@@ -2381,7 +2381,13 @@
     "uploadedImages": "Uploaded {{count}} image(s)",
     "uploadedAttachments": "Uploaded attachment(s)",
     "emptyMessage": "Empty message",
-    "attachment": "Attachment"
+    "attachment": "Attachment",
+    "workspaceSubstituted": "[Notice] Working directory substituted: requested \"{{requested}}\", using \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "unsafe working directory",
+    "workspaceReasonPluginInternal": "plugin-internal directory",
+    "workspaceReasonMissing": "directory does not exist",
+    "workspaceReasonNotADirectory": "not a directory",
+    "workspaceReasonTemporary": "temporary directory"
   },
   "changelog": {
     "title": "What's New",

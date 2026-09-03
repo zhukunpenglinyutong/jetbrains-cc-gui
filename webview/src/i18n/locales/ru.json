@@ -1869,7 +1869,13 @@
     "uploadedImages": "Загружено {{count}} изображений",
     "uploadedAttachments": "Вложения загружены",
     "emptyMessage": "Пустое сообщение",
-    "attachment": "Вложение"
+    "attachment": "Вложение",
+    "workspaceSubstituted": "[Уведомление] Рабочий каталог заменён: запрошен \"{{requested}}\", используется \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "небезопасный рабочий каталог",
+    "workspaceReasonPluginInternal": "внутренний каталог плагина",
+    "workspaceReasonMissing": "каталог не существует",
+    "workspaceReasonNotADirectory": "не является каталогом",
+    "workspaceReasonTemporary": "временный каталог"
   },
   "changelog": {
     "title": "Что нового",

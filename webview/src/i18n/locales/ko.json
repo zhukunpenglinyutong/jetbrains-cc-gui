@@ -1944,7 +1944,13 @@
     "uploadedImages": "{{count}}개 이미지 업로드됨",
     "uploadedAttachments": "첨부파일 업로드됨",
     "emptyMessage": "빈 메시지",
-    "attachment": "첨부파일"
+    "attachment": "첨부파일",
+    "workspaceSubstituted": "[알림] 작업 디렉터리가 대체되었습니다: 요청 \"{{requested}}\", 사용 \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "안전하지 않은 작업 디렉터리",
+    "workspaceReasonPluginInternal": "플러그인 내부 디렉터리",
+    "workspaceReasonMissing": "디렉터리가 존재하지 않습니다",
+    "workspaceReasonNotADirectory": "디렉터리가 아닙니다",
+    "workspaceReasonTemporary": "임시 디렉터리"
   },
   "changelog": {
     "title": "새로운 기능",

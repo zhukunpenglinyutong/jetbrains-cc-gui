@@ -1993,7 +1993,13 @@
     "uploadedImages": "{{count}} imagem(ns) enviada(s)",
     "uploadedAttachments": "Anexo(s) enviado(s)",
     "emptyMessage": "Mensagem vazia",
-    "attachment": "Anexo"
+    "attachment": "Anexo",
+    "workspaceSubstituted": "[Aviso] Diretório de trabalho substituído: solicitado \"{{requested}}\", usando \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "diretório de trabalho não seguro",
+    "workspaceReasonPluginInternal": "diretório interno do plugin",
+    "workspaceReasonMissing": "o diretório não existe",
+    "workspaceReasonNotADirectory": "não é um diretório",
+    "workspaceReasonTemporary": "diretório temporário"
   },
   "changelog": {
     "title": "Novidades",

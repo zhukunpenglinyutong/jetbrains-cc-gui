@@ -43,8 +43,10 @@ public class CliModelsHandler extends BaseMessageHandler {
             "get_cli_models",
     };
 
-    private static final Set<String> SUPPORTED_PROVIDERS = Set.of(
-            "opencode", "kimi", "pi", "omp", "codex", "grok", "dsh", "minimax"
+    // Package-private so a test can pin the provider set: dropping gemini here
+    // makes the webview's model picker break for that provider only.
+    static final Set<String> SUPPORTED_PROVIDERS = Set.of(
+            "opencode", "kimi", "pi", "omp", "codex", "grok", "dsh", "gemini", "minimax"
     );
 
     private final Gson gson = new Gson();

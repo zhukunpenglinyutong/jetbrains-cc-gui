@@ -1849,7 +1849,13 @@
     "uploadedImages": "{{count}} imagen(es) subida(s)",
     "uploadedAttachments": "Archivo(s) adjunto(s) subido(s)",
     "emptyMessage": "Mensaje vacío",
-    "attachment": "Adjunto"
+    "attachment": "Adjunto",
+    "workspaceSubstituted": "[Aviso] Directorio de trabajo sustituido: se solicitó \"{{requested}}\", se usa \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "directorio de trabajo no seguro",
+    "workspaceReasonPluginInternal": "directorio interno del plugin",
+    "workspaceReasonMissing": "el directorio no existe",
+    "workspaceReasonNotADirectory": "no es un directorio",
+    "workspaceReasonTemporary": "directorio temporal"
   },
   "changelog": {
     "title": "Novedades",

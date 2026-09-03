@@ -1848,7 +1848,13 @@
     "uploadedImages": "{{count}} 枚の画像をアップロードしました",
     "uploadedAttachments": "添付ファイルをアップロードしました",
     "emptyMessage": "空のメッセージ",
-    "attachment": "添付ファイル"
+    "attachment": "添付ファイル",
+    "workspaceSubstituted": "[通知] 作業ディレクトリを置き換えました: 指定 \"{{requested}}\"、使用 \"{{effective}}\" ({{reason}})。",
+    "workspaceReasonUnsafe": "安全ではない作業ディレクトリ",
+    "workspaceReasonPluginInternal": "プラグイン内部のディレクトリ",
+    "workspaceReasonMissing": "ディレクトリが存在しません",
+    "workspaceReasonNotADirectory": "ディレクトリではありません",
+    "workspaceReasonTemporary": "一時ディレクトリ"
   },
   "changelog": {
     "title": "更新情報",

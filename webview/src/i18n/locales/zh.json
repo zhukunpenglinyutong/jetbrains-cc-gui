@@ -2387,7 +2387,13 @@
     "uploadedImages": "已上传 {{count}} 张图片",
     "uploadedAttachments": "已上传附件",
     "emptyMessage": "空消息",
-    "attachment": "附件"
+    "attachment": "附件",
+    "workspaceSubstituted": "[提示] 工作目录已替换：请求的目录为 \"{{requested}}\"，实际使用 \"{{effective}}\" ({{reason}})。",
+    "workspaceReasonUnsafe": "不安全的工作目录",
+    "workspaceReasonPluginInternal": "插件内部目录",
+    "workspaceReasonMissing": "目录不存在",
+    "workspaceReasonNotADirectory": "不是目录",
+    "workspaceReasonTemporary": "临时目录"
   },
   "changelog": {
     "title": "版本更新",

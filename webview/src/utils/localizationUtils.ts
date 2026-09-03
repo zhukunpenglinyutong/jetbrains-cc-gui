@@ -1,6 +1,43 @@
 import type { TFunction } from 'i18next';
 
 /**
+ * The closed set of English substitution reasons the bridge's
+ * `classifyWorkspaceSubstitutionReason` (ai-bridge/services/gemini/
+ * message-service.js) can emit. The notice regex below anchors its reason
+ * group on exactly these literals, so an UNKNOWN reason never matches: the
+ * raw English text is left untouched instead of being interpolated into a
+ * localized template (NFR8). Keep this list in lockstep with the service —
+ * localizationUtils.test.ts pins the literals against the service source.
+ */
+export const WORKSPACE_SUBSTITUTION_REASONS = [
+  'unsafe working directory',
+  'plugin-internal directory',
+  'directory does not exist',
+  'not a directory',
+  'temporary directory',
+] as const;
+
+/** Reason literal → i18n key. Total over WORKSPACE_SUBSTITUTION_REASONS. */
+const WORKSPACE_REASON_KEY: Record<(typeof WORKSPACE_SUBSTITUTION_REASONS)[number], string> = {
+  'unsafe working directory': 'aiBridge.workspaceReasonUnsafe',
+  'plugin-internal directory': 'aiBridge.workspaceReasonPluginInternal',
+  'directory does not exist': 'aiBridge.workspaceReasonMissing',
+  'not a directory': 'aiBridge.workspaceReasonNotADirectory',
+  'temporary directory': 'aiBridge.workspaceReasonTemporary',
+};
+
+// The reason literals are plain words/spaces/hyphens — no regex metacharacters.
+const WORKSPACE_REASON_ALTERNATION = WORKSPACE_SUBSTITUTION_REASONS.join('|');
+
+// Match "[Notice] Working directory substituted: requested \"...\", using \"...\" (...).\n\n"
+// Path groups use [\s\S]+? so paths containing quotes or parentheses still
+// parse; the reason group only matches the closed English set above.
+const WORKSPACE_SUBSTITUTED_RE = new RegExp(
+  '\\[Notice\\] Working directory substituted: requested "([\\s\\S]+?)", using "([\\s\\S]+?)"'
+  + ` \\((${WORKSPACE_REASON_ALTERNATION})\\)\\.(\\n\\n)?`
+);
+
+/**
  * Create a localization function for AI bridge messages
  * @param t - i18next translation function
  * @returns A function that localizes message text
@@ -48,6 +85,20 @@ export function createLocalizeMessage(t: TFunction): (text: string) => string {
     }
 
     // Handle messages with parameters
+    const workspaceSubstitutedMatch = result.match(WORKSPACE_SUBSTITUTED_RE);
+    if (workspaceSubstitutedMatch) {
+      const [, requestedDir, effectiveDir, reason, trailingNewlines] = workspaceSubstitutedMatch;
+      result = result.replace(
+        workspaceSubstitutedMatch[0],
+        t('aiBridge.workspaceSubstituted', {
+          requested: requestedDir,
+          effective: effectiveDir,
+          // The regex only matches known reasons, so this lookup is total.
+          reason: t(WORKSPACE_REASON_KEY[reason as (typeof WORKSPACE_SUBSTITUTION_REASONS)[number]]),
+        }) + (trailingNewlines ?? '')
+      );
+    }
+
     // Match "User denied permission for XXX tool"
     const permissionDeniedMatch = result.match(/User denied permission for (.+) tool/);
     if (permissionDeniedMatch) {

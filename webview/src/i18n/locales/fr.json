@@ -1843,7 +1843,13 @@
     "uploadedImages": "{{count}} image(s) téléchargée(s)",
     "uploadedAttachments": "Pièce(s) jointe(s) téléchargée(s)",
     "emptyMessage": "Message vide",
-    "attachment": "Pièce jointe"
+    "attachment": "Pièce jointe",
+    "workspaceSubstituted": "[Avis] Répertoire de travail remplacé : \"{{requested}}\" demandé, utilisation de \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "répertoire de travail non sûr",
+    "workspaceReasonPluginInternal": "répertoire interne du plugin",
+    "workspaceReasonMissing": "le répertoire n'existe pas",
+    "workspaceReasonNotADirectory": "n'est pas un répertoire",
+    "workspaceReasonTemporary": "répertoire temporaire"
   },
   "changelog": {
     "title": "Nouveautés",

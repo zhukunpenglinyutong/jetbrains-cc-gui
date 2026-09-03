@@ -16,6 +16,7 @@ import com.github.claudecodegui.provider.minimax.MiniMaxCliBridge;
 import com.github.claudecodegui.provider.opencode.OpenCodeCliBridge;
 import com.github.claudecodegui.provider.pi.PiCliBridge;
 import com.github.claudecodegui.provider.omp.OmpCliBridge;
+import com.github.claudecodegui.provider.gemini.GeminiCliBridge;
 import com.github.claudecodegui.session.SessionProviderRouter;
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
@@ -82,6 +83,7 @@ public class ClaudeChatWindow {
     private final OpenCodeCliBridge openCodeCliBridge;
     private final PiCliBridge piCliBridge;
     private final OmpCliBridge ompCliBridge;
+    private final GeminiCliBridge geminiCliBridge;
     private final MiniMaxCliBridge miniMaxCliBridge;
     private final Project project;
     private final CodemossSettingsService settingsService;
@@ -224,6 +226,24 @@ public class ClaudeChatWindow {
         this(project, false);
     }
 
+    /**
+     * Register the bundled marker-CLI bridges (kimi, openCode, pi, omp, dsh,
+     * gemini) under their provider ids. Extracted from the constructor so a
+     * test can pin the bundled set — a provider dropped from the list (e.g.
+     * gemini) fails there instead of only surfacing as a missing CLI provider
+     * inside the IDE. Grok is not on this list: it uses {@code GrokSDKBridge}
+     * (persistent ACP / grok agent stdio), not {@link MarkerCliBridge}.
+     */
+    static Map<String, MarkerCliBridge> registerBundledCliBridges(
+            MarkerCliBridge kimi,
+            MarkerCliBridge openCode,
+            MarkerCliBridge pi,
+            MarkerCliBridge omp,
+            MarkerCliBridge gemini
+    ) {
+        return SessionProviderRouter.registerCliBridges(kimi, openCode, pi, omp, new DshCliBridge(), gemini);
+    }
+
     public ClaudeChatWindow(Project project, boolean skipRegister) {
         this.project = project;
         this.claudeSDKBridge = new ClaudeSDKBridge();
@@ -233,11 +253,12 @@ public class ClaudeChatWindow {
         this.openCodeCliBridge = new OpenCodeCliBridge();
         this.piCliBridge = new PiCliBridge();
         this.ompCliBridge = new OmpCliBridge();
+        this.geminiCliBridge = new GeminiCliBridge();
         this.miniMaxCliBridge = new MiniMaxCliBridge();
         // Grok uses GrokSDKBridge (persistent ACP / grok agent stdio), not MarkerCliBridge.
-        this.cliBridges = SessionProviderRouter.registerCliBridges(
+        this.cliBridges = registerBundledCliBridges(
                 this.kimiCliBridge, this.openCodeCliBridge, this.piCliBridge,
-                this.ompCliBridge, new DshCliBridge(), this.miniMaxCliBridge);
+                this.ompCliBridge, new DshCliBridge(), this.geminiCliBridge, this.miniMaxCliBridge);
         this.settingsService = new CodemossSettingsService();
         this.htmlLoader = new HtmlLoader(getClass());
         this.mainPanel = new JPanel(new BorderLayout());
@@ -1407,6 +1428,10 @@ public class ClaudeChatWindow {
 
     public OmpCliBridge getOmpCliBridge() {
         return ompCliBridge;
+    }
+
+    public GeminiCliBridge getGeminiCliBridge() {
+        return geminiCliBridge;
     }
 
     public MiniMaxCliBridge getMiniMaxCliBridge() {

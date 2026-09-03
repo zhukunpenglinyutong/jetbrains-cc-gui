@@ -1842,7 +1842,13 @@
     "uploadedImages": "{{count}} छवि(यां) अपलोड की गईं",
     "uploadedAttachments": "अनुलग्नक अपलोड किए गए",
     "emptyMessage": "खाली संदेश",
-    "attachment": "अनुलग्नक"
+    "attachment": "अनुलग्नक",
+    "workspaceSubstituted": "[सूचना] कार्य निर्देशिका बदल दी गई: अनुरोधित \"{{requested}}\", उपयोग की जा रही \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "असुरक्षित कार्य निर्देशिका",
+    "workspaceReasonPluginInternal": "प्लगइन की आंतरिक निर्देशिका",
+    "workspaceReasonMissing": "निर्देशिका मौजूद नहीं है",
+    "workspaceReasonNotADirectory": "निर्देशिका नहीं है",
+    "workspaceReasonTemporary": "अस्थायी निर्देशिका"
   },
   "changelog": {
     "title": "नया क्या है",

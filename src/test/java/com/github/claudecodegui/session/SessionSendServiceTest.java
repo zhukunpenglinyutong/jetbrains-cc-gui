@@ -1,8 +1,21 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.github.claudecodegui.provider.common.MessageCallback;
+import com.github.claudecodegui.provider.common.SDKResult;
+import com.intellij.openapi.project.Project;
 import org.junit.Test;
 
+import java.lang.reflect.Proxy;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -208,5 +221,169 @@ public class SessionSendServiceTest {
                 SessionSendService.resolveEffectiveCodexServiceTier(null, "priority")
         );
         assertNull(SessionSendService.resolveEffectiveCodexServiceTier(null, "normal"));
+    }
+
+    @Test
+    public void resolveCliSendCwdClampsOutsideCwdToProjectBase() {
+        String project = Paths.get(tmpdir(), "proj").toString();
+        String outside = Paths.get(tmpdir(), "elsewhere").toString();
+        assertEquals(project, SessionSendService.resolveCliSendCwd(outside, project));
+    }
+
+    @Test
+    public void resolveCliSendCwdKeepsCwdInsideProjectVerbatim() {
+        String project = Paths.get(tmpdir(), "proj").toString();
+        String nested = Paths.get(project, "src", "deep").toString();
+        assertEquals(nested, SessionSendService.resolveCliSendCwd(nested, project));
+        assertEquals(project, SessionSendService.resolveCliSendCwd(project, project));
+    }
+
+    @Test
+    public void resolveCliSendCwdClampsSentinelCwdToProjectBase() {
+        String project = Paths.get(tmpdir(), "proj").toString();
+        // The webview sends these sentinels when no cwd was chosen.
+        assertEquals(project, SessionSendService.resolveCliSendCwd(null, project));
+        assertEquals(project, SessionSendService.resolveCliSendCwd("", project));
+        assertEquals(project, SessionSendService.resolveCliSendCwd("undefined", project));
+        assertEquals(project, SessionSendService.resolveCliSendCwd("null", project));
+    }
+
+    @Test
+    public void resolveCliSendCwdPassesThroughWhenNoProjectBase() {
+        // No project base: nothing to clamp to — the raw cwd is kept (the caller
+        // logs the degraded guard instead of failing the send).
+        String anywhere = Paths.get(tmpdir(), "anywhere").toString();
+        assertEquals(anywhere, SessionSendService.resolveCliSendCwd(anywhere, null));
+        assertEquals(anywhere, SessionSendService.resolveCliSendCwd(anywhere, ""));
+        assertNull(SessionSendService.resolveCliSendCwd(null, null));
+    }
+
+    private String tmpdir() {
+        return Paths.get(System.getProperty("java.io.tmpdir")).toAbsolutePath().toString();
+    }
+
+    // ------------------------------------------------------------------
+    // R-15: the actual (guarded cwd, pre-clamp requestedCwd) tuple forwarded
+    // to the bridge must survive the send path intact.
+    // ------------------------------------------------------------------
+
+    /** Records the full sendMessage argument tuple instead of spawning. */
+    private static final class CapturingBridge extends MarkerCliBridge {
+        String channelId;
+        String message;
+        String sessionId;
+        String cwd;
+        String model;
+        String reasoningEffort;
+        String permissionMode;
+        String dshPreset;
+        String requestedCwd;
+        int calls;
+
+        CapturingBridge() {
+            super(MarkerCliBridge.class);
+        }
+
+        @Override
+        protected String getProviderName() {
+            return "capturing";
+        }
+
+        @Override
+        protected String getStdinEnvKey() {
+            return "CAPTURING_USE_STDIN";
+        }
+
+        @Override
+        public CompletableFuture<SDKResult> sendMessage(
+                String channelId,
+                String message,
+                String sessionId,
+                String cwd,
+                String model,
+                String reasoningEffort,
+                List<ClaudeSession.Attachment> attachments,
+                String permissionMode,
+                String dshPreset,
+                String requestedCwd,
+                MessageCallback callback
+        ) {
+            this.calls++;
+            this.channelId = channelId;
+            this.message = message;
+            this.sessionId = sessionId;
+            this.cwd = cwd;
+            this.model = model;
+            this.reasoningEffort = reasoningEffort;
+            this.permissionMode = permissionMode;
+            this.dshPreset = dshPreset;
+            this.requestedCwd = requestedCwd;
+            return CompletableFuture.completedFuture(new SDKResult());
+        }
+    }
+
+    /** Headless Project stand-in: only getBasePath() is meaningful here. */
+    private static Project projectWithBase(String basePath) {
+        return (Project) Proxy.newProxyInstance(
+                Project.class.getClassLoader(),
+                new Class<?>[]{Project.class},
+                (proxy, method, args) -> {
+                    if ("getBasePath".equals(method.getName()) && method.getParameterCount() == 0) {
+                        return basePath;
+                    }
+                    Class<?> rt = method.getReturnType();
+                    if (rt == boolean.class) return false;
+                    if (rt == int.class) return 0;
+                    if (rt == long.class) return 0L;
+                    if (rt == float.class) return 0f;
+                    if (rt == double.class) return 0d;
+                    return null;
+                }
+        );
+    }
+
+    @Test
+    public void sendToCliProviderForwardsGuardedCwdAndPreClampRequestedCwd() throws Exception {
+        Path projectDir = Files.createTempDirectory("gemini-send-proj-");
+        projectDir.toFile().deleteOnExit();
+        String requested = Paths.get(tmpdir(), "outside-project-" + System.nanoTime()).toString();
+        SessionState state = new SessionState();
+        state.setCwd(requested);
+        CapturingBridge bridge = new CapturingBridge();
+        Project project = projectWithBase(projectDir.toString());
+        SessionSendService service = new SessionSendService(
+                project,
+                state,
+                new SessionCallbackFacade(project),
+                null,
+                null,
+                null,
+                null,
+                null,
+                Map.of("gemini", bridge),
+                new SessionContextService(project)
+        );
+
+        service.sendToCliProvider("gemini", "channel-1", "hello", null, null, null, null, null, null)
+                .get(5, java.util.concurrent.TimeUnit.SECONDS);
+
+        assertEquals(1, bridge.calls);
+        // cwd is the CLAMPED workspace, requestedCwd is what the user asked
+        // for — both reach the bridge, in the right slots.
+        assertEquals(projectDir.toString(), bridge.cwd);
+        assertEquals(requested, bridge.requestedCwd);
+        assertNotEquals(bridge.cwd, bridge.requestedCwd);
+        // Current (review-deferred) behaviour: the clamp is persisted into the
+        // session state, so a repeat turn has requested == guarded and stays
+        // silent. Pin it so a product-level change (re-notice per turn) is
+        // conscious, not accidental.
+        assertEquals(projectDir.toString(), state.getCwd());
+        // The remaining tuple is pinned too so nearby refactors cannot drift.
+        assertEquals("channel-1", bridge.channelId);
+        assertEquals("hello", bridge.message);
+        assertEquals("default", bridge.permissionMode);
+        assertEquals("medium", bridge.reasoningEffort);
+        assertEquals("", bridge.model);
+        assertNull(bridge.dshPreset);
     }
 }

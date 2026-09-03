@@ -1899,7 +1899,13 @@
     "uploadedImages": "已上傳 {{count}} 張圖片",
     "uploadedAttachments": "已上傳附件",
     "emptyMessage": "空訊息",
-    "attachment": "附件"
+    "attachment": "附件",
+    "workspaceSubstituted": "[提示] 工作目錄已替換：請求的目錄為 \"{{requested}}\"，實際使用 \"{{effective}}\" ({{reason}})。",
+    "workspaceReasonUnsafe": "不安全的工作目錄",
+    "workspaceReasonPluginInternal": "外掛內部目錄",
+    "workspaceReasonMissing": "目錄不存在",
+    "workspaceReasonNotADirectory": "不是目錄",
+    "workspaceReasonTemporary": "暫存目錄"
   },
   "changelog": {
     "title": "版本更新",

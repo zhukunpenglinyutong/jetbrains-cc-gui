@@ -194,10 +194,10 @@ public class SessionSendService {
             );
         }
 
-        // Registered CLI tool whose bridge has not landed yet (gemini pre-1.2):
-        // fail loudly via the channel error path instead of silently routing
-        // the turn to the Claude SDK. Grok keeps its historic fallthrough when
-        // its bridge is missing.
+        // Registered CLI tool whose bridge is not registered: fail loudly via
+        // the channel error path instead of silently routing the turn to the
+        // Claude SDK. Grok keeps its historic fallthrough when its bridge is
+        // missing.
         CliToolId cliTool = !"grok".equals(currentProvider)
                 ? CliToolId.fromId(currentProvider)
                 : null;
@@ -427,7 +427,10 @@ public class SessionSendService {
         ).thenApply(result -> null);
     }
 
-    private CompletableFuture<Void> sendToCliProvider(
+    // Package-private (not private) so the forwarded argument tuple is pinned
+    // by a test: swapping the adjacent cwd/requestedCwd positionals must fail
+    // there instead of silently inverting the substitution notice.
+    CompletableFuture<Void> sendToCliProvider(
             String provider,
             String channelId,
             String input,
@@ -466,9 +469,26 @@ public class SessionSendService {
                 : "default";
         int attachmentCount = attachments != null ? attachments.size() : 0;
 
+        // Clamp the workspace to the project base before spawn — the same guard
+        // the grok send path applies. A cwd outside the project (or a sentinel)
+        // must never reach the CLI as the agent workspace. The PRE-clamp value is
+        // forwarded as `requestedCwd` so the Node side can surface a visible
+        // substitution notice (AC5) — the clamp itself erases that difference.
+        String projectBase = project != null ? project.getBasePath() : null;
+        String requestedCwd = state.getCwd();
+        String guardedCwd = resolveCliSendCwd(requestedCwd, projectBase);
+        if (projectBase == null || projectBase.isEmpty()) {
+            LOG.warn("[Lifecycle] sendToCli cwd guard (" + provider + "): no project base"
+                    + " available; passing raw cwd through: " + guardedCwd);
+        } else if (guardedCwd == null || requestedCwd == null || !guardedCwd.equals(requestedCwd)) {
+            LOG.warn("[Lifecycle] sendToCli cwd guard (" + provider + "): "
+                    + requestedCwd + " -> " + guardedCwd);
+            state.setCwd(guardedCwd);
+        }
+
         LOG.info("[Lifecycle] sendToCli provider=" + provider
                 + " sessionId=" + (state.getSessionId() != null ? state.getSessionId() : "(new)")
-                + ", cwd=" + state.getCwd()
+                + ", cwd=" + guardedCwd
                 + ", modelRaw=" + state.getModel()
                 + ", modelCli=" + (modelForCli != null ? modelForCli : "(config-default)")
                 + ", effort=" + effort
@@ -479,14 +499,28 @@ public class SessionSendService {
                 channelId,
                 finalInput,
                 state.getSessionId(),
-                state.getCwd(),
+                guardedCwd,
                 modelForCli != null ? modelForCli : "",
                 effort,
                 attachments,
                 effectiveMode,
                 "dsh".equals(provider) ? state.getDshPreset() : null,
+                requestedCwd,
                 handler
         ).thenApply(result -> null);
+    }
+
+    /**
+     * Workspace a CLI-provider turn runs in: clamped to the project base when
+     * one exists, passed through unchanged when it does not (no anchor to clamp
+     * to — the raw cwd is kept and the caller logs the degraded guard).
+     *
+     * <p>Static so the clamp decision is pinned by tests
+     * ({@code SessionSendServiceTest}) rather than only observable live.
+     */
+    static String resolveCliSendCwd(String cwd, String projectBase) {
+        String guarded = com.github.claudecodegui.util.PathUtils.guardWorkingDirectory(cwd, projectBase);
+        return guarded != null ? guarded : cwd;
     }
 
     /**
