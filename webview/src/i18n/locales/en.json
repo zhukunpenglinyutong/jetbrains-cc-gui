@@ -634,6 +634,11 @@
       "codex": "Codex",
       "cli": "CLI"
     },
+    "gemini": {
+      "idleReapLabel": "Stop silent turns automatically",
+      "idleReapHelp": "Ends a Gemini turn that has produced no output for this many minutes — usually a CLI stuck at an interactive prompt or a stalled backend. 0 disables automatic stopping.",
+      "idleReapDisabled": "Disabled"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",

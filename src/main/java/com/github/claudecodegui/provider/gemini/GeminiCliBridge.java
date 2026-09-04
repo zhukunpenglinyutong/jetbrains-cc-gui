@@ -1,6 +1,7 @@
 package com.github.claudecodegui.provider.gemini;
 
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.JsonObject;
 
 import java.util.Collections;
@@ -16,6 +17,7 @@ import java.util.Map;
 public class GeminiCliBridge extends MarkerCliBridge {
 
     private final GeminiHistoryReader historyReader;
+    private final CodemossSettingsService settingsService = new CodemossSettingsService();
 
     public GeminiCliBridge() {
         this(new GeminiHistoryReader());
@@ -39,7 +41,20 @@ public class GeminiCliBridge extends MarkerCliBridge {
 
     @Override
     protected void configureExtraEnv(Map<String, String> env) {
-        // Reserved for future Gemini-specific env.
+        // The ai-bridge silence-window reap reads its window from this var on
+        // every send. Forwarded unconditionally — the documented default "30"
+        // when the user never touched the setting (the default must not depend
+        // on the Node side), "0" verbatim as the disable signal.
+        env.put("GEMINI_IDLE_REAP_MINUTES", String.valueOf(resolveGeminiIdleReapMinutes()));
+    }
+
+    private int resolveGeminiIdleReapMinutes() {
+        try {
+            return settingsService.getGeminiIdleReapMinutes();
+        } catch (Exception e) {
+            LOG.warn("[Gemini] Failed to read gemini.idleReapMinutes, forwarding default: " + e.getMessage());
+            return CodemossSettingsService.DEFAULT_GEMINI_IDLE_REAP_MINUTES;
+        }
     }
 
     @Override

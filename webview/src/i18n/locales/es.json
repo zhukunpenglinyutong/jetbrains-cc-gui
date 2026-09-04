@@ -847,6 +847,11 @@
         "saveChanges": "Save"
       }
     },
+    "gemini": {
+      "idleReapLabel": "Detener turnos silenciosos automáticamente",
+      "idleReapHelp": "Finaliza un turno de Gemini que no produce salida durante estos minutos; suele deberse a una CLI atascada en un prompt interactivo o a un backend detenido. 0 desactiva la detención automática.",
+      "idleReapDisabled": "Desactivado"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",

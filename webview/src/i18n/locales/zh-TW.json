@@ -852,6 +852,11 @@
         "saveChanges": "Save"
       }
     },
+    "gemini": {
+      "idleReapLabel": "自動停止無輸出的回合",
+      "idleReapHelp": "若 Gemini 回合連續此分鐘數沒有任何輸出，則自動結束——通常是 CLI 卡在互動提示或後端停止回應。設為 0 可停用自動停止。",
+      "idleReapDisabled": "已停用"
+    },
     "cli": {
       "hint": "以下 CLI 需在系統終端自行安裝並完成設定。外掛只負責偵測是否已安裝及版本號，不會替你自動安裝。請先在終端確認可正常使用，再回到此處使用。",
       "refresh": "Re-check",

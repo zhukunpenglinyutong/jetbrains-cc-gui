@@ -7,7 +7,14 @@ import { createInterface } from 'readline';
 import { emitSendError, endStream } from './marker-protocol.js';
 import { resolveCliSpawn } from './cli-path.js';
 
-function killChildTree(child, label) {
+/**
+ * Kill a spawned CLI and its whole process tree. Non-Windows children run in
+ * their own process group (detached), so a negative-pid SIGTERM reaches the
+ * CLI's own grandchildren too; Windows falls back to the direct handle kill.
+ * Exported for callers that own an extra termination path on the same child
+ * (e.g. the gemini silence-window reap) so every killer shares one semantics.
+ */
+export function killChildTree(child, label) {
   if (!child || child.killed) return;
   try {
     if (process.platform === 'win32') {
@@ -55,6 +62,9 @@ function killChildTree(child, label) {
  * @param {(message: string) => void} [options.onError] - when set, called instead of
  *   writing `[SEND_ERROR]` (used by session-less ask paths: prompt enhance / commit)
  * @param {boolean} [options.emitEndStream=true] - when false, skip chat stream end markers
+ * @param {(child: import('child_process').ChildProcess) => void} [options.onSpawn] - called
+ *   once right after a successful spawn, with the child handle. Callers that need to act
+ *   on the live process (watchdogs) get their only access to it here.
  * @returns {Promise<{ code: number|null, signal: NodeJS.Signals|null, hadError: boolean, errorMessage?: string }>}
  */
 export function runCliStreaming({
@@ -68,6 +78,7 @@ export function runCliStreaming({
   onCloseBeforeEnd,
   onError,
   emitEndStream = true,
+  onSpawn,
 }) {
   return new Promise((resolve) => {
     let hadError = false;
@@ -119,6 +130,14 @@ export function runCliStreaming({
       reportError(`Failed to spawn ${label} CLI (${bin}): ${error?.message || error}`);
       finish({ code: null, signal: null, hadError });
       return;
+    }
+
+    if (typeof onSpawn === 'function') {
+      try {
+        onSpawn(child);
+      } catch (error) {
+        console.error(`[WARN][${label}] onSpawn failed:`, error?.message || error);
+      }
     }
 
     const onParentSignal = () => killChildTree(child, label);

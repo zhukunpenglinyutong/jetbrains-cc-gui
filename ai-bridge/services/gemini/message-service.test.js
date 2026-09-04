@@ -39,7 +39,7 @@
  * classifier is exercised against a synthetic best-effort stderr string.
  */
 import { spawn } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,6 +56,7 @@ const BRIDGE_DIR = fileURLToPath(new URL('../../', import.meta.url));
 
 const FAKE_CLI_BODY = `
 import fs from 'node:fs';
+import { spawn as spawnChild } from 'node:child_process';
 const fixture = process.env.FIXTURE_FILE || '';
 const exitCode = Number(process.env.FIXTURE_EXIT ?? '0');
 const stderr = process.env.FIXTURE_STDERR || '';
@@ -93,7 +94,49 @@ if (process.env.FAKE_ECHO_IMAGE_STATS === '1') {
   });
   process.stderr.write('IMGSTAT:' + JSON.stringify(stats) + '\\n');
 }
-process.stdout.write(payload, () => process.exit(exitCode));
+// Story 1.10 modes: the watchdog tests need a CLI that can be ALIVE while
+// silent (the canonical hang), alive while slowly producing output (the
+// legitimate silent-ish build), and one that leaves a grandchild behind so
+// the tree-kill can be proven. Every mode carries a hard self-exit cap so a
+// red-phase harness kill can never leak a detached fake process.
+const mode = process.env.FAKE_MODE || '';
+if (mode) {
+  const lifetime = Number(process.env.FAKE_LIFETIME_MS || '15000');
+  const CONV = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+  const keepAlive = setInterval(() => {}, 1000000);
+  const initLine = JSON.stringify({ event: 'init', conversation_id: CONV, init: { cwd: process.cwd(), tools: [], permission_mode: 'default' } });
+  const deltaLine = (i) => JSON.stringify({ event: 'step_update', step_update: { conversation_id: CONV, step_index: 1, state: 'ACTIVE', step_type: 'agent_response', text_delta: 'tick ' + i } });
+  const unknownLine = (i) => JSON.stringify({ event: 'mystery_event_' + i, payload: { n: i, note: 'unknown-but-parseable' } });
+  const resultLine = JSON.stringify({ event: 'result', result: { conversation_id: CONV, duration_seconds: 1, num_turns: 1, usage: { input_tokens: 10, output_tokens: 5, thinking_tokens: 0, cache_read_tokens: 0, total_tokens: 15 }, status: 'SUCCESS', response: 'done', error: null } });
+  const write = (s) => new Promise((res) => process.stdout.write(s + '\\n', res));
+  if (mode === 'silent-hang' || mode === 'delta-then-hang' || mode === 'hang-with-grandchild') {
+    if (process.env.FAKE_HANG_INIT === '1') await write(initLine);
+    if (mode === 'delta-then-hang') {
+      await write(deltaLine(1));
+      await write(deltaLine(2));
+    }
+    if (mode === 'hang-with-grandchild' && process.env.FAKE_GC_PID_FILE) {
+      const gcCode = "import fs from 'node:fs';fs.writeFileSync(process.env.FAKE_GC_PID_FILE, String(process.pid));setInterval(() => {}, 1000000);setTimeout(() => process.exit(0), Number(process.env.FAKE_LIFETIME_MS || '15000'));";
+      spawnChild(process.execPath, ['--input-type=module', '-e', gcCode], { stdio: 'ignore' });
+    }
+    setTimeout(() => process.exit(42), lifetime);
+  } else if (mode === 'slow-emit') {
+    const interval = Number(process.env.FAKE_EMIT_INTERVAL_MS || '500');
+    const total = Number(process.env.FAKE_EMIT_LINES || '8');
+    const kind = process.env.FAKE_EMIT_KIND || 'delta';
+    await write(initLine);
+    for (let i = 1; i <= total; i++) {
+      await write(kind === 'unknown' ? unknownLine(i) : deltaLine(i));
+      await new Promise((res) => setTimeout(res, interval));
+    }
+    await write(resultLine);
+    process.exit(0);
+  } else {
+    process.exit(43); // unknown mode: visible in the exit code, never a silent hang
+  }
+} else {
+  process.stdout.write(payload, () => process.exit(exitCode));
+}
 `;
 
 /** Cross-platform launcher: spawnable on POSIX (shebang) and Windows (.cmd). */
@@ -151,6 +194,18 @@ function runService({
   echoInitPerm = false,
   echoImageStats = false,
   extraEnv = {},
+  // Story 1.10 watchdog harness: hang/slow-emit fake-CLI modes plus a bounded
+  // run. timeoutMs SIGTERMs the runner (the same path the JVM's dispose uses
+  // — cli-spawn's parent-signal handler tears the fake tree down) so a turn
+  // that is NEVER reaped still resolves; `timedOut` tells the two apart.
+  mode = '',
+  hangInit = false,
+  emitKind = '',
+  emitIntervalMs = '',
+  emitLines = '',
+  gcPidFile = '',
+  lifetimeMs = '',
+  timeoutMs = 0,
 }) {
   const fakeCli = globalThis.__geminiFakeCli;
   const env = { ...process.env };
@@ -175,6 +230,13 @@ function runService({
   env.SVC_REQUESTED_CWD = requestedCwd;
   env.SVC_PERMISSION_MODE = permissionMode;
   env.SVC_ATTACHMENTS_FILE = attachmentsFile;
+  env.FAKE_MODE = mode;
+  env.FAKE_HANG_INIT = hangInit ? '1' : '';
+  env.FAKE_EMIT_KIND = emitKind;
+  env.FAKE_EMIT_INTERVAL_MS = emitIntervalMs;
+  env.FAKE_EMIT_LINES = emitLines;
+  env.FAKE_GC_PID_FILE = gcPidFile;
+  env.FAKE_LIFETIME_MS = lifetimeMs;
 
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ['--input-type=module', '-e', RUNNER], {
@@ -184,10 +246,26 @@ function runService({
     });
     let stdout = '';
     let stderrOut = '';
+    let timedOut = false;
+    let hardKill = null;
+    let killer = null;
+    if (timeoutMs > 0) {
+      killer = setTimeout(() => {
+        timedOut = true;
+        child.kill('SIGTERM');
+        hardKill = setTimeout(() => {
+          try { child.kill('SIGKILL'); } catch { /* already gone */ }
+        }, 5000);
+      }, timeoutMs);
+    }
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderrOut += chunk; });
     child.on('error', reject);
-    child.on('close', (code) => resolve({ code, stdout, stderr: stderrOut }));
+    child.on('close', (code) => {
+      if (killer) clearTimeout(killer);
+      if (hardKill) clearTimeout(hardKill);
+      resolve({ code, stdout, stderr: stderrOut, timedOut });
+    });
   });
 }
 
@@ -1714,4 +1792,153 @@ test('Story 1.9 M2: a no-delta turn with usage still emits exactly ONE [USAGE] b
   const fallbackIdx = lines.findIndex((l) => l.startsWith('[CONTENT_DELTA]'));
   assert.ok(fallbackIdx !== -1, 'the result.response fallback delta keeps the bubble non-empty');
   assert.equal(finalPayload(stdout).success, true);
+});
+
+// ─── Story 1.10: Turn Resilience — reap the dead, never the living ─────────
+//
+// The idle-silence watchdog does not exist yet: every RED test below fails
+// today because NOTHING ever reaps a hung turn (the harness timeout has to
+// kill the runner), and every GUARD passes today and must KEEP passing once
+// the watchdog lands. The window travels through the production carriage
+// GEMINI_IDLE_REAP_MINUTES (minutes; the settings UI sends integers, tests
+// use fractional values like 0.05 → 3s so no test sleeps real minutes — the
+// story forbids real-minute sleeps and an injectable-clock seam would test
+// less of the real spawn/timer path). Fake-CLI modes keep a hard self-exit
+// cap so a red-phase harness kill can never leak a detached fake process.
+
+// The reap error's content contract (story Task 1/Task 4): what happened,
+// the bound, likely causes, concrete remedies — never a bare "timeout", and
+// it must beat the close handler's generic NO_RESULT wording.
+function assertActionableReapMessage(stdout) {
+  const errors = markers(stdout, 'SEND_ERROR')
+    .map((l) => JSON.parse(l.slice('[SEND_ERROR]'.length)).error);
+  assert.equal(errors.length, 1, `exactly one terminal error, got ${errors.length}: ${JSON.stringify(errors)}`);
+  const text = String(errors[0]);
+  assert.match(text, /no output|silent|silence/i, `must say WHAT happened (silence), got: ${text}`);
+  assert.match(text, /minute|second/i, `must name the silence bound's time unit, got: ${text}`);
+  assert.match(text, /auth|prompt|login|network|stall/i, `must name the likely cause (stuck prompt/auth or network stall), got: ${text}`);
+  assert.match(text, /login|agy|setting|cancel|terminal|retry/i, `must name a concrete remedy, got: ${text}`);
+  assert.ok(!/ended without a result payload/i.test(text), 'the reap message must win over the generic close-handler error');
+  return text;
+}
+
+test('Story 1.10 AC1/AC3: a turn silent past the idle window is reaped with an actionable message', async () => {
+  const { stdout, timedOut } = await runService({
+    mode: 'silent-hang',
+    hangInit: true,
+    extraEnv: { GEMINI_IDLE_REAP_MINUTES: '0.05' }, // 3s
+    timeoutMs: 9000,
+  });
+
+  assert.equal(timedOut, false, 'the reap must end the turn on its own — instead the harness timeout had to kill it');
+  assertActionableReapMessage(stdout);
+  assert.equal(markers(stdout, 'STREAM_END').length, 1, 'the stream ends exactly once after the reap');
+  const lines = protocolLines(stdout);
+  const errorIdx = lines.findIndex((l) => l.startsWith('[SEND_ERROR]'));
+  const endIdx = lines.findIndex((l) => l.startsWith('[STREAM_END]'));
+  assert.ok(errorIdx !== -1 && endIdx !== -1 && errorIdx < endIdx, 'the reap error precedes the stream end');
+});
+
+test('Story 1.10 AC3/AC4: the reap kills the whole child tree — no orphaned grandchild survives', async () => {
+  const gcPidFile = join(makeTempDir('gemini-reap-gc-'), 'gc.pid');
+  const { stdout, timedOut } = await runService({
+    mode: 'hang-with-grandchild',
+    hangInit: true,
+    extraEnv: { GEMINI_IDLE_REAP_MINUTES: '0.05' }, // 3s
+    gcPidFile,
+    timeoutMs: 9000,
+  });
+
+  assert.equal(timedOut, false, 'the reap must end the turn on its own — instead the harness timeout had to kill it');
+  assert.equal(markers(stdout, 'SEND_ERROR').length, 1, 'the reap emits its terminal error');
+  const gcPid = Number(readFileSync(gcPidFile, 'utf8').trim());
+  assert.ok(gcPid > 0, 'the fake grandchild recorded its pid');
+  const deadline = Date.now() + 5000;
+  let alive = true;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(gcPid, 0);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    } catch {
+      alive = false;
+      break;
+    }
+  }
+  assert.equal(alive, false, `the grandchild (pid ${gcPid}) must be dead after the tree-kill reap`);
+});
+
+test('Story 1.10 AC4: content streamed before the reap is retained and the turn ends exactly once', async () => {
+  const { stdout, timedOut } = await runService({
+    mode: 'delta-then-hang',
+    hangInit: true,
+    extraEnv: { GEMINI_IDLE_REAP_MINUTES: '0.05' }, // 3s
+    timeoutMs: 9000,
+  });
+
+  assert.equal(timedOut, false, 'the reap must end the turn on its own — instead the harness timeout had to kill it');
+  const deltas = markers(stdout, 'CONTENT_DELTA');
+  assert.ok(deltas.length >= 2, `the turn streamed content before hanging, got ${deltas.length} deltas`);
+  const lines = protocolLines(stdout);
+  const lastDeltaIdx = lines.map((l) => l.startsWith('[CONTENT_DELTA]')).lastIndexOf(true);
+  const errorIdx = lines.findIndex((l) => l.startsWith('[SEND_ERROR]'));
+  assert.ok(lastDeltaIdx !== -1 && errorIdx !== -1 && lastDeltaIdx < errorIdx, 'the streamed deltas precede the reap error — the partial transcript is kept');
+  assertActionableReapMessage(stdout);
+  assert.equal(markers(stdout, 'STREAM_END').length, 1, 'the stream ends exactly once (partial content + reap error + one end)');
+});
+
+test('Story 1.10 AC2 guard: output within the window keeps the turn alive past a full window of total elapsed time', async () => {
+  const { stdout, timedOut } = await runService({
+    mode: 'slow-emit',
+    emitKind: 'delta',
+    emitIntervalMs: '500',
+    emitLines: '8', // 8 × 500ms = 4s total elapsed > the 3s window; every gap 0.5s ≪ 3s
+    extraEnv: { GEMINI_IDLE_REAP_MINUTES: '0.05' },
+    timeoutMs: 15000,
+  });
+
+  assert.equal(timedOut, false, 'the turn must complete on its own');
+  assert.equal(markers(stdout, 'SEND_ERROR').length, 0, 'silence alone never kills — and neither may total elapsed time');
+  assert.equal(finalPayload(stdout).success, true, 'the turn completes normally');
+});
+
+test('Story 1.10 AC3 guard: unknown-but-parseable event lines also reset the silence window', async () => {
+  const { stdout, timedOut } = await runService({
+    mode: 'slow-emit',
+    emitKind: 'unknown',
+    emitIntervalMs: '500',
+    emitLines: '8',
+    extraEnv: { GEMINI_IDLE_REAP_MINUTES: '0.05' },
+    timeoutMs: 15000,
+  });
+
+  assert.equal(timedOut, false, 'the turn must complete on its own');
+  assert.equal(markers(stdout, 'SEND_ERROR').length, 0, 'every parsed line resets the watchdog, even unknown event types');
+  assert.equal(finalPayload(stdout).success, true, 'the turn completes normally');
+});
+
+test('Story 1.10 AC5 guard: idleReapMinutes=0 disables automatic reaping — a hung turn is left alone', async () => {
+  const { stdout, timedOut } = await runService({
+    mode: 'silent-hang',
+    hangInit: true,
+    extraEnv: { GEMINI_IDLE_REAP_MINUTES: '0' },
+    timeoutMs: 6000, // well past the 3s a non-zero window would have fired at
+  });
+
+  assert.equal(timedOut, true, 'the harness probe ends the run — the disabled watchdog must not have');
+  const reapErrors = markers(stdout, 'SEND_ERROR').filter((l) => /no output|silent|silence/i.test(l));
+  assert.equal(reapErrors.length, 0, `no reap error may appear while disabled, got: ${JSON.stringify(reapErrors)}`);
+});
+
+test('Story 1.10 Task 1 guard: no watchdog timer survives a normally completed turn', async () => {
+  const started = Date.now();
+  const { stdout, timedOut } = await runService({
+    fixture: 'success-text-turn.jsonl',
+    extraEnv: { GEMINI_IDLE_REAP_MINUTES: '0.1' }, // 6s: an armed-but-uncleared timer would hold the runner open past this
+    timeoutMs: 15000,
+  });
+  const elapsedMs = Date.now() - started;
+
+  assert.equal(timedOut, false, 'the completed turn releases the runner on its own');
+  assert.ok(elapsedMs < 4000, `a completed turn must not be held open by an armed reap timer (resolved in ${elapsedMs}ms)`);
+  assert.equal(finalPayload(stdout).success, true, 'and the turn itself completed normally');
 });

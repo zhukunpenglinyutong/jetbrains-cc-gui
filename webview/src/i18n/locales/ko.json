@@ -941,6 +941,11 @@
         "confirmExport": "내보내기 확인"
       }
     },
+    "gemini": {
+      "idleReapLabel": "출력 없는 턴 자동 중지",
+      "idleReapHelp": "지정한 분 동안 출력이 없는 Gemini 턴을 종료합니다. 보통 CLI가 대화형 프롬프트에서 멈췄거나 백엔드가 멈춘 경우입니다. 0이면 자동 중지가 비활성화됩니다.",
+      "idleReapDisabled": "비활성화됨"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",

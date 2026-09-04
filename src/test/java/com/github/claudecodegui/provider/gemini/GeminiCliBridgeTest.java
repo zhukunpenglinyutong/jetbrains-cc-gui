@@ -238,4 +238,49 @@ public class GeminiCliBridgeTest {
             assertEquals(mode, payload.get("permissionMode").getAsString());
         }
     }
+
+    @Test
+    public void configureExtraEnvCarriesIdleReapMinutesOnEverySend() {
+        // Story 1.10: the silence-window watchdog in the ai-bridge reads its
+        // window from GEMINI_IDLE_REAP_MINUTES. The bridge must inject it on
+        // EVERY send (the bridge process is spawned per send) — with the
+        // documented default 30 when the user never touched the setting, so
+        // the default does not silently depend on the Node side.
+        GeminiCliBridge bridge = new GeminiCliBridge();
+        java.util.Map<String, String> env = new java.util.HashMap<>();
+        bridge.configureExtraEnv(env);
+        assertTrue(
+                "GEMINI_IDLE_REAP_MINUTES must be forwarded on every send (story 1.10 Task 2)",
+                env.containsKey("GEMINI_IDLE_REAP_MINUTES"));
+        assertEquals("30", env.get("GEMINI_IDLE_REAP_MINUTES"));
+    }
+
+    @Test
+    public void configureExtraEnvForwardsDisabledZeroFromTheSettingsBlock() throws Exception {
+        // The disable affordance (gemini.idleReapMinutes = 0) must survive the
+        // carriage verbatim: "0" on the env, never swallowed into a default.
+        String originalHomeDir = null;
+        java.lang.reflect.Field homeField = Class.forName("com.github.claudecodegui.util.PlatformUtils")
+                .getDeclaredField("cachedRealHomeDir");
+        homeField.setAccessible(true);
+        java.nio.file.Path tempHome = java.nio.file.Files.createTempDirectory("gemini-reap-zero-home");
+        try {
+            originalHomeDir = (String) homeField.get(null);
+            homeField.set(null, tempHome.toString());
+            java.nio.file.Path codemoss = tempHome.resolve(".codemoss");
+            java.nio.file.Files.createDirectories(codemoss);
+            java.nio.file.Files.writeString(
+                    codemoss.resolve("config.json"),
+                    "{\"gemini\":{\"idleReapMinutes\":0}}");
+
+            GeminiCliBridge bridge = new GeminiCliBridge();
+            java.util.Map<String, String> env = new java.util.HashMap<>();
+            bridge.configureExtraEnv(env);
+            assertEquals("0", env.get("GEMINI_IDLE_REAP_MINUTES"));
+        } finally {
+            if (originalHomeDir != null) {
+                homeField.set(null, originalHomeDir);
+            }
+        }
+    }
 }

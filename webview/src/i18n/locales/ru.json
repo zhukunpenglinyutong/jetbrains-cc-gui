@@ -859,6 +859,11 @@
         "saveChanges": "Сохранить"
       }
     },
+    "gemini": {
+      "idleReapLabel": "Автоматически останавливать простаивающие ходы",
+      "idleReapHelp": "Завершает ход Gemini, если он не выдаёт вывод указанное количество минут — обычно это CLI, зависший в интерактивном запросе, или зависший бэкенд. 0 отключает автоматическую остановку.",
+      "idleReapDisabled": "Отключено"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",

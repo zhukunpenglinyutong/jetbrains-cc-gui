@@ -47,7 +47,7 @@ import fs from 'fs';
 import { homedir } from 'os';
 import { resolve } from 'path';
 import { resolveGeminiCliPath, enrichPathWithBinDirs, commonCliBinDirs } from '../../utils/cli-path.js';
-import { runCliStreaming } from '../../utils/cli-spawn.js';
+import { killChildTree, runCliStreaming } from '../../utils/cli-spawn.js';
 import { PermissionMapperFactory } from '../../utils/permission-mapper.js';
 import {
   beginStream,
@@ -299,6 +299,60 @@ export function normalizeGeminiModelId(value) {
   return trimmed;
 }
 
+// Silence-window reap (turn resilience): the ONLY time-based termination in
+// the gemini path. It measures stdout SILENCE — every parsed stream line
+// resets it — never total elapsed time, so a turn that keeps producing
+// output survives indefinitely. The window travels from the Java settings
+// via GEMINI_IDLE_REAP_MINUTES on every send; 0 (and, fail-safe, any
+// unparseable value) disables the automatic kill entirely.
+const DEFAULT_IDLE_REAP_MINUTES = 30;
+
+/**
+ * Window in minutes; fractions allowed so the real spawn→timer→tree-kill
+ * path can be exercised in seconds (the settings UI only sends integers).
+ * Absent/blank → the documented default (30, above the known-legitimate
+ * 20-minute silent build tail). `0` → disabled. Unparseable/negative →
+ * disabled: an unknown value must never turn into a surprise kill.
+ * @param {unknown} raw
+ * @returns {number} minutes (0 = disabled)
+ */
+function parseIdleReapMinutes(raw) {
+  if (raw === undefined || raw === null) return DEFAULT_IDLE_REAP_MINUTES;
+  const text = String(raw).trim();
+  if (!text) return DEFAULT_IDLE_REAP_MINUTES;
+  const value = Number(text);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return value;
+}
+
+function formatIdleWindow(minutes) {
+  if (minutes >= 1) {
+    return `${Math.round(minutes * 10) / 10} minutes`;
+  }
+  return `${Math.max(1, Math.round(minutes * 60))} seconds`;
+}
+
+/**
+ * Actionable reap message: what happened (silence + the bound), the liveness
+ * observation (supporting evidence only — never a second kill signal), the
+ * likely causes in observed order (stuck interactive prompt — most commonly
+ * authentication; backend/network stall) and concrete remedies. Must stay
+ * clear of formatGeminiError's auth-classifier phrases (the text is already
+ * the final user-facing cause+remedy set) and of the close handler's
+ * "ended without a result payload" wording.
+ */
+function buildIdleReapMessage(minutes, processAlive) {
+  const observation = processAlive
+    ? 'the CLI process was alive but silent — it is likely stuck at an interactive prompt (most commonly authentication) or stalled on the backend/network'
+    : 'the CLI process had already exited without delivering a result';
+  return [
+    `Gemini turn stopped automatically: no output from the Gemini CLI (agy) for ${formatIdleWindow(minutes)}.`,
+    `- Likely cause: ${observation}.`,
+    "- What to do: run 'agy' in an external terminal to check your login, then cancel and retry; if the turn was legitimately silent (e.g. a long build), raise the window.",
+    '- This limit is configurable: set gemini.idleReapMinutes in the Gemini plugin settings (0 disables automatic stopping).',
+  ].join('\n');
+}
+
 export function buildGeminiArgs({ message, sessionId, model, permissionMode = '' }) {
   const args = [
     '-p',
@@ -413,6 +467,19 @@ export async function sendMessage(
 
   let promptText = message || '';
   let imagePaths = [];
+
+  // Silence-window reap state. The timer is armed only after a successful
+  // spawn (onSpawn), reset by every parsed stdout line, and cleared in the
+  // finally below — a reap timer firing on a finished turn is a defect.
+  const idleReapMinutes = parseIdleReapMinutes(process.env.GEMINI_IDLE_REAP_MINUTES);
+  let reapChild = null;
+  let reapTimer = null;
+  const clearIdleReapTimer = () => {
+    if (reapTimer !== null) {
+      clearTimeout(reapTimer);
+      reapTimer = null;
+    }
+  };
   try {
     // EVERYTHING between beginStream() and the spawn stays inside this try:
     // a throw here (CLI resolution, path/attachment work, ...) must still
@@ -490,6 +557,34 @@ export async function sendMessage(
       }
     };
 
+    // Reap decision: no parsed stream line arrived within the window. Kill
+    // the detached process group FIRST (the close event that follows lands
+    // on an already-failing stream), then exactly one actionable error, then
+    // close dangling tool bubbles and end the stream exactly once.
+    const reapHungTurn = () => {
+      clearIdleReapTimer();
+      const alive = Boolean(reapChild && reapChild.exitCode === null && reapChild.signalCode === null);
+      killChildTree(reapChild, 'gemini');
+      // failureEmitted is set synchronously here, so the close handler that
+      // fires a moment later cannot layer the generic NO_RESULT error on top.
+      emitFailure(buildIdleReapMessage(idleReapMinutes, alive), { status: 'IDLE_REAP', idleMinutes: idleReapMinutes });
+      flushUnresolvedTools();
+      emitStreamEndOnce();
+    };
+    const armIdleReapTimer = () => {
+      clearIdleReapTimer();
+      if (idleReapMinutes <= 0) return;
+      reapTimer = setTimeout(reapHungTurn, idleReapMinutes * 60 * 1000);
+      // The child's pipes keep the loop alive while the turn runs; unref only
+      // stops an armed timer from delaying a runner that is done otherwise.
+      reapTimer.unref?.();
+    };
+    const resetIdleReapTimer = () => {
+      if (reapTimer !== null) {
+        armIdleReapTimer();
+      }
+    };
+
     await runCliStreaming({
       bin,
       args,
@@ -497,6 +592,10 @@ export async function sendMessage(
       env,
       label: 'gemini',
       emitEndStream: false,
+      onSpawn: (child) => {
+        reapChild = child;
+        armIdleReapTimer();
+      },
       onError: (msg) => {
         // CLI-driven failures (spawn error or nonzero exit, both reported by
         // runCliStreaming through this callback) never override a result
@@ -528,6 +627,11 @@ export async function sendMessage(
           return;
         }
         if (!event || typeof event !== 'object') return;
+
+        // Evidence of life: EVERY parsed line (known or unknown event) resets
+        // the silence window — silence is the only thing the watchdog ever
+        // measures, so streaming output keeps a turn alive indefinitely.
+        resetIdleReapTimer();
 
         if (event.event === 'init') {
           // A resumed turn already emitted the id pre-spawn; re-emitting the
@@ -667,6 +771,7 @@ export async function sendMessage(
       emitFailure(err?.message || String(err), { status: 'PRE_SPAWN_ERROR' });
     }
   } finally {
+    clearIdleReapTimer();
     emitStreamEndOnce();
     await cleanupMaterializedImagePaths(imagePaths);
   }

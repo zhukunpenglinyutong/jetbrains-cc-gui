@@ -994,6 +994,11 @@
         "confirmExport": "Confirmar Exportação"
       }
     },
+    "gemini": {
+      "idleReapLabel": "Interromper turnos silenciosos automaticamente",
+      "idleReapHelp": "Encerra um turno do Gemini que não produz saída por estes minutos — normalmente uma CLI presa em um prompt interativo ou um backend parado. 0 desativa a interrupção automática.",
+      "idleReapDisabled": "Desativado"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",

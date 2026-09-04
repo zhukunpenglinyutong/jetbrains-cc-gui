@@ -847,6 +847,11 @@
         "saveChanges": "Save"
       }
     },
+    "gemini": {
+      "idleReapLabel": "Arrêter automatiquement les tours silencieux",
+      "idleReapHelp": "Met fin à un tour Gemini sans aucune sortie pendant ce nombre de minutes — généralement une CLI bloquée sur une invite interactive ou un backend en panne. 0 désactive l'arrêt automatique.",
+      "idleReapDisabled": "Désactivé"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",

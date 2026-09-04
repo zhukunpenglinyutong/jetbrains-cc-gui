@@ -290,6 +290,39 @@ public class ProjectConfigHandler {
         return jsonOf("permissionDialogTimeoutSeconds", effectiveSeconds);
     }
 
+    public void handleGetGeminiIdleReapMinutes() {
+        respondWithJson("window.updateGeminiIdleReapMinutes",
+            () -> jsonOf("geminiIdleReapMinutes", settingsService.getGeminiIdleReapMinutes()),
+            jsonOf("geminiIdleReapMinutes", CodemossSettingsService.DEFAULT_GEMINI_IDLE_REAP_MINUTES),
+            "Failed to get Gemini idle reap window");
+    }
+
+    public void handleSetGeminiIdleReapMinutes(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            // Strict type check like the permission-dialog timeout: only a JSON
+            // numeric primitive is accepted; anything else keeps the default.
+            int minutes = CodemossSettingsService.DEFAULT_GEMINI_IDLE_REAP_MINUTES;
+            if (json != null && json.has("geminiIdleReapMinutes")) {
+                JsonElement element = json.get("geminiIdleReapMinutes");
+                if (element != null
+                        && element.isJsonPrimitive()
+                        && element.getAsJsonPrimitive().isNumber()) {
+                    minutes = element.getAsInt();
+                }
+            }
+            settingsService.setGeminiIdleReapMinutes(minutes);
+            LOG.info("[ProjectConfigHandler] Set Gemini idle reap window: "
+                    + settingsService.getGeminiIdleReapMinutes() + " min");
+            pushJson("window.updateGeminiIdleReapMinutes",
+                    jsonOf("geminiIdleReapMinutes", settingsService.getGeminiIdleReapMinutes()));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set Gemini idle reap window; errorClass="
+                    + e.getClass().getSimpleName(), e);
+            showError("Failed to save Gemini idle reap window. See IDE log for details.");
+        }
+    }
+
     public void handleGetSendShortcut() {
         try {
             String sendShortcut = PropertiesComponent.getInstance().getValue(SEND_SHORTCUT_PROPERTY_KEY, "enter");
