@@ -109,4 +109,34 @@ describe('useGeminiPlanUsage', () => {
     expect(resolveDisplayWindow(snapshot!, 'gemini-5h').capacityPct).toBe(58);
     expect(resolveDisplayWindow(snapshot!, 'gemini-weekly').capacityPct).toBe(23.83);
   });
+
+  it('installs the exact contracted JS callback global (review M1: bridge wiring)', () => {
+    // Java pushes through `window.updateGeminiPlanUsage` — pinned byte-identical
+    // on the Java side by GeminiPlanUsageHandlerCallbackTest.
+    w.sendToJava = vi.fn();
+    renderHook(() => useGeminiPlanUsage('gemini', 'gemini-3.7-flash-high'));
+    expect(typeof w.updateGeminiPlanUsage).toBe('function');
+  });
+
+  it('repolls on the pinned 120s cadence and stops after unmount (review L6)', () => {
+    vi.useFakeTimers();
+    try {
+      w.sendToJava = vi.fn();
+      const { unmount } = renderHook(() =>
+        useGeminiPlanUsage('gemini', 'gemini-3.7-flash-high'));
+      expect(w.sendToJava).toHaveBeenCalledTimes(1); // initial poll
+
+      act(() => { vi.advanceTimersByTime(119_999); });
+      expect(w.sendToJava).toHaveBeenCalledTimes(1);
+
+      act(() => { vi.advanceTimersByTime(1); });
+      expect(w.sendToJava).toHaveBeenCalledTimes(2); // exactly one repoll at 120s
+
+      unmount();
+      act(() => { vi.advanceTimersByTime(10 * 120_000); });
+      expect(w.sendToJava).toHaveBeenCalledTimes(2); // interval cleared on unmount
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -33,6 +33,7 @@
       "tooltipWindow": "{{period}} {{percent}}%",
       "tooltipWindowWithReset": "{{period}} {{percent}}% · сброс {{value}}",
       "clickToSwitch": "Нажмите, чтобы переключить окно",
+      "switchWindowHint": "Нажмите на метку периода, чтобы переключить окно",
       "worstHint": "Точка показывает худшее окно ({{color}})",
       "worstDot": "Худшее окно: {{color}}",
       "stale": "Данные могут быть устаревшими (не удалось обновить)"

@@ -38,7 +38,8 @@ import java.util.concurrent.TimeUnit;
  * probe is never spawned below the floor — the only outcome is an
  * unavailable payload with an upgrade hint. A {@code SUCCESS} payload without
  * the {@code command} object is the documented old-CLI marker and is treated
- * the same way (after that single probe, without retrying).
+ * the same way — and that outcome is negative-cached so the 120s poll never
+ * re-spawns the probe until the cache TTL expires.
  *
  * <p>The webview polls {@code get_gemini_plan_usage} every ~120s with the
  * selected model slug riding along; the cache is keyed by billing family so a
@@ -94,9 +95,11 @@ public final class GeminiPlanUsageService {
     static JsonObject resolvePlanUsagePayload(String selectedModelSlug, long nowMs) {
         // Gate BEFORE anything else: on a below-floor CLI the probe itself is
         // the hazard, so not even a cached payload's refresh may spawn it.
-        CliToolStatus cli = geminiCliStatus();
-        if (!cliMeetsProductFloor(cliVersion(cli))) {
-            return unavailable(upgradeHint(cliVersion(cli)));
+        // The test override short-circuits BEFORE the detector so unit tests
+        // never spawn real `--version` processes.
+        String version = cliVersionOverrideSet ? cliVersionOverride : detectedCliVersion();
+        if (!cliMeetsProductFloor(version)) {
+            return unavailable(upgradeHint(version));
         }
 
         String family = familyOf(selectedModelSlug);
@@ -112,9 +115,17 @@ public final class GeminiPlanUsageService {
                 CACHE.put(family, new FamilyCache(nowMs, parsed));
                 return parsed.deepCopy();
             }
-            // The probe answered but not with usable quota data: a SUCCESS
-            // without the command object is the old-CLI marker (hint, and this
-            // single probe already did the damage — never retry in a loop).
+            // The probe answered but not with usable quota data. A SUCCESS
+            // without the command object is the old-CLI marker: that single
+            // probe already ran as a model prompt (the damage is done), so
+            // negative-cache the outcome — the 120s poll must not re-spawn it
+            // until the TTL expires. Other unparseable answers are zero-cost
+            // to re-probe and self-healing, so they stay uncached.
+            if (isOldCliMarker(raw)) {
+                JsonObject negative = unavailable(outcomeMessage(raw));
+                CACHE.put(family, new FamilyCache(nowMs, negative));
+                return negative.deepCopy();
+            }
             return unavailable(outcomeMessage(raw));
         } catch (Exception e) {
             LOG.warn("Gemini usage probe failed: " + e.getMessage());
@@ -261,10 +272,8 @@ public final class GeminiPlanUsageService {
 
     // ===== version gate =====
 
-    private static String cliVersion(CliToolStatus cli) {
-        if (cliVersionOverrideSet) {
-            return cliVersionOverride;
-        }
+    private static String detectedCliVersion() {
+        CliToolStatus cli = geminiCliStatus();
         return cli != null && cli.isInstalled() ? cli.getVersion() : null;
     }
 
@@ -301,7 +310,10 @@ public final class GeminiPlanUsageService {
         while (end < part.length() && Character.isDigit(part.charAt(end))) {
             end++;
         }
-        if (end == 0) {
+        if (end == 0 || end < part.length()) {
+            // No leading digits, or a trailing qualifier ("11-rc1"): a
+            // prerelease of the floor must NOT pass the gate, so any
+            // non-numeric residue counts as unverifiable (gate stays closed).
             return -1;
         }
         try {
@@ -321,13 +333,29 @@ public final class GeminiPlanUsageService {
                 + "). Run `agy update` to upgrade.";
     }
 
+    /**
+     * The documented old-CLI marker: a {@code SUCCESS} answer that carries no
+     * {@code command} object — on CLIs below the product floor {@code /usage}
+     * ran as a model prompt instead of a structural command.
+     */
+    private static boolean isOldCliMarker(JsonObject raw) {
+        JsonElement command = raw == null ? null : raw.get("command");
+        return "SUCCESS".equals(asString(raw, "status"))
+                && (command == null || !command.isJsonObject());
+    }
+
     /** Unavailable message for a probe that answered without usable quota data. */
     private static String outcomeMessage(JsonObject raw) {
         String status = raw == null ? null : asString(raw, "status");
         if ("SUCCESS".equals(status)) {
-            return "Antigravity CLI " + PRODUCT_FLOOR
-                    + "+ is required for usage data — the CLI answered without the usage structure. "
-                    + "Run `agy update` to upgrade.";
+            if (isOldCliMarker(raw)) {
+                return "Antigravity CLI " + PRODUCT_FLOOR
+                        + "+ is required for usage data — the CLI answered without the usage structure. "
+                        + "Run `agy update` to upgrade.";
+            }
+            // New CLI, structural answer — the family simply has no quota group
+            // (no upgrade hint here; `agy update` would not change anything).
+            return "Gemini usage unavailable: the CLI reported no quota group for this model's billing family.";
         }
         return "Gemini usage unavailable: the CLI reported "
                 + (status != null ? "status " + status : "no status") + " for /usage.";
@@ -396,7 +424,7 @@ public final class GeminiPlanUsageService {
                     output.append(line).append('\n');
                 }
             }
-            JsonObject answer = firstJsonObject(output.toString());
+            JsonObject answer = lastJsonObject(output.toString());
             if (answer == null) {
                 throw new IllegalStateException("agy /usage produced no JSON answer");
             }
@@ -409,10 +437,12 @@ public final class GeminiPlanUsageService {
     }
 
     /**
-     * Stderr is merged into stdout, so scan for the last line that parses as a
-     * JSON object rather than trusting line 1 or the exit code.
+     * Stderr is merged into stdout, so scan for the LAST line that parses as a
+     * JSON object rather than trusting line 1 or the exit code. Non-JSON noise
+     * lines (spinner/status text) are skipped; a text with no JSON object line
+     * yields {@code null}.
      */
-    private static JsonObject firstJsonObject(String text) {
+    static JsonObject lastJsonObject(String text) {
         JsonObject found = null;
         for (String line : text.split("\n")) {
             String trimmed = line.trim();

@@ -304,6 +304,116 @@ public class GeminiPlanUsageServiceTest {
         assertEquals("exactly one probe, no retry loop", 1, calls[0]);
     }
 
+    @Test
+    public void resolvePlanUsagePayload_oldCliMarker_negativeCachedAcrossPollsUntilTtlExpires() {
+        // Review M2: the marker outcome must be negatively cached — the next
+        // 120s poll re-serves it WITHOUT spawning another probe process (each
+        // probe on a truly old CLI burns tokens). Only after the TTL expires
+        // is one re-probe allowed (the user may have upgraded).
+        int[] calls = {0};
+        GeminiPlanUsageService.setCliVersionForTests("1.1.26");
+        GeminiPlanUsageService.setAgyTransportForTests(() -> {
+            calls[0]++;
+            return payload(OLD_CLI_PAYLOAD);
+        });
+        long t0 = 1_000_000L;
+
+        JsonObject first = GeminiPlanUsageService.resolvePlanUsagePayload(
+                "gemini-3.7-flash-high", t0);
+        assertFalse(first.get("present").getAsBoolean());
+        assertEquals(1, calls[0]);
+
+        // Next poll within TTL → negative cache answers, ZERO new probes
+        JsonObject second = GeminiPlanUsageService.resolvePlanUsagePayload(
+                "gemini-3.7-flash-high", t0 + GeminiPlanUsageService.CACHE_TTL_MS - 1);
+        assertFalse(second.get("present").getAsBoolean());
+        assertTrue("cached negative must still carry the upgrade hint",
+                second.get("message").getAsString().contains("agy update"));
+        assertEquals("old-CLI marker must not re-spawn the probe on the next poll",
+                1, calls[0]);
+
+        // TTL expired → exactly one re-probe (upgrade window), outcome re-cached
+        GeminiPlanUsageService.resolvePlanUsagePayload(
+                "gemini-3.7-flash-high", t0 + GeminiPlanUsageService.CACHE_TTL_MS + 1);
+        assertEquals(2, calls[0]);
+    }
+
+    @Test
+    public void resolvePlanUsagePayload_successWithoutFamilyGroup_noFalseUpgradeHint() {
+        // Review L3: SUCCESS + command object present but no quota group for
+        // the family is NOT an old CLI — an upgrade hint here would be wrong
+        // (`agy update` fixes nothing). Only the no-command marker hints.
+        JsonObject threePOnly = new JsonObject();
+        threePOnly.addProperty("status", "SUCCESS");
+        JsonObject bucket = new JsonObject();
+        bucket.addProperty("id", "3p-weekly");
+        bucket.addProperty("window", "weekly");
+        bucket.addProperty("remaining_fraction", 1);
+        JsonArray buckets = new JsonArray();
+        buckets.add(bucket);
+        JsonObject group = new JsonObject();
+        group.addProperty("name", "Claude and GPT models");
+        group.add("buckets", buckets);
+        JsonArray groups = new JsonArray();
+        groups.add(group);
+        JsonObject data = new JsonObject();
+        data.add("groups", groups);
+        JsonObject command = new JsonObject();
+        command.add("data", data);
+        threePOnly.add("command", command);
+
+        GeminiPlanUsageService.setCliVersionForTests("1.1.26");
+        GeminiPlanUsageService.setAgyTransportForTests(() -> threePOnly);
+        JsonObject out = GeminiPlanUsageService.resolvePlanUsagePayload(
+                "gemini-3.7-flash-high", 1_000_000L);
+        assertFalse(out.get("present").getAsBoolean());
+        String message = out.get("message").getAsString();
+        assertFalse("a missing family group must not produce an upgrade hint: " + message,
+                message.contains("agy update"));
+        assertTrue(message.contains("billing family"));
+    }
+
+    // ===== probe-answer parsing rules (review L4) =====
+
+    @Test
+    public void lastJsonObject_returnsTheLastParseableObjectLine_noiseSkipped() {
+        // Stdout/stderr are merged: spinners and status text surround the
+        // answer, and the LAST JSON object line wins (later answer beats log).
+        JsonObject out = GeminiPlanUsageService.lastJsonObject(
+                "starting probe…\n{\"progress\": 1}\nnot json {\n"
+                        + "{\"conversation_id\":\"\",\"status\":\"SUCCESS\"}\n");
+        assertEquals("SUCCESS", out.get("status").getAsString());
+
+        JsonObject only = GeminiPlanUsageService.lastJsonObject("noise\n{\"a\": 1}\nnoise\n");
+        assertEquals(1, only.get("a").getAsInt());
+    }
+
+    @Test
+    public void lastJsonObject_noJsonObjectLine_returnsNull() {
+        assertNull(GeminiPlanUsageService.lastJsonObject(""));
+        assertNull(GeminiPlanUsageService.lastJsonObject("plain text\n[1, 2]\n{broken\n"));
+    }
+
+    // ===== version-gate boundary semantics (review L5) =====
+
+    @Test
+    public void atLeastVersion_boundaryAndQualifierSemantics() {
+        // The floor itself passes; anything below fails.
+        assertTrue(GeminiPlanUsageService.atLeastVersion("1.1.11", "1.1.11"));
+        assertTrue(GeminiPlanUsageService.atLeastVersion("1.1.12", "1.1.11"));
+        assertTrue(GeminiPlanUsageService.atLeastVersion("1.2", "1.1.11"));
+        assertTrue(GeminiPlanUsageService.atLeastVersion("v1.1.11", "1.1.11"));
+        assertFalse(GeminiPlanUsageService.atLeastVersion("1.1.10", "1.1.11"));
+        assertFalse(GeminiPlanUsageService.atLeastVersion("1.1", "1.1.11"));
+
+        // A prerelease of the floor (1.1.11-rc1) is NOT verifiably >= 1.1.11:
+        // javadoc contract — any non-numeric part keeps the gate closed, since
+        // probing a below-floor CLI burns tokens (fail-safe direction).
+        assertFalse(GeminiPlanUsageService.atLeastVersion("1.1.11-rc1", "1.1.11"));
+        assertFalse(GeminiPlanUsageService.atLeastVersion("1.1.x", "1.1.11"));
+        assertFalse(GeminiPlanUsageService.atLeastVersion("abc", "1.1.11"));
+    }
+
     // ===== caching (TTL / stale / family keying) =====
 
     @Test

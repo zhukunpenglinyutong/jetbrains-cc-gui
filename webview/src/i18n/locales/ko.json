@@ -33,6 +33,7 @@
       "tooltipWindow": "{{period}} {{percent}}%",
       "tooltipWindowWithReset": "{{period}} {{percent}}% · {{value}}에 초기화",
       "clickToSwitch": "클릭하여 기간 전환",
+      "switchWindowHint": "기간 레이블을 클릭하여 창 전환",
       "worstHint": "점은 최악의 창을 표시합니다({{color}})",
       "worstDot": "최악의 창: {{color}}",
       "stale": "데이터가 오래되었을 수 있습니다(새로고침 실패)"

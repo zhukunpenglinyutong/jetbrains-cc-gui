@@ -33,6 +33,7 @@
       "tooltipWindow": "{{period}} {{percent}}%",
       "tooltipWindowWithReset": "{{period}} {{percent}}% · Reinicia em {{value}}",
       "clickToSwitch": "Clique para alternar entre janelas",
+      "switchWindowHint": "Clique no rótulo do período para alternar a janela",
       "worstHint": "O ponto mostra a pior janela ({{color}})",
       "worstDot": "Pior janela: {{color}}",
       "stale": "Os dados podem estar desatualizados (falha na atualização)"

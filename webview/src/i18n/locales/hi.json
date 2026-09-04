@@ -33,6 +33,7 @@
       "tooltipWindow": "{{period}} {{percent}}%",
       "tooltipWindowWithReset": "{{period}} {{percent}}% · रीसेट {{value}}",
       "clickToSwitch": "विंडो बदलने के लिए क्लिक करें",
+      "switchWindowHint": "विंडो बदलने के लिए अवधि लेबल पर क्लिक करें",
       "worstHint": "बिंदु सबसे खराब विंडो दिखाता है ({{color}})",
       "worstDot": "सबसे खराब विंडो: {{color}}",
       "stale": "डेटा पुराना हो सकता है (रीफ्रेश विफल)"

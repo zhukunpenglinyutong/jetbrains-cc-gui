@@ -50,6 +50,7 @@
       "tooltipWindow": "{{period}} {{percent}}%",
       "tooltipWindowWithReset": "{{period}} {{percent}}% · Resets {{value}}",
       "clickToSwitch": "Click to switch between windows",
+      "switchWindowHint": "Click period label to switch window",
       "worstHint": "Dot shows worst window ({{color}})",
       "worstDot": "Worst window: {{color}}",
       "stale": "Data may be outdated (refresh failed)"

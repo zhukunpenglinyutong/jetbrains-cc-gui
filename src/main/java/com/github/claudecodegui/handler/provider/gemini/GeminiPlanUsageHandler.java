@@ -17,8 +17,18 @@ import com.intellij.openapi.application.ApplicationManager;
  */
 public class GeminiPlanUsageHandler extends BaseMessageHandler {
 
+    /** Dispatch type the webview polls with ({@code get_gemini_plan_usage:<slug>}). */
+    static final String DISPATCH_TYPE = "get_gemini_plan_usage";
+    /**
+     * JS callback the snapshot is pushed through. Contract-pinned by
+     * {@code GeminiPlanUsageHandlerCallbackTest} (precedent:
+     * {@code CodexMcpServerHandlerCallbackTest}) so a rename cannot silently
+     * kill the indicator while the suites stay green.
+     */
+    static final String GEMINI_PLAN_USAGE_CALLBACK = "window.updateGeminiPlanUsage";
+
     private static final String[] SUPPORTED_TYPES = {
-            "get_gemini_plan_usage"
+            DISPATCH_TYPE
     };
 
     public GeminiPlanUsageHandler(HandlerContext context) {
@@ -32,7 +42,7 @@ public class GeminiPlanUsageHandler extends BaseMessageHandler {
 
     @Override
     public boolean handle(String type, String content) {
-        if ("get_gemini_plan_usage".equals(type)) {
+        if (DISPATCH_TYPE.equals(type)) {
             String selectedModelSlug = content != null ? content.trim() : "";
             ApplicationManager.getApplication().executeOnPooledThread(() -> {
                 try {
@@ -41,12 +51,12 @@ public class GeminiPlanUsageHandler extends BaseMessageHandler {
                         usage = new JsonObject();
                         usage.addProperty("error", true);
                     }
-                    context.callJavaScript("window.updateGeminiPlanUsage", context.escapeJs(usage.toString()));
+                    context.callJavaScript(GEMINI_PLAN_USAGE_CALLBACK, context.escapeJs(usage.toString()));
                 } catch (Exception e) {
                     JsonObject error = new JsonObject();
                     error.addProperty("error", true);
                     error.addProperty("message", e.getMessage());
-                    context.callJavaScript("window.updateGeminiPlanUsage", context.escapeJs(error.toString()));
+                    context.callJavaScript(GEMINI_PLAN_USAGE_CALLBACK, context.escapeJs(error.toString()));
                 }
             });
             return true;

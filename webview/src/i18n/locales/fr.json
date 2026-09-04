@@ -33,6 +33,7 @@
       "tooltipWindow": "{{period}} {{percent}}%",
       "tooltipWindowWithReset": "{{period}} {{percent}}% · réinitialise {{value}}",
       "clickToSwitch": "Cliquez pour changer de période",
+      "switchWindowHint": "Cliquez sur le libellé de période pour changer de fenêtre",
       "worstHint": "Le point montre la pire fenêtre ({{color}})",
       "worstDot": "Pire fenêtre : {{color}}",
       "stale": "Les données peuvent être obsolètes (échec de l'actualisation)"

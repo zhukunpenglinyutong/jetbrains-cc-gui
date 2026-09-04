@@ -33,6 +33,7 @@
       "tooltipWindow": "{{period}} {{percent}}%",
       "tooltipWindowWithReset": "{{period}} {{percent}}% · {{value}} 重設",
       "clickToSwitch": "點擊切換時間視窗",
+      "switchWindowHint": "點擊期間標籤以切換時間視窗",
       "worstHint": "圓點顯示最差視窗（{{color}}）",
       "worstDot": "最差視窗：{{color}}",
       "stale": "資料可能已過期（重新整理失敗）"

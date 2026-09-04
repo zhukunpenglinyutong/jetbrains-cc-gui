@@ -33,6 +33,7 @@
       "tooltipWindow": "{{period}} {{percent}}%",
       "tooltipWindowWithReset": "{{period}} {{percent}}% · {{value}} にリセット",
       "clickToSwitch": "クリックで期間を切り替え",
+      "switchWindowHint": "期間ラベルをクリックしてウィンドウを切り替え",
       "worstHint": "ドットは最も悪いウィンドウを示します（{{color}}）",
       "worstDot": "最も悪いウィンドウ: {{color}}",
       "stale": "データが古い可能性があります（更新失敗）"
