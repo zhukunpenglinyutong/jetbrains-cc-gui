@@ -15,8 +15,16 @@ import java.util.Map;
  */
 public class GeminiCliBridge extends MarkerCliBridge {
 
+    private final GeminiHistoryReader historyReader;
+
     public GeminiCliBridge() {
+        this(new GeminiHistoryReader());
+    }
+
+    /** Test constructor so history loading can be pointed at an isolated fixture. */
+    GeminiCliBridge(GeminiHistoryReader historyReader) {
         super(GeminiCliBridge.class);
+        this.historyReader = historyReader;
     }
 
     @Override
@@ -36,7 +44,11 @@ public class GeminiCliBridge extends MarkerCliBridge {
 
     @Override
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) {
-        // History reader arrives in Story 1.7
-        return Collections.emptyList();
+        try {
+            return historyReader.getSessionMessages(sessionId, cwd);
+        } catch (Exception e) {
+            LOG.warn("[Gemini] Failed to load session messages: " + e.getMessage());
+            return Collections.emptyList();
+        }
     }
 }

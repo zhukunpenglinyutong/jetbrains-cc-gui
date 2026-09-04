@@ -4,6 +4,8 @@ import com.github.claudecodegui.provider.common.MarkerCliBridge;
 import com.github.claudecodegui.session.SessionProviderRouter;
 import org.junit.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -42,10 +44,63 @@ public class GeminiCliBridgeTest {
     }
 
     @Test
-    public void historyReaderIsDeferredToStory17() {
+    public void historyReaderDelegatesToGeminiHistoryReader() throws Exception {
+        // The Story-1.2 empty-list stub is gone: the bridge must route history loads
+        // through GeminiHistoryReader. A fixture database is injected via the test
+        // constructor because the default home is the user's real CLI storage.
+        org.junit.rules.TemporaryFolder home = new org.junit.rules.TemporaryFolder();
+        home.create();
+        try {
+            String conversationId = "55555555-5555-4555-8555-555555555555";
+            Path conversations = home.newFolder("conversations").toPath();
+            Files.createDirectories(conversations);
+            Path db = conversations.resolve(conversationId + ".db");
+            try (java.sql.Connection conn = java.sql.DriverManager.getConnection(
+                    "jdbc:sqlite:" + db.toAbsolutePath());
+                 java.sql.Statement statement = conn.createStatement()) {
+                statement.execute("CREATE TABLE steps (idx INTEGER PRIMARY KEY, step_type TEXT, "
+                        + "status TEXT, step_payload BLOB, error_details TEXT)");
+                byte[] payload = flatUserPayload("loaded through the bridge");
+                try (java.sql.PreparedStatement insert = conn.prepareStatement(
+                        "INSERT INTO steps (idx, step_type, status, step_payload) "
+                                + "VALUES (0, 'user', 'done', ?)")) {
+                    insert.setBytes(1, payload);
+                    insert.executeUpdate();
+                }
+            }
+            GeminiHistoryReader reader = new GeminiHistoryReader(
+                    home.getRoot().toPath(), new com.google.gson.Gson());
+            GeminiCliBridge bridge = new GeminiCliBridge(reader);
+
+            List<com.google.gson.JsonObject> messages =
+                    bridge.getSessionMessages(conversationId, "/tmp");
+            assertEquals(1, messages.size());
+            assertEquals("user", messages.get(0).get("type").getAsString());
+        } finally {
+            home.delete();
+        }
+    }
+
+    @Test
+    public void historyLoadRefusesIdsOutsideTheSharedWhitelist() {
         GeminiCliBridge bridge = new GeminiCliBridge();
-        List<com.google.gson.JsonObject> messages = bridge.getSessionMessages("sess-1", "/tmp");
+        List<com.google.gson.JsonObject> messages = bridge.getSessionMessages("../evil", "/tmp");
         assertTrue(messages.isEmpty());
+    }
+
+    /** One length-delimited protobuf field: {@code (field << 3) | 2, varint len, utf8}. */
+    private static byte[] flatUserPayload(String text) {
+        byte[] utf8 = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        long tag = (1L << 3) | 2;
+        while ((tag & ~0x7FL) != 0) {
+            out.write((int) ((tag & 0x7F) | 0x80));
+            tag >>>= 7;
+        }
+        out.write((int) tag);
+        out.write(utf8.length);
+        out.writeBytes(utf8);
+        return out.toByteArray();
     }
 
     @Test
