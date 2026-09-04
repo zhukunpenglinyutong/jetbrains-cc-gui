@@ -63,12 +63,15 @@ const ATTACHMENT_REASON_KEY: Record<(typeof ATTACHMENT_NOT_DELIVERED_REASONS)[nu
 // Reason literals are plain words/spaces/hyphens — no regex metacharacters.
 const ATTACHMENT_REASON_ALTERNATION = ATTACHMENT_NOT_DELIVERED_REASONS.join('|');
 
-// Match "[Notice] Attachment not delivered: \"...\" (...).\n\n"
-// The name group uses [\s\S]+? so file names containing quotes or parentheses
-// still parse; the reason group only matches the closed English set above.
+// Match "[Notice] Attachment not delivered: \"...\" (...).\n\n" — GLOBALLY:
+// a turn concatenates one notice per rejected attachment, so every occurrence
+// must localize, not just the first. The name group uses [\s\S]+? so file
+// names containing quotes or parentheses still parse; the reason group only
+// matches the closed English set above.
 const ATTACHMENT_NOT_DELIVERED_RE = new RegExp(
   '\\[Notice\\] Attachment not delivered: "([\\s\\S]+?)"'
-  + ` \\((${ATTACHMENT_REASON_ALTERNATION})\\)\\.(\\n\\n)?`
+  + ` \\((${ATTACHMENT_REASON_ALTERNATION})\\)\\.(\\n\\n)?`,
+  'g'
 );
 
 /**
@@ -136,22 +139,21 @@ export function createLocalizeMessage(t: TFunction): (text: string) => string {
       );
     }
 
-    // Match "[Notice] Attachment not delivered: \"...\" (...).\n\n"
-    const attachmentNotDeliveredMatch = result.match(ATTACHMENT_NOT_DELIVERED_RE);
-    if (attachmentNotDeliveredMatch) {
-      const [, fileName, reason, trailingNewlines] = attachmentNotDeliveredMatch;
+    // Match "[Notice] Attachment not delivered: \"...\" (...).\n\n" — ALL
+    // occurrences (the regex carries the g flag): localizing only the first
+    // would leave notices 2..N of a multi-rejection turn as raw English.
+    result = result.replace(
+      ATTACHMENT_NOT_DELIVERED_RE,
       // Replacer FUNCTION, not a replacement string: the replacement embeds a
       // user-controlled file name, and a plain string would interpret $& / $'
       // / $` / $1 sequences inside it.
-      result = result.replace(
-        attachmentNotDeliveredMatch[0],
-        () => t('aiBridge.attachmentNotDelivered.notice', {
+      (_whole: string, fileName: string, reason: string, trailingNewlines?: string) =>
+        t('aiBridge.attachmentNotDelivered.notice', {
           name: fileName,
           // The regex only matches known reasons, so this lookup is total.
           reason: t(ATTACHMENT_REASON_KEY[reason as (typeof ATTACHMENT_NOT_DELIVERED_REASONS)[number]]),
         }) + (trailingNewlines ?? '')
-      );
-    }
+    );
 
     // Match "User denied permission for XXX tool"
     const permissionDeniedMatch = result.match(/User denied permission for (.+) tool/);

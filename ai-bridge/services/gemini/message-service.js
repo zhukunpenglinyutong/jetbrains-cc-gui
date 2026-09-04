@@ -189,12 +189,20 @@ function collectAttachmentRejections(attachments) {
       rejections.push({ name: 'unnamed', reason: ATTACHMENT_INVALID_REASON });
       continue;
     }
+    // Mirror the materializer's path-passthrough BEFORE any data check: a
+    // path-bearing attachment is delivered as-is (cli-image-input.js pushes
+    // att.path.trim()) and is never rejected here.
+    if (typeof att.path === 'string' && att.path.trim()) continue;
+
     const name = typeof att.fileName === 'string' && att.fileName
       ? att.fileName
       : (typeof att.name === 'string' && att.name ? att.name : 'unnamed');
 
-    // Mirror the materializer's hint resolution (mediaType || mimeType).
-    const hint = typeof att.mediaType === 'string' && att.mediaType
+    // Mirror the materializer's hint resolution EXACTLY: any string mediaType
+    // is authoritative — an EMPTY-STRING mediaType means assume-image (through
+    // resolveImageMimeType / the parsed data-URL mime) and must not fall
+    // through to an explicit mimeType. Only an ABSENT mediaType falls back.
+    const hint = typeof att.mediaType === 'string'
       ? att.mediaType
       : (typeof att.mimeType === 'string' ? att.mimeType : '');
     const parsed = parseAttachmentData(att.data);

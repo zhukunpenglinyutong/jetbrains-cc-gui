@@ -1482,3 +1482,52 @@ test('Story 1.6: an empty-hint attachment is treated as an image, never announce
   assert.equal(imageRefPaths(spawnedPrompt(stderr)).length, 1, 'delivered as an image');
   assert.equal(finalPayload(stdout).success, true);
 });
+
+test('Story 1.6 review M2: a path-bearing attachment is delivered, never announced as rejected', async () => {
+  // codex-style local_image passthrough: the materializer pushes att.path
+  // as-is with NO data payload at all — the notice layer must not demand data
+  // that was never sent (it would pre-announce a delivered file as invalid).
+  const dir = makeTempDir('gemini-path-att-');
+  const existing = join(dir, 'pic.png');
+  writeFileSync(existing, Buffer.from(TINY_PNG_B64, 'base64'));
+  const attachmentsFile = writeAttachmentsFile([
+    { fileName: 'pic.png', path: existing },
+  ]);
+  const { stdout, stderr } = await runService({
+    fixture: 'success-text-turn.jsonl',
+    exitCode: 0,
+    attachmentsFile,
+    echoArgv: true,
+    echoImageStats: true,
+  });
+
+  assert.equal(attachmentNotices(stdout).length, 0, JSON.stringify(attachmentNotices(stdout)));
+  // The passthrough path itself is referenced as the image — and it truly
+  // existed while the "CLI" ran (no materialized copy in the shared subdir).
+  const stats = imageStats(stderr);
+  assert.deepEqual(imageRefPaths(spawnedPrompt(stderr)), [existing]);
+  assert.equal(stats.length, 1, JSON.stringify(stats));
+  assert.equal(stats[0].exists, true, 'the passthrough path is delivered as-is');
+  assert.equal(finalPayload(stdout).success, true);
+});
+
+test('Story 1.6 review M2: an EMPTY-STRING mediaType is authoritative assume-image even against a text/plain mimeType', async () => {
+  // The materializer treats ANY string mediaType (including '') as the
+  // authoritative hint — '' resolves through the data-URL mime to a delivered
+  // image. The notice layer must not resolve the hint differently (an empty
+  // string falling through to mimeType:'text/plain' would pre-announce a
+  // delivered image as non-image — the two layers would disagree).
+  const attachmentsFile = writeAttachmentsFile([
+    { fileName: 'paste.png', mediaType: '', mimeType: 'text/plain', data: `data:image/png;base64,${TINY_PNG_B64}` },
+  ]);
+  const { stdout, stderr } = await runService({
+    fixture: 'success-text-turn.jsonl',
+    exitCode: 0,
+    attachmentsFile,
+    echoArgv: true,
+  });
+
+  assert.equal(attachmentNotices(stdout).length, 0, JSON.stringify(attachmentNotices(stdout)));
+  assert.equal(imageRefPaths(spawnedPrompt(stderr)).length, 1, 'delivered as an image');
+  assert.equal(finalPayload(stdout).success, true);
+});

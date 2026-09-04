@@ -259,6 +259,35 @@ describe('createLocalizeMessage — ai-bridge attachment non-delivery notices (S
     }
   });
 
+  it('localizes EVERY concatenated notice of a multi-rejection turn, not just the first (review M1)', () => {
+    // AC5 concatenates one notice per rejection into the leading delta; with a
+    // single-shot match only notice 1 localized and notices 2..N rendered raw
+    // English. The makeT stand-in echoes localized templates (no English),
+    // i.e. any non-en locale rendering; the answer text interleaves after the
+    // notices, as the turn's own delta does on the stream.
+    const t = makeT();
+    const localize = createLocalizeMessage(t as never);
+    const answer = 'Вот ответ на ваш вопрос.';
+    const emitted =
+      attachmentNotice('notes.txt', 'only image attachments are supported')
+      + attachmentNotice('huge.png', 'image exceeds the 2 MB per-image limit')
+      + answer;
+    const localized = localize(emitted);
+
+    // NO raw English notice sentence survives — not even for notice 2.
+    expect(localized).not.toContain('Attachment not delivered');
+    // Both names localize through the template, in emission order.
+    const first = localized.indexOf('name=notes.txt');
+    const second = localized.indexOf('name=huge.png');
+    expect(first, 'notice 1 must localize').toBeGreaterThanOrEqual(0);
+    expect(second, 'notice 2 must localize').toBeGreaterThan(first);
+    expect(t).toHaveBeenCalledWith('aiBridge.attachmentNotDelivered.nonImage');
+    expect(t).toHaveBeenCalledWith('aiBridge.attachmentNotDelivered.tooLarge');
+    expect(t.mock.calls.filter(([key]) => key === 'aiBridge.attachmentNotDelivered.notice')).toHaveLength(2);
+    // The answer text survives the notices untouched.
+    expect(localized).toContain(answer);
+  });
+
   it('consumes the trailing blank line from the emitted notice', () => {
     const t = makeT();
     const localize = createLocalizeMessage(t as never);
