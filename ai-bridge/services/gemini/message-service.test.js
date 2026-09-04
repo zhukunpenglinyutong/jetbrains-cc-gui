@@ -39,7 +39,7 @@
  * classifier is exercised against a synthetic best-effort stderr string.
  */
 import { spawn } from 'node:child_process';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,6 +47,7 @@ import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getRealHomeDir } from '../../utils/path-utils.js';
 import { GeminiPermissionMapper } from '../../utils/permission-mapper.js';
+import { GROK_MAX_IMAGE_BYTES } from '../../utils/cli-image-input.js';
 
 const SERVICE_DIR = fileURLToPath(new URL('.', import.meta.url));
 const SERVICE_PATH = join(SERVICE_DIR, 'message-service.js');
@@ -76,6 +77,21 @@ if (process.env.FAKE_ECHO_INIT_PERM === '1') {
   let echoedPerm = '';
   try { echoedPerm = (JSON.parse(firstLine).init || {}).permission_mode ?? ''; } catch {}
   process.stderr.write('INIT_PERM:' + echoedPerm + '\\n');
+}
+if (process.env.FAKE_ECHO_IMAGE_STATS === '1') {
+  // Story 1.6: stat every [Image #N: path] the service injected into the
+  // prompt — on-disk proof the referenced file was materialized while the
+  // "CLI" ran (the parent test asserts cleanup after the child exits).
+  const promptIdx = process.argv.indexOf('-p');
+  const prompt = promptIdx >= 0 ? (process.argv[promptIdx + 1] || '') : '';
+  const stats = [...prompt.matchAll(/\\[Image #\\d+: ([^\\]]+)\\]/g)].map((m) => {
+    try {
+      return { path: m[1], exists: true, size: fs.statSync(m[1]).size };
+    } catch {
+      return { path: m[1], exists: false, size: -1 };
+    }
+  });
+  process.stderr.write('IMGSTAT:' + JSON.stringify(stats) + '\\n');
 }
 process.stdout.write(payload, () => process.exit(exitCode));
 `;
@@ -133,6 +149,7 @@ function runService({
   echoArgv = false,
   echoCwd = false,
   echoInitPerm = false,
+  echoImageStats = false,
   extraEnv = {},
 }) {
   const fakeCli = globalThis.__geminiFakeCli;
@@ -149,6 +166,7 @@ function runService({
   env.FAKE_ECHO_ARGV = echoArgv ? '1' : '';
   env.FAKE_ECHO_CWD = echoCwd ? '1' : '';
   env.FAKE_ECHO_INIT_PERM = echoInitPerm ? '1' : '';
+  env.FAKE_ECHO_IMAGE_STATS = echoImageStats ? '1' : '';
   env.SERVICE_PATH = SERVICE_PATH;
   env.SVC_CWD = cwd;
   env.SVC_SESSION_ID = sessionId;
@@ -876,7 +894,7 @@ test('a relative requestedCwd resolves against the selected workspace (R-7)', as
   assert.match(notice, /\(directory does not exist\)\./);
 });
 
-test('non-image attachments are logged to stderr and the turn continues (R-9)', async () => {
+test('non-image attachments are announced and the turn continues (R-9)', async () => {
   const attachmentsFile = writeAttachmentsFile([
     { fileName: 'notes.txt', mediaType: 'text/plain', data: 'data:text/plain;base64,aGVsbG8=' },
     { fileName: 'shot.png', mediaType: 'image/png', data: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==' },
@@ -887,7 +905,11 @@ test('non-image attachments are logged to stderr and the turn continues (R-9)', 
     attachmentsFile,
     echoArgv: true,
   });
-  assert.match(stderr, /\[gemini\] ignoring 1 non-image attachment\(s\): text\/plain:notes\.txt/);
+  // The old stderr-only log was superseded by the visible notice layer
+  // (Story 1.6): stderr keeps a diagnostic line, and the user-facing
+  // announcement goes out on the protocol stream.
+  assert.match(stderr, /\[gemini\] attachment not delivered: notes\.txt \(only image attachments are supported\)/);
+  assert.equal(attachmentNoticeFor(stdout, 'notes.txt'), noticeFor('notes.txt', REASON_NON_IMAGE));
   const argvLine = stderr.split('\n').find((l) => l.startsWith('ARGV:'));
   const argv = JSON.parse(argvLine.slice('ARGV:'.length));
   const prompt = argv[argv.indexOf('-p') + 1];
@@ -1172,4 +1194,291 @@ test('after a conversation reset the next turn starts a NEW conversation (AC5)',
   // the final payload reports back to Java's session slot.
   assert.deepEqual(markers(after.stdout, 'SESSION_ID'), [`[SESSION_ID] ${CONVERSATION_B}`]);
   assert.equal(finalPayload(after.stdout).sessionId, CONVERSATION_B);
+});
+
+// -------------------------------------------------------------------------
+// Story 1.6 — image attachments: visible non-delivery notices (CAP-7, C10)
+//
+// Delivery (materialize + [Image #N: path] prompt injection + cleanup) is
+// already wired since Story 1.2 (verify-only); what is NEW here is the
+// visible layer: today a rejected attachment only console.errors on stderr
+// while the user watches their file silently vanish. The contract below
+// reuses the workspace-substitution channel — a pre-spawn [CONTENT_DELTA]
+// notice — and a closed English reason set the webview localizes verbatim
+// (localizationUtils.test.ts pins the same literals against this source).
+//
+// Size expectations derive from GROK_MAX_IMAGE_BYTES (the shared 2 MB per-
+// image cap, C10), never a hand-typed literal. Corrupt-data nuance:
+// Buffer.from(base64, 'base64') never throws — "invalid" means an empty
+// payload or a zero-length decode, so tests target that, not an exception.
+// -------------------------------------------------------------------------
+
+/** The shared per-image cap, expressed the way the notice names it. */
+const SIZE_LIMIT_MB = GROK_MAX_IMAGE_BYTES / (1024 * 1024);
+
+/** The closed English reason set — kept in lockstep with localizationUtils.test.ts. */
+const REASON_NON_IMAGE = 'only image attachments are supported';
+const REASON_TOO_LARGE = `image exceeds the ${SIZE_LIMIT_MB} MB per-image limit`;
+const REASON_INVALID = 'image data is missing or unreadable';
+
+const ATTACHMENT_NOTICE_PREFIX = '[Notice] Attachment not delivered: ';
+
+function noticeFor(name, reason) {
+  return `${ATTACHMENT_NOTICE_PREFIX}"${name}" (${reason}).\n\n`;
+}
+
+/** All decoded attachment non-delivery notices on the protocol stream. */
+function attachmentNotices(stdout) {
+  return markers(stdout, 'CONTENT_DELTA')
+    .map(decodeStringMarker)
+    .map(String)
+    .filter((t) => t.startsWith(ATTACHMENT_NOTICE_PREFIX));
+}
+
+function attachmentNoticeFor(stdout, fileName) {
+  return attachmentNotices(stdout).find((t) => t.includes(`"${fileName}"`));
+}
+
+/** The [Image #N: path] references the service injected into the prompt. */
+function imageRefPaths(prompt) {
+  return [...String(prompt).matchAll(/\[Image #\d+: ([^\]]+)\]/g)].map((m) => m[1]);
+}
+
+function spawnedPrompt(stderr) {
+  const argv = fakeChildArgv(stderr);
+  return argv[argv.indexOf('-p') + 1] || '';
+}
+
+/** IMGSTAT echo: what the spawned "CLI" saw on disk for each image ref. */
+function imageStats(stderr) {
+  const line = stderr.split('\n').find((l) => l.startsWith('IMGSTAT:'));
+  assert.ok(line, `fake CLI must echo image stats: ${stderr.slice(0, 400)}`);
+  return JSON.parse(line.slice('IMGSTAT:'.length));
+}
+
+// 1x1 PNG (same bytes cli-image-input.test.js uses).
+const TINY_PNG_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const TINY_PNG_BYTES = Buffer.from(TINY_PNG_B64, 'base64').length;
+
+test('Story 1.6 AC1: a valid image is materialized, referenced in the prompt, and cleaned up', async () => {
+  const attachmentsFile = writeAttachmentsFile([
+    { fileName: 'shot.png', mediaType: 'image/png', data: `data:image/png;base64,${TINY_PNG_B64}` },
+  ]);
+  const { stdout, stderr } = await runService({
+    fixture: 'success-text-turn.jsonl',
+    exitCode: 0,
+    attachmentsFile,
+    echoArgv: true,
+    echoImageStats: true,
+  });
+
+  // The model side receives the image as a file it can read: the prompt
+  // references it and the file truly existed while the CLI ran.
+  const stats = imageStats(stderr);
+  assert.equal(stats.length, 1, JSON.stringify(stats));
+  assert.equal(stats[0].exists, true, 'the referenced file must be materialized on disk');
+  assert.equal(stats[0].size, TINY_PNG_BYTES, 'the materialized file holds the decoded bytes');
+  assert.ok(stats[0].size <= GROK_MAX_IMAGE_BYTES, 'within the shared per-image cap');
+  assert.match(stats[0].path, /cc-gui-cli-images/);
+  assert.match(stats[0].path, /shot\.png/);
+
+  const prompt = spawnedPrompt(stderr);
+  assert.match(prompt, /\[Image #1: /);
+  assert.ok(prompt.includes(stats[0].path), `prompt references the materialized path: ${prompt}`);
+  assert.ok(prompt.includes('hello world'), 'user text survives the injection');
+
+  // Temp hygiene: the finally-cleanup removes the file once the turn ends.
+  assert.equal(existsSync(stats[0].path), false, 'cleanupMaterializedImagePaths must run after the turn');
+
+  assert.equal(attachmentNotices(stdout).length, 0, 'a delivered image must not produce a notice');
+  assert.equal(finalPayload(stdout).success, true);
+});
+
+test('Story 1.6 AC2: an explicitly non-image attachment surfaces a visible non-delivery notice', async () => {
+  const attachmentsFile = writeAttachmentsFile([
+    { fileName: 'notes.txt', mediaType: 'text/plain', data: 'data:text/plain;base64,aGVsbG8=' },
+  ]);
+  const { stdout, stderr } = await runService({
+    fixture: 'success-text-turn.jsonl',
+    exitCode: 0,
+    attachmentsFile,
+    echoArgv: true,
+  });
+
+  // Zero silent drops: the user must SEE that notes.txt was not delivered and
+  // why — stderr logging alone is exactly the gap this story closes.
+  const notices = attachmentNotices(stdout);
+  assert.equal(notices.length, 1, `expected exactly one notice, got: ${JSON.stringify(notices)}`);
+  assert.equal(notices[0], noticeFor('notes.txt', REASON_NON_IMAGE));
+
+  // The notice is the LEADING content delta — heard before any answer text.
+  const lines = protocolLines(stdout);
+  const noticeIndex = lines.findIndex(
+    (l) => l.startsWith('[CONTENT_DELTA]') && String(decodeStringMarker(l)).startsWith(ATTACHMENT_NOTICE_PREFIX)
+  );
+  const firstTurnDeltaIndex = lines.findIndex(
+    (l) => l.startsWith('[CONTENT_DELTA]') && !String(decodeStringMarker(l)).startsWith(ATTACHMENT_NOTICE_PREFIX)
+  );
+  assert.notEqual(noticeIndex, -1, 'notice present on the stream');
+  assert.notEqual(firstTurnDeltaIndex, -1, 'the turn itself still streams');
+  assert.ok(noticeIndex < firstTurnDeltaIndex, 'the notice must precede the answer');
+
+  // Nothing image-like reaches the prompt; the text still sends.
+  assert.equal(spawnedPrompt(stderr), 'hello world', 'a rejected attachment must not inject a path reference');
+  assert.equal(finalPayload(stdout).success, true, 'the turn is not blocked by the rejection');
+});
+
+test('Story 1.6 AC3: an over-cap image surfaces a visible notice naming the file and the fixed limit', async () => {
+  // Decodes to just past the shared cap (derived from the constant, C10).
+  const overCap = Buffer.alloc(GROK_MAX_IMAGE_BYTES + 1024, 0x50).toString('base64');
+  const attachmentsFile = writeAttachmentsFile([
+    { fileName: 'huge.png', mediaType: 'image/png', data: overCap },
+  ]);
+  const { stdout, stderr } = await runService({
+    fixture: 'success-text-turn.jsonl',
+    exitCode: 0,
+    attachmentsFile,
+    echoArgv: true,
+  });
+
+  const notices = attachmentNotices(stdout);
+  assert.equal(notices.length, 1, `expected exactly one notice, got: ${JSON.stringify(notices)}`);
+  // NFR10: the notice names the file AND the fixed per-image limit.
+  assert.equal(notices[0], noticeFor('huge.png', REASON_TOO_LARGE));
+  assert.ok(notices[0].includes(`${SIZE_LIMIT_MB} MB`), `must name the ${SIZE_LIMIT_MB} MB limit: ${notices[0]}`);
+  assert.ok(notices[0].includes('huge.png'));
+
+  assert.equal(spawnedPrompt(stderr), 'hello world', 'the oversized image must not reach the prompt');
+  assert.equal(finalPayload(stdout).success, true);
+  assert.equal(markers(stdout, 'STREAM_END').length, 1);
+});
+
+test('Story 1.6 AC4: missing or undecodable image data surfaces a visible invalid-data notice', async () => {
+  const attachmentsFile = writeAttachmentsFile([
+    // empty payload — parseAttachmentData returns null
+    { fileName: 'broken.png', mediaType: 'image/png', data: '' },
+    // undecodable: Buffer.from('!!!!', 'base64') never throws — it decodes to
+    // ZERO bytes, which is the invalid-data contract (no exception path).
+    { fileName: 'junk.png', mediaType: 'image/png', data: '!!!!' },
+    // malformed entry (non-object) — cannot be an image either
+    'not-an-attachment-object',
+  ]);
+  const { stdout, stderr } = await runService({
+    fixture: 'success-text-turn.jsonl',
+    exitCode: 0,
+    attachmentsFile,
+    echoArgv: true,
+  });
+
+  const notices = attachmentNotices(stdout);
+  assert.equal(notices.length, 3, `one notice per rejected attachment, got: ${JSON.stringify(notices)}`);
+  assert.equal(attachmentNoticeFor(stdout, 'broken.png'), noticeFor('broken.png', REASON_INVALID));
+  assert.equal(attachmentNoticeFor(stdout, 'junk.png'), noticeFor('junk.png', REASON_INVALID));
+  const unnamed = notices.find((n) => !n.includes('broken.png') && !n.includes('junk.png'));
+  assert.ok(unnamed && unnamed.includes(REASON_INVALID), `the malformed entry must produce its own notice: ${JSON.stringify(notices)}`);
+
+  assert.equal(spawnedPrompt(stderr), 'hello world', 'no path reference for data that never materialized');
+  assert.equal(finalPayload(stdout).success, true);
+});
+
+test('Story 1.6 AC5: a mixed batch yields one notice per rejection and delivers the valid ones', async () => {
+  const attachmentsFile = writeAttachmentsFile([
+    { fileName: 'shot.png', mediaType: 'image/png', data: `data:image/png;base64,${TINY_PNG_B64}` },
+    { fileName: 'notes.txt', mediaType: 'text/plain', data: 'data:text/plain;base64,aGVsbG8=' },
+    { fileName: 'huge.png', mediaType: 'image/png', data: Buffer.alloc(GROK_MAX_IMAGE_BYTES + 1024, 0x50).toString('base64') },
+    { fileName: 'broken.png', mediaType: 'image/png', data: '' },
+  ]);
+  const { stdout, stderr } = await runService({
+    fixture: 'success-text-turn.jsonl',
+    exitCode: 0,
+    attachmentsFile,
+    echoArgv: true,
+    echoImageStats: true,
+  });
+
+  // Every invalid one gets its OWN notice with its OWN reason.
+  const notices = attachmentNotices(stdout);
+  assert.equal(notices.length, 3, `got: ${JSON.stringify(notices)}`);
+  assert.equal(attachmentNoticeFor(stdout, 'notes.txt'), noticeFor('notes.txt', REASON_NON_IMAGE));
+  assert.equal(attachmentNoticeFor(stdout, 'huge.png'), noticeFor('huge.png', REASON_TOO_LARGE));
+  assert.equal(attachmentNoticeFor(stdout, 'broken.png'), noticeFor('broken.png', REASON_INVALID));
+
+  // The valid one is still delivered — and the [Image #N] list contains
+  // EXACTLY the successfully materialized files (renumbered over delivered
+  // files only, honesty guard from Task 3).
+  const prompt = spawnedPrompt(stderr);
+  const stats = imageStats(stderr);
+  assert.equal(stats.length, 1, `only the valid image materializes: ${JSON.stringify(stats)}`);
+  assert.deepEqual(imageRefPaths(prompt), [stats[0].path], `prompt must reference exactly the delivered file: ${prompt}`);
+  assert.match(prompt, /\[Image #1: /);
+  for (const rejected of ['notes.txt', 'huge.png', 'broken.png']) {
+    assert.ok(!prompt.includes(rejected), `rejected ${rejected} must not be referenced in the prompt`);
+  }
+  assert.ok(prompt.includes('hello world'));
+
+  assert.equal(finalPayload(stdout).success, true);
+});
+
+test('Story 1.6: when every attachment is rejected the turn still sends the plain text message', async () => {
+  const attachmentsFile = writeAttachmentsFile([
+    { fileName: 'notes.txt', mediaType: 'text/plain', data: 'data:text/plain;base64,aGVsbG8=' },
+    { fileName: 'broken.png', mediaType: 'image/png', data: '' },
+  ]);
+  const { stdout, stderr } = await runService({
+    fixture: 'success-text-turn.jsonl',
+    exitCode: 0,
+    attachmentsFile,
+    echoArgv: true,
+  });
+
+  assert.equal(attachmentNotices(stdout).length, 2, 'every rejected attachment gets its own notice');
+  assert.equal(spawnedPrompt(stderr), 'hello world', 'text-only send: no image references at all');
+  assert.equal(finalPayload(stdout).success, true);
+  assert.equal(markers(stdout, 'STREAM_END').length, 1);
+});
+
+test('Story 1.6: an image exactly at the size cap is delivered with no notice (boundary)', async () => {
+  // Decodes to EXACTLY GROK_MAX_IMAGE_BYTES: `> maxBytes` rejects, `==` passes.
+  const atCap = Buffer.alloc(GROK_MAX_IMAGE_BYTES, 0x50).toString('base64');
+  const attachmentsFile = writeAttachmentsFile([
+    { fileName: 'exact.png', mediaType: 'image/png', data: atCap },
+  ]);
+  const { stdout, stderr } = await runService({
+    fixture: 'success-text-turn.jsonl',
+    exitCode: 0,
+    attachmentsFile,
+    echoArgv: true,
+    echoImageStats: true,
+  });
+
+  const stats = imageStats(stderr);
+  assert.equal(stats.length, 1, JSON.stringify(stats));
+  assert.equal(stats[0].exists, true);
+  assert.equal(stats[0].size, GROK_MAX_IMAGE_BYTES, 'the boundary case must materialize in full');
+
+  const prompt = spawnedPrompt(stderr);
+  assert.match(prompt, /\[Image #1: /);
+  assert.equal(attachmentNotices(stdout).length, 0, 'a delivered image is never announced as rejected');
+  assert.equal(finalPayload(stdout).success, true);
+  assert.equal(existsSync(stats[0].path), false, 'cleanup runs on the happy path too');
+});
+
+test('Story 1.6: an empty-hint attachment is treated as an image, never announced as non-image', async () => {
+  // Paste/drop paths send image data with NO mediaType. The shared materializer
+  // treats an empty hint as "assume image" — the notice layer must not
+  // pre-announce such attachments as ignored (existing stderr-filter contract).
+  const attachmentsFile = writeAttachmentsFile([
+    { fileName: 'from-paste.bin', data: `data:image/png;base64,${TINY_PNG_B64}` },
+  ]);
+  const { stdout, stderr } = await runService({
+    fixture: 'success-text-turn.jsonl',
+    exitCode: 0,
+    attachmentsFile,
+    echoArgv: true,
+  });
+
+  assert.equal(attachmentNotices(stdout).length, 0, JSON.stringify(attachmentNotices(stdout)));
+  assert.equal(imageRefPaths(spawnedPrompt(stderr)).length, 1, 'delivered as an image');
+  assert.equal(finalPayload(stdout).success, true);
 });

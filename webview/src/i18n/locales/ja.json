@@ -1862,7 +1862,13 @@
     "workspaceReasonPluginInternal": "プラグイン内部のディレクトリ",
     "workspaceReasonMissing": "ディレクトリが存在しません",
     "workspaceReasonNotADirectory": "ディレクトリではありません",
-    "workspaceReasonTemporary": "一時ディレクトリ"
+    "workspaceReasonTemporary": "一時ディレクトリ",
+    "attachmentNotDelivered": {
+      "notice": "[通知] 添付ファイルを配信できませんでした: \"{{name}}\" ({{reason}})。",
+      "nonImage": "画像の添付ファイルのみサポートしています",
+      "tooLarge": "画像が1画像あたり2 MBの制限を超えています",
+      "invalid": "画像データが存在しないか、読み取れません"
+    }
   },
   "changelog": {
     "title": "更新情報",

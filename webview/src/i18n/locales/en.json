@@ -2396,7 +2396,13 @@
     "workspaceReasonPluginInternal": "plugin-internal directory",
     "workspaceReasonMissing": "directory does not exist",
     "workspaceReasonNotADirectory": "not a directory",
-    "workspaceReasonTemporary": "temporary directory"
+    "workspaceReasonTemporary": "temporary directory",
+    "attachmentNotDelivered": {
+      "notice": "[Notice] Attachment not delivered: \"{{name}}\" ({{reason}}).",
+      "nonImage": "only image attachments are supported",
+      "tooLarge": "image exceeds the 2 MB per-image limit",
+      "invalid": "image data is missing or unreadable"
+    }
   },
   "changelog": {
     "title": "What's New",

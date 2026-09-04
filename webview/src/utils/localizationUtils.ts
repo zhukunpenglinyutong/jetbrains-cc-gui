@@ -38,6 +38,40 @@ const WORKSPACE_SUBSTITUTED_RE = new RegExp(
 );
 
 /**
+ * The closed set of English rejection reasons the bridge's attachment notice
+ * layer (ai-bridge/services/gemini/message-service.js,
+ * collectAttachmentRejections) can emit. Same design as the workspace set:
+ * the notice regex anchors its reason group on exactly these literals, so an
+ * UNKNOWN reason never matches — the raw English text is left untouched
+ * instead of being interpolated into a localized template (NFR8). Keep this
+ * list in lockstep with the service — localizationUtils.test.ts pins the
+ * literals against the service source.
+ */
+export const ATTACHMENT_NOT_DELIVERED_REASONS = [
+  'only image attachments are supported',
+  'image exceeds the 2 MB per-image limit',
+  'image data is missing or unreadable',
+] as const;
+
+/** Reason literal → i18n key. Total over ATTACHMENT_NOT_DELIVERED_REASONS. */
+const ATTACHMENT_REASON_KEY: Record<(typeof ATTACHMENT_NOT_DELIVERED_REASONS)[number], string> = {
+  'only image attachments are supported': 'aiBridge.attachmentNotDelivered.nonImage',
+  'image exceeds the 2 MB per-image limit': 'aiBridge.attachmentNotDelivered.tooLarge',
+  'image data is missing or unreadable': 'aiBridge.attachmentNotDelivered.invalid',
+};
+
+// Reason literals are plain words/spaces/hyphens — no regex metacharacters.
+const ATTACHMENT_REASON_ALTERNATION = ATTACHMENT_NOT_DELIVERED_REASONS.join('|');
+
+// Match "[Notice] Attachment not delivered: \"...\" (...).\n\n"
+// The name group uses [\s\S]+? so file names containing quotes or parentheses
+// still parse; the reason group only matches the closed English set above.
+const ATTACHMENT_NOT_DELIVERED_RE = new RegExp(
+  '\\[Notice\\] Attachment not delivered: "([\\s\\S]+?)"'
+  + ` \\((${ATTACHMENT_REASON_ALTERNATION})\\)\\.(\\n\\n)?`
+);
+
+/**
  * Create a localization function for AI bridge messages
  * @param t - i18next translation function
  * @returns A function that localizes message text
@@ -98,6 +132,23 @@ export function createLocalizeMessage(t: TFunction): (text: string) => string {
           effective: effectiveDir,
           // The regex only matches known reasons, so this lookup is total.
           reason: t(WORKSPACE_REASON_KEY[reason as (typeof WORKSPACE_SUBSTITUTION_REASONS)[number]]),
+        }) + (trailingNewlines ?? '')
+      );
+    }
+
+    // Match "[Notice] Attachment not delivered: \"...\" (...).\n\n"
+    const attachmentNotDeliveredMatch = result.match(ATTACHMENT_NOT_DELIVERED_RE);
+    if (attachmentNotDeliveredMatch) {
+      const [, fileName, reason, trailingNewlines] = attachmentNotDeliveredMatch;
+      // Replacer FUNCTION, not a replacement string: the replacement embeds a
+      // user-controlled file name, and a plain string would interpret $& / $'
+      // / $` / $1 sequences inside it.
+      result = result.replace(
+        attachmentNotDeliveredMatch[0],
+        () => t('aiBridge.attachmentNotDelivered.notice', {
+          name: fileName,
+          // The regex only matches known reasons, so this lookup is total.
+          reason: t(ATTACHMENT_REASON_KEY[reason as (typeof ATTACHMENT_NOT_DELIVERED_REASONS)[number]]),
         }) + (trailingNewlines ?? '')
       );
     }

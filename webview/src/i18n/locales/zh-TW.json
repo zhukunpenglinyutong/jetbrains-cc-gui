@@ -1914,7 +1914,13 @@
     "workspaceReasonPluginInternal": "外掛內部目錄",
     "workspaceReasonMissing": "目錄不存在",
     "workspaceReasonNotADirectory": "不是目錄",
-    "workspaceReasonTemporary": "暫存目錄"
+    "workspaceReasonTemporary": "暫存目錄",
+    "attachmentNotDelivered": {
+      "notice": "[提示] 附加檔案未送達：\"{{name}}\" ({{reason}})。",
+      "nonImage": "僅支援圖片附加檔案",
+      "tooLarge": "圖片超過每張 2 MB 的限制",
+      "invalid": "圖片資料缺失或無法讀取"
+    }
   },
   "changelog": {
     "title": "版本更新",

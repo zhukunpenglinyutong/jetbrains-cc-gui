@@ -1857,7 +1857,13 @@
     "workspaceReasonPluginInternal": "répertoire interne du plugin",
     "workspaceReasonMissing": "le répertoire n'existe pas",
     "workspaceReasonNotADirectory": "n'est pas un répertoire",
-    "workspaceReasonTemporary": "répertoire temporaire"
+    "workspaceReasonTemporary": "répertoire temporaire",
+    "attachmentNotDelivered": {
+      "notice": "[Avis] Pièce jointe non livrée : \"{{name}}\" ({{reason}}).",
+      "nonImage": "seules les pièces jointes de type image sont prises en charge",
+      "tooLarge": "l'image dépasse la limite de 2 Mo par image",
+      "invalid": "les données de l'image sont absentes ou illisibles"
+    }
   },
   "changelog": {
     "title": "Nouveautés",

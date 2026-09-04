@@ -1958,7 +1958,13 @@
     "workspaceReasonPluginInternal": "플러그인 내부 디렉터리",
     "workspaceReasonMissing": "디렉터리가 존재하지 않습니다",
     "workspaceReasonNotADirectory": "디렉터리가 아닙니다",
-    "workspaceReasonTemporary": "임시 디렉터리"
+    "workspaceReasonTemporary": "임시 디렉터리",
+    "attachmentNotDelivered": {
+      "notice": "[알림] 첨부 파일을 전달하지 못했습니다: \"{{name}}\" ({{reason}}).",
+      "nonImage": "이미지 첨부 파일만 지원됩니다",
+      "tooLarge": "이미지가 이미지당 2 MB 제한을 초과합니다",
+      "invalid": "이미지 데이터가 없거나 읽을 수 없습니다"
+    }
   },
   "changelog": {
     "title": "새로운 기능",

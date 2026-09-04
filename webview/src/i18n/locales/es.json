@@ -1863,7 +1863,13 @@
     "workspaceReasonPluginInternal": "directorio interno del plugin",
     "workspaceReasonMissing": "el directorio no existe",
     "workspaceReasonNotADirectory": "no es un directorio",
-    "workspaceReasonTemporary": "directorio temporal"
+    "workspaceReasonTemporary": "directorio temporal",
+    "attachmentNotDelivered": {
+      "notice": "[Aviso] Adjunto no entregado: \"{{name}}\" ({{reason}}).",
+      "nonImage": "solo se admiten adjuntos de imagen",
+      "tooLarge": "la imagen supera el límite de 2 MB por imagen",
+      "invalid": "los datos de la imagen faltan o no se pueden leer"
+    }
   },
   "changelog": {
     "title": "Novedades",

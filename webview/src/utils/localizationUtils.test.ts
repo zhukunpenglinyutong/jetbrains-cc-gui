@@ -1,7 +1,11 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { createLocalizeMessage, WORKSPACE_SUBSTITUTION_REASONS } from './localizationUtils';
+import {
+  ATTACHMENT_NOT_DELIVERED_REASONS,
+  WORKSPACE_SUBSTITUTION_REASONS,
+  createLocalizeMessage,
+} from './localizationUtils';
 
 /**
  * Minimal t() stand-in: records the key + interpolation params and echoes
@@ -197,6 +201,123 @@ describe('workspace notice i18n contract (R-14)', () => {
       for (const key of REASON_KEYS) {
         expect(typeof aiBridge[key], `${locale}.${key}`).toBe('string');
         expect((aiBridge[key] as string).length, `${locale}.${key}`).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 1.6 — image attachment non-delivery notices (CAP-7, C10, NFR8).
+//
+// The gemini bridge emits, per rejected attachment, a pre-spawn leading
+// [CONTENT_DELTA]: `[Notice] Attachment not delivered: "<name>" (<reason>).\n\n`
+// (ai-bridge/services/gemini/message-service.test.js pins the emission; the
+// reason literals are a CLOSED set — same design as
+// WORKSPACE_SUBSTITUTION_REASONS — and this file is their lockstep anchor).
+//
+// i18n shape mirrors the workspace pair: a sentence template with
+// {{name}}/{{reason}} plus one key per reason, grouped under
+// `aiBridge.attachmentNotDelivered` (nested objects are established locale
+// style — chat.search, settings.pet).
+// ---------------------------------------------------------------------------
+
+const ATTACHMENT_NOTICE_PREFIX = '[Notice] Attachment not delivered: ';
+
+const attachmentNotice = (name: string, reason: string) =>
+  `${ATTACHMENT_NOTICE_PREFIX}"${name}" (${reason}).\n\n`;
+
+/**
+ * Reason literal → i18n key. Total over ATTACHMENT_NOT_DELIVERED_REASONS
+ * (enforced by the satisfies clause): a reason added to the bridge set
+ * without a mapping fails the typecheck AND the pinning test below.
+ */
+const ATTACHMENT_REASON_KEYS = {
+  'only image attachments are supported': 'aiBridge.attachmentNotDelivered.nonImage',
+  'image exceeds the 2 MB per-image limit': 'aiBridge.attachmentNotDelivered.tooLarge',
+  'image data is missing or unreadable': 'aiBridge.attachmentNotDelivered.invalid',
+} as const satisfies Record<(typeof ATTACHMENT_NOT_DELIVERED_REASONS)[number], string>;
+
+describe('createLocalizeMessage — ai-bridge attachment non-delivery notices (Story 1.6)', () => {
+  it('maps each emitted notice onto aiBridge.attachmentNotDelivered.notice with a localized reason', () => {
+    for (const reason of ATTACHMENT_NOT_DELIVERED_REASONS) {
+      const key = ATTACHMENT_REASON_KEYS[reason as keyof typeof ATTACHMENT_REASON_KEYS];
+      const t = makeT();
+      const localize = createLocalizeMessage(t as never);
+      const localized = localize(attachmentNotice('notes.txt', reason));
+
+      expect(t).toHaveBeenCalledWith('aiBridge.attachmentNotDelivered.notice', {
+        name: 'notes.txt',
+        // The reason is translated through its own i18n key (NFR8) — never the
+        // raw English string interpolated into a localized template.
+        reason: `[${key}]`,
+      });
+      expect(t).toHaveBeenCalledWith(key);
+      expect(localized, reason).toContain('[aiBridge.attachmentNotDelivered.notice]');
+      expect(localized, reason).toContain('name=notes.txt');
+      // The raw English sentence must not survive localization.
+      expect(localized, reason).not.toContain('Attachment not delivered');
+    }
+  });
+
+  it('consumes the trailing blank line from the emitted notice', () => {
+    const t = makeT();
+    const localize = createLocalizeMessage(t as never);
+    const localized = localize(attachmentNotice('shot.png', 'image data is missing or unreadable'));
+
+    // Same contract as the workspace notice: the consumed \n\n is re-appended
+    // so a following answer stays visually separated either way.
+    expect(localized.endsWith('\n\n')).toBe(true);
+  });
+
+  it('leaves an unknown-reason attachment notice completely untouched (closed set)', () => {
+    const t = makeT();
+    const localize = createLocalizeMessage(t as never);
+    const emitted = attachmentNotice('x.png', 'some future reason');
+    expect(localize(emitted)).toBe(emitted);
+    expect(t).not.toHaveBeenCalledWith('aiBridge.attachmentNotDelivered.notice', expect.anything());
+  });
+
+  it('does not treat other [Notice] text as an attachment rejection', () => {
+    const t = makeT();
+    const localize = createLocalizeMessage(t as never);
+    // A valid workspace notice must localize through the WORKSPACE channel —
+    // and never trip the attachment mapping.
+    localize('[Notice] Working directory substituted: requested "/a", using "/b" (temporary directory).\n\n');
+    expect(t).toHaveBeenCalledWith('aiBridge.workspaceSubstituted', expect.anything());
+    expect(t).not.toHaveBeenCalledWith('aiBridge.attachmentNotDelivered.notice', expect.anything());
+  });
+});
+
+describe('attachment notice i18n contract (Story 1.6, NFR8)', () => {
+  it('pins the webview reason set to the literals the gemini service emits', () => {
+    expect([...ATTACHMENT_NOT_DELIVERED_REASONS].sort()).toEqual([
+      'image data is missing or unreadable',
+      'image exceeds the 2 MB per-image limit',
+      'only image attachments are supported',
+    ]);
+    // Lockstep both ways: every literal must exist verbatim in the service
+    // source (same rule as the workspace reasons' JSDoc mandate). The "2 MB"
+    // wording is pinned too — the bridge test derives it from
+    // GROK_MAX_IMAGE_BYTES, so a cap change must consciously update BOTH.
+    const serviceSource = readFileSync(SERVICE_SOURCE_PATH, 'utf8');
+    expect(serviceSource).toContain(ATTACHMENT_NOTICE_PREFIX);
+    for (const reason of ATTACHMENT_NOT_DELIVERED_REASONS) {
+      expect(serviceSource, `service source must contain "${reason}" verbatim`).toContain(reason);
+    }
+  });
+
+  it('every locale ships the notice template and all three reason keys (NFR8)', () => {
+    for (const locale of LOCALES) {
+      const aiBridge = JSON.parse(readFileSync(localePath(locale), 'utf8')).aiBridge;
+      const group = aiBridge.attachmentNotDelivered as
+        | { notice?: string; nonImage?: string; tooLarge?: string; invalid?: string }
+        | undefined;
+      expect(group, `${locale}.aiBridge.attachmentNotDelivered`).toBeTruthy();
+      expect(group!.notice, `${locale}.notice`).toContain('{{name}}');
+      expect(group!.notice, `${locale}.notice`).toContain('{{reason}}');
+      for (const key of ['nonImage', 'tooLarge', 'invalid'] as const) {
+        expect(typeof group![key], `${locale}.${key}`).toBe('string');
+        expect((group![key] as string).length, `${locale}.${key}`).toBeGreaterThan(0);
       }
     }
   });

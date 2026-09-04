@@ -2007,7 +2007,13 @@
     "workspaceReasonPluginInternal": "diretório interno do plugin",
     "workspaceReasonMissing": "o diretório não existe",
     "workspaceReasonNotADirectory": "não é um diretório",
-    "workspaceReasonTemporary": "diretório temporário"
+    "workspaceReasonTemporary": "diretório temporário",
+    "attachmentNotDelivered": {
+      "notice": "[Aviso] Anexo não entregue: \"{{name}}\" ({{reason}}).",
+      "nonImage": "apenas anexos de imagem são suportados",
+      "tooLarge": "a imagem excede o limite de 2 MB por imagem",
+      "invalid": "os dados da imagem estão ausentes ou ilegíveis"
+    }
   },
   "changelog": {
     "title": "Novidades",

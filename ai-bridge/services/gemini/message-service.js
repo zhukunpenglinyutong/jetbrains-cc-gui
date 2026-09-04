@@ -34,6 +34,13 @@
  * for BEFORE that clamp. When the two differ, a visible notice is emitted as
  * the leading content delta — substitution must never be silent. Callers that
  * don't pass `requestedCwd` keep the previous behaviour (compare `cwd`).
+ *
+ * Attachments: images are materialized to temp files and referenced as
+ * `[Image #N: path]`. Every rejected attachment (explicit non-image, over the
+ * shared 2 MB per-image cap, missing/undecodable data) produces a visible
+ * `[Notice] Attachment not delivered: "<name>" (<reason>).` leading content
+ * delta — one per rejection, never a silent drop. The English reason set is
+ * closed and matched verbatim by the webview for localization.
  */
 
 import fs from 'fs';
@@ -61,9 +68,13 @@ import {
   selectWorkingDirectory,
 } from '../../utils/path-utils.js';
 import {
+  GROK_MAX_IMAGE_BYTES,
   buildReadPathPromptWithImages,
   cleanupMaterializedImagePaths,
+  estimateBase64DecodedBytes,
   materializeImageAttachments,
+  parseAttachmentData,
+  resolveImageMimeType,
 } from '../../utils/cli-image-input.js';
 import { reformatFileLineReferences } from '../../utils/file-line-references.js';
 
@@ -131,6 +142,88 @@ export function classifyWorkspaceSubstitutionReason(requested) {
   if (!stats.isDirectory()) return 'not a directory';
   if (isTempDirectory(requested)) return 'temporary directory';
   return 'unsafe working directory';
+}
+
+// The shared per-image cap (2 MiB across all providers) announced in
+// megabytes — derived from the constant, never a hand-typed figure.
+const SIZE_LIMIT_MB = GROK_MAX_IMAGE_BYTES / (1024 * 1024);
+
+/**
+ * Closed set of English attachment-rejection reasons, in the exact wording
+ * the webview localizes: createLocalizeMessage anchors its regex reason group
+ * on exactly these literals, and localizationUtils.test.ts scans this file
+ * verbatim for each one. Do not reword or add without updating that regex and
+ * all 10 locales.
+ *
+ * The over-cap reason keeps the canonical "2 MB" spelling as the lockstep
+ * anchor for the current GROK_MAX_IMAGE_BYTES; the announced figure itself is
+ * derived from the constant at runtime, so the notice always states the
+ * active cap.
+ */
+const ATTACHMENT_NON_IMAGE_REASON = 'only image attachments are supported';
+const ATTACHMENT_TOO_LARGE_REASON = 'image exceeds the 2 MB per-image limit'
+  .replace('2', String(SIZE_LIMIT_MB));
+const ATTACHMENT_INVALID_REASON = 'image data is missing or unreadable';
+
+/**
+ * One rejection entry per attachment the shared materializer will skip,
+ * classified with the SAME rules and the SAME shared classifiers
+ * (resolveImageMimeType / parseAttachmentData / estimateBase64DecodedBytes)
+ * the materializer applies — the visible notice layer and the drop layer can
+ * never disagree. A path-only attachment (att.path) is delivered as-is by the
+ * materializer and is never rejected here. An EMPTY mediaType hint is
+ * "assume image" and must never surface as non-image; only an EXPLICIT
+ * non-image hint does.
+ *
+ * "Invalid data" means an unparsable payload or a zero-length decode —
+ * Buffer.from(base64, 'base64') never throws, it silently ignores invalid
+ * characters, so there is no exception path to report.
+ * @param {unknown} attachments
+ * @returns {Array<{ name: string, reason: string }>}
+ */
+function collectAttachmentRejections(attachments) {
+  if (!Array.isArray(attachments)) return [];
+  const rejections = [];
+  for (const att of attachments) {
+    if (!att || typeof att !== 'object') {
+      rejections.push({ name: 'unnamed', reason: ATTACHMENT_INVALID_REASON });
+      continue;
+    }
+    const name = typeof att.fileName === 'string' && att.fileName
+      ? att.fileName
+      : (typeof att.name === 'string' && att.name ? att.name : 'unnamed');
+
+    // Mirror the materializer's hint resolution (mediaType || mimeType).
+    const hint = typeof att.mediaType === 'string' && att.mediaType
+      ? att.mediaType
+      : (typeof att.mimeType === 'string' ? att.mimeType : '');
+    const parsed = parseAttachmentData(att.data);
+    const mimeType = resolveImageMimeType(hint, parsed?.mimeType);
+    if (!mimeType) {
+      rejections.push({ name, reason: ATTACHMENT_NON_IMAGE_REASON });
+      continue;
+    }
+    if (!parsed) {
+      rejections.push({ name, reason: ATTACHMENT_INVALID_REASON });
+      continue;
+    }
+    // The helper checks estimated base64 size AND decoded bytes; mirror both
+    // checks in the same order.
+    if (estimateBase64DecodedBytes(parsed.base64) > GROK_MAX_IMAGE_BYTES) {
+      rejections.push({ name, reason: ATTACHMENT_TOO_LARGE_REASON });
+      continue;
+    }
+    const decoded = Buffer.from(parsed.base64, 'base64');
+    if (!decoded.length) {
+      rejections.push({ name, reason: ATTACHMENT_INVALID_REASON });
+      continue;
+    }
+    if (decoded.length > GROK_MAX_IMAGE_BYTES) {
+      rejections.push({ name, reason: ATTACHMENT_TOO_LARGE_REASON });
+      continue;
+    }
+  }
+  return rejections;
 }
 
 export function isGeminiAuthError(text) {
@@ -268,31 +361,21 @@ export async function sendMessage(
   let promptText = message || '';
   let imagePaths = [];
   try {
-    // Non-image attachments are silently dropped by the image materializer;
-    // say so on stderr instead of vanishing them without a trace.
-    const nonImages = (Array.isArray(attachments) ? attachments : []).filter((att) => {
-      // Malformed entries (strings, numbers, null) cannot be images — count them.
-      if (!att || typeof att !== 'object') return true;
-      // Mirror the materializer's hint resolution (mediaType || mimeType); an
-      // empty hint is undecided — the materializer treats it as image data, so
-      // it must not be pre-announced as ignored here.
-      const hint = typeof att.mediaType === 'string' && att.mediaType
-        ? att.mediaType
-        : (typeof att.mimeType === 'string' ? att.mimeType : '');
-      if (!hint.trim()) return false;
-      return !hint.trim().toLowerCase().startsWith('image/');
-    });
-    if (nonImages.length > 0) {
-      console.error(`[gemini] ignoring ${nonImages.length} non-image attachment(s): `
-        + nonImages
-          .map((att) => `${att.mediaType || att.mimeType || 'unknown'}:${att.fileName || att.name || 'unnamed'}`)
-          .join(', '));
-    }
-
     // EVERYTHING between beginStream() and the spawn stays inside this try:
     // a throw here (CLI resolution, path/attachment work, ...) must still
     // produce a well-formed stream with [SEND_ERROR] + [STREAM_END].
     try {
+      // A rejected attachment must never vanish silently: one visible notice
+      // per rejection, emitted as the leading content delta before the turn's
+      // own answer (same channel as the workspace-substitution notice).
+      for (const { name, reason } of collectAttachmentRejections(attachments)) {
+        console.error(`[gemini] attachment not delivered: ${name} (${reason})`);
+        emitJsonStringMarker(
+          '[CONTENT_DELTA]',
+          `[Notice] Attachment not delivered: "${name}" (${reason}).\n\n`
+        );
+      }
+
       imagePaths = await materializeImageAttachments(attachments);
       if (imagePaths.length > 0) {
         promptText = buildReadPathPromptWithImages(promptText, imagePaths);

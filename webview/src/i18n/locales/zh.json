@@ -2402,7 +2402,13 @@
     "workspaceReasonPluginInternal": "插件内部目录",
     "workspaceReasonMissing": "目录不存在",
     "workspaceReasonNotADirectory": "不是目录",
-    "workspaceReasonTemporary": "临时目录"
+    "workspaceReasonTemporary": "临时目录",
+    "attachmentNotDelivered": {
+      "notice": "[提示] 附件未送达：\"{{name}}\" ({{reason}})。",
+      "nonImage": "仅支持图片附件",
+      "tooLarge": "图片超过每张 2 MB 的限制",
+      "invalid": "图片数据缺失或无法读取"
+    }
   },
   "changelog": {
     "title": "版本更新",

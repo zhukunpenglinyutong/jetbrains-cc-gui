@@ -1883,7 +1883,13 @@
     "workspaceReasonPluginInternal": "внутренний каталог плагина",
     "workspaceReasonMissing": "каталог не существует",
     "workspaceReasonNotADirectory": "не является каталогом",
-    "workspaceReasonTemporary": "временный каталог"
+    "workspaceReasonTemporary": "временный каталог",
+    "attachmentNotDelivered": {
+      "notice": "[Уведомление] Вложение не доставлено: \"{{name}}\" ({{reason}}).",
+      "nonImage": "поддерживаются только вложения-изображения",
+      "tooLarge": "изображение превышает лимит 2 MB на изображение",
+      "invalid": "данные изображения отсутствуют или нечитаемы"
+    }
   },
   "changelog": {
     "title": "Что нового",

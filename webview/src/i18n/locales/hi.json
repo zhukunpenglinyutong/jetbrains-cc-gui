@@ -1856,7 +1856,13 @@
     "workspaceReasonPluginInternal": "प्लगइन की आंतरिक निर्देशिका",
     "workspaceReasonMissing": "निर्देशिका मौजूद नहीं है",
     "workspaceReasonNotADirectory": "निर्देशिका नहीं है",
-    "workspaceReasonTemporary": "अस्थायी निर्देशिका"
+    "workspaceReasonTemporary": "अस्थायी निर्देशिका",
+    "attachmentNotDelivered": {
+      "notice": "[सूचना] अटैचमेंट वितरित नहीं हुआ: \"{{name}}\" ({{reason}}).",
+      "nonImage": "केवल छवि अटैचमेंट समर्थित हैं",
+      "tooLarge": "छवि प्रति छवि 2 MB सीमा से अधिक है",
+      "invalid": "छवि डेटा अनुपलब्ध या अपठनीय है"
+    }
   },
   "changelog": {
     "title": "नया क्या है",
