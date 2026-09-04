@@ -34,14 +34,19 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Reads Gemini CLI (agy) conversation history from the CLI-owned storage at
  * {@code ~/.gemini/antigravity-cli/}:
  * <ul>
- *   <li>{@code cache/conversation_metadata.json} — listing source (per-conversation
- *       summaries the CLI itself maintains); {@code cache/last_conversations.json} —
- *       cwd → latest-conversation fallback for project scoping.</li>
+ *   <li>{@code cache/conversation_metadata.json} — legacy listing cache. The current
+ *       CLI no longer maintains it (live 2026-09-04: entries months stale, none backed
+ *       by an existing database), so an entry is trusted only when its
+ *       {@code conversations/<id>.db} still exists; when nothing survives the filter,
+ *       listing falls back to scanning the databases.
+ *       {@code cache/last_conversations.json} — cwd → latest-conversation fallback
+ *       for project scoping.</li>
  *   <li>{@code conversations/<uuid>.db} — one SQLite database per conversation
  *       (with {@code -shm}/{@code -wal} sidecars); {@code steps.step_payload} holds
  *       protobuf-encoded step content.</li>
@@ -142,6 +147,10 @@ public class GeminiHistoryReader {
             if (!fromCache.isEmpty()) {
                 return fromCache;
             }
+            // Every cache entry was a ghost (no backing database) — the scan is
+            // the effective listing source on a stale cache (live 2026-09-04).
+            LOG.debug("[GeminiHistoryReader] Metadata cache yielded no sessions with an "
+                    + "existing conversation database, scanning conversations/");
         }
         return listSessionsByScanningDatabases();
     }
@@ -163,17 +172,26 @@ public class GeminiHistoryReader {
         if (conversations == null) {
             return sessions;
         }
+        int skipped = 0;
         for (Map.Entry<String, JsonElement> entry : conversations.entrySet()) {
             try {
                 SessionInfo info = sessionFromCacheEntry(entry.getKey(), entry.getValue());
                 if (info != null) {
                     sessions.add(info);
+                } else {
+                    skipped++;
                 }
             } catch (Exception e) {
                 // Skip malformed entries; a broken one must never break the listing.
+                skipped++;
                 LOG.debug("[GeminiHistoryReader] Skipping malformed cache entry "
                         + entry.getKey() + ": " + e.getMessage());
             }
+        }
+        if (skipped > 0) {
+            LOG.debug("[GeminiHistoryReader] Skipped " + skipped
+                    + " metadata-cache entr(ies) (malformed, internal, or without an "
+                    + "existing conversation database)");
         }
         sessions.sort(Comparator.comparingLong((SessionInfo s) -> s.lastTimestamp).reversed());
         return sessions;
@@ -194,11 +212,17 @@ public class GeminiHistoryReader {
         }
         JsonObject summary = summaryElement.getAsJsonObject();
         String id = stringField(summary, "ID");
-        if (id == null || id.isBlank()) {
+        if (id == null || id.isBlank() || !isSafeSessionId(id)) {
             return null;
         }
         SessionInfo info = new SessionInfo();
         info.sessionId = id.trim();
+        // The cache is stale whenever the CLI resets its storage: entries whose
+        // conversation database no longer exists must not shadow the real ones
+        // (live 2026-09-04: 84 entries, 0 with a database on disk).
+        if (!Files.isRegularFile(conversationDbPath(info.sessionId))) {
+            return null;
+        }
         String title = stringField(summary, "Title");
         String preview = stringField(summary, "Preview");
         info.title = resolveSessionTitle(title, preview, info.sessionId);
@@ -221,9 +245,12 @@ public class GeminiHistoryReader {
     }
 
     /**
-     * Fallback when the metadata cache is missing or empty: scan the per-conversation
-     * databases directly. Titles come from the CLI's summaries database when it can be
-     * opened; otherwise the session id doubles as the title.
+     * Fallback when the metadata cache is missing, unreadable, or stale (no entry
+     * backed by an existing database — the effective listing source on a current
+     * CLI install): scan the per-conversation databases directly. Titles come from
+     * the CLI's summaries database when it can be opened (best-effort — it is
+     * equally stale on current installs); otherwise the session id doubles as the
+     * title.
      */
     private List<SessionInfo> listSessionsByScanningDatabases() throws IOException {
         Map<String, String[]> summaries = loadConversationSummaries();
@@ -379,9 +406,18 @@ public class GeminiHistoryReader {
             int counter = 0;
             Set<String> emittedToolUseIds = new HashSet<>();
             int undecodable = 0;
+            int unknownTypes = 0;
+            Set<String> unknownTypeValues = new TreeSet<>();
             while (rs.next()) {
-                StepRole role = roleOf(rs.getObject("step_type"));
+                Object rawStepType = rs.getObject("step_type");
+                StepRole role = roleOf(rawStepType);
                 if (role == null) {
+                    // Bounded count-then-summarize instead of a line per step —
+                    // live histories carry hundreds of bookkeeping steps.
+                    unknownTypes++;
+                    if (rawStepType != null) {
+                        unknownTypeValues.add(String.valueOf(rawStepType));
+                    }
                     continue;
                 }
                 byte[] payload = rs.getBytes("step_payload");
@@ -390,6 +426,11 @@ public class GeminiHistoryReader {
                     undecodable++;
                 }
                 messages.addAll(envelopes);
+            }
+            if (unknownTypes > 0) {
+                LOG.info("[GeminiHistoryReader] Skipped " + unknownTypes
+                        + " step(s) with unknown step_type(s) " + unknownTypeValues
+                        + " (CLI-injected/context bookkeeping — no content fabricated)");
             }
             if (undecodable > 0) {
                 LOG.info("[GeminiHistoryReader] Skipped " + undecodable
@@ -403,8 +444,10 @@ public class GeminiHistoryReader {
 
     /**
      * The step_type column is an integer enum in live databases (14/15/132; 101 and
-     * other values are CLI bookkeeping, not conversation turns). Fixture databases and
-     * future CLI revisions may carry the role as text instead.
+     * 17/23/90/98 among other values are CLI-injected/context bookkeeping, not
+     * conversation turns — skipped deliberately, summarized in one log line per
+     * load). Fixture databases and future CLI revisions may carry the role as text
+     * instead.
      */
     private static StepRole roleOf(Object stepType) {
         if (stepType instanceof Number) {
@@ -463,18 +506,34 @@ public class GeminiHistoryReader {
                 break;
             }
             case AGENT: {
-                ProtoFields content = contentEnvelope(fields, 20, 3);
-                String text = content != null ? content.string(3) : null;
-                if (text == null) {
-                    text = fields.string(2);
-                }
-                if (text != null && !text.isBlank()) {
-                    out.add(buildAssistantTextMessage(text, "gemini-assistant-" + counter));
-                }
-                if (content != null) {
-                    for (byte[] callBlob : content.messages(7)) {
-                        appendToolUse(callBlob, counter, emittedToolUseIds, out);
+                // Iterate EVERY repeated field-20 blob and collect text plus tool
+                // calls across all of them — committing to one blob silently dropped
+                // whatever sat in the others. (Live corpus 2026-09-04: 22382/22382
+                // agent steps carry exactly one blob, so this is behaviour-preserving
+                // there and lossless everywhere else.)
+                StringBuilder text = null;
+                List<byte[]> callBlobs = new ArrayList<>();
+                for (byte[] blob : fields.messages(20)) {
+                    ProtoFields nested = ProtoFields.parse(blob);
+                    String candidate = nested.string(3);
+                    if (candidate != null && !candidate.isBlank()) {
+                        text = text == null ? new StringBuilder(candidate)
+                                : text.append("\n\n").append(candidate);
                     }
+                    callBlobs.addAll(nested.messages(7));
+                }
+                if (text == null) {
+                    // Flat fixture shape: field 2 carries the agent response.
+                    String flat = fields.string(2);
+                    if (flat != null && !flat.isBlank()) {
+                        text = new StringBuilder(flat);
+                    }
+                }
+                if (text != null && text.length() > 0) {
+                    out.add(buildAssistantTextMessage(text.toString(), "gemini-assistant-" + counter));
+                }
+                for (byte[] callBlob : callBlobs) {
+                    appendToolUse(callBlob, counter, emittedToolUseIds, out);
                 }
                 break;
             }
@@ -503,12 +562,17 @@ public class GeminiHistoryReader {
                 }
                 if (callBlob != null) {
                     String callId = appendToolUse(callBlob, counter, emittedToolUseIds, out);
-                    String contentText = resultText != null && !resultText.isBlank()
-                            ? resultText
-                            : toolSummary;
-                    if (contentText != null && !contentText.isBlank()) {
-                        out.add(buildToolResultMessage(callId,
-                                truncate(contentText, MAX_TOOL_RESULT_CHARS)));
+                    // A call blob without a name emits no tool_use envelope — a
+                    // tool_result without a call id would be an orphan block
+                    // (Gson drops the null tool_use_id property).
+                    if (callId != null) {
+                        String contentText = resultText != null && !resultText.isBlank()
+                                ? resultText
+                                : toolSummary;
+                        if (contentText != null && !contentText.isBlank()) {
+                            out.add(buildToolResultMessage(callId,
+                                    truncate(contentText, MAX_TOOL_RESULT_CHARS)));
+                        }
                     }
                 } else {
                     // Flat fixture shape: field 3 name + field 4 summary.
@@ -720,8 +784,9 @@ public class GeminiHistoryReader {
 
     /**
      * First nested blob of {@code outer} whose sub-field {@code inner} carries a
-     * non-blank string. Live payloads repeat the outer field number: the first
-     * occurrence is a small trajectory reference, the content envelope follows.
+     * non-blank string. Live payloads repeat the outer field number, so the blobs
+     * are iterated until the text one is found — the first occurrence carries no
+     * special meaning.
      */
     private static String nestedText(ProtoFields fields, int outer, int inner) {
         for (byte[] blob : fields.messages(outer)) {
@@ -732,26 +797,6 @@ public class GeminiHistoryReader {
             }
         }
         return null;
-    }
-
-    /**
-     * First nested blob of {@code outer} that carries the content envelope: either a
-     * non-blank string under {@code inner} or any nested message (tool calls), so an
-     * agent step with only a tool call still resolves to the right blob.
-     */
-    private static ProtoFields contentEnvelope(ProtoFields fields, int outer, int inner) {
-        ProtoFields fallback = null;
-        for (byte[] blob : fields.messages(outer)) {
-            ProtoFields nested = ProtoFields.parse(blob);
-            String candidate = nested.string(inner);
-            if (candidate != null && !candidate.isBlank()) {
-                return nested;
-            }
-            if (fallback == null && nested.messages(7).size() > 0) {
-                fallback = nested;
-            }
-        }
-        return fallback;
     }
 
     // ── Envelope builders (shared Claude-compatible load format) ─────────────
@@ -857,13 +902,25 @@ public class GeminiHistoryReader {
 
     /**
      * Copy a conversation database and its -shm/-wal sidecars to a temporary directory
-     * so a live writer cannot defeat the read-only open.
+     * so a live writer cannot defeat the read-only open. Package-private for the
+     * temp-hygiene test.
+     *
+     * <p>Hygiene: a successful copy is removed with its directory by the caller's
+     * finally ({@link #deleteTempCopy}); a failed copy removes the directory it
+     * created here — nothing leaks.
      *
      * @return path of the copied database, or null when nothing was copied
      */
-    private Path copyWithSidecarsToTemp(Path db) throws IOException {
+    Path copyWithSidecarsToTemp(Path db) throws IOException {
+        Path tempDir;
         try {
-            Path tempDir = Files.createTempDirectory("gemini-history-");
+            tempDir = Files.createTempDirectory("gemini-history-");
+        } catch (IOException e) {
+            LOG.debug("[GeminiHistoryReader] Temp dir creation failed: " + e.getMessage());
+            return null;
+        }
+        tempDir.toFile().deleteOnExit();
+        try {
             Path target = tempDir.resolve(db.getFileName().toString());
             Files.copy(db, target, StandardCopyOption.REPLACE_EXISTING);
             for (String sidecar : new String[]{".db-shm", ".db-wal"}) {
@@ -877,7 +934,23 @@ public class GeminiHistoryReader {
             return target;
         } catch (IOException e) {
             LOG.debug("[GeminiHistoryReader] Temp copy failed: " + e.getMessage());
+            deleteTempDir(tempDir);
             return null;
+        }
+    }
+
+    /** Best-effort removal of a temp directory and whatever a failed copy left in it. */
+    private static void deleteTempDir(Path dir) {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
+            for (Path leftover : stream) {
+                Files.deleteIfExists(leftover);
+            }
+        } catch (IOException ignored) {
+        }
+        try {
+            Files.deleteIfExists(dir);
+        } catch (IOException ignored) {
+            dir.toFile().deleteOnExit();
         }
     }
 

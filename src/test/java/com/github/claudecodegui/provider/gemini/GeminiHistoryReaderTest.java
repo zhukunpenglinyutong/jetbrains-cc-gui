@@ -10,8 +10,10 @@ import org.junit.rules.TemporaryFolder;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -21,6 +23,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -98,6 +101,11 @@ public class GeminiHistoryReaderTest {
     @Test
     public void titlePriorityIsTitleThenPreviewThenId() throws Exception {
         Path home = cliHome();
+        // M1: a cache entry is only listed when its conversation database exists —
+        // every listed fixture entry gets one.
+        createConversationDb(home, UUID_A, userStep("a"));
+        createConversationDb(home, UUID_B, userStep("b"));
+        createConversationDb(home, UUID_C, userStep("c"));
         writeCache(home, cacheWith(
                 sessionEntry(UUID_A, "Real Title", "preview ignored", 1, T_NEW, PROJECT_URI),
                 sessionEntry(UUID_B, "", "first prompt wins", 1, T_OLD, PROJECT_URI),
@@ -121,6 +129,8 @@ public class GeminiHistoryReaderTest {
         Path home = cliHome();
         // UUID_A points its workspace elsewhere, but is the CLI's latest
         // conversation for the current project directory.
+        createConversationDb(home, UUID_A, userStep("latest"));
+        createConversationDb(home, UUID_B, userStep("never"));
         writeCache(home, cacheWith(
                 sessionEntry(UUID_A, "Latest here", "preview", 2, T_NEW, OTHER_PROJECT_URI),
                 sessionEntry(UUID_B, "Never here", "preview", 1, T_OLD, OTHER_PROJECT_URI)));
@@ -136,6 +146,8 @@ public class GeminiHistoryReaderTest {
     @Test
     public void entriesWithoutResolvableWorkspaceAreSkippedForProjectScoping() throws Exception {
         Path home = cliHome();
+        createConversationDb(home, UUID_A, userStep("has workspace"));
+        createConversationDb(home, UUID_D, userStep("no workspace"));
         writeCache(home, cacheWith(
                 sessionEntry(UUID_A, "Has workspace", "preview", 1, T_NEW, PROJECT_URI),
                 sessionEntry(UUID_D, "No workspace", "preview", 1, T_OLD)));
@@ -153,6 +165,7 @@ public class GeminiHistoryReaderTest {
         // UUID_E has a summary object missing every field; UUID_F's summary is
         // a bare string instead of an object. Both must be skipped; UUID_A must
         // survive; the reader must not throw.
+        createConversationDb(home, UUID_A, userStep("healthy"));
         String json = "{ \"conversations\": {"
                 + sessionEntry(UUID_A, "Healthy", "preview", 1, T_NEW, PROJECT_URI) + ", "
                 + "\"eeeeeeee-3333-4333-8333-333333333333\": { \"summary\": {} }, "
@@ -190,6 +203,68 @@ public class GeminiHistoryReaderTest {
             }
         }
         assertTrue(found);
+    }
+
+    @Test
+    public void cacheEntryWithoutConversationDatabaseIsSkipped() throws Exception {
+        Path home = cliHome();
+        // The CLI can leave cache entries behind after a storage reset (live
+        // 2026-09-04: 84 entries, none with a database on disk). Only entries
+        // whose conversations/<id>.db still exists are listed.
+        writeCache(home, cacheWith(
+                sessionEntry(UUID_A, "Ghost", "no db on disk", 3, T_NEW, PROJECT_URI),
+                sessionEntry(UUID_B, "Real", "backed by its db", 1, T_OLD, PROJECT_URI)));
+        createConversationDb(home, UUID_B, userStep("real"));
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+        JsonArray sessions =
+                parse(reader.getSessionsForProjectAsJson(PROJECT)).getAsJsonArray("sessions");
+        assertEquals(1, sessions.size());
+        assertEquals(UUID_B, sessions.get(0).getAsJsonObject().get("sessionId").getAsString());
+    }
+
+    @Test
+    public void staleCacheWithOnlyGhostEntriesFallsBackToDatabaseScan() throws Exception {
+        Path home = cliHome();
+        // Live shape of the M1 finding: every cache entry is a ghost, and the real
+        // conversations exist only as databases. The scan must take over and the
+        // ghosts must not shadow the real sessions.
+        writeCache(home, cacheWith(
+                sessionEntry(UUID_A, "Ghost", "db gone", 3, T_NEW, PROJECT_URI)));
+        createConversationDb(home, UUID_B, userStep("real one"));
+        createConversationDb(home, UUID_C, userStep("real two"));
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+        JsonObject envelope = parse(reader.getSessionsForProjectAsJson(null));
+        assertTrue(envelope.get("success").getAsBoolean());
+        assertEquals(2, envelope.get("sessionCount").getAsInt());
+        JsonArray sessions = envelope.getAsJsonArray("sessions");
+        // The real sessions surface through the scan (mtime-ordered); the ghost
+        // is nowhere in the listing.
+        java.util.Set<String> ids = new java.util.TreeSet<>();
+        for (JsonElement element : sessions) {
+            ids.add(element.getAsJsonObject().get("sessionId").getAsString());
+        }
+        assertEquals(new java.util.TreeSet<>(java.util.List.of(UUID_B, UUID_C)), ids);
+    }
+
+    @Test
+    public void cacheEntryWithExistingDatabaseIsStillListedFromCache() throws Exception {
+        Path home = cliHome();
+        // Legacy path preserved: a backed entry keeps its cache metadata
+        // (title/step count) instead of degrading to the id-as-title scan.
+        writeCache(home, cacheWith(
+                sessionEntry(UUID_A, "Cache Title", "preview", 5, T_NEW, PROJECT_URI)));
+        createConversationDb(home, UUID_A, userStep("hello"));
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+        JsonArray sessions =
+                parse(reader.getSessionsForProjectAsJson(PROJECT)).getAsJsonArray("sessions");
+        assertEquals(1, sessions.size());
+        JsonObject session = sessions.get(0).getAsJsonObject();
+        assertEquals(UUID_A, session.get("sessionId").getAsString());
+        assertEquals("Cache Title", session.get("title").getAsString());
+        assertEquals(5, session.get("messageCount").getAsInt());
     }
 
     // ------------------------------------------------------------------
@@ -275,6 +350,23 @@ public class GeminiHistoryReaderTest {
     }
 
     @Test
+    public void failedTempCopyCleansUpItsTempDirectory() throws Exception {
+        // L3: a copy that fails after the temp dir exists must remove that dir —
+        // nothing leaks into java.io.tmpdir.
+        Path home = cliHome();
+        Path tmp = Paths.get(System.getProperty("java.io.tmpdir"));
+        java.util.Set<String> before = geminiTempDirs(tmp);
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+        // Source database does not exist → Files.copy fails after the temp dir
+        // was created; the reader removes it instead of leaking it.
+        assertNull(reader.copyWithSidecarsToTemp(
+                home.resolve("conversations").resolve(UUID_A + ".db")));
+
+        assertEquals(before, geminiTempDirs(tmp));
+    }
+
+    @Test
     public void everyEnvelopeCarriesTheSharedExportShape() throws Exception {
         Path home = cliHome();
         createConversationDb(home, UUID_A,
@@ -353,6 +445,86 @@ public class GeminiHistoryReaderTest {
         assertEquals("run_command", toolUse.get("name").getAsString());
         assertEquals(toolUse.get("id").getAsString(), toolResult.get("tool_use_id").getAsString());
         assertEquals("{\"name\":\"hello.txt\"}", toolResult.get("content").getAsString());
+    }
+
+    @Test
+    public void everyRepeatedAgentContentBlobContributesTextAndToolCalls() throws Exception {
+        // L1: an agent step carrying TWO repeated f20 blobs — the first call-only,
+        // the second with text and a call. Committing to one blob (any rule built on
+        // "first blob") drops the other's content; iteration keeps both calls and
+        // the text. (Live corpus: 22382/22382 agent steps have exactly ONE f20 —
+        // the iteration rule replaces the old first-blob assumption.)
+        Path home = cliHome();
+        createLiveConversationDb(home, UUID_A,
+                liveStep(15, concat(
+                        protoMessage(20, protoMessage(7, concat(
+                                protoField(1, "call_first"),
+                                protoField(2, "first_tool"),
+                                protoField(3, "{}")))),
+                        protoMessage(20, concat(
+                                protoField(3, "second blob text"),
+                                protoMessage(7, concat(
+                                        protoField(1, "call_second"),
+                                        protoField(2, "second_tool"),
+                                        protoField(3, "{}"))))))));
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+        List<JsonObject> messages = reader.getSessionMessages(UUID_A, PROJECT);
+
+        // One text envelope (the only text found across the blobs) + both calls.
+        assertEquals(3, messages.size());
+        assertEquals("assistant", messages.get(0).get("type").getAsString());
+        assertEquals("second blob text", textOf(messages.get(0)));
+        java.util.Set<String> callIds = new java.util.TreeSet<>();
+        for (JsonObject message : messages) {
+            for (JsonElement element : message.getAsJsonObject("message").getAsJsonArray("content")) {
+                JsonObject block = element.getAsJsonObject();
+                if ("tool_use".equals(block.get("type").getAsString())) {
+                    callIds.add(block.get("id").getAsString());
+                }
+            }
+        }
+        assertEquals(new java.util.TreeSet<>(java.util.List.of("call_first", "call_second")), callIds);
+    }
+
+    @Test
+    public void toolResultIsNotEmittedWithoutAToolUseWhenTheCallBlobHasNoName() throws Exception {
+        // L2: a call blob without a name emits no tool_use; emitting the paired
+        // tool_result anyway would orphan it (null tool_use_id dropped by Gson).
+        Path home = cliHome();
+        createLiveConversationDb(home, UUID_A,
+                liveStep(132, concat(
+                        protoMessage(5, protoMessage(4, protoField(1, "call_noname"))),
+                        protoMessage(140, concat(
+                                protoMessage(1, concat(
+                                        protoField(1, "toolSummary"),
+                                        protoField(2, "List dir"))),
+                                protoField(2, "{\"name\":\"hello.txt\"}"))))));
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+        List<JsonObject> messages = reader.getSessionMessages(UUID_A, PROJECT);
+
+        assertTrue(messages.isEmpty());
+    }
+
+    @Test
+    public void unknownStepTypesAreSkippedAndDoNotBreakTheLoad() throws Exception {
+        // L5: step types outside the live enum (17/23/90/98/101 — CLI-injected
+        // context bookkeeping, 331 steps in the live corpus) are skipped; the
+        // summary log line is the contract's "skipped with a log line".
+        Path home = cliHome();
+        createLiveConversationDb(home, UUID_A,
+                liveStep(17, protoMessage(114, protoField(1, "bookkeeping"))),
+                liveStep(23, protoMessage(114, protoField(1, "context"))),
+                liveStep(90, protoMessage(114, protoField(1, "bookkeeping"))),
+                liveStep(98, protoMessage(114, protoField(1, "context"))),
+                liveStep(14, protoMessage(19, protoField(2, "still decodes"))));
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+        List<JsonObject> messages = reader.getSessionMessages(UUID_A, PROJECT);
+
+        assertEquals(1, messages.size());
+        assertEquals("still decodes", textOf(messages.get(0)));
     }
 
     // ------------------------------------------------------------------
@@ -574,6 +746,19 @@ public class GeminiHistoryReaderTest {
 
     private static JsonObject parse(String json) {
         return com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+    }
+
+    /** Names of the reader's temp directories currently present in {@code tmp}. */
+    private static java.util.Set<String> geminiTempDirs(Path tmp) throws Exception {
+        java.util.Set<String> names = new java.util.TreeSet<>();
+        if (Files.isDirectory(tmp)) {
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(tmp, "gemini-history-*")) {
+                for (Path dir : stream) {
+                    names.add(dir.getFileName().toString());
+                }
+            }
+        }
+        return names;
     }
 
     private static JsonObject bySessionId(JsonArray sessions, String sessionId) {
