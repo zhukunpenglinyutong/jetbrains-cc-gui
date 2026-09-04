@@ -18,6 +18,10 @@
  * - timeout-error.jsonl: --print-timeout abort — user_input then result
  *   ERROR "timeout waiting for response", exit 1 (proves --print-timeout
  *   bounds the TOTAL turn wait, hence the explicit 8760h flag).
+ * - slash-clear-error-result.jsonl: "/clear" in print mode — result-only
+ *   ERROR (no init/steps) with the CLI's explanatory error text, empty
+ *   conversation_id, zero usage, exit 2 (re-captured live from agy 1.1.26
+ *   2026-09-03; closes the Story 1.2 deferred recapture item).
  *
  * Synthetic fixtures (built from the live-verified shapes after the quota
  * died — the scenarios themselves are documented CLI behaviour):
@@ -35,13 +39,14 @@
  * classifier is exercised against a synthetic best-effort stderr string.
  */
 import { spawn } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getRealHomeDir } from '../../utils/path-utils.js';
+import { GeminiPermissionMapper } from '../../utils/permission-mapper.js';
 
 const SERVICE_DIR = fileURLToPath(new URL('.', import.meta.url));
 const SERVICE_PATH = join(SERVICE_DIR, 'message-service.js');
@@ -63,6 +68,15 @@ if (stderr) process.stderr.write(stderr);
 const payload = fixture
   ? fs.readFileSync(fixture, 'utf8').split('\\n').filter(Boolean).map((l) => l + '\\n').join('')
   : '';
+if (process.env.FAKE_ECHO_INIT_PERM === '1') {
+  // Stand-in for the live CLI's init echo: report the posture the "CLI"
+  // acknowledged, read from the fixture it is about to replay, so tests
+  // assert what flowed through the spawned child — not the file on disk.
+  const firstLine = payload ? payload.split('\\n')[0] : '';
+  let echoedPerm = '';
+  try { echoedPerm = (JSON.parse(firstLine).init || {}).permission_mode ?? ''; } catch {}
+  process.stderr.write('INIT_PERM:' + echoedPerm + '\\n');
+}
 process.stdout.write(payload, () => process.exit(exitCode));
 `;
 
@@ -118,6 +132,7 @@ function runService({
   geminiBin = '',
   echoArgv = false,
   echoCwd = false,
+  echoInitPerm = false,
   extraEnv = {},
 }) {
   const fakeCli = globalThis.__geminiFakeCli;
@@ -133,6 +148,7 @@ function runService({
   env.FIXTURE_STDERR = stderr;
   env.FAKE_ECHO_ARGV = echoArgv ? '1' : '';
   env.FAKE_ECHO_CWD = echoCwd ? '1' : '';
+  env.FAKE_ECHO_INIT_PERM = echoInitPerm ? '1' : '';
   env.SERVICE_PATH = SERVICE_PATH;
   env.SVC_CWD = cwd;
   env.SVC_SESSION_ID = sessionId;
@@ -300,14 +316,12 @@ test('buildGeminiArgs appends the permission flags for each unified mode', async
 });
 
 test('sendMessage forwards the permission mode into the spawned CLI args (AC1)', async () => {
-  const cases = [
-    ['plan', ['--mode', 'plan']],
-    ['acceptEdits', ['--mode', 'accept-edits']],
-    ['bypassPermissions', ['--dangerously-skip-permissions']],
-    ['sandbox', ['--sandbox']],
-    ['default', []],
-  ];
-  for (const [mode, flags] of cases) {
+  // Expected flags come from the mapper itself — this test pins the FORWARDING
+  // (mode -> mapper -> spawn argv); the literal mode->flags table is pinned by
+  // permission-mapper.test.js, the single place it is spelled out.
+  const modes = ['plan', 'acceptEdits', 'bypassPermissions', 'sandbox', 'default'];
+  for (const mode of modes) {
+    const flags = GeminiPermissionMapper.toProvider(mode).args;
     const run = await runService({
       fixture: 'success-text-turn.jsonl',
       permissionMode: mode,
@@ -331,30 +345,35 @@ test('sendMessage forwards the permission mode into the spawned CLI args (AC1)',
 });
 
 test('AC6 conformance: mode -> spawn flags -> CLI-acknowledged posture', async () => {
-  // The fixtures stand in for the live CLI behavior recorded from agy 1.1.25:
+  // Conformance source of truth is the LIVE probe table (Task 0, agy 1.1.25):
   // every posture echoes init.permission_mode "request-review" except
   // --dangerously-skip-permissions, which the CLI acknowledges as
-  // "always-proceed". Each mode must spawn exactly its flag set against the
-  // fixture whose echo matches that live observation, and the turn must
-  // still complete — UI label and backend posture can never diverge.
+  // "always-proceed". What this test enforces against that table: each mode
+  // spawns exactly its mapper flag set, the replayed child echoes the
+  // table's posture (INIT_PERM — read from what the spawned child reported,
+  // not from the fixture file on disk), and the turn completes. UI label and
+  // backend posture can never diverge.
   const table = [
-    ['default', [], 'success-text-turn.jsonl', 'request-review'],
-    ['plan', ['--mode', 'plan'], 'success-text-turn.jsonl', 'request-review'],
-    ['acceptEdits', ['--mode', 'accept-edits'], 'success-text-turn.jsonl', 'request-review'],
-    ['bypassPermissions', ['--dangerously-skip-permissions'], 'bypass-always-proceed.jsonl', 'always-proceed'],
-    ['sandbox', ['--sandbox'], 'success-text-turn.jsonl', 'request-review'],
+    ['default', 'success-text-turn.jsonl', 'request-review'],
+    ['plan', 'success-text-turn.jsonl', 'request-review'],
+    ['acceptEdits', 'success-text-turn.jsonl', 'request-review'],
+    ['bypassPermissions', 'bypass-always-proceed.jsonl', 'always-proceed'],
+    ['sandbox', 'success-text-turn.jsonl', 'request-review'],
   ];
-  for (const [mode, flags, fixture, posture] of table) {
-    const run = await runService({ fixture, permissionMode: mode, echoArgv: true });
+  for (const [mode, fixture, posture] of table) {
+    const flags = GeminiPermissionMapper.toProvider(mode).args;
+    const run = await runService({ fixture, permissionMode: mode, echoArgv: true, echoInitPerm: true });
     assert.equal(run.code, 0, `mode=${mode}: ${run.stderr.slice(0, 400)}`);
     const argvLine = run.stderr.split('\n').find((l) => l.startsWith('ARGV:'));
+    assert.ok(argvLine, `mode=${mode}: missing ARGV echo: ${run.stderr.slice(0, 400)}`);
     const argv = JSON.parse(argvLine.slice('ARGV:'.length));
     for (const flag of flags) {
       assert.ok(argv.includes(flag), `mode=${mode}: missing ${flag} in ${JSON.stringify(argv)}`);
     }
-    const init = JSON.parse(readFileSync(join(FIXTURES_DIR, fixture), 'utf8').split('\n')[0]).init;
-    assert.equal(init.permission_mode, posture,
-      `mode=${mode} spawns ${JSON.stringify(flags)}; live CLI acknowledges "${posture}"`);
+    const permLine = run.stderr.split('\n').find((l) => l.startsWith('INIT_PERM:'));
+    assert.ok(permLine, `mode=${mode}: missing INIT_PERM echo: ${run.stderr.slice(0, 400)}`);
+    assert.equal(permLine.slice('INIT_PERM:'.length), posture,
+      `mode=${mode} spawns ${JSON.stringify(flags)}; replayed CLI acknowledges "${posture}"`);
     assert.equal(finalPayload(run.stdout).success, true, `mode=${mode}: turn must complete`);
   }
 });
@@ -590,6 +609,31 @@ test('unauthenticated stderr is classified as an auth failure (AC4, best-effort 
   assert.match(sendError.error, /Run 'agy' in an external terminal/);
   assert.match(sendError.error, /complete the interactive Google Sign-In flow/);
   assert.match(sendError.error, /does not manage Google credentials or perform Google login in-plugin/);
+});
+
+test('result-only ERROR with nonzero exit: print-mode slash command (live capture, exit 2)', async () => {
+  // Live-captured from agy 1.1.26 (2026-09-03): sending "/clear" in print
+  // mode yields a single result event — no init, no step_updates — with
+  // status ERROR, an empty conversation_id, zero usage, an explanatory
+  // `error` string, and CLI exit code 2. The result payload, not the exit
+  // code, is authoritative: the user must see the CLI's own explanation,
+  // not a generic CLI_ERROR footer.
+  const safeDir = makeTempDir('gemini-clear-');
+  const { stdout } = await runService({
+    fixture: 'slash-clear-error-result.jsonl',
+    exitCode: 2,
+    cwd: safeDir,
+  });
+  assert.equal(markers(stdout, 'CONTENT_DELTA').length, 0, 'no steps precede the result');
+  const sendErrors = markers(stdout, 'SEND_ERROR');
+  assert.equal(sendErrors.length, 1);
+  const sendError = JSON.parse(sendErrors[0].slice('[SEND_ERROR]'.length));
+  assert.match(sendError.error, /\/clear is not available in print mode/);
+  assert.match(sendError.error, /--disable-slash-commands/);
+  const payload = finalPayload(stdout);
+  assert.equal(payload.success, false);
+  assert.equal(payload.details.status, 'ERROR', 'exit 2 after a parsed result must not downgrade to CLI_ERROR');
+  assert.match(payload.details.rawError, /not available in print mode/);
 });
 
 test('safe requested cwd runs without a substitution notice (AC1, AC5)', async () => {

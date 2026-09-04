@@ -56,6 +56,11 @@ const normalizeRestoredPermissionMode = (value: unknown): PermissionMode | null 
   return typeof candidate === 'string' && isValidPermissionMode(candidate) ? candidate : null;
 };
 
+/** Claude's native postures — the claude slot's restore whitelist. */
+const CLAUDE_PERMISSION_MODE_IDS: ReadonlySet<string> = new Set([
+  'default', 'plan', 'acceptEdits', 'auto', 'bypassPermissions',
+]);
+
 export interface UseModelStatePersistenceOptions {
   // Cross-slice load setters (run once on mount)
   setCurrentProvider: (value: string) => void;
@@ -304,7 +309,11 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
 
         const restoredClaudeMode = normalizeRestoredPermissionMode(state.claudePermissionMode);
         if (restoredClaudeMode) {
-          restoredClaudePermissionMode = restoredClaudeMode;
+          // Claude's own postures — a stale/corrupted snapshot carrying a
+          // provider-specific id (smol/slow/sandbox) must not ride claude turns.
+          restoredClaudePermissionMode = CLAUDE_PERMISSION_MODE_IDS.has(restoredClaudeMode)
+            ? restoredClaudeMode
+            : 'default';
         }
         const restoredCodexMode = normalizeRestoredPermissionMode(state.codexPermissionMode);
         if (restoredCodexMode) {

@@ -634,6 +634,40 @@ describe('useModelStatePersistence — gemini permission mode slot', () => {
     expect(setPermissionMode).toHaveBeenCalledWith('sandbox');
   });
 
+  it('sanitizes a corrupted claude snapshot carrying a provider-specific mode id', () => {
+    // Review patch P5: sandbox (and the omp roles) are not claude postures —
+    // a stale/hand-edited snapshot must restore to default, not ride claude
+    // turns while the selector displays Default.
+    const setClaudePermissionMode = vi.fn();
+    const setPermissionMode = vi.fn();
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'claude',
+      claudePermissionMode: 'sandbox',
+    }));
+
+    renderHook(() => useModelStatePersistence(makeOptions({ setClaudePermissionMode, setPermissionMode })));
+    vi.advanceTimersByTime(200);
+
+    expect(setClaudePermissionMode).toHaveBeenCalledWith('default');
+    expect(setPermissionMode).toHaveBeenCalledWith('default');
+  });
+
+  it('coerces an omp role id found in the gemini slot back to default on restore', () => {
+    // Review patch P5: the gemini slot only accepts its five native postures.
+    const setGeminiPermissionMode = vi.fn();
+    const setPermissionMode = vi.fn();
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'gemini',
+      geminiPermissionMode: 'smol',
+    }));
+
+    renderHook(() => useModelStatePersistence(makeOptions({ setGeminiPermissionMode, setPermissionMode })));
+    vi.advanceTimersByTime(200);
+
+    expect(setGeminiPermissionMode).toHaveBeenCalledWith('default');
+    expect(setPermissionMode).toHaveBeenCalledWith('default');
+  });
+
   it('persists the gemini permission mode in the snapshot', () => {
     renderHook(() => useModelStatePersistence(makeOptions({
       currentProvider: 'gemini',

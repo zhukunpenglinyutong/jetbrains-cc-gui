@@ -17,6 +17,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { GeminiPermissionMapper } from '../utils/permission-mapper.js';
 
 const bridgeDir = dirname(fileURLToPath(import.meta.url));
 const channelManager = join(bridgeDir, '..', 'channel-manager.js');
@@ -265,13 +266,11 @@ test('gemini send forwards the picked model as --model and never --effort', () =
 });
 
 test('gemini send maps stdin permissionMode onto the CLI posture flags', () => {
-  const cases = [
-    ['plan', ['--mode', 'plan']],
-    ['acceptEdits', ['--mode', 'accept-edits']],
-    ['bypassPermissions', ['--dangerously-skip-permissions']],
-    ['sandbox', ['--sandbox']],
-    ['default', []],
-  ];
+  // Expected flags derive from the mapper — this dispatcher-level test pins
+  // the stdin -> channel -> service -> argv forwarding; the literal
+  // mode->flags table lives only in permission-mapper.test.js.
+  const cases = ['plan', 'acceptEdits', 'bypassPermissions', 'sandbox', 'default']
+    .map((mode) => [mode, GeminiPermissionMapper.toProvider(mode).args]);
   for (const [mode, flags] of cases) {
     const result = spawnSync(
       process.execPath,

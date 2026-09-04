@@ -26,9 +26,21 @@ describe('normalizeCliPermissionMode', () => {
     expect(normalizeCliPermissionMode('plan', 'gemini')).toBe('plan');
   });
 
-  it('never coerces the sandbox mode for any provider', () => {
-    for (const provider of ['gemini', 'kimi', 'opencode', 'pi', 'dsh', 'omp', undefined]) {
-      expect(normalizeCliPermissionMode('sandbox', provider)).toBe('sandbox');
+  it('keeps sandbox only for gemini and coerces it to default everywhere else', () => {
+    // Review patch P5: sandbox is a gemini-only posture — a stale/corrupted
+    // snapshot must never send it for another provider while the selector
+    // silently displays Default (displayed-vs-sent divergence).
+    expect(normalizeCliPermissionMode('sandbox', 'gemini')).toBe('sandbox');
+    for (const provider of ['kimi', 'opencode', 'pi', 'dsh', 'codex', 'grok', 'omp', undefined]) {
+      expect(normalizeCliPermissionMode('sandbox', provider)).toBe('default');
+    }
+  });
+
+  it('filters the gemini slot to the five native postures (omp roles do not restore into gemini)', () => {
+    expect(normalizeCliPermissionMode('smol', 'gemini')).toBe('default');
+    expect(normalizeCliPermissionMode('slow', 'gemini')).toBe('default');
+    for (const mode of ['default', 'plan', 'acceptEdits', 'bypassPermissions', 'sandbox']) {
+      expect(normalizeCliPermissionMode(mode, 'gemini')).toBe(mode);
     }
   });
 
