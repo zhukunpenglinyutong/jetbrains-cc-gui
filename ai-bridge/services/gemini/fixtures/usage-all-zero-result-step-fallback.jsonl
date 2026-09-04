@@ -1,0 +1,4 @@
+{"event":"init","conversation_id":"9a1b2c3d-0007-4a5b-8c6d-1e2f3a4b5c6d","init":{"cwd":"<TMP>","tools":["read_file"],"permission_mode":"request-review"}}
+{"event":"step_update","step_update":{"conversation_id":"9a1b2c3d-0007-4a5b-8c6d-1e2f3a4b5c6d","step_index":0,"state":"DONE","step_type":"user_input"}}
+{"event":"step_update","step_update":{"conversation_id":"9a1b2c3d-0007-4a5b-8c6d-1e2f3a4b5c6d","step_index":1,"state":"DONE","step_type":"agent_response","text_delta":"Answer.\n","usage":{"input_tokens":1042,"output_tokens":15,"thinking_tokens":8,"cache_read_tokens":0,"total_tokens":1065}}}
+{"event":"result","result":{"conversation_id":"9a1b2c3d-0007-4a5b-8c6d-1e2f3a4b5c6d","duration_seconds":0.0,"num_turns":1,"usage":{"input_tokens":0,"output_tokens":0,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":0},"status":"SUCCESS","response":"Answer.\n","error":null}}

@@ -98,8 +98,9 @@ public class CodexMessageHandler implements MessageCallback {
             handleSessionId(content);
         } else if ("usage".equals(type)) {
             // Whole-turn usage from the shared [USAGE] marker (MarkerCliBridge).
-            // Dormant for providers that never emit the marker; only the gemini
-            // bridge delivers it today.
+            // Gated to the gemini bridge: only its payload shape is vetted, and
+            // other CLI bridges (dsh/omp/pi) keep their pre-story behavior —
+            // the marker is dropped (Story 1.9 review fix H1).
             handleUsage(content);
         } else if ("event_msg".equals(type)) {
             handleEventMessage(content);
@@ -338,16 +339,22 @@ public class CodexMessageHandler implements MessageCallback {
     /**
      * Handle a whole-turn usage marker ([USAGE] → onMessage("usage", json)).
      *
-     * <p>The marker payload is already the canonical claude-shape usage
-     * (input_tokens / output_tokens / cache_creation_input_tokens /
-     * cache_read_input_tokens, plus an additive thinking_tokens) and is stored
-     * VERBATIM: the provider's input figure is reported cache-exclusive, so the
-     * codex buildTurnUsage normalization (input includes cache → subtract
-     * cacheRead) must NOT be applied here. thinking_tokens passes through for
-     * the per-turn display but is never part of the context-ring math.
+     * <p><b>Provider gate (Story 1.9 review fix H1):</b> only the gemini
+     * bridge's marker is consumed. dsh/omp/pi also emit [USAGE] through the
+     * shared marker protocol, but their payload shapes and per-call emission
+     * semantics are unvetted — for them the marker keeps its pre-story
+     * behavior (dropped) until they are brought in deliberately.
      *
-     * <p>A payload with no non-zero figure is ignored entirely: stamping it
-     * would record a genuinely free turn, which would be a lie.
+     * <p>The gemini payload is the canonical claude-shape usage (input_tokens /
+     * output_tokens / cache_creation_input_tokens / cache_read_input_tokens,
+     * plus an additive thinking_tokens) and is stored VERBATIM: the provider's
+     * input figure is reported cache-exclusive, so the codex buildTurnUsage
+     * normalization (input includes cache → subtract cacheRead) must NOT be
+     * applied here. thinking_tokens passes through for the per-turn display
+     * but is never part of the context-ring math.
+     *
+     * <p>A payload with no non-zero displayable figure is ignored entirely:
+     * stamping it would record a genuinely free turn, which would be a lie.
      *
      * @param jsonContent canonical usage JSON
      */
@@ -355,20 +362,26 @@ public class CodexMessageHandler implements MessageCallback {
         if (jsonContent == null || jsonContent.isEmpty()) {
             return;
         }
+        if (!"gemini".equals(state.getProvider())) {
+            LOG.debug("Usage marker dropped (provider '" + state.getProvider()
+                    + "' is not vetted for [USAGE]): " + jsonContent);
+            return;
+        }
         try {
             com.google.gson.JsonObject usage = new com.google.gson.Gson().fromJson(jsonContent, com.google.gson.JsonObject.class);
-            if (usage == null || usage.size() == 0 || !hasPositiveFigure(usage)) {
+            if (usage == null || usage.size() == 0 || !hasPositiveDisplayableFigure(usage)) {
                 LOG.debug("Usage marker ignored (no reported figures): " + jsonContent);
                 return;
             }
 
-            Message target = currentAssistantMessage != null && currentAssistantMessage.type == Message.Type.ASSISTANT
-                    ? currentAssistantMessage
-                    : findLastAssistantMessage();
-            if (target == null) {
-                LOG.debug("Usage marker received but no assistant message to attach");
-                return;
-            }
+            // Same-turn guard (Story 1.9 review fix M2): a turn whose text
+            // arrives only via the result-fallback delta (or an ERROR turn
+            // with no text) has no current assistant message yet — create THIS
+            // turn's message instead of letting the marker fall onto the
+            // previous turn's bubble (or vanish on the first turn). A fallback
+            // content_delta later in the same turn then fills this message.
+            ensureCurrentAssistantMessageExists();
+            Message target = currentAssistantMessage;
             ensureAssistantMessageRaw(target);
 
             com.google.gson.JsonObject storedUsage = usage.deepCopy();
@@ -399,13 +412,20 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * True when at least one numeric entry is greater than zero — i.e. the
-     * backend actually reported a figure. Absent or non-numeric entries say
-     * nothing and never fabricate a positive.
+     * True when at least one of the canonical DISPLAYABLE usage keys
+     * (input_tokens / output_tokens / cache_creation_input_tokens /
+     * cache_read_input_tokens) carries a number greater than zero — i.e. the
+     * backend reported a figure the per-turn footer can actually show.
+     * thinking_tokens rides along on the wire but never qualifies on its own
+     * (Story 1.9 review fix L2/L5: unknown keys like {@code {"foo":1}} and
+     * thinking-only payloads record nothing).
      */
-    private static boolean hasPositiveFigure(com.google.gson.JsonObject usage) {
-        for (java.util.Map.Entry<String, JsonElement> entry : usage.entrySet()) {
-            JsonElement value = entry.getValue();
+    private static boolean hasPositiveDisplayableFigure(com.google.gson.JsonObject usage) {
+        String[] displayableKeys = {
+            "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens",
+        };
+        for (String key : displayableKeys) {
+            JsonElement value = usage.get(key);
             if (value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber()) {
                 if (value.getAsLong() > 0) {
                     return true;
@@ -413,20 +433,6 @@ public class CodexMessageHandler implements MessageCallback {
             }
         }
         return false;
-    }
-
-    /**
-     * Fallback attach target when no streaming assistant message is current
-     * (e.g. a usage marker arriving after the accumulator was reset).
-     */
-    private Message findLastAssistantMessage() {
-        java.util.List<Message> messages = state.getMessagesReference();
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            if (messages.get(i).type == Message.Type.ASSISTANT) {
-                return messages.get(i);
-            }
-        }
-        return null;
     }
 
     /**

@@ -1577,9 +1577,10 @@ test('Story 1.9 AC1: emits ONE canonical [USAGE] from the result payload — map
     !('cache_creation_input_tokens' in usage),
     `absent cache_creation must stay absent (nothing invented): ${JSON.stringify(usage)}`,
   );
-  if ('total_tokens' in usage) {
-    assert.equal(usage.total_tokens, 19022, 'total_tokens, when carried, is the reported value verbatim');
-  }
+  assert.ok(
+    !('total_tokens' in usage),
+    `total_tokens (read by no consumer) must not be carried: ${JSON.stringify(usage)}`,
+  );
   const usageIdx = lines.findIndex((l) => l.startsWith('[USAGE]'));
   const streamEndIdx = lines.findIndex((l) => l.startsWith('[STREAM_END]'));
   assert.ok(usageIdx !== -1 && streamEndIdx !== -1 && usageIdx < streamEndIdx, '[USAGE] must precede stream end');
@@ -1633,4 +1634,84 @@ test('Story 1.9 AC4 guard: partial fields pass through exactly — nothing inven
     { input_tokens: 100, output_tokens: 20 },
     'only the reported fields, verbatim — no cache/thinking/total defaults invented',
   );
+});
+
+// Review-fix round (M1): the result→step fallback chain was unpinned — every
+// existing usage fixture with step usage also had positive result usage, so
+// deleting `|| mapGeminiUsageToCanonical(lastStepUsage)` kept all tests green.
+
+test('Story 1.9 M1: a usage-bearing final step is emitted when the result reports NO usage at all', async () => {
+  const { stdout } = await runService({
+    fixture: 'usage-step-only-result-absent.jsonl',
+    exitCode: 0,
+  });
+
+  const usages = markers(stdout, 'USAGE').map((l) => JSON.parse(l.slice('[USAGE]'.length)));
+  assert.equal(usages.length, 1, `exactly ONE marker — the step figure, got ${usages.length}: ${JSON.stringify(usages)}`);
+  assert.deepEqual(
+    usages[0],
+    { input_tokens: 1042, output_tokens: 15, cache_read_input_tokens: 0, thinking_tokens: 8 },
+    'the STEP figures carry through the canonical mapping',
+  );
+  assert.equal(finalPayload(stdout).success, true);
+});
+
+test('Story 1.9 M1: an all-zero result usage falls back to the step figures — one marker', async () => {
+  const { stdout } = await runService({
+    fixture: 'usage-all-zero-result-step-fallback.jsonl',
+    exitCode: 0,
+  });
+
+  const usages = markers(stdout, 'USAGE').map((l) => JSON.parse(l.slice('[USAGE]'.length)));
+  assert.equal(usages.length, 1, `exactly ONE marker, got ${usages.length}: ${JSON.stringify(usages)}`);
+  assert.deepEqual(
+    usages[0],
+    { input_tokens: 1042, output_tokens: 15, cache_read_input_tokens: 0, thinking_tokens: 8 },
+    'the step figures surface when the result maps to nothing usable',
+  );
+  assert.equal(finalPayload(stdout).success, true);
+});
+
+// Review-fix round (L3): a REPORTED cache_creation_input_tokens passes through
+// verbatim (additive, honest AC4) instead of being silently dropped.
+
+test('Story 1.9 L3: a reported cache_creation_input_tokens is carried verbatim', async () => {
+  const { stdout } = await runService({
+    fixture: 'usage-cache-creation-reported.jsonl',
+    exitCode: 0,
+  });
+
+  const usages = markers(stdout, 'USAGE').map((l) => JSON.parse(l.slice('[USAGE]'.length)));
+  assert.equal(usages.length, 1);
+  assert.deepEqual(
+    usages[0],
+    { input_tokens: 500, output_tokens: 40, cache_creation_input_tokens: 30, cache_read_input_tokens: 0 },
+    'reported cache_creation carried verbatim; raw cache_read_tokens still mapped; nothing invented',
+  );
+});
+
+// Review-fix round (M2, bridge half): a turn with NO text_delta steps still
+// emits its [USAGE]; the Java handler attaches it to THIS turn's message
+// (pinned by usageMarkerOnTurnWithoutDeltasStampsThisTurnNotThePreviousOne).
+// The result.response fallback delta keeps the bubble non-empty — the handler
+// fills that same message, so the marker never lands on the previous turn.
+
+test('Story 1.9 M2: a no-delta turn with usage still emits exactly ONE [USAGE] beside the fallback delta', async () => {
+  const { stdout } = await runService({
+    fixture: 'usage-no-delta-turn.jsonl',
+    exitCode: 0,
+  });
+
+  const usages = markers(stdout, 'USAGE').map((l) => JSON.parse(l.slice('[USAGE]'.length)));
+  assert.equal(usages.length, 1, `one marker for the no-delta turn, got ${usages.length}: ${JSON.stringify(usages)}`);
+  assert.deepEqual(
+    usages[0],
+    { input_tokens: 700, output_tokens: 25, cache_read_input_tokens: 0, thinking_tokens: 0 },
+    'reported zero thinking stays verbatim (present field), displayable figures carry the turn',
+  );
+
+  const lines = protocolLines(stdout);
+  const fallbackIdx = lines.findIndex((l) => l.startsWith('[CONTENT_DELTA]'));
+  assert.ok(fallbackIdx !== -1, 'the result.response fallback delta keeps the bubble non-empty');
+  assert.equal(finalPayload(stdout).success, true);
 });

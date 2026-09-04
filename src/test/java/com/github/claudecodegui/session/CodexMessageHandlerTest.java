@@ -666,6 +666,10 @@ public class CodexMessageHandlerTest {
     // buildTurnUsage convention (input includes cache → subtract cacheRead)
     // must NOT be applied. thinking_tokens passes through for display but is
     // excluded from the context-ring math (input + cache_creation + cache_read).
+    //
+    // Review-fix round: handleUsage is gated to provider "gemini" (H1) and
+    // attaches to THIS turn's assistant message even when no delta preceded
+    // the marker (M2) — every test below runs on a gemini-provider state.
 
     private static final String GEMINI_CANONICAL_USAGE =
             "{\"input_tokens\":18814,\"output_tokens\":208,\"cache_read_input_tokens\":0,\"thinking_tokens\":207}";
@@ -683,6 +687,7 @@ public class CodexMessageHandlerTest {
     @Test
     public void usageMarkerStampsCanonicalUsageTurnUsageAndContextRing() {
         SessionState state = new SessionState();
+        state.setProvider("gemini");
         state.setModel("gemini-3.6-flash-medium");
         CallbackHandler callbackHandler = new CallbackHandler();
         RecordingCallback callback = new RecordingCallback();
@@ -729,6 +734,7 @@ public class CodexMessageHandlerTest {
     @Test
     public void usageMarkerThinkingStaysOutOfContextRingMath() {
         SessionState state = new SessionState();
+        state.setProvider("gemini");
         CallbackHandler callbackHandler = new CallbackHandler();
         RecordingCallback callback = new RecordingCallback();
         callbackHandler.setCallback(callback);
@@ -756,6 +762,7 @@ public class CodexMessageHandlerTest {
     @Test
     public void twoTurnsRecordExactlyTheirReportedFigures() {
         SessionState state = new SessionState();
+        state.setProvider("gemini");
         CallbackHandler callbackHandler = new CallbackHandler();
         RecordingCallback callback = new RecordingCallback();
         callbackHandler.setCallback(callback);
@@ -799,6 +806,7 @@ public class CodexMessageHandlerTest {
     @Test
     public void usageMarkerWithAllZeroFiguresStampsNothing() {
         SessionState state = new SessionState();
+        state.setProvider("gemini");
         CallbackHandler callbackHandler = new CallbackHandler();
         RecordingCallback callback = new RecordingCallback();
         callbackHandler.setCallback(callback);
@@ -834,5 +842,82 @@ public class CodexMessageHandlerTest {
             assertFalse("no usage must appear when the provider reports none",
                     m.raw != null && (m.raw.has("turnUsage") || m.raw.has("turnCostUsd")));
         }
+    }
+
+    // ---------------------------------------------------------------------
+    // Story 1.9 review-fix round — H1 (provider gate) and M2 (same-turn guard).
+
+    /**
+     * H1: dsh/omp/pi emit [USAGE] through the shared marker protocol too, but
+     * their payload shapes and per-call emission semantics are unvetted. The
+     * handler consumes the marker ONLY on the gemini provider; other CLI
+     * providers keep their pre-story behavior — the marker is dropped. The
+     * payload here is the fully canonical gemini shape, proving the gate is
+     * the provider, not the shape.
+     */
+    @Test
+    public void usageMarkerFromNonGeminiCliProviderIsDroppedLikeBeforeTheStory() {
+        for (String provider : List.of("dsh", "omp", "pi")) {
+            SessionState state = new SessionState();
+            state.setProvider(provider);
+            CallbackHandler callbackHandler = new CallbackHandler();
+            RecordingCallback callback = new RecordingCallback();
+            callbackHandler.setCallback(callback);
+
+            CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+            handler.onMessage("stream_start", "");
+            handler.onMessage("content_delta", "Answer.");
+            handler.onMessage("usage", GEMINI_CANONICAL_USAGE);
+            handler.onMessage("stream_end", "");
+
+            assertTrue("[" + provider + "] no ring notification may fire",
+                    callback.usageUpdates.isEmpty());
+            for (Message m : state.getMessages()) {
+                assertFalse("[" + provider + "] the marker must be dropped exactly as before the story",
+                        m.raw != null && (m.raw.has("turnUsage") || m.raw.has("message")
+                                && m.raw.getAsJsonObject("message").has("usage")));
+            }
+        }
+    }
+
+    /**
+     * M2: a turn whose text arrives only via the result-fallback delta (or an
+     * ERROR turn with no text) has no current assistant message when the
+     * [USAGE] marker arrives. The marker must stamp THIS turn's (newly
+     * created) message — never the previous turn's bubble.
+     */
+    @Test
+    public void usageMarkerOnTurnWithoutDeltasStampsThisTurnNotThePreviousOne() {
+        SessionState state = new SessionState();
+        state.setProvider("gemini");
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        // Turn 1 — normal delta turn, reported in 100 / out 20.
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "one");
+        handler.onMessage("usage", "{\"input_tokens\":100,\"output_tokens\":20}");
+        handler.onMessage("stream_end", "");
+        // Turn 2 — NO deltas at all: usage arrives onto a fresh accumulator.
+        handler.onMessage("stream_start", "");
+        handler.onMessage("usage", "{\"input_tokens\":200,\"output_tokens\":30}");
+        handler.onMessage("stream_end", "");
+
+        List<Message> assistants = new ArrayList<>();
+        for (Message m : state.getMessages()) {
+            if (m.type == Message.Type.ASSISTANT && m.raw != null && m.raw.has("turnUsage")) {
+                assistants.add(m);
+            }
+        }
+        assertEquals("both turns must record their own usage", 2, assistants.size());
+        assertEquals("turn 1 keeps exactly its own figures", 100,
+                assistants.get(0).raw.getAsJsonObject("turnUsage").get("input_tokens").getAsInt());
+        assertEquals("turn 2's marker must not fall onto turn 1's message", 200,
+                assistants.get(1).raw.getAsJsonObject("turnUsage").get("input_tokens").getAsInt());
+        assertEquals(30, assistants.get(1).raw.getAsJsonObject("turnUsage").get("output_tokens").getAsInt());
+        assertEquals(2, callback.usageUpdates.size());
+        assertEquals(200, callback.usageUpdates.get(1)[0]);
     }
 }

@@ -327,15 +327,17 @@ export function buildGeminiArgs({ message, sessionId, model, permissionMode = ''
  * Map an agy usage object onto the canonical `[USAGE]` wire shape — the key
  * names every downstream consumer already reads (util/TokenUsageUtils.java,
  * the webview footer's turnUsage reader, claude's emitUsageTag output):
- * `input_tokens` / `output_tokens` / `cache_read_input_tokens`, plus an
- * additive `thinking_tokens`. Present fields map verbatim (a reported 0
- * stays 0); absent fields stay absent — `cache_creation_input_tokens` is
- * never fabricated (agy reports none), and `total_tokens` (the CLI's own
- * sum, read by no consumer) is not carried.
+ * `input_tokens` / `output_tokens` / `cache_creation_input_tokens` /
+ * `cache_read_input_tokens`, plus an additive `thinking_tokens`. Present
+ * fields map verbatim (a reported 0 stays 0); absent fields stay absent, and
+ * `total_tokens` (the CLI's own sum, read by no consumer) is not carried.
  *
- * Returns null when the object carries no usable figures: absent, empty, or
- * all-zero. Emitting a stored zero would read as a genuinely free turn — a
- * lie — so an all-zero report maps to nothing at all.
+ * Returns null when the object carries nothing displayable: absent, empty,
+ * all-zero, or thinking-only (review fix L2 — a figure must be showable in
+ * the per-turn footer to be worth recording; thinking rides along on real
+ * turns but a thinking-only report maps to nothing at all). Emitting a
+ * stored zero would read as a genuinely free turn — a lie — so an all-zero
+ * report maps to nothing too.
  * @param {unknown} usage raw CLI usage object
  * @returns {Record<string, number>|null} canonical usage or null (nothing to emit)
  */
@@ -345,13 +347,20 @@ export function mapGeminiUsageToCanonical(usage) {
   const num = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
   const input = num(usage.input_tokens);
   const output = num(usage.output_tokens);
+  const cacheCreation = num(usage.cache_creation_input_tokens);
   const cacheRead = num(usage.cache_read_tokens);
   const thinking = num(usage.thinking_tokens);
   if (input !== undefined) mapped.input_tokens = input;
   if (output !== undefined) mapped.output_tokens = output;
+  // Review fix L3: a reported cache-creation figure passes through verbatim
+  // instead of being dropped (honest AC4: shown ⊆ reported).
+  if (cacheCreation !== undefined) mapped.cache_creation_input_tokens = cacheCreation;
   if (cacheRead !== undefined) mapped.cache_read_input_tokens = cacheRead;
   if (thinking !== undefined) mapped.thinking_tokens = thinking;
-  const reported = Object.values(mapped).some((value) => value > 0);
+  // L2: only a DISPLAYABLE figure (input / output / cache) qualifies; thinking
+  // alone never triggers emission (the footer would hide it — nothing would
+  // be shown for what was stamped).
+  const reported = [input, output, cacheCreation, cacheRead].some((value) => value !== undefined && value > 0);
   return reported ? mapped : null;
 }
 
