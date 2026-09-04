@@ -43,6 +43,17 @@
     "optional": "可选"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "用量不可用",
+      "dash": "用量 —",
+      "loading": "正在加载用量…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · {{value}} 重置",
+      "clickToSwitch": "点击切换时间窗口",
+      "worstHint": "圆点显示最差窗口（{{color}}）",
+      "worstDot": "最差窗口：{{color}}",
+      "stale": "数据可能已过期（刷新失败）"
+    },
     "sendMessage": "给 {{provider}} 发送消息",
     "createNewSession": "创建新会话",
     "confirmNewSession": "当前会话已有消息，确定要创建新会话吗？",

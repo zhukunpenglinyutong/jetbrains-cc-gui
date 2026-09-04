@@ -26,6 +26,17 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "उपयोग अनुपलब्ध",
+      "dash": "उपयोग —",
+      "loading": "उपयोग लोड हो रहा है…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · रीसेट {{value}}",
+      "clickToSwitch": "विंडो बदलने के लिए क्लिक करें",
+      "worstHint": "बिंदु सबसे खराब विंडो दिखाता है ({{color}})",
+      "worstDot": "सबसे खराब विंडो: {{color}}",
+      "stale": "डेटा पुराना हो सकता है (रीफ्रेश विफल)"
+    },
     "sendMessage": "{{provider}} को संदेश भेजें",
     "createNewSession": "नया सत्र बनाएं",
     "confirmNewSession": "वर्तमान सत्र में संदेश हैं, क्या आप नया सत्र बनाना चाहते हैं?",

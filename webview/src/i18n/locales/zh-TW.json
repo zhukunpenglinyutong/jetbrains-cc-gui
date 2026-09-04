@@ -26,6 +26,17 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "用量無法使用",
+      "dash": "用量 —",
+      "loading": "正在載入用量…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · {{value}} 重設",
+      "clickToSwitch": "點擊切換時間視窗",
+      "worstHint": "圓點顯示最差視窗（{{color}}）",
+      "worstDot": "最差視窗：{{color}}",
+      "stale": "資料可能已過期（重新整理失敗）"
+    },
     "sendMessage": "給 {{provider}} 發送訊息",
     "createNewSession": "建立新會話",
     "confirmNewSession": "目前會話已有訊息，確定要建立新會話嗎？",

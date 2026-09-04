@@ -26,6 +26,17 @@
     "optional": "Opcional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "Uso indisponível",
+      "dash": "Uso —",
+      "loading": "Carregando uso…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · Reinicia em {{value}}",
+      "clickToSwitch": "Clique para alternar entre janelas",
+      "worstHint": "O ponto mostra a pior janela ({{color}})",
+      "worstDot": "Pior janela: {{color}}",
+      "stale": "Os dados podem estar desatualizados (falha na atualização)"
+    },
     "sendMessage": "Enviar mensagem para {{provider}}",
     "createNewSession": "Criar Nova Sessão",
     "confirmNewSession": "A sessão atual possui mensagens. Tem certeza que deseja criar uma nova sessão?",

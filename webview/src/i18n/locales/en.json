@@ -43,6 +43,17 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "Usage unavailable",
+      "dash": "Usage —",
+      "loading": "Loading usage…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · Resets {{value}}",
+      "clickToSwitch": "Click to switch between windows",
+      "worstHint": "Dot shows worst window ({{color}})",
+      "worstDot": "Worst window: {{color}}",
+      "stale": "Data may be outdated (refresh failed)"
+    },
     "sendMessage": "Send message to {{provider}}",
     "createNewSession": "Create New Session",
     "confirmNewSession": "Current session has messages. Are you sure you want to create a new session?",

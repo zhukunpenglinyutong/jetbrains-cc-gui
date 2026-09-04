@@ -26,6 +26,17 @@
     "optional": "Необязательно"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "Данные о расходе недоступны",
+      "dash": "Расход —",
+      "loading": "Загрузка расхода…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · сброс {{value}}",
+      "clickToSwitch": "Нажмите, чтобы переключить окно",
+      "worstHint": "Точка показывает худшее окно ({{color}})",
+      "worstDot": "Худшее окно: {{color}}",
+      "stale": "Данные могут быть устаревшими (не удалось обновить)"
+    },
     "sendMessage": "Отправить сообщение в {{provider}}",
     "createNewSession": "Начать новый чат",
     "confirmNewSession": "В текущем чате есть сообщения. Начать новый?",

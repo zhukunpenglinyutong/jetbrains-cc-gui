@@ -26,6 +26,17 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "使用量を取得できません",
+      "dash": "使用量 —",
+      "loading": "使用量を読み込み中…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · {{value}} にリセット",
+      "clickToSwitch": "クリックで期間を切り替え",
+      "worstHint": "ドットは最も悪いウィンドウを示します（{{color}}）",
+      "worstDot": "最も悪いウィンドウ: {{color}}",
+      "stale": "データが古い可能性があります（更新失敗）"
+    },
     "sendMessage": "{{provider}}にメッセージを送信",
     "createNewSession": "新規セッションを作成",
     "confirmNewSession": "現在のセッションにメッセージがあります。新規セッションを作成してもよろしいですか?",

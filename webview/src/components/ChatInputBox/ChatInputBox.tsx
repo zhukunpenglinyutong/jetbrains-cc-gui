@@ -177,6 +177,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           sdkStatusError={sdkStatusError}
           sdkInstalled={sdkInstalled}
           currentProvider={currentProvider}
+          selectedModel={selectedModel}
           onRetrySdkStatus={onRetrySdkStatus}
           onInstallSdk={onInstallSdk}
           t={t}
