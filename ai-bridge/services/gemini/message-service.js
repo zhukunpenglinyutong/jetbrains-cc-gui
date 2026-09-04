@@ -324,6 +324,38 @@ export function buildGeminiArgs({ message, sessionId, model, permissionMode = ''
 }
 
 /**
+ * Map an agy usage object onto the canonical `[USAGE]` wire shape — the key
+ * names every downstream consumer already reads (util/TokenUsageUtils.java,
+ * the webview footer's turnUsage reader, claude's emitUsageTag output):
+ * `input_tokens` / `output_tokens` / `cache_read_input_tokens`, plus an
+ * additive `thinking_tokens`. Present fields map verbatim (a reported 0
+ * stays 0); absent fields stay absent — `cache_creation_input_tokens` is
+ * never fabricated (agy reports none), and `total_tokens` (the CLI's own
+ * sum, read by no consumer) is not carried.
+ *
+ * Returns null when the object carries no usable figures: absent, empty, or
+ * all-zero. Emitting a stored zero would read as a genuinely free turn — a
+ * lie — so an all-zero report maps to nothing at all.
+ * @param {unknown} usage raw CLI usage object
+ * @returns {Record<string, number>|null} canonical usage or null (nothing to emit)
+ */
+export function mapGeminiUsageToCanonical(usage) {
+  if (!usage || typeof usage !== 'object') return null;
+  const mapped = {};
+  const num = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
+  const input = num(usage.input_tokens);
+  const output = num(usage.output_tokens);
+  const cacheRead = num(usage.cache_read_tokens);
+  const thinking = num(usage.thinking_tokens);
+  if (input !== undefined) mapped.input_tokens = input;
+  if (output !== undefined) mapped.output_tokens = output;
+  if (cacheRead !== undefined) mapped.cache_read_input_tokens = cacheRead;
+  if (thinking !== undefined) mapped.thinking_tokens = thinking;
+  const reported = Object.values(mapped).some((value) => value > 0);
+  return reported ? mapped : null;
+}
+
+/**
  * @param {string} message
  * @param {string} sessionId
  * @param {string} cwd
@@ -358,6 +390,10 @@ export async function sendMessage(
   let hadResult = false;
   let failureEmitted = false;
   let emittedDeltaCount = 0;
+  // The live CLI reports usage on BOTH the final agent step and the result.
+  // The step figure is captured, not emitted: the result payload is the
+  // backend's authoritative terminal accounting and wins when both exist.
+  let lastStepUsage = null;
   const emitFailure = (errorText, details) => {
     if (failureEmitted) return;
     failureEmitted = true;
@@ -506,7 +542,7 @@ export async function sendMessage(
               emitJsonStringMarker('[CONTENT_DELTA]', step.text_delta);
             }
             if (step.usage && typeof step.usage === 'object') {
-              emitUsage(step.usage);
+              lastStepUsage = step.usage;
             }
           } else if (step.step_type === 'tool') {
             // Live-verified shapes (agy 1.1.24, fixtures/):
@@ -572,8 +608,15 @@ export async function sendMessage(
           // never getting one — close them before the terminal markers.
           flushUnresolvedTools();
           const res = event.result || {};
-          if (res.usage && typeof res.usage === 'object') {
-            emitUsage(res.usage);
+          // Exactly ONE [USAGE] per turn, emitted before the stream ends: the
+          // mapped result payload is the authoritative terminal accounting;
+          // when the result reports nothing usable, a usage-bearing final
+          // agent step is still an honest backend-reported figure, so it is
+          // emitted rather than dropped.
+          const canonicalUsage = mapGeminiUsageToCanonical(res.usage)
+            || mapGeminiUsageToCanonical(lastStepUsage);
+          if (canonicalUsage) {
+            emitUsage(canonicalUsage);
           }
           const finalSessionId = res.conversation_id || currentSessionId || '';
           if (res.status === 'SUCCESS') {

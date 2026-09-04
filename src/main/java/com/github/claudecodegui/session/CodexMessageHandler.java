@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.CodexMessageConverter;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.ClaudeSession.Message;
+import com.github.claudecodegui.util.TokenUsageUtils;
 import com.github.claudecodegui.util.UsageCostCalculator;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -95,6 +96,11 @@ public class CodexMessageHandler implements MessageCallback {
         } else if ("session_id".equals(type)) {
             // Handle session_id/thread_id (for session recovery)
             handleSessionId(content);
+        } else if ("usage".equals(type)) {
+            // Whole-turn usage from the shared [USAGE] marker (MarkerCliBridge).
+            // Dormant for providers that never emit the marker; only the gemini
+            // bridge delivers it today.
+            handleUsage(content);
         } else if ("event_msg".equals(type)) {
             handleEventMessage(content);
         } else if ("stream_start".equals(type)) {
@@ -327,6 +333,119 @@ public class CodexMessageHandler implements MessageCallback {
             }
         }
         return 0;
+    }
+
+    /**
+     * Handle a whole-turn usage marker ([USAGE] → onMessage("usage", json)).
+     *
+     * <p>The marker payload is already the canonical claude-shape usage
+     * (input_tokens / output_tokens / cache_creation_input_tokens /
+     * cache_read_input_tokens, plus an additive thinking_tokens) and is stored
+     * VERBATIM: the provider's input figure is reported cache-exclusive, so the
+     * codex buildTurnUsage normalization (input includes cache → subtract
+     * cacheRead) must NOT be applied here. thinking_tokens passes through for
+     * the per-turn display but is never part of the context-ring math.
+     *
+     * <p>A payload with no non-zero figure is ignored entirely: stamping it
+     * would record a genuinely free turn, which would be a lie.
+     *
+     * @param jsonContent canonical usage JSON
+     */
+    private void handleUsage(String jsonContent) {
+        if (jsonContent == null || jsonContent.isEmpty()) {
+            return;
+        }
+        try {
+            com.google.gson.JsonObject usage = new com.google.gson.Gson().fromJson(jsonContent, com.google.gson.JsonObject.class);
+            if (usage == null || usage.size() == 0 || !hasPositiveFigure(usage)) {
+                LOG.debug("Usage marker ignored (no reported figures): " + jsonContent);
+                return;
+            }
+
+            Message target = currentAssistantMessage != null && currentAssistantMessage.type == Message.Type.ASSISTANT
+                    ? currentAssistantMessage
+                    : findLastAssistantMessage();
+            if (target == null) {
+                LOG.debug("Usage marker received but no assistant message to attach");
+                return;
+            }
+            ensureAssistantMessageRaw(target);
+
+            com.google.gson.JsonObject storedUsage = usage.deepCopy();
+            com.google.gson.JsonObject message = target.raw.getAsJsonObject("message");
+            message.add("usage", storedUsage);
+            target.raw.add("message", message);
+            target.raw.add("turnUsage", usage.deepCopy());
+
+            Double turnCostUsd = UsageCostCalculator.calculateTurnCostUsd(state.getProvider(), usage, state.getModel());
+            if (turnCostUsd != null) {
+                target.raw.addProperty("turnCostUsd", turnCostUsd);
+            }
+
+            // Context ring: input + cache sums on the cache-exclusive input
+            // profile; thinking is not context input and is never added.
+            int used = TokenUsageUtils.extractContextTokens(usage, state.getProvider());
+            if (used > 0) {
+                int maxTokens = com.github.claudecodegui.handler.provider.ModelProviderHandler
+                        .getModelContextLimit(state.getModel());
+                LOG.info("CLI [USAGE] context ring: used=" + used + " max=" + maxTokens
+                        + " model=" + state.getModel());
+                callbackHandler.notifyUsageUpdate(used, maxTokens);
+            }
+            callbackHandler.notifyMessageUpdate(state.getMessages());
+        } catch (Exception e) {
+            LOG.debug("Usage marker parse skipped: " + e.getMessage());
+        }
+    }
+
+    /**
+     * True when at least one numeric entry is greater than zero — i.e. the
+     * backend actually reported a figure. Absent or non-numeric entries say
+     * nothing and never fabricate a positive.
+     */
+    private static boolean hasPositiveFigure(com.google.gson.JsonObject usage) {
+        for (java.util.Map.Entry<String, JsonElement> entry : usage.entrySet()) {
+            JsonElement value = entry.getValue();
+            if (value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber()) {
+                if (value.getAsLong() > 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Fallback attach target when no streaming assistant message is current
+     * (e.g. a usage marker arriving after the accumulator was reset).
+     */
+    private Message findLastAssistantMessage() {
+        java.util.List<Message> messages = state.getMessagesReference();
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            if (messages.get(i).type == Message.Type.ASSISTANT) {
+                return messages.get(i);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Guarantee the target message carries a raw object with a nested
+     * "message" object so usage can be stamped without disturbing content.
+     */
+    private static void ensureAssistantMessageRaw(Message message) {
+        if (message.raw == null) {
+            com.google.gson.JsonObject raw = new com.google.gson.JsonObject();
+            raw.addProperty("type", "assistant");
+            com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
+            messageObj.add("content", new JsonArray());
+            raw.add("message", messageObj);
+            message.raw = raw;
+        } else if (!message.raw.has("message") || !message.raw.get("message").isJsonObject()) {
+            com.google.gson.JsonObject messageObj = new com.google.gson.JsonObject();
+            messageObj.add("content", new JsonArray());
+            message.raw.add("message", messageObj);
+        }
     }
 
     /**

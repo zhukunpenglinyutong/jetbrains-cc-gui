@@ -38,6 +38,9 @@ public class CodexMessageHandlerTest {
         // Records the relative order of stream-end vs message-update callbacks so a
         // test can assert stream-end fires BEFORE the error snapshot is pushed.
         final List<String> callOrder = new ArrayList<>();
+        // Story 1.9: records the context-ring notifications (used, max) so the
+        // [USAGE]-marker path can be asserted end to end.
+        final List<int[]> usageUpdates = new ArrayList<>();
 
         @Override
         public void onMessageUpdate(List<Message> messages) {
@@ -45,6 +48,11 @@ public class CodexMessageHandlerTest {
             callOrder.add("messageUpdate");
             lastMessages.clear();
             lastMessages.addAll(messages);
+        }
+
+        @Override
+        public void onUsageUpdate(int usedTokens, int maxTokens) {
+            usageUpdates.add(new int[]{usedTokens, maxTokens});
         }
 
         @Override
@@ -641,5 +649,190 @@ public class CodexMessageHandlerTest {
                 callback.lastMessages.get(callback.lastMessages.size() - 1).type);
         assertFalse(state.isBusy());
         assertFalse(state.isLoading());
+    }
+
+    // -----------------------------------------------------------------------
+    // Story 1.9 — token usage accounting (AC1–AC4).
+    //
+    // The gemini CLI bridge delivers turn usage through the shared [USAGE]
+    // marker (MarkerCliBridge → onMessage("usage", <canonical json>)). The
+    // canonical wire shape is the claude emitUsageTag shape every consumer
+    // already reads (TokenUsageUtils, the webview footer's turnUsage reader):
+    // input_tokens / output_tokens / cache_creation_input_tokens /
+    // cache_read_input_tokens, plus an additive thinking_tokens.
+    //
+    // Gemini follows TokenUsageUtils' "others" profile: input_tokens is
+    // reported cache-exclusive and stays VERBATIM in turnUsage — the codex
+    // buildTurnUsage convention (input includes cache → subtract cacheRead)
+    // must NOT be applied. thinking_tokens passes through for display but is
+    // excluded from the context-ring math (input + cache_creation + cache_read).
+
+    private static final String GEMINI_CANONICAL_USAGE =
+            "{\"input_tokens\":18814,\"output_tokens\":208,\"cache_read_input_tokens\":0,\"thinking_tokens\":207}";
+
+    private Message lastAssistantMessage(CodexMessageHandler handler, SessionState state) {
+        List<Message> messages = state.getMessages();
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            if (messages.get(i).type == Message.Type.ASSISTANT) {
+                return messages.get(i);
+            }
+        }
+        return null;
+    }
+
+    @Test
+    public void usageMarkerStampsCanonicalUsageTurnUsageAndContextRing() {
+        SessionState state = new SessionState();
+        state.setModel("gemini-3.6-flash-medium");
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "Answer.");
+        handler.onMessage("usage", GEMINI_CANONICAL_USAGE);
+        handler.onMessage("stream_end", "");
+
+        Message assistant = lastAssistantMessage(handler, state);
+        assertTrue("usage must stamp the current assistant message", assistant != null && assistant.raw != null);
+
+        // message.usage carries the canonical object verbatim (thinking included).
+        assertTrue("message.usage must be stamped", assistant.raw.has("message"));
+        JsonObject messageUsage = assistant.raw.getAsJsonObject("message").getAsJsonObject("usage");
+        assertEquals(18814, messageUsage.get("input_tokens").getAsInt());
+        assertEquals(208, messageUsage.get("output_tokens").getAsInt());
+        assertEquals(207, messageUsage.get("thinking_tokens").getAsInt());
+
+        // Root turnUsage records the reported figures verbatim — gemini's
+        // input is cache-exclusive ("others" profile), no codex subtraction.
+        assertTrue("root turnUsage must be stamped for the per-turn footer",
+                assistant.raw.has("turnUsage"));
+        JsonObject turnUsage = assistant.raw.getAsJsonObject("turnUsage");
+        assertEquals(18814, turnUsage.get("input_tokens").getAsInt());
+        assertEquals(208, turnUsage.get("output_tokens").getAsInt());
+        assertEquals(207, turnUsage.get("thinking_tokens").getAsInt());
+
+        // Unknown model → cost is null → turnCostUsd is never fabricated.
+        assertFalse("turnCostUsd must stay absent for unknown models",
+                assistant.raw.has("turnCostUsd"));
+
+        // Context ring: one notification, used = input + cache sums (thinking
+        // excluded), max = the model's registered context limit.
+        assertEquals(1, callback.usageUpdates.size());
+        assertEquals(18814, callback.usageUpdates.get(0)[0]);
+        int expectedMax = com.github.claudecodegui.handler.provider.ModelProviderHandler
+                .getModelContextLimit(state.getModel());
+        assertEquals(expectedMax, callback.usageUpdates.get(0)[1]);
+    }
+
+    @Test
+    public void usageMarkerThinkingStaysOutOfContextRingMath() {
+        SessionState state = new SessionState();
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "Answer.");
+        handler.onMessage("usage",
+                "{\"input_tokens\":100,\"cache_creation_input_tokens\":30,"
+                        + "\"cache_read_input_tokens\":500,\"output_tokens\":40,\"thinking_tokens\":207}");
+        handler.onMessage("stream_end", "");
+
+        Message assistant = lastAssistantMessage(handler, state);
+        assertTrue(assistant != null && assistant.raw != null && assistant.raw.has("turnUsage"));
+        assertEquals("input_tokens stays verbatim — no codex input-includes-cache subtraction",
+                100, assistant.raw.getAsJsonObject("turnUsage").get("input_tokens").getAsInt());
+        assertEquals("thinking passes through to the stored usage",
+                207, assistant.raw.getAsJsonObject("turnUsage").get("thinking_tokens").getAsInt());
+
+        // Ring math = input + cache_creation + cache_read (630), thinking NOT added.
+        assertEquals(1, callback.usageUpdates.size());
+        assertEquals(630, callback.usageUpdates.get(0)[0]);
+    }
+
+    @Test
+    public void twoTurnsRecordExactlyTheirReportedFigures() {
+        SessionState state = new SessionState();
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        // Turn 1 — reported: in 100 / out 20 / thinking 5.
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "one");
+        handler.onMessage("usage",
+                "{\"input_tokens\":100,\"output_tokens\":20,\"thinking_tokens\":5}");
+        handler.onMessage("stream_end", "");
+        // Turn 2 — reported: in 200 / out 30 / thinking 7.
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "two");
+        handler.onMessage("usage",
+                "{\"input_tokens\":200,\"output_tokens\":30,\"thinking_tokens\":7}");
+        handler.onMessage("stream_end", "");
+
+        List<Message> assistants = new ArrayList<>();
+        for (Message m : state.getMessages()) {
+            if (m.type == Message.Type.ASSISTANT && m.raw != null && m.raw.has("turnUsage")) {
+                assistants.add(m);
+            }
+        }
+        assertEquals("each reported turn stamps exactly its own message", 2, assistants.size());
+        JsonObject first = assistants.get(0).raw.getAsJsonObject("turnUsage");
+        JsonObject second = assistants.get(1).raw.getAsJsonObject("turnUsage");
+        assertEquals(100, first.get("input_tokens").getAsInt());
+        assertEquals(20, first.get("output_tokens").getAsInt());
+        assertEquals(200, second.get("input_tokens").getAsInt());
+        assertEquals(30, second.get("output_tokens").getAsInt());
+
+        // Session totals (AC2) aggregate exactly the reported turns — no
+        // cumulative bleed, no invented figures: 100+200 in / 20+30 out.
+        int totalIn = first.get("input_tokens").getAsInt() + second.get("input_tokens").getAsInt();
+        int totalOut = first.get("output_tokens").getAsInt() + second.get("output_tokens").getAsInt();
+        assertEquals(300, totalIn);
+        assertEquals(50, totalOut);
+    }
+
+    @Test
+    public void usageMarkerWithAllZeroFiguresStampsNothing() {
+        SessionState state = new SessionState();
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "Answer.");
+        handler.onMessage("usage",
+                "{\"input_tokens\":0,\"output_tokens\":0,\"cache_read_input_tokens\":0,\"thinking_tokens\":0}");
+        handler.onMessage("stream_end", "");
+
+        assertTrue("a fabricated free turn must not be recorded", callback.usageUpdates.isEmpty());
+        for (Message m : state.getMessages()) {
+            assertFalse("no turnUsage may be stamped from an all-zero payload",
+                    m.raw != null && m.raw.has("turnUsage"));
+        }
+    }
+
+    @Test
+    public void standardTurnWithoutUsageLeavesUsageUntouched() {
+        SessionState state = new SessionState();
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "plain turn");
+        handler.onMessage("stream_end", "");
+
+        assertTrue(callback.usageUpdates.isEmpty());
+        for (Message m : state.getMessages()) {
+            assertFalse("no usage must appear when the provider reports none",
+                    m.raw != null && (m.raw.has("turnUsage") || m.raw.has("turnCostUsd")));
+        }
     }
 }

@@ -113,6 +113,7 @@
     "totalDuration": "इस जवाब में लगा समय",
     "tokenUsage": "{{input}} इन / {{output}} आउट",
     "tokenUsageDetail": "टर्न कुल — इनपुट {{input}} · कैश लेखन {{cacheWrite}} · कैश पठन {{cacheRead}} · आउटपुट {{output}}",
+    "tokenUsageThinking": "चिंतन {{thinking}}",
     "cacheHitsWithRatio": " ({{tokens}} कैश हिट, {{ratio}})",
     "search": {
       "ariaLabel": "बातचीत में खोजें",

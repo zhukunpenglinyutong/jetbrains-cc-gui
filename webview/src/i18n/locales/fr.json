@@ -113,6 +113,7 @@
     "totalDuration": "Cette réponse a pris",
     "tokenUsage": "{{input}} entrée / {{output}} sortie",
     "tokenUsageDetail": "Total du tour — entrée {{input}} · écriture cache {{cacheWrite}} · lecture cache {{cacheRead}} · sortie {{output}}",
+    "tokenUsageThinking": "Réflexion {{thinking}}",
     "cacheHitsWithRatio": " ({{tokens}} cache atteint, {{ratio}})",
     "search": {
       "ariaLabel": "Rechercher dans la conversation",

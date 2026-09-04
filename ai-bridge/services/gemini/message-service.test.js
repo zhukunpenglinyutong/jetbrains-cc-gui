@@ -504,13 +504,17 @@ test('replays a text turn: deltas stream live, ERROR payload beats exit 0 (AC2, 
   const deltas = markers(stdout, 'CONTENT_DELTA').map(decodeStringMarker);
   assert.ok(deltas.includes('ok\n'), JSON.stringify(deltas));
 
-  // usage from the step and from the result is not dropped (Story 1.9 maps it)
+  // [USAGE] is the single canonical per-turn figure mapped from the result
+  // payload (raw CLI field names never reach the wire). The turn here is an
+  // ERROR result, but tokens were still consumed — usage is still reported.
   const usages = markers(stdout, 'USAGE').map((l) => JSON.parse(l.slice('[USAGE]'.length)));
-  assert.equal(usages.length, 2, 'step_update usage + result usage');
-  for (const usage of usages) {
-    assert.equal(usage.output_tokens, 147);
-    assert.equal(usage.total_tokens, 18941);
-  }
+  assert.equal(usages.length, 1, 'result payload is the authoritative single [USAGE]');
+  assert.deepEqual(usages[0], {
+    input_tokens: 18794,
+    output_tokens: 147,
+    cache_read_input_tokens: 0,
+    thinking_tokens: 146,
+  });
 
   // conversation_id from init becomes the session id
   assert.equal(markers(stdout, 'SESSION_ID')[0], '[SESSION_ID] 299cd332-7948-4a22-b015-e3dffd1bb939');
@@ -1530,4 +1534,103 @@ test('Story 1.6 review M2: an EMPTY-STRING mediaType is authoritative assume-ima
   assert.equal(attachmentNotices(stdout).length, 0, JSON.stringify(attachmentNotices(stdout)));
   assert.equal(imageRefPaths(spawnedPrompt(stderr)).length, 1, 'delivered as an image');
   assert.equal(finalPayload(stdout).success, true);
+});
+
+// ---------------------------------------------------------------------------
+// Story 1.9 — token usage accounting (AC1–AC4).
+//
+// Canonical [USAGE] contract under test: exactly ONE marker per turn, sourced
+// from the result payload (the backend's authoritative terminal figures),
+// mapped to the wire shape every downstream consumer already reads (claude
+// emitUsageTag names, what util/TokenUsageUtils.java and the webview footer's
+// turnUsage reader consume): input_tokens / output_tokens /
+// cache_creation_input_tokens / cache_read_input_tokens, plus an additive
+// thinking_tokens. Raw CLI field names (cache_read_tokens) are NOT valid on
+// the wire. Present fields map verbatim (a reported 0 stays 0); absent
+// fields stay absent — nothing is invented (AC4), and a turn that reports no
+// usable usage emits nothing at all (AC3 — a stored zero would read as a
+// genuinely free turn, a lie).
+
+test('Story 1.9 AC1: emits ONE canonical [USAGE] from the result payload — mapped fields, thinking carried, before stream end', async () => {
+  const { stdout } = await runService({
+    fixture: 'usage-full-turn.jsonl',
+    exitCode: 0,
+  });
+
+  const lines = protocolLines(stdout);
+  const usageLines = lines.filter((l) => l.startsWith('[USAGE]'));
+  assert.equal(
+    usageLines.length,
+    1,
+    `exactly one [USAGE] per turn (result payload is authoritative), got ${usageLines.length}: ${JSON.stringify(usageLines)}`,
+  );
+  const usage = JSON.parse(usageLines[0].slice('[USAGE]'.length));
+  assert.equal(usage.input_tokens, 18814);
+  assert.equal(usage.output_tokens, 208);
+  assert.equal(usage.cache_read_input_tokens, 0, 'reported cache_read_tokens:0 maps to cache_read_input_tokens:0');
+  assert.equal(usage.thinking_tokens, 207, 'thinking_tokens carries through additively');
+  assert.ok(
+    !('cache_read_tokens' in usage),
+    `raw CLI key cache_read_tokens leaked onto the wire: ${JSON.stringify(usage)}`,
+  );
+  assert.ok(
+    !('cache_creation_input_tokens' in usage),
+    `absent cache_creation must stay absent (nothing invented): ${JSON.stringify(usage)}`,
+  );
+  if ('total_tokens' in usage) {
+    assert.equal(usage.total_tokens, 19022, 'total_tokens, when carried, is the reported value verbatim');
+  }
+  const usageIdx = lines.findIndex((l) => l.startsWith('[USAGE]'));
+  const streamEndIdx = lines.findIndex((l) => l.startsWith('[STREAM_END]'));
+  assert.ok(usageIdx !== -1 && streamEndIdx !== -1 && usageIdx < streamEndIdx, '[USAGE] must precede stream end');
+  assert.equal(finalPayload(stdout).success, true);
+});
+
+test('Story 1.9 AC1/AC2: step-level usage defers to the result figures when they disagree', async () => {
+  const { stdout } = await runService({
+    fixture: 'usage-step-result-discrepancy.jsonl',
+    exitCode: 0,
+  });
+
+  const usages = markers(stdout, 'USAGE').map((l) => JSON.parse(l.slice('[USAGE]'.length)));
+  assert.equal(usages.length, 1, `result wins — one authoritative marker, got ${usages.length}: ${JSON.stringify(usages)}`);
+  assert.equal(usages[0].input_tokens, 18814, 'result input_tokens, not the step interim 1042');
+  assert.equal(usages[0].output_tokens, 208, 'result output_tokens, not the step interim 15');
+  assert.equal(usages[0].thinking_tokens, 207, 'result thinking_tokens, not the step interim 8');
+});
+
+test('Story 1.9 AC3: an all-zero usage object emits nothing — a fabricated free turn is a lie', async () => {
+  const { stdout } = await runService({
+    fixture: 'usage-all-zero-result.jsonl',
+    exitCode: 0,
+  });
+
+  const usages = markers(stdout, 'USAGE');
+  assert.equal(usages.length, 0, `all-zero usage must not be emitted or stamped: ${JSON.stringify(usages)}`);
+  assert.equal(finalPayload(stdout).success, true, 'the turn itself still completes normally');
+});
+
+test('Story 1.9 AC3 guard: a turn reporting no usage at all emits nothing and still closes cleanly', async () => {
+  const { stdout } = await runService({
+    fixture: 'usage-absent-turn.jsonl',
+    exitCode: 0,
+  });
+
+  assert.equal(markers(stdout, 'USAGE').length, 0, 'no usage field → no [USAGE] marker');
+  assert.equal(finalPayload(stdout).success, true);
+});
+
+test('Story 1.9 AC4 guard: partial fields pass through exactly — nothing invented for absent fields', async () => {
+  const { stdout } = await runService({
+    fixture: 'usage-partial-fields.jsonl',
+    exitCode: 0,
+  });
+
+  const usages = markers(stdout, 'USAGE').map((l) => JSON.parse(l.slice('[USAGE]'.length)));
+  assert.equal(usages.length, 1);
+  assert.deepEqual(
+    usages[0],
+    { input_tokens: 100, output_tokens: 20 },
+    'only the reported fields, verbatim — no cache/thinking/total defaults invented',
+  );
 });

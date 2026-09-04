@@ -132,6 +132,7 @@
     "totalDuration": "This reply took",
     "tokenUsage": "{{input}} in / {{output}} out",
     "tokenUsageDetail": "Turn total — input {{input}} · cache write {{cacheWrite}} · cache read {{cacheRead}} · output {{output}}",
+    "tokenUsageThinking": "Thinking {{thinking}}",
     "cacheHitsWithRatio": " (cache hit {{tokens}}, {{ratio}})",
     "search": {
       "ariaLabel": "Search in conversation",
