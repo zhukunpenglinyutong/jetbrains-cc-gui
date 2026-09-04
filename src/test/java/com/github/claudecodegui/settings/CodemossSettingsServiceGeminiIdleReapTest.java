@@ -76,6 +76,69 @@ public class CodemossSettingsServiceGeminiIdleReapTest {
                 raw.contains("\"gemini\"") && raw.contains("\"idleReapMinutes\""));
     }
 
+    @Test
+    public void shouldClampNegativeSetterInputToDisabledZero() throws Exception {
+        // Review fix L3: pins the setter's fail-safe direction — a negative
+        // (only reachable via a hand-edited payload; the webview clamps before
+        // sending) is normalized to 0 = disabled, never persisted verbatim as
+        // a negative. 0 matches the ai-bridge's parse of the same value.
+        Path tempHome = Files.createTempDirectory("gemini-reap-negative-home");
+        useTemporaryHomeDirectory(tempHome);
+
+        CodemossSettingsService service = new CodemossSettingsService();
+        invokeSetGeminiIdleReapMinutes(service, -5);
+        assertEquals("a negative window must clamp to disabled (0)", 0,
+                invokeGetGeminiIdleReapMinutes(service));
+        String raw = Files.readString(Path.of(service.getConfigPath()));
+        // Gson here pretty-prints ("key": 0), so accept either spacing.
+        boolean carriesClampedZero = raw.contains("\"idleReapMinutes\": 0")
+                || raw.contains("\"idleReapMinutes\":0");
+        org.junit.Assert.assertTrue(
+                "the file must carry the clamped 0, not the raw negative",
+                carriesClampedZero && !raw.contains("-5"));
+    }
+
+    @Test
+    public void shouldDropTheStoredKeyWhenTheDefaultIsRestored() throws Exception {
+        // Review fix L3: the default (30) is the absent-key reading, so saving
+        // it back must remove the key and keep the config file clean — the
+        // file then keeps answering the default even if DEFAULT ever moves.
+        Path tempHome = Files.createTempDirectory("gemini-reap-default-key-home");
+        useTemporaryHomeDirectory(tempHome);
+
+        CodemossSettingsService service = new CodemossSettingsService();
+        invokeSetGeminiIdleReapMinutes(service, 15);
+        String withKey = Files.readString(Path.of(service.getConfigPath()));
+        org.junit.Assert.assertTrue("the non-default window must be stored",
+                withKey.contains("\"idleReapMinutes\""));
+
+        invokeSetGeminiIdleReapMinutes(service, 30);
+        String raw = Files.readString(Path.of(service.getConfigPath()));
+        org.junit.Assert.assertTrue(
+                "restoring the default must remove the idleReapMinutes key",
+                !raw.contains("\"idleReapMinutes\""));
+        assertEquals("the absent key still reads as the default", 30,
+                invokeGetGeminiIdleReapMinutes(service));
+    }
+
+    @Test
+    public void shouldReadHandEditedGarbageAsTheDefault() throws Exception {
+        // Review fix L3: pins the getter's documented asymmetry vs the
+        // ai-bridge. UnPARSEABLE values read as the default 30 here (this is
+        // the "settings chain is alive" reading), while the ai-bridge disables
+        // on the same input — an unknown value must never become a surprise
+        // kill on either side; the bridge side is the last line of defense.
+        // Parseable negatives, by contrast, clamp to 0 on BOTH sides.
+        Path tempHome = Files.createTempDirectory("gemini-reap-garbage-home");
+        useTemporaryHomeDirectory(tempHome);
+
+        CodemossSettingsService service = new CodemossSettingsService();
+        Files.writeString(Path.of(service.getConfigPath()),
+                "{\"gemini\":{\"idleReapMinutes\":\"not-a-number\"}}");
+        assertEquals("a hand-edited unparseable window reads as the default",
+                30, invokeGetGeminiIdleReapMinutes(service));
+    }
+
     private int invokeGetGeminiIdleReapMinutes(CodemossSettingsService service) throws Exception {
         Method method;
         try {

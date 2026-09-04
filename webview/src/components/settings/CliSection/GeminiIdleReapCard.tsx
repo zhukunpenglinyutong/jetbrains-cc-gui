@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import styles from './style.module.less';
+import {
+  MAX_GEMINI_IDLE_REAP_MINUTES,
+  MIN_GEMINI_IDLE_REAP_MINUTES,
+  clampGeminiIdleReapMinutes,
+} from '../../../utils/geminiIdleReap';
 
 /**
  * Gemini idle-reap window card (Settings → CLI, shown under the Gemini CLI row
@@ -13,9 +18,14 @@ import styles from './style.module.less';
  *
  * Payload shape: {"geminiIdleReapMinutes": <int>} — minutes of stdout silence
  * after which a Gemini turn is stopped automatically; 0 disables the watchdog.
- * Persistence is optimistic (same pattern as the boolean toggles): the input
- * updates local state and sends immediately; the authoritative echo from Java
- * re-syncs the value (Java clamps negatives to 0).
+ *
+ * Persistence commits on blur / Enter (review fix M2 — same pattern as the
+ * permission-dialog timeout field), never per keystroke: typing 30→45 must
+ * not momentarily persist "4", an abandoned mid-edit previously left a 1–4
+ * minute window that killed healthy 20-minute silent turns. The draft is
+ * clamped to [0, 1440] on commit (a >2^31 value would be narrowed by Gson
+ * getAsInt() on the Java side and could read as negative → 0 = silently
+ * disabled); Escape reverts the draft to the last authoritative value.
  */
 
 interface IdleReapPayload {
@@ -50,6 +60,8 @@ const GeminiIdleReapCard = () => {
   const { t } = useTranslation();
   // null = not yet answered by Java (input stays disabled until then)
   const [minutes, setMinutes] = useState<number | null>(null);
+  // What the input displays; only commit() turns it into a persisted value.
+  const [draft, setDraft] = useState('');
   const label = t('settings.gemini.idleReapLabel');
 
   useEffect(() => {
@@ -58,6 +70,7 @@ const GeminiIdleReapCard = () => {
       const parsed = parseMinutes(dataOrStr);
       if (parsed !== null) {
         setMinutes(parsed);
+        setDraft(String(parsed));
       }
       previous?.(dataOrStr);
     };
@@ -67,18 +80,28 @@ const GeminiIdleReapCard = () => {
     };
   }, []);
 
-  const handleChange = useCallback((raw: string) => {
-    if (raw === '') {
-      // Never persist mid-edit: an empty field must not become "0 = disabled".
+  const commit = useCallback(() => {
+    if (minutes === null) return;
+    const clamped = clampGeminiIdleReapMinutes(draft);
+    if (clamped === null) {
+      // Blank / unparseable draft (abandoned or cleared edit): revert the
+      // display to the authoritative value — never commit, and never flip a
+      // disabled watchdog back to the default.
+      setDraft(String(minutes));
       return;
     }
-    const parsed = Number.parseInt(raw, 10);
-    if (!Number.isFinite(parsed) || parsed < 0) {
-      return;
+    setDraft(String(clamped));
+    if (clamped !== minutes) {
+      setMinutes(clamped);
+      sendToJava(`set_gemini_idle_reap_minutes:${JSON.stringify({ geminiIdleReapMinutes: clamped })}`);
     }
-    setMinutes(parsed);
-    sendToJava(`set_gemini_idle_reap_minutes:${JSON.stringify({ geminiIdleReapMinutes: parsed })}`);
-  }, []);
+  }, [draft, minutes]);
+
+  const revert = useCallback(() => {
+    if (minutes !== null) {
+      setDraft(String(minutes));
+    }
+  }, [minutes]);
 
   return (
     <div className={styles.cliCard} data-testid="gemini-idle-reap-card">
@@ -103,13 +126,24 @@ const GeminiIdleReapCard = () => {
         <input
           type="number"
           className={styles.idleReapInput}
-          min={0}
+          min={MIN_GEMINI_IDLE_REAP_MINUTES}
+          max={MAX_GEMINI_IDLE_REAP_MINUTES}
           step={1}
-          value={minutes === null ? '' : String(minutes)}
+          value={draft}
           disabled={minutes === null}
           aria-label={label}
           title={t('settings.gemini.idleReapHelp')}
-          onChange={(e) => handleChange(e.target.value)}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commit();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              revert();
+            }
+          }}
         />
       </div>
     </div>

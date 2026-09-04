@@ -240,19 +240,38 @@ public class GeminiCliBridgeTest {
     }
 
     @Test
-    public void configureExtraEnvCarriesIdleReapMinutesOnEverySend() {
+    public void configureExtraEnvCarriesIdleReapMinutesOnEverySend() throws Exception {
         // Story 1.10: the silence-window watchdog in the ai-bridge reads its
         // window from GEMINI_IDLE_REAP_MINUTES. The bridge must inject it on
         // EVERY send (the bridge process is spawned per send) — with the
         // documented default 30 when the user never touched the setting, so
         // the default does not silently depend on the Node side.
-        GeminiCliBridge bridge = new GeminiCliBridge();
-        java.util.Map<String, String> env = new java.util.HashMap<>();
-        bridge.configureExtraEnv(env);
-        assertTrue(
-                "GEMINI_IDLE_REAP_MINUTES must be forwarded on every send (story 1.10 Task 2)",
-                env.containsKey("GEMINI_IDLE_REAP_MINUTES"));
-        assertEquals("30", env.get("GEMINI_IDLE_REAP_MINUTES"));
+        // Review fix M1: the home is isolated (same reflection seam as the
+        // sibling test below) so the asserted default comes from the empty
+        // temp config, never the developer's real ~/.codemoss/config.json.
+        String originalHomeDir = null;
+        java.lang.reflect.Field homeField = Class.forName("com.github.claudecodegui.util.PlatformUtils")
+                .getDeclaredField("cachedRealHomeDir");
+        homeField.setAccessible(true);
+        java.nio.file.Path tempHome = java.nio.file.Files.createTempDirectory("gemini-reap-default-home");
+        try {
+            originalHomeDir = (String) homeField.get(null);
+            homeField.set(null, tempHome.toString());
+            // No config.json at all: the "user never touched the setting" case.
+            java.nio.file.Files.createDirectories(tempHome.resolve(".codemoss"));
+
+            GeminiCliBridge bridge = new GeminiCliBridge();
+            java.util.Map<String, String> env = new java.util.HashMap<>();
+            bridge.configureExtraEnv(env);
+            assertTrue(
+                    "GEMINI_IDLE_REAP_MINUTES must be forwarded on every send (story 1.10 Task 2)",
+                    env.containsKey("GEMINI_IDLE_REAP_MINUTES"));
+            assertEquals("30", env.get("GEMINI_IDLE_REAP_MINUTES"));
+        } finally {
+            if (originalHomeDir != null) {
+                homeField.set(null, originalHomeDir);
+            }
+        }
     }
 
     @Test

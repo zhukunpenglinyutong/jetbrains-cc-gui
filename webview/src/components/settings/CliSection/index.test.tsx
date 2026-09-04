@@ -179,6 +179,15 @@ describe('CliSection', () => {
     expect(group.contains(connection)).toBe(true);
     expect(cliRow.compareDocumentPosition(connection) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+    // Review fix L1: the Gemini idle-reap card is mounted (and only mounted)
+    // under an installed Gemini CLI row — the webview half of story 1.10's
+    // settings chain. Its own behavior lives in GeminiIdleReapCard.test.tsx;
+    // here only the mount/placement wiring is pinned.
+    const reapCard = screen.getByTestId('gemini-idle-reap-card');
+    const geminiRow = screen.getByText('Antigravity CLI');
+    expect(geminiRow.compareDocumentPosition(reapCard) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
   it('persists switcher visibility when the eye toggle is clicked', async () => {
     render(<CliSection />);
@@ -231,6 +240,8 @@ describe('CliSection', () => {
     expect(screen.getByText('CLI install')).toBeTruthy();
     expect(screen.queryByText('Install the CLI first')).toBeNull();
     expect(screen.queryByTestId('dsh-connection-card')).toBeNull();
+    // Review fix L1 (negative half): no installed Gemini CLI → no reap card.
+    expect(screen.queryByTestId('gemini-idle-reap-card')).toBeNull();
   });
 
   it('does not show the local host card while CLI detection is still loading', async () => {

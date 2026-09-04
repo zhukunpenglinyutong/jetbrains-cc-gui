@@ -343,6 +343,24 @@ function writeAttachmentsFile(attachments) {
   return file;
 }
 
+test('Story 1.10 review L4/L2 pins: reap window wording and classifier immunity', async () => {
+  const { buildIdleReapMessage, formatGeminiError, isGeminiAuthError } =
+    await import('./message-service.js');
+  // L4: exact 1 is singular — "1 minutes" never ships.
+  assert.match(buildIdleReapMessage(1, true), /no output from the Gemini CLI \(agy\) for 1 minute\./);
+  assert.match(buildIdleReapMessage(30, true), /for 30 minutes\./);
+  assert.match(buildIdleReapMessage(1.5, true), /for 1\.5 minutes\./);
+  assert.match(buildIdleReapMessage(0.05, false), /for 3 seconds\./);
+  const oneSecond = buildIdleReapMessage(1 / 60, true);
+  assert.match(oneSecond, /for 1 second\./, `got: ${oneSecond}`);
+  // L2 at the unit level: the message names authentication as a LIKELY cause,
+  // so it must never trip the classifier that emitFailure runs it through —
+  // a trip would rewrap the whole cause+remedy set into the auth template.
+  const text = buildIdleReapMessage(0.05, true);
+  assert.equal(isGeminiAuthError(text), false, 'the reap message must not match isGeminiAuthError');
+  assert.equal(formatGeminiError(text), text, 'formatGeminiError must pass the reap message through unrewrapped');
+});
+
 test('buildGeminiArgs emits the print-mode stream contract', async () => {
   const { buildGeminiArgs } = await import('./message-service.js');
   const args = buildGeminiArgs({ message: 'hi', sessionId: 'abc-123' });
@@ -1819,6 +1837,12 @@ function assertActionableReapMessage(stdout) {
   assert.match(text, /auth|prompt|login|network|stall/i, `must name the likely cause (stuck prompt/auth or network stall), got: ${text}`);
   assert.match(text, /login|agy|setting|cancel|terminal|retry/i, `must name a concrete remedy, got: ${text}`);
   assert.ok(!/ended without a result payload/i.test(text), 'the reap message must win over the generic close-handler error');
+  // Review fix L2: emitFailure runs the reap message through formatGeminiError.
+  // If the wording ever trips isGeminiAuthError (it names authentication as a
+  // likely cause), the classifier rewraps it into the "Gemini CLI
+  // authentication required:" template and destroys the cause+remedy set.
+  assert.ok(!/Gemini CLI authentication required/i.test(text),
+    `the reap message must not be rewrapped by the auth classifier, got: ${text}`);
   return text;
 }
 

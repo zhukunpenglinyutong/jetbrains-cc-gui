@@ -325,11 +325,18 @@ function parseIdleReapMinutes(raw) {
   return value;
 }
 
+/**
+ * Human window for the reap message. Review fix L4: exact 1 renders
+ * singular ("1 minute" / "1 second"), everything else keeps the plural.
+ * Exported indirectly via buildIdleReapMessage for unit pins.
+ */
 function formatIdleWindow(minutes) {
   if (minutes >= 1) {
-    return `${Math.round(minutes * 10) / 10} minutes`;
+    const count = Math.round(minutes * 10) / 10;
+    return `${count} ${count === 1 ? 'minute' : 'minutes'}`;
   }
-  return `${Math.max(1, Math.round(minutes * 60))} seconds`;
+  const seconds = Math.max(1, Math.round(minutes * 60));
+  return `${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
 }
 
 /**
@@ -339,9 +346,13 @@ function formatIdleWindow(minutes) {
  * authentication; backend/network stall) and concrete remedies. Must stay
  * clear of formatGeminiError's auth-classifier phrases (the text is already
  * the final user-facing cause+remedy set) and of the close handler's
- * "ended without a result payload" wording.
+ * "ended without a result payload" wording. Exported so the classifier
+ * immunity and the window wording stay unit-pinned (review fixes L2/L4).
+ * @param {number} minutes silence window
+ * @param {boolean} processAlive
+ * @returns {string}
  */
-function buildIdleReapMessage(minutes, processAlive) {
+export function buildIdleReapMessage(minutes, processAlive) {
   const observation = processAlive
     ? 'the CLI process was alive but silent — it is likely stuck at an interactive prompt (most commonly authentication) or stalled on the backend/network'
     : 'the CLI process had already exited without delivering a result';

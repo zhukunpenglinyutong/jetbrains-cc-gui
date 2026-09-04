@@ -8,30 +8,62 @@ import { emitSendError, endStream } from './marker-protocol.js';
 import { resolveCliSpawn } from './cli-path.js';
 
 /**
+ * taskkill argument vector for killing a whole Windows process tree
+ * (/T = tree, /F = force) — the same call the Java manual-cancel path makes
+ * (PlatformUtils.terminateProcess). Exported pure so the argument contract
+ * is unit-testable on every platform (this codebase has no platform-faking
+ * precedent — see cli-path.test.js, which extracts win32 spawn logic into
+ * pure helpers for the same reason); the win32 branch that spawns it is
+ * inspection-verified. Returns null when the pid cannot be trusted so the
+ * caller falls back to the direct handle kill.
+ * @param {number|undefined} pid
+ * @returns {string[]|null}
+ */
+export function win32TreeKillArgs(pid) {
+  if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return null;
+  return ['/PID', String(pid), '/T', '/F'];
+}
+
+/**
  * Kill a spawned CLI and its whole process tree. Non-Windows children run in
  * their own process group (detached), so a negative-pid SIGTERM reaches the
- * CLI's own grandchildren too; Windows falls back to the direct handle kill.
- * Exported for callers that own an extra termination path on the same child
- * (e.g. the gemini silence-window reap) so every killer shares one semantics.
+ * CLI's own grandchildren too. On Windows the direct handle kill would leave
+ * those grandchildren alive (story 1.10 AC4 gap — only the auto-reap goes
+ * through here; Java's manual cancel already uses taskkill /T), so this
+ * mirrors Java: `taskkill /PID <pid> /T /F`, fire-and-forget (unref'd so a
+ * reap during shutdown never delays exit), falling back to the direct kill
+ * when taskkill cannot run or reports failure. Exported for callers that own
+ * an extra termination path on the same child (e.g. the gemini
+ * silence-window reap) so every killer shares one semantics.
  */
 export function killChildTree(child, label) {
   if (!child || child.killed) return;
   try {
     if (process.platform === 'win32') {
-      if (child.pid) {
-        // Tree-kill via taskkill so grandchild node processes (npm .cmd shims)
-        // do not outlive the cmd.exe wrapper and hold stdout open.
-        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' })
-          .on('error', () => {
-            try {
-              child.kill();
-            } catch {
-              /* already gone */
-            }
-          });
+      const args = win32TreeKillArgs(child.pid);
+      if (!args) {
+        child.kill();
         return;
       }
-      child.kill();
+      const fallbackDirectKill = () => {
+        try {
+          child.kill();
+        } catch {
+          // already gone
+        }
+      };
+      try {
+        const killer = spawn('taskkill', args, { stdio: 'ignore' });
+        // A non-zero taskkill exit is most often "already gone" — the direct
+        // fallback is harmless there (kill on a dead handle is a no-op).
+        killer.on('error', fallbackDirectKill);
+        killer.on('close', (code) => {
+          if (code !== 0) fallbackDirectKill();
+        });
+        killer.unref?.();
+      } catch {
+        fallbackDirectKill();
+      }
     } else {
       try {
         process.kill(-child.pid, 'SIGTERM');
