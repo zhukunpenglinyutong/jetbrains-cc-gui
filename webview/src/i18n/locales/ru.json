@@ -237,7 +237,8 @@
           "kimi": "Kimi CLI",
           "opencode": "OpenCode",
           "pi": "PI CLI",
-          "omp": "OMP CLI"
+          "omp": "OMP CLI",
+          "minimax": "MiniMax Code"
         },
         "currentProviderAuto": "Currently using automatic selection: {{provider}}",
         "currentProviderManual": "Currently using manually selected provider: {{provider}}",
@@ -861,6 +862,10 @@
       "copied": "Copied to clipboard",
       "copyFailed": "Failed to copy",
       "tools": {
+        "minimax": {
+          "name": "MiniMax Code",
+          "description": "Терминальный кодинг-агент MiniMax. Требуется Node.js 22.19+ / 24+ (не 23); команды: minimax / mcode"
+        },
         "grok": {
           "name": "Grok CLI",
           "description": "xAI Grok terminal coding agent"
@@ -1651,8 +1656,15 @@
       "tooltip": "Автоматическое принятие правок файлов",
       "description": "Автоматически принимает создание/редактирование файлов, уменьшая количество подтверждений"
     },
+    "auto": {
+      "label": "Автоодобрение",
+      "shortLabel": "Авто",
+      "tooltip": "Передавать запросы на одобрение встроенному проверяющему провайдера",
+      "description": "Использует встроенную автоматическую проверку, сохраняя границы безопасности"
+    },
     "bypassPermissions": {
-      "label": "Авто-режим",
+      "label": "Полный автомат",
+      "shortLabel": "Полный",
       "tooltip": "Пропуск всех проверок разрешений",
       "description": "Полностью автоматический, пропускает все проверки разрешений [Используйте с осторожностью]"
     }
@@ -1672,6 +1684,12 @@
       "label": "Авто-правки",
       "tooltip": "Codex approval_policy=on-request – asks for approval when needed",
       "description": "Автоматическое создание и редактирование файлов через apply_patch с сохранением одобрения команд."
+    },
+    "auto": {
+      "label": "Одобрять за меня",
+      "shortLabel": "Авто",
+      "tooltip": "Codex approvals_reviewer=auto_review — автоматический проверяющий обрабатывает подходящие запросы.",
+      "description": "Сохраняет песочницу workspace-write и передаёт пользователю запросы, которые нельзя одобрить автоматически."
     },
     "bypassPermissions": {
       "label": "Полный автомат",
@@ -1707,6 +1725,9 @@
     },
     "codex": {
       "label": "Codex"
+    },
+    "minimax": {
+      "label": "MiniMax Code"
     },
     "gemini": {
       "label": "Gemini Cli"

@@ -237,7 +237,8 @@
           "kimi": "Kimi CLI",
           "opencode": "OpenCode",
           "pi": "PI CLI",
-          "omp": "OMP CLI"
+          "omp": "OMP CLI",
+          "minimax": "MiniMax Code"
         },
         "currentProviderAuto": "Currently using automatic selection: {{provider}}",
         "currentProviderManual": "Currently using manually selected provider: {{provider}}",
@@ -849,6 +850,10 @@
       "copied": "Copied to clipboard",
       "copyFailed": "Failed to copy",
       "tools": {
+        "minimax": {
+          "name": "MiniMax Code",
+          "description": "Agente de código en terminal de MiniMax. Requiere Node.js 22.19+ / 24+ (no 23); comandos: minimax / mcode"
+        },
         "grok": {
           "name": "Grok CLI",
           "description": "xAI Grok terminal coding agent"
@@ -1625,10 +1630,17 @@
       "tooltip": "Automatically accept file edits",
       "description": "Automatically accept file creation/editing, reducing confirmation steps"
     },
+    "auto": {
+      "label": "Aprobación automática",
+      "shortLabel": "Auto",
+      "tooltip": "Deja que el revisor nativo gestione automáticamente las solicitudes de aprobación",
+      "description": "Usa el revisor nativo del proveedor manteniendo los límites de seguridad"
+    },
     "bypassPermissions": {
-      "label": "Auto Mode",
-      "tooltip": "Bypass all permission checks",
-      "description": "Fully automated, bypassing all permission checks [Use with caution]"
+      "label": "Automático total",
+      "shortLabel": "Total",
+      "tooltip": "Omitir todas las comprobaciones de permisos",
+      "description": "Totalmente automatizado, omitiendo todas las comprobaciones de permisos [Usar con precaución]"
     }
   },
   "codexModes": {
@@ -1646,6 +1658,12 @@
       "label": "Auto Edit",
       "tooltip": "Codex approval_policy=on-request – asks for approval when needed",
       "description": "Balanced option. Allows normal editing flow while still requiring approvals when needed."
+    },
+    "auto": {
+      "label": "Aprobar por mí",
+      "shortLabel": "Auto",
+      "tooltip": "Codex approvals_reviewer=auto_review – un revisor automático gestiona las solicitudes aptas.",
+      "description": "Mantiene el sandbox workspace-write y escala las solicitudes que el revisor no puede aprobar."
     },
     "bypassPermissions": {
       "label": "Full Auto",
@@ -1687,6 +1705,9 @@
     },
     "kimi": {
       "label": "Kimi CLI"
+    },
+    "minimax": {
+      "label": "MiniMax Code"
     },
     "gemini": {
       "label": "Gemini Cli"

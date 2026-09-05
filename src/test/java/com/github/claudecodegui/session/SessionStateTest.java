@@ -68,6 +68,29 @@ public class SessionStateTest {
     }
 
     @Test
+    public void nativeAutoIsAValidPermissionMode() {
+        SessionState state = new SessionState();
+        state.setPermissionMode("auto");
+        Assert.assertEquals("auto", state.getPermissionMode());
+        Assert.assertTrue(SessionState.isValidPermissionMode("auto"));
+    }
+
+    @Test
+    public void unknownPermissionModeDoesNotReplaceCurrentMode() {
+        SessionState state = new SessionState();
+        state.setPermissionMode("auto");
+        state.setPermissionMode("automatic-but-unknown");
+        Assert.assertEquals("auto", state.getPermissionMode());
+    }
+
+    @Test
+    public void legacyAutoEditPermissionModeMigratesToAcceptEdits() {
+        SessionState state = new SessionState();
+        state.setPermissionMode(" autoEdit ");
+        Assert.assertEquals("acceptEdits", state.getPermissionMode());
+    }
+
+    @Test
     public void defaultModelIsTheLiveSonnet5() {
         SessionState state = new SessionState();
         // The initial value must never be a retired id (#1678).

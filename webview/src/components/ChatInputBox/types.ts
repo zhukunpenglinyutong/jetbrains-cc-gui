@@ -189,6 +189,7 @@ export type PermissionMode =
   | 'default'
   | 'acceptEdits'
   | 'plan'
+  | 'auto'
   | 'bypassPermissions'
   | 'smol'
   | 'slow'
@@ -232,8 +233,15 @@ export const AVAILABLE_MODES: ModeInfo[] = [
     description: 'Auto-accept file creation/editing, fewer confirmations',
   },
   {
-    id: 'bypassPermissions',
+    id: 'auto',
     label: 'Auto Mode',
+    icon: 'codicon-shield',
+    tooltip: 'Let the provider review approval requests automatically',
+    description: 'Uses the provider-native reviewer while retaining safety boundaries',
+  },
+  {
+    id: 'bypassPermissions',
+    label: 'Full Auto',
     icon: 'codicon-zap',
     tooltip: 'Bypass all permission checks',
     description: 'Fully automated, bypasses all permission checks [use with caution]',
@@ -583,6 +591,32 @@ export const isValidDshPreset = (value: unknown): value is DshPreset =>
   && (DSH_PRESETS.some((preset) => preset.id === value)
     || getUserDshPresetOptions().some((preset) => preset.id === value));
 
+/** MiniMax Code default: omit `--model` so the CLI resolves its own default. */
+export const MINIMAX_DEFAULT_MODEL_ID = 'auto';
+
+export const MINIMAX_MODELS: ModelInfo[] = [
+  {
+    id: MINIMAX_DEFAULT_MODEL_ID,
+    label: 'MiniMax Auto',
+    description: 'Use MiniMax Code default model',
+  },
+  {
+    id: 'minimax/MiniMax-M2.7',
+    label: 'MiniMax M2.7',
+    description: 'MiniMax coding model (thinking forced on)',
+  },
+  {
+    id: 'minimax/MiniMax-M2.7-highspeed',
+    label: 'MiniMax M2.7 Highspeed',
+    description: 'MiniMax low-latency coding model',
+  },
+  {
+    id: 'minimax/MiniMax-M3',
+    label: 'MiniMax M3',
+    description: 'MiniMax multimodal coding model',
+  },
+];
+
 /**
  * Available models (backward compatibility)
  */
@@ -612,6 +646,7 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   { id: 'pi', label: 'PI CLI', icon: 'codicon-terminal', enabled: true, beta: true },
   { id: 'omp', label: 'OMP CLI', icon: 'codicon-terminal', enabled: true, beta: true },
   { id: 'dsh', label: 'DeepSeek Harness', icon: 'codicon-terminal', enabled: true, beta: true },
+  { id: 'minimax', label: 'MiniMax Code', icon: 'codicon-terminal', enabled: true, beta: true },
 ];
 
 /**
@@ -771,6 +806,8 @@ export interface ChatInputBoxProps {
   permissionMode?: PermissionMode;
   /** Current provider */
   currentProvider?: string;
+  /** Whether the installed Codex SDK supports native auto review */
+  codexNativeAutoReviewAvailable?: boolean;
   /** Usage percentage */
   usagePercentage?: number;
   /** Used context tokens */
@@ -910,6 +947,8 @@ export interface ButtonAreaProps {
   permissionMode?: PermissionMode;
   /** Current provider */
   currentProvider?: string;
+  /** Whether the installed Codex SDK supports native auto review */
+  codexNativeAutoReviewAvailable?: boolean;
   /** Current reasoning effort */
   reasoningEffort?: ReasoningEffort;
   /** Codex speed mode */
