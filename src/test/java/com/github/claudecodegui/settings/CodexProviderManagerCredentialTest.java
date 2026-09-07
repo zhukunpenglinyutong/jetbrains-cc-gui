@@ -4,134 +4,118 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import org.junit.Test;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+/**
+ * Provider auth (authJson) is stored inline in ~/.codemoss/config.json.
+ * Keychain/PasswordSafe storage was removed before release because macOS shows
+ * a scary keychain-access prompt; these tests pin the inline-storage behavior.
+ */
 public class CodexProviderManagerCredentialTest {
 
     @Test
-    public void newCredentialIsStoredOutsideConfigAndHydratedOnRead() throws Exception {
+    public void newCredentialStaysInlineInConfigAndIsReturnedOnRead() throws Exception {
         AtomicReference<JsonObject> config = new AtomicReference<>(configWithProvider());
-        FakeCredentialStore credentials = new FakeCredentialStore();
-        CodexProviderManager manager = manager(config, credentials);
+        CodexProviderManager manager = manager(config);
         JsonObject provider = provider("provider-secret");
         provider.addProperty("authJson", "{\"OPENAI_API_KEY\":\"secret\"}");
 
         manager.addCodexProvider(provider);
 
         JsonObject persisted = provider(config, "provider-secret");
-        assertFalse(persisted.has("authJson"));
-        assertTrue(persisted.get("authStoredInPasswordSafe").getAsBoolean());
-        JsonObject hydrated = manager.getCodexProviders().stream()
+        assertEquals("{\"OPENAI_API_KEY\":\"secret\"}", persisted.get("authJson").getAsString());
+        JsonObject listed = manager.getCodexProviders().stream()
                 .filter(candidate -> "provider-secret".equals(candidate.get("id").getAsString()))
                 .findFirst()
                 .orElseThrow();
-        assertEquals("{\"OPENAI_API_KEY\":\"secret\"}", hydrated.get("authJson").getAsString());
+        assertEquals("{\"OPENAI_API_KEY\":\"secret\"}", listed.get("authJson").getAsString());
     }
 
     @Test
-    public void recoversCredentialWhenOlderUpdateLostPasswordSafeMarker() {
+    public void updatingOtherFieldsKeepsInlineCredential() throws Exception {
         AtomicReference<JsonObject> config = new AtomicReference<>(configWithProvider());
-        provider(config, "provider-a").addProperty("authJson", "");
-        FakeCredentialStore credentials = new FakeCredentialStore();
-        credentials.values.put("provider-a", "{\"OPENAI_API_KEY\":\"recovered\"}");
+        provider(config, "provider-a").addProperty("authJson", "{\"OPENAI_API_KEY\":\"secret\"}");
+        JsonObject updates = new JsonObject();
+        updates.addProperty("name", "Renamed Provider");
 
-        JsonObject returned = manager(config, credentials).getCodexProviders().stream()
-                .filter(candidate -> "provider-a".equals(candidate.get("id").getAsString()))
-                .findFirst()
-                .orElseThrow();
+        manager(config).updateCodexProvider("provider-a", updates);
 
-        assertEquals("{\"OPENAI_API_KEY\":\"recovered\"}", returned.get("authJson").getAsString());
-        assertTrue(provider(config, "provider-a").get("authStoredInPasswordSafe").getAsBoolean());
+        JsonObject persisted = provider(config, "provider-a");
+        assertEquals("Renamed Provider", persisted.get("name").getAsString());
+        assertEquals("{\"OPENAI_API_KEY\":\"secret\"}", persisted.get("authJson").getAsString());
+    }
+
+    @Test
+    public void credentialCanBeExplicitlyCleared() throws Exception {
+        AtomicReference<JsonObject> config = new AtomicReference<>(configWithProvider());
+        provider(config, "provider-a").addProperty("authJson", "{\"OPENAI_API_KEY\":\"old\"}");
+        JsonObject updates = new JsonObject();
+        updates.add("authJson", null);
+
+        manager(config).updateCodexProvider("provider-a", updates);
+
         assertFalse(provider(config, "provider-a").has("authJson"));
     }
 
     @Test
-    public void unavailableCredentialIsNotDeletedWhenUpdatingOtherFields() throws Exception {
+    public void deletingProviderLeavesOtherCredentialsUntouched() {
         AtomicReference<JsonObject> config = new AtomicReference<>(configWithProvider());
-        provider(config, "provider-a").addProperty("authStoredInPasswordSafe", true);
-        config.get().getAsJsonObject("codex").addProperty("current", "provider-a");
-        FakeCredentialStore credentials = new FakeCredentialStore();
-        JsonObject updates = new JsonObject();
-        updates.addProperty("name", "Renamed Provider");
-        updates.addProperty("authJson", "");
+        provider(config, "provider-a").addProperty("authJson", "{\"OPENAI_API_KEY\":\"a\"}");
+        config.get().getAsJsonObject("codex").getAsJsonObject("providers")
+                .add("provider-b", provider("provider-b"));
+        provider(config, "provider-b").addProperty("authJson", "{\"OPENAI_API_KEY\":\"b\"}");
 
-        manager(config, credentials).updateCodexProvider("provider-a", updates);
+        assertTrue(manager(config).deleteCodexProvider("provider-a").isSuccess());
 
-        JsonObject persisted = provider(config, "provider-a");
-        assertEquals("Renamed Provider", persisted.get("name").getAsString());
-        assertTrue(persisted.get("authStoredInPasswordSafe").getAsBoolean());
-        assertFalse(persisted.has("authJson"));
-        assertEquals(0, credentials.deleteAttempts);
+        JsonObject providers = config.get().getAsJsonObject("codex").getAsJsonObject("providers");
+        assertFalse(providers.has("provider-a"));
+        assertEquals("{\"OPENAI_API_KEY\":\"b\"}",
+                providers.getAsJsonObject("provider-b").get("authJson").getAsString());
     }
 
     @Test
-    public void availableCredentialCanBeExplicitlyCleared() throws Exception {
+    public void legacyKeychainMarkersAreStrippedOnRead() {
+        AtomicReference<JsonObject> config = new AtomicReference<>(configWithProvider());
+        JsonObject legacy = provider(config, "provider-a");
+        legacy.addProperty("authStoredInPasswordSafe", true);
+        legacy.addProperty("credentialUnavailable", true);
+
+        JsonObject listed = manager(config).getCodexProviders().stream()
+                .filter(candidate -> "provider-a".equals(candidate.get("id").getAsString()))
+                .findFirst()
+                .orElseThrow();
+
+        assertFalse(listed.has("authStoredInPasswordSafe"));
+        assertFalse(listed.has("credentialUnavailable"));
+        assertFalse(listed.has("authJson"));
+    }
+
+    @Test
+    public void legacyKeychainMarkersAreStrippedOnSave() throws Exception {
         AtomicReference<JsonObject> config = new AtomicReference<>(configWithProvider());
         provider(config, "provider-a").addProperty("authStoredInPasswordSafe", true);
-        FakeCredentialStore credentials = new FakeCredentialStore();
-        credentials.values.put("provider-a", "{\"OPENAI_API_KEY\":\"old\"}");
         JsonObject updates = new JsonObject();
-        updates.addProperty("authJson", "");
+        updates.addProperty("name", "Renamed Provider");
+        updates.addProperty("authJson", "{\"OPENAI_API_KEY\":\"fresh\"}");
 
-        manager(config, credentials).updateCodexProvider("provider-a", updates);
+        manager(config).updateCodexProvider("provider-a", updates);
 
         JsonObject persisted = provider(config, "provider-a");
         assertFalse(persisted.has("authStoredInPasswordSafe"));
-        assertFalse(persisted.has("authJson"));
-        assertEquals(1, credentials.deleteAttempts);
+        assertEquals("{\"OPENAI_API_KEY\":\"fresh\"}", persisted.get("authJson").getAsString());
     }
 
-    @Test
-    public void configWriteFailureRestoresPreviousCredential() {
-        AtomicReference<JsonObject> config = new AtomicReference<>(configWithProvider());
-        provider(config, "provider-a").addProperty("authStoredInPasswordSafe", true);
-        FakeCredentialStore credentials = new FakeCredentialStore();
-        credentials.values.put("provider-a", "{\"OPENAI_API_KEY\":\"old\"}");
-        CodexProviderManager manager = manager(config, ignored -> {
-            throw new IllegalStateException("config write failed");
-        }, credentials);
-        JsonObject updates = new JsonObject();
-        updates.addProperty("authJson", "{\"OPENAI_API_KEY\":\"new\"}");
-
-        assertThrows(IOException.class, () -> manager.updateCodexProvider("provider-a", updates));
-        assertEquals("{\"OPENAI_API_KEY\":\"old\"}", credentials.read("provider-a"));
-    }
-
-    @Test
-    public void unavailableCredentialBlocksProviderSwitch() {
-        AtomicReference<JsonObject> config = new AtomicReference<>(configWithProvider());
-        provider(config, "provider-a").addProperty("authStoredInPasswordSafe", true);
-
-        assertThrows(IOException.class,
-                () -> manager(config, new FakeCredentialStore()).switchCodexProvider("provider-a"));
-    }
-
-    private CodexProviderManager manager(
-            AtomicReference<JsonObject> config,
-            CodexProviderCredentialStore credentials) {
-        return manager(config, config::set, credentials);
-    }
-
-    private CodexProviderManager manager(
-            AtomicReference<JsonObject> config,
-            Consumer<JsonObject> configWriter,
-            CodexProviderCredentialStore credentials) {
+    private CodexProviderManager manager(AtomicReference<JsonObject> config) {
         Gson gson = new Gson();
         return new CodexProviderManager(
                 ignored -> config.get().deepCopy(),
-                configWriter,
+                config::set,
                 new ConfigPathManager(),
-                new CodexSettingsManager(gson),
-                credentials);
+                new CodexSettingsManager(gson));
     }
 
     private JsonObject configWithProvider() {
@@ -154,38 +138,5 @@ public class CodexProviderManagerCredentialTest {
         provider.addProperty("id", id);
         provider.addProperty("name", "Provider");
         return provider;
-    }
-
-    private static final class FakeCredentialStore extends CodexProviderCredentialStore {
-        private final Map<String, String> values = new HashMap<>();
-        private int deleteAttempts;
-
-        @Override
-        public boolean isPersistentStorageAvailable() {
-            return true;
-        }
-
-        @Override
-        public boolean writeVerified(String providerId, String authJson) {
-            values.put(providerId, authJson);
-            return authJson.equals(read(providerId));
-        }
-
-        @Override
-        public String read(String providerId) {
-            return values.get(providerId);
-        }
-
-        @Override
-        public void delete(String providerId) {
-            values.remove(providerId);
-        }
-
-        @Override
-        public boolean deleteVerified(String providerId) {
-            deleteAttempts++;
-            values.remove(providerId);
-            return true;
-        }
     }
 }

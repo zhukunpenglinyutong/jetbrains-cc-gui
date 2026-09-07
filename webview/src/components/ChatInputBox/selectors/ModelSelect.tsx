@@ -57,6 +57,8 @@ interface ModelSelectProps {
   onLongContextChange?: (enabled: boolean) => void;
   /** Render only the dropdown, positioned as a fly-out from triggerRef. */
   embedded?: boolean;
+  /** Render the list flat inside a parent popover: no positioning, no close-on-select. */
+  inline?: boolean;
   triggerRef?: React.RefObject<HTMLElement | null>;
   onClose?: () => void;
   /** Hide the 1M toggle when the parent menu already exposes it. */
@@ -86,6 +88,7 @@ export const ModelSelect = ({
   longContextEnabled = true,
   onLongContextChange,
   embedded = false,
+  inline = false,
   triggerRef,
   onClose,
   hideLongContextToggle = false,
@@ -182,10 +185,11 @@ export const ModelSelect = ({
    */
   const handleSelect = useCallback((modelId: string) => {
     onChange(modelId);
+    if (inline) return;
     setIsOpen(false);
     setSearchQuery('');
     onClose?.();
-  }, [onChange, onClose]);
+  }, [inline, onChange, onClose]);
 
   const handleTogglePin = useCallback((e: React.MouseEvent, modelId: string) => {
     e.stopPropagation();
@@ -223,10 +227,10 @@ export const ModelSelect = ({
   }, [embedded, isOpen]);
 
   useLayoutEffect(() => {
-    if (embedded || isOpen) {
+    if (!inline && (embedded || isOpen)) {
       recalculate();
     }
-  }, [embedded, isOpen, filteredModels.length, pinnedIds.length, loading, recalculate]);
+  }, [embedded, inline, isOpen, filteredModels.length, pinnedIds.length, loading, recalculate]);
 
   const renderSectionLabel = (sectionId: string, sectionLabel: string): string => {
     if (sectionId === PINNED_GROUP_ID) {
@@ -257,9 +261,9 @@ export const ModelSelect = ({
   const renderDropdown = () => (
         <div
           ref={dropdownRef}
-          className="selector-dropdown model-selector-dropdown"
+          className={inline ? 'model-selector-inline' : 'selector-dropdown model-selector-dropdown'}
           data-testid="model-selector-dropdown"
-          style={dropdownStyle}
+          style={inline ? undefined : dropdownStyle}
           onMouseEnter={(e) => e.stopPropagation()}
         >
           {showSearch && (
@@ -276,7 +280,7 @@ export const ModelSelect = ({
               />
             </div>
           )}
-          <div className="model-selector-list" style={DROPDOWN_LIST_STYLE}>
+          <div className={inline ? 'model-selector-list model-selector-list--inline' : 'model-selector-list'} style={DROPDOWN_LIST_STYLE}>
             {loading && (
               <div
                 className="selector-option selector-option-status"
@@ -405,7 +409,7 @@ export const ModelSelect = ({
         </div>
   );
 
-  if (embedded) {
+  if (embedded || inline) {
     return renderDropdown();
   }
 

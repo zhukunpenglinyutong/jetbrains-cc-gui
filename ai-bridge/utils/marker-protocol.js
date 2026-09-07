@@ -75,8 +75,13 @@ export function emitToolResultMessage({ toolUseId, content, isError = false }) {
   });
 }
 
+// Leading "@" is guarded the same way as leading "-": pi/omp (parseArgs in
+// cli/args.ts) classify ANY argv token starting with "@" as a file argument
+// (fileArgs -> processFileArguments -> "Error: File not found" + exit 1).
+// A leading space keeps the token in `messages` while the mention still
+// parses (omp's mention regex allows whitespace before "@").
 export function safePromptArg(text) {
-  if (typeof text === 'string' && text.startsWith('-')) {
+  if (typeof text === 'string' && (text.startsWith('-') || text.startsWith('@'))) {
     return ` ${text}`;
   }
   return text ?? '';

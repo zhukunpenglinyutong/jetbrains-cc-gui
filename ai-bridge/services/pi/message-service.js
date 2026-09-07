@@ -38,6 +38,7 @@ import {
   cleanupMaterializedImagePaths,
   materializeImageAttachments,
 } from '../../utils/cli-image-input.js';
+import { reformatFileLineReferences } from '../../utils/file-line-references.js';
 
 const THINKING_LEVELS = new Set(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -142,6 +143,7 @@ export async function sendMessage(
   } catch (err) {
     console.error('[PI] failed to materialize image attachments:', err?.message || err);
   }
+  promptText = reformatFileLineReferences(promptText);
 
   const bin = resolvePiCliPath();
   const args = buildPiArgs({ message: promptText, sessionId, model, reasoningEffort });

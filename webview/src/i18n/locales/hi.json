@@ -86,8 +86,7 @@
     "retrySdkStatus": "पुनः प्रयास करें",
     "openSourceBanner": "यह प्रोजेक्ट 100% ओपन सोर्स और मुफ़्त है (नकली प्रोजेक्ट से सावधान रहें)",
     "openSourceBannerStar": "Star",
-    "openSourceBannerStarToast": "रिपॉजिटरी लिंक क्लिपबोर्ड पर कॉपी हो गया — ब्राउज़र में पेस्ट करके खोलें ⭐",
-    "openSourceBannerStarAria": "रिपॉजिटरी लिंक कॉपी करें और GitHub पर स्टार करें",
+    "openSourceBannerStarAria": "GitHub पर रिपॉजिटरी खोलें और स्टार करें",
     "goInstallSdk": "इंस्टॉल करने जाएं",
     "commandNotImplemented": "`{{command}}` सुविधा अभी तक लागू नहीं की गई है।",
     "clearCommandDescription": "बातचीत इतिहास साफ़ करें और नया सत्र शुरू करें",
@@ -516,11 +515,18 @@
     "communityDesc": "नवीनतम जानकारी और तकनीकी सहायता के लिए आधिकारिक WeChat समूह में शामिल होने के लिए नीचे QR कोड स्कैन करें",
     "communityQrTip": "WeChat से स्कैन करके समुदाय में शामिल हों",
     "communityQrAlt": "आधिकारिक WeChat समुदाय QR कोड",
-    "githubTitle": "GitHub रिपॉजिटरी",
-    "githubDesc": "यह प्रोजेक्ट GitHub पर ओपन सोर्स है। सपोर्ट के लिए Star करें!",
-    "githubCopyBtn": "रिपॉजिटरी URL कॉपी करें",
-    "githubCopied": "रिपॉजिटरी URL क्लिपबोर्ड पर कॉपी हो गया। कृपया इसे अपने ब्राउज़र में खोलें।",
-    "githubCopyFailed": "कॉपी करने में विफल। कृपया मैन्युअल रूप से कॉपी करें।",
+    "socialDocs": "आधिकारिक दस्तावेज़",
+    "socialTitle": "हमें फॉलो करें",
+    "socialGithub": "GitHub रिपॉजिटरी — Star करें!",
+    "socialX": "X (Twitter) @ZPeng31310",
+    "socialZhihu": "Zhihu @vscodeai",
+    "socialXiaohongshu": "Xiaohongshu (RED)",
+    "socialDouyin": "Douyin — फॉलो करने के लिए होवर करके स्कैन करें",
+    "socialYoutube": "YouTube चैनल",
+    "douyinQrAlt": "Douyin QR कोड",
+    "douyinId": "Douyin ID: nengyongai",
+    "douyinCopied": "Douyin ID क्लिपबोर्ड पर कॉपी हो गया",
+    "douyinCopyFailed": "कॉपी करने में विफल। कृपया मैन्युअल रूप से कॉपी करें।",
     "sponsor": "Sponsor",
     "sponsorDesc": "If this project helps you, consider sponsoring to support ongoing maintenance!",
     "alipay": "Alipay",
@@ -884,7 +890,11 @@
       "listTitle": "स्थानीय CLI टूल",
       "summary": "{{installed}} / {{total}} स्थापित",
       "moreComingSoon": "जल्द और समर्थन",
-      "copyPath": "पथ कॉपी करें"
+      "copyPath": "पथ कॉपी करें",
+      "visibility": {
+        "hide": "प्रदाता स्विचर में छिपाएँ",
+        "show": "प्रदाता स्विचर में दिखाएँ"
+      }
     }
   },
   "history": {
@@ -1565,13 +1575,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · सबसे तेज़, त्वरित उत्तरों के लिए उपयुक्त"
       },
-      "opus48": {
-        "label": "Opus 4.8",
-        "description": "Opus 4.8 · पिछली Opus पीढ़ी"
+      "fable51": {
+        "label": "Fable 5.1",
+        "description": "Fable 5.1 · सबसे शक्तिशाली · Mythos-श्रेणी"
       },
       "fable5": {
         "label": "Fable 5",
-        "description": "Fable 5 · सबसे शक्तिशाली · Mythos-श्रेणी"
+        "description": "Fable 5 · पिछली Fable पीढ़ी"
       }
     },
     "longContext": {
@@ -1581,6 +1591,10 @@
       "tooltipDisabled": "Haiku के लिए 1M संदर्भ उपलब्ध नहीं है"
     },
     "codex": {
+      "gpt6astra": {
+        "label": "GPT-6 Astra",
+        "description": "स्वायत्त कंप्यूटर उपयोग और लंबे एजेंटिक कार्यों के लिए नई पीढ़ी का फ्लैगशिप मॉडल।"
+      },
       "gpt56sol": {
         "label": "GPT-5.6 Sol",
         "description": "जटिल पेशेवर कार्यों के लिए फ्रंटियर मॉडल।"
@@ -1619,10 +1633,17 @@
       "tooltip": "Automatically accept file edits",
       "description": "Automatically accept file creation/editing, reducing confirmation steps"
     },
+    "auto": {
+      "label": "स्वचालित अनुमोदन",
+      "shortLabel": "स्वचालित",
+      "tooltip": "प्रदाता के मूल समीक्षक को अनुमोदन अनुरोध स्वचालित रूप से संभालने दें",
+      "description": "सुरक्षा सीमाएँ बनाए रखते हुए प्रदाता के मूल समीक्षक का उपयोग करता है"
+    },
     "bypassPermissions": {
-      "label": "Auto Mode",
-      "tooltip": "Bypass all permission checks",
-      "description": "Fully automated, bypassing all permission checks [Use with caution]"
+      "label": "पूर्ण स्वचालित",
+      "shortLabel": "पूर्ण",
+      "tooltip": "सभी अनुमति जाँचों को बायपास करें",
+      "description": "पूरी तरह स्वचालित, सभी अनुमति जाँचों को बायपास करता है [सावधानी से उपयोग करें]"
     }
   },
   "codexModes": {
@@ -1640,6 +1661,12 @@
       "label": "Auto Edit",
       "tooltip": "Codex approval_policy=on-request – asks for approval when needed",
       "description": "Balanced option. Allows normal editing flow while still requiring approvals when needed."
+    },
+    "auto": {
+      "label": "मेरे लिए अनुमोदित करें",
+      "shortLabel": "स्वचालित",
+      "tooltip": "Codex approvals_reviewer=auto_review – स्वचालित समीक्षक योग्य अनुरोधों को संभालता है।",
+      "description": "workspace-write सैंडबॉक्स बनाए रखता है और अस्वीकृत अनुरोधों को आगे भेजता है।"
     },
     "bypassPermissions": {
       "label": "Full Auto",
@@ -1675,6 +1702,9 @@
     },
     "codex": {
       "label": "Codex"
+    },
+    "minimax": {
+      "label": "MiniMax Code"
     },
     "gemini": {
       "label": "Gemini Cli"

@@ -3,6 +3,7 @@ import { getAppViewport } from '../utils/viewport';
 import {
   getMainDropdownLayout,
   getSubmenuLayout,
+  isSubmenuHeightClipped,
   toViewportTrigger,
   type DropdownAlignment,
 } from './dropdownPosition';
@@ -22,7 +23,7 @@ interface PositionState {
   left?: number;
   top?: number;
   bottom?: number;
-  maxHeight: number;
+  maxHeight?: number;
   maxWidth?: number;
   submenuSide?: 'right' | 'left';
   submenuOverlap?: number;
@@ -98,12 +99,15 @@ export function useDropdownPosition({
         maxHeight: submenuMaxHeight,
         bottomClearance: submenuBottomClearance,
       });
+      const reportedMaxHeight = isSubmenuHeightClipped(layout.maxHeight, measuredHeight)
+        ? layout.maxHeight
+        : undefined;
 
       setPositionState((current) => {
         if (
           current
           && current.top === layout.topOffset
-          && current.maxHeight === layout.maxHeight
+          && current.maxHeight === reportedMaxHeight
           && current.maxWidth === layout.maxWidth
           && current.submenuSide === layout.side
           && current.submenuOverlap === layout.overlap
@@ -112,7 +116,7 @@ export function useDropdownPosition({
         }
         return {
           top: layout.topOffset,
-          maxHeight: layout.maxHeight,
+          maxHeight: reportedMaxHeight,
           maxWidth: layout.maxWidth,
           submenuSide: layout.side,
           submenuOverlap: layout.overlap,
@@ -192,7 +196,7 @@ export function useDropdownPosition({
       ['--selector-enter-x' as string]: '0px',
       ['--selector-enter-y' as string]: '6px',
     },
-    maxHeight: positionState.maxHeight / fixedPosDivisor,
+    maxHeight: (positionState.maxHeight ?? 0) / fixedPosDivisor,
     maxWidth: undefined,
     recalculate,
   };

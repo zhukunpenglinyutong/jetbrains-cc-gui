@@ -1,11 +1,7 @@
 package com.github.claudecodegui.session;
 
-import com.intellij.openapi.application.Application;
-import com.intellij.openapi.application.ApplicationManager;
-import org.jetbrains.annotations.NotNull;
 import org.junit.Test;
 
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -157,6 +153,22 @@ public class SessionCallbackAdapterStreamEndTest {
         assertEquals("onStreamEnd:20", jsTarget.calls.get(2));
     }
 
+    @Test
+    public void duplicateSessionIdsAreForwardedOnlyOnce() {
+        RecordingJsTarget jsTarget = new RecordingJsTarget();
+        SessionCallbackAdapter adapter = new SessionCallbackAdapter(
+                null, jsTarget, null, () -> true, null);
+
+        adapter.onSessionIdReceived("session-1");
+        adapter.onSessionIdReceived("session-1");
+        adapter.onSessionIdReceived("session-2");
+
+        assertEquals(2, jsTarget.calls.size());
+        assertEquals("setSessionId:session-1", jsTarget.calls.get(0));
+        assertEquals("setSessionId:session-2", jsTarget.calls.get(1));
+        adapter.deactivate();
+    }
+
     /**
      * Verify the flush LongConsumer callback contract:
      * when StreamMessageCoalescer.flush() invokes the callback with a
@@ -191,8 +203,7 @@ public class SessionCallbackAdapterStreamEndTest {
      *
      * <p>Exercised through the real SessionCallbackAdapter with test-friendly
      * collaborators; the throttlers' default constructor flushes synchronously
-     * via flushNow(), so no IntelliJ Application is needed — the headless
-     * invokeLater in onBlockReset happens after the ordering under test.
+     * via flushNow(), and the ordered webview target records the callbacks directly.
      */
     @Test
     public void blockResetFlushesBufferedDeltasBeforeClearing() throws Exception {
@@ -209,44 +220,10 @@ public class SessionCallbackAdapterStreamEndTest {
         adapter.onContentDelta("text-tail");
         adapter.onThinkingDelta("thinking-tail");
 
-        // onBlockReset dispatches its JS notification via invokeLater, which has
-        // no Application in headless tests. The flush-before-reset ordering under
-        // test completes before that call, so a benign proxy stub suffices.
-        // Not restored afterwards: setApplication(null, ...) is rejected by the
-        // platform's @NotNull contract, and each Gradle test fork owns its JVM.
-        ApplicationManager.setApplication(invokeLaterInlineApplication());
         adapter.onBlockReset();
 
         assertTrue(jsTarget.calls.contains("onContentDelta:text-tail"));
         assertTrue(jsTarget.calls.contains("onThinkingDelta:thinking-tail"));
         adapter.deactivate();
     }
-
-    /**
-     * Headless Application stub whose invokeLater runs the runnable inline — the
-     * adapter only needs a non-null application for its EDT dispatch.
-     */
-    private static @NotNull Application invokeLaterInlineApplication() {
-        return (Application) Proxy.newProxyInstance(
-                Application.class.getClassLoader(),
-                new Class<?>[] { Application.class },
-                (proxy, method, args) -> {
-                    if ("invokeLater".equals(method.getName()) && args != null && args.length >= 1) {
-                        ((Runnable) args[0]).run();
-                        return null;
-                    }
-                    if (method.getName().equals("isDispatchThread")) {
-                        return Boolean.TRUE;
-                    }
-                    // Unimplemented platform calls are irrelevant to this test;
-                    // returning defaults keeps the stub minimal.
-                    Class<?> type = method.getReturnType();
-                    if (type == boolean.class) {
-                        return Boolean.FALSE;
-                    }
-                    return null;
-                }
-        );
-    }
 }
-

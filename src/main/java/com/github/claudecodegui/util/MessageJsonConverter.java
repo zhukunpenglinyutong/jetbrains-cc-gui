@@ -8,9 +8,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.ui.jcef.JBCefBrowser;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -321,22 +319,26 @@ public class MessageJsonConverter {
     }
 
     /**
-     * Extract usage info from messages and push update to the webview.
+     * Build the current usage payload from session messages.
+     *
+     * @param messages session messages
+     * @param handlerContext current provider and model context
+     * @return JSON payload, or null when no usage is available
      */
-    public static void pushUsageUpdateFromMessages(
+    public static String buildUsageUpdateJson(
             List<ClaudeSession.Message> messages,
-            HandlerContext handlerContext,
-            JBCefBrowser browser,
-            boolean disposed
+            HandlerContext handlerContext
     ) {
+        if (messages == null || handlerContext == null) {
+            return null;
+        }
         try {
-            LOG.debug("pushUsageUpdateFromMessages called with " + messages.size() + " messages");
-
+            LOG.debug("buildUsageUpdateJson called with " + messages.size() + " messages");
             String currentProvider = handlerContext.getCurrentProvider();
             JsonObject lastUsage = TokenUsageUtils.findLastUsageFromSessionMessages(messages, currentProvider);
             if (lastUsage == null) {
                 LOG.debug("No usage info found in messages");
-                return;
+                return null;
             }
 
             int usedTokens = TokenUsageUtils.extractContextTokens(lastUsage, currentProvider);
@@ -345,32 +347,16 @@ public class MessageJsonConverter {
             int maxTokens = TokenUsageUtils.extractMaxTokens(lastUsage, fallbackMaxTokens);
             int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
 
-            LOG.debug("Pushing usage update: provider=" + currentProvider + ", usedTokens=" + usedTokens + ", max=" + maxTokens + ", percentage=" + percentage + "%");
-
             JsonObject usageUpdate = new JsonObject();
             usageUpdate.addProperty("percentage", percentage);
             usageUpdate.addProperty("totalTokens", usedTokens);
             usageUpdate.addProperty("limit", maxTokens);
             usageUpdate.addProperty("usedTokens", usedTokens);
             usageUpdate.addProperty("maxTokens", maxTokens);
-
-            String usageJson = new Gson().toJson(usageUpdate);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                if (browser != null && !disposed) {
-                    // Use safe call pattern, check if function exists
-                    String js = "(function() {" +
-                            "  if (typeof window.onUsageUpdate === 'function') {" +
-                            "    window.onUsageUpdate('" + JsUtils.escapeJs(usageJson) + "');" +
-                            "    console.log('[Backend->Frontend] Usage update sent successfully');" +
-                            "  } else {" +
-                            "    console.warn('[Backend->Frontend] window.onUsageUpdate not found');" +
-                            "  }" +
-                            "})();";
-                    browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
-                }
-            });
+            return new Gson().toJson(usageUpdate);
         } catch (Exception e) {
-            LOG.warn("Failed to push usage update: " + e.getMessage(), e);
+            LOG.warn("Failed to build usage update: " + e.getMessage(), e);
+            return null;
         }
     }
 }

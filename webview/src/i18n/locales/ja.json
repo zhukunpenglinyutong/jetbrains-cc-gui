@@ -86,8 +86,7 @@
     "retrySdkStatus": "再試行",
     "openSourceBanner": "このプロジェクトは100%オープンソースかつ無料を保証します（海賊版プロジェクトにご注意ください）",
     "openSourceBannerStar": "Star",
-    "openSourceBannerStarToast": "リポジトリのURLをクリップボードにコピーしました。ブラウザに貼り付けてアクセスできます ⭐",
-    "openSourceBannerStarAria": "リポジトリのURLをコピーして GitHub でスター",
+    "openSourceBannerStarAria": "GitHub でリポジトリを開いてスター",
     "goInstallSdk": "インストールへ",
     "commandNotImplemented": "`{{command}}` 機能はまだ実装されていません。",
     "clearCommandDescription": "会話履歴をクリアして新しいセッションを開始",
@@ -521,11 +520,18 @@
     "communityDesc": "下のQRコードをスキャンして、公式WeChatグループに参加し、最新ニュースと技術サポートを入手",
     "communityQrTip": "WeChatでスキャンしてコミュニティに参加",
     "communityQrAlt": "公式WeChatコミュニティQRコード",
-    "githubTitle": "GitHub リポジトリ",
-    "githubDesc": "このプロジェクトは GitHub でオープンソースです。Star で応援してください！",
-    "githubCopyBtn": "リポジトリURLをコピー",
-    "githubCopied": "リポジトリURLがクリップボードにコピーされました。ブラウザでアクセスしてください。",
-    "githubCopyFailed": "コピーに失敗しました。手動でコピーしてください。",
+    "socialDocs": "公式ドキュメント",
+    "socialTitle": "フォローする",
+    "socialGithub": "GitHub リポジトリ — Star をお願いします！",
+    "socialX": "X（Twitter）@ZPeng31310",
+    "socialZhihu": "Zhihu @vscodeai",
+    "socialXiaohongshu": "Xiaohongshu（RED）",
+    "socialDouyin": "Douyin — ホバーしてスキャン",
+    "socialYoutube": "YouTube チャンネル",
+    "douyinQrAlt": "Douyin QRコード",
+    "douyinId": "Douyin ID: nengyongai",
+    "douyinCopied": "Douyin ID をクリップボードにコピーしました",
+    "douyinCopyFailed": "コピーに失敗しました。手動でコピーしてください。",
     "sponsor": "Sponsor",
     "sponsorDesc": "If this project helps you, consider sponsoring to support ongoing maintenance!",
     "alipay": "Alipay",
@@ -889,7 +895,11 @@
       "listTitle": "ローカル CLI ツール",
       "summary": "{{installed}} / {{total}} インストール済み",
       "moreComingSoon": "今後さらに対応予定",
-      "copyPath": "パスをコピー"
+      "copyPath": "パスをコピー",
+      "visibility": {
+        "hide": "プロバイダー切り替えメニューに表示しない",
+        "show": "プロバイダー切り替えメニューに表示する"
+      }
     }
   },
   "history": {
@@ -1577,16 +1587,20 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · 迅速な回答に最速"
       },
-      "opus48": {
-        "label": "Opus 4.8",
-        "description": "Opus 4.8 · 前世代の Opus モデル"
+      "fable51": {
+        "label": "Fable 5.1",
+        "description": "Fable 5.1 · 最も強力 · Mythosクラス"
       },
       "fable5": {
         "label": "Fable 5",
-        "description": "Fable 5 · 最も強力 · Mythosクラス"
+        "description": "Fable 5 · 前世代の Fable モデル"
       }
     },
     "codex": {
+      "gpt6astra": {
+        "label": "GPT-6 Astra",
+        "description": "自律的なコンピュータ操作と長時間のエージェントタスク向けの新世代フラッグシップ"
+      },
       "gpt56sol": {
         "label": "GPT-5.6 Sol",
         "description": "複雑なプロフェッショナル業務向けのフロンティアモデル"
@@ -1625,8 +1639,15 @@
       "tooltip": "ファイル編集を自動的に承認",
       "description": "ファイルの作成/編集を自動的に承認し、確認手順を削減"
     },
+    "auto": {
+      "label": "自動承認モード",
+      "shortLabel": "自動承認",
+      "tooltip": "プロバイダーのネイティブ審査に承認リクエストを自動処理させます",
+      "description": "安全境界を維持しながらプロバイダーのネイティブ審査を使用します"
+    },
     "bypassPermissions": {
-      "label": "自動モード",
+      "label": "完全自動",
+      "shortLabel": "完全自動",
       "tooltip": "すべての権限チェックをバイパス",
       "description": "完全自動、すべての権限チェックをバイパス[注意して使用]"
     }
@@ -1646,6 +1667,12 @@
       "label": "Auto Edit",
       "tooltip": "Codex approval_policy=on-request – asks for approval when needed",
       "description": "Balanced option. Allows normal editing flow while still requiring approvals when needed."
+    },
+    "auto": {
+      "label": "代わりに承認",
+      "shortLabel": "自動承認",
+      "tooltip": "Codex approvals_reviewer=auto_review – 自動審査が対象の承認リクエストを処理します。",
+      "description": "workspace-write サンドボックスを維持し、承認できないリクエストはエスカレーションします。"
     },
     "bypassPermissions": {
       "label": "Full Auto",
@@ -1681,6 +1708,9 @@
     },
     "codex": {
       "label": "Codex"
+    },
+    "minimax": {
+      "label": "MiniMax Code"
     },
     "gemini": {
       "label": "Gemini Cli"

@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, normalize } from 'node:path';
 import {
   decodeCliOutput,
   isWindowsCmdShim,
@@ -8,7 +11,10 @@ import {
   selectWindowsWhereMatch,
   resolveWindowsSpawnableBin,
   resolveOmpCliPath,
+  resolveCliPath,
   commonCliBinDirs,
+  versionManagerBinDirs,
+  whichViaLoginShell,
 } from './cli-path.js';
 
 test('isWindowsCmdShim detects .cmd/.bat only on win32-style paths', () => {
@@ -137,10 +143,83 @@ test('resolveOmpCliPath honors OMP_BIN env override', () => {
   }
 });
 
+test('resolveCliPath expands {localAppData} candidates (OMP Windows installer layout)', () => {
+  // Fake a Windows native-installer layout: %LOCALAPPDATA%\omp\<binary>.
+  // A never-on-PATH binary name keeps which/login-shell lookups from short-circuiting.
+  const root = mkdtempSync(join(tmpdir(), 'ccgui-localappdata-'));
+  const binDir = join(root, 'omp');
+  mkdirSync(binDir, { recursive: true });
+  const name = 'ccgui-test-cli-9f8e7d';
+  for (const ext of process.platform === 'win32' ? ['.cmd', '.bat', '.exe', ''] : ['']) {
+    writeFileSync(join(binDir, name + ext), '');
+  }
+  const saved = process.env.LOCALAPPDATA;
+  try {
+    process.env.LOCALAPPDATA = root;
+    const resolved = resolveCliPath({
+      binaryName: name,
+      envKeys: [],
+      homeCandidates: ['{localAppData}/omp/{bin}'],
+    });
+    assert.equal(dirname(normalize(resolved)), binDir);
+  } finally {
+    if (saved === undefined) {
+      delete process.env.LOCALAPPDATA;
+    } else {
+      process.env.LOCALAPPDATA = saved;
+    }
+  }
+});
+
+test('versionManagerBinDirs scans nvm/fnm roots newest-first and lists static managers', () => {
+  if (process.platform === 'win32') return;
+  const home = mkdtempSync(join(tmpdir(), 'cc-gui-vm-home-'));
+  mkdirSync(join(home, '.nvm', 'versions', 'node', 'v22.22.3', 'bin'), { recursive: true });
+  mkdirSync(join(home, '.nvm', 'versions', 'node', 'v24.11.1', 'bin'), { recursive: true });
+  mkdirSync(join(home, '.nvm', 'versions', 'node', 'v9.11.2', 'bin'), { recursive: true });
+  mkdirSync(join(home, '.local', 'share', 'fnm', 'node-versions', 'v20.1.0', 'installation', 'bin'), { recursive: true });
+  const dirs = versionManagerBinDirs(home);
+  // Static single-node managers are always listed.
+  assert.ok(dirs.includes(join(home, '.volta', 'bin')), 'expected volta bin dir');
+  assert.ok(dirs.includes(join(home, '.nvmd', 'bin')), 'expected nvmd bin dir');
+  // Numeric (not lexicographic) descending order: v24 > v22 > v9.
+  const nvmDirs = dirs.filter((dir) => dir.includes(join('.nvm', 'versions', 'node')));
+  assert.deepEqual(nvmDirs, [
+    join(home, '.nvm', 'versions', 'node', 'v24.11.1', 'bin'),
+    join(home, '.nvm', 'versions', 'node', 'v22.22.3', 'bin'),
+    join(home, '.nvm', 'versions', 'node', 'v9.11.2', 'bin'),
+  ]);
+  assert.ok(
+    dirs.includes(join(home, '.local', 'share', 'fnm', 'node-versions', 'v20.1.0', 'installation', 'bin')),
+    'expected fnm installation bin dir',
+  );
+});
+
+test('resolveCliPath finds a CLI shim installed under an nvm version dir', () => {
+  if (process.platform === 'win32') return;
+  const fakeHome = mkdtempSync(join(tmpdir(), 'cc-gui-nvm-home-'));
+  const binDir = join(fakeHome, '.nvm', 'versions', 'node', 'v22.22.3', 'bin');
+  mkdirSync(binDir, { recursive: true });
+  writeFileSync(join(binDir, 'cc-gui-fake-cli'), '#!/bin/sh\necho 1.0.0\n', { mode: 0o755 });
+  // resolveCliPath reads os.homedir(), which honors $HOME on POSIX.
+  const savedHome = process.env.HOME;
+  process.env.HOME = fakeHome;
+  try {
+    const resolved = resolveCliPath({ binaryName: 'cc-gui-fake-cli', envKeys: [], homeCandidates: [] });
+    assert.equal(resolved, join(binDir, 'cc-gui-fake-cli'));
+  } finally {
+    if (savedHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = savedHome;
+    }
+  }
+});
+
 test('commonCliBinDirs includes the OMP bin dir after the PI entry', () => {
   const dirs = commonCliBinDirs('/home/tester');
-  const piIndex = dirs.indexOf('/home/tester/.pi/bin');
-  const ompIndex = dirs.indexOf('/home/tester/.omp/bin');
+  const piIndex = dirs.indexOf(join('/home/tester', '.pi', 'bin'));
+  const ompIndex = dirs.indexOf(join('/home/tester', '.omp', 'bin'));
   assert.ok(piIndex !== -1, 'expected .pi/bin entry');
   assert.ok(ompIndex !== -1, 'expected .omp/bin entry');
   assert.equal(ompIndex, piIndex + 1);
@@ -237,4 +316,34 @@ test('resolveCliSpawn file-redirect quotes both the shim and the dest path', () 
   assert.match(invocation.args[3], />/);
   assert.match(invocation.args[3], /models\.txt/);
   assert.equal(invocation.args[3].includes('C:\\Program'), false);
+});
+
+test('whichViaLoginShell rejects unsafe binary names without spawning', () => {
+  assert.equal(whichViaLoginShell(''), null);
+  assert.equal(whichViaLoginShell('omp; rm -rf /'), null);
+  assert.equal(whichViaLoginShell('../omp'), null);
+  assert.equal(whichViaLoginShell('$(whoami)'), null);
+});
+
+test('whichViaLoginShell resolves a PATH binary via an allowlisted shell', (t) => {
+  if (process.platform === 'win32') {
+    t.skip('login-shell fallback is POSIX-only');
+    return;
+  }
+  // `sh` is always on PATH; `command -v sh` prints its absolute path. On
+  // distros where /bin symlinks to /usr/bin (e.g. Ubuntu CI runners) the
+  // resolved path is /usr/bin/sh instead of /bin/sh.
+  const resolved = whichViaLoginShell('sh', '/bin/sh');
+  assert.ok(
+    resolved === '/bin/sh' || resolved === '/usr/bin/sh',
+    `expected /bin/sh or /usr/bin/sh, got ${resolved}`,
+  );
+});
+
+test('whichViaLoginShell returns null for a missing binary', (t) => {
+  if (process.platform === 'win32') {
+    t.skip('login-shell fallback is POSIX-only');
+    return;
+  }
+  assert.equal(whichViaLoginShell('definitely-not-a-real-cli-9f8e7d', '/bin/sh'), null);
 });

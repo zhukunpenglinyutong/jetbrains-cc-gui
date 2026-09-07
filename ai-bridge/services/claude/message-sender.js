@@ -301,8 +301,11 @@ function processStreamMessage(msg, state, logPrefix) {
   // Capture session_id
   if (msg.type === 'system' && msg.session_id) {
     state.currentSessionId = msg.session_id;
-    console.log('[SESSION_ID]', msg.session_id);
-    setActiveQueryResult(msg.session_id, state.queryResult);
+    if (state.lastEmittedSessionId !== msg.session_id) {
+      state.lastEmittedSessionId = msg.session_id;
+      console.log('[SESSION_ID]', msg.session_id);
+      setActiveQueryResult(msg.session_id, state.queryResult);
+    }
   }
 
   // Error result detection
@@ -355,7 +358,7 @@ async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSes
 
   while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
     const state = {
-      currentSessionId: resumeSessionId, messageCount: 0, hasStreamEvents: false,
+      currentSessionId: resumeSessionId, lastEmittedSessionId: null, messageCount: 0, hasStreamEvents: false,
       lastAssistantContent: '', lastThinkingContent: '', accumulatedUsage: null,
       streamingEnabled, streamStarted: outerStreamState.streamStarted,
       streamEnded: outerStreamState.streamEnded, queryResult: null

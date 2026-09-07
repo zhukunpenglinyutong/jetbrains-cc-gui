@@ -117,8 +117,9 @@ export const CodexFastModeSelect = ({
     ? {
         minWidth: 0,
         maxWidth: maxWidth ?? 280,
-        maxHeight: maxHeight ? `${Math.min(300, maxHeight)}px` : '300px',
-        overflowY: 'auto',
+        ...(maxHeight != null
+          ? { maxHeight: `${Math.min(300, maxHeight)}px`, overflowY: 'auto' as const }
+          : { overflowY: 'visible' as const }),
         ...positionedStyle,
       }
     : { ...DROPDOWN_STYLE, ...positionedStyle };

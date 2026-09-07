@@ -29,7 +29,7 @@ import { homedir } from 'os';
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { pathToFileURL } from 'url';
-import { enrichPathWithBinDirs, commonCliBinDirs } from '../../utils/cli-path.js';
+import { enrichPathWithBinDirs, commonCliBinDirs, resolveCliSpawn } from '../../utils/cli-path.js';
 
 /**
  * The shipped DSH agent presets plus user-installed ones curated by the CC
@@ -380,8 +380,8 @@ export function buildPresetOverlay({ presetId, presetText, baseIds, presetDir = 
  * `<dshHome>/.agent-presets/<id>/` where dshHome is `${DSH_HOME:-$HOME/.dsh}`
  * — the same root the `dsh-agent-presets` plugin scans, so anything the DSH
  * web app can select is found here too. From the resolved spawn command:
- * - Windows `.cmd` shim: `resolveDshSpawnCommand` yields `node <pkgRoot>/lib/bin.js`
- *   → pkgRoot = dirname(dirname(script)).
+ * - Windows `.cmd` shim: `resolveCliSpawn` launches it via `cmd.exe`, so the
+ *   preset directory is located from the bin path candidates below instead.
  * - POSIX: try `dirname(dirname(bin))` (bin under `<pkgRoot>/bin/`) and the
  *   npm prefix layout `<prefix>/lib/node_modules/@deepseek-ai/dsh`.
  *
@@ -434,12 +434,18 @@ export function getHeadlessBaseIds(spawnCmd, options = {}) {
   const home = process.env.HOME || process.env.USERPROFILE || homedir();
   enrichPathWithBinDirs(env, commonCliBinDirs(home));
   try {
-    const result = spawnSync(bin, [...(spawnCmd.args || []), '--profile', 'headless', '--dump-config'], {
-      encoding: 'utf8',
+    // Route through resolveCliSpawn so Windows `.cmd`/`.bat` shims launch via
+    // cmd.exe (CVE-2024-27980) — a raw spawn of a shim fails with EINVAL and
+    // would silently drop the preset overlay.
+    const invocation = resolveCliSpawn(bin, [...(spawnCmd.args || []), '--profile', 'headless', '--dump-config'], {
       env,
+      windowsHide: true,
+    });
+    const result = spawnSync(invocation.file, invocation.args, {
+      ...invocation.options,
+      encoding: 'utf8',
       timeout: 60_000,
       maxBuffer: 32 * 1024 * 1024,
-      shell: spawnCmd.shell === true,
     });
     if (result.error || result.status !== 0) {
       logDebug('dump-config failed:', result.error?.message || `status ${result.status}`);

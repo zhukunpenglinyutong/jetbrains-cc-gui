@@ -164,7 +164,7 @@ public class HistoryMessageInjector {
                     String jsCode = "if (window.addErrorMessage) { " +
                                             "  window.addErrorMessage('加载 Codex 会话失败: " + errorMsg + "'); " +
                                             "}";
-                    context.executeJavaScriptOnEDT(jsCode);
+                    context.executeJavaScriptQueued(jsCode);
                 });
                 notifyHistoryLoadComplete();
             }
@@ -389,7 +389,7 @@ public class HistoryMessageInjector {
                                     "    console.error('[HistoryHandler] historyLoadComplete callback failed:', e); " +
                                     "  } " +
                                     "}";
-            context.executeJavaScriptOnEDT(jsCode);
+            context.executeJavaScriptQueued(jsCode);
         });
     }
 
@@ -1060,7 +1060,7 @@ public class HistoryMessageInjector {
 
         if (replace) {
             // Keep the session-transition barrier active until historyLoadComplete.
-            context.executeJavaScriptOnEDT("if (window.clearMessages) { window.clearMessages(); }");
+            context.executeJavaScriptQueued("if (window.clearMessages) { window.clearMessages(); }");
         }
         context.callJavaScript("beginCodexHistoryPage", context.escapeJs(gson.toJson(startInfo)));
 

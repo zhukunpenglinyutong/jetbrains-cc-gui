@@ -404,6 +404,106 @@ public class CodexSettingsManagerTomlRoundTripTest {
     }
 
     @Test
+    public void shouldBackupLegacyLocalAuthOnFirstPostUpgradeTransition() throws Exception {
+        // Legacy state: provider A (config-only, no authJson) was applied by old
+        // code which never took an auth backup, so auth.json still holds the
+        // user's genuine `codex login` session and no cli_backup exists.
+        Path tempHome = Files.createTempDirectory("codex-provider-legacy-backup-home");
+        useTemporaryHomeDirectory(tempHome);
+        Path codexDir = tempHome.resolve(".codex");
+        Files.createDirectories(codexDir);
+        Files.writeString(
+                codexDir.resolve("auth.json"),
+                "{\"auth_mode\":\"chatgpt\",\"tokens\":{\"access_token\":\"legacy-oauth\"}}",
+                StandardCharsets.UTF_8
+        );
+
+        CodexSettingsManager manager = new CodexSettingsManager(new Gson());
+        JsonObject legacyProvider = new JsonObject();
+        legacyProvider.addProperty("id", "legacy-config-only");
+        legacyProvider.addProperty("configToml", "model = \"legacy-model\"\n");
+        JsonObject nextProvider = provider(
+                "next",
+                "model = \"next-model\"\n",
+                "{\"OPENAI_API_KEY\":\"next-key\"}"
+        );
+
+        manager.transitionProvider(legacyProvider, nextProvider, false, () -> { });
+
+        // The user's OAuth session must have been stashed before the overwrite.
+        assertTrue(Files.exists(codexDir.resolve("auth.json.cli_backup")));
+        assertEquals("next-key", manager.readAuthJson().get("OPENAI_API_KEY").getAsString());
+
+        // Leaving managed mode restores the legacy OAuth session.
+        manager.transitionProvider(nextProvider, null, true, () -> { });
+        assertEquals("legacy-oauth", manager.readAuthJson()
+                .getAsJsonObject("tokens").get("access_token").getAsString());
+        assertFalse(Files.exists(codexDir.resolve("auth.json.cli_backup")));
+    }
+
+    @Test
+    public void shouldPreserveUnmanagedAuthWhenLeavingLegacyManagedProvider() throws Exception {
+        // Legacy state as above; the user goes straight from the legacy managed
+        // provider to CLI-login without ever switching under the new code.
+        Path tempHome = Files.createTempDirectory("codex-provider-legacy-deactivate-home");
+        useTemporaryHomeDirectory(tempHome);
+        Path codexDir = tempHome.resolve(".codex");
+        Files.createDirectories(codexDir);
+        Files.writeString(
+                codexDir.resolve("auth.json"),
+                "{\"auth_mode\":\"chatgpt\",\"tokens\":{\"access_token\":\"legacy-oauth\"}}",
+                StandardCharsets.UTF_8
+        );
+
+        CodexSettingsManager manager = new CodexSettingsManager(new Gson());
+        JsonObject legacyProvider = new JsonObject();
+        legacyProvider.addProperty("id", "legacy-config-only");
+        legacyProvider.addProperty("configToml", "model = \"legacy-model\"\n");
+
+        manager.transitionProvider(legacyProvider, null, true, () -> { });
+
+        // The unmanaged local credential survives — no backup existed to restore,
+        // and the current auth.json is not the provider's own credential.
+        assertEquals("legacy-oauth", manager.readAuthJson()
+                .getAsJsonObject("tokens").get("access_token").getAsString());
+    }
+
+    @Test
+    public void shouldNotBackupOutgoingProvidersOwnCredential() throws Exception {
+        // Transition A→B where auth.json currently holds A's managed credential:
+        // there is no user credential to preserve, so no backup must appear
+        // (backing up A's credential would later restore it as if it were local).
+        Path tempHome = Files.createTempDirectory("codex-provider-owned-auth-home");
+        useTemporaryHomeDirectory(tempHome);
+        Path codexDir = tempHome.resolve(".codex");
+        Files.createDirectories(codexDir);
+
+        CodexSettingsManager manager = new CodexSettingsManager(new Gson());
+        JsonObject providerA = provider(
+                "a",
+                "model = \"a-model\"\n",
+                "{\"OPENAI_API_KEY\":\"a-key\"}"
+        );
+        JsonObject providerB = provider(
+                "b",
+                "model = \"b-model\"\n",
+                "{\"OPENAI_API_KEY\":\"b-key\"}"
+        );
+
+        // Simulate legacy: A applied without a backup (write its auth directly).
+        manager.transitionProvider(null, providerA, false, () -> { });
+        Files.deleteIfExists(codexDir.resolve("auth.json.cli_backup"));
+
+        manager.transitionProvider(providerA, providerB, false, () -> { });
+        assertFalse(Files.exists(codexDir.resolve("auth.json.cli_backup")));
+        assertEquals("b-key", manager.readAuthJson().get("OPENAI_API_KEY").getAsString());
+
+        // Deactivating B with no backup removes B's managed credential.
+        manager.transitionProvider(providerB, null, true, () -> { });
+        assertFalse(Files.exists(codexDir.resolve("auth.json")));
+    }
+
+    @Test
     public void shouldNotConfuseProviderOAuthWithLocalCredentialBackup() throws Exception {
         Path tempHome = Files.createTempDirectory("codex-provider-oauth-ownership-home");
         useTemporaryHomeDirectory(tempHome);

@@ -58,11 +58,19 @@ const parsePayload = (dataOrStr: string | DshStatusPayload): DshStatusPayload | 
   }
 };
 
-const DshConnectionCard = () => {
+interface DshConnectionCardProps {
+  /** Nested under the DeepSeek Harness group — role row, not a second product. */
+  nested?: boolean;
+}
+
+const DshConnectionCard = ({ nested = false }: DshConnectionCardProps) => {
   const { t } = useTranslation();
   const [status, setStatus] = useState<DshStatusPayload | null>(null);
   const [busy, setBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const clearPendingTimeout = useCallback(() => {
     if (timeoutRef.current) {
@@ -112,6 +120,37 @@ const DshConnectionCard = () => {
     [],
   );
 
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const menu = menuRef.current;
+    const onMouseDown = (event: MouseEvent) => {
+      if (menu && !menu.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    };
+    const onFocusOut = (event: FocusEvent) => {
+      if (menu && !menu.contains(event.relatedTarget as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('keydown', onKeyDown);
+    menu?.addEventListener('focusout', onFocusOut);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('keydown', onKeyDown);
+      menu?.removeEventListener('focusout', onFocusOut);
+    };
+  }, [menuOpen]);
+
   const installed = status?.installed === true;
   const running = status?.hostRunning === true;
   const origin = status?.origin || '';
@@ -133,18 +172,37 @@ const DshConnectionCard = () => {
   const stateBadgeClass =
     stateKey === 'connected' ? styles.ok : stateKey === 'checking' ? '' : styles.missing;
 
+  const canStart = (stateKey === 'notRunning' || stateKey === 'notInstalled') && installed !== false;
+  const canOpenWebUi = stateKey === 'connected' && Boolean(origin);
+  const canStop = stateKey === 'connected' && ownership === 'spawned';
+  const moreActionsLabel = t('settings.cli.dsh.moreActions');
+
   return (
-    <div className={`${styles.cliCard} ${styles.dshCard}`}>
+    <div
+      className={`${styles.cliCard} ${styles.dshCard} ${nested ? styles.nestedCard : ''}`}
+      data-testid="dsh-host-card"
+    >
       <div className={styles.cliMain}>
         <div className={styles.cliIcon}>
           <span className="codicon codicon-server-process" aria-hidden="true" />
         </div>
-        <span className={styles.cliName}>{t('settings.cli.dsh.cardTitle')}</span>
-        {status?.version && <span className={styles.versionBadge}>v{status.version}</span>}
-        <span className={styles.cliMeta} title={status?.error || origin}>
+        <span
+          className={styles.cliName}
+          title={t(nested ? 'settings.cli.dsh.cardTitle' : 'settings.cli.dsh.groupTitle')}
+        >
+          {t(nested ? 'settings.cli.dsh.cardTitle' : 'settings.cli.dsh.groupTitle')}
+        </span>
+        {!nested && status?.version && (
+          <span className={styles.versionBadge}>v{status.version}</span>
+        )}
+        <span
+          className={styles.cliMeta}
+          title={status?.error || origin || t('settings.cli.dsh.hint')}
+        >
           {stateKey === 'connected' && origin
             ? `${origin} · ${status?.describe?.provider ?? ''}/${status?.describe?.model ?? ''}`
-            : status?.error || t('settings.cli.dsh.hint')}
+            : status?.error
+              || (nested ? t('settings.cli.dsh.rowHint') : t('settings.cli.dsh.hint'))}
         </span>
       </div>
 
@@ -157,55 +215,85 @@ const DshConnectionCard = () => {
           )}
         </span>
 
-        <div className={styles.actionButtons}>
-          {stateKey === 'connected' && origin && (
-            <button
-              type="button"
-              className={styles.iconBtn}
-              onClick={() => openBrowser(origin)}
-              title={t('settings.cli.dsh.openWebUi')}
-              aria-label={t('settings.cli.dsh.openWebUi')}
+        {canStart && (
+          <button
+            type="button"
+            className={styles.primaryBtn}
+            disabled={busy}
+            onClick={() => request('start_dsh_host')}
+          >
+            <span className="codicon codicon-play" aria-hidden="true" />
+            {t('settings.cli.dsh.startHost')}
+          </button>
+        )}
+
+        {!canStart && <span className={styles.divider} aria-hidden="true" />}
+
+        <div className={styles.moreMenu} ref={menuRef}>
+          <button
+            type="button"
+            ref={menuButtonRef}
+            className={styles.menuButton}
+            onClick={() => setMenuOpen((open) => !open)}
+            title={moreActionsLabel}
+            aria-label={moreActionsLabel}
+            aria-haspopup="true"
+            aria-expanded={menuOpen}
+            aria-controls="dsh-more-menu"
+          >
+            <span className="codicon codicon-ellipsis" aria-hidden="true" />
+          </button>
+          {menuOpen && (
+            <div
+              id="dsh-more-menu"
+              className={styles.dropdownMenu}
+              role="group"
+              aria-label={moreActionsLabel}
+              data-testid="dsh-more-menu"
             >
-              <span className="codicon codicon-globe" />
-            </button>
-          )}
-          {(stateKey === 'notRunning' || stateKey === 'notInstalled') && installed !== false && (
-            <button
-              type="button"
-              className={styles.primaryBtn}
-              disabled={busy}
-              onClick={() => request('start_dsh_host')}
-            >
-              <span className="codicon codicon-play" aria-hidden="true" />
-              {t('settings.cli.dsh.startHost')}
-            </button>
-          )}
-          {stateKey === 'connected' && ownership === 'spawned' && (
-            <button
-              type="button"
-              className={styles.iconBtn}
-              disabled={busy}
-              onClick={() => request('stop_dsh_host')}
-              title={t('settings.cli.dsh.stopHost')}
-              aria-label={t('settings.cli.dsh.stopHost')}
-            >
-              <span className="codicon codicon-debug-stop" />
-            </button>
+              {canOpenWebUi && (
+                <button
+                  type="button"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    openBrowser(origin);
+                    closeMenu();
+                  }}
+                >
+                  <span className="codicon codicon-globe" aria-hidden="true" />
+                  {t('settings.cli.dsh.openWebUi')}
+                </button>
+              )}
+              {canStop && (
+                <button
+                  type="button"
+                  className={`${styles.menuItem} ${styles.danger}`}
+                  disabled={busy}
+                  onClick={() => {
+                    request('stop_dsh_host');
+                    closeMenu();
+                  }}
+                >
+                  <span className="codicon codicon-debug-stop" aria-hidden="true" />
+                  {t('settings.cli.dsh.stopHost')}
+                </button>
+              )}
+              {(canOpenWebUi || canStop) && <div className={styles.menuDivider} aria-hidden="true" />}
+              <label
+                className={styles.menuCheckItem}
+                title={status ? undefined : t('settings.cli.dsh.state.checking')}
+              >
+                <input
+                  type="checkbox"
+                  checked={status?.settings?.autoStart !== false}
+                  disabled={!status}
+                  onChange={(e) => toggleAutoStart(e.target.checked)}
+                />
+                <span>{t('settings.cli.dsh.autoStart')}</span>
+              </label>
+            </div>
           )}
         </div>
-
-        <label
-          className={styles.dshAutoStart}
-          title={status ? undefined : t('settings.cli.dsh.state.checking')}
-        >
-          <input
-            type="checkbox"
-            checked={status?.settings?.autoStart !== false}
-            disabled={!status}
-            onChange={(e) => toggleAutoStart(e.target.checked)}
-          />
-          <span>{t('settings.cli.dsh.autoStart')}</span>
-        </label>
       </div>
     </div>
   );

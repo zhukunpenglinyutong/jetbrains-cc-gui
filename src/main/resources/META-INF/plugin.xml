@@ -1,17 +1,24 @@
 <idea-plugin>
     <id>com.github.idea-claude-code-gui</id>
-    <name>CC GUI (Claude or Codex)</name>
+    <name>CC GUI (Claude, Codex and More)</name>
     <vendor>MossX</vendor>
 
     <!-- Resource bundle for i18n -->
     <resource-bundle>messages.ClaudeCodeGuiBundle</resource-bundle>
 
     <description><![CDATA[
-        <h2>Dual-engine GUI for Claude Code and Codex - MIT 100% Open Source</h2>
-        <h2>Claude Code 和 Codex 的双引擎GUI MIT 100%开源产品</h2>
+        <h2>Multi-engine GUI for Claude Code, Codex, OpenCode & more - MIT 100% Open Source</h2>
+        <h2>Claude Code / Codex / OpenCode 等多引擎GUI MIT 100%开源产品</h2>
+        <p>支持的 CLI / Supported CLIs:</p>
         <ul>
             <li><strong>Claude Code</strong> Anthropic 官方 AI 编程助手（支持 Opus 4.6 等多模型）</li>
             <li><strong>OpenAI Codex</strong> - OpenAI 强大的代码生成引擎</li>
+            <li><strong>Grok CLI</strong> <em>(Beta)</em> - xAI 的 Grok 命令行编程助手</li>
+            <li><strong>Kimi CLI</strong> <em>(Beta)</em> - 月之暗面 Kimi 编程助手</li>
+            <li><strong>OpenCode</strong> <em>(Beta)</em> - 开源多模型 AI 编程终端</li>
+            <li><strong>PI CLI</strong> <em>(Beta)</em></li>
+            <li><strong>OMP CLI</strong> <em>(Beta)</em></li>
+            <li><strong>DeepSeek Harness</strong> <em>(Beta)</em></li>
         </ul>
 
         <p><strong>Connection &amp; proxy disclosure / 连接与代理说明：</strong></p>
@@ -53,7 +60,7 @@
             <li>即时获得 AI 驱动的代码辅助和智能建议</li>
         </ul>
 
-        <p><em>Keywords: Claude, Claude Code, Codex, OpenCode, Gemini, Code Generation, AI Coding</em></p>
+        <p><em>Keywords: CCGUI, CC-GUI, Claude, Claude Code, Codex, OpenAI Codex, OpenCode, Gemini, Kimi, Grok, PI CLI, OMP, DeepSeek, Code Generation, AI Coding, AI Coding Assistant</em></p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

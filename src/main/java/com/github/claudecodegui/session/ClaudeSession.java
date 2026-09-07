@@ -73,17 +73,9 @@ public class ClaudeSession {
         }
 
         public Type type;
-        // The streaming handler thread reassigns these on every assistant update
-        // (e.g. `raw = mergedRaw`, `content = builder.toString()`) while
-        // StreamMessageCoalescer serializes the same Message off-EDT — enqueue only
-        // shallow-copies the list, so elements are shared across threads. Without
-        // volatile the serializer could read a stale reference and publish a snapshot
-        // predating a just-reassigned tool_use block, which the frontend's structural
-        // merge (it takes blocks from the new snapshot only) would then freeze as
-        // missing.
-        // This covers the reassignment race, the dominant mutation pattern. Note:
-        // a few call sites still mutate the JsonObject in place (turnUsage / uuid /
-        // usage stamps in ClaudeMessageHandler); those are a separate concern.
+        // Message state is read by callback and UI threads. The coalescer takes a
+        // deep transport snapshot before asynchronous serialization, while volatile
+        // keeps direct readers from observing stale field references.
         public volatile String content;
         public long timestamp;
         public volatile JsonObject raw; // Raw message data from SDK
@@ -690,27 +682,32 @@ public class ClaudeSession {
      * Maps frontend permission mode strings to PermissionManager enum values.
      */
     public void setPermissionMode(String mode) {
-        state.setPermissionMode(mode);
+        String normalizedMode = mode != null ? mode.trim() : null;
+        if ("autoEdit".equals(normalizedMode)) {
+            normalizedMode = "acceptEdits";
+        }
+        state.setPermissionMode(normalizedMode);
 
         // Sync PermissionManager mode with frontend mode:
         // - "default" -> DEFAULT (ask every time)
-        // - "acceptEdits"/"autoEdit" -> ACCEPT_EDITS (agent mode, auto-accept file edits)
-        // - "bypassPermissions" -> ALLOW_ALL (auto mode, bypass all permission checks)
-        // - "plan" -> DENY_ALL (plan mode, not yet supported)
+        // - "auto" -> DEFAULT (the provider reviewer decides first; residual requests still ask)
+        // - "acceptEdits" (legacy "autoEdit") -> ACCEPT_EDITS (agent mode, auto-accept file edits)
+        // - "bypassPermissions" -> ALLOW_ALL (full auto, bypass all permission checks)
+        // - "plan" -> DENY_ALL (plan mode, read-only tool policy)
         PermissionManager.PermissionMode pmMode;
-        if ("bypassPermissions".equals(mode)) {
+        if ("bypassPermissions".equals(normalizedMode)) {
             pmMode = PermissionManager.PermissionMode.ALLOW_ALL;
-            LOG.info("Permission mode set to ALLOW_ALL for mode: " + mode);
-        } else if ("acceptEdits".equals(mode) || "autoEdit".equals(mode)) {
+            LOG.info("Permission mode set to ALLOW_ALL for mode: " + normalizedMode);
+        } else if ("acceptEdits".equals(normalizedMode)) {
             pmMode = PermissionManager.PermissionMode.ACCEPT_EDITS;
-            LOG.info("Permission mode set to ACCEPT_EDITS for mode: " + mode);
-        } else if ("plan".equals(mode)) {
+            LOG.info("Permission mode set to ACCEPT_EDITS for mode: " + normalizedMode);
+        } else if ("plan".equals(normalizedMode)) {
             pmMode = PermissionManager.PermissionMode.DENY_ALL;
-            LOG.info("Permission mode set to DENY_ALL for mode: " + mode);
+            LOG.info("Permission mode set to DENY_ALL for mode: " + normalizedMode);
         } else {
-            // "default" or other unknown modes
+            // Default asks directly; native auto reaches Java only when the provider reviewer escalates.
             pmMode = PermissionManager.PermissionMode.DEFAULT;
-            LOG.info("Permission mode set to DEFAULT for mode: " + mode);
+            LOG.info("Permission mode set to DEFAULT for mode: " + normalizedMode);
         }
 
         permissionManager.setPermissionMode(pmMode);

@@ -68,7 +68,34 @@ test('exec.result maps to result event with sessionId', () => {
   });
   assert.deepEqual(parseMiniMaxStreamLine(line), {
     kind: 'result', sessionId: 'mvs_abc123', status: 'succeeded',
+    failed: false, errorMessage: '',
   });
+});
+
+test('exec.result with failed status is flagged and carries the error text', () => {
+  const line = JSON.stringify({
+    type: 'exec.result', status: 'failed', error: 'permission denied',
+  });
+  assert.deepEqual(parseMiniMaxStreamLine(line), {
+    kind: 'result', sessionId: '', status: 'failed',
+    failed: true, errorMessage: 'permission denied',
+  });
+});
+
+test('exec.result failure falls back to the message field', () => {
+  const line = JSON.stringify({
+    type: 'exec.result', status: 'cancelled', message: 'aborted by user',
+  });
+  const event = parseMiniMaxStreamLine(line);
+  assert.equal(event.failed, true);
+  assert.equal(event.errorMessage, 'aborted by user');
+});
+
+test('exec.result without a status is not treated as failure', () => {
+  const line = JSON.stringify({ type: 'exec.result', sessionId: 'mvs_x' });
+  const event = parseMiniMaxStreamLine(line);
+  assert.equal(event.failed, false);
+  assert.equal(event.errorMessage, '');
 });
 
 test('noise events (heartbeat/generic/session-status/done/user message) are ignored', () => {

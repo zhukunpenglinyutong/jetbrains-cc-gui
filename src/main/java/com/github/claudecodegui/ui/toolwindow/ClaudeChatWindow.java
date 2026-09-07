@@ -103,6 +103,7 @@ public class ClaudeChatWindow {
     private volatile ClaudeSession session;
     private final WebviewWatchdog webviewWatchdog;
     private final StreamMessageCoalescer streamCoalescer;
+    private final WebviewEventQueue<JBCefBrowser> webviewEventQueue;
 
     private volatile boolean disposed = false;
     private volatile boolean initialized = false;
@@ -255,15 +256,15 @@ public class ClaudeChatWindow {
         this.mainPanel.setBackground(com.github.claudecodegui.util.ThemeConfigService.getBackgroundColor());
         this.mainPanel.addHierarchyListener(surfaceRefreshHierarchyListener);
 
+        this.webviewEventQueue = new WebviewEventQueue<JBCefBrowser>(
+                () -> this.browser,
+                () -> this.disposed,
+                this::executeQueuedWebviewScript
+        );
         this.streamCoalescer = new StreamMessageCoalescer(new StreamMessageCoalescer.JsCallbackTarget() {
             @Override
             public void callJavaScript(String functionName, String... args) {
                 ClaudeChatWindow.this.callJavaScript(functionName, args);
-            }
-
-            @Override
-            public JBCefBrowser getBrowser() {
-                return browser;
             }
 
             @Override
@@ -274,19 +275,6 @@ public class ClaudeChatWindow {
             @Override
             public HandlerContext getHandlerContext() {
                 return handlerContext;
-            }
-
-            @Override
-            public void onStreamEnded() {
-                ClaudeSession current = ClaudeChatWindow.this.session;
-                if (current != null && shouldReconcileTranscriptAtStreamEnd(
-                        current.getProvider(), current.getSessionId())) {
-                    // Grok's live ACP stream can omit file-tool blocks that are present
-                    // in chat_history.jsonl. Reuse the proven same-session reload path
-                    // once the turn is idle so derived edit statistics use final data.
-                    ClaudeChatWindow.this.deferredReload.defer(current.getSessionId());
-                }
-                ClaudeChatWindow.this.drainDeferredReload();
             }
         });
 
@@ -1233,6 +1221,8 @@ public class ClaudeChatWindow {
         cancelScheduledOsrSurfaceRefresh();
         surfaceRefreshCoordinator.invalidate();
         browser = nextBrowser;
+        webviewEventQueue.browserChanged();
+        streamCoalescer.resetDeliveryBaseline();
         if (nextBrowser != null) {
             observedBrowserComponent = nextBrowser.getComponent();
             observedBrowserComponent.addComponentListener(surfaceRefreshComponentListener);
@@ -2136,22 +2126,21 @@ public class ClaudeChatWindow {
         chatWindowDelegate.sendQuickFixMessage(prompt, isQuickFix, callback);
     }
 
+    /** Execute raw JavaScript through the same ordered webview queue as callback events. */
     public void executeJavaScriptCode(String jsCode) {
-        JBCefBrowser targetBrowser = this.browser;
-        if (this.disposed || targetBrowser == null) {
+        webviewEventQueue.enqueueRaw(jsCode);
+    }
+
+    private void executeQueuedWebviewScript(JBCefBrowser targetBrowser, String jsCode) {
+        if (this.disposed || this.browser != targetBrowser) {
             return;
         }
-        ApplicationManager.getApplication().invokeLater(() -> {
-            if (this.disposed || this.browser != targetBrowser) {
-                return;
-            }
-            try {
-                org.cef.browser.CefBrowser cefBrowser = targetBrowser.getCefBrowser();
-                cefBrowser.executeJavaScript(jsCode, cefBrowser.getURL(), 0);
-            } catch (Exception | LinkageError e) {
-                LOG.warn("Failed to execute raw JS code: " + e.getMessage(), e);
-            }
-        });
+        try {
+            org.cef.browser.CefBrowser cefBrowser = targetBrowser.getCefBrowser();
+            cefBrowser.executeJavaScript(jsCode, cefBrowser.getURL(), 0);
+        } catch (Exception | LinkageError e) {
+            LOG.warn("Failed to execute queued webview JavaScript: " + e.getMessage(), e);
+        }
     }
 
     // ==================== JavaScript Bridge ====================
@@ -2160,54 +2149,11 @@ public class ClaudeChatWindow {
             java.util.regex.Pattern.compile("^[a-zA-Z_$][a-zA-Z0-9_$.]*$");
 
     void callJavaScript(String functionName, String... args) {
-        JBCefBrowser targetBrowser = this.browser;
-        if (this.disposed || targetBrowser == null) {
-            LOG.warn("Cannot call JS function " + functionName + ": disposed=" + this.disposed
-                    + ", browser=" + (targetBrowser == null ? "null" : "exists"));
-            return;
-        }
-
         if (functionName == null || !SAFE_JS_FUNCTION_NAME.matcher(functionName).matches()) {
             LOG.error("Invalid JavaScript function name rejected: " + functionName);
             return;
         }
-
-        ApplicationManager.getApplication().invokeLater(() -> {
-            if (this.disposed || this.browser != targetBrowser) {
-                return;
-            }
-            try {
-                org.cef.browser.CefBrowser cefBrowser = targetBrowser.getCefBrowser();
-                String callee = functionName;
-                if (!functionName.contains(".")) {
-                    callee = "window." + functionName;
-                }
-
-                StringBuilder argsJs = new StringBuilder();
-                if (args != null) {
-                    for (int i = 0; i < args.length; i++) {
-                        if (i > 0) { argsJs.append(", "); }
-                        String arg = args[i] == null ? "" : args[i];
-                        argsJs.append("'").append(arg).append("'");
-                    }
-                }
-
-                String checkAndCall =
-                        "(function() {" +
-                                "  try {" +
-                                "    if (typeof " + callee + " === 'function') {" +
-                                "      " + callee + "(" + argsJs + ");" +
-                                "    }" +
-                                "  } catch (e) {" +
-                                "    console.error('[Backend->Frontend] Failed to call " + functionName + ":', e);" +
-                                "  }" +
-                                "})();";
-
-                cefBrowser.executeJavaScript(checkAndCall, cefBrowser.getURL(), 0);
-            } catch (Exception | LinkageError e) {
-                LOG.warn("Failed to call JS function: " + functionName + ", error: " + e.getMessage(), e);
-            }
-        });
+        webviewEventQueue.enqueue(functionName, args);
     }
 
     void handleJavaScriptMessage(int pageGeneration, String message) {
@@ -2303,6 +2249,10 @@ public class ClaudeChatWindow {
             @Override
             public void onSessionIdReceived(String newSessionId) {
                 super.onSessionIdReceived(newSessionId);
+                if (newSessionId == null || newSessionId.trim().isEmpty()
+                        || newSessionId.equals(sessionId)) {
+                    return;
+                }
                 sessionId = newSessionId;
                 persistTabSessionState();
             }
@@ -2524,7 +2474,8 @@ public class ClaudeChatWindow {
      * only after the user reopens the session.
      *
      * <p>Thread-safety: {@code defer} is called from the daemon event thread,
-     * {@code takeIfRunnable} from the coalescer's onStreamEnded hook; both are
+     * {@code takeIfRunnable} from the adapter's stream-end callback (ordered
+     * after the final snapshot enters the webview queue); both are
      * fully synchronized so a defer/drain interleave never loses or duplicates a
      * pending reload. {@code take} atomically reads-clears-and-gates in one
      * critical section (no read/clear window). Coalescing is last-writer-wins:
@@ -2655,6 +2606,19 @@ public class ClaudeChatWindow {
     }
 
     private void onStreamEnded() {
+        // Runs as the adapter's stream-end callback, already ordered after the
+        // final snapshot and the onStreamEnd signal have entered the webview
+        // queue — the safe point to reconcile and drain a deferred reload.
+        ClaudeSession current = this.session;
+        if (current != null && shouldReconcileTranscriptAtStreamEnd(
+                current.getProvider(), current.getSessionId())) {
+            // Grok's live ACP stream can omit file-tool blocks that are present
+            // in chat_history.jsonl. Reuse the proven same-session reload path
+            // once the turn is idle so derived edit statistics use final data.
+            this.deferredReload.defer(current.getSessionId());
+        }
+        this.drainDeferredReload();
+
         if (session == null) {
             return;
         }
@@ -2805,6 +2769,7 @@ public class ClaudeChatWindow {
             return;
         }
         this.disposed = true;
+        this.webviewEventQueue.dispose();
         JBCefBrowser targetBrowser = this.browser;
         cancelScheduledOsrSurfaceRefresh();
         surfaceRefreshCoordinator.invalidate();
@@ -3234,6 +3199,11 @@ public class ClaudeChatWindow {
             @Override
             public void callJavaScript(String fn, String... args) {
                 ClaudeChatWindow.this.callJavaScript(fn, args);
+            }
+
+            @Override
+            public void executeJavaScriptCode(String jsCode) {
+                ClaudeChatWindow.this.executeJavaScriptCode(jsCode);
             }
 
             @Override

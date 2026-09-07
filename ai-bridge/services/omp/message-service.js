@@ -38,6 +38,7 @@ import {
   cleanupMaterializedImagePaths,
   materializeImageAttachments,
 } from '../../utils/cli-image-input.js';
+import { reformatFileLineReferences } from '../../utils/file-line-references.js';
 
 const THINKING_LEVELS = new Set(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -144,6 +145,7 @@ export async function sendMessage(
   } catch (err) {
     console.error('[OMP] failed to materialize image attachments:', err?.message || err);
   }
+  promptText = reformatFileLineReferences(promptText);
 
   const bin = resolveOmpCliPath();
   const args = buildOmpArgs({ message: promptText, sessionId, model, reasoningEffort });

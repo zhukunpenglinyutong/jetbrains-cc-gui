@@ -148,7 +148,7 @@ class HistoryLoadService {
                                             "  console.error('[Backend->Frontend] setHistoryData not available!'); " +
                                             "}";
 
-                    context.executeJavaScriptOnEDT(jsCode);
+                    context.executeJavaScriptQueued(jsCode);
                     LOG.info("[HistoryHandler] JavaScript 代码已注入");
                 });
 
@@ -160,7 +160,7 @@ class HistoryLoadService {
                     String jsCode = "if (window.setHistoryData) { " +
                                             "  window.setHistoryData({ success: false, error: '" + errorMsg + "' }); " +
                                             "}";
-                    context.executeJavaScriptOnEDT(jsCode);
+                    context.executeJavaScriptQueued(jsCode);
                 });
             }
         });

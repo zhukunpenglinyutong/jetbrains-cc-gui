@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getSubmenuLayout } from './dropdownPosition';
+import { getSubmenuLayout, isSubmenuHeightClipped } from './dropdownPosition';
 
 const viewport = { width: 420, height: 700, left: 0, top: 0 };
 
@@ -56,5 +56,42 @@ describe('getSubmenuLayout', () => {
 
     expect(layout.topOffset + layout.maxHeight).toBeLessThanOrEqual(700 - 8 - 620);
     expect(layout.maxHeight).toBeGreaterThan(0);
+  });
+
+  it('does not treat a fitting submenu as clipped, including 1-2px rounding slack', () => {
+    const layout = getSubmenuLayout({
+      trigger: { left: 24, right: 220, top: 80, bottom: 108, width: 196, height: 28 },
+      viewport: { width: 800, height: 700, left: 0, top: 0 },
+      measuredHeight: 240,
+      maxHeight: 480,
+    });
+
+    expect(layout.maxHeight).toBe(240);
+    expect(isSubmenuHeightClipped(layout.maxHeight, 240)).toBe(false);
+    expect(isSubmenuHeightClipped(layout.maxHeight, 241)).toBe(false);
+    expect(isSubmenuHeightClipped(layout.maxHeight, 242)).toBe(false);
+  });
+
+  it('treats a submenu as clipped when measured height exceeds available space', () => {
+    const layout = getSubmenuLayout({
+      trigger: { left: 40, right: 240, top: 200, bottom: 228, width: 200, height: 28 },
+      viewport: { width: 400, height: 220, left: 0, top: 0 },
+      measuredHeight: 260,
+      maxHeight: 480,
+      bottomClearance: 16,
+    });
+
+    expect(layout.maxHeight).toBeLessThan(260);
+    expect(isSubmenuHeightClipped(layout.maxHeight, 260)).toBe(true);
+  });
+});
+
+describe('isSubmenuHeightClipped', () => {
+  it('reports a clip only when overflow exceeds the 2px slack', () => {
+    expect(isSubmenuHeightClipped(240, 240)).toBe(false);
+    expect(isSubmenuHeightClipped(239, 240)).toBe(false);
+    expect(isSubmenuHeightClipped(238, 240)).toBe(false);
+    expect(isSubmenuHeightClipped(237, 240)).toBe(true);
+    expect(isSubmenuHeightClipped(180, 240)).toBe(true);
   });
 });

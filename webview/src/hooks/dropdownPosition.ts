@@ -44,6 +44,12 @@ const DEFAULT_MIN_WIDTH = 200;
 const DEFAULT_MAX_WIDTH = 360;
 const DEFAULT_MAX_HEIGHT = 300;
 const DEFAULT_BOTTOM_CLEARANCE = 96;
+/** Border-box / subpixel slack so a menu that fits does not grow a phantom scrollbar. */
+const SUBMENU_HEIGHT_CLIP_SLACK_PX = 2;
+
+export function isSubmenuHeightClipped(constrainedHeight: number, measuredHeight: number): boolean {
+  return constrainedHeight + SUBMENU_HEIGHT_CLIP_SLACK_PX < measuredHeight;
+}
 
 export function toViewportTrigger(rect: DOMRect, viewport: ViewportBox): TriggerBox {
   return {

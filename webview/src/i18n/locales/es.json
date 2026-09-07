@@ -86,8 +86,7 @@
     "retrySdkStatus": "Reintentar",
     "openSourceBanner": "Este proyecto garantiza ser 100% de código abierto y gratuito (cuidado con los proyectos pirateados)",
     "openSourceBannerStar": "Star",
-    "openSourceBannerStarToast": "Enlace copiado al portapapeles — pégalo en el navegador para acceder ⭐",
-    "openSourceBannerStarAria": "Copiar enlace y dar una estrella en GitHub",
+    "openSourceBannerStarAria": "Abrir el repositorio en GitHub y dar una estrella",
     "goInstallSdk": "Ir a instalar",
     "commandNotImplemented": "La función `{{command}}` aún no está implementada.",
     "clearCommandDescription": "Borrar historial de conversación e iniciar nueva sesión",
@@ -516,11 +515,18 @@
     "communityDesc": "Escanea el código QR a continuación para unirte al grupo oficial de WeChat para obtener las últimas noticias y soporte técnico",
     "communityQrTip": "Escanea con WeChat para unirte a la comunidad",
     "communityQrAlt": "Código QR de la comunidad oficial de WeChat",
-    "githubTitle": "Repositorio GitHub",
-    "githubDesc": "Este proyecto es de código abierto en GitHub. ¡Dale una estrella para apoyarnos!",
-    "githubCopyBtn": "Copiar URL del repositorio",
-    "githubCopied": "URL del repositorio copiada al portapapeles. Por favor, ábrela en tu navegador.",
-    "githubCopyFailed": "Error al copiar. Por favor, copia manualmente.",
+    "socialDocs": "Documentación oficial",
+    "socialTitle": "Síguenos",
+    "socialGithub": "Repositorio de GitHub — ¡danos una estrella!",
+    "socialX": "X (Twitter) @ZPeng31310",
+    "socialZhihu": "Zhihu @vscodeai",
+    "socialXiaohongshu": "Xiaohongshu (RED)",
+    "socialDouyin": "Douyin — pasa el cursor para escanear y seguir",
+    "socialYoutube": "Canal de YouTube",
+    "douyinQrAlt": "Código QR de Douyin",
+    "douyinId": "ID de Douyin: nengyongai",
+    "douyinCopied": "ID de Douyin copiado al portapapeles",
+    "douyinCopyFailed": "Error al copiar. Por favor, copia manualmente.",
     "sponsor": "Sponsor",
     "sponsorDesc": "If this project helps you, consider sponsoring to support ongoing maintenance!",
     "alipay": "Alipay",
@@ -884,7 +890,11 @@
       "listTitle": "Herramientas CLI locales",
       "summary": "{{installed}} / {{total}} instaladas",
       "moreComingSoon": "Pronto más compatibilidad",
-      "copyPath": "Copiar ruta"
+      "copyPath": "Copiar ruta",
+      "visibility": {
+        "hide": "Ocultar en el selector de proveedor",
+        "show": "Mostrar en el selector de proveedor"
+      }
     }
   },
   "history": {
@@ -1566,13 +1576,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · El más rápido para respuestas rápidas"
       },
-      "opus48": {
-        "label": "Opus 4.8",
-        "description": "Opus 4.8 · Generación anterior de Opus"
+      "fable51": {
+        "label": "Fable 5.1",
+        "description": "Fable 5.1 · El más potente · clase Mythos"
       },
       "fable5": {
         "label": "Fable 5",
-        "description": "Fable 5 · El más potente · clase Mythos"
+        "description": "Fable 5 · Generación anterior de Fable"
       }
     },
     "longContext": {
@@ -1582,6 +1592,10 @@
       "tooltipDisabled": "1M contexto no disponible para Haiku"
     },
     "codex": {
+      "gpt6astra": {
+        "label": "GPT-6 Astra",
+        "description": "Insignia de nueva generación para el uso autónomo del ordenador y tareas agénticas largas."
+      },
       "gpt56sol": {
         "label": "GPT-5.6 Sol",
         "description": "Modelo frontera para trabajo profesional complejo."
@@ -1620,10 +1634,17 @@
       "tooltip": "Automatically accept file edits",
       "description": "Automatically accept file creation/editing, reducing confirmation steps"
     },
+    "auto": {
+      "label": "Aprobación automática",
+      "shortLabel": "Auto",
+      "tooltip": "Deja que el revisor nativo gestione automáticamente las solicitudes de aprobación",
+      "description": "Usa el revisor nativo del proveedor manteniendo los límites de seguridad"
+    },
     "bypassPermissions": {
-      "label": "Auto Mode",
-      "tooltip": "Bypass all permission checks",
-      "description": "Fully automated, bypassing all permission checks [Use with caution]"
+      "label": "Automático total",
+      "shortLabel": "Total",
+      "tooltip": "Omitir todas las comprobaciones de permisos",
+      "description": "Totalmente automatizado, omitiendo todas las comprobaciones de permisos [Usar con precaución]"
     }
   },
   "codexModes": {
@@ -1641,6 +1662,12 @@
       "label": "Auto Edit",
       "tooltip": "Codex approval_policy=on-request – asks for approval when needed",
       "description": "Balanced option. Allows normal editing flow while still requiring approvals when needed."
+    },
+    "auto": {
+      "label": "Aprobar por mí",
+      "shortLabel": "Auto",
+      "tooltip": "Codex approvals_reviewer=auto_review – un revisor automático gestiona las solicitudes aptas.",
+      "description": "Mantiene el sandbox workspace-write y escala las solicitudes que el revisor no puede aprobar."
     },
     "bypassPermissions": {
       "label": "Full Auto",

@@ -227,6 +227,7 @@ public class CodexSettingsManager {
             IoAction commitProviderState) throws IOException {
         Map<String, Object> previousFragment = parseProviderFragment(previousProvider, false);
         Map<String, Object> nextFragment = parseProviderFragment(nextProvider, true);
+        JsonObject previousAuth = parseProviderAuth(previousProvider);
         JsonObject nextAuth = parseProviderAuth(nextProvider);
 
         synchronized (CONFIG_FILE_LOCK) {
@@ -263,7 +264,7 @@ public class CodexSettingsManager {
                 }
                 writeConfigTomlUnlocked(nextConfig);
                 if (nextProvider != null) {
-                    if (previousProvider == null) {
+                    if (shouldBackupLocalAuthUnlocked(cliAuthBackupPath, previousAuth)) {
                         backupLocalAuthUnlocked(cliAuthBackupPath);
                     }
                     if (nextAuth != null) {
@@ -272,7 +273,7 @@ public class CodexSettingsManager {
                         Files.deleteIfExists(authPath);
                     }
                 } else if (previousProvider != null) {
-                    restoreLocalAuthUnlocked(cliAuthBackupPath);
+                    restoreLocalAuthUnlocked(cliAuthBackupPath, previousAuth);
                 }
                 if (nextProvider == null) {
                     Files.deleteIfExists(configBaselinePath);
@@ -570,6 +571,27 @@ public class CodexSettingsManager {
         return value;
     }
 
+    /**
+     * Decides whether the current auth.json must be preserved as the user's local
+     * credential before a provider overwrites it. A backup is taken only when no
+     * backup exists yet and the current auth.json is not the outgoing provider's
+     * own managed credential — the latter covers legacy installs whose active
+     * provider was applied by older code that never took a backup.
+     */
+    private boolean shouldBackupLocalAuthUnlocked(Path backupPath, JsonObject previousAuth) throws IOException {
+        if (Files.exists(backupPath)) {
+            return false;
+        }
+        if (previousAuth == null) {
+            // Either no previous provider (entering managed mode from a purely
+            // local state) or the outgoing provider owns no credential — in both
+            // cases the current auth.json is unmanaged and worth preserving.
+            return true;
+        }
+        JsonObject currentAuth = readAuthJsonUnlocked();
+        return currentAuth != null && !previousAuth.equals(currentAuth);
+    }
+
     private void backupLocalAuthUnlocked(Path backupPath) throws IOException {
         Path authPath = getAuthJsonPath();
         if (Files.exists(authPath)) {
@@ -580,10 +602,18 @@ public class CodexSettingsManager {
         }
     }
 
-    private void restoreLocalAuthUnlocked(Path backupPath) throws IOException {
+    private void restoreLocalAuthUnlocked(Path backupPath, JsonObject previousAuth) throws IOException {
         if (Files.exists(backupPath)) {
             writeStringAtomically(getAuthJsonPath(), Files.readString(backupPath, StandardCharsets.UTF_8));
             Files.deleteIfExists(backupPath);
+            return;
+        }
+        // No backup on file (legacy installs never took one): the current
+        // auth.json may still be the user's own `codex login` session — only
+        // delete it when it is the outgoing provider's managed credential.
+        JsonObject currentAuth = readAuthJsonUnlocked();
+        if (currentAuth != null && (previousAuth == null || !previousAuth.equals(currentAuth))) {
+            LOG.info("[CodexSettingsManager] No auth backup found; preserving unmanaged local credentials");
             return;
         }
         Files.deleteIfExists(getAuthJsonPath());

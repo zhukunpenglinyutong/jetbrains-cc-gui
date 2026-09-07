@@ -86,8 +86,7 @@
     "retrySdkStatus": "Повторить",
     "openSourceBanner": "Этот проект гарантированно 100% с открытым исходным кодом и бесплатный (остерегайтесь пиратских проектов)",
     "openSourceBannerStar": "Star",
-    "openSourceBannerStarToast": "Ссылка скопирована в буфер обмена — вставьте её в браузере, чтобы открыть ⭐",
-    "openSourceBannerStarAria": "Скопировать ссылку и поставить звезду на GitHub",
+    "openSourceBannerStarAria": "Открыть репозиторий на GitHub и поставить звезду",
     "goInstallSdk": "Перейти к установке",
     "commandNotImplemented": "Функция `{{command}}` ещё не реализована.",
     "clearCommandDescription": "Очистить историю и начать новый чат",
@@ -528,11 +527,18 @@
     "versionHistoryDesc": "Просмотр всех записей об обновлениях версий",
     "communityQrTip": "Отсканируйте WeChat для вступления в сообщество",
     "communityQrAlt": "QR-код официального сообщества WeChat",
-    "githubTitle": "Репозиторий GitHub",
-    "githubDesc": "Этот проект с открытым исходным кодом на GitHub. Поставьте звезду в поддержку!",
-    "githubCopyBtn": "Скопировать URL репозитория",
-    "githubCopied": "URL репозитория скопирован в буфер обмена. Откройте его в браузере.",
-    "githubCopyFailed": "Не удалось скопировать. Пожалуйста, скопируйте вручную.",
+    "socialDocs": "Официальная документация",
+    "socialTitle": "Подписывайтесь",
+    "socialGithub": "Репозиторий GitHub — поставьте звезду!",
+    "socialX": "X (Twitter) @ZPeng31310",
+    "socialZhihu": "Zhihu @vscodeai",
+    "socialXiaohongshu": "Xiaohongshu (RED)",
+    "socialDouyin": "Douyin — наведите, чтобы сканировать и подписаться",
+    "socialYoutube": "YouTube-канал",
+    "douyinQrAlt": "QR-код Douyin",
+    "douyinId": "Douyin ID: nengyongai",
+    "douyinCopied": "Douyin ID скопирован в буфер обмена",
+    "douyinCopyFailed": "Не удалось скопировать. Пожалуйста, скопируйте вручную.",
     "sponsor": "Поддержать проект",
     "sponsorDesc": "Если этот проект вам полезен, поддержите его развитие!",
     "alipay": "Alipay",
@@ -896,7 +902,11 @@
       "listTitle": "Локальные CLI-инструменты",
       "summary": "{{installed}} / {{total}} установлено",
       "moreComingSoon": "Скоро будет больше",
-      "copyPath": "Копировать путь"
+      "copyPath": "Копировать путь",
+      "visibility": {
+        "hide": "Скрыть в меню выбора провайдера",
+        "show": "Показать в меню выбора провайдера"
+      }
     }
   },
   "history": {
@@ -1592,13 +1602,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Самая быстрая для быстрых ответов"
       },
-      "opus48": {
-        "label": "Opus 4.8",
-        "description": "Opus 4.8 · Предыдущее поколение Opus"
+      "fable51": {
+        "label": "Fable 5.1",
+        "description": "Fable 5.1 · Самая мощная · класс Mythos"
       },
       "fable5": {
         "label": "Fable 5",
-        "description": "Fable 5 · Самая мощная · класс Mythos"
+        "description": "Fable 5 · Предыдущее поколение Fable"
       }
     },
     "longContext": {
@@ -1608,6 +1618,10 @@
       "tooltipDisabled": "1M контекст недоступен для Haiku"
     },
     "codex": {
+      "gpt6astra": {
+        "label": "GPT-6 Astra",
+        "description": "Флагман нового поколения для автономной работы с компьютером и длительных агентных задач."
+      },
       "gpt56sol": {
         "label": "GPT-5.6 Sol",
         "description": "Передовая модель для сложной профессиональной работы."
@@ -1646,8 +1660,15 @@
       "tooltip": "Автоматическое принятие правок файлов",
       "description": "Автоматически принимает создание/редактирование файлов, уменьшая количество подтверждений"
     },
+    "auto": {
+      "label": "Автоодобрение",
+      "shortLabel": "Авто",
+      "tooltip": "Передавать запросы на одобрение встроенному проверяющему провайдера",
+      "description": "Использует встроенную автоматическую проверку, сохраняя границы безопасности"
+    },
     "bypassPermissions": {
-      "label": "Авто-режим",
+      "label": "Полный автомат",
+      "shortLabel": "Полный",
       "tooltip": "Пропуск всех проверок разрешений",
       "description": "Полностью автоматический, пропускает все проверки разрешений [Используйте с осторожностью]"
     }
@@ -1667,6 +1688,12 @@
       "label": "Авто-правки",
       "tooltip": "Codex approval_policy=on-request – asks for approval when needed",
       "description": "Автоматическое создание и редактирование файлов через apply_patch с сохранением одобрения команд."
+    },
+    "auto": {
+      "label": "Одобрять за меня",
+      "shortLabel": "Авто",
+      "tooltip": "Codex approvals_reviewer=auto_review — автоматический проверяющий обрабатывает подходящие запросы.",
+      "description": "Сохраняет песочницу workspace-write и передаёт пользователю запросы, которые нельзя одобрить автоматически."
     },
     "bypassPermissions": {
       "label": "Полный автомат",
@@ -1702,6 +1729,9 @@
     },
     "codex": {
       "label": "Codex"
+    },
+    "minimax": {
+      "label": "MiniMax Code"
     },
     "gemini": {
       "label": "Gemini Cli"

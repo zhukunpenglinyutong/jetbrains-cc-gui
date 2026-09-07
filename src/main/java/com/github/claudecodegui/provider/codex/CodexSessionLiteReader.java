@@ -1,8 +1,8 @@
 package com.github.claudecodegui.provider.codex;
 
 import com.github.claudecodegui.provider.common.SessionLiteReader;
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.intellij.openapi.diagnostic.Logger;
 
 import java.nio.file.Path;
 import java.util.regex.Matcher;
@@ -14,8 +14,6 @@ import java.util.regex.Pattern;
  */
 public class CodexSessionLiteReader {
 
-    private static final Logger LOG = Logger.getInstance(CodexSessionLiteReader.class);
-
     private static final Pattern THREAD_ID_PATTERN = Pattern.compile(
             "^thread_[a-zA-Z0-9]{10,}$"
     );
@@ -25,10 +23,19 @@ public class CodexSessionLiteReader {
             Pattern.CASE_INSENSITIVE
     );
 
+    private static final Pattern UUID_IN_NAME_PATTERN = Pattern.compile(
+            "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+            Pattern.CASE_INSENSITIVE
+    );
+
     private final SessionLiteReader liteReader;
+    private final CodexHistoryParser parser;
+    private final Gson gson;
 
     public CodexSessionLiteReader() {
         this.liteReader = new SessionLiteReader();
+        this.parser = new CodexHistoryParser();
+        this.gson = new Gson();
     }
 
     /**
@@ -123,7 +130,7 @@ public class CodexSessionLiteReader {
             }
         }
 
-        // Extract title from first user_message
+        // Title from the first visible user prompt (event_msg or response_item).
         String summary = this.extractFirstUserMessageTitle(lite.head);
 
         // Skip sessions with no title
@@ -195,7 +202,7 @@ public class CodexSessionLiteReader {
     }
 
     /**
-     * Extracts the first user message title from event_msg.
+     * Extracts the first visible user prompt title from event_msg or response_item lines.
      */
     private String extractFirstUserMessageTitle(String head) {
         int start = 0;
@@ -203,70 +210,20 @@ public class CodexSessionLiteReader {
             int newlineIdx = head.indexOf('\n', start);
             String line = newlineIdx >= 0 ? head.substring(start, newlineIdx) : head.substring(start);
             start = newlineIdx >= 0 ? newlineIdx + 1 : head.length();
-
-            if (!line.contains("\"type\":\"event_msg\"") && !line.contains("\"type\": \"event_msg\"")) {
+            if (line.isBlank()) {
                 continue;
             }
-
-            // Check if payload contains user_message
-            if (!line.contains("\"user_message\"")) {
-                continue;
-            }
-
-            String message = this.liteReader.extractLastJsonStringField(line, "message");
-            if (message != null && !message.isEmpty()) {
-                // Strip system tags
-                message = stripSystemTags(message);
-                message = message.replace("\n", " ").trim();
-
-                // Skip auto-generated patterns
-                if (message.startsWith("<") && message.length() > 1) {
-                    char nextChar = message.charAt(1);
-                    if (Character.isLowerCase(nextChar)) {
-                        continue;
-                    }
+            try {
+                CodexHistoryReader.CodexMessage msg = this.gson.fromJson(line, CodexHistoryReader.CodexMessage.class);
+                String title = this.parser.extractVisibleUserTitle(msg);
+                if (title != null && !title.isEmpty()) {
+                    return title;
                 }
-
-                // Truncate to 45 chars
-                if (message.length() > 45) {
-                    message = message.substring(0, 45).trim() + "\u2026";
-                }
-                return message;
+            } catch (Exception ignored) {
+                // Truncated or malformed head lines are skipped; full parse is the fallback.
             }
         }
         return null;
-    }
-
-    /**
-     * Remove known system/instruction XML tag blocks from text.
-     */
-    private String stripSystemTags(String text) {
-        if (text == null || text.isEmpty()) {
-            return text;
-        }
-        String[] systemTags = {"agents-instructions", "system-reminder", "system-prompt"};
-        String result = text;
-        for (String tag : systemTags) {
-            result = removeTagBlock(result, tag);
-        }
-        return result.trim();
-    }
-
-    /**
-     * Remove a complete XML tag block from text.
-     */
-    private String removeTagBlock(String text, String tagName) {
-        String openTag = "<" + tagName + ">";
-        String closeTag = "</" + tagName + ">";
-        int start = text.indexOf(openTag);
-        if (start == -1) {
-            return text;
-        }
-        int end = text.indexOf(closeTag, start);
-        if (end == -1) {
-            return text;
-        }
-        return text.substring(0, start) + text.substring(end + closeTag.length());
     }
 
     /**
@@ -289,6 +246,8 @@ public class CodexSessionLiteReader {
 
     /**
      * Extracts session ID from file name.
+     * Codex CLI writes {@code rollout-<timestamp>-<uuid>.jsonl}; session_meta.id
+     * later overrides this when present.
      */
     private String extractSessionId(String fileName) {
         if (!fileName.endsWith(".jsonl")) {
@@ -296,11 +255,15 @@ public class CodexSessionLiteReader {
         }
         String sessionId = fileName.substring(0, fileName.length() - 6);
 
-        // Validate: must be UUID or thread_xxx format
-        Matcher uuidMatcher = UUID_PATTERN.matcher(sessionId);
-        Matcher threadMatcher = THREAD_ID_PATTERN.matcher(sessionId);
+        if (UUID_PATTERN.matcher(sessionId).matches() || THREAD_ID_PATTERN.matcher(sessionId).matches()) {
+            return sessionId;
+        }
 
-        if (uuidMatcher.matches() || threadMatcher.matches()) {
+        if (sessionId.startsWith("rollout-")) {
+            Matcher uuidInName = UUID_IN_NAME_PATTERN.matcher(sessionId);
+            if (uuidInName.find()) {
+                return uuidInName.group();
+            }
             return sessionId;
         }
         return null;

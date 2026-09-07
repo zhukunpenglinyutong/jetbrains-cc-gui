@@ -5,7 +5,7 @@ import type { ModelInfo } from '../../ChatInputBox/types';
 import { resolveProviderModels } from '../../ChatInputBox/resolveProviderModels';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
 import { usePluginModels } from '../hooks/usePluginModels';
-import { useCliModels, useOmpRoles } from '../../../hooks/providers/useCliModels';
+import { useCliModels } from '../../../hooks/providers/useCliModels';
 import { STORAGE_KEYS } from '../../../types/provider';
 import { readClaudeModelMapping } from '../../../utils/claudeModelMapping';
 import type { AiFeatureConfig, AiFeatureProvider } from '../../../types/aiFeatureConfig';
@@ -157,9 +157,6 @@ const AiFeatureProviderModelPanel = ({
 
   // Same catalog source as main chat ModelSelect (useCliModels + resolveProviderModels).
   const { cliModels, cliCatalogHasEntries } = useCliModels(selectedProvider);
-  // Dynamic omp roles (static smol/slow/plan fallback until loaded) — keeps the
-  // omp list identical to the chat toolbar.
-  const ompRoles = useOmpRoles();
 
   // Shared resolver with chat toolbar — Prompt Enhancer and Commit AI both mount
   // this panel so they stay identical by construction.
@@ -181,12 +178,11 @@ const AiFeatureProviderModelPanel = ({
       provider: selectedProvider,
       cliModels,
       cliCatalogHasEntries,
-      cliRoles: ompRoles,
       claudeCustomModels: claudeCustomModels.map(toModelInfo),
       codexCustomModels: codexCustomModels.map(toModelInfo),
       claudeMapping,
     });
-  }, [selectedProvider, claudeCustomModels, codexCustomModels, cliModels, cliCatalogHasEntries, ompRoles]);
+  }, [selectedProvider, claudeCustomModels, codexCustomModels, cliModels, cliCatalogHasEntries]);
 
   const currentModel = config.models?.[selectedProvider] ?? '';
   const currentModelInList = availableModels.some((m) => m.id === currentModel);

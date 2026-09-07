@@ -213,8 +213,8 @@
     position: relative;
     width: 20px;
     height: 20px;
-    opacity: 0.7;
-    visibility: visible;
+    opacity: 0;
+    visibility: hidden;
     bottom: auto;
     right: auto;
     padding: 2px;
@@ -260,13 +260,21 @@
     }
 }
 
+/* Show inline action buttons on user message hover */
+.message.user {
+    &:hover .message-copy-btn-inline {
+        opacity: 0.7;
+        visibility: visible;
+    }
+
+    &:hover .message-copy-btn-inline:hover {
+        opacity: 1;
+    }
+}
+
 /* Mobile responsiveness for copy button */
 @media (max-width: 768px) {
     .message-copy-btn {
-        /* Show button by default on mobile */
-        opacity: 0.7;
-        visibility: visible;
-
         /* Smaller button size for mobile */
         width: 24px;
         height: 24px;
@@ -275,6 +283,15 @@
             width: 12px;
             height: 12px;
         }
+    }
+}
+
+/* Touch devices have no hover — keep action buttons visible */
+@media (hover: none) {
+    .message-copy-btn,
+    .message-copy-btn-inline {
+        opacity: 0.7;
+        visibility: visible;
     }
 }
 

@@ -1,5 +1,6 @@
 /* Confirm Dialog Styles */
-/* z-index: 1200 确保 Alert/Confirm 弹窗始终显示在 Provider/Agent 编辑弹窗(z-index:1100)之上 */
+/* Above selector dropdowns (10000) and provider/agent editors (1100) so the
+   confirm button stays clickable after portaling out of the chat toolbar. */
 .confirm-dialog-overlay {
     position: fixed;
     top: 0;
@@ -12,7 +13,7 @@
     justify-content: center;
     box-sizing: border-box;
     padding: 16px;
-    z-index: 1200;
+    z-index: 20000;
     animation: fadeIn 0.2s ease-out;
 }
 

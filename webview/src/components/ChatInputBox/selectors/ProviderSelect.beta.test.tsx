@@ -74,10 +74,47 @@ describe('ProviderSelect Beta badge and first-click notice', () => {
       )
     ).toBeTruthy();
 
+    const overlay = document.querySelector('.confirm-dialog-overlay');
+    // Toolbar uses container-type, which traps position:fixed descendants.
+    // The notice must mount on document.body so Got it / overlay click stay reachable.
+    expect(overlay).toBeTruthy();
+    expect(overlay?.parentElement).toBe(document.body);
+
     fireEvent.click(screen.getByText('Got it'));
 
     expect(onChange).toHaveBeenCalledWith('grok');
     expect(localStorage.getItem(BETA_PROVIDER_NOTICE_KEY)).toBe('true');
+    expect(document.querySelector('.confirm-dialog-overlay')).toBeNull();
+  });
+
+  it('dismisses the beta notice when clicking the overlay', () => {
+    const onChange = vi.fn();
+    render(<ProviderSelect value="claude" onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByText('DeepSeek Harness'));
+
+    const overlay = document.querySelector('.confirm-dialog-overlay');
+    expect(overlay).toBeTruthy();
+    expect(overlay?.parentElement).toBe(document.body);
+    fireEvent.click(overlay!);
+
+    expect(onChange).toHaveBeenCalledWith('dsh');
+    expect(document.querySelector('.confirm-dialog-overlay')).toBeNull();
+  });
+
+  it('dismisses the beta notice on Escape', () => {
+    const onChange = vi.fn();
+    render(<ProviderSelect value="claude" onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByText('OpenCode'));
+
+    expect(document.querySelector('.confirm-dialog-overlay')).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(onChange).toHaveBeenCalledWith('opencode');
+    expect(document.querySelector('.confirm-dialog-overlay')).toBeNull();
   });
 
   it('does not show the notice again after it was acknowledged', () => {

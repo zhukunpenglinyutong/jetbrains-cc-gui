@@ -4,7 +4,6 @@ import {
   CODEX_MODELS,
   GROK_MODELS,
   OMP_MODELS,
-  OMP_ROLE_MODELS,
 } from './types';
 import { buildCodexModelList } from './codexModelList';
 import {
@@ -22,11 +21,6 @@ export interface ResolveProviderModelsInput {
    * for Codex (see buildCodexModelList).
    */
   cliCatalogHasEntries?: boolean;
-  /**
-   * Dynamic OMP model roles (useOmpRoles). Absent/empty → static
-   * smol/slow/plan role entries. Only consumed for provider 'omp'.
-   */
-  cliRoles?: ModelInfo[];
   claudeCustomModels?: ModelInfo[];
   codexCustomModels?: ModelInfo[];
   claudeMapping?: ClaudeModelMapping | null;
@@ -44,7 +38,6 @@ export function resolveProviderModels({
   provider,
   cliModels,
   cliCatalogHasEntries = false,
-  cliRoles,
   claudeCustomModels = [],
   codexCustomModels = [],
   claudeMapping = null,
@@ -69,12 +62,12 @@ export function resolveProviderModels({
   }
 
   if (provider === 'omp') {
-    // Built-ins first: 'auto' plus the role entries (dynamic from listModels,
-    // static smol/slow/plan until loaded), then the dynamic catalog appended.
-    // Dedupe by id — the role selector entries win on collision, and the
-    // static-fallback 'auto' must not duplicate the OMP_MODELS one.
-    const roles = cliRoles && cliRoles.length > 0 ? cliRoles : OMP_ROLE_MODELS;
-    const merged = [...OMP_MODELS, ...roles, ...cliModels];
+    // 'auto' first, then the dynamic catalog. Model roles (smol/slow/plan/…)
+    // are NOT listed here — they live in the mode selector (ModeSelect),
+    // which sets the model to the role id as a shortcut.
+    // Dedupe by id — the static-fallback cliModels IS OMP_MODELS, so 'auto'
+    // would otherwise appear twice.
+    const merged = [...OMP_MODELS, ...cliModels];
     const seenIds = new Set<string>();
     return merged.filter((m) => {
       if (seenIds.has(m.id)) return false;

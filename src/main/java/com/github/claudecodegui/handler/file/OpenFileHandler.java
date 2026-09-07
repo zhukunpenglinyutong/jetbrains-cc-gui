@@ -45,6 +45,8 @@ class OpenFileHandler {
 
     private static final Logger LOG = Logger.getInstance(OpenFileHandler.class);
     private static final Pattern LINE_INFO_PATTERN = Pattern.compile("^(.*):(\\d+)(?:-(\\d+))?$");
+    private static final Pattern SAFE_EXTERNAL_URL_PATTERN =
+            Pattern.compile("^(https?|mailto):.*$", Pattern.CASE_INSENSITIVE);
 
     private final HandlerContext context;
 
@@ -634,6 +636,13 @@ class OpenFileHandler {
         if (url == null || url.isBlank()) {
             return;
         }
+        // The webview gates this bridge event too, but any script in the
+        // webview context can post it — re-validate server-side so a crafted
+        // file:///javascript: URL never reaches the OS protocol handler.
+        if (!isSafeExternalUrl(url)) {
+            LOG.warn("Refusing to open external URL with disallowed scheme: " + url);
+            return;
+        }
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
                 String[] command = PlatformUtils.isWindows()
@@ -653,6 +662,14 @@ class OpenFileHandler {
                 });
             }
         });
+    }
+
+    /**
+     * Allowlist of URL schemes that may be handed to the OS "open URL" command.
+     * Mirrors {@code SAFE_BROWSER_PROTOCOLS} in webview/src/utils/bridge.ts.
+     */
+    static boolean isSafeExternalUrl(String url) {
+        return url != null && SAFE_EXTERNAL_URL_PATTERN.matcher(url).matches();
     }
 
     /**

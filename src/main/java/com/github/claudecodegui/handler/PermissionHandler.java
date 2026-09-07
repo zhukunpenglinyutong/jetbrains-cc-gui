@@ -149,11 +149,11 @@ public class PermissionHandler extends BaseMessageHandler {
         String escapedId = escapeJs(safeId);
         String jsCode = "if (typeof window." + fnName + " === 'function') { "
                 + "window." + fnName + "('" + escapedId + "'); }";
-        // executeJavaScriptOnEDT already marshals to the EDT and no-ops when the
+        // executeJavaScriptQueued already marshals to the EDT and no-ops when the
         // browser is absent, so call it directly. Wrapping it in another
         // invokeLater would both double-post and NPE in unit tests, where
         // ApplicationManager.getApplication() is null.
-        context.executeJavaScriptOnEDT(jsCode);
+        context.executeJavaScriptQueued(jsCode);
     }
 
     public void setPermissionDeniedCallback(PermissionDeniedCallback callback) {
@@ -220,7 +220,7 @@ public class PermissionHandler extends BaseMessageHandler {
                     "  } " +
                     "})(30);";
 
-                context.executeJavaScriptOnEDT(jsCode);
+                context.executeJavaScriptQueued(jsCode);
             });
 
             scheduleSafetyNet(future, () -> {
@@ -468,7 +468,7 @@ public class PermissionHandler extends BaseMessageHandler {
                         "  } " +
                         "})(30);";
 
-                    context.executeJavaScriptOnEDT(jsCode);
+                    context.executeJavaScriptQueued(jsCode);
                 });
             } else {
                 LOG.debug("[ASK_USER_QUESTION][SHOW_DIALOG] Application unavailable, skipping JS dialog dispatch");
@@ -546,7 +546,7 @@ public class PermissionHandler extends BaseMessageHandler {
                     "  } " +
                     "})(30);";
 
-                context.executeJavaScriptOnEDT(jsCode);
+                context.executeJavaScriptQueued(jsCode);
             });
 
             scheduleSafetyNet(future, () -> {

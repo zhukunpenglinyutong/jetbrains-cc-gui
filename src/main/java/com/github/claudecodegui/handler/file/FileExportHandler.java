@@ -134,7 +134,7 @@ public class FileExportHandler extends BaseMessageHandler {
             String jsCode = "if (window.addToast) { " +
                 "  window.addToast('" + escapeJs(message) + "', 'success'); " +
                 "}";
-            context.executeJavaScriptOnEDT(jsCode);
+            context.executeJavaScriptQueued(jsCode);
         });
     }
 
@@ -145,7 +145,7 @@ public class FileExportHandler extends BaseMessageHandler {
             String jsCode = "if (window.addToast) { " +
                 "  window.addToast('" + errorMsg + "', 'error'); " +
                 "}";
-            context.executeJavaScriptOnEDT(jsCode);
+            context.executeJavaScriptQueued(jsCode);
         });
     }
 }

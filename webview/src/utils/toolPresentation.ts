@@ -1,5 +1,5 @@
 import type { ToolInput, ToolResultBlock } from '../types';
-import { getFileName, truncate } from './helpers';
+import { getFileName, truncate, truncatePathFromStart } from './helpers';
 import { extractFilePathFromCommand, isCommandToolName, unwrapShellCommand } from './toolCommandPath';
 import { normalizeToolInput } from './toolInputNormalization';
 import { normalizeToolName } from './toolConstants';
@@ -241,7 +241,7 @@ export const resolveToolTarget = (input: ToolInput, name?: string): ToolTargetIn
         const rawPath = paths[0];
         const { start, end } = parseLineSuffix(rawPath);
         const openPath = stripLineSuffix(rawPath);
-        const displayPath = relativizeDisplayPath(rawPath, workdir);
+        const displayPath = truncatePathFromStart(relativizeDisplayPath(rawPath, workdir));
         const fileName = getFileName(displayPath);
         const cleanFileName = getFileName(stripLineSuffix(displayPath));
         const isDirectory = detectDirectory(rawPath);
@@ -281,7 +281,7 @@ export const resolveToolTarget = (input: ToolInput, name?: string): ToolTargetIn
 
   const { start, end } = parseLineSuffix(rawPath);
   const openPath = stripLineSuffix(rawPath);
-  const displayPath = relativizeDisplayPath(rawPath, workdir);
+  const displayPath = truncatePathFromStart(relativizeDisplayPath(rawPath, workdir));
   const fileName = getFileName(displayPath);
   const cleanFileName = getFileName(stripLineSuffix(displayPath));
   const isDirectory = detectDirectory(rawPath);

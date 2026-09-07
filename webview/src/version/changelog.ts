@@ -13,6 +13,124 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: '0.5.5-fix1',
+    date: '2026-09-06',
+    content: {
+      en: `🔧 Improvements
+- Update the **Claude model lineup**: add \`claude-fable-5-1\` (Fable 5.1, Mythos-class) as the new top entry with 200K / 1M context handling, xhigh / max reasoning-effort support, fable-family model mapping, localized labels across all 10 languages, and \$10/\$50 usage pricing; Fable 5 stays available as the previous Fable generation (by @zkpaiminmin)
+- Add **GPT-6 Astra** (\`gpt-6-astra\`) to the Codex model list above GPT-5.6 Sol, with 1.05M context, max reasoning-effort support, and \$10/\$50 usage pricing (by @zkpaiminmin)
+- Remove the retired **Opus 4.8** entry; saved \`claude-opus-4-8\` / \`claude-opus-4-6\` sessions now migrate to \`claude-opus-5\` (by @zkpaiminmin)`,
+      zh: `🔧 优化
+- 更新 **Claude 模型清单**：新增 \`claude-fable-5-1\`（Fable 5.1，Mythos 级）为新的首位模型，支持 200K / 1M 上下文、xhigh / max 推理强度、fable 家族模型映射与全部 10 种语言本地化标签，并添加 \$10/\$50 用量计价；Fable 5 保留为前代 Fable 模型入口（by @zkpaiminmin）
+- Codex 模型列表在 GPT-5.6 Sol 之上新增 **GPT-6 Astra**（\`gpt-6-astra\`），支持 1.05M 上下文、max 推理强度与 \$10/\$50 用量计价（by @zkpaiminmin）
+- 移除已下线的 **Opus 4.8** 入口；已保存的 \`claude-opus-4-8\` / \`claude-opus-4-6\` 会话现在迁移到 \`claude-opus-5\`（by @zkpaiminmin）`,
+    },
+  },
+  {
+    version: '0.5.5',
+    date: '2026-09-01',
+    content: {
+      en: `✨ Features
+- Add an **open-source banner with a Star button** to the changelog dialog — clicking Star opens the GitHub repository directly in the system browser (by @zhukunpenglinyutong)
+- Allow **hiding CLI providers from the provider switcher**: an eye toggle on each card in Settings → Providers → CLI removes the provider from the switcher dropdown (a hidden active provider keeps working), and the provider dropdown gains a **CLI Settings** footer entry that deep-links into that page (by @zhukunpenglinyutong)
+- Rework the **settings community section** into a social-links row (GitHub / X / Zhihu / Xiaohongshu / Douyin with QR popover / YouTube) plus docs and version-history entries; every external link goes through the system browser instead of dead \`target=_blank\` anchors in JCEF (by @zhukunpenglinyutong)
+- Rebrand the Marketplace listing and READMEs to **"CC GUI (Claude, Codex and More)"** with the full multi-CLI list (Grok / Kimi / OpenCode / PI / OMP / DeepSeek Harness) and expanded keywords (by @zhukunpenglinyutong)
+
+🔧 Improvements
+- Flatten the **model list directly into the model-config popover**: effort / 1M-context rows sit above an inline model list, so picking a model no longer requires crossing a nested fly-out (by @zhukunpenglinyutong)
+- The chat header **Star button now opens the GitHub repo in the browser** directly instead of copying the link to the clipboard (by @zhukunpenglinyutong)
+- Polish the **provider switcher**: hairline separators between rows and a compact active-dot indicator replacing the check icon (by @zhukunpenglinyutong)
+
+🐛 Fixes
+- **Serialize every webview event through an ordered queue** (\`WebviewEventQueue\`): streaming snapshots, callbacks, and ad-hoc JS now share one ordered channel, the coalescer builds deep transport snapshots off the EDT, and stream-end delivery is generation-guarded with a 5s fallback — out-of-order events, stale snapshots freezing \`tool_use\` blocks, and lost stream-end signals are fixed (by @gadfly3173, @zhukunpenglinyutong)
+- Fix **\`@file#L1\` line references sent to pi/omp**: references are rewritten to \`@file (lines N[-M])\` so the mention still resolves and line info survives as prose, and a prompt starting with \`@\` is no longer misparsed as a CLI file argument (by @Sojiroh, @zhukunpenglinyutong)
+- Resolve CLIs installed under **Node version managers** (nvm / fnm / mise / asdf / volta / nvmd / hermes), **bun / yarn / pnpm global bins**, and the **OMP Windows native installer** (\`%LOCALAPPDATA%\\omp\`), with an allowlisted login-shell fallback as the last resort — GUI-launched IDEs with a sparse PATH now find these CLIs (by @zhukunpenglinyutong)
+- Keep **OMP model roles (smol / slow / plan …) out of the model dropdown** — they live in the mode selector, and an active role is no longer clobbered back to the default when the model catalog arrives (by @zhukunpenglinyutong)
+- Hide the **runtime-provider menu entry for beta CLI providers** (grok / kimi / opencode / pi / omp / dsh); only Claude and Codex support runtime provider switching (by @zhukunpenglinyutong)
+- Truncate **long file paths in tool blocks from the start** with an ellipsis prefix, keeping whole trailing segments readable (by @zhukunpenglinyutong)
+- Show the **inline copy button on user messages only on hover** (still always visible on touch devices), and emit each \`[SESSION_ID]\` exactly once across stream retries (by @zhukunpenglinyutong)`,
+      zh: `✨ 新功能
+- 版本记录弹窗新增 **开源横幅与 Star 按钮**：点击 Star 直接在系统浏览器中打开 GitHub 仓库（by @zhukunpenglinyutong）
+- 支持 **在 Provider 切换器中隐藏 CLI Provider**：设置 → 供应商 → CLI 管理页中每张卡片新增眼睛开关，可将对应 Provider 从切换器下拉中移除（已激活的隐藏 Provider 仍可正常使用）；Provider 下拉底部新增 **CLI 设置** 入口，一键跳转到该页面（by @zhukunpenglinyutong）
+- 重做 **设置页社区板块**：改为社交链接行（GitHub / X / 知乎 / 小红书 / 抖音（含二维码浮层）/ YouTube）+ 文档与版本记录入口；所有外部链接统一走系统浏览器打开，避免 JCEF 中 \`target=_blank\` 点击无响应（by @zhukunpenglinyutong）
+- Marketplace 列表与 README 品牌升级为 **「CC GUI（Claude, Codex and More）」**，列出全部多 CLI 支持（Grok / Kimi / OpenCode / PI / OMP / DeepSeek Harness）并扩充搜索关键词（by @zhukunpenglinyutong）
+
+🔧 优化
+- **模型列表平铺进模型配置弹层**：推理强度 / 1M 上下文行位于内联模型列表上方，选模型不再需要穿越嵌套飞出菜单（by @zhukunpenglinyutong）
+- 聊天头部 **Star 按钮改为直接在浏览器打开 GitHub 仓库**，不再只是复制链接到剪贴板（by @zhukunpenglinyutong）
+- 打磨 **Provider 切换器**：行间细分隔线，激活态改用紧凑圆点替代对勾图标（by @zhukunpenglinyutong）
+
+🐛 修复
+- **所有 webview 事件统一经由有序队列（\`WebviewEventQueue\`）下发**：流式快照、回调与临时 JS 共用同一条有序通道；合并器在 EDT 之外构建深拷贝传输快照；流结束信号改用代际（generation）守卫并带 5 秒兜底——修复事件乱序、旧快照冻结 \`tool_use\` 块、流结束信号丢失等问题（by @gadfly3173、@zhukunpenglinyutong）
+- 修复发送给 pi/omp 的 **\`@文件#L行号\` 引用**：重写为 \`@文件 (lines N[-M])\` 使 mention 仍可解析、行号信息以文本保留；以 \`@\` 开头的 prompt 不再被 CLI 误当作文件参数（by @Sojiroh、@zhukunpenglinyutong）
+- 支持解析安装在 **Node 版本管理器**（nvm / fnm / mise / asdf / volta / nvmd / hermes）、**bun / yarn / pnpm 全局 bin 目录** 以及 **OMP Windows 原生安装器**（\`%LOCALAPPDATA%\\omp\`）下的 CLI，并以白名单登录 shell 兜底——从图形界面启动、PATH 稀疏的 IDE 现在也能找到这些 CLI（by @zhukunpenglinyutong）
+- **OMP 模型角色（smol / slow / plan …）不再出现在模型下拉中**——它们归属模式选择器；模型目录到达时，已选中的角色不再被错误重置为默认模型（by @zhukunpenglinyutong）
+- 对 Beta CLI Provider（grok / kimi / opencode / pi / omp / dsh）**隐藏「切换运行时供应商」菜单项**——仅 Claude 与 Codex 支持运行时供应商切换（by @zhukunpenglinyutong）
+- 工具块中的 **超长文件路径改为从开头截断** 并加省略号前缀，保留完整尾部路径段可读（by @zhukunpenglinyutong）
+- 用户消息的 **内联复制按钮改为仅悬停时显示**（触屏设备保持常显）；流重试时每个 \`[SESSION_ID]\` 只发一次（by @zhukunpenglinyutong）`,
+    },
+  },
+  {
+    version: '0.5.4',
+    date: '2026-08-26',
+    content: {
+      en: `✨ Features
+- Add the **OMP (Oh My Pi) CLI Provider**: a Pi-compatible headless agent (\`omp\` / \`@oh-my-pi/pi-coding-agent\`) with \`--resume\` multi-turn sessions, \`omp models --json\` catalogs, title-first history under \`~/.omp/agent/sessions\`, and a mode dropdown driven by the user's \`modelRoles\` (by @Sojiroh)
+- Add a **Claude plan-usage bar** in the input tool cluster, colored by spend pace vs. the 5h / 7d window budget, with a worst-window warning dot; **z.ai / GLM** backends fill the same bar from the monitor quota endpoint (plan tier, stale-cache hint) instead of SDK \`rate_limit_event\` (by @toxeh, @zhukunpenglinyutong)
+- Add **DSH agent preset switching** in the chat toolbar: built-in and user-installed presets persist per tab, apply to spawned DSH hosts, and reload owned hosts when the preset changes (by @yibeiqingke, @zhukunpenglinyutong)
+- Nest **model / effort / speed / 1M context** into a compact model-config dropdown with in-viewport fly-outs, so the input toolbar stays readable in narrow plugin widths (by @zhukunpenglinyutong)
+- Expand **Codex Pet**: configurable random action mappings, safe local pet deletion, and a redesigned settings workspace with responsive preview / operations panels (by @GGMGG)
+
+🔧 Improvements
+- Finish the **Grok persistent ACP runtime**: route Grok through \`GrokSDKBridge\` instead of a per-request CLI process, keep one ACP daemon across turns, convert snapshot chunks into true deltas (no duplicated / resurrected text), and persist \`grok.env\` into the daemon (by @toxeh)
+- Switch Claude settings startup sync to **repair-only fill-in-the-blanks**: missing provider-managed fields are added, existing user values (including per-env keys) are never overwritten, and incomplete / exempt providers are skipped (by @HardBrick21, @zhukunpenglinyutong)
+- Polish the **DSH settings card** (CLI install + local host as one product) and open docs / MCP help links through the system browser instead of dead \`target=_blank\` anchors in JCEF (by @zhukunpenglinyutong)
+- Restore **Codex 0.148+ rollout history** by indexing sessions whose user prompt is a \`response_item\`, and keep provider \`auth.json\` inline (with a backup of unmanaged auth before the first post-upgrade overwrite) (by @zhukunpenglinyutong, @GGMGG)
+
+🐛 Fixes
+- Offload **Node.js auto-detection / verification off the EDT** so hung \`which\` probes in VMs no longer freeze the IDE on chat-window open (by @mbehensky, @zhukunpenglinyutong)
+- Make **Codex provider activation atomic** and keep MCP / Skills authorization in sync with the enabled managed provider, so upgrades no longer drop credentials or reject \`~/.codex\` access (by @GGMGG)
+- Restore **Codex subagent lifecycle and plan rendering**: keep spawn identity / sidechain status across reloads, isolate \`update_plan\` to the current turn, hide opaque spawn prompts, and ignore late status responses from other sessions (by @GGMGG)
+- Isolate **model labels and icons by provider** so third-party catalogs whose ids collide with \`claude-*\` slots no longer inherit Claude mappings (by @toxeh)
+- Keep the **DSH configured model** in the picker when the runtime catalog omits that route, and spawn \`--dump-config\` through the Windows-safe CLI shim (by @yibeiqingke, @zhukunpenglinyutong)
+- Clear **model-routing env vars** (\`ANTHROPIC_MODEL\` / \`ANTHROPIC_DEFAULT_*\`) in the settings override so \`~/.claude/settings.json\` can no longer pin every family to one model (by @hebulin, closes #1509)
+- Fix **\`@file\` references with spaces in the filename** on both the input and the rendered message, and preserve ordinary text between consecutive project-tree file chips (by @Cyber0xFE, @elexiang, @zhukunpenglinyutong, closes #1726)
+- Preserve **existing input content** when inserting an IDE selection / snippet while a stale webview selection is still non-collapsed (by @hebulin, closes #1700)
+- Stop **MCP stdio container leaks** by closing stdin (EOF) before signalling, and expand \`\${VAR}\` placeholders in \`.mcp.json\` env from Claude settings files (by @hebulin, closes #1721, #1722)
+- Preserve **Claude thinking-block boundaries** during streaming so independent thoughts are no longer concatenated (or duplicated) across assistant messages (by @gadfly3173)
+- Signal daemon **ready before SDK preload** so Java startup / heartbeats are no longer blocked on the Claude Agent SDK import (by @hebulin)
+- Migrate the retired **Commit AI / Prompt Enhancer** default \`claude-sonnet-4-6\` to \`claude-sonnet-5\` on read (by @hebulin, closes #1693)
+- Delay **model-config submenu hover** so fly-outs stay reachable when the pointer crosses rows above them (by @zhukunpenglinyutong)`,
+      zh: `✨ 新功能
+- 新增 **OMP（Oh My Pi）CLI Provider**：兼容 Pi 的无头 Agent（\`omp\` / \`@oh-my-pi/pi-coding-agent\`），支持 \`--resume\` 多轮会话、\`omp models --json\` 模型目录、\`~/.omp/agent/sessions\` 下 title-first 历史，以及由用户 \`modelRoles\` 驱动的模式选择器（by @Sojiroh）
+- 输入栏工具区新增 **Claude 套餐用量条**：按 5h / 7d 窗口的消耗节奏着色，并用最差窗口圆点提示风险；**z.ai / GLM** 后端改为从 monitor 配额接口填充同一条用量条（展示套餐档位、过期缓存提示），而不再依赖 SDK \`rate_limit_event\`（by @toxeh、@zhukunpenglinyutong）
+- 聊天工具栏新增 **DSH Agent Preset 切换**：内置与用户安装的 preset 按 Tab 持久化，会应用到新拉起的 DSH host，并在 preset 变更时重载由插件托管的 host（by @yibeiqingke、@zhukunpenglinyutong）
+- 将 **模型 / 推理强度 / 速度 / 1M 上下文** 收进紧凑的模型配置下拉，子菜单限制在插件视口内弹出，窄宽度下输入工具栏仍可读（by @zhukunpenglinyutong）
+- 扩展 **Codex Pet**：可配置随机动作映射、安全删除本地宠物，并重做设置页的预览 / 操作面板（by @GGMGG）
+
+🔧 优化
+- 完成 **Grok 持久化 ACP runtime**：Grok 改为走 \`GrokSDKBridge\` 而非每次请求拉起 CLI，跨轮次复用同一个 ACP daemon，把快照式 chunk 转成真 delta（避免重复 / 复活文本），并把 \`grok.env\` 注入 daemon（by @toxeh）
+- Claude 设置启动同步改为 **只补缺失字段**：仅填充缺失的供应商管理字段，永不覆盖用户已有值（含 env 里的单个键）；不完整或豁免的供应商会跳过（by @HardBrick21、@zhukunpenglinyutong）
+- 打磨 **DSH 设置卡片**（CLI 安装与本地 host 合并为一张产品卡），文档 / MCP 帮助链接改为通过系统浏览器打开，避免 JCEF 中 \`target=_blank\` 点击无响应（by @zhukunpenglinyutong）
+- 恢复 **Codex 0.148+ rollout 历史**：索引 user prompt 为 \`response_item\` 的会话；provider \`auth.json\` 继续内联保存，并在升级后首次覆盖非托管 auth 前先备份（by @zhukunpenglinyutong、@GGMGG）
+
+🐛 修复
+- 将 **Node.js 自动检测 / 校验移出 EDT**，虚拟机里卡住的 \`which\` 探测不再在打开聊天窗口时冻住整个 IDE（by @mbehensky、@zhukunpenglinyutong）
+- **Codex 供应商激活改为原子操作**，MCP / Skills 授权与已启用的托管供应商保持同步，升级不再丢失凭证或拒绝访问 \`~/.codex\`（by @GGMGG）
+- 修复 **Codex 子代理生命周期与计划渲染**：重载后保留 spawn 身份与侧链状态，将 \`update_plan\` 隔离到当前轮，隐藏不透明的 spawn prompt，并忽略来自其他会话的迟到状态响应（by @GGMGG）
+- **按 provider 隔离模型标签与图标**，第三方目录里与 \`claude-*\` 槽位撞 id 的条目不再套用 Claude 映射（by @toxeh）
+- 运行时目录未包含该路由时，**DSH 模型选择器仍保留已配置模型**；Windows 上通过安全 CLI shim 拉起 \`--dump-config\`（by @yibeiqingke、@zhukunpenglinyutong）
+- 在 settings override 中清空 **模型路由环境变量**（\`ANTHROPIC_MODEL\` / \`ANTHROPIC_DEFAULT_*\`），避免 \`~/.claude/settings.json\` 把所有模型族钉到同一个模型（by @hebulin，关闭 #1509）
+- 修复 **文件名含空格的 \`@file\` 引用** 在输入框与消息展示两侧被截断的问题，并保留连续项目树文件 chip 之间的普通文本（by @Cyber0xFE、@elexiang、@zhukunpenglinyutong，关闭 #1726）
+- 在 webview 仍残留未折叠选区时插入 IDE 选区 / 片段，**不再删掉输入框已有内容**（by @hebulin，关闭 #1700）
+- 先关闭 stdin（EOF）再发信号，避免 **MCP stdio 容器泄漏**；并从 Claude settings 文件展开 \`.mcp.json\` env 中的 \`\${VAR}\` 占位符（by @hebulin，关闭 #1721、#1722）
+- 流式输出中保留 **Claude thinking 块边界**，独立思考内容不再被拼在一起或重复追加（by @gadfly3173）
+- Daemon 在 SDK 预加载前先发 **ready**，Java 启动 / 心跳不再被 Claude Agent SDK 导入阻塞（by @hebulin）
+- 读取时把已退役的 **Commit AI / Prompt Enhancer** 默认模型 \`claude-sonnet-4-6\` 迁移为 \`claude-sonnet-5\`（by @hebulin，关闭 #1693）
+- 延迟 **模型配置子菜单的 hover 切换**，指针划过上方行时飞出菜单仍可到达（by @zhukunpenglinyutong）`,
+    },
+  },
+  {
     version: '0.5.3',
     date: '2026-08-21',
     content: {

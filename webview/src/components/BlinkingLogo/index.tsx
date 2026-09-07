@@ -5,6 +5,7 @@ import { AVAILABLE_PROVIDERS } from '../ChatInputBox/types';
 import { ProviderModelIcon } from '../shared/ProviderModelIcon';
 import AlertDialog from '../AlertDialog';
 import { useBetaProviderNotice } from '../../hooks/useBetaProviderNotice';
+import { useHiddenCliProviders } from '../../hooks/useCliProviderVisibility';
 
 const ROOT_STYLE: React.CSSProperties = {
   position: 'relative',
@@ -47,6 +48,8 @@ export const BlinkingLogo = ({ provider, onProviderChange }: BlinkingLogoProps) 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const betaNotice = useBetaProviderNotice();
+  const hiddenProviders = useHiddenCliProviders();
+  const visibleProviders = AVAILABLE_PROVIDERS.filter((p) => !hiddenProviders.has(p.id));
 
   useEffect(() => {
     if (provider !== displayProvider) {
@@ -156,10 +159,10 @@ export const BlinkingLogo = ({ provider, onProviderChange }: BlinkingLogoProps) 
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="selector-dropdown"
+          className="selector-dropdown provider-dropdown"
           style={DROPDOWN_STYLE}
         >
-          {AVAILABLE_PROVIDERS.map((p) => (
+          {visibleProviders.map((p) => (
             <div
               key={p.id}
               className={`selector-option ${p.id === provider ? 'selected' : ''} ${!p.enabled ? 'disabled' : ''}`}
@@ -172,13 +175,13 @@ export const BlinkingLogo = ({ provider, onProviderChange }: BlinkingLogoProps) 
               <ProviderModelIcon providerId={p.id} size={16} colored />
               <span>{getProviderLabel(p.id)}</span>
               <span className="provider-option-trailing">
+                {p.id === provider && (
+                  <span className="provider-active-dot" aria-hidden="true" />
+                )}
                 {p.beta && (
                   <span className="provider-beta-badge">
                     {t('providers.beta.badge', { defaultValue: 'Beta' })}
                   </span>
-                )}
-                {p.id === provider && (
-                  <span className="codicon codicon-check check-mark" />
                 )}
               </span>
             </div>

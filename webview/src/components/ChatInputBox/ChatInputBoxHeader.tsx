@@ -3,10 +3,7 @@ import type { Attachment, SelectedAgent, QueuedMessage } from './types.js';
 import { AttachmentList } from './AttachmentList.js';
 import { ContextBar } from './ContextBar.js';
 import { MessageQueue } from './MessageQueue.js';
-import { useUIState } from '../../contexts/UIStateContext';
-import { copyToClipboard } from '../../utils/copyUtils';
-
-const GITHUB_REPO_URL = 'https://github.com/zhukunpenglinyutong/jetbrains-cc-gui';
+import { openBrowser, GITHUB_REPO_URL } from '../../utils/bridge';
 
 export function ChatInputBoxHeader({
   sdkStatusLoading,
@@ -69,13 +66,8 @@ export function ChatInputBoxHeader({
   autoOpenFileEnabled?: boolean;
   onRequestEnableFileContext?: () => void;
 }) {
-  const { addToast } = useUIState();
-
-  const handleStarProject = async () => {
-    const copied = await copyToClipboard(GITHUB_REPO_URL);
-    if (copied) {
-      addToast(t('chat.openSourceBannerStarToast'), 'success');
-    }
+  const handleStarProject = () => {
+    openBrowser(GITHUB_REPO_URL);
   };
 
   return (

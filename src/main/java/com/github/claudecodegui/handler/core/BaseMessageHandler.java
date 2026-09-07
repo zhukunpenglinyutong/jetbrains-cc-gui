@@ -30,7 +30,7 @@ public abstract class BaseMessageHandler implements MessageHandler {
      * Execute JavaScript on the EDT (Event Dispatch Thread).
      */
     protected void executeJavaScript(String jsCode) {
-        context.executeJavaScriptOnEDT(jsCode);
+        context.executeJavaScriptQueued(jsCode);
     }
 
     /**

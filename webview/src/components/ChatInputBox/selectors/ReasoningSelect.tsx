@@ -15,6 +15,8 @@ const DROPDOWN_STYLE: React.CSSProperties = {
   overflowX: 'hidden',
 };
 const LEVEL_INFO_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', flex: 1 };
+/** Five two-line rows; only the viewport should clip, not a 300px design cap. */
+const SUBMENU_MAX_HEIGHT_PX = 480;
 
 interface ReasoningSelectProps {
   value: ReasoningEffort;
@@ -57,6 +59,7 @@ export const ReasoningSelect = ({
     submenu: embedded,
     minWidth: embedded ? 180 : 200,
     maxWidth: 280,
+    submenuMaxHeight: SUBMENU_MAX_HEIGHT_PX,
   });
 
   const { isVisible, availableLevels, currentLevel } = useReasoningEffortGuard(
@@ -137,8 +140,9 @@ export const ReasoningSelect = ({
     ? {
         minWidth: 0,
         maxWidth: maxWidth ?? 280,
-        maxHeight: maxHeight ? `${Math.min(300, maxHeight)}px` : '300px',
-        overflowY: 'auto',
+        ...(maxHeight != null
+          ? { maxHeight: `${maxHeight}px`, overflowY: 'auto' as const }
+          : { overflowY: 'visible' as const }),
         ...positionedStyle,
       }
     : { ...DROPDOWN_STYLE, ...positionedStyle };

@@ -31,6 +31,7 @@ import { runCliStreaming } from '../../utils/cli-spawn.js';
 import {
   beginStream,
   emitJsonStringMarker,
+  emitSendError,
   emitSessionId,
   emitUsage,
   emitToolResultMessage,
@@ -222,7 +223,13 @@ export function parseMiniMaxStreamLine(line) {
     case 'exec.result': {
       const sessionId = typeof value.sessionId === 'string' ? value.sessionId.trim() : '';
       const status = typeof value.status === 'string' ? value.status : '';
-      return { kind: 'result', sessionId, status };
+      const errorMessage = typeof value.error === 'string' && value.error.trim()
+        ? value.error.trim()
+        : (typeof value.message === 'string' ? value.message.trim() : '');
+      // Anything other than an explicit success counts as failure: the stream
+      // is terminated on this line, so a failed run must not end in silence.
+      const failed = status !== '' && status.toLowerCase() !== 'succeeded';
+      return { kind: 'result', sessionId, status, failed, errorMessage };
     }
     default:
       return { kind: 'other' };
@@ -361,11 +368,24 @@ export async function sendMessage(
         }
         break;
       }
-      case 'result':
+      case 'result': {
         if (event.sessionId && isNonEmptySessionId(event.sessionId)) {
           emitSessionId(event.sessionId);
         }
+        // shouldTerminate kills the CLI on this line and suppresses the
+        // non-zero exit code, so a failed run with no streamed output would
+        // otherwise end the stream in silence — surface it explicitly.
+        const nothingStreamed = streamedContentMessageIds.size === 0
+          && streamedThinkingMessageIds.size === 0
+          && seenToolUseIds.size === 0;
+        if (event.failed && nothingStreamed) {
+          emitSendError(
+            event.errorMessage || `MiniMax CLI run failed (status: ${event.status})`,
+            'MiniMax'
+          );
+        }
         break;
+      }
       default:
         break;
     }

@@ -49,6 +49,12 @@ const OMP_MODE_ID_PATTERN = /^[a-zA-Z][\w-]{0,31}$/;
 const isRestorableOmpMode = (value: unknown): value is PermissionMode =>
   typeof value === 'string' && OMP_MODE_ID_PATTERN.test(value);
 
+// Older sessions stored autoEdit, but the canonical UI/backend value is acceptEdits.
+const normalizeRestoredPermissionMode = (value: unknown): PermissionMode | null => {
+  const candidate = value === 'autoEdit' ? 'acceptEdits' : value;
+  return typeof candidate === 'string' && isValidPermissionMode(candidate) ? candidate : null;
+};
+
 export interface UseModelStatePersistenceOptions {
   // Cross-slice load setters (run once on mount)
   setCurrentProvider: (value: string) => void;
@@ -281,34 +287,45 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           setCurrentProvider(providerCandidate);
         }
 
-        if (isValidPermissionMode(state.claudePermissionMode)) {
-          restoredClaudePermissionMode = state.claudePermissionMode;
+        const restoredClaudeMode = normalizeRestoredPermissionMode(state.claudePermissionMode);
+        if (restoredClaudeMode) {
+          restoredClaudePermissionMode = restoredClaudeMode;
         }
-        if (isValidPermissionMode(state.codexPermissionMode)) {
-          restoredCodexPermissionMode = state.codexPermissionMode === 'plan'
+        const restoredCodexMode = normalizeRestoredPermissionMode(state.codexPermissionMode);
+        if (restoredCodexMode) {
+          restoredCodexPermissionMode = restoredCodexMode === 'plan'
             ? 'default'
-            : state.codexPermissionMode;
+            : restoredCodexMode;
         }
-        if (isValidPermissionMode(state.grokPermissionMode)) {
-          restoredGrokPermissionMode = normalizeCliPermissionMode(state.grokPermissionMode, 'grok');
+        const restoredGrokMode = normalizeRestoredPermissionMode(state.grokPermissionMode);
+        if (restoredGrokMode) {
+          restoredGrokPermissionMode = normalizeCliPermissionMode(restoredGrokMode, 'grok');
         }
-        if (isValidPermissionMode(state.kimiPermissionMode)) {
-          restoredKimiPermissionMode = normalizeCliPermissionMode(state.kimiPermissionMode, 'kimi');
+        const restoredKimiMode = normalizeRestoredPermissionMode(state.kimiPermissionMode);
+        if (restoredKimiMode) {
+          restoredKimiPermissionMode = normalizeCliPermissionMode(restoredKimiMode, 'kimi');
         }
-        if (isValidPermissionMode(state.miniMaxPermissionMode)) {
-          restoredMiniMaxPermissionMode = normalizeCliPermissionMode(state.miniMaxPermissionMode);
+        const restoredMiniMaxMode = normalizeRestoredPermissionMode(state.miniMaxPermissionMode);
+        if (restoredMiniMaxMode) {
+          restoredMiniMaxPermissionMode = normalizeCliPermissionMode(restoredMiniMaxMode, 'minimax');
         }
-        if (isValidPermissionMode(state.openCodePermissionMode)) {
-          restoredOpenCodePermissionMode = normalizeCliPermissionMode(state.openCodePermissionMode, 'opencode');
+        const restoredOpenCodeMode = normalizeRestoredPermissionMode(state.openCodePermissionMode);
+        if (restoredOpenCodeMode) {
+          restoredOpenCodePermissionMode = normalizeCliPermissionMode(restoredOpenCodeMode, 'opencode');
         }
-        if (isValidPermissionMode(state.piPermissionMode)) {
-          restoredPiPermissionMode = normalizeCliPermissionMode(state.piPermissionMode, 'pi');
+        const restoredPiMode = normalizeRestoredPermissionMode(state.piPermissionMode);
+        if (restoredPiMode) {
+          restoredPiPermissionMode = normalizeCliPermissionMode(restoredPiMode, 'pi');
         }
         if (isRestorableOmpMode(state.ompPermissionMode)) {
-          restoredOmpPermissionMode = normalizeCliPermissionMode(state.ompPermissionMode, 'omp');
+          const restoredOmpMode = state.ompPermissionMode === 'autoEdit'
+            ? 'default'
+            : state.ompPermissionMode;
+          restoredOmpPermissionMode = normalizeCliPermissionMode(restoredOmpMode, 'omp');
         }
-        if (isValidPermissionMode(state.dshPermissionMode)) {
-          restoredDshPermissionMode = normalizeCliPermissionMode(state.dshPermissionMode);
+        const restoredDshMode = normalizeRestoredPermissionMode(state.dshPermissionMode);
+        if (restoredDshMode) {
+          restoredDshPermissionMode = normalizeCliPermissionMode(restoredDshMode, 'dsh');
         }
 
         if (typeof state.longContextEnabled === 'boolean') {
@@ -465,7 +482,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           // which survives a plugin reinstall) and the webview seeds its own mode
           // FROM Java via get_mode → onModeReceived. Our localStorage copy is
           // wiped on reinstall, so pushing it here would clobber the surviving
-          // Java value with 'default' — the reported "reinstall forgets Auto" bug.
+          // Java value with 'default' — the reported "reinstall forgets Full Auto" bug.
           // The mode is only sent to Java on an explicit user switch
           // (handleModeSelect → set_mode).
           sendBridgeEvent('set_codex_fast_mode', restoredCodexFastMode);

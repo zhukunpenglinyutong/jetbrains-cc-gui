@@ -49,7 +49,8 @@ function parseScalar(line) {
 }
 
 function isMappingKey(line) {
-  return /^[A-Za-z_][\w.-]*:\s*$/.test(line.trim()) && line.trim().endsWith(':');
+  // Custom-provider model ids may start with a digit (e.g. "7b-instruct").
+  return /^[A-Za-z0-9_][\w.-]*:\s*$/.test(line.trim()) && line.trim().endsWith(':');
 }
 
 /**

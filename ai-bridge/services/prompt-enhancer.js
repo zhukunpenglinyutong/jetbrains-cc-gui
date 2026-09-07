@@ -422,6 +422,25 @@ export function emitContentDelta(text) {
 }
 
 /**
+ * Build the messages.stream() request for the Claude ask path.
+ * thinking is disabled so reasoning models (e.g. DeepSeek via relay) do not
+ * spend the token budget on `thinking` blocks and leave the text empty.
+ * Exposed for tests.
+ */
+export function buildEnhanceAskRequest(modelId, fullPrompt, systemPrompt, maxTokens) {
+  const request = {
+    model: modelId,
+    max_tokens: maxTokens,
+    thinking: { type: 'disabled' },
+    messages: [{ role: 'user', content: fullPrompt }],
+  };
+  if (systemPrompt && String(systemPrompt).trim()) {
+    request.system = String(systemPrompt).trim();
+  }
+  return request;
+}
+
+/**
  * Fast Claude path: Anthropic SDK messages.stream (no Agent SDK cold start).
  * Native SSE token streaming via .on('text').
  */
@@ -459,16 +478,9 @@ async function enhancePromptWithClaudeAsk(originalPrompt, systemPrompt, model, c
   console.log('[PromptEnhancer] Streaming via Anthropic SDK messages.stream()...');
 
   let streamedText = '';
-  const request = {
-    model: modelId,
-    max_tokens: maxTokens,
-    messages: [{ role: 'user', content: fullPrompt }],
-  };
-  if (systemPrompt && String(systemPrompt).trim()) {
-    request.system = String(systemPrompt).trim();
-  }
-
-  const stream = client.messages.stream(request);
+  const stream = client.messages.stream(
+    buildEnhanceAskRequest(modelId, fullPrompt, systemPrompt, maxTokens)
+  );
   stream.on('text', (text) => {
     if (text) {
       emitContentDelta(text);

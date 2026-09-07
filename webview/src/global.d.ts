@@ -786,9 +786,10 @@ interface Window {
   onThinkingDelta?: (delta: string) => void;
 
   /**
-   * Block reset callback - called when a new assistant message starts within
-   * an ongoing stream (e.g., after a tool_use loop iteration). Frontend should
-   * clear streaming content refs to prevent cross-turn content merging.
+   * Block reset callback - fired when a new assistant content block starts
+   * within an ongoing stream (e.g., after a tool_use loop iteration). Only
+   * render bookkeeping resets here; content buffers stay cumulative so the
+   * backend snapshot's per-block routing remains consistent.
    */
   onBlockReset?: () => void;
 
@@ -894,18 +895,23 @@ interface Window {
   __stallWatchdogInterval?: ReturnType<typeof setInterval> | null;
 
   /**
-   * Pending rAF handle and JSON for deferred updateMessages processing.
-   * Stored on window so re-registration of message callbacks cancels stale rAFs.
+   * Pending timer handle and JSON for deferred updateMessages processing during
+   * streaming (historical "rAF" naming). Stored on window so re-registration of
+   * message callbacks cancels stale timers.
    */
   __pendingUpdateRaf?: number | null;
   __pendingUpdateJson?: string | null;
   __pendingUpdateSequence?: number | null;
+  /** Deltas arrived while a structural snapshot was pending; rendering resumes after it applies. */
+  __streamingDeltaRenderDeferred?: boolean;
+  /** Re-schedule deferred delta rendering once the pending snapshot has been applied. */
+  __flushDeferredStreamingRenders?: () => void;
   __minAcceptedUpdateSequence?: number;
   /** Number of paged history messages prepended ahead of the backend session snapshot. */
   __prependedHistoryMessageCount?: number;
   /** Backend index represented by the first non-prepended message; zero means its full prefix is present. */
   __messageBaseIndex?: number;
-  /** Cancel pending rAF-deferred updateMessages (set by messageCallbacks, called by onStreamEnd). */
+  /** Cancel the pending deferred updateMessages (set by messageCallbacks, called by stream lifecycle guards). */
   __cancelPendingUpdateMessages?: () => void;
 
   /**

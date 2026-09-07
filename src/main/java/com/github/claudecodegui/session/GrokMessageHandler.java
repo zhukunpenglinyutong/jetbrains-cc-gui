@@ -188,7 +188,7 @@ public class GrokMessageHandler implements MessageCallback {
                 target.raw = parsed.raw;
             }
             // Prefer usage from the incoming message (finishSuccess now attaches it);
-            // otherwise restore prior snapshot so pushUsageUpdateFromMessages still works.
+            // otherwise restore prior snapshot so the next usage refresh still works.
             JsonObject incomingUsage = extractUsageFromAssistantRaw(target.raw);
             if (incomingUsage == null && priorUsage != null) {
                 restoreUsageOnAssistantRaw(target.raw, priorUsage);

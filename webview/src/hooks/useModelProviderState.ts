@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { sendBridgeEvent } from '../utils/bridge';
 import {
@@ -194,16 +194,33 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       : null,
     [currentProvider, isSdkStatusKnown, usage.sdkStatusError],
   );
-  // Whether the installed Claude SDK meets the minimum version required for the
-  // selected model's tier (Fable needs >= 0.3.182). `undefined` means the backend
-  // hasn't reported it (SDK not installed, or an old plugin version without the
-  // field) — callers must only warn on an explicit `false` to avoid false positives.
+  // Whether the installed Claude/Codex SDK meets the minimum version required for
+  // the selected feature tier. `undefined` means the backend has not reported it;
+  // callers must only act on an explicit `false` to avoid false positives.
   const claudeSdkMeetsMinimum = sdkStatus?.['claude-sdk']?.meetsMinimumVersion;
+  // Codex native auto review config is available in the verified @openai/codex-sdk 0.146.0 floor.
+  const codexSdkMeetsMinimum = sdkStatus?.['codex-sdk']?.meetsMinimumVersion;
+  const codexNativeAutoReviewAvailable = codexSdkMeetsMinimum === true;
 
-  // ── Cross-provider handlers ──
+  // A saved auto mode can outlive the SDK that supports it. Reset it before a
+  // send can race the dependency-status response; otherwise the selected mode
+  // would be sent to an SDK that cannot implement the native reviewer.
+  useEffect(() => {
+    if (codexSdkMeetsMinimum !== false || codexPermissionMode !== 'auto') {
+      return;
+    }
+    setCodexPermissionMode('default');
+    if (currentProvider === 'codex' && permissionMode === 'auto') {
+      setPermissionMode('default');
+      sendBridgeEvent('set_mode', 'default');
+    }
+  }, [codexPermissionMode, codexSdkMeetsMinimum, currentProvider, permissionMode, setCodexPermissionMode, setPermissionMode]);
   const handleModeSelect = useCallback((mode: PermissionMode) => {
     if (currentProvider === 'codex') {
-      const codexMode: PermissionMode = mode === 'plan' ? 'default' : mode;
+      const codexMode: PermissionMode = mode === 'plan'
+        || (mode === 'auto' && codexSdkMeetsMinimum === false)
+        ? 'default'
+        : mode;
       setPermissionMode(codexMode);
       setCodexPermissionMode(codexMode);
       sendBridgeEvent('set_mode', codexMode);
@@ -240,6 +257,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     sendBridgeEvent('set_mode', mode);
   }, [
     currentProvider,
+    codexSdkMeetsMinimum,
     setCodexPermissionMode,
     setClaudePermissionMode,
     setGrokPermissionMode,
@@ -316,6 +334,9 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     let modeToSet: PermissionMode = claudePermissionMode;
     if (providerId === 'codex') {
       modeToSet = normalizeCliPermissionMode(codexPermissionMode, providerId);
+      if (modeToSet === 'auto' && codexSdkMeetsMinimum === false) {
+        modeToSet = 'default';
+      }
     } else if (providerId === 'grok') {
       modeToSet = normalizeCliPermissionMode(grokPermissionMode, providerId);
     } else if (providerId === 'kimi') {
@@ -351,6 +372,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   }, [
     claudePermissionMode,
     codexPermissionMode,
+    codexSdkMeetsMinimum,
     grokPermissionMode,
     kimiPermissionMode,
     miniMaxPermissionMode,
@@ -443,6 +465,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     selectedModel,
     currentSdkInstalled,
     claudeSdkMeetsMinimum,
+    codexNativeAutoReviewAvailable,
     currentProviderRef,
     handleModeSelect,
     handleModelSelect,

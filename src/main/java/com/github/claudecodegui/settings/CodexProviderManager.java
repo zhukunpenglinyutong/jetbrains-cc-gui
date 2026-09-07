@@ -23,8 +23,6 @@ import java.util.function.Function;
  */
 public class CodexProviderManager {
     private static final Logger LOG = Logger.getInstance(CodexProviderManager.class);
-    private static final String AUTH_STORED_KEY = "authStoredInPasswordSafe";
-    private static final String CREDENTIAL_UNAVAILABLE_KEY = "credentialUnavailable";
     private static final String APPLIED_PROVIDER_ID_KEY = "appliedProviderId";
     private static final String APPLIED_PROVIDER_REVISION_KEY = "appliedProviderRevision";
     private static final Object PROVIDER_STATE_LOCK = new Object();
@@ -34,39 +32,23 @@ public class CodexProviderManager {
     private final Consumer<JsonObject> configWriter;
     private final ConfigPathManager pathManager;
     private final CodexSettingsManager codexSettingsManager;
-    private final CodexProviderCredentialStore credentialStore;
 
     public CodexProviderManager(
             Function<Void, JsonObject> configReader,
             Consumer<JsonObject> configWriter,
             ConfigPathManager pathManager,
             CodexSettingsManager codexSettingsManager) {
-        this(configReader, configWriter, pathManager, codexSettingsManager,
-                new CodexProviderCredentialStore());
-    }
-
-    CodexProviderManager(
-            Function<Void, JsonObject> configReader,
-            Consumer<JsonObject> configWriter,
-            ConfigPathManager pathManager,
-            CodexSettingsManager codexSettingsManager,
-            CodexProviderCredentialStore credentialStore) {
         this.configReader = configReader;
         this.configWriter = configWriter;
         this.pathManager = pathManager;
         this.codexSettingsManager = codexSettingsManager;
-        this.credentialStore = credentialStore;
     }
 
     /**
      * Get all Codex providers
      */
     public List<JsonObject> getCodexProviders() {
-        JsonObject config;
-        synchronized (PROVIDER_STATE_LOCK) {
-            config = configReader.apply(null);
-            migrateLegacyCredentials(config);
-        }
+        JsonObject config = configReader.apply(null);
         List<JsonObject> result = new ArrayList<>();
 
         String currentId = null;
@@ -104,7 +86,7 @@ public class CodexProviderManager {
                 if (!provider.has("id")) {
                     provider.addProperty("id", id);
                 }
-                hydrateCredential(provider, id);
+                stripLegacyCredentialMarkers(provider);
                 // Add isActive flag
                 provider.addProperty("isActive", id.equals(currentId));
                 result.add(provider);
@@ -144,11 +126,7 @@ public class CodexProviderManager {
      * Get currently active Codex provider
      */
     public JsonObject getActiveCodexProvider() {
-        JsonObject config;
-        synchronized (PROVIDER_STATE_LOCK) {
-            config = configReader.apply(null);
-            migrateLegacyCredentials(config);
-        }
+        JsonObject config = configReader.apply(null);
 
         if (!config.has("codex")) {
             return null;
@@ -183,7 +161,7 @@ public class CodexProviderManager {
             if (!provider.has("id")) {
                 provider.addProperty("id", currentId);
             }
-            hydrateCredential(provider, currentId);
+            stripLegacyCredentialMarkers(provider);
             provider.addProperty("isActive", true);
             return provider;
         }
@@ -231,15 +209,9 @@ public class CodexProviderManager {
             providerToPersist.addProperty("createdAt", System.currentTimeMillis());
         }
 
-        String previousCredential = credentialStore.read(id);
-        try {
-            protectCredential(providerToPersist, id);
-            providers.add(id, providerToPersist);
-            writeConfig(config);
-        } catch (IOException | RuntimeException e) {
-            restoreCredential(id, previousCredential, false);
-            throw e;
-        }
+        stripLegacyCredentialMarkers(providerToPersist);
+        providers.add(id, providerToPersist);
+        writeConfig(config);
         LOG.info("[CodexProviderManager] Added provider: " + id);
     }
 
@@ -274,18 +246,11 @@ public class CodexProviderManager {
         String id = savedProvider.get("id").getAsString();
         JsonObject existingProvider = providers.has(id) ? providers.getAsJsonObject(id).deepCopy() : null;
         JsonObject previousProvider = existingProvider == null ? null : providerWithId(existingProvider, id);
-        String previousCredential = credentialStore.read(id);
-        boolean hadStoredCredential = hasStoredCredential(existingProvider)
-                || (!hasInlineCredential(existingProvider) && previousCredential != null);
 
         // Preserve createdAt if updating existing provider
         if (existingProvider != null) {
-            JsonObject existing = existingProvider;
-            if (existing.has("createdAt") && !savedProvider.has("createdAt")) {
-                savedProvider.addProperty("createdAt", existing.get("createdAt").getAsLong());
-            }
-            if (hadStoredCredential && !savedProvider.has(AUTH_STORED_KEY)) {
-                savedProvider.addProperty(AUTH_STORED_KEY, true);
+            if (existingProvider.has("createdAt") && !savedProvider.has("createdAt")) {
+                savedProvider.addProperty("createdAt", existingProvider.get("createdAt").getAsLong());
             }
         } else {
             if (!savedProvider.has("createdAt")) {
@@ -293,28 +258,19 @@ public class CodexProviderManager {
             }
         }
 
-        if (hadStoredCredential && previousCredential == null) {
-            savedProvider.addProperty(CREDENTIAL_UNAVAILABLE_KEY, true);
-        }
-        try {
-            protectCredential(savedProvider, id);
-            JsonObject providerToApply = providerWithId(savedProvider, id);
-            boolean activeSettingsChanged = id.equals(getCurrentId(codex))
-                    && managedSettingsChanged(previousProvider, providerToApply);
-            if (activeSettingsChanged) {
-                requireCredentialAvailable(providerToApply);
-                codexSettingsManager.transitionProvider(previousProvider, providerToApply, false, () -> {
-                    providers.add(id, savedProvider);
-                    commitManagedProviderState(codex, id, providerToApply);
-                    writeConfig(config);
-                });
-            } else {
+        stripLegacyCredentialMarkers(savedProvider);
+        JsonObject providerToApply = providerWithId(savedProvider, id);
+        boolean activeSettingsChanged = id.equals(getCurrentId(codex))
+                && managedSettingsChanged(previousProvider, providerToApply);
+        if (activeSettingsChanged) {
+            codexSettingsManager.transitionProvider(previousProvider, providerToApply, false, () -> {
                 providers.add(id, savedProvider);
+                commitManagedProviderState(codex, id, providerToApply);
                 writeConfig(config);
-            }
-        } catch (IOException | RuntimeException e) {
-            restoreCredential(id, previousCredential, hadStoredCredential);
-            throw e;
+            });
+        } else {
+            providers.add(id, savedProvider);
+            writeConfig(config);
         }
     }
 
@@ -344,9 +300,6 @@ public class CodexProviderManager {
         JsonObject persistedProvider = providers.getAsJsonObject(id).deepCopy();
         JsonObject previousProvider = providerWithId(persistedProvider, id);
         JsonObject updatedProvider = persistedProvider.deepCopy();
-        String previousCredential = credentialStore.read(id);
-        boolean hadStoredCredential = hasStoredCredential(persistedProvider)
-                || (!hasInlineCredential(persistedProvider) && previousCredential != null);
 
         // Merge updates
         for (String key : updates.keySet()) {
@@ -363,31 +316,19 @@ public class CodexProviderManager {
             }
         }
 
-        if (hadStoredCredential) {
-            updatedProvider.addProperty(AUTH_STORED_KEY, true);
-        }
-        if (hadStoredCredential && previousCredential == null) {
-            updatedProvider.addProperty(CREDENTIAL_UNAVAILABLE_KEY, true);
-        }
-        try {
-            protectCredential(updatedProvider, id);
-            JsonObject providerToApply = providerWithId(updatedProvider, id);
-            boolean activeSettingsChanged = id.equals(getCurrentId(codex))
-                    && managedSettingsChanged(previousProvider, providerToApply);
-            if (activeSettingsChanged) {
-                requireCredentialAvailable(providerToApply);
-                codexSettingsManager.transitionProvider(previousProvider, providerToApply, false, () -> {
-                    providers.add(id, updatedProvider);
-                    commitManagedProviderState(codex, id, providerToApply);
-                    writeConfig(config);
-                });
-            } else {
+        stripLegacyCredentialMarkers(updatedProvider);
+        JsonObject providerToApply = providerWithId(updatedProvider, id);
+        boolean activeSettingsChanged = id.equals(getCurrentId(codex))
+                && managedSettingsChanged(previousProvider, providerToApply);
+        if (activeSettingsChanged) {
+            codexSettingsManager.transitionProvider(previousProvider, providerToApply, false, () -> {
                 providers.add(id, updatedProvider);
+                commitManagedProviderState(codex, id, providerToApply);
                 writeConfig(config);
-            }
-        } catch (IOException | RuntimeException e) {
-            restoreCredential(id, previousCredential, hadStoredCredential);
-            throw e;
+            });
+        } else {
+            providers.add(id, updatedProvider);
+            writeConfig(config);
         }
         LOG.info("[CodexProviderManager] Updated provider: " + id);
     }
@@ -405,8 +346,6 @@ public class CodexProviderManager {
 
     private DeleteResult deleteCodexProviderLocked(String id) {
         Path configFilePath = pathManager.getConfigFilePath();
-        String deletedCredential = null;
-        boolean credentialDeleted = false;
         try {
             JsonObject config = configReader.apply(null);
             if (!config.has("codex")) {
@@ -429,16 +368,7 @@ public class CodexProviderManager {
                 );
             }
 
-            JsonObject persistedProvider = providers.getAsJsonObject(id).deepCopy();
-            JsonObject deletedProvider = providerWithId(persistedProvider, id);
-            deletedCredential = credentialStore.read(id);
-            if (hasStoredCredential(persistedProvider)
-                    || (!hasInlineCredential(persistedProvider) && deletedCredential != null)) {
-                if (deletedCredential == null || !credentialStore.deleteVerified(id)) {
-                    throw new IOException("Unable to remove Codex credential from PasswordSafe");
-                }
-                credentialDeleted = true;
-            }
+            JsonObject deletedProvider = providerWithId(providers.getAsJsonObject(id), id);
             boolean active = id.equals(getCurrentId(codex));
             providers.remove(id);
             ProviderOrderHelper.removeFromOrder(codex, id);
@@ -448,7 +378,6 @@ public class CodexProviderManager {
                 JsonObject fallbackProvider = fallbackId.isEmpty()
                         ? null
                         : providerWithId(providers.getAsJsonObject(fallbackId), fallbackId);
-                requireCredentialAvailable(fallbackProvider);
                 codexSettingsManager.transitionProvider(deletedProvider, fallbackProvider, false, () -> {
                     if (fallbackProvider == null) {
                         clearAppliedProviderState(codex);
@@ -464,10 +393,6 @@ public class CodexProviderManager {
             LOG.info("[CodexProviderManager] Deleted provider: " + id);
             return DeleteResult.success(id);
         } catch (Exception e) {
-            if (credentialDeleted && deletedCredential != null
-                    && !credentialStore.writeVerified(id, deletedCredential)) {
-                LOG.warn("[CodexProviderManager] Failed to restore credential after provider deletion failure");
-            }
             return DeleteResult.fromException(e, configFilePath.toString());
         }
     }
@@ -538,7 +463,6 @@ public class CodexProviderManager {
         JsonObject nextProvider = !nextId.isEmpty() && !useCliLogin
                 ? providerWithId(providers.getAsJsonObject(nextId), nextId)
                 : null;
-        requireCredentialAvailable(nextProvider);
 
         codexSettingsManager.transitionProvider(previousProvider, nextProvider, useCliLogin, () -> {
             if (useCliLogin) {
@@ -602,9 +526,6 @@ public class CodexProviderManager {
 
     private boolean isManagedProviderReadyInternal(boolean migrateState) throws IOException {
         JsonObject config = configReader.apply(null);
-        if (migrateState) {
-            migrateLegacyCredentials(config);
-        }
         if (!config.has("codex") || !config.get("codex").isJsonObject()) {
             return false;
         }
@@ -617,9 +538,6 @@ public class CodexProviderManager {
         }
 
         JsonObject provider = providerWithId(codex.getAsJsonObject("providers").getAsJsonObject(currentId), currentId);
-        if (isCredentialUnavailable(provider)) {
-            return false;
-        }
         boolean applied = codexSettingsManager.isProviderApplied(provider);
         if (codex.has(APPLIED_PROVIDER_ID_KEY) && codex.has(APPLIED_PROVIDER_REVISION_KEY)) {
             return currentId.equals(codex.get(APPLIED_PROVIDER_ID_KEY).getAsString())
@@ -653,7 +571,7 @@ public class CodexProviderManager {
     private JsonObject providerWithId(JsonObject provider, String id) {
         JsonObject copy = provider.deepCopy();
         copy.addProperty("id", id);
-        hydrateCredential(copy, id);
+        stripLegacyCredentialMarkers(copy);
         return copy;
     }
 
@@ -669,18 +587,6 @@ public class CodexProviderManager {
         return provider.has(key) && provider.get(key).isJsonPrimitive()
                 ? provider.get(key).getAsString()
                 : "";
-    }
-
-    private void requireCredentialAvailable(JsonObject provider) throws IOException {
-        if (isCredentialUnavailable(provider)) {
-            throw new IOException("Codex provider credential is unavailable in PasswordSafe");
-        }
-    }
-
-    private boolean isCredentialUnavailable(JsonObject provider) {
-        return provider != null && provider.has(CREDENTIAL_UNAVAILABLE_KEY)
-                && provider.get(CREDENTIAL_UNAVAILABLE_KEY).isJsonPrimitive()
-                && provider.get(CREDENTIAL_UNAVAILABLE_KEY).getAsBoolean();
     }
 
     private String providerRevision(JsonObject provider) {
@@ -725,114 +631,18 @@ public class CodexProviderManager {
         return provider;
     }
 
-    private void migrateLegacyCredentials(JsonObject config) {
-        if (config == null || !credentialStore.isPersistentStorageAvailable()
-                || !config.has("codex") || !config.get("codex").isJsonObject()) {
+    /**
+     * Dev builds briefly stored provider auth in the OS keychain and left
+     * "authStoredInPasswordSafe" / "credentialUnavailable" markers in the config.
+     * Keychain storage was removed before release; strip those stale markers so
+     * leftover dev configs stay readable. authJson now stays inline in the config.
+     */
+    private static void stripLegacyCredentialMarkers(JsonObject provider) {
+        if (provider == null) {
             return;
         }
-        JsonObject codex = config.getAsJsonObject("codex");
-        if (!codex.has("providers") || !codex.get("providers").isJsonObject()) {
-            return;
-        }
-
-        boolean changed = false;
-        JsonObject providers = codex.getAsJsonObject("providers");
-        for (String id : providers.keySet()) {
-            if (!providers.get(id).isJsonObject()) {
-                continue;
-            }
-            JsonObject provider = providers.getAsJsonObject(id);
-            if (hasStoredCredential(provider)) {
-                continue;
-            }
-            if (hasInlineCredential(provider)) {
-                String authJson = provider.get("authJson").getAsString();
-                if (credentialStore.writeVerified(id, authJson)) {
-                    provider.remove("authJson");
-                    provider.addProperty(AUTH_STORED_KEY, true);
-                    changed = true;
-                }
-            } else if (credentialStore.read(id) != null) {
-                // Older builds could save an empty editor payload after losing the marker.
-                provider.remove("authJson");
-                provider.addProperty(AUTH_STORED_KEY, true);
-                changed = true;
-            }
-        }
-
-        if (changed) {
-            try {
-                writeConfig(config);
-                LOG.info("[CodexProviderManager] Recovered provider credentials from PasswordSafe");
-            } catch (IOException e) {
-                LOG.warn("[CodexProviderManager] Credential migration config update failed: " + e.getMessage());
-            }
-        }
-    }
-
-    private void protectCredential(JsonObject provider, String id) {
-        boolean unavailable = isCredentialUnavailable(provider);
-        if (!provider.has("authJson") || !provider.get("authJson").isJsonPrimitive()) {
-            provider.remove(CREDENTIAL_UNAVAILABLE_KEY);
-            return;
-        }
-
-        String authJson = provider.get("authJson").getAsString();
-        if (unavailable && authJson.isBlank() && hasStoredCredential(provider)) {
-            provider.remove("authJson");
-            provider.remove(CREDENTIAL_UNAVAILABLE_KEY);
-            return;
-        }
-        provider.remove(CREDENTIAL_UNAVAILABLE_KEY);
-        if (authJson.isBlank()) {
-            if (hasStoredCredential(provider) && !credentialStore.deleteVerified(id)) {
-                throw new IllegalStateException("Unable to remove Codex credential from PasswordSafe");
-            }
-            provider.remove("authJson");
-            provider.remove(AUTH_STORED_KEY);
-            return;
-        }
-        if (!credentialStore.writeVerified(id, authJson)) {
-            provider.remove("authJson");
-            throw new IllegalStateException("Unable to store Codex credential in PasswordSafe");
-        }
-        provider.remove("authJson");
-        provider.addProperty(AUTH_STORED_KEY, true);
-    }
-
-    private void hydrateCredential(JsonObject provider, String id) {
-        if (hasInlineCredential(provider)) {
-            return;
-        }
-        String authJson = credentialStore.read(id);
-        if (authJson != null) {
-            provider.addProperty(AUTH_STORED_KEY, true);
-            provider.addProperty("authJson", authJson);
-            provider.remove(CREDENTIAL_UNAVAILABLE_KEY);
-        } else if (hasStoredCredential(provider)) {
-            provider.addProperty(CREDENTIAL_UNAVAILABLE_KEY, true);
-        }
-    }
-
-    private void restoreCredential(String id, String previousCredential, boolean hadStoredCredential) {
-        if (previousCredential != null) {
-            if (!credentialStore.writeVerified(id, previousCredential)) {
-                LOG.warn("[CodexProviderManager] Failed to restore previous PasswordSafe credential");
-            }
-        } else if (!hadStoredCredential) {
-            credentialStore.delete(id);
-        }
-    }
-
-    private static boolean hasInlineCredential(JsonObject provider) {
-        return provider != null && provider.has("authJson") && provider.get("authJson").isJsonPrimitive()
-                && !provider.get("authJson").getAsString().isBlank();
-    }
-
-    private static boolean hasStoredCredential(JsonObject provider) {
-        return provider != null && provider.has(AUTH_STORED_KEY)
-                && provider.get(AUTH_STORED_KEY).isJsonPrimitive()
-                && provider.get(AUTH_STORED_KEY).getAsBoolean();
+        provider.remove("authStoredInPasswordSafe");
+        provider.remove("credentialUnavailable");
     }
 
     /**

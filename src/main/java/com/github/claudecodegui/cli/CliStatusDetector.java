@@ -130,6 +130,16 @@ public final class CliStatusDetector {
                     return CliToolStatus.installed(tool, probe.version, probe.resolvedPath);
                 }
             }
+            // Last resort: ask the user's login shell. GUI-launched IDEs inherit a
+            // minimal launchd/service PATH, so CLIs installed via nvm/fnm/mise/asdf
+            // or custom prefixes only exist once .zshrc/.bashrc/config.fish is sourced.
+            String viaShell = resolveViaLoginShell(tool.getBinaryName());
+            if (viaShell != null) {
+                ProbeResult probe = probe(viaShell);
+                if (probe.ok) {
+                    return CliToolStatus.installed(tool, probe.version, probe.resolvedPath);
+                }
+            }
             return CliToolStatus.notInstalled(tool);
         } catch (Exception e) {
             LOG.warn("[CliStatusDetector] Failed to detect " + tool.getId() + ": " + e.getMessage());
@@ -208,6 +218,13 @@ public final class CliStatusDetector {
             case OMP:
                 dirs.add(join(home, ".omp", "bin"));
                 dirs.add(join(home, ".local", "bin"));
+                // Windows native installer: %LOCALAPPDATA%\omp\omp.exe
+                if (PlatformUtils.isWindows()) {
+                    String localAppData = System.getenv("LOCALAPPDATA");
+                    if (localAppData != null && !localAppData.isBlank()) {
+                        dirs.add(join(localAppData, "omp"));
+                    }
+                }
                 break;
             case DSH:
                 // Hermes (the DSH-native installer) keeps node + dsh together.
@@ -244,8 +261,79 @@ public final class CliStatusDetector {
             dirs.add(join(home, ".npm-global", "bin"));
             dirs.add(join(home, ".volta", "bin"));
             dirs.add(join(home, ".cargo", "bin"));
+            // Package-manager global bins that an IDE-launched process PATH misses.
+            dirs.add(join(home, ".bun", "bin"));
+            dirs.add(join(home, ".yarn", "bin"));
+            // pnpm: macOS default PNPM_HOME is ~/Library/pnpm, Linux ~/.local/share/pnpm
+            dirs.add(join(home, "Library", "pnpm"));
+            dirs.add(join(home, ".local", "share", "pnpm"));
+            // Version managers (nvm/fnm/mise/asdf/...): npm -g shims land next to
+            // the managed node, invisible without sourcing the login shell.
+            dirs.addAll(versionManagerBinDirs(home));
         }
         return dirs;
+    }
+
+    /**
+     * Node version-manager global bin dirs (non-Windows). GUI-launched IDEs get
+     * a sparse launchd PATH, so CLIs installed via {@code npm -g} under nvm /
+     * fnm / mise / asdf version dirs only appear after the login shell is
+     * sourced — and that fallback is fragile (slow or stdin-blocking rc files).
+     * Scan the well-known roots directly; newest versions first. Mirrors
+     * {@code versionManagerBinDirs} in {@code ai-bridge/utils/cli-path.js}.
+     */
+    static List<String> versionManagerBinDirs(String home) {
+        List<String> dirs = new ArrayList<>();
+        if (home == null || home.isBlank()) {
+            return dirs;
+        }
+        // Static single-node managers (bin dir sits next to the managed node).
+        dirs.add(join(home, ".hermes", "node", "bin"));
+        dirs.add(join(home, ".volta", "bin"));
+        dirs.add(join(home, ".fnm", "aliases", "default", "bin"));
+        dirs.add(join(home, ".nvmd", "bin"));
+        // Per-version managers: one global bin dir per installed node version.
+        collectVersionBinDirs(dirs, join(home, ".nvm", "versions", "node"), "bin");
+        collectVersionBinDirs(dirs, join(home, ".local", "share", "fnm", "node-versions"),
+                "installation" + File.separator + "bin");
+        collectVersionBinDirs(dirs, join(home, ".local", "share", "mise", "installs", "node"), "bin");
+        collectVersionBinDirs(dirs, join(home, ".asdf", "installs", "nodejs"), "bin");
+        return dirs;
+    }
+
+    /** Append {@code <root>/<version>/<binSub>} for every version-looking child, newest first. */
+    private static void collectVersionBinDirs(List<String> out, String root, String binSub) {
+        File[] children = new File(root).listFiles();
+        if (children == null) {
+            return;
+        }
+        List<File> versions = new ArrayList<>();
+        for (File child : children) {
+            if (child.isDirectory() && child.getName().matches(".*\\d.*")) {
+                versions.add(child);
+            }
+        }
+        versions.sort((a, b) -> compareVersionNamesDesc(a.getName(), b.getName()));
+        for (File version : versions) {
+            File bin = new File(version, binSub);
+            if (bin.isDirectory()) {
+                out.add(bin.getAbsolutePath());
+            }
+        }
+    }
+
+    /** Numeric-descending compare for names like {@code v22.22.3} / {@code 24.11.1}. */
+    static int compareVersionNamesDesc(String a, String b) {
+        String[] pa = a.split("\\D+");
+        String[] pb = b.split("\\D+");
+        for (int i = 0; i < Math.max(pa.length, pb.length); i++) {
+            long va = i < pa.length && !pa[i].isEmpty() ? Long.parseLong(pa[i]) : 0;
+            long vb = i < pb.length && !pb[i].isEmpty() ? Long.parseLong(pb[i]) : 0;
+            if (va != vb) {
+                return Long.compare(vb, va);
+            }
+        }
+        return b.compareTo(a);
     }
 
     private static String[] envKeysFor(CliToolId tool) {
@@ -261,9 +349,13 @@ public final class CliStatusDetector {
     }
 
     private static ProbeResult probe(String candidate) {
+        // npm -g shims use a `#!/usr/bin/env node` shebang; their sibling `node`
+        // (same version-manager bin dir) is not on the IDE's sparse PATH, so the
+        // probe would die with exit 127 ("env: node: No such file or directory").
+        String siblingBinDir = parentDirOf(candidate);
         // Prefer --version; fall back to -v for tools that only support short flag.
         for (String flag : new String[]{"--version", "-v"}) {
-            ProcessResult result = run(List.of(candidate, flag));
+            ProcessResult result = run(List.of(candidate, flag), siblingBinDir);
             if (result.exitCode == 0 && result.stdout != null && !result.stdout.isBlank()) {
                 String version = extractVersion(result.stdout);
                 String path = resolveWhichLike(candidate);
@@ -396,13 +488,17 @@ public final class CliStatusDetector {
     }
 
     private static ProcessResult run(List<String> command) {
+        return run(command, null);
+    }
+
+    private static ProcessResult run(List<String> command, String extraBinDir) {
         Process process = null;
         try {
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
             Map<String, String> env = pb.environment();
             // Ensure common user bin dirs are on PATH for IDE-launched processes.
-            enrichPath(env);
+            enrichPath(env, extraBinDir);
             process = pb.start();
             // Bound the wait first so a hung child cannot block the probe:
             // expected output is a tiny version string that will not fill the
@@ -439,7 +535,20 @@ public final class CliStatusDetector {
         }
     }
 
-    private static void enrichPath(Map<String, String> env) {
+    /** Absolute parent dir of a candidate path, or null for bare binary names. */
+    private static String parentDirOf(String candidate) {
+        if (candidate == null || candidate.isBlank()) {
+            return null;
+        }
+        File file = new File(candidate);
+        if (!file.isAbsolute()) {
+            return null;
+        }
+        File parent = file.getParentFile();
+        return parent != null ? parent.getAbsolutePath() : null;
+    }
+
+    private static void enrichPath(Map<String, String> env, String extraBinDir) {
         String home = PlatformUtils.getHomeDirectory();
         if (home == null || home.isBlank()) {
             return;
@@ -447,7 +556,12 @@ public final class CliStatusDetector {
         String pathKey = PlatformUtils.isWindows() ? "Path" : "PATH";
         String current = env.getOrDefault(pathKey, env.getOrDefault("PATH", ""));
         String sep = PlatformUtils.isWindows() ? ";" : ":";
-        List<String> extras = new ArrayList<>(List.of(
+        List<String> extras = new ArrayList<>();
+        if (extraBinDir != null && !extraBinDir.isBlank()) {
+            extras.add(extraBinDir);
+        }
+        extras.addAll(versionManagerBinDirs(home));
+        extras.addAll(List.of(
                 join(home, ".kimi-code", "bin"),
                 join(home, ".kimi", "bin"),
                 join(home, ".opencode", "bin"),
@@ -464,6 +578,11 @@ public final class CliStatusDetector {
             String appData = System.getenv("APPDATA");
             if (appData != null && !appData.isBlank()) {
                 extras.add(join(appData, "npm"));
+            }
+            // Windows native installer dir (omp.exe) — see homeBinDirs.
+            String localAppData = System.getenv("LOCALAPPDATA");
+            if (localAppData != null && !localAppData.isBlank()) {
+                extras.add(join(localAppData, "omp"));
             }
             String programFiles = System.getenv("ProgramFiles");
             if (programFiles != null && !programFiles.isBlank()) {
@@ -487,6 +606,160 @@ public final class CliStatusDetector {
         if (!"PATH".equals(pathKey)) {
             env.put("PATH", merged);
         }
+    }
+
+    // --- Login-shell fallback -----------------------------------------------
+
+    /**
+     * Shells allowed for login-env probing (mirrors the allowlist in
+     * {@code EnvironmentConfigurator}): {@code $SHELL} is attacker-influenced,
+     * so only standard system/Homebrew shell binaries may be invoked.
+     */
+    private static final Set<String> ALLOWED_LOGIN_SHELLS = Set.of(
+            "/bin/zsh", "/bin/bash", "/bin/sh",
+            "/usr/bin/zsh", "/usr/bin/bash", "/usr/bin/sh",
+            "/usr/local/bin/zsh", "/usr/local/bin/bash",
+            "/opt/homebrew/bin/zsh", "/opt/homebrew/bin/bash",
+            "/usr/local/bin/fish", "/opt/homebrew/bin/fish"
+    );
+    private static final int LOGIN_SHELL_TIMEOUT_SECONDS = 10;
+
+    private static final Object LOGIN_SHELL_LOCK = new Object();
+    /** binary name → absolute path, resolved in one batched shell invocation. */
+    private static volatile Map<String, String> loginShellPaths;
+    private static volatile long loginShellResolvedAt;
+
+    /**
+     * Resolve {@code binary} through the user's login shell (non-Windows only).
+     * One shell invocation resolves every known CLI binary; the result is cached
+     * for {@value #CACHE_TTL_MILLIS} ms alongside the regular detection cache.
+     */
+    private static String resolveViaLoginShell(String binary) {
+        if (PlatformUtils.isWindows()) {
+            return null;
+        }
+        Map<String, String> cached = loginShellPaths;
+        if (cached != null && System.currentTimeMillis() - loginShellResolvedAt < CACHE_TTL_MILLIS) {
+            return cached.get(binary);
+        }
+        synchronized (LOGIN_SHELL_LOCK) {
+            cached = loginShellPaths;
+            if (cached != null && System.currentTimeMillis() - loginShellResolvedAt < CACHE_TTL_MILLIS) {
+                return cached.get(binary);
+            }
+            Map<String, String> resolved = queryLoginShell();
+            loginShellPaths = resolved;
+            loginShellResolvedAt = System.currentTimeMillis();
+            return resolved.get(binary);
+        }
+    }
+
+    private static Map<String, String> queryLoginShell() {
+        String shell = loginShellBinary();
+        if (shell == null) {
+            return Map.of();
+        }
+        boolean fish = shell.endsWith("fish");
+        List<String> command = new ArrayList<>();
+        command.add(shell);
+        if (!fish) {
+            // -l -i: nvm/fnm/mise only export PATH from interactive login rc files.
+            command.add("-l");
+            command.add("-i");
+        }
+        command.add("-c");
+        command.add(buildLookupScript(fish));
+
+        Process process = null;
+        try {
+            ProcessBuilder pb = new ProcessBuilder(command);
+            // Keep stderr separate: interactive shells print prompts / job-control
+            // noise there; merging would corrupt the key=value parse.
+            pb.redirectErrorStream(false);
+            process = pb.start();
+            boolean finished = process.waitFor(LOGIN_SHELL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                LOG.warn("[CliStatusDetector] Login-shell lookup timed out after "
+                        + LOGIN_SHELL_TIMEOUT_SECONDS + "s");
+                return Map.of();
+            }
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append('\n');
+                    if (output.length() > 4000) {
+                        break;
+                    }
+                }
+            }
+            return parseLoginShellLookup(output.toString());
+        } catch (Exception e) {
+            LOG.debug("[CliStatusDetector] Login-shell lookup failed: " + e.getMessage());
+            return Map.of();
+        } finally {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+    }
+
+    /**
+     * Per-tool {@code name=path} lines. Binary names are internal constants, and
+     * the value is validated against the filesystem before use.
+     */
+    static String buildLookupScript(boolean fish) {
+        StringBuilder script = new StringBuilder();
+        for (CliToolId tool : CliToolId.values()) {
+            String binary = tool.getBinaryName();
+            if (fish) {
+                script.append("echo \"").append(binary).append("=\"(command -v ").append(binary)
+                        .append(" 2>/dev/null); ");
+            } else {
+                script.append("echo \"").append(binary).append("=$(command -v ").append(binary)
+                        .append(" 2>/dev/null)\"; ");
+            }
+        }
+        return script.toString();
+    }
+
+    /** Parse {@code name=path} lines; keep only absolute paths of existing files. */
+    static Map<String, String> parseLoginShellLookup(String output) {
+        if (output == null || output.isBlank()) {
+            return Map.of();
+        }
+        Map<String, String> resolved = new LinkedHashMap<>();
+        for (String line : output.split("\n")) {
+            int eq = line.indexOf('=');
+            if (eq <= 0) {
+                continue;
+            }
+            String name = line.substring(0, eq).trim();
+            String path = line.substring(eq + 1).trim();
+            if (name.isEmpty() || path.isEmpty()) {
+                continue;
+            }
+            File file = new File(path);
+            if (file.isAbsolute() && file.isFile()) {
+                resolved.put(name, file.getAbsolutePath());
+            }
+        }
+        return resolved;
+    }
+
+    private static String loginShellBinary() {
+        String shell = System.getenv("SHELL");
+        if (shell != null && ALLOWED_LOGIN_SHELLS.contains(shell)) {
+            return shell;
+        }
+        for (String candidate : new String[]{"/bin/zsh", "/bin/bash", "/bin/sh"}) {
+            if (new File(candidate).canExecute()) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private static String join(String first, String... parts) {

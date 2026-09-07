@@ -7,7 +7,7 @@ import { ToastContainer } from '../Toast';
 import SettingsHeader from './SettingsHeader';
 import SettingsSidebar, { type SettingsTab } from './SettingsSidebar';
 import BasicConfigSection from './BasicConfigSection';
-import ProviderTabSection from './ProviderTabSection';
+import ProviderTabSection, { type ProviderManageTab } from './ProviderTabSection';
 import DependencySection from './DependencySection';
 import UsageSection from './UsageSection';
 import PlaceholderSection from './PlaceholderSection';
@@ -39,6 +39,8 @@ import styles from './style.module.less';
 interface SettingsViewProps {
   onClose: () => void;
   initialTab?: SettingsTab;
+  /** Deep link into the Providers tab's sub-tab (claude/codex/cli) */
+  initialProviderSubTab?: ProviderManageTab;
   currentProvider: 'claude' | 'codex' | string;
   // Streaming configuration (passed from App.tsx for state sync)
   streamingEnabled?: boolean;
@@ -57,6 +59,7 @@ interface SettingsViewProps {
 const SettingsView = ({
   onClose,
   initialTab,
+  initialProviderSubTab,
   currentProvider,
   streamingEnabled: streamingEnabledProp,
   onStreamingEnabledChange: onStreamingEnabledChangeProp,
@@ -70,9 +73,9 @@ const SettingsView = ({
   const { t } = useTranslation();
   const isCodexMode = currentProvider === 'codex';
   // Codex mode: align with Claude capabilities for settings tabs.
-  // The Codex pet entry is temporarily disabled (grayed out, not clickable).
+  // Keep the Codex pet settings available.
   const disabledTabs = useMemo<SettingsTab[]>(
-    () => ['pet'],
+    () => [],
     []
   );
 
@@ -595,6 +598,7 @@ const SettingsView = ({
           {currentTab === 'providers' && (
             <ProviderTabSection
               currentProvider={currentProvider}
+              initialSubTab={initialProviderSubTab}
               providers={providers}
               loading={loading}
               onAddProvider={handleAddProvider}

@@ -103,8 +103,7 @@
     "retrySdkStatus": "Retry",
     "openSourceBanner": "This project is guaranteed to be 100% open source and free (beware of pirated projects)",
     "openSourceBannerStar": "Star",
-    "openSourceBannerStarToast": "Repo link copied to clipboard — paste it in your browser to visit ⭐",
-    "openSourceBannerStarAria": "Copy repository link and star on GitHub",
+    "openSourceBannerStarAria": "Open the repository on GitHub and star it",
     "goInstallSdk": "Go to Install",
     "sdkTooLowForFable": "Claude SDK version is too low for the Fable model. Update the Claude Code SDK in Settings.",
     "updateSdk": "Update SDK",
@@ -332,6 +331,7 @@
       "retryAttempts": "Retry attempts",
       "catalogColumns": "Cards per row",
       "catalogPageSize": "Items per page",
+      "catalogSort": "Sort order",
       "pageSizeOption": "{{count}} per page",
       "pageJump": "Go to",
       "goToPage": "Go to page",
@@ -663,7 +663,7 @@
         },
         "dsh": {
           "name": "DeepSeek Harness",
-          "description": "DeepSeek terminal agent harness (persistent dsh web host)"
+          "description": "DeepSeek terminal agent CLI (dsh)"
         }
       },
       "installDialog": {
@@ -682,8 +682,15 @@
       "summary": "{{installed}} / {{total}} installed",
       "moreComingSoon": "More coming soon",
       "copyPath": "Copy path",
+      "visibility": {
+        "hide": "Hide in provider switcher",
+        "show": "Show in provider switcher"
+      },
       "dsh": {
-        "cardTitle": "DeepSeek Harness (DSH)",
+        "groupTitle": "DeepSeek Harness",
+        "cliRowTitle": "CLI install",
+        "cardTitle": "Local host",
+        "rowHint": "Start or adopt the local dsh web host",
         "hint": "One persistent local dsh web host serves all sessions; the plugin adopts a running host instead of spawning a second one.",
         "state": {
           "checking": "Checking…",
@@ -696,7 +703,8 @@
         "openWebUi": "Open DSH Web UI",
         "startHost": "Start host",
         "stopHost": "Stop host (plugin-spawned only)",
-        "autoStart": "Auto-start when needed"
+        "autoStart": "Auto-start when needed",
+        "moreActions": "More"
       }
     },
     "pluginModels": {
@@ -883,11 +891,18 @@
     "versionHistoryDesc": "View all version update records",
     "communityQrTip": "Scan with WeChat to join the community",
     "communityQrAlt": "Official WeChat community QR code",
-    "githubTitle": "GitHub Repository",
-    "githubDesc": "This project is open source on GitHub. Star us to show your support!",
-    "githubCopyBtn": "Copy Repository URL",
-    "githubCopied": "Repository URL copied to clipboard. Please visit it in your browser.",
-    "githubCopyFailed": "Failed to copy. Please copy manually.",
+    "socialDocs": "Official Documentation",
+    "socialTitle": "Follow Us",
+    "socialGithub": "GitHub repository — star us!",
+    "socialX": "X (Twitter) @ZPeng31310",
+    "socialZhihu": "Zhihu @vscodeai",
+    "socialXiaohongshu": "Xiaohongshu (RED)",
+    "socialDouyin": "Douyin — hover to scan and follow",
+    "socialYoutube": "YouTube channel",
+    "douyinQrAlt": "Douyin QR code",
+    "douyinId": "Douyin ID: nengyongai",
+    "douyinCopied": "Douyin ID copied to clipboard",
+    "douyinCopyFailed": "Failed to copy. Please copy manually.",
     "sponsor": "Sponsor",
     "sponsorDesc": "If this project helps you, consider sponsoring to support ongoing maintenance!",
     "alipay": "Alipay",
@@ -2033,16 +2048,20 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Fastest for quick answers"
       },
-      "opus48": {
-        "label": "Opus 4.8",
-        "description": "Opus 4.8 · Previous Opus generation"
+      "fable51": {
+        "label": "Fable 5.1",
+        "description": "Fable 5.1 · Most powerful · Mythos-class"
       },
       "fable5": {
         "label": "Fable 5",
-        "description": "Fable 5 · Most powerful · Mythos-class"
+        "description": "Fable 5 · Previous Fable generation"
       }
     },
     "codex": {
+      "gpt6astra": {
+        "label": "GPT-6 Astra",
+        "description": "New-generation flagship for autonomous computer use and long agentic tasks."
+      },
       "gpt56sol": {
         "label": "GPT-5.6 Sol",
         "description": "Frontier model for complex professional work."
@@ -2099,9 +2118,15 @@
       "tooltip": "Automatically accept file edits",
       "description": "Automatically accept file creation/editing, reducing confirmation steps"
     },
-    "bypassPermissions": {
+    "auto": {
       "label": "Auto Mode",
       "shortLabel": "Auto",
+      "tooltip": "Let the provider review approval requests automatically",
+      "description": "Uses the provider-native reviewer while retaining safety boundaries"
+    },
+    "bypassPermissions": {
+      "label": "Full Auto",
+      "shortLabel": "Full Auto",
       "tooltip": "Bypass all permission checks",
       "description": "Fully automated, bypassing all permission checks [Use with caution]"
     }
@@ -2122,6 +2147,12 @@
       "label": "Auto Edit",
       "tooltip": "Codex approval_policy=on-request – asks for approval when needed",
       "description": "Balanced option. Allows normal editing flow while still requiring approvals when needed."
+    },
+    "auto": {
+      "label": "Approve for me",
+      "shortLabel": "Auto",
+      "tooltip": "Codex approvals_reviewer=auto_review – an automatic reviewer handles eligible approval requests.",
+      "description": "Keeps the workspace-write sandbox and escalates requests the reviewer cannot approve."
     },
     "bypassPermissions": {
       "label": "Full Auto",
@@ -2186,7 +2217,8 @@
     },
     "dsh": {
       "label": "DeepSeek Harness"
-    }
+    },
+    "manageCli": "CLI Settings"
   },
   "promptEnhancer": {
     "title": "Prompt Enhancer",

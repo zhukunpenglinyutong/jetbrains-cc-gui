@@ -24,6 +24,7 @@ export function ChatInputBoxFooter({
   selectedModel,
   permissionMode,
   currentProvider,
+  codexNativeAutoReviewAvailable = true,
   reasoningEffort,
   codexFastMode,
   dshPreset,
@@ -45,6 +46,7 @@ export function ChatInputBoxFooter({
   onOpenAgentSettings,
   onAddModel,
   onClearAgent,
+  onOpenCliSettings,
   longContextEnabled = true,
   onLongContextChange,
   fileCompletion,
@@ -63,6 +65,7 @@ export function ChatInputBoxFooter({
   selectedModel: string;
   permissionMode: PermissionMode;
   currentProvider: string;
+  codexNativeAutoReviewAvailable?: boolean;
   reasoningEffort: ReasoningEffort;
   codexFastMode?: CodexFastMode;
   dshPreset?: string;
@@ -84,6 +87,7 @@ export function ChatInputBoxFooter({
   onOpenAgentSettings?: () => void;
   onAddModel?: () => void;
   onClearAgent: () => void;
+  onOpenCliSettings?: () => void;
   longContextEnabled?: boolean;
   onLongContextChange?: (enabled: boolean) => void;
   fileCompletion: CompletionController;
@@ -120,6 +124,7 @@ export function ChatInputBoxFooter({
         selectedModel={selectedModel}
         permissionMode={permissionMode}
         currentProvider={currentProvider}
+        codexNativeAutoReviewAvailable={codexNativeAutoReviewAvailable}
         reasoningEffort={reasoningEffort}
         codexFastMode={codexFastMode}
         dshPreset={dshPreset}
@@ -141,6 +146,7 @@ export function ChatInputBoxFooter({
         onOpenAgentSettings={onOpenAgentSettings}
         onAddModel={onAddModel}
         onClearAgent={onClearAgent}
+        onOpenCliSettings={onOpenCliSettings}
         longContextEnabled={longContextEnabled}
         onLongContextChange={onLongContextChange}
       />
