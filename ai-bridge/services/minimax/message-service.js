@@ -125,6 +125,53 @@ function parseToolArguments(raw) {
 }
 
 /**
+ * Normalize a MiniMax (mcode) usage payload into the snake_case shape the
+ * shared marker protocol expects (consumed by Java TokenUsageUtils, which
+ * only reads input_tokens / cache_creation_input_tokens / cache_read_input_tokens
+ * / output_tokens / total_tokens).
+ *
+ * The mcode CLI emits camelCase fields (inputTokens / cacheReadTokens /
+ * outputTokens / totalTokens) and may attach non-token fields such as
+ * requestDurationMs — those are dropped here. Any field whose value is not a
+ * positive integer is omitted; if total_tokens is missing but the other three
+ * are present, it is reconstructed as their sum.
+ *
+ * Returns null when the input is unusable (non-object, array, null, or every
+ * tracked field is missing/non-positive), so callers can skip emission
+ * instead of sending a zeroed usage marker.
+ */
+export function normalizeMiniMaxUsage(usage) {
+  if (usage == null || typeof usage !== 'object' || Array.isArray(usage)) {
+    return null;
+  }
+  const result = {};
+  const fields = [
+    ['input_tokens', 'inputTokens'],
+    ['cache_read_input_tokens', 'cacheReadTokens'],
+    ['output_tokens', 'outputTokens'],
+    ['total_tokens', 'totalTokens'],
+  ];
+  for (const [snake, camel] of fields) {
+    const raw = usage[camel];
+    if (typeof raw === 'number' && Number.isInteger(raw) && raw > 0) {
+      result[snake] = raw;
+    }
+  }
+  if (result.total_tokens == null) {
+    const sum = (result.input_tokens || 0)
+      + (result.cache_read_input_tokens || 0)
+      + (result.output_tokens || 0);
+    if (sum > 0) {
+      result.total_tokens = sum;
+    }
+  }
+  if (Object.keys(result).length === 0) {
+    return null;
+  }
+  return result;
+}
+
+/**
  * Map one mcode stream-json line onto a small event descriptor.
  */
 export function parseMiniMaxStreamLine(line) {
@@ -299,8 +346,11 @@ export async function sendMessage(
         }
         break;
       }
-      case 'usage':
-        emitUsage(event.usage);
+      case 'usage': {
+        const normalizedUsage = normalizeMiniMaxUsage(event.usage);
+        if (normalizedUsage) {
+          emitUsage(normalizedUsage);
+        }
         // Safety net: if a finished assistant message never produced deltas
         // (e.g. non-streaming fallback), emit its full text/thinking once.
         if (event.message && typeof event.message === 'object' && event.message.id) {
@@ -317,6 +367,7 @@ export async function sendMessage(
           }
         }
         break;
+      }
       case 'result': {
         if (event.sessionId && isNonEmptySessionId(event.sessionId)) {
           emitSessionId(event.sessionId);

@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.CodexMessageConverter;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.ClaudeSession.Message;
+import com.github.claudecodegui.util.TokenUsageUtils;
 import com.github.claudecodegui.util.UsageCostCalculator;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -114,6 +115,8 @@ public class CodexMessageHandler implements MessageCallback {
             }
         } else if ("message_end".equals(type)) {
             handleMessageEnd();
+        } else if ("usage".equals(type)) {
+            handleUsageMessage(content);
         } else {
             LOG.debug("CodexMessageHandler: Unhandled message type: " + type);
         }
@@ -882,6 +885,42 @@ public class CodexMessageHandler implements MessageCallback {
      */
     private void handleMessageEnd() {
         LOG.debug("Codex message_end received, deferring stream cleanup to stream_end/onComplete");
+    }
+
+    /**
+     * Handle a usage update from a non-Codex CLI provider (e.g. minimax, dsh, kimi).
+     * The [USAGE] marker is forwarded by ai-bridge as type="usage" with the usage
+     * JSON object as content. This path directly pushes the context ring because
+     * Codex has no authoritative token_count event for these providers.
+     *
+     * @param jsonContent usage JSON content
+     * @since 1.0.0
+     */
+    private void handleUsageMessage(String jsonContent) {
+        try {
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            com.google.gson.JsonObject usage = gson.fromJson(jsonContent, com.google.gson.JsonObject.class);
+            if (usage == null || !usage.isJsonObject()) {
+                return;
+            }
+
+            currentTurnContextUsage = usage.deepCopy();
+
+            boolean updated = attachUsageToLastAssistant(usage, null);
+            if (updated) {
+                callbackHandler.notifyMessageUpdate(state.getMessages());
+                LOG.debug("Codex usage applied from [USAGE] message");
+            } else {
+                LOG.debug("Codex usage received but no assistant message to attach");
+            }
+
+            int usedTokens = TokenUsageUtils.extractContextTokens(usage, state.getProvider());
+            int maxTokens = com.github.claudecodegui.handler.SettingsHandler.getModelContextLimit(state.getModel());
+            callbackHandler.notifyUsageUpdate(usedTokens, maxTokens);
+            LOG.debug("Codex usage push: usedTokens=" + usedTokens + ", maxTokens=" + maxTokens);
+        } catch (Exception e) {
+            LOG.debug("Failed to parse Codex usage message: " + e.getMessage());
+        }
     }
 
     /**

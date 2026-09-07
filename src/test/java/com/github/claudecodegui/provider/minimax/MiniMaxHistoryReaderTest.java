@@ -260,4 +260,41 @@ public class MiniMaxHistoryReaderTest {
         assertTrue("symlink target contents must survive session deletion",
                 Files.exists(victimFile));
     }
+
+    @Test
+    public void mapsLastAssistantUsageIntoGeneratedMessages() throws Exception {
+        Path home = Files.createTempDirectory("minimax-history-test");
+        String display = """
+                [
+                  {"msg_id":"umsg_1","role":"user","msg_content":"hello","timestamp":1},
+                  {"msg_id":"amsg_2","role":"assistant","msg_content":"first","timestamp":2},
+                  {"msg_id":"amsg_3","role":"assistant","msg_content":"second","timestamp":3,
+                   "usage":{"total_tokens":30248,"context_window":400000,
+                            "input_tokens":23993,"output_tokens":493,"cache_read":5762}}
+                ]
+                """;
+        writeSession(home, "11-22-33-000-session_usage",
+                snapshot("mvs_usage1", "E:/test/project", "usage", display));
+
+        MiniMaxHistoryReader reader = new MiniMaxHistoryReader(home, new Gson());
+        List<JsonObject> messages = reader.getSessionMessages("mvs_usage1", "E:/test/project");
+
+        // user + two assistant text bubbles
+        assertEquals(3, messages.size());
+        JsonObject firstAssistant = messages.get(1);
+        assertEquals("assistant", firstAssistant.get("type").getAsString());
+        assertFalse(firstAssistant.has("usage"));
+
+        JsonObject secondAssistant = messages.get(2);
+        assertEquals("assistant", secondAssistant.get("type").getAsString());
+        assertTrue(secondAssistant.has("usage"));
+        JsonObject usage = secondAssistant.getAsJsonObject("usage");
+        assertEquals(23993, usage.get("input_tokens").getAsInt());
+        assertEquals(493, usage.get("output_tokens").getAsInt());
+        assertEquals(30248, usage.get("total_tokens").getAsInt());
+        assertEquals(5762, usage.get("cache_read_input_tokens").getAsInt());
+        assertEquals(400000, usage.get("model_context_window").getAsInt());
+        assertFalse(usage.has("cache_read"));
+        assertFalse(usage.has("context_window"));
+    }
 }
