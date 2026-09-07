@@ -95,6 +95,17 @@ public class ModelProviderHandlerTest {
     }
 
     @Test
+    public void shouldKeepExpectedContextLimitsForVisibleMiniMaxModels() {
+        // MiniMax context windows come from ~/.minimax/config.yaml limit.context.
+        assertEquals(400_000, ModelProviderHandler.getModelContextLimit("minimax/MiniMax-M3"));
+        assertEquals(400_000, ModelProviderHandler.getModelContextLimit("MiniMax-M3"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("minimax/MiniMax-M2.7"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("MiniMax-M2.7"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("minimax/MiniMax-M2.7-highspeed"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("MiniMax-M2.7-highspeed"));
+    }
+
+    @Test
     public void shouldReturnCorrectContextLimitsForClaudeModels() {
         // Base IDs without [1m] suffix - 200k context by default
         assertTrue(ModelProviderHandler.MODEL_CONTEXT_LIMITS.containsKey("claude-opus-5"));

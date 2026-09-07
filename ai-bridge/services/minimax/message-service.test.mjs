@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseMiniMaxStreamLine } from './message-service.js';
+import { parseMiniMaxStreamLine, normalizeMiniMaxUsage } from './message-service.js';
 
 test('delta content maps to text event', () => {
   const line = JSON.stringify({
@@ -91,4 +91,45 @@ test('empty delta with finish flag is ignored', () => {
     type: 'delta', messageId: 'm4', role: 'assistant', chunkIndex: 9, finish: true,
   });
   assert.deepEqual(parseMiniMaxStreamLine(line), { kind: 'other' });
+});
+
+test('normalizeMiniMaxUsage maps real mcode sample to snake_case token fields', () => {
+  const normalized = normalizeMiniMaxUsage({
+    totalTokens: 36178,
+    inputTokens: 1347,
+    outputTokens: 15,
+    requestDurationMs: 2811,
+    cacheReadTokens: 34816,
+  });
+  assert.deepEqual(normalized, {
+    input_tokens: 1347,
+    cache_read_input_tokens: 34816,
+    output_tokens: 15,
+    total_tokens: 36178,
+  });
+});
+
+test('normalizeMiniMaxUsage reconstructs total_tokens when missing', () => {
+  const normalized = normalizeMiniMaxUsage({
+    inputTokens: 100,
+    cacheReadTokens: 50,
+    outputTokens: 10,
+  });
+  assert.deepEqual(normalized, {
+    input_tokens: 100,
+    cache_read_input_tokens: 50,
+    output_tokens: 10,
+    total_tokens: 160,
+  });
+});
+
+test('normalizeMiniMaxUsage returns null for invalid inputs', () => {
+  assert.equal(normalizeMiniMaxUsage(null), null);
+  assert.equal(normalizeMiniMaxUsage(undefined), null);
+  assert.equal(normalizeMiniMaxUsage({}), null);
+  assert.equal(normalizeMiniMaxUsage([]), null);
+  assert.equal(normalizeMiniMaxUsage({ inputTokens: 0, cacheReadTokens: 0, outputTokens: 0 }), null);
+  assert.equal(normalizeMiniMaxUsage({ inputTokens: -5, cacheReadTokens: -1, outputTokens: -3 }), null);
+  assert.equal(normalizeMiniMaxUsage('not an object'), null);
+  assert.equal(normalizeMiniMaxUsage(42), null);
 });

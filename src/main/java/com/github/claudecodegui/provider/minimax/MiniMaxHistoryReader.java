@@ -373,16 +373,43 @@ public class MiniMaxHistoryReader {
     /**
      * Converts mcode displayMessages into Claude-shaped messages:
      * user text, assistant thinking / text, tool_use, and tool_result.
+     *
+     * <p>Also maps the last assistant {@code usage} object from the on-disk
+     * snapshot into the generated assistant message's top-level {@code usage}
+     * field so the context-usage status bar can read it.</p>
      */
     private static List<JsonObject> buildMessages(JsonArray displayMessages) {
+        // Find the last assistant displayMessage that carries a non-empty usage object.
+        JsonObject targetUsage = null;
+        int targetAssistantIndex = -1;
+        for (int i = 0; i < displayMessages.size(); i++) {
+            JsonObject msg = displayMessages.get(i).getAsJsonObject();
+            if ("assistant".equals(text(msg, "role")) && msg.has("usage") && msg.get("usage").isJsonObject()) {
+                targetUsage = msg.getAsJsonObject("usage");
+                targetAssistantIndex = i;
+            }
+        }
+
         List<JsonObject> messages = new ArrayList<>();
         int counter = 0;
-        for (JsonElement el : displayMessages) {
+        int pendingTargetAssistantLastIdx = -1;
+
+        for (int i = 0; i < displayMessages.size(); i++) {
+            JsonElement el = displayMessages.get(i);
             if (!el.isJsonObject()) {
                 continue;
             }
             JsonObject msg = el.getAsJsonObject();
             String role = text(msg, "role");
+
+            // If the previous displayMessage was the target assistant and the current
+            // one is not an assistant, attach the mapped usage to the last assistant
+            // message that belongs to that original assistant.
+            if (pendingTargetAssistantLastIdx >= 0 && !"assistant".equals(role)) {
+                attachMappedUsage(messages.get(pendingTargetAssistantLastIdx), targetUsage);
+                pendingTargetAssistantLastIdx = -1;
+            }
+
             if ("user".equals(role)) {
                 String content = text(msg, "msg_content");
                 if (content == null || content.isBlank()) {
@@ -395,11 +422,17 @@ public class MiniMaxHistoryReader {
                 if (thinking != null && !thinking.isBlank()) {
                     counter++;
                     messages.add(buildAssistantThinkingMessage(thinking, "minimax-think-" + counter));
+                    if (i == targetAssistantIndex) {
+                        pendingTargetAssistantLastIdx = messages.size() - 1;
+                    }
                 }
                 String content = text(msg, "msg_content");
                 if (content != null && !content.isBlank()) {
                     counter++;
                     messages.add(buildAssistantTextMessage(content, "minimax-text-" + counter));
+                    if (i == targetAssistantIndex) {
+                        pendingTargetAssistantLastIdx = messages.size() - 1;
+                    }
                 }
                 if (msg.has("tool_calls") && msg.get("tool_calls").isJsonArray()) {
                     for (JsonElement callEl : msg.getAsJsonArray("tool_calls")) {
@@ -418,6 +451,9 @@ public class MiniMaxHistoryReader {
                         }
                         JsonObject input = parseJsonObject(text(call, "tool_call_args"));
                         messages.add(buildToolUseMessage(callId, name, input));
+                        if (i == targetAssistantIndex) {
+                            pendingTargetAssistantLastIdx = messages.size() - 1;
+                        }
 
                         String resultData = firstNonBlank(text(call, "tool_call_result_data"),
                                 text(call, "toolCallResultData"));
@@ -431,7 +467,41 @@ public class MiniMaxHistoryReader {
                 }
             }
         }
+
+        // If the last displayMessage was the target assistant, attach usage now.
+        if (pendingTargetAssistantLastIdx >= 0) {
+            attachMappedUsage(messages.get(pendingTargetAssistantLastIdx), targetUsage);
+        }
+
         return messages;
+    }
+
+    private static void attachMappedUsage(JsonObject target, JsonObject usage) {
+        if (target == null || usage == null) {
+            return;
+        }
+        JsonObject mapped = new JsonObject();
+        if (usage.has("input_tokens") && usage.get("input_tokens").isJsonPrimitive()
+                && usage.get("input_tokens").getAsInt() > 0) {
+            mapped.addProperty("input_tokens", usage.get("input_tokens").getAsInt());
+        }
+        if (usage.has("output_tokens") && usage.get("output_tokens").isJsonPrimitive()
+                && usage.get("output_tokens").getAsInt() > 0) {
+            mapped.addProperty("output_tokens", usage.get("output_tokens").getAsInt());
+        }
+        if (usage.has("total_tokens") && usage.get("total_tokens").isJsonPrimitive()
+                && usage.get("total_tokens").getAsInt() > 0) {
+            mapped.addProperty("total_tokens", usage.get("total_tokens").getAsInt());
+        }
+        if (usage.has("cache_read") && usage.get("cache_read").isJsonPrimitive()
+                && usage.get("cache_read").getAsInt() > 0) {
+            mapped.addProperty("cache_read_input_tokens", usage.get("cache_read").getAsInt());
+        }
+        if (usage.has("context_window") && usage.get("context_window").isJsonPrimitive()
+                && usage.get("context_window").getAsInt() > 0) {
+            mapped.addProperty("model_context_window", usage.get("context_window").getAsInt());
+        }
+        target.add("usage", mapped);
     }
 
     /**

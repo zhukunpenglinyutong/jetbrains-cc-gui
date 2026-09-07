@@ -76,6 +76,14 @@ public class ModelProviderHandler {
         MODEL_CONTEXT_LIMITS.put("grok-4.5", 500_000); // legacy alias
         MODEL_CONTEXT_LIMITS.put("grok-4", 500_000);
         MODEL_CONTEXT_LIMITS.put("grok-build", 500_000);
+
+        // MiniMax models (context window from ~/.minimax/config.yaml limit.context)
+        MODEL_CONTEXT_LIMITS.put("minimax/MiniMax-M3", 400_000);
+        MODEL_CONTEXT_LIMITS.put("MiniMax-M3", 400_000);
+        MODEL_CONTEXT_LIMITS.put("minimax/MiniMax-M2.7", 200_000);
+        MODEL_CONTEXT_LIMITS.put("MiniMax-M2.7", 200_000);
+        MODEL_CONTEXT_LIMITS.put("minimax/MiniMax-M2.7-highspeed", 200_000);
+        MODEL_CONTEXT_LIMITS.put("MiniMax-M2.7-highspeed", 200_000);
     }
 
     private final HandlerContext context;
