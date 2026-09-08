@@ -42,7 +42,7 @@ import { spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getRealHomeDir } from '../../utils/path-utils.js';
@@ -222,7 +222,10 @@ function runService({
   env.FAKE_ECHO_CWD = echoCwd ? '1' : '';
   env.FAKE_ECHO_INIT_PERM = echoInitPerm ? '1' : '';
   env.FAKE_ECHO_IMAGE_STATS = echoImageStats ? '1' : '';
-  env.SERVICE_PATH = SERVICE_PATH;
+  // The runner child dynamic-imports this value: on Windows a bare absolute
+  // path parses as a URL scheme ("d:") and ESM import rejects it — hand the
+  // child a file:// URL instead (same idiom as config/api-config.test.js).
+  env.SERVICE_PATH = pathToFileURL(SERVICE_PATH).href;
   env.SVC_CWD = cwd;
   env.SVC_SESSION_ID = sessionId;
   env.SVC_MODEL = model;
@@ -539,7 +542,7 @@ test('normalizeConversationId rejects dash-led ids (P-6: they would parse as CLI
 
 test('classifyWorkspaceSubstitutionReason covers the closed localized set', async () => {
   const { classifyWorkspaceSubstitutionReason } = await import('./message-service.js');
-  assert.equal(classifyWorkspaceSubstitutionReason(BRIDGE_DIR.replace(/\/$/, '')), 'plugin-internal directory');
+  assert.equal(classifyWorkspaceSubstitutionReason(BRIDGE_DIR.replace(/[\\/]$/, '')), 'plugin-internal directory');
   const missing = join(tmpdir(), `gemini-missing-${Date.now()}-classify`);
   assert.equal(classifyWorkspaceSubstitutionReason(missing), 'directory does not exist');
   // exists-but-file
@@ -802,15 +805,15 @@ test('requestedCwd equal to cwd produces no notice', async () => {
 test('bridge directory request is substituted VISIBLY (AC5, NFR2)', async () => {
   const { stdout } = await runService({
     fixture: 'text-turn-error-result.jsonl',
-    cwd: BRIDGE_DIR.replace(/\/$/, ''),
+    cwd: BRIDGE_DIR.replace(/[\\/]$/, ''),
   });
   const notices = markers(stdout, 'CONTENT_DELTA').map(decodeStringMarker);
   const notice = notices.find((t) => String(t).startsWith('[Notice] Working directory substituted'));
   assert.ok(notice, 'substitution must never be silent');
-  assert.ok(notice.includes(BRIDGE_DIR.replace(/\/$/, '')), `names the requested dir: ${notice}`);
+  assert.ok(notice.includes(BRIDGE_DIR.replace(/[\\/]$/, '')), `names the requested dir: ${notice}`);
   assert.match(notice, /\(plugin-internal directory\)\./);
   const used = notice.match(/using "([^"]+)"/)[1];
-  assert.notEqual(used, BRIDGE_DIR.replace(/\/$/, ''));
+  assert.notEqual(used, BRIDGE_DIR.replace(/[\\/]$/, ''));
 });
 
 test('non-existent directory request is substituted VISIBLY (AC5)', async () => {
@@ -946,7 +949,7 @@ test('blank cwd with no project env falls through to home, never the bridge dir 
   const cwdLine = stderr.split('\n').find((l) => l.startsWith('CWD:'));
   assert.ok(cwdLine, `fake CLI must echo its cwd: ${stderr.slice(0, 400)}`);
   const used = cwdLine.slice('CWD:'.length);
-  const bridgeDir = BRIDGE_DIR.replace(/\/$/, '');
+  const bridgeDir = BRIDGE_DIR.replace(/[\\/]$/, '');
   assert.notEqual(
     normalize(used), normalize(bridgeDir),
     'the runner child starts in the bridge dir — it must never be chosen'

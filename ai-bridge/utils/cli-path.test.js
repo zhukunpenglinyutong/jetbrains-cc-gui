@@ -77,6 +77,15 @@ async function writeFakeCli(dir, {
   const bin = join(dir, 'agy');
   await writeFile(bin, script, 'utf8');
   await chmod(bin, 0o755);
+  if (process.platform === 'win32') {
+    // A shebang script without an extension cannot be executed on Windows;
+    // hand verifyAgyBinary the .cmd shim instead (same idiom as
+    // services/gemini/message-service.test.js), which its resolveCliSpawn
+    // discipline runs through cmd.exe.
+    const cmd = join(dir, 'agy.cmd');
+    await writeFile(cmd, `@echo off\r\nnode "${bin}" %*\r\n`, 'utf8');
+    return cmd;
+  }
   return bin;
 }
 
