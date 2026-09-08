@@ -236,6 +236,12 @@ export function extractCommandMessageContent(text: string): string {
 
 export type LocalizeMessageFn = (text: string) => string;
 
+const NON_VISIBLE_MESSAGE_CHARS_REGEX = /[\u200B-\u200D\u2063\uFEFF]/g;
+
+export function hasVisibleMessageText(text: string | undefined): text is string {
+  return typeof text === 'string' && text.replace(NON_VISIBLE_MESSAGE_CHARS_REGEX, '').trim().length > 0;
+}
+
 export function isSyntheticToolMessageContent(
   content: string | undefined,
   rawBlocks: readonly ClaudeContentBlock[] | null | undefined
@@ -288,8 +294,7 @@ export function normalizeBlocks(
       const type = candidate.type as string | undefined;
       if (type === 'text') {
         const rawText = typeof candidate.text === 'string' ? candidate.text : '';
-        // Some replies contain placeholder text "(no content)", skip to avoid rendering empty content
-        if (rawText.trim() === '(no content)') {
+        if (!hasVisibleMessageText(rawText) || rawText.trim() === '(no content)') {
           return;
         }
 
@@ -408,7 +413,7 @@ export function normalizeBlocks(
 
       // Filter empty strings and command tags (without <command-message>)
       // But only for user messages - assistant messages with these tags should pass through
-      if (!content.trim() || (isUserMessage && containsAnyTag(content, FILTERED_NORMALIZE_TAGS))) {
+      if (!hasVisibleMessageText(content) || (isUserMessage && containsAnyTag(content, FILTERED_NORMALIZE_TAGS))) {
         return null;
       }
       return [{ type: 'text' as const, text: localizeMessage(content) }];
