@@ -25,7 +25,6 @@ export function ompModeForModelId(modelId: string, roles: ModelInfo[]): Permissi
 }
 
 /**
-/**
  * The postures the gemini CLI natively supports (its ModeSelect set).
  * Anything else in the gemini slot — e.g. omp-only role ids from a stale or
  * corrupted snapshot — is coerced to default on every normalize pass, so the
@@ -59,5 +58,4 @@ export function normalizeCliPermissionMode(mode: PermissionMode, provider?: stri
     return 'acceptEdits';
   }
   return mode === 'plan' || mode === 'auto' || mode === 'sandbox' ? 'default' : mode;
-}
 }

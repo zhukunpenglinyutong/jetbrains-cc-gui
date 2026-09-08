@@ -2911,6 +2911,27 @@ public class ClaudeChatWindow {
             LOG.warn("Failed to clean up Grok processes: " + e.getMessage());
         }
 
+        // Bundled CLI bridges (gemini/omp/dsh/kimi/opencode/pi): the per-provider
+        // blocks above only cover SDK-based bridges — without this loop their
+        // spawned CLI processes would survive window dispose until the JVM
+        // shutdown hook (same shape as ClaudeSDKToolWindow.cleanupWindowProcesses).
+        try {
+            if (getCliBridges() != null) {
+                for (MarkerCliBridge bridge : getCliBridges().values()) {
+                    if (bridge == null) {
+                        continue;
+                    }
+                    int activeCount = bridge.getActiveProcessCount();
+                    if (activeCount > 0) {
+                        LOG.info("Cleaning up " + activeCount + " active CLI process(es)...");
+                    }
+                    bridge.cleanupAllProcesses();
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to clean up bundled CLI processes: " + e.getMessage());
+        }
+
         try {
             if (targetBrowser != null) {
                 targetBrowser.dispose();

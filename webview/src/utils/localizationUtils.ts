@@ -74,6 +74,15 @@ const ATTACHMENT_NOT_DELIVERED_RE = new RegExp(
   'g'
 );
 
+// Match the gemini idle-reap headline (buildIdleReapMessage in
+// ai-bridge/services/gemini/message-service.js): "…for <window>." — the
+// captured window is the only dynamic part ("30 minutes", "1.5 minutes",
+// "45 seconds"). The lazy group plus the $-anchored period keep a fractional
+// window ("1.5") intact. The block's remaining lines are STATIC and map
+// through exact-match entries in aiBridgeMessageMap below.
+const GEMINI_IDLE_REAP_STOPPED_RE =
+  /^Gemini turn stopped automatically: no output from the Gemini CLI \(agy\) for ([^\n]+?)\.$/m;
+
 /**
  * Create a localization function for AI bridge messages
  * @param t - i18next translation function
@@ -93,6 +102,19 @@ export function createLocalizeMessage(t: TFunction): (text: string) => string {
       'Codex authentication error:': t('aiBridge.codexAuthError'),
       'Codex network error:': t('aiBridge.codexNetworkError'),
       'Codex error:': t('aiBridge.codexError'),
+      // Gemini CLI error remedies (formatGeminiError / buildIdleReapMessage in
+      // ai-bridge/services/gemini/message-service.js). The STATIC lines of both
+      // blocks map verbatim; the dynamic lines are handled below (the reap
+      // headline regex, the '- Error details:' label replace). localizationUtils
+      // .test.ts pins every literal against the service source.
+      'Gemini CLI authentication required:': t('aiBridge.geminiAuthRequired'),
+      '- Cause: The Gemini CLI (agy) is not logged in or credentials have expired.': t('aiBridge.geminiAuthCause'),
+      "- Resolution: Run 'agy' in an external terminal and complete the interactive Google Sign-In flow.": t('aiBridge.geminiAuthResolution'),
+      '- Note: This plugin does not manage Google credentials or perform Google login in-plugin.': t('aiBridge.geminiAuthNote'),
+      '- Likely cause: the CLI process was alive but silent — it is likely stuck at an interactive prompt (most commonly authentication) or stalled on the backend/network.': t('aiBridge.geminiIdleReapCauseAlive'),
+      '- Likely cause: the CLI process had already exited without delivering a result.': t('aiBridge.geminiIdleReapCauseExited'),
+      "- What to do: run 'agy' in an external terminal to check your login, then cancel and retry; if the turn was legitimately silent (e.g. a long build), raise the window.": t('aiBridge.geminiIdleReapWhatToDo'),
+      '- This limit is configurable: set gemini.idleReapMinutes in the Gemini plugin settings (0 disables automatic stopping).': t('aiBridge.geminiIdleReapSetting'),
       // Permission related
       'User did not provide answers': t('aiBridge.userDidNotProvideAnswers'),
       // Database related
@@ -155,6 +177,19 @@ export function createLocalizeMessage(t: TFunction): (text: string) => string {
         }) + (trailingNewlines ?? '')
     );
 
+    // Match the gemini idle-reap headline (dynamic silence window). Replacer
+    // FUNCTION, not a replacement string: same $-sequence safety rule as the
+    // workspace notice — the window is a number the bridge formatted, but the
+    // rule is kept uniform.
+    const idleReapStoppedMatch = result.match(GEMINI_IDLE_REAP_STOPPED_RE);
+    if (idleReapStoppedMatch) {
+      const [, silenceWindow] = idleReapStoppedMatch;
+      result = result.replace(
+        idleReapStoppedMatch[0],
+        () => t('aiBridge.geminiIdleReapStopped', { window: silenceWindow })
+      );
+    }
+
     // Match "User denied permission for XXX tool"
     const permissionDeniedMatch = result.match(/User denied permission for (.+) tool/);
     if (permissionDeniedMatch) {
@@ -194,6 +229,9 @@ export function createLocalizeMessage(t: TFunction): (text: string) => string {
     // Handle labels in multi-line error messages
     result = result
       .replace(/- Error message:/g, `- ${t('aiBridge.errorMessage')}:`)
+      // Gemini auth remedy tail: only the LABEL localizes — the details after
+      // it are the CLI's own (untranslateable) error text.
+      .replace(/- Error details:/g, `- ${t('aiBridge.geminiErrorDetails')}:`)
       .replace(/- Current API Key source:/g, `- ${t('aiBridge.currentApiKeySource')}:`)
       .replace(/- Current API Key preview:/g, `- ${t('aiBridge.currentApiKeyPreview')}:`)
       .replace(/- Current Base URL:/g, `- ${t('aiBridge.currentBaseUrl')}:`)

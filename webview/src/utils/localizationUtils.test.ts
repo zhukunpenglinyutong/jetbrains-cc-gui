@@ -351,3 +351,181 @@ describe('attachment notice i18n contract (Story 1.6, NFR8)', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Gemini bridge remedy blocks (NFR8) — formatGeminiError's auth remedy and
+// buildIdleReapMessage's reap message (ai-bridge/services/gemini/
+// message-service.js). Every STATIC line of both blocks maps through an
+// exact-match entry in aiBridgeMessageMap; the reap headline's silence window
+// is the one dynamic capture (GEMINI_IDLE_REAP_STOPPED_RE), and the auth
+// block's "- Error details:" tail localizes as a label only — the tail is the
+// CLI's own error text and must survive verbatim.
+// ---------------------------------------------------------------------------
+
+/** The full auth-remedy block the bridge emits for a credential failure. */
+const authRemedyBlock = (details: string) => [
+  'Gemini CLI authentication required:',
+  '- Cause: The Gemini CLI (agy) is not logged in or credentials have expired.',
+  "- Resolution: Run 'agy' in an external terminal and complete the interactive Google Sign-In flow.",
+  '- Note: This plugin does not manage Google credentials or perform Google login in-plugin.',
+  '',
+  `- Error details: ${details}`,
+].join('\n');
+
+/** The full reap message the bridge emits when the silence window trips. */
+const idleReapBlock = (windowText: string, processAlive: boolean) => [
+  `Gemini turn stopped automatically: no output from the Gemini CLI (agy) for ${windowText}.`,
+  processAlive
+    ? '- Likely cause: the CLI process was alive but silent — it is likely stuck at an interactive prompt (most commonly authentication) or stalled on the backend/network.'
+    : '- Likely cause: the CLI process had already exited without delivering a result.',
+  "- What to do: run 'agy' in an external terminal to check your login, then cancel and retry; if the turn was legitimately silent (e.g. a long build), raise the window.",
+  '- This limit is configurable: set gemini.idleReapMinutes in the Gemini plugin settings (0 disables automatic stopping).',
+].join('\n');
+
+/** Static line literal → i18n key. Total over both blocks' static lines. */
+const GEMINI_STATIC_LINE_KEYS = {
+  'Gemini CLI authentication required:': 'aiBridge.geminiAuthRequired',
+  '- Cause: The Gemini CLI (agy) is not logged in or credentials have expired.': 'aiBridge.geminiAuthCause',
+  "- Resolution: Run 'agy' in an external terminal and complete the interactive Google Sign-In flow.": 'aiBridge.geminiAuthResolution',
+  '- Note: This plugin does not manage Google credentials or perform Google login in-plugin.': 'aiBridge.geminiAuthNote',
+  '- Likely cause: the CLI process was alive but silent — it is likely stuck at an interactive prompt (most commonly authentication) or stalled on the backend/network.': 'aiBridge.geminiIdleReapCauseAlive',
+  '- Likely cause: the CLI process had already exited without delivering a result.': 'aiBridge.geminiIdleReapCauseExited',
+  "- What to do: run 'agy' in an external terminal to check your login, then cancel and retry; if the turn was legitimately silent (e.g. a long build), raise the window.": 'aiBridge.geminiIdleReapWhatToDo',
+  '- This limit is configurable: set gemini.idleReapMinutes in the Gemini plugin settings (0 disables automatic stopping).': 'aiBridge.geminiIdleReapSetting',
+} as const;
+
+/** The keys of one block's OWN static lines (a block never contains the other's). */
+const AUTH_LINE_KEYS = [
+  'aiBridge.geminiAuthRequired',
+  'aiBridge.geminiAuthCause',
+  'aiBridge.geminiAuthResolution',
+  'aiBridge.geminiAuthNote',
+] as const;
+const REAP_LINE_KEYS = (causeKey: string) => [
+  'aiBridge.geminiIdleReapStopped',
+  causeKey,
+  'aiBridge.geminiIdleReapWhatToDo',
+  'aiBridge.geminiIdleReapSetting',
+] as const;
+
+describe('createLocalizeMessage — gemini auth remedy block (NFR8)', () => {
+  it('maps every static line onto its i18n key and keeps the error tail raw', () => {
+    const t = makeT();
+    const localize = createLocalizeMessage(t as never);
+    const localized = localize(authRemedyBlock('agy: no active credentials found'));
+
+    for (const key of AUTH_LINE_KEYS) {
+      expect(localized).toContain(`[${key}]`);
+    }
+    // The label localizes; the CLI's own error text after it must survive
+    // verbatim — it is the only diagnostic the user can act on.
+    expect(localized).toContain('- [aiBridge.geminiErrorDetails]: agy: no active credentials found');
+    // No raw English remedy line survives.
+    expect(localized).not.toContain('Gemini CLI authentication required');
+    expect(localized).not.toContain('credentials have expired');
+    expect(localized).not.toContain('Google Sign-In');
+  });
+
+  it('leaves a non-auth gemini error untouched', () => {
+    const t = makeT();
+    const localize = createLocalizeMessage(t as never);
+    const emitted = 'agy: the model stream closed unexpectedly';
+    expect(localize(emitted)).toBe(emitted);
+  });
+});
+
+describe('createLocalizeMessage — gemini idle-reap message (NFR8)', () => {
+  it('localizes the whole block, extracting the silence window as a param', () => {
+    const t = makeT();
+    const localize = createLocalizeMessage(t as never);
+    const localized = localize(idleReapBlock('30 minutes', true));
+
+    expect(t).toHaveBeenCalledWith('aiBridge.geminiIdleReapStopped', { window: '30 minutes' });
+    for (const key of REAP_LINE_KEYS('aiBridge.geminiIdleReapCauseAlive')) {
+      expect(localized).toContain(`[${key}]`);
+    }
+    // No raw English line of the block survives.
+    expect(localized).not.toContain('Gemini turn stopped automatically');
+    expect(localized).not.toContain('Likely cause');
+    expect(localized).not.toContain('What to do');
+    expect(localized).not.toContain('idleReapMinutes');
+  });
+
+  it('localizes the already-exited cause variant through its own key', () => {
+    const t = makeT();
+    const localize = createLocalizeMessage(t as never);
+    const localized = localize(idleReapBlock('45 seconds', false));
+
+    expect(localized).toContain('[aiBridge.geminiIdleReapCauseExited]');
+    // The alive variant's key must not appear — makeT renders every localized
+    // template as its key, so a raw `[key]` in the output IS the signal.
+    expect(localized).not.toContain('[aiBridge.geminiIdleReapCauseAlive]');
+    expect(localized).toContain('window=45 seconds');
+  });
+
+  it('captures every window shape formatIdleWindow can emit', () => {
+    // Singular, fractional (the dot must survive inside the capture), and
+    // sub-minute seconds rendering.
+    for (const windowText of ['1 minute', '1.5 minutes', '45 seconds', '1 second']) {
+      const t = makeT();
+      createLocalizeMessage(t as never)(idleReapBlock(windowText, true));
+      expect(t).toHaveBeenCalledWith('aiBridge.geminiIdleReapStopped', { window: windowText });
+    }
+  });
+
+  it('does not treat ordinary gemini output as a reap headline', () => {
+    const t = makeT();
+    const localize = createLocalizeMessage(t as never);
+    localize('no output from the Gemini CLI (agy) for a while, but not the reap message');
+    expect(t).not.toHaveBeenCalledWith('aiBridge.geminiIdleReapStopped', expect.anything());
+  });
+});
+
+describe('gemini bridge remedy i18n contract (NFR8)', () => {
+  it('pins every static line to the gemini service source', () => {
+    // A bridge-side rewording must break this test, not ship half-English
+    // remedy blocks (same scrape rule as the workspace/attachment contracts).
+    // The auth lines and the reap remedy/setting lines are fully static and
+    // must appear verbatim; the two cause lines are TEMPLATED in the service
+    // ("- Likely cause: ${observation}.") — their source-verbatim halves are
+    // the observation literals, while the webview map carries the composed
+    // full lines.
+    const serviceSource = readFileSync(SERVICE_SOURCE_PATH, 'utf8');
+    const verbatimLines = [
+      'Gemini CLI authentication required:',
+      '- Cause: The Gemini CLI (agy) is not logged in or credentials have expired.',
+      "- Resolution: Run 'agy' in an external terminal and complete the interactive Google Sign-In flow.",
+      '- Note: This plugin does not manage Google credentials or perform Google login in-plugin.',
+      "- What to do: run 'agy' in an external terminal to check your login, then cancel and retry; if the turn was legitimately silent (e.g. a long build), raise the window.",
+      '- This limit is configurable: set gemini.idleReapMinutes in the Gemini plugin settings (0 disables automatic stopping).',
+    ];
+    for (const line of verbatimLines) {
+      expect(serviceSource, `service source must contain "${line}" verbatim`).toContain(line);
+    }
+    expect(serviceSource).toContain('- Likely cause: ${observation}.');
+    expect(serviceSource).toContain(
+      'the CLI process was alive but silent — it is likely stuck at an interactive prompt (most commonly authentication) or stalled on the backend/network'
+    );
+    expect(serviceSource).toContain('the CLI process had already exited without delivering a result');
+    // The dynamic halves' anchors are pinned too: the reap headline prefix
+    // (the regex above matches the rest) and the error-details label.
+    expect(serviceSource).toContain('Gemini turn stopped automatically: no output from the Gemini CLI (agy) for ');
+    expect(serviceSource).toContain('- Error details: ${text}');
+  });
+
+  it('every locale ships all ten gemini remedy keys (NFR8)', () => {
+    const keys = [
+      ...Object.values(GEMINI_STATIC_LINE_KEYS).map((key) => key.replace('aiBridge.', '')),
+      'geminiErrorDetails',
+      'geminiIdleReapStopped',
+    ];
+    for (const locale of LOCALES) {
+      const aiBridge = JSON.parse(readFileSync(localePath(locale), 'utf8')).aiBridge;
+      for (const key of keys) {
+        expect(typeof aiBridge[key], `${locale}.${key}`).toBe('string');
+        expect((aiBridge[key] as string).length, `${locale}.${key}`).toBeGreaterThan(0);
+      }
+      expect(aiBridge.geminiIdleReapStopped, `${locale}.geminiIdleReapStopped`).toContain('{{window}}');
+    }
+  });
+});

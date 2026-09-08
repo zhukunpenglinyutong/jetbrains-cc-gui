@@ -30,6 +30,7 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
     setCodexPermissionMode,
     setSelectedClaudeModel,
     setSelectedCodexModel,
+    setSelectedGeminiModel,
     setLongContextEnabled,
     setReasoningEffort,
     setCodexFastMode,
@@ -120,6 +121,12 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
       setSelectedClaudeModel(normalizeClaudeModelId(modelId));
     } else if (provider === 'codex') {
       setSelectedCodexModel(modelId);
+    } else if (provider === 'gemini') {
+      // Java fires onModelConfirmed for EVERY provider (ModelProviderHandler),
+      // so a gemini confirmation previously fell through every branch and the
+      // gemini model slot never heard about it. Gemini ids are full catalog
+      // slugs (family+effort in ONE slug) — stored raw, like codex.
+      setSelectedGeminiModel?.(modelId);
     }
   };
 

@@ -160,16 +160,16 @@ let attachments = [];
 if (process.env.SVC_ATTACHMENTS_FILE) {
   attachments = JSON.parse(await (await import('node:fs/promises')).readFile(process.env.SVC_ATTACHMENTS_FILE, 'utf8'));
 }
-await sendMessage(
-  'hello world',
-  process.env.SVC_SESSION_ID || '',
-  process.env.SVC_CWD || '',
-  process.env.SVC_MODEL || '',
-  process.env.SVC_REASONING_EFFORT || '',
+await sendMessage({
+  message: 'hello world',
+  sessionId: process.env.SVC_SESSION_ID || '',
+  cwd: process.env.SVC_CWD || '',
+  model: process.env.SVC_MODEL || '',
+  reasoningEffort: process.env.SVC_REASONING_EFFORT || '',
   attachments,
-  process.env.SVC_REQUESTED_CWD || '',
-  process.env.SVC_PERMISSION_MODE || ''
-);
+  requestedCwd: process.env.SVC_REQUESTED_CWD || '',
+  permissionMode: process.env.SVC_PERMISSION_MODE || ''
+});
 `;
 
 /**

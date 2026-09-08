@@ -69,25 +69,32 @@ export async function handleGeminiCommand(command, args, stdinData) {
           rejectEmptyMessage();
           break;
         }
-        await geminiSendMessage(
+        await geminiSendMessage({
           message,
-          sessionId || '',
-          cwd || '',
-          model || '',
-          '',
-          attachments || [],
-          requestedCwd || '',
+          sessionId: sessionId || '',
+          cwd: cwd || '',
+          model: model || '',
+          // `reasoningEffort` rides along in the stdin payload but is
+          // deliberately never forwarded (see the destructuring above).
+          attachments: attachments || [],
+          requestedCwd: requestedCwd || '',
           // Applied per turn: the unified mode becomes the CLI posture flags
           // inside the service (headless print mode has no mid-turn switch).
-          typeof permissionMode === 'string' ? permissionMode : ''
-        );
+          permissionMode: typeof permissionMode === 'string' ? permissionMode : '',
+        });
       } else {
         const message = args[0];
         if (isBlankMessage(message)) {
           rejectEmptyMessage();
           break;
         }
-        await geminiSendMessage(message, args[1], args[2], args[3], args[4], []);
+        await geminiSendMessage({
+          message,
+          sessionId: args[1],
+          cwd: args[2],
+          model: args[3],
+          reasoningEffort: args[4],
+        });
       }
       break;
     }

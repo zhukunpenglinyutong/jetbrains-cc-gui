@@ -29,9 +29,10 @@
  * payload status is the source of truth (AC3).
  *
  * Workspace (AC5): `cwd` is the workspace the turn runs in — already clamped
- * to the project base by Java's `guardWorkingDirectory`. `requestedCwd` (7th
- * arg, forwarded by MarkerCliBridge in the stdin JSON) is what the user asked
- * for BEFORE that clamp. When the two differ, a visible notice is emitted as
+ * to the project base by Java's `guardWorkingDirectory`. `requestedCwd` (a
+ * sendMessage option, forwarded by MarkerCliBridge in the stdin JSON) is what
+ * the user asked for BEFORE that clamp. When the two differ, a visible notice
+ * is emitted as
  * the leading content delta — substitution must never be silent. Callers that
  * don't pass `requestedCwd` keep the previous behaviour (compare `cwd`).
  *
@@ -430,19 +431,23 @@ export function mapGeminiUsageToCanonical(usage) {
 }
 
 /**
- * @param {string} message
- * @param {string} sessionId
- * @param {string} cwd
- * @param {string} model full catalog slug (family+effort is ONE slug)
- * @param {string} [reasoningEffort] accepted for positional compatibility,
- *   never forwarded: the effort tier is baked into the full model slug and
- *   some slugs reject a separate --effort flag
- * @param {Array} [attachments] image attachments (fileName/mediaType/data)
- * @param {string} [requestedCwd] cwd as requested BEFORE Java's clamp (see header)
- * @param {string} [permissionMode] unified mode id; mapped onto the CLI
+ * Run one gemini turn. Named options — the eight positional parameters this
+ * used to take were one transposition away from silently swapping cwd/model/
+ * sessionId in a new caller.
+ * @param {object} options
+ * @param {string} options.message
+ * @param {string} [options.sessionId]
+ * @param {string} [options.cwd]
+ * @param {string} [options.model] full catalog slug (family+effort is ONE slug)
+ * @param {string} [options.reasoningEffort] accepted for caller
+ *   compatibility, never forwarded: the effort tier is baked into the full
+ *   model slug and some slugs reject a separate --effort flag
+ * @param {Array} [options.attachments] image attachments (fileName/mediaType/data)
+ * @param {string} [options.requestedCwd] cwd as requested BEFORE Java's clamp (see header)
+ * @param {string} [options.permissionMode] unified mode id; mapped onto the CLI
  *   posture flags (--mode plan, --sandbox, ...) for THIS turn
  */
-export async function sendMessage(
+export async function sendMessage({
   message,
   sessionId = '',
   cwd = '',
@@ -450,8 +455,8 @@ export async function sendMessage(
   reasoningEffort = '',
   attachments = [],
   requestedCwd = '',
-  permissionMode = ''
-) {
+  permissionMode = '',
+} = {}) {
   beginStream();
 
   let streamEnded = false;

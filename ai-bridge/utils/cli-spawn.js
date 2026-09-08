@@ -25,9 +25,65 @@ export function win32TreeKillArgs(pid) {
 }
 
 /**
+ * How long a POSIX process group gets to honor SIGTERM before the escalation
+ * to SIGKILL — long enough for a clean CLI shutdown, short enough that a
+ * tree ignoring the graceful signal does not outlive the kill.
+ */
+const POSIX_KILL_ESCALATION_MS = 5000;
+
+/**
+ * A child Node has already reaped (exit code or signal recorded on the
+ * handle) must never receive a follow-up signal.
+ */
+function isChildProcessDone(child) {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+/**
+ * POSIX half of killChildTree, extracted with injectable kill/timer seams so
+ * the SIGTERM→SIGKILL escalation is unit-testable on every platform (same
+ * pattern as win32TreeKillArgs). Sends SIGTERM to the process group —
+ * falling back to the direct handle kill when the group is already gone —
+ * then, unless the child has been reaped within the window, escalates to
+ * SIGKILL the same way. The timer is unref'd so a pending escalation never
+ * keeps the event loop (or process exit) waiting.
+ * @param {import('child_process').ChildProcess} child
+ * @param {object} [options]
+ * @param {number} [options.escalateAfterMs] SIGTERM → SIGKILL window
+ * @param {(pid: number, signal: NodeJS.Signals) => void} [options.killFn]
+ * @param {(fn: () => void, ms: number) => unknown} [options.setTimeoutFn]
+ * @param {(timer: unknown) => void} [options.clearTimeoutFn]
+ * @returns {() => void} disarmer cancelling a still-pending escalation
+ */
+export function posixTreeKillEscalate(child, {
+  escalateAfterMs = POSIX_KILL_ESCALATION_MS,
+  killFn = (pid, signal) => process.kill(pid, signal),
+  setTimeoutFn = setTimeout,
+  clearTimeoutFn = clearTimeout,
+} = {}) {
+  const killGroup = (signal) => {
+    try {
+      killFn(-child.pid, signal);
+    } catch {
+      child.kill(signal);
+    }
+  };
+  killGroup('SIGTERM');
+  const timer = setTimeoutFn(() => {
+    if (isChildProcessDone(child)) return;
+    killGroup('SIGKILL');
+  }, escalateAfterMs);
+  // A pending escalation must not delay process exit.
+  timer?.unref?.();
+  return () => clearTimeoutFn(timer);
+}
+
+/**
  * Kill a spawned CLI and its whole process tree. Non-Windows children run in
  * their own process group (detached), so a negative-pid SIGTERM reaches the
- * CLI's own grandchildren too. On Windows the direct handle kill would leave
+ * CLI's own grandchildren too — with a short-window escalation to SIGKILL so
+ * a tree that ignores the graceful signal still dies (see
+ * posixTreeKillEscalate). On Windows the direct handle kill would leave
  * those grandchildren alive (story 1.10 AC4 gap — only the auto-reap goes
  * through here; Java's manual cancel already uses taskkill /T), so this
  * mirrors Java: `taskkill /PID <pid> /T /F`, fire-and-forget (unref'd so a
@@ -65,11 +121,9 @@ export function killChildTree(child, label) {
         fallbackDirectKill();
       }
     } else {
-      try {
-        process.kill(-child.pid, 'SIGTERM');
-      } catch {
-        child.kill('SIGTERM');
-      }
+      // Graceful first, forced second: a tree that ignores SIGTERM (or is
+      // stuck inside it) is reaped by the escalation instead of surviving.
+      posixTreeKillEscalate(child);
     }
   } catch (error) {
     console.error(`[WARN][${label}] Failed to kill child:`, error?.message || error);

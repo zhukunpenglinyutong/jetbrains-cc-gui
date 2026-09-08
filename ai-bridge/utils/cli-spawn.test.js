@@ -15,7 +15,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { win32TreeKillArgs, killChildTree } from './cli-spawn.js';
+import { win32TreeKillArgs, killChildTree, posixTreeKillEscalate } from './cli-spawn.js';
 
 const waitFor = async (predicate, deadlineMs) => {
   const deadline = Date.now() + deadlineMs;
@@ -61,4 +61,98 @@ test('killChildTree is a no-op for an already-killed child', () => {
   // No real child behind this handle: if the guard is broken the win32 branch
   // would spawn taskkill /PID undefined (non-win32: process.kill(-undefined)).
   assert.doesNotThrow(() => killChildTree({ killed: true, pid: 1 }, 'test'));
+});
+
+// posixTreeKillEscalate: the injected kill/timer seams make the
+// SIGTERM→SIGKILL escalation deterministic without real timing or platform
+// fakes (same rationale as the win32TreeKillArgs pins above).
+
+/** Fake child + recorded calls, shared shape across the escalation pins. */
+function makeEscalationHarness({ killFn } = {}) {
+  const calls = [];
+  const child = {
+    pid: 4321,
+    exitCode: null,
+    signalCode: null,
+    kill: (signal) => calls.push(`handle:${signal}`),
+  };
+  const timers = [];
+  const unrefd = [];
+  const deps = {
+    killFn: killFn ?? ((pid, signal) => calls.push(`${pid}:${signal}`)),
+    setTimeoutFn: (fn, ms) => {
+      timers.push({ fn, ms });
+      return { unref: () => unrefd.push('timer') };
+    },
+    clearTimeoutFn: () => {},
+  };
+  return { child, calls, timers, unrefd, deps };
+}
+
+test('posixTreeKillEscalate sends SIGTERM to the group, then SIGKILL after the window', () => {
+  const { child, calls, timers, unrefd, deps } = makeEscalationHarness();
+
+  const disarmer = posixTreeKillEscalate(child, { escalateAfterMs: 5000, ...deps });
+
+  assert.deepEqual(calls, ['-4321:SIGTERM'], 'graceful signal goes to the process group first');
+  assert.equal(timers.length, 1, 'exactly one escalation timer armed');
+  assert.equal(timers[0].ms, 5000);
+  assert.equal(typeof disarmer, 'function', 'a disarmer is returned');
+
+  // The child ignored SIGTERM (still alive when the window elapses).
+  timers[0].fn();
+  assert.deepEqual(calls, ['-4321:SIGTERM', '-4321:SIGKILL'], 'the window ends in SIGKILL');
+  assert.deepEqual(unrefd, ['timer'], 'the escalation timer must be unref’d');
+});
+
+test('posixTreeKillEscalate skips SIGKILL when the child is already reaped', () => {
+  const { child, calls, timers, deps } = makeEscalationHarness({
+    // The graceful kill lands: Node records the exit on the handle.
+    killFn: (pid, signal) => {
+      calls.push(`${pid}:${signal}`);
+      child.exitCode = 0;
+    },
+  });
+
+  posixTreeKillEscalate(child, deps);
+  assert.deepEqual(calls, ['-4321:SIGTERM']);
+
+  timers[0].fn();
+  assert.deepEqual(calls, ['-4321:SIGTERM'], 'a reaped child gets no follow-up signal');
+});
+
+test('posixTreeKillEscalate falls back to the handle kill when the group is gone', () => {
+  // ESRCH-shaped failure: the group id no longer resolves, the direct handle
+  // kill is the only signal that can still reach the child.
+  const { child, calls, deps } = makeEscalationHarness({
+    killFn: () => {
+      throw new Error('kill ESRCH');
+    },
+  });
+
+  posixTreeKillEscalate(child, deps);
+
+  assert.deepEqual(calls, ['handle:SIGTERM']);
+});
+
+test('posixTreeKillEscalate falls back to the handle kill for the SIGKILL escalation too', () => {
+  // The group id no longer resolves (ESRCH on EVERY group attempt — a dead
+  // group stays dead) but the child lingers on its handle; the escalation
+  // must degrade the same way as the first signal, not throw past
+  // killChildTree's guard.
+  const { child, calls, timers, deps } = makeEscalationHarness({
+    killFn: () => {
+      throw new Error('kill ESRCH');
+    },
+  });
+
+  posixTreeKillEscalate(child, deps);
+  assert.deepEqual(calls, ['handle:SIGTERM']);
+
+  timers[0].fn();
+  assert.deepEqual(
+    calls,
+    ['handle:SIGTERM', 'handle:SIGKILL'],
+    'SIGTERM fell back to the handle; the escalation must fall back the same way',
+  );
 });

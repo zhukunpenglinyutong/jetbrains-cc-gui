@@ -174,5 +174,8 @@ source only, never a listing source.
 ## Related Docs
 
 - [OpenCode Integration Quickstart (template)](../opencode/OPENCODE-INTEGRATION-QUICKSTART.md)
+- [Streaming Event Logs](../opencode/STREAMING-EVENT-LOGS.md) — gemini's live-CLI
+  NDJSON fixtures live in `ai-bridge/services/gemini/fixtures/` (see its
+  Gemini-Specific Notes for the replay convention)
 - `src/main/java/com/github/claudecodegui/provider/gemini/GeminiHistoryReader.java`
 - `src/test/java/com/github/claudecodegui/provider/gemini/GeminiHistoryReaderTest.java`
