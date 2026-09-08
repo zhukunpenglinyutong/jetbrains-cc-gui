@@ -248,6 +248,7 @@ class HistoryDeleteService {
         }
         if ("minimax".equals(currentProvider)) {
             return new DeleteResult(deleteMiniMaxSession(sessionId), 0);
+        }
         if ("gemini".equals(currentProvider)) {
             return new DeleteResult(deleteGeminiSession(sessionId), 0);
         }
@@ -330,6 +331,9 @@ class HistoryDeleteService {
                 new com.github.claudecodegui.provider.minimax.MiniMaxHistoryReader();
         boolean deleted = reader.deleteSession(sessionId, projectPath);
         LOG.info("[HistoryHandler] Delete MiniMax session " + sessionId + ": " + (deleted ? "ok" : "not found"));
+        return deleted;
+    }
+
     private boolean deleteGeminiSession(String sessionId) throws java.io.IOException {
         String rawPath = context.resolveEffectiveWorkingDirectory();
         String nodePath = NodeDetector.getInstance().getCachedNodePath();

@@ -228,8 +228,8 @@ public class ClaudeChatWindow {
 
     /**
      * Register the bundled marker-CLI bridges (kimi, openCode, pi, omp, dsh,
-     * gemini) under their provider ids. Extracted from the constructor so a
-     * test can pin the bundled set — a provider dropped from the list (e.g.
+     * gemini, minimax) under their provider ids. Extracted from the constructor
+     * so a test can pin the bundled set — a provider dropped from the list (e.g.
      * gemini) fails there instead of only surfacing as a missing CLI provider
      * inside the IDE. Grok is not on this list: it uses {@code GrokSDKBridge}
      * (persistent ACP / grok agent stdio), not {@link MarkerCliBridge}.
@@ -239,9 +239,10 @@ public class ClaudeChatWindow {
             MarkerCliBridge openCode,
             MarkerCliBridge pi,
             MarkerCliBridge omp,
-            MarkerCliBridge gemini
+            MarkerCliBridge gemini,
+            MarkerCliBridge miniMax
     ) {
-        return SessionProviderRouter.registerCliBridges(kimi, openCode, pi, omp, new DshCliBridge(), gemini);
+        return SessionProviderRouter.registerCliBridges(kimi, openCode, pi, omp, new DshCliBridge(), gemini, miniMax);
     }
 
     public ClaudeChatWindow(Project project, boolean skipRegister) {
@@ -256,9 +257,10 @@ public class ClaudeChatWindow {
         this.geminiCliBridge = new GeminiCliBridge();
         this.miniMaxCliBridge = new MiniMaxCliBridge();
         // Grok uses GrokSDKBridge (persistent ACP / grok agent stdio), not MarkerCliBridge.
+        // DshCliBridge is fieldless and constructed inside registerBundledCliBridges.
         this.cliBridges = registerBundledCliBridges(
                 this.kimiCliBridge, this.openCodeCliBridge, this.piCliBridge,
-                this.ompCliBridge, new DshCliBridge(), this.geminiCliBridge, this.miniMaxCliBridge);
+                this.ompCliBridge, this.geminiCliBridge, this.miniMaxCliBridge);
         this.settingsService = new CodemossSettingsService();
         this.htmlLoader = new HtmlLoader(getClass());
         this.mainPanel = new JPanel(new BorderLayout());

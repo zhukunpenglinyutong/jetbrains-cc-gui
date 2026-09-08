@@ -3,6 +3,7 @@ package com.github.claudecodegui.ui.toolwindow;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
 import com.github.claudecodegui.provider.gemini.GeminiCliBridge;
 import com.github.claudecodegui.provider.kimi.KimiCliBridge;
+import com.github.claudecodegui.provider.minimax.MiniMaxCliBridge;
 import com.github.claudecodegui.provider.omp.OmpCliBridge;
 import com.github.claudecodegui.provider.opencode.OpenCodeCliBridge;
 import com.github.claudecodegui.provider.pi.PiCliBridge;
@@ -29,13 +30,14 @@ public class ClaudeChatWindowCliBridgesTest {
                 new OpenCodeCliBridge(),
                 new PiCliBridge(),
                 new OmpCliBridge(),
-                new GeminiCliBridge()
+                new GeminiCliBridge(),
+                new MiniMaxCliBridge()
         );
 
-        assertEquals(6, bridges.size());
+        assertEquals(7, bridges.size());
         assertTrue("gemini must be registered as a CLI bridge",
                 bridges.get("gemini") instanceof GeminiCliBridge);
-        for (String provider : new String[]{"kimi", "opencode", "pi", "omp", "dsh"}) {
+        for (String provider : new String[]{"kimi", "opencode", "pi", "omp", "dsh", "minimax"}) {
             assertTrue("missing bundled bridge: " + provider, bridges.containsKey(provider));
         }
     }

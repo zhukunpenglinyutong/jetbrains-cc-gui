@@ -148,6 +148,7 @@ class HistoryExportService {
         if ("minimax".equals(provider)) {
             LOG.info("[HistoryHandler] 使用 MiniMaxHistoryReader 导出 MiniMax 会话");
             return toJsonArray(new MiniMaxHistoryReader().getSessionMessages(sessionId, projectPath));
+        }
         if ("gemini".equals(provider)) {
             LOG.info("[HistoryHandler] 使用 GeminiHistoryReader 导出 Gemini 会话");
             return toJsonArray(
