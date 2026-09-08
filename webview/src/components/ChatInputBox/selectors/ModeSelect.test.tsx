@@ -129,7 +129,9 @@ describe('ModeSelect', () => {
   it('hides plan/smol/slow for the other CLI providers', () => {
     // omp is excluded: it has its own role-based mode list (smol/slow/plan).
     // gemini is excluded too: its CLI natively exposes the plan posture.
-    for (const provider of ['codex', 'grok', 'kimi', 'minimax', 'opencode', 'pi', 'dsh']) {
+    // codex is excluded: it additionally exposes its native auto review
+    // posture (covered by the dedicated codex test below).
+    for (const provider of ['grok', 'kimi', 'minimax', 'opencode', 'pi', 'dsh']) {
       expect(openAndGetOptionIds(provider)).toEqual(['default', 'acceptEdits', 'bypassPermissions']);
       cleanup();
     }

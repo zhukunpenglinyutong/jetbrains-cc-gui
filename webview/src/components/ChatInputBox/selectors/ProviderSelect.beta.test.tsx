@@ -49,7 +49,7 @@ describe('ProviderSelect Beta badge and first-click notice', () => {
     fireEvent.click(screen.getByRole('button'));
 
     const badges = screen.getAllByText('Beta');
-    expect(badges).toHaveLength(7);
+    expect(badges).toHaveLength(8);
 
     for (const id of ['grok', 'kimi', 'minimax', 'opencode', 'pi', 'omp', 'dsh', 'gemini']) {
       const row = document.querySelector(`[data-provider-id="${id}"]`);

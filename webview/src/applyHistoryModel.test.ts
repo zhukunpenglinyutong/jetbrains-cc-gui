@@ -219,7 +219,9 @@ describe('createApplyHistoryModel — provider switch and agent restore', () => 
 
   it('ignores an agent field on a row without a model', () => {
     const deps = makeDeps();
-    makeApply(deps)('claude', undefined, 'my-agent');
+    // '' is the type-clean spelling of "row without a model" (the callback
+    // signature takes string; the `if (model)` guard is what skips routing).
+    makeApply(deps)('claude', '', 'my-agent');
     expect(deps.handleAgentSelect).toHaveBeenCalledWith({ id: 'my-agent', name: 'my-agent', prompt: '' });
     for (const setter of [
       'setSelectedClaudeModel', 'setSelectedCodexModel', 'setSelectedGeminiModel',

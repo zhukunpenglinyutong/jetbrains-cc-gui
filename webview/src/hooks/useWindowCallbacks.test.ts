@@ -2638,7 +2638,7 @@ describe('useWindowCallbacks integration', () => {
         window.onModelConfirmed?.('claude-opus-4-6[1m]', 'claude');
       });
 
-      expect(opts.setSelectedClaudeModel).toHaveBeenCalledWith('claude-opus-4-8');
+      expect(opts.setSelectedClaudeModel).toHaveBeenCalledWith('claude-opus-5');
       expect(opts.setSelectedGeminiModel).not.toHaveBeenCalled();
     });
 
