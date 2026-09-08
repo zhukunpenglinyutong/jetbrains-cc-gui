@@ -151,6 +151,11 @@ export function killChildTree(child, label) {
  * @param {(child: import('child_process').ChildProcess) => void} [options.onSpawn] - called
  *   once right after a successful spawn, with the child handle. Callers that need to act
  *   on the live process (watchdogs) get their only access to it here.
+ * @param {string} [options.stdinPayload=''] - when non-empty, written to the child's
+ *   stdin (then closed) instead of leaving stdin ignored. For CLIs whose prompts cannot
+ *   ride argv — a multi-line argument value cannot survive the cmd.exe wrapper used for
+ *   `.cmd` shims on Windows (cmd terminates the command at the first line feed), so the
+ *   prompt travels as one newline-free stdin line instead.
  * @returns {Promise<{ code: number|null, signal: NodeJS.Signals|null, hadError: boolean, errorMessage?: string }>}
  */
 export function runCliStreaming({
@@ -165,6 +170,7 @@ export function runCliStreaming({
   onError,
   emitEndStream = true,
   onSpawn,
+  stdinPayload = '',
 }) {
   return new Promise((resolve) => {
     let hadError = false;
@@ -207,7 +213,7 @@ export function runCliStreaming({
       const invocation = resolveCliSpawn(bin, args, {
         cwd,
         env,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: [stdinPayload ? 'pipe' : 'ignore', 'pipe', 'pipe'],
         detached: process.platform !== 'win32',
       });
       child = spawn(invocation.file, invocation.args, invocation.options);
@@ -216,6 +222,14 @@ export function runCliStreaming({
       reportError(`Failed to spawn ${label} CLI (${bin}): ${error?.message || error}`);
       finish({ code: null, signal: null, hadError });
       return;
+    }
+
+    if (child.stdin) {
+      // A child that exits before draining stdin (early crash, refused spawn)
+      // rejects the write with EPIPE — swallow it: the close handler reports
+      // the real failure, and an unhandled 'error' would kill the bridge.
+      child.stdin.on('error', () => {});
+      if (stdinPayload) child.stdin.end(stdinPayload);
     }
 
     if (typeof onSpawn === 'function') {

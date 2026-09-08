@@ -503,21 +503,21 @@ test('verifyAgyBinary accepts a real agy child process', async () => {
   });
 });
 
-test('verifyAgyBinary enforces the exact floor: 1.1.11 passes, 1.1.10 gets the upgrade hint', async () => {
+test('verifyAgyBinary enforces the exact floor: 1.1.15 passes, 1.1.14 gets the upgrade hint', async () => {
   await withFakeCliDir(async (dir) => {
-    const atFloor = await writeFakeCli(dir, { version: '1.1.11' });
+    const atFloor = await writeFakeCli(dir, { version: '1.1.15' });
     assert.deepEqual(
       { ok: verifyAgyBinary(atFloor).ok, version: verifyAgyBinary(atFloor).version },
-      { ok: true, version: '1.1.11' },
+      { ok: true, version: '1.1.15' },
     );
 
-    const belowFloor = await writeFakeCli(dir, { version: '1.1.10' });
+    const belowFloor = await writeFakeCli(dir, { version: '1.1.14' });
     const result = verifyAgyBinary(belowFloor);
     assert.equal(result.ok, false);
     assert.equal(result.available, false);
     assert.equal(result.reason, 'unsupported_version');
-    assert.equal(result.version, '1.1.10');
-    assert.match(result.error, /1\.1\.11/);
+    assert.equal(result.version, '1.1.14');
+    assert.match(result.error, /1\.1\.15/);
     assert.match(result.error, /agy update/);
   });
 });

@@ -6,8 +6,15 @@
  * as Grok/Kimi/OpenCode/PI/OMP).
  *
  * CLI:
- *   agy -p "<text>" --output-format stream-json --print-timeout 8760h
- *       [--conversation <id>] [--model <slug>] [<posture flags>]
+ *   agy --input-format stream-json --output-format stream-json
+ *       --print-timeout 8760h [--conversation <id>] [--model <slug>]
+ *       [<posture flags>]
+ *   stdin: one NDJSON user message line carrying the prompt
+ *   (buildGeminiStdinPayload). The prompt NEVER rides argv — a multi-line
+ *   argument value cannot survive the cmd.exe wrapper resolveCliSpawn uses
+ *   for `.cmd` shims on Windows (cmd terminates the command at the first
+ *   line feed). Requires agy >= 1.1.15 (`--input-format`); the output event
+ *   protocol is identical to the `-p` print mode.
  *
  * `--print-timeout` bounds the TOTAL wait for the print-mode response (live
  * probe: `--print-timeout 1s` aborts a turn that would have finished in ~6s
@@ -60,7 +67,6 @@ import {
   emitUsage,
   endStream,
   isNonEmptySessionId,
-  safePromptArg,
 } from '../../utils/marker-protocol.js';
 import {
   isBridgeDirectory,
@@ -365,10 +371,20 @@ export function buildIdleReapMessage(minutes, processAlive) {
   ].join('\n');
 }
 
-export function buildGeminiArgs({ message, sessionId, model, permissionMode = '' }) {
+export function buildGeminiArgs({ sessionId, model, permissionMode = '' }) {
+  // NO prompt token ever rides argv: the CLI reads the turn's prompt from
+  // stdin as one NDJSON user message (buildGeminiStdinPayload). An argv
+  // `-p <prompt>` value cannot carry newlines through the cmd.exe wrapper
+  // resolveCliSpawn uses for `.cmd` shims on Windows — cmd terminates the
+  // command at the first line feed, truncating every multi-line prompt
+  // (pasted code, and every image attachment via the `[Image #N]`
+  // injection) to its first line. The JSON-encoded stdin line is
+  // newline-safe by construction and drops the argv length cap with it.
+  // Requires the `--input-format stream-json` print mode (agy >= 1.1.15,
+  // AGY_MIN_VERSION; the output event protocol is unchanged).
   const args = [
-    '-p',
-    safePromptArg(message),
+    '--input-format',
+    'stream-json',
     '--output-format',
     'stream-json',
     '--print-timeout',
@@ -387,6 +403,24 @@ export function buildGeminiArgs({ message, sessionId, model, permissionMode = ''
   // — deny-by-default is what the CLI does outside a posture anyway.
   args.push(...PermissionMapperFactory.toProvider('gemini', permissionMode).args);
   return args;
+}
+
+/**
+ * Encode the turn's prompt as the single stream-json user message the CLI
+ * reads from stdin (shape probe-verified against agy 1.1.26:
+ * `{"event":"user","message":{"content":[{"type":"text","text":...}]}}`).
+ * JSON escaping keeps every newline INSIDE the string literal, so the
+ * physical line sent is always single-line — safe through every shell
+ * wrapper, including cmd.exe on Windows. The trailing newline closes the
+ * message; the CLI runs one turn per line and we send exactly one.
+ * @param {string} prompt
+ * @returns {string}
+ */
+export function buildGeminiStdinPayload(prompt) {
+  return `${JSON.stringify({
+    event: 'user',
+    message: { content: [{ type: 'text', text: String(prompt ?? '') }] },
+  })}\n`;
 }
 
 /**
@@ -524,7 +558,7 @@ export async function sendMessage({
     promptText = reformatFileLineReferences(promptText);
 
     const bin = resolveGeminiCliPath();
-    const args = buildGeminiArgs({ message: promptText, sessionId, model, permissionMode });
+    const args = buildGeminiArgs({ sessionId, model, permissionMode });
 
     const env = { ...process.env };
     const home = process.env.HOME || process.env.USERPROFILE || homedir();
@@ -607,6 +641,9 @@ export async function sendMessage({
       cwd: workCwd,
       env,
       label: 'gemini',
+      // The turn's prompt travels on stdin as one NDJSON user message —
+      // see buildGeminiArgs for why it can never ride argv.
+      stdinPayload: buildGeminiStdinPayload(promptText),
       emitEndStream: false,
       onSpawn: (child) => {
         reapChild = child;

@@ -63,6 +63,26 @@ const stderr = process.env.FIXTURE_STDERR || '';
 if (process.env.FAKE_ECHO_ARGV === '1') {
   process.stderr.write('ARGV:' + JSON.stringify(process.argv.slice(2)) + '\\n');
 }
+// The turn's prompt arrives on stdin as NDJSON user-message lines — the
+// service never puts it on argv (a multi-line argument value cannot survive
+// the cmd.exe wrapper resolveCliSpawn uses for .cmd shims on Windows).
+// Drain stdin to EOF BEFORE any mode dispatch: hang modes never come back.
+let stdinRaw = '';
+try { for await (const chunk of process.stdin) stdinRaw += chunk; } catch {}
+let promptText = '';
+for (const line of stdinRaw.split('\\n')) {
+  if (!line.trim()) continue;
+  try {
+    const evt = JSON.parse(line);
+    const blocks = evt && evt.event === 'user' && evt.message && Array.isArray(evt.message.content) ? evt.message.content : [];
+    for (const block of blocks) {
+      if (block && block.type === 'text' && typeof block.text === 'string') promptText += block.text;
+    }
+  } catch {}
+}
+if (process.env.FAKE_ECHO_ARGV === '1') {
+  process.stderr.write('PROMPT:' + JSON.stringify(promptText) + '\\n');
+}
 if (process.env.FAKE_ECHO_CWD === '1') {
   process.stderr.write('CWD:' + process.cwd() + '\\n');
 }
@@ -83,8 +103,7 @@ if (process.env.FAKE_ECHO_IMAGE_STATS === '1') {
   // Story 1.6: stat every [Image #N: path] the service injected into the
   // prompt — on-disk proof the referenced file was materialized while the
   // "CLI" ran (the parent test asserts cleanup after the child exits).
-  const promptIdx = process.argv.indexOf('-p');
-  const prompt = promptIdx >= 0 ? (process.argv[promptIdx + 1] || '') : '';
+  const prompt = promptText;
   const stats = [...prompt.matchAll(/\\[Image #\\d+: ([^\\]]+)\\]/g)].map((m) => {
     try {
       return { path: m[1], exists: true, size: fs.statSync(m[1]).size };
@@ -366,9 +385,12 @@ test('Story 1.10 review L4/L2 pins: reap window wording and classifier immunity'
 
 test('buildGeminiArgs emits the print-mode stream contract', async () => {
   const { buildGeminiArgs } = await import('./message-service.js');
-  const args = buildGeminiArgs({ message: 'hi', sessionId: 'abc-123' });
+  const args = buildGeminiArgs({ sessionId: 'abc-123' });
   assert.deepEqual(args, [
-    '-p', 'hi',
+    // The prompt rides stdin as one NDJSON user message (see
+    // buildGeminiStdinPayload) — NEVER argv, which cannot carry newlines
+    // through the cmd.exe wrapper used for .cmd shims on Windows.
+    '--input-format', 'stream-json',
     '--output-format', 'stream-json',
     // --print-timeout bounds the TOTAL turn wait on the live CLI (a 1s cap
     // aborted a ~6s turn), so an effectively unbounded value is required.
@@ -380,7 +402,7 @@ test('buildGeminiArgs emits the print-mode stream contract', async () => {
 test('buildGeminiArgs omits --conversation without a usable session id', async () => {
   const { buildGeminiArgs } = await import('./message-service.js');
   for (const sessionId of ['', 'undefined', 'null', '.', 'a/b']) {
-    const args = buildGeminiArgs({ message: 'hi', sessionId });
+    const args = buildGeminiArgs({ sessionId });
     assert.ok(!args.includes('--conversation'), `sessionId=${sessionId}`);
     assert.ok(!args.includes('--model'), 'no model flag without a model id');
   }
@@ -402,7 +424,7 @@ test('normalizeGeminiModelId keeps real slugs and collapses sentinels to none', 
 
 test('buildGeminiArgs forwards a picked model as --model <full-slug>', async () => {
   const { buildGeminiArgs } = await import('./message-service.js');
-  const args = buildGeminiArgs({ message: 'hi', sessionId: '', model: 'gemini-3.7-flash-high' });
+  const args = buildGeminiArgs({ sessionId: '', model: 'gemini-3.7-flash-high' });
   const idx = args.indexOf('--model');
   assert.notEqual(idx, -1, JSON.stringify(args));
   assert.equal(args[idx + 1], 'gemini-3.7-flash-high');
@@ -420,12 +442,12 @@ test('buildGeminiArgs appends the permission flags for each unified mode', async
     ['sandbox', ['--sandbox']],
   ];
   for (const [mode, flags] of table) {
-    const args = buildGeminiArgs({ message: 'hi', permissionMode: mode });
+    const args = buildGeminiArgs({ permissionMode: mode });
     assert.deepEqual(args.slice(-flags.length), flags, `mode=${mode}: ${JSON.stringify(args)}`);
   }
   // default (and anything unrecognized) spawns with zero posture flags.
   for (const mode of ['default', '', undefined, 'bogus']) {
-    const args = buildGeminiArgs({ message: 'hi', permissionMode: mode });
+    const args = buildGeminiArgs({ permissionMode: mode });
     assert.ok(!args.includes('--mode'), `no --mode for ${String(mode)}: ${JSON.stringify(args)}`);
     assert.ok(!args.includes('--sandbox'), `no --sandbox for ${String(mode)}`);
     assert.ok(!args.includes('--dangerously-skip-permissions'), `no bypass for ${String(mode)}`);
@@ -498,7 +520,7 @@ test('AC6 conformance: mode -> spawn flags -> CLI-acknowledged posture', async (
 test('buildGeminiArgs omits --model for sentinel and blank model ids', async () => {
   const { buildGeminiArgs } = await import('./message-service.js');
   for (const model of ['', 'auto', 'default', '__config_default__', '(default)', '-dash-led']) {
-    const args = buildGeminiArgs({ message: 'hi', sessionId: 'abc-123', model });
+    const args = buildGeminiArgs({ sessionId: 'abc-123', model });
     assert.ok(!args.includes('--model'), `model=${model}: ${JSON.stringify(args)}`);
   }
 });
@@ -524,10 +546,27 @@ test('a picked model slug reaches the CLI verbatim and --effort is never sent', 
   }
 });
 
-test('buildGeminiArgs guards a leading dash prompt token', async () => {
-  const { buildGeminiArgs } = await import('./message-service.js');
-  const args = buildGeminiArgs({ message: '-looks-like-a-flag', sessionId: '' });
-  assert.equal(args[1], ' -looks-like-a-flag');
+test('buildGeminiStdinPayload round-trips any prompt — leading-dash, multi-line — as ONE physical line', async () => {
+  const { buildGeminiStdinPayload } = await import('./message-service.js');
+  for (const prompt of [
+    '-looks-like-a-flag',
+    'line one\nline two\n\n[Image #1: C:\\shot.png]',
+    'hi',
+    '',
+    'quote " and backslash \\ and unicode ✓',
+  ]) {
+    const payload = buildGeminiStdinPayload(prompt);
+    // One physical line: JSON escaping keeps every newline INSIDE the string
+    // literal — exactly what makes the transport safe through cmd.exe
+    // wrappers, where an argv value is truncated at the first line feed.
+    assert.ok(!payload.slice(0, -1).includes('\n'), `prompt=${JSON.stringify(prompt)}`);
+    assert.ok(payload.endsWith('\n'), 'the NDJSON line is closed with a newline');
+    const event = JSON.parse(payload);
+    assert.equal(event.event, 'user');
+    assert.deepEqual(event.message.content, [{ type: 'text', text: prompt }]);
+  }
+  // null/undefined collapse to an empty text block, never the string "null".
+  assert.deepEqual(JSON.parse(buildGeminiStdinPayload(undefined)).message.content, [{ type: 'text', text: '' }]);
 });
 
 test('normalizeConversationId rejects dash-led ids (P-6: they would parse as CLI flags)', async () => {
@@ -1013,9 +1052,7 @@ test('non-image attachments are announced and the turn continues (R-9)', async (
   // announcement goes out on the protocol stream.
   assert.match(stderr, /\[gemini\] attachment not delivered: notes\.txt \(only image attachments are supported\)/);
   assert.equal(attachmentNoticeFor(stdout, 'notes.txt'), noticeFor('notes.txt', REASON_NON_IMAGE));
-  const argvLine = stderr.split('\n').find((l) => l.startsWith('ARGV:'));
-  const argv = JSON.parse(argvLine.slice('ARGV:'.length));
-  const prompt = argv[argv.indexOf('-p') + 1];
+  const prompt = spawnedPrompt(stderr);
   assert.match(prompt, /hello world/, 'text prompt intact');
   assert.match(prompt, /\[Image #1: /, 'the image sibling still materializes');
   assert.equal(finalPayload(stdout).success, true);
@@ -1144,10 +1181,15 @@ test('a materialized image attachment reaches the prompt (P-9 glue)', async () =
     echoArgv: true,
   });
 
-  const argvLine = stderr.split('\n').find((l) => l.startsWith('ARGV:'));
-  assert.ok(argvLine, `fake CLI must echo its argv: ${stderr.slice(0, 400)}`);
-  const argv = JSON.parse(argvLine.slice('ARGV:'.length));
-  const prompt = argv[argv.indexOf('-p') + 1];
+  const argv = fakeChildArgv(stderr);
+  // Windows regression (CI round 2): the prompt NEVER rides argv — the
+  // cmd.exe wrapper terminates the command at the first line feed, which
+  // truncated every multi-line prompt (all image attachments) to its first
+  // line. argv carries flags only; the prompt is one NDJSON stdin line.
+  assert.equal(argv.includes('-p'), false, JSON.stringify(argv));
+  assert.ok(argv.includes('--input-format') && argv.includes('stream-json'), JSON.stringify(argv));
+  assert.ok(!argv.some((a) => String(a).includes('\n')), `argv must stay newline-free: ${JSON.stringify(argv)}`);
+  const prompt = spawnedPrompt(stderr);
   assert.match(prompt, /\[Image #1: /);
   assert.match(prompt, /cc-gui-cli-images/);
   assert.match(prompt, /shot\.png/);
@@ -1168,9 +1210,7 @@ test('a failed materialization logs to stderr and the turn continues without ima
   });
 
   assert.match(stderr, /\[cli-image\] skip oversized image/);
-  const argvLine = stderr.split('\n').find((l) => l.startsWith('ARGV:'));
-  const argv = JSON.parse(argvLine.slice('ARGV:'.length));
-  const prompt = argv[argv.indexOf('-p') + 1];
+  const prompt = spawnedPrompt(stderr);
   assert.equal(prompt, 'hello world', 'no image refs when nothing materialized');
   assert.equal(finalPayload(stdout).success, true, 'the turn is not blocked by the failure');
   assert.equal(markers(stdout, 'STREAM_END').length, 1);
@@ -1347,9 +1387,11 @@ function imageRefPaths(prompt) {
   return [...String(prompt).matchAll(/\[Image #\d+: ([^\]]+)\]/g)].map((m) => m[1]);
 }
 
+/** The prompt the spawned "CLI" received via stdin (PROMPT echo: JSON string). */
 function spawnedPrompt(stderr) {
-  const argv = fakeChildArgv(stderr);
-  return argv[argv.indexOf('-p') + 1] || '';
+  const line = stderr.split('\n').find((l) => l.startsWith('PROMPT:'));
+  assert.ok(line, `fake CLI must echo its stdin prompt: ${stderr.slice(0, 400)}`);
+  return JSON.parse(line.slice('PROMPT:'.length));
 }
 
 /** IMGSTAT echo: what the spawned "CLI" saw on disk for each image ref. */

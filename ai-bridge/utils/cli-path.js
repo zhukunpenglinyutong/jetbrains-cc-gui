@@ -605,7 +605,7 @@ export function resolveGeminiCliPath() {
   });
 }
 
-export const AGY_MIN_VERSION = '1.1.11';
+export const AGY_MIN_VERSION = '1.1.15';
 export const AGY_REQUIRED_HELP_FLAGS = ['--conversation', '--effort', '--sandbox', 'models'];
 
 /**
@@ -677,11 +677,13 @@ function comparePrerelease(a, b) {
 
 /**
  * Validate that a resolved binary is the genuine Antigravity CLI (agy)
- * and meets the minimum version requirement (>= 1.1.11).
+ * and meets the minimum version requirement (>= 1.1.15 — the version that
+ * added `--input-format stream-json`, the stdin prompt transport the gemini
+ * message service depends on; per agy's own changelog).
  *
  * Probe (zero-cost, no tokens):
  * 1. `<bin> --version` -> exits 0 and prints clean semver (no banner)
- * 2. Version >= 1.1.11 floor
+ * 2. Version >= 1.1.15 floor
  * 3. `<bin> --help` -> contains `--conversation`, `--effort`, `--sandbox`, `models`
  *
  * @param {string} [bin]
