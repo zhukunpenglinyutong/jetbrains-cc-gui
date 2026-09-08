@@ -35,6 +35,27 @@ import {
   processCodexEventStream,
 } from './codex-event-handler.js';
 
+// Codex CLI rejects empty stdin even when --image is present.
+const EMPTY_PROMPT_SENTINEL = '\u2063';
+
+export function buildCodexRunInput(message, attachments = []) {
+  const text = typeof message === 'string' ? message : '';
+  const imageInputs = Array.isArray(attachments)
+    ? attachments
+        .filter((attachment) => attachment?.type === 'local_image' && attachment.path)
+        .map((attachment) => ({ type: 'local_image', path: attachment.path }))
+    : [];
+
+  if (imageInputs.length === 0) {
+    return text;
+  }
+
+  return [
+    { type: 'text', text: text.trim() ? text : EMPTY_PROMPT_SENTINEL },
+    ...imageInputs,
+  ];
+}
+
 // ---------------------------------------------------------------------------
 // sendMessage
 // ---------------------------------------------------------------------------
@@ -238,18 +259,15 @@ export async function sendMessage(
     // 6. Build Input and Start Streaming
     // ============================================================
 
-    let runInput;
-    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
-      runInput = [{ type: 'text', text: finalMessage }];
-      for (const attachment of attachments) {
-        if (attachment && attachment.type === 'local_image' && attachment.path) {
-          runInput.push({ type: 'local_image', path: attachment.path });
-          console.log('[DEBUG] Added local_image attachment:', attachment.path);
+    const runInput = buildCodexRunInput(finalMessage, attachments);
+    if (Array.isArray(runInput)) {
+      for (const item of runInput) {
+        if (item.type === 'local_image') {
+          console.log('[DEBUG] Added local_image attachment:', item.path);
         }
       }
       console.log('[DEBUG] Using array input format with', runInput.length, 'entries');
     } else {
-      runInput = finalMessage;
       console.log('[DEBUG] Using string input format');
     }
 

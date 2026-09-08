@@ -28,6 +28,16 @@
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
+.message.user .message-content.image-only {
+    line-height: 0;
+}
+
+.message.user .message-content.image-only .message-image-block.user-image,
+.message.user .message-content.image-only .message-image-block.user-image img {
+    display: block;
+    margin: 0;
+}
+
 .message-image-block.user-image:hover img {
     transform: scale(1.02);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);

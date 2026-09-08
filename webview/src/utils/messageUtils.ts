@@ -9,6 +9,7 @@ import {
   formatTaskNotificationForDisplay,
   hasCommandMessageTag,
   hasTaskNotificationTag,
+  hasVisibleMessageText,
   isSyntheticToolMessageContent,
   HIDDEN_OUTPUT_TAGS,
   INTERNAL_METADATA_TAGS,
@@ -636,12 +637,11 @@ export function getContentBlocks(
     }
     // Streaming/tool scenario: if raw doesn't have text but message.content has text, still need to show text
     const hasTextBlock = rawBlocks.some(
-      (block) => block.type === 'text' && typeof block.text === 'string' && String(block.text).trim().length > 0,
+      (block) => block.type === 'text' && hasVisibleMessageText(block.text),
     );
     if (
       !hasTextBlock &&
-      message.content &&
-      message.content.trim() &&
+      hasVisibleMessageText(message.content) &&
       !isSyntheticToolMessageContent(message.content, rawBlocks)
     ) {
       return [...rawBlocks, { type: 'text', text: localizeMessage(message.content) }];
@@ -649,7 +649,7 @@ export function getContentBlocks(
     return rawBlocks;
   }
   // If no raw blocks, check if content needs special handling
-  if (message.content && message.content.trim()) {
+  if (hasVisibleMessageText(message.content)) {
     // Handle task-notification in message.content directly
     if (hasTaskNotificationTag(message.content)) {
       const block = createTaskNotificationBlock(message.content);
