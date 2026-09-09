@@ -177,10 +177,53 @@ async function generateWithClaudeAsk(prompt, model, config) {
   }
 
   console.log(`[CommitMessage] Claude response text length: ${streamedText.length}`);
+
+  // Third-party Anthropic-compatible endpoints (e.g. DeepSeek) intermittently
+  // return empty text on the streaming protocol even though the plain JSON path
+  // is reliable. Fall back to a non-streaming create() call before giving up,
+  // so a transient empty stream no longer fails the whole generation.
+  if (!streamedText.trim()) {
+    streamedText = await askClaudeNonStreaming(client, modelId, prompt);
+  }
+
   if (streamedText.trim()) {
     return streamedText.trim();
   }
   throw new Error('Claude commit response is empty');
+}
+
+/**
+ * Non-streaming one-shot "ask" via messages.create(). Third-party
+ * Anthropic-compatible endpoints (DeepSeek) intermittently return empty text on
+ * the streaming protocol; the plain create() JSON response maps text blocks
+ * reliably. Retries once on an empty result to absorb transient flakiness.
+ */
+async function askClaudeNonStreaming(client, modelId, prompt) {
+  const ATTEMPTS = 2;
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+    console.log(`[CommitMessage] Non-streaming messages.create() attempt ${attempt}/${ATTEMPTS}...`);
+    const response = await client.messages.create({
+      model: modelId,
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    let text = '';
+    if (response && Array.isArray(response.content)) {
+      for (const block of response.content) {
+        if (block && block.type === 'text' && block.text) {
+          text += block.text;
+        }
+      }
+    }
+    console.log(`[CommitMessage] Non-streaming attempt ${attempt} text length: ${text.length}`);
+    if (text.trim()) {
+      return text;
+    }
+    if (attempt < ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+  return '';
 }
 
 /**
