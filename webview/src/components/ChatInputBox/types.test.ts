@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AVAILABLE_MODES,
   CLAUDE_MODELS,
   DEFAULT_CLAUDE_MODEL_ID,
+  isValidPermissionMode,
   normalizeClaudeModelId,
 } from './types';
 
@@ -48,5 +50,29 @@ describe('normalizeClaudeModelId', () => {
 
   it('leaves unknown custom model IDs untouched', () => {
     expect(normalizeClaudeModelId('qwen3.5-plus')).toBe('qwen3.5-plus');
+  });
+});
+
+describe('permission mode vocabulary', () => {
+  it('accepts every shared mode id including the gemini-only sandbox posture', () => {
+    for (const mode of ['default', 'plan', 'acceptEdits', 'bypassPermissions', 'smol', 'slow', 'sandbox']) {
+      expect(isValidPermissionMode(mode)).toBe(true);
+    }
+    expect(isValidPermissionMode('bogus')).toBe(false);
+    expect(isValidPermissionMode(undefined)).toBe(false);
+  });
+
+  it('derives the valid-id set from AVAILABLE_MODES with no duplicates', () => {
+    const ids = AVAILABLE_MODES.map((m) => m.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const mode of ['default', 'plan', 'acceptEdits', 'bypassPermissions', 'smol', 'slow', 'sandbox']) {
+      expect(ids).toContain(mode);
+    }
+  });
+
+  it('labels every mode for display — a mode without a label would render blank in the selector', () => {
+    for (const mode of AVAILABLE_MODES) {
+      expect(mode.label.length).toBeGreaterThan(0);
+    }
   });
 });

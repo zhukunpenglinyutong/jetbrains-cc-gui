@@ -26,6 +26,18 @@
     "optional": "Opcional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "Uso indisponível",
+      "dash": "Uso —",
+      "loading": "Carregando uso…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · Reinicia em {{value}}",
+      "clickToSwitch": "Clique para alternar entre janelas",
+      "switchWindowHint": "Clique no rótulo do período para alternar a janela",
+      "worstHint": "O ponto mostra a pior janela ({{color}})",
+      "worstDot": "Pior janela: {{color}}",
+      "stale": "Os dados podem estar desatualizados (falha na atualização)"
+    },
     "sendMessage": "Enviar mensagem para {{provider}}",
     "createNewSession": "Criar Nova Sessão",
     "confirmNewSession": "A sessão atual possui mensagens. Tem certeza que deseja criar uma nova sessão?",
@@ -101,6 +113,7 @@
     "totalDuration": "Esta resposta levou",
     "tokenUsage": "{{input}} entrada / {{output}} saída",
     "tokenUsageDetail": "Total do turno — entrada {{input}} · gravação de cache {{cacheWrite}} · leitura de cache {{cacheRead}} · saída {{output}}",
+    "tokenUsageThinking": "Raciocínio {{thinking}}",
     "cacheHitsWithRatio": " ({{tokens}} acertos de cache, {{ratio}})",
     "search": {
       "ariaLabel": "Pesquisar na conversa",
@@ -981,6 +994,11 @@
         "confirmExport": "Confirmar Exportação"
       }
     },
+    "gemini": {
+      "idleReapLabel": "Interromper turnos silenciosos automaticamente",
+      "idleReapHelp": "Encerra um turno do Gemini que não produz saída por estes minutos — normalmente uma CLI presa em um prompt interativo ou um backend parado. 0 desativa a interrupção automática.",
+      "idleReapDisabled": "Desativado"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",
@@ -1020,6 +1038,10 @@
         "omp": {
           "name": "OMP CLI",
           "description": "Agente de codificação de terminal Oh My Pi com suporte a múltiplos provedores"
+        },
+        "gemini": {
+          "name": "Antigravity CLI",
+          "description": "Agente de código no terminal Google Antigravity (agy)"
         }
       },
       "installDialog": {
@@ -1723,6 +1745,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "O modelo {{model}} não está mais disponível — voltamos para o modelo padrão da CLI."
+    },
     "addModel": "Adicionar Modelo",
     "searchPlaceholder": "Pesquisar modelos",
     "noModelsFound": "Nenhum modelo encontrado",
@@ -1820,6 +1845,11 @@
       "shortLabel": "Total",
       "tooltip": "Ignorar todas as verificações de permissão",
       "description": "Totalmente automatizado, ignorando todas as verificações de permissão [Use com cautela]"
+    },
+    "sandbox": {
+      "label": "Modo Sandbox",
+      "tooltip": "Execução em sandbox (somente Gemini CLI)",
+      "description": "Executa em um sandbox com restrições de terminal habilitadas (Gemini CLI)"
     }
   },
   "codexModes": {
@@ -1883,7 +1913,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"
@@ -2002,6 +2032,16 @@
     "codexNetworkErrorChecks": "Por favor, verifique:\n1. A conexão de rede está funcionando\n2. Se estiver usando um proxy, confirme a configuração do proxy\n3. O firewall está bloqueando a conexão",
     "codexError": "Erro do Codex:",
     "codexErrorCheck": "Por favor, verifique a conexão de rede e a configuração do Codex",
+    "geminiAuthRequired": "Autenticação do Gemini CLI necessária:",
+    "geminiAuthCause": "- Causa: O Gemini CLI (agy) não está logado ou as credenciais expiraram.",
+    "geminiAuthResolution": "- Resolução: Execute 'agy' em um terminal externo e conclua o fluxo interativo de login do Google.",
+    "geminiAuthNote": "- Observação: Este plugin não gerencia credenciais do Google nem realiza login do Google dentro do plugin.",
+    "geminiErrorDetails": "Detalhes do erro",
+    "geminiIdleReapStopped": "O turno do Gemini foi interrompido automaticamente: sem saída do Gemini CLI (agy) por {{window}}.",
+    "geminiIdleReapCauseAlive": "- Causa provável: o processo da CLI estava ativo, porém em silêncio — provavelmente preso em um prompt interativo (geralmente autenticação) ou parado no backend/rede.",
+    "geminiIdleReapCauseExited": "- Causa provável: o processo da CLI já havia encerrado sem entregar um resultado.",
+    "geminiIdleReapWhatToDo": "- O que fazer: execute 'agy' em um terminal externo para verificar seu login, depois cancele e tente novamente; se o turno estava legitimamente em silêncio (ex.: uma compilação longa), aumente o limite.",
+    "geminiIdleReapSetting": "- Esse limite é configurável: defina gemini.idleReapMinutes nas configurações do plugin Gemini (0 desativa a parada automática).",
     "codexThinkingHint": "O Codex não retornou itens de raciocínio. Se você ainda não consegue ver o processo de raciocínio, consulte docs/codex/docs/config.md para configurações hide_agent_reasoning/show_raw_agent_reasoning, e certifique-se de que sua conta OpenAI foi verificada.",
     "userDeniedPermission": "Usuário negou permissão para a ferramenta {{toolName}}",
     "userDidNotProvideAnswers": "Usuário não forneceu respostas",
@@ -2014,7 +2054,19 @@
     "uploadedImages": "{{count}} imagem(ns) enviada(s)",
     "uploadedAttachments": "Anexo(s) enviado(s)",
     "emptyMessage": "Mensagem vazia",
-    "attachment": "Anexo"
+    "attachment": "Anexo",
+    "workspaceSubstituted": "[Aviso] Diretório de trabalho substituído: solicitado \"{{requested}}\", usando \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "diretório de trabalho não seguro",
+    "workspaceReasonPluginInternal": "diretório interno do plugin",
+    "workspaceReasonMissing": "o diretório não existe",
+    "workspaceReasonNotADirectory": "não é um diretório",
+    "workspaceReasonTemporary": "diretório temporário",
+    "attachmentNotDelivered": {
+      "notice": "[Aviso] Anexo não entregue: \"{{name}}\" ({{reason}}).",
+      "nonImage": "apenas anexos de imagem são suportados",
+      "tooLarge": "a imagem excede o limite de 2 MB por imagem",
+      "invalid": "os dados da imagem estão ausentes ou ilegíveis"
+    }
   },
   "changelog": {
     "title": "Novidades",

@@ -1,6 +1,7 @@
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { AVAILABLE_MODELS } from '../types';
 import type { ModelInfo } from '../types';
+import { geminiDropdownGroupOfFor } from '../geminiCatalog';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
 import { MODEL_ID_TO_MAPPING_KEY, resolveModelIdForIcon } from '../modelLabelUtils';
 import { ModelDropdownContent } from './ModelDropdownContent';
@@ -59,6 +60,14 @@ export const ModelSelect = ({
   onClose,
   hideLongContextToggle = false,
 }: ModelSelectProps) => {
+  // Gemini groups by catalog family (label-driven), not id prefixes. The
+  // factory is bound to the catalog so two different families that share a
+  // label stay in separate sections.
+  const geminiGroupOf = useMemo(
+    () => (currentProvider === 'gemini' ? geminiDropdownGroupOfFor(models) : undefined),
+    [currentProvider, models],
+  );
+
   const {
     t,
     isOpen,
@@ -78,7 +87,13 @@ export const ModelSelect = ({
     hiddenModelCount,
     visibleModelCount,
     showSearch,
-  } = useModelSelectState({ value, models, currentProvider, longContextEnabled });
+  } = useModelSelectState({
+    value,
+    models,
+    currentProvider,
+    longContextEnabled,
+    groupOf: geminiGroupOf,
+  });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { dropdownStyle, recalculate } = useModelDropdownLayout({

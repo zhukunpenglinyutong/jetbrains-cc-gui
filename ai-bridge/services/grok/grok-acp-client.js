@@ -1067,12 +1067,32 @@ export function isAutoApproveMode(permissionMode) {
  *   text:  { type: "text", text }
  *   image: { type: "image", mimeType: "image/png", data: "<base64>" }
  *
- * When the user only attaches images with empty text, inject
- * GROK_IMAGE_ONLY_FALLBACK_TEXT so the payload stays valid.
+ * When the user only attaches images with empty text AND at least one image
+ * actually loaded, inject GROK_IMAGE_ONLY_FALLBACK_TEXT so the payload stays
+ * valid. If every image failed to load, no image analysis is promised - the
+ * attachments note below names what was attached instead.
  */
 export function buildPromptBlocks({ message, agentPrompt, openedFiles, attachments }) {
   const blocks = [];
   let text = message || '';
+
+  // Load images first: the image-only fallback below is only honest when at
+  // least one image block actually made it into the payload.
+  const { blocks: imageBlocks, loaded, errors } = buildGrokImageBlocks(
+    Array.isArray(attachments) ? attachments : []
+  );
+  if (errors.length > 0) {
+    console.error(
+      `[Grok] image load issues: ${loaded} ok, ${errors.length} failed (${errors.join('; ')})`
+    );
+  }
+  if (loaded > 0) {
+    console.error(`[Grok] embedding ${loaded} image block(s) into ACP prompt`);
+  }
+
+  if (!String(text).trim() && loaded > 0) {
+    text = GROK_IMAGE_ONLY_FALLBACK_TEXT;
+  }
 
   if (agentPrompt && String(agentPrompt).trim()) {
     text =
@@ -1106,18 +1126,6 @@ export function buildPromptBlocks({ message, agentPrompt, openedFiles, attachmen
     }
   }
 
-  const { blocks: imageBlocks, loaded, errors } = buildGrokImageBlocks(
-    Array.isArray(attachments) ? attachments : []
-  );
-  if (errors.length > 0) {
-    console.error(
-      `[Grok] image load issues: ${loaded} ok, ${errors.length} failed (${errors.join('; ')})`
-    );
-  }
-  if (loaded > 0) {
-    console.error(`[Grok] embedding ${loaded} image block(s) into ACP prompt`);
-  }
-
   // Non-image attachments (or failed images): keep a text note so the agent
   // still knows something was attached.
   if (Array.isArray(attachments) && attachments.length > 0 && loaded === 0) {
@@ -1130,10 +1138,9 @@ export function buildPromptBlocks({ message, agentPrompt, openedFiles, attachmen
   const trimmedText = String(text || '').trim();
   if (trimmedText) {
     blocks.push({ type: 'text', text });
-  } else if (imageBlocks.length > 0) {
-    // Grok requires at least one text content block with multimodal payloads.
-    blocks.push({ type: 'text', text: GROK_IMAGE_ONLY_FALLBACK_TEXT });
   } else {
+    // Grok requires at least one text content block; an empty turn keeps an
+    // empty text block rather than promising images that are not there.
     blocks.push({ type: 'text', text: text || '' });
   }
 

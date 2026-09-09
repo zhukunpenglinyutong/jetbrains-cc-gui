@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 import { sendBridgeEvent } from '../utils/bridge';
 import {
   apply1MContextSuffix,
+  GEMINI_DEFAULT_MODEL_ID,
   isValidDshPreset,
   isValidPermissionMode,
 } from '../components/ChatInputBox/types';
@@ -38,6 +39,18 @@ export type ViewMode = 'chat' | 'history' | 'settings';
 export interface UseModelProviderStateOptions {
   addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   t: TFunction;
+  /**
+   * Fired when the active provider requires the backend conversation to be
+   * discarded before the next send (Story 1.3, CAP-4). Today only the gemini
+   * model change fires it: the CLI bakes the effort tier into the full model
+   * slug, so a resumed conversation would feed prior context into a possibly
+   * smaller-context model. The hook decides WHEN; App wires this to the
+   * shared session transition (`forceCreateNewSession`: interrupt if
+   * streaming → beginSessionTransition → create_new_session). Strictly
+   * gemini-gated — every other provider keeps its behavior of continuing the
+   * session across a model change.
+   */
+  onSessionResetRequest?: () => void;
 }
 
 /**
@@ -54,10 +67,22 @@ export interface UseModelProviderStateOptions {
  * identity that must read the current provider when fired by the JCEF bridge.
  * The ref is mirrored inside useEffect so no ref access happens during render.
  */
-export function useModelProviderState({ addToast, t }: UseModelProviderStateOptions) {
+export function useModelProviderState({ addToast, t, onSessionResetRequest }: UseModelProviderStateOptions) {
   // ── Cross-slice state owned by the orchestrator ──
   const [currentProvider, setCurrentProvider] = useState('claude');
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('default');
+
+  // Gemini model slot: a full catalog slug where family+effort is ONE slug
+  // ('auto' = let the CLI pick its own default). Any different slug —
+  // including an effort-tier change — is a model change for the CAP-4
+  // conversation reset below.
+  const [selectedGeminiModel, setSelectedGeminiModel] = useState(GEMINI_DEFAULT_MODEL_ID);
+
+  // Gemini mode slot: the CLI natively supports every shared posture including
+  // plan and sandbox, so the choice is persisted un-coerced. Without a slot the
+  // mode rides the shared claude one and a provider switch away and back
+  // silently swaps the user's posture for claude's.
+  const [geminiPermissionMode, setGeminiPermissionMode] = useState<PermissionMode>('default');
 
   // External-facing ref so window callbacks can read the latest provider
   // without re-binding. Mirrored in an effect (bridge callbacks fire async,
@@ -139,6 +164,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setSelectedPiModel,
     setSelectedOmpModel,
     setSelectedDshModel,
+    setSelectedGeminiModel,
     setGrokPermissionMode,
     setKimiPermissionMode,
     setMiniMaxPermissionMode,
@@ -146,6 +172,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setPiPermissionMode,
     setOmpPermissionMode,
     setDshPermissionMode,
+    setGeminiPermissionMode,
     setPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
@@ -163,6 +190,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     selectedPiModel,
     selectedOmpModel,
     selectedDshModel,
+    selectedGeminiModel,
     grokPermissionMode,
     kimiPermissionMode,
     miniMaxPermissionMode,
@@ -170,6 +198,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     piPermissionMode,
     ompPermissionMode,
     dshPermissionMode,
+    geminiPermissionMode,
     longContextEnabled,
     reasoningEffort,
     codexFastMode,
@@ -187,6 +216,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     pi: selectedPiModel,
     omp: selectedOmpModel,
     dsh: selectedDshModel,
+    gemini: selectedGeminiModel,
   });
   const currentSdkInstalled = useMemo(
     () => isSdkInstalled(currentProvider),
@@ -237,6 +267,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
         setPiPermissionMode,
         setOmpPermissionMode,
         setDshPermissionMode,
+        setGeminiPermissionMode,
         setSelectedOmpModel,
       });
       return;
@@ -257,9 +288,29 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setOmpPermissionMode,
     setSelectedOmpModel,
     setDshPermissionMode,
+    setGeminiPermissionMode,
   ]);
 
   const handleModelSelect = useCallback((modelId: string) => {
+    if (currentProvider === 'gemini') {
+      // CAP-4 (Story 1.3): for gemini the effort tier is baked into the full
+      // slug (family+effort = one slug), so ANY different slug — including an
+      // effort-tier change — IS a model change. Resuming would replay the
+      // prior conversation into a possibly smaller-context model (the
+      // recorded CAP-4 failure mode), so an actual change discards the
+      // backend conversation: the session reset clears the single session-id
+      // slot, the next send carries no session id, and the CLI (which never
+      // continues implicitly) starts a fresh conversation. A same-slug
+      // reaffirmation is a no-op, matching Java's isActualModelSwitch.
+      // Strictly gemini-gated: other providers keep their behavior.
+      const isModelChange = modelId !== selectedGeminiModel;
+      setSelectedGeminiModel(modelId);
+      sendBridgeEvent('set_model', modelId);
+      if (isModelChange) {
+        onSessionResetRequest?.();
+      }
+      return;
+    }
     applyModelSelect(currentProvider, modelId, longContextEnabled, ompRoles, {
       setSelectedClaudeModel,
       setSelectedCodexModel,
@@ -277,6 +328,8 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     currentProvider,
     longContextEnabled,
     ompRoles,
+    selectedGeminiModel,
+    onSessionResetRequest,
     setSelectedClaudeModel,
     setSelectedCodexModel,
     setSelectedGrokModel,
@@ -303,6 +356,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       pi: piPermissionMode,
       omp: ompPermissionMode,
       dsh: dshPermissionMode,
+      gemini: geminiPermissionMode,
     }, codexSdkMeetsMinimum);
     setPermissionMode(modeToSet);
     // Dynamic omp roles are not in Java's static mode whitelist — the
@@ -321,6 +375,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       pi: selectedPiModel,
       omp: selectedOmpModel,
       dsh: selectedDshModel,
+      gemini: selectedGeminiModel,
     }, longContextEnabled);
     sendBridgeEvent('set_model', newModel);
   }, [
@@ -334,6 +389,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     piPermissionMode,
     ompPermissionMode,
     dshPermissionMode,
+    geminiPermissionMode,
     selectedCodexModel,
     selectedClaudeModel,
     selectedGrokModel,
@@ -343,6 +399,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     selectedPiModel,
     selectedOmpModel,
     selectedDshModel,
+    selectedGeminiModel,
     longContextEnabled,
   ]);
 
@@ -395,6 +452,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     sdkStatus,
     sdkStatusError: currentSdkStatusError,
     currentProvider, setCurrentProvider,
+    selectedGeminiModel, setSelectedGeminiModel,
     permissionMode, setPermissionMode,
     selectedModel,
     currentSdkInstalled,

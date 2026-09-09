@@ -1,0 +1,4 @@
+{"event":"init","conversation_id":"6f1c2a54-93b7-4c0e-8a41-7d2e5b9c1a01","init":{"cwd":"<TMP>","tools":["read_file","write_to_file","run_command"],"permission_mode":"request-review"}}
+{"event":"step_update","step_update":{"conversation_id":"6f1c2a54-93b7-4c0e-8a41-7d2e5b9c1a01","step_index":0,"state":"DONE","step_type":"user_input"}}
+{"event":"result","result":{"conversation_id":"6f1c2a54-93b7-4c0e-8a41-7d2e5b9c1a01","duration_seconds":2.5,"num_turns":1,"usage":{"input_tokens":120,"output_tokens":30,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":150},"status":"ERROR","response":"","error":"first failure wins"}}
+{"event":"result","result":{"conversation_id":"6f1c2a54-93b7-4c0e-8a41-7d2e5b9c1a01","duration_seconds":2.5,"num_turns":1,"usage":{"input_tokens":120,"output_tokens":30,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":150},"status":"SUCCESS","response":"late success","error":null}}

@@ -26,6 +26,18 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "Utilisation indisponible",
+      "dash": "Utilisation —",
+      "loading": "Chargement de l'utilisation…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · réinitialise {{value}}",
+      "clickToSwitch": "Cliquez pour changer de période",
+      "switchWindowHint": "Cliquez sur le libellé de période pour changer de fenêtre",
+      "worstHint": "Le point montre la pire fenêtre ({{color}})",
+      "worstDot": "Pire fenêtre : {{color}}",
+      "stale": "Les données peuvent être obsolètes (échec de l'actualisation)"
+    },
     "sendMessage": "Envoyer un message à {{provider}}",
     "createNewSession": "Créer une nouvelle session",
     "confirmNewSession": "La session actuelle contient des messages, êtes-vous sûr de vouloir créer une nouvelle session ?",
@@ -101,6 +113,7 @@
     "totalDuration": "Cette réponse a pris",
     "tokenUsage": "{{input}} entrée / {{output}} sortie",
     "tokenUsageDetail": "Total du tour — entrée {{input}} · écriture cache {{cacheWrite}} · lecture cache {{cacheRead}} · sortie {{output}}",
+    "tokenUsageThinking": "Réflexion {{thinking}}",
     "cacheHitsWithRatio": " ({{tokens}} cache atteint, {{ratio}})",
     "search": {
       "ariaLabel": "Rechercher dans la conversation",
@@ -834,6 +847,11 @@
         "saveChanges": "Save"
       }
     },
+    "gemini": {
+      "idleReapLabel": "Arrêter automatiquement les tours silencieux",
+      "idleReapHelp": "Met fin à un tour Gemini sans aucune sortie pendant ce nombre de minutes — généralement une CLI bloquée sur une invite interactive ou un backend en panne. 0 désactive l'arrêt automatique.",
+      "idleReapDisabled": "Désactivé"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",
@@ -873,6 +891,10 @@
         "omp": {
           "name": "OMP CLI",
           "description": "Agent de codage terminal Oh My Pi avec prise en charge multi-fournisseurs"
+        },
+        "gemini": {
+          "name": "Antigravity CLI",
+          "description": "Agent de codage en terminal Google Antigravity (agy)"
         }
       },
       "installDialog": {
@@ -1573,6 +1595,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "Le modèle {{model}} n'est plus disponible — retour au modèle par défaut de la CLI."
+    },
     "addModel": "Ajouter un modèle",
     "searchPlaceholder": "Rechercher des modèles",
     "noModelsFound": "Aucun modèle trouvé",
@@ -1670,6 +1695,11 @@
       "shortLabel": "Totale",
       "tooltip": "Contourner toutes les vérifications d'autorisation",
       "description": "Entièrement automatisé, contourne toutes les vérifications d'autorisation [À utiliser avec prudence]"
+    },
+    "sandbox": {
+      "label": "Mode Sandbox",
+      "tooltip": "Exécution en sandbox (Gemini CLI uniquement)",
+      "description": "S'exécute dans un sandbox avec des restrictions de terminal activées (Gemini CLI)"
     }
   },
   "codexModes": {
@@ -1733,7 +1763,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"
@@ -1852,6 +1882,16 @@
     "codexNetworkErrorChecks": "Veuillez vérifier :\n1. La connexion réseau fonctionne-t-elle ?\n2. Si vous utilisez un proxy, veuillez confirmer la configuration du proxy\n3. Le pare-feu bloque-t-il la connexion ?",
     "codexError": "Erreur Codex :",
     "codexErrorCheck": "Veuillez vérifier la connexion réseau et la configuration Codex",
+    "geminiAuthRequired": "Authentification Gemini CLI requise :",
+    "geminiAuthCause": "- Cause : La CLI Gemini (agy) n'est pas connectée ou les identifiants ont expiré.",
+    "geminiAuthResolution": "- Résolution : Exécutez 'agy' dans un terminal externe et suivez le flux de connexion Google interactif.",
+    "geminiAuthNote": "- Remarque : Ce plugin ne gère pas les identifiants Google et n'effectue pas de connexion Google depuis le plugin.",
+    "geminiErrorDetails": "Détails de l'erreur",
+    "geminiIdleReapStopped": "Le tour Gemini a été arrêté automatiquement : aucune sortie de la CLI Gemini (agy) depuis {{window}}.",
+    "geminiIdleReapCauseAlive": "- Cause probable : le processus de la CLI était vivant mais silencieux — il est probablement bloqué sur une invite interactive (le plus souvent l'authentification) ou en attente côté backend/réseau.",
+    "geminiIdleReapCauseExited": "- Cause probable : le processus de la CLI s'était déjà terminé sans livrer de résultat.",
+    "geminiIdleReapWhatToDo": "- Que faire : exécutez 'agy' dans un terminal externe pour vérifier votre connexion, puis annulez et réessayez ; si le tour était légitimement silencieux (par ex. une longue compilation), augmentez la limite.",
+    "geminiIdleReapSetting": "- Cette limite est configurable : définissez gemini.idleReapMinutes dans les paramètres du plugin Gemini (0 désactive l'arrêt automatique).",
     "codexThinkingHint": "Codex n'a pas retourné d'éléments de raisonnement. Si vous ne pouvez toujours pas voir le processus de réflexion, veuillez consulter docs/codex/docs/config.md pour les paramètres hide_agent_reasoning/show_raw_agent_reasoning, et assurez-vous que votre compte OpenAI a été vérifié.",
     "userDeniedPermission": "L'utilisateur a refusé la permission pour l'outil {{toolName}}",
     "userDidNotProvideAnswers": "L'utilisateur n'a pas fourni de réponses",
@@ -1864,7 +1904,19 @@
     "uploadedImages": "{{count}} image(s) téléchargée(s)",
     "uploadedAttachments": "Pièce(s) jointe(s) téléchargée(s)",
     "emptyMessage": "Message vide",
-    "attachment": "Pièce jointe"
+    "attachment": "Pièce jointe",
+    "workspaceSubstituted": "[Avis] Répertoire de travail remplacé : \"{{requested}}\" demandé, utilisation de \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "répertoire de travail non sûr",
+    "workspaceReasonPluginInternal": "répertoire interne du plugin",
+    "workspaceReasonMissing": "le répertoire n'existe pas",
+    "workspaceReasonNotADirectory": "n'est pas un répertoire",
+    "workspaceReasonTemporary": "répertoire temporaire",
+    "attachmentNotDelivered": {
+      "notice": "[Avis] Pièce jointe non livrée : \"{{name}}\" ({{reason}}).",
+      "nonImage": "seules les pièces jointes de type image sont prises en charge",
+      "tooLarge": "l'image dépasse la limite de 2 Mo par image",
+      "invalid": "les données de l'image sont absentes ou illisibles"
+    }
   },
   "changelog": {
     "title": "Nouveautés",

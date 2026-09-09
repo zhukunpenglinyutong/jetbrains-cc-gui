@@ -66,6 +66,50 @@ public class CodemossSettingsService {
     public static final String GROK_AUTH_METHOD_API_KEY = "api_key";
     public static final String DEFAULT_GROK_AUTH_METHOD = GROK_AUTH_METHOD_OAUTH;
 
+    /**
+     * Silence-window (minutes) after which a Gemini turn with no output is
+     * reaped by the ai-bridge watchdog. Strictly above the known-legitimate
+     * silent tool-call tail (20-minute builds); {@code 0} disables automatic
+     * reaping entirely (manual cancel always works).
+     */
+    public static final int DEFAULT_GEMINI_IDLE_REAP_MINUTES = 30;
+
+    public int getGeminiIdleReapMinutes() throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has("gemini") || config.get("gemini").isJsonNull()) {
+            return DEFAULT_GEMINI_IDLE_REAP_MINUTES;
+        }
+        JsonObject gemini = config.getAsJsonObject("gemini");
+        if (!gemini.has("idleReapMinutes") || gemini.get("idleReapMinutes").isJsonNull()) {
+            return DEFAULT_GEMINI_IDLE_REAP_MINUTES;
+        }
+        try {
+            int minutes = gemini.get("idleReapMinutes").getAsInt();
+            // A hand-edited negative must not become a kill window — fail safe
+            // to disabled, matching the ai-bridge's parse of the same value.
+            return Math.max(0, minutes);
+        } catch (Exception e) {
+            return DEFAULT_GEMINI_IDLE_REAP_MINUTES;
+        }
+    }
+
+    public void setGeminiIdleReapMinutes(int minutes) throws IOException {
+        JsonObject config = readConfig();
+        JsonObject gemini = config.has("gemini") && !config.get("gemini").isJsonNull()
+                ? config.getAsJsonObject("gemini")
+                : new JsonObject();
+        int normalized = Math.max(0, minutes);
+        if (normalized == DEFAULT_GEMINI_IDLE_REAP_MINUTES) {
+            // The default is the absent-key reading; keep the file clean.
+            gemini.remove("idleReapMinutes");
+        } else {
+            gemini.addProperty("idleReapMinutes", normalized);
+        }
+        config.add("gemini", gemini);
+        writeConfig(config);
+        LOG.info("[CodemossSettingsService] Set gemini.idleReapMinutes=" + normalized);
+    }
+
     public String getGrokAuthMethod() throws IOException {
         JsonObject config = readConfig();
         if (!config.has("grok") || config.get("grok").isJsonNull()) {

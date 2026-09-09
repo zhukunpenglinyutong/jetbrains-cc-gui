@@ -16,13 +16,15 @@ interface UseModelSelectStateArgs {
   models: ModelInfo[];
   currentProvider: string;
   longContextEnabled: boolean;
+  /** Optional custom grouping (e.g. gemini catalog families instead of id prefixes). */
+  groupOf?: (model: ModelInfo) => string;
 }
 
 /**
  * Holds ModelSelect's open/search/pinned state plus every derived value
  * (current model resolution, label/description helpers, filtered sections).
  */
-export function useModelSelectState({ value, models, currentProvider, longContextEnabled }: UseModelSelectStateArgs) {
+export function useModelSelectState({ value, models, currentProvider, longContextEnabled, groupOf }: UseModelSelectStateArgs) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -79,6 +81,7 @@ export function useModelSelectState({ value, models, currentProvider, longContex
 
   const { sections, hiddenCount: hiddenModelCount } = buildModelDropdownSections(filteredModels, pinnedIds, {
     visibleLimit: MAX_VISIBLE_MODEL_OPTIONS,
+    ...(groupOf ? { groupOf } : {}),
   });
   const visibleModelCount = sections.reduce((n, s) => n + s.models.length, 0);
   const showSearch = shouldShowModelSearch(models.length, searchQuery);

@@ -259,7 +259,7 @@ export function selectWorkingDirectory(requestedCwd) {
   candidates.push(process.cwd());
   candidates.push(getRealHomeDir());
 
-  console.log('[DEBUG] selectWorkingDirectory candidates:', JSON.stringify(candidates));
+  console.error('[DEBUG] selectWorkingDirectory candidates:', JSON.stringify(candidates));
 
   for (const candidate of candidates) {
     const normalized = sanitizePath(candidate);
@@ -271,33 +271,33 @@ export function selectWorkingDirectory(requestedCwd) {
     // here and make the SDK persist sessions under
     // ~/.claude/projects/<sanitized-bridge-dir>/, hiding every project's history.
     if (isBridgeDirectory(normalized)) {
-      console.log('[DEBUG] Skipping ai-bridge directory candidate:', normalized);
+      console.error('[DEBUG] Skipping ai-bridge directory candidate:', normalized);
       continue;
     }
 
     if (isTempDirectory(normalized) && envProjectPath) {
-      console.log('[DEBUG] Skipping temp directory candidate:', normalized);
+      console.error('[DEBUG] Skipping temp directory candidate:', normalized);
       continue;
     }
 
     try {
       const stats = fs.statSync(normalized);
       if (stats.isDirectory()) {
-        console.log('[DEBUG] selectWorkingDirectory resolved:', normalized);
+        console.error('[DEBUG] selectWorkingDirectory resolved:', normalized);
         return normalized;
       }
     } catch {
       // Ignore invalid candidates
-      console.log('[DEBUG] Candidate is invalid:', normalized);
+      console.error('[DEBUG] Candidate is invalid:', normalized);
     }
   }
 
-  console.log('[DEBUG] selectWorkingDirectory fallback triggered');
+  console.error('[DEBUG] selectWorkingDirectory fallback triggered');
   // Guard: reject the bridge dir even from IDEA_PROJECT_PATH (e.g. when the user
   // is developing the bridge itself). The home dir is always a safe fallback.
   const fallback = envProjectPath || getRealHomeDir();
   if (isBridgeDirectory(fallback)) {
-    console.log('[DEBUG] Fallback env path is bridge dir, using home dir instead');
+    console.error('[DEBUG] Fallback env path is bridge dir, using home dir instead');
     return getRealHomeDir();
   }
   return fallback;

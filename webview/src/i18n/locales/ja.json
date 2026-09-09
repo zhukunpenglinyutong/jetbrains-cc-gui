@@ -26,6 +26,18 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "使用量を取得できません",
+      "dash": "使用量 —",
+      "loading": "使用量を読み込み中…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · {{value}} にリセット",
+      "clickToSwitch": "クリックで期間を切り替え",
+      "switchWindowHint": "期間ラベルをクリックしてウィンドウを切り替え",
+      "worstHint": "ドットは最も悪いウィンドウを示します（{{color}}）",
+      "worstDot": "最も悪いウィンドウ: {{color}}",
+      "stale": "データが古い可能性があります（更新失敗）"
+    },
     "sendMessage": "{{provider}}にメッセージを送信",
     "createNewSession": "新規セッションを作成",
     "confirmNewSession": "現在のセッションにメッセージがあります。新規セッションを作成してもよろしいですか?",
@@ -101,6 +113,7 @@
     "totalDuration": "今回の応答時間",
     "tokenUsage": "入力 {{input}} / 出力 {{output}}",
     "tokenUsageDetail": "ターン合計 — 入力 {{input}} · キャッシュ書き込み {{cacheWrite}} · キャッシュ読み取り {{cacheRead}} · 出力 {{output}}",
+    "tokenUsageThinking": "思考 {{thinking}}",
     "cacheHitsWithRatio": "（キャッシュヒット {{tokens}}、{{ratio}}）",
     "search": {
       "ariaLabel": "会話内を検索",
@@ -839,6 +852,11 @@
         "saveChanges": "Save"
       }
     },
+    "gemini": {
+      "idleReapLabel": "無応答のターンを自動停止",
+      "idleReapHelp": "指定した分数出力のない Gemini ターンを終了します。通常は CLI が対話プロンプトで止まっているか、バックエンドが停止しています。0 で自動停止を無効にします。",
+      "idleReapDisabled": "無効"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",
@@ -878,6 +896,10 @@
         "omp": {
           "name": "OMP CLI",
           "description": "マルチプロバイダーのモデルに対応した Oh My Pi ターミナルコーディングエージェント"
+        },
+        "gemini": {
+          "name": "Antigravity CLI",
+          "description": "Google Antigravity ターミナルコーディングエージェント (agy)"
         }
       },
       "installDialog": {
@@ -1578,6 +1600,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "モデル {{model}} は利用できなくなったため、CLI のデフォルトモデルに戻しました。"
+    },
     "addModel": "モデル追加",
     "searchPlaceholder": "モデルを検索",
     "noModelsFound": "モデルが見つかりません",
@@ -1675,6 +1700,11 @@
       "shortLabel": "完全自動",
       "tooltip": "すべての権限チェックをバイパス",
       "description": "完全自動、すべての権限チェックをバイパス[注意して使用]"
+    },
+    "sandbox": {
+      "label": "サンドボックスモード",
+      "tooltip": "サンドボックスで実行（Gemini CLI のみ）",
+      "description": "ターミナル制限を有効にしたサンドボックスで実行します（Gemini CLI）"
     }
   },
   "codexModes": {
@@ -1738,7 +1768,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"
@@ -1857,6 +1887,16 @@
     "codexNetworkErrorChecks": "確認してください：\n1. ネットワーク接続は正常ですか\n2. プロキシを使用している場合、プロキシ設定を確認してください\n3. ファイアウォールが接続をブロックしていませんか",
     "codexError": "Codex エラー：",
     "codexErrorCheck": "ネットワーク接続と Codex 設定を確認してください",
+    "geminiAuthRequired": "Gemini CLI の認証が必要です：",
+    "geminiAuthCause": "- 原因：Gemini CLI (agy) がログインしていないか、認証情報の有効期限が切れています。",
+    "geminiAuthResolution": "- 解決方法：外部ターミナルで 'agy' を実行し、Google のインタラクティブなログイン フローを完了してください。",
+    "geminiAuthNote": "- 注意：このプラグインは Google の認証情報を管理せず、プラグイン内で Google ログインを行うこともありません。",
+    "geminiErrorDetails": "エラー詳細",
+    "geminiIdleReapStopped": "Gemini のターンを自動停止しました：Gemini CLI (agy) から {{window}} 間出力がありませんでした。",
+    "geminiIdleReapCauseAlive": "- 考えられる原因：CLI プロセスは存続しているものの出力がなく、インタラクティブなプロンプト（多くは認証）で停止しているか、バックエンド/ネットワークで滞留している可能性が高いです。",
+    "geminiIdleReapCauseExited": "- 考えられる原因：CLI プロセスは既に結果を返さずに終了していました。",
+    "geminiIdleReapWhatToDo": "- 対処方法：外部ターミナルで 'agy' を実行してログイン状態を確認し、キャンセルして再試行してください。ターンが正当に無出力だった場合（長時間のビルドなど）は、上限を引き上げてください。",
+    "geminiIdleReapSetting": "- この上限は設定可能です：Gemini プラグイン設定で gemini.idleReapMinutes を設定してください（0 で自動停止を無効化）。",
     "codexThinkingHint": "Codex が reasoning 項目を返しませんでした。思考プロセスが表示されない場合は、docs/codex/docs/config.md の hide_agent_reasoning/show_raw_agent_reasoning 設定を参照し、OpenAI アカウントが認証済みであることを確認してください。",
     "userDeniedPermission": "ユーザーが {{toolName}} ツールの使用権限を拒否しました",
     "userDidNotProvideAnswers": "ユーザーが回答を提供しませんでした",
@@ -1869,7 +1909,19 @@
     "uploadedImages": "{{count}} 枚の画像をアップロードしました",
     "uploadedAttachments": "添付ファイルをアップロードしました",
     "emptyMessage": "空のメッセージ",
-    "attachment": "添付ファイル"
+    "attachment": "添付ファイル",
+    "workspaceSubstituted": "[通知] 作業ディレクトリを置き換えました: 指定 \"{{requested}}\"、使用 \"{{effective}}\" ({{reason}})。",
+    "workspaceReasonUnsafe": "安全ではない作業ディレクトリ",
+    "workspaceReasonPluginInternal": "プラグイン内部のディレクトリ",
+    "workspaceReasonMissing": "ディレクトリが存在しません",
+    "workspaceReasonNotADirectory": "ディレクトリではありません",
+    "workspaceReasonTemporary": "一時ディレクトリ",
+    "attachmentNotDelivered": {
+      "notice": "[通知] 添付ファイルを配信できませんでした: \"{{name}}\" ({{reason}})。",
+      "nonImage": "画像の添付ファイルのみサポートしています",
+      "tooLarge": "画像が1画像あたり2 MBの制限を超えています",
+      "invalid": "画像データが存在しないか、読み取れません"
+    }
   },
   "changelog": {
     "title": "更新情報",

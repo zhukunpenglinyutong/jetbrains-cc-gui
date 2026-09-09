@@ -26,6 +26,18 @@
     "optional": "선택사항"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "사용량을 사용할 수 없음",
+      "dash": "사용량 —",
+      "loading": "사용량 불러오는 중…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · {{value}}에 초기화",
+      "clickToSwitch": "클릭하여 기간 전환",
+      "switchWindowHint": "기간 레이블을 클릭하여 창 전환",
+      "worstHint": "점은 최악의 창을 표시합니다({{color}})",
+      "worstDot": "최악의 창: {{color}}",
+      "stale": "데이터가 오래되었을 수 있습니다(새로고침 실패)"
+    },
     "sendMessage": "{{provider}}에게 메시지 보내기",
     "createNewSession": "새 세션 만들기",
     "confirmNewSession": "현재 세션에 메시지가 있습니다. 새 세션을 만드시겠습니까?",
@@ -101,6 +113,7 @@
     "totalDuration": "이번 응답 소요 시간",
     "tokenUsage": "입력 {{input}} / 출력 {{output}}",
     "tokenUsageDetail": "턴 합계 — 입력 {{input}} · 캐시 쓰기 {{cacheWrite}} · 캐시 읽기 {{cacheRead}} · 출력 {{output}}",
+    "tokenUsageThinking": "추론 {{thinking}}",
     "cacheHitsWithRatio": " (캐시 히트 {{tokens}}, {{ratio}})",
     "search": {
       "ariaLabel": "대화에서 검색",
@@ -928,6 +941,11 @@
         "confirmExport": "내보내기 확인"
       }
     },
+    "gemini": {
+      "idleReapLabel": "출력 없는 턴 자동 중지",
+      "idleReapHelp": "지정한 분 동안 출력이 없는 Gemini 턴을 종료합니다. 보통 CLI가 대화형 프롬프트에서 멈췄거나 백엔드가 멈춘 경우입니다. 0이면 자동 중지가 비활성화됩니다.",
+      "idleReapDisabled": "비활성화됨"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",
@@ -967,6 +985,10 @@
         "omp": {
           "name": "OMP CLI",
           "description": "멀티 프로바이더 모델을 지원하는 Oh My Pi 터미널 코딩 에이전트"
+        },
+        "gemini": {
+          "name": "Antigravity CLI",
+          "description": "Google Antigravity 터미널 코딩 에이전트 (agy)"
         }
       },
       "installDialog": {
@@ -1668,6 +1690,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "{{model}} 모델을 더 이상 사용할 수 없어 CLI 기본 모델로 되돌렸습니다."
+    },
     "addModel": "모델 추가",
     "searchPlaceholder": "모델 검색",
     "noModelsFound": "모델을 찾을 수 없습니다",
@@ -1765,6 +1790,11 @@
       "shortLabel": "완전 자동",
       "tooltip": "모든 권한 검사 우회",
       "description": "완전 자동화, 모든 권한 검사를 우회합니다 [주의하여 사용]"
+    },
+    "sandbox": {
+      "label": "샌드박스 모드",
+      "tooltip": "샌드박스에서 실행(Gemini CLI 전용)",
+      "description": "터미널 제한이 활성화된 샌드박스에서 실행합니다(Gemini CLI)"
     }
   },
   "codexModes": {
@@ -1834,7 +1864,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"
@@ -1953,6 +1983,16 @@
     "codexNetworkErrorChecks": "확인해주세요:\n1. 네트워크 연결이 정상인지\n2. 프록시를 사용하는 경우 프록시 설정이 올바른지\n3. 방화벽이 연결을 차단하고 있지 않은지",
     "codexError": "Codex 오류:",
     "codexErrorCheck": "네트워크 연결과 Codex 설정을 확인해주세요",
+    "geminiAuthRequired": "Gemini CLI 인증이 필요합니다:",
+    "geminiAuthCause": "- 원인: Gemini CLI (agy)에 로그인하지 않았거나 자격 증명이 만료되었습니다.",
+    "geminiAuthResolution": "- 해결 방법: 외부 터미널에서 'agy'를 실행하여 대화형 Google 로그인 절차를 완료하세요.",
+    "geminiAuthNote": "- 참고: 이 플러그인은 Google 자격 증명을 관리하지 않으며 플러그인 내에서 Google 로그인을 수행하지 않습니다.",
+    "geminiErrorDetails": "오류 세부 정보",
+    "geminiIdleReapStopped": "Gemini 턴이 자동 중지되었습니다: Gemini CLI (agy)에서 {{window}} 동안 출력이 없었습니다.",
+    "geminiIdleReapCauseAlive": "- 가능한 원인: CLI 프로세스는 살아 있지만 출력이 없습니다. 대화형 프롬프트(주로 인증)에서 멈추었거나 백엔드/네트워크 정체로 지연되고 있을 가능성이 높습니다.",
+    "geminiIdleReapCauseExited": "- 가능한 원인: CLI 프로세스가 이미 결과 없이 종료되었습니다.",
+    "geminiIdleReapWhatToDo": "- 조치 방법: 외부 터미널에서 'agy'를 실행해 로그인 상태를 확인한 후 취소하고 다시 시도하세요. 턴이 정상적으로 조용한 경우(예: 긴 빌드)라면 상한을 늘리세요.",
+    "geminiIdleReapSetting": "- 이 상한은 설정할 수 있습니다: Gemini 플러그인 설정에서 gemini.idleReapMinutes를 설정하세요(0이면 자동 중지를 비활성화).",
     "codexThinkingHint": "Codex가 추론 항목을 반환하지 않았습니다. 사고 과정이 여전히 보이지 않으면 docs/codex/docs/config.md에서 hide_agent_reasoning/show_raw_agent_reasoning 설정을 참조하고, OpenAI 계정이 인증되었는지 확인해주세요.",
     "userDeniedPermission": "사용자가 {{toolName}} 도구의 권한을 거부했습니다",
     "userDidNotProvideAnswers": "사용자가 답변을 제공하지 않았습니다",
@@ -1965,7 +2005,19 @@
     "uploadedImages": "{{count}}개 이미지 업로드됨",
     "uploadedAttachments": "첨부파일 업로드됨",
     "emptyMessage": "빈 메시지",
-    "attachment": "첨부파일"
+    "attachment": "첨부파일",
+    "workspaceSubstituted": "[알림] 작업 디렉터리가 대체되었습니다: 요청 \"{{requested}}\", 사용 \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "안전하지 않은 작업 디렉터리",
+    "workspaceReasonPluginInternal": "플러그인 내부 디렉터리",
+    "workspaceReasonMissing": "디렉터리가 존재하지 않습니다",
+    "workspaceReasonNotADirectory": "디렉터리가 아닙니다",
+    "workspaceReasonTemporary": "임시 디렉터리",
+    "attachmentNotDelivered": {
+      "notice": "[알림] 첨부 파일을 전달하지 못했습니다: \"{{name}}\" ({{reason}}).",
+      "nonImage": "이미지 첨부 파일만 지원됩니다",
+      "tooLarge": "이미지가 이미지당 2 MB 제한을 초과합니다",
+      "invalid": "이미지 데이터가 없거나 읽을 수 없습니다"
+    }
   },
   "changelog": {
     "title": "새로운 기능",

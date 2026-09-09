@@ -37,6 +37,8 @@ const translations: Record<string, string> = {
   'settings.cli.tools.omp.description': 'OMP desc',
   'settings.cli.tools.dsh.name': 'DeepSeek Harness',
   'settings.cli.tools.dsh.description': 'DSH desc',
+  'settings.cli.tools.gemini.name': 'Antigravity CLI',
+  'settings.cli.tools.gemini.description': 'Antigravity desc',
   'settings.cli.dsh.groupTitle': 'DeepSeek Harness',
   'settings.cli.dsh.cliRowTitle': 'CLI install',
   'settings.cli.installDialog.title': 'Install {{name}}',
@@ -143,6 +145,14 @@ describe('CliSection', () => {
           version: '0.1',
           path: '/usr/local/bin/dsh',
         },
+        gemini: {
+          id: 'gemini',
+          name: 'Antigravity CLI',
+          binaryName: 'agy',
+          installed: true,
+          version: '1.1.22',
+          path: '/Users/test/.local/bin/agy',
+        },
       }));
     });
 
@@ -152,6 +162,8 @@ describe('CliSection', () => {
     expect(screen.getByText('PI CLI')).toBeTruthy();
     expect(screen.getByText('OMP CLI')).toBeTruthy();
     expect(screen.getByText('DeepSeek Harness')).toBeTruthy();
+    expect(screen.getByText('Antigravity CLI')).toBeTruthy();
+    expect(screen.getByText('/Users/test/.local/bin/agy')).toBeTruthy();
     expect(screen.getByText('CLI install')).toBeTruthy();
     expect(screen.queryByText('One product, two steps')).toBeNull();
     expect(screen.getByText('v1.2.3')).toBeTruthy();
@@ -166,6 +178,15 @@ describe('CliSection', () => {
     expect(group.contains(cliRow)).toBe(true);
     expect(group.contains(connection)).toBe(true);
     expect(cliRow.compareDocumentPosition(connection) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+    // Review fix L1: the Gemini idle-reap card is mounted (and only mounted)
+    // under an installed Gemini CLI row — the webview half of story 1.10's
+    // settings chain. Its own behavior lives in GeminiIdleReapCard.test.tsx;
+    // here only the mount/placement wiring is pinned.
+    const reapCard = screen.getByTestId('gemini-idle-reap-card');
+    const geminiRow = screen.getByText('Antigravity CLI');
+    expect(geminiRow.compareDocumentPosition(reapCard) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
   it('persists switcher visibility when the eye toggle is clicked', async () => {
@@ -219,6 +240,8 @@ describe('CliSection', () => {
     expect(screen.getByText('CLI install')).toBeTruthy();
     expect(screen.queryByText('Install the CLI first')).toBeNull();
     expect(screen.queryByTestId('dsh-connection-card')).toBeNull();
+    // Review fix L1 (negative half): no installed Gemini CLI → no reap card.
+    expect(screen.queryByTestId('gemini-idle-reap-card')).toBeNull();
   });
 
   it('does not show the local host card while CLI detection is still loading', async () => {

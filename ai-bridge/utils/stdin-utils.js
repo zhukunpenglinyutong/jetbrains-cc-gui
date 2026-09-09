@@ -11,14 +11,18 @@ const STDIN_ENV_BY_PROVIDER = {
   pi: 'PI_USE_STDIN',
   omp: 'OMP_USE_STDIN',
   dsh: 'DSH_USE_STDIN',
+  gemini: 'GEMINI_USE_STDIN',
   minimax: 'MINIMAX_USE_STDIN',
 };
 
 /**
+ * Env var that gates JSON-stdin mode for a provider. Exported so tests (and
+ * any new channel) can pin the provider→env contract instead of re-typing it:
+ * a typo here silently disables the stdin path for that provider.
  * @param {string} provider
  * @returns {string}
  */
-function stdinEnvKeyForProvider(provider) {
+export function stdinEnvKeyForProvider(provider) {
   return STDIN_ENV_BY_PROVIDER[provider] || 'CLAUDE_USE_STDIN';
 }
 

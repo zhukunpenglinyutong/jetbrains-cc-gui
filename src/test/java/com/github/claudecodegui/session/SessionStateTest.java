@@ -60,6 +60,16 @@ public class SessionStateTest {
     }
 
     @Test
+    public void freshSessionHasNoConversationId() {
+        // Story 1.3 AC2/AC5: a brand-new session (new chat tab, provider
+        // switch, create_new_session) starts with NO conversation id. The send
+        // path then serializes it as "" and the gemini bridge omits the
+        // --conversation flag, so the CLI starts a fresh conversation — no
+        // residual id can ever be reused across the reset.
+        Assert.assertNull(new SessionState().getSessionId());
+    }
+
+    @Test
     public void setModelHandlesNullAndBlank() {
         SessionState state = new SessionState();
         state.setModel(null);
@@ -97,5 +107,18 @@ public class SessionStateTest {
         SessionState state = new SessionState();
         // The initial value must never be a retired id (#1678).
         Assert.assertEquals("claude-sonnet-5", state.getModel());
+    }
+
+    @Test
+    public void permissionModeWhitelistAcceptsEveryWebviewModeId() {
+        // Unknown ids are silently rejected by set_mode, so any id the webview
+        // offers (including the gemini sandbox posture) must be whitelisted here.
+        for (String mode : new String[] {
+            "default", "plan", "acceptEdits", "autoEdit", "bypassPermissions", "smol", "slow", "sandbox",
+        }) {
+            Assert.assertTrue("whitelist must accept " + mode, SessionState.isValidPermissionMode(mode));
+        }
+        Assert.assertFalse(SessionState.isValidPermissionMode(null));
+        Assert.assertFalse(SessionState.isValidPermissionMode("bogus"));
     }
 }

@@ -38,6 +38,7 @@ const t = ((key: string, opts?: Record<string, string>) => {
     'chat.totalDuration': '本次耗时',
     'chat.tokenUsage': '输入 {{input}} / 输出 {{output}}',
     'chat.tokenUsageDetail': '本轮合计 — 输入 {{input}} · 缓存写入 {{cacheWrite}} · 缓存读取 {{cacheRead}} · 输出 {{output}}',
+    'chat.tokenUsageThinking': '思考 {{thinking}}',
     'chat.cacheHitsWithRatio': '（缓存命中 {{tokens}}，{{ratio}}）',
   };
   let result = translations[key] ?? key;
@@ -371,5 +372,82 @@ describe('MessageItem token usage display', () => {
 
     expect(screen.getByText('0:03')).toBeTruthy();
     expect(screen.queryByText(/输入/)).toBeNull();
+  });
+
+  // Story 1.9 — the CLI reports thinking_tokens (live: 207 on a trivial
+  // turn). Honest accounting shows it in the per-turn footer detail ONLY
+  // when the backend reported it (> 0), and it never inflates the input
+  // figure (thinking is not context input per the CLI's own accounting —
+  // total_tokens = input + output, excluding thinking).
+
+  it('shows the thinking segment in the detail tooltip when the turn reports thinking tokens', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: 'Hello',
+      durationMs: 16000,
+      raw: {
+        message: {
+          content: [{ type: 'text', text: 'Hello' }],
+        },
+        turnUsage: {
+          input_tokens: 1200,
+          output_tokens: 456,
+          thinking_tokens: 207,
+        },
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    const tokens = screen.getByText('输入 1.2K / 输出 456');
+    const title = tokens.getAttribute('title') ?? '';
+    expect(title).toContain('思考 207');
+    // Thinking must not inflate the input side: 1.2K stays 1.2K (not 1.4K).
+    expect(tokens.textContent).toContain('输入 1.2K');
+  });
+
+  it('omits the thinking segment when the turn reports no thinking tokens', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: 'Hello',
+      durationMs: 16000,
+      raw: {
+        message: {
+          content: [{ type: 'text', text: 'Hello' }],
+        },
+        turnUsage: {
+          input_tokens: 1200,
+          output_tokens: 456,
+        },
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    const tokens = screen.getByText('输入 1.2K / 输出 456');
+    expect((tokens.getAttribute('title') ?? '')).not.toContain('思考');
+  });
+
+  it('omits the thinking segment for a reported zero thinking count', () => {
+    const message: ClaudeMessage = {
+      type: 'assistant',
+      content: 'Hello',
+      durationMs: 16000,
+      raw: {
+        message: {
+          content: [{ type: 'text', text: 'Hello' }],
+        },
+        turnUsage: {
+          input_tokens: 1200,
+          output_tokens: 456,
+          thinking_tokens: 0,
+        },
+      } as any,
+    };
+
+    renderMessageItem(message);
+
+    const tokens = screen.getByText('输入 1.2K / 输出 456');
+    expect((tokens.getAttribute('title') ?? '')).not.toContain('思考');
   });
 });

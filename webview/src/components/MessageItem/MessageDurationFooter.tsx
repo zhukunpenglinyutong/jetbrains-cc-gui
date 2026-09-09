@@ -20,6 +20,8 @@ interface TokenUsageInfo {
   nonCacheInputTokens: number;
   cacheCreationTokens: number;
   cacheReadTokens: number;
+  /** Reasoning tokens reported by the backend, when it reports them at all. */
+  thinkingTokens: number;
   costUsd?: number;
 }
 
@@ -46,6 +48,7 @@ function extractTokenUsage(raw: ClaudeMessage['raw']): TokenUsageInfo | null {
   const nonCacheInput = num(usage.input_tokens);
   const cacheCreation = num(usage.cache_creation_input_tokens);
   const cacheRead = num(usage.cache_read_input_tokens);
+  const thinking = num(usage.thinking_tokens);
   const output = num(usage.output_tokens);
   const input = nonCacheInput + cacheCreation + cacheRead;
   if (input === 0 && output === 0) return null;
@@ -57,6 +60,7 @@ function extractTokenUsage(raw: ClaudeMessage['raw']): TokenUsageInfo | null {
     nonCacheInputTokens: nonCacheInput,
     cacheCreationTokens: cacheCreation,
     cacheReadTokens: cacheRead,
+    thinkingTokens: thinking,
     ...(costUsd !== undefined ? { costUsd } : {}),
   };
 }
@@ -107,6 +111,21 @@ export const MessageDurationFooter = memo(function MessageDurationFooter({
       ratio: cacheHitRatio,
     })
     : '';
+  const usageDetail = tokenInfo
+    ? t('chat.tokenUsageDetail', {
+      input: formatTokenCount(tokenInfo.nonCacheInputTokens),
+      cacheWrite: formatTokenCount(tokenInfo.cacheCreationTokens),
+      cacheRead: formatTokenCount(tokenInfo.cacheReadTokens),
+      output: formatTokenCount(tokenInfo.outputTokens),
+    })
+    : '';
+  // Thinking is shown only when the backend actually reported it;
+  // it never inflates the input figure (not context input).
+  const usageDetailTitle = tokenInfo && tokenInfo.thinkingTokens > 0
+    ? `${usageDetail} · ${t('chat.tokenUsageThinking', {
+      thinking: formatTokenCount(tokenInfo.thinkingTokens),
+    })}`
+    : usageDetail;
 
   return (
     <div className="message-duration">
@@ -119,12 +138,7 @@ export const MessageDurationFooter = memo(function MessageDurationFooter({
             <span className="message-duration-separator">·</span>
             <span
               className="message-duration-tokens"
-              title={t('chat.tokenUsageDetail', {
-                input: formatTokenCount(tokenInfo.nonCacheInputTokens),
-                cacheWrite: formatTokenCount(tokenInfo.cacheCreationTokens),
-                cacheRead: formatTokenCount(tokenInfo.cacheReadTokens),
-                output: formatTokenCount(tokenInfo.outputTokens),
-              })}
+              title={usageDetailTitle}
             >
               {t('chat.tokenUsage', {
                 input: `${formatTokenCount(tokenInfo.inputTokens)}${cacheHitLabel}`,

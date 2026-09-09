@@ -43,6 +43,18 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "Usage unavailable",
+      "dash": "Usage —",
+      "loading": "Loading usage…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · Resets {{value}}",
+      "clickToSwitch": "Click to switch between windows",
+      "switchWindowHint": "Click period label to switch window",
+      "worstHint": "Dot shows worst window ({{color}})",
+      "worstDot": "Worst window: {{color}}",
+      "stale": "Data may be outdated (refresh failed)"
+    },
     "sendMessage": "Send message to {{provider}}",
     "createNewSession": "Create New Session",
     "confirmNewSession": "Current session has messages. Are you sure you want to create a new session?",
@@ -120,6 +132,7 @@
     "totalDuration": "This reply took",
     "tokenUsage": "{{input}} in / {{output}} out",
     "tokenUsageDetail": "Turn total — input {{input}} · cache write {{cacheWrite}} · cache read {{cacheRead}} · output {{output}}",
+    "tokenUsageThinking": "Thinking {{thinking}}",
     "cacheHitsWithRatio": " (cache hit {{tokens}}, {{ratio}})",
     "search": {
       "ariaLabel": "Search in conversation",
@@ -621,6 +634,11 @@
       "codex": "Codex",
       "cli": "CLI"
     },
+    "gemini": {
+      "idleReapLabel": "Stop silent turns automatically",
+      "idleReapHelp": "Ends a Gemini turn that has produced no output for this many minutes — usually a CLI stuck at an interactive prompt or a stalled backend. 0 disables automatic stopping.",
+      "idleReapDisabled": "Disabled"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",
@@ -664,6 +682,10 @@
         "dsh": {
           "name": "DeepSeek Harness",
           "description": "DeepSeek terminal agent CLI (dsh)"
+        },
+        "gemini": {
+          "name": "Antigravity CLI",
+          "description": "Google Antigravity terminal coding agent (agy)"
         }
       },
       "installDialog": {
@@ -2039,6 +2061,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "Model {{model}} is no longer available — switched back to the CLI default model."
+    },
     "addModel": "Add Model",
     "searchPlaceholder": "Search models",
     "noModelsFound": "No models found",
@@ -2154,6 +2179,12 @@
       "shortLabel": "Full Auto",
       "tooltip": "Bypass all permission checks",
       "description": "Fully automated, bypassing all permission checks [Use with caution]"
+    },
+    "sandbox": {
+      "label": "Sandbox Mode",
+      "shortLabel": "Sandbox",
+      "tooltip": "Sandboxed execution (Gemini CLI only)",
+      "description": "Runs in a sandbox with terminal restrictions enabled (Gemini CLI)"
     }
   },
   "codexModes": {
@@ -2224,7 +2255,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"
@@ -2390,6 +2421,16 @@
     "codexNetworkErrorChecks": "Please check:\n1. Is the network connection working\n2. If using a proxy, please confirm proxy configuration\n3. Is the firewall blocking the connection",
     "codexError": "Codex error:",
     "codexErrorCheck": "Please check network connection and Codex configuration",
+    "geminiAuthRequired": "Gemini CLI authentication required:",
+    "geminiAuthCause": "- Cause: The Gemini CLI (agy) is not logged in or credentials have expired.",
+    "geminiAuthResolution": "- Resolution: Run 'agy' in an external terminal and complete the interactive Google Sign-In flow.",
+    "geminiAuthNote": "- Note: This plugin does not manage Google credentials or perform Google login in-plugin.",
+    "geminiErrorDetails": "Error details",
+    "geminiIdleReapStopped": "Gemini turn stopped automatically: no output from the Gemini CLI (agy) for {{window}}.",
+    "geminiIdleReapCauseAlive": "- Likely cause: the CLI process was alive but silent — it is likely stuck at an interactive prompt (most commonly authentication) or stalled on the backend/network.",
+    "geminiIdleReapCauseExited": "- Likely cause: the CLI process had already exited without delivering a result.",
+    "geminiIdleReapWhatToDo": "- What to do: run 'agy' in an external terminal to check your login, then cancel and retry; if the turn was legitimately silent (e.g. a long build), raise the window.",
+    "geminiIdleReapSetting": "- This limit is configurable: set gemini.idleReapMinutes in the Gemini plugin settings (0 disables automatic stopping).",
     "codexThinkingHint": "Codex did not return reasoning items. If you still cannot see the thinking process, please refer to docs/codex/docs/config.md for hide_agent_reasoning/show_raw_agent_reasoning settings, and ensure your OpenAI account has been verified.",
     "userDeniedPermission": "User denied permission for {{toolName}} tool",
     "userDidNotProvideAnswers": "User did not provide answers",
@@ -2402,7 +2443,19 @@
     "uploadedImages": "Uploaded {{count}} image(s)",
     "uploadedAttachments": "Uploaded attachment(s)",
     "emptyMessage": "Empty message",
-    "attachment": "Attachment"
+    "attachment": "Attachment",
+    "workspaceSubstituted": "[Notice] Working directory substituted: requested \"{{requested}}\", using \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "unsafe working directory",
+    "workspaceReasonPluginInternal": "plugin-internal directory",
+    "workspaceReasonMissing": "directory does not exist",
+    "workspaceReasonNotADirectory": "not a directory",
+    "workspaceReasonTemporary": "temporary directory",
+    "attachmentNotDelivered": {
+      "notice": "[Notice] Attachment not delivered: \"{{name}}\" ({{reason}}).",
+      "nonImage": "only image attachments are supported",
+      "tooLarge": "image exceeds the 2 MB per-image limit",
+      "invalid": "image data is missing or unreadable"
+    }
   },
   "changelog": {
     "title": "What's New",

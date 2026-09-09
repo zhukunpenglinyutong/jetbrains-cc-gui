@@ -90,14 +90,22 @@ export const ModeSelect = ({
         && mode.id !== 'plan'
         && mode.id !== 'smol'
         && mode.id !== 'slow'
+        && mode.id !== 'sandbox'
       );
+    }
+    if (provider === 'gemini') {
+      // The Gemini CLI natively supports the plan and sandbox postures
+      // (live-verified `--mode plan` / `--sandbox` flags); smol/slow stay
+      // OMP-only and native auto review is a Claude/Codex feature.
+      return AVAILABLE_MODES.filter((mode) => mode.id !== 'auto' && mode.id !== 'smol' && mode.id !== 'slow');
     }
     if (provider === 'grok' || provider === 'kimi' || provider === 'minimax' || provider === 'opencode' || provider === 'pi' || provider === 'dsh') {
       // Headless CLI providers do not expose Claude/Codex native automatic reviewers.
-      return AVAILABLE_MODES.filter((mode) => mode.id !== 'auto' && mode.id !== 'plan' && mode.id !== 'smol' && mode.id !== 'slow');
+      return AVAILABLE_MODES.filter((mode) => mode.id !== 'auto' && mode.id !== 'plan' && mode.id !== 'smol' && mode.id !== 'slow' && mode.id !== 'sandbox');
     }
-    // smol/slow are OMP-only model roles; hide them everywhere else.
-    return AVAILABLE_MODES.filter((mode) => mode.id !== 'smol' && mode.id !== 'slow');
+    // smol/slow are OMP-only model roles and sandbox is a Gemini-only posture;
+    // hide them everywhere else.
+    return AVAILABLE_MODES.filter((mode) => mode.id !== 'smol' && mode.id !== 'slow' && mode.id !== 'sandbox');
   }, [provider, ompRoles, codexNativeAutoReviewAvailable]);
 
   const currentMode = modeOptions.find(m => m.id === value) || modeOptions[0];

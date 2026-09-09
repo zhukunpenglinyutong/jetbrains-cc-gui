@@ -193,6 +193,7 @@ export type PermissionMode =
   | 'bypassPermissions'
   | 'smol'
   | 'slow'
+  | 'sandbox'
   | (string & {});
 
 /**
@@ -245,6 +246,13 @@ export const AVAILABLE_MODES: ModeInfo[] = [
     icon: 'codicon-zap',
     tooltip: 'Bypass all permission checks',
     description: 'Fully automated, bypasses all permission checks [use with caution]',
+  },
+  {
+    id: 'sandbox',
+    label: 'Sandbox Mode',
+    icon: 'codicon-shield',
+    tooltip: 'Sandboxed execution (Gemini CLI only)',
+    description: 'Runs in a sandbox with terminal restrictions enabled (Gemini CLI)',
   },
   {
     id: 'smol',
@@ -563,6 +571,22 @@ export const DSH_MODELS: ModelInfo[] = [
   },
 ];
 
+/**
+ * Gemini default: omit `--model` so the Antigravity CLI resolves its own
+ * default. There is no advertised default slug to hardcode — and a fabricated
+ * one could send a wrong-vendor model — so 'auto' is the offline fallback's
+ * single entry (the real catalog is fetched live from `agy models`).
+ */
+export const GEMINI_DEFAULT_MODEL_ID = 'auto';
+
+export const GEMINI_MODELS: ModelInfo[] = [
+  {
+    id: GEMINI_DEFAULT_MODEL_ID,
+    label: 'Default (CLI)',
+    description: 'Use the Antigravity CLI default model',
+  },
+];
+
 /** No DSH agent preset: use the default headless composition. */
 export const DSH_PRESET_NONE = '';
 
@@ -652,6 +676,7 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   { id: 'pi', label: 'PI CLI', icon: 'codicon-terminal', enabled: true, beta: true },
   { id: 'omp', label: 'OMP CLI', icon: 'codicon-terminal', enabled: true, beta: true },
   { id: 'dsh', label: 'DeepSeek Harness', icon: 'codicon-terminal', enabled: true, beta: true },
+  { id: 'gemini', label: 'Antigravity CLI', icon: 'codicon-terminal', enabled: true, beta: true },
   { id: 'minimax', label: 'MiniMax Code', icon: 'codicon-terminal', enabled: true, beta: true },
 ];
 
@@ -1003,6 +1028,8 @@ export interface ButtonAreaProps {
   longContextEnabled?: boolean;
   /** Toggle long context callback */
   onLongContextChange?: (enabled: boolean) => void;
+  /** Surface transient notices (e.g. a vanished model selection) as toasts. */
+  addToast?: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
 /**

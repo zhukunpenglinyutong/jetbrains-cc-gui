@@ -26,6 +26,7 @@ export interface ProviderModelSelection {
   pi: string;
   omp: string;
   dsh: string;
+  gemini: string;
 }
 
 /** Per-provider permission-mode snapshot, keyed by provider id. */
@@ -39,6 +40,7 @@ export interface ProviderPermissionModes {
   pi: PermissionMode;
   omp: PermissionMode;
   dsh: PermissionMode;
+  gemini: PermissionMode;
 }
 
 /** Model shown for the active provider; unknown ids fall back to Claude. */
@@ -52,6 +54,7 @@ export function selectedModelForProvider(providerId: string, models: ProviderMod
     case 'pi': return models.pi;
     case 'omp': return models.omp;
     case 'dsh': return models.dsh;
+    case 'gemini': return models.gemini;
     default: return models.claude;
   }
 }
@@ -78,6 +81,7 @@ export function resolveProviderPermissionMode(
     case 'pi': return normalizeCliPermissionMode(modes.pi, providerId);
     case 'omp': return normalizeCliPermissionMode(modes.omp, providerId);
     case 'dsh': return normalizeCliPermissionMode(modes.dsh, providerId);
+    case 'gemini': return normalizeCliPermissionMode(modes.gemini, providerId);
     default: return modes.claude;
   }
 }
@@ -100,6 +104,9 @@ export function resolveProviderModel(
     case 'pi': return models.pi;
     case 'omp': return models.omp;
     case 'dsh': return models.dsh;
+    // Gemini carries its OWN slot ('auto' until the user picks) — forwarding
+    // the claude slug would send a wrong-vendor model to the agy CLI.
+    case 'gemini': return models.gemini;
     default: return apply1MContextSuffix(models.claude, longContextEnabled);
   }
 }
@@ -114,6 +121,7 @@ export interface CliModeSelectActions {
   setPiPermissionMode: (mode: PermissionMode) => void;
   setOmpPermissionMode: (mode: PermissionMode) => void;
   setDshPermissionMode: (mode: PermissionMode) => void;
+  setGeminiPermissionMode: (mode: PermissionMode) => void;
   setSelectedOmpModel: (modelId: string) => void;
 }
 
@@ -151,6 +159,7 @@ export function applyCliModeSelect(
       return;
     }
     case 'dsh': actions.setDshPermissionMode(cliMode); break;
+    case 'gemini': actions.setGeminiPermissionMode(cliMode); break;
   }
   sendBridgeEvent('set_mode', cliMode);
 }

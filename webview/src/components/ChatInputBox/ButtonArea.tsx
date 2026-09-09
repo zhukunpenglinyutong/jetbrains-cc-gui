@@ -9,6 +9,7 @@ import { readClaudeModelMapping } from '../../utils/claudeModelMapping';
 import { useCliModels, useOmpRoles } from '../../hooks/providers/useCliModels';
 import { useToolbarSelectorCompact } from './hooks/useToolbarSelectorCompact';
 import { resolveProviderModels } from './resolveProviderModels';
+import { resolveVanishedGeminiSelection } from './geminiCatalog';
 
 /**
  * Get custom Codex model list from localStorage
@@ -101,6 +102,7 @@ export const ButtonArea = ({
   onOpenCliSettings,
   longContextEnabled = true,
   onLongContextChange,
+  addToast,
 }: ButtonAreaProps) => {
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
@@ -164,7 +166,7 @@ export const ButtonArea = ({
       || currentProvider === 'opencode'
       || currentProvider === 'pi' || currentProvider === 'codex'
       || currentProvider === 'grok' || currentProvider === 'omp'
-      || currentProvider === 'dsh';
+      || currentProvider === 'dsh' || currentProvider === 'gemini';
     if (!isDynamicProvider) return;
     // Only correct once a *real* catalog arrived. Static fallback lists
     // (OPENCODE_MODELS = just "opencode-default", CODEX built-ins, …) must not
@@ -181,6 +183,21 @@ export const ButtonArea = ({
     const exists = availableModels.some((model) => model.id === selectedModel)
       || (currentProvider === 'omp' && ompRoles.some((role) => role.id === selectedModel));
     if (!exists) {
+      if (currentProvider === 'gemini') {
+        // A persisted slug missing from the live catalog (deprecated server
+        // side, stale localStorage) snaps back to 'auto' — and the correction
+        // is said out loud instead of applied silently.
+        const { next, vanished } = resolveVanishedGeminiSelection(
+          selectedModel,
+          availableModels,
+          cliDefaultModel ?? availableModels[0].id,
+        );
+        onModelSelect(next);
+        if (vanished) {
+          addToast?.(t('models.gemini.vanishedSelection', { model: selectedModel }), 'warning');
+        }
+        return;
+      }
       onModelSelect(cliDefaultModel ?? availableModels[0].id);
     }
   }, [
@@ -192,6 +209,8 @@ export const ButtonArea = ({
     cliCatalogHasEntries,
     cliModelsLoading,
     ompRoles,
+    addToast,
+    t,
   ]);
 
   /**

@@ -43,6 +43,18 @@
     "optional": "可选"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "用量不可用",
+      "dash": "用量 —",
+      "loading": "正在加载用量…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · {{value}} 重置",
+      "clickToSwitch": "点击切换时间窗口",
+      "switchWindowHint": "点击期间标签以切换时间窗口",
+      "worstHint": "圆点显示最差窗口（{{color}}）",
+      "worstDot": "最差窗口：{{color}}",
+      "stale": "数据可能已过期（刷新失败）"
+    },
     "sendMessage": "给 {{provider}} 发送消息",
     "createNewSession": "创建新会话",
     "confirmNewSession": "当前会话已有消息，确定要创建新会话吗？",
@@ -120,6 +132,7 @@
     "totalDuration": "本次耗时",
     "tokenUsage": "输入 {{input}} / 输出 {{output}}",
     "tokenUsageDetail": "本轮合计 — 输入 {{input}} · 缓存写入 {{cacheWrite}} · 缓存读取 {{cacheRead}} · 输出 {{output}}",
+    "tokenUsageThinking": "思考 {{thinking}}",
     "cacheHitsWithRatio": "（缓存命中 {{tokens}}，{{ratio}}）",
     "search": {
       "ariaLabel": "在对话中搜索",
@@ -621,6 +634,11 @@
       "codex": "Codex",
       "cli": "CLI"
     },
+    "gemini": {
+      "idleReapLabel": "自动停止无输出的回合",
+      "idleReapHelp": "若 Gemini 回合连续此分钟数没有任何输出，则自动结束——通常是 CLI 卡在交互式提示或后端停止响应。设为 0 可停用自动停止。",
+      "idleReapDisabled": "已停用"
+    },
     "cli": {
       "hint": "以下 CLI 需在系统终端自行安装并完成配置。插件只负责检测是否已安装及版本号，不会替你自动安装。请先在终端确认可正常使用，再回到此处使用。",
       "refresh": "重新检测",
@@ -664,6 +682,10 @@
         "dsh": {
           "name": "DeepSeek Harness",
           "description": "DeepSeek 终端智能体 CLI（dsh）"
+        },
+        "gemini": {
+          "name": "Antigravity CLI",
+          "description": "Google Antigravity 终端代码智能体 (agy)"
         }
       },
       "installDialog": {
@@ -2044,6 +2066,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "模型 {{model}} 已不再可用，已切换回 CLI 默认模型。"
+    },
     "addModel": "添加模型",
     "searchPlaceholder": "搜索模型",
     "noModelsFound": "未找到模型",
@@ -2159,6 +2184,12 @@
       "shortLabel": "全自动",
       "tooltip": "绕过所有权限检查",
       "description": "完全自动化，绕过所有权限检查【谨慎使用】"
+    },
+    "sandbox": {
+      "label": "沙盒模式",
+      "shortLabel": "沙盒",
+      "tooltip": "在沙盒中执行（仅 Gemini CLI）",
+      "description": "在启用终端限制的沙盒中运行（Gemini CLI）"
     }
   },
   "codexModes": {
@@ -2230,7 +2261,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"
@@ -2396,6 +2427,16 @@
     "codexNetworkErrorChecks": "请检查：\n1. 网络连接是否正常\n2. 如果使用代理，请确认代理配置\n3. 防火墙是否阻止了连接",
     "codexError": "Codex 出现错误：",
     "codexErrorCheck": "请检查网络连接和 Codex 配置",
+    "geminiAuthRequired": "需要 Gemini CLI 认证：",
+    "geminiAuthCause": "- 原因：Gemini CLI (agy) 未登录，或凭据已过期。",
+    "geminiAuthResolution": "- 解决方法：在外部终端运行 'agy'，完成交互式 Google 登录流程。",
+    "geminiAuthNote": "- 注意：本插件不管理 Google 凭据，也不会在插件内执行 Google 登录。",
+    "geminiErrorDetails": "错误详情",
+    "geminiIdleReapStopped": "Gemini 回合已自动停止：Gemini CLI (agy) 已 {{window}} 没有任何输出。",
+    "geminiIdleReapCauseAlive": "- 可能原因：CLI 进程仍在运行但没有输出——很可能卡在交互式提示上（最常见的是认证），或因后端/网络问题停滞。",
+    "geminiIdleReapCauseExited": "- 可能原因：CLI 进程已经退出，未返回结果。",
+    "geminiIdleReapWhatToDo": "- 处理方法：在外部终端运行 'agy' 检查登录状态，然后取消并重试；如果该回合确实需要长时间静默（例如较长的构建），可以调高该上限。",
+    "geminiIdleReapSetting": "- 此上限可配置：在 Gemini 插件设置中设置 gemini.idleReapMinutes（0 表示禁用自动停止）。",
     "codexThinkingHint": "Codex 未返回 reasoning 项。若依然看不到思考过程，请参考 docs/codex/docs/config.md 中 hide_agent_reasoning/show_raw_agent_reasoning 的说明，并确认 OpenAI 账号已完成验证。",
     "userDeniedPermission": "用户拒绝了 {{toolName}} 工具的使用权限",
     "userDidNotProvideAnswers": "用户未提供问题答案",
@@ -2408,7 +2449,19 @@
     "uploadedImages": "已上传 {{count}} 张图片",
     "uploadedAttachments": "已上传附件",
     "emptyMessage": "空消息",
-    "attachment": "附件"
+    "attachment": "附件",
+    "workspaceSubstituted": "[提示] 工作目录已替换：请求的目录为 \"{{requested}}\"，实际使用 \"{{effective}}\" ({{reason}})。",
+    "workspaceReasonUnsafe": "不安全的工作目录",
+    "workspaceReasonPluginInternal": "插件内部目录",
+    "workspaceReasonMissing": "目录不存在",
+    "workspaceReasonNotADirectory": "不是目录",
+    "workspaceReasonTemporary": "临时目录",
+    "attachmentNotDelivered": {
+      "notice": "[提示] 附件未送达：\"{{name}}\" ({{reason}})。",
+      "nonImage": "仅支持图片附件",
+      "tooLarge": "图片超过每张 2 MB 的限制",
+      "invalid": "图片数据缺失或无法读取"
+    }
   },
   "changelog": {
     "title": "版本更新",

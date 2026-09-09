@@ -46,6 +46,7 @@ describe('useWindowCallbacks integration', () => {
     setCodexPermissionMode: vi.fn(),
     setSelectedClaudeModel: vi.fn(),
     setSelectedCodexModel: vi.fn(),
+    setSelectedGeminiModel: vi.fn(),
     setLongContextEnabled: vi.fn(),
     setReasoningEffort: vi.fn(),
     setCodexFastMode: vi.fn(),
@@ -2607,6 +2608,62 @@ describe('useWindowCallbacks integration', () => {
       expect(buffer.current.every((m) => m.type !== 'assistant')).toBe(true);
 
       delete window.__pendingUpdateJson;
+    });
+  });
+
+  // W2: Java fires window.onModelConfirmed for EVERY provider
+  // (ModelProviderHandler), but only claude/codex had branches — a gemini
+  // confirmation fell through silently and the gemini model slot never
+  // learned the confirmed slug.
+  describe('window.onModelConfirmed — per-provider model slots (W2)', () => {
+    it('routes a gemini slug to the gemini slot raw, never through claude normalization', () => {
+      const opts = createOptions();
+      renderHook(() => useWindowCallbacks(opts));
+
+      act(() => {
+        window.onModelConfirmed?.('claude-sonnet-4-6', 'gemini');
+      });
+
+      expect(opts.setSelectedGeminiModel).toHaveBeenCalledTimes(1);
+      expect(opts.setSelectedGeminiModel).toHaveBeenCalledWith('claude-sonnet-4-6');
+      expect(opts.setSelectedClaudeModel).not.toHaveBeenCalled();
+      expect(opts.setSelectedCodexModel).not.toHaveBeenCalled();
+    });
+
+    it('still normalizes claude confirmations (retired alias + [1m] strip)', () => {
+      const opts = createOptions();
+      renderHook(() => useWindowCallbacks(opts));
+
+      act(() => {
+        window.onModelConfirmed?.('claude-opus-4-6[1m]', 'claude');
+      });
+
+      expect(opts.setSelectedClaudeModel).toHaveBeenCalledWith('claude-opus-5');
+      expect(opts.setSelectedGeminiModel).not.toHaveBeenCalled();
+    });
+
+    it('leaves the codex path unchanged', () => {
+      const opts = createOptions();
+      renderHook(() => useWindowCallbacks(opts));
+
+      act(() => {
+        window.onModelConfirmed?.('gpt-5.6-sol', 'codex');
+      });
+
+      expect(opts.setSelectedCodexModel).toHaveBeenCalledWith('gpt-5.6-sol');
+      expect(opts.setSelectedGeminiModel).not.toHaveBeenCalled();
+    });
+
+    it('degrades gracefully when the optional gemini setter is absent', () => {
+      const opts = createOptions();
+      delete (opts as Partial<UseWindowCallbacksOptions>).setSelectedGeminiModel;
+      renderHook(() => useWindowCallbacks(opts));
+
+      expect(() => {
+        act(() => {
+          window.onModelConfirmed?.('gemini-3.7-flash-high', 'gemini');
+        });
+      }).not.toThrow();
     });
   });
 });

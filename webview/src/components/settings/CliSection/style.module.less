@@ -802,3 +802,30 @@
     accent-color: var(--interactive-primary, #4f8ef7);
   }
 }
+
+/* ── Gemini idle-reap window (minutes) input ────────────── */
+
+.idleReapInput {
+  width: 76px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-primary, var(--border-secondary));
+  background: var(--bg-primary, var(--bg-secondary));
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(
+    --idea-editor-font-family,
+    var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace)
+  );
+  text-align: right;
+
+  &:focus {
+    outline: none;
+    border-color: var(--interactive-primary, #4f8ef7);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+  }
+}

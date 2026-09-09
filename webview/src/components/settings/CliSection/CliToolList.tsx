@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
 import CliToolCard from './CliToolCard';
 import DshConnectionCard from './DshConnectionCard';
+import GeminiIdleReapCard from './GeminiIdleReapCard';
 import {
   CLI_TOOL_DEFINITIONS,
   type CliStatusMap,
@@ -116,6 +117,24 @@ const CliToolList = ({
   return (
     <div className={styles.cliList}>
       {CLI_TOOL_DEFINITIONS.map((tool) => {
+        if (tool.id === 'gemini') {
+          // Gemini carries the only provider-settings field in this list:
+          // the idle-reap window card, shown once the CLI is installed.
+          const geminiInstalled = statusMap.gemini?.installed === true;
+          return (
+            <div key={tool.id}>
+              <CliToolCard
+                tool={tool}
+                status={statusMap[tool.id]}
+                onOpenInstall={onOpenInstall}
+                onOpenDocs={onOpenDocs}
+                switcherHidden={hiddenProviders.has(tool.id)}
+                onToggleSwitcherVisibility={onToggleSwitcherVisibility}
+              />
+              {geminiInstalled && <GeminiIdleReapCard />}
+            </div>
+          );
+        }
         if (tool.id === 'dsh') {
           return (
             <DshGroup

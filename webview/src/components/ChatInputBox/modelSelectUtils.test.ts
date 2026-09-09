@@ -135,3 +135,48 @@ describe('modelSelectUtils', () => {
     });
   });
 });
+
+describe('buildModelDropdownSections with a groupOf override', () => {
+  const models: ModelInfo[] = [
+    { id: 'auto', label: 'Default (CLI)' },
+    { id: 'gemini-3.7-flash-high', label: 'Gemini 3.7 Flash (High)' },
+    { id: 'gemini-3.7-flash-low', label: 'Gemini 3.7 Flash (Low)' },
+    { id: 'claude-opus-4-6-thinking', label: 'Claude Opus 4.6 (Thinking)' },
+  ];
+  // Family label per entry — the gemini dropdown's grouping callback shape.
+  const groupOf = (m: ModelInfo) =>
+    m.id === 'auto' ? 'Default (CLI)'
+      : m.id.startsWith('gemini-3.7') ? 'Gemini 3.7 Flash'
+        : m.label;
+
+  it('groups by the supplied key even when id prefixes would not group', () => {
+    const { sections } = buildModelDropdownSections(models, [], { groupOf });
+    expect(sections.map((s) => s.label)).toEqual([
+      'Default (CLI)',
+      'Gemini 3.7 Flash',
+      'Claude Opus 4.6 (Thinking)',
+    ]);
+    expect(sections[1].models.map((m) => m.id)).toEqual([
+      'gemini-3.7-flash-high',
+      'gemini-3.7-flash-low',
+    ]);
+  });
+
+  it('falls back to the other bucket for empty keys and respects visibleLimit', () => {
+    const { sections, hiddenCount } = buildModelDropdownSections(models, [], {
+      groupOf: (m) => (m.id === 'claude-opus-4-6-thinking' ? '' : groupOf(m)),
+      visibleLimit: 3,
+    });
+    // The limit is consumed by the first two buckets, so the empty-key row
+    // never renders — the exhausted 'other' bucket is omitted and the row is
+    // counted as hidden.
+    expect(sections.map((s) => s.label)).toEqual(['Default (CLI)', 'Gemini 3.7 Flash']);
+    expect(hiddenCount).toBe(1);
+    const withRoom = buildModelDropdownSections(models, [], {
+      groupOf: (m) => (m.id === 'claude-opus-4-6-thinking' ? '' : groupOf(m)),
+    });
+    expect(withRoom.sections.map((s) => s.label)).toEqual(['Default (CLI)', 'Gemini 3.7 Flash', 'other']);
+    expect(withRoom.sections[2].models).toHaveLength(1);
+    expect(withRoom.hiddenCount).toBe(0);
+  });
+});

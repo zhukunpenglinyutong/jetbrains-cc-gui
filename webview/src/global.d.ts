@@ -461,6 +461,11 @@ interface Window {
   updatePermissionDialogTimeout?: (json: string) => void;
 
   /**
+   * Update the Gemini idle-reap window (minutes) setting
+   */
+  updateGeminiIdleReapMinutes?: (json: string) => void;
+
+  /**
    * Update current Claude config
    */
   updateCurrentClaudeConfig?: (json: string) => void;

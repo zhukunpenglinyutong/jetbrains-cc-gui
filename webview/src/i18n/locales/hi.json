@@ -26,6 +26,18 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "उपयोग अनुपलब्ध",
+      "dash": "उपयोग —",
+      "loading": "उपयोग लोड हो रहा है…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · रीसेट {{value}}",
+      "clickToSwitch": "विंडो बदलने के लिए क्लिक करें",
+      "switchWindowHint": "विंडो बदलने के लिए अवधि लेबल पर क्लिक करें",
+      "worstHint": "बिंदु सबसे खराब विंडो दिखाता है ({{color}})",
+      "worstDot": "सबसे खराब विंडो: {{color}}",
+      "stale": "डेटा पुराना हो सकता है (रीफ्रेश विफल)"
+    },
     "sendMessage": "{{provider}} को संदेश भेजें",
     "createNewSession": "नया सत्र बनाएं",
     "confirmNewSession": "वर्तमान सत्र में संदेश हैं, क्या आप नया सत्र बनाना चाहते हैं?",
@@ -101,6 +113,7 @@
     "totalDuration": "इस जवाब में लगा समय",
     "tokenUsage": "{{input}} इन / {{output}} आउट",
     "tokenUsageDetail": "टर्न कुल — इनपुट {{input}} · कैश लेखन {{cacheWrite}} · कैश पठन {{cacheRead}} · आउटपुट {{output}}",
+    "tokenUsageThinking": "चिंतन {{thinking}}",
     "cacheHitsWithRatio": " ({{tokens}} कैश हिट, {{ratio}})",
     "search": {
       "ariaLabel": "बातचीत में खोजें",
@@ -834,6 +847,11 @@
         "saveChanges": "Save"
       }
     },
+    "gemini": {
+      "idleReapLabel": "मौन टर्न को स्वतः रोकें",
+      "idleReapHelp": "इतने मिनटों तक बिना किसी आउटपुट के चल रहे Gemini टर्न को समाप्त कर देता है — आमतौर पर इंटरैक्टिव प्रॉम्प्ट पर अटकी CLI या अटका हुआ बैकएंड। 0 से स्वतः रोकना बंद हो जाता है।",
+      "idleReapDisabled": "अक्षम"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",
@@ -873,6 +891,10 @@
         "omp": {
           "name": "OMP CLI",
           "description": "मल्टी-प्रोवाइडर मॉडल सपोर्ट वाला Oh My Pi टर्मिनल कोडिंग एजेंट"
+        },
+        "gemini": {
+          "name": "Antigravity CLI",
+          "description": "गूगल एंटीग्रेविटी टर्मिनल कोडिंग एजेंट (agy)"
         }
       },
       "installDialog": {
@@ -1572,6 +1594,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "मॉडल {{model}} अब उपलब्ध नहीं है — CLI डिफ़ॉल्ट मॉडल पर वापस लाया गया।"
+    },
     "addModel": "मॉडल जोड़ें",
     "searchPlaceholder": "मॉडल खोजें",
     "noModelsFound": "कोई मॉडल नहीं मिला",
@@ -1669,6 +1694,11 @@
       "shortLabel": "पूर्ण",
       "tooltip": "सभी अनुमति जाँचों को बायपास करें",
       "description": "पूरी तरह स्वचालित, सभी अनुमति जाँचों को बायपास करता है [सावधानी से उपयोग करें]"
+    },
+    "sandbox": {
+      "label": "सैंडबॉक्स मोड",
+      "tooltip": "सैंडबॉक्स में निष्पादन (केवल Gemini CLI)",
+      "description": "टर्मिनल प्रतिबंधों के साथ सैंडबॉक्स में चलता है (Gemini CLI)"
     }
   },
   "codexModes": {
@@ -1732,7 +1762,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"
@@ -1851,6 +1881,16 @@
     "codexNetworkErrorChecks": "कृपया जांचें:\n1. क्या नेटवर्क कनेक्शन काम कर रहा है\n2. यदि प्रॉक्सी का उपयोग कर रहे हैं, तो कृपया प्रॉक्सी कॉन्फ़िगरेशन की पुष्टि करें\n3. क्या फ़ायरवॉल कनेक्शन को अवरुद्ध कर रहा है",
     "codexError": "Codex त्रुटि:",
     "codexErrorCheck": "कृपया नेटवर्क कनेक्शन और Codex कॉन्फ़िगरेशन जांचें",
+    "geminiAuthRequired": "Gemini CLI प्रमाणीकरण आवश्यक है:",
+    "geminiAuthCause": "- कारण: Gemini CLI (agy) लॉग इन नहीं है या क्रेडेंशियल समाप्त हो गए हैं।",
+    "geminiAuthResolution": "- समाधान: बाहरी टर्मिनल में 'agy' चलाएँ और इंटरैक्टिव Google साइन-इन प्रवाह पूरा करें।",
+    "geminiAuthNote": "- नोट: यह प्लगइन Google क्रेडेंशियल प्रबंधित नहीं करता और प्लगइन के भीतर Google लॉगिन नहीं करता।",
+    "geminiErrorDetails": "त्रुटि विवरण",
+    "geminiIdleReapStopped": "Gemini टर्न स्वतः रुक गया: Gemini CLI (agy) से {{window}} से कोई आउटपुट नहीं मिला।",
+    "geminiIdleReapCauseAlive": "- संभावित कारण: CLI प्रक्रिया जीवित थी पर चुप थी — यह संभवतः किसी इंटरैक्टिव प्रॉम्प्ट (सबसे आम रूप से प्रमाणीकरण) पर अटकी हुई थी या बैकएंड/नेटवर्क पर रुकी हुई थी।",
+    "geminiIdleReapCauseExited": "- संभावित कारण: CLI प्रक्रिया पहले ही बिना परिणाम दिए समाप्त हो चुकी थी।",
+    "geminiIdleReapWhatToDo": "- क्या करें: लॉगिन जाँचने के लिए बाहरी टर्मिनल में 'agy' चलाएँ, फिर रद्द करें और पुनः प्रयास करें; यदि टर्न वास्तव में मौन था (जैसे लंबा बिल्ड), तो सीमा बढ़ाएँ।",
+    "geminiIdleReapSetting": "- यह सीमा कॉन्फ़िगर योग्य है: Gemini प्लगइन सेटिंग्स में gemini.idleReapMinutes सेट करें (0 स्वतः रुकना अक्षम कर देता है)।",
     "codexThinkingHint": "Codex ने reasoning आइटम नहीं लौटाए। यदि आप अभी भी सोचने की प्रक्रिया नहीं देख सकते हैं, तो कृपया hide_agent_reasoning/show_raw_agent_reasoning सेटिंग्स के लिए docs/codex/docs/config.md देखें, और सुनिश्चित करें कि आपका OpenAI खाता सत्यापित हो गया है।",
     "userDeniedPermission": "उपयोगकर्ता ने {{toolName}} टूल के लिए अनुमति अस्वीकार कर दी",
     "userDidNotProvideAnswers": "उपयोगकर्ता ने उत्तर प्रदान नहीं किए",
@@ -1863,7 +1903,19 @@
     "uploadedImages": "{{count}} छवि(यां) अपलोड की गईं",
     "uploadedAttachments": "अनुलग्नक अपलोड किए गए",
     "emptyMessage": "खाली संदेश",
-    "attachment": "अनुलग्नक"
+    "attachment": "अनुलग्नक",
+    "workspaceSubstituted": "[सूचना] कार्य निर्देशिका बदल दी गई: अनुरोधित \"{{requested}}\", उपयोग की जा रही \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "असुरक्षित कार्य निर्देशिका",
+    "workspaceReasonPluginInternal": "प्लगइन की आंतरिक निर्देशिका",
+    "workspaceReasonMissing": "निर्देशिका मौजूद नहीं है",
+    "workspaceReasonNotADirectory": "निर्देशिका नहीं है",
+    "workspaceReasonTemporary": "अस्थायी निर्देशिका",
+    "attachmentNotDelivered": {
+      "notice": "[सूचना] अटैचमेंट वितरित नहीं हुआ: \"{{name}}\" ({{reason}}).",
+      "nonImage": "केवल छवि अटैचमेंट समर्थित हैं",
+      "tooLarge": "छवि प्रति छवि 2 MB सीमा से अधिक है",
+      "invalid": "छवि डेटा अनुपलब्ध या अपठनीय है"
+    }
   },
   "changelog": {
     "title": "नया क्या है",

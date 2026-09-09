@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { UnifiedPermissionMode, ClaudePermissionMapper, CodexPermissionMapper } from './permission-mapper.js';
+import {
+  UnifiedPermissionMode,
+  ClaudePermissionMapper,
+  CodexPermissionMapper,
+  GeminiPermissionMapper,
+  PermissionMapperFactory,
+} from './permission-mapper.js';
 import { VALID_APPROVAL_POLICIES, applyCodexApprovalsReviewerConfig } from '../services/codex/codex-utils.js';
 
 // ---------- CodexPermissionMapper.toProvider (#1702: 'untrusted' retired) ----------
@@ -97,6 +103,57 @@ test('toProvider keeps yolo / acceptEdits mappings unchanged', () => {
   assert.equal(CodexPermissionMapper.toProvider('bypassPermissions').approvalPolicy, 'never');
   assert.equal(CodexPermissionMapper.toProvider('acceptEdits').approvalPolicy, 'on-request');
   assert.equal(CodexPermissionMapper.toProvider('autoEdit').approvalPolicy, 'on-request');
+});
+
+// ---------- GeminiPermissionMapper ----------
+
+const GEMINI_MODES = ['default', 'plan', 'acceptEdits', 'bypassPermissions', 'sandbox'];
+
+test('factory returns the real mapper for gemini (no stub throw)', () => {
+  assert.equal(PermissionMapperFactory.getMapper('gemini'), GeminiPermissionMapper);
+  assert.equal(typeof GeminiPermissionMapper.toProvider, 'function');
+  assert.equal(typeof GeminiPermissionMapper.fromProvider, 'function');
+});
+
+test('toProvider maps each unified mode to the live-verified agy flags', () => {
+  assert.deepEqual(GeminiPermissionMapper.toProvider('default'), { args: [] });
+  assert.deepEqual(GeminiPermissionMapper.toProvider('plan'), { args: ['--mode', 'plan'] });
+  assert.deepEqual(GeminiPermissionMapper.toProvider('acceptEdits'), { args: ['--mode', 'accept-edits'] });
+  assert.deepEqual(GeminiPermissionMapper.toProvider('bypassPermissions'), { args: ['--dangerously-skip-permissions'] });
+  assert.deepEqual(GeminiPermissionMapper.toProvider('sandbox'), { args: ['--sandbox'] });
+});
+
+test('toProvider falls back to no flags (never throws) for unknown/blank/non-string modes', () => {
+  for (const mode of [undefined, null, '', '   ', 'smol', 'slow', 'autoEdit', 'yolo', '--evil', 'request-review', 42, {}]) {
+    assert.deepEqual(GeminiPermissionMapper.toProvider(mode), { args: [] }, `mode=${String(mode)}`);
+  }
+});
+
+test('toProvider tolerates case variants of the canonical ids', () => {
+  assert.deepEqual(GeminiPermissionMapper.toProvider('PLAN').args, ['--mode', 'plan']);
+  assert.deepEqual(GeminiPermissionMapper.toProvider('AcceptEdits').args, ['--mode', 'accept-edits']);
+  assert.deepEqual(GeminiPermissionMapper.toProvider('BypassPermissions').args, ['--dangerously-skip-permissions']);
+  assert.deepEqual(GeminiPermissionMapper.toProvider(' Sandbox ').args, ['--sandbox']);
+});
+
+test('fromProvider inverts toProvider for every mode', () => {
+  for (const mode of GEMINI_MODES) {
+    const { args } = GeminiPermissionMapper.toProvider(mode);
+    assert.equal(GeminiPermissionMapper.fromProvider(args), mode, `round-trip via [${args.join(' ')}]`);
+  }
+});
+
+test('fromProvider accepts an {args} wrapper as well as a bare array', () => {
+  assert.equal(GeminiPermissionMapper.fromProvider({ args: ['--sandbox'] }), 'sandbox');
+});
+
+test('fromProvider defaults malformed or unrecognized input', () => {
+  assert.equal(GeminiPermissionMapper.fromProvider(undefined), 'default');
+  assert.equal(GeminiPermissionMapper.fromProvider(null), 'default');
+  assert.equal(GeminiPermissionMapper.fromProvider([]), 'default');
+  assert.equal(GeminiPermissionMapper.fromProvider(['-p', 'hi', '--model', 'x']), 'default');
+  assert.equal(GeminiPermissionMapper.fromProvider(['--mode', 'bogus']), 'default');
+  assert.equal(GeminiPermissionMapper.fromProvider({ args: 'not-an-array' }), 'default');
 });
 
 // ---------- VALID_APPROVAL_POLICIES whitelist ----------

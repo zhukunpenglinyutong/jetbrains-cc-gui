@@ -369,6 +369,48 @@ describe('useSessionManagement', () => {
     expect(mocks.setCurrentSessionId).toHaveBeenCalledWith(null);
   });
 
+  it('a provider switch away from gemini and back never carries the gemini conversation id (Story 1.3 AC4)', () => {
+    // The single session-id slot is provider-agnostic; leak prevention is
+    // TEMPORAL: every provider switch forces a transition that nulls it. A
+    // gemini conversation UUID must therefore never survive a switch — nor
+    // ride any bridge event of the following turns.
+    const geminiConversationId = 'd5451c2b-751a-4248-9d75-47344e4bc885';
+    const mocks = createMocks();
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [{ type: 'assistant', content: 'gemini answer', timestamp: new Date().toISOString() }],
+        loading: false,
+        historyData: null,
+        currentSessionId: geminiConversationId,
+        ...mocks,
+        t,
+      })
+    );
+
+    // gemini → codex
+    act(() => {
+      result.current.forceCreateNewSessionWithProvider('codex');
+    });
+    expect(window.sendToJava).toHaveBeenNthCalledWith(1, 'set_provider:codex');
+    expect(window.sendToJava).toHaveBeenNthCalledWith(2, 'create_new_session:');
+    expect(mocks.setCurrentSessionId).toHaveBeenNthCalledWith(1, null);
+
+    // …and back to gemini: another fresh session, still no conversation id.
+    act(() => {
+      result.current.forceCreateNewSessionWithProvider('gemini');
+    });
+    expect(window.sendToJava).toHaveBeenNthCalledWith(3, 'set_provider:gemini');
+    expect(window.sendToJava).toHaveBeenNthCalledWith(4, 'create_new_session:');
+    expect(mocks.setCurrentSessionId).toHaveBeenNthCalledWith(2, null);
+
+    // The gemini UUID never re-enters the slot nor any bridge payload.
+    expect(mocks.setCurrentSessionId).not.toHaveBeenCalledWith(geminiConversationId);
+    const bridgePayloads = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls
+      .map((c: unknown[]) => String(c[0]));
+    expect(bridgePayloads.some((p) => p.includes(geminiConversationId))).toBe(false);
+  });
+
   it('shows confirm dialog when creating new session with existing messages', () => {
     const mocks = createMocks();
 

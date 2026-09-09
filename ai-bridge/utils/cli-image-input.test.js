@@ -5,6 +5,9 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   buildGrokImageBlocks,
   buildKimiPromptWithImages,
@@ -16,6 +19,27 @@ import {
   parseAttachmentData,
 } from './cli-image-input.js';
 import { buildPromptBlocks } from '../services/grok/grok-acp-client.js';
+
+/**
+ * buildPromptBlocks reads ~/.grok/grok-rules.md - point HOME at an empty temp
+ * dir so assertions are exact instead of machine-dependent.
+ */
+function withStubbedGrokHome(run) {
+  const savedHome = process.env.HOME;
+  const savedProfile = process.env.USERPROFILE;
+  const dir = mkdtempSync(join(tmpdir(), 'grok-home-'));
+  process.env.HOME = dir;
+  process.env.USERPROFILE = dir;
+  try {
+    return run();
+  } finally {
+    if (savedHome === undefined) delete process.env.HOME;
+    else process.env.HOME = savedHome;
+    if (savedProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = savedProfile;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 // 1x1 PNG
 const TINY_PNG_B64 =
@@ -66,41 +90,85 @@ describe('buildGrokImageBlocks', () => {
 
 describe('buildPromptBlocks multimodal', () => {
   it('embeds image blocks alongside text', () => {
-    const blocks = buildPromptBlocks({
-      message: 'What is in this image?',
-      attachments: [
-        { fileName: 'dot.png', mediaType: 'image/png', data: TINY_PNG_B64 },
-      ],
+    withStubbedGrokHome(() => {
+      const blocks = buildPromptBlocks({
+        message: 'What is in this image?',
+        attachments: [
+          { fileName: 'dot.png', mediaType: 'image/png', data: TINY_PNG_B64 },
+        ],
+      });
+      const text = blocks.find((b) => b.type === 'text');
+      assert.ok(text);
+      assert.equal(text.text, 'What is in this image?');
+      const images = blocks.filter((b) => b.type === 'image');
+      assert.equal(images.length, 1);
+      assert.equal(images[0].mimeType, 'image/png');
     });
-    assert.ok(blocks.some((b) => b.type === 'text' && b.text.includes('What is in this image?')));
-    const images = blocks.filter((b) => b.type === 'image');
-    assert.equal(images.length, 1);
-    assert.equal(images[0].mimeType, 'image/png');
   });
 
-  it('injects fallback text for image-only turns', () => {
-    const blocks = buildPromptBlocks({
-      message: '',
-      attachments: [
-        { fileName: 'dot.png', mediaType: 'image/png', data: TINY_PNG_B64 },
-      ],
+  it('injects exactly the fallback text for image-only turns', () => {
+    withStubbedGrokHome(() => {
+      const blocks = buildPromptBlocks({
+        message: '',
+        attachments: [
+          { fileName: 'dot.png', mediaType: 'image/png', data: TINY_PNG_B64 },
+        ],
+      });
+      const text = blocks.find((b) => b.type === 'text');
+      assert.ok(text);
+      assert.equal(text.text, GROK_IMAGE_ONLY_FALLBACK_TEXT);
+      assert.equal(blocks.filter((b) => b.type === 'image').length, 1);
     });
-    const text = blocks.find((b) => b.type === 'text');
-    assert.ok(text);
-    assert.equal(text.text, GROK_IMAGE_ONLY_FALLBACK_TEXT);
-    assert.equal(blocks.filter((b) => b.type === 'image').length, 1);
+  });
+
+  it('keeps the fallback ahead of the agentPrompt concat', () => {
+    withStubbedGrokHome(() => {
+      const blocks = buildPromptBlocks({
+        message: '',
+        agentPrompt: 'You are a reviewer.',
+        attachments: [
+          { fileName: 'dot.png', mediaType: 'image/png', data: TINY_PNG_B64 },
+        ],
+      });
+      const text = blocks.find((b) => b.type === 'text');
+      assert.ok(text);
+      assert.ok(text.text.startsWith(GROK_IMAGE_ONLY_FALLBACK_TEXT));
+      assert.ok(text.text.includes('## Agent Role and Instructions'));
+      assert.ok(text.text.includes('You are a reviewer.'));
+      assert.equal(blocks.filter((b) => b.type === 'image').length, 1);
+    });
+  });
+
+  it('does not promise image analysis when every image failed to load', () => {
+    withStubbedGrokHome(() => {
+      const blocks = buildPromptBlocks({
+        message: '',
+        attachments: [
+          // path-only attachment: cannot be embedded, produces a load error
+          { fileName: 'local.png', mediaType: 'image/png', path: '/tmp/local.png' },
+        ],
+      });
+      const text = blocks.find((b) => b.type === 'text');
+      assert.ok(text);
+      assert.equal(text.text.includes(GROK_IMAGE_ONLY_FALLBACK_TEXT), false);
+      assert.ok(text.text.includes('## Attachments'));
+      assert.ok(text.text.includes('local.png'));
+      assert.equal(blocks.filter((b) => b.type === 'image').length, 0);
+    });
   });
 
   it('does not only list attachment names when image data is present', () => {
-    const blocks = buildPromptBlocks({
-      message: 'see',
-      attachments: [
-        { fileName: 'secret.png', mediaType: 'image/png', data: TINY_PNG_B64 },
-      ],
+    withStubbedGrokHome(() => {
+      const blocks = buildPromptBlocks({
+        message: 'see',
+        attachments: [
+          { fileName: 'secret.png', mediaType: 'image/png', data: TINY_PNG_B64 },
+        ],
+      });
+      const text = blocks.find((b) => b.type === 'text')?.text || '';
+      assert.equal(text.includes('## Attachments'), false);
+      assert.ok(blocks.some((b) => b.type === 'image'));
     });
-    const text = blocks.find((b) => b.type === 'text')?.text || '';
-    assert.equal(text.includes('## Attachments'), false);
-    assert.ok(blocks.some((b) => b.type === 'image'));
   });
 });
 

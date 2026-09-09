@@ -26,6 +26,18 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "用量無法使用",
+      "dash": "用量 —",
+      "loading": "正在載入用量…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · {{value}} 重設",
+      "clickToSwitch": "點擊切換時間視窗",
+      "switchWindowHint": "點擊期間標籤以切換時間視窗",
+      "worstHint": "圓點顯示最差視窗（{{color}}）",
+      "worstDot": "最差視窗：{{color}}",
+      "stale": "資料可能已過期（重新整理失敗）"
+    },
     "sendMessage": "給 {{provider}} 發送訊息",
     "createNewSession": "建立新會話",
     "confirmNewSession": "目前會話已有訊息，確定要建立新會話嗎？",
@@ -101,6 +113,7 @@
     "totalDuration": "本次耗時",
     "tokenUsage": "輸入 {{input}} / 輸出 {{output}}",
     "tokenUsageDetail": "本輪合計 — 輸入 {{input}} · 快取寫入 {{cacheWrite}} · 快取讀取 {{cacheRead}} · 輸出 {{output}}",
+    "tokenUsageThinking": "思考 {{thinking}}",
     "cacheHitsWithRatio": "（快取命中 {{tokens}}，{{ratio}}）",
     "search": {
       "ariaLabel": "在對話中搜尋",
@@ -839,6 +852,11 @@
         "saveChanges": "Save"
       }
     },
+    "gemini": {
+      "idleReapLabel": "自動停止無輸出的回合",
+      "idleReapHelp": "若 Gemini 回合連續此分鐘數沒有任何輸出，則自動結束——通常是 CLI 卡在互動提示或後端停止回應。設為 0 可停用自動停止。",
+      "idleReapDisabled": "已停用"
+    },
     "cli": {
       "hint": "以下 CLI 需在系統終端自行安裝並完成設定。外掛只負責偵測是否已安裝及版本號，不會替你自動安裝。請先在終端確認可正常使用，再回到此處使用。",
       "refresh": "Re-check",
@@ -882,6 +900,10 @@
         "dsh": {
           "name": "DeepSeek Harness",
           "description": "DeepSeek 終端智慧體 CLI（dsh）"
+        },
+        "gemini": {
+          "name": "Antigravity CLI",
+          "description": "Google Antigravity 終端程式碼智慧體 (agy)"
         }
       },
       "installDialog": {
@@ -1602,6 +1624,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "模型 {{model}} 已不再可用，已切換回 CLI 預設模型。"
+    },
     "addModel": "新增模型",
     "searchPlaceholder": "搜尋模型",
     "noModelsFound": "找不到模型",
@@ -1711,6 +1736,12 @@
       "shortLabel": "全自動",
       "tooltip": "略過所有權限檢查",
       "description": "完全自動化，略過所有權限檢查【請謹慎使用】"
+    },
+    "sandbox": {
+      "label": "沙盒模式",
+      "shortLabel": "沙盒",
+      "tooltip": "在沙盒中執行（僅 Gemini CLI）",
+      "description": "於啟用終端限制的沙盒中執行（Gemini CLI）"
     }
   },
   "codexModes": {
@@ -1780,7 +1811,7 @@
       "label": "MiniMax Code"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"
@@ -1908,6 +1939,16 @@
     "codexNetworkErrorChecks": "請檢查：\n1. 網路連線是否正常\n2. 如果使用代理，請確認代理配置\n3. 防火牆是否阻止了連線",
     "codexError": "Codex 出現錯誤：",
     "codexErrorCheck": "請檢查網路連線和 Codex 配置",
+    "geminiAuthRequired": "需要 Gemini CLI 認證：",
+    "geminiAuthCause": "- 原因：Gemini CLI (agy) 未登入，或憑證已過期。",
+    "geminiAuthResolution": "- 解決方法：在外部終端執行 'agy'，完成互動式 Google 登入流程。",
+    "geminiAuthNote": "- 注意：本外掛不管理 Google 憑證，也不會在外掛內執行 Google 登入。",
+    "geminiErrorDetails": "錯誤詳情",
+    "geminiIdleReapStopped": "Gemini 回合已自動停止：Gemini CLI (agy) 已 {{window}} 沒有任何輸出。",
+    "geminiIdleReapCauseAlive": "- 可能原因：CLI 程序仍在執行但沒有輸出——很可能卡在互動式提示上（最常見的是認證），或因後端/網路問題停滯。",
+    "geminiIdleReapCauseExited": "- 可能原因：CLI 程序已經結束，未回傳結果。",
+    "geminiIdleReapWhatToDo": "- 處理方法：在外部終端執行 'agy' 檢查登入狀態，然後取消並重試；如果該回合確實需要長時間靜默（例如較長的建置），可以調高該上限。",
+    "geminiIdleReapSetting": "- 此上限可設定：在 Gemini 外掛設定中設定 gemini.idleReapMinutes（0 表示停用自動停止）。",
     "codexThinkingHint": "Codex 未返回 reasoning 項。若依然看不到思考過程，請參考 docs/codex/docs/config.md 中 hide_agent_reasoning/show_raw_agent_reasoning 的說明，並確認 OpenAI 帳號已完成驗證。",
     "userDeniedPermission": "用戶拒絕了 {{toolName}} 工具的使用權限",
     "userDidNotProvideAnswers": "用戶未提供問題答案",
@@ -1920,7 +1961,19 @@
     "uploadedImages": "已上傳 {{count}} 張圖片",
     "uploadedAttachments": "已上傳附件",
     "emptyMessage": "空訊息",
-    "attachment": "附件"
+    "attachment": "附件",
+    "workspaceSubstituted": "[提示] 工作目錄已替換：請求的目錄為 \"{{requested}}\"，實際使用 \"{{effective}}\" ({{reason}})。",
+    "workspaceReasonUnsafe": "不安全的工作目錄",
+    "workspaceReasonPluginInternal": "外掛內部目錄",
+    "workspaceReasonMissing": "目錄不存在",
+    "workspaceReasonNotADirectory": "不是目錄",
+    "workspaceReasonTemporary": "暫存目錄",
+    "attachmentNotDelivered": {
+      "notice": "[提示] 附加檔案未送達：\"{{name}}\" ({{reason}})。",
+      "nonImage": "僅支援圖片附加檔案",
+      "tooLarge": "圖片超過每張 2 MB 的限制",
+      "invalid": "圖片資料缺失或無法讀取"
+    }
   },
   "changelog": {
     "title": "版本更新",

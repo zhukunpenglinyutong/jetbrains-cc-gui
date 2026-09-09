@@ -149,6 +149,12 @@ class HistoryExportService {
             LOG.info("[HistoryHandler] 使用 MiniMaxHistoryReader 导出 MiniMax 会话");
             return toJsonArray(new MiniMaxHistoryReader().getSessionMessages(sessionId, projectPath));
         }
+        if ("gemini".equals(provider)) {
+            LOG.info("[HistoryHandler] 使用 GeminiHistoryReader 导出 Gemini 会话");
+            return toJsonArray(
+                    new com.github.claudecodegui.provider.gemini.GeminiHistoryReader()
+                            .getSessionMessages(sessionId, projectPath));
+        }
         if ("pi".equals(provider)) {
             LOG.info("[HistoryHandler] 使用 PiHistoryReader 导出 PI 会话");
             return toJsonArray(new PiHistoryReader().getSessionMessages(sessionId, projectPath));

@@ -3,7 +3,7 @@
  * Detection only — the plugin never auto-installs these binaries.
  */
 
-export type CliToolId = 'grok' | 'kimi' | 'opencode' | 'pi' | 'dsh' | 'omp' | 'minimax';
+export type CliToolId = 'grok' | 'kimi' | 'opencode' | 'pi' | 'dsh' | 'omp' | 'gemini' | 'minimax';
 
 export interface CliToolStatus {
   id: CliToolId;
@@ -92,6 +92,15 @@ export const CLI_TOOL_DEFINITIONS: CliToolDefinition[] = [
     docsUrl: 'https://omp.sh/',
     installCommand: 'curl -fsSL https://omp.sh/install.sh | sh',
     altInstallCommand: 'npm install -g @oh-my-pi/pi-coding-agent',
+  },
+  {
+    id: 'gemini',
+    nameKey: 'settings.cli.tools.gemini.name',
+    descriptionKey: 'settings.cli.tools.gemini.description',
+    binaryName: 'agy',
+    docsUrl: 'https://antigravity.google/docs/cli/install/',
+    installCommand: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+    installCommandWindows: 'irm https://antigravity.google/cli/install.ps1 | iex',
   },
   {
     id: 'minimax',
