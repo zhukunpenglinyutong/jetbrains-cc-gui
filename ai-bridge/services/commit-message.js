@@ -43,6 +43,18 @@ let claudeSdk = null;
 let codexSdk = null;
 
 /**
+ * Output-token budget for one commit message.
+ *
+ * Reasoning models (e.g. deepseek-v4.1-flash) emit a `thinking` block before the
+ * `text` block, and those thinking tokens count against `max_tokens`. With a
+ * small budget (1024) a large diff made thinking consume the whole budget, so
+ * the response ended with stop_reason=max_tokens and NO text block - surfacing
+ * as "Claude commit response is empty" on every attempt. 4096 leaves room for
+ * thinking plus the message itself (verified against oversized diffs).
+ */
+const MAX_OUTPUT_TOKENS = 4096;
+
+/**
  * Lazy-load and cache the Claude Agent SDK (same pattern as ensureCodexSdk).
  */
 async function ensureClaudeSdk() {
@@ -153,7 +165,7 @@ async function generateWithClaudeAsk(prompt, model, config) {
   let streamedText = '';
   const stream = client.messages.stream({
     model: modelId,
-    max_tokens: 1024,
+    max_tokens: MAX_OUTPUT_TOKENS,
     messages: [{ role: 'user', content: prompt }],
   });
 
@@ -204,7 +216,7 @@ async function askClaudeNonStreaming(client, modelId, prompt) {
     console.log(`[CommitMessage] Non-streaming messages.create() attempt ${attempt}/${ATTEMPTS}...`);
     const response = await client.messages.create({
       model: modelId,
-      max_tokens: 1024,
+      max_tokens: MAX_OUTPUT_TOKENS,
       messages: [{ role: 'user', content: prompt }],
     });
     let text = '';
