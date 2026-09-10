@@ -33,6 +33,7 @@ class GrokDaemonCoordinator {
     private final Object daemonLock = new Object();
     private volatile long daemonRetryAfter = 0;
     private volatile CompletableFuture<?> prewarmFuture;
+    private volatile long lifecycleGeneration;
     private final List<DaemonBridge.DaemonEventListener> cachedEventListeners = new CopyOnWriteArrayList<>();
 
     GrokDaemonCoordinator(
@@ -116,17 +117,21 @@ class GrokDaemonCoordinator {
     }
 
     void shutdownDaemon() {
-        CompletableFuture<?> runningPrewarm = prewarmFuture;
-        if (runningPrewarm != null) {
-            runningPrewarm.cancel(true);
+        CompletableFuture<?> runningPrewarm;
+        DaemonBridge current;
+        synchronized (daemonLock) {
+            lifecycleGeneration++;
+            runningPrewarm = prewarmFuture;
             prewarmFuture = null;
-        }
-
-        DaemonBridge current = daemonBridge;
-        if (current != null) {
-            current.stop();
+            current = daemonBridge;
             daemonBridge = null;
             daemonRetryAfter = 0;
+        }
+        if (runningPrewarm != null) {
+            runningPrewarm.cancel(true);
+        }
+        if (current != null) {
+            current.stop();
         }
     }
 
@@ -140,11 +145,19 @@ class GrokDaemonCoordinator {
             previous.cancel(true);
         }
 
+        final long generation = lifecycleGeneration;
         prewarmFuture = CompletableFuture.runAsync(() -> {
             try {
+                if (generation != lifecycleGeneration) {
+                    return;
+                }
                 DaemonBridge daemon = getDaemonBridge();
                 if (daemon == null) {
                     log.info("[GrokDaemonCoordinator] Prewarm skipped (daemon unavailable)");
+                    return;
+                }
+                if (generation != lifecycleGeneration) {
+                    daemon.stop();
                     return;
                 }
 

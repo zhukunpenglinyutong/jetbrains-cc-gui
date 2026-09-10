@@ -71,6 +71,14 @@ public class NodeProcessRegistryHelpersTest {
     }
 
     @Test
+    public void detectProviderKeepsJetBrainsAcpCodexSeparate() {
+        assertEquals("jetbrains-codex", NodeProcessRegistry.detectProviderFromCmd(
+                "node /opt/homebrew/bin/npx -y @agentclientprotocol/codex-acp@1.6.0"));
+        assertEquals("jetbrains-codex", NodeProcessRegistry.detectProviderFromCmd(
+                "node coding-copilot-jetbrains codex-acp"));
+    }
+
+    @Test
     public void detectProviderClassifiesClaudeCommand() {
         // claude appears in the path but daemon.js doesn't — still claude
         assertEquals("claude",

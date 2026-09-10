@@ -5,9 +5,9 @@ const anonymousRuntimesBySignature = new Map();
 let activeTurnRuntime = null;
 
 const RUNTIME_MAX_ABSOLUTE_LIFETIME_MS = 6 * 60 * 60 * 1000;
-const ANONYMOUS_RUNTIME_MAX_IDLE_MS = 10 * 60 * 1000;
-const SESSION_RUNTIME_MAX_IDLE_MS = 30 * 60 * 1000;
-const SESSION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+const ANONYMOUS_RUNTIME_MAX_IDLE_MS = 60 * 1000;
+const SESSION_RUNTIME_MAX_IDLE_MS = 60 * 1000;
+const SESSION_CLEANUP_INTERVAL_MS = 15 * 1000;
 
 export {
   RUNTIME_MAX_ABSOLUTE_LIFETIME_MS,
@@ -96,6 +96,8 @@ export function canDisposeIdleRuntime(runtime, now, maxIdleMs) {
   if (!runtime || runtime.closed) return false;
   if (now - runtime.createdAt > RUNTIME_MAX_ABSOLUTE_LIFETIME_MS) return true;
   if ((runtime.activeTurnCount || 0) > 0) return false;
+  if (runtime.cliTurnInFlight) return false;
+  if ((runtime.backgroundTaskIds?.size || 0) > 0) return false;
   return now - runtime.lastUsedAt > maxIdleMs;
 }
 

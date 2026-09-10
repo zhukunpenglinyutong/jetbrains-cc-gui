@@ -228,6 +228,9 @@ async function createRuntime(requestContext, callbacks) {
     // has not. readerProgress: ticks per message the perpetual reader routes.
     cliTurnInFlight: false,
     readerProgress: 0,
+    // Async Agent/Task sidechains may continue after the foreground result.
+    // The idle reaper must wait for their terminal notifications.
+    backgroundTaskIds: new Set(),
     stderrLines: [],
     query: null,
     inputStream: new AsyncStream(),
@@ -338,6 +341,44 @@ export async function waitForReaderQuiescent(runtime) {
 }
 
 /**
+ * Track asynchronous Agent/Task work that can outlive the foreground turn.
+ * Claude versions expose this either through task_* system events or through
+ * a task-notification XML message, so support both representations.
+ */
+export function updateBackgroundTaskState(runtime, msg) {
+  if (!runtime || !msg) return;
+  if (!(runtime.backgroundTaskIds instanceof Set)) {
+    runtime.backgroundTaskIds = new Set();
+  }
+
+  const content = msg?.message?.content ?? msg?.content;
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      if (block?.type !== 'tool_use' || block?.input?.run_in_background !== true) continue;
+      const taskId = block.id || block.tool_use_id;
+      if (taskId) runtime.backgroundTaskIds.add(taskId);
+    }
+  }
+
+  if (msg?.type === 'system' && typeof msg.subtype === 'string') {
+    const taskId = msg.tool_use_id || msg.task_id;
+    if ((msg.subtype === 'task_started' || msg.subtype === 'task_progress') && taskId) {
+      runtime.backgroundTaskIds.add(taskId);
+    } else if (msg.subtype === 'task_notification') {
+      if (msg.tool_use_id) runtime.backgroundTaskIds.delete(msg.tool_use_id);
+      if (msg.task_id) runtime.backgroundTaskIds.delete(msg.task_id);
+    }
+  }
+
+  const taskNotificationXml = extractTaskNotificationXml(msg);
+  if (taskNotificationXml !== null) {
+    const parsed = parseTaskNotificationXml(taskNotificationXml);
+    if (parsed?.toolUseId) runtime.backgroundTaskIds.delete(parsed.toolUseId);
+    if (parsed?.taskId) runtime.backgroundTaskIds.delete(parsed.taskId);
+  }
+}
+
+/**
  * Start the perpetual reader for a runtime.
  * The reader continuously consumes runtime.query.next() for the runtime's lifetime,
  * routing messages to either the active turn (via turnSink) or inter-turn handling.
@@ -384,13 +425,11 @@ export function startPerpetualReader(runtime, callbacks) {
         const msg = next.value;
 
         // Keep the runtime's idle timer fresh while it actively produces output.
-        // cleanupStaleSessionRuntimes reaps runtimes idle past SESSION_RUNTIME_MAX_IDLE_MS
-        // and only spares those with activeTurnCount > 0 — which is 0 between turns.
-        // Without this, a long-running background task (inter-turn) would be reaped
-        // mid-flight, killing the SDK subprocess and losing its completion. In-turn
-        // messages are also touched by executeTurn; touching here is idempotent and
-        // additionally covers the inter-turn path executeTurn cannot see.
+        // Refresh the idle clock for every in-turn and inter-turn message. The reaper
+        // also checks active turns, CLI activity, and tracked background tasks, so a
+        // long-running sidechain is not terminated between progress notifications.
         touchRuntime(runtime);
+        updateBackgroundTaskState(runtime, msg);
 
         // CLI turn accounting for executeTurn's quiescence gate. Substantive
         // output (assistant / user / stream_event) means a CLI run is in flight;
@@ -588,6 +627,7 @@ function assertRuntimeOwnership(runtime, requestContext) {
 
 export async function acquireRuntime(requestContext, callbacks) {
   await cleanupAnonymousFromRegistry((runtime) => disposeRuntime(runtime, callbacks));
+  await cleanupSessionsFromRegistry((runtime) => disposeRuntime(runtime, callbacks));
 
   let runtime = findRuntimeForRequest(requestContext);
 

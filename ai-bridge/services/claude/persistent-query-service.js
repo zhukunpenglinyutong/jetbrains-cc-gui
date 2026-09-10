@@ -259,13 +259,23 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   };
 }
 
-// Background cleanup of idle session runtimes, decoupled from the request hot path.
-// Runs every 5 minutes instead of on every acquireRuntime call to avoid O(n) scans.
-const _sessionCleanupTimer = setInterval(async () => {
-  await cleanupStaleSessionRuntimes({ registerActiveQueryResult, removeSession });
+// Background cleanup of every idle runtime, including anonymous runtimes created
+// before Claude returns a session ID. Guard against overlapping disposal sweeps.
+let _runtimeCleanupInFlight = false;
+const _runtimeCleanupTimer = setInterval(async () => {
+  if (_runtimeCleanupInFlight) return;
+  _runtimeCleanupInFlight = true;
+  try {
+    await cleanupStaleAnonymousRuntimes({ registerActiveQueryResult, removeSession });
+    await cleanupStaleSessionRuntimes({ registerActiveQueryResult, removeSession });
+  } catch (error) {
+    console.error('[DAEMON] Idle runtime cleanup failed:', error?.message || error);
+  } finally {
+    _runtimeCleanupInFlight = false;
+  }
 }, SESSION_CLEANUP_INTERVAL_MS);
 // unref() so the timer does not prevent natural process exit
-_sessionCleanupTimer.unref();
+_runtimeCleanupTimer.unref();
 
   async function executeTurn(runtime, requestContext, turnMeta) {
   if (!runtime || runtime.closed) {
@@ -946,6 +956,9 @@ export async function shutdownPersistentRuntimes() {
   resetRegistryState();
   resetCachedQueryFn();
 }
+
+// Lightweight lifecycle snapshot used by the outer daemon idle reaper.
+export { getSnapshot };
 
 export const __testing = {
   async resetState() {

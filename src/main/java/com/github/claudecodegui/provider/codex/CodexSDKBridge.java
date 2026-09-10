@@ -28,6 +28,7 @@ import java.util.Set;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -54,6 +55,9 @@ public class CodexSDKBridge extends BaseSDKBridge {
     private static final String ENV_CODEX_CI = "CODEX_CI";
     private static final String ENV_CODEX_SANDBOX_NETWORK_DISABLED = "CODEX_SANDBOX_NETWORK_DISABLED";
     private static final long MCP_TOOLS_TIMEOUT_MS = 65_000;
+    /** Abort a stuck Codex request while allowing long tool executions. */
+    static final long CODEX_NO_OUTPUT_TIMEOUT_MS = 10 * 60 * 1000L;
+    static final long CODEX_TOTAL_TIMEOUT_MS = 2 * 60 * 60 * 1000L;
     private static final int MAX_ENV_VAR_VALUE_LENGTH = 16 * 1024;
     private final CodexHistoryReader historyReader;
     private final CodemossSettingsService settingsService = new CodemossSettingsService();
@@ -538,9 +542,39 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 LOG.info("Command: " + String.join(" ", command));
 
                 Process process = null;
+                Thread watchdog = null;
+                AtomicBoolean finished = new AtomicBoolean(false);
+                AtomicLong lastOutputAt = new AtomicLong(System.currentTimeMillis());
+                AtomicReference<String> timeoutReason = new AtomicReference<>(null);
                 try {
                     process = pb.start();
                     processManager.registerProcess(channelId, process);
+
+                    final Process watchedProcess = process;
+                    final long startedAt = System.currentTimeMillis();
+                    watchdog = new Thread(() -> {
+                        while (!finished.get() && watchedProcess.isAlive()) {
+                            long now = System.currentTimeMillis();
+                            if (now - startedAt >= CODEX_TOTAL_TIMEOUT_MS) {
+                                timeoutReason.compareAndSet(null, "Codex request exceeded the 2-hour total timeout");
+                            } else if (now - lastOutputAt.get() >= CODEX_NO_OUTPUT_TIMEOUT_MS) {
+                                timeoutReason.compareAndSet(null, "Codex produced no output for 10 minutes");
+                            }
+                            if (timeoutReason.get() != null) {
+                                LOG.warn("[Codex] " + timeoutReason.get() + "; terminating process tree");
+                                PlatformUtils.terminateProcess(watchedProcess);
+                                return;
+                            }
+                            try {
+                                Thread.sleep(5_000L);
+                            } catch (InterruptedException ignored) {
+                                Thread.currentThread().interrupt();
+                                return;
+                            }
+                        }
+                    }, "ccgui-codex-watchdog-" + channelId);
+                    watchdog.setDaemon(true);
+                    watchdog.start();
 
                     // Write to stdin
                     try (java.io.OutputStream stdin = process.getOutputStream()) {
@@ -555,6 +589,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
                         String line;
                         while ((line = reader.readLine()) != null) {
+                            lastOutputAt.set(System.currentTimeMillis());
                             // Capture Node.js error logs
                             if (line.startsWith("[UNCAUGHT_ERROR]")
                                     || line.startsWith("[UNHANDLED_REJECTION]")
@@ -574,7 +609,12 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     result.finalResult = assistantContent.toString();
                     result.messageCount = result.messages.size();
 
-                    if (wasInterrupted) {
+                    String timedOut = timeoutReason.get();
+                    if (timedOut != null) {
+                        result.success = false;
+                        result.error = timedOut;
+                        callback.onError(timedOut);
+                    } else if (wasInterrupted) {
                         result.success = false;
                         result.error = "User interrupted";
                         callback.onComplete(result);
@@ -595,6 +635,15 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
                     return result;
                 } finally {
+                    finished.set(true);
+                    if (watchdog != null) {
+                        watchdog.interrupt();
+                        try {
+                            watchdog.join(1000L);
+                        } catch (InterruptedException ignored) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
                     processManager.unregisterProcess(channelId, process);
                     processManager.waitForProcessTermination(process);
                     cleanupTempImages(tempImageFiles);  // Cleanup temp image files

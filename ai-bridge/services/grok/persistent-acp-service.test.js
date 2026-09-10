@@ -289,3 +289,25 @@ test('forceSetActiveTurn tracks active runtime', () => {
   forceSetActiveTurn(null);
   assert.equal(getActiveTurnRuntimeInternal(), null);
 });
+
+test('idle cleanup disposes stale runtimes but preserves active turns', async () => {
+  resetRegistry();
+  let closed = 0;
+  const staleAt = Date.now() - 2 * 60 * 1000;
+  createTestRuntime('stale', {
+    createdAt: staleAt,
+    lastUsedAt: staleAt,
+    client: { close: async () => { closed++; } },
+  });
+  createTestRuntime('active', {
+    createdAt: staleAt,
+    lastUsedAt: staleAt,
+    activeTurnCount: 1,
+    client: { close: async () => { closed++; } },
+  });
+
+  await __testing.triggerCleanup();
+
+  assert.equal(closed, 1);
+  assert.deepEqual(getRuntimes().map((runtime) => runtime.key), ['active']);
+});

@@ -67,6 +67,9 @@ function usageFromNotification(method, params) {
 
 const runtimes = new Map(); // runtimeKey -> runtime
 let activeTurnRuntime = null;
+const GROK_RUNTIME_MAX_IDLE_MS = 60 * 1000;
+const GROK_RUNTIME_CLEANUP_INTERVAL_MS = 15 * 1000;
+let runtimeCleanupInFlight = false;
 
 function normalizePermissionMode(mode) {
   const m = String(mode || '').trim().toLowerCase();
@@ -118,6 +121,15 @@ function getAllRuntimes() {
   return Array.from(runtimes.values());
 }
 
+/** Lightweight lifecycle snapshot used by the outer daemon idle reaper. */
+export function getRuntimeSnapshot() {
+  const all = getAllRuntimes();
+  return {
+    runtimeCount: all.filter((runtime) => runtime && !runtime.closed).length,
+    activeTurnCount: all.reduce((total, runtime) => total + (runtime?.activeTurnCount || 0), 0),
+  };
+}
+
 function setActive(runtime) {
   activeTurnRuntime = runtime || null;
 }
@@ -125,6 +137,31 @@ function setActive(runtime) {
 function clearActiveIf(runtime) {
   if (activeTurnRuntime === runtime) activeTurnRuntime = null;
 }
+
+async function cleanupStaleRuntimes() {
+  if (runtimeCleanupInFlight) return;
+  runtimeCleanupInFlight = true;
+  try {
+    const now = Date.now();
+    const stale = getAllRuntimes().filter((runtime) => {
+      if (!runtime || runtime.closed || (runtime.activeTurnCount || 0) > 0) return false;
+      return now - (runtime.lastUsedAt || runtime.createdAt || now) > GROK_RUNTIME_MAX_IDLE_MS;
+    });
+    for (const runtime of stale) {
+      console.log(`[GROK-DAEMON] disposing stale runtime (idle ${Math.round((now - runtime.lastUsedAt) / 1000)}s)`);
+      await disposeRuntime(runtime);
+    }
+  } catch (error) {
+    console.warn('[GROK-DAEMON] idle runtime cleanup failed:', error?.message || error);
+  } finally {
+    runtimeCleanupInFlight = false;
+  }
+}
+
+const runtimeCleanupTimer = setInterval(() => {
+  cleanupStaleRuntimes().catch(() => {});
+}, GROK_RUNTIME_CLEANUP_INTERVAL_MS);
+runtimeCleanupTimer.unref();
 
 // =============================================================================
 // Runtime lifecycle
@@ -705,6 +742,7 @@ export async function getUsagePersistent(params = {}) {
 // For daemon introspection / tests
 export const __testing = {
   getRuntimes: () => getAllRuntimes(),
+  getRuntimeSnapshot,
   getActiveTurnRuntime: () => activeTurnRuntime,
   getActiveTurnRuntimeInternal: () => activeTurnRuntime,
   makeRuntimeKey,
@@ -743,6 +781,5 @@ export const __testing = {
   forceSetActiveTurn: (runtime) => {
     activeTurnRuntime = runtime || null;
   },
-  /** No-op placeholder for older tests that expected idle cleanup timers. */
-  triggerCleanup: () => {},
+  triggerCleanup: () => cleanupStaleRuntimes(),
 };

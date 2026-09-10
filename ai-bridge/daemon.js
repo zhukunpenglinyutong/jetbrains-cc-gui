@@ -38,6 +38,7 @@ import {
   abortCurrentTurn,
   resetRuntimePersistent,
   getContextUsagePersistent,
+  getSnapshot as getClaudeRuntimeSnapshot,
   setPermissionModePersistent
 } from './services/claude/persistent-query-service.js';
 import {
@@ -48,7 +49,8 @@ import {
   shutdownPersistentRuntimes as grokShutdownPersistentRuntimes,
   setPermissionModePersistent as grokSetPermissionModePersistent,
   getContextUsagePersistent as grokGetContextUsagePersistent,
-  getUsagePersistent as grokGetUsagePersistent
+  getUsagePersistent as grokGetUsagePersistent,
+  getRuntimeSnapshot as getGrokRuntimeSnapshot
 } from './services/grok/persistent-acp-service.js';
 import { injectStartupEnvVars, isWebviewControlledEnvVar, isDangerousEnvVar } from './config/api-config.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
@@ -70,6 +72,8 @@ injectStartupEnvVars();
 
 // NOTE: Keep in sync with package.json version when updating.
 const DAEMON_VERSION = '1.0.0';
+const DAEMON_IDLE_TIMEOUT_MS = 3 * 60 * 1000;
+const DAEMON_IDLE_CHECK_INTERVAL_MS = 15 * 1000;
 
 // =============================================================================
 // State
@@ -78,6 +82,10 @@ const DAEMON_VERSION = '1.0.0';
 let activeRequestId = null;
 let isDaemonMode = true;
 let sdkPreloaded = false;
+let lastCommandActivityAt = Date.now();
+let pendingCommandCount = 0;
+let idleShutdownInFlight = false;
+let idleShutdownGeneration = 0;
 
 // =============================================================================
 // Output Interception
@@ -387,6 +395,10 @@ async function processRequest(request) {
       ts: Date.now(),
       sdkPreloaded,
       memoryUsage: process.memoryUsage().heapUsed,
+      runtimes: {
+        claude: getClaudeRuntimeSnapshot(),
+        grok: getGrokRuntimeSnapshot(),
+      },
     });
     return;
   }
@@ -401,6 +413,10 @@ async function processRequest(request) {
       uptime: process.uptime(),
       sdkPreloaded,
       memoryUsage: process.memoryUsage(),
+      runtimes: {
+        claude: getClaudeRuntimeSnapshot(),
+        grok: getGrokRuntimeSnapshot(),
+      },
     });
     return;
   }
@@ -613,6 +629,45 @@ async function runDaemonMain() {
   // for stdout interception. Heartbeats/status are safe to run concurrently.
   let commandQueue = Promise.resolve();
 
+  // A daemon is deliberately lazy: after all provider runtimes have been
+  // released, keep the lightweight bridge around briefly for quick reuse and
+  // then terminate it. Heartbeats/status probes do not refresh this timer.
+  const idleReaper = setInterval(async () => {
+    if (idleShutdownInFlight || activeRequestId || pendingCommandCount > 0) return;
+    const idleFor = Date.now() - lastCommandActivityAt;
+    if (idleFor < DAEMON_IDLE_TIMEOUT_MS) return;
+
+    const claude = getClaudeRuntimeSnapshot();
+    const grok = getGrokRuntimeSnapshot();
+    const claudeBusy = (claude.anonymousRuntimeCount || 0) > 0
+      || (claude.sessionRuntimeCount || 0) > 0
+      || !!claude.activeTurnEpoch;
+    const grokBusy = (grok.runtimeCount || 0) > 0 || (grok.activeTurnCount || 0) > 0;
+    if (claudeBusy || grokBusy) return;
+
+    idleShutdownInFlight = true;
+    const shutdownGeneration = ++idleShutdownGeneration;
+    try {
+      await shutdownPersistentRuntimes();
+      await grokShutdownPersistentRuntimes().catch(() => {});
+      // A command may have arrived while provider shutdown was awaiting an
+      // SDK/client close. In that case the command wins: its runtime will be
+      // recreated lazily and the daemon must stay alive to service it.
+      if (shutdownGeneration !== idleShutdownGeneration) {
+        idleShutdownInFlight = false;
+        return;
+      }
+      sendDaemonEvent('shutdown', { reason: 'idle_timeout' });
+      isDaemonMode = false;
+      rl.close();
+      setTimeout(() => _originalExit(0), 100).unref();
+    } catch (error) {
+      idleShutdownInFlight = false;
+      _originalStderrWrite(`[daemon] Idle shutdown failed: ${error?.message || error}\n`, 'utf8');
+    }
+  }, DAEMON_IDLE_CHECK_INTERVAL_MS);
+  idleReaper.unref();
+
   rl.on('line', (line) => {
     // Skip empty lines
     if (!line.trim()) return;
@@ -626,6 +681,16 @@ async function runDaemonMain() {
         'utf8'
       );
       return;
+    }
+
+    if (request.method !== 'heartbeat' && request.method !== 'status') {
+      lastCommandActivityAt = Date.now();
+      // Cancel an idle shutdown that has not yet closed stdin. The request is
+      // still accepted and serialized normally below.
+      if (idleShutdownInFlight) {
+        idleShutdownGeneration++;
+        idleShutdownInFlight = false;
+      }
     }
 
     // Heartbeats and status queries don't use activeRequestId — safe to run immediately
@@ -695,8 +760,10 @@ async function runDaemonMain() {
     }
 
     // Command requests are serialized to prevent activeRequestId conflicts
+    pendingCommandCount++;
     commandQueue = commandQueue
       .then(() => processRequest(request))
+      .finally(() => { pendingCommandCount = Math.max(0, pendingCommandCount - 1); })
       .catch((e) => {
         _originalStderrWrite(
           `[daemon] Request queue error: ${e.message}\n`,
@@ -706,6 +773,11 @@ async function runDaemonMain() {
   });
 
   rl.on('close', async () => {
+    // Idle reaper already performed graceful provider shutdown and scheduled
+    // process exit; do not run the stdin-disconnect cleanup a second time.
+    if (!isDaemonMode) {
+      return;
+    }
     // stdin closed — Java process disconnected, exit gracefully
     // Force-exit after 5s to prevent zombie processes when SDK network connections hang
     const forceExitTimer = setTimeout(() => {
