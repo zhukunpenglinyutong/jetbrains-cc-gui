@@ -29,6 +29,21 @@ A powerful IntelliJ IDEA plugin that provides a visual interface for **Claude Co
 
 ---
 
+## Performance Tips
+
+### macOS Scrolling Performance
+
+If you experience laggy scrolling in the chat panel or settings on macOS (especially with Retina displays), disable GPU acceleration:
+
+**Add to VM options** (Help → Edit Custom VM Options):
+```
+-Dide.browser.jcef.gpu.disable=true
+```
+
+Then restart the IDE.
+
+---
+
 ## Key Features
 
 ### Multi AI Engine Support
