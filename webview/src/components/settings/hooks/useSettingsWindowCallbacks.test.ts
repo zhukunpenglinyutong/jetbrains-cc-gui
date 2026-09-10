@@ -126,6 +126,8 @@ describe('useSettingsWindowCallbacks', () => {
         opencode: 'opencode-default',
         pi: 'auto',
         omp: 'auto',
+        minimax: 'auto',
+        zcode: 'auto',
       },
       availability: {
         claude: true,
@@ -135,6 +137,8 @@ describe('useSettingsWindowCallbacks', () => {
         opencode: false,
         pi: false,
         omp: false,
+        minimax: false,
+        zcode: false,
       },
     };
 
@@ -160,6 +164,8 @@ describe('useSettingsWindowCallbacks', () => {
         opencode: 'opencode-default',
         pi: 'auto',
         omp: 'auto',
+        minimax: 'auto',
+        zcode: 'auto',
       },
       availability: {
         claude: true,
@@ -169,6 +175,8 @@ describe('useSettingsWindowCallbacks', () => {
         opencode: false,
         pi: false,
         omp: false,
+        minimax: false,
+        zcode: false,
       },
     };
 

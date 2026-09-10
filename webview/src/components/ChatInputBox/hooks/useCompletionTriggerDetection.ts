@@ -224,7 +224,9 @@ export function useCompletionTriggerDetection({
   // spawn a new debounce per render — orphaned timers then fire with stale
   // closures (e.g. isOpen=false) and redundantly re-open/clear the dropdown.
   const detectRef = useRef(detectAndTriggerCompletion);
-  detectRef.current = detectAndTriggerCompletion;
+  useEffect(() => {
+    detectRef.current = detectAndTriggerCompletion;
+  });
 
   const debouncedDetectCompletion = useMemo(
     () => debounce(() => detectRef.current(), DEBOUNCE_TIMING.COMPLETION_DETECTION_MS),

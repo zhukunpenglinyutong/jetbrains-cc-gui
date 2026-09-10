@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { HistoryData, HistorySessionSummary } from '../../types';
-import VirtualList from './VirtualList';
 import { sendBridgeEvent } from '../../utils/bridge';
 import { copyToClipboard } from '../../utils/copyUtils';
-import { HistoryListItem, stopPropagationHandler } from './HistoryListItem';
-import { HistoryFilters } from './HistoryFilters';
-import { HistoryActions } from './HistoryActions';
+import { HistoryListItem } from './HistoryListItem';
+import { HistoryHeader } from './HistoryHeader';
+import { HistorySessionList } from './HistorySessionList';
+import { HistoryConfirmDialogs } from './HistoryConfirmDialogs';
+import { HistoryLoadingState, HistoryErrorState } from './HistoryStatusView';
+import { useHistorySessions } from './useHistorySessions';
+import { useHistorySelection } from './useHistorySelection';
 
 // Deep search timeout (milliseconds)
 const DEEP_SEARCH_TIMEOUT_MS = 30000;
@@ -15,47 +18,6 @@ const ROOT_STYLE: React.CSSProperties = {
   height: '100%',
   display: 'flex',
   flexDirection: 'column',
-};
-
-const LIST_WRAPPER_STYLE: React.CSSProperties = {
-  flex: 1,
-  overflow: 'hidden',
-};
-
-const SPINNER_STYLE: React.CSSProperties = {
-  width: '48px',
-  height: '48px',
-  margin: '0 auto 16px',
-  border: '4px solid rgba(133, 133, 133, 0.2)',
-  borderTop: '4px solid #858585',
-  borderRadius: '50%',
-  animation: 'spin 1s linear infinite',
-};
-
-const CENTER_BLOCK_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-};
-
-const CENTER_BLOCK_FULL_HEIGHT_STYLE: React.CSSProperties = {
-  ...CENTER_BLOCK_STYLE,
-  height: '100%',
-};
-
-const EMPTY_TEXT_STYLE: React.CSSProperties = {
-  textAlign: 'center',
-  color: '#858585',
-};
-
-const EMPTY_ICON_STYLE: React.CSSProperties = {
-  fontSize: '48px',
-  marginBottom: '16px',
-};
-
-const EMPTY_HINT_STYLE: React.CSSProperties = {
-  fontSize: '12px',
-  marginTop: '8px',
 };
 
 interface HistoryViewProps {
@@ -71,49 +33,6 @@ interface HistoryViewProps {
   onConvertToCliSession: (sessionId: string) => void; // Convert sidechain session to CLI session callback
 }
 
-const getComparableTimestamp = (timestamp: string | undefined) => {
-  if (!timestamp) {
-    return 0;
-  }
-  const value = new Date(timestamp).getTime();
-  return Number.isNaN(value) ? 0 : value;
-};
-
-const deduplicateHistorySessions = (sessions: HistorySessionSummary[]) => {
-  const deduplicated = new Map<string, HistorySessionSummary>();
-
-  for (const session of sessions) {
-    if (!session?.sessionId) {
-      continue;
-    }
-
-    const existing = deduplicated.get(session.sessionId);
-    if (!existing) {
-      deduplicated.set(session.sessionId, session);
-      continue;
-    }
-
-    const existingTs = getComparableTimestamp(existing.lastTimestamp);
-    const incomingTs = getComparableTimestamp(session.lastTimestamp);
-    const preferred = incomingTs >= existingTs ? session : existing;
-    const fallback = preferred === session ? existing : session;
-
-    deduplicated.set(session.sessionId, {
-      ...preferred,
-      title: preferred.title || fallback.title,
-      messageCount: Math.max(preferred.messageCount || 0, fallback.messageCount || 0),
-      isFavorited: preferred.isFavorited || fallback.isFavorited,
-      favoritedAt: Math.max(preferred.favoritedAt || 0, fallback.favoritedAt || 0) || undefined,
-      provider: preferred.provider || fallback.provider,
-      model: preferred.model || fallback.model,
-      agent: preferred.agent || fallback.agent,
-      entrypoint: preferred.entrypoint || fallback.entrypoint,
-    });
-  }
-
-  return Array.from(deduplicated.values());
-};
-
 const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSession, onDeleteSession, onDeleteSessions, onExportSession, onToggleFavorite, onUpdateTitle, onConvertToCliSession }: HistoryViewProps) => {
   const { t } = useTranslation();
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
@@ -128,9 +47,22 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSes
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Copy status timeout timer
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null); // Track which session ID was copied
   const [copyFailedSessionId, setCopyFailedSessionId] = useState<string | null>(null); // Track which session ID copy failed
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(() => new Set());
-  const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+
+  const { sessions, infoBar } = useHistorySessions(historyData, searchQuery, t);
+  const {
+    isSelectionMode,
+    selectedSessionIds,
+    selectedCount,
+    allVisibleSelected,
+    isDeletingSelected,
+    enterSelectionMode,
+    exitSelectionMode,
+    toggleSessionSelection,
+    toggleSelectAllVisible,
+    confirmDeleteSelected,
+    startDeleteSelected,
+    cancelDeleteSelected,
+  } = useHistorySelection(sessions, onDeleteSessions);
 
   // Clean up all timeout timers on unmount
   useEffect(() => {
@@ -165,90 +97,11 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSes
   // Depend on stable content fields so an existing history list refresh also clears the spinner.
   useEffect(() => {
     if (historyData) {
-      setIsDeepSearching(prev => {
-        if (prev && deepSearchTimeoutRef.current) {
-          clearTimeout(deepSearchTimeoutRef.current);
-          deepSearchTimeoutRef.current = null;
-        }
-        return false;
-      });
+      clearTimeout(deepSearchTimeoutRef.current ?? undefined);
+      deepSearchTimeoutRef.current = null;
+      setIsDeepSearching(false);
     }
   }, [historyData?.success, historyData?.total, historyData?.sessions]);
-
-  // Sort and filter sessions: favorited on top (by favorite time descending), unfavorited below (original order)
-  const sessions = useMemo(() => {
-    const rawSessions = deduplicateHistorySessions(historyData?.sessions ?? []);
-
-    // Search filter (case-insensitive)
-    const filteredSessions = searchQuery.trim()
-      ? rawSessions.filter(s =>
-          s.title?.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      : rawSessions;
-
-    // Separate favorited and unfavorited sessions
-    const favorited = filteredSessions.filter(s => s.isFavorited);
-    const unfavorited = filteredSessions.filter(s => !s.isFavorited);
-
-    // Sort favorited sessions by favorite time descending
-    favorited.sort((a, b) => (b.favoritedAt || 0) - (a.favoritedAt || 0));
-
-    // Merge: favorited first, unfavorited after
-    return [...favorited, ...unfavorited];
-  }, [historyData?.sessions, searchQuery]);
-
-  const infoBar = !historyData
-    ? ''
-    : t('history.totalSessions', {
-        count: sessions.length,
-        total: historyData.total ?? 0,
-      });
-
-  const selectedCount = selectedSessionIds.size;
-  const allVisibleSelected = sessions.length > 0 && sessions.every(session => selectedSessionIds.has(session.sessionId));
-
-  useEffect(() => {
-    setSelectedSessionIds(prev => {
-      if (prev.size === 0) {
-        return prev;
-      }
-
-      const visibleSessionIds = new Set(sessions.map(session => session.sessionId));
-      const next = new Set(Array.from(prev).filter(sessionId => visibleSessionIds.has(sessionId)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [sessions]);
-
-  const enterSelectionMode = useCallback(() => {
-    setIsSelectionMode(true);
-  }, []);
-
-  const exitSelectionMode = useCallback(() => {
-    setIsSelectionMode(false);
-    setSelectedSessionIds(new Set());
-    setIsDeletingSelected(false);
-  }, []);
-
-  const toggleSessionSelection = useCallback((sessionId: string) => {
-    setSelectedSessionIds(prev => {
-      const next = new Set(prev);
-      if (next.has(sessionId)) {
-        next.delete(sessionId);
-      } else {
-        next.add(sessionId);
-      }
-      return next;
-    });
-  }, []);
-
-  const toggleSelectAllVisible = useCallback(() => {
-    setSelectedSessionIds(prev => {
-      if (sessions.length > 0 && sessions.every(session => prev.has(session.sessionId))) {
-        return new Set();
-      }
-      return new Set(sessions.map(session => session.sessionId));
-    });
-  }, [sessions]);
 
   const handleDeleteRequest = useCallback((sessionId: string) => {
     setDeletingSessionId(sessionId);
@@ -268,16 +121,6 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSes
       setDeletingSessionId(null);
     }
   }, [deletingSessionId, onDeleteSession]);
-
-  const confirmDeleteSelected = useCallback(() => {
-    if (selectedSessionIds.size === 0) {
-      setIsDeletingSelected(false);
-      return;
-    }
-
-    onDeleteSessions(Array.from(selectedSessionIds));
-    exitSelectionMode();
-  }, [selectedSessionIds, onDeleteSessions, exitSelectionMode]);
 
   const cancelDelete = useCallback(() => {
     setDeletingSessionId(null);
@@ -340,21 +183,19 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSes
   }, [isSelectionMode, toggleSessionSelection, onLoadSession]);
 
   const handleDeepSearch = useCallback(() => {
-    setIsDeepSearching(prev => {
-      if (prev) return prev;
-      sendBridgeEvent('deep_search_history', currentProvider || 'claude');
+    if (isDeepSearching) return;
 
-      if (deepSearchTimeoutRef.current) {
-        clearTimeout(deepSearchTimeoutRef.current);
-      }
+    sendBridgeEvent('deep_search_history', currentProvider || 'claude');
 
-      deepSearchTimeoutRef.current = setTimeout(() => {
-        setIsDeepSearching(false);
-        deepSearchTimeoutRef.current = null;
-      }, DEEP_SEARCH_TIMEOUT_MS);
-      return true;
-    });
-  }, [currentProvider]);
+    clearTimeout(deepSearchTimeoutRef.current ?? undefined);
+
+    deepSearchTimeoutRef.current = setTimeout(() => {
+      setIsDeepSearching(false);
+      deepSearchTimeoutRef.current = null;
+    }, DEEP_SEARCH_TIMEOUT_MS);
+
+    setIsDeepSearching(true);
+  }, [isDeepSearching, currentProvider]);
 
   const handleConvertRequest = useCallback((sessionId: string) => {
     setConvertingSessionId(sessionId);
@@ -375,66 +216,13 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSes
     setInputValue(e.target.value);
   }, []);
 
-  const handleStartDeleteSelected = useCallback(() => {
-    setIsDeletingSelected(true);
-  }, []);
-
-  const handleCancelDeleteSelected = useCallback(() => {
-    setIsDeletingSelected(false);
-  }, []);
-
   if (!historyData) {
-    return (
-      <div className="messages-container" style={CENTER_BLOCK_STYLE}>
-        <div style={EMPTY_TEXT_STYLE}>
-          <div style={SPINNER_STYLE}></div>
-          <div>{t('history.loading')}</div>
-        </div>
-      </div>
-    );
+    return <HistoryLoadingState t={t} />;
   }
 
   if (!historyData.success) {
-    return (
-      <div className="messages-container" style={CENTER_BLOCK_STYLE}>
-        <div style={EMPTY_TEXT_STYLE}>
-          <div style={EMPTY_ICON_STYLE}>⚠️</div>
-          <div>{historyData.error ?? t('history.loadFailed')}</div>
-        </div>
-      </div>
-    );
+    return <HistoryErrorState error={historyData.error} t={t} />;
   }
-
-  // Render empty state (no search results or no sessions)
-  const renderEmptyState = () => {
-    // If search returned no results
-    if (searchQuery.trim() && sessions.length === 0) {
-      return (
-        <div className="messages-container" style={CENTER_BLOCK_FULL_HEIGHT_STYLE}>
-          <div style={EMPTY_TEXT_STYLE}>
-            <div style={EMPTY_ICON_STYLE}>🔍</div>
-            <div>{t('history.noSearchResults')}</div>
-            <div style={EMPTY_HINT_STYLE}>{t('history.tryOtherKeywords')}</div>
-          </div>
-        </div>
-      );
-    }
-
-    // If there are no sessions at all
-    if (!searchQuery.trim() && sessions.length === 0) {
-      return (
-        <div className="messages-container" style={CENTER_BLOCK_FULL_HEIGHT_STYLE}>
-          <div style={EMPTY_TEXT_STYLE}>
-            <div style={EMPTY_ICON_STYLE}>📭</div>
-            <div>{t('history.noSessions')}</div>
-            <div style={EMPTY_HINT_STYLE}>{t('history.noSessionsDesc')}</div>
-          </div>
-        </div>
-      );
-    }
-
-    return null;
-  };
 
   const renderHistoryItem = (session: HistorySessionSummary) => (
     <HistoryListItem
@@ -467,104 +255,42 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSes
 
   return (
     <div style={ROOT_STYLE}>
-      <div className="history-header">
-        <div className="history-header-main">
-          {isSelectionMode ? (
-            <div className="history-selection-summary">
-              {t('history.selectedSessions', { count: selectedCount })}
-            </div>
-          ) : (
-            <div className="history-info">{infoBar}</div>
-          )}
-          <HistoryActions
-            isSelectionMode={isSelectionMode}
-            selectedCount={selectedCount}
-            visibleCount={sessions.length}
-            allVisibleSelected={allVisibleSelected}
-            isDeepSearching={isDeepSearching}
-            t={t}
-            onEnterSelectionMode={enterSelectionMode}
-            onExitSelectionMode={exitSelectionMode}
-            onToggleSelectAllVisible={toggleSelectAllVisible}
-            onStartDeleteSelected={handleStartDeleteSelected}
-            onDeepSearch={handleDeepSearch}
-          />
-        </div>
-        {!isSelectionMode && (
-          <HistoryFilters
-            inputValue={inputValue}
-            onInputChange={handleInputChange}
-            t={t}
-          />
-        )}
-        </div>
-      <div style={LIST_WRAPPER_STYLE}>
-        {sessions.length > 0 ? (
-          <VirtualList
-            items={sessions}
-            itemHeight={78}
-            height={listHeight}
-            renderItem={renderHistoryItem}
-            getItemKey={(session) => `${session.sessionId}-${session.lastTimestamp ?? '0'}`}
-            className="messages-container"
-          />
-        ) : (
-          renderEmptyState()
-        )}
-      </div>
-
-      {/* Delete confirmation dialog */}
-      {deletingSessionId && (
-        <div className="modal-overlay" onClick={cancelDelete} role="presentation">
-          <div className="modal-content" onClick={stopPropagationHandler}>
-            <h3>{t('history.confirmDelete')}</h3>
-            <p>{t('history.deleteMessage')}</p>
-            <div className="modal-actions">
-              <button className="modal-btn modal-btn-cancel" onClick={cancelDelete}>
-                {t('common.cancel')}
-              </button>
-              <button className="modal-btn modal-btn-danger" onClick={confirmDelete}>
-                {t('common.delete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Convert to CLI confirmation dialog */}
-      {convertingSessionId && (
-        <div className="modal-overlay" onClick={cancelConvert} role="presentation">
-          <div className="modal-content" onClick={stopPropagationHandler} role="dialog" aria-modal="true" aria-labelledby="convert-session-title">
-            <h3 id="convert-session-title">{t('history.confirmConvert')}</h3>
-            <p>{t('history.convertConfirmMessage')}</p>
-            <div className="modal-actions">
-              <button className="modal-btn modal-btn-cancel" onClick={cancelConvert}>
-                {t('common.cancel')}
-              </button>
-              <button className="modal-btn modal-btn-primary" onClick={confirmConvert}>
-                {t('history.convertButton')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isDeletingSelected && (
-        <div className="modal-overlay" onClick={handleCancelDeleteSelected} role="presentation">
-          <div className="modal-content" onClick={stopPropagationHandler} role="dialog" aria-modal="true" aria-labelledby="delete-selected-title">
-            <h3 id="delete-selected-title">{t('history.confirmDeleteSelected')}</h3>
-            <p>{t('history.deleteSelectedMessage', { count: selectedCount })}</p>
-            <div className="modal-actions">
-              <button className="modal-btn modal-btn-cancel" onClick={handleCancelDeleteSelected}>
-                {t('common.cancel')}
-              </button>
-              <button className="modal-btn modal-btn-danger" onClick={confirmDeleteSelected}>
-                {t('common.delete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <HistoryHeader
+        isSelectionMode={isSelectionMode}
+        selectedCount={selectedCount}
+        infoBar={infoBar}
+        allVisibleSelected={allVisibleSelected}
+        visibleCount={sessions.length}
+        isDeepSearching={isDeepSearching}
+        inputValue={inputValue}
+        t={t}
+        onEnterSelectionMode={enterSelectionMode}
+        onExitSelectionMode={exitSelectionMode}
+        onToggleSelectAllVisible={toggleSelectAllVisible}
+        onStartDeleteSelected={startDeleteSelected}
+        onDeepSearch={handleDeepSearch}
+        onInputChange={handleInputChange}
+      />
+      <HistorySessionList
+        sessions={sessions}
+        height={listHeight}
+        renderItem={renderHistoryItem}
+        searchQuery={searchQuery}
+        t={t}
+      />
+      <HistoryConfirmDialogs
+        deletingSessionId={deletingSessionId}
+        convertingSessionId={convertingSessionId}
+        isDeletingSelected={isDeletingSelected}
+        selectedCount={selectedCount}
+        t={t}
+        onCancelDelete={cancelDelete}
+        onConfirmDelete={confirmDelete}
+        onCancelConvert={cancelConvert}
+        onConfirmConvert={confirmConvert}
+        onCancelDeleteSelected={cancelDeleteSelected}
+        onConfirmDeleteSelected={confirmDeleteSelected}
+      />
     </div>
   );
 };

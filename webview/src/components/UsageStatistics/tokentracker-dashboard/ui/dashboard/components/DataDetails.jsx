@@ -12,6 +12,10 @@ import {
 
 const PROJECT_SOURCE_ICON_LIMIT = 5;
 
+// Hoisted so destructuring defaults don't create a fresh reference per render.
+const EMPTY_LIST = [];
+const EMPTY_QUERY = {};
+
 function ProjectRow({ entry, maxTokens, copy, formatTokens, formatTokensTooltip, onSelect }) {
   const projectKey = typeof entry?.project_key === "string" ? entry.project_key : "";
   const projectRef = typeof entry?.project_ref === "string" ? entry.project_ref : "";
@@ -85,12 +89,12 @@ function ProjectRow({ entry, maxTokens, copy, formatTokens, formatTokensTooltip,
 
 export function DataDetails({
   // Project props
-  projectEntries = [],
+  projectEntries = EMPTY_LIST,
   projectLimit = 3,
   onProjectLimitChange,
   // { from, to, timeZone, tzOffsetMinutes } — forwarded to the per-project
   // drill-down modal so it queries the same range the panel shows.
-  projectDetailQuery = {},
+  projectDetailQuery = EMPTY_QUERY,
   // Daily breakdown props
   copy,
   hasDetailsActual,
@@ -102,8 +106,8 @@ export function DataDetails({
   toggleSort,
   sortIconFor,
   pagedDetails,
-  dailyBreakdownRows = [],
-  dailyBreakdownColumns = [],
+  dailyBreakdownRows = EMPTY_LIST,
+  dailyBreakdownColumns = EMPTY_LIST,
   dailyBreakdownAriaSortFor,
   dailyBreakdownSortIconFor,
   dailyBreakdownDateKey = "day",

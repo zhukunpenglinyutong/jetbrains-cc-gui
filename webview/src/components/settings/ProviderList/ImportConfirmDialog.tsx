@@ -17,7 +17,7 @@ export default function ImportConfirmDialog({
   onCancel
 }: ImportConfirmDialogProps) {
   const { t } = useTranslation();
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(providers.map(p => p.id)));
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(providers.map(p => p.id)));
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {

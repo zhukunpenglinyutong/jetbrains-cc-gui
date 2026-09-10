@@ -22,12 +22,16 @@ const Toast: React.FC<ToastProps> = ({ message, onDismiss, duration = 1000 }) =>
   const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    let dismissTimer: number | undefined;
+    const exitTimer = window.setTimeout(() => {
       setIsExiting(true);
-      setTimeout(() => onDismiss(message.id), 300); // Wait for exit animation
+      dismissTimer = window.setTimeout(() => onDismiss(message.id), 300); // Wait for exit animation
     }, duration);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(exitTimer);
+      clearTimeout(dismissTimer);
+    };
   }, [message.id, duration, onDismiss]);
 
   return (

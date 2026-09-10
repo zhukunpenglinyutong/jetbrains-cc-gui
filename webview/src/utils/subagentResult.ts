@@ -13,8 +13,7 @@ export function extractResultText(result?: ToolResultBlock | null): string | und
   if (typeof result.content === 'string') return result.content;
   if (Array.isArray(result.content)) {
     const text = result.content
-      .map((item) => (item && typeof item.text === 'string' ? item.text : ''))
-      .filter(Boolean)
+      .flatMap((item) => (item && typeof item.text === 'string' && item.text ? [item.text] : []))
       .join('\n');
     return text || undefined;
   }

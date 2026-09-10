@@ -169,18 +169,8 @@ export function ThemeProvider({ children }) {
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setTheme((prev) => {
-      const next = prev === "dark" ? "light" : "dark";
-      if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem(THEME_STORAGE_KEY, next);
-        } catch {
-          // Ignore localStorage errors
-        }
-      }
-      return next;
-    });
-  }, []);
+    setTheme(theme === "dark" ? "light" : "dark");
+  }, [theme, setTheme]);
 
   const contextValue = useMemo(
     () => ({

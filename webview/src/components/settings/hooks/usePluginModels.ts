@@ -65,14 +65,16 @@ function readConfiguredClaudePricingModels(): CodexCustomModel[] {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return [];
     }
-    return Object.entries(parsed as Record<string, unknown>)
-      .filter(([id, pricing]) => id.trim() && isValidModelPricing(pricing))
-      .map(([id, pricing]) => ({
-        id: normalizeComparableModelId(id.trim()),
-        label: normalizeComparableModelId(id.trim()),
+    return Object.entries(parsed as Record<string, unknown>).flatMap(([id, pricing]) => {
+      if (!id.trim() || !isValidModelPricing(pricing)) return [];
+      const normalizedId = normalizeComparableModelId(id.trim());
+      if (!normalizedId) return [];
+      return [{
+        id: normalizedId,
+        label: normalizedId,
         pricing: pricing as ModelPricing,
-      }))
-      .filter(model => model.id);
+      }];
+    });
   } catch {
     return [];
   }

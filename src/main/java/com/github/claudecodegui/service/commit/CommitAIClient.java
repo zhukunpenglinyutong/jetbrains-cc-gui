@@ -51,6 +51,8 @@ public class CommitAIClient {
     public static final String PROVIDER_OPENCODE = "opencode";
     public static final String PROVIDER_PI = "pi";
     public static final String PROVIDER_OMP = "omp";
+    public static final String PROVIDER_MINIMAX = "minimax";
+    public static final String PROVIDER_ZCODE = "zcode";
 
     private static final Logger LOG = Logger.getInstance(CommitAIClient.class);
     private static final Gson GSON = new Gson();
@@ -77,7 +79,7 @@ public class CommitAIClient {
     /**
      * Run the commit-message script for the resolved provider + model.
      *
-     * @param provider claude / codex / grok / kimi / opencode / pi
+     * @param provider claude / codex / grok / kimi / opencode / pi / zcode
      * @param model    resolved model id (may be null → SDK/CLI default)
      */
     public void send(@NotNull String prompt, @NotNull String provider, @Nullable String model,

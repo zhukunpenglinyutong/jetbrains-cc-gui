@@ -22,6 +22,8 @@ import {
   resolveOpenCodeCliPath,
   resolvePiCliPath,
   resolveOmpCliPath,
+  resolveMiniMaxCliPath,
+
   enrichPathWithBinDirs,
   commonCliBinDirs,
 } from '../utils/cli-path.js';
@@ -31,7 +33,7 @@ import { getRealHomeDir } from '../utils/path-utils.js';
 import { runAcpTurn } from './grok/grok-acp-client.js';
 import { buildGrokEnv, resolveEffectiveGrokAuth } from './grok/grok-utils.js';
 
-export const CLI_ASK_PROVIDERS = ['grok', 'kimi', 'opencode', 'pi', 'omp'];
+export const CLI_ASK_PROVIDERS = ['grok', 'kimi', 'opencode', 'pi', 'omp', 'minimax', 'zcode'];
 
 const DEFAULT_MODELS = {
   grok: 'grok',
@@ -39,6 +41,8 @@ const DEFAULT_MODELS = {
   opencode: 'opencode-default',
   pi: 'auto',
   omp: 'auto',
+  minimax: 'auto',
+  zcode: 'auto',
 };
 
 function isDefaultModelToken(model) {
@@ -196,6 +200,7 @@ async function collectFromStreamingCli({
   label,
   onLine,
   onDelta,
+  shouldTerminate,
 }) {
   let text = '';
   let streamError = '';
@@ -206,6 +211,7 @@ async function collectFromStreamingCli({
     env: buildCliEnv(),
     label,
     emitEndStream: false,
+    shouldTerminate,
     onError: (message) => {
       streamError = message;
     },
@@ -461,10 +467,155 @@ async function askOmp(prompt, { model, cwd, onDelta } = {}) {
 }
 
 /**
+ * One-shot ask via MiniMax Code (`minimax exec`).
+ *
+ * Security: mcode has no headless deny/no-tools policy ("ask" auto-approves
+ * when no UI is attached), so this follows the Kimi/OpenCode/PI precedent:
+ * `--permission smart` plus the caller's prompt-level "do not run tools"
+ * instruction. The CLI keeps running after the final `exec.result` line —
+ * `shouldTerminate` ends the process tree there.
+ */
+async function askMiniMax(prompt, { model, cwd, onDelta } = {}) {
+  const bin = resolveMiniMaxCliPath();
+  const args = [
+    'exec',
+    '--output-format', 'stream-json',
+    '--permission', 'smart',
+  ];
+  const modelFlag = resolveModelFlag(model);
+  if (modelFlag) args.push('--model', modelFlag);
+  const workCwd = buildWorkCwd(cwd);
+  args.push('--cwd', workCwd);
+  args.push(safePromptArg(prompt));
+
+  let sawExecResult = false;
+  let resultAnswer = '';
+  return collectFromStreamingCli({
+    bin,
+    args,
+    cwd: workCwd,
+    label: 'MiniMax',
+    onDelta,
+    onLine: (line) => {
+      if (!line || !line.trim()) return '';
+      let event;
+      try {
+        event = JSON.parse(line);
+      } catch {
+        return '';
+      }
+      if (!event || typeof event !== 'object') return '';
+      if (event.type === 'delta' && typeof event.content === 'string' && event.content) {
+        return event.content;
+      }
+      if (event.type === 'exec.result') {
+        sawExecResult = true;
+        if (typeof event.answer === 'string') resultAnswer = event.answer;
+      }
+      return '';
+    },
+    shouldTerminate: (line) => line.includes('"type":"exec.result"'),
+  }).catch((error) => {
+    // Some mcode versions exit non-zero after a denied permission ask; if the
+    // run still produced a final answer, prefer it over the error.
+    if (sawExecResult && resultAnswer.trim()) {
+      return resultAnswer.trim();
+    }
+    throw error;
+  });
+}
+
+/**
+ * ZCode: session-less generation through the app-server's workspace-level
+ * text API (lighter than booting a full chat session; no tools involved).
+ */
+async function askZcode(prompt, { model, cwd } = {}) {
+  const { ZcodeAppServerClient } = await import('./zcode/zcode-appserver-client.js');
+  const {
+    resolveZcodeCliPath,
+    buildZcodeEnv,
+    resolveActiveProvider,
+  } = await import('./zcode/zcode-config.js');
+
+  const cliPath = resolveZcodeCliPath();
+  if (!cliPath) {
+    throw new Error('ZCode CLI not found. Install the ZCode desktop client, or set ZCODE_CLI_PATH.');
+  }
+  const workCwd = (cwd && String(cwd).trim()) || process.cwd();
+  const active = resolveActiveProvider();
+  if (!active) {
+    throw new Error('No active ZCode provider in ~/.zcode/v2/config.json (open the ZCode client once).');
+  }
+  const modelId = isDefaultModelToken(model) ? Object.keys(active.models || {})[0] : model;
+  if (!modelId) {
+    throw new Error('ZCode provider exposes no models.');
+  }
+
+  const client = new ZcodeAppServerClient({
+    nodePath: process.execPath,
+    cliPath,
+    cwd: workCwd,
+    env: buildZcodeEnv(),
+    onReverseRequest: async (method) => {
+      if (method === 'session/requestRuntimePreferences') {
+        return {
+          nativeSearchEnhancementsEnabled: false,
+          memoryEnabled: false,
+          askUserQuestionAutoResolutionEnabled: false,
+        };
+      }
+      const err = new Error(`unsupported reverse request: ${method}`);
+      err.code = -32601;
+      throw err;
+    },
+  });
+  client.on('stderrLine', () => {}); // drained; generation errors surface via RPC
+
+  try {
+    client.start();
+    const workspace = { workspacePath: workCwd, workspaceKey: workCwd };
+    const modelRef = { providerId: active.providerId, modelId };
+    const params = {
+      workspace,
+      modelRef,
+      prompt: String(prompt),
+      querySource: 'cc-gui-ask',
+    };
+    // The app-server only knows env-injected providers; register the client
+    // channel up front (idempotent) so generateText's modelRef resolves.
+    // provider.source is a closed enum: builtin|models-dev|custom|user|…
+    await client.request('workspace/upsertModelProvider', {
+      workspace,
+      provider: {
+        providerId: active.providerId,
+        kind: 'anthropic',
+        label: active.name || active.providerId,
+        source: active.providerId.startsWith('builtin:') ? 'builtin' : 'custom',
+        baseURL: active.baseURL,
+        ...(active.apiKey ? { apiKey: { source: 'inline', value: active.apiKey } } : {}),
+        models: Object.entries(active.models || {}).map(([id, def]) => ({
+          modelId: id,
+          label: def?.name || id,
+          contextWindow: def?.limit?.context ?? undefined,
+          maxOutputTokens: def?.limit?.output ?? undefined,
+          supportsImages: Array.isArray(def?.modalities?.input)
+            ? def.modalities.input.includes('image')
+            : undefined,
+        })),
+      },
+    });
+    const result = await client.request('workspace/generateText', params, 120_000);
+    return typeof result?.text === 'string' ? result.text.trim() : '';
+  } finally {
+    client.close();
+  }
+}
+
+/**
  * One-shot text generation for a CLI provider.
  *
  * @param {object} options
- * @param {'grok'|'kimi'|'opencode'|'pi'|'omp'} options.provider
+ * @param {'grok'|'kimi'|'opencode'|'pi'|'omp'|'minimax'} options.provider
  * @param {string} options.prompt
  * @param {string} [options.model]
  * @param {string} [options.cwd]
@@ -499,6 +650,10 @@ export async function askCliProvider({
       return askPi(prompt, opts);
     case 'omp':
       return askOmp(prompt, opts);
+    case 'minimax':
+      return askMiniMax(prompt, opts);
+    case 'zcode':
+      return askZcode(prompt, opts);
     default:
       throw new Error(`Unsupported CLI ask provider: ${provider}`);
   }

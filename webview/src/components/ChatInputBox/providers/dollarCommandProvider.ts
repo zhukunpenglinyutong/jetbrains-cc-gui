@@ -54,20 +54,23 @@ export function setupDollarCommandsCallback() {
         return;
       }
 
-      cachedCommands = parsed
-        .filter(item =>
-          typeof item === 'object' && item !== null &&
-          typeof item.name === 'string' && item.name.length > 0 &&
-          item.name.length <= 128
-        )
-        .map(item => ({
+      cachedCommands = parsed.flatMap(item => {
+        if (
+          typeof item !== 'object' || item === null ||
+          typeof item.name !== 'string' || item.name.length === 0 ||
+          item.name.length > 128
+        ) {
+          return [];
+        }
+        return [{
           id: item.name.replace(/^\$/, ''),
           label: item.name.startsWith('$') ? item.name : `$${item.name}`,
           description: typeof item.description === 'string'
             ? item.description.substring(0, 1024)
             : '',
           category: 'skill',
-        }));
+        }];
+      });
 
       loadingState = 'success';
       debugLog('[DollarCommand] Loaded ' + cachedCommands.length + ' commands');

@@ -20,7 +20,7 @@ describe('toolPresentation', () => {
     });
   });
 
-  it('prefers structured line metadata over path suffix', () => {
+  it('treats read offset as a 1-based starting line number', () => {
     const target = resolveToolTarget({
       file_path: 'src/main.ts:1-10',
       offset: 19,
@@ -31,7 +31,21 @@ describe('toolPresentation', () => {
       file_path: 'src/main.ts:1-10',
       offset: 19,
       limit: 5,
-    }, target)).toEqual({ start: 20, end: 24 });
+    }, target)).toEqual({ start: 19, end: 23 });
+  });
+
+  it('covers the first page when reading from the top', () => {
+    const input = { file_path: 'src/main.ts', offset: 1, limit: 100 };
+    const target = resolveToolTarget(input, 'read');
+
+    expect(getToolLineInfo(input, target)).toEqual({ start: 1, end: 100 });
+  });
+
+  it('clamps a zero read offset to the first line', () => {
+    const input = { file_path: 'src/main.ts', offset: 0, limit: 50 };
+    const target = resolveToolTarget(input, 'read');
+
+    expect(getToolLineInfo(input, target)).toEqual({ start: 1, end: 50 });
   });
 
   it('summarizes shell-wrapped multiline commands like the TUI', () => {

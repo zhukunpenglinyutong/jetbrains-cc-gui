@@ -16,12 +16,10 @@ export function useCodexPetPreference() {
   }, []);
 
   const toggle = useCallback(() => {
-    setEnabledState((current) => {
-      const next = !current;
-      petBridge.setConfig({ enabled: next });
-      return next;
-    });
-  }, []);
+    const next = !enabled;
+    setEnabledState(next);
+    petBridge.setConfig({ enabled: next });
+  }, [enabled]);
 
   return { enabled, setEnabled, toggle };
 }

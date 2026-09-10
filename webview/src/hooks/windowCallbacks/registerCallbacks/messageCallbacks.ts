@@ -727,10 +727,13 @@ export function registerMessageCallbacks(
         if (message.type !== 'user') continue;
         if (getRawUuid(message)) continue;
 
-        const rawText = extractRawBlocks(message.raw)
-          .filter((block) => block?.type === 'text' && typeof block.text === 'string')
-          .map((block) => String(block.text))
-          .join('\n');
+        const rawTextParts: string[] = [];
+        for (const block of extractRawBlocks(message.raw)) {
+          if (block?.type === 'text' && typeof block.text === 'string') {
+            rawTextParts.push(String(block.text));
+          }
+        }
+        const rawText = rawTextParts.join('\n');
         if ((message.content || '') !== content && rawText !== content) continue;
 
         const raw: ClaudeMessage['raw'] =

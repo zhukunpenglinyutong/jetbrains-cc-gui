@@ -315,9 +315,10 @@ export function usePromptManagement(options: UsePromptManagementOptions = {}) {
     (selectedIds: string[], strategy: ConflictStrategy, scope: PromptScope) => {
       if (!importPreviewDialog.previewData) return;
 
-      const selectedPrompts = importPreviewDialog.previewData.items
-        .filter(item => selectedIds.includes(item.data.id))
-        .map(item => item.data);
+      const selectedIdSet = new Set(selectedIds);
+      const selectedPrompts = importPreviewDialog.previewData.items.flatMap(item =>
+        selectedIdSet.has(item.data.id) ? [item.data] : []
+      );
 
       const message: SaveImportedPromptsMessage = {
         scope,

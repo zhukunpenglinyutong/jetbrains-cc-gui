@@ -8,10 +8,13 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -29,6 +32,10 @@ public class SessionIndexManager {
     // Linear backoff base. Sleeps happen while holding indexFileLock, so keep the worst-case
     // total (sum 1..N-1 * base) within ~100ms to avoid blocking concurrent index reads/writes.
     private static final long INDEX_REPLACE_RETRY_DELAY_MS = 10L;
+    private static final Pattern CLAUDE_SESSION_FILE_PATTERN = Pattern.compile(
+            "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.jsonl$",
+            Pattern.CASE_INSENSITIVE
+    );
 
     // v7 (2026-08): Codex 0.148+ CLI rollouts persist the user prompt as
     // response_item/role=user instead of event_msg/user_message. v6 indexes can
@@ -54,7 +61,12 @@ public class SessionIndexManager {
         this(defaultCacheDir());
     }
 
-    SessionIndexManager(Path codemossCacheDir) {
+    /**
+     * Creates an index manager that stores files under the given cache directory.
+     *
+     * @param codemossCacheDir cache directory for index files
+     */
+    public SessionIndexManager(Path codemossCacheDir) {
         this.codemossCacheDir = codemossCacheDir;
         ensureCacheDir();
     }
@@ -101,7 +113,7 @@ public class SessionIndexManager {
      */
     public enum UpdateType {
         NONE,           // No update needed
-        INCREMENTAL,    // Incremental update (new files only)
+        INCREMENTAL,    // Incremental update (new or modified files)
         FULL            // Full rebuild
     }
 
@@ -178,10 +190,15 @@ public class SessionIndexManager {
     }
 
     /**
-     * Saves the Claude index.
+     * Saves one Claude project entry while preserving concurrent updates to other projects.
+     *
+     * @param projectPath  the Claude project path used as the index key
+     * @param projectIndex the refreshed project index
      */
-    public void saveClaudeIndex(SessionIndex index) {
+    public void saveClaudeProjectIndex(String projectPath, ProjectIndex projectIndex) {
         synchronized (indexFileLock) {
+            SessionIndex index = readIndex(getClaudeIndexPath());
+            index.projects.put(projectPath, projectIndex);
             saveIndex(getClaudeIndexPath(), index);
         }
     }
@@ -336,38 +353,112 @@ public class SessionIndexManager {
      * @return the update type
      */
     public UpdateType getUpdateType(ProjectIndex projectIndex, Path projectDir) {
-        if (projectIndex == null || projectIndex.sessions.isEmpty()) {
+        if (projectIndex == null || projectIndex.sessions == null) {
+            return UpdateType.FULL;
+        }
+        if (projectDir == null || !Files.isDirectory(projectDir)) {
             return UpdateType.FULL;
         }
 
         try {
-            // Check file count
-            long currentFileCount;
+            List<Path> currentFiles = new ArrayList<>();
             try (Stream<Path> paths = Files.list(projectDir)) {
-                currentFileCount = paths.filter(p -> p.toString().endsWith(".jsonl")).count();
+                paths.filter(Files::isRegularFile)
+                        .filter(p -> p.toString().endsWith(".jsonl"))
+                        .forEach(currentFiles::add);
             }
 
-            if (currentFileCount == projectIndex.fileCount) {
-                // File count unchanged; check directory modification time
-                long currentDirModified = Files.getLastModifiedTime(projectDir).toMillis();
-                if (currentDirModified <= projectIndex.lastDirScanTime) {
-                    return UpdateType.NONE;
-                }
-                // Directory timestamp changed but file count is the same -- content may have changed, requiring a full update
-                return UpdateType.FULL;
-            } else if (currentFileCount > projectIndex.fileCount) {
-                // File count increased; an incremental update is sufficient
-                LOG.info("[SessionIndexManager] File count increased: " + projectIndex.fileCount + " -> " + currentFileCount + ", incremental update");
+            long currentFileCount = currentFiles.size();
+            if (currentFileCount > projectIndex.fileCount) {
+                // New files can be added without re-reading unchanged sessions.
+                LOG.info("[SessionIndexManager] File count increased: " + projectIndex.fileCount
+                        + " -> " + currentFileCount + ", incremental update");
                 return UpdateType.INCREMENTAL;
-            } else {
-                // File count decreased; a full update is needed
-                LOG.info("[SessionIndexManager] File count decreased: " + projectIndex.fileCount + " -> " + currentFileCount + ", full update");
+            }
+            if (currentFileCount < projectIndex.fileCount) {
+                // A deleted file must be removed from the index, so rebuild the project.
+                LOG.info("[SessionIndexManager] File count decreased: " + projectIndex.fileCount
+                        + " -> " + currentFileCount + ", full update");
                 return UpdateType.FULL;
             }
+
+            Map<String, BasicFileAttributes> currentFileAttributes = new HashMap<>();
+            for (Path currentFile : currentFiles) {
+                String relativePath = normalizeRelativePath(currentFile.getFileName().toString());
+                currentFileAttributes.put(
+                        relativePath,
+                        Files.readAttributes(currentFile, BasicFileAttributes.class)
+                );
+            }
+
+            Set<String> indexedPaths = new HashSet<>();
+            boolean hasChangedFile = false;
+            for (SessionIndexEntry entry : projectIndex.sessions) {
+                if (entry == null || entry.sessionId == null || entry.sessionId.isEmpty()) {
+                    return UpdateType.FULL;
+                }
+
+                String indexedPath = entry.fileRelativePath;
+                if (indexedPath == null || indexedPath.isEmpty()) {
+                    indexedPath = entry.sessionId + ".jsonl";
+                }
+                indexedPath = normalizeRelativePath(indexedPath);
+                indexedPaths.add(indexedPath);
+
+                BasicFileAttributes currentAttributes = currentFileAttributes.get(indexedPath);
+                if (currentAttributes == null) {
+                    // Rebuild the index when a session file disappears, matching a reduced file count.
+                    return UpdateType.FULL;
+                }
+                if (entry.fileLastModified <= 0
+                        || entry.fileLastModified != currentAttributes.lastModifiedTime().toMillis()
+                        || entry.fileSize != currentAttributes.size()
+                        || entry.entrypoint == null) {
+                    hasChangedFile = true;
+                }
+            }
+
+            if (hasChangedFile) {
+                // Claude appends to existing JSONL files, which changes file metadata but not
+                // the project directory mtime. Let the existing incremental scanner refresh them.
+                return UpdateType.INCREMENTAL;
+            }
+
+            long currentDirModified = Files.getLastModifiedTime(projectDir).toMillis();
+            if (currentDirModified > projectIndex.lastDirScanTime) {
+                // Detect a new Claude session that replaced another file while the total file
+                // count stayed constant. Non-UUID JSONL files are intentionally ignored by
+                // Claude's reader. Gated on the directory mtime so a file that exists but never
+                // produces an index entry (single-message, warmup, or truncated session) does
+                // not trigger a rescan on every read.
+                for (String currentPath : currentFileAttributes.keySet()) {
+                    if (!indexedPaths.contains(currentPath)
+                            && isClaudeSessionFile(currentPath)
+                            && currentFileAttributes.get(currentPath).size() > 0) {
+                        return UpdateType.INCREMENTAL;
+                    }
+                }
+                // A directory change not explained by a known session requires a full rebuild.
+                return UpdateType.FULL;
+            }
+            return UpdateType.NONE;
+        } catch (UncheckedIOException e) {
+            LOG.warn("[SessionIndexManager] Failed to check update type: " + e.getMessage());
+            return UpdateType.FULL;
         } catch (IOException e) {
             LOG.warn("[SessionIndexManager] Failed to check update type: " + e.getMessage());
             return UpdateType.FULL;
         }
+    }
+
+    private static String normalizeRelativePath(String path) {
+        return path.replace('\\', '/').toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean isClaudeSessionFile(String relativePath) {
+        int separator = relativePath.lastIndexOf('/');
+        String fileName = separator >= 0 ? relativePath.substring(separator + 1) : relativePath;
+        return CLAUDE_SESSION_FILE_PATTERN.matcher(fileName).matches();
     }
 
     /**

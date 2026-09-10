@@ -86,13 +86,14 @@ export function useThemeInit() {
     let retryCount = 0;
     const MAX_RETRIES = 20; // Max 20 retries (2 seconds)
 
+    let retryTimer: number | undefined;
     const requestIdeTheme = () => {
       if (window.sendToJava) {
         window.sendToJava('get_ide_theme:');
       } else {
         retryCount++;
         if (retryCount < MAX_RETRIES) {
-          setTimeout(requestIdeTheme, 100);
+          retryTimer = window.setTimeout(requestIdeTheme, 100);
         } else {
           // If in Follow IDE mode and unable to get IDE theme, use injected theme or dark as fallback
           if (savedTheme === null || savedTheme === 'system') {
@@ -104,7 +105,13 @@ export function useThemeInit() {
     };
 
     // Delay 100ms before requesting, giving the bridge time to initialize
-    setTimeout(requestIdeTheme, 100);
+    retryTimer = window.setTimeout(requestIdeTheme, 100);
+
+    return () => {
+      clearTimeout(retryTimer);
+      window.onIdeThemeReceived = undefined;
+      window.onIdeThemeChanged = undefined;
+    };
   }, []);
 
   // Re-apply theme when IDE theme changes (if user chose "Follow IDE")

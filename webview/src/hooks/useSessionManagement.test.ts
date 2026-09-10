@@ -66,6 +66,31 @@ describe('useSessionManagement', () => {
     expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
   });
 
+  it('discards queued messages when the session transitions', () => {
+    const mocks = createMocks();
+    const clearQueuedMessages = vi.fn();
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData: null,
+        currentSessionId: 'old-session',
+        ...mocks,
+        t,
+        clearQueuedMessages,
+      })
+    );
+
+    act(() => {
+      result.current.createNewSession();
+    });
+
+    // Queued messages belong to the outgoing session; the transition must
+    // drop them before the next session's queue-auto-execute can see them.
+    expect(clearQueuedMessages).toHaveBeenCalledTimes(1);
+  });
+
   it('clears stale ui state before loading history', () => {
     const historyData = {
       success: true,

@@ -398,15 +398,17 @@ export function getMessageText(
     } else if (typeof raw.content === 'string') {
       text = raw.content;
     } else if (Array.isArray(raw.content)) {
-      text = raw.content
-        .filter((block) => block && block.type === 'text')
-        .map((block) => block.text ?? '')
-        .join('\n');
+      const parts: string[] = [];
+      for (const block of raw.content) {
+        if (block && block.type === 'text') parts.push(block.text ?? '');
+      }
+      text = parts.join('\n');
     } else if (raw.message?.content && Array.isArray(raw.message.content)) {
-      text = raw.message.content
-        .filter((block) => block && block.type === 'text')
-        .map((block) => block.text ?? '')
-        .join('\n');
+      const parts: string[] = [];
+      for (const block of raw.message.content) {
+        if (block && block.type === 'text') parts.push(block.text ?? '');
+      }
+      text = parts.join('\n');
     } else {
       return `(${t('chat.emptyMessage')})`;
     }
@@ -478,18 +480,20 @@ export function shouldShowMessage(
     if (typeof raw === 'string') return raw;
     if (typeof raw.content === 'string') return raw.content;
     if (Array.isArray(raw.content)) {
-      return raw.content
-        .filter((block) => block && block.type === 'text')
-        .map((block) => block.text ?? '')
-        .join('\n');
+      const parts: string[] = [];
+      for (const block of raw.content) {
+        if (block && block.type === 'text') parts.push(block.text ?? '');
+      }
+      return parts.join('\n');
     }
     if (raw.message?.content) {
       if (typeof raw.message.content === 'string') return raw.message.content;
       if (Array.isArray(raw.message.content)) {
-        return raw.message.content
-          .filter((block) => block && block.type === 'text')
-          .map((block) => block.text ?? '')
-          .join('\n');
+        const parts: string[] = [];
+        for (const block of raw.message.content) {
+          if (block && block.type === 'text') parts.push(block.text ?? '');
+        }
+        return parts.join('\n');
       }
     }
     return '';

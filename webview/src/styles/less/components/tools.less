@@ -467,3 +467,261 @@
 [data-theme="light"] .bash-timeline-content.expanded {
     background-color: rgba(0, 0, 0, 0.04);
 }
+
+/* Report findings card: keep the review actionable without exposing its raw JSON payload. */
+.report-findings-container {
+    border-color: var(--color-link);
+}
+
+.report-findings-header {
+    width: 100%;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+}
+
+.report-findings-header:focus-visible,
+.report-finding-toggle:focus-visible,
+.report-finding-location:focus-visible {
+    outline: 1px solid var(--color-link);
+    outline-offset: -2px;
+}
+
+.report-findings-count {
+    margin-left: 8px;
+    color: var(--text-tertiary);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.report-findings-chevron {
+    color: var(--text-tertiary);
+    font-size: 12px;
+}
+
+.report-findings-content {
+    background: var(--bg-primary);
+}
+
+.report-findings-summary {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-primary);
+    color: var(--text-tertiary);
+    font-size: 12px;
+}
+
+.report-findings-summary-item,
+.report-findings-level {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 20px;
+    padding: 2px 6px;
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+}
+
+.report-findings-summary-item.confirmed {
+    color: var(--color-success);
+}
+
+.report-findings-summary-item.plausible {
+    color: var(--color-warning);
+}
+
+.report-findings-level {
+    color: var(--text-tertiary);
+    margin-left: auto;
+}
+
+.report-findings-empty {
+    padding: 8px 12px;
+    color: var(--color-success);
+}
+
+.report-findings-list {
+    max-height: 520px;
+    overflow-y: auto;
+    padding: 4px 8px 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb, rgba(128, 128, 128, 0.4)) transparent;
+}
+
+.report-findings-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.report-findings-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.report-findings-list::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb, rgba(128, 128, 128, 0.4));
+    border-radius: 3px;
+}
+
+.report-finding-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    padding: 9px 4px;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.report-finding-row:last-child {
+    border-bottom: 0;
+}
+
+.report-finding-main {
+    min-width: 0;
+}
+
+.report-finding-title-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+    line-height: 1.35;
+}
+
+.report-finding-verdict-icon {
+    flex: 0 0 auto;
+    font-size: 14px;
+}
+
+.report-finding-row.confirmed .report-finding-verdict-icon,
+.report-finding-verdict-confirmed {
+    color: var(--color-success);
+}
+
+.report-finding-row.plausible .report-finding-verdict-icon,
+.report-finding-verdict-plausible {
+    color: var(--color-warning);
+}
+
+.report-finding-row.unverified .report-finding-verdict-icon {
+    color: var(--text-tertiary);
+}
+
+.report-finding-title {
+    min-width: 0;
+    flex: 1 1 180px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.report-finding-category,
+.report-finding-verdict,
+.report-finding-outcome {
+    display: inline-flex;
+    align-items: center;
+    min-height: 18px;
+    padding: 1px 5px;
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.report-finding-category {
+    color: var(--text-secondary);
+}
+
+.report-finding-verdict,
+.report-finding-outcome-fixed {
+    border-color: transparent;
+}
+
+.report-finding-outcome-fixed {
+    color: var(--color-success);
+}
+
+.report-finding-outcome-skipped,
+.report-finding-outcome-no_change_needed {
+    color: var(--text-tertiary);
+}
+
+.report-finding-location {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    margin-top: 5px;
+    padding: 2px 0 2px 20px;
+    border: 0;
+    background: transparent;
+    color: var(--color-link);
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    text-align: left;
+}
+
+.report-finding-location:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.report-finding-path {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.report-finding-line {
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+    font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
+}
+
+.report-finding-toggle {
+    align-self: start;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+}
+
+.report-finding-toggle:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.report-finding-details {
+    grid-column: 1 / -1;
+    margin: 2px 0 0 20px;
+    padding: 8px 0 0;
+    border-top: 1px solid var(--border-primary);
+}
+
+.report-finding-detail + .report-finding-detail {
+    margin-top: 8px;
+}
+
+.report-finding-detail-label {
+    margin-bottom: 3px;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.report-finding-detail .markdown-content {
+    color: var(--text-primary);
+    font-size: 12px;
+    line-height: 1.5;
+}

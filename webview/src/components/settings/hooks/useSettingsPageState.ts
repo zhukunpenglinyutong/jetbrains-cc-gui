@@ -1,5 +1,5 @@
 // hooks/useSettingsPageState.ts
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SettingsTab } from '../SettingsSidebar';
 import type { AlertType } from '../../AlertDialog';
@@ -61,10 +61,7 @@ export function useSettingsPageState({
   }>({ isOpen: false, type: 'info', title: '', message: '' });
 
   // Determine whether to collapse: prefer manual setting, otherwise auto-detect based on window width
-  const isCollapsed = useMemo(
-    () => (manualCollapsed !== null ? manualCollapsed : windowWidth < AUTO_COLLAPSE_THRESHOLD),
-    [manualCollapsed, windowWidth]
-  );
+  const isCollapsed = manualCollapsed !== null ? manualCollapsed : windowWidth < AUTO_COLLAPSE_THRESHOLD;
 
   // Listen for window resize events
   useEffect(() => {

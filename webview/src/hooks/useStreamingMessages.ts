@@ -102,9 +102,10 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
   const syncTextBlocksWithContent = (blocks: ContentBlock[], content: string): ContentBlock[] => {
     if (!content) return blocks;
 
-    const textIndices = blocks
-      .map((block, index) => (block?.type === 'text' ? index : -1))
-      .filter((index) => index >= 0);
+    const textIndices: number[] = [];
+    blocks.forEach((block, index) => {
+      if (block?.type === 'text') textIndices.push(index);
+    });
 
     if (textIndices.length === 0) {
       return [...blocks, { type: 'text', text: content }];
@@ -221,9 +222,10 @@ export function useStreamingMessages(): UseStreamingMessagesReturn {
   const syncThinkingBlocksWithContent = (blocks: ContentBlock[], thinking: string): ContentBlock[] => {
     if (!thinking) return blocks;
 
-    const thinkingIndices = blocks
-      .map((block, index) => (block?.type === 'thinking' ? index : -1))
-      .filter((index) => index >= 0);
+    const thinkingIndices: number[] = [];
+    blocks.forEach((block, index) => {
+      if (block?.type === 'thinking') thinkingIndices.push(index);
+    });
 
     if (thinkingIndices.length === 0) {
       return [{ type: 'thinking', thinking, text: thinking }, ...blocks];

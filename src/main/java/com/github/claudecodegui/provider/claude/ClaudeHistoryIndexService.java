@@ -6,6 +6,7 @@ import com.github.claudecodegui.util.PathUtils;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -46,11 +47,21 @@ class ClaudeHistoryIndexService {
     private final Path projectsDir;
     private final ClaudeHistoryParser parser;
     private final ClaudeSessionLiteReader liteReader;
+    private final SessionIndexManager indexManager;
 
     ClaudeHistoryIndexService(Path projectsDir, ClaudeHistoryParser parser) {
+        this(projectsDir, parser, SessionIndexManager.getInstance());
+    }
+
+    ClaudeHistoryIndexService(
+            Path projectsDir,
+            ClaudeHistoryParser parser,
+            SessionIndexManager indexManager
+    ) {
         this.projectsDir = projectsDir;
         this.parser = parser;
         this.liteReader = new ClaudeSessionLiteReader();
+        this.indexManager = indexManager;
     }
 
     /**
@@ -74,9 +85,15 @@ class ClaudeHistoryIndexService {
             return new ArrayList<>();
         }
 
-        // 1. Check memory cache (only for non-paginated requests)
+        // Claude appends messages without changing the parent directory mtime, so inspect files
+        // before trusting the in-memory cache.
+        SessionIndexManager.SessionIndex index = this.indexManager.readClaudeIndex();
+        SessionIndexManager.ProjectIndex projectIndex = index.projects.get(projectPath);
+        SessionIndexManager.UpdateType updateType = this.indexManager.getUpdateType(projectIndex, projectDir);
+
+        // Use the memory cache only after the per-file index check confirms that no session changed.
         SessionIndexCache cache = SessionIndexCache.getInstance();
-        if (limit == 0 && offset == 0) {
+        if (limit == 0 && offset == 0 && updateType == SessionIndexManager.UpdateType.NONE) {
             List<ClaudeHistoryReader.SessionInfo> cachedSessions = cache.getClaudeSessions(projectPath, projectDir);
             if (cachedSessions != null) {
                 LOG.info("[ClaudeHistoryIndexService] Using memory cache for " + projectPath + ", sessions: " + cachedSessions.size());
@@ -84,18 +101,17 @@ class ClaudeHistoryIndexService {
             }
         }
 
-        // 2. Check index file and determine update type
-        SessionIndexManager indexManager = SessionIndexManager.getInstance();
-        SessionIndexManager.SessionIndex index = indexManager.readClaudeIndex();
-        SessionIndexManager.ProjectIndex projectIndex = index.projects.get(projectPath);
-        SessionIndexManager.UpdateType updateType = indexManager.getUpdateType(projectIndex, projectDir);
-
         if (updateType == SessionIndexManager.UpdateType.NONE) {
             // Index is valid, restore from index
             LOG.info("[ClaudeHistoryIndexService] Using file index for " + projectPath + ", sessions: " + projectIndex.sessions.size());
             List<ClaudeHistoryReader.SessionInfo> restored = restoreSessionsFromIndex(projectIndex);
             // Apply pagination if needed
-            List<ClaudeHistoryReader.SessionInfo> paged = applySortAndLimit(restored, limit, offset);
+            List<ClaudeHistoryReader.SessionInfo> paged = applySortAndLimit(
+                    restored,
+                    limit,
+                    offset,
+                    getIndexedMtimes(projectIndex)
+            );
             // Update memory cache (full list, reuse already-restored list)
             if (limit == 0 && offset == 0) {
                 cache.updateClaudeCache(projectPath, projectDir, restored);
@@ -107,11 +123,15 @@ class ClaudeHistoryIndexService {
 
         ScanResult scanResult;
         if (updateType == SessionIndexManager.UpdateType.INCREMENTAL && projectIndex != null) {
-            // 3a. Incremental update: only scan new files using lite-read
+            // Incremental scanning preserves unchanged summaries and refreshes only new or modified files.
             LOG.info("[ClaudeHistoryIndexService] Incremental scan for " + projectPath);
-            scanResult = incrementalScanLite(projectDir, projectIndex);
+            ScanResult incremental = incrementalScanLite(projectDir, projectIndex);
+            scanResult = new ScanResult(
+                    applySortAndLimit(incremental.sessions, limit, offset, incremental.sessionMtimes),
+                    incremental.sessionMtimes
+            );
         } else {
-            // 3b. Full scan using lite-read with pagination support
+            // Full scan using lite-read with pagination support
             LOG.info("[ClaudeHistoryIndexService] Full scan for " + projectPath);
             scanResult = scanProjectSessionsLite(projectDir, limit, offset);
         }
@@ -119,11 +139,15 @@ class ClaudeHistoryIndexService {
         long scanTime = System.currentTimeMillis() - startTime;
         LOG.info("[ClaudeHistoryIndexService] Scan completed in " + scanTime + "ms, sessions: " + scanResult.sessions.size());
 
-        // 4. Update index (for non-paginated full scans)
+        // Persist the refreshed index only for non-paginated requests.
         if (limit == 0 && offset == 0) {
-            updateProjectIndex(index, projectPath, projectDir, scanResult.sessions, scanResult.sessionMtimes);
-            indexManager.saveClaudeIndex(index);
-            // 5. Update memory cache
+            SessionIndexManager.ProjectIndex refreshedProjectIndex = updateProjectIndex(
+                    projectDir,
+                    scanResult.sessions,
+                    scanResult.sessionMtimes
+            );
+            this.indexManager.saveClaudeProjectIndex(projectPath, refreshedProjectIndex);
+            // Update the in-memory cache
             cache.updateClaudeCache(projectPath, projectDir, scanResult.sessions);
         }
 
@@ -156,7 +180,7 @@ class ClaudeHistoryIndexService {
         Map<String, SessionIndexManager.SessionIndexEntry> indexedById = new HashMap<>();
         for (SessionIndexManager.SessionIndexEntry entry : existingIndex.sessions) {
             if (entry != null && entry.sessionId != null) {
-                indexedById.put(entry.sessionId, entry);
+                indexedById.put(normalizeSessionId(entry.sessionId), entry);
             }
         }
 
@@ -183,7 +207,7 @@ class ClaudeHistoryIndexService {
                             skipped.incrementAndGet();
                             return;
                         }
-                        if (attrs.size() <= 0) {
+                        if (!attrs.isRegularFile() || attrs.size() <= 0) {
                             skipped.incrementAndGet();
                             return;
                         }
@@ -193,8 +217,9 @@ class ClaudeHistoryIndexService {
                         if (indexed == null) {
                             newFiles.add(p);
                         } else if (indexed.fileLastModified <= 0 || indexed.fileLastModified != mtime
+                                || indexed.fileSize != attrs.size()
                                 || indexed.entrypoint == null) {
-                            // Re-read when the mtime drifted (active session appended, or legacy
+                            // Re-read when file metadata drifted (active session appended, or legacy
                             // entry without mtime) or when entrypoint was never extracted (entry
                             // persisted by a writer predating extraction) -- restoring such an
                             // entry verbatim would freeze the missing field forever.
@@ -205,11 +230,14 @@ class ClaudeHistoryIndexService {
                             sessionMtimes.put(sessionId, mtime);
                         }
                     });
+        } catch (UncheckedIOException e) {
+            throw e.getCause();
         }
 
         List<ClaudeHistoryReader.SessionInfo> sessions = new ArrayList<>();
         for (SessionIndexManager.SessionIndexEntry entry : existingIndex.sessions) {
-            if (entry != null && entry.sessionId != null && restoredIds.contains(entry.sessionId)) {
+            String sessionId = entry != null ? normalizeSessionId(entry.sessionId) : null;
+            if (sessionId != null && restoredIds.contains(sessionId)) {
                 sessions.add(restoreEntry(entry));
             }
         }
@@ -228,7 +256,7 @@ class ClaudeHistoryIndexService {
                 + newSessions.size() + " new, " + restoredIds.size() + " unchanged, "
                 + skipped.get() + " skipped");
 
-        sessions.sort((a, b) -> Long.compare(b.lastTimestamp, a.lastTimestamp));
+        sessions.sort((a, b) -> compareSessions(a, b, sessionMtimes));
         return new ScanResult(sessions, sessionMtimes);
     }
 
@@ -273,7 +301,7 @@ class ClaudeHistoryIndexService {
                         if (doStat) {
                             try {
                                 BasicFileAttributes attrs = Files.readAttributes(p, BasicFileAttributes.class);
-                                if (attrs.size() <= 0) {
+                                if (!attrs.isRegularFile() || attrs.size() <= 0) {
                                     return;
                                 }
                                 mtime = attrs.lastModifiedTime().toMillis();
@@ -284,9 +312,39 @@ class ClaudeHistoryIndexService {
 
                         candidates.add(new SessionCandidate(sessionId, p, mtime));
                     });
+        } catch (UncheckedIOException e) {
+            throw e.getCause();
         }
 
         return candidates;
+    }
+
+    private static int compareSessions(
+            ClaudeHistoryReader.SessionInfo first,
+            ClaudeHistoryReader.SessionInfo second,
+            Map<String, Long> sessionMtimes
+    ) {
+        long firstTimestamp = getSortTimestamp(first, sessionMtimes);
+        long secondTimestamp = getSortTimestamp(second, sessionMtimes);
+        int timestampComparison = Long.compare(secondTimestamp, firstTimestamp);
+        if (timestampComparison != 0) {
+            return timestampComparison;
+        }
+        String firstId = first.sessionId != null ? first.sessionId : "";
+        String secondId = second.sessionId != null ? second.sessionId : "";
+        return secondId.compareTo(firstId);
+    }
+
+    private static long getSortTimestamp(
+            ClaudeHistoryReader.SessionInfo session,
+            Map<String, Long> sessionMtimes
+    ) {
+        Long mtime = sessionMtimes.get(normalizeSessionId(session.sessionId));
+        return mtime != null && mtime > 0 ? mtime : session.lastTimestamp;
+    }
+
+    private static String normalizeSessionId(String sessionId) {
+        return sessionId != null ? sessionId.toLowerCase(Locale.ROOT) : null;
     }
 
     /**
@@ -302,7 +360,7 @@ class ClaudeHistoryIndexService {
         if (!UUID_PATTERN.matcher(sessionId).matches()) {
             return null;
         }
-        return sessionId.toLowerCase(); // Normalize to lowercase for consistency
+        return normalizeSessionId(sessionId);
     }
 
     /**
@@ -361,8 +419,7 @@ class ClaudeHistoryIndexService {
             i = batchEnd;
         }
 
-        // Final sort by lastTimestamp to ensure correct order
-        sessions.sort((a, b) -> Long.compare(b.lastTimestamp, a.lastTimestamp));
+        sessions.sort((a, b) -> compareSessions(a, b, sessionMtimes));
 
         return sessions;
     }
@@ -384,14 +441,10 @@ class ClaudeHistoryIndexService {
                         return new ReadResult(convertToSessionInfo(liteInfo), liteInfo.lastModified);
                     }
                     // Fallback to full scan if lite-read fails.
-                    ClaudeHistoryReader.SessionInfo info = fallbackFullScan(path);
-                    long mtime = info != null ? safeStatMillis(path) : 0L;
-                    return new ReadResult(info, mtime);
+                    return readFallback(path);
                 } catch (Exception e) {
                     LOG.debug("[ClaudeHistoryIndexService] Lite-read failed for " + path + ", trying fallback: " + e.getMessage());
-                    ClaudeHistoryReader.SessionInfo info = fallbackFullScan(path);
-                    long mtime = info != null ? safeStatMillis(path) : 0L;
-                    return new ReadResult(info, mtime);
+                    return readFallback(path);
                 }
             }, LITE_READ_POOL));
         }
@@ -411,11 +464,18 @@ class ClaudeHistoryIndexService {
         return results;
     }
 
-    private static long safeStatMillis(Path path) {
+    private ReadResult readFallback(Path path) {
+        ClaudeHistoryReader.SessionInfo info = fallbackFullScan(path);
+        if (info == null) {
+            return new ReadResult(null, 0L);
+        }
+        info.sessionId = normalizeSessionId(info.sessionId);
         try {
-            return Files.getLastModifiedTime(path).toMillis();
+            BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class);
+            info.fileSize = attrs.size();
+            return new ReadResult(info, attrs.lastModifiedTime().toMillis());
         } catch (IOException e) {
-            return 0L;
+            return new ReadResult(info, 0L);
         }
     }
 
@@ -458,9 +518,10 @@ class ClaudeHistoryIndexService {
     private List<ClaudeHistoryReader.SessionInfo> applySortAndLimit(
             List<ClaudeHistoryReader.SessionInfo> sessions,
             int limit,
-            int offset
+            int offset,
+            Map<String, Long> sessionMtimes
     ) {
-        sessions.sort((a, b) -> Long.compare(b.lastTimestamp, a.lastTimestamp));
+        sessions.sort((a, b) -> compareSessions(a, b, sessionMtimes));
 
         if (offset > 0) {
             sessions = sessions.subList(Math.min(offset, sessions.size()), sessions.size());
@@ -471,6 +532,16 @@ class ClaudeHistoryIndexService {
         }
 
         return new ArrayList<>(sessions);
+    }
+
+    private Map<String, Long> getIndexedMtimes(SessionIndexManager.ProjectIndex projectIndex) {
+        Map<String, Long> sessionMtimes = new HashMap<>();
+        for (SessionIndexManager.SessionIndexEntry entry : projectIndex.sessions) {
+            if (entry != null && entry.sessionId != null && entry.fileLastModified > 0) {
+                sessionMtimes.put(normalizeSessionId(entry.sessionId), entry.fileLastModified);
+            }
+        }
+        return sessionMtimes;
     }
 
     /**
@@ -489,7 +560,7 @@ class ClaudeHistoryIndexService {
      */
     private ClaudeHistoryReader.SessionInfo restoreEntry(SessionIndexManager.SessionIndexEntry entry) {
         ClaudeHistoryReader.SessionInfo session = new ClaudeHistoryReader.SessionInfo();
-        session.sessionId = entry.sessionId;
+        session.sessionId = normalizeSessionId(entry.sessionId);
         session.title = entry.title;
         session.messageCount = entry.messageCount;
         session.lastTimestamp = entry.lastTimestamp;
@@ -504,9 +575,7 @@ class ClaudeHistoryIndexService {
      * Update project index. Uses mtimes captured during the scan phase so no second
      * stat call is required.
      */
-    private void updateProjectIndex(
-            SessionIndexManager.SessionIndex index,
-            String projectPath,
+    private SessionIndexManager.ProjectIndex updateProjectIndex(
             Path projectDir,
             List<ClaudeHistoryReader.SessionInfo> sessions,
             Map<String, Long> sessionMtimes
@@ -515,7 +584,10 @@ class ClaudeHistoryIndexService {
         projectIndex.lastDirScanTime = System.currentTimeMillis();
 
         try (Stream<Path> paths = Files.list(projectDir)) {
-            projectIndex.fileCount = (int) paths.filter(p -> p.toString().endsWith(".jsonl")).count();
+            projectIndex.fileCount = (int) paths.filter(p -> p.toString().endsWith(".jsonl"))
+                    .filter(Files::isRegularFile).count();
+        } catch (UncheckedIOException e) {
+            projectIndex.fileCount = sessions.size();
         } catch (IOException e) {
             projectIndex.fileCount = sessions.size();
         }
@@ -538,7 +610,7 @@ class ClaudeHistoryIndexService {
             projectIndex.sessions.add(entry);
         }
 
-        index.projects.put(projectPath, projectIndex);
+        return projectIndex;
     }
 
     /**

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatCountdown } from '../utils/helpers';
 import { useDialogCountdownTimeout } from '../hooks/useDialogCountdownTimeout';
@@ -35,8 +35,10 @@ const formatInputValue = (value: unknown): string => {
   }
   if (Array.isArray(value)) {
     return value
-      .map((item) => formatInputValue(item))
-      .filter(Boolean)
+      .flatMap((item) => {
+        const text = formatInputValue(item);
+        return text ? [text] : [];
+      })
       .join('\n');
   }
   if (typeof value === 'object') {
@@ -65,10 +67,13 @@ const getCommandContent = (inputs: Record<string, unknown>): string => {
     return formatInputValue(inputs.text);
   }
   // For other tools, format all inputs (skip internal policy fields)
-  return Object.entries(inputs)
-    .filter(([key]) => !key.startsWith('_'))
-    .map(([key, value]) => `${key}: ${formatInputValue(value)}`)
-    .join('\n');
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(inputs)) {
+    if (!key.startsWith('_')) {
+      lines.push(`${key}: ${formatInputValue(value)}`);
+    }
+  }
+  return lines.join('\n');
 };
 
 // Derive the working-directory / path label from the tool inputs.
@@ -134,12 +139,11 @@ const PermissionDialog = ({
     }
   }, [isOpen, request?.channelId, setDialogHeight]);
 
+  // Latest-handler ref: the keydown subscription stays stable across
+  // selectedIndex/callback changes instead of re-subscribing every render.
+  const keydownHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {});
   useEffect(() => {
-    if (!isOpen || !request) {
-      return;
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
+    keydownHandlerRef.current = (e: KeyboardEvent) => {
       if (isEditableEventTarget(e.target)) {
         return;
       }
@@ -158,18 +162,22 @@ const PermissionDialog = ({
         setSelectedIndex(prev => Math.min(2, prev + 1));
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        setSelectedIndex(current => {
-          if (current === 0) handleApprove();
-          else if (current === 1) handleApproveAlways();
-          else if (current === 2) handleSkip();
-          return current;
-        });
+        if (selectedIndex === 0) handleApprove();
+        else if (selectedIndex === 1) handleApproveAlways();
+        else if (selectedIndex === 2) handleSkip();
       }
     };
+  });
 
+  useEffect(() => {
+    if (!isOpen || !request) {
+      return;
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => keydownHandlerRef.current(e);
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, request, handleApprove, handleApproveAlways, handleSkip]);
+  }, [isOpen, request]);
 
   // Derived display values are memoized so the per-second countdown re-render
   // does not re-run command formatting (which may JSON.stringify inputs).

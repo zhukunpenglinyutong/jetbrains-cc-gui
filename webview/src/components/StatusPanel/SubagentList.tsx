@@ -66,8 +66,9 @@ const SubagentRow = memo(({ subagent, isExpanded, history, canLoad, onToggle, t 
 });
 
 SubagentRow.displayName = 'SubagentRow';
+const EMPTY_HISTORIES: SubagentListProps['histories'] = {};
 
-const SubagentList = memo(({ subagents, histories = {}, currentSessionId, currentProvider }: SubagentListProps) => {
+const SubagentList = memo(({ subagents, histories = EMPTY_HISTORIES, currentSessionId, currentProvider }: SubagentListProps) => {
   const { t } = useTranslation();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 

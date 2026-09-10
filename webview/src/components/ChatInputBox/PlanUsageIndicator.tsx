@@ -1,19 +1,16 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  clampPercent,
-  formatFullReset,
-  formatShortReset,
   nextWindowId,
-  paceColor,
   readStoredWindowId,
   resolveDisplayWindow,
-  resolveTimeBudget,
-  windowShortLabel,
-  worstPaceColor,
   writeStoredWindowId,
   type PlanUsageSnapshot,
 } from '../../utils/planUsagePace';
+import { PlanUsageLoading } from './PlanUsageLoading';
+import { PlanUsageUnavailable } from './PlanUsageUnavailable';
+import { PlanUsageBar } from './PlanUsageBar';
+import { buildPlanUsageTooltip, derivePlanUsageView } from './planUsageView';
 
 export interface PlanUsageIndicatorProps {
   snapshot: PlanUsageSnapshot | null;
@@ -49,156 +46,43 @@ export const PlanUsageIndicator: React.FC<PlanUsageIndicatorProps> = memo(({
     writeStoredWindowId(next);
   }, [canSwitch, windows, display?.windowId, windowId]);
 
-  const present = !!display && typeof display.capacityPct === 'number' && !!snapshot?.present;
-  const tp = present ? clampPercent(display!.capacityPct) : 0;
-  const tt = present
-    ? resolveTimeBudget({
-      resetAt: display!.resetAt,
-      periodStart: snapshot?.periodStart,
-      periodType: display!.periodType,
-    })
-    : null;
-  // Bar/% = selected window; trailing dot = worst across all windows.
-  const color = present ? paceColor(tp, tt) : 'neutral';
-  const worstColor = present && snapshot ? worstPaceColor(snapshot) : 'neutral';
-  const shortReset = present ? formatShortReset(display!.resetAt, i18n.language) : '';
-  const fullReset = present ? formatFullReset(display!.resetAt, i18n.language) : '';
-  const winLabel = windowShortLabel(display?.windowId || display?.periodType);
+  const { present, tp, color, worstColor, shortReset, fullReset, winLabel } =
+    derivePlanUsageView(snapshot, display, i18n.language);
 
-  const tooltip = useMemo(() => {
-    if (!present) {
-      return snapshot?.message
-        || t('chat.planUsage.unavailable', { defaultValue: 'Usage unavailable' });
-    }
-    const pct = Math.round(tp);
-    const period = display?.periodType || display?.windowId || 'limit';
-    const lines: string[] = [];
-    if (snapshot?.level) {
-      lines.push(snapshot.level.toUpperCase());
-    }
-    if (fullReset) {
-      lines.push(
-        t('chat.planUsage.tooltipWindowWithReset', {
-          period,
-          percent: pct,
-          value: fullReset,
-          defaultValue: '{{period}} {{percent}}% · Resets {{value}}',
-        }),
-      );
-    } else {
-      lines.push(
-        t('chat.planUsage.tooltipWindow', {
-          period,
-          percent: pct,
-          defaultValue: '{{period}} {{percent}}%',
-        }),
-      );
-    }
-    if (windows.length > 1) {
-      const others = windows
-        .map((w) => `${w.id} ${Math.round(w.usedPct)}%`)
-        .join(' · ');
-      lines.push(others);
-      if (worstColor !== color && worstColor !== 'neutral' && worstColor !== 'green') {
-        lines.push(
-          t('chat.planUsage.worstHint', {
-            color: worstColor,
-            defaultValue: 'Dot shows worst window ({{color}})',
-          }),
-        );
-      }
-      lines.push(
-        t('chat.planUsage.clickToSwitch', {
-          defaultValue: 'Click period label to switch window',
-        }),
-      );
-    }
-    if (snapshot?.stale) {
-      lines.push(
-        t('chat.planUsage.stale', {
-          defaultValue: 'Data may be outdated (refresh failed)',
-        }),
-      );
-    }
-    return lines.join('\n');
-  }, [present, snapshot?.message, snapshot?.level, snapshot?.stale, tp, fullReset, display, windows, worstColor, color, t]);
+  const tooltip = useMemo(() => buildPlanUsageTooltip({
+    present,
+    snapshot,
+    tp,
+    fullReset,
+    display,
+    windows,
+    worstColor,
+    color,
+    t,
+  }), [present, snapshot?.message, snapshot?.level, snapshot?.stale, tp, fullReset, display, windows, worstColor, color, t]);
 
   if (status === 'idle') return null;
 
   if (!present && status === 'loading') {
-    return (
-      <div
-        className="plan-usage loading has-tooltip"
-        data-tooltip={t('chat.planUsage.loading', { defaultValue: 'Loading usage…' })}
-        aria-label={t('chat.planUsage.loading', { defaultValue: 'Loading usage…' })}
-      >
-        <span className="plan-usage-label">…</span>
-      </div>
-    );
+    return <PlanUsageLoading t={t} />;
   }
 
   if (!present) {
-    return (
-      <div
-        className="plan-usage unavailable has-tooltip"
-        data-tooltip={tooltip}
-        aria-label={tooltip}
-      >
-        <span className="plan-usage-label">
-          {t('chat.planUsage.dash', { defaultValue: 'Usage —' })}
-        </span>
-      </div>
-    );
+    return <PlanUsageUnavailable tooltip={tooltip} t={t} />;
   }
 
-  const fillWidth = `${tp}%`;
-  const rounded = Math.round(tp);
-  const labelPct = tp > 0 && rounded === 0 ? '<1%' : `${rounded}%`;
-
   return (
-    <div
-      className={`plan-usage pace-${color} has-tooltip`}
-      data-tooltip={tooltip}
-      aria-label={tooltip}
-    >
-      <div className="plan-usage-bar" aria-hidden>
-        <div className="plan-usage-fill" style={{ width: fillWidth }} />
-      </div>
-      <span className="plan-usage-pct">{labelPct}</span>
-      {canSwitch || winLabel !== '·' ? (
-        <button
-          type="button"
-          className={`plan-usage-window${canSwitch ? ' switchable' : ''}`}
-          onClick={onCycleWindow}
-          disabled={!canSwitch}
-          title={
-            canSwitch
-              ? t('chat.planUsage.clickToSwitch', {
-                defaultValue: 'Click to switch between windows',
-              })
-              : undefined
-          }
-        >
-          {winLabel}
-        </button>
-      ) : null}
-      {shortReset ? (
-        <span className="plan-usage-reset">{shortReset}</span>
-      ) : null}
-      {/* Worst pace across all windows — after reset date */}
-      <span
-        className={`plan-usage-worst-dot pace-${worstColor}`}
-        aria-hidden
-        title={
-          worstColor !== 'neutral'
-            ? t('chat.planUsage.worstDot', {
-              color: worstColor,
-              defaultValue: 'Worst window: {{color}}',
-            })
-            : undefined
-        }
-      />
-    </div>
+    <PlanUsageBar
+      tooltip={tooltip}
+      color={color}
+      tp={tp}
+      canSwitch={canSwitch}
+      winLabel={winLabel}
+      onCycleWindow={onCycleWindow}
+      shortReset={shortReset}
+      worstColor={worstColor}
+      t={t}
+    />
   );
 });
 

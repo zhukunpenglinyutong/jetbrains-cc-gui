@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import ConfirmDialog from '../../ConfirmDialog';
+import { NodeProcessList } from './NodeProcessList';
 import { getAppViewport } from '../../../utils/viewport';
 import {
   fetchNodeProcesses,
@@ -33,133 +34,6 @@ const DROPDOWN_STYLE_EMBEDDED: React.CSSProperties = {
   overflowY: 'auto',
   overflowX: 'hidden',
   padding: '6px 0',
-};
-
-const GROUP_HEADER_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
-  padding: '6px 12px 4px',
-  fontSize: '11px',
-  fontWeight: 600,
-  color: 'var(--text-secondary)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-};
-
-const GROUP_HEADER_ORPHAN_STYLE: React.CSSProperties = {
-  ...GROUP_HEADER_STYLE,
-  color: 'var(--error-color, #d9534f)',
-};
-
-const PROCESS_ROW_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  padding: '6px 12px',
-  cursor: 'default',
-};
-
-const PROCESS_LEADING_ICON_STYLE: React.CSSProperties = {
-  fontSize: '14px',
-  flexShrink: 0,
-};
-
-const PROCESS_BODY_STYLE: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '2px',
-  minWidth: 0,
-  flex: 1,
-  overflow: 'hidden',
-};
-
-const PROCESS_TITLE_STYLE: React.CSSProperties = {
-  fontSize: '12px',
-  color: 'var(--text-primary)',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-};
-
-const PROCESS_META_STYLE: React.CSSProperties = {
-  fontSize: '11px',
-  color: 'var(--text-secondary)',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-};
-
-const PROCESS_ACTIONS_STYLE: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'row',
-  gap: '2px',
-  alignItems: 'center',
-  flexShrink: 0,
-};
-
-const ICON_BUTTON_STYLE: React.CSSProperties = {
-  background: 'transparent',
-  border: 'none',
-  borderRadius: '4px',
-  width: '24px',
-  height: '24px',
-  padding: 0,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  color: 'var(--text-secondary)',
-  cursor: 'pointer',
-  flexShrink: 0,
-  transition: 'background 0.15s, color 0.15s',
-};
-
-const ICON_BUTTON_DANGER_STYLE: React.CSSProperties = {
-  ...ICON_BUTTON_STYLE,
-  color: 'var(--error-color, #d9534f)',
-};
-
-const EMPTY_STATE_STYLE: React.CSSProperties = {
-  padding: '20px 12px',
-  textAlign: 'center',
-  color: 'var(--text-secondary)',
-  fontSize: '12px',
-};
-
-const FOOTER_STYLE: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'center',
-  padding: '6px 12px 2px',
-  borderTop: '1px solid var(--dropdown-border)',
-  marginTop: '4px',
-};
-
-const FOOTER_BUTTON_STYLE: React.CSSProperties = {
-  background: 'transparent',
-  border: 'none',
-  color: 'var(--error-color, #d9534f)',
-  fontSize: '11px',
-  cursor: 'pointer',
-  padding: '4px 8px',
-  borderRadius: '4px',
-};
-
-const REFRESH_ROW_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: '4px 12px 6px',
-  fontSize: '11px',
-  color: 'var(--text-secondary)',
-  borderBottom: '1px solid var(--dropdown-border)',
-};
-
-const REFRESH_BUTTON_STYLE: React.CSSProperties = {
-  background: 'transparent',
-  border: 'none',
-  color: 'var(--text-primary)',
-  cursor: 'pointer',
-  padding: '2px 6px',
 };
 
 const DROPDOWN_SIDE_OVERLAP_PX = 30;
@@ -233,39 +107,6 @@ export function getEmbeddedNodeProcessDropdownLayout({
     topOffset,
     horizontalOverlap,
   };
-}
-
-function formatUptime(ms: number): string {
-  if (ms <= 0) return '—';
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes <= 0) return '';
-  const mb = bytes / (1024 * 1024);
-  if (mb < 1) return `${(bytes / 1024).toFixed(0)} KB`;
-  if (mb < 1024) return `${mb.toFixed(1)} MB`;
-  return `${(mb / 1024).toFixed(2)} GB`;
-}
-
-function providerIcon(provider?: string, kind?: string): string {
-  if (kind === 'ORPHAN') return 'codicon-warning';
-  if (provider === 'claude') return 'codicon-server-process';
-  if (provider === 'codex') return 'codicon-comment-discussion';
-  return 'codicon-debug-disconnect';
-}
-
-function kindColor(kind: string): string {
-  if (kind === 'DAEMON') return '#3fb950';
-  if (kind === 'CHANNEL') return '#d29922';
-  if (kind === 'ORPHAN') return '#d9534f';
-  return 'var(--text-secondary)';
 }
 
 /**
@@ -477,108 +318,6 @@ export const NodeProcessSelect = ({ embedded = false, onClose, onToast }: NodePr
     };
   }, [pendingConfirm, t]);
 
-  const renderRow = (proc: NodeProcessInfo) => {
-    const isPending = pendingPids.has(proc.pid);
-    // The leading icon's color already encodes provider (claude=green, codex=yellow,
-    // orphan=red), so the title only carries the parts that are not already implied
-    // visually. Provider stays in the hover tooltip below for completeness.
-    const titleParts: string[] = [];
-    if (proc.kind === 'DAEMON') {
-      titleParts.push(t(`config.nodeProcesses.kind.daemonShort`, { defaultValue: 'Daemon' }));
-    } else if (proc.kind === 'CHANNEL') {
-      titleParts.push(t(`config.nodeProcesses.kind.channelShort`, { defaultValue: 'Channel' }));
-    } else {
-      titleParts.push(t(`config.nodeProcesses.kind.orphanShort`, { defaultValue: 'Orphan' }));
-    }
-    if (proc.tabName) titleParts.push(proc.tabName);
-    const titleText = titleParts.join(' · ');
-
-    const metaParts: string[] = [`PID ${proc.pid}`, formatUptime(proc.uptimeMs)];
-    if (typeof proc.heapUsed === 'number' && proc.heapUsed > 0) {
-      metaParts.push(formatBytes(proc.heapUsed));
-    }
-    if (proc.activeRequestCount > 0) {
-      metaParts.push(t('config.nodeProcesses.activeRequests', {
-        count: proc.activeRequestCount,
-        defaultValue: '{{count}} active',
-      }));
-    }
-    const metaText = metaParts.join(' · ');
-
-    // Show full command + provider on row hover so users can still inspect them
-    const tooltipLines: string[] = [titleText];
-    if (proc.provider) {
-      tooltipLines.push(`Provider: ${proc.provider}`);
-    }
-    tooltipLines.push(metaText);
-    if (proc.command) {
-      tooltipLines.push(proc.command);
-    }
-    const rowTooltip = tooltipLines.join('\n');
-
-    const killIconClass = proc.kind === 'CHANNEL' ? 'codicon-debug-stop' : 'codicon-close';
-    const killHintKey = proc.kind === 'CHANNEL'
-      ? 'config.nodeProcesses.interrupt'
-      : 'config.nodeProcesses.kill';
-
-    return (
-      <div key={proc.id} style={PROCESS_ROW_STYLE} title={rowTooltip}>
-        <span
-          className={`codicon ${providerIcon(proc.provider, proc.kind)}`}
-          style={{ ...PROCESS_LEADING_ICON_STYLE, color: kindColor(proc.kind) }}
-        />
-        <div style={PROCESS_BODY_STYLE}>
-          <span style={PROCESS_TITLE_STYLE}>{titleText}</span>
-          <span style={PROCESS_META_STYLE}>{metaText}</span>
-        </div>
-        <div style={PROCESS_ACTIONS_STYLE}>
-          {proc.kind === 'DAEMON' && (
-            <button
-              type="button"
-              className="node-process-icon-button"
-              style={ICON_BUTTON_STYLE}
-              disabled={isPending}
-              onClick={(e) => { e.stopPropagation(); handleRestart(proc); }}
-              title={t('config.nodeProcesses.restart')}
-              aria-label={t('config.nodeProcesses.restart')}
-            >
-              <span className={`codicon ${isPending ? 'codicon-loading codicon-modifier-spin' : 'codicon-debug-restart'}`} />
-            </button>
-          )}
-          <button
-            type="button"
-            className="node-process-icon-button node-process-icon-button--danger"
-            style={ICON_BUTTON_DANGER_STYLE}
-            disabled={isPending}
-            onClick={(e) => { e.stopPropagation(); handleKill(proc); }}
-            title={t(killHintKey)}
-            aria-label={t(killHintKey)}
-          >
-            <span className={`codicon ${isPending ? 'codicon-loading codicon-modifier-spin' : killIconClass}`} />
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  const renderGroup = (
-    label: string,
-    items: NodeProcessInfo[],
-    headerStyle: React.CSSProperties = GROUP_HEADER_STYLE,
-    icon?: string,
-  ) => {
-    if (items.length === 0) return null;
-    return (
-      <div>
-        <div style={headerStyle}>
-          {icon ? <span className={`codicon ${icon}`} /> : null}
-          <span>{label} ({items.length})</span>
-        </div>
-        {items.map(renderRow)}
-      </div>
-    );
-  };
-
   const embeddedWidthStyle: React.CSSProperties = embedded
     ? {
         minWidth: `${Math.min(DROPDOWN_MIN_WIDTH_PX, embeddedLayout.maxWidth)}px`,
@@ -614,70 +353,18 @@ export const NodeProcessSelect = ({ embedded = false, onClose, onToast }: NodePr
       style={dropdownStyle}
       onMouseEnter={(e) => e.stopPropagation()}
     >
-      <div style={REFRESH_ROW_STYLE}>
-        <span>
-          {t('config.nodeProcesses.summary', {
-            total: totalCount,
-            orphan: orphanCount,
-            defaultValue: 'Total: {{total}} · Orphans: {{orphan}}',
-          })}
-        </span>
-        <button
-          type="button"
-          style={REFRESH_BUTTON_STYLE}
-          onClick={(e) => { e.stopPropagation(); requestRefresh(); }}
-          title={t('config.nodeProcesses.refresh')}
-        >
-          <span className={`codicon codicon-refresh ${loading ? 'codicon-modifier-spin' : ''}`} />
-        </button>
-      </div>
-
-      {loading && !snapshot ? (
-        <div style={EMPTY_STATE_STYLE}>
-          <span className="codicon codicon-loading codicon-modifier-spin" />
-          <span style={{ marginLeft: 6 }}>{t('config.nodeProcesses.loading')}</span>
-        </div>
-      ) : totalCount === 0 ? (
-        <div style={EMPTY_STATE_STYLE}>
-          <span className="codicon codicon-info" />
-          <span style={{ marginLeft: 6 }}>{t('config.nodeProcesses.empty')}</span>
-        </div>
-      ) : (
-        <>
-          {renderGroup(
-            t('config.nodeProcesses.groups.daemon'),
-            grouped.daemon,
-            GROUP_HEADER_STYLE,
-            'codicon-server-process',
-          )}
-          {renderGroup(
-            t('config.nodeProcesses.groups.channel'),
-            grouped.channel,
-            GROUP_HEADER_STYLE,
-            'codicon-comment-discussion',
-          )}
-          {renderGroup(
-            t('config.nodeProcesses.groups.orphan'),
-            grouped.orphan,
-            GROUP_HEADER_ORPHAN_STYLE,
-            'codicon-warning',
-          )}
-        </>
-      )}
-
-      {orphanCount > 0 ? (
-        <div style={FOOTER_STYLE}>
-          <button
-            type="button"
-            style={FOOTER_BUTTON_STYLE}
-            onClick={(e) => { e.stopPropagation(); handleKillAllOrphans(); }}
-            title={t('config.nodeProcesses.killAllHint')}
-          >
-            <span className="codicon codicon-trash" style={{ marginRight: 4 }} />
-            {t('config.nodeProcesses.killAll', { count: orphanCount })}
-          </button>
-        </div>
-      ) : null}
+      <NodeProcessList
+        loading={loading}
+        snapshot={snapshot}
+        grouped={grouped}
+        orphanCount={orphanCount}
+        totalCount={totalCount}
+        pendingPids={pendingPids}
+        onRefresh={requestRefresh}
+        onKill={handleKill}
+        onRestart={handleRestart}
+        onKillAllOrphans={handleKillAllOrphans}
+      />
     </div>
   );
 

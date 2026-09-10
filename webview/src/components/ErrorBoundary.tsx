@@ -212,13 +212,12 @@ function extractComponentNames(componentStack?: string | null): string[] {
 
   return componentStack
     .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const match = line.match(/^at\s+([^\s(]+)/);
-      return match?.[1] ?? '';
-    })
-    .filter(Boolean);
+    .flatMap((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return [];
+      const match = trimmed.match(/^at\s+([^\s(]+)/);
+      return match?.[1] ? [match[1]] : [];
+    });
 }
 
 function getErrorHints(error?: Error): string[] {

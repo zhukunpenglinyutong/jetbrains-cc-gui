@@ -60,21 +60,23 @@ export function useNativeEventCapture({
     handleSubmit,
     handleEnhancePrompt,
   });
-  latestRef.current = {
-    editableRef,
-    isComposingRef,
-    lastCompositionEndTimeRef,
-    sendShortcut,
-    fileCompletion,
-    commandCompletion,
-    agentCompletion,
-    promptCompletion,
-    dollarCommandCompletion,
-    completionSelectedRef,
-    submittedOnEnterRef,
-    handleSubmit,
-    handleEnhancePrompt,
-  };
+  useEffect(() => {
+    latestRef.current = {
+      editableRef,
+      isComposingRef,
+      lastCompositionEndTimeRef,
+      sendShortcut,
+      fileCompletion,
+      commandCompletion,
+      agentCompletion,
+      promptCompletion,
+      dollarCommandCompletion,
+      completionSelectedRef,
+      submittedOnEnterRef,
+      handleSubmit,
+      handleEnhancePrompt,
+    };
+  });
 
   useEffect(() => {
     const el = editableRef.current;

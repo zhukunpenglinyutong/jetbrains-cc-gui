@@ -1,40 +1,19 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import Switch from 'antd/es/switch';
 import { agentProvider, CREATE_NEW_AGENT_ID, EMPTY_STATE_ID, type AgentItem } from '../providers/agentProvider';
 import type { SelectedAgent } from '../types';
-import { RuntimeProviderSelect } from './RuntimeProviderSelect';
-import { NodeProcessSelect } from './NodeProcessSelect';
 import {
   fetchNodeProcesses,
   subscribeNodeProcesses,
   type NodeProcessSnapshot,
 } from '../../../utils/nodeProcessCapabilities';
 import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
-import { openBrowser } from '../../../utils/bridge';
-
-const DOCS_URLS: Record<string, string> = {
-  zh: 'https://docs.mossx.ai/jetbrains',
-  'zh-TW': 'https://docs.mossx.ai/zh-Hant/jetbrains/index',
-};
-const DEFAULT_DOCS_URL = 'https://docs.mossx.ai/en/jetbrains/index';
-/**
- * Runtime provider switching is only implemented for the Claude and Codex
- * harnesses (see RuntimeProviderSelect's providerKind). Hide the menu entry
- * for the beta CLI providers (grok/kimi/opencode/pi/omp/dsh).
- */
-const RUNTIME_PROVIDER_SUPPORTED: Record<string, true> = { claude: true, codex: true };
-
-const resolveDocsUrl = (language: string): string => {
-  if (language.startsWith('zh-TW') || language.startsWith('zh-Hant')) {
-    return DOCS_URLS['zh-TW'];
-  }
-  if (language.startsWith('zh')) {
-    return DOCS_URLS.zh;
-  }
-  return DEFAULT_DOCS_URL;
-};
+import { AgentMenuItem } from './AgentMenuItem';
+import { RuntimeProviderMenuItem } from './RuntimeProviderMenuItem';
+import { NodeProcessesMenuItem } from './NodeProcessesMenuItem';
+import { ConfigSwitchOption } from './ConfigSwitchOption';
+import { OfficialDocsOption } from './OfficialDocsOption';
 
 interface ConfigSelectProps {
   alwaysThinkingEnabled?: boolean;
@@ -57,40 +36,6 @@ const TOGGLE_BUTTON_STYLE: React.CSSProperties = {
   marginRight: '-2px',
 };
 
-const SUBMENU_BASE_STYLE: React.CSSProperties = {
-  minWidth: 0,
-  maxWidth: '360px',
-  maxHeight: '300px',
-  overflowY: 'auto',
-};
-
-const LOADING_OPTION_STYLE: React.CSSProperties = { cursor: 'default' };
-
-const AGENT_BODY_STYLE: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '2px',
-  minWidth: 0,
-  flex: 1,
-};
-
-const AGENT_NAME_STYLE: React.CSSProperties = {
-  whiteSpace: 'nowrap',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-};
-
-const AGENT_DESC_STYLE: React.CSSProperties = {
-  fontStyle: 'normal',
-  whiteSpace: 'nowrap',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-};
-
-const AGENT_DESC_PLAIN_STYLE: React.CSSProperties = {
-  fontStyle: 'normal',
-};
-
 const DROPDOWN_STYLE: React.CSSProperties = {
   position: 'absolute',
   bottom: '100%',
@@ -101,36 +46,6 @@ const DROPDOWN_STYLE: React.CSSProperties = {
   overflow: 'visible',
 };
 
-const SELECTOR_OPTION_RELATIVE_STYLE: React.CSSProperties = { position: 'relative', overflow: 'visible' };
-
-const ITEM_INFO_STYLE: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '2px',
-};
-
-const ARROW_CONTAINER_STYLE: React.CSSProperties = {
-  marginLeft: 'auto',
-  display: 'flex',
-  alignItems: 'center',
-  alignSelf: 'stretch',
-  paddingLeft: '12px',
-  cursor: 'pointer',
-};
-
-const ARROW_ICON_STYLE: React.CSSProperties = { fontSize: '12px' };
-
-const SWITCH_OPTION_STYLE: React.CSSProperties = {
-  justifyContent: 'space-between',
-  cursor: 'pointer',
-};
-
-const SWITCH_LABEL_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-};
-
 const FAINT_DIVIDER_STYLE: React.CSSProperties = {
   height: 1,
   background: 'var(--dropdown-border)',
@@ -139,13 +54,6 @@ const FAINT_DIVIDER_STYLE: React.CSSProperties = {
 };
 
 const TOAST_STYLE: React.CSSProperties = { zIndex: 20000 };
-
-function getAgentOptionStyle(isInfo: boolean): React.CSSProperties {
-  return {
-    alignItems: 'flex-start',
-    cursor: isInfo ? 'default' : 'pointer',
-  };
-}
 
 /**
  * ConfigSelect - Configuration menu (Agent, Streaming, Thinking)
@@ -161,7 +69,7 @@ export const ConfigSelect = ({
   onOpenAgentSettings,
   currentProvider = 'claude',
 }: ConfigSelectProps) => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'agent' | 'runtimeProvider' | 'nodeProcesses'>('none');
   const [agentItems, setAgentItems] = useState<AgentItem[]>([]);
@@ -172,24 +80,12 @@ export const ConfigSelect = ({
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const agentSubmenuRef = useRef<HTMLDivElement>(null);
-  const agentTriggerRef = useRef<HTMLDivElement>(null);
-  const runtimeProviderTriggerRef = useRef<HTMLDivElement>(null);
   const agentAbortControllerRef = useRef<AbortController | null>(null);
   const toastTimerRef = useRef<number | undefined>(undefined);
 
   const { positionedStyle: mainPositionedStyle, recalculate: mainRecalculate } = useDropdownPosition({
     buttonRef,
     dropdownRef,
-  });
-  const { positionedStyle: agentSubmenuPositionedStyle, maxHeight: agentSubmenuMaxHeight, maxWidth: agentSubmenuMaxWidth, recalculate: agentSubmenuRecalculate } = useDropdownPosition({
-    buttonRef: agentTriggerRef,
-    dropdownRef: agentSubmenuRef,
-    submenu: true,
-    minWidth: 260,
-    maxWidth: 360,
-    submenuMaxHeight: 300,
-    submenuBottomClearance: 96,
   });
 
   const handleToggle = useCallback((e: React.MouseEvent) => {
@@ -256,6 +152,11 @@ export const ConfigSelect = ({
     }, 1800);
   }, []);
 
+  const closeMenu = useCallback(() => {
+    setIsOpen(false);
+    setActiveSubmenu('none');
+  }, []);
+
   // Subscribe to node process snapshots so the badge counter stays in sync
   // with whatever the panel (or other consumers) see.
   useEffect(() => {
@@ -314,11 +215,6 @@ export const ConfigSelect = ({
     }
   }, [isOpen, mainRecalculate]);
 
-  useLayoutEffect(() => {
-    if (activeSubmenu !== 'agent') return;
-    agentSubmenuRecalculate();
-  }, [activeSubmenu, agentItems.length, agentsLoading, agentSubmenuRecalculate]);
-
   useEffect(() => {
     return () => {
       if (agentAbortControllerRef.current) {
@@ -329,75 +225,6 @@ export const ConfigSelect = ({
       }
     };
   }, []);
-
-  const renderAgentSubmenu = () => {
-    const submenuMaxHeightPx = agentSubmenuMaxHeight ? `${Math.min(300, agentSubmenuMaxHeight)}px` : '300px';
-    return (
-    <div
-      ref={agentSubmenuRef}
-      className="selector-dropdown"
-      style={{
-        ...SUBMENU_BASE_STYLE,
-        maxWidth: agentSubmenuMaxWidth ?? 360,
-        ...agentSubmenuPositionedStyle,
-        maxHeight: submenuMaxHeightPx,
-      }}
-      onMouseEnter={(e) => {
-        e.stopPropagation();
-        setActiveSubmenu('agent');
-      }}
-    >
-      {agentsLoading ? (
-        <div className="selector-option" style={LOADING_OPTION_STYLE}>
-          <span className="codicon codicon-loading codicon-modifier-spin" />
-          <span>{t('chat.loadingDropdown')}</span>
-        </div>
-      ) : (
-        agentItems.map((agent) => {
-          const isInfo = agent.id === EMPTY_STATE_ID;
-          const isCreate = agent.id === CREATE_NEW_AGENT_ID;
-          const isSelected = !!selectedAgent && selectedAgent.id === agent.id;
-
-          return (
-            <div
-              key={agent.id}
-              className={`selector-option ${isSelected ? 'selected' : ''} ${isInfo ? 'disabled' : ''}`}
-              style={getAgentOptionStyle(isInfo)}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isInfo) return;
-
-                if (isCreate) {
-                  setIsOpen(false);
-                  setActiveSubmenu('none');
-                  onOpenAgentSettings?.();
-                  return;
-                }
-
-                onAgentSelect?.({ id: agent.id, name: agent.name, prompt: agent.prompt });
-                setIsOpen(false);
-                setActiveSubmenu('none');
-              }}
-            >
-              <span className={`codicon ${isCreate ? 'codicon-add' : isInfo ? 'codicon-info' : 'codicon-robot'}`} />
-              <div style={AGENT_BODY_STYLE}>
-                <span style={AGENT_NAME_STYLE}>{agent.name}</span>
-                {agent.prompt ? (
-                  <span className="model-description" style={AGENT_DESC_STYLE}>
-                    {agent.prompt.length > 60 ? agent.prompt.substring(0, 60) + '...' : agent.prompt}
-                  </span>
-                ) : isCreate ? (
-                  <span className="model-description" style={AGENT_DESC_PLAIN_STYLE}>{t('settings.agent.createAgentHint')}</span>
-                ) : null}
-              </div>
-              {isSelected && <span className="codicon codicon-check check-mark" />}
-            </div>
-          );
-        })
-      )}
-    </div>
-    );
-  };
 
   return (
     <div style={WRAPPER_STYLE}>
@@ -418,191 +245,79 @@ export const ConfigSelect = ({
           style={{ ...DROPDOWN_STYLE, ...mainPositionedStyle }}
         >
           {/* Agent Item */}
-          <div
-            ref={agentTriggerRef}
-            className="selector-option"
-            data-testid="config-option-agent"
-            onMouseEnter={() => {
-              setActiveSubmenu('agent');
-              agentSubmenuRecalculate();
+          <AgentMenuItem
+            selectedAgent={selectedAgent}
+            agents={agentItems}
+            loading={agentsLoading}
+            active={activeSubmenu === 'agent'}
+            onEnter={() => setActiveSubmenu('agent')}
+            onLeave={() => setActiveSubmenu('none')}
+            onSelectAgent={(agent) => {
+              onAgentSelect?.(agent);
+              closeMenu();
             }}
-            onMouseLeave={() => setActiveSubmenu('none')}
-            style={SELECTOR_OPTION_RELATIVE_STYLE}
-          >
-            <span className="codicon codicon-robot" />
-            <div style={ITEM_INFO_STYLE}>
-              <span>{t('settings.agent.title')}</span>
-              {selectedAgent?.name ? (
-                <span className="model-description" style={AGENT_DESC_PLAIN_STYLE}>
-                  {selectedAgent.name}
-                </span>
-              ) : null}
-            </div>
-            <div style={ARROW_CONTAINER_STYLE}>
-              <span className="codicon codicon-chevron-right" style={ARROW_ICON_STYLE} />
-            </div>
-
-            {activeSubmenu === 'agent' && renderAgentSubmenu()}
-          </div>
+            onCreateAgent={() => {
+              closeMenu();
+              onOpenAgentSettings?.();
+            }}
+          />
 
           {/* Runtime Provider Item — only Claude/Codex support switching */}
-          {RUNTIME_PROVIDER_SUPPORTED[currentProvider] && (
-            <>
-              <div className="selector-divider" />
-
-              <div
-                ref={runtimeProviderTriggerRef}
-                className="selector-option"
-                data-testid="config-option-runtime-provider"
-                onMouseEnter={() => setActiveSubmenu('runtimeProvider')}
-                onMouseLeave={() => setActiveSubmenu('none')}
-                style={SELECTOR_OPTION_RELATIVE_STYLE}
-              >
-                <span className="codicon codicon-vm-connect" />
-                <div style={ITEM_INFO_STYLE}>
-                  <span>{t('config.runtimeProvider.title')}</span>
-                </div>
-                <div style={ARROW_CONTAINER_STYLE}>
-                  <span className="codicon codicon-chevron-right" style={ARROW_ICON_STYLE} />
-                </div>
-
-                {activeSubmenu === 'runtimeProvider' && (
-                  <RuntimeProviderSelect
-                    currentProvider={currentProvider}
-                    embedded
-                    triggerRef={runtimeProviderTriggerRef}
-                    onProviderSwitched={showProviderToast}
-                    onClose={() => {
-                      setIsOpen(false);
-                      setActiveSubmenu('none');
-                    }}
-                  />
-                )}
-              </div>
-            </>
-          )}
+          <RuntimeProviderMenuItem
+            currentProvider={currentProvider}
+            active={activeSubmenu === 'runtimeProvider'}
+            onEnter={() => setActiveSubmenu('runtimeProvider')}
+            onLeave={() => setActiveSubmenu('none')}
+            onProviderSwitched={showProviderToast}
+            onClose={closeMenu}
+          />
 
           <div className="selector-divider" />
 
           {/* Node Process Management Item */}
-          <div
-            className="selector-option"
-            data-testid="config-option-node-processes"
-            onMouseEnter={() => setActiveSubmenu('nodeProcesses')}
-            onMouseLeave={() => setActiveSubmenu('none')}
-            style={SELECTOR_OPTION_RELATIVE_STYLE}
-          >
-            <span className="codicon codicon-server-process" />
-            <div style={ITEM_INFO_STYLE}>
-              <span>{t('config.nodeProcesses.title', { defaultValue: 'Node 进程管理' })}</span>
-              {nodeProcessTotals.all > 0 ? (
-                <span className="model-description" style={AGENT_DESC_PLAIN_STYLE}>
-                  {nodeProcessTotals.orphan > 0
-                    ? t('config.nodeProcesses.badgeWithOrphan', {
-                        total: nodeProcessTotals.all,
-                        orphan: nodeProcessTotals.orphan,
-                        defaultValue: '{{total}} 个 · {{orphan}} 孤立 ⚠',
-                      })
-                    : t('config.nodeProcesses.badge', {
-                        total: nodeProcessTotals.all,
-                        defaultValue: '{{total}} 个进程',
-                      })}
-                </span>
-              ) : null}
-            </div>
-            <div style={ARROW_CONTAINER_STYLE}>
-              <span className="codicon codicon-chevron-right" style={ARROW_ICON_STYLE} />
-            </div>
-
-            {activeSubmenu === 'nodeProcesses' && (
-              <NodeProcessSelect
-                embedded
-                onToast={showGenericToast}
-                onClose={() => {
-                  setIsOpen(false);
-                  setActiveSubmenu('none');
-                }}
-              />
-            )}
-          </div>
+          <NodeProcessesMenuItem
+            totals={nodeProcessTotals}
+            active={activeSubmenu === 'nodeProcesses'}
+            onEnter={() => setActiveSubmenu('nodeProcesses')}
+            onLeave={() => setActiveSubmenu('none')}
+            onToast={showGenericToast}
+            onClose={closeMenu}
+          />
 
           {/* Divider */}
           <div className="selector-divider" />
 
           {/* Streaming Switch Item */}
-          <div
-            className="selector-option"
-            onClick={(e) => {
-              e.stopPropagation();
-              onStreamingEnabledChange?.(!streamingEnabled);
-            }}
+          <ConfigSwitchOption
+            icon="codicon-sync"
+            label={t('settings.basic.streaming.label')}
+            value={streamingEnabled}
+            defaultChecked
+            onChange={onStreamingEnabledChange}
             onMouseEnter={() => setActiveSubmenu('none')}
-            style={SWITCH_OPTION_STYLE}
-          >
-            <div style={SWITCH_LABEL_STYLE}>
-              <span className="codicon codicon-sync" />
-              <span>{t('settings.basic.streaming.label')}</span>
-            </div>
-            <Switch
-              size="small"
-              checked={streamingEnabled ?? true}
-              onClick={(checked, e) => {
-                 e.stopPropagation();
-                 onStreamingEnabledChange?.(checked);
-              }}
-            />
-          </div>
+          />
 
           {/* Divider */}
           <div style={FAINT_DIVIDER_STYLE} />
 
           {/* Thinking Switch Item */}
-          <div
-            className="selector-option"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleThinking?.(!alwaysThinkingEnabled);
-            }}
+          <ConfigSwitchOption
+            icon="codicon-lightbulb"
+            label={t('common.thinking')}
+            value={alwaysThinkingEnabled}
+            defaultChecked={false}
+            onChange={onToggleThinking}
             onMouseEnter={() => setActiveSubmenu('none')}
-            style={SWITCH_OPTION_STYLE}
-          >
-            <div style={SWITCH_LABEL_STYLE}>
-              <span className="codicon codicon-lightbulb" />
-              <span>{t('common.thinking')}</span>
-            </div>
-            <Switch
-              size="small"
-              checked={alwaysThinkingEnabled ?? false}
-              onClick={(checked, e) => {
-                 e.stopPropagation();
-                 onToggleThinking?.(checked);
-              }}
-            />
-          </div>
+          />
 
           {/* Divider */}
           <div style={FAINT_DIVIDER_STYLE} />
 
           {/* Official Docs Item */}
-          <div
-            className="selector-option"
-            data-testid="config-option-official-docs"
-            onClick={(e) => {
-              e.stopPropagation();
-              openBrowser(resolveDocsUrl(i18n.language));
-              setIsOpen(false);
-              setActiveSubmenu('none');
-            }}
+          <OfficialDocsOption
+            onClose={closeMenu}
             onMouseEnter={() => setActiveSubmenu('none')}
-          >
-            <span className="codicon codicon-book" />
-            <div style={ITEM_INFO_STYLE}>
-              <span>{t('config.officialDocs')}</span>
-            </div>
-            <div style={ARROW_CONTAINER_STYLE}>
-              <span className="codicon codicon-link-external" style={ARROW_ICON_STYLE} />
-            </div>
-          </div>
+          />
         </div>
       )}
 

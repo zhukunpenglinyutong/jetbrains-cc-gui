@@ -369,6 +369,8 @@ public class CodemossSettingsService {
     private static final String AI_FEATURE_PROVIDER_OPENCODE = "opencode";
     private static final String AI_FEATURE_PROVIDER_PI = "pi";
     private static final String AI_FEATURE_PROVIDER_OMP = "omp";
+    private static final String AI_FEATURE_PROVIDER_MINIMAX = "minimax";
+    private static final String AI_FEATURE_PROVIDER_ZCODE = "zcode";
     /** Same order as webview AVAILABLE_PROVIDERS / chat CLI selector. */
     private static final String[] AI_FEATURE_PROVIDERS = {
             AI_FEATURE_PROVIDER_CLAUDE,
@@ -377,7 +379,9 @@ public class CodemossSettingsService {
             AI_FEATURE_PROVIDER_KIMI,
             AI_FEATURE_PROVIDER_OPENCODE,
             AI_FEATURE_PROVIDER_PI,
-            AI_FEATURE_PROVIDER_OMP
+            AI_FEATURE_PROVIDER_OMP,
+            AI_FEATURE_PROVIDER_MINIMAX,
+            AI_FEATURE_PROVIDER_ZCODE
     };
     private static final String AI_FEATURE_RESOLUTION_MANUAL = "manual";
     private static final String AI_FEATURE_RESOLUTION_AUTO = "auto";
@@ -392,6 +396,8 @@ public class CodemossSettingsService {
     private static final String DEFAULT_AI_FEATURE_OPENCODE_MODEL = "opencode-default";
     private static final String DEFAULT_AI_FEATURE_PI_MODEL = "auto";
     private static final String DEFAULT_AI_FEATURE_OMP_MODEL = "auto";
+    private static final String DEFAULT_AI_FEATURE_MINIMAX_MODEL = "auto";
+    private static final String DEFAULT_AI_FEATURE_ZCODE_MODEL = "auto";
     private static final String USER_LANGUAGE_CONFIG_KEY = "language";
 
     private final Gson gson;
@@ -2397,6 +2403,12 @@ public class CodemossSettingsService {
         }
         if (AI_FEATURE_PROVIDER_OMP.equals(provider)) {
             return DEFAULT_AI_FEATURE_OMP_MODEL;
+        }
+        if (AI_FEATURE_PROVIDER_MINIMAX.equals(provider)) {
+            return DEFAULT_AI_FEATURE_MINIMAX_MODEL;
+        }
+        if (AI_FEATURE_PROVIDER_ZCODE.equals(provider)) {
+            return DEFAULT_AI_FEATURE_ZCODE_MODEL;
         }
         return defaultClaudeModel;
     }

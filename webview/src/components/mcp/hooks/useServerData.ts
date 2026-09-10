@@ -20,10 +20,11 @@ function normalizeServerKey(value: string | undefined): string {
 
 function getTerminalStatusNames(statusList: McpServerStatusInfo[]): Set<string> {
   return new Set(
-    statusList
-      .filter((status) => TERMINAL_DISCONNECT_STATUSES.has(status.status))
-      .map((status) => normalizeServerKey(status.name))
-      .filter(Boolean),
+    statusList.flatMap((status) => {
+      if (!TERMINAL_DISCONNECT_STATUSES.has(status.status)) return [];
+      const name = normalizeServerKey(status.name);
+      return name ? [name] : [];
+    }),
   );
 }
 
@@ -32,10 +33,13 @@ function getTerminalServerIds(servers: McpServer[], terminalStatusNames: Set<str
     return [];
   }
 
-  return servers
-    .filter((server) => terminalStatusNames.has(normalizeServerKey(server.id))
-      || terminalStatusNames.has(normalizeServerKey(server.name)))
-    .map((server) => server.id);
+  return servers.flatMap((server) => {
+    if (terminalStatusNames.has(normalizeServerKey(server.id))
+      || terminalStatusNames.has(normalizeServerKey(server.name))) {
+      return [server.id];
+    }
+    return [];
+  });
 }
 
 export interface UseServerDataOptions {
@@ -91,17 +95,11 @@ export function useServerData({
   const terminalStatusNamesRef = useRef<Set<string>>(new Set());
 
   const setServers = useCallback((value: React.SetStateAction<McpServer[]>) => {
-    if (typeof value !== 'function') {
-      serversRef.current = value;
-      setServersState(value);
-      return;
-    }
-
-    setServersState((previous) => {
-      const next = value(previous);
-      serversRef.current = next;
-      return next;
-    });
+    // serversRef always holds the latest list, so functional updates can be
+    // resolved synchronously here instead of inside the state updater.
+    const next = typeof value === 'function' ? value(serversRef.current) : value;
+    serversRef.current = next;
+    setServersState(next);
   }, []);
 
   const clearToolsForTerminalStatuses = useCallback((
@@ -213,7 +211,16 @@ export function useServerData({
       if (hasValidCache) {
         setServers(cachedServers);
         setLoading(false);
-        const cacheAge = Date.now() - (JSON.parse(localStorage.getItem(cacheKeys.SERVERS) || '{}').timestamp || 0);
+        let cachedAt = 0;
+        try {
+          const parsed: unknown = JSON.parse(localStorage.getItem(cacheKeys.SERVERS) || '{}');
+          if (parsed && typeof parsed === 'object' && 'timestamp' in parsed && typeof parsed.timestamp === 'number') {
+            cachedAt = parsed.timestamp;
+          }
+        } catch {
+          // Malformed cache payload — treat as cache with no timestamp.
+        }
+        const cacheAge = Date.now() - cachedAt;
         if (cacheAge < 60000) {
           onLog(t('mcp.logs.fastLoadCache', { count: cachedServers.length, seconds: Math.round(cacheAge/1000) }), 'info');
         }

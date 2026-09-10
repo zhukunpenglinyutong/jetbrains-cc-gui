@@ -16,7 +16,9 @@ interface ContextMenuProps {
 export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   // State-driven position to avoid React overwriting imperative DOM changes
   const [pos, setPos] = useState({ left: x, top: y });

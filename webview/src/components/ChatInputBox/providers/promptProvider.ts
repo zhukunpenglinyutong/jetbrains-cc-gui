@@ -105,9 +105,11 @@ export function setupPromptsCallback() {
     try {
       const payload = parsePromptCallbackPayload(json);
       if (!payload || payload.provider !== activePromptProvider) return;
-      const prompts = payload.prompts
-        .filter(prompt => promptOwner(prompt) === activePromptProvider)
-        .map(prompt => promptToItem(prompt, 'global', activePromptProvider));
+      const prompts = payload.prompts.flatMap(prompt =>
+        promptOwner(prompt) === activePromptProvider
+          ? [promptToItem(prompt, 'global', activePromptProvider)]
+          : []
+      );
 
       cachedGlobalPrompts = prompts;
       globalLoadingState = 'success';
@@ -129,9 +131,11 @@ export function setupPromptsCallback() {
     try {
       const payload = parsePromptCallbackPayload(json);
       if (!payload || payload.provider !== activePromptProvider) return;
-      const prompts = payload.prompts
-        .filter(prompt => promptOwner(prompt) === activePromptProvider)
-        .map(prompt => promptToItem(prompt, 'project', activePromptProvider));
+      const prompts = payload.prompts.flatMap(prompt =>
+        promptOwner(prompt) === activePromptProvider
+          ? [promptToItem(prompt, 'project', activePromptProvider)]
+          : []
+      );
 
       cachedProjectPrompts = prompts;
       projectLoadingState = 'success';

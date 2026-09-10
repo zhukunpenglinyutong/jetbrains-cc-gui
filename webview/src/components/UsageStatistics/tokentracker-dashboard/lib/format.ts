@@ -1,10 +1,12 @@
+const sharedNumberFormatter = new Intl.NumberFormat();
+
 export function toDisplayNumber(value: any) {
   if (value == null) return "-";
   try {
-    if (typeof value === "bigint") return new Intl.NumberFormat().format(value);
-    if (typeof value === "number") return new Intl.NumberFormat().format(value);
+    if (typeof value === "bigint") return sharedNumberFormatter.format(value);
+    if (typeof value === "number") return sharedNumberFormatter.format(value);
     const s = String(value).trim();
-    if (/^[0-9]+$/.test(s)) return new Intl.NumberFormat().format(BigInt(s));
+    if (/^[0-9]+$/.test(s)) return sharedNumberFormatter.format(BigInt(s));
     return s;
   } catch (_e) {
     return String(value);
@@ -119,7 +121,7 @@ export function formatUsdCurrency(value: any, options: FormatUsdCurrencyOptions 
   const fracPart = match[2] || "";
   let formattedInt = intPart;
   try {
-    formattedInt = new Intl.NumberFormat().format(BigInt(intPart));
+    formattedInt = sharedNumberFormatter.format(BigInt(intPart));
   } catch (_e) {
     formattedInt = intPart;
   }

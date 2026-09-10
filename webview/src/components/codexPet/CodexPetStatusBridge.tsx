@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { petBridge } from './petBridge';
 import { resolveCodexPetState } from './petState';
 
@@ -34,7 +34,8 @@ export function CodexPetStatusBridge({
   model,
   tabTitle,
 }: CodexPetStatusBridgeProps) {
-  const sourceId = useRef(createSourceId());
+  // Write-once lazy values: useState runs the initializer exactly once.
+  const [sourceId] = useState(() => createSourceId());
   const wasBusy = useRef(false);
   const liveTurnActive = useRef(false);
   const lastBubbleEvent = useRef<string | null>(null);
@@ -56,7 +57,7 @@ export function CodexPetStatusBridge({
     const state = resolvedState === 'error' && !turnHasError ? 'idle' : resolvedState;
     const reportState = (nextState: string) => {
       lastReportedState.current = nextState;
-      petBridge.updateState(sourceId.current, nextState);
+      petBridge.updateState(sourceId, nextState);
     };
     const clearTerminalState = () => {
       if (stateResetTimer.current !== undefined) {
@@ -84,7 +85,7 @@ export function CodexPetStatusBridge({
       lastBubbleEvent.current = event;
       petBridge.showBubble({
         event,
-        sourceId: sourceId.current,
+        sourceId: sourceId,
         tabTitle,
         provider,
         model,
@@ -133,23 +134,23 @@ export function CodexPetStatusBridge({
       wasBusy.current = busy;
     }
     return undefined;
-  }, [active, errorCount, isThinking, loading, model, provider, resolvedState, status, streamingActive, tabTitle]);
+  }, [active, errorCount, isThinking, loading, model, provider, resolvedState, status, sourceId, streamingActive, tabTitle]);
 
   useEffect(() => {
     if (!active) return undefined;
     const heartbeat = window.setInterval(
-      () => petBridge.updateState(sourceId.current, lastReportedState.current),
+      () => petBridge.updateState(sourceId, lastReportedState.current),
       STATE_HEARTBEAT_MS,
     );
     return () => window.clearInterval(heartbeat);
-  }, [active]);
+  }, [active, sourceId]);
 
   useEffect(() => () => {
     if (stateResetTimer.current !== undefined) {
       window.clearTimeout(stateResetTimer.current);
     }
-    petBridge.updateState(sourceId.current, 'disposed');
-  }, []);
+    petBridge.updateState(sourceId, 'disposed');
+  }, [sourceId]);
 
   return null;
 }

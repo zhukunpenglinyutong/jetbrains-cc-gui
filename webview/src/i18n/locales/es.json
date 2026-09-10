@@ -237,7 +237,9 @@
           "kimi": "Kimi CLI",
           "opencode": "OpenCode",
           "pi": "PI CLI",
-          "omp": "OMP CLI"
+          "omp": "OMP CLI",
+          "minimax": "MiniMax Code",
+          "zcode": "ZCode"
         },
         "currentProviderAuto": "Currently using automatic selection: {{provider}}",
         "currentProviderManual": "Currently using manually selected provider: {{provider}}",
@@ -849,6 +851,14 @@
       "copied": "Copied to clipboard",
       "copyFailed": "Failed to copy",
       "tools": {
+        "minimax": {
+          "name": "MiniMax Code",
+          "description": "Agente de código en terminal de MiniMax. Requiere Node.js 22.19+ / 24+ (no 23); comandos: minimax / mcode"
+        },
+        "zcode": {
+          "name": "ZCode",
+          "description": "Aplicación de escritorio de codificación ZCode de Zhipu con modelos GLM"
+        },
         "grok": {
           "name": "Grok CLI",
           "description": "xAI Grok terminal coding agent"
@@ -1344,7 +1354,32 @@
     "bashGroupBatchExecution": "Batch Execution",
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
-    "bashGroupFailed": "failed"
+    "bashGroupFailed": "failed",
+    "reportFindings": {
+      "title": "Hallazgos de la revisión",
+      "findingsCount_one": "{{count}} hallazgo",
+      "findingsCount_other": "{{count}} hallazgos",
+      "confirmedCount_one": "{{count}} confirmado",
+      "confirmedCount_other": "{{count}} confirmados",
+      "plausibleCount_one": "{{count}} por revisar",
+      "plausibleCount_other": "{{count}} por revisar",
+      "confirmed": "Confirmado",
+      "plausible": "Por revisar",
+      "fixed": "Corregido",
+      "skipped": "Omitido",
+      "noChangeNeeded": "Sin cambios necesarios",
+      "empty": "Sin hallazgos",
+      "summaryLabel": "Resumen de la revisión",
+      "summary": "Resumen",
+      "failureScenario": "Escenario de fallo",
+      "reviewLevel": "Nivel de revisión: {{level}}",
+      "openFile": "Abrir {{filePath}}",
+      "expandFinding": "Expandir hallazgo",
+      "collapseFinding": "Contraer hallazgo",
+      "expandReport": "Expandir informe de hallazgos",
+      "collapseReport": "Contraer informe de hallazgos",
+      "untitled": "Hallazgo sin título"
+    }
   },
   "todo": {
     "inProgress": "En progreso {{completed}}/{{total}} tareas",
@@ -1571,13 +1606,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · El más rápido para respuestas rápidas"
       },
-      "opus48": {
-        "label": "Opus 4.8",
-        "description": "Opus 4.8 · Generación anterior de Opus"
+      "fable51": {
+        "label": "Fable 5.1",
+        "description": "Fable 5.1 · El más potente · clase Mythos"
       },
       "fable5": {
         "label": "Fable 5",
-        "description": "Fable 5 · El más potente · clase Mythos"
+        "description": "Fable 5 · Generación anterior de Fable"
       }
     },
     "longContext": {
@@ -1587,6 +1622,10 @@
       "tooltipDisabled": "1M contexto no disponible para Haiku"
     },
     "codex": {
+      "gpt6astra": {
+        "label": "GPT-6 Astra",
+        "description": "Insignia de nueva generación para el uso autónomo del ordenador y tareas agénticas largas."
+      },
       "gpt56sol": {
         "label": "GPT-5.6 Sol",
         "description": "Modelo frontera para trabajo profesional complejo."
@@ -1625,10 +1664,17 @@
       "tooltip": "Automatically accept file edits",
       "description": "Automatically accept file creation/editing, reducing confirmation steps"
     },
+    "auto": {
+      "label": "Aprobación automática",
+      "shortLabel": "Auto",
+      "tooltip": "Deja que el revisor nativo gestione automáticamente las solicitudes de aprobación",
+      "description": "Usa el revisor nativo del proveedor manteniendo los límites de seguridad"
+    },
     "bypassPermissions": {
-      "label": "Auto Mode",
-      "tooltip": "Bypass all permission checks",
-      "description": "Fully automated, bypassing all permission checks [Use with caution]"
+      "label": "Automático total",
+      "shortLabel": "Total",
+      "tooltip": "Omitir todas las comprobaciones de permisos",
+      "description": "Totalmente automatizado, omitiendo todas las comprobaciones de permisos [Usar con precaución]"
     }
   },
   "codexModes": {
@@ -1646,6 +1692,12 @@
       "label": "Auto Edit",
       "tooltip": "Codex approval_policy=on-request – asks for approval when needed",
       "description": "Balanced option. Allows normal editing flow while still requiring approvals when needed."
+    },
+    "auto": {
+      "label": "Aprobar por mí",
+      "shortLabel": "Auto",
+      "tooltip": "Codex approvals_reviewer=auto_review – un revisor automático gestiona las solicitudes aptas.",
+      "description": "Mantiene el sandbox workspace-write y escala las solicitudes que el revisor no puede aprobar."
     },
     "bypassPermissions": {
       "label": "Full Auto",
@@ -1687,6 +1739,12 @@
     },
     "kimi": {
       "label": "Kimi CLI"
+    },
+    "minimax": {
+      "label": "MiniMax Code"
+    },
+    "zcode": {
+      "label": "ZCode"
     },
     "gemini": {
       "label": "Gemini Cli"

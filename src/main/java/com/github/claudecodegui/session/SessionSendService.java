@@ -8,6 +8,7 @@ import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.github.claudecodegui.provider.zcode.ZcodeSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -36,6 +37,7 @@ public class SessionSendService {
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
     private final GrokSDKBridge grokSDKBridge;
+    private final ZcodeSDKBridge zcodeSDKBridge;
     private final Map<String, MarkerCliBridge> cliBridges;
     private final SessionContextService contextService;
 
@@ -68,6 +70,24 @@ public class SessionSendService {
             SessionContextService contextService,
             GrokSDKBridge grokSDKBridge
     ) {
+        this(project, state, callbackFacade, messageParser, messageMerger, gson,
+                claudeSDKBridge, codexSDKBridge, cliBridges, contextService, grokSDKBridge, null);
+    }
+
+    public SessionSendService(
+            Project project,
+            SessionState state,
+            SessionCallbackFacade callbackFacade,
+            MessageParser messageParser,
+            MessageMerger messageMerger,
+            Gson gson,
+            ClaudeSDKBridge claudeSDKBridge,
+            CodexSDKBridge codexSDKBridge,
+            Map<String, MarkerCliBridge> cliBridges,
+            SessionContextService contextService,
+            GrokSDKBridge grokSDKBridge,
+            ZcodeSDKBridge zcodeSDKBridge
+    ) {
         this.project = project;
         this.state = state;
         this.callbackFacade = callbackFacade;
@@ -77,6 +97,7 @@ public class SessionSendService {
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
         this.grokSDKBridge = grokSDKBridge;
+        this.zcodeSDKBridge = zcodeSDKBridge;
         this.cliBridges = cliBridges != null ? cliBridges : Collections.emptyMap();
         this.contextService = contextService;
     }
@@ -175,6 +196,18 @@ public class SessionSendService {
                     normalizedRequestedEffort
             );
         }
+        if ("zcode".equals(currentProvider) && zcodeSDKBridge != null) {
+            return sendToZcode(
+                    channelId,
+                    input,
+                    attachments,
+                    openedFilesJson,
+                    agentPrompt,
+                    fileTagPaths,
+                    effectivePermissionMode,
+                    normalizedRequestedEffort
+            );
+        }
 
         if (cliBridges.containsKey(currentProvider) && !"grok".equals(currentProvider)) {
             if ("dsh".equals(currentProvider) && requestedDshPreset != null) {
@@ -220,6 +253,9 @@ public class SessionSendService {
         if (trimmed.isEmpty()) {
             return null;
         }
+        if ("autoEdit".equals(trimmed)) {
+            return "acceptEdits";
+        }
         if (SessionState.isValidPermissionMode(trimmed)) {
             return trimmed;
         }
@@ -236,14 +272,22 @@ public class SessionSendService {
             resolvedMode = "default";
         }
 
-        // Codex and Grok run as full SDK bridges (not MarkerCli providers, so they
+        boolean isProviderWithoutPlanMode = "codex".equals(provider)
+                || "grok".equals(provider)
+                || "zcode".equals(provider)
+                || (SessionProviderRouter.isCliProvider(provider) && !"omp".equals(provider));
+        boolean isCliProviderWithoutNativeAuto = SessionProviderRouter.isCliProvider(provider);
+        // Codex, Grok and ZCode run as full SDK bridges (not MarkerCli providers, so they
         // are absent from CLI_PROVIDER_IDS), but like the headless CLI providers
         // they have no plan-mode equivalent — so plan still downgrades to default.
         // EXCEPT omp, where "plan" is a model role (`omp --model plan`), not Claude
-        // plan mode.
-        if (("codex".equals(provider) || "grok".equals(provider)
-                || (SessionProviderRouter.isCliProvider(provider) && !"omp".equals(provider)))
+        // plan mode. Native auto review is limited to Claude/Codex; Grok retains its
+        // existing internal auto-approve alias, while the Webview still hides auto there.
+        if (isProviderWithoutPlanMode
                 && "plan".equals(resolvedMode)) {
+            return "default";
+        }
+        if (isCliProviderWithoutNativeAuto && "auto".equals(resolvedMode)) {
             return "default";
         }
         return resolvedMode;
@@ -398,6 +442,58 @@ public class SessionSendService {
         ).thenApply(result -> null);
     }
 
+    private CompletableFuture<Void> sendToZcode(
+            String channelId,
+            String input,
+            List<ClaudeSession.Attachment> attachments,
+            JsonObject openedFilesJson,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String effectivePermissionMode,
+            String requestedReasoningEffort
+    ) {
+        if (zcodeSDKBridge == null) {
+            LOG.error("[Lifecycle] sendToZcode called but ZcodeSDKBridge is null");
+            callbackFacade.notifyStateChange(false, false, "ZCode bridge not available");
+            return CompletableFuture.completedFuture(null);
+        }
+        ZcodeMessageHandler handler = new ZcodeMessageHandler(state, callbackFacade.getCallbackHandler());
+        Boolean streaming = readStreamingEnabled();
+        final String runtimeSessionEpoch = state.getRuntimeSessionEpoch();
+        final String currentModel = state.getModel();
+        String projectBase = project != null ? project.getBasePath() : null;
+        String guardedCwd = com.github.claudecodegui.util.PathUtils.guardWorkingDirectory(
+                state.getCwd(), projectBase);
+        if (guardedCwd == null) {
+            guardedCwd = state.getCwd();
+        } else if (state.getCwd() == null || !guardedCwd.equals(state.getCwd())) {
+            LOG.warn("[Lifecycle] sendToZcode cwd guard: " + state.getCwd() + " -> " + guardedCwd);
+            state.setCwd(guardedCwd);
+        }
+        LOG.info("[Lifecycle] sendToZcode sessionId=" + (state.getSessionId() != null ? state.getSessionId() : "(new)")
+                + ", epoch=" + runtimeSessionEpoch
+                + ", cwd=" + guardedCwd
+                + ", model=" + currentModel
+                + ", fileTags=" + (fileTagPaths != null ? fileTagPaths.size() : 0));
+
+        return zcodeSDKBridge.sendMessage(
+                channelId,
+                input,
+                state.getSessionId(),
+                runtimeSessionEpoch,
+                guardedCwd,
+                attachments,
+                effectivePermissionMode,
+                currentModel,
+                openedFilesJson,
+                agentPrompt,
+                streaming,
+                false,
+                requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort(),
+                handler
+        ).thenApply(result -> null);
+    }
+
     private CompletableFuture<Void> sendToCliProvider(
             String provider,
             String channelId,
@@ -469,6 +565,9 @@ public class SessionSendService {
         CallbackHandler callbacks = callbackFacade.getCallbackHandler();
         if ("grok".equals(provider)) {
             return new GrokMessageHandler(state, callbacks);
+        }
+        if ("zcode".equals(provider)) {
+            return new ZcodeMessageHandler(state, callbacks);
         }
         return new CodexMessageHandler(state, callbacks);
     }

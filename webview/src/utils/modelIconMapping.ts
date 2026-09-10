@@ -19,6 +19,7 @@ export type ModelVendor =
   | 'moonshot'
   | 'zhipu'
   | 'minimax'
+  | 'zcode'
   | 'xiaomi'
   | 'bailian'
   | 'longcat'
@@ -49,6 +50,8 @@ const MODEL_VENDOR_PATTERNS: ReadonlyArray<readonly [RegExp, ModelVendor]> = [
   [/glm|chatglm/i, 'zhipu'],
   [/zhipu/i, 'zhipu'],
   [/minimax/i, 'minimax'],
+  // ZCode desktop harness; its GLM-* models still resolve to the zhipu mark above.
+  [/zcode/i, 'zcode'],
   [/xiaomi|mimo/i, 'xiaomi'],
   [/longcat/i, 'longcat'],
   [/opencode/i, 'opencode'],
@@ -107,6 +110,8 @@ const PROVIDER_TO_VENDOR: Record<string, ModelVendor> = {
   'kimi-coding': 'kimi',
   zhipu: 'zhipu',
   minimax: 'minimax',
+  // Runtime CLI provider id (ProviderSelect, BlinkingLogo, CliSection)
+  zcode: 'zcode',
   xiaomi: 'xiaomi',
   'xiaomi-plan': 'xiaomi',
   bailian: 'bailian',

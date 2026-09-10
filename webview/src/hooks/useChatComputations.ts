@@ -137,14 +137,12 @@ export function useChatComputations({
   getMessageText,
   getContentBlocks,
 }: UseChatComputationsParams) {
-  // Ref-backed scan over messages for tool_result blocks, with a per-id cache.
-  const messagesRef = useRef(messages);
-  messagesRef.current = messages;
+  // Scan over messages for tool_result blocks, with a per-id ref-backed cache.
   const toolResultRawMapRef = useRef<Map<string, ClaudeRawMessage>>(new Map());
 
   const findToolResult = useCallback((toolUseId?: string, messageIndex?: number): ToolResultBlock | null => {
     if (!toolUseId || typeof messageIndex !== 'number') return null;
-    const currentMessages = messagesRef.current;
+    const currentMessages = messages;
     const cachedRaw = toolResultRawMapRef.current.get(toolUseId);
     if (cachedRaw != null) {
       const content = cachedRaw.content ?? cachedRaw.message?.content;
@@ -172,7 +170,7 @@ export function useChatComputations({
       }
     }
     return null;
-  }, []);
+  }, [messages]);
 
   const getToolResultRaw = useCallback<GetToolResultRawFn>(
     (toolUseId: string) => toolResultRawMapRef.current.get(toolUseId) ?? null,
@@ -237,10 +235,7 @@ export function useChatComputations({
   // a text-only new turn must not temporarily revive a previous turn's plan.
   // Settled/history views scan the full transcript for Claude; Codex is always
   // narrowed to its latest user turn inside deriveTodosForTurn.
-  const todoScopeMessages = useMemo(
-    () => (streamingActive ? latestTurnMessages : messages),
-    [streamingActive, latestTurnMessages, messages],
-  );
+  const todoScopeMessages = streamingActive ? latestTurnMessages : messages;
 
   const extractedSubagents = useSubagents({
     messages: currentProvider === 'codex' ? messages : statusScopeMessages,

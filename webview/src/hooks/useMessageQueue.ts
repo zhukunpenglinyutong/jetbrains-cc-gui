@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { Attachment } from '../components/ChatInputBox/types';
 
 export interface QueuedMessage {
@@ -37,8 +37,6 @@ export function useMessageQueue({
   onExecute,
 }: UseMessageQueueOptions): UseMessageQueueReturn {
   const [queue, setQueue] = useState<QueuedMessage[]>([]);
-  const prevLoadingRef = useRef(isLoading);
-  const isExecutingFromQueueRef = useRef(false);
 
   // Generate unique ID
   const generateId = useCallback(() => {
@@ -66,26 +64,19 @@ export function useMessageQueue({
     setQueue([]);
   }, []);
 
-  // Auto-execute next message when loading completes
+  // Auto-execute next message whenever the chat is idle. Dequeue and execute
+  // must stay atomic inside this effect: deferring the execution behind a
+  // timer let the very next re-render (the dequeue's own state update) run
+  // effect cleanup, cancel the timer, and silently drop the already-dequeued
+  // message. Checking "idle && non-empty" instead of a loading transition also
+  // covers messages enqueued while `isLoading` was already flipping to false.
   useEffect(() => {
-    // Detect transition from loading to not loading
-    const wasLoading = prevLoadingRef.current;
-    prevLoadingRef.current = isLoading;
-
-    // If just finished loading and queue has items, execute next
-    if (wasLoading && !isLoading && !isExecutingFromQueueRef.current && queue.length > 0) {
-      const nextMessage = queue[0];
-      isExecutingFromQueueRef.current = true;
-
-      // Remove from queue first
-      setQueue(prev => prev.slice(1));
-
-      // Execute with small delay to ensure state updates
-      setTimeout(() => {
-        onExecute(nextMessage.content, nextMessage.attachments);
-        isExecutingFromQueueRef.current = false;
-      }, 50);
+    if (isLoading || queue.length === 0) {
+      return;
     }
+    const nextMessage = queue[0];
+    setQueue(prev => prev.slice(1));
+    onExecute(nextMessage.content, nextMessage.attachments);
   }, [isLoading, queue, onExecute]);
 
   return {

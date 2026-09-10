@@ -1,5 +1,5 @@
 import React from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { m, useReducedMotion } from "motion/react";
 
 export function FadeIn({
   children,
@@ -16,7 +16,7 @@ export function FadeIn({
   }
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
@@ -27,7 +27,7 @@ export function FadeIn({
       className={className}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -44,7 +44,7 @@ export function StaggerContainer({
   }
 
   return (
-    <motion.div
+    <m.div
       initial="hidden"
       animate="visible"
       variants={{
@@ -59,7 +59,7 @@ export function StaggerContainer({
       className={className}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -75,7 +75,7 @@ export function StaggerItem({
   }
 
   return (
-    <motion.div
+    <m.div
       variants={{
         hidden: { opacity: 0, y },
         visible: {
@@ -90,6 +90,6 @@ export function StaggerItem({
       className={className}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }

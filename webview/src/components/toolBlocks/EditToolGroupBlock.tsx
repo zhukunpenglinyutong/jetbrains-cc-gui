@@ -249,7 +249,7 @@ const EditFileItem = ({ item, onFileClick, onShowDiff, onRefresh, t }: EditFileI
       </span>
 
       {(item.lineStart || item.additions > 0 || item.deletions > 0) && (
-        <span style={ITEM_STATS_STYLE}>
+        <span className="code-font-surface" style={ITEM_STATS_STYLE}>
           {item.lineStart && (
             <span style={LINE_INFO_STYLE}>
               {item.lineEnd && item.lineEnd !== item.lineStart
@@ -382,7 +382,7 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
           </span>
 
           {(totalAdditions > 0 || totalDeletions > 0) && (
-            <span style={TOTAL_STATS_STYLE}>
+            <span className="code-font-surface" style={TOTAL_STATS_STYLE}>
               {totalAdditions > 0 && <span style={ADDED_TEXT_STYLE}>+{totalAdditions}</span>}
               {totalAdditions > 0 && totalDeletions > 0 && <span style={STATS_SPACER_STYLE} />}
               {totalDeletions > 0 && <span style={DELETED_TEXT_STYLE}>-{totalDeletions}</span>}

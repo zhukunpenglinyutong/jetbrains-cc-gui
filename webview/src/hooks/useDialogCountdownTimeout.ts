@@ -33,7 +33,9 @@ export function useDialogCountdownTimeout({
   // Capture the latest timeoutSeconds so the open effect can read it without
   // adding timeoutSeconds to its dependency list.
   const capturedTimeoutRef = useRef(timeoutSeconds);
-  capturedTimeoutRef.current = timeoutSeconds;
+  useEffect(() => {
+    capturedTimeoutRef.current = timeoutSeconds;
+  });
 
   const triggerTimeout = useCallback(() => {
     expiredRef.current = true;

@@ -1,23 +1,17 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Skill, SkillsConfig, SkillScope, SkillFilter, SkillEnabledFilter } from '../../types/skill';
 import { sendToJava } from '../../utils/bridge';
 import { SkillHelpDialog } from './SkillHelpDialog';
 import { SkillConfirmDialog } from './SkillConfirmDialog';
+import { SkillToolbar } from './SkillToolbar';
+import { SkillList } from './SkillList';
+import { useSkillToggle } from './useSkillToggle';
+import { useFilteredSkills } from './useFilteredSkills';
 import { ToastContainer, type ToastMessage } from '../Toast';
 
 interface SkillsSettingsSectionProps {
   currentProvider?: string;
-}
-
-interface SkillToggleResult {
-  success: boolean;
-  enabled?: boolean;
-  id?: string;
-  requestId?: string;
-  name?: string;
-  error?: string;
-  conflict?: boolean;
 }
 
 /**
@@ -45,12 +39,6 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [deletingSkill, setDeletingSkill] = useState<Skill | null>(null);
 
-  // Skills currently being toggled (used to disable buttons and prevent duplicate clicks)
-  const [togglingSkills, setTogglingSkills] = useState<Set<string>>(new Set());
-  const toggleTimeoutsRef = useRef<Map<string, number>>(new Map());
-  const latestToggleRequestsRef = useRef<Map<string, string>>(new Map());
-  const toggleRequestSequenceRef = useRef(0);
-
   // Toast state
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -66,87 +54,23 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
 
   const isCodex = currentProvider === 'codex';
 
-  useEffect(() => {
-    setTogglingSkills(new Set());
-  }, [currentProvider]);
-
-  // Compute Skills lists (provider-aware: Claude uses global/local, Codex uses user/repo)
-  const primarySkillList = useMemo(
-    () => Object.values(isCodex ? (skills.user ?? {}) : skills.global),
-    [isCodex, skills.global, skills.user]
-  );
-  const secondarySkillList = useMemo(
-    () => Object.values(isCodex ? (skills.repo ?? {}) : skills.local),
-    [isCodex, skills.local, skills.repo]
-  );
-  const allSkillList = useMemo(() => [...primarySkillList, ...secondarySkillList], [primarySkillList, secondarySkillList]);
-
-  // Filtered Skills list
-  const filteredSkills = useMemo(() => {
-    let list: Skill[] = [];
-    if (currentFilter === 'all') {
-      list = allSkillList;
-    } else if (currentFilter === 'global' || currentFilter === 'user') {
-      list = primarySkillList;
-    } else {
-      list = secondarySkillList;
-    }
-
-    // Filter by enabled status
-    if (enabledFilter === 'enabled') {
-      list = list.filter(s => s.enabled);
-    } else if (enabledFilter === 'disabled') {
-      list = list.filter(s => !s.enabled);
-    }
-
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      list = list.filter(s =>
-        s.name.toLowerCase().includes(query) ||
-        s.path.toLowerCase().includes(query) ||
-        (s.description && s.description.toLowerCase().includes(query))
-      );
-    }
-
-    // Sort by enabled status: enabled first
-    return [...list].sort((a, b) => {
-      if (a.enabled === b.enabled) return 0;
-      return a.enabled ? -1 : 1;
-    });
-  }, [currentFilter, enabledFilter, searchQuery, allSkillList, primarySkillList, secondarySkillList]);
-
-  // Counts
-  const totalCount = allSkillList.length;
-  const primaryCount = primarySkillList.length;
-  const secondaryCount = secondarySkillList.length;
-  const { enabledCount, disabledCount } = useMemo(() => {
-    let enabled = 0;
-    for (const s of allSkillList) if (s.enabled) enabled++;
-    return { enabledCount: enabled, disabledCount: allSkillList.length - enabled };
-  }, [allSkillList]);
-
-  // Icon colors
-  const iconColors = [
-    '#3B82F6', '#10B981', '#8B5CF6', '#F59E0B',
-    '#EF4444', '#EC4899', '#06B6D4', '#6366F1',
-  ];
-
-  const getIconColor = (skillId: string): string => {
-    let hash = 0;
-    for (let i = 0; i < skillId.length; i++) {
-      hash = skillId.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return iconColors[Math.abs(hash) % iconColors.length];
-  };
-
-  const getSkillIconStyle = (skillId: string, enabled: boolean): React.CSSProperties => ({
-    color: enabled ? getIconColor(skillId) : 'var(--text-tertiary)',
-  });
-
   const loadSkills = useCallback(() => {
     setLoading(true);
     sendToJava('get_all_skills', {});
   }, []);
+
+  // Enable/disable toggle state machine
+  const { togglingSkills, handleToggle, handleToggleResult } = useSkillToggle(currentProvider, loadSkills, addToast);
+
+  // Filtered/sorted skill lists and tab counts
+  const {
+    filteredSkills,
+    totalCount,
+    primaryCount,
+    secondaryCount,
+    enabledCount,
+    disabledCount,
+  } = useFilteredSkills(skills, isCodex, currentFilter, enabledFilter, searchQuery);
 
   // Initialization
   useEffect(() => {
@@ -203,40 +127,7 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
     };
 
     // Register callback: enable/disable result
-    window.skillToggleResult = (jsonStr: string) => {
-      try {
-        const result = JSON.parse(jsonStr) as SkillToggleResult;
-        if (!result.id || !result.requestId
-            || latestToggleRequestsRef.current.get(result.id) !== result.requestId) {
-          return;
-        }
-
-        latestToggleRequestsRef.current.delete(result.id);
-        const timeoutId = toggleTimeoutsRef.current.get(result.id);
-        if (timeoutId !== undefined) {
-          window.clearTimeout(timeoutId);
-          toggleTimeoutsRef.current.delete(result.id);
-        }
-        setTogglingSkills(prev => {
-          const next = new Set(prev);
-          next.delete(result.id as string);
-          return next;
-        });
-
-        if (result.success) {
-          addToast(result.enabled ? t('skills.enableSuccess', { name: result.name }) : t('skills.disableSuccess', { name: result.name }), 'success');
-          loadSkills();
-        } else {
-          if (result.conflict) {
-            addToast(t('skills.operationFailed', { error: result.error }), 'warning');
-          } else {
-            addToast(result.error || t('skills.operationError'), 'error');
-          }
-        }
-      } catch (error) {
-        console.error('[SkillsSettings] Failed to parse toggle result:', error);
-      }
-    };
+    window.skillToggleResult = handleToggleResult;
 
     // Load Skills
     loadSkills();
@@ -254,12 +145,9 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
       window.skillImportResult = undefined;
       window.skillDeleteResult = undefined;
       window.skillToggleResult = undefined;
-      toggleTimeoutsRef.current.forEach(timeoutId => window.clearTimeout(timeoutId));
-      toggleTimeoutsRef.current.clear();
-      latestToggleRequestsRef.current.clear();
       document.removeEventListener('click', handleClickOutside);
     };
-  }, [loadSkills, addToast]);
+  }, [loadSkills, addToast, handleToggleResult]);
 
   // Auto-refresh when provider changes (skip initial mount — handled by init useEffect above)
   const isInitialMount = useRef(true);
@@ -333,262 +221,44 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
     setDeletingSkill(null);
   };
 
-  // Enable/disable Skill
-  const handleToggle = (skill: Skill, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent triggering card expand
-    if (togglingSkills.has(skill.id) || toggleTimeoutsRef.current.has(skill.id)) return;
-
-    const requestId = `${Date.now()}-${++toggleRequestSequenceRef.current}`;
-    latestToggleRequestsRef.current.set(skill.id, requestId);
-    setTogglingSkills(prev => new Set(prev).add(skill.id));
-    const timeoutId = window.setTimeout(() => {
-      if (latestToggleRequestsRef.current.get(skill.id) !== requestId) {
-        return;
-      }
-      latestToggleRequestsRef.current.delete(skill.id);
-      toggleTimeoutsRef.current.delete(skill.id);
-      setTogglingSkills(prev => {
-        const next = new Set(prev);
-        next.delete(skill.id);
-        return next;
-      });
-      addToast(t('skills.operationError'), 'error');
-    }, 15000);
-    toggleTimeoutsRef.current.set(skill.id, timeoutId);
-    sendToJava('toggle_skill', {
-      id: skill.id,
-      requestId,
-      name: skill.name,
-      scope: skill.scope,
-      enabled: skill.enabled,
-      ...(isCodex && skill.skillPath ? { skillPath: skill.skillPath } : {}),
-    });
-  };
-
-  // Scope label mapping for readable badge text
-  const scopeLabelMap: Record<string, string> = {
-    user: t('skills.user'),
-    repo: t('skills.repo'),
-    global: t('chat.global'),
-    local: t('chat.localProject'),
-  };
-
   return (
     <div className="skills-settings-section">
       {/* Toolbar */}
-      <div className="skills-toolbar">
-        {/* Filter tabs */}
-        <div className="filter-tabs" role="tablist">
-          <div
-            className={`tab-item ${currentFilter === 'all' ? 'active' : ''}`}
-            role="tab"
-            tabIndex={0}
-            aria-selected={currentFilter === 'all'}
-            onClick={() => setCurrentFilter('all')}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrentFilter('all'); } }}
-          >
-            {t('skills.all')} <span className="count-badge">{totalCount}</span>
-          </div>
-          <div
-            className={`tab-item ${currentFilter === (isCodex ? 'user' : 'global') ? 'active' : ''}`}
-            role="tab"
-            tabIndex={0}
-            aria-selected={currentFilter === (isCodex ? 'user' : 'global')}
-            onClick={() => setCurrentFilter(isCodex ? 'user' : 'global')}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrentFilter(isCodex ? 'user' : 'global'); } }}
-          >
-            {isCodex ? t('skills.user') : t('skills.global')} <span className="count-badge">{primaryCount}</span>
-          </div>
-          <div
-            className={`tab-item ${currentFilter === (isCodex ? 'repo' : 'local') ? 'active' : ''}`}
-            role="tab"
-            tabIndex={0}
-            aria-selected={currentFilter === (isCodex ? 'repo' : 'local')}
-            onClick={() => setCurrentFilter(isCodex ? 'repo' : 'local')}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrentFilter(isCodex ? 'repo' : 'local'); } }}
-          >
-            {isCodex ? t('skills.repo') : t('skills.local')} <span className="count-badge">{secondaryCount}</span>
-          </div>
-          {/* Enabled status filter */}
-          <div className="filter-separator"></div>
-          <div
-            className={`tab-item enabled-filter ${enabledFilter === 'enabled' ? 'active' : ''}`}
-            role="tab"
-            tabIndex={0}
-            aria-selected={enabledFilter === 'enabled'}
-            onClick={() => setEnabledFilter(enabledFilter === 'enabled' ? 'all' : 'enabled')}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEnabledFilter(enabledFilter === 'enabled' ? 'all' : 'enabled'); } }}
-            title={t('skills.filterEnabled')}
-          >
-            <span className="codicon codicon-check"></span>
-            {t('skills.enabled')} <span className="count-badge">{enabledCount}</span>
-          </div>
-          <div
-            className={`tab-item enabled-filter ${enabledFilter === 'disabled' ? 'active' : ''}`}
-            role="tab"
-            tabIndex={0}
-            aria-selected={enabledFilter === 'disabled'}
-            onClick={() => setEnabledFilter(enabledFilter === 'disabled' ? 'all' : 'disabled')}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEnabledFilter(enabledFilter === 'disabled' ? 'all' : 'disabled'); } }}
-            title={t('skills.filterDisabled')}
-          >
-            <span className="codicon codicon-circle-slash"></span>
-            {t('skills.disabled')} <span className="count-badge">{disabledCount}</span>
-          </div>
-        </div>
-
-        {/* Right-side tools */}
-        <div className="toolbar-right">
-          {/* Search box */}
-          <div className="search-box">
-            <span className="codicon codicon-search"></span>
-            <input
-              type="text"
-              className="search-input"
-              placeholder={t('skills.searchPlaceholder')}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
-          {/* Help button */}
-          <button
-            className="icon-btn"
-            onClick={() => setShowHelpDialog(true)}
-            title={t('skills.whatIsSkills')}
-          >
-            <span className="codicon codicon-question"></span>
-          </button>
-
-          {/* Import button */}
-          <div className="add-dropdown" ref={dropdownRef}>
-            <button
-              className="icon-btn primary"
-              onClick={() => setShowDropdown(!showDropdown)}
-              title={t('skills.importSkill')}
-            >
-              <span className="codicon codicon-add"></span>
-            </button>
-            {showDropdown && (
-              <div className="dropdown-menu">
-                <div className="dropdown-item" onClick={() => handleImport(primaryScope)}>
-                  <span className="codicon codicon-globe"></span>
-                  {isCodex ? t('skills.importUserSkill') : t('skills.importGlobalSkill')}
-                </div>
-                <div className="dropdown-item" onClick={() => handleImport(secondaryScope)}>
-                  <span className="codicon codicon-desktop-download"></span>
-                  {isCodex ? t('skills.importRepoSkill') : t('skills.importLocalSkill')}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Refresh button */}
-          <button
-            className="icon-btn"
-            onClick={handleRefresh}
-            disabled={loading}
-            title={t('chat.refresh')}
-          >
-            <span className={`codicon codicon-refresh ${loading ? 'spinning' : ''}`}></span>
-          </button>
-        </div>
-      </div>
+      <SkillToolbar
+        isCodex={isCodex}
+        currentFilter={currentFilter}
+        enabledFilter={enabledFilter}
+        totalCount={totalCount}
+        primaryCount={primaryCount}
+        secondaryCount={secondaryCount}
+        enabledCount={enabledCount}
+        disabledCount={disabledCount}
+        searchQuery={searchQuery}
+        loading={loading}
+        showDropdown={showDropdown}
+        dropdownRef={dropdownRef}
+        primaryScope={primaryScope}
+        secondaryScope={secondaryScope}
+        onFilterChange={setCurrentFilter}
+        onEnabledFilterChange={setEnabledFilter}
+        onSearchChange={setSearchQuery}
+        onShowHelp={() => setShowHelpDialog(true)}
+        onToggleDropdown={() => setShowDropdown(!showDropdown)}
+        onImport={handleImport}
+        onRefresh={handleRefresh}
+      />
 
       {/* Skills list */}
-      <div className="skill-list">
-        {filteredSkills.map((skill) => (
-          <div
-            key={skill.id}
-            className={`skill-card ${expandedSkills.has(skill.id) ? 'expanded' : ''} ${!skill.enabled ? 'disabled' : ''}`}
-          >
-            {/* Card header */}
-            <div className="card-header" onClick={() => toggleExpand(skill.id)}>
-              {/* Enable/disable toggle */}
-              <button
-                className={`toggle-switch ${skill.enabled ? 'enabled' : 'disabled'} ${togglingSkills.has(skill.id) ? 'loading' : ''}`}
-                onClick={(e) => handleToggle(skill, e)}
-                disabled={togglingSkills.has(skill.id)}
-                title={skill.enabled ? t('chat.clickToDisable') : t('chat.clickToEnable')}
-              >
-                {togglingSkills.has(skill.id) ? (
-                  <span className="codicon codicon-loading codicon-modifier-spin"></span>
-                ) : skill.enabled ? (
-                  <span className="codicon codicon-check"></span>
-                ) : (
-                  <span className="codicon codicon-circle-slash"></span>
-                )}
-              </button>
-
-              <div className="skill-icon-wrapper" style={getSkillIconStyle(skill.id, skill.enabled)}>
-                <span className="codicon codicon-folder"></span>
-              </div>
-
-              <div className="skill-info">
-                <div className="skill-header-row">
-                  <span className={`skill-name ${!skill.enabled ? 'muted' : ''}`}>{skill.name}</span>
-                  <span className={`scope-badge ${skill.scope}`}>
-                    <span className={`codicon ${(skill.scope === 'global' || skill.scope === 'user') ? 'codicon-globe' : 'codicon-desktop-download'}`}></span>
-                    {scopeLabelMap[skill.scope] || skill.scope}
-                  </span>
-                  {!skill.enabled && (
-                    <span className="status-badge disabled">
-                      {t('chat.disabled')}
-                    </span>
-                  )}
-                </div>
-                <div className="skill-path" title={skill.path}>{skill.path}</div>
-              </div>
-
-              <div className="expand-indicator">
-                <span className={`codicon ${expandedSkills.has(skill.id) ? 'codicon-chevron-down' : 'codicon-chevron-right'}`}></span>
-              </div>
-            </div>
-
-            {/* Expanded content */}
-            {expandedSkills.has(skill.id) && (
-              <div className="card-content">
-                <div className="info-section">
-                  {skill.description ? (
-                    <div className="description-container">
-                      <div className="description-label">{t('skills.description')}:</div>
-                      <div className="description-content">{skill.description}</div>
-                    </div>
-                  ) : (
-                    <div className="description-placeholder">{t('skills.noDescription')}</div>
-                  )}
-                </div>
-
-                <div className="actions-section">
-                  <button className="action-btn edit-btn" onClick={() => handleOpen(skill)}>
-                    <span className="codicon codicon-edit"></span> {t('common.edit')}
-                  </button>
-                  <button className="action-btn delete-btn" onClick={() => handleDelete(skill)}>
-                    <span className="codicon codicon-trash"></span> {t('common.delete')}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-
-        {/* Empty state */}
-        {filteredSkills.length === 0 && !loading && (
-          <div className="empty-state">
-            <span className="codicon codicon-extensions"></span>
-            <p>{t('skills.noMatchingSkills')}</p>
-            <p className="hint">{t('skills.importHint')}</p>
-          </div>
-        )}
-
-        {/* Loading state */}
-        {loading && filteredSkills.length === 0 && (
-          <div className="loading-state">
-            <span className="codicon codicon-loading codicon-modifier-spin"></span>
-            <p>{t('common.loading')}</p>
-          </div>
-        )}
-      </div>
+      <SkillList
+        skills={filteredSkills}
+        loading={loading}
+        expandedSkills={expandedSkills}
+        togglingSkills={togglingSkills}
+        onToggleExpand={toggleExpand}
+        onToggle={handleToggle}
+        onOpen={handleOpen}
+        onDelete={handleDelete}
+      />
 
       {/* Dialogs */}
       {showHelpDialog && (

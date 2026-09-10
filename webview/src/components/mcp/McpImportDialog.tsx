@@ -35,7 +35,9 @@ function uniqueId(baseId: string, taken: Set<string>): string {
  * Import MCP servers from a GitHub Copilot configuration (root key `servers`).
  * The Java backend does the format mapping; this dialog only pastes, previews and saves.
  */
-export function McpImportDialog({ currentProvider = 'claude', existingIds = [], onClose, onImport }: McpImportDialogProps) {
+const EMPTY_EXISTING_IDS: string[] = [];
+
+export function McpImportDialog({ currentProvider = 'claude', existingIds = EMPTY_EXISTING_IDS, onClose, onImport }: McpImportDialogProps) {
   const { t } = useTranslation();
   const isCodexMode = currentProvider === 'codex';
   const [jsonContent, setJsonContent] = useState('');

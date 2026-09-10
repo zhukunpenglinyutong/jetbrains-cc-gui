@@ -12,6 +12,9 @@ import {
 import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 import { useBetaProviderNotice } from '../../../hooks/useBetaProviderNotice';
 import { useHiddenCliProviders } from '../../../hooks/useCliProviderVisibility';
+import { CodexQuotaSubmenu } from './CodexQuotaSubmenu';
+import { ProviderOptionRow } from './ProviderOptionRow';
+import { ProviderCliFooter } from './ProviderCliFooter';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
@@ -25,39 +28,6 @@ const DROPDOWN_STYLE: React.CSSProperties = {
 const TOAST_STYLE: React.CSSProperties = { zIndex: 20000 };
 /** Gap (px) between the floating quota panel and the top of the provider dropdown. */
 const SUBMENU_GAP_PX = 4;
-const SUBMENU_STYLE: React.CSSProperties = {
-  // Float the quota panel above the whole dropdown (full-width, never overlapping rows).
-  position: 'absolute',
-  left: 0,
-  right: 0,
-  zIndex: 10001,
-  whiteSpace: 'normal',
-};
-const SUBMENU_ROW_STYLE: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '2px',
-  alignItems: 'flex-start',
-};
-const SUBMENU_SECTION_STYLE: React.CSSProperties = {
-  padding: '6px 12px',
-};
-const SUBMENU_DIVIDER_STYLE: React.CSSProperties = {
-  height: '1px',
-  background: 'var(--dropdown-border)',
-};
-
-function formatTokens(value: number): string {
-  if (!Number.isFinite(value)) return '0';
-  return Math.trunc(value).toLocaleString();
-}
-
-function getProviderOptionStyle(enabled: boolean): React.CSSProperties {
-  return {
-    opacity: enabled ? 1 : 0.5,
-    cursor: enabled ? 'pointer' : 'not-allowed',
-  };
-}
 
 interface ProviderSelectProps {
   value: string;
@@ -199,103 +169,27 @@ export const ProviderSelect = ({ value, onChange, compact = false, onOpenCliSett
     }
   }, [isOpen, recalculate]);
 
-  const renderCodexQuotaSubmenu = () => {
-    const fiveHour = codexQuota?.windows.fiveHour;
-    const weekly = codexQuota?.windows.weekly;
-    // API-key providers are billed per token and have no subscription quota,
-    // so the window rows would only ever show "Unavailable" noise.
-    const isApiKeyMode = codexQuota?.reasonCode === 'api_key_mode';
+  const handleRowMouseEnter = useCallback((e: React.MouseEvent<HTMLDivElement>, providerId: string) => {
+    if (providerId === 'codex') {
+      // Float the quota panel just above the entire dropdown so it
+      // never overlaps the provider rows, regardless of panel width.
+      const rowRect = e.currentTarget.getBoundingClientRect();
+      const dropdownRect = dropdownRef.current?.getBoundingClientRect();
+      const bottomOffset = dropdownRect
+        ? rowRect.bottom - dropdownRect.top + SUBMENU_GAP_PX
+        : rowRect.height + SUBMENU_GAP_PX;
+      setSubmenuBottom(Math.round(bottomOffset));
+      setActiveSubmenu('codexQuota');
+    } else {
+      setActiveSubmenu('none');
+    }
+  }, []);
 
-    const renderWindowRow = (
-      label: string,
-      window: CodexSubscriptionQuotaSnapshot['windows']['fiveHour'] | undefined,
-      isLast: boolean,
-    ) => {
-      const hasLimit = typeof window?.limitTokens === 'number' && Number.isFinite(window.limitTokens);
-      const hasRemaining = typeof window?.remainingTokens === 'number' && Number.isFinite(window.remainingTokens);
-      const limitTokens = typeof window?.limitTokens === 'number' ? window.limitTokens : undefined;
-      const remainingTokens = typeof window?.remainingTokens === 'number' ? window.remainingTokens : undefined;
-      const remainingPercentFromApi = typeof window?.remainingPercent === 'number' && Number.isFinite(window.remainingPercent)
-        ? window.remainingPercent
-        : null;
-      const remainingPercent = remainingPercentFromApi !== null
-        ? Math.max(0, Math.min(100, Math.round(remainingPercentFromApi)))
-        : hasLimit && hasRemaining && (limitTokens ?? 0) > 0
-          ? Math.max(0, Math.min(100, Math.round(((remainingTokens ?? 0) / (limitTokens ?? 1)) * 100)))
-          : null;
-      const hasUsedTokens = typeof window?.usedTokens === 'number' && Number.isFinite(window.usedTokens) && window.usedTokens > 0;
-      const resetsAt = typeof window?.resetsAt === 'number' && Number.isFinite(window.resetsAt)
-        ? new Date(window.resetsAt).toLocaleString()
-        : null;
-      return (
-        <div style={SUBMENU_SECTION_STYLE}>
-          <div className="selector-option" style={SUBMENU_ROW_STYLE}>
-            <span>{label}</span>
-            <span className="model-description">
-              {window
-                ? remainingPercent !== null
-                  ? resetsAt
-                    ? t('config.codexQuota.windowRemainingPercentWithReset', {
-                        percent: remainingPercent,
-                        value: resetsAt,
-                        defaultValue: '{{percent}}% remaining · Resets {{value}}',
-                      })
-                    : t('config.codexQuota.windowRemainingPercent', {
-                      percent: remainingPercent,
-                      defaultValue: '{{percent}}% remaining',
-                    })
-                  : hasUsedTokens
-                    ? t('config.codexQuota.windowUsedOnly', {
-                      used: formatTokens(window.usedTokens),
-                      defaultValue: '{{used}} used',
-                    })
-                    : t('config.codexQuota.windowUnavailable', { defaultValue: 'Unavailable' })
-                : t('config.codexQuota.windowUnavailable', { defaultValue: 'Unavailable' })}
-            </span>
-          </div>
-          {!isLast && <div style={SUBMENU_DIVIDER_STYLE} />}
-        </div>
-      );
-    };
-
-    return (
-      <div
-        className="selector-dropdown"
-        style={{ ...SUBMENU_STYLE, bottom: `${submenuBottom}px` }}
-        onClick={(e) => e.stopPropagation()}
-        onMouseEnter={(e) => {
-          e.stopPropagation();
-          setActiveSubmenu('codexQuota');
-        }}
-      >
-        <div className="selector-option disabled" style={{ cursor: 'default' }}>
-          <span className="codicon codicon-dashboard" />
-          <div style={SUBMENU_ROW_STYLE}>
-            <span>{t('config.codexQuota.title', { defaultValue: 'Codex quota' })}</span>
-            <span className="model-description">
-              {isApiKeyMode
-                ? t('config.codexQuota.apiKeyMode', { defaultValue: 'API key mode has no subscription quota' })
-                : codexQuota?.status === 'ok'
-                  ? t('config.codexQuota.lastUpdated', {
-                      value: new Date(codexQuota.fetchedAt).toLocaleString(),
-                      defaultValue: 'Updated {{value}}',
-                    })
-                  : quotaLoading
-                    ? t('config.codexQuota.loading', { defaultValue: 'Loading...' })
-                    : t('config.codexQuota.unavailable', { defaultValue: 'Unavailable' })}
-              </span>
-          </div>
-        </div>
-        {!isApiKeyMode && (
-          <>
-            <div style={SUBMENU_DIVIDER_STYLE} />
-            {renderWindowRow(t('config.codexQuota.fiveHour', { defaultValue: '5h usage' }), fiveHour, false)}
-            {renderWindowRow(t('config.codexQuota.weekly', { defaultValue: 'Weekly usage' }), weekly, true)}
-          </>
-        )}
-      </div>
-    );
-  };
+  const handleRowMouseLeave = useCallback((providerId: string) => {
+    if (providerId === 'codex') {
+      setActiveSubmenu('none');
+    }
+  }, []);
 
   return (
     <>
@@ -322,73 +216,33 @@ export const ProviderSelect = ({ value, onChange, compact = false, onOpenCliSett
             style={{ ...DROPDOWN_STYLE, ...positionedStyle }}
           >
             {visibleProviders.map((provider) => (
-              <div
+              <ProviderOptionRow
                 key={provider.id}
-                className={`selector-option ${provider.id === value ? 'selected' : ''} ${!provider.enabled ? 'disabled' : ''}`}
-                onClick={() => handleSelect(provider.id)}
-                style={{
-                  ...getProviderOptionStyle(!!provider.enabled),
-                  ...(provider.id === 'codex' ? { position: 'relative' } : {}),
-                }}
-                data-provider-id={provider.id}
-                onMouseEnter={(e) => {
-                  if (provider.id === 'codex') {
-                    // Float the quota panel just above the entire dropdown so it
-                    // never overlaps the provider rows, regardless of panel width.
-                    const rowRect = e.currentTarget.getBoundingClientRect();
-                    const dropdownRect = dropdownRef.current?.getBoundingClientRect();
-                    const bottomOffset = dropdownRect
-                      ? rowRect.bottom - dropdownRect.top + SUBMENU_GAP_PX
-                      : rowRect.height + SUBMENU_GAP_PX;
-                    setSubmenuBottom(Math.round(bottomOffset));
-                    setActiveSubmenu('codexQuota');
-                  } else {
-                    setActiveSubmenu('none');
-                  }
-                }}
-                onMouseLeave={() => {
-                  if (provider.id === 'codex') {
-                    setActiveSubmenu('none');
-                  }
-                }}
-              >
-                <ProviderModelIcon providerId={provider.id} size={16} colored />
-                <span>{getProviderLabel(provider.id)}</span>
-                <span className="provider-option-trailing">
-                  {provider.id === value && (
-                    <span className="provider-active-dot" aria-hidden="true" />
-                  )}
-                  {provider.beta && (
-                    <span className="provider-beta-badge">
-                      {t('providers.beta.badge', { defaultValue: 'Beta' })}
-                    </span>
-                  )}
-                  {provider.id === 'codex' && (
-                    <span
-                      className="codicon codicon-chevron-right"
-                      style={{ fontSize: '10px' }}
+                provider={provider}
+                isSelected={provider.id === value}
+                label={getProviderLabel(provider.id)}
+                trailingPanel={
+                  activeSubmenu === 'codexQuota' ? (
+                    <CodexQuotaSubmenu
+                      quota={codexQuota}
+                      loading={quotaLoading}
+                      bottom={submenuBottom}
+                      onHover={() => setActiveSubmenu('codexQuota')}
                     />
-                  )}
-                </span>
-                {provider.id === 'codex' && activeSubmenu === 'codexQuota' && (
-                  renderCodexQuotaSubmenu()
-                )}
-              </div>
+                  ) : undefined
+                }
+                onSelect={handleSelect}
+                onRowMouseEnter={handleRowMouseEnter}
+                onRowMouseLeave={handleRowMouseLeave}
+              />
             ))}
             {onOpenCliSettings && (
-              <div className="provider-cli-footer">
-                <button
-                  type="button"
-                  className="provider-cli-footer-btn"
-                  onClick={() => {
-                    setIsOpen(false);
-                    onOpenCliSettings();
-                  }}
-                >
-                  <span className="codicon codicon-settings" />
-                  <span>{t('providers.manageCli', { defaultValue: 'CLI Settings' })}</span>
-                </button>
-              </div>
+              <ProviderCliFooter
+                onOpenCliSettings={() => {
+                  setIsOpen(false);
+                  onOpenCliSettings();
+                }}
+              />
             )}
           </div>
         )}

@@ -1,43 +1,16 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../../../types/provider';
 import { SPECIAL_PROVIDER_IDS } from '../../../types/provider';
 import { sendToJava } from '../../../utils/bridge';
 import { useDragSort } from '../hooks/useDragSort';
-import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
 import ImportConfirmDialog from './ImportConfirmDialog';
+import ProviderListHeader from './ProviderListHeader';
+import ProviderListItem from './ProviderListItem';
+import ProviderListOverlays from './ProviderListOverlays';
+import SpecialProviderCard from './SpecialProviderCard';
+import { useProviderListBridge } from './useProviderListBridge';
 import styles from './style.module.less';
-
-const ICON_MR_8_STYLE: React.CSSProperties = { marginRight: '8px' };
-const CLI_ACCOUNT_INFO_STYLE: React.CSSProperties = { marginTop: '4px', opacity: 0.8 };
-
-/**
- * Wraps a colored brand logo so it aligns with the provider name text and
- * never shrinks, matching the layout of the codicon used by the local/CLI cards.
- */
-const PROVIDER_LOGO_STYLE: React.CSSProperties = {
-  marginRight: '8px',
-  flexShrink: 0,
-  display: 'inline-flex',
-  alignItems: 'center',
-};
-
-/**
- * Pick the most representative configured model id for brand detection.
- * The base URL is the primary brand signal; the model id is only a fallback,
- * so any of the configured mapping models is sufficient.
- */
-function pickModelId(provider: ProviderConfig): string | undefined {
-  const env = provider.settingsConfig?.env;
-  if (!env) return undefined;
-  return (
-    env.ANTHROPIC_DEFAULT_FABLE_MODEL
-    || env.ANTHROPIC_MODEL
-    || env.ANTHROPIC_DEFAULT_SONNET_MODEL
-    || env.ANTHROPIC_DEFAULT_OPUS_MODEL
-    || env.ANTHROPIC_DEFAULT_HAIKU_MODEL
-  );
-}
 
 interface ProviderListProps {
   providers: ProviderConfig[];
@@ -94,94 +67,16 @@ export default function ProviderList({
     pinnedIds: [SPECIAL_PROVIDER_IDS.LOCAL_SETTINGS, SPECIAL_PROVIDER_IDS.CLI_LOGIN],
   });
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (importMenuRef.current && !importMenuRef.current.contains(event.target as Node)) {
-        setImportMenuOpen(false);
-      }
-    };
-
-    // Register CLI login account info callback
-    window.updateCliLoginAccountInfo = (email: string) => {
-      if (mountedRef.current) {
-        setCliLoginAccountEmail(email);
-      }
-    };
-
-    // Register global callback functions for Java invocation
-    window.import_preview_result = (dataOrStr) => {
-        let data: unknown = dataOrStr;
-        if (typeof data === 'string') {
-            try {
-                data = JSON.parse(data);
-            } catch (e) {
-                console.error('Failed to parse import_preview_result data:', e);
-            }
-        }
-        const event = new CustomEvent('import_preview_result', { detail: data });
-        window.dispatchEvent(event);
-    };
-
-    window.backend_notification = (...args: unknown[]) => {
-        let data: any = {};
-        
-        // Support multi-argument invocation (type, title, message) to avoid JSON parsing issues
-        if (args.length >= 3 && typeof args[0] === 'string' && typeof args[2] === 'string') {
-            data = {
-                type: args[0],
-                title: args[1],
-                message: args[2]
-            };
-        } else if (args.length > 0) {
-            // Backward compatible with legacy single-argument JSON format
-            let dataOrStr = args[0];
-            data = dataOrStr;
-            if (typeof data === 'string') {
-                try {
-                    data = JSON.parse(data);
-                } catch (e) {
-                    console.error('Failed to parse backend_notification data:', e);
-                }
-            }
-        }
-        
-        const event = new CustomEvent('backend_notification', { detail: data });
-        window.dispatchEvent(event);
-    };
-
-    const handleImportPreview = (event: CustomEvent) => {
-      setIsImporting(false); // Received result, hide loading
-      const data = event.detail;
-      if (data && data.providers) {
-        setImportPreviewData(data.providers);
-        setShowImportDialog(true);
-      }
-    };
-
-    const handleBackendNotification = (event: CustomEvent) => {
-      setIsImporting(false); // Received notification (possibly an error), hide loading
-      const data = event.detail;
-      if (data && data.message) {
-        addToast(data.message, data.type || 'info');
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('import_preview_result', handleImportPreview as EventListener);
-    window.addEventListener('backend_notification', handleBackendNotification as EventListener);
-    
-    return () => {
-      mountedRef.current = false;
-      document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('import_preview_result', handleImportPreview as EventListener);
-      window.removeEventListener('backend_notification', handleBackendNotification as EventListener);
-      
-      // Clean up global functions
-      delete window.updateCliLoginAccountInfo;
-      delete window.import_preview_result;
-      delete window.backend_notification;
-    };
-  }, [addToast]);
+  useProviderListBridge({
+    addToast,
+    importMenuRef,
+    mountedRef,
+    setImportMenuOpen,
+    setIsImporting,
+    setImportPreviewData,
+    setShowImportDialog,
+    setCliLoginAccountEmail,
+  });
 
   const handleEditClick = (provider: ProviderConfig) => {
     if (provider.source === 'cc-switch') {
@@ -235,6 +130,11 @@ export default function ProviderList({
     sendToJava('open_file_chooser_for_cc_switch');
   };
 
+  const localProviderActive = localProviders.some(p => p.id === SPECIAL_PROVIDER_IDS.LOCAL_SETTINGS && p.isActive);
+  const cliLoginActive = localProviders.some(p => p.id === SPECIAL_PROVIDER_IDS.CLI_LOGIN && p.isActive);
+  const regularProviders = localProviders.filter(p => p.id !== SPECIAL_PROVIDER_IDS.LOCAL_SETTINGS && p.id !== SPECIAL_PROVIDER_IDS.CLI_LOGIN);
+  const hasNonLocalProviders = localProviders.some(p => p.id !== SPECIAL_PROVIDER_IDS.LOCAL_SETTINGS);
+
   return (
     <div className={styles.container}>
       {/* Import dialog */}
@@ -260,512 +160,89 @@ export default function ProviderList({
         </div>
       )}
 
-      {/* Edit warning dialog */}
-      {editingCcSwitchProvider && (
-          <div className={styles.warningOverlay}>
-              <div className={styles.warningDialog}>
-                  <div className={styles.warningTitle}>
-                      <span className="codicon codicon-warning" />
-                      {t('settings.provider.editCcSwitchTitle')}
-                  </div>
-                  <div className={styles.warningContent}>
-                      {t('settings.provider.editCcSwitchWarning')}
-                  </div>
-                  <div className={styles.warningActions}>
-                      <button
-                          className={styles.btnSecondary}
-                          onClick={() => setEditingCcSwitchProvider(null)}
-                      >
-                          {t('common.cancel')}
-                      </button>
-                      <button
-                          className={styles.btnSecondary}
-                          onClick={() => {
-                              const p = editingCcSwitchProvider;
-                              setEditingCcSwitchProvider(null);
-                              onEdit(p);
-                          }}
-                      >
-                          {t('settings.provider.continueEdit')}
-                      </button>
-                      <button
-                          className={styles.btnWarning}
-                          onClick={() => {
-                              setConvertingProvider(editingCcSwitchProvider);
-                              // setEditingCcSwitchProvider(null); // Keep null to handle after conversion
-                          }}
-                      >
-                          {t('settings.provider.convertAndEdit')}
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
+      <ProviderListOverlays
+        editingCcSwitchProvider={editingCcSwitchProvider}
+        convertingProvider={convertingProvider}
+        showLocalProviderConfirm={showLocalProviderConfirm}
+        showLocalProviderDisableConfirm={showLocalProviderDisableConfirm}
+        showCliLoginConfirm={showCliLoginConfirm}
+        showCliLoginDisableConfirm={showCliLoginDisableConfirm}
+        helpKind={helpKind}
+        setEditingCcSwitchProvider={setEditingCcSwitchProvider}
+        setConvertingProvider={setConvertingProvider}
+        setShowLocalProviderConfirm={setShowLocalProviderConfirm}
+        setShowLocalProviderDisableConfirm={setShowLocalProviderDisableConfirm}
+        setShowCliLoginConfirm={setShowCliLoginConfirm}
+        setShowCliLoginDisableConfirm={setShowCliLoginDisableConfirm}
+        setCliLoginAccountEmail={setCliLoginAccountEmail}
+        setHelpKind={setHelpKind}
+        onEdit={onEdit}
+        onSwitch={onSwitch}
+        onConvertConfirm={handleConvert}
+      />
 
-      {/* Conversion confirmation dialog */}
-      {convertingProvider && (
-          <div className={styles.warningOverlay}>
-              <div className={styles.warningDialog}>
-                  <div className={styles.warningTitle}>
-                      <span className="codicon codicon-arrow-swap" />
-                      {t('settings.provider.convertToPlugin')}
-                  </div>
-                  <div className={styles.warningContent}>
-                      {t('settings.provider.convertConfirmMessage', { name: convertingProvider.name })}<br/><br/>
-                      {t('settings.provider.convertDetailMessage')}
-                  </div>
-                  <div className={styles.warningActions}>
-                      <button
-                          className={styles.btnSecondary}
-                          onClick={() => {
-                              setConvertingProvider(null);
-                              // If triggered from editing, canceling conversion also cancels editing
-                              if (editingCcSwitchProvider) {
-                                  setEditingCcSwitchProvider(null);
-                              }
-                          }}
-                      >
-                          {t('common.cancel')}
-                      </button>
-                      <button
-                          className={styles.btnPrimary}
-                          onClick={handleConvert}
-                      >
-                          {t('settings.provider.confirmConvert')}
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {showLocalProviderConfirm && (
-        <div className={styles.warningOverlay}>
-          <div className={styles.warningDialog}>
-            <div className={styles.warningTitle}>
-              <span className="codicon codicon-shield" />
-              {t('settings.provider.localProviderAuthorizeTitle')}
-            </div>
-            <div className={styles.warningContent}>
-              {t('settings.provider.localProviderAuthorizeMessage')}
-              <br />
-              <br />
-              {t('settings.provider.localProviderAuthorizeDetail')}
-            </div>
-            <div className={styles.warningActions}>
-              <button
-                className={styles.btnSecondary}
-                onClick={() => setShowLocalProviderConfirm(false)}
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                className={styles.btnPrimary}
-                onClick={() => {
-                  setShowLocalProviderConfirm(false);
-                  onSwitch(SPECIAL_PROVIDER_IDS.LOCAL_SETTINGS);
-                }}
-              >
-                {t('settings.provider.authorizeAndEnable')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showLocalProviderDisableConfirm && (
-        <div className={styles.warningOverlay}>
-          <div className={styles.warningDialog}>
-            <div className={styles.warningTitle}>
-              <span className="codicon codicon-circle-slash" />
-              {t('settings.provider.localProviderDisableTitle')}
-            </div>
-            <div className={styles.warningContent}>
-              {t('settings.provider.localProviderDisableMessage')}
-            </div>
-            <div className={styles.warningActions}>
-              <button
-                className={styles.btnSecondary}
-                onClick={() => setShowLocalProviderDisableConfirm(false)}
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                className={styles.btnDanger}
-                onClick={() => {
-                  setShowLocalProviderDisableConfirm(false);
-                  onSwitch(SPECIAL_PROVIDER_IDS.DISABLED);
-                }}
-              >
-                {t('settings.provider.revokeAuthorization')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showCliLoginConfirm && (
-        <div className={styles.warningOverlay}>
-          <div className={styles.warningDialog}>
-            <div className={styles.warningTitle}>
-              <span className="codicon codicon-key" />
-              {t('settings.provider.cliLoginAuthorizeTitle')}
-            </div>
-            <div className={styles.warningContent}>
-              {t('settings.provider.cliLoginAuthorizeMessage')}
-              <br />
-              <br />
-              {t('settings.provider.cliLoginAuthorizeDetail')}
-            </div>
-            <div className={styles.warningActions}>
-              <button
-                className={styles.btnSecondary}
-                onClick={() => setShowCliLoginConfirm(false)}
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                className={styles.btnPrimary}
-                onClick={() => {
-                  setShowCliLoginConfirm(false);
-                  onSwitch(SPECIAL_PROVIDER_IDS.CLI_LOGIN);
-                }}
-              >
-                {t('settings.provider.authorizeAndEnable')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showCliLoginDisableConfirm && (
-        <div className={styles.warningOverlay}>
-          <div className={styles.warningDialog}>
-            <div className={styles.warningTitle}>
-              <span className="codicon codicon-circle-slash" />
-              {t('settings.provider.cliLoginDisableTitle')}
-            </div>
-            <div className={styles.warningContent}>
-              {t('settings.provider.cliLoginDisableMessage')}
-            </div>
-            <div className={styles.warningActions}>
-              <button
-                className={styles.btnSecondary}
-                onClick={() => setShowCliLoginDisableConfirm(false)}
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                className={styles.btnDanger}
-                onClick={() => {
-                  setShowCliLoginDisableConfirm(false);
-                  setCliLoginAccountEmail(null);
-                  onSwitch(SPECIAL_PROVIDER_IDS.DISABLED);
-                }}
-              >
-                {t('settings.provider.revokeAuthorization')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {helpKind && (
-        <div className={styles.warningOverlay}>
-          <div className={styles.warningDialog}>
-            <div className={styles.warningTitle}>
-              <span className="codicon codicon-info" />
-              {helpKind === 'local'
-                ? t('settings.provider.localProviderHelpTitle')
-                : t('settings.provider.cliLoginHelpTitle')}
-            </div>
-            <div className={styles.warningContent} style={{ whiteSpace: 'pre-wrap' }}>
-              {helpKind === 'local'
-                ? t('settings.provider.localProviderHelpBody')
-                : t('settings.provider.cliLoginHelpBody')}
-            </div>
-            <div className={styles.warningActions}>
-              <button
-                className={styles.btnPrimary}
-                onClick={() => setHelpKind(null)}
-              >
-                {t('common.gotIt')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className={styles.header}>
-        <h4 className={styles.title}>{t('settings.provider.allProviders')}</h4>
-
-        <div className={styles.actions}>
-          <div className={styles.importMenuWrapper} ref={importMenuRef}>
-            <button
-              className={styles.btnSecondary}
-              onClick={() => setImportMenuOpen(!importMenuOpen)}
-            >
-              <span className="codicon codicon-cloud-download" />
-              {t('settings.provider.import')}
-            </button>
-            
-            {importMenuOpen && (
-              <div className={styles.importMenu}>
-                <div
-                  className={styles.importMenuItem}
-                  onClick={() => {
-                    setImportMenuOpen(false);
-                    setIsImporting(true); // Start loading
-                    sendToJava('preview_cc_switch_import');
-                  }}
-                >
-                  <span className="codicon codicon-arrow-swap" />
-                  {t('settings.provider.importFromCcSwitchUpdate')}
-                </div>
-                <div
-                  className={styles.importMenuItem}
-                  onClick={handleSelectFileClick}
-                >
-                  <span className="codicon codicon-file" />
-                  {t('settings.provider.importFromCcSwitchFile')}
-                </div>
-                {/* <div
-                  className={styles.importMenuItem}
-                  onClick={() => {
-                    setImportMenuOpen(false);
-                    addToast(t('settings.provider.featureComingSoon'), 'info');
-                  }}
-                >
-                  <span className="codicon codicon-arrow-swap" />
-                  {t('settings.provider.importFromCcSwitchCli')}
-                </div>
-                <div
-                  className={styles.importMenuItem}
-                  onClick={() => {
-                    setImportMenuOpen(false);
-                    addToast(t('settings.provider.featureComingSoon'), 'info');
-                  }}
-                >
-                  <span className="codicon codicon-arrow-swap" />
-                  {t('settings.provider.importFromClaudeRouter')}
-                </div> */}
-              </div>
-            )}
-          </div>
-
-          <button
-            className={styles.btnPrimary}
-            onClick={onAdd}
-          >
-            <span className="codicon codicon-add" />
-            {t('common.add')}
-          </button>
-        </div>
-      </div>
+      <ProviderListHeader
+        importMenuOpen={importMenuOpen}
+        importMenuRef={importMenuRef}
+        onToggleImportMenu={() => setImportMenuOpen(!importMenuOpen)}
+        onPreviewImport={() => {
+          setImportMenuOpen(false);
+          setIsImporting(true); // Start loading
+          sendToJava('preview_cc_switch_import');
+        }}
+        onSelectFile={handleSelectFileClick}
+        onAdd={onAdd}
+      />
 
       <div className={styles.list}>
         <>
-          <div
+          <SpecialProviderCard
             key={SPECIAL_PROVIDER_IDS.LOCAL_SETTINGS}
-            className={`${styles.card} ${localProviders.some(p => p.id === SPECIAL_PROVIDER_IDS.LOCAL_SETTINGS && p.isActive) ? styles.active : ''} ${styles.localProviderCard}`}
-          >
-            <div className={styles.cardInfo}>
-              <div className={styles.name}>
-                <span className="codicon codicon-file" style={ICON_MR_8_STYLE} />
-                <span className={styles.nameText}>{t('settings.provider.localProviderName')}</span>
-                <button
-                  type="button"
-                  className={styles.nameInfoIcon}
-                  onClick={(e) => { e.stopPropagation(); setHelpKind('local'); }}
-                  title={t('settings.provider.whatIsThis')}
-                  aria-label={t('settings.provider.whatIsThis')}
-                >
-                  <span className="codicon codicon-info" />
-                </button>
-              </div>
-            </div>
+            iconClass="codicon-file"
+            name={t('settings.provider.localProviderName')}
+            isActive={localProviderActive}
+            onHelp={() => setHelpKind('local')}
+            onRevoke={() => setShowLocalProviderDisableConfirm(true)}
+            onEnable={() => setShowLocalProviderConfirm(true)}
+          />
 
-            <div className={styles.cardActions}>
-              {localProviders.some(p => p.id === SPECIAL_PROVIDER_IDS.LOCAL_SETTINGS && p.isActive) ? (
-                <button
-                  className={styles.revokeButton}
-                  onClick={() => setShowLocalProviderDisableConfirm(true)}
-                >
-                  <span className="codicon codicon-circle-slash" />
-                  {t('settings.provider.revokeAuthorization')}
-                </button>
-              ) : (
-                <button
-                  className={styles.useButton}
-                  onClick={() => setShowLocalProviderConfirm(true)}
-                >
-                  <span className="codicon codicon-play" />
-                  {t('settings.provider.authorizeAndEnable')}
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div
+          <SpecialProviderCard
             key={SPECIAL_PROVIDER_IDS.CLI_LOGIN}
-            className={`${styles.card} ${localProviders.some(p => p.id === SPECIAL_PROVIDER_IDS.CLI_LOGIN && p.isActive) ? styles.active : ''} ${styles.localProviderCard}`}
-          >
-            <div className={styles.cardInfo}>
-              <div className={styles.name}>
-                <span className="codicon codicon-key" style={ICON_MR_8_STYLE} />
-                <span className={styles.nameText}>{t('settings.provider.cliLoginProviderName')}</span>
-                <button
-                  type="button"
-                  className={styles.nameInfoIcon}
-                  onClick={(e) => { e.stopPropagation(); setHelpKind('cli'); }}
-                  title={t('settings.provider.whatIsThis')}
-                  aria-label={t('settings.provider.whatIsThis')}
-                >
-                  <span className="codicon codicon-info" />
-                </button>
-              </div>
-              {cliLoginAccountEmail && localProviders.some(p => p.id === SPECIAL_PROVIDER_IDS.CLI_LOGIN && p.isActive) && (
-                <div className={styles.website} style={CLI_ACCOUNT_INFO_STYLE}>
-                  {t('settings.provider.cliLoginAccountInfo', { email: cliLoginAccountEmail })}
-                </div>
-              )}
-            </div>
+            iconClass="codicon-key"
+            name={t('settings.provider.cliLoginProviderName')}
+            isActive={cliLoginActive}
+            accountInfo={cliLoginAccountEmail
+              ? t('settings.provider.cliLoginAccountInfo', { email: cliLoginAccountEmail })
+              : undefined}
+            onHelp={() => setHelpKind('cli')}
+            onRevoke={() => setShowCliLoginDisableConfirm(true)}
+            onEnable={() => setShowCliLoginConfirm(true)}
+          />
 
-            <div className={styles.cardActions}>
-              {localProviders.some(p => p.id === SPECIAL_PROVIDER_IDS.CLI_LOGIN && p.isActive) ? (
-                <button
-                  className={styles.revokeButton}
-                  onClick={() => setShowCliLoginDisableConfirm(true)}
-                >
-                  <span className="codicon codicon-circle-slash" />
-                  {t('settings.provider.revokeAuthorization')}
-                </button>
-              ) : (
-                <button
-                  className={styles.useButton}
-                  onClick={() => setShowCliLoginConfirm(true)}
-                >
-                  <span className="codicon codicon-play" />
-                  {t('settings.provider.authorizeAndEnable')}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {(() => {
-            const regularProviders = localProviders.filter(p => p.id !== SPECIAL_PROVIDER_IDS.LOCAL_SETTINGS && p.id !== SPECIAL_PROVIDER_IDS.CLI_LOGIN);
-            return regularProviders.length > 0 ? (
-              regularProviders.map((provider) => (
-            <div
+          {regularProviders.map((provider) => (
+            <ProviderListItem
               key={provider.id}
-              className={[
-                styles.card,
-                provider.isActive && styles.active,
-                draggedProviderId === provider.id && styles.dragging,
-                dragOverProviderId === provider.id && styles.dragOver,
-              ].filter(Boolean).join(' ')}
-              data-drag-sort-id={provider.id}
-              draggable={true}
-              onDragStart={(e) => handleDragStart(e, provider.id)}
-              onDragOver={(e) => handleDragOver(e, provider.id)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, provider.id)}
-              onDragEnd={handleDragEnd}
-            >
-              <div
-                className={styles.dragHandle}
-                title={t('settings.provider.dragToSort')}
-                onPointerDown={(e) => handlePointerDown(e, provider.id, e.currentTarget.closest<HTMLElement>('[data-drag-sort-id]'))}
-              >
-                <span className="codicon codicon-gripper" />
-              </div>
-              <div className={styles.cardInfo}>
-                <div className={styles.name}>
-                  <span style={PROVIDER_LOGO_STYLE}>
-                    <ProviderModelIcon
-                      baseUrl={provider.settingsConfig?.env?.ANTHROPIC_BASE_URL}
-                      modelId={pickModelId(provider)}
-                      size={18}
-                      colored
-                    />
-                  </span>
-                  <span className={styles.nameText}>{provider.name}</span>
-                </div>
-                {(provider.remark || provider.websiteUrl) && (
-                  <div className={styles.website} title={provider.remark || provider.websiteUrl}>
-                    {provider.remark || provider.websiteUrl}
-                  </div>
-                )}
-                {provider.source === 'cc-switch' && (
-                    <div className={styles.ccSwitchBadge}>
-                        cc-switch
-                    </div>
-                )}
-              </div>
-              
-              <div className={styles.cardActions}>
-                {provider.isActive ? (
-                  <div className={styles.activeBadge}>
-                    <span className="codicon codicon-check" />
-                    {t('settings.provider.inUse')}
-                  </div>
-                ) : (
-                  <button
-                    className={styles.useButton}
-                    onClick={() => onSwitch(provider.id)}
-                  >
-                    <span className="codicon codicon-play" />
-                    {t('settings.provider.enable')}
-                  </button>
-                )}
+              provider={provider}
+              isDragging={draggedProviderId === provider.id}
+              isDragOver={dragOverProviderId === provider.id}
+              onSwitch={onSwitch}
+              onEdit={handleEditClick}
+              onDelete={onDelete}
+              onConvert={setConvertingProvider}
+              handlePointerDown={handlePointerDown}
+              handleDragStart={handleDragStart}
+              handleDragOver={handleDragOver}
+              handleDragLeave={handleDragLeave}
+              handleDrop={handleDrop}
+              handleDragEnd={handleDragEnd}
+            />
+          ))}
 
-                <div className={styles.divider}></div>
-
-                <div className={styles.actionButtons}>
-                  {!provider.isLocalProvider && (
-                    <>
-                      {provider.source === 'cc-switch' && (
-                        <button
-                          className={styles.iconBtn}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setConvertingProvider(provider);
-                          }}
-                          title={t('settings.provider.convertToPlugin')}
-                        >
-                          <span className="codicon codicon-arrow-swap" />
-                        </button>
-                      )}
-                      <button
-                        className={styles.iconBtn}
-                        onClick={() => handleEditClick(provider)}
-                        title={t('common.edit')}
-                      >
-                        <span className="codicon codicon-edit" />
-                      </button>
-                      <button
-                        className={styles.iconBtn}
-                        onClick={() => onDelete(provider)}
-                        title={t('common.delete')}
-                      >
-                        <span className="codicon codicon-trash" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
+          {!hasNonLocalProviders && emptyState ? (
+            <div className={styles.emptyState}>
+              {emptyState}
             </div>
-          ))
-        ) : null;
-          })()}
-
-          {(() => {
-            const regularProviders = localProviders.filter(p => p.id !== SPECIAL_PROVIDER_IDS.LOCAL_SETTINGS);
-            return regularProviders.length === 0 && emptyState ? (
-              <div className={styles.emptyState}>
-                {emptyState}
-              </div>
-            ) : null;
-          })()}
+          ) : null}
         </>
       </div>
     </div>

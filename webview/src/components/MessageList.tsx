@@ -55,8 +55,7 @@ function extractToolResultPreview(result: ToolResultBlock | null | undefined): s
     text = result.content;
   } else if (Array.isArray(result.content)) {
     text = result.content
-      .map((item) => (item && typeof item.text === 'string' ? item.text : ''))
-      .filter(Boolean)
+      .flatMap((item) => (item && typeof item.text === 'string' && item.text ? [item.text] : []))
       .join('\n');
   }
 

@@ -244,9 +244,10 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
     (selectedIds: string[], strategy: ConflictStrategy) => {
       if (!importPreviewDialog.previewData) return;
 
-      const selectedAgents = importPreviewDialog.previewData.items
-        .filter(item => selectedIds.includes(item.data.id))
-        .map(item => item.data);
+      const selectedIdSet = new Set(selectedIds);
+      const selectedAgents = importPreviewDialog.previewData.items.flatMap(item =>
+        selectedIdSet.has(item.data.id) ? [item.data] : []
+      );
 
       const importData = {
         agents: selectedAgents,

@@ -5,6 +5,7 @@
 // Renders the five kept cards in the upstream fixed order, using the same
 // FadeIn stagger as upstream's screenshotMode branch.
 import React from "react";
+import { LazyMotion, domAnimation } from "motion/react";
 import { Shell } from "../../components";
 import { DataDetails } from "../components/DataDetails.jsx";
 import { StatsPanel } from "../components/StatsPanel.jsx";
@@ -17,6 +18,11 @@ import { FadeIn } from "../../foundation/FadeIn.jsx";
 const STEP = 0.06;
 const D_LEFT_BASE = 0.11;
 const D_RIGHT_BASE = 0.05;
+
+// Upstream order minus the removed cards (macAppBanner / widgetOnboarding /
+// installCopy / deviceUsage / qualityPerDollar / sessionInsights).
+const LEFT_CARD_ORDER = ["statsPanel", "activityHeatmap", "trendMonitor"];
+const RIGHT_CARD_ORDER = ["usageOverview", "dataDetails"];
 
 export function DashboardView(props) {
 
@@ -208,11 +214,6 @@ export function DashboardView(props) {
     }
   }
 
-  // Upstream order minus the removed cards (macAppBanner / widgetOnboarding /
-  // installCopy / deviceUsage / qualityPerDollar / sessionInsights).
-  const LEFT_CARD_ORDER = ["statsPanel", "activityHeatmap", "trendMonitor"];
-  const RIGHT_CARD_ORDER = ["usageOverview", "dataDetails"];
-
   const leftColumnContent = LEFT_CARD_ORDER.map((id, i) => (
     <React.Fragment key={id}>{renderLeftCard(id, D_LEFT_BASE + STEP * i)}</React.Fragment>
   ));
@@ -221,6 +222,7 @@ export function DashboardView(props) {
   ));
 
   return (
+    <LazyMotion features={domAnimation}>
     <Shell bare header={header} footer={footer}>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-4 flex flex-col gap-4 min-w-0 order-2 lg:order-1">
@@ -232,5 +234,6 @@ export function DashboardView(props) {
         </div>
       </div>
     </Shell>
+    </LazyMotion>
   );
 }

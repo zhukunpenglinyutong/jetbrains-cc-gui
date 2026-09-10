@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from "react";
-import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "motion/react";
+import { m, useMotionValue, useReducedMotion, useSpring, useTransform } from "motion/react";
 
 function getStaticTokenStyle(token, height) {
   if (token === ".") {
@@ -36,7 +36,7 @@ function RollingDigit({ mv, digit, height }) {
   });
 
   return (
-    <motion.span
+    <m.span
       style={{
         position: "absolute",
         inset: 0,
@@ -47,7 +47,7 @@ function RollingDigit({ mv, digit, height }) {
       }}
     >
       {digit}
-    </motion.span>
+    </m.span>
   );
 }
 
@@ -89,39 +89,39 @@ export function getCounterPlaces(displayValue) {
   });
 }
 
-function Digit({ place, value, height, digitStyle, shouldReduceMotion }) {
-  if (typeof place !== "number") {
-    const staticTokenStyle = getStaticTokenStyle(place, height);
-    // Letter tokens (unit suffixes like K/M/B) are wider than a digit cell, so
-    // a fixed digit-width (from digitStyle) clips them against the row's
-    // overflow:hidden. Let the glyph size itself; "." and "," keep their tuned
-    // widths.
-    const isLetterToken = place !== "." && place !== ",";
-    // The caller's digitStyle.width sizes DIGIT cells. Applied to ".", it
-    // stretches the dot into a full digit slot, leaving a big gap around it (the
-    // comma escapes this via its large negative margin; the dot's -0.04ch
-    // can't). Re-assert the dot's tuned narrow width after digitStyle so it
-    // reads as tight as the thousands comma. Letters still size to auto.
-    const isDot = place === ".";
-    return (
-      <span
-        data-counter-token="static"
-        className="relative inline-flex items-center justify-center"
-        style={{
-          height,
-          ...staticTokenStyle,
-          ...digitStyle,
-          ...(isLetterToken
-            ? { width: "auto", paddingInline: "0.06ch", justifyContent: "center" }
-            : null),
-          ...(isDot ? { width: staticTokenStyle.width } : null),
-        }}
-      >
-        {place}
-      </span>
-    );
-  }
+function StaticToken({ place, height, digitStyle }) {
+  const staticTokenStyle = getStaticTokenStyle(place, height);
+  // Letter tokens (unit suffixes like K/M/B) are wider than a digit cell, so
+  // a fixed digit-width (from digitStyle) clips them against the row's
+  // overflow:hidden. Let the glyph size itself; "." and "," keep their tuned
+  // widths.
+  const isLetterToken = place !== "." && place !== ",";
+  // The caller's digitStyle.width sizes DIGIT cells. Applied to ".", it
+  // stretches the dot into a full digit slot, leaving a big gap around it (the
+  // comma escapes this via its large negative margin; the dot's -0.04ch
+  // can't). Re-assert the dot's tuned narrow width after digitStyle so it
+  // reads as tight as the thousands comma. Letters still size to auto.
+  const isDot = place === ".";
+  return (
+    <span
+      data-counter-token="static"
+      className="relative inline-flex items-center justify-center"
+      style={{
+        height,
+        ...staticTokenStyle,
+        ...digitStyle,
+        ...(isLetterToken
+          ? { width: "auto", paddingInline: "0.06ch", justifyContent: "center" }
+          : null),
+        ...(isDot ? { width: staticTokenStyle.width } : null),
+      }}
+    >
+      {place}
+    </span>
+  );
+}
 
+function AnimatedDigit({ place, value, height, digitStyle, shouldReduceMotion }) {
   const valueRoundedToPlace = getValueRoundedToPlace(value, place);
   const motionValue = useMotionValue(0);
   const animatedValue = useSpring(motionValue, {
@@ -169,6 +169,15 @@ function Digit({ place, value, height, digitStyle, shouldReduceMotion }) {
       ))}
     </span>
   );
+}
+
+// Non-numeric places (".", ",", unit letters) render no hooks, so they get
+// their own component instead of an early return inside a hooked component.
+function Digit(props) {
+  if (typeof props.place !== "number") {
+    return <StaticToken place={props.place} height={props.height} digitStyle={props.digitStyle} />;
+  }
+  return <AnimatedDigit {...props} />;
 }
 
 export default function Counter({

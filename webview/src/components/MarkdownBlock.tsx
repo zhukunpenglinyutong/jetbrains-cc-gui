@@ -1,10 +1,9 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { memo, useMemo, useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { memo, useMemo, useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import katex from 'katex';
 import markedKatex from 'marked-katex-extension';
-import { openBrowser, openClass, openFile } from '../utils/bridge';
 import {
   captureRangeOffsets,
   restoreRangeOffsets,
@@ -20,6 +19,9 @@ import {
   subscribeLinkifyCapabilities,
   type LinkifyCapabilities,
 } from '../utils/linkifyCapabilities';
+import { useMermaidDiagrams } from './MarkdownBlock/useMermaidDiagrams';
+import { useMarkdownClickHandler } from './MarkdownBlock/useMarkdownClickHandler';
+import { ImagePreviewOverlay } from './MarkdownBlock/ImagePreviewOverlay';
 import hljs from 'highlight.js/lib/core';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
@@ -146,22 +148,6 @@ hljs.registerAliases(['sh', 'zsh'], { languageName: 'bash' });
 hljs.registerAliases(['html', 'xhtml', 'svg'], { languageName: 'xml' });
 hljs.registerAliases(['yml'], { languageName: 'yaml' });
 
-// Lazy-loaded mermaid singleton (deferred until first diagram is encountered)
-let mermaidInstance: typeof import('mermaid').default | null = null;
-async function getMermaid() {
-  if (!mermaidInstance) {
-    const mod = await import('mermaid');
-    mermaidInstance = mod.default;
-    mermaidInstance.initialize({
-      startOnLoad: false,
-      theme: 'dark',
-      securityLevel: 'strict',
-      fontFamily: 'inherit',
-    });
-  }
-  return mermaidInstance;
-}
-
 // Configure marked to use syntax highlighting
 marked.use(
   markedKatex({
@@ -177,50 +163,15 @@ marked.use(
         try {
           return hljs.highlight(code, { language: lang }).value;
         } catch {
-          // Silently fall through to auto-highlight
+          // Silently fall through to plain-text rendering
         }
       }
-      return hljs.highlightAuto(code).value;
+      // highlightAuto misclassifies prose like commit messages (leading "- " lines
+      // score as diff deletions), so unlabeled blocks render as plain text
+      return hljs.highlight(code, { language: 'plaintext' }).value;
     },
   })
 );
-
-// Mermaid syntax keywords used to detect diagram content (Set for O(1) lookup)
-const MERMAID_KEYWORDS = new Set([
-  'flowchart',
-  'graph',
-  'sequencediagram',
-  'classdiagram',
-  'statediagram',
-  'statediagram-v2',
-  'erdiagram',
-  'journey',
-  'gantt',
-  'pie',
-  'quadrantchart',
-  'requirementdiagram',
-  'gitgraph',
-  'mindmap',
-  'timeline',
-  'zenuml',
-  'sankey',
-  'xychart',
-  'xychart-beta',
-  'block-beta',
-]);
-
-const MERMAID_FENCE_REGEX = /```mermaid[\s\S]*?```/i;
-
-// Pre-compiled regex: matches any mermaid keyword at the start of a line
-const MERMAID_KEYWORD_REGEX = new RegExp(
-  `(^|\\n)\\s*(?:${[...MERMAID_KEYWORDS].join('|')})\\b`,
-  'i',
-);
-
-function hasPossibleMermaidContent(content: string): boolean {
-  if (!content) return false;
-  return MERMAID_FENCE_REGEX.test(content) || MERMAID_KEYWORD_REGEX.test(content);
-}
 
 marked.setOptions({
   breaks: false,
@@ -243,7 +194,10 @@ function safeStringifyContent(value: unknown): string {
     return String(value);
   }
   if (Array.isArray(value)) {
-    return value.map((item) => safeStringifyContent(item)).filter(Boolean).join('\n');
+    return value.flatMap((item) => {
+      const text = safeStringifyContent(item);
+      return text ? [text] : [];
+    }).join('\n');
   }
   if (typeof value === 'object') {
     const record = value as Record<string, unknown>;
@@ -732,9 +686,6 @@ const BlockSection = memo(function BlockSection({
   return <div className="md-block" dangerouslySetInnerHTML={{ __html: html }} />;
 });
 
-// Mermaid render counter for generating unique IDs
-let mermaidIdCounter = 0;
-
 // Copy icon SVG (hoisted to module scope to avoid recreation on each render)
 const copyIconSvg = `
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -763,238 +714,16 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   const copySuccessText = t('markdown.copySuccess');
   const copyCodeTitle = t('markdown.copyCode');
 
-  // Ref for tracking retry count
-  const mermaidRetryRef = useRef(0);
-  const MERMAID_MAX_RETRIES = 3;
-
   const fileLinkTooltip = useMarkdownFileLinkTooltip();
 
   useEffect(() => {
     return subscribeLinkifyCapabilities(setLinkifyCapabilities);
   }, []);
 
-  // Render mermaid diagrams
-  const renderMermaidDiagrams = useCallback(async () => {
-    if (!containerRef.current) return;
+  // Render mermaid diagrams after HTML updates (skipped during streaming)
+  useMermaidDiagrams(containerRef, isStreaming, normalizedContent);
 
-    const codeBlocks = containerRef.current.querySelectorAll('pre code');
-
-    // If no code blocks found, reset retry count
-    if (codeBlocks.length === 0) {
-      mermaidRetryRef.current = 0;
-      return;
-    }
-
-    let renderedAny = false;
-
-    for (const codeBlock of codeBlocks) {
-      const pre = codeBlock.parentElement;
-      if (!pre) continue;
-
-      const wrapper = pre.parentElement;
-      if (wrapper?.classList.contains('mermaid-rendered')) continue;
-
-      // Get the text content of the code block
-      let code = codeBlock.textContent || '';
-
-      // Clean up any remaining markdown markers (e.g., ```mermaid)
-      code = code.replace(/^```mermaid\s*/i, '').replace(/```\s*$/, '').trim();
-
-      if (!code) continue;
-
-      // Check if the content is mermaid syntax (starts with a keyword)
-      const firstWord = code.split(/[\s\n]/)[0].toLowerCase();
-      const isMermaid = MERMAID_KEYWORDS.has(firstWord);
-
-      if (!isMermaid) continue;
-
-      // Show loading placeholder while mermaid library loads
-      const loadingEl = document.createElement('div');
-      loadingEl.className = 'mermaid-loading';
-      loadingEl.textContent = 'Loading diagram\u2026';
-      loadingEl.style.cssText = 'padding:12px;color:var(--text-secondary,#888);';
-      if (wrapper?.classList.contains('code-block-wrapper')) {
-        wrapper.insertBefore(loadingEl, pre);
-      } else {
-        pre.parentNode?.insertBefore(loadingEl, pre);
-      }
-
-      try {
-        const mmd = await getMermaid();
-        const id = `mermaid-${++mermaidIdCounter}`;
-        const { svg } = await mmd.render(id, code);
-
-        const mermaidContainer = document.createElement('div');
-        mermaidContainer.className = 'mermaid-diagram';
-        mermaidContainer.innerHTML = svg;
-
-        // Remove loading placeholder
-        loadingEl.remove();
-
-        if (wrapper?.classList.contains('code-block-wrapper')) {
-          wrapper.classList.add('mermaid-rendered');
-          pre.style.display = 'none';
-          wrapper.insertBefore(mermaidContainer, pre);
-        } else {
-          const newWrapper = document.createElement('div');
-          newWrapper.className = 'code-block-wrapper mermaid-rendered';
-          newWrapper.appendChild(mermaidContainer);
-          pre.parentNode?.replaceChild(newWrapper, pre);
-        }
-        renderedAny = true;
-      } catch {
-        // Mermaid render error - remove loading indicator and silently skip
-        loadingEl.remove();
-      }
-    }
-
-    // If any diagrams were rendered, reset retry count
-    if (renderedAny) {
-      mermaidRetryRef.current = 0;
-    }
-
-    return renderedAny;
-  }, []);
-
-  // Render mermaid diagrams after HTML updates (skip during streaming to prevent flicker)
-  useEffect(() => {
-    if (isStreaming) return;
-    if (!hasPossibleMermaidContent(normalizedContent)) {
-      mermaidRetryRef.current = 0;
-      return;
-    }
-
-    let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
-    let retryRafId: number | null = null;
-
-    // Use double requestAnimationFrame to ensure the DOM is fully rendered
-    let rafId1 = requestAnimationFrame(() => {
-      rafId1 = requestAnimationFrame(() => {
-        renderMermaidDiagrams().then((rendered) => {
-          // If no diagrams were rendered and retry limit not reached, retry after a delay
-          if (!rendered && mermaidRetryRef.current < MERMAID_MAX_RETRIES) {
-            mermaidRetryRef.current++;
-            retryTimeoutId = setTimeout(() => {
-              retryRafId = requestAnimationFrame(() => {
-                renderMermaidDiagrams();
-              });
-            }, 100 * mermaidRetryRef.current);
-          }
-        });
-      });
-    });
-
-    return () => {
-      cancelAnimationFrame(rafId1);
-      if (retryTimeoutId) clearTimeout(retryTimeoutId);
-      if (retryRafId) cancelAnimationFrame(retryRafId);
-    };
-  }, [normalizedContent, isStreaming, renderMermaidDiagrams]);
-
-  // Copy to clipboard implementation
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch (err) {
-      // Fallback method for environments where navigator.clipboard is not available
-      try {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.left = '-9999px';
-        textarea.style.top = '0';
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        const successful = document.execCommand('copy');
-        document.body.removeChild(textarea);
-        return successful;
-      } catch (e) {
-        console.error('Copy failed:', e);
-        return false;
-      }
-    }
-  };
-
-  const handleClick = async (event: React.MouseEvent<HTMLDivElement>) => {
-    // React synthetic events may have a Text node as target when the user
-    // clicks inside an <a> element. Walk up to the parent element so that
-    // element.closest() can be used safely.
-    const targetNode = event.target as unknown as Node;
-    const target = targetNode.nodeType === Node.TEXT_NODE
-      ? (targetNode as Text).parentElement
-      : (event.target as HTMLElement);
-
-    const copyBtn = target?.closest('button.copy-code-btn') as HTMLButtonElement | null;
-    if (copyBtn && containerRef.current?.contains(copyBtn)) {
-      event.preventDefault();
-      event.stopPropagation();
-
-      const wrapper = copyBtn.closest('.code-block-wrapper');
-      const codeElement = wrapper?.querySelector('pre code') as HTMLElement | null;
-      const text = codeElement?.innerText || codeElement?.textContent || '';
-      const success = await copyToClipboard(text);
-
-      if (success) {
-        copyBtn.classList.add('copied');
-        window.setTimeout(() => copyBtn.classList.remove('copied'), 1500);
-      }
-      return;
-    }
-
-    const img = target?.closest('img');
-    if (img && img.getAttribute('src')) {
-      setPreviewSrc(img.getAttribute('src'));
-      return;
-    }
-
-    let anchor = target?.closest('a');
-
-    // Fallback: if the click target is not inside an <a> (e.g. a portal
-    // tooltip with broken pointer-events overlaying the link), use the
-    // click coordinates to find which <a> was actually clicked.
-    if (!anchor && containerRef.current) {
-      const x = event.clientX;
-      const y = event.clientY;
-      const links = containerRef.current.querySelectorAll('a');
-      for (const link of Array.from(links)) {
-        const rect = link.getBoundingClientRect();
-        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-          anchor = link as HTMLAnchorElement;
-          break;
-        }
-      }
-    }
-
-    if (!anchor) {
-      return;
-    }
-
-    event.preventDefault();
-    const href = anchor.getAttribute('href');
-    if (!href) {
-      return;
-    }
-
-    const linkType = anchor.getAttribute('data-linkify');
-
-    if (linkType === 'file') {
-      openFile(href);
-      return;
-    }
-
-    if (linkType === 'class') {
-      openClass(href);
-      return;
-    }
-
-    if (linkType === 'url' || /^(https?:|mailto:)/.test(href)) {
-      openBrowser(href);
-    } else {
-      openFile(href);
-    }
-  };
+  const handleClick = useMarkdownClickHandler(containerRef, setPreviewSrc);
 
   // Selection preservation lives inside each BlockSection: stable blocks are
   // never rewritten (memoized identical `__html`), only the streaming tail
@@ -1024,26 +753,11 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
       {/* Tooltip is managed via native DOM API in handleMouseOver/handleMouseOut
           to avoid React re-render issues that break click events in JCEF. */}
       {previewSrc && (
-        <div
-          className="image-preview-overlay"
-          onClick={() => setPreviewSrc(null)}
-          onKeyDown={(e) => e.key === 'Escape' && setPreviewSrc(null)}
-          tabIndex={0}
-        >
-          <img
-            className="image-preview-content"
-            src={previewSrc}
-            alt=""
-            onClick={(e) => e.stopPropagation()}
-          />
-          <button
-            className="image-preview-close"
-            onClick={() => setPreviewSrc(null)}
-            title={t('chat.closePreview')}
-          >
-            ×
-          </button>
-        </div>
+        <ImagePreviewOverlay
+          src={previewSrc}
+          closeTitle={t('chat.closePreview')}
+          onClose={() => setPreviewSrc(null)}
+        />
       )}
     </>
   );

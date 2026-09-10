@@ -1,7 +1,9 @@
 import { useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ProviderModelIcon } from '../shared/ProviderModelIcon';
 import type { EnhanceUsageInfo } from './hooks/usePromptEnhancer';
+import { PromptEnhancerMeta } from './PromptEnhancerMeta';
+import { PromptEnhancerContent } from './PromptEnhancerContent';
+import { PromptEnhancerFooter } from './PromptEnhancerFooter';
 
 interface PromptEnhancerDialogProps {
   isOpen: boolean;
@@ -61,25 +63,6 @@ export const PromptEnhancerDialog = ({
     }
   };
 
-  const hasUsage = usageInfo != null;
-  const resolutionSource = usageInfo?.resolutionSource ?? null;
-  const isManual = resolutionSource === 'manual';
-  const modeLabel = resolutionSource === 'unavailable'
-    ? t('promptEnhancer.modeUnavailable', { defaultValue: t('promptEnhancer.modeAuto') })
-    : isManual
-      ? t('promptEnhancer.modeManual')
-      : t('promptEnhancer.modeAuto');
-
-  const providerId = usageInfo?.provider ?? null;
-  const providerLabel = providerId
-    ? t(`providers.${providerId}.label`, { defaultValue: providerId })
-    : t('promptEnhancer.providerUnresolved');
-  const modelLabel = usageInfo?.model?.trim() || t('promptEnhancer.modelUnresolved');
-
-  const handleOpenSettings = () => {
-    onOpenSettings?.();
-  };
-
   return (
     <div className="prompt-enhancer-overlay" onClick={handleOverlayClick}>
       <div className="prompt-enhancer-dialog" onClick={(e) => e.stopPropagation()}>
@@ -95,122 +78,22 @@ export const PromptEnhancerDialog = ({
         </div>
 
         {/* Usage meta: mode / CLI / model + settings shortcut */}
-        <div className="prompt-enhancer-meta" data-testid="prompt-enhancer-meta">
-          <div className="prompt-enhancer-meta-items">
-            {hasUsage ? (
-              <>
-                <span
-                  className={`prompt-enhancer-meta-chip ${isManual ? 'is-manual' : 'is-auto'}`}
-                  data-testid="prompt-enhancer-mode"
-                  title={t('promptEnhancer.modeLabel')}
-                >
-                  <span className={`codicon ${isManual ? 'codicon-pinned' : 'codicon-sync'}`} />
-                  {modeLabel}
-                </span>
-                <span className="prompt-enhancer-meta-separator" aria-hidden="true">·</span>
-                <span
-                  className="prompt-enhancer-meta-chip is-provider"
-                  data-testid="prompt-enhancer-provider"
-                  title={t('promptEnhancer.providerLabel')}
-                >
-                  {providerId ? (
-                    <ProviderModelIcon providerId={providerId} size={14} colored />
-                  ) : (
-                    <span className="codicon codicon-server-process" />
-                  )}
-                  <span className="prompt-enhancer-meta-text">{providerLabel}</span>
-                </span>
-                <span className="prompt-enhancer-meta-separator" aria-hidden="true">·</span>
-                <span
-                  className="prompt-enhancer-meta-chip is-model"
-                  data-testid="prompt-enhancer-model"
-                  title={t('promptEnhancer.modelLabel')}
-                >
-                  <span className="codicon codicon-symbol-misc" />
-                  <span className="prompt-enhancer-meta-text" title={modelLabel}>{modelLabel}</span>
-                </span>
-              </>
-            ) : (
-              <span className="prompt-enhancer-meta-chip is-loading" data-testid="prompt-enhancer-meta-loading">
-                <span className="codicon codicon-loading codicon-modifier-spin" />
-                {t('promptEnhancer.resolvingUsage')}
-              </span>
-            )}
-          </div>
-          {onOpenSettings && (
-            <button
-              type="button"
-              className="prompt-enhancer-settings-btn"
-              onClick={handleOpenSettings}
-              data-testid="prompt-enhancer-open-settings"
-              title={t('promptEnhancer.openSettingsTooltip')}
-            >
-              <span className="codicon codicon-settings-gear" />
-              <span>{t('promptEnhancer.openSettings')}</span>
-            </button>
-          )}
-        </div>
+        <PromptEnhancerMeta usageInfo={usageInfo} onOpenSettings={onOpenSettings} />
 
         {/* Content area */}
-        <div className="prompt-enhancer-content">
-          {/* Original prompt */}
-          <div className="prompt-section">
-            <div className="prompt-section-header">
-              <span className="codicon codicon-edit" />
-              <span>{t('promptEnhancer.originalPrompt')}</span>
-            </div>
-            <div className="prompt-text original-prompt">
-              {originalPrompt}
-            </div>
-          </div>
-
-          {/* Enhanced prompt */}
-          <div className="prompt-section">
-            <div className="prompt-section-header">
-              <span className="codicon codicon-sparkle" />
-              <span>{t('promptEnhancer.enhancedPrompt')}</span>
-            </div>
-            <div className="prompt-text enhanced-prompt">
-              {isLoading && !enhancedPrompt ? (
-                <div className="prompt-loading">
-                  <span className="codicon codicon-loading codicon-modifier-spin" />
-                  <span>{t('promptEnhancer.enhancing')}</span>
-                </div>
-              ) : (
-                <>
-                  {enhancedPrompt || t('promptEnhancer.enhancing')}
-                  {isLoading && enhancedPrompt ? (
-                    <span className="prompt-streaming-cursor" aria-hidden="true">
-                      <span className="codicon codicon-loading codicon-modifier-spin" />
-                    </span>
-                  ) : null}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+        <PromptEnhancerContent
+          isLoading={isLoading}
+          originalPrompt={originalPrompt}
+          enhancedPrompt={enhancedPrompt}
+        />
 
         {/* Footer buttons */}
-        <div className="prompt-enhancer-footer">
-          <button
-            className="prompt-enhancer-btn secondary"
-            onClick={onKeepOriginal}
-            disabled={isLoading}
-            type="button"
-          >
-            <span className="codicon codicon-close" />
-            {t('promptEnhancer.keepOriginal')}
-          </button>
-          <button
-            className="prompt-enhancer-btn primary"
-            onClick={onUseEnhanced}
-            disabled={!enhancedPrompt}
-            type="button"
-          >
-            <span className="codicon codicon-check" />
-            {t('promptEnhancer.useEnhanced')}
-          </button>
-        </div>
+        <PromptEnhancerFooter
+          isLoading={isLoading}
+          enhancedPrompt={enhancedPrompt}
+          onKeepOriginal={onKeepOriginal}
+          onUseEnhanced={onUseEnhanced}
+        />
       </div>
     </div>
   );

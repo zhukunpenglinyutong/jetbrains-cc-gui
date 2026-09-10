@@ -29,6 +29,7 @@ import { createInterface } from 'readline';
 import { handleClaudeCommand } from './channels/claude-channel.js';
 import { handleCodexCommand } from './channels/codex-channel.js';
 import { handleGrokCommand } from './channels/grok-channel.js';
+import { handleZcodeCommand } from './channels/zcode-channel.js';
 import { loadClaudeSdk, isClaudeSdkAvailable } from './utils/sdk-loader.js';
 import {
   sendMessagePersistent,
@@ -50,6 +51,16 @@ import {
   getContextUsagePersistent as grokGetContextUsagePersistent,
   getUsagePersistent as grokGetUsagePersistent
 } from './services/grok/persistent-acp-service.js';
+import {
+  sendMessagePersistent as zcodeSendPersistent,
+  preconnectPersistent as zcodePreconnectPersistent,
+  resetRuntimePersistent as zcodeResetRuntimePersistent,
+  abortCurrentTurn as zcodeAbortCurrentTurn,
+  shutdownPersistentRuntimes as zcodeShutdownPersistentRuntimes,
+  setPermissionModePersistent as zcodeSetPermissionModePersistent,
+  getContextUsagePersistent as zcodeGetContextUsagePersistent,
+  getUsagePersistent as zcodeGetUsagePersistent
+} from './services/zcode/persistent-zcode-service.js';
 import { injectStartupEnvVars, isWebviewControlledEnvVar, isDangerousEnvVar } from './config/api-config.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
 
@@ -409,6 +420,7 @@ async function processRequest(request) {
   if (method === 'shutdown') {
     await shutdownPersistentRuntimes();
     await grokShutdownPersistentRuntimes().catch(() => {});
+    await zcodeShutdownPersistentRuntimes().catch(() => {});
     sendDaemonEvent('shutdown', { reason: 'requested' });
     writeRawLine({ id: id || '0', done: true, success: true });
     isDaemonMode = false;
@@ -492,6 +504,16 @@ async function processRequest(request) {
       await grokPreconnectPersistent(stdinData);
     } else if (provider === 'grok' && command === 'resetRuntime') {
       await grokResetRuntimePersistent(stdinData);
+    } else if (provider === 'zcode' && command === 'send') {
+      await zcodeSendPersistent(stdinData);
+    } else if (provider === 'zcode' && command === 'preconnect') {
+      await zcodePreconnectPersistent(stdinData);
+    } else if (provider === 'zcode' && command === 'resetRuntime') {
+      await zcodeResetRuntimePersistent(stdinData);
+    } else if (provider === 'zcode' && command === 'getContextUsage') {
+      await zcodeGetContextUsagePersistent(stdinData);
+    } else if (provider === 'zcode' && command === 'getUsage') {
+      await zcodeGetUsagePersistent(stdinData);
     } else {
       // Dispatch to the existing handlers for non-send commands.
       switch (provider) {
@@ -503,6 +525,9 @@ async function processRequest(request) {
           break;
         case 'grok':
           await handleGrokCommand(command, [], stdinData);
+          break;
+        case 'zcode':
+          await handleZcodeCommand(command, [], stdinData);
           break;
         default:
           throw new Error(`Unknown provider: ${provider}`);
@@ -642,10 +667,11 @@ async function runDaemonMain() {
         'utf8'
       );
       if (targetId) {
-        // Fire-and-forget for both providers
+        // Fire-and-forget for every provider with a persistent runtime
         Promise.all([
           abortCurrentTurn().catch((e) => _originalStderrWrite(`[daemon] Claude abort error: ${e.message}\n`, 'utf8')),
           grokAbortCurrentTurn().catch((e) => _originalStderrWrite(`[daemon] Grok abort error: ${e.message}\n`, 'utf8')),
+          zcodeAbortCurrentTurn().catch((e) => _originalStderrWrite(`[daemon] ZCode abort error: ${e.message}\n`, 'utf8')),
         ]);
       }
       writeRawLine({ id: request.id || '0', done: true, success: true });
@@ -694,6 +720,17 @@ async function runDaemonMain() {
       return;
     }
 
+    if (request.method === 'zcode.setPermissionMode') {
+      const switchId = request.id || '0';
+      zcodeSetPermissionModePersistent(request.params || {})
+        .then(() => writeRawLine({ id: switchId, done: true, success: true }))
+        .catch((e) => {
+          _originalStderrWrite(`[daemon] zcode.setPermissionMode error: ${e.message}\n`, 'utf8');
+          writeRawLine({ id: switchId, done: true, success: false, error: e.message || String(e) });
+        });
+      return;
+    }
+
     // Command requests are serialized to prevent activeRequestId conflicts
     commandQueue = commandQueue
       .then(() => processRequest(request))
@@ -718,6 +755,7 @@ async function runDaemonMain() {
     try {
       await shutdownPersistentRuntimes();
       await grokShutdownPersistentRuntimes();
+      await zcodeShutdownPersistentRuntimes();
     } catch (e) {
       _originalStderrWrite(`[daemon] Failed to shutdown persistent runtimes: ${e.message}\n`, 'utf8');
     }

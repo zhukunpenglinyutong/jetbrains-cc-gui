@@ -34,20 +34,18 @@ export default function EnvVarEditor({ entries, onChange, disabled }: EnvVarEdit
 
   // Sync rowIds when entries length changes externally (e.g., dialog reset)
   useEffect(() => {
-    setRowIds((prev) => {
-      if (prev.length === entries.length) {
-        return prev;
-      }
-      const next = [...prev];
-      while (next.length < entries.length) {
-        next.push(`env-${nextIdRef.current++}`);
-      }
-      if (next.length > entries.length) {
-        next.length = entries.length;
-      }
-      return next;
-    });
-  }, [entries.length]);
+    if (rowIds.length === entries.length) {
+      return;
+    }
+    const next = [...rowIds];
+    while (next.length < entries.length) {
+      next.push(`env-${nextIdRef.current++}`);
+    }
+    if (next.length > entries.length) {
+      next.length = entries.length;
+    }
+    setRowIds(next);
+  }, [entries.length, rowIds]);
 
   const validateEntries = useCallback((newEntries: EnvVarEntry[]): ValidationErrors => {
     const newErrors: ValidationErrors = {};
@@ -116,7 +114,8 @@ export default function EnvVarEditor({ entries, onChange, disabled }: EnvVarEdit
   const handleAdd = useCallback(() => {
     const newEntries = [...entries, { key: '', value: '' }];
     onChange(newEntries);
-    setRowIds((prev) => [...prev, `env-${nextIdRef.current++}`]);
+    const newRowId = `env-${nextIdRef.current++}`;
+    setRowIds((prev) => [...prev, newRowId]);
   }, [entries, onChange]);
 
   const handleBlur = useCallback(() => {

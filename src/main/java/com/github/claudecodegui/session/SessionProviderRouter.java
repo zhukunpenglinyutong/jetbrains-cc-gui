@@ -4,6 +4,7 @@ import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.github.claudecodegui.provider.zcode.ZcodeSDKBridge;
 import com.google.gson.JsonObject;
 
 import java.util.Collections;
@@ -22,7 +23,7 @@ public class SessionProviderRouter {
      * {@link MarkerCliBridge} — the keys of the map built by
      * {@link #registerCliBridges(MarkerCliBridge...)} for the bundled bridges.
      */
-    private static final Set<String> CLI_PROVIDER_IDS = Set.of("kimi", "opencode", "pi", "omp", "dsh");
+    private static final Set<String> CLI_PROVIDER_IDS = Set.of("kimi", "opencode", "pi", "omp", "dsh", "minimax");
 
     /**
      * Whether {@code provider} is a headless CLI provider routed through the
@@ -35,6 +36,7 @@ public class SessionProviderRouter {
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
     private final GrokSDKBridge grokSDKBridge;
+    private final ZcodeSDKBridge zcodeSDKBridge;
     private final Map<String, MarkerCliBridge> cliBridges;
 
     public SessionProviderRouter(
@@ -51,9 +53,20 @@ public class SessionProviderRouter {
             Map<String, MarkerCliBridge> cliBridges,
             GrokSDKBridge grokSDKBridge
     ) {
+        this(claudeSDKBridge, codexSDKBridge, cliBridges, grokSDKBridge, null);
+    }
+
+    public SessionProviderRouter(
+            ClaudeSDKBridge claudeSDKBridge,
+            CodexSDKBridge codexSDKBridge,
+            Map<String, MarkerCliBridge> cliBridges,
+            GrokSDKBridge grokSDKBridge,
+            ZcodeSDKBridge zcodeSDKBridge
+    ) {
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
         this.grokSDKBridge = grokSDKBridge;
+        this.zcodeSDKBridge = zcodeSDKBridge;
         this.cliBridges = cliBridges != null
                 ? Collections.unmodifiableMap(new LinkedHashMap<>(cliBridges))
                 : Collections.emptyMap();
@@ -83,6 +96,9 @@ public class SessionProviderRouter {
         if ("grok".equals(provider) && grokSDKBridge != null) {
             return grokSDKBridge.launchChannel(channelId, sessionId, cwd);
         }
+        if ("zcode".equals(provider) && zcodeSDKBridge != null) {
+            return zcodeSDKBridge.launchChannel(channelId, sessionId, cwd);
+        }
         MarkerCliBridge bridge = cli(provider);
         if (bridge != null) {
             return bridge.launchChannel(channelId, sessionId, cwd);
@@ -97,6 +113,10 @@ public class SessionProviderRouter {
         }
         if ("grok".equals(provider) && grokSDKBridge != null) {
             grokSDKBridge.interruptChannel(channelId);
+            return;
+        }
+        if ("zcode".equals(provider) && zcodeSDKBridge != null) {
+            zcodeSDKBridge.interruptChannel(channelId);
             return;
         }
         MarkerCliBridge bridge = cli(provider);
@@ -114,6 +134,9 @@ public class SessionProviderRouter {
         if ("grok".equals(provider) && grokSDKBridge != null) {
             return grokSDKBridge.getSessionMessages(sessionId, cwd);
         }
+        if ("zcode".equals(provider) && zcodeSDKBridge != null) {
+            return zcodeSDKBridge.getSessionMessages(sessionId, cwd);
+        }
         MarkerCliBridge bridge = cli(provider);
         if (bridge != null) {
             return bridge.getSessionMessages(sessionId, cwd);
@@ -127,5 +150,8 @@ public class SessionProviderRouter {
 
     public GrokSDKBridge getGrokSDKBridge() {
         return grokSDKBridge;
+    }
+    public ZcodeSDKBridge getZcodeSDKBridge() {
+        return zcodeSDKBridge;
     }
 }

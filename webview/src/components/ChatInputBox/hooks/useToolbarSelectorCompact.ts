@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useLayoutEffect, useState, type RefObject } from 'react';
 
 /** Collapse labels when left selectors would come within this many px of the send cluster. */
 export const TOOLBAR_SELECTOR_MIN_GAP_PX = 10;
@@ -71,9 +71,6 @@ export function useToolbarSelectorCompact(
   contentKey: string | number,
 ): boolean {
   const [compact, setCompact] = useState(false);
-  const compactRef = useRef(compact);
-  compactRef.current = compact;
-
   useLayoutEffect(() => {
     const root = rootRef.current;
     const left = leftRef.current;
@@ -97,10 +94,7 @@ export function useToolbarSelectorCompact(
         rightEl.offsetWidth,
       );
 
-      if (needsCompact !== compactRef.current) {
-        compactRef.current = needsCompact;
-        setCompact(needsCompact);
-      }
+      setCompact((prev) => (prev === needsCompact ? prev : needsCompact));
     };
 
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(recompute) : null;

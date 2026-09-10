@@ -6,6 +6,7 @@ import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.github.claudecodegui.provider.zcode.ZcodeSDKBridge;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -50,6 +51,7 @@ public class ClaudeSession {
     private final com.github.claudecodegui.session.EditorContextCollector contextCollector;
     private final SessionContextService contextService;
     private final GrokSDKBridge grokSDKBridge;
+    private final ZcodeSDKBridge zcodeSDKBridge;
     private final SessionProviderRouter providerRouter;
     private final SessionSendService sendService;
     private final SessionMessageOrchestrator messageOrchestrator;
@@ -175,6 +177,17 @@ public class ClaudeSession {
             Map<String, MarkerCliBridge> cliBridges,
             GrokSDKBridge grokSDKBridge
     ) {
+        this(project, claudeSDKBridge, codexSDKBridge, cliBridges, grokSDKBridge, null);
+    }
+
+    public ClaudeSession(
+            Project project,
+            ClaudeSDKBridge claudeSDKBridge,
+            CodexSDKBridge codexSDKBridge,
+            Map<String, MarkerCliBridge> cliBridges,
+            GrokSDKBridge grokSDKBridge,
+            ZcodeSDKBridge zcodeSDKBridge
+    ) {
         this.project = project;
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
@@ -187,7 +200,9 @@ public class ClaudeSession {
         this.callbackFacade = new SessionCallbackFacade(project);
         this.contextService = new SessionContextService(project);
         this.grokSDKBridge = grokSDKBridge;
-        this.providerRouter = new SessionProviderRouter(claudeSDKBridge, codexSDKBridge, cliBridges, this.grokSDKBridge);
+        this.zcodeSDKBridge = zcodeSDKBridge;
+        this.providerRouter = new SessionProviderRouter(
+                claudeSDKBridge, codexSDKBridge, cliBridges, this.grokSDKBridge, this.zcodeSDKBridge);
         this.sendService = new SessionSendService(
                 project,
                 state,
@@ -199,7 +214,8 @@ public class ClaudeSession {
                 codexSDKBridge,
                 cliBridges,
                 contextService,
-                this.grokSDKBridge);
+                this.grokSDKBridge,
+                this.zcodeSDKBridge);
         this.messageOrchestrator = new SessionMessageOrchestrator(
                 project,
                 state,
@@ -682,27 +698,32 @@ public class ClaudeSession {
      * Maps frontend permission mode strings to PermissionManager enum values.
      */
     public void setPermissionMode(String mode) {
-        state.setPermissionMode(mode);
+        String normalizedMode = mode != null ? mode.trim() : null;
+        if ("autoEdit".equals(normalizedMode)) {
+            normalizedMode = "acceptEdits";
+        }
+        state.setPermissionMode(normalizedMode);
 
         // Sync PermissionManager mode with frontend mode:
         // - "default" -> DEFAULT (ask every time)
-        // - "acceptEdits"/"autoEdit" -> ACCEPT_EDITS (agent mode, auto-accept file edits)
-        // - "bypassPermissions" -> ALLOW_ALL (auto mode, bypass all permission checks)
-        // - "plan" -> DENY_ALL (plan mode, not yet supported)
+        // - "auto" -> DEFAULT (the provider reviewer decides first; residual requests still ask)
+        // - "acceptEdits" (legacy "autoEdit") -> ACCEPT_EDITS (agent mode, auto-accept file edits)
+        // - "bypassPermissions" -> ALLOW_ALL (full auto, bypass all permission checks)
+        // - "plan" -> DENY_ALL (plan mode, read-only tool policy)
         PermissionManager.PermissionMode pmMode;
-        if ("bypassPermissions".equals(mode)) {
+        if ("bypassPermissions".equals(normalizedMode)) {
             pmMode = PermissionManager.PermissionMode.ALLOW_ALL;
-            LOG.info("Permission mode set to ALLOW_ALL for mode: " + mode);
-        } else if ("acceptEdits".equals(mode) || "autoEdit".equals(mode)) {
+            LOG.info("Permission mode set to ALLOW_ALL for mode: " + normalizedMode);
+        } else if ("acceptEdits".equals(normalizedMode)) {
             pmMode = PermissionManager.PermissionMode.ACCEPT_EDITS;
-            LOG.info("Permission mode set to ACCEPT_EDITS for mode: " + mode);
-        } else if ("plan".equals(mode)) {
+            LOG.info("Permission mode set to ACCEPT_EDITS for mode: " + normalizedMode);
+        } else if ("plan".equals(normalizedMode)) {
             pmMode = PermissionManager.PermissionMode.DENY_ALL;
-            LOG.info("Permission mode set to DENY_ALL for mode: " + mode);
+            LOG.info("Permission mode set to DENY_ALL for mode: " + normalizedMode);
         } else {
-            // "default" or other unknown modes
+            // Default asks directly; native auto reaches Java only when the provider reviewer escalates.
             pmMode = PermissionManager.PermissionMode.DEFAULT;
-            LOG.info("Permission mode set to DEFAULT for mode: " + mode);
+            LOG.info("Permission mode set to DEFAULT for mode: " + normalizedMode);
         }
 
         permissionManager.setPermissionMode(pmMode);

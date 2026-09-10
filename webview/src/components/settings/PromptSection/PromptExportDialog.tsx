@@ -17,7 +17,7 @@ export default function PromptExportDialog({
 }: PromptExportDialogProps) {
   const { t } = useTranslation();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
-    new Set(prompts.map(prompt => prompt.id))
+    () => new Set(prompts.map(prompt => prompt.id))
   );
   const [mounted, setMounted] = useState(false);
 

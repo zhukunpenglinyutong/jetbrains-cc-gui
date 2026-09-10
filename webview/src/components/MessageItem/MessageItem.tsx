@@ -2,24 +2,18 @@ import { useState, useCallback, useMemo, memo, useEffect, useRef } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../../types';
 
-import MarkdownBlock from '../MarkdownBlock';
-import { ProviderNotConfiguredCard, isProviderNotConfiguredError } from './ProviderNotConfiguredCard';
-import { ErrorDiagnosticCard } from './ErrorDiagnosticCard';
+import { isProviderNotConfiguredError } from './ProviderNotConfiguredCard';
 import { matchErrorPattern } from '../../utils/errorMatcher';
-import {
-  EditToolBlock,
-  ReadToolBlock,
-  ReadToolGroupBlock,
-  BashToolBlock,
-  BashToolGroupBlock,
-  SearchToolGroupBlock,
-  AgentGroupBlock,
-} from '../toolBlocks';
-import { ContentBlockRenderer } from './ContentBlockRenderer';
-import { formatTime } from '../../utils/helpers';
+import { UserMessageHeader, AssistantMessageActions, MessageRoleLabel } from './MessageActionButtons';
+import { MessageDurationFooter } from './MessageDurationFooter';
+import { GroupedBlocksRenderer } from './GroupedBlocksRenderer';
 import { copyToClipboard } from '../../utils/copyUtils';
 import { quoteToChatInput } from '../../utils/quoteUtils';
-import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, SEARCH_TOOL_NAMES, AGENT_TOOL_NAMES, isToolName, isNonRenderedToolUse } from '../../utils/toolConstants';
+import { isNonRenderedToolUse } from '../../utils/toolConstants';
+import { groupBlocks } from './groupBlocks';
+
+// Re-exported so existing imports (`groupBlocks.test.ts`) keep working.
+export { groupBlocks };
 
 export interface MessageItemProps {
   message: ClaudeMessage;
@@ -41,347 +35,6 @@ export interface MessageItemProps {
   currentProvider?: string;
   /** Show opt-in detailed footer extras such as turn cost and cache-hit ratio. */
   detailedOutputEnabled?: boolean;
-}
-
-/** Map provider id to a human-readable label used in UI text. */
-function getProviderDisplayName(providerId?: string): string {
-  if (providerId === 'codex') return 'Codex';
-  if (providerId === 'grok') return 'Grok';
-  if (providerId === 'gemini') return 'Gemini';
-  if (providerId === 'opencode') return 'OpenCode';
-  if (providerId === 'kimi') return 'Kimi';
-  if (providerId === 'pi') return 'Pi';
-  if (providerId === 'omp') return 'OMP';
-  if (providerId === 'dsh') return 'DSH';
-  if (providerId) return providerId.charAt(0).toUpperCase() + providerId.slice(1);
-  return 'Claude';
-}
-
-type GroupedBlock =
-  | { type: 'single'; block: ClaudeContentBlock; originalIndex: number }
-  | { type: 'read_group'; blocks: ClaudeContentBlock[]; startIndex: number }
-  | { type: 'edit_group'; blocks: ClaudeContentBlock[]; startIndex: number }
-  | { type: 'bash_group'; blocks: ClaudeContentBlock[]; startIndex: number }
-  | { type: 'search_group'; blocks: ClaudeContentBlock[]; startIndex: number }
-  | { type: 'agent_group'; agentBlock: ClaudeContentBlock; followingBlocks: ClaudeContentBlock[]; startIndex: number };
-
-/** Shared copy icon SVG used by both user and assistant message copy buttons */
-const CopyIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M4 4l0 8a2 2 0 0 0 2 2l8 0a2 2 0 0 0 2 -2l0 -8a2 2 0 0 0 -2 -2l-8 0a2 2 0 0 0 -2 2zm2 0l8 0l0 8l-8 0l0 -8z" fill="currentColor" fillOpacity="0.9"/>
-    <path d="M2 2l0 8l-2 0l0 -8a2 2 0 0 1 2 -2l8 0l0 2l-8 0z" fill="currentColor" fillOpacity="0.6"/>
-  </svg>
-);
-
-interface CopyButtonProps {
-  className?: string;
-  isCopied: boolean;
-  onClick: () => void;
-  copyLabel: string;
-  copySuccessText: string;
-}
-
-const CopyButton = memo(function CopyButton({
-  className,
-  isCopied,
-  onClick,
-  copyLabel,
-  copySuccessText,
-}: CopyButtonProps) {
-  return (
-    <button
-      type="button"
-      className={`message-copy-btn${className ? ` ${className}` : ''} ${isCopied ? 'copied' : ''}`}
-      onClick={onClick}
-      title={copyLabel}
-      aria-label={copyLabel}
-    >
-      <span className="copy-icon">
-        <CopyIcon />
-      </span>
-      <span className="copy-tooltip">{copySuccessText}</span>
-    </button>
-  );
-});
-
-/** Quote icon (chat bubble with a right-arrow) used by the message quote button */
-const QuoteIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H6l-3 3v-3H3a1 1 0 0 1-1-1z" fill="currentColor" fillOpacity="0.6"/>
-    <path d="M7.5 4.5l2.5 2.5-2.5 2.5M5 7h5" stroke="var(--bg-secondary)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
-);
-
-interface QuoteButtonProps {
-  className?: string;
-  isQuoted: boolean;
-  onClick: () => void;
-  quoteLabel: string;
-  quoteSuccessText: string;
-}
-
-const QuoteButton = memo(function QuoteButton({
-  className,
-  isQuoted,
-  onClick,
-  quoteLabel,
-  quoteSuccessText,
-}: QuoteButtonProps) {
-  return (
-    <button
-      type="button"
-      className={`message-copy-btn message-quote-btn${className ? ` ${className}` : ''} ${isQuoted ? 'copied' : ''}`}
-      onClick={onClick}
-      title={quoteLabel}
-      aria-label={quoteLabel}
-    >
-      <span className="copy-icon">
-        <QuoteIcon />
-      </span>
-      <span className="copy-tooltip">{quoteSuccessText}</span>
-    </button>
-  );
-});
-
-function formatDurationMs(durationMs: number): string {
-  const seconds = Math.max(0, Math.floor(durationMs / 1000));
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainder = seconds % 60;
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
-  }
-  return `${minutes}:${String(remainder).padStart(2, '0')}`;
-}
-
-interface TokenUsageInfo {
-  /** Total input-side tokens for the turn (non-cache input + cache write + cache read). */
-  inputTokens: number;
-  outputTokens: number;
-  nonCacheInputTokens: number;
-  cacheCreationTokens: number;
-  cacheReadTokens: number;
-  costUsd?: number;
-}
-
-/**
- * Extract whole-turn token usage from a message's raw JSON.
- *
- * Reads the `turnUsage` field stamped by the backend when a turn completes
- * (ClaudeMessageHandler.handleResult / CodexMessageHandler.handleResultMessage).
- * It aggregates every API call in the turn, normalized to the Claude usage
- * schema (input_tokens excludes cache; cache fields are separate).
- *
- * Do NOT read `raw.message.usage` or `raw.usage` here: those carry per-API-call
- * and session-cumulative values that feed the context-usage status bar, and
- * would understate (Claude) or overstate (Codex) what this turn consumed.
- *
- * Returns null when no turn usage is available (aborted turns, history replay).
- */
-function extractTokenUsage(raw: ClaudeMessage['raw']): TokenUsageInfo | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const usageSrc = (raw as Record<string, unknown>).turnUsage;
-  if (!usageSrc || typeof usageSrc !== 'object') return null;
-  const usage = usageSrc as Record<string, unknown>;
-  const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
-  const nonCacheInput = num(usage.input_tokens);
-  const cacheCreation = num(usage.cache_creation_input_tokens);
-  const cacheRead = num(usage.cache_read_input_tokens);
-  const output = num(usage.output_tokens);
-  const input = nonCacheInput + cacheCreation + cacheRead;
-  if (input === 0 && output === 0) return null;
-  const rawCost = (raw as Record<string, unknown>).turnCostUsd;
-  const costUsd = typeof rawCost === 'number' && Number.isFinite(rawCost) && rawCost > 0 ? rawCost : undefined;
-  return {
-    inputTokens: input,
-    outputTokens: output,
-    nonCacheInputTokens: nonCacheInput,
-    cacheCreationTokens: cacheCreation,
-    cacheReadTokens: cacheRead,
-    ...(costUsd !== undefined ? { costUsd } : {}),
-  };
-}
-
-/** Format a token count for compact display (e.g., 1234 → "1.2K"). */
-function formatTokenCount(count: number): string {
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
-  return String(count);
-}
-
-function formatUsdCost(cost: number): string {
-  if (cost > 0 && cost < 0.0001) return '<$0.0001';
-  if (cost < 0.01) return `$${cost.toFixed(4)}`;
-  if (cost < 1) return `$${cost.toFixed(3)}`;
-  return `$${cost.toFixed(2)}`;
-}
-
-function formatCacheHitRatio(tokenInfo: TokenUsageInfo): string | null {
-  if (tokenInfo.cacheReadTokens <= 0 || tokenInfo.inputTokens <= 0) return null;
-  const ratio = Math.round((tokenInfo.cacheReadTokens / tokenInfo.inputTokens) * 100);
-  return `${Math.min(100, Math.max(0, ratio))}%`;
-}
-
-function isToolBlockOfType(block: ClaudeContentBlock, toolNames: Set<string>): boolean {
-  return block.type === 'tool_use' && isToolName(block.name, toolNames);
-}
-
-// Groups consecutive content blocks for rendering. Agent groups absorb the
-// tool_use blocks that follow them using a purely structural rule (see the
-// forEach below), so live streaming and history reload yield identical groups.
-// Exported for unit testing.
-export function groupBlocks(blocks: ClaudeContentBlock[]): GroupedBlock[] {
-  const groupedBlocks: GroupedBlock[] = [];
-  let currentReadGroup: ClaudeContentBlock[] = [];
-  let readGroupStartIndex = -1;
-  let currentEditGroup: ClaudeContentBlock[] = [];
-  let editGroupStartIndex = -1;
-  let currentBashGroup: ClaudeContentBlock[] = [];
-  let bashGroupStartIndex = -1;
-  let currentSearchGroup: ClaudeContentBlock[] = [];
-  let searchGroupStartIndex = -1;
-  let currentAgentBlock: ClaudeContentBlock | null = null;
-  let agentFollowingText: ClaudeContentBlock[] = [];
-  let agentGroupStartIndex = -1;
-
-  const flushReadGroup = () => {
-    if (currentReadGroup.length > 0) {
-      groupedBlocks.push({
-        type: 'read_group',
-        blocks: [...currentReadGroup],
-        startIndex: readGroupStartIndex,
-      });
-      currentReadGroup = [];
-      readGroupStartIndex = -1;
-    }
-  };
-
-  const flushEditGroup = () => {
-    if (currentEditGroup.length > 0) {
-      groupedBlocks.push({
-        type: 'edit_group',
-        blocks: [...currentEditGroup],
-        startIndex: editGroupStartIndex,
-      });
-      currentEditGroup = [];
-      editGroupStartIndex = -1;
-    }
-  };
-
-  const flushBashGroup = () => {
-    if (currentBashGroup.length > 0) {
-      groupedBlocks.push({
-        type: 'bash_group',
-        blocks: [...currentBashGroup],
-        startIndex: bashGroupStartIndex,
-      });
-      currentBashGroup = [];
-      bashGroupStartIndex = -1;
-    }
-  };
-
-  const flushSearchGroup = () => {
-    if (currentSearchGroup.length > 0) {
-      groupedBlocks.push({
-        type: 'search_group',
-        blocks: [...currentSearchGroup],
-        startIndex: searchGroupStartIndex,
-      });
-      currentSearchGroup = [];
-      searchGroupStartIndex = -1;
-    }
-  };
-
-  const flushAgentGroup = () => {
-    if (currentAgentBlock) {
-      groupedBlocks.push({
-        type: 'agent_group',
-        agentBlock: currentAgentBlock,
-        followingBlocks: [...agentFollowingText],
-        startIndex: agentGroupStartIndex,
-      });
-      currentAgentBlock = null;
-      agentFollowingText = [];
-      agentGroupStartIndex = -1;
-    }
-  };
-
-  blocks.forEach((block, idx) => {
-    // While inside an agent group, absorb subsequent tool_use blocks until a
-    // structural boundary: the next agent tool, a non-tool block (text/thinking),
-    // or the end of the message. Keeping this purely structural guarantees that
-    // live streaming and history reload produce identical groups — the previous
-    // streaming-only "frozen count" could not be reconstructed from a snapshot,
-    // so reloaded agent groups dropped all their absorbed children.
-    if (currentAgentBlock) {
-      if (isToolBlockOfType(block, AGENT_TOOL_NAMES)) {
-        // Next agent tool — close this group and open a new one below.
-        flushAgentGroup();
-      } else if (block.type === 'tool_use') {
-        // Absorb the following tool_use into the running agent group.
-        agentFollowingText.push(block);
-        return;
-      } else {
-        // Non-tool block (text/thinking/...) ends the group; process it normally.
-        flushAgentGroup();
-      }
-    }
-
-    if (isToolBlockOfType(block, AGENT_TOOL_NAMES)) {
-      flushReadGroup();
-      flushEditGroup();
-      flushBashGroup();
-      flushSearchGroup();
-      currentAgentBlock = block;
-      agentGroupStartIndex = idx;
-    } else if (isToolBlockOfType(block, READ_TOOL_NAMES)) {
-      flushEditGroup();
-      flushBashGroup();
-      flushSearchGroup();
-      if (currentReadGroup.length === 0) {
-        readGroupStartIndex = idx;
-      }
-      currentReadGroup.push(block);
-    } else if (isToolBlockOfType(block, EDIT_TOOL_NAMES)) {
-      flushReadGroup();
-      flushBashGroup();
-      flushSearchGroup();
-      if (currentEditGroup.length === 0) {
-        editGroupStartIndex = idx;
-      }
-      currentEditGroup.push(block);
-    } else if (isToolBlockOfType(block, BASH_TOOL_NAMES)) {
-      flushReadGroup();
-      flushEditGroup();
-      flushSearchGroup();
-      if (currentBashGroup.length === 0) {
-        bashGroupStartIndex = idx;
-      }
-      currentBashGroup.push(block);
-    } else if (isToolBlockOfType(block, SEARCH_TOOL_NAMES)) {
-      flushReadGroup();
-      flushEditGroup();
-      flushBashGroup();
-      if (currentSearchGroup.length === 0) {
-        searchGroupStartIndex = idx;
-      }
-      currentSearchGroup.push(block);
-    } else {
-      flushReadGroup();
-      flushEditGroup();
-      flushBashGroup();
-      flushSearchGroup();
-      groupedBlocks.push({ type: 'single', block, originalIndex: idx });
-    }
-  });
-
-  flushAgentGroup();
-  flushReadGroup();
-  flushEditGroup();
-  flushBashGroup();
-  flushSearchGroup();
-
-  return groupedBlocks;
 }
 
 export const MessageItem = memo(function MessageItem({
@@ -417,19 +70,17 @@ export const MessageItem = memo(function MessageItem({
   const [manuallyExpandedThinking, setManuallyExpandedThinking] = useState<Record<number, boolean>>({});
 
   const toggleThinking = useCallback((blockIndex: number) => {
-    setExpandedThinking((prev) => {
-      const newExpanded = !prev[blockIndex];
-      // Mark this block as manually toggled by the user
-      setManuallyExpandedThinking((manualPrev) => ({
-        ...manualPrev,
-        [blockIndex]: newExpanded,
-      }));
-      return {
-        ...prev,
-        [blockIndex]: newExpanded,
-      };
-    });
-  }, []);
+    const newExpanded = !expandedThinking[blockIndex];
+    setExpandedThinking((prev) => ({
+      ...prev,
+      [blockIndex]: !prev[blockIndex],
+    }));
+    // Mark this block as manually toggled by the user
+    setManuallyExpandedThinking((manualPrev) => ({
+      ...manualPrev,
+      [blockIndex]: newExpanded,
+    }));
+  }, [expandedThinking]);
 
   const isThinkingExpanded = useCallback(
     (blockIndex: number) => Boolean(expandedThinking[blockIndex]),
@@ -534,9 +185,10 @@ export const MessageItem = memo(function MessageItem({
   useEffect(() => {
     if (!isMessageStreaming) return;
 
-    const thinkingIndices = renderedBlocks
-      .map((block, index) => (block.type === 'thinking' ? index : -1))
-      .filter((index) => index !== -1);
+    const thinkingIndices: number[] = [];
+    renderedBlocks.forEach((block, index) => {
+      if (block.type === 'thinking') thinkingIndices.push(index);
+    });
 
     if (thinkingIndices.length === 0) return;
 
@@ -580,199 +232,6 @@ export const MessageItem = memo(function MessageItem({
     [message, isProviderNotConfigured, getMessageText]
   );
 
-  const renderGroupedBlocks = () => {
-    if (message.type === 'error') {
-      if (isProviderNotConfigured) {
-        return (
-          <ProviderNotConfiguredCard
-            t={t}
-            onNavigateToSettings={onNavigateToProviderSettings}
-          />
-        );
-      }
-      return (
-        <>
-          <MarkdownBlock content={getMessageText(message)} />
-          {errorDiagnosticPattern && (
-            <ErrorDiagnosticCard
-              t={t}
-              pattern={errorDiagnosticPattern}
-              onNavigateToDependencySettings={onNavigateToDependencySettings}
-            />
-          )}
-        </>
-      );
-    }
-
-    if (isEmptyStreamingPlaceholder) {
-      return (
-        <div className="streaming-connect-status">
-          <span className="streaming-connect-text">
-            {t('chat.streamingConnected', { provider: getProviderDisplayName(currentProvider) })}
-          </span>
-        </div>
-      );
-    }
-
-    return groupedBlocks.map((grouped) => {
-      if (grouped.type === 'read_group') {
-        const readItems = grouped.blocks.map((b) => {
-          const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
-          return {
-            name: block.name,
-            input: block.input,
-            result: findToolResult(block.id, messageIndex),
-            toolId: block.id,
-          };
-        });
-
-        if (readItems.length === 1) {
-          return (
-            <div key={`${messageIndex}-readgroup-${grouped.startIndex}`} className="content-block">
-              <ReadToolBlock
-                input={readItems[0].input}
-                result={readItems[0].result}
-                toolId={readItems[0].toolId}
-              />
-            </div>
-          );
-        }
-
-        return (
-          <div key={`${messageIndex}-readgroup-${grouped.startIndex}`} className="content-block">
-            <ReadToolGroupBlock items={readItems} />
-          </div>
-        );
-      }
-
-      if (grouped.type === 'edit_group') {
-        const editItems = grouped.blocks.map((b) => {
-          const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
-          return {
-            name: block.name,
-            input: block.input,
-            result: findToolResult(block.id, messageIndex),
-            toolId: block.id,
-          };
-        });
-
-        // Always route through EditToolBlock so the instance stays stable as
-        // edits stream in (1 -> 2 -> ...). It renders the inline-diff view for
-        // a single item and delegates to the grouped list view for multiple,
-        // without unmounting on the transition.
-        return (
-          <div key={`${messageIndex}-editgroup-${grouped.startIndex}`} className="content-block">
-            <EditToolBlock items={editItems} />
-          </div>
-        );
-      }
-
-      if (grouped.type === 'bash_group') {
-        const bashItems = grouped.blocks.map((b) => {
-          const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
-          return {
-            name: block.name,
-            input: block.input,
-            result: findToolResult(block.id, messageIndex),
-            toolId: block.id,
-          };
-        });
-
-        if (bashItems.length === 1) {
-          return (
-            <div key={`${messageIndex}-bashgroup-${grouped.startIndex}`} className="content-block">
-              <BashToolBlock
-                name={bashItems[0].name}
-                input={bashItems[0].input}
-                result={bashItems[0].result}
-                toolId={bashItems[0].toolId}
-              />
-            </div>
-          );
-        }
-
-        return (
-          <div key={`${messageIndex}-bashgroup-${grouped.startIndex}`} className="content-block">
-            <BashToolGroupBlock items={bashItems} deniedToolIds={window.__deniedToolIds} />
-          </div>
-        );
-      }
-
-      if (grouped.type === 'search_group') {
-        const searchItems = grouped.blocks.map((b) => {
-          const block = b as { type: 'tool_use'; id?: string; name?: string; input?: Record<string, unknown> };
-          return {
-            name: block.name,
-            input: block.input,
-            result: findToolResult(block.id, messageIndex),
-          };
-        });
-
-        if (searchItems.length === 1) {
-          return (
-            <div key={`${messageIndex}-searchgroup-${grouped.startIndex}`} className="content-block">
-              <ContentBlockRenderer
-                block={grouped.blocks[0]}
-                messageIndex={messageIndex}
-                messageType={message.type}
-                isStreaming={isMessageStreaming}
-                isThinkingExpanded={false}
-                isThinking={isThinking}
-                isLastMessage={isLast}
-                isLastBlock={grouped.startIndex === renderedBlocks.length - 1}
-                t={t}
-                onToggleThinking={() => {}}
-                findToolResult={findToolResult}
-              />
-            </div>
-          );
-        }
-
-        return (
-          <div key={`${messageIndex}-searchgroup-${grouped.startIndex}`} className="content-block">
-            <SearchToolGroupBlock items={searchItems} />
-          </div>
-        );
-      }
-
-      if (grouped.type === 'agent_group') {
-        return (
-          <div key={`${messageKey}-agentgroup-${grouped.startIndex}`} className="content-block">
-            <AgentGroupBlock
-              agentBlock={grouped.agentBlock}
-              followingBlocks={grouped.followingBlocks}
-              messageIndex={messageIndex}
-              isStreaming={isMessageStreaming}
-              isLastMessage={isLast}
-              isThinking={isThinking}
-              findToolResult={findToolResult}
-            />
-          </div>
-        );
-      }
-
-      const { block, originalIndex: blockIndex } = grouped;
-
-      return (
-        <div key={`${messageIndex}-${blockIndex}`} className="content-block">
-          <ContentBlockRenderer
-            block={block}
-            messageIndex={messageIndex}
-            messageType={message.type}
-            isStreaming={isMessageStreaming}
-            isThinkingExpanded={isThinkingExpanded(blockIndex)}
-            isThinking={isThinking}
-            isLastMessage={isLast}
-            isLastBlock={blockIndex === renderedBlocks.length - 1}
-            t={t}
-            onToggleThinking={() => toggleThinking(blockIndex)}
-            findToolResult={findToolResult}
-          />
-        </div>
-      );
-    });
-  };
-
   if (isEmptyStreamingPlaceholder && !showStreamingConnectHint) {
     return <></>;
   }
@@ -783,109 +242,60 @@ export const MessageItem = memo(function MessageItem({
       ref={anchorRefCallback}
       data-message-anchor-id={message.type === 'user' ? messageKey : undefined}
     >
-      {/* Timestamp and copy button for user messages */}
-      {message.type === 'user' && message.timestamp && (
-        <div className="message-header-row">
-          <div className="message-timestamp-header">
-            {formatTime(message.timestamp)}
-          </div>
-          {hasCopyableText && (
-            <>
-              <QuoteButton
-                className="message-copy-btn-inline"
-                isQuoted={quotedMessageIndex === messageIndex}
-                onClick={handleQuoteMessage}
-                quoteLabel={t('markdown.quoteMessage', 'Quote message')}
-                quoteSuccessText={t('markdown.quoteSuccess', 'Quoted!')}
-              />
-              <CopyButton
-                className="message-copy-btn-inline"
-                isCopied={copiedMessageIndex === messageIndex}
-                onClick={handleCopyMessage}
-                copyLabel={t('markdown.copyMessage')}
-                copySuccessText={t('markdown.copySuccess')}
-              />
-            </>
-          )}
-        </div>
-      )}
+      <UserMessageHeader
+        messageType={message.type}
+        timestamp={message.timestamp}
+        hasCopyableText={hasCopyableText}
+        isQuoted={quotedMessageIndex === messageIndex}
+        isCopied={copiedMessageIndex === messageIndex}
+        onQuote={handleQuoteMessage}
+        onCopy={handleCopyMessage}
+        t={t}
+      />
 
-      {/* Copy and quote buttons for assistant messages only */}
-      {message.type === 'assistant' && !isMessageStreaming && hasCopyableText && (
-        <>
-          <QuoteButton
-            isQuoted={quotedMessageIndex === messageIndex}
-            onClick={handleQuoteMessage}
-            quoteLabel={t('markdown.quoteMessage', 'Quote message')}
-            quoteSuccessText={t('markdown.quoteSuccess', 'Quoted!')}
-          />
-          <CopyButton
-            isCopied={copiedMessageIndex === messageIndex}
-            onClick={handleCopyMessage}
-            copyLabel={t('markdown.copyMessage')}
-            copySuccessText={t('markdown.copySuccess')}
-          />
-        </>
-      )}
+      <AssistantMessageActions
+        messageType={message.type}
+        isMessageStreaming={isMessageStreaming}
+        hasCopyableText={hasCopyableText}
+        isQuoted={quotedMessageIndex === messageIndex}
+        isCopied={copiedMessageIndex === messageIndex}
+        onQuote={handleQuoteMessage}
+        onCopy={handleCopyMessage}
+        t={t}
+      />
 
-      {/* Role label for non-user/assistant messages — hidden for notification types */}
-      {message.type !== 'assistant' && message.type !== 'user'
-        && message.type !== 'notification' && message.type !== 'task_notification' && (
-        <div className="message-role-label">
-          {message.type}
-        </div>
-      )}
+      <MessageRoleLabel messageType={message.type} />
 
       <div className="message-content">
-        {renderGroupedBlocks()}
+        <GroupedBlocksRenderer
+          message={message}
+          messageIndex={messageIndex}
+          messageKey={messageKey}
+          t={t}
+          getMessageText={getMessageText}
+          findToolResult={findToolResult}
+          isProviderNotConfigured={isProviderNotConfigured}
+          errorDiagnosticPattern={errorDiagnosticPattern}
+          isEmptyStreamingPlaceholder={isEmptyStreamingPlaceholder}
+          currentProvider={currentProvider}
+          groupedBlocks={groupedBlocks}
+          renderedBlockCount={renderedBlocks.length}
+          isMessageStreaming={isMessageStreaming}
+          isThinking={isThinking}
+          isLast={isLast}
+          isThinkingExpanded={isThinkingExpanded}
+          onToggleThinking={toggleThinking}
+          onNavigateToProviderSettings={onNavigateToProviderSettings}
+          onNavigateToDependencySettings={onNavigateToDependencySettings}
+        />
       </div>
 
-      {/* Duration and token display after last assistant message */}
-      {message.type === 'assistant' && !isMessageStreaming && typeof message.durationMs === 'number' && (
-        <div className="message-duration">
-          <span className="message-duration-inner">
-            <span className="message-duration-flag codicon codicon-clock"></span>
-            <span className="message-duration-cost">{t('chat.totalDuration')}</span>
-            <span className="message-duration-value">{formatDurationMs(message.durationMs)}</span>
-            {(() => {
-              const tokenInfo = extractTokenUsage(message.raw);
-              if (!tokenInfo) return null;
-              const cacheHitRatio = detailedOutputEnabled ? formatCacheHitRatio(tokenInfo) : null;
-              const cacheHitLabel = cacheHitRatio
-                ? t('chat.cacheHitsWithRatio', {
-                  tokens: formatTokenCount(tokenInfo.cacheReadTokens),
-                  ratio: cacheHitRatio,
-                })
-                : '';
-              return (
-                <>
-                  <span className="message-duration-separator">·</span>
-                  <span
-                    className="message-duration-tokens"
-                    title={t('chat.tokenUsageDetail', {
-                      input: formatTokenCount(tokenInfo.nonCacheInputTokens),
-                      cacheWrite: formatTokenCount(tokenInfo.cacheCreationTokens),
-                      cacheRead: formatTokenCount(tokenInfo.cacheReadTokens),
-                      output: formatTokenCount(tokenInfo.outputTokens),
-                    })}
-                  >
-                    {t('chat.tokenUsage', {
-                      input: `${formatTokenCount(tokenInfo.inputTokens)}${cacheHitLabel}`,
-                      output: formatTokenCount(tokenInfo.outputTokens),
-                    })}
-                  </span>
-                  {detailedOutputEnabled && tokenInfo.costUsd !== undefined && (
-                    <>
-                      <span className="message-duration-separator">·</span>
-                      <span className="message-duration-tokens">{formatUsdCost(tokenInfo.costUsd)}</span>
-                    </>
-                  )}
-                </>
-              );
-            })()}
-          </span>
-        </div>
-      )}
+      <MessageDurationFooter
+        message={message}
+        isMessageStreaming={isMessageStreaming}
+        detailedOutputEnabled={detailedOutputEnabled}
+        t={t}
+      />
     </div>
   );
 });

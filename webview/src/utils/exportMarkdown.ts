@@ -27,9 +27,9 @@ export function convertMessagesToJSON(messages: ClaudeMessage[], sessionTitle: s
   const exportTime = formatTimestamp(new Date().toISOString());
 
   // Filter out messages that should not be exported
-  const filteredMessages = messages
-    .filter(msg => shouldExportMessage(msg))
-    .map(msg => processMessageForExport(msg));
+  const filteredMessages = messages.flatMap(msg =>
+    shouldExportMessage(msg) ? [processMessageForExport(msg)] : []
+  );
 
   const exportData = {
     format: 'claude-chat-export-v2',
@@ -85,20 +85,22 @@ function extractRawContent(raw: ClaudeRawMessage | unknown): string | null {
   if (typeof rawObj.content === 'string') return rawObj.content;
 
   if (Array.isArray(rawObj.content)) {
-    return rawObj.content
-      .filter(isTextBlock)
-      .map(block => block.text || '')
-      .join('\n');
+    const parts: string[] = [];
+    for (const block of rawObj.content) {
+      if (isTextBlock(block)) parts.push(block.text || '');
+    }
+    return parts.join('\n');
   }
 
   if (rawObj.message && typeof rawObj.message === 'object') {
     const msg = rawObj.message as Record<string, unknown>;
     if (typeof msg.content === 'string') return msg.content;
     if (Array.isArray(msg.content)) {
-      return msg.content
-        .filter(isTextBlock)
-        .map(block => block.text || '')
-        .join('\n');
+      const parts: string[] = [];
+      for (const block of msg.content) {
+        if (isTextBlock(block)) parts.push(block.text || '');
+      }
+      return parts.join('\n');
     }
   }
 
@@ -249,17 +251,19 @@ function getMessageText(message: ClaudeMessage): string {
   }
 
   if (Array.isArray(raw.content)) {
-    return raw.content
-      .filter(isTextBlock)
-      .map(block => block.text ?? '')
-      .join('\n');
+    const parts: string[] = [];
+    for (const block of raw.content) {
+      if (isTextBlock(block)) parts.push(block.text ?? '');
+    }
+    return parts.join('\n');
   }
 
   if (raw.message?.content && Array.isArray(raw.message.content)) {
-    return raw.message.content
-      .filter(isTextBlock)
-      .map(block => block.text ?? '')
-      .join('\n');
+    const parts: string[] = [];
+    for (const block of raw.message.content) {
+      if (isTextBlock(block)) parts.push(block.text ?? '');
+    }
+    return parts.join('\n');
   }
 
   return '';

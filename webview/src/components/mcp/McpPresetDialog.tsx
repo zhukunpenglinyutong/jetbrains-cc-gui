@@ -6,6 +6,30 @@ interface McpPresetDialogProps {
   onSelect: (preset: McpPreset) => void;
 }
 
+// Server icon colors
+const ICON_COLORS = [
+  '#3B82F6', // blue
+  '#10B981', // green
+  '#8B5CF6', // purple
+  '#F59E0B', // amber
+  '#EF4444', // red
+  '#EC4899', // pink
+  '#06B6D4', // cyan
+  '#6366F1', // indigo
+];
+
+function getIconColor(presetId: string): string {
+  let hash = 0;
+  for (let i = 0; i < presetId.length; i++) {
+    hash = presetId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return ICON_COLORS[Math.abs(hash) % ICON_COLORS.length];
+}
+
+function getIconStyle(presetId: string): React.CSSProperties {
+  return { background: getIconColor(presetId) };
+}
+
 /**
  * MCP Preset Server Selection Dialog
  */
@@ -79,28 +103,6 @@ export function McpPresetDialog({ onClose, onSelect }: McpPresetDialogProps) {
       docs: 'https://github.com/upstash/context7/blob/master/README.md',
     },
   ];
-
-  // Server icon colors
-  const iconColors = [
-    '#3B82F6', // blue
-    '#10B981', // green
-    '#8B5CF6', // purple
-    '#F59E0B', // amber
-    '#EF4444', // red
-    '#EC4899', // pink
-    '#06B6D4', // cyan
-    '#6366F1', // indigo
-  ];
-
-  const getIconColor = (presetId: string): string => {
-    let hash = 0;
-    for (let i = 0; i < presetId.length; i++) {
-      hash = presetId.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return iconColors[Math.abs(hash) % iconColors.length];
-  };
-
-  const getIconStyle = (presetId: string): React.CSSProperties => ({ background: getIconColor(presetId) });
 
   const getServerType = (preset: McpPreset): string => {
     return preset.server.type || 'stdio';

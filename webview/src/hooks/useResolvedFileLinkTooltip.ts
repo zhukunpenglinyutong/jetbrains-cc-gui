@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { resolveFilePathWithCallback } from '../utils/bridge';
 import { useFloatingTextTooltip } from './useFloatingTextTooltip';
 import { LRUCache } from '../utils/lruCache';
@@ -19,7 +19,7 @@ export function useResolvedFileLinkTooltip(
   onMouseLeave: () => void;
 } {
   const tooltip = useFloatingTextTooltip();
-  const resolvedTextCacheRef = useRef<LRUCache<string, string>>(new LRUCache(200));
+  const [resolvedTextCache] = useState(() => new LRUCache<string, string>(200));
   const currentHoverPathRef = useRef<string | undefined>(undefined);
   const currentTooltipTextRef = useRef<string | undefined>(undefined);
   const mountedRef = useRef(true);
@@ -50,7 +50,7 @@ export function useResolvedFileLinkTooltip(
       return;
     }
 
-    const cachedText = resolvedTextCacheRef.current.get(filePath);
+    const cachedText = resolvedTextCache.get(filePath);
     const initialText = cachedText ?? fallback;
     if (initialText) {
       currentTooltipTextRef.current = initialText;
@@ -64,7 +64,7 @@ export function useResolvedFileLinkTooltip(
 
       const resolvedText = normalizeTooltipText(resolvedPath);
       if (resolvedText) {
-        resolvedTextCacheRef.current.set(filePath, resolvedText);
+        resolvedTextCache.set(filePath, resolvedText);
         currentTooltipTextRef.current = resolvedText;
         const { clientX, clientY } = latestMousePositionRef.current;
         tooltip.showTooltip(resolvedText, clientX, clientY);
@@ -74,7 +74,7 @@ export function useResolvedFileLinkTooltip(
       // Backend could not produce a display path (e.g. no project root,
       // canonicalization failure). Fall back to the link text if available;
       // otherwise hide the tooltip.
-      resolvedTextCacheRef.current.delete(filePath);
+      resolvedTextCache.delete(filePath);
       if (fallback) {
         currentTooltipTextRef.current = fallback;
         const { clientX, clientY } = latestMousePositionRef.current;
@@ -84,7 +84,7 @@ export function useResolvedFileLinkTooltip(
         tooltip.hideTooltip();
       }
     });
-  }, [fallbackText, filePath, tooltip]);
+  }, [fallbackText, filePath, resolvedTextCache, tooltip]);
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     latestMousePositionRef.current = { clientX: e.clientX, clientY: e.clientY };

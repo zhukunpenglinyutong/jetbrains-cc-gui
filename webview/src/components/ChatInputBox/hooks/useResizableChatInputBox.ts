@@ -94,7 +94,9 @@ export function useResizableChatInputBox({
     }
   });
   const sizeRef = useRef<SizeState>(size);
-  sizeRef.current = size;
+  useEffect(() => {
+    sizeRef.current = size;
+  }, [size]);
 
   const [isResizing, setIsResizing] = useState(false);
   const startRef = useRef<{

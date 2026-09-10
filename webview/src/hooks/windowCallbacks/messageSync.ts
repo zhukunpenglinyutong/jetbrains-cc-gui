@@ -20,7 +20,7 @@ export const getStreamEndHandlingMode = (
   if (isStreaming || currentTurnId > 0) {
     return 'full';
   }
-  if (provider === 'codex' || provider === 'grok' || provider === 'kimi' || provider === 'opencode' || provider === 'pi' || provider === 'omp' || provider === 'dsh') {
+  if (provider === 'codex' || provider === 'grok' || provider === 'kimi' || provider === 'minimax' || provider === 'zcode' || provider === 'opencode' || provider === 'pi' || provider === 'omp' || provider === 'dsh') {
     return 'minimal';
   }
   return 'skip';
@@ -195,10 +195,13 @@ const getUserMessageComparableContent = (message: ClaudeMessage): string => {
   if (!Array.isArray(rawContent)) {
     return message.content || '';
   }
-  const rawText = rawContent
-    .filter((block: any) => block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string')
-    .map((block: any) => block.text)
-    .join('\n');
+  const rawTextParts: string[] = [];
+  for (const block of rawContent) {
+    if (block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string') {
+      rawTextParts.push(block.text);
+    }
+  }
+  const rawText = rawTextParts.join('\n');
   return rawText || message.content || '';
 };
 
@@ -221,11 +224,13 @@ const getAssistantComparableContent = (message: ClaudeMessage): string => {
   }
   const content = (raw as any)?.message?.content ?? (raw as any)?.content;
   if (!Array.isArray(content)) return '';
-  const text = content
-    .filter((b: any) => b && typeof b === 'object' && b.type === 'text' && typeof b.text === 'string')
-    .map((b: any) => b.text)
-    .join('\n')
-    .trim();
+  const textParts: string[] = [];
+  for (const b of content) {
+    if (b && typeof b === 'object' && b.type === 'text' && typeof b.text === 'string') {
+      textParts.push(b.text);
+    }
+  }
+  const text = textParts.join('\n').trim();
   return text;
 };
 

@@ -693,7 +693,8 @@ public class StreamMessageCoalescer {
             return false;
         }
         String provider = context.getCurrentProvider();
-        return "claude".equals(provider) || "codex".equals(provider) || "grok".equals(provider);
+        return "claude".equals(provider) || "codex".equals(provider) || "grok".equals(provider)
+                || "zcode".equals(provider);
     }
 
     private void startHeartbeat() {

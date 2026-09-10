@@ -124,6 +124,10 @@ public final class CliStatusDetector {
 
     public static CliToolStatus detect(CliToolId tool) {
         try {
+            if (tool == CliToolId.ZCODE) {
+                // No PATH binary: resolve the app-server entry inside the desktop app bundle.
+                return detectZcodeAppBundle(tool);
+            }
             for (String candidate : candidatesFor(tool)) {
                 ProbeResult probe = probe(candidate);
                 if (probe.ok) {
@@ -149,7 +153,11 @@ public final class CliStatusDetector {
 
     private static List<String> candidatesFor(CliToolId tool) {
         Set<String> candidates = new LinkedHashSet<>();
-        String binary = tool.getBinaryName();
+        // Primary name first, then the alt name (e.g. minimax → mcode): tools
+        // installed under either name must be detected.
+        String[] binaries = tool.getAltBinaryName() != null
+                ? new String[]{tool.getBinaryName(), tool.getAltBinaryName()}
+                : new String[]{tool.getBinaryName()};
         String[] extensions = PlatformUtils.isWindows()
                 ? new String[]{".cmd", ".exe", ""}
                 : new String[]{""};
@@ -165,18 +173,22 @@ public final class CliStatusDetector {
         // 2. Common home / system install locations
         String home = PlatformUtils.getHomeDirectory();
         List<String> homeDirs = homeBinDirs(tool, home);
-        for (String dir : homeDirs) {
-            for (String ext : extensions) {
-                File file = new File(dir, binary + ext);
-                if (file.isFile()) {
-                    candidates.add(file.getAbsolutePath());
+        for (String binary : binaries) {
+            for (String dir : homeDirs) {
+                for (String ext : extensions) {
+                    File file = new File(dir, binary + ext);
+                    if (file.isFile()) {
+                        candidates.add(file.getAbsolutePath());
+                    }
                 }
             }
         }
 
         // 3. Bare binary names (resolved via process PATH)
-        for (String ext : extensions) {
-            candidates.add(binary + ext);
+        for (String binary : binaries) {
+            for (String ext : extensions) {
+                candidates.add(binary + ext);
+            }
         }
 
         return new ArrayList<>(candidates);
@@ -222,6 +234,11 @@ public final class CliStatusDetector {
                 // Hermes (the DSH-native installer) keeps node + dsh together.
                 dirs.add(join(home, ".hermes", "node", "bin"));
                 dirs.add(join(home, ".dsh", "bin"));
+                dirs.add(join(home, ".local", "bin"));
+                break;
+            case MINIMAX:
+                dirs.add(join(home, ".minimax", "bin"));
+                dirs.add(join(home, ".minimax-code"));
                 dirs.add(join(home, ".local", "bin"));
                 break;
             default:
@@ -331,7 +348,55 @@ public final class CliStatusDetector {
             case PI -> new String[]{"PI_BIN", "PI_PATH", "PI_CLI_PATH"};
             case OMP -> new String[]{"OMP_BIN", "OMP_PATH", "OMP_CLI_PATH"};
             case DSH -> new String[]{"DSH_BIN", "DSH_PATH", "DSH_CLI_PATH"};
+            case MINIMAX -> new String[]{"MINIMAX_BIN", "MINIMAX_PATH", "MINIMAX_CLI_PATH", "MCODE_BIN"};
+            case ZCODE -> new String[]{"ZCODE_CLI_PATH", "ZCODE_PATH"};
         };
+    }
+    /**
+     * ZCode ships no PATH binary: the app-server entry ({@code zcode.cjs}) is bundled
+     * inside the desktop client, so detection means locating that file at the
+     * well-known install locations (env override first). The resolved file path
+     * plays the role of the "binary" in the status payload.
+     */
+    private static CliToolStatus detectZcodeAppBundle(CliToolId tool) {
+        for (String candidate : zcodeAppBundleCandidates()) {
+            File file = new File(candidate);
+            if (file.isFile()) {
+                return CliToolStatus.installed(tool, "unknown", file.getAbsolutePath());
+            }
+        }
+        return CliToolStatus.notInstalled(tool);
+    }
+
+    private static List<String> zcodeAppBundleCandidates() {
+        List<String> candidates = new ArrayList<>();
+        // 1. Explicit env overrides (point directly at zcode.cjs)
+        for (String envKey : envKeysFor(CliToolId.ZCODE)) {
+            String value = firstNonBlank(System.getenv(envKey));
+            if (value != null) {
+                candidates.add(value.trim());
+            }
+        }
+        // 2. Desktop app bundle locations (mirrors ai-bridge zcode-config.js)
+        if (PlatformUtils.isWindows()) {
+            String localAppData = System.getenv("LOCALAPPDATA");
+            if (localAppData != null && !localAppData.isBlank()) {
+                candidates.add(join(localAppData, "Programs", "ZCode", "resources", "glm", "zcode.cjs"));
+            }
+            String programFiles = System.getenv("ProgramFiles");
+            if (programFiles != null && !programFiles.isBlank()) {
+                candidates.add(join(programFiles, "ZCode", "resources", "glm", "zcode.cjs"));
+            }
+            String programFilesX86 = System.getenv("ProgramFiles(x86)");
+            if (programFilesX86 != null && !programFilesX86.isBlank()) {
+                candidates.add(join(programFilesX86, "ZCode", "resources", "glm", "zcode.cjs"));
+            }
+        } else if (PlatformUtils.isMac()) {
+            candidates.add("/Applications/ZCode.app/Contents/Resources/glm/zcode.cjs");
+        } else {
+            candidates.add("/opt/ZCode/app/resources/glm/zcode.cjs");
+        }
+        return candidates;
     }
 
     private static ProbeResult probe(String candidate) {
@@ -554,6 +619,7 @@ public final class CliStatusDetector {
                 join(home, ".grok", "bin"),
                 join(home, ".pi", "bin"),
                 join(home, ".omp", "bin"),
+                join(home, ".minimax", "bin"),
                 join(home, ".local", "bin"),
                 join(home, ".cargo", "bin"),
                 "/opt/homebrew/bin",

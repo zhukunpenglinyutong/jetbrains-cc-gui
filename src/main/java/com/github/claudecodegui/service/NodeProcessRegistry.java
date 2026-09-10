@@ -4,6 +4,7 @@ import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.grok.GrokSDKBridge;
+import com.github.claudecodegui.provider.zcode.ZcodeSDKBridge;
 import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
 import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.github.claudecodegui.util.PlatformUtils;
@@ -108,6 +109,7 @@ public final class NodeProcessRegistry implements Disposable {
             // -- DAEMON + CHANNEL entries from Claude / Grok / Codex bridges --
             ClaudeSDKBridge claudeBridge = safeClaudeBridge(window);
             GrokSDKBridge grokBridge = safeGrokBridge(window);
+            ZcodeSDKBridge zcodeBridge = safeZcodeBridge(window);
             if (claudeBridge != null) {
                 collectDaemonEntry(
                         result,
@@ -148,6 +150,29 @@ public final class NodeProcessRegistry implements Disposable {
                         result,
                         knownPids,
                         grokBridge.getProcessManager().getActiveChannelSnapshot(),
+                        tabProvider,
+                        sessionId,
+                        tabName,
+                        now
+                );
+            }
+            // ZCode persistent app-server daemon (zcode.cjs app-server under daemon.js).
+            // Without this, the live ZCode daemon is mislabeled ORPHAN and "Kill all
+            // orphans" / panel kill destroys multi-turn app-server state.
+            if (zcodeBridge != null) {
+                collectDaemonEntry(
+                        result,
+                        knownPids,
+                        zcodeBridge.getCurrentDaemonBridgeForInspection(),
+                        tabProvider,
+                        sessionId,
+                        tabName,
+                        now
+                );
+                collectChannelEntries(
+                        result,
+                        knownPids,
+                        zcodeBridge.getProcessManager().getActiveChannelSnapshot(),
                         tabProvider,
                         sessionId,
                         tabName,
@@ -333,6 +358,11 @@ public final class NodeProcessRegistry implements Disposable {
                     grokBridge != null ? grokBridge::shutdownDaemon : null, pid)) {
                 return true;
             }
+            ZcodeSDKBridge zcodeBridge = safeZcodeBridge(window);
+            if (tryRestartDaemon(zcodeBridge != null ? zcodeBridge.getCurrentDaemonBridgeForInspection() : null,
+                    zcodeBridge != null ? zcodeBridge::shutdownDaemon : null, pid)) {
+                return true;
+            }
         }
         // PID didn't match any tracked daemon — fall back to plain kill
         return killByPid(pid);
@@ -397,6 +427,7 @@ public final class NodeProcessRegistry implements Disposable {
     // else, so "grok-agent" and ".antig-grok" still match while "grokky" does not.
     private static final Pattern GROK_WORD = Pattern.compile("\\bgrok\\b");
     private static final Pattern GEMINI_WORD = Pattern.compile("\\bgemini\\b");
+    private static final Pattern ZCODE_WORD = Pattern.compile("\\bzcode\\b");
 
     static @Nullable String detectProviderFromCmd(String cmd) {
         if (cmd == null) {
@@ -405,9 +436,13 @@ public final class NodeProcessRegistry implements Disposable {
         String lower = cmd.toLowerCase();
         boolean hasGrok = GROK_WORD.matcher(lower).find();
         boolean hasGemini = GEMINI_WORD.matcher(lower).find();
+        boolean hasZcode = ZCODE_WORD.matcher(lower).find();
         // Shared daemon.js is used by Claude and Grok; channel-manager fingerprints are clearer.
         if (lower.contains("channel-manager") && hasGrok) {
             return "grok";
+        }
+        if (lower.contains("channel-manager") && hasZcode) {
+            return "zcode";
         }
         if (lower.contains("channel-manager") && hasGemini) {
             return "gemini";
@@ -424,6 +459,9 @@ public final class NodeProcessRegistry implements Disposable {
         }
         if (hasGrok) {
             return "grok";
+        }
+        if (hasZcode) {
+            return "zcode";
         }
         if (hasGemini) {
             return "gemini";
@@ -551,6 +589,13 @@ public final class NodeProcessRegistry implements Disposable {
     private static @Nullable GrokSDKBridge safeGrokBridge(ClaudeChatWindow window) {
         try {
             return window != null ? window.getGrokSDKBridge() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+    private static @Nullable ZcodeSDKBridge safeZcodeBridge(ClaudeChatWindow window) {
+        try {
+            return window != null ? window.getZcodeSDKBridge() : null;
         } catch (Exception e) {
             return null;
         }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { resolveFilePathWithCallback } from '../utils/bridge';
 import { useFloatingTextTooltip } from './useFloatingTextTooltip';
 import { LRUCache } from '../utils/lruCache';
@@ -15,7 +15,7 @@ export function useMarkdownFileLinkTooltip() {
   // Cache resolved tooltip texts per href to prevent flicker during streaming
   // when DOM replacement causes repeated mouseover/mouseout cycles.
   // Use LRU cache to prevent unbounded memory growth in long sessions.
-  const resolvedTooltipTextRef = useRef<LRUCache<string, string>>(new LRUCache(200));
+  const [resolvedTooltipTextCache] = useState(() => new LRUCache<string, string>(200));
   const currentTooltipTextRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
   const latestMousePositionRef = useRef({ clientX: 0, clientY: 0 });
@@ -100,7 +100,7 @@ export function useMarkdownFileLinkTooltip() {
       floatingTooltip.showTooltip(text, clientX, clientY);
     };
 
-    const cachedText = resolvedTooltipTextRef.current.get(href);
+    const cachedText = resolvedTooltipTextCache.get(href);
     if (cachedText) {
       showTooltip(cachedText);
     }
@@ -114,15 +114,15 @@ export function useMarkdownFileLinkTooltip() {
         // canonicalization failure). Fall back to the raw href so the tooltip
         // still tells the user where the link points — same policy as
         // useResolvedFileLinkTooltip.
-        resolvedTooltipTextRef.current.delete(href);
+        resolvedTooltipTextCache.delete(href);
         showTooltip(href);
         return;
       }
 
-      resolvedTooltipTextRef.current.set(href, resolvedPath);
+      resolvedTooltipTextCache.set(href, resolvedPath);
       showTooltip(resolvedPath);
     });
-  }, [floatingTooltip]);
+  }, [floatingTooltip, resolvedTooltipTextCache]);
 
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     // Only update position when a tooltip is visible and the mouse is

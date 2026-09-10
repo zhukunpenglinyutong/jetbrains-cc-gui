@@ -44,6 +44,9 @@ public class SessionLifecycleManager {
         default com.github.claudecodegui.provider.grok.GrokSDKBridge getGrokSDKBridge() {
             return null;
         }
+        default com.github.claudecodegui.provider.zcode.ZcodeSDKBridge getZcodeSDKBridge() {
+            return null;
+        }
 
         Map<String, MarkerCliBridge> getCliBridges();
 
@@ -109,6 +112,9 @@ public class SessionLifecycleManager {
                 if (host.getGrokSDKBridge() != null) {
                     host.getGrokSDKBridge().resetPersistentRuntime(oldEpoch);
                 }
+                if (host.getZcodeSDKBridge() != null) {
+                    host.getZcodeSDKBridge().resetPersistentRuntime(oldEpoch);
+                }
                 LOG.info("[Lifecycle] Requested daemon runtime reset for old epoch=" + oldEpoch);
             }
             LOG.info("Old session interrupted, creating new session");
@@ -160,6 +166,9 @@ public class SessionLifecycleManager {
                 host.getClaudeSDKBridge().resetPersistentRuntime(oldEpoch);
                 if (host.getGrokSDKBridge() != null) {
                     host.getGrokSDKBridge().resetPersistentRuntime(oldEpoch);
+                }
+                if (host.getZcodeSDKBridge() != null) {
+                    host.getZcodeSDKBridge().resetPersistentRuntime(oldEpoch);
                 }
                 LOG.info("[Lifecycle] Requested daemon runtime reset for old epoch=" + oldEpoch);
             }
@@ -267,6 +276,9 @@ public class SessionLifecycleManager {
                 if (host.getGrokSDKBridge() != null) {
                     host.getGrokSDKBridge().resetPersistentRuntime(oldEpoch);
                 }
+                if (host.getZcodeSDKBridge() != null) {
+                    host.getZcodeSDKBridge().resetPersistentRuntime(oldEpoch);
+                }
                 LOG.info("[Lifecycle] Requested daemon runtime reset before history load for old epoch="
                         + oldEpoch);
             }
@@ -291,6 +303,8 @@ public class SessionLifecycleManager {
                 host.getClaudeSDKBridge().prewarmDaemonAsync(workingDir, newSession.getRuntimeSessionEpoch(), sessionId);
             } else if ("grok".equals(newSession.getProvider()) && host.getGrokSDKBridge() != null) {
                 host.getGrokSDKBridge().prewarmDaemonAsync(workingDir, newSession.getRuntimeSessionEpoch(), sessionId);
+            } else if ("zcode".equals(newSession.getProvider()) && host.getZcodeSDKBridge() != null) {
+                host.getZcodeSDKBridge().prewarmDaemonAsync(workingDir, newSession.getRuntimeSessionEpoch(), sessionId);
             }
 
             newSession.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
@@ -468,7 +482,8 @@ public class SessionLifecycleManager {
                 host.getClaudeSDKBridge(),
                 host.getCodexSDKBridge(),
                 host.getCliBridges(),
-                host.getGrokSDKBridge());
+                host.getGrokSDKBridge(),
+                host.getZcodeSDKBridge());
     }
 
     private void completeNewSessionBootstrap(ClaudeSession newSession, String workingDirectory, String successLogPrefix) {
@@ -484,6 +499,8 @@ public class SessionLifecycleManager {
             host.getClaudeSDKBridge().prewarmDaemonAsync(workingDirectory, newSession.getRuntimeSessionEpoch());
         } else if ("grok".equals(newSession.getProvider()) && host.getGrokSDKBridge() != null) {
             host.getGrokSDKBridge().prewarmDaemonAsync(workingDirectory, newSession.getRuntimeSessionEpoch());
+        } else if ("zcode".equals(newSession.getProvider()) && host.getZcodeSDKBridge() != null) {
+            host.getZcodeSDKBridge().prewarmDaemonAsync(workingDirectory, newSession.getRuntimeSessionEpoch());
         }
         fetchSlashCommandsOnStartup();
 

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, HistoryData, SubagentHistoryResponse, TaskEventMap } from '../types';
 import { sendBridgeEvent } from '../utils/bridge';
@@ -43,6 +43,12 @@ interface UseSessionManagementOptions {
    * matches the session being opened.
    */
   applyHistoryModel?: (provider: string, model: string, agent?: string | null) => void;
+  /**
+   * Discards messages still waiting in the send queue. Queued messages belong
+   * to the session they were typed in, so they must not leak into the next
+   * session when the user switches away.
+   */
+  clearQueuedMessages?: () => void;
 }
 
 interface UseSessionManagementReturn {
@@ -94,6 +100,7 @@ export function useSessionManagement({
   addToast,
   t,
   applyHistoryModel,
+  clearQueuedMessages,
 }: UseSessionManagementOptions): UseSessionManagementReturn {
   const [showNewSessionConfirm, setShowNewSessionConfirm] = useState(false);
   const [showInterruptConfirm, setShowInterruptConfirm] = useState(false);
@@ -101,7 +108,9 @@ export function useSessionManagement({
   const suppressNextStatusToastRef = useRef(false);
   const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyDataRef = useRef(historyData);
-  historyDataRef.current = historyData;
+  useEffect(() => {
+    historyDataRef.current = historyData;
+  }, [historyData]);
   const showSessionDeletedToast = useCallback((afterSessionTransition = false) => {
     const toast = { message: t('history.sessionDeleted'), type: 'success' as const };
     if (afterSessionTransition) {
@@ -131,6 +140,16 @@ export function useSessionManagement({
       setStreamingActive(false);
     }
     setMessages([]);
+    // Queued messages were typed against the outgoing session — dropping them
+    // here keeps them from firing into the freshly opened one. The reset via
+    // window.__resetTransientUiState above already clears the queue too (it
+    // also covers the Java-driven clearMessages path); this explicit call only
+    // guards the fallback branch where that global isn't registered yet.
+    // A plain interrupt (no transition) intentionally keeps the queue so the
+    // pending messages still get sent once the turn ends.
+    if (clearQueuedMessages) {
+      clearQueuedMessages();
+    }
     // Drop async subagent events from the prior session: tool_use_ids are
     // globally unique so stale entries cannot mislabel the new session's
     // agents, but leaving them would grow the map without bound.
@@ -174,7 +193,7 @@ export function useSessionManagement({
         }
       }
     }, 15_000); // 15 seconds — generous enough for slow history loads
-  }, [clearToasts, currentSessionIdRef, setStatus, setLoadingState, setIsThinking, setStreamingActive, setMessages, setCurrentSessionId, setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens, setTaskEvents, setSubagentHistories]);
+  }, [clearToasts, currentSessionIdRef, setStatus, setLoadingState, setIsThinking, setStreamingActive, setMessages, setCurrentSessionId, setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens, setTaskEvents, setSubagentHistories, clearQueuedMessages]);
 
   // Create new session
   const createNewSession = useCallback(() => {

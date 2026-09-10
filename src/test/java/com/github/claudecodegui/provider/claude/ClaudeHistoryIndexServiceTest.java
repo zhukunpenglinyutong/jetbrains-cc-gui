@@ -1,5 +1,6 @@
 package com.github.claudecodegui.provider.claude;
 
+import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
 import org.junit.Rule;
 import org.junit.Test;
@@ -8,6 +9,8 @@ import org.junit.rules.TemporaryFolder;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -44,8 +47,14 @@ public class ClaudeHistoryIndexServiceTest {
         SessionIndexManager.ProjectIndex existing = new SessionIndexManager.ProjectIndex();
         existing.lastDirScanTime = System.currentTimeMillis();
         existing.fileCount = 2;
-        existing.sessions.add(entry(UUID_1, "STALE A", 1, mtimeA + 1000, mtimeA + 1000, UUID_1 + ".jsonl"));
-        existing.sessions.add(entry(UUID_2, "Hello B", 1, mtimeB, mtimeB, UUID_2 + ".jsonl"));
+        SessionIndexManager.SessionIndexEntry staleA =
+                entry(UUID_1, "STALE A", 1, mtimeA + 1000, mtimeA + 1000, UUID_1 + ".jsonl");
+        staleA.fileSize = Files.size(fileA);
+        SessionIndexManager.SessionIndexEntry unchangedB =
+                entry(UUID_2, "Hello B", 1, mtimeB, mtimeB, UUID_2 + ".jsonl");
+        unchangedB.fileSize = Files.size(fileB);
+        existing.sessions.add(staleA);
+        existing.sessions.add(unchangedB);
 
         ClaudeHistoryIndexService service = newService(projectDir);
         ClaudeHistoryIndexService.ScanResult result = service.incrementalScanLite(projectDir, existing);
@@ -72,7 +81,10 @@ public class ClaudeHistoryIndexServiceTest {
         SessionIndexManager.ProjectIndex existing = new SessionIndexManager.ProjectIndex();
         existing.lastDirScanTime = System.currentTimeMillis();
         existing.fileCount = 1;
-        existing.sessions.add(entry(UUID_1, "Existing A", 1, mtimeA, mtimeA, UUID_1 + ".jsonl"));
+        SessionIndexManager.SessionIndexEntry existingEntry =
+                entry(UUID_1, "Existing A", 1, mtimeA, mtimeA, UUID_1 + ".jsonl");
+        existingEntry.fileSize = Files.size(fileA);
+        existing.sessions.add(existingEntry);
 
         writeSession(projectDir, UUID_3, "Brand New", "2026-04-21T11:00:00Z");
 
@@ -104,6 +116,69 @@ public class ClaudeHistoryIndexServiceTest {
 
         assertEquals(1, result.sessions().size());
         assertEquals("legacy entry should be refreshed from file", "Fresh A", result.sessions().get(0).title);
+    }
+
+    @Test
+    public void incrementalScan_refreshesSizeChangedFileWhenMtimeIsUnchanged() throws IOException {
+        Path projectDir = tmp.newFolder("claude-index-size").toPath();
+        Path file = writeSession(projectDir, UUID_1, "Original", "2026-04-21T10:00:00Z");
+        long mtime = Files.getLastModifiedTime(file).toMillis();
+
+        SessionIndexManager.ProjectIndex existing = new SessionIndexManager.ProjectIndex();
+        existing.fileCount = 1;
+        SessionIndexManager.SessionIndexEntry indexed = entry(
+                UUID_1, "Original", 1, mtime, mtime, UUID_1 + ".jsonl");
+        indexed.fileSize = Files.size(file);
+        existing.sessions.add(indexed);
+
+        Files.writeString(
+                file,
+                "{\"type\":\"assistant\",\"customTitle\":\"Updated\"}\n",
+                java.nio.file.StandardOpenOption.APPEND
+        );
+        Files.setLastModifiedTime(file, FileTime.fromMillis(mtime));
+
+        ClaudeHistoryIndexService.ScanResult result = newService(projectDir)
+                .incrementalScanLite(projectDir, existing);
+
+        assertEquals(1, result.sessions().size());
+        assertEquals("Updated", result.sessions().get(0).title);
+    }
+
+    @Test
+    public void incrementalScan_usesSessionIdToBreakTimestampTies() throws IOException {
+        Path projectDir = tmp.newFolder("claude-index-tie-order").toPath();
+        Path first = writeSession(projectDir, UUID_1, "First", "2026-04-21T10:00:00Z");
+        Path second = writeSession(projectDir, UUID_2, "Second", "2026-04-21T10:00:00Z");
+        long mtime = 1_700_000_000_000L;
+        Files.setLastModifiedTime(first, FileTime.fromMillis(mtime));
+        Files.setLastModifiedTime(second, FileTime.fromMillis(mtime));
+
+        SessionIndexManager.ProjectIndex existing = new SessionIndexManager.ProjectIndex();
+        existing.fileCount = 2;
+        SessionIndexManager.SessionIndexEntry secondEntry = entry(
+                UUID_2, "Second", 1, mtime, mtime, UUID_2 + ".jsonl");
+        secondEntry.fileSize = Files.size(second);
+        SessionIndexManager.SessionIndexEntry firstEntry = entry(
+                UUID_1, "First", 1, mtime, mtime, UUID_1 + ".jsonl");
+        firstEntry.fileSize = Files.size(first);
+        existing.sessions.add(secondEntry);
+        existing.sessions.add(firstEntry);
+
+        Files.writeString(
+                second,
+                "{\"type\":\"assistant\",\"customTitle\":\"Updated second\"}\n",
+                java.nio.file.StandardOpenOption.APPEND
+        );
+        Files.setLastModifiedTime(second, FileTime.fromMillis(mtime));
+
+        ClaudeHistoryIndexService.ScanResult result = newService(projectDir)
+                .incrementalScanLite(projectDir, existing);
+
+        assertEquals(2, result.sessions().size());
+        assertEquals("equal timestamps must use a stable descending ID order",
+                UUID_2, result.sessions().get(0).sessionId);
+        assertEquals(UUID_1, result.sessions().get(1).sessionId);
     }
 
     @Test
@@ -140,7 +215,10 @@ public class ClaudeHistoryIndexServiceTest {
         SessionIndexManager.ProjectIndex existing = new SessionIndexManager.ProjectIndex();
         existing.lastDirScanTime = System.currentTimeMillis();
         existing.fileCount = 1;
-        existing.sessions.add(entry(UUID_1, "RESTORED TITLE", 1, mtime, mtime, UUID_1 + ".jsonl"));
+        SessionIndexManager.SessionIndexEntry restoredEntry =
+                entry(UUID_1, "RESTORED TITLE", 1, mtime, mtime, UUID_1 + ".jsonl");
+        restoredEntry.fileSize = Files.size(file);
+        existing.sessions.add(restoredEntry);
 
         ClaudeHistoryIndexService service = newService(projectDir);
         ClaudeHistoryIndexService.ScanResult result = service.incrementalScanLite(projectDir, existing);
@@ -195,6 +273,125 @@ public class ClaudeHistoryIndexServiceTest {
         assertEquals(UUID_1, result.sessions().get(0).sessionId);
         assertTrue("mtime map should use normalized lowercase key",
                 result.sessionMtimes().containsKey(UUID_1));
+    }
+
+    @Test
+    public void incrementalScan_matchesUppercaseIndexedSessionId() throws IOException {
+        Path projectDir = tmp.newFolder("claude-index-uppercase-index").toPath();
+        String uppercaseUuid = UUID_1.toUpperCase(java.util.Locale.ROOT);
+        Path file = writeSession(projectDir, uppercaseUuid, "Upper Case", "2026-04-21T10:00:00Z");
+        long mtime = Files.getLastModifiedTime(file).toMillis();
+
+        SessionIndexManager.ProjectIndex existing = new SessionIndexManager.ProjectIndex();
+        existing.lastDirScanTime = System.currentTimeMillis();
+        existing.fileCount = 1;
+        SessionIndexManager.SessionIndexEntry uppercaseEntry =
+                entry(uppercaseUuid, "Upper Case", 1, mtime, mtime, uppercaseUuid + ".jsonl");
+        uppercaseEntry.fileSize = Files.size(file);
+        existing.sessions.add(uppercaseEntry);
+
+        ClaudeHistoryIndexService.ScanResult result = newService(projectDir).incrementalScanLite(projectDir, existing);
+
+        assertEquals(1, result.sessions().size());
+        assertEquals(UUID_1, result.sessions().get(0).sessionId);
+        assertEquals("Upper Case", result.sessions().get(0).title);
+    }
+
+    @Test
+    public void readProjectSessions_reloadsChangedFileWhenDirectoryMtimeIsUnchanged() throws IOException {
+        Path projectsDir = tmp.newFolder("claude-projects").toPath();
+        String projectPath = "claude-index-reload-" + tmp.getRoot().getName();
+        Path projectDir = projectsDir.resolve(projectPath);
+        Files.createDirectories(projectDir);
+        Path sessionFile = writeSession(projectDir, UUID_1, "Original title", "2026-04-21T10:00:00Z");
+
+        long indexedFileMtime = Files.getLastModifiedTime(sessionFile).toMillis();
+        long directoryMtime = Files.getLastModifiedTime(projectDir).toMillis();
+        SessionIndexCache cache = SessionIndexCache.getInstance();
+        SessionIndexManager indexManager = new SessionIndexManager(tmp.newFolder("reload-index-cache").toPath());
+        cache.clearProject(projectPath);
+
+        try {
+            ClaudeHistoryIndexService service = new ClaudeHistoryIndexService(
+                    projectsDir, new ClaudeHistoryParser(), indexManager);
+            List<ClaudeHistoryReader.SessionInfo> initial = service.readProjectSessions(projectPath);
+            assertEquals(1, initial.size());
+            assertEquals("Original title", initial.get(0).title);
+            assertEquals(1, initial.get(0).messageCount);
+
+            Files.writeString(
+                    sessionFile,
+                    "{\"type\":\"assistant\",\"customTitle\":\"Updated title\"}\n",
+                    java.nio.file.StandardOpenOption.APPEND
+            );
+            Files.setLastModifiedTime(sessionFile, FileTime.fromMillis(indexedFileMtime + 2_000));
+            Files.setLastModifiedTime(projectDir, FileTime.fromMillis(directoryMtime));
+
+            List<ClaudeHistoryReader.SessionInfo> updated = service.readProjectSessions(projectPath);
+            assertEquals(1, updated.size());
+            assertEquals("Updated title", updated.get(0).title);
+            assertEquals(2, updated.get(0).messageCount);
+        } finally {
+            cache.clearProject(projectPath);
+            indexManager.clearProjectIndex("claude", projectPath);
+        }
+    }
+
+    @Test
+    public void readProjectSessions_appliesPaginationAfterIncrementalRefresh() throws IOException {
+        Path projectsDir = tmp.newFolder("paginated-projects").toPath();
+        String projectPath = "paginated-" + tmp.getRoot().getName();
+        Path projectDir = Files.createDirectory(projectsDir.resolve(projectPath));
+        Path first = writeSession(projectDir, UUID_1, "First", "2026-04-21T10:00:00Z");
+        Path second = writeSession(projectDir, UUID_2, "Second", "2026-04-21T11:00:00Z");
+        Files.setLastModifiedTime(first, FileTime.fromMillis(1_700_000_000_000L));
+        Files.setLastModifiedTime(second, FileTime.fromMillis(1_700_000_002_000L));
+        long directoryMtime = Files.getLastModifiedTime(projectDir).toMillis();
+        SessionIndexManager indexManager = new SessionIndexManager(tmp.newFolder("isolated-index-cache").toPath());
+        SessionIndexCache cache = SessionIndexCache.getInstance();
+        cache.clearProject(projectPath);
+        try {
+            ClaudeHistoryIndexService service = new ClaudeHistoryIndexService(
+                    projectsDir, new ClaudeHistoryParser(), indexManager);
+            assertEquals(2, service.readProjectSessions(projectPath).size());
+            Files.setLastModifiedTime(first, FileTime.fromMillis(1_700_000_004_000L));
+            Files.setLastModifiedTime(projectDir, FileTime.fromMillis(directoryMtime));
+
+            List<ClaudeHistoryReader.SessionInfo> page = service.readProjectSessions(projectPath, 1, 0);
+            assertEquals(1, page.size());
+            assertEquals(UUID_1, page.get(0).sessionId);
+            page = service.readProjectSessions(projectPath, 1, 1);
+            assertEquals(1, page.size());
+            assertEquals(UUID_2, page.get(0).sessionId);
+            assertTrue(service.readProjectSessions(projectPath, 1, 2).isEmpty());
+            assertEquals(2, service.readProjectSessions(projectPath).size());
+        } finally {
+            cache.clearProject(projectPath);
+            indexManager.clearProjectIndex("claude", projectPath);
+        }
+    }
+
+    @Test
+    public void readProjectSessions_ignoresJsonlDirectoriesInPersistedFileCount() throws IOException {
+        Path projectsDir = tmp.newFolder("directory-projects").toPath();
+        String projectPath = "directory-" + tmp.getRoot().getName();
+        Path projectDir = Files.createDirectory(projectsDir.resolve(projectPath));
+        writeSession(projectDir, UUID_1, "Real session", "2026-04-21T10:00:00Z");
+        Files.createDirectory(projectDir.resolve(UUID_2 + ".jsonl"));
+        SessionIndexManager indexManager = new SessionIndexManager(tmp.newFolder("isolated-index-cache").toPath());
+        SessionIndexCache cache = SessionIndexCache.getInstance();
+        cache.clearProject(projectPath);
+        try {
+            ClaudeHistoryIndexService service = new ClaudeHistoryIndexService(
+                    projectsDir, new ClaudeHistoryParser(), indexManager);
+            assertEquals(1, service.readProjectSessions(projectPath).size());
+            SessionIndexManager.ProjectIndex index = indexManager.readClaudeIndex().projects.get(projectPath);
+            assertEquals(1, index.fileCount);
+            assertEquals(SessionIndexManager.UpdateType.NONE, indexManager.getUpdateType(index, projectDir));
+        } finally {
+            cache.clearProject(projectPath);
+            indexManager.clearProjectIndex("claude", projectPath);
+        }
     }
 
     // --- helpers -----------------------------------------------------------

@@ -33,71 +33,80 @@ export function useFileChangesManagement({
   // Ref to always hold the latest messages array, avoiding stale closure issues
   // in handleKeepAll when messages.length changes between renders.
   const messagesRef = useRef(messages);
-  messagesRef.current = messages;
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // Ref to always hold the latest processedFiles list, so handlers can compute
+  // and persist the next list outside of the state updater.
+  const processedFilesRef = useRef(processedFiles);
+  useEffect(() => {
+    processedFilesRef.current = processedFiles;
+  }, [processedFiles]);
 
   // Callback after file undo success (triggered from StatusPanel)
   const handleUndoFile = useCallback((filePath: string) => {
-    setProcessedFiles(prev => {
-      if (prev.includes(filePath)) return prev;
-      const newList = [...prev, filePath];
+    const prev = processedFilesRef.current;
+    if (prev.includes(filePath)) return;
+    const newList = [...prev, filePath];
 
-      // Persist to localStorage
-      if (currentSessionId) {
-        try {
-          localStorage.setItem(
-            `processed-files-${currentSessionId}`,
-            JSON.stringify(newList)
-          );
-        } catch (e) {
-          console.error('Failed to persist processed files:', e);
-        }
+    processedFilesRef.current = newList;
+    setProcessedFiles(newList);
+
+    // Persist to localStorage
+    if (currentSessionId) {
+      try {
+        localStorage.setItem(
+          `processed-files-${currentSessionId}`,
+          JSON.stringify(newList)
+        );
+      } catch (e) {
+        console.error('Failed to persist processed files:', e);
       }
-
-      return newList;
-    });
+    }
   }, [currentSessionId]);
 
   // Helper to add a file to the processed list with localStorage persistence
   const addFileToProcessed = useCallback((filePath: string) => {
-    setProcessedFiles(prev => {
-      if (prev.includes(filePath)) return prev;
-      const newList = [...prev, filePath];
+    const prev = processedFilesRef.current;
+    if (prev.includes(filePath)) return;
+    const newList = [...prev, filePath];
 
-      const sessionId = currentSessionIdRef.current;
-      if (sessionId) {
-        try {
-          localStorage.setItem(
-            `processed-files-${sessionId}`,
-            JSON.stringify(newList)
-          );
-        } catch (e) {
-          console.error('Failed to persist processed files:', e);
-        }
+    processedFilesRef.current = newList;
+    setProcessedFiles(newList);
+
+    const sessionId = currentSessionIdRef.current;
+    if (sessionId) {
+      try {
+        localStorage.setItem(
+          `processed-files-${sessionId}`,
+          JSON.stringify(newList)
+        );
+      } catch (e) {
+        console.error('Failed to persist processed files:', e);
       }
-
-      return newList;
-    });
+    }
   }, [currentSessionIdRef]);
 
   // Callback after batch undo success (Discard All)
   const handleDiscardAll = useCallback((filteredFileChanges: FileChange[]) => {
-    setProcessedFiles(prev => {
-      const filesToAdd = filteredFileChanges.map(fc => fc.filePath);
-      const newList = [...prev, ...filesToAdd.filter(f => !prev.includes(f))];
+    const prev = processedFilesRef.current;
+    const filesToAdd = filteredFileChanges.map(fc => fc.filePath);
+    const newList = [...prev, ...filesToAdd.filter(f => !prev.includes(f))];
 
-      if (currentSessionId) {
-        try {
-          localStorage.setItem(
-            `processed-files-${currentSessionId}`,
-            JSON.stringify(newList)
-          );
-        } catch (e) {
-          console.error('Failed to persist processed files:', e);
-        }
+    processedFilesRef.current = newList;
+    setProcessedFiles(newList);
+
+    if (currentSessionId) {
+      try {
+        localStorage.setItem(
+          `processed-files-${currentSessionId}`,
+          JSON.stringify(newList)
+        );
+      } catch (e) {
+        console.error('Failed to persist processed files:', e);
       }
-
-      return newList;
-    });
+    }
   }, [currentSessionId]);
 
   // Callback for Keep All - set current changes as the new baseline (ledger rebuilds from index)
@@ -105,6 +114,7 @@ export function useFileChangesManagement({
     // Use ref to get the latest messages.length, avoiding stale closure issues
     const newBaseIndex = messagesRef.current.length;
     setBaseMessageIndex(newBaseIndex);
+    processedFilesRef.current = [];
     setProcessedFiles([]);
 
     if (currentSessionId) {
@@ -161,6 +171,7 @@ export function useFileChangesManagement({
 
   // Restore/reset state on session switch
   useEffect(() => {
+    processedFilesRef.current = [];
     setProcessedFiles([]);
 
     if (!currentSessionId) {
@@ -189,6 +200,7 @@ export function useFileChangesManagement({
       if (savedProcessedFiles) {
         const files = JSON.parse(savedProcessedFiles);
         if (Array.isArray(files)) {
+          processedFilesRef.current = files;
           setProcessedFiles(files);
         }
       }

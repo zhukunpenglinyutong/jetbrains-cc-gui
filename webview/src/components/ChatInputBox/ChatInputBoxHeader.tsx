@@ -3,7 +3,8 @@ import type { Attachment, SelectedAgent, QueuedMessage } from './types.js';
 import { AttachmentList } from './AttachmentList.js';
 import { ContextBar } from './ContextBar.js';
 import { MessageQueue } from './MessageQueue.js';
-import { openBrowser, GITHUB_REPO_URL } from '../../utils/bridge';
+import { OpenSourceBanner } from './OpenSourceBanner.js';
+import { SdkStatusBar } from './SdkStatusBar.js';
 
 export function ChatInputBoxHeader({
   sdkStatusLoading,
@@ -66,82 +67,25 @@ export function ChatInputBoxHeader({
   autoOpenFileEnabled?: boolean;
   onRequestEnableFileContext?: () => void;
 }) {
-  const handleStarProject = () => {
-    openBrowser(GITHUB_REPO_URL);
-  };
-
   return (
     <>
       {/* Open source banner */}
-      {showOpenSourceBanner && (
-        <div className="open-source-banner">
-          <span className="banner-text">{t('chat.openSourceBanner')}</span>
-          <button
-            type="button"
-            className="banner-star"
-            aria-label={t('chat.openSourceBannerStarAria')}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleStarProject();
-            }}
-          >
-            <svg className="star-icon" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
-              <path d="M12 2.5l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.11-6.46-4.7-4.58 6.49-.94z" />
-            </svg>
-            <span className="banner-star-text">{t('chat.openSourceBannerStar')}</span>
-          </button>
-          <button
-            className="banner-close"
-            aria-label="Close"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDismissOpenSourceBanner?.();
-            }}
-          >
-            &#x2715;
-          </button>
-        </div>
-      )}
+      <OpenSourceBanner
+        show={showOpenSourceBanner}
+        onDismiss={onDismissOpenSourceBanner}
+        t={t}
+      />
 
       {/* SDK status loading, query error, or not installed warning bar */}
-      {(sdkStatusLoading || sdkStatusError || !sdkInstalled) && (
-        <div className={`sdk-warning-bar ${sdkStatusLoading ? 'sdk-loading' : ''}`}>
-          <span
-            className={`codicon ${sdkStatusLoading ? 'codicon-loading codicon-modifier-spin' : 'codicon-warning'}`}
-          />
-          <span className="sdk-warning-text">
-            {sdkStatusLoading
-              ? t('chat.sdkStatusLoading')
-              : sdkStatusError
-                ? t('chat.sdkStatusUnavailable')
-              : t('chat.sdkNotInstalled', {
-                  provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code',
-                })}
-          </span>
-          {sdkStatusError ? (
-            <button
-              className="sdk-install-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRetrySdkStatus?.();
-              }}
-            >
-              <span className="codicon codicon-refresh" />
-              <span>{t('chat.retrySdkStatus')}</span>
-            </button>
-          ) : !sdkStatusLoading && (
-            <button
-              className="sdk-install-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                onInstallSdk?.();
-              }}
-            >
-              {t('chat.goInstallSdk')}
-            </button>
-          )}
-        </div>
-      )}
+      <SdkStatusBar
+        sdkStatusLoading={sdkStatusLoading}
+        sdkStatusError={sdkStatusError}
+        sdkInstalled={sdkInstalled}
+        currentProvider={currentProvider}
+        onRetrySdkStatus={onRetrySdkStatus}
+        onInstallSdk={onInstallSdk}
+        t={t}
+      />
 
       {/* Message queue */}
       {messageQueue && messageQueue.length > 0 && (

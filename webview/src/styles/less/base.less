@@ -92,6 +92,17 @@ html {
     font-family: var(--cc-gui-ui-font-family, 'Inter', system-ui, sans-serif);
 }
 
+/* 代码字体作用域 - 给代码/等宽内容容器加 .code-font-surface，作用域内的每个后代
+ * 都使用当前生效的代码字体（即用户在设置里选的编辑器/代码字体）。
+ * 上面的全局 UI 字体通配符会命中作用域内的每个元素并截断继承链，仅靠容器继承
+ * 拿不到代码字体，故这里用后代选择器把代码字体重新压到每个元素上（特异性 0,1,0
+ * 高于通配符的 0,0,0）。这样 diff 行、符号列以及后续可能加入的语法高亮 span 都
+ * 无需逐个声明字体。 */
+.code-font-surface,
+.code-font-surface * {
+    font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
+}
+
 /* 保护字体图标 - 确保 codicon 图标正常显示 */
 .codicon,
 .codicon[class*='codicon-'],

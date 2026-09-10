@@ -29,6 +29,10 @@ export const SEARCH_TOOL_NAMES = new Set(['grep', 'glob', 'search', 'find', 'sea
 // Agent/subagent spawning tools
 export const AGENT_TOOL_NAMES = new Set(['task', 'agent', 'spawn_agent']);
 
+// Structured code-review report tool. CamelCase names normalize to reportfindings;
+// snake_case aliases keep custom integrations compatible with the same renderer.
+export const REPORT_FINDINGS_TOOL_NAMES = new Set(['reportfindings', 'report_findings']);
+
 // Task management tools (new structured Task API)
 export const TASK_MANAGE_TOOL_NAMES = new Set(['taskcreate', 'taskupdate', 'taskget', 'tasklist']);
 
