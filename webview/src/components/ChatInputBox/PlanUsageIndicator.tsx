@@ -9,8 +9,13 @@ import {
 } from '../../utils/planUsagePace';
 import { PlanUsageLoading } from './PlanUsageLoading';
 import { PlanUsageUnavailable } from './PlanUsageUnavailable';
+import { PlanUsageBalance } from './PlanUsageBalance';
 import { PlanUsageBar } from './PlanUsageBar';
-import { buildPlanUsageTooltip, derivePlanUsageView } from './planUsageView';
+import {
+  buildBalanceTooltip,
+  buildPlanUsageTooltip,
+  derivePlanUsageView,
+} from './planUsageView';
 
 export interface PlanUsageIndicatorProps {
   snapshot: PlanUsageSnapshot | null;
@@ -46,7 +51,7 @@ export const PlanUsageIndicator: React.FC<PlanUsageIndicatorProps> = memo(({
     writeStoredWindowId(next);
   }, [canSwitch, windows, display?.windowId, windowId]);
 
-  const { present, tp, color, worstColor, shortReset, fullReset, winLabel } =
+  const { present, tp, color, worstColor, shortReset, fullReset, winLabel, balance } =
     derivePlanUsageView(snapshot, display, i18n.language);
 
   const tooltip = useMemo(() => buildPlanUsageTooltip({
@@ -61,6 +66,11 @@ export const PlanUsageIndicator: React.FC<PlanUsageIndicatorProps> = memo(({
     t,
   }), [present, snapshot?.message, snapshot?.level, snapshot?.stale, tp, fullReset, display, windows, worstColor, color, t]);
 
+  const balanceTooltip = useMemo(
+    () => buildBalanceTooltip(snapshot, balance?.amount ?? '', t),
+    [snapshot, balance?.amount, t],
+  );
+
   if (status === 'idle') return null;
 
   if (!present && status === 'loading') {
@@ -69,6 +79,22 @@ export const PlanUsageIndicator: React.FC<PlanUsageIndicatorProps> = memo(({
 
   if (!present) {
     return <PlanUsageUnavailable tooltip={tooltip} t={t} />;
+  }
+
+  // Prepaid balance vendors (DeepSeek/Moonshot/OpenRouter/…): no percentage
+  // denominator, so the labeled amount renders instead of the bar.
+  // Reaching here relies on resolveDisplayWindow's fallback returning
+  // capacityPct 0 for balance-only snapshots — that keeps `present` true
+  // past the !present return above.
+  if (balance) {
+    return (
+      <PlanUsageBalance
+        amount={balance.amount}
+        color={balance.color}
+        tooltip={balanceTooltip}
+        t={t}
+      />
+    );
   }
 
   return (
