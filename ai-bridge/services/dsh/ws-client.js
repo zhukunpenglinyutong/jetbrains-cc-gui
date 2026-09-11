@@ -1,11 +1,13 @@
 /**
  * Minimal RFC 6455 WebSocket client for the DSH mux stream.
  *
- * The published `dsh web` host (0.1.0-rc.6) serves `/api/events.mux` over
- * WebSocket only — a bare GET answers `426 Upgrade Required`. Node's global
- * WebSocket is unavailable before v22, so this dependency-free client speaks
- * just enough of the protocol for a localhost text stream:
+ * `dsh web` serves its event stream over WebSocket only — a bare GET answers
+ * `426 Upgrade Required`. Node's global WebSocket is unavailable before v22,
+ * so this dependency-free client speaks just enough of the protocol for a
+ * localhost text stream:
  *   - HTTP Upgrade handshake with Sec-WebSocket-Accept validation
+ *   - extra handshake headers (the >= 0.1.1 hosts authenticate the upgrade
+ *     with a browser-session cookie, so the stream needs one too)
  *   - text / binary / continuation frames, ping → pong, close
  *   - client-side masking (required by RFC)
  *   - ws:// via net, wss:// via tls
@@ -30,6 +32,39 @@ const OPCODES = {
   PONG: 0xa,
 };
 
+/** Handshake headers the client owns; a caller-supplied copy must not override them. */
+const RESERVED_HANDSHAKE_HEADERS = new Set([
+  'host',
+  'upgrade',
+  'connection',
+  'sec-websocket-key',
+  'sec-websocket-version',
+]);
+
+/**
+ * Render caller-supplied handshake headers as `Name: value\r\n` lines.
+ * Values are flattened and CR/LF-stripped so a header value can never inject
+ * a second request line or header.
+ */
+function normalizeHandshakeHeaders(headers) {
+  if (!headers || typeof headers !== 'object') {
+    return '';
+  }
+  let rendered = '';
+  for (const [rawName, rawValue] of Object.entries(headers)) {
+    const name = String(rawName || '').trim();
+    const value = String(rawValue ?? '').replace(/[\r\n]+/g, ' ').trim();
+    if (!name || !value || !/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(name)) {
+      continue;
+    }
+    if (RESERVED_HANDSHAKE_HEADERS.has(name.toLowerCase())) {
+      continue;
+    }
+    rendered += `${name}: ${value}\r\n`;
+  }
+  return rendered;
+}
+
 export class DshWebSocket extends EventEmitter {
   #socket = null;
   #buffer = Buffer.alloc(0);
@@ -42,10 +77,13 @@ export class DshWebSocket extends EventEmitter {
 
   /**
    * @param {string} url ws:// or wss:// URL
-   * @param {{ timeoutMs?: number }} [options]
+   * @param {{ timeoutMs?: number, headers?: Record<string, string> }} [options]
+   *   `headers` are appended verbatim to the Upgrade request (one
+   *   `Name: value` line each); reserved handshake headers win.
    */
   connect(url, options = {}) {
     const timeoutMs = options.timeoutMs ?? 10_000;
+    const extraHeaders = normalizeHandshakeHeaders(options.headers);
     let parsed;
     try {
       parsed = new URL(url);
@@ -67,6 +105,7 @@ export class DshWebSocket extends EventEmitter {
         'Connection: Upgrade\r\n' +
         `Sec-WebSocket-Key: ${key}\r\n` +
         'Sec-WebSocket-Version: 13\r\n' +
+        extraHeaders +
         '\r\n';
       this.#socket.write(request);
     };
@@ -171,7 +210,12 @@ export class DshWebSocket extends EventEmitter {
     const statusMatch = statusLine.match(/^HTTP\/\d\.\d (\d{3})/);
     const status = statusMatch ? Number(statusMatch[1]) : 0;
     if (status !== 101) {
-      this.#fail(new Error(`dsh mux upgrade failed (HTTP ${status || statusLine})`));
+      const hint = status === 401
+        ? ' — the host requires browser-session authentication'
+        : status === 403
+          ? ' — the host rejected this authority'
+          : '';
+      this.#fail(new Error(`dsh mux upgrade failed (HTTP ${status || statusLine})${hint}`));
       return false;
     }
     const acceptMatch = header.match(/sec-websocket-accept:\s*(\S+)/i);

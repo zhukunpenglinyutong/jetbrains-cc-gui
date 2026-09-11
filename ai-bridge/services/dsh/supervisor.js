@@ -26,7 +26,9 @@ import {
   readDshPresetFile,
   resolveDshPresetDir,
 } from './preset-overlay.js';
-import { DshHostClient, DshTransportError, originFromHostPort, probeDescribe } from './host.js';
+import { DshTransportError, originFromHostPort } from './host.js';
+import { negotiateWire } from './negotiate.js';
+import { resolveDshHome } from './wire.js';
 
 const SPAWN_READY_TIMEOUT_MS = process.platform === 'win32' ? 45_000 : 20_000;
 const SPAWN_POLL_MS = 250;
@@ -42,7 +44,11 @@ export function runtimeSettingsFromEnv(env = process.env) {
   const autoStart = (env.DSH_AUTO_START || '').trim().toLowerCase() !== 'false';
   const binPath = (env.DSH_BIN || '').trim() || null;
   const dshPreset = (env.DSH_PRESET || '').trim();
-  return { binPath, host, port, autoStart, dshPreset };
+  // `DSH_WIRE` pins the wire dialect (legacy|modern) when negotiation guesses
+  // wrong; `DSH_HOME` must match the home of the host we are talking to, since
+  // its browser-session secret is what authenticates a host we did not spawn.
+  const wire = (env.DSH_WIRE || '').trim();
+  return { binPath, host, port, autoStart, dshPreset, wire, dshHome: resolveDshHome(env) };
 }
 
 function stateFilePath() {
@@ -307,34 +313,60 @@ function spawnDshWeb(bin, host, port, preset = '') {
   return { child, logFile };
 }
 
-async function waitForDescribe(origin, timeoutMs) {
+/**
+ * Observe the wire dialect of one live host and build its client. `logFile` is
+ * the stdout log of a host this bridge spawned: modern hosts print a one-shot
+ * launch URL there, which is how a spawned host is authenticated without
+ * touching the host's credential store.
+ */
+async function negotiateHost(settings, logFile) {
+  const origin = originFromHostPort(settings.host, settings.port);
+  const negotiated = await negotiateWire({
+    origin,
+    logFile,
+    dshHome: settings.dshHome,
+    dialect: settings.wire,
+    log: logDebug,
+  });
+  return {
+    origin,
+    host: settings.host,
+    port: settings.port,
+    dialect: negotiated.dialect,
+    describe: negotiated.describe,
+    client: negotiated.client,
+  };
+}
+
+function describeProbeError(error) {
+  return error && error.message ? error.message : String(error);
+}
+
+async function waitForDescribe(settings, logFile, timeoutMs) {
+  const origin = originFromHostPort(settings.host, settings.port);
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
   while (Date.now() < deadline) {
     try {
-      return await probeDescribe(origin, 2_000);
+      return await negotiateHost(settings, logFile);
     } catch (error) {
       lastError = error;
       await new Promise((resolve) => setTimeout(resolve, SPAWN_POLL_MS));
     }
   }
-  throw lastError || new DshTransportError(`dsh host did not become ready at ${origin}`);
+  if (lastError) {
+    throw new DshTransportError(describeProbeError(lastError), { cause: lastError });
+  }
+  throw new DshTransportError(`dsh host did not become ready at ${origin}`);
 }
 
 /**
  * Read-only attach: adopt a running host, never spawn.
  */
 export async function connectExisting(settings) {
-  const origin = originFromHostPort(settings.host, settings.port);
-  const describe = await probeDescribe(origin);
-  return {
-    origin,
-    host: settings.host,
-    port: settings.port,
-    ownership: 'adopted',
-    describe,
-    client: new DshHostClient(origin),
-  };
+  const remembered = readStateFile();
+  const handle = await negotiateHost(settings, remembered && remembered.logFile);
+  return { ...handle, ownership: 'adopted' };
 }
 
 /**
@@ -396,15 +428,12 @@ export async function ensureHost(settings) {
   const refreshedRemembered = readStateFile();
   if (refreshedRemembered && refreshedRemembered.origin === origin && isPidAlive(refreshedRemembered.pid)) {
     try {
-      const describe = await waitForDescribe(origin, SPAWN_READY_TIMEOUT_MS);
-      return {
-        origin,
-        host: settings.host,
-        port: settings.port,
-        ownership: 'spawned',
-        describe,
-        client: new DshHostClient(origin),
-      };
+      const handle = await waitForDescribe(
+        settings,
+        refreshedRemembered.logFile,
+        SPAWN_READY_TIMEOUT_MS
+      );
+      return { ...handle, ownership: 'spawned' };
     } catch {
       // recorded spawn never became healthy — respawn below
     }
@@ -435,15 +464,8 @@ export async function ensureHost(settings) {
   });
 
   try {
-    const describe = await waitForDescribe(origin, SPAWN_READY_TIMEOUT_MS);
-    return {
-      origin,
-      host: settings.host,
-      port: settings.port,
-      ownership: 'spawned',
-      describe,
-      client: new DshHostClient(origin),
-    };
+    const handle = await waitForDescribe(settings, logFile, SPAWN_READY_TIMEOUT_MS);
+    return { ...handle, ownership: 'spawned' };
   } catch (error) {
     let logTail = '';
     try {
@@ -492,9 +514,10 @@ export async function collectDshStatus(settings) {
     describe: null,
   };
   try {
-    const describe = await probeDescribe(base.origin);
+    const handle = await negotiateHost(settings, base.remembered && base.remembered.logFile);
     result.hostRunning = true;
-    result.describe = describe;
+    result.describe = handle.describe;
+    result.dialect = handle.dialect;
     result.ownership =
       base.remembered && base.remembered.origin === base.origin && isPidAlive(base.remembered.pid)
         ? 'spawned'

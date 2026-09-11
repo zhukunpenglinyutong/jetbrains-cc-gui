@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import {
   DshGoalSettlement,
   peekMuxSessionId,
+  projectFollowFrame,
   projectMuxFrame,
+  projectRemoteEventFrame,
   unwrapMuxEnvelope,
 } from './events.js';
 
@@ -144,4 +146,56 @@ test('DshGoalSettlement settles plain turns and failures', () => {
   cleared.feed('goal-change', { goal: { phase: 'active' } });
   cleared.feed('turn-completed'); // suppressed, awaiting idle
   assert.equal(cleared.feed('goal-change', { operation: 'clear', goal: null }), 'settle');
+});
+
+test('projectFollowFrame maps durable events and assistant deltas', () => {
+  assert.deepEqual(
+    projectFollowFrame({ type: 'event', event: { type: 'turn/start', data: {} } }),
+    [{ kind: 'turn-start' }]
+  );
+  assert.deepEqual(
+    projectFollowFrame({
+      type: 'assistant-stream',
+      frame: { type: 'chunk', chunk: { type: 'text-delta', text: 'hi' } },
+    }),
+    [{ kind: 'text-delta', text: 'hi' }]
+  );
+  // Lifecycle bookends and the opening snapshot carry nothing to project.
+  assert.deepEqual(projectFollowFrame({ type: 'assistant-stream', frame: { type: 'start' } }), []);
+  assert.deepEqual(projectFollowFrame({ type: 'snapshot', records: [{ type: 'event' }] }), []);
+  assert.deepEqual(projectFollowFrame(null), []);
+});
+
+test('projectRemoteEventFrame distinguishes ready, waterfalls and cancel', () => {
+  assert.deepEqual(
+    projectRemoteEventFrame({ type: 'ready', clientId: 'c1', host: { home: '/h' } }),
+    { kind: 'ready', clientId: 'c1' }
+  );
+  assert.deepEqual(
+    projectRemoteEventFrame({
+      type: 'waterfall',
+      event: 'approval/request',
+      eventId: 'e1',
+      request: { toolName: 'pwsh', reason: 'escalate' },
+    }),
+    { kind: 'approval-request', eventId: 'e1', request: { toolName: 'pwsh', reason: 'escalate' } }
+  );
+  assert.deepEqual(
+    projectRemoteEventFrame({
+      type: 'waterfall',
+      event: 'user-questions/request',
+      eventId: 'e2',
+      request: { questions: [{ id: 'q1', question: 'Pick' }] },
+    }),
+    { kind: 'question-request', eventId: 'e2', request: { questions: [{ id: 'q1', question: 'Pick' }] } }
+  );
+  assert.deepEqual(projectRemoteEventFrame({ type: 'cancel', eventId: 'e3' }), {
+    kind: 'cancel',
+    eventId: 'e3',
+  });
+  // Forwarded emits and unknown/withdrawn shapes are not bridge instructions.
+  assert.equal(projectRemoteEventFrame({ type: 'emit', event: 'api-session/added', args: [] }), null);
+  assert.equal(projectRemoteEventFrame({ type: 'waterfall', event: 'other/event', eventId: 'e' }), null);
+  assert.equal(projectRemoteEventFrame({ type: 'ready' }), null);
+  assert.equal(projectRemoteEventFrame(undefined), null);
 });
