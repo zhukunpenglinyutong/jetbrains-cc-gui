@@ -958,10 +958,10 @@ test('REGRESSION (eb1786): message_start reset preserves cross-turn usage accumu
 // =========================================================================
 // BLOCK_RESET SIGNAL TESTS.
 //
-// message_start now emits a [BLOCK_RESET] signal to notify frontend that
-// streaming content refs should be cleared. This prevents cross-turn
-// content merging when a new assistant message starts within an ongoing
-// stream (e.g., after a tool_use loop iteration).
+// message_start now emits a [BLOCK_RESET] signal so the frontend can record
+// the new block's offset while retaining cumulative streaming buffers. This
+// prevents cross-turn content from being assigned to the wrong block while
+// preserving the prefix needed for reconciliation.
 // =========================================================================
 
 test('BLOCK_RESET: message_start emits [BLOCK_RESET] signal before subsequent deltas', () => {

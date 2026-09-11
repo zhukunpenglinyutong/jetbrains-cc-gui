@@ -328,7 +328,7 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         contentDeltaThrottler.reset();
         thinkingDeltaThrottler.reset();
         jsTarget.callJavaScript("onBlockReset");
-        LOG.debug("Block reset sent to frontend - streaming refs cleared");
+        LOG.debug("Block reset sent to frontend - boundary recorded");
     }
 
     @Override

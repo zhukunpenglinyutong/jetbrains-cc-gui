@@ -334,6 +334,188 @@ describe('useStreamingMessages', () => {
     expect(rawContent[2]).toMatchObject({ type: 'text', text: 'After tool.' });
   });
 
+  it('splits a consecutive thinking block before the backend snapshot arrives', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    result.current.streamingThinkingRef.current = 'First summary';
+    result.current.recordStreamingBlockReset();
+    result.current.streamingThinkingRef.current = 'First summarySecond summary';
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      content: '',
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [{ type: 'thinking', thinking: 'First summary', text: 'First summary' }],
+        },
+      },
+    };
+
+    const patched = result.current.patchAssistantForStreaming(assistant);
+    const rawContent = (patched.raw as any).message.content as ContentBlockTest[];
+
+    expect(rawContent).toHaveLength(2);
+    expect(rawContent[0]).toMatchObject({ type: 'thinking', thinking: 'First summary' });
+    expect(rawContent[1]).toMatchObject({ type: 'thinking', thinking: 'Second summary' });
+  });
+
+  it('splits a merged backend thinking block at a recorded boundary', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    result.current.streamingThinkingRef.current = 'First';
+    result.current.recordStreamingBlockReset();
+    result.current.streamingThinkingRef.current = 'FirstSecond';
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      content: '',
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [{ type: 'thinking', thinking: 'FirstSecond', text: 'FirstSecond' }],
+        },
+      },
+    };
+
+    const patched = result.current.patchAssistantForStreaming(assistant);
+    const rawContent = (patched.raw as any).message.content as ContentBlockTest[];
+
+    expect(rawContent.map((block) => block.thinking)).toEqual(['First', 'Second']);
+  });
+
+  it('extends a short backend thinking block before adding the next block', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    result.current.streamingThinkingRef.current = 'First';
+    result.current.recordStreamingBlockReset();
+    result.current.streamingThinkingRef.current = 'FirstSecond';
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      content: '',
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [{ type: 'thinking', thinking: 'Fi', text: 'Fi' }],
+        },
+      },
+    };
+
+    const patched = result.current.patchAssistantForStreaming(assistant);
+    const rawContent = (patched.raw as any).message.content as ContentBlockTest[];
+
+    expect(rawContent.map((block) => block.thinking)).toEqual(['First', 'Second']);
+  });
+
+  it('splits a merged backend text block at a recorded boundary', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    result.current.streamingContentRef.current = 'Before';
+    result.current.recordStreamingBlockReset();
+    result.current.streamingContentRef.current = 'BeforeAfter';
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      content: 'BeforeAfter',
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [{ type: 'text', text: 'BeforeAfter' }],
+        },
+      },
+    };
+
+    const patched = result.current.patchAssistantForStreaming(assistant);
+    const rawContent = (patched.raw as any).message.content as ContentBlockTest[];
+
+    expect(rawContent.map((block) => block.text)).toEqual(['Before', 'After']);
+  });
+
+  it('fills lagging thinking placeholders before splitting later blocks', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    result.current.streamingThinkingRef.current = 'First';
+    result.current.recordStreamingBlockReset();
+    result.current.streamingThinkingRef.current = 'FirstSecond';
+    result.current.recordStreamingBlockReset();
+    result.current.streamingThinkingRef.current = 'FirstSecondThird';
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      content: '',
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [
+            { type: 'thinking', thinking: 'First', text: 'First' },
+            { type: 'thinking', thinking: '', text: '' },
+            { type: 'thinking', thinking: '', text: '' },
+          ],
+        },
+      },
+    };
+
+    const patched = result.current.patchAssistantForStreaming(assistant);
+    const rawContent = (patched.raw as any).message.content as ContentBlockTest[];
+
+    expect(rawContent).toHaveLength(3);
+    expect(rawContent.map((block) => block.thinking)).toEqual(['First', 'Second', 'Third']);
+  });
+
+  it('materializes the full block sequence when no backend block has arrived yet', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    result.current.streamingThinkingRef.current = 'First';
+    result.current.recordStreamingBlockReset();
+    result.current.streamingThinkingRef.current = 'FirstSecond';
+    result.current.recordStreamingBlockReset();
+    result.current.streamingThinkingRef.current = 'FirstSecondThird';
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      content: '',
+      isStreaming: true,
+      raw: { message: { content: [] } },
+    };
+
+    const patched = result.current.patchAssistantForStreaming(assistant);
+    const rawContent = (patched.raw as any).message.content as ContentBlockTest[];
+
+    expect(rawContent).toHaveLength(3);
+    expect(rawContent.map((block) => block.thinking)).toEqual(['First', 'Second', 'Third']);
+  });
+
+  it('keeps materializing later blocks when earlier boundaries are already covered by the backend', () => {
+    const { result } = renderHook(() => useStreamingMessages());
+
+    result.current.streamingThinkingRef.current = 'First';
+    result.current.recordStreamingBlockReset();
+    result.current.streamingThinkingRef.current = 'FirstSecond';
+    result.current.recordStreamingBlockReset();
+    result.current.streamingThinkingRef.current = 'FirstSecondThird';
+
+    const assistant: ClaudeMessage = {
+      type: 'assistant',
+      content: '',
+      isStreaming: true,
+      raw: {
+        message: {
+          content: [
+            { type: 'thinking', thinking: 'First', text: 'First' },
+            { type: 'thinking', thinking: 'Second', text: 'Second' },
+          ],
+        },
+      },
+    };
+
+    const patched = result.current.patchAssistantForStreaming(assistant);
+    const rawContent = (patched.raw as any).message.content as ContentBlockTest[];
+
+    expect(rawContent).toHaveLength(3);
+    expect(rawContent.map((block) => block.thinking)).toEqual(['First', 'Second', 'Third']);
+  });
+
   it('extends the last thinking block as new deltas arrive (single segment)', () => {
     const { result } = renderHook(() => useStreamingMessages());
 
