@@ -832,12 +832,12 @@ public class ClaudeMessageHandler implements MessageCallback {
      * Handle block reset signal received during streaming.
      * This indicates a new assistant message has started within the stream
      * (e.g., after a tool_use loop iteration). Reset segment state and notify
-     * frontend to clear streaming content refs, preventing cross-turn content merging.
+     * the frontend so it can record the boundary for live block reconciliation.
      */
     private void handleBlockReset() {
         LOG.debug("Block reset received - clearing segment state and notifying frontend");
         resetSegmentState();
-        // Notify frontend to clear streaming refs (streamingThinkingRef, streamingContentRef)
+        // The frontend records the boundary and keeps cumulative streaming refs.
         callbackHandler.notifyBlockReset();
     }
 

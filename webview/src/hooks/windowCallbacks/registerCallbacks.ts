@@ -84,6 +84,7 @@ export function registerWindowCallbacks(
     streamingMessageIndexRef: options.streamingMessageIndexRef,
     streamingContentRef: options.streamingContentRef,
     streamingThinkingRef: options.streamingThinkingRef,
+    clearStreamingBlockResets: options.clearStreamingBlockResets,
     autoExpandedThinkingKeysRef: options.autoExpandedThinkingKeysRef,
     contentUpdateTimeoutRef: options.contentUpdateTimeoutRef,
     thinkingUpdateTimeoutRef: options.thinkingUpdateTimeoutRef,

@@ -19,6 +19,7 @@ const ref = <T,>(value: T): Ref<T> => ({ current: value });
 
 function createHarness(initialMessages: ClaudeMessage[], turnIdCounter: number) {
   let messages = [...initialMessages];
+  let blockResetCount = 0;
 
   const refs = {
     streamingContentRef: ref(''),
@@ -29,6 +30,7 @@ function createHarness(initialMessages: ClaudeMessage[], turnIdCounter: number) 
     streamingMessageIndexRef: ref(-1),
     streamingTurnIdRef: ref(-1),
     turnIdCounterRef: ref(turnIdCounter),
+    recordStreamingBlockReset: () => { blockResetCount += 1; },
     lastContentUpdateRef: ref(0),
     contentUpdateTimeoutRef: ref<number | null>(null),
     lastThinkingUpdateRef: ref(0),
@@ -51,7 +53,7 @@ function createHarness(initialMessages: ClaudeMessage[], turnIdCounter: number) 
   } as unknown as UseWindowCallbacksOptions;
 
   registerStreamingCallbacks(options);
-  return { refs, getMessages: () => messages };
+  return { refs, getMessages: () => messages, getBlockResetCount: () => blockResetCount };
 }
 
 describe('onStreamStart bubble routing', () => {
@@ -65,6 +67,16 @@ describe('onStreamStart bubble routing', () => {
       clearInterval(window.__stallWatchdogInterval);
       window.__stallWatchdogInterval = null;
     }
+  });
+
+  it('records block reset boundaries without clearing the active stream', () => {
+    const { getBlockResetCount, refs } = createHarness([], 0);
+
+    window.onStreamStart!();
+    window.onBlockReset!();
+
+    expect(getBlockResetCount()).toBe(1);
+    expect(refs.isStreamingRef.current).toBe(true);
   });
 
   const olderTurnStreamingAssistant: ClaudeMessage = {

@@ -205,6 +205,8 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     streamingMessageIndexRef,
     streamingTurnIdRef,
     turnIdCounterRef,
+    recordStreamingBlockReset,
+    clearStreamingBlockResets,
     lastContentUpdateRef,
     contentUpdateTimeoutRef,
     lastThinkingUpdateRef,
@@ -278,6 +280,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     window.__streamingDeltaRenderDeferred = false;
     streamingContentRef.current = '';
     streamingThinkingRef.current = '';
+    clearStreamingBlockResets?.();
     isStreamingRef.current = true;
     startStallWatchdog();
     useBackendStreamingRenderRef.current = false;
@@ -634,6 +637,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // Content buffer refs
     streamingContentRef.current = '';
     streamingThinkingRef.current = '';
+    clearStreamingBlockResets?.();
     autoExpandedThinkingKeysRef.current.clear();
 
     // Mark that streaming just ended - used by mergeConsecutiveAssistantMessages to
@@ -831,25 +835,22 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
   // onStreamEnd is the last writer). See Issue #1315 investigation for details.
   window.onPermissionDenied = () => {};
 
-  // Block reset callback — clears streaming content refs when a new assistant
-  // message starts within an ongoing stream (e.g., after tool_use loop iteration).
-  // This prevents cross-turn content merging where new thinking/text deltas
-  // would append to previous turn's buffered content.
+  // Block reset callback — marks the start offset of a new assistant block while
+  // keeping cumulative delta buffers intact. The streaming renderer uses these
+  // offsets to split consecutive thinking/text blocks before the backend snapshot
+  // reaches the webview.
   window.onBlockReset = () => {
     if (!isStreamingRef.current) {
       // Stream not active, ignore (could be stale signal after stream ended)
       return;
     }
+    recordStreamingBlockReset?.();
     // NOTE: content/thinking buffers are intentionally NOT cleared here.
     // The Java layer keeps ONE assistant message for the whole turn (including
     // every tool_use loop iteration), appending each turn's text/thinking as
-    // additional raw blocks. Clearing the buffers on BLOCK_RESET would discard
-    // the prefix carried by earlier turns and break sync*BlocksWithContent's
-    // prefix reconciliation: a multi-block turn would drop new deltas (prefix
-    // no longer matches) and a single-block turn would overwrite the prior
-    // turn's block with the new turn's content. Keep the cumulative buffer; the
-    // sync functions' trailing-block guard routes each turn's content into its
-    // own block once the backend snapshot delivers it.
+    // additional raw blocks. The boundary offsets let the streaming renderer
+    // materialize a missing block before the backend snapshot arrives while the
+    // cumulative buffer remains available for prefix reconciliation.
     // Intentionally NOT resetting streamingMessageIndexRef either: the assistant
     // message is shared across turns, so the index already points at it.
     // Reset throttle timeouts to ensure clean state for new deltas

@@ -132,7 +132,7 @@ public class CallbackHandler {
 
     /**
      * Notify that a block reset signal was received.
-     * Frontend should clear streaming content refs to prevent cross-turn merging.
+     * The frontend records the boundary while retaining cumulative streaming content.
      */
     public void notifyBlockReset() {
         if (callback != null) {

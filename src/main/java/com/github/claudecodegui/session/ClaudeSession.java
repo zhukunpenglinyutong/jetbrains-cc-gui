@@ -133,8 +133,8 @@ public class ClaudeSession {
         /**
          * Called when a block reset signal is received during streaming.
          * This indicates a new assistant message has started within the stream
-         * (e.g., after a tool_use loop iteration), and the frontend should
-         * clear its streaming content refs to prevent cross-turn content merging.
+         * (e.g., after a tool_use loop iteration), so the frontend can record
+         * the boundary while retaining cumulative streaming content for reconciliation.
          */
         default void onBlockReset() {
         }

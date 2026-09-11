@@ -87,6 +87,8 @@ export interface UseWindowCallbacksOptions {
   streamingMessageIndexRef: MutableRefObject<number>;
   streamingTurnIdRef: MutableRefObject<number>;
   turnIdCounterRef: MutableRefObject<number>;
+  recordStreamingBlockReset?: () => void;
+  clearStreamingBlockResets?: () => void;
   lastContentUpdateRef: MutableRefObject<number>;
   contentUpdateTimeoutRef: MutableRefObject<number | null>;
   lastThinkingUpdateRef: MutableRefObject<number>;

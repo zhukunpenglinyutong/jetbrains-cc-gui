@@ -23,6 +23,7 @@ export interface ResetTransientUiStateOptions {
   streamingMessageIndexRef: MutableRefObject<number>;
   streamingContentRef: MutableRefObject<string>;
   streamingThinkingRef: MutableRefObject<string>;
+  clearStreamingBlockResets?: () => void;
   autoExpandedThinkingKeysRef: MutableRefObject<Set<string>>;
   contentUpdateTimeoutRef: MutableRefObject<number | null>;
   thinkingUpdateTimeoutRef: MutableRefObject<number | null>;
@@ -62,6 +63,7 @@ export const buildResetTransientUiState = (opts: ResetTransientUiStateOptions) =
     opts.streamingMessageIndexRef.current = -1;
     opts.streamingContentRef.current = '';
     opts.streamingThinkingRef.current = '';
+    opts.clearStreamingBlockResets?.();
     opts.autoExpandedThinkingKeysRef.current.clear();
     // Reset active turn ID to prevent stale streaming assistant recovery.
     // NOTE: turnIdCounterRef is intentionally NOT reset — it must stay monotonically
