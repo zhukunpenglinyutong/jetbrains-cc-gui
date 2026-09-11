@@ -10,7 +10,7 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https://cc-gui-font.local; connect-src 'self'; frame-src 'none';" />
     <title>Claude Chat Webview</title>
     <!-- Set theme data-theme attribute immediately before React loads -->
-    <!-- Note: Background color is injected as inline style on the HTML tag by Java; only data-theme needs to be set here -->
+    <!-- Note: Java injects the initial background color on the root HTML and body tags; only data-theme needs to be set here -->
     <script>
       (function() {
         try {

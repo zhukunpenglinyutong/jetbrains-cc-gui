@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -30,6 +31,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public abstract class BaseSDKBridge {
 
     protected static final String CHANNEL_SCRIPT = "channel-manager.js";
+    private static final long ENVIRONMENT_CHECK_TIMEOUT_SECONDS = 5L;
 
     protected final Logger LOG;
     protected final Gson gson = new Gson();
@@ -185,12 +187,21 @@ public abstract class BaseSDKBridge {
      * Check if the environment is ready.
      */
     public boolean checkEnvironment() {
+        Process process = null;
         try {
             String node = nodeDetector.findNodeExecutable();
             List<String> versionCmd = NodeDetector.buildNodeScriptCommand(node, "--version");
             ProcessBuilder pb = new ProcessBuilder(versionCmd);
             envConfigurator.updateProcessEnvironment(pb, node);
-            Process process = pb.start();
+            process = pb.start();
+
+            boolean finished = process.waitFor(
+                    ENVIRONMENT_CHECK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            if (!finished) {
+                LOG.warn("Node.js environment check timed out; terminating probe process");
+                process.destroyForcibly();
+                return false;
+            }
 
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
@@ -198,15 +209,14 @@ public abstract class BaseSDKBridge {
                 LOG.debug("Node.js version: " + version);
             }
 
-            int exitCode = process.waitFor();
-            if (exitCode != 0) {
+            if (process.exitValue() != 0) {
                 return false;
             }
 
             // Check bridge directory
             File bridgeDir = getDirectoryResolver().findSdkDir();
             if (bridgeDir == null) {
-                // Bridge extraction is in progress (EDT thread scenario)
+                // Bridge extraction is in progress (background initialization scenario)
                 LOG.info("Bridge directory not ready yet (extraction in progress)");
                 return false;
             }
@@ -219,9 +229,17 @@ public abstract class BaseSDKBridge {
 
             LOG.info("Environment check passed for " + getProviderName());
             return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOG.warn("Environment check was interrupted");
+            return false;
         } catch (Exception e) {
             LOG.warn("Environment check failed: " + e.getMessage());
             return false;
+        } finally {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
         }
     }
 

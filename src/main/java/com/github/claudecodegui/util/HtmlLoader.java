@@ -6,6 +6,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * HTML loader.
@@ -14,6 +16,8 @@ import java.util.List;
 public class HtmlLoader {
 
     private static final Logger LOG = Logger.getInstance(HtmlLoader.class);
+    private static final Map<String, String> CHAT_HTML_CACHE = new ConcurrentHashMap<>();
+    private static final Object CHAT_HTML_CACHE_LOCK = new Object();
     private final Class<?> resourceClass;
 
     public HtmlLoader(Class<?> resourceClass) {
@@ -25,96 +29,179 @@ public class HtmlLoader {
      * @return the HTML content, or fallback HTML if loading fails
      */
     public String loadChatHtml() {
-        try {
-            InputStream is = resourceClass.getResourceAsStream("/html/claude-chat.html");
-            if (is != null) {
-                String html = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-                is.close();
+        // Read the theme once: theme and background color are both derived from the same
+        // observation, so a mid-read theme switch cannot produce a mixed dark/light injection.
+        boolean isDark = ThemeConfigService.getIdeThemeConfig().get("isDark").getAsBoolean();
+        String theme = isDark ? "dark" : "light";
+        String bgColor = isDark ? ThemeConfigService.DARK_BG_HEX : ThemeConfigService.LIGHT_BG_HEX;
+        String cacheKey = resourceClass.getName() + "\n" + theme;
+        String cachedHtml = CHAT_HTML_CACHE.get(cacheKey);
+        if (cachedHtml != null) {
+            return cachedHtml;
+        }
 
-                if (html.contains("<!-- LOCAL_LIBRARY_INJECTION_POINT -->")) {
-                    html = injectLocalLibraries(html);
-                } else {
-                    LOG.info("Detected bundled modern frontend assets; no additional library injection needed");
-                }
-
-                // Inject the IDE theme into the HTML to prevent flash of unstyled content on initial load
-                html = injectIdeTheme(html);
-
-                return html;
+        // Several tabs can initialize concurrently. Serialize the one-time 10 MB resource
+        // transformation so a burst of tabs does not duplicate the same allocation and I/O.
+        synchronized (CHAT_HTML_CACHE_LOCK) {
+            cachedHtml = CHAT_HTML_CACHE.get(cacheKey);
+            if (cachedHtml != null) {
+                return cachedHtml;
             }
-        } catch (Exception e) {
-            LOG.error("Failed to load claude-chat.html: " + e.getMessage());
+
+            try (InputStream is = resourceClass.getResourceAsStream("/html/claude-chat.html")) {
+                if (is != null) {
+                    String html = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+
+                    if (html.contains("<!-- LOCAL_LIBRARY_INJECTION_POINT -->")) {
+                        html = injectLocalLibraries(html);
+                    } else {
+                        LOG.info("Detected bundled modern frontend assets; no additional library injection needed");
+                    }
+
+                    // Prepare the complete static page once per theme. Per-tab state is added
+                    // later, after this shared result is returned.
+                    html = injectIdeTheme(html, theme, bgColor);
+                    CHAT_HTML_CACHE.put(cacheKey, html);
+                    return html;
+                }
+            } catch (Exception e) {
+                LOG.error("Failed to load claude-chat.html: " + e.getMessage(), e);
+            }
         }
 
         return generateFallbackHtml();
     }
 
     /**
-     * Inject the IDE theme into the HTML.
+     * Injects theme bootstrap data with one linear pass over the static document.
      *
-     * Strategy: add inline style attributes directly on HTML tags to ensure the background
-     * color is applied on the very first render frame.
-     * 1. Modify the &lt;html&gt; tag to add style="background-color:..."
-     * 2. Modify the &lt;body&gt; tag to add style="background-color:..."
-     * 3. Inject a theme variable script into &lt;head&gt;
+     * The bundled JavaScript contains HTML examples, so the body lookup uses the last body
+     * before the document's closing tag and cannot accidentally modify an embedded string.
      *
-     * Inline styles are parsed faster than CSS rules, ensuring the correct color appears
-     * on the first CEF render frame.
+     * @param html the static HTML document.
+     * @param theme the IDE theme name.
+     * @param bgColor the background color to apply.
+     * @return the HTML with the initial theme bootstrap.
      */
-    private String injectIdeTheme(String html) {
-        try {
-            boolean isDark = ThemeConfigService.getIdeThemeConfig().get("isDark").getAsBoolean();
-            String theme = isDark ? "dark" : "light";
-            // Use the unified color values to ensure consistency with Swing component backgrounds
-            String bgColor = ThemeConfigService.getBackgroundColorHex();
+    static String injectIdeTheme(String html, String theme, String bgColor) {
+        int htmlTagEnd = findOpeningTagEnd(html, "<html", 0);
+        int headTagEnd = findOpeningTagEnd(html, "<head", htmlTagEnd + 1);
+        int htmlClosingTagStart = html.lastIndexOf("</html>");
+        int bodyTagEnd = findLastOpeningTagEnd(
+                html, "<body", htmlClosingTagStart >= 0 ? htmlClosingTagStart : html.length());
 
-            // 1. Modify the <html> tag to add inline styles
-            html = html.replaceFirst(
-                "<html([^>]*)>",
-                "<html$1 style=\"background-color:" + bgColor + ";\">"
-            );
+        String styleAttribute = " style=\"background-color:" + bgColor + ";\"";
+        String scriptInjection = "\n    <script>window.__INITIAL_IDE_THEME__ = '"
+                + theme + "';</script>";
+        StringBuilder result = new StringBuilder(html.length() + styleAttribute.length() * 2
+                + scriptInjection.length());
+        int cursor = 0;
 
-            // 2. Modify the <body> tag to add inline styles
-            html = html.replaceFirst(
-                "<body([^>]*)>",
-                "<body$1 style=\"background-color:" + bgColor + ";\">"
-            );
-
-            // 3. Inject a theme variable script after the <head> tag
-            String scriptInjection = "\n    <script>window.__INITIAL_IDE_THEME__ = '" + theme + "';</script>";
-            int headIndex = html.indexOf("<head>");
-            if (headIndex != -1) {
-                int insertPos = headIndex + "<head>".length();
-                html = html.substring(0, insertPos) + scriptInjection + html.substring(insertPos);
-            }
-
-            LOG.info("Successfully injected IDE theme (inline styles): " + theme + ", background: " + bgColor);
-        } catch (Exception e) {
-            LOG.error("Failed to inject IDE theme: " + e.getMessage(), e);
+        if (htmlTagEnd >= cursor) {
+            result.append(html, cursor, htmlTagEnd);
+            result.append(styleAttribute);
+            cursor = htmlTagEnd;
         }
+        if (headTagEnd >= cursor) {
+            result.append(html, cursor, headTagEnd + 1);
+            result.append(scriptInjection);
+            cursor = headTagEnd + 1;
+        }
+        if (bodyTagEnd >= cursor) {
+            result.append(html, cursor, bodyTagEnd);
+            result.append(styleAttribute);
+            cursor = bodyTagEnd;
+        }
+        result.append(html, cursor, html.length());
 
-        return html;
+        LOG.info("Successfully injected IDE theme (inline styles): " + theme + ", background: " + bgColor);
+        return result.toString();
+    }
+
+    private static int findOpeningTagEnd(String html, String tagPrefix, int fromIndex) {
+        int tagStart = html.indexOf(tagPrefix, Math.max(0, fromIndex));
+        while (tagStart >= 0) {
+            int nameEnd = tagStart + tagPrefix.length();
+            if (nameEnd >= html.length()
+                    || Character.isWhitespace(html.charAt(nameEnd))
+                    || html.charAt(nameEnd) == '>') {
+                return html.indexOf('>', nameEnd);
+            }
+            tagStart = html.indexOf(tagPrefix, nameEnd);
+        }
+        return -1;
+    }
+
+    private static int findLastOpeningTagEnd(String html, String tagPrefix, int beforeIndex) {
+        int tagStart = html.lastIndexOf(tagPrefix, Math.max(0, beforeIndex - 1));
+        while (tagStart >= 0) {
+            int nameEnd = tagStart + tagPrefix.length();
+            if (nameEnd >= html.length()
+                    || Character.isWhitespace(html.charAt(nameEnd))
+                    || html.charAt(nameEnd) == '>') {
+                return html.indexOf('>', nameEnd);
+            }
+            tagStart = html.lastIndexOf(tagPrefix, tagStart - 1);
+        }
+        return -1;
     }
 
     /**
-     * Inject per-tab provider/model into the HTML so the WebView can prefer
-     * the backend-restored values over the global localStorage snapshot.
+     * Injects all page-start state in one rewrite of the large HTML document.
      *
-     * Without this, every tab in a multi-tab setup hydrates from the same
-     * localStorage key ("model-selection-state") and clobbers the per-tab
-     * provider that ClaudeChatWindow.restorePersistedTabSessionState already
-     * applied to the session — see issue #1353.
+     * Combining the snippets avoids creating three additional full-size strings when a tab
+     * starts or a watchdog recreates the browser.
      *
-     * Both arguments may be null/empty. Null/empty values are injected as
-     * empty strings; the frontend treats an empty string as "no backend
-     * preference" and falls back to localStorage. Only non-empty values
-     * override the global localStorage snapshot.
+     * The provider/model pair is injected so each tab can prefer the backend-restored values
+     * over the shared localStorage snapshot ("model-selection-state") — without it, every tab
+     * in a multi-tab setup hydrates from the same key and clobbers the per-tab provider that
+     * ClaudeChatWindow.restorePersistedTabSessionState already applied to the session
+     * (issue #1353). Null/empty values are injected as empty strings; the frontend treats an
+     * empty string as "no backend preference" and falls back to localStorage.
+     *
+     * @param html the static HTML document.
+     * @param provider the restored provider, or {@code null}.
+     * @param model the restored model, or {@code null}.
+     * @param presetIds locally available DSH preset IDs.
+     * @return the HTML with all page-start state injected.
      */
-    public String injectInitialTabState(String html, String provider, String model) {
+    public String injectInitialPageState(
+            String html,
+            String provider,
+            String model,
+            List<String> presetIds
+    ) {
         try {
             String safeProvider = escapeForSingleQuotedJs(provider == null ? "" : provider);
             String safeModel = escapeForSingleQuotedJs(model == null ? "" : model);
+            StringBuilder presetValues = new StringBuilder("[");
+            if (presetIds != null) {
+                boolean first = true;
+                for (String presetId : presetIds) {
+                    if (presetId == null || presetId.isBlank()) {
+                        continue;
+                    }
+                    if (!first) {
+                        presetValues.append(',');
+                    }
+                    presetValues.append('\'')
+                            .append(escapeForSingleQuotedJs(presetId.trim()))
+                            .append('\'');
+                    first = false;
+                }
+            }
+            presetValues.append(']');
+
             String scriptInjection = "\n    <script>"
+                    + "window.__CCG_PAGE_GENERATION__ = undefined;"
+                    + "window.__CCGUI_PAGE_CONTEXT_READY__ = false;"
+                    + "window.__CCGUI_PAGE_LOAD_KIND__ = undefined;"
+                    + "window.__CCGUI_RECOVERY_RELOAD__ = undefined;"
+                    + "window.__CCGUI_RECOVERY_STATE_APPLIED__ = false;"
+                    + "</script>"
+                    + "\n    <script>window.__INITIAL_DSH_PRESETS__ = "
+                    + presetValues + ";</script>"
+                    + "\n    <script>"
                     + "window.__INITIAL_TAB_PROVIDER__ = '" + safeProvider + "';"
                     + "window.__INITIAL_TAB_MODEL__ = '" + safeModel + "';"
                     + "</script>";
@@ -124,65 +211,9 @@ public class HtmlLoader {
                 return html.substring(0, insertPos) + scriptInjection + html.substring(insertPos);
             }
         } catch (Exception e) {
-            LOG.error("Failed to inject initial tab state: " + e.getMessage(), e);
+            LOG.error("Failed to inject initial page state: " + e.getMessage(), e);
         }
         return html;
-    }
-
-    /**
-     * Inject locally installed DSH preset ids before the frontend bundle starts.
-     */
-    public String injectInitialDshPresets(String html, List<String> presetIds) {
-        try {
-            StringBuilder values = new StringBuilder("[");
-            if (presetIds != null) {
-                boolean first = true;
-                for (String presetId : presetIds) {
-                    if (presetId == null || presetId.isBlank()) {
-                        continue;
-                    }
-                    if (!first) {
-                        values.append(',');
-                    }
-                    values.append('\'')
-                            .append(escapeForSingleQuotedJs(presetId.trim()))
-                            .append('\'');
-                    first = false;
-                }
-            }
-            values.append(']');
-            String scriptInjection = "\n    <script>window.__INITIAL_DSH_PRESETS__ = "
-                    + values + ";</script>";
-            int headIndex = html.indexOf("<head>");
-            if (headIndex != -1) {
-                int insertPos = headIndex + "<head>".length();
-                return html.substring(0, insertPos) + scriptInjection + html.substring(insertPos);
-            }
-        } catch (Exception e) {
-            LOG.error("Failed to inject initial DSH presets: " + e.getMessage(), e);
-        }
-        return html;
-    }
-
-    /**
-     * Marks the Java-owned page context as unavailable before the frontend bundle executes.
-     * The active runtime generation is injected later by {@code WebviewInitializer}, immediately
-     * before the page-specific bridge becomes visible.
-     */
-    public String injectPageContextBootstrap(String html) {
-        String scriptInjection = "\n    <script>"
-                + "window.__CCG_PAGE_GENERATION__ = undefined;"
-                + "window.__CCGUI_PAGE_CONTEXT_READY__ = false;"
-                + "window.__CCGUI_PAGE_LOAD_KIND__ = undefined;"
-                + "window.__CCGUI_RECOVERY_RELOAD__ = undefined;"
-                + "window.__CCGUI_RECOVERY_STATE_APPLIED__ = false;"
-                + "</script>";
-        int headIndex = html.indexOf("<head>");
-        if (headIndex == -1) {
-            return html;
-        }
-        int insertPos = headIndex + "<head>".length();
-        return html.substring(0, insertPos) + scriptInjection + html.substring(insertPos);
     }
 
     private static String escapeForSingleQuotedJs(String value) {
@@ -266,25 +297,23 @@ public class HtmlLoader {
      * Load a resource file as a string.
      */
     private String loadResourceAsString(String resourcePath) throws Exception {
-        InputStream is = resourceClass.getResourceAsStream(resourcePath);
-        if (is == null) {
-            throw new Exception("Resource not found: " + resourcePath);
+        try (InputStream is = resourceClass.getResourceAsStream(resourcePath)) {
+            if (is == null) {
+                throw new Exception("Resource not found: " + resourcePath);
+            }
+            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
         }
-        String content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        is.close();
-        return content;
     }
 
     /**
      * Load a resource file as a Base64-encoded string.
      */
     private String loadResourceAsBase64(String resourcePath) throws Exception {
-        InputStream is = resourceClass.getResourceAsStream(resourcePath);
-        if (is == null) {
-            throw new Exception("Resource not found: " + resourcePath);
+        try (InputStream is = resourceClass.getResourceAsStream(resourcePath)) {
+            if (is == null) {
+                throw new Exception("Resource not found: " + resourcePath);
+            }
+            return Base64.getEncoder().encodeToString(is.readAllBytes());
         }
-        byte[] bytes = is.readAllBytes();
-        is.close();
-        return Base64.getEncoder().encodeToString(bytes);
     }
 }
