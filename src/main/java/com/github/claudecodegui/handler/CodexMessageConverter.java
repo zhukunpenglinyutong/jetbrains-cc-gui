@@ -336,7 +336,8 @@ public class CodexMessageConverter {
                contentStr.startsWith("# AGENTS.md instructions") ||
                contentStr.startsWith("<agents-instructions>") ||
                contentStr.startsWith("<INSTRUCTIONS>") ||
-               contentStr.startsWith("<environment_context>");
+               contentStr.startsWith("<environment_context>") ||
+               contentStr.startsWith("<recommended_plugins>");
     }
 
     /**

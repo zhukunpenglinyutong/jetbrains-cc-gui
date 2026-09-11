@@ -37,6 +37,11 @@ public class SessionIndexManager {
             Pattern.CASE_INSENSITIVE
     );
 
+    // v8 (2026-09): Codex CLI injects a <recommended_plugins> context block as the first
+    // user message of a session. It was not stripped, so extractFirstUserMessageTitle()
+    // picked it as the session title (every session showed "<recommended_plugins> Here
+    // is a list of plugi..."). The sanitizer now strips the tag; bump so cached wrong
+    // titles are rebuilt from the JSONL files.
     // v7 (2026-08): Codex 0.148+ CLI rollouts persist the user prompt as
     // response_item/role=user instead of event_msg/user_message. v6 indexes can
     // store an empty session list for those files; bump so they rebuild.
@@ -47,7 +52,7 @@ public class SessionIndexManager {
     // Restore paths trust index entries while the file mtime is unchanged, so those
     // nulls would never self-heal. Bumping once more forces a clean rebuild that
     // populates entrypoint for every session.
-    private static final int INDEX_VERSION = 7;
+    private static final int INDEX_VERSION = 8;
 
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
     private final Path codemossCacheDir;

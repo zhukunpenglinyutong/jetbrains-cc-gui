@@ -360,6 +360,26 @@ public class CodexMessageConverterTest {
         assertEquals("raw", input.get("cmd").getAsString());
     }
 
+    // ---- isSystemMessage (injection fallback) ----
+
+    /**
+     * Regression test for #1809: a message that starts with the injected
+     * {@code <recommended_plugins>} block must be classified as a system
+     * message so it is filtered even when the closing tag is missing
+     * (e.g. truncated head reads in the lite reader).
+     */
+    @Test
+    public void isSystemMessageCatchesRecommendedPlugins() {
+        assertTrue(CodexMessageConverter.isSystemMessage(
+                "<recommended_plugins>Here is a list of plugins"));
+        assertTrue(CodexMessageConverter.isSystemMessage(
+                "<recommended_plugins>full block</recommended_plugins>"));
+        assertFalse(CodexMessageConverter.isSystemMessage(
+                "What does <recommended_plugins> mean mid-sentence?"));
+        assertFalse(CodexMessageConverter.isSystemMessage(
+                "A normal question about plugins"));
+    }
+
     // ---- helpers ----
 
     private static JsonObject extractFirstToolResult(JsonObject frontendMsg) {

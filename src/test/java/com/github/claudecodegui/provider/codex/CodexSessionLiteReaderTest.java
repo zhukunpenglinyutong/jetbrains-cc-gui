@@ -101,6 +101,58 @@ public class CodexSessionLiteReaderTest {
         assertTrue(!info.summary.contains("agents-instructions"));
     }
 
+    /**
+     * Regression test for #1809: the Codex CLI injects a <recommended_plugins>
+     * context block as the FIRST user message; the title must come from the
+     * next real user message instead of the injection.
+     */
+    @Test
+    public void parseSessionInfoFromLite_skipsRecommendedPluginsInjection() {
+        String sessionId = "thread_abc123def456";
+        SessionLiteReader.LiteSessionFile lite = new SessionLiteReader.LiteSessionFile(
+                System.currentTimeMillis(), 1000,
+                "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"<recommended_plugins>Here is a list of plugins you may want to install</recommended_plugins>\"}]}}\n"
+                        + "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"帮我把这个函数重构为异步版本\"}]}}\n",
+                ""
+        );
+
+        CodexSessionLiteReader.CodexLiteSessionInfo info = reader.parseSessionInfoFromLite(sessionId, lite);
+        assertNotNull(info);
+        assertTrue("title must come from the real user message",
+                info.summary.contains("帮我把这个函数重构为异步版本"));
+        assertTrue("title must not leak the injected context block",
+                !info.summary.contains("recommended_plugins"));
+    }
+
+    /**
+     * Variant of the #1809 regression where the injected block and the real
+     * question live in the SAME message. The two defense layers behave
+     * differently here: with the sanitizer (layer 1) the tag block is stripped
+     * and THIS message's question becomes the title; if only the
+     * isSystemMessage prefix fallback (layer 2) existed, the whole message
+     * would be filtered and the title would fall through to the next message.
+     * This test is therefore sensitive to a regression of layer 1 alone.
+     */
+    @Test
+    public void parseSessionInfoFromLite_injectionAndQuestionInSameMessage() {
+        String sessionId = "thread_abc123def456";
+        SessionLiteReader.LiteSessionFile lite = new SessionLiteReader.LiteSessionFile(
+                System.currentTimeMillis(), 1000,
+                "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"<recommended_plugins>Here is a list of plugins</recommended_plugins>帮我优化这个SQL查询\"}]}}\n"
+                        + "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"第二条消息不应该成为标题\"}]}}\n",
+                ""
+        );
+
+        CodexSessionLiteReader.CodexLiteSessionInfo info = reader.parseSessionInfoFromLite(sessionId, lite);
+        assertNotNull(info);
+        assertTrue("title must come from the first message's real question (sanitizer stripped the injection)",
+                info.summary.contains("帮我优化这个SQL查询"));
+        assertTrue("the second message must not have become the title (would mean layer 1 regressed)",
+                !info.summary.contains("第二条消息不应该成为标题"));
+        assertTrue("title must not leak the injected context block",
+                !info.summary.contains("recommended_plugins"));
+    }
+
     @Test
     public void parseSessionInfoFromLite_responseItemUserMessage() {
         String sessionId = "01a0229e-d4d9-7850-876d-1a3b36867785";

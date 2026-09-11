@@ -7,7 +7,7 @@ package com.github.claudecodegui.util;
  */
 public final class UserMessageSanitizer {
 
-    private static final String[] SYSTEM_TAG_NAMES = {"agents-instructions", "system-reminder", "system-prompt", "skill"};
+    private static final String[] SYSTEM_TAG_NAMES = {"agents-instructions", "system-reminder", "system-prompt", "skill", "recommended_plugins"};
 
     private static final String[] APPENDED_CONTEXT_MARKERS = {
         "\n\n## Agent Role and Instructions\n\n",
