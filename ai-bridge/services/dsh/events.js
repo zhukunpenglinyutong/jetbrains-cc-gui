@@ -284,6 +284,45 @@ function projectSessionProjection(frame) {
 }
 
 /**
+ * Project one process-local assistant frame from a modern `session/follow`
+ * stream (`{type:'assistant-stream', frame}`). Only `chunk` carries payload;
+ * `start`/`end` are lifecycle bookends the marker protocol has no use for.
+ */
+export function projectAssistantStreamFrame(frame) {
+  if (!frame || typeof frame !== 'object') {
+    return [];
+  }
+  switch (asString(frame.type)) {
+    case 'chunk':
+      return projectStreamChunk({ chunk: frame.chunk });
+    default:
+      return [];
+  }
+}
+
+/**
+ * Project one `session/follow` frame (modern host) into turn events.
+ * Durable events carry the same `{type, data}` envelope the legacy mux emitted,
+ * so `projectSessionEvent` is reused as-is; the opening `snapshot` is skipped
+ * on purpose — it replays history the plugin loads through its own reader, and
+ * re-emitting it would duplicate the transcript.
+ */
+export function projectFollowFrame(value) {
+  if (!value || typeof value !== 'object') {
+    return [];
+  }
+  switch (asString(value.type)) {
+    case 'event':
+      return projectSessionEvent(value.event);
+    case 'assistant-stream':
+      return projectAssistantStreamFrame(value.frame);
+    case 'snapshot':
+    default:
+      return [];
+  }
+}
+
+/**
  * Project one mux frame into turn events.
  * frameType: frame.type (e.g. "session/event" / "approval/requested").
  */
@@ -336,6 +375,78 @@ export function projectMuxFrame(frameType, frame, rpcId) {
     default:
       return [];
   }
+}
+
+/**
+ * Project one `$events` frame (modern host) into a bridge instruction.
+ *
+ * The modern host forwards only a small allowlist of Cordis events, and the
+ * two that need an answer arrive as waterfalls carrying their own `eventId`;
+ * the reply must also quote the `clientId` learned from the opening `ready`
+ * frame, which is regenerated on every reconnect.
+ *
+ * @returns {{kind:'ready',clientId:string}
+ *   | {kind:'approval-request',eventId:string,request:object}
+ *   | {kind:'question-request',eventId:string,request:object}
+ *   | {kind:'cancel',eventId:string}
+ *   | null}
+ */
+export function projectRemoteEventFrame(value) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  switch (asString(value.type)) {
+    case 'ready': {
+      const clientId = asString(value.clientId);
+      return clientId ? { kind: 'ready', clientId } : null;
+    }
+    case 'waterfall': {
+      const eventId = asString(value.eventId);
+      if (!eventId) {
+        return null;
+      }
+      const request = value.request && typeof value.request === 'object' ? value.request : {};
+      const event = asString(value.event);
+      if (event === 'approval/request') {
+        return { kind: 'approval-request', eventId, request };
+      }
+      if (event === 'user-questions/request') {
+        return { kind: 'question-request', eventId, request };
+      }
+      return null;
+    }
+    case 'cancel': {
+      const eventId = asString(value.eventId);
+      return eventId ? { kind: 'cancel', eventId } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+/** Tool name of an `approval/request` waterfall payload. */
+function approvalToolName(request) {
+  return asString(request && request.toolName) || 'dsh-tool';
+}
+
+/** Reason / summary of an `approval/request` waterfall payload. */
+function approvalReason(request) {
+  const explicit = asString(request && request.reason);
+  if (explicit) {
+    return explicit;
+  }
+  return asString(request && request.policy);
+}
+
+/** Question rows of a `user-questions/request` waterfall payload. */
+function questionRows(request) {
+  if (!request || typeof request !== 'object') {
+    return [];
+  }
+  if (Array.isArray(request.questions)) {
+    return request.questions;
+  }
+  return [];
 }
 
 /**
@@ -471,6 +582,73 @@ function mapQuestionAnswers(answers) {
     }
     return { id, selected };
   });
+}
+
+/**
+ * Settle one modern waterfall frame. `$events/result` accepts only
+ * `{kind, value?}` — a stray key makes the whole answer invalid, which tears
+ * down the host's event generation instead of merely failing the request.
+ */
+async function answerWaterfall(client, clientId, eventId, value, log) {
+  if (!clientId) {
+    log('[dsh] dropping a waterfall answer: the $events stream has no clientId yet');
+    return false;
+  }
+  await client.answerRemoteEvent(clientId, eventId, value);
+  return true;
+}
+
+/**
+ * Settle a modern `approval/request` waterfall. The decision is the bare
+ * `ApprovalOutcome` string — `'allowed-once'` is the only granting value.
+ */
+export async function bridgeModernApproval(client, clientId, event, log = () => {}) {
+  const request = event && event.request && typeof event.request === 'object' ? event.request : {};
+  const toolName = approvalToolName(request);
+  try {
+    const allowed = await requestPermissionFromJava(toolName, {
+      tool: toolName,
+      reason: approvalReason(request) || undefined,
+      approvalId: event.eventId,
+      input: request,
+    });
+    await answerWaterfall(client, clientId, event.eventId, allowed ? 'allowed-once' : 'rejected', log);
+    log(`[dsh] approval ${event.eventId} ${allowed ? 'allowed-once' : 'rejected'}`);
+    return true;
+  } catch (error) {
+    log(`[dsh] approval answer failed: ${error.message}`);
+    try {
+      await answerWaterfall(client, clientId, event.eventId, 'rejected', log);
+    } catch {
+      // Secondary failure: the host keeps the request pending until the turn
+      // is aborted — there is no host-side watchdog for a waterfall.
+    }
+    return false;
+  }
+}
+
+/**
+ * Settle a modern `user-questions/request` waterfall with the
+ * `{answers:[{id, selected, custom?}]}` shape the asker's output schema requires.
+ */
+export async function bridgeModernQuestion(client, clientId, event, log = () => {}) {
+  const questions = questionRows(event && event.request);
+  try {
+    const answers = await requestAskUserQuestionAnswers({ questions });
+    await answerWaterfall(client, clientId, event.eventId, {
+      answers: mapQuestionAnswers(answers),
+    }, log);
+    log('[dsh] question answered');
+    return true;
+  } catch (error) {
+    log(`[dsh] question answer failed: ${error.message}`);
+    try {
+      await answerWaterfall(client, clientId, event.eventId, { answers: [] }, log);
+    } catch {
+      // Secondary failure — see bridgeModernApproval.
+    }
+    return false;
+  }
 }
 
 /**
