@@ -193,36 +193,16 @@ public class ChatWindowDelegate {
             if (savedNodePath != null && !savedNodePath.trim().isEmpty()) {
                 String path = savedNodePath.trim();
                 applyNodePathToBridges(path);
-                claudeSDKBridge.verifyAndCacheNodePath(path);
-                LOG.info("Using manually configured Node.js path: " + path);
+                // The webview initializer performs the authoritative verification on its
+                // preparation worker before creating the browser. Avoid starting a duplicate
+                // subprocess here; this constructor path must remain non-blocking.
+                LOG.info("Using manually configured Node.js path: " + path
+                        + " (verification deferred to webview preparation)");
             } else {
-                // Auto-detection spawns shell processes which block the calling thread for several
-                // seconds per attempt. Running this on the EDT freezes the entire IDE. Offload to
-                // a pooled thread; the bridges fall back to invoking "node" by name until the
-                // detection completes and updates them.
-                LOG.info("No saved Node.js path found, scheduling auto-detection on background thread...");
-                ApplicationManager.getApplication().executeOnPooledThread(() -> {
-                    try {
-                        com.github.claudecodegui.model.NodeDetectionResult detected =
-                            claudeSDKBridge.detectNodeWithDetails();
-
-                        if (detected != null && detected.isFound() && detected.getNodePath() != null) {
-                            String detectedPath = detected.getNodePath();
-                            String detectedVersion = detected.getNodeVersion();
-
-                            props.setValue(NODE_PATH_PROPERTY_KEY, detectedPath);
-                            applyNodePathToBridges(detectedPath);
-                            claudeSDKBridge.verifyAndCacheNodePath(detectedPath);
-
-                            LOG.info("Auto-detected Node.js: " + detectedPath + " (" + detectedVersion + ")");
-                        } else {
-                            LOG.warn("Failed to auto-detect Node.js path. Error: " +
-                                (detected != null ? detected.getErrorMessage() : "Unknown error"));
-                        }
-                    } catch (Exception e) {
-                        LOG.error("Failed to auto-detect Node.js path: " + e.getMessage(), e);
-                    }
-                });
+                // WebviewInitializer owns the startup preparation and performs the single
+                // background detection there. Keeping construction free of a second probe
+                // avoids duplicate shell processes and competing writes to the shared cache.
+                LOG.info("No saved Node.js path; deferring detection to webview preparation...");
             }
         } catch (Exception e) {
             LOG.error("Failed to load Node.js path: " + e.getMessage(), e);
