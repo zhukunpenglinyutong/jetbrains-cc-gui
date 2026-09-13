@@ -19,7 +19,7 @@ describe('AppearanceTab ui font selector', () => {
     localStorage.clear();
   });
 
-  const renderAppearanceTab = () => render(
+  const renderAppearanceTab = (overrides: Record<string, unknown> = {}) => render(
     <AppearanceTab
       {...({
         theme: 'dark',
@@ -52,6 +52,7 @@ describe('AppearanceTab ui font selector', () => {
         onCodeFontSelectionChange: vi.fn(),
         onSaveCodeFontCustomPath: vi.fn(),
         onBrowseCodeFontFile: vi.fn(),
+        ...overrides,
       } as any)}
     />
   );
@@ -210,5 +211,43 @@ describe('AppearanceTab ui font selector', () => {
 
     expect(onUiFontSelectionChange).toHaveBeenCalledTimes(1);
     expect(onUiFontSelectionChange).toHaveBeenCalledWith('customFile');
+  });
+
+  it('applies a shared chat bar preset immediately', () => {
+    const onChatBarColorChange = vi.fn();
+    renderAppearanceTab({ onChatBarColorChange });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Midnight Blue' }));
+
+    expect(onChatBarColorChange).toHaveBeenCalledWith('#1e3a5f');
+  });
+
+  it('accepts only complete hex values for the shared chat bar color', () => {
+    const onChatBarColorChange = vi.fn();
+    renderAppearanceTab({ onChatBarColorChange });
+    const label = screen.getByText('settings.basic.chatBarColor.label');
+    const section = label.closest('div[class]')?.parentElement;
+    expect(section).toBeTruthy();
+    const input = within(section as HTMLElement).getByPlaceholderText('#000000');
+
+    fireEvent.change(input, { target: { value: '#123' } });
+    expect(onChatBarColorChange).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: '#123456' } });
+    expect(onChatBarColorChange).toHaveBeenCalledWith('#123456');
+  });
+
+  it('resets the shared chat bar color to theme defaults', () => {
+    const onChatBarColorChange = vi.fn();
+    renderAppearanceTab({ chatBarColor: '#1e3a5f', onChatBarColorChange });
+    const label = screen.getByText('settings.basic.chatBarColor.label');
+    const section = label.closest('div[class]')?.parentElement;
+    expect(section).toBeTruthy();
+
+    fireEvent.click(within(section as HTMLElement).getByRole('button', {
+      name: 'settings.basic.chatBarColor.reset',
+    }));
+
+    expect(onChatBarColorChange).toHaveBeenCalledWith('');
   });
 });

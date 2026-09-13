@@ -16,6 +16,8 @@ import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -71,18 +73,19 @@ public class SendFilePathToInputAction extends AnAction implements DumbAware {
             return;
         }
 
-        // Build file path string (supports multi-selection)
-        StringBuilder pathBuilder = new StringBuilder();
-        for (int i = 0; i < files.length; i++) {
-            if (i > 0) {
-                pathBuilder.append(" ");
+        // Keep the selection structured so spaces in one path cannot be
+        // confused with the separator between two selected files.
+        List<String> filePaths = new ArrayList<>(files.length);
+        for (VirtualFile file : files) {
+            if (file != null && file.isValid()) {
+                filePaths.add(file.getPath());
             }
-            // Add @ prefix with absolute path
-            pathBuilder.append("@").append(files[i].getPath());
         }
-
-        String filePaths = pathBuilder.toString();
-        LOG.info("Sending file paths to input: " + filePaths);
+        if (filePaths.isEmpty()) {
+            LOG.warn("No valid files selected");
+            return;
+        }
+        LOG.info("Sending " + filePaths.size() + " file path(s) to input");
 
         // Send to chat window
         sendToChatWindow(project, filePaths);
@@ -116,7 +119,7 @@ public class SendFilePathToInputAction extends AnAction implements DumbAware {
     /**
      * Send file paths to the plugin's chat input box.
      */
-    private void sendToChatWindow(@NotNull Project project, @NotNull String filePaths) {
+    private void sendToChatWindow(@NotNull Project project, @NotNull List<String> filePaths) {
         try {
             // Get the plugin tool window
             ToolWindowManager toolWindowManager = ToolWindowManager.getInstance(project);
@@ -132,7 +135,7 @@ public class SendFilePathToInputAction extends AnAction implements DumbAware {
                             ApplicationManager.getApplication().invokeLater(() -> {
                                 try {
                                     if (project.isDisposed()) { return; }
-                                    ClaudeSDKToolWindow.addSelectionFromExternal(project, filePaths);
+                                    ClaudeSDKToolWindow.addFileReferencesFromExternal(project, filePaths);
                                     LOG.info("Window activated and sent file paths to project: " + project.getName());
                                 } catch (Exception ex) {
                                     LOG.warn("Failed to send file paths after activation: " + ex.getMessage(), ex);
@@ -142,7 +145,7 @@ public class SendFilePathToInputAction extends AnAction implements DumbAware {
                     }, true);
                 } else {
                     // Window is already visible, send content directly
-                    ClaudeSDKToolWindow.addSelectionFromExternal(project, filePaths);
+                    ClaudeSDKToolWindow.addFileReferencesFromExternal(project, filePaths);
                     // Ensure window gets focus
                     toolWindow.activate(null, true);
                     LOG.info("Chat window activated and sent file paths to project: " + project.getName());

@@ -66,4 +66,33 @@ describe('toolPresentation', () => {
       cleanFileName: 'main.ts',
     });
   });
+  it('truncates long display paths from the start with an ellipsis prefix', () => {
+    const target = resolveToolTarget({
+      file_path: '/repo/webview/src/components/ChatInputBox/selectors/useFileTagExtraction.ts',
+      workdir: '/repo',
+    }, 'read');
+
+    expect(target?.displayPath).toBe('…/selectors/useFileTagExtraction.ts');
+    expect(target?.cleanFileName).toBe('useFileTagExtraction.ts');
+    expect(target?.openPath).toBe('/repo/webview/src/components/ChatInputBox/selectors/useFileTagExtraction.ts');
+  });
+
+  it('keeps a trailing separator when truncating long directory paths', () => {
+    const target = resolveToolTarget({
+      file_path: '/repo/webview/src/components/ChatInputBox/someVeryDeepFolderName/selectors/',
+      workdir: '/repo',
+    }, 'read');
+
+    expect(target?.displayPath).toBe('…/someVeryDeepFolderName/selectors/');
+    expect(target?.isDirectory).toBe(true);
+  });
+
+  it('leaves short display paths untouched', () => {
+    const target = resolveToolTarget({
+      file_path: '/repo/src/main.ts',
+      workdir: '/repo',
+    }, 'read');
+
+    expect(target?.displayPath).toBe('src/main.ts');
+  });
 });

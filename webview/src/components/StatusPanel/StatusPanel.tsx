@@ -11,7 +11,7 @@ import DiscardAllDialog from './DiscardAllDialog';
 import type { TabType, StatusPanelProps } from './types';
 import './StatusPanel.less';
 
-const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, currentSessionId, expanded = true, isStreaming = false, onUndoFile, onDiscardAll, onKeepAll }: StatusPanelProps) => {
+const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, currentSessionId, currentProvider, expanded = true, isStreaming = false, onUndoFile, onDiscardAll, onKeepAll }: StatusPanelProps) => {
   const { t } = useTranslation();
   const [openPopover, setOpenPopover] = useState<TabType | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -205,9 +205,9 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
   const renderPopoverContent = () => {
     switch (openPopover) {
       case 'todo':
-        return <TodoList todos={todos} />;
+        return <TodoList todos={todos} isStreaming={isStreaming} />;
       case 'subagent':
-        return <SubagentList subagents={subagents} histories={subagentHistories} currentSessionId={currentSessionId} isStreaming={isStreaming} />;
+        return <SubagentList subagents={subagents} histories={subagentHistories} currentSessionId={currentSessionId} currentProvider={currentProvider} isStreaming={isStreaming} />;
       case 'files':
         return (
           <FileChangesList
@@ -234,7 +234,9 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
           onClick={() => handleTabClick('todo')}
         >
           <span className="codicon codicon-checklist" />
-          <span className="tab-label">{t('statusPanel.tasksTab')}</span>
+          <span className="tab-label">
+            {t(currentProvider === 'codex' ? 'statusPanel.todoTab' : 'statusPanel.tasksTab')}
+          </span>
           {hasTodos && (
             <span className="tab-progress">
               {completedCount}/{totalCount}

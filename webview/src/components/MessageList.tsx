@@ -1,12 +1,12 @@
-import { memo, useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle, useLayoutEffect } from 'react';
+import { memo, useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, ClaudeContentBlock, CodexHistoryPageInfo, ToolResultBlock } from '../types';
-import { getMessageKey } from '../utils/messageUtils';
 import { sendBridgeEvent } from '../utils/bridge';
 import { MessageItem } from './MessageItem';
 import WaitingIndicator from './WaitingIndicator';
 import { ContextMenu } from './ContextMenu';
 import { useContextMenu, copySelection } from '../hooks/useContextMenu.js';
+import { quoteToChatInput } from '../utils/quoteUtils';
 import type { MessageListRevealHandle } from './ConversationSearch/types';
 import {
   DETAILED_OUTPUT_ENABLED_EVENT,
@@ -47,58 +47,6 @@ function getFirstMessageBoundaryKey(message: ClaudeMessage | undefined): string 
   return `content:${message.type}:${message.content ?? ''}`;
 }
 
-interface MessageRenderKeySnapshot {
-  keys: string[];
-  identityToKey: Map<string, string>;
-}
-
-function keepMessageRenderKeysSteady(
-  messages: ClaudeMessage[],
-  rememberedIdentities: ReadonlyMap<string, string>,
-): MessageRenderKeySnapshot {
-  const turnOccurrences = new Map<number, number>();
-  const identityToKey = new Map<string, string>();
-
-  const keys = messages.map((message, index) => {
-    const rawUuid = typeof message.raw === 'object'
-      && message.raw !== null
-      && typeof message.raw.uuid === 'string'
-      && message.raw.uuid.length > 0
-      ? message.raw.uuid
-      : undefined;
-    const uuidIdentity = rawUuid ? `uuid:${rawUuid}` : undefined;
-    let turnIdentity: string | undefined;
-    let defaultTurnKey: string | undefined;
-
-    if (typeof message.__turnId === 'number') {
-      const occurrence = turnOccurrences.get(message.__turnId) ?? 0;
-      turnOccurrences.set(message.__turnId, occurrence + 1);
-      turnIdentity = `turn:${message.__turnId}:${occurrence}`;
-      defaultTurnKey = occurrence === 0
-        ? `turn-${message.__turnId}`
-        : `turn-${message.__turnId}-${occurrence}`;
-    }
-
-    // A streaming placeholder starts without a backend UUID. When the tool-use
-    // snapshot arrives, raw.uuid is added while __turnId continues to identify
-    // the same live bubble. Keep the turn key during that identity enrichment
-    // so React preserves MessageItem's thinking expansion state. Remember both
-    // identities once they meet, which also keeps UUID-first replay messages
-    // mounted when a runtime turn ID is attached later.
-    const rememberedKey = (turnIdentity && rememberedIdentities.get(turnIdentity))
-      || (uuidIdentity && rememberedIdentities.get(uuidIdentity));
-    const renderKey = rememberedKey
-      || (rawUuid ? getMessageKey(message, index) : defaultTurnKey)
-      || getMessageKey(message, index);
-
-    if (turnIdentity) identityToKey.set(turnIdentity, renderKey);
-    if (uuidIdentity) identityToKey.set(uuidIdentity, renderKey);
-    return renderKey;
-  });
-
-  return { keys, identityToKey };
-}
-
 function extractToolResultPreview(result: ToolResultBlock | null | undefined): string {
   if (!result) return 'pending';
 
@@ -134,6 +82,7 @@ function getMessageToolResultSignature(
 
 interface MessageListProps {
   messages: ClaudeMessage[];
+  messageKeys: readonly string[];
   streamingActive: boolean;
   isThinking: boolean;
   loading: boolean;
@@ -151,11 +100,16 @@ interface MessageListProps {
   onNavigateToDependencySettings?: () => void;
   /** Current active provider id; forwarded to MessageItem for streaming-connect label. */
   currentProvider?: string;
+  /** Callback when user clicks the rollback button on a user message */
+  onRollbackUserMessage?: (messageIndex: number, message: ClaudeMessage) => void;
+  /** Whether a rollback operation is currently in progress */
+  isRollingBack?: boolean;
   currentSessionId?: string | null;
 }
 
 export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListProps>(function MessageList({
   messages,
+  messageKeys,
   streamingActive,
   isThinking,
   loading,
@@ -171,6 +125,8 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
   onNavigateToProviderSettings,
   onNavigateToDependencySettings,
   currentProvider,
+  onRollbackUserMessage,
+  isRollingBack = false,
   currentSessionId,
 }, ref) {
   const [revealedTurnCount, setRevealedTurnCount] = useState(0);
@@ -181,14 +137,33 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
     getDetailedOutputEnabled()
   );
 
-  // Context menu for message list (copy only, when text selected)
+  // Context menu for message list (copy + quote, when text selected)
   const ctxMenu = useContextMenu();
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
   const handleMessageContextMenu = useCallback((e: React.MouseEvent) => {
     const sel = window.getSelection();
     if (sel && sel.toString().trim().length > 0) {
       ctxMenu.open(e);
     }
   }, [ctxMenu.open]);
+
+  // Hotkey (Ctrl/Cmd+Shift+Q): quote the current selection when it lives inside the message list.
+  useEffect(() => {
+    const handleQuoteHotkey = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'q' || !event.shiftKey || !(event.ctrlKey || event.metaKey)) return;
+      const sel = window.getSelection();
+      const selectedText = sel?.toString() ?? '';
+      if (!selectedText.trim()) return;
+      const anchor = sel?.anchorNode ?? null;
+      const anchorElement = anchor instanceof Element ? anchor : anchor?.parentElement ?? null;
+      if (!containerRef.current || !anchorElement || !containerRef.current.contains(anchorElement)) return;
+      event.preventDefault();
+      quoteToChatInput(selectedText);
+    };
+    window.addEventListener('keydown', handleQuoteHotkey);
+    return () => window.removeEventListener('keydown', handleQuoteHotkey);
+  }, []);
 
   // Use explicit session identity in production; keep the message boundary for isolated callers/tests.
   const previousSessionRef = useRef(currentSessionId);
@@ -293,7 +268,7 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
   }), [collapsedCount, userTurnStartIndexes.length]);
 
   // Notify parent of collapsed count changes (for anchor rail sync)
-  useEffect(() => {
+  useLayoutEffect(() => {
     onCollapsedCountChange?.(collapsedCount);
   }, [collapsedCount, onCollapsedCountChange]);
 
@@ -312,23 +287,15 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
     () => (shouldCollapse ? messages.slice(collapsedCount) : messages),
     [messages, shouldCollapse, collapsedCount]
   );
-  const rememberedMessageKeysRef = useRef<ReadonlyMap<string, string>>(new Map());
-  const messageRenderKeySnapshot = useMemo(
-    () => keepMessageRenderKeysSteady(messages, rememberedMessageKeysRef.current),
-    [messages],
-  );
-  useLayoutEffect(() => {
-    rememberedMessageKeysRef.current = messageRenderKeySnapshot.identityToKey;
-  }, [messageRenderKeySnapshot]);
-
   return (
-    <div onContextMenu={handleMessageContextMenu}>
+    <div ref={containerRef} onContextMenu={handleMessageContextMenu}>
       {ctxMenu.visible && (
         <ContextMenu
           x={ctxMenu.x}
           y={ctxMenu.y}
           onClose={ctxMenu.close}
           items={[
+            { label: t('contextMenu.quote', 'Quote'), action: () => quoteToChatInput(ctxMenu.selectedText) },
             { label: t('contextMenu.copy', 'Copy'), action: () => copySelection(ctxMenu.savedRange, ctxMenu.selectedText) },
           ]}
         />
@@ -356,7 +323,7 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
 
       {visibleMessages.map((message, visibleIndex) => {
         const messageIndex = shouldCollapse ? visibleIndex + collapsedCount : visibleIndex;
-        const messageKey = messageRenderKeySnapshot.keys[messageIndex];
+        const messageKey = messageKeys[messageIndex];
         const toolResultSignature = getMessageToolResultSignature(message, messageIndex, getContentBlocks, findToolResult);
 
         return (
@@ -378,6 +345,8 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
             onNavigateToDependencySettings={onNavigateToDependencySettings}
             toolResultSignature={toolResultSignature}
             currentProvider={currentProvider}
+            onRollback={onRollbackUserMessage}
+            isRollingBack={isRollingBack}
             detailedOutputEnabled={detailedOutputEnabled}
           />
         );

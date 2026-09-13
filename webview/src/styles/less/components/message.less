@@ -117,6 +117,69 @@
     line-height: 1;
 }
 
+/* Rollback button — always visible inline. top: 8px mirrors the copy
+   button's inherited offset from .message-copy-btn so the two align. */
+.message-rollback-btn {
+    position: relative;
+    top: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 2px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: color 0.2s ease, background 0.2s ease;
+    opacity: 0.7;
+    border-radius: 3px;
+    flex-shrink: 0;
+    vertical-align: middle;
+
+    &:hover {
+        opacity: 1;
+        color: var(--color-accent, #d4a574);
+        background: rgba(128, 128, 128, 0.1);
+    }
+
+    .rollback-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        svg {
+            width: 14px;
+            height: 14px;
+        }
+    }
+
+    .rollback-tooltip {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: -4px;
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        border: 1px solid var(--border-secondary);
+        box-shadow: var(--shadow-sm);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+        pointer-events: none;
+        white-space: nowrap;
+        z-index: 20;
+    }
+
+    &:hover .rollback-tooltip {
+        opacity: 1;
+        visibility: visible;
+    }
+}
+
 /* Assistant Message: Row layout for alignment */
 .message.assistant {
     background: transparent;
@@ -203,13 +266,18 @@
     }
 }
 
+/* Quote button sits to the left of the absolute copy button on assistant messages */
+.message-quote-btn {
+    right: 44px;
+}
+
 /* Inline copy button for user messages (in header row) */
 .message-copy-btn-inline {
     position: relative;
     width: 20px;
     height: 20px;
-    opacity: 0.7;
-    visibility: visible;
+    opacity: 0;
+    visibility: hidden;
     bottom: auto;
     right: auto;
     padding: 2px;
@@ -255,13 +323,21 @@
     }
 }
 
+/* Show inline action buttons on user message hover */
+.message.user {
+    &:hover .message-copy-btn-inline {
+        opacity: 0.7;
+        visibility: visible;
+    }
+
+    &:hover .message-copy-btn-inline:hover {
+        opacity: 1;
+    }
+}
+
 /* Mobile responsiveness for copy button */
 @media (max-width: 768px) {
     .message-copy-btn {
-        /* Show button by default on mobile */
-        opacity: 0.7;
-        visibility: visible;
-
         /* Smaller button size for mobile */
         width: 24px;
         height: 24px;
@@ -270,6 +346,15 @@
             width: 12px;
             height: 12px;
         }
+    }
+}
+
+/* Touch devices have no hover — keep action buttons visible */
+@media (hover: none) {
+    .message-copy-btn,
+    .message-copy-btn-inline {
+        opacity: 0.7;
+        visibility: visible;
     }
 }
 
@@ -596,6 +681,8 @@
 .text-block {
     white-space: pre-wrap;
     word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 /* Markdown Content */
@@ -604,6 +691,7 @@
     line-height: 1.6;
     color: var(--text-primary);
     word-wrap: break-word;
+    word-break: break-word;
     overflow-wrap: break-word;
     cursor: text;
 }
@@ -618,11 +706,28 @@
 .markdown-content p {
     margin-bottom: 10px;
     word-wrap: break-word;
+    word-break: break-word;
     overflow-wrap: break-word;
     max-width: 100%;
 }
 
 .markdown-content p:last-child {
+    margin-bottom: 0;
+}
+
+/* Block-memoized streaming render: each top-level markdown block is wrapped
+   in .md-block. Keep paragraph spacing between blocks identical to the old
+   single-document render — only the message's final paragraph drops its
+   bottom margin. */
+.markdown-content .md-block > p:last-child {
+    margin-bottom: 10px;
+}
+
+.markdown-content > .md-block:last-child > p:last-child {
+    margin-bottom: 0;
+}
+
+.thinking-content .markdown-content .md-block > p:last-child {
     margin-bottom: 0;
 }
 
@@ -900,6 +1005,20 @@
 
 .message.user .markdown-content a {
     color: inherit;
+}
+
+/* @ file-reference links rendered by CollapsibleTextBlock live in
+   .plain-text-content, not .markdown-content — give them the same
+   treatment: inherit the bubble text color, dotted underline, pointer. */
+.message.user .plain-text-content a.file-link {
+    color: inherit;
+    text-decoration-style: dotted;
+    cursor: pointer;
+}
+
+.message.user .plain-text-content a.file-link:hover {
+    text-decoration-thickness: 2px;
+    opacity: 0.95;
 }
 
 /* 表格容器 - 处理溢出 */

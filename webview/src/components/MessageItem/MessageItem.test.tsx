@@ -16,6 +16,7 @@ vi.mock('../toolBlocks', () => ({
   BashToolBlock: () => <div data-testid="bash-tool-block">bash</div>,
   BashToolGroupBlock: () => <div data-testid="bash-tool-group-block">bash-group</div>,
   SearchToolGroupBlock: () => <div data-testid="search-tool-group-block">search-group</div>,
+  AgentGroupBlock: () => <div data-testid="agent-group-block">agent</div>,
 }));
 
 vi.mock('./ContentBlockRenderer', () => ({
@@ -161,6 +162,42 @@ describe('MessageItem copy button visibility', () => {
 
     expect(screen.getByTestId('bash-tool-group-block')).toBeTruthy();
     expect(screen.queryAllByTestId('content-block-tool_use')).toHaveLength(0);
+  });
+  it('keeps the Agent block mounted when its tool id arrives later', () => {
+    const makeMessage = (id?: string): ClaudeMessage => ({
+      type: 'assistant',
+      raw: {
+        content: [{
+          type: 'tool_use',
+          ...(id ? { id } : {}),
+          name: 'Task',
+          input: { description: 'Inspect the project' },
+        }],
+      },
+    } as unknown as ClaudeMessage);
+
+    const renderAgentMessage = (message: ClaudeMessage) => (
+      <MessageItem
+        message={message}
+        messageIndex={0}
+        messageKey="message-0"
+        isLast
+        streamingActive
+        isThinking={false}
+        t={t}
+        getMessageText={getMessageText}
+        getContentBlocks={getContentBlocks}
+        findToolResult={findToolResult}
+        extractMarkdownContent={extractMarkdownContent}
+      />
+    );
+
+    const { rerender } = render(renderAgentMessage(makeMessage()));
+    const initialBlock = screen.getByTestId('agent-group-block');
+
+    rerender(renderAgentMessage(makeMessage('tool-1')));
+
+    expect(screen.getByTestId('agent-group-block')).toBe(initialBlock);
   });
 });
 

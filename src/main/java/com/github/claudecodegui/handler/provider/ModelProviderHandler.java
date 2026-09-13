@@ -5,7 +5,9 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.session.SessionSendService;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
+import com.github.claudecodegui.provider.CustomModelContextWindowProvider;
 import com.github.claudecodegui.util.EditorFileUtils;
+import com.github.claudecodegui.util.TokenUsageUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -63,6 +65,17 @@ public class ModelProviderHandler {
         MODEL_CONTEXT_LIMITS.put("o1", 200_000);
         MODEL_CONTEXT_LIMITS.put("o1-mini", 128_000);
         MODEL_CONTEXT_LIMITS.put("o1-preview", 128_000);
+
+        // Grok models (xAI)
+        MODEL_CONTEXT_LIMITS.put("grok-2", 128_000);
+        MODEL_CONTEXT_LIMITS.put("grok-2-latest", 128_000);
+        MODEL_CONTEXT_LIMITS.put("grok-beta", 128_000);
+        MODEL_CONTEXT_LIMITS.put("grok", 500_000);
+        MODEL_CONTEXT_LIMITS.put("grok-1.5", 128_000);
+        MODEL_CONTEXT_LIMITS.put("grok-4.6", 500_000);
+        MODEL_CONTEXT_LIMITS.put("grok-4.5", 500_000); // legacy alias
+        MODEL_CONTEXT_LIMITS.put("grok-4", 500_000);
+        MODEL_CONTEXT_LIMITS.put("grok-build", 500_000);
     }
 
     private final HandlerContext context;
@@ -88,28 +101,54 @@ public class ModelProviderHandler {
                 }
             }
 
-            LOG.info("[ModelProviderHandler] Setting model to: " + model);
+            String previousModel = resolveCurrentSessionModel(context);
+            boolean modelChanged = isActualModelSwitch(previousModel, model);
+            LOG.info("[ModelProviderHandler] Setting model to: " + model
+                    + " (was: " + previousModel + ")");
             context.setCurrentModel(model);
 
             if (context.getSession() != null) {
                 context.getSession().setModel(model);
+                if (modelChanged) {
+                    TokenUsageUtils.clearContextUsageFromSessionMessages(
+                            context.getSession().getMessages());
+                }
                 LOG.info("[ModelProviderHandler] Updated session model to canonical ID: " + model);
             }
 
-            com.github.claudecodegui.notifications.ClaudeNotifier.setModel(context.getProject(), model);
+            if (modelChanged) {
+                usagePushService.clearUsageDisplay();
+            }
 
-            String resolvedModelForUsage = resolveConfiguredClaudeModelFromSettings(model);
-            int newMaxTokens = getModelContextLimit(resolvedModelForUsage);
+            if (context.getProject() != null) {
+                com.github.claudecodegui.notifications.ClaudeNotifier.setModel(context.getProject(), model);
+            }
+
+            String provider = context.getCurrentProvider();
+            boolean isCodex = "codex".equalsIgnoreCase(provider);
+            String resolvedModelForUsage = isCodex ? model : resolveConfiguredClaudeModelFromSettings(model);
+            int newMaxTokens = isCodex
+                    ? getModelContextLimit(provider, model)
+                    : getModelContextLimit(resolvedModelForUsage);
             LOG.info("[ModelProviderHandler] Model context limit: " + newMaxTokens
                     + " tokens for selected model: " + model
                     + ", resolved model: " + resolvedModelForUsage);
 
             final String confirmedModel = model;
             final String confirmedProvider = context.getCurrentProvider();
-            ApplicationManager.getApplication().invokeLater(() -> {
+            Runnable confirmModel = () -> {
                 context.callJavaScript("window.onModelConfirmed", context.escapeJs(confirmedModel), context.escapeJs(confirmedProvider));
-                usagePushService.pushUsageUpdateAfterModelChange(newMaxTokens);
-            });
+                if (modelChanged) {
+                    usagePushService.pushUsageUpdateAfterModelChange(newMaxTokens);
+                }
+            };
+            if (ApplicationManager.getApplication() != null) {
+                ApplicationManager.getApplication().invokeLater(confirmModel);
+            } else {
+                // Plain unit tests have no IntelliJ Application; keep the state
+                // transition testable without changing the IDE's EDT behavior.
+                confirmModel.run();
+            }
         } catch (Exception e) {
             LOG.error("[ModelProviderHandler] Failed to set model: " + e.getMessage(), e);
         }
@@ -132,12 +171,21 @@ public class ModelProviderHandler {
             // Capture previous provider BEFORE mutating context so we can detect
             // the leave-claude transition that needs daemon cleanup.
             String previousProvider = context.getCurrentProvider();
+            boolean providerChanged = isActualProviderSwitch(previousProvider, provider);
             LOG.info("[ModelProviderHandler] Setting provider to: " + provider
                     + " (was: " + previousProvider + ")");
             context.setCurrentProvider(provider);
 
             if (context.getSession() != null) {
                 context.getSession().setProvider(provider);
+                if (providerChanged) {
+                    TokenUsageUtils.clearContextUsageFromSessionMessages(
+                            context.getSession().getMessages());
+                }
+            }
+
+            if (providerChanged) {
+                usagePushService.clearUsageDisplay();
             }
 
             // Bug fix (Node process leak L2): when the tab moves AWAY from Claude
@@ -182,6 +230,45 @@ public class ModelProviderHandler {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Return whether a provider command represents a real cross-provider switch.
+     * Null/empty initialization values and same-provider reaffirmations are no-ops.
+     */
+    static boolean isActualProviderSwitch(String previousProvider, String newProvider) {
+        return previousProvider != null
+                && newProvider != null
+                && !previousProvider.isEmpty()
+                && !newProvider.isEmpty()
+                && !previousProvider.equals(newProvider);
+    }
+
+    /**
+     * Return whether a model command represents a real model transition.
+     * Null/empty initialization values and same-model reaffirmations are no-ops.
+     */
+    static boolean isActualModelSwitch(String previousModel, String newModel) {
+        return previousModel != null
+                && newModel != null
+                && !previousModel.isEmpty()
+                && !newModel.isEmpty()
+                && !previousModel.equals(newModel);
+    }
+
+    /**
+     * Resolve the authoritative model before processing a frontend model command.
+     * A restored session may already own the saved model while the handler context
+     * still contains its startup default, so session state takes precedence.
+     */
+    static String resolveCurrentSessionModel(HandlerContext context) {
+        if (context != null && context.getSession() != null) {
+            String sessionModel = context.getSession().getModel();
+            if (sessionModel != null && !sessionModel.isEmpty()) {
+                return sessionModel;
+            }
+        }
+        return context == null ? null : context.getCurrentModel();
     }
 
     /**
@@ -315,7 +402,7 @@ public class ModelProviderHandler {
         return baseModel;
     }
 
-    static String resolveConfiguredClaudeModel(String baseModel, JsonObject env) {
+    public static String resolveConfiguredClaudeModel(String baseModel, JsonObject env) {
         if (baseModel == null || baseModel.isEmpty() || env == null) {
             return baseModel;
         }
@@ -386,4 +473,11 @@ public class ModelProviderHandler {
 
         return MODEL_CONTEXT_LIMITS.getOrDefault(model, 200_000);
     }
+
+    public static int getModelContextLimit(String provider, String model) {
+        return CustomModelContextWindowProvider.getInstance()
+                .getContextWindow(provider, model)
+                .orElseGet(() -> getModelContextLimit(model));
+    }
+
 }

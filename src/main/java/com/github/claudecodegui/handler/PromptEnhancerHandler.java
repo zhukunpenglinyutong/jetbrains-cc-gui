@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -37,12 +38,16 @@ import java.util.concurrent.atomic.AtomicReference;
 public class PromptEnhancerHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(PromptEnhancerHandler.class);
-    private final Gson gson = new Gson();
+    private static final Gson GSON = new Gson();
+    private final Gson gson = GSON;
     private final EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
 
-    // Hard timeout for the enhancement Node.js process. Without this, a network-stalled
-    // SDK call would block the calling thread forever and leak the child process.
-    private static final long ENHANCE_TIMEOUT_SECONDS = 60;
+    // Hard timeout bounds for the enhancement Node.js process. Without a timeout, a
+    // network-stalled SDK call would block forever and leak the child process.
+    // Short prompts stay snappy; long plain-language requirements get more headroom.
+    private static final long ENHANCE_TIMEOUT_BASE_SECONDS = 45;
+    private static final long ENHANCE_TIMEOUT_MAX_SECONDS = 120;
+    private static final int ENHANCE_TIMEOUT_CHARS_PER_EXTRA_SECOND = 400;
     // Grace window after the process exits, for the async reader thread to drain stdout.
     private static final long READER_DRAIN_SECONDS = 5;
 
@@ -132,15 +137,22 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
                 JsonObject payload = gson.fromJson(content, JsonObject.class);
                 String originalPrompt = payload.has("prompt") ? payload.get("prompt").getAsString() : "";
                 String legacyModel = payload.has("model") ? payload.get("model").getAsString() : null;
+                // Current chat selection — used in auto mode so enhancer follows the chat model.
+                String chatProvider = readOptionalString(payload, "chatProvider");
+                String chatModel = readOptionalString(payload, "chatModel");
 
                 if (originalPrompt.isEmpty()) {
-                    sendEnhanceResult(false, "", "Prompt is empty");
+                    sendEnhanceResult(false, "", "Prompt is empty", true, null);
                     return;
                 }
 
                 LOG.info("[PromptEnhancer] Starting prompt enhancement: " + originalPrompt.substring(0, Math.min(50, originalPrompt.length())) + "...");
                 if (legacyModel != null) {
                     LOG.info("[PromptEnhancer] Received legacy model from frontend: " + legacyModel);
+                }
+                if (chatProvider != null || chatModel != null) {
+                    LOG.info("[PromptEnhancer] Chat selection: provider="
+                            + chatProvider + ", model=" + chatModel);
                 }
 
                 // Automatically collect context information from the editor
@@ -176,23 +188,67 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
                     LOG.info("[PromptEnhancer] Failed to collect editor context");
                 }
 
-                // Call AI service for enhancement (passing context information)
-                JsonObject promptEnhancerConfig = context.getSettingsService().getPromptEnhancerConfig();
-                String enhancedPrompt = callAIForEnhancement(originalPrompt, legacyModel, contextObj, promptEnhancerConfig);
+                // Auto mode follows the current chat provider when that CLI is available.
+                JsonObject promptEnhancerConfig = context.getSettingsService()
+                        .getPromptEnhancerConfig(context.getCurrentProvider());
+                // Push usage meta immediately so the dialog can show mode/CLI/model
+                // while the enhancement is still running.
+                JsonObject usageMeta = buildUsageMeta(promptEnhancerConfig, chatProvider, chatModel);
+                sendEnhanceResult(true, "", null, false, usageMeta);
 
-                if (enhancedPrompt != null && !enhancedPrompt.isEmpty()) {
-                    LOG.info("[PromptEnhancer] Enhancement successful");
-                    sendEnhanceResult(true, enhancedPrompt, null);
+                EnhanceOutcome outcome = callAIForEnhancement(
+                        originalPrompt, legacyModel, contextObj, promptEnhancerConfig,
+                        chatProvider, chatModel);
+
+                if (outcome.success && outcome.text != null && !outcome.text.isEmpty()) {
+                    LOG.info("[PromptEnhancer] Enhancement successful"
+                            + (outcome.partial ? " (partial)" : ""));
+                    // Surface partial-cause (e.g. timeout) so the user knows the
+                    // result was truncated instead of silently accepting it.
+                    sendEnhanceResult(true, outcome.text,
+                            outcome.partial ? outcome.error : null, true, usageMeta);
+                } else if (outcome.text != null && !outcome.text.isEmpty()) {
+                    // Failed but we already streamed partial text — keep it usable.
+                    LOG.warn("[PromptEnhancer] Enhancement incomplete: " + outcome.error);
+                    sendEnhanceResult(true, outcome.text, outcome.error, true, usageMeta);
                 } else {
-                    LOG.warn("[PromptEnhancer] Enhancement failed: empty result returned");
-                    sendEnhanceResult(false, "", "Enhancement failed: empty result returned");
+                    LOG.warn("[PromptEnhancer] Enhancement failed: "
+                            + (outcome.error != null ? outcome.error : "empty result returned"));
+                    sendEnhanceResult(false, "",
+                            outcome.error != null ? outcome.error : "Enhancement failed: empty result returned",
+                            true, usageMeta);
                 }
 
             } catch (Exception e) {
                 LOG.error("[PromptEnhancer] Prompt enhancement failed: " + e.getMessage(), e);
-                sendEnhanceResult(false, "", "Enhancement failed: " + e.getMessage());
+                sendEnhanceResult(false, "", "Enhancement failed: " + e.getMessage(), true, null);
             }
         });
+    }
+
+    /**
+     * Dynamic wall-clock timeout: base + 1s per N chars of the user prompt, capped.
+     * Exposed package-private for unit tests.
+     */
+    static long computeEnhanceTimeoutSeconds(int promptLength) {
+        long extra = Math.max(0, promptLength) / (long) ENHANCE_TIMEOUT_CHARS_PER_EXTRA_SECOND;
+        return Math.min(ENHANCE_TIMEOUT_MAX_SECONDS, Math.max(ENHANCE_TIMEOUT_BASE_SECONDS,
+                ENHANCE_TIMEOUT_BASE_SECONDS + extra));
+    }
+
+    /** Result of a single enhance process run. */
+    static final class EnhanceOutcome {
+        final boolean success;
+        final boolean partial;
+        final String text;
+        final String error;
+
+        EnhanceOutcome(boolean success, boolean partial, String text, String error) {
+            this.success = success;
+            this.partial = partial;
+            this.text = text;
+            this.error = error;
+        }
     }
 
     /**
@@ -349,25 +405,106 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
      * availability/resolution metadata).
      */
     private static String describePromptEnhancerConfig(JsonObject promptEnhancerConfig) {
-        if (promptEnhancerConfig == null) {
+        JsonObject meta = buildUsageMeta(promptEnhancerConfig);
+        if (meta == null) {
             return "none";
         }
+        String provider = meta.has("provider") && !meta.get("provider").isJsonNull()
+                ? meta.get("provider").getAsString()
+                : "unresolved";
+        String model = meta.has("model") && !meta.get("model").isJsonNull()
+                ? meta.get("model").getAsString()
+                : "default";
+        return provider + ", model: " + model;
+    }
+
+    /**
+     * Extract the mode / CLI / model actually used for this enhance request so the
+     * webview dialog can display them. Package-private for unit tests.
+     *
+     * @return a JsonObject with {@code provider}, {@code model}, {@code resolutionSource}
+     *         (any field may be omitted / null when unresolved)
+     */
+    static JsonObject buildUsageMeta(JsonObject promptEnhancerConfig) {
+        return buildUsageMeta(promptEnhancerConfig, null, null);
+    }
+
+    /**
+     * Same as {@link #buildUsageMeta(JsonObject)} but, in auto mode, prefers the
+     * chat-input model when {@code chatProvider} matches the resolved enhancer provider.
+     */
+    static JsonObject buildUsageMeta(
+            JsonObject promptEnhancerConfig,
+            String chatProvider,
+            String chatModel
+    ) {
+        JsonObject meta = new JsonObject();
+        if (promptEnhancerConfig == null) {
+            meta.addProperty("resolutionSource", "unavailable");
+            return meta;
+        }
+
+        String resolutionSource = "auto";
+        if (promptEnhancerConfig.has("resolutionSource")
+                && !promptEnhancerConfig.get("resolutionSource").isJsonNull()) {
+            resolutionSource = promptEnhancerConfig.get("resolutionSource").getAsString();
+        }
+        meta.addProperty("resolutionSource", resolutionSource);
+
         String provider = null;
         if (promptEnhancerConfig.has("effectiveProvider")
                 && !promptEnhancerConfig.get("effectiveProvider").isJsonNull()) {
             provider = promptEnhancerConfig.get("effectiveProvider").getAsString();
         }
+        if (provider != null && !provider.isEmpty()) {
+            meta.addProperty("provider", provider);
+        }
+
         String model = null;
         if (provider != null
                 && promptEnhancerConfig.has("models")
                 && promptEnhancerConfig.get("models").isJsonObject()) {
             JsonObject models = promptEnhancerConfig.getAsJsonObject("models");
             if (models.has(provider) && !models.get(provider).isJsonNull()) {
-                model = models.get(provider).getAsString();
+                String configured = models.get(provider).getAsString();
+                if (configured != null && !configured.isEmpty()) {
+                    model = configured;
+                }
             }
         }
-        return (provider != null ? provider : "unresolved")
-                + ", model: " + (model != null ? model : "default");
+
+        // Auto mode: follow the model currently selected in the chat input when
+        // the enhancer resolved to the same provider as the chat session.
+        if ("auto".equals(resolutionSource)
+                && provider != null
+                && chatProvider != null
+                && !chatProvider.isBlank()
+                && chatModel != null
+                && !chatModel.isBlank()
+                && provider.trim().equalsIgnoreCase(chatProvider.trim())) {
+            model = chatModel.trim();
+        }
+
+        if (model != null && !model.isEmpty()) {
+            meta.addProperty("model", model);
+        }
+        return meta;
+    }
+
+    private static String readOptionalString(JsonObject payload, String key) {
+        if (payload == null || !payload.has(key) || payload.get(key).isJsonNull()) {
+            return null;
+        }
+        try {
+            String value = payload.get(key).getAsString();
+            if (value == null) {
+                return null;
+            }
+            String trimmed = value.trim();
+            return trimmed.isEmpty() ? null : trimmed;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
@@ -377,11 +514,13 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
      * @param contextObj context information (optional)
      * @param promptEnhancerConfig resolved prompt enhancer configuration
      */
-    private String callAIForEnhancement(
+    private EnhanceOutcome callAIForEnhancement(
             String originalPrompt,
             String legacyModel,
             JsonObject contextObj,
-            JsonObject promptEnhancerConfig
+            JsonObject promptEnhancerConfig,
+            String chatProvider,
+            String chatModel
     ) {
         LOG.info("[PromptEnhancer] Starting AI service call for prompt enhancement");
         LOG.info("[PromptEnhancer] Original prompt: " + originalPrompt);
@@ -392,14 +531,14 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
             String nodeExecutable = context.getClaudeSDKBridge().getNodeExecutable();
             if (nodeExecutable == null) {
                 LOG.error("[PromptEnhancer] Node.js is not configured");
-                return null;
+                return new EnhanceOutcome(false, false, null, "Node.js is not configured");
             }
             LOG.info("[PromptEnhancer] Node.js path: " + nodeExecutable);
 
             File bridgeDir = context.getClaudeSDKBridge().getSdkTestDir();
             if (bridgeDir == null || !bridgeDir.exists()) {
                 LOG.error("[PromptEnhancer] AI Bridge directory does not exist");
-                return null;
+                return new EnhanceOutcome(false, false, null, "AI Bridge directory does not exist");
             }
             LOG.info("[PromptEnhancer] AI Bridge directory: " + bridgeDir.getAbsolutePath());
 
@@ -411,6 +550,9 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.directory(bridgeDir);
+            // Merge stderr into stdout so the async reader drains both and the
+            // child cannot block on a full stderr pipe. Protocol markers are
+            // prefix-matched, so log lines are ignored safely.
             pb.redirectErrorStream(true);
 
             // Set environment variables
@@ -423,6 +565,12 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
             if (legacyModel != null && !legacyModel.isEmpty()) {
                 stdinInput.addProperty("legacyModel", legacyModel);
             }
+            if (chatProvider != null && !chatProvider.isEmpty()) {
+                stdinInput.addProperty("chatProvider", chatProvider);
+            }
+            if (chatModel != null && !chatModel.isEmpty()) {
+                stdinInput.addProperty("chatModel", chatModel);
+            }
             if (contextObj != null) {
                 stdinInput.add("context", contextObj);
             }
@@ -430,59 +578,189 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
                 stdinInput.add("promptEnhancerConfig", promptEnhancerConfig);
             }
 
+            long timeoutSeconds = computeEnhanceTimeoutSeconds(
+                    originalPrompt != null ? originalPrompt.length() : 0);
+            LOG.info("[PromptEnhancer] Timeout: " + timeoutSeconds + "s");
+
             // Delegate to the runner so that:
             //  1. The process is registered with ProcessManager (cleanup on shutdown).
-            //  2. A hard 60s timeout actually kills hung Node processes.
+            //  2. A hard timeout actually kills hung Node processes.
             //  3. The process is unregistered + force-killed in finally on every exit path.
-            // The original code lacked all three, leaking child processes forever when
-            // the SDK call hung on a stalled network connection.
+            // Streaming: [CONTENT_DELTA] lines are pushed to the webview as they arrive.
             ProcessManager processManager = context.getClaudeSDKBridge().getProcessManager();
             StringBuilder response = new StringBuilder();
+            StringBuilder streamed = new StringBuilder();
+            StringBuilder errorMessage = new StringBuilder();
             StringBuilder allOutput = new StringBuilder();
+            final Object streamLock = new Object();
+            final AtomicReference<String> latestPreview = new AtomicReference<>("");
+            final AtomicBoolean progressScheduled = new AtomicBoolean(false);
+            // Set once the process run ends (success/timeout/failure); late reader
+            // output after drain timeout must not overwrite the final result.
+            final AtomicBoolean finished = new AtomicBoolean(false);
+            final JsonObject usageMeta = buildUsageMeta(promptEnhancerConfig, chatProvider, chatModel);
+
             try {
                 int exitCode = PromptEnhancerProcessRunner.runWithProcessManager(
                         pb,
                         processManager,
                         gson.toJson(stdinInput),
-                        ENHANCE_TIMEOUT_SECONDS,
+                        timeoutSeconds,
                         READER_DRAIN_SECONDS,
                         line -> {
-                            allOutput.append(line).append("\n");
+                            synchronized (streamLock) {
+                                allOutput.append(line).append("\n");
+                            }
                             LOG.info("[PromptEnhancer] Node.js: " + line);
-                            if (line.startsWith("[ENHANCED]")) {
+                            if (line.startsWith("[CONTENT_DELTA]")) {
+                                String payload = line.substring("[CONTENT_DELTA]".length()).trim();
+                                String delta = parseJsonStringPayload(payload);
+                                if (delta != null && !delta.isEmpty()) {
+                                    synchronized (streamLock) {
+                                        streamed.append(delta);
+                                        latestPreview.set(streamed.toString());
+                                    }
+                                    scheduleEnhanceProgress(latestPreview, progressScheduled, finished, usageMeta);
+                                }
+                            } else if (line.startsWith("[ENHANCED_ERROR]")) {
+                                String err = line.substring("[ENHANCED_ERROR]".length()).trim();
+                                if (!err.isEmpty()) {
+                                    synchronized (streamLock) {
+                                        errorMessage.append(err);
+                                    }
+                                }
+                            } else if (line.startsWith("[ENHANCED]")) {
                                 String enhancedText = line.substring("[ENHANCED]".length()).trim();
                                 enhancedText = enhancedText.replace("{{NEWLINE}}", "\n");
-                                response.append(enhancedText);
+                                synchronized (streamLock) {
+                                    response.append(enhancedText);
+                                }
                             }
                         }
                 );
                 LOG.info("[PromptEnhancer] Node.js process exit code: " + exitCode);
+
+                finished.set(true);
+                // Reads must hold streamLock: on drain timeout the reader thread
+                // may still be alive and appending to these builders.
+                final String finalText;
+                final String errorText;
+                final String outputSnapshot;
+                synchronized (streamLock) {
+                    finalText = response.length() > 0
+                            ? response.toString()
+                            : streamed.toString();
+                    errorText = errorMessage.toString();
+                    outputSnapshot = allOutput.toString();
+                }
+                if (errorText.length() > 0) {
+                    if (finalText != null && !finalText.isEmpty()) {
+                        return new EnhanceOutcome(false, true, finalText, errorText);
+                    }
+                    return new EnhanceOutcome(false, false, null, errorText);
+                }
+                if (finalText == null || finalText.isEmpty()) {
+                    if (!outputSnapshot.isEmpty()) {
+                        LOG.warn("[PromptEnhancer] [ENHANCED] marker not found, full output:\n" + outputSnapshot);
+                    }
+                    return new EnhanceOutcome(false, false, null, "Enhancement failed: empty result returned");
+                }
+                return new EnhanceOutcome(true, false, finalText, null);
             } catch (TimeoutException te) {
                 LOG.warn("[PromptEnhancer] " + te.getMessage());
-                return null;
+                finished.set(true);
+                String partial;
+                synchronized (streamLock) {
+                    partial = streamed.toString();
+                }
+                if (partial != null && !partial.isEmpty()) {
+                    return new EnhanceOutcome(true, true, partial,
+                            "Prompt enhancement timed out; showing partial result");
+                }
+                return new EnhanceOutcome(false, false, null, te.getMessage());
+            } finally {
+                finished.set(true);
             }
-
-            if (response.length() == 0 && allOutput.length() > 0) {
-                LOG.warn("[PromptEnhancer] [ENHANCED] marker not found, full output:\n" + allOutput);
-            }
-
-            return response.toString();
 
         } catch (Exception e) {
             LOG.error("[PromptEnhancer] AI service call failed: " + e.getMessage(), e);
-            return null;
+            return new EnhanceOutcome(false, false, null, e.getMessage());
         }
     }
 
     /**
-     * Send the enhancement result to the frontend.
+     * Parse a stdout delta payload that is a JSON-encoded string (e.g. {@code "Hello"}).
      */
-    private void sendEnhanceResult(boolean success, String enhancedPrompt, String error) {
+    static String parseJsonStringPayload(String payload) {
+        if (payload == null || payload.isEmpty()) {
+            return null;
+        }
+        try {
+            return GSON.fromJson(payload, String.class);
+        } catch (Throwable t) {
+            return payload;
+        }
+    }
+
+    /**
+     * Coalesce EDT progress updates so rapid CONTENT_DELTA lines do not flood JCEF.
+     * Updates are dropped once {@code finished} is set so a late delta from a
+     * zombie reader cannot revert the dialog to the loading state.
+     */
+    private void scheduleEnhanceProgress(
+            AtomicReference<String> latestPreview,
+            AtomicBoolean progressScheduled,
+            AtomicBoolean finished,
+            JsonObject usageMeta
+    ) {
+        if (finished.get()) {
+            return;
+        }
+        if (!progressScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        ApplicationManager.getApplication().invokeLater(() -> {
+            progressScheduled.set(false);
+            if (finished.get()) {
+                return;
+            }
+            String preview = latestPreview.get();
+            if (preview != null && !preview.isEmpty()) {
+                sendEnhanceResult(true, preview, null, false, usageMeta);
+            }
+        });
+    }
+
+    /**
+     * Send the enhancement result (or streaming progress) to the frontend.
+     *
+     * @param done when false, the UI keeps the loading state and shows partial text
+     * @param usageMeta optional provider/model/mode info for the dialog header
+     */
+    private void sendEnhanceResult(
+            boolean success,
+            String enhancedPrompt,
+            String error,
+            boolean done,
+            JsonObject usageMeta
+    ) {
         JsonObject result = new JsonObject();
         result.addProperty("success", success);
-        result.addProperty("enhancedPrompt", enhancedPrompt);
+        result.addProperty("enhancedPrompt", enhancedPrompt != null ? enhancedPrompt : "");
+        result.addProperty("done", done);
         if (error != null) {
             result.addProperty("error", error);
+        }
+        if (usageMeta != null) {
+            if (usageMeta.has("provider") && !usageMeta.get("provider").isJsonNull()) {
+                result.addProperty("provider", usageMeta.get("provider").getAsString());
+            }
+            if (usageMeta.has("model") && !usageMeta.get("model").isJsonNull()) {
+                result.addProperty("model", usageMeta.get("model").getAsString());
+            }
+            if (usageMeta.has("resolutionSource") && !usageMeta.get("resolutionSource").isJsonNull()) {
+                result.addProperty("resolutionSource", usageMeta.get("resolutionSource").getAsString());
+            }
         }
 
         String resultJson = gson.toJson(result);

@@ -127,17 +127,34 @@ public class SendTerminalSelectionToInputAction extends AnAction implements Dumb
     }
 
     static boolean registerForReworkedTerminalContextMenu(@NotNull ActionManager actionManager) {
+        return registerForTerminalContextMenu(actionManager, TERMINAL_REWORKED_CONTEXT_MENU);
+    }
+
+    /**
+     * Register the send action into a terminal context-menu group at runtime, only
+     * when that group exists in the current IDE build.
+     *
+     * <p>{@code Terminal.OutputContextMenu} and {@code Terminal.PromptContextMenu} were
+     * introduced in later IDE versions and are absent from 2023.3 (build 233), so they
+     * must NOT be referenced statically in terminal-features.xml — doing so raises a
+     * PluginException at startup. Registering them here (guarded by an existence check)
+     * keeps the action available in newer builds while staying silent on older ones.</p>
+     *
+     * @return true if the action was newly added to the group, false otherwise (group
+     *         missing, action missing, not a DefaultActionGroup, or already registered)
+     */
+    static boolean registerForTerminalContextMenu(@NotNull ActionManager actionManager, @NotNull String groupId) {
         synchronized (SendTerminalSelectionToInputAction.class) {
             AnAction action = actionManager.getAction(ACTION_ID);
             if (action == null) {
-                LOG.warn("[TerminalSend] Cannot register reworked terminal menu action because the action is missing: " + ACTION_ID);
+                LOG.warn("[TerminalSend] Cannot register terminal menu action because the action is missing: " + ACTION_ID);
                 return false;
             }
 
-            AnAction groupAction = actionManager.getAction(TERMINAL_REWORKED_CONTEXT_MENU);
+            AnAction groupAction = actionManager.getAction(groupId);
             if (!(groupAction instanceof DefaultActionGroup)) {
                 if (groupAction instanceof ActionGroup) {
-                    LOG.debug("[TerminalSend] Reworked terminal context menu is not a DefaultActionGroup: "
+                    LOG.debug("[TerminalSend] Terminal context menu is not a DefaultActionGroup: "
                             + groupAction.getClass().getName());
                 }
                 return false;

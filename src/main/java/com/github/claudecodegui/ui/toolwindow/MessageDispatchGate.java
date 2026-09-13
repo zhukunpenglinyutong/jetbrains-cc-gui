@@ -27,6 +27,7 @@ package com.github.claudecodegui.ui.toolwindow;
 public final class MessageDispatchGate {
 
     private boolean disposed = false;
+    private int activePageGeneration;
 
     /**
      * Run a dispatch section while holding the gate.
@@ -41,6 +42,32 @@ public final class MessageDispatchGate {
         }
         task.run();
         return true;
+    }
+
+    /**
+     * Run a webview dispatch only when it belongs to the active page load.
+     *
+     * @param pageGeneration generation carried by the webview bridge message.
+     * @param task dispatch work to run.
+     * @return {@code true} when the task ran; {@code false} for a stale page or after teardown.
+     */
+    public synchronized boolean runInDispatch(int pageGeneration, Runnable task) {
+        if (this.disposed || pageGeneration != this.activePageGeneration) {
+            return false;
+        }
+        task.run();
+        return true;
+    }
+
+    /**
+     * Activate a new page generation after any in-flight dispatch from the old page completes.
+     *
+     * @param pageGeneration generation assigned before the page is loaded.
+     */
+    public synchronized void activatePageGeneration(int pageGeneration) {
+        if (!this.disposed) {
+            this.activePageGeneration = pageGeneration;
+        }
     }
 
     /**

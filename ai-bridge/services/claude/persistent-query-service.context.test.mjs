@@ -4,6 +4,25 @@ import assert from 'node:assert/strict';
 import { __testing, getContextUsagePersistent } from './persistent-query-service.js';
 
 /**
+ * Make a mock query.next() idle like a real SDK stream: block while idle,
+ * settle only when close() runs. Returning {done:true} immediately makes the
+ * perpetual reader treat the stream as ended out-of-band and evict the runtime
+ * via disposeRuntime - which races acquireRuntime's ownership check (the
+ * runtime can be closed between createRuntime and the assert). The reader
+ * always awaits next(), so the close rejection is handled by its catch rather
+ * than surfacing as an unhandled rejection.
+ * @returns {{ next: () => Promise, onClose: () => void }}
+ */
+function createIdleNext() {
+  let closeReject;
+  const idle = new Promise((_, reject) => { closeReject = reject; });
+  return {
+    next: () => idle,
+    onClose: () => closeReject(new Error('runtime closed')),
+  };
+}
+
+/**
  * Create a query factory whose runtimes have getContextUsage() and setModel().
  * The runtime's currentModel is set from options.model at creation time.
  * Also stores modelId to track [1m] suffix state for context window changes.
@@ -16,6 +35,7 @@ function createContextAwareQueryFactory(contextUsageResult = { totalTokens: 1000
     queryFn({ prompt, options }) {
       // Set currentModel from options.model (matches SDK behavior)
       // Also store the original modelId for [1m] suffix tracking
+      const idle = createIdleNext();
       const runtime = {
         prompt,
         options,
@@ -30,10 +50,9 @@ function createContextAwareQueryFactory(contextUsageResult = { totalTokens: 1000
         getContextUsage: async () => contextUsageResult,
         close() {
           this.closed = true;
+          idle.onClose();
         },
-        async next() {
-          return { done: true, value: undefined };
-        }
+        next: idle.next
       };
       runtimes.push(runtime);
       return runtime;
@@ -212,6 +231,7 @@ test('getContextUsagePersistent throws when getContextUsage is not available', a
   // Create a factory WITHOUT getContextUsage on the runtime
   const factory = {
     queryFn({ prompt, options }) {
+      const idle = createIdleNext();
       return {
         prompt,
         options,
@@ -219,8 +239,8 @@ test('getContextUsagePersistent throws when getContextUsage is not available', a
         setPermissionMode: async () => {},
         setModel: async () => {},
         setMaxThinkingTokens: async () => {},
-        close() { this.closed = true; },
-        async next() { return { done: true }; }
+        close() { this.closed = true; idle.onClose(); },
+        next: idle.next
       };
     }
   };
@@ -328,6 +348,7 @@ test('getContextUsagePersistent temporarily disables 1M context when model has n
   const observedValues = [];
   const factory = {
     queryFn({ prompt, options }) {
+      const idle = createIdleNext();
       return {
         prompt,
         options,
@@ -343,10 +364,9 @@ test('getContextUsagePersistent temporarily disables 1M context when model has n
         },
         close() {
           this.closed = true;
+          idle.onClose();
         },
-        async next() {
-          return { done: true, value: undefined };
-        }
+        next: idle.next
       };
     }
   };
@@ -382,6 +402,7 @@ test('getContextUsagePersistent temporarily clears 1M disable override for expli
   const observedValues = [];
   const factory = {
     queryFn({ prompt, options }) {
+      const idle = createIdleNext();
       return {
         prompt,
         options,
@@ -397,10 +418,9 @@ test('getContextUsagePersistent temporarily clears 1M disable override for expli
         },
         close() {
           this.closed = true;
+          idle.onClose();
         },
-        async next() {
-          return { done: true, value: undefined };
-        }
+        next: idle.next
       };
     }
   };

@@ -14,12 +14,14 @@ import type {
   ChatInputBoxProps,
   PermissionMode,
 } from './types.js';
+import { DEFAULT_CLAUDE_MODEL_ID } from './types.js';
 import { ChatInputBoxHeader } from './ChatInputBoxHeader.js';
 import { ChatInputBoxFooter } from './ChatInputBoxFooter.js';
 import { ResizeHandles } from './ResizeHandles.js';
 import {
   useTextContent,
   useFileTags,
+  useQuoteTags,
   useTooltip,
   useKeyboardNavigation,
   useIMEComposition,
@@ -37,15 +39,30 @@ import {
   useOpenSourceBannerState,
   useResetAttachmentsOnSessionChange,
   useSpaceKeyListener,
+  useCompositionSafeTagRendering,
   useResizableChatInputBox,
 } from './hooks/index.js';
 import { debounce } from './utils/debounce.js';
 import { perfTimer } from '../../utils/debug.js';
 import { DEBOUNCE_TIMING } from '../../constants/performance.js';
 import { SessionContext } from '../../contexts/SessionContext.js';
+import { useUIState } from '../../contexts/UIStateContext.js';
 import { ContextMenu } from '../ContextMenu';
 import { useContextMenu, copySelection, pasteAtCursor, insertNewline } from '../../hooks/useContextMenu.js';
 import './styles.css';
+
+/**
+ * InputEvent.inputType values that belong to an active IME composition.
+ * Any other inputType arriving while isComposingRef is set means JCEF lost the
+ * compositionEnd event (e.g. IME switched mid-composition) and the composing
+ * state is stale.
+ */
+const COMPOSITION_INPUT_TYPES = new Set([
+  'insertCompositionText',
+  'deleteCompositionText',
+  'insertFromComposition',
+  'deleteByComposition',
+]);
 
 /**
  * ChatInputBox - Chat input component
@@ -60,7 +77,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
   (
     {
       isLoading = false,
-      selectedModel = 'claude-sonnet-4-7',
+      selectedModel = DEFAULT_CLAUDE_MODEL_ID,
       permissionMode = 'default',
       currentProvider = 'claude',
       usagePercentage = 0,
@@ -83,6 +100,8 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onReasoningChange,
       codexFastMode = 'normal',
       onCodexFastModeChange,
+      dshPreset,
+      onDshPresetChange,
       activeFile,
       selectedLines,
       onClearContext,
@@ -96,12 +115,15 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onOpenAgentSettings,
       onOpenPromptSettings,
       onOpenModelSettings,
+      onOpenCliSettings,
       hasMessages = false,
       onRewind,
       statusPanelExpanded = true,
       onToggleStatusPanel,
       sdkInstalled = true, // Default to true to avoid disabling input box on initial state
       sdkStatusLoading = false, // SDK status loading state
+      sdkStatusError = false,
+      onRetrySdkStatus,
       onInstallSdk,
       addToast,
       messageQueue,
@@ -114,6 +136,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     ref: React.ForwardedRef<ChatInputBoxHandle>
   ) => {
     const { t } = useTranslation();
+    const { setSettingsInitialTab, setCurrentView } = useUIState();
 
     const { showOpenSourceBanner, handleDismissOpenSourceBanner } = useOpenSourceBannerState();
     const {
@@ -175,8 +198,19 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onCloseCompletions: closeAllCompletions,
     });
 
+    // Quote tags hook (inline quote chips)
+    const { renderQuoteTags } = useQuoteTags({ editableRef });
+
+    // Combined tag rendering: file tags first, then quote chips.
+    const renderTags = useCallback(() => {
+      renderFileTags();
+      renderQuoteTags();
+    }, [renderFileTags, renderQuoteTags]);
+
     // Tooltip hook
-    const { tooltip, handleMouseOver, handleMouseLeave } = useTooltip();
+    const { tooltip, handleMouseOver, handleMouseLeave } = useTooltip({
+      containerRef: editableRef,
+    });
 
     // Context menu hook
     const ctxMenu = useContextMenu();
@@ -210,11 +244,15 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       el.style.overflowY = 'hidden';
     }, []);
 
-    // Create debounced version of renderFileTags
-    const debouncedRenderFileTags = useMemo(
-      () => debounce(renderFileTags, DEBOUNCE_TIMING.FILE_TAG_RENDERING_MS),
-      [renderFileTags]
-    );
+    const {
+      scheduleTagRendering,
+      cancelTagRendering,
+      renderTagsNowIfSafe,
+    } = useCompositionSafeTagRendering({
+      isComposingRef: sharedComposingRef,
+      renderTags,
+      delay: DEBOUNCE_TIMING.FILE_TAG_RENDERING_MS,
+    });
 
     const {
       fileCompletion,
@@ -265,18 +303,33 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
 
     /**
      * Handle input event (optimized: use debounce to reduce performance overhead)
+     *
+     * @param inputType - InputEvent.inputType of the triggering native event,
+     *   when available. Programmatic callers omit it.
      */
     const handleInput = useCallback(
-      () => {
+      (inputType?: string) => {
         const timer = perfTimer('handleInput');
 
-        // Only trust our own isComposingRef for IME state detection.
+        // Only trust our composition-event-backed ref for IME state detection.
         // JCEF's InputEvent.isComposing is unreliable (can be false during active
-        // composition, or true after compositionEnd). Our ref is set synchronously
-        // by compositionStart/End and keyCode 229 detection, making it the sole
-        // reliable source of truth.
+        // composition, or true after compositionEnd). The ref is set synchronously
+        // by compositionStart/End. Do not restore persistent keyCode 229 state: it
+        // can get stuck for Korean IMEs when no matching compositionEnd arrives.
         if (isComposingRef.current) {
-          return;
+          // JCEF/OSR can drop compositionEnd entirely when the user switches the
+          // input source mid-composition (e.g. Bopomofo -> English via Shift).
+          // A non-composition input event while our flag is still set proves the
+          // composition is over — reset the refs so completion detection and
+          // parent sync are not blocked forever.
+          const staleComposition =
+            inputType !== undefined && !COMPOSITION_INPUT_TYPES.has(inputType);
+          if (!staleComposition) {
+            return;
+          }
+          isComposingRef.current = false;
+          sharedComposingRef.current = false;
+          lastCompositionEndTimeRef.current = Date.now();
         }
 
         // Cancel any pending compositionEnd fallback timeout.
@@ -317,6 +370,11 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         // If determined empty (only zero-width characters), pass empty string to parent
         debouncedOnInput(isEmpty ? '' : text);
 
+        // Schedule file/quote tag rendering after the input DOM becomes stable.
+        // Covers non-keyboard input paths (history restore, paste, etc.)
+        // that don't fire the space-key listener.
+        scheduleTagRendering();
+
         timer.end();
       },
       [
@@ -324,6 +382,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         adjustHeight,
         debouncedDetectCompletion,
         debouncedOnInput,
+        scheduleTagRendering,
         invalidateCache,
         syncInlineCompletion,
       ]
@@ -347,9 +406,10 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     // Wrap composition handlers to sync sharedComposingRef (used by completion detection)
     // Both refs are now set synchronously — no RAF, no race conditions.
     const handleCompositionStart = useCallback(() => {
-      rawHandleCompositionStart();
       sharedComposingRef.current = true;
-    }, [rawHandleCompositionStart]);
+      cancelTagRendering();
+      rawHandleCompositionStart();
+    }, [cancelTagRendering, rawHandleCompositionStart]);
 
     const handleCompositionEnd = useCallback(() => {
       rawHandleCompositionEnd();
@@ -357,8 +417,8 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     }, [rawHandleCompositionEnd]);
 
     useEffect(() => {
-      setRenderFileTags(renderFileTags);
-    }, [renderFileTags, setRenderFileTags]);
+      setRenderFileTags(renderTagsNowIfSafe);
+    }, [renderTagsNowIfSafe, setRenderFileTags]);
 
     const { record: recordInputHistory, handleKeyDown: handleHistoryKeyDown } = useInputHistory({
       editableRef,
@@ -373,17 +433,17 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     });
 
     /**
-     * Handle keyboard down event (for detecting space to trigger file tag rendering)
+     * Handle keyboard down event (for detecting space to trigger tag rendering)
      * Optimized: use debounce for delayed rendering
      */
     const handleKeyDownForTagRendering = useCallback(
       (e: KeyboardEvent) => {
-        // If space key pressed, use debounce for delayed file tag rendering
-        if (e.key === ' ') {
-          debouncedRenderFileTags();
+        // IME candidate confirmation also uses Space, so never schedule while composing.
+        if (e.key === ' ' && !sharedComposingRef.current) {
+          scheduleTagRendering();
         }
       },
-      [debouncedRenderFileTags]
+      [scheduleTagRendering]
     );
 
     const handleSubmit = useSubmitHandler({
@@ -419,6 +479,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       showEnhancerDialog,
       originalPrompt,
       enhancedPrompt,
+      usageInfo,
       handleEnhancePrompt,
       handleUseEnhancedPrompt,
       handleKeepOriginalPrompt,
@@ -428,7 +489,15 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       getTextContent,
       setHasContent,
       onInput,
+      currentProvider,
+      selectedModel,
     });
+
+    const handleOpenPromptEnhancerSettings = useCallback(() => {
+      handleCloseEnhancerDialog();
+      setSettingsInitialTab('promptEnhancer');
+      setCurrentView('settings');
+    }, [handleCloseEnhancerDialog, setSettingsInitialTab, setCurrentView]);
 
     const {
       focusInput,
@@ -520,7 +589,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       pathMappingRef,
       getTextContent,
       adjustHeight,
-      renderFileTags,
+      renderFileTags: renderTagsNowIfSafe,
       setHasContent,
       setInternalAttachments,
       onInput,
@@ -557,7 +626,8 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       pathMappingRef,
       getTextContent,
       adjustHeight,
-      renderFileTags,
+      renderFileTags: renderTagsNowIfSafe,
+      renderQuoteTags,
       setHasContent,
       onInput,
       closeAllCompletions,
@@ -590,8 +660,10 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
 
         <ChatInputBoxHeader
           sdkStatusLoading={sdkStatusLoading}
+          sdkStatusError={sdkStatusError}
           sdkInstalled={sdkInstalled}
           currentProvider={currentProvider}
+          onRetrySdkStatus={onRetrySdkStatus}
           onInstallSdk={onInstallSdk}
           t={t}
           attachments={attachments}
@@ -631,11 +703,16 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
             spellCheck={false}
             data-placeholder={placeholder}
             data-completion-suffix={inlineCompletion.suffix || ''}
-            onInput={() => {
+            onInput={(e) => {
               // Don't pass browser's isComposing — it's unreliable in JCEF.
               // isComposingRef (set by compositionStart/End + keyCode 229) is the
-              // sole source of truth for IME state.
-              handleInput();
+              // sole source of truth for IME state. The inputType is forwarded so
+              // handleInput can detect a stale composing flag (lost compositionEnd).
+              const inputType =
+                'inputType' in e.nativeEvent
+                  ? (e.nativeEvent as InputEvent).inputType
+                  : undefined;
+              handleInput(inputType);
             }}
             onKeyDown={handleKeyDown}
             onKeyUp={handleKeyUp}
@@ -703,6 +780,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           currentProvider={currentProvider}
           reasoningEffort={reasoningEffort}
           codexFastMode={codexFastMode}
+          dshPreset={dshPreset}
           onSubmit={handleSubmit}
           onStop={onStop}
           onModeSelect={handleModeSelect}
@@ -710,6 +788,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           onProviderSelect={onProviderSelect}
           onReasoningChange={onReasoningChange}
           onCodexFastModeChange={onCodexFastModeChange}
+          onDshPresetChange={onDshPresetChange}
           onEnhancePrompt={handleEnhancePrompt}
           alwaysThinkingEnabled={alwaysThinkingEnabled}
           onToggleThinking={onToggleThinking}
@@ -720,6 +799,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           onOpenAgentSettings={onOpenAgentSettings}
           onAddModel={onOpenModelSettings}
           onClearAgent={() => onAgentSelect?.(null)}
+          onOpenCliSettings={onOpenCliSettings}
           longContextEnabled={longContextEnabled}
           onLongContextChange={onLongContextChange}
           fileCompletion={fileCompletion}
@@ -733,9 +813,11 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
             isLoading: isEnhancing,
             originalPrompt,
             enhancedPrompt,
+            usageInfo,
             onUseEnhanced: handleUseEnhancedPrompt,
             onKeepOriginal: handleKeepOriginalPrompt,
             onClose: handleCloseEnhancerDialog,
+            onOpenSettings: handleOpenPromptEnhancerSettings,
           }}
           t={t}
         />

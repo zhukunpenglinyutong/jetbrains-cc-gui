@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { McpInstallOption, McpMarketplaceEntry, McpMarketplaceSearchResponse, McpMarketplaceSource, McpServer, McpServerSpec } from '../../types/mcp';
-import { sendToJava } from '../../utils/bridge';
+import { sendToJava, openBrowser } from '../../utils/bridge';
 
 interface McpMarketplaceDialogProps {
   currentProvider?: 'claude' | 'codex' | string;
@@ -320,6 +320,12 @@ interface MarketplaceDetailsProps {
   onSelectedOptionIndexChange: (index: number) => void;
 }
 
+// JCEF won't route target=_blank to the system browser — go through the bridge.
+const openMarketplaceLink = (event: React.MouseEvent<HTMLAnchorElement>) => {
+  event.preventDefault();
+  openBrowser(event.currentTarget.href);
+};
+
 function MarketplaceDetails({ entry, selectedOptionIndex, onSelectedOptionIndexChange }: MarketplaceDetailsProps) {
   const { t } = useTranslation();
   const selectedOption = entry.installOptions[Math.min(selectedOptionIndex, Math.max(entry.installOptions.length - 1, 0))];
@@ -337,9 +343,9 @@ function MarketplaceDetails({ entry, selectedOptionIndex, onSelectedOptionIndexC
       </div>
 
       <div className="marketplace-link-grid">
-        {isSafeHttpUrl(entry.repositoryUrl) && <a href={entry.repositoryUrl} target="_blank" rel="noopener noreferrer">{t('mcp.market.repository')}</a>}
-        {isSafeHttpUrl(entry.docsUrl) && <a href={entry.docsUrl} target="_blank" rel="noopener noreferrer">{t('mcp.market.docs')}</a>}
-        {isSafeHttpUrl(entry.homepage) && <a href={entry.homepage} target="_blank" rel="noopener noreferrer">{t('mcp.market.homepage')}</a>}
+        {isSafeHttpUrl(entry.repositoryUrl) && <a href={entry.repositoryUrl} target="_blank" rel="noopener noreferrer" onClick={openMarketplaceLink}>{t('mcp.market.repository')}</a>}
+        {isSafeHttpUrl(entry.docsUrl) && <a href={entry.docsUrl} target="_blank" rel="noopener noreferrer" onClick={openMarketplaceLink}>{t('mcp.market.docs')}</a>}
+        {isSafeHttpUrl(entry.homepage) && <a href={entry.homepage} target="_blank" rel="noopener noreferrer" onClick={openMarketplaceLink}>{t('mcp.market.homepage')}</a>}
       </div>
 
       {entry.installOptions.length > 0 ? (

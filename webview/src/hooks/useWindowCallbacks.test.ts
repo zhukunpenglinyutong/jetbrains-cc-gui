@@ -1,4 +1,5 @@
-import { act, renderHook } from '@testing-library/react';
+import { createElement, useState } from 'react';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { useWindowCallbacks } from './useWindowCallbacks.js';
 import type { UseWindowCallbacksOptions } from './useWindowCallbacks.js';
 import type { ClaudeMessage } from '../types/index.js';
@@ -6,7 +7,9 @@ import { forceWebviewRepaint } from '../utils/forceWebviewRepaint.js';
 
 // Mock the repaint util so we can assert the session-transition path triggers it
 // without touching the real DOM (there is no #app element under jsdom).
-vi.mock('../utils/forceWebviewRepaint.js', () => ({ forceWebviewRepaint: vi.fn() }));
+vi.mock('../utils/forceWebviewRepaint.js', () => ({
+  forceWebviewRepaint: vi.fn((_reason?: string, onRepaint?: () => void) => onRepaint?.()),
+}));
 
 /**
  * Integration tests for useWindowCallbacks — verifies the real window callback
@@ -38,10 +41,14 @@ describe('useWindowCallbacks integration', () => {
     setUsageMaxTokens: vi.fn(),
     setSubagentHistories: vi.fn(),
     setPermissionMode: vi.fn(),
+    setCurrentProvider: vi.fn(),
     setClaudePermissionMode: vi.fn(),
     setCodexPermissionMode: vi.fn(),
     setSelectedClaudeModel: vi.fn(),
     setSelectedCodexModel: vi.fn(),
+    setLongContextEnabled: vi.fn(),
+    setReasoningEffort: vi.fn(),
+    setCodexFastMode: vi.fn(),
     setProviderConfigVersion: vi.fn(),
     setActiveProviderConfig: vi.fn(),
     setClaudeSettingsAlwaysThinkingEnabled: vi.fn(),
@@ -51,6 +58,7 @@ describe('useWindowCallbacks integration', () => {
     setPermissionDialogTimeoutSeconds: vi.fn(),
     setSdkStatus: vi.fn(),
     setSdkStatusLoaded: vi.fn(),
+    setSdkStatusError: vi.fn(),
     setIsRewinding: vi.fn(),
     setRewindDialogOpen: vi.fn(),
     setCurrentRewindRequest: vi.fn(),
@@ -105,16 +113,29 @@ describe('useWindowCallbacks integration', () => {
   beforeEach(() => {
     window.__sessionTransitioning = false;
     window.__sessionTransitionToken = null;
+    window.__deferredTransitionUpdateMessages = null;
     window.__minAcceptedUpdateSequence = 0;
     window.__prependedHistoryMessageCount = 0;
     window.__messageBaseIndex = 0;
     window.__pendingSessionTransitionToast = undefined;
     window.__deniedToolIds = new Set();
     window.sendToJava = vi.fn();
+    window.updateDependencyStatus = undefined;
+    delete (window as unknown as Record<string, unknown>)._appUpdateDependencyStatus;
     // The drain test inspects this slot; if a prior test (or earlier suite run)
     // leaked a value onto window we'd see a false-positive drain. Wipe it here
     // so each test starts from a clean pending state.
     delete (window as unknown as Record<string, unknown>).__pendingPermissionDialogTimeout;
+    delete (window as unknown as Record<string, unknown>).__pendingDependencyStatus;
+    delete window.__pendingBackendTabState;
+    delete window.__pendingUsageUpdate;
+    delete window.__CCGUI_RECOVERY_STATE_APPLIED__;
+    delete window.__lastAcceptedMessageCount;
+    delete window.__pendingHistoryRefreshMessageCount;
+    delete window.__pendingHistoryLoadComplete;
+    delete window.__historySurfaceRefreshEpoch;
+    vi.mocked(forceWebviewRepaint).mockClear();
+    window.__dependencyStatusState = 'pending';
   });
 
   /** Stub timer/rAF globals to execute synchronously for streaming tests. */
@@ -131,7 +152,114 @@ describe('useWindowCallbacks integration', () => {
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
   };
 
+  it('applies Java recovery state without echoing provider or model bridge commands', () => {
+    const currentProviderRef = { current: 'codex' };
+    const opts = createOptions({ currentProviderRef });
+    renderHook(() => useWindowCallbacks(opts));
+    const bridgeCallsBeforeRestore = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    act(() => {
+      window.applyBackendTabState?.(JSON.stringify({
+        provider: 'claude',
+        model: 'claude-opus-4-8[1m]',
+        permissionMode: 'default',
+        reasoningEffort: 'high',
+        codexFastMode: 'normal',
+      }));
+    });
+
+    expect(currentProviderRef.current).toBe('claude');
+    expect(opts.setCurrentProvider).toHaveBeenCalledWith('claude');
+    expect(opts.setSelectedClaudeModel).toHaveBeenCalledWith('claude-opus-4-8');
+    expect(opts.setLongContextEnabled).toHaveBeenCalledWith(true);
+    expect(opts.setReasoningEffort).toHaveBeenCalledWith('high');
+    expect(opts.setCodexFastMode).toHaveBeenCalledWith('normal');
+    expect(window.__CCGUI_RECOVERY_STATE_APPLIED__).toBe(true);
+    expect((window.sendToJava as ReturnType<typeof vi.fn>).mock.calls.length).toBe(bridgeCallsBeforeRestore);
+  });
+
+  it('drains Java recovery state buffered before React callback registration', () => {
+    window.__pendingBackendTabState = JSON.stringify({
+      provider: 'codex',
+      model: 'gpt-5.6-sol',
+      permissionMode: 'default',
+      codexFastMode: 'fast',
+    });
+    const opts = createOptions();
+
+    renderHook(() => useWindowCallbacks(opts));
+
+    expect(opts.setCurrentProvider).toHaveBeenCalledWith('codex');
+    expect(opts.setSelectedCodexModel).toHaveBeenCalledWith('gpt-5.6-sol');
+    expect(opts.setCodexFastMode).toHaveBeenCalledWith('fast');
+    expect(window.__pendingBackendTabState).toBeUndefined();
+  });
+
+  it('drains the latest usage update buffered before React callback registration', () => {
+    window.__pendingUsageUpdate = JSON.stringify({
+      percentage: 19,
+      usedTokens: 49300,
+      maxTokens: 258400,
+    });
+    const opts = createOptions();
+
+    renderHook(() => useWindowCallbacks(opts));
+
+    expect(opts.setUsagePercentage).toHaveBeenCalledWith(19);
+    expect(opts.setUsageUsedTokens).toHaveBeenCalledWith(49300);
+    expect(opts.setUsageMaxTokens).toHaveBeenCalledWith(258400);
+    expect(window.__pendingUsageUpdate).toBeUndefined();
+  });
+
+  it('settles dependency status errors without reporting an SDK installation state', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.updateDependencyStatus?.(JSON.stringify({
+        success: false,
+        error: 'status unavailable',
+      }));
+    });
+
+    expect(opts.setSdkStatus).not.toHaveBeenCalled();
+    expect(opts.setSdkStatusLoaded).toHaveBeenCalledWith(false);
+    expect(opts.setSdkStatusError).toHaveBeenCalledWith('status unavailable');
+    expect(window.__dependencyStatusState).toBe('error');
+  });
+
+  it('clears a dependency status error after a valid response', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+    const status = {
+      'codex-sdk': { status: 'installed' },
+    };
+
+    act(() => {
+      window.updateDependencyStatus?.(JSON.stringify(status));
+    });
+
+    expect(opts.setSdkStatus).toHaveBeenCalledWith(status);
+    expect(opts.setSdkStatusLoaded).toHaveBeenCalledWith(true);
+    expect(opts.setSdkStatusError).toHaveBeenCalledWith(null);
+    expect(window.__dependencyStatusState).toBe('ready');
+  });
+
+  it('settles malformed dependency status payloads as errors', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.updateDependencyStatus?.('{invalid');
+    });
+
+    expect(opts.setSdkStatusLoaded).toHaveBeenCalledWith(false);
+    expect(opts.setSdkStatusError).toHaveBeenCalledWith(expect.any(String));
+    expect(window.__dependencyStatusState).toBe('error');
+  });
+
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     delete window.__codexHistoryPageInfo;
   });
@@ -349,24 +477,97 @@ describe('useWindowCallbacks integration', () => {
     expect(opts.applyHistoryTitleLocal).not.toHaveBeenCalled();
   });
 
-  // ===== updateMessages is blocked during transition =====
+  // ===== updateMessages is deferred during transition =====
 
-  it('updateMessages is silently dropped while __sessionTransitioning is true', () => {
+  it('updateMessages is stashed while __sessionTransitioning is true (not applied yet)', () => {
     const opts = createOptions();
     renderHook(() => useWindowCallbacks(opts));
 
     window.__sessionTransitioning = true;
 
-    const staleMessages: ClaudeMessage[] = [
-      { type: 'assistant', content: 'stale content', timestamp: new Date().toISOString() },
+    const historyMessages: ClaudeMessage[] = [
+      { type: 'assistant', content: 'history content', timestamp: new Date().toISOString() },
     ];
 
     act(() => {
-      window.updateMessages!(JSON.stringify(staleMessages));
+      window.updateMessages!(JSON.stringify(historyMessages));
     });
 
-    // setMessages should NOT be called because guard is active
+    // Not applied while the guard is active
     expect(opts.setMessages).not.toHaveBeenCalled();
+    expect(window.__deferredTransitionUpdateMessages?.json).toContain('history content');
+  });
+
+  it('historyLoadComplete flushes stashed updateMessages after releasing the guard', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    window.__sessionTransitioning = true;
+    const historyMessages: ClaudeMessage[] = [
+      { type: 'user', content: '从历史恢复', timestamp: new Date().toISOString() },
+      { type: 'assistant', content: 'ok', timestamp: new Date().toISOString() },
+    ];
+
+    act(() => {
+      window.updateMessages!(JSON.stringify(historyMessages), 5);
+    });
+    expect(opts.setMessages).not.toHaveBeenCalled();
+
+    act(() => {
+      window.historyLoadComplete!();
+    });
+
+    expect(window.__sessionTransitioning).toBe(false);
+    expect(opts.setMessages).toHaveBeenCalled();
+    expect(window.__deferredTransitionUpdateMessages == null
+      || window.__deferredTransitionUpdateMessages === null).toBe(true);
+
+    // historyLoadComplete also re-scans messages (refreshLoadedHistoryMessages), so
+    // the last setMessages call may be a no-op on []. Assert some updater installs
+    // the restored transcript when given an empty previous list.
+    const applied = (opts.setMessages as ReturnType<typeof vi.fn>).mock.calls.some(([arg]) => {
+      if (typeof arg !== 'function') return false;
+      const next = (arg as (prev: ClaudeMessage[]) => ClaudeMessage[])([]);
+      return Array.isArray(next)
+        && next.length === 2
+        && next[0]?.content === '从历史恢复'
+        && next[1]?.content === 'ok';
+    });
+    expect(applied).toBe(true);
+  });
+
+  it('clearMessages does not wipe a post-barrier stashed history snapshot', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+
+    window.__sessionTransitioning = true;
+    // Simulate clearMessages barrier first (normal order), then history arrives with higher sequence.
+    act(() => {
+      window.clearMessages!('10');
+    });
+    const historyMessages: ClaudeMessage[] = [
+      { type: 'user', content: 'post-clear history', timestamp: new Date().toISOString() },
+    ];
+    act(() => {
+      window.updateMessages!(JSON.stringify(historyMessages), 11);
+    });
+    expect(window.__deferredTransitionUpdateMessages?.json).toContain('post-clear history');
+
+    // Reordered clear with lower/same barrier must not drop the post-barrier stash
+    act(() => {
+      window.clearMessages!('10');
+    });
+    expect(window.__deferredTransitionUpdateMessages?.json).toContain('post-clear history');
+
+    act(() => {
+      window.historyLoadComplete!();
+    });
+    const applied = (opts.setMessages as ReturnType<typeof vi.fn>).mock.calls.some(([arg]) => {
+      if (typeof arg !== 'function') return false;
+      const next = (arg as (prev: ClaudeMessage[]) => ClaudeMessage[])([]);
+      return Array.isArray(next) && next.some((m) => m.content === 'post-clear history');
+    });
+    expect(applied).toBe(true);
   });
 
   it('updateMessages works normally after guard is released', () => {
@@ -386,6 +587,153 @@ describe('useWindowCallbacks integration', () => {
 
     // setMessages SHOULD be called
     expect(opts.setMessages).toHaveBeenCalled();
+  });
+
+  it('reports one DOM commit when restored history arrives after completion', () => {
+    const opts = createOptions();
+    vi.useFakeTimers();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.updateMessages!(JSON.stringify([]), 1);
+      window.historyLoadComplete!('1');
+    });
+
+    expect(window.__pendingHistoryRefreshMessageCount).toBe(1);
+
+    act(() => {
+      window.updateMessages!(JSON.stringify([
+        { type: 'user', content: 'restored history' },
+      ]), 2);
+    });
+
+    expect(window.__pendingHistoryRefreshMessageCount).toBeUndefined();
+    act(() => vi.runAllTimers());
+    expect(window.sendToJava).toHaveBeenCalledWith('history_dom_committed:1');
+
+    act(() => {
+      window.updateMessages!(JSON.stringify([
+        { type: 'user', content: 'normal follow-up' },
+      ]), 3);
+    });
+
+    const historyRefreshCalls = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls
+      .filter(([payload]) => payload === 'history_dom_committed:1');
+    expect(historyRefreshCalls).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
+  it('drains an early history completion only after the restored message DOM commits', async () => {
+    const restoredMessages: ClaudeMessage[] = [
+      { type: 'assistant', content: 'restored before callback registration' },
+    ];
+    window.__pendingUpdateMessages = {
+      json: JSON.stringify(restoredMessages),
+      sequence: 1,
+    };
+    window.__pendingHistoryLoadComplete = { expectedMessageCount: 1 };
+    let domTextWhenAcknowledged = '';
+    window.sendToJava = vi.fn((payload: string) => {
+      if (payload === 'history_dom_committed:1') {
+        domTextWhenAcknowledged = document.querySelector('[data-testid="history-dom"]')?.textContent ?? '';
+      }
+    });
+
+    const HistoryHarness = () => {
+      const [messages, setMessages] = useState<ClaudeMessage[]>([]);
+      useWindowCallbacks(createOptions({ setMessages }));
+      return createElement(
+        'div',
+        { 'data-testid': 'history-dom' },
+        messages.map(message => message.content).join('|'),
+      );
+    };
+
+    render(createElement(HistoryHarness));
+
+    await waitFor(() => {
+      expect(domTextWhenAcknowledged).toContain('restored before callback registration');
+    });
+    expect(window.__pendingHistoryLoadComplete).toBeUndefined();
+    expect(window.sendToJava).toHaveBeenCalledWith('history_dom_committed:1');
+  });
+
+  it('preserves an explicit zero count buffered before callback registration', async () => {
+    window.__pendingHistoryLoadComplete = { expectedMessageCount: 0 };
+    renderHook(() => useWindowCallbacks(createOptions()));
+
+    await waitFor(() => {
+      expect(window.sendToJava).toHaveBeenCalledWith('history_dom_committed:1');
+    });
+    expect(window.__pendingHistoryLoadComplete).toBeUndefined();
+    expect(window.sendToJava).toHaveBeenCalledWith('history_dom_committed:1');
+  });
+
+  it('reports a DOM commit when the restored-history snapshot arrived first', () => {
+    const opts = createOptions();
+    vi.useFakeTimers();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.updateMessages!(JSON.stringify([
+        { type: 'assistant', content: 'already restored' },
+      ]), 1);
+    });
+    act(() => {
+      window.historyLoadComplete!(1);
+    });
+
+    expect(window.__pendingHistoryRefreshMessageCount).toBeUndefined();
+    act(() => vi.runAllTimers());
+    expect(window.sendToJava).toHaveBeenCalledWith('history_dom_committed:1');
+    vi.useRealTimers();
+  });
+
+  it('keeps the restored-history refresh pending when a stale snapshot is rejected', () => {
+    const opts = createOptions();
+    vi.useFakeTimers();
+    window.__minAcceptedUpdateSequence = 5;
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.historyLoadComplete!(1);
+      window.updateMessages!(JSON.stringify([
+        { type: 'assistant', content: 'stale history' },
+      ]), 4);
+    });
+
+    expect(window.__pendingHistoryRefreshMessageCount).toBe(1);
+
+    act(() => {
+      window.updateMessages!(JSON.stringify([
+        { type: 'assistant', content: 'current history' },
+      ]), 5);
+    });
+
+    expect(window.__pendingHistoryRefreshMessageCount).toBeUndefined();
+    act(() => vi.runAllTimers());
+    expect(window.sendToJava).toHaveBeenCalledWith('history_dom_committed:1');
+    vi.useRealTimers();
+  });
+
+  it('cancels a deferred restored-history refresh when the session is cleared', () => {
+    const opts = createOptions();
+    vi.useFakeTimers();
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.historyLoadComplete!(1);
+      window.clearMessages!();
+      window.updateMessages!(JSON.stringify([
+        { type: 'assistant', content: 'new session' },
+      ]), 1);
+    });
+
+    act(() => vi.runAllTimers());
+    expect(window.__pendingHistoryRefreshMessageCount).toBeUndefined();
+    expect(window.sendToJava).not.toHaveBeenCalledWith('history_dom_committed:1');
+    expect(forceWebviewRepaint).toHaveBeenCalledWith('session-transition');
+    vi.useRealTimers();
   });
 
   it('buffers a Codex history page and prepends it in one ordered state update', () => {
@@ -1162,7 +1510,7 @@ describe('useWindowCallbacks integration', () => {
   });
 
   it('onSubagentHistoryLoaded skips updates only when history payload is truly unchanged', () => {
-    const opts = createOptions();
+    const opts = createOptions({ currentSessionIdRef: { current: 'session-1' } });
     renderHook(() => useWindowCallbacks(opts));
 
     const firstPayload = {
@@ -1198,6 +1546,30 @@ describe('useWindowCallbacks integration', () => {
     const updatedState = thirdUpdater(initialState);
     expect(updatedState).not.toBe(initialState);
     expect(updatedState['task-1'].messages[0].content[0].text).toBe('final result');
+  });
+
+  it('reassembles oversized subagent history before updating state', () => {
+    const opts = createOptions();
+    renderHook(() => useWindowCallbacks(opts));
+    const payload = JSON.stringify({
+      success: true,
+      toolUseId: 'task-1',
+      messages: [{ type: 'assistant', content: 'large result' }],
+    });
+    const midpoint = Math.floor(payload.length / 2);
+
+    act(() => {
+      window.onSubagentHistoryChunk?.('transfer-1', payload.slice(0, midpoint), false);
+    });
+    expect(opts.setSubagentHistories).not.toHaveBeenCalled();
+
+    act(() => {
+      window.onSubagentHistoryChunk?.('transfer-1', payload.slice(midpoint), true);
+    });
+
+    expect(opts.setSubagentHistories).toHaveBeenCalledTimes(1);
+    const updater = (opts.setSubagentHistories as any).mock.calls[0][0] as (prev: Record<string, unknown>) => Record<string, any>;
+    expect(updater({})['task-1'].messages[0].content).toBe('large result');
   });
 
   // ===== onStreamEnd idempotency (dual-path delivery) =====
@@ -1599,6 +1971,46 @@ describe('useWindowCallbacks integration', () => {
         type: 'assistant',
         __turnId: 2,
       });
+    });
+
+    it('defers delta rendering until a pending structural snapshot is processed', () => {
+      vi.useFakeTimers();
+      const rafCallbacks: FrameRequestCallback[] = [];
+      let nextRafId = 0;
+      vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+        rafCallbacks.push(callback);
+        nextRafId += 1;
+        return nextRafId;
+      });
+      vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
+      const opts = createOptions();
+      renderHook(() => useWindowCallbacks(opts));
+
+      act(() => {
+        window.onStreamStart!();
+        window.updateMessages!(JSON.stringify([
+          {
+            type: 'assistant',
+            content: 'snapshot',
+            raw: {
+              message: {
+                content: [{ type: 'tool_use', id: 'tool-1', name: 'Bash', input: { command: 'ls' } }],
+              },
+            },
+          },
+        ]), 1);
+        window.onContentDelta!('delta-after-snapshot');
+      });
+
+      expect(opts.streamingContentRef.current).toBe('delta-after-snapshot');
+      expect(rafCallbacks).toHaveLength(0);
+
+      act(() => {
+        vi.advanceTimersByTime(16);
+      });
+
+      expect(rafCallbacks).toHaveLength(2);
     });
 
     it('onBlockReset keeps streaming refs cumulative across turns (single assistant message)', () => {

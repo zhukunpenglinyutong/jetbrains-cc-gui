@@ -77,18 +77,54 @@ class PermissionFileProtocol {
                         && name.endsWith(".json"));
     }
 
+    /**
+     * Deletes all request/response files for this session, regardless of age.
+     * Prefer {@link #cleanupStaleSessionFiles(long)} on watcher start so in-flight
+     * requests created just before a restart are not wiped before consumption.
+     */
     void cleanupSessionFiles() {
+        cleanupSessionFilesMatching(file -> true, "all");
+    }
+
+    /**
+     * Deletes only session-scoped permission files whose last-modified time is
+     * older than {@code maxAgeMillis}. Fresh requests (e.g. written by Node before
+     * the Java watcher restarts) are retained and can still be polled.
+     *
+     * @param maxAgeMillis maximum age to keep; files older than this are deleted.
+     *                     Non-positive values delete nothing (caller should use
+     *                     {@link #cleanupSessionFiles()} for unconditional cleanup).
+     */
+    void cleanupStaleSessionFiles(long maxAgeMillis) {
+        if (maxAgeMillis <= 0L) {
+            debugLog.accept("CLEANUP", "Skipping stale cleanup: maxAgeMillis=" + maxAgeMillis);
+            return;
+        }
+        long cutoffMillis = System.currentTimeMillis() - maxAgeMillis;
+        cleanupSessionFilesMatching(
+                file -> {
+                    long modified = file.lastModified();
+                    return modified > 0L && modified < cutoffMillis;
+                },
+                "staleBefore=" + cutoffMillis
+        );
+    }
+
+    private void cleanupSessionFilesMatching(java.util.function.Predicate<File> shouldDelete, String reason) {
         try {
             if (!permissionDir.toFile().exists()) {
                 return;
             }
 
-            deleteFiles("response-" + sessionId + "-");
-            deleteFiles("request-" + sessionId + "-");
-            deleteFiles("ask-user-question-" + sessionId + "-");
-            deleteFiles("plan-approval-" + sessionId + "-");
+            deleteFiles("response-" + sessionId + "-", shouldDelete);
+            deleteFiles("request-" + sessionId + "-", shouldDelete);
+            // ask/plan response files use a longer prefix; clean both request and response names.
+            deleteFiles("ask-user-question-response-" + sessionId + "-", shouldDelete);
+            deleteFiles("ask-user-question-" + sessionId + "-", shouldDelete);
+            deleteFiles("plan-approval-response-" + sessionId + "-", shouldDelete);
+            deleteFiles("plan-approval-" + sessionId + "-", shouldDelete);
 
-            debugLog.accept("CLEANUP", "Session-specific permission files cleanup complete");
+            debugLog.accept("CLEANUP", "Session-specific permission files cleanup complete (" + reason + ")");
         } catch (Exception e) {
             debugLog.accept("CLEANUP_ERROR", "Error during cleanup: " + e.getMessage());
         }
@@ -114,12 +150,15 @@ class PermissionFileProtocol {
         writeJson(resolveResponsePath(PLAN_APPROVAL_RESPONSE_FILE_PREFIX, requestId), response, "PLAN_RESPONSE");
     }
 
-    private void deleteFiles(String prefix) {
+    private void deleteFiles(String prefix, java.util.function.Predicate<File> shouldDelete) {
         File[] files = listFiles((dir, name) -> name.startsWith(prefix) && name.endsWith(".json"));
         if (files == null) {
             return;
         }
         for (File file : files) {
+            if (shouldDelete != null && !shouldDelete.test(file)) {
+                continue;
+            }
             try {
                 Files.deleteIfExists(file.toPath());
                 debugLog.accept("CLEANUP", "Deleted old file: " + file.getName());

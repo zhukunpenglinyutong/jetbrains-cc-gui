@@ -6,7 +6,10 @@ import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import java.util.Map;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.util.FontConfigService;
 import com.github.claudecodegui.util.HtmlLoader;
@@ -23,6 +26,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.jcef.JBCefBrowser;
+import com.intellij.ui.jcef.JBCefOSRHandlerFactory;
 import com.intellij.ui.jcef.JBCefBrowserBase;
 import com.intellij.ui.jcef.JBCefJSQuery;
 import org.cef.CefClient;
@@ -44,6 +48,9 @@ import java.io.File;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
+import java.util.function.IntPredicate;
+import java.util.function.Supplier;
 
 /**
  * Handles webview (JCEF browser) creation, configuration, error panels,
@@ -53,8 +60,24 @@ public class WebviewInitializer {
 
     private static final Logger LOG = Logger.getInstance(WebviewInitializer.class);
     private static final String NODE_PATH_PROPERTY_KEY = "claude.code.node.path";
-    private static final int BRIDGE_INJECTION_RETRY_INTERVAL_MS = 100;
-    private static final int BRIDGE_INJECTION_MAX_ATTEMPTS = 50;
+    private static final int BRIDGE_INJECTION_FAST_RETRY_INTERVAL_MS = 100;
+    private static final int BRIDGE_INJECTION_SLOW_RETRY_INTERVAL_MS = 1000;
+    private static final int BRIDGE_INJECTION_FAST_RETRY_ATTEMPTS = 50;
+
+    /** Identifies which side owns provider/model boot synchronization for a page load. */
+    enum PageLoadKind {
+        INITIAL_LOAD("initial_load", false),
+        STARTUP_RETRY("startup_retry", false),
+        RUNTIME_RECOVERY("runtime_recovery", true);
+
+        private final String wireName;
+        private final boolean authoritativeRecovery;
+
+        PageLoadKind(String wireName, boolean authoritativeRecovery) {
+            this.wireName = wireName;
+            this.authoritativeRecovery = authoritativeRecovery;
+        }
+    }
 
     /**
      * Host interface providing access to window-level dependencies.
@@ -63,15 +86,20 @@ public class WebviewInitializer {
         Project getProject();
         ClaudeSDKBridge getClaudeSDKBridge();
         CodexSDKBridge getCodexSDKBridge();
+        Map<String, MarkerCliBridge> getCliBridges();
         JPanel getMainPanel();
         HtmlLoader getHtmlLoader();
         HandlerContext getHandlerContext();
         JBCefBrowser getBrowser();
+        JBCefOSRHandlerFactory getOsrHandlerFactory();
         void setBrowser(JBCefBrowser browser);
         boolean isDisposed();
-        void handleJavaScriptMessage(String message);
+        void activatePageGeneration(int pageGeneration);
+        void handleJavaScriptMessage(int pageGeneration, String message);
         WebviewWatchdog getWebviewWatchdog();
         boolean isFrontendReady();
+        boolean hasEverBeenFrontendReady();
+        boolean isWebviewActive();
         void setFrontendReady(boolean ready);
     }
 
@@ -79,12 +107,25 @@ public class WebviewInitializer {
 
     private final Object bridgeLock = new Object();
 
+    private static void applyNodePathToCliBridges(Map<String, MarkerCliBridge> cliBridges, String path) {
+        if (cliBridges == null) {
+            return;
+        }
+        for (MarkerCliBridge bridge : cliBridges.values()) {
+            if (bridge != null) {
+                bridge.setNodeExecutable(path);
+            }
+        }
+    }
+
     /**
      * JCEF JS bridges for the current browser. Keeping each browser's queries
      * together prevents a stale load callback from using a replacement browser's
      * native callback handles during a watchdog recreation.
      */
     private volatile BrowserBridges bridges;
+    private int pageGeneration;
+    private PageLoadKind nextBrowserPageLoadKind = PageLoadKind.INITIAL_LOAD;
 
     public WebviewInitializer(WebviewHost host) {
         this.host = host;
@@ -105,9 +146,6 @@ public class WebviewInitializer {
             LOG.debug("Skip duplicate webview initialization: browser is already active");
             return;
         }
-
-        JPanel mainPanel = host.getMainPanel();
-        JBCefBrowser browser = null;
 
         // Use the shared resolver from BridgePreloader for consistent state
         com.github.claudecodegui.bridge.BridgeDirectoryResolver sharedResolver = BridgePreloader.getSharedResolver();
@@ -130,29 +168,85 @@ public class WebviewInitializer {
 
         ClaudeSDKBridge claudeSDKBridge = host.getClaudeSDKBridge();
         CodexSDKBridge codexSDKBridge = host.getCodexSDKBridge();
+        Map<String, MarkerCliBridge> cliBridges = host.getCliBridges();
 
         PropertiesComponent props = PropertiesComponent.getInstance();
         String savedNodePath = props.getValue(NODE_PATH_PROPERTY_KEY);
-        com.github.claudecodegui.model.NodeDetectionResult nodeResult = null;
 
         if (savedNodePath != null && !savedNodePath.trim().isEmpty()) {
             String trimmed = savedNodePath.trim();
             claudeSDKBridge.setNodeExecutable(trimmed);
             codexSDKBridge.setNodeExecutable(trimmed);
-            nodeResult = claudeSDKBridge.verifyAndCacheNodePath(trimmed);
+            applyNodePathToCliBridges(cliBridges, trimmed);
+            NodeDetectionResult nodeResult = claudeSDKBridge.verifyAndCacheNodePath(trimmed);
             if (nodeResult == null || !nodeResult.isFound()) {
                 showInvalidNodePathPanel(trimmed, nodeResult != null ? nodeResult.getErrorMessage() : null);
                 return;
             }
-        } else {
-            nodeResult = claudeSDKBridge.detectNodeWithDetails();
-            if (nodeResult != null && nodeResult.isFound() && nodeResult.getNodePath() != null) {
-                props.setValue(NODE_PATH_PROPERTY_KEY, nodeResult.getNodePath());
-                claudeSDKBridge.setNodeExecutable(nodeResult.getNodePath());
-                codexSDKBridge.setNodeExecutable(nodeResult.getNodePath());
-                claudeSDKBridge.verifyAndCacheNodePath(nodeResult.getNodePath());
-            }
+            continueCreateUIComponentsAfterNodeSetup(nodeResult);
+            return;
         }
+
+        // No saved path: auto-detection spawns shell probes that block the calling
+        // thread for several seconds per attempt (and may hang instead of exiting in
+        // VM/container environments), so it must never run on the EDT. Detect on a
+        // pooled thread, then continue initialization back on the EDT.
+        LOG.info("No saved Node.js path found, scheduling auto-detection on background thread...");
+        showLoadingPanel();
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            NodeDetectionResult detected;
+            try {
+                detected = claudeSDKBridge.detectNodeWithDetails();
+            } catch (Exception e) {
+                LOG.error("Failed to auto-detect Node.js path: " + e.getMessage(), e);
+                detected = null;
+            }
+
+            if (detected != null && detected.isFound() && detected.getNodePath() != null) {
+                props.setValue(NODE_PATH_PROPERTY_KEY, detected.getNodePath());
+                claudeSDKBridge.setNodeExecutable(detected.getNodePath());
+                codexSDKBridge.setNodeExecutable(detected.getNodePath());
+                applyNodePathToCliBridges(cliBridges, detected.getNodePath());
+                claudeSDKBridge.verifyAndCacheNodePath(detected.getNodePath());
+                LOG.info("Auto-detected Node.js: " + detected.getNodePath()
+                    + " (" + detected.getNodeVersion() + ")");
+            } else {
+                // Fall back to invoking "node" by name (the same fallback
+                // NodeDetector.findNodeExecutable uses) so checkEnvironment can
+                // still pass when node is reachable on PATH but the probes failed.
+                LOG.warn("Failed to auto-detect Node.js path. Error: " +
+                    (detected != null ? detected.getErrorMessage() : "Unknown error"));
+                claudeSDKBridge.setNodeExecutable("node");
+                codexSDKBridge.setNodeExecutable("node");
+                applyNodePathToCliBridges(cliBridges, "node");
+            }
+
+            final NodeDetectionResult nodeResult = detected;
+            invokeLaterForToolWindow(() -> {
+                if (host.isDisposed()) {
+                    return;
+                }
+                continueCreateUIComponentsAfterNodeSetup(nodeResult);
+            });
+        });
+    }
+
+    /**
+     * Continue UI initialization once the Node.js path has been resolved: environment
+     * check, version gate, then browser creation. Must be called on the EDT.
+     */
+    private void continueCreateUIComponentsAfterNodeSetup(NodeDetectionResult nodeResult) {
+        ClaudeSDKBridge claudeSDKBridge = host.getClaudeSDKBridge();
+        JPanel mainPanel = host.getMainPanel();
+        JBCefBrowser browser = null;
+
+        // The async detection path shows a loading panel while probing; clear it so
+        // it cannot linger next to the browser component added below (BorderLayout
+        // keeps only CENTER in its map, it does not remove stale children).
+        mainPanel.removeAll();
+
+        // Use the shared resolver from BridgePreloader for consistent state
+        com.github.claudecodegui.bridge.BridgeDirectoryResolver sharedResolver = BridgePreloader.getSharedResolver();
 
         if (!claudeSDKBridge.checkEnvironment()) {
             if (sharedResolver.isExtractionInProgress()) {
@@ -179,9 +273,8 @@ public class WebviewInitializer {
             return;
         }
 
-        if (nodeResult == null) {
-            nodeResult = claudeSDKBridge.detectNodeWithDetails();
-        }
+        // nodeResult is always the resolved verify/detection result here; a failure
+        // result (or null) simply skips the version gate, matching prior behavior.
         if (nodeResult != null && nodeResult.isFound() && nodeResult.getNodeVersion() != null) {
             if (!NodeDetector.isVersionSupported(nodeResult.getNodeVersion())) {
                 showVersionErrorPanel(nodeResult.getNodeVersion());
@@ -207,7 +300,7 @@ public class WebviewInitializer {
         }
 
         try {
-            browser = JBCefBrowserFactory.create();
+            browser = JBCefBrowserFactory.create(host.getOsrHandlerFactory());
             JBCefBrowser createdBrowser = browser;
             host.setBrowser(createdBrowser);
             host.getHandlerContext().setBrowser(createdBrowser);
@@ -226,9 +319,14 @@ public class WebviewInitializer {
             }
             currentBridges.jsQuery.addHandler((msg) -> {
                 boolean dispatch;
+                int pageGeneration;
+                String message;
                 synchronized (this.bridgeLock) {
-                    dispatch = !host.isDisposed() && this.bridges == currentBridges
-                            && currentBridges.isCurrentFor(createdBrowser);
+                    pageGeneration = currentBridges.getPageGeneration();
+                    message = unwrapBridgeMessage(msg, pageGeneration);
+                    dispatch = message != null && !host.isDisposed()
+                            && this.bridges == currentBridges
+                            && currentBridges.isCurrentPage(createdBrowser, pageGeneration);
                 }
                 // Dispatch outside bridgeLock: handleJavaScriptMessage serializes on the dispatch
                 // gate (MessageDispatchGate), not the host window, and dispose() runs
@@ -239,9 +337,9 @@ public class WebviewInitializer {
                 // that races this gap is caught by the gate: runInDispatch refuses once
                 // beginTeardown has flipped disposed.
                 if (dispatch) {
-                    host.handleJavaScriptMessage(msg);
+                    host.handleJavaScriptMessage(pageGeneration, message);
                 }
-                return new JBCefJSQuery.Response(dispatch ? "ok" : "closed");
+                return new JBCefJSQuery.Response(dispatch ? "ok" : "stale");
             });
 
             currentBridges.clipboardPathQuery.addHandler((msg) -> {
@@ -292,6 +390,10 @@ public class WebviewInitializer {
                 return new JBCefJSQuery.Response("ok");
             });
 
+            PageLoadKind initialPageLoadKind = consumeNextBrowserPageLoadKind();
+            int initialPageGeneration = beginPageLoad(currentBridges, initialPageLoadKind);
+            host.activatePageGeneration(initialPageGeneration);
+            host.setFrontendReady(false);
             String htmlContent = loadChatHtmlWithInitialTabState();
 
             // LoadHandler must be registered before loadHTML, otherwise the
@@ -313,31 +415,43 @@ public class WebviewInitializer {
                     String injection;
                     String shiftEscInjection;
                     String clipboardPathInjection;
+                    String pageContextInjection;
+                    int pageGeneration;
+                    PageLoadKind pageLoadKind;
                     synchronized (WebviewInitializer.this.bridgeLock) {
                         if (WebviewInitializer.this.bridges != currentBridges
                                 || !currentBridges.isCurrentFor(createdBrowser)) {
                             return;
                         }
-                        injection = "window.sendToJava = function(msg) { "
-                                + currentBridges.jsQuery.inject("msg") + " };";
-                        shiftEscInjection = buildShiftEscInjection(
-                                currentBridges.hidePanelQuery.inject("''",
-                                        "function() {}",
-                                        "function() {}"));
-                        clipboardPathInjection =
+                        pageGeneration = currentBridges.getPageGeneration();
+                        pageLoadKind = currentBridges.getPageLoadKind();
+                        pageContextInjection = buildPageContextInjection(pageGeneration, pageLoadKind);
+                        injection = guardPageScript(pageGeneration,
+                                buildBridgeInjection(currentBridges.jsQuery.inject(
+                                        buildBridgeMessageExpression(pageGeneration))));
+                        shiftEscInjection = guardPageScript(pageGeneration,
+                                buildShiftEscInjection(
+                                        currentBridges.hidePanelQuery.inject("''",
+                                                "function() {}",
+                                                "function() {}")));
+                        clipboardPathInjection = guardPageScript(pageGeneration,
                             "window.getClipboardFilePath = function() {" +
                             "  return new Promise((resolve) => {" +
                             "    " + currentBridges.clipboardPathQuery.inject("''",
                                 "function(response) { resolve(response); }",
                                 "function(error_code, error_message) { console.error('Failed to get clipboard path:', error_message); resolve(''); }") +
                             "  });" +
-                            "};";
+                            "};");
                     }
 
                     try {
-                        cefBrowser.executeJavaScript(injection, cefBrowser.getURL(), 0);
-                        cefBrowser.executeJavaScript(shiftEscInjection, cefBrowser.getURL(), 0);
-                        cefBrowser.executeJavaScript(clipboardPathInjection, cefBrowser.getURL(), 0);
+                        String runtimeBootstrap = joinRuntimePageBootstrap(
+                                pageContextInjection,
+                                injection,
+                                shiftEscInjection,
+                                clipboardPathInjection
+                        );
+                        cefBrowser.executeJavaScript(runtimeBootstrap, cefBrowser.getURL(), 0);
                     } catch (Exception | LinkageError e) {
                         LOG.debug("Skipping webview bridge injection after browser disposal: " + e.getMessage(), e);
                         return;
@@ -365,7 +479,7 @@ public class WebviewInitializer {
                             cefBrowser.executeJavaScript(consoleForward, cefBrowser.getURL(), 0);
                         }
 
-                        injectFrontendConfiguration(cefBrowser);
+                        injectFrontendConfiguration(cefBrowser, currentBridges, pageGeneration);
 
                         LOG.debug("onLoadEnd completed, waiting for frontend_ready signal");
                     } catch (Exception | LinkageError e) {
@@ -380,7 +494,7 @@ public class WebviewInitializer {
             // registered, so it is safe to load the HTML - the first frame's
             // onLoadEnd will fire and inject the sendToJava bridge as expected.
             createdBrowser.loadHTML(htmlContent);
-            scheduleBridgeInjectionRetries(createdBrowser, currentBridges);
+            scheduleBridgeInjectionRetries(createdBrowser, currentBridges, initialPageGeneration);
 
             JComponent browserComponent = createdBrowser.getComponent();
 
@@ -468,25 +582,84 @@ public class WebviewInitializer {
 
     private void scheduleBridgeInjectionRetries(
             JBCefBrowser browser,
-            BrowserBridges currentBridges
+            BrowserBridges currentBridges,
+            int pageGeneration
     ) {
-        AtomicInteger attempts = new AtomicInteger();
-        Timer timer = new Timer(BRIDGE_INJECTION_RETRY_INTERVAL_MS, null);
-        timer.addActionListener(event -> {
-            int attempt = attempts.incrementAndGet();
-            if (host.isDisposed() || host.isFrontendReady()
-                    || attempt > BRIDGE_INJECTION_MAX_ATTEMPTS) {
-                currentBridges.stopBridgeInjectionTimer();
+        boolean scheduled = currentBridges.startBridgeInjectionRetriesIfAbsent(
+                pageGeneration,
+                () -> shouldRunBridgeInjectionRetries(
+                        host.isDisposed(), host.isFrontendReady(), host.isWebviewActive()),
+                attempt -> injectBridgeFallback(browser, currentBridges, pageGeneration, attempt));
+        if (!scheduled) {
+            if (!host.isFrontendReady() && !host.isWebviewActive()) {
+                LOG.debug("[JCEF] Bridge injection retries paused while webview is inactive");
+            }
+            return;
+        }
+        LOG.info("[JCEF] Scheduled fallback bridge injection retries until frontend readiness");
+    }
+
+    static boolean shouldRunBridgeInjectionRetries(
+            boolean disposed,
+            boolean frontendReady,
+            boolean webviewActive
+    ) {
+        return !disposed && !frontendReady && webviewActive;
+    }
+
+    /** Resume startup bridge fallback when a previously hidden tab becomes active. */
+    public void onTabActivated() {
+        if (host.isDisposed() || host.isFrontendReady() || !host.isWebviewActive()) {
+            return;
+        }
+
+        JBCefBrowser currentBrowser;
+        BrowserBridges currentBridges;
+        int currentPageGeneration;
+        synchronized (this.bridgeLock) {
+            currentBrowser = host.getBrowser();
+            currentBridges = this.bridges;
+            if (currentBrowser == null || currentBridges == null
+                    || !currentBridges.isCurrentFor(currentBrowser)) {
                 return;
             }
-            if (!injectBridgeFallback(browser, currentBridges, attempt)) {
-                currentBridges.stopBridgeInjectionTimer();
+            currentPageGeneration = currentBridges.getPageGeneration();
+        }
+        scheduleBridgeInjectionRetries(currentBrowser, currentBridges, currentPageGeneration);
+    }
+
+    private int beginPageLoad(BrowserBridges expectedBridges, PageLoadKind pageLoadKind) {
+        synchronized (this.bridgeLock) {
+            if (this.bridges != expectedBridges) {
+                throw new IllegalStateException("Cannot load a page for stale browser bridges");
             }
-        });
-        timer.setInitialDelay(BRIDGE_INJECTION_RETRY_INTERVAL_MS);
-        currentBridges.setBridgeInjectionTimer(timer);
-        LOG.info("[JCEF] Scheduled fallback bridge injection retries for remote-mode startup");
-        timer.start();
+            int nextPageGeneration = nextPageGeneration();
+            expectedBridges.beginPageLoad(nextPageGeneration, pageLoadKind);
+            return nextPageGeneration;
+        }
+    }
+
+    private int invalidateCurrentPage() {
+        synchronized (this.bridgeLock) {
+            int nextPageGeneration = nextPageGeneration();
+            if (this.bridges != null) {
+                this.bridges.beginPageLoad(nextPageGeneration, PageLoadKind.INITIAL_LOAD);
+            }
+            return nextPageGeneration;
+        }
+    }
+
+    int nextPageGeneration() {
+        synchronized (this.bridgeLock) {
+            this.pageGeneration += 1;
+            return this.pageGeneration;
+        }
+    }
+
+    static int bridgeInjectionRetryDelayMs(int attempt) {
+        return attempt <= BRIDGE_INJECTION_FAST_RETRY_ATTEMPTS
+                ? BRIDGE_INJECTION_FAST_RETRY_INTERVAL_MS
+                : BRIDGE_INJECTION_SLOW_RETRY_INTERVAL_MS;
     }
 
     /**
@@ -494,51 +667,66 @@ public class WebviewInitializer {
      * browser-scoped onLoadEnd callback. Retry the minimum bootstrap directly
      * in the active page so the frontend can establish its Java bridge and
      * request dependency status. The timer stops as soon as frontend_ready is
-     * received, or after a bounded five-second startup window.
+     * received. Retries slow down after the initial five-second startup window.
      */
     private boolean injectBridgeFallback(
             JBCefBrowser browser,
             BrowserBridges currentBridges,
+            int pageGeneration,
             int attempt
     ) {
         String bridgeInjection;
         String shiftEscInjection;
         String clipboardPathInjection;
+        String pageContextInjection;
+        PageLoadKind pageLoadKind;
         synchronized (this.bridgeLock) {
-            if (this.bridges != currentBridges || !currentBridges.isCurrentFor(browser)) {
+            if (this.bridges != currentBridges
+                    || !currentBridges.isCurrentPage(browser, pageGeneration)) {
                 return false;
             }
-            bridgeInjection = "window.sendToJava = function(msg) { "
-                    + currentBridges.jsQuery.inject("msg") + " };";
-            shiftEscInjection = buildShiftEscInjection(
-                    currentBridges.hidePanelQuery.inject("''",
-                            "function() {}",
-                            "function() {}"));
-            clipboardPathInjection =
+            pageLoadKind = currentBridges.getPageLoadKind();
+            pageContextInjection = buildPageContextInjection(pageGeneration, pageLoadKind);
+            bridgeInjection = guardPageScript(pageGeneration,
+                    buildBridgeInjection(currentBridges.jsQuery.inject(
+                            buildBridgeMessageExpression(pageGeneration))));
+            shiftEscInjection = guardPageScript(pageGeneration,
+                    buildShiftEscInjection(
+                            currentBridges.hidePanelQuery.inject("''",
+                                    "function() {}",
+                                    "function() {}")));
+            clipboardPathInjection = guardPageScript(pageGeneration,
                     "window.getClipboardFilePath = function() {" +
                     "  return new Promise((resolve) => {" +
                     "    " + currentBridges.clipboardPathQuery.inject("''",
                             "function(response) { resolve(response); }",
                             "function(error_code, error_message) { console.error('Failed to get clipboard path:', error_message); resolve(''); }") +
                     "  });" +
-                    "};";
+                    "};");
         }
 
         try {
             CefBrowser cefBrowser = browser.getCefBrowser();
             String url = cefBrowser.getURL();
-            cefBrowser.executeJavaScript(bridgeInjection, url, 0);
-            cefBrowser.executeJavaScript(shiftEscInjection, url, 0);
-            cefBrowser.executeJavaScript(clipboardPathInjection, url, 0);
+            String runtimeBootstrap = joinRuntimePageBootstrap(
+                    pageContextInjection,
+                    bridgeInjection,
+                    shiftEscInjection,
+                    clipboardPathInjection
+            );
+            cefBrowser.executeJavaScript(runtimeBootstrap, url, 0);
 
-            injectFrontendConfiguration(cefBrowser);
+            injectFrontendConfiguration(cefBrowser, currentBridges, pageGeneration);
             if (attempt == 1) {
                 LOG.info("[JCEF] Executed first fallback bridge injection for remote-mode startup");
             }
             return true;
-        } catch (Exception | LinkageError e) {
+        } catch (Exception e) {
             LOG.debug("Fallback bridge injection failed on attempt " + attempt + ": " + e.getMessage(), e);
-            return attempt < BRIDGE_INJECTION_MAX_ATTEMPTS;
+            return true;
+        } catch (LinkageError e) {
+            LOG.warn("Fallback bridge injection is unavailable: " + e.getMessage(), e);
+            return false;
         }
     }
 
@@ -553,6 +741,82 @@ public class WebviewInitializer {
                 "    }" +
                 "  }, true);" +
                 "}";
+    }
+
+    static String buildBridgeInjection(String queryInvocation) {
+        return "window.sendToJava = function(msg) { " + queryInvocation + " };"
+                + "if (typeof window.__ccgOnBridgeReady === 'function') {"
+                + "  window.__ccgOnBridgeReady();"
+                + "}";
+    }
+
+    static String buildBridgeMessageExpression(int pageGeneration) {
+        return "'__CCG_PAGE_GENERATION__:" + pageGeneration + ":' + String(msg)";
+    }
+
+    /**
+     * Establishes the Java-owned runtime page context before any bridge function is exposed.
+     * Repeated fallback injections for the same generation are idempotent so they cannot reset
+     * the recovery-applied marker after React consumes the authoritative backend state.
+     */
+    static String buildPageContextInjection(int pageGeneration, PageLoadKind pageLoadKind) {
+        boolean authoritativeRecovery = pageLoadKind.authoritativeRecovery;
+        return "if (window.__CCG_PAGE_GENERATION__ !== " + pageGeneration
+                + " || window.__CCGUI_PAGE_CONTEXT_READY__ !== true) {"
+                + "window.__CCG_PAGE_GENERATION__ = " + pageGeneration + ";"
+                + "window.__CCGUI_PAGE_LOAD_KIND__ = '" + pageLoadKind.wireName + "';"
+                + "window.__CCGUI_RECOVERY_RELOAD__ = " + authoritativeRecovery + ";"
+                + "window.__CCGUI_RECOVERY_STATE_APPLIED__ = " + !authoritativeRecovery + ";"
+                + "window.__CCGUI_PAGE_CONTEXT_READY__ = true;"
+                + "};";
+    }
+
+    /**
+     * Joins runtime context and guarded bridge scripts into one renderer invocation so the
+     * bridge can never become visible before its generation and recovery context.
+     */
+    static String joinRuntimePageBootstrap(String pageContext, String... guardedScripts) {
+        return pageContext + String.join("", guardedScripts);
+    }
+
+    private PageLoadKind consumeNextBrowserPageLoadKind() {
+        synchronized (this.bridgeLock) {
+            PageLoadKind pageLoadKind = this.nextBrowserPageLoadKind;
+            this.nextBrowserPageLoadKind = PageLoadKind.INITIAL_LOAD;
+            return pageLoadKind;
+        }
+    }
+
+    private PageLoadKind recoveryPageLoadKind() {
+        return recoveryPageLoadKind(host.hasEverBeenFrontendReady());
+    }
+
+    static PageLoadKind recoveryPageLoadKind(boolean hasEverBeenFrontendReady) {
+        return hasEverBeenFrontendReady
+                ? PageLoadKind.RUNTIME_RECOVERY
+                : PageLoadKind.STARTUP_RETRY;
+    }
+
+    /** Returns whether the active page is recovering state after having reached frontend readiness. */
+    public boolean isRuntimeRecoveryPage() {
+        synchronized (this.bridgeLock) {
+            return this.bridges != null
+                    && this.bridges.getPageLoadKind() == PageLoadKind.RUNTIME_RECOVERY;
+        }
+    }
+
+    static String unwrapBridgeMessage(String message, int expectedPageGeneration) {
+        String prefix = "__CCG_PAGE_GENERATION__:" + expectedPageGeneration + ":";
+        if (message == null || !message.startsWith(prefix)) {
+            return null;
+        }
+        return message.substring(prefix.length());
+    }
+
+    static String guardPageScript(int pageGeneration, String script) {
+        return "if (window.__CCG_PAGE_GENERATION__ === " + pageGeneration + ") {"
+                + script
+                + "}";
     }
 
     static List<String> buildConfigurationInjections(
@@ -585,7 +849,25 @@ public class WebviewInitializer {
         );
     }
 
-    private void injectFrontendConfiguration(CefBrowser cefBrowser) {
+    private void injectFrontendConfiguration(
+            CefBrowser cefBrowser,
+            BrowserBridges currentBridges,
+            int pageGeneration
+    ) {
+        String idempotentConfigurationScript = currentBridges.getOrCreateConfigurationScript(
+                pageGeneration,
+                () -> buildFrontendConfigurationScript(pageGeneration));
+        if (idempotentConfigurationScript == null) {
+            return;
+        }
+        cefBrowser.executeJavaScript(
+                guardPageScript(pageGeneration, idempotentConfigurationScript),
+                cefBrowser.getURL(),
+                0);
+        LOG.debug("[WebviewConfigSync] Frontend configuration injected");
+    }
+
+    private String buildFrontendConfigurationScript(int pageGeneration) {
         String editorFontConfig = FontConfigService.getEditorFontConfigJson();
         String uiFontConfig = FontConfigService.getResolvedUiFontConfigJson(
                 host.getHandlerContext().getSettingsService());
@@ -593,13 +875,18 @@ public class WebviewInitializer {
                 host.getHandlerContext().getSettingsService());
         String languageConfig = LanguageConfigService.getLanguageConfigJson(
                 host.getHandlerContext().getSettingsService());
-        String url = cefBrowser.getURL();
 
-        for (String injection : buildConfigurationInjections(
-                editorFontConfig, uiFontConfig, codeFontConfig, languageConfig)) {
-            cefBrowser.executeJavaScript(injection, url, 0);
-        }
-        LOG.info("[WebviewConfigSync] Frontend configuration injected");
+        String configurationScript = joinConfigurationInjections(buildConfigurationInjections(
+                editorFontConfig, uiFontConfig, codeFontConfig, languageConfig));
+        return
+                "if (window.__CCG_CONFIG_GENERATION__ !== " + pageGeneration + ") {"
+                + configurationScript
+                + "window.__CCG_CONFIG_GENERATION__ = " + pageGeneration + ";"
+                + "}";
+    }
+
+    static String joinConfigurationInjections(List<String> injections) {
+        return String.join(";", injections) + ";";
     }
 
     private JBCefJSQuery.Response handleClipboardPathRequest() {
@@ -762,14 +1049,40 @@ public class WebviewInitializer {
 
     private void showJcefRemoteModeErrorPanel() {
         // Terminal state: the remote CefServer process is unhealthy, so every
-        // reload/recreate against it will keep throwing the same NPE. Stop the
-        // watchdog so it does not loop back into recreate every cooldown and
-        // re-flash this panel. Recovery requires an IDE restart.
+        // reload/recreate against it will keep throwing the same NPE (JBR-9234,
+        // out-of-process JCEF on IntelliJ 2025.2+ / JCEF 144). Stop the watchdog
+        // so it does not loop back into recreate every cooldown and re-flash this
+        // panel. The offered action disables out-of-process JCEF in the Registry
+        // — the documented workaround — after which an IDE restart initialises
+        // JCEF in-process and the message router stops throwing.
         host.getWebviewWatchdog().stop();
         JPanel panel = ErrorPanelBuilder.buildCenteredPanel(
             "⚠️",
             ClaudeCodeGuiBundle.message("toolwindow.jcefRemoteError"),
-            ClaudeCodeGuiBundle.message("toolwindow.jcefRemoteSolution")
+            ClaudeCodeGuiBundle.message("toolwindow.jcefRemoteSolution"),
+            ClaudeCodeGuiBundle.message("toolwindow.jcefRemoteAction"),
+            this::disableOutOfProcessJcefAndShowRestartPanel
+        );
+        replaceMainContent(panel);
+    }
+
+    private void disableOutOfProcessJcefAndShowRestartPanel() {
+        if (!JBCefBrowserFactory.disableOutOfProcessJcefInRegistry()) {
+            LOG.warn("Could not disable out-of-process JCEF in the IDE registry");
+            // The button must not appear to do nothing: show the manual
+            // VM-option fallback so the user can still apply the workaround.
+            JPanel failedPanel = ErrorPanelBuilder.buildCenteredPanel(
+                    "⚠️",
+                    ClaudeCodeGuiBundle.message("toolwindow.jcefRemoteActionFailedTitle"),
+                    ClaudeCodeGuiBundle.message("toolwindow.jcefRemoteActionFailed")
+            );
+            replaceMainContent(failedPanel);
+            return;
+        }
+        JPanel panel = ErrorPanelBuilder.buildCenteredPanel(
+                "✓",
+                ClaudeCodeGuiBundle.message("toolwindow.jcefOutOfProcessDisabled"),
+                ClaudeCodeGuiBundle.message("toolwindow.jcefOutOfProcessDisabledSolution")
         );
         replaceMainContent(panel);
     }
@@ -857,31 +1170,47 @@ public class WebviewInitializer {
 
     /**
      * Handle Node.js path save from the error panel input.
+     * Verification and auto-detection spawn subprocesses that can block for seconds
+     * (or hang in VM/container environments), so they run on a pooled thread; all
+     * UI updates are dispatched back to the EDT.
      */
     public void handleNodePathSave(String manualPath) {
         ClaudeSDKBridge claudeSDKBridge = this.host.getClaudeSDKBridge();
         CodexSDKBridge codexSDKBridge = this.host.getCodexSDKBridge();
+        Map<String, MarkerCliBridge> cliBridges = this.host.getCliBridges();
         JPanel mainPanel = this.host.getMainPanel();
 
-        try {
+        final boolean clearRequested = manualPath == null || manualPath.isEmpty();
+        if (clearRequested) {
+            // Clear the saved path up front so no bridge can use the stale path
+            // while detection runs, and show a loading panel in the meantime.
             PropertiesComponent props = PropertiesComponent.getInstance();
+            props.unsetValue(NODE_PATH_PROPERTY_KEY);
+            claudeSDKBridge.setNodeExecutable(null);
+            codexSDKBridge.setNodeExecutable(null);
+            applyNodePathToCliBridges(cliBridges, null);
+            LOG.info("Cleared manual Node.js path, scheduling auto-detection on background thread");
+            showLoadingPanel();
+        }
 
-            if (manualPath == null || manualPath.isEmpty()) {
-                // Clear saved path and trigger auto-detection
-                props.unsetValue(NODE_PATH_PROPERTY_KEY);
-                claudeSDKBridge.setNodeExecutable(null);
-                codexSDKBridge.setNodeExecutable(null);
-                LOG.info("Cleared manual Node.js path, triggering auto-detection");
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            try {
+                PropertiesComponent props = PropertiesComponent.getInstance();
 
-                NodeDetectionResult detected = claudeSDKBridge.detectNodeWithDetails();
-                if (detected != null && detected.isFound() && detected.getNodePath() != null) {
-                    String detectedPath = detected.getNodePath();
-                    props.setValue(NODE_PATH_PROPERTY_KEY, detectedPath);
-                    claudeSDKBridge.verifyAndCacheNodePath(detectedPath);
-                    codexSDKBridge.setNodeExecutable(detectedPath);
-                    LOG.info("Auto-detected and saved Node.js path: " + detectedPath);
+                if (clearRequested) {
+                    NodeDetectionResult detected = claudeSDKBridge.detectNodeWithDetails();
+                    if (detected != null && detected.isFound() && detected.getNodePath() != null) {
+                        String detectedPath = detected.getNodePath();
+                        props.setValue(NODE_PATH_PROPERTY_KEY, detectedPath);
+                        claudeSDKBridge.verifyAndCacheNodePath(detectedPath);
+                        codexSDKBridge.setNodeExecutable(detectedPath);
+                        applyNodePathToCliBridges(cliBridges, detectedPath);
+                        LOG.info("Auto-detected and saved Node.js path: " + detectedPath);
+                    }
+                    reinitializeUi(mainPanel);
+                    return;
                 }
-            } else {
+
                 // Verify before saving to avoid caching invalid path
                 NodeDetectionResult result = claudeSDKBridge.verifyAndCacheNodePath(manualPath);
                 if (result != null && result.isFound()) {
@@ -889,62 +1218,86 @@ public class WebviewInitializer {
                     props.setValue(NODE_PATH_PROPERTY_KEY, manualPath);
                     claudeSDKBridge.setNodeExecutable(manualPath);
                     codexSDKBridge.setNodeExecutable(manualPath);
+                    applyNodePathToCliBridges(cliBridges, manualPath);
                     LOG.info("Saved manual Node.js path: " + manualPath);
+                    reinitializeUi(mainPanel);
                 } else {
-                    // Verification failed, show error and don't save invalid path
+                    // Verification failed, show error and don't save invalid path.
+                    // Don't reinitialize UI, let user try again.
                     String errorMsg = result != null ? result.getErrorMessage() : "Unknown error";
                     LOG.warn("Node.js path verification failed: " + manualPath + " - " + errorMsg);
-                    JOptionPane.showMessageDialog(mainPanel,
-                        "Node.js path verification failed: " + errorMsg + "\n\nPath not saved.",
-                        "Invalid Node.js Path", JOptionPane.WARNING_MESSAGE);
-                    return; // Don't reinitialize UI, let user try again
+                    invokeLaterForToolWindow(() -> JOptionPane.showMessageDialog(mainPanel,
+                            "Node.js path verification failed: " + errorMsg + "\n\nPath not saved.",
+                            "Invalid Node.js Path", JOptionPane.WARNING_MESSAGE));
                 }
+            } catch (Exception ex) {
+                invokeLaterForToolWindow(() -> JOptionPane.showMessageDialog(mainPanel,
+                    "Error saving or applying Node.js path: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE));
             }
+        });
+    }
 
-            invokeLaterForToolWindow(() -> {
-                mainPanel.removeAll();
-                createUIComponents();
-                mainPanel.revalidate();
-                mainPanel.repaint();
-            });
-
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(mainPanel,
-                "Error saving or applying Node.js path: " + ex.getMessage(),
-                "Error", JOptionPane.ERROR_MESSAGE);
-        }
+    /**
+     * Rebuild the tool window UI on the EDT after the Node.js path changed.
+     */
+    private void reinitializeUi(JPanel mainPanel) {
+        invokeLaterForToolWindow(() -> {
+            if (host.isDisposed()) {
+                return;
+            }
+            mainPanel.removeAll();
+            createUIComponents();
+            mainPanel.revalidate();
+            mainPanel.repaint();
+        });
     }
 
     /**
      * Reload the webview HTML content.
      */
     public void reloadWebview(String reason) {
-        ApplicationManager.getApplication().invokeLater(() -> {
+        runOnEventDispatchThread(() -> {
             if (host.isDisposed()) { return; }
             JBCefBrowser browser = host.getBrowser();
             if (browser == null) {
                 recreateWebview(reason + "_no_browser");
                 return;
             }
-            host.setFrontendReady(false);
             try {
                 LOG.info("[WebviewWatchdog] Reloading webview (" + reason + ")");
-                browser.loadHTML(loadChatHtmlWithInitialTabState());
                 BrowserBridges currentBridges;
+                int pageGeneration;
                 synchronized (this.bridgeLock) {
                     currentBridges = this.bridges;
+                    pageGeneration = currentBridges == null || !currentBridges.belongsTo(browser)
+                            ? -1
+                            : beginPageLoad(currentBridges, recoveryPageLoadKind());
                 }
-                if (currentBridges != null && currentBridges.belongsTo(browser)) {
-                    scheduleBridgeInjectionRetries(browser, currentBridges);
+                if (pageGeneration < 0) {
+                    recreateWebview(reason + "_stale_bridges");
+                    return;
                 }
+                host.activatePageGeneration(pageGeneration);
+                host.setFrontendReady(false);
+                reloadCurrentPage(browser.getCefBrowser());
+                scheduleBridgeInjectionRetries(browser, currentBridges, pageGeneration);
                 host.getWebviewWatchdog().resetTimestamps();
                 host.getMainPanel().revalidate();
                 host.getMainPanel().repaint();
-            } catch (Exception e) {
+            } catch (Exception | LinkageError e) {
                 LOG.warn("[WebviewWatchdog] Reload failed, escalating to recreate: " + e.getMessage(), e);
                 recreateWebview(reason + "_reload_failed");
             }
         });
+    }
+
+    /**
+     * Reloads the URL already registered for the JCEF browser instead of registering another
+     * full HTML payload in the platform-wide {@code loadHTML} request map.
+     */
+    static void reloadCurrentPage(CefBrowser cefBrowser) {
+        cefBrowser.reload();
     }
 
     private String loadChatHtmlWithInitialTabState() {
@@ -957,16 +1310,25 @@ public class WebviewInitializer {
                 ? host.getHandlerContext().getSession() : null;
         String tabProvider = session != null ? session.getProvider() : null;
         String tabModel = session != null ? session.getModel() : null;
-        return htmlLoader.injectInitialTabState(htmlContent, tabProvider, tabModel);
+        String htmlWithTabState = htmlLoader.injectInitialTabState(htmlContent, tabProvider, tabModel);
+        String htmlWithDshPresets = htmlLoader.injectInitialDshPresets(
+                htmlWithTabState,
+                SessionState.discoverUserDshPresetIds());
+        return htmlLoader.injectPageContextBootstrap(htmlWithDshPresets);
     }
 
     /**
      * Recreate the webview from scratch (dispose old, create new).
      */
     public void recreateWebview(String reason) {
-        ApplicationManager.getApplication().invokeLater(() -> {
+        runOnEventDispatchThread(() -> {
             if (host.isDisposed()) { return; }
 
+            synchronized (this.bridgeLock) {
+                this.nextBrowserPageLoadKind = recoveryPageLoadKind();
+            }
+            int invalidationGeneration = invalidateCurrentPage();
+            host.activatePageGeneration(invalidationGeneration);
             host.setFrontendReady(false);
             JPanel mainPanel = host.getMainPanel();
             JBCefBrowser browser = host.getBrowser();
@@ -1007,6 +1369,14 @@ public class WebviewInitializer {
         });
     }
 
+    private void runOnEventDispatchThread(Runnable action) {
+        if (SwingUtilities.isEventDispatchThread()) {
+            action.run();
+        } else {
+            ApplicationManager.getApplication().invokeLater(action);
+        }
+    }
+
     /**
      * Release the JBCefJSQuery bridges.
      * Must be called before the owning browser is disposed so the native
@@ -1034,7 +1404,11 @@ public class WebviewInitializer {
         private final JBCefJSQuery jsQuery;
         private final JBCefJSQuery clipboardPathQuery;
         private final JBCefJSQuery hidePanelQuery;
-        private Timer bridgeInjectionTimer;
+        private int pageGeneration;
+        private PageLoadKind pageLoadKind = PageLoadKind.INITIAL_LOAD;
+        private final PageConfigurationCache configurationCache = new PageConfigurationCache();
+        private final BridgeInjectionTimerLifecycle bridgeRetryLifecycle =
+                new BridgeInjectionTimerLifecycle();
 
         private BrowserBridges(JBCefBrowser browser) {
             this.browser = browser;
@@ -1057,6 +1431,21 @@ public class WebviewInitializer {
             this.hidePanelQuery = createdHidePanelQuery;
         }
 
+        private synchronized void beginPageLoad(int newPageGeneration, PageLoadKind newPageLoadKind) {
+            this.pageGeneration = newPageGeneration;
+            this.pageLoadKind = newPageLoadKind;
+            this.configurationCache.reset(newPageGeneration);
+            this.bridgeRetryLifecycle.beginPageLoad(newPageGeneration);
+        }
+
+        private synchronized int getPageGeneration() {
+            return pageGeneration;
+        }
+
+        private synchronized PageLoadKind getPageLoadKind() {
+            return pageLoadKind;
+        }
+
         private boolean belongsTo(JBCefBrowser browser) {
             return this.browser == browser;
         }
@@ -1070,16 +1459,28 @@ public class WebviewInitializer {
             return this.belongsTo(browser);
         }
 
-        private synchronized void setBridgeInjectionTimer(Timer timer) {
-            stopBridgeInjectionTimer();
-            this.bridgeInjectionTimer = timer;
+        private synchronized boolean isCurrentPage(JBCefBrowser browser, int expectedPageGeneration) {
+            return this.belongsTo(browser) && pageGeneration == expectedPageGeneration;
         }
 
-        private synchronized void stopBridgeInjectionTimer() {
-            if (this.bridgeInjectionTimer != null) {
-                this.bridgeInjectionTimer.stop();
-                this.bridgeInjectionTimer = null;
-            }
+        private boolean startBridgeInjectionRetriesIfAbsent(
+                int expectedPageGeneration,
+                BooleanSupplier retryAllowed,
+                IntPredicate retryAction
+        ) {
+            return this.bridgeRetryLifecycle.startIfAbsent(
+                    expectedPageGeneration, retryAllowed, retryAction);
+        }
+
+        private void stopBridgeInjectionTimer() {
+            this.bridgeRetryLifecycle.stop();
+        }
+
+        private String getOrCreateConfigurationScript(
+                int expectedPageGeneration,
+                Supplier<String> scriptBuilder
+        ) {
+            return this.configurationCache.getOrCreate(expectedPageGeneration, scriptBuilder);
         }
 
         private void dispose() {
@@ -1087,6 +1488,96 @@ public class WebviewInitializer {
             disposeQueryQuietly(this.hidePanelQuery);
             disposeQueryQuietly(this.clipboardPathQuery);
             disposeQueryQuietly(this.jsQuery);
+        }
+    }
+
+    /** Owns the single Swing retry timer associated with the current runtime page generation. */
+    static final class BridgeInjectionTimerLifecycle {
+        private int pageGeneration;
+        private Timer timer;
+
+        synchronized void beginPageLoad(int newPageGeneration) {
+            stop();
+            this.pageGeneration = newPageGeneration;
+        }
+
+        boolean startIfAbsent(
+                int expectedPageGeneration,
+                BooleanSupplier retryAllowed,
+                IntPredicate retryAction
+        ) {
+            if (!retryAllowed.getAsBoolean()) {
+                stopIfCurrentGeneration(expectedPageGeneration);
+                return false;
+            }
+
+            AtomicInteger attempts = new AtomicInteger();
+            Timer candidate = new Timer(BRIDGE_INJECTION_FAST_RETRY_INTERVAL_MS, null);
+            candidate.addActionListener(event -> {
+                int attempt = attempts.incrementAndGet();
+                if (!retryAllowed.getAsBoolean()) {
+                    stop(candidate);
+                    return;
+                }
+                candidate.setDelay(bridgeInjectionRetryDelayMs(attempt + 1));
+                if (!retryAction.test(attempt)) {
+                    stop(candidate);
+                }
+            });
+            candidate.setInitialDelay(BRIDGE_INJECTION_FAST_RETRY_INTERVAL_MS);
+
+            synchronized (this) {
+                if (this.pageGeneration != expectedPageGeneration || this.timer != null) {
+                    return false;
+                }
+                this.timer = candidate;
+            }
+            candidate.start();
+            return true;
+        }
+
+        synchronized void stop() {
+            if (this.timer != null) {
+                this.timer.stop();
+                this.timer = null;
+            }
+        }
+
+        private synchronized void stopIfCurrentGeneration(int expectedPageGeneration) {
+            if (this.pageGeneration == expectedPageGeneration) {
+                stop();
+            }
+        }
+
+        private synchronized void stop(Timer expectedTimer) {
+            expectedTimer.stop();
+            if (this.timer == expectedTimer) {
+                this.timer = null;
+            }
+        }
+
+        synchronized Timer getTimer() {
+            return this.timer;
+        }
+    }
+
+    static final class PageConfigurationCache {
+        private int pageGeneration;
+        private String configurationScript;
+
+        synchronized void reset(int newPageGeneration) {
+            this.pageGeneration = newPageGeneration;
+            this.configurationScript = null;
+        }
+
+        synchronized String getOrCreate(int expectedPageGeneration, Supplier<String> scriptBuilder) {
+            if (this.pageGeneration != expectedPageGeneration) {
+                return null;
+            }
+            if (this.configurationScript == null) {
+                this.configurationScript = scriptBuilder.get();
+            }
+            return this.configurationScript;
         }
     }
 

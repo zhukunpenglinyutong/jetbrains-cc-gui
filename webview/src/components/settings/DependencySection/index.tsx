@@ -16,6 +16,13 @@ import {
   getRequestedVersion,
   getVersionAction,
 } from './versioning';
+import {
+  isDependencyStatusResponse,
+  requestFreshDependencyStatus,
+  requestDependencyStatusUntilSettled,
+  retryDependencyStatusRequest,
+  settleDependencyStatusRequest,
+} from '../../../utils/bridgeStartup';
 import styles from './style.module.less';
 
 interface DependencySectionProps {
@@ -158,6 +165,7 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
   const { t } = useTranslation();
   const [sdkStatus, setSdkStatus] = useState<Record<SdkId, SdkStatus>>({} as Record<SdkId, SdkStatus>);
   const [loading, setLoading] = useState(true);
+  const [statusError, setStatusError] = useState(false);
   const [installingSdk, setInstallingSdk] = useState<SdkId | null>(null);
   const [uninstallingSdk, setUninstallingSdk] = useState<SdkId | null>(null);
   const [updatingSdk, setUpdatingSdk] = useState<SdkId | null>(null);
@@ -218,12 +226,22 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
     window.updateDependencyStatus = (jsonStr: string) => {
       try {
         const status = JSON.parse(jsonStr);
-        setSdkStatus(status);
-        sdkStatusRef.current = status;
-        setLoading(false);
+        if (!isDependencyStatusResponse(status)) {
+          setStatusError(true);
+          setLoading(false);
+          settleDependencyStatusRequest('error');
+        } else {
+          setSdkStatus(status);
+          sdkStatusRef.current = status;
+          setStatusError(false);
+          setLoading(false);
+          settleDependencyStatusRequest('ready');
+        }
       } catch (error) {
         console.error('[DependencySection] Failed to parse dependency status:', error);
+        setStatusError(true);
         setLoading(false);
+        settleDependencyStatusRequest('error');
       }
       if (typeof savedUpdateDependencyStatus === 'function') {
         try { savedUpdateDependencyStatus(jsonStr); } catch (e) {
@@ -259,7 +277,9 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
           const sdkName = sdkDef ? tRef.current(sdkDef.nameKey) : result.sdkId;
           const msgKey = wasUpdating ? 'settings.dependency.updateSuccess' : 'settings.dependency.installSuccess';
           addToastRef.current?.(tRef.current(msgKey, { name: sdkName }), 'success');
-          sendToJava('get_dependency_status:');
+          setStatusError(false);
+          setLoading(true);
+          requestFreshDependencyStatus();
           sendToJava(`check_dependency_updates:${JSON.stringify({ id: result.sdkId })}`);
           sendToJava(`get_dependency_versions:${JSON.stringify({ id: result.sdkId })}`);
         } else if (result.error === 'node_not_configured') {
@@ -436,7 +456,13 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
       'claude-sdk': true,
       'codex-sdk': true,
     });
-    sendToJava('get_dependency_status:');
+    setStatusError(false);
+    setLoading(true);
+    if (window.__dependencyStatusState === 'pending') {
+      requestDependencyStatusUntilSettled();
+    } else {
+      retryDependencyStatusRequest();
+    }
     sendToJava('check_dependency_updates:');
     sendToJava('get_dependency_versions:');
     if (isNodePathReadyRef.current) {
@@ -513,6 +539,12 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
     return t('settings.dependency.updateToVersion', { version: `v${targetVersion}` });
   };
 
+  const handleRetryStatus = () => {
+    setStatusError(false);
+    setLoading(true);
+    retryDependencyStatusRequest();
+  };
+
   return (
     <div className={styles.dependencySection}>
       <h3 className={styles.sectionTitle}>{t('settings.dependency.title')}</h3>
@@ -538,6 +570,15 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
           <div className={styles.loadingState}>
             <span className="codicon codicon-loading codicon-modifier-spin" />
             <span>{t('settings.dependency.loading')}</span>
+          </div>
+        ) : statusError ? (
+          <div className={styles.loadingState}>
+            <span className="codicon codicon-warning" />
+            <span>{t('chat.sdkStatusUnavailable')}</span>
+            <button type="button" className={styles.retryButton} onClick={handleRetryStatus}>
+              <span className="codicon codicon-refresh" />
+              <span>{t('chat.retrySdkStatus')}</span>
+            </button>
           </div>
         ) : (
           SDK_DEFINITIONS.map((sdk) => {

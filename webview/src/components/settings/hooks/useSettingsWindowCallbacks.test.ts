@@ -1,6 +1,10 @@
 import { renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useSettingsWindowCallbacks, type SettingsWindowCallbacksDeps } from './useSettingsWindowCallbacks';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES,
+  useSettingsWindowCallbacks,
+  type SettingsWindowCallbacksDeps,
+} from './useSettingsWindowCallbacks';
 import type { CommitAiConfig } from '../../../types/aiFeatureConfig';
 import type { PromptEnhancerConfig } from '../../../types/promptEnhancer';
 
@@ -40,6 +44,8 @@ describe('useSettingsWindowCallbacks', () => {
     setSoundOnlyWhenUnfocused: vi.fn(),
     setSelectedSound: vi.fn(),
     setCustomSoundPath: vi.fn(),
+    setSystemNotificationOnlyWhenUnfocused: vi.fn(),
+    setAskUserQuestionSoundNotificationEnabled: vi.fn(),
     updateProviders: vi.fn(),
     updateActiveProvider: vi.fn(),
     loadProviders: vi.fn(),
@@ -58,31 +64,49 @@ describe('useSettingsWindowCallbacks', () => {
   });
 
   beforeEach(() => {
+    vi.useFakeTimers();
+    // Force setTimeout path so fake timers control deferred batches. Asserting
+    // to a plain optional-field type keeps delete legal: intersecting with
+    // Window re-introduces lib.dom's required requestIdleCallback signature.
+    delete (window as { requestIdleCallback?: unknown }).requestIdleCallback;
+    delete (window as { cancelIdleCallback?: unknown }).cancelIdleCallback;
     window.sendToJava = vi.fn();
     window.applyUiFontConfig = vi.fn();
     window.applyCodeFontConfig = vi.fn();
   });
 
-  it('does not auto-request current Claude config on mount', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('loads basic settings in batches without stamping providers/agents or CLI-probe configs', () => {
     const deps = createDeps();
 
     renderHook(() => useSettingsWindowCallbacks(deps));
 
-    expect(deps.loadProviders).toHaveBeenCalledTimes(1);
-    expect(deps.loadCodexProviders).toHaveBeenCalledTimes(1);
-    expect(deps.loadAgents).toHaveBeenCalledTimes(1);
+    // Heavy list fetches are deferred until their settings tabs open.
+    expect(deps.loadProviders).not.toHaveBeenCalled();
+    expect(deps.loadCodexProviders).not.toHaveBeenCalled();
+    expect(deps.loadAgents).not.toHaveBeenCalled();
     expect(window.sendToJava).not.toHaveBeenCalledWith('get_current_claude_config:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_node_path:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_working_directory:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_editor_font_config:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_streaming_enabled:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_codex_sandbox_mode:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_commit_prompt:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_commit_ai_config:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_prompt_enhancer_config:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_sound_notification_config:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_ui_font_config:');
-    expect(window.sendToJava).toHaveBeenCalledWith('get_code_font_config:');
+
+    // First batch only (batchSize = 5), priority fields for first paint.
+    const firstBatch = SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES.slice(0, 5);
+    expect((window.sendToJava as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])).toEqual([
+      ...firstBatch,
+    ]);
+
+    // Drain deferred batches.
+    vi.runAllTimers();
+    const allMessages = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    for (const message of SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES) {
+      expect(allMessages).toContain(message);
+    }
+
+    // CLI availability probes freeze JCEF when done on open — keep off bootstrap.
+    expect(allMessages).not.toContain('get_commit_prompt:');
+    expect(allMessages).not.toContain('get_commit_ai_config:');
+    expect(allMessages).not.toContain('get_prompt_enhancer_config:');
   });
 
   it('registers prompt enhancer callback and updates state from backend payload', () => {
@@ -97,10 +121,20 @@ describe('useSettingsWindowCallbacks', () => {
       models: {
         claude: 'claude-sonnet-4-6',
         codex: 'gpt-5.5',
+        grok: 'grok',
+        kimi: 'auto',
+        opencode: 'opencode-default',
+        pi: 'auto',
+        omp: 'auto',
       },
       availability: {
         claude: true,
         codex: true,
+        grok: false,
+        kimi: false,
+        opencode: false,
+        pi: false,
+        omp: false,
       },
     };
 
@@ -121,10 +155,20 @@ describe('useSettingsWindowCallbacks', () => {
       models: {
         claude: 'claude-sonnet-4-6',
         codex: 'gpt-5.5',
+        grok: 'grok',
+        kimi: 'auto',
+        opencode: 'opencode-default',
+        pi: 'auto',
+        omp: 'auto',
       },
       availability: {
         claude: true,
         codex: true,
+        grok: false,
+        kimi: false,
+        opencode: false,
+        pi: false,
+        omp: false,
       },
     };
 
@@ -226,5 +270,17 @@ describe('useSettingsWindowCallbacks', () => {
       fontBase64: 'AAECA',
       fontFormat: 'truetype',
     }));
+  });
+
+  it('registers system notification focus gate callback and updates state from backend payload', () => {
+    const deps = createDeps();
+
+    renderHook(() => useSettingsWindowCallbacks(deps));
+
+    window.updateSystemNotificationOnlyWhenUnfocused?.(JSON.stringify({
+      systemNotificationOnlyWhenUnfocused: true,
+    }));
+
+    expect(deps.setSystemNotificationOnlyWhenUnfocused).toHaveBeenCalledWith(true);
   });
 });

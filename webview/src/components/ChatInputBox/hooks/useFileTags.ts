@@ -11,6 +11,7 @@ import {
   getVirtualCursorPosition,
   setVirtualCursorPosition,
 } from '../utils/virtualCursorUtils.js';
+import { looksLikePathSegment } from '../../../utils/pathSegment.js';
 import type { FileTagInfo } from '../types.js';
 
 interface FileMatch {
@@ -131,20 +132,22 @@ export function useFileTags({
      * L = average path length (for startsWith checks). Acceptable for input box text
      * (typically < 10 '@' references) and moderate project sizes (< 1000 path entries).
      */
-    const matches: FileMatch[] = [];
+    const findMatches = (text: string): FileMatch[] => {
+      const matches: FileMatch[] = [];
 
-    // First pass: Find @ positions and try to match against pathMappingRef
-    for (let i = 0; i < currentText.length; i++) {
-      if (currentText[i] === '@') {
+      // Find @ positions and try to match against pathMappingRef.
+      for (let i = 0; i < text.length; i++) {
+        if (text[i] !== '@') continue;
+
         let longestMatch: { path: string; length: number } | null = null;
 
         // Try to find the longest matching path from pathMappingRef
         // Uses startsWith(str, position) to avoid creating substrings
         for (const [key] of pathMappingRef.current) {
           // Check if the text at position i matches "@key"
-          if (currentText.startsWith(key, i + 1)) {
+          if (text.startsWith(key, i + 1)) {
             // Match must be followed by whitespace or end of string
-            const afterChar = currentText[i + 1 + key.length];
+            const afterChar = text[i + 1 + key.length];
             if (afterChar === undefined || afterChar === ' ' || afterChar === '\n' || afterChar === '\t' || afterChar === '\r') {
               if (!longestMatch || key.length > longestMatch.length) {
                 longestMatch = { path: key, length: key.length };
@@ -155,7 +158,7 @@ export function useFileTags({
 
         if (longestMatch) {
           // Found a match from pathMappingRef
-          const afterChar = currentText[i + 1 + longestMatch.length];
+          const afterChar = text[i + 1 + longestMatch.length];
           const spacer = afterChar === ' ' ? ' ' : '';
           matches.push({
             index: i,
@@ -167,11 +170,37 @@ export function useFileTags({
           continue;
         }
 
-        // Fall back to simple pattern matching for paths not in pathMappingRef
-        // This handles absolute paths and paths with line numbers
-        // Match pattern: @[non-space-non-@-chars](space|newline|end)
-        const remainingText = currentText.substring(i);
-        const simpleMatch = remainingText.match(/^@([^\s@]+?)(\s|$)/);
+        // Fall back to simple pattern matching for paths not in pathMappingRef.
+        // This handles absolute paths and paths with line numbers.
+        // The helper scans forward allowing spaces when the next segment
+        // looks like a path continuation (contains a path separator: \ or /,
+        // or ends with a file extension — e.g. a filename with spaces).
+        const remainingText = text.substring(i);
+        const afterAt = remainingText.slice(1); // text after '@'
+        let endPos = 0;
+        while (endPos < afterAt.length) {
+          const ch = afterAt[endPos];
+          if (ch === '\n' || ch === '\r' || ch === '@') break;
+          if (ch === ' ' || ch === '\t') {
+            // Peek ahead: if next segment has a path separator or file
+            // extension, the space is inside the path — include it.
+            const peekRemainder = afterAt.slice(endPos + 1);
+            if (peekRemainder.length > 0 && peekRemainder[0] !== ' '
+              && peekRemainder[0] !== '\t' && peekRemainder[0] !== '\n'
+              && peekRemainder[0] !== '\r' && peekRemainder[0] !== '@'
+              && looksLikePathSegment(peekRemainder.split(/\s/)[0])
+            ) {
+              endPos++; // include the space, continue scanning
+              continue;
+            }
+            break;
+          }
+          endPos++;
+        }
+        const fallbackPath = afterAt.slice(0, endPos);
+        const simpleMatch = fallbackPath.length > 0
+          ? ['@' + fallbackPath + (remainingText[endPos + 1] === ' ' ? ' ' : ''), fallbackPath] as const
+          : null;
 
         if (simpleMatch) {
           matches.push({
@@ -183,7 +212,34 @@ export function useFileTags({
           i += simpleMatch[0].length - 1;
         }
       }
-    }
+
+      return matches;
+    };
+
+    const isValidFileReference = (filePath: string): boolean => {
+      const hashIndex = filePath.indexOf('#');
+      const pureFilePath = hashIndex !== -1 ? filePath.substring(0, hashIndex) : filePath;
+      const pureFileName = pureFilePath.split(/[/\\]/).pop() || pureFilePath;
+      const isRegistered = pathMappingRef.current.has(pureFilePath)
+        || pathMappingRef.current.has(pureFileName)
+        || pathMappingRef.current.has(filePath);
+      if (isRegistered) return true;
+
+      // Preserve the existing single-reference fallback for a manually typed
+      // absolute path or line reference. Boundaries are only ambiguous when
+      // another @ marker also starts an absolute-looking path; ordinary @
+      // text (emails, annotations) must not disable the fallback. Accepting
+      // an absolute-looking fallback alongside another path-like marker can
+      // absorb ordinary text between two references (issue #1726).
+      const absoluteAtMarkers = currentText.match(/@(?=(?:[a-zA-Z]:[/\\]|\\\\|\/))/g);
+      if (absoluteAtMarkers !== null && absoluteAtMarkers.length > 1) return false;
+
+      const hasLineNumber = /#L\d+/.test(filePath);
+      const isAbsolutePath = /^[a-zA-Z]:[/\\]/.test(filePath) || filePath.startsWith('/');
+      return hasLineNumber || isAbsolutePath;
+    };
+
+    const matches = findMatches(currentText);
 
     timer.mark('smart-matching');
 
@@ -199,29 +255,55 @@ export function useFileTags({
         ? matches.slice(0, RENDERING_LIMITS.MAX_FILE_TAGS_PER_RENDER)
         : matches;
 
-    // Check if there are plain text @filepath in DOM that need conversion
-    // Traverse all text nodes, looking for text containing @
-    let hasUnrenderedReferences = false;
+    // Only an actually renderable reference in a raw text node may authorize a
+    // root DOM rebuild. getTextContent() serializes an existing .file-tag back
+    // to @path, so validating the virtual currentText alone would mistake an
+    // already-rendered chip for pending work whenever unrelated raw @ text is
+    // also present (for example, @GetMapping).
+    const rawTextSegments: string[] = [''];
+    const appendRawText = (text: string) => {
+      rawTextSegments[rawTextSegments.length - 1] += text;
+    };
+    const breakRawTextSegment = () => {
+      if (rawTextSegments[rawTextSegments.length - 1] !== '') {
+        rawTextSegments.push('');
+      }
+    };
     const walk = (node: Node) => {
-      if (hasUnrenderedReferences) return; // Early exit if found
       if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent || '';
-        if (text.includes('@')) {
-          hasUnrenderedReferences = true;
-        }
+        appendRawText(node.textContent || '');
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         const element = node as HTMLElement;
-        // Skip already rendered file tags
-        if (!element.classList.contains('file-tag')) {
-          node.childNodes.forEach(walk);
+        // Existing chips are serialized by getTextContent but are not raw text
+        // waiting for conversion. Their decorative children must not drive a
+        // rebuild either.
+        if (element.classList.contains('file-tag') || element.classList.contains('quote-tag')) {
+          breakRawTextSegment();
+          return;
         }
+
+        const tagName = element.tagName.toLowerCase();
+        if (tagName === 'br') {
+          appendRawText('\n');
+          return;
+        }
+        if (tagName === 'div' || tagName === 'p') {
+          breakRawTextSegment();
+          node.childNodes.forEach(walk);
+          breakRawTextSegment();
+          return;
+        }
+        node.childNodes.forEach(walk);
       }
     };
     editableRef.current.childNodes.forEach(walk);
 
-    // If no unrendered references, no need to re-render
-    if (!hasUnrenderedReferences) {
-      timer.mark('no-unrendered');
+    const hasRenderableRawReference = rawTextSegments.some((text) =>
+      text.includes('@') && findMatches(text).some((match) => isValidFileReference(match.path))
+    );
+
+    if (!hasRenderableRawReference) {
+      timer.mark('no-renderable-raw-reference');
       timer.end();
       return;
     }
@@ -230,6 +312,10 @@ export function useFileTags({
     // Build new HTML content using array + join (O(n) vs O(n²) string concatenation)
     const htmlParts: string[] = [];
     let lastIndex = 0;
+    // Track whether any match will actually become a tag. In-progress completion
+    // queries (e.g. "@b") produce fallback matches but are NOT file references —
+    // closing completions / rewriting innerHTML for them kills the open dropdown.
+    let hasRenderableTag = false;
 
     limitedMatches.forEach((match) => {
       const fullMatch = match.fullMatch;
@@ -252,14 +338,7 @@ export function useFileTags({
       // Validate if path is a valid reference (must exist in pathMappingRef)
       // Only files selected from dropdown list are recorded in pathMappingRef
       // Also allow paths with line numbers (e.g. #L10-20) or absolute paths
-      const hasLineNumber = /#L\d+/.test(filePath);
-      const isAbsolutePath = /^[a-zA-Z]:[/\\]/.test(filePath) || filePath.startsWith('/');
-      const isValidReference =
-        pathMappingRef.current.has(pureFilePath) ||
-        pathMappingRef.current.has(pureFileName) ||
-        pathMappingRef.current.has(filePath) ||
-        hasLineNumber ||
-        isAbsolutePath;
+      const isValidReference = isValidFileReference(filePath);
 
       // If not a valid reference, keep original text, don't render as tag
       if (!isValidReference) {
@@ -267,6 +346,8 @@ export function useFileTags({
         lastIndex = matchIndex + fullMatch.length;
         return;
       }
+
+      hasRenderableTag = true;
 
       // Get display filename (with line number, for display)
       const displayFileName = filePath.split(/[/\\]/).pop() || filePath;
@@ -339,6 +420,14 @@ export function useFileTags({
     // Join all parts into final HTML
     const newHTML = htmlParts.join('');
     timer.mark('build-html');
+
+    // Nothing will actually be converted to a tag (e.g. an in-progress @query
+    // like "@b" while the completion dropdown is open). Leave the DOM and the
+    // dropdown untouched — closing completions here is the "flash then gone" bug.
+    if (!hasRenderableTag) {
+      timer.end();
+      return;
+    }
 
     // Save virtual cursor position before DOM replacement
     const savedVirtualOffset = getVirtualCursorPosition(editableRef.current);

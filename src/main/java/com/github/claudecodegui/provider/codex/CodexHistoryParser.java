@@ -1,8 +1,11 @@
 package com.github.claudecodegui.provider.codex;
 
+import com.github.claudecodegui.handler.CodexMessageConverter;
 import com.github.claudecodegui.util.TagExtractor;
 import com.github.claudecodegui.util.TextSanitizer;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -107,15 +110,32 @@ class CodexHistoryParser {
 
     String generateTitle(List<CodexHistoryReader.CodexMessage> messages) {
         for (CodexHistoryReader.CodexMessage msg : messages) {
-            if (!"event_msg".equals(msg.type) || msg.payload == null) {
-                continue;
-            }
-            String title = extractUserMessageTitle(msg.payload);
+            String title = extractVisibleUserTitle(msg);
             if (title != null) {
                 return title;
             }
         }
         return null;
+    }
+
+    /**
+     * Title from a user-visible prompt. Codex 0.148+ CLI rollouts often persist the
+     * prompt only as {@code response_item}/{@code role=user}; older files still use
+     * {@code event_msg}/{@code user_message}. Instruction dumps are skipped.
+     */
+    String extractVisibleUserTitle(CodexHistoryReader.CodexMessage msg) {
+        if (msg == null || msg.payload == null || msg.type == null) {
+            return null;
+        }
+        String text;
+        if ("event_msg".equals(msg.type)) {
+            text = extractEventMsgUserText(msg.payload);
+        } else if ("response_item".equals(msg.type)) {
+            text = extractResponseItemUserText(msg.payload);
+        } else {
+            return null;
+        }
+        return toTitle(text);
     }
 
     boolean isValidSession(CodexHistoryReader.SessionInfo session) {
@@ -126,63 +146,90 @@ class CodexHistoryParser {
         return session.messageCount >= 1;
     }
 
-    /**
-     * Extract the first user message title from a single message payload.
-     * Returns the truncated title or null if payload is not a user_message.
-     */
-    String extractUserMessageTitle(JsonObject payload) {
-        if (payload == null) {
+    private String extractEventMsgUserText(JsonObject payload) {
+        if (payload == null || !payload.has("type") || payload.get("type").isJsonNull()) {
             return null;
         }
-        if (!payload.has("type") || !"user_message".equals(payload.get("type").getAsString())) {
+        if (!"user_message".equals(payload.get("type").getAsString())) {
             return null;
         }
-        if (!payload.has("message")) {
+        if (!payload.has("message") || payload.get("message").isJsonNull()) {
             return null;
         }
-        String text = payload.get("message").getAsString();
+        return payload.get("message").getAsString();
+    }
+
+    private String extractResponseItemUserText(JsonObject payload) {
+        if (payload == null || !payload.has("type") || payload.get("type").isJsonNull()) {
+            return null;
+        }
+        if (!"message".equals(payload.get("type").getAsString())) {
+            return null;
+        }
+        if (!payload.has("role") || payload.get("role").isJsonNull()
+                || !"user".equals(payload.get("role").getAsString())) {
+            return null;
+        }
+        if (!payload.has("content")) {
+            return null;
+        }
+        return flattenUserContent(payload.get("content"));
+    }
+
+    private String flattenUserContent(JsonElement content) {
+        if (content == null || content.isJsonNull()) {
+            return null;
+        }
+        if (content.isJsonPrimitive()) {
+            return content.getAsString();
+        }
+        if (!content.isJsonArray()) {
+            return null;
+        }
+        JsonArray items = content.getAsJsonArray();
+        StringBuilder text = new StringBuilder();
+        for (JsonElement item : items) {
+            if (item == null || !item.isJsonObject()) {
+                continue;
+            }
+            JsonObject block = item.getAsJsonObject();
+            if (!block.has("type") || block.get("type").isJsonNull() || !block.has("text")) {
+                continue;
+            }
+            String type = block.get("type").getAsString();
+            if (!"input_text".equals(type) && !"text".equals(type)) {
+                continue;
+            }
+            if (block.get("text").isJsonNull()) {
+                continue;
+            }
+            if (text.length() > 0) {
+                text.append('\n');
+            }
+            text.append(block.get("text").getAsString());
+        }
+        return text.length() == 0 ? null : text.toString();
+    }
+
+    private String toTitle(String text) {
         if (text == null || text.isEmpty()) {
             return null;
         }
-        // Strip system/instruction tags that the Codex SDK prepends to user messages.
-        // These contain AGENTS.md content and should not appear in titles.
-        text = stripSystemTags(text);
+        // Strip system/instruction tags that Codex prepends to user messages.
+        // These contain AGENTS.md / skill dumps and should not appear in titles.
+        text = CodexMessageConverter.stripSystemTags(text);
+        if (text == null || text.isEmpty()) {
+            return null;
+        }
+        if (CodexMessageConverter.isSystemMessage(text)) {
+            return null;
+        }
         text = TagExtractor.extractCommandMessageContent(text);
-        return TextSanitizer.sanitizeAndTruncateSingleLine(text, 45);
-    }
-
-    /**
-     * Remove known system/instruction XML tag blocks from text.
-     * Codex prepends &lt;agents-instructions&gt; blocks to user messages containing
-     * AGENTS.md content; these should be stripped before title extraction.
-     */
-    static String stripSystemTags(String text) {
-        if (text == null || text.isEmpty()) {
-            return text;
+        String title = TextSanitizer.sanitizeAndTruncateSingleLine(text, 45);
+        if (title == null || title.isEmpty()) {
+            return null;
         }
-        String[] systemTags = {"agents-instructions", "system-reminder", "system-prompt"};
-        String result = text;
-        for (String tag : systemTags) {
-            result = removeTagBlock(result, tag);
-        }
-        return result.trim();
-    }
-
-    /**
-     * Remove a complete XML tag block (opening tag through closing tag) from text.
-     */
-    private static String removeTagBlock(String text, String tagName) {
-        String openTag = "<" + tagName + ">";
-        String closeTag = "</" + tagName + ">";
-        int start = text.indexOf(openTag);
-        if (start == -1) {
-            return text;
-        }
-        int end = text.indexOf(closeTag, start);
-        if (end == -1) {
-            return text;
-        }
-        return text.substring(0, start) + text.substring(end + closeTag.length());
+        return title;
     }
 
     long parseTimestamp(String timestamp) {

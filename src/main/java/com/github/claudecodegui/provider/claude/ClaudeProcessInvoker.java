@@ -272,6 +272,7 @@ class ClaudeProcessInvoker {
                 || line.startsWith("[TOOL_RESULT]")
                 || line.startsWith("[USAGE]")
                 || line.startsWith("[MESSAGE_START]")
+                || line.startsWith("[BLOCK_RESET]")
                 || line.startsWith("[MESSAGE_END]");
     }
 

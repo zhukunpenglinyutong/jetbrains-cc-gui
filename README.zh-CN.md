@@ -1,6 +1,6 @@
 <div align="center">
 
-# CC GUI（Claude or Codex）
+# CC GUI（Claude, Codex and More）
 
 > 原名：Claude Code GUI
 
@@ -16,7 +16,7 @@
 
 > 为规避Claude商标风险，本项目名称修改为CC GUI（原名：Claude Code GUI）；并更换LOGO减少中国元素；对于安全方面，后续每个小版本发版前都进行 /security-review 审查，每隔10个小版本进行一次整体的 claude-code-security 审查
 
-一个功能强大的 IntelliJ IDEA 插件，为开发者提供 **Claude Code** 和 **OpenAI Codex** 双 AI 工具的可视化操作界面，让 AI 辅助编程变得更加高效和直观。
+一个功能强大的 IntelliJ IDEA 插件，为开发者提供 **Claude Code**、**OpenAI Codex** 以及更多 AI 编程 CLI的可视化操作界面，让 AI 辅助编程变得更加高效和直观。
 
 <img width="850" alt="Image" src="/docs/img/banner.png" />
 
@@ -24,15 +24,21 @@
 
 ## 插件下载
 
-[CC GUI（Claude or Codex） 下载](https://plugins.jetbrains.com/plugin/29342-cc-gui-claude-or-codex-)
+[CC GUI（Claude, Codex and More） 下载](https://plugins.jetbrains.com/plugin/29342-cc-gui-claude-or-codex-)
 
 ---
 
 ## 核心特性
 
-### 双 AI 引擎支持
+### 多 AI 引擎支持
 - **Claude Code** - Anthropic 官方 AI 编程助手，支持 Opus 4.5 等多模型
 - **OpenAI Codex** - OpenAI 强大的代码生成引擎
+- **Grok CLI**（Beta）- xAI 的命令行 AI 编程助手
+- **Kimi CLI**（Beta）- 月之暗面（Moonshot AI）的命令行 AI 编程助手
+- **OpenCode**（Beta）- 开源终端 AI 编程 Agent
+- **PI CLI**（Beta）- PI 命令行 AI 编程助手
+- **OMP CLI**（Beta）- OMP 命令行 AI 编程助手
+- **DeepSeek Harness**（Beta）- DeepSeek 的命令行编程 Harness
 
 ### 智能对话功能
 - 上下文感知的 AI 编程助手
@@ -119,136 +125,9 @@ MIT
 
 感谢所有帮助 IDEA-Claude-Code-GUI 变得更好的贡献者！
 
-<table>
-  <tr>
-    <td align="center">
-      <a href="https://github.com/zhukunpenglinyutong">
-        <img src="https://avatars.githubusercontent.com/u/31264015?size=100" width="100" height="100" alt="zhukunpenglinyutong" style="border-radius: 50%; border: 3px solid #ff6b35; box-shadow: 0 0 15px rgba(255, 107, 53, 0.6);" />
-      </a>
-      <div>⭐️⭐️⭐️</div>
-    </td>
-    <td align="center">
-      <a href="https://github.com/M1sury">
-        <img src="https://avatars.githubusercontent.com/u/64764195?size=100" width="100" height="100" alt="M1sury" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/gadfly3173">
-        <img src="https://avatars.githubusercontent.com/u/28685179?size=100" width="100" height="100" alt="gadfly3173" style="border-radius: 50%; border: 3px solid #ff6b35; box-shadow: 0 0 15px rgba(255, 107, 53, 0.6);" />
-      </a>
-      <div">🔥🔥🔥</div>
-    </td>
-    <td align="center">
-      <a href="https://github.com/song782360037">
-        <img src="https://avatars.githubusercontent.com/u/66980578?size=100" width="100" height="100" alt="song782360037" style="border-radius: 50%;" />
-      </a>
-      <div">🔥</div>
-    </td>
-    <td align="center">
-      <a href="https://github.com/hpstream">
-        <img src="https://avatars.githubusercontent.com/u/18394192?size=100" width="100" height="100" alt="hpstream" style="border-radius: 50%;" />
-      </a>
-      <div>🔥🔥</div>
-    </td>
-    <td align="center">
-      <a href="https://github.com/imblowsnow">
-        <img src="https://avatars.githubusercontent.com/u/74449531?size=100" width="100" height="100" alt="imblowsnow" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/Rinimabi">
-        <img src="https://avatars.githubusercontent.com/u/18625271?size=100" width="100" height="100" alt="Rinimabi" style="border-radius: 50%;" />
-      </a>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <a href="https://github.com/GotoFox">
-        <img src="https://avatars.githubusercontent.com/u/68596145?size=100" width="100" height="100" alt="GotoFox" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/changshunxu520">
-        <img src="https://avatars.githubusercontent.com/u/16171624?size=100" width="100" height="100" alt="changshunxu520" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/lie5860">
-        <img src="https://avatars.githubusercontent.com/u/30894657?size=100" width="100" height="100" alt="lie5860" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/buddhist-coder">
-        <img src="https://avatars.githubusercontent.com/u/61658071?size=100" width="100" height="100" alt="buddhist-coder" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/LaCreArthur">
-        <img src="https://avatars.githubusercontent.com/u/14138307?size=100" width="100" height="100" alt="LaCreArthur" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/dungnguyent8">
-        <img src="https://avatars.githubusercontent.com/u/39462756?size=100" width="100" height="100" alt="dungnguyent8" style="border-radius: 50%;" />
-      </a>
-      <div>🔥</div>
-    </td>
-    <td align="center">
-      <a href="https://github.com/magic5295">
-        <img src="https://avatars.githubusercontent.com/u/157901486?size=100" width="100" height="100" alt="magic5295" style="border-radius: 50%;" />
-      </a>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <a href="https://github.com/JackWPP">
-        <img src="https://avatars.githubusercontent.com/u/120316122?size=100" width="100" height="100" alt="JackWPP" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/luhua-123">
-        <img src="https://avatars.githubusercontent.com/u/83643600?size=100" width="100" height="100" alt="luhua-123" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/geofqiu-hub">
-        <img src="https://avatars.githubusercontent.com/u/248376932?size=100" width="100" height="100" alt="geofqiu-hub" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/1lck">
-        <img src="https://avatars.githubusercontent.com/u/159525154?size=100" width="100" height="100" alt="1lck" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/fz-lyle">
-        <img src="https://avatars.githubusercontent.com/u/35370530?size=100" width="100" height="100" alt="fz-lyle" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/dsudomoin">
-        <img src="https://avatars.githubusercontent.com/u/155488585?size=100" width="100" height="100" alt="dsudomoin" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/serega0005">
-        <img src="https://avatars.githubusercontent.com/u/39858725?size=100" width="100" height="100" alt="serega0005" style="border-radius: 50%;" />
-      </a>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <a href="https://github.com/jhaan83">
-        <img src="https://avatars.githubusercontent.com/u/45828854?size=100" width="100" height="100" alt="jhaan83" style="border-radius: 50%;" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://github.com/Olexandr1904">
-        <img src="https://avatars.githubusercontent.com/u/12022163?size=100" width="100" height="100" alt="Olexandr1904" style="border-radius: 50%;" />
-      </a>
-    </td>
-  </tr>
-</table>
+<a href="https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=zhukunpenglinyutong/jetbrains-cc-gui" alt="Contributors" />
+</a>
 
 ---
 
@@ -282,7 +161,7 @@ https://atomgit.com/zhukunpenglinyutong/idea-claude-code-gui
 
 ## Star History
 
-[![Star History](https://api.star-history.com/svg?repos=zhukunpenglinyutong/idea-claude-code-gui&type=date&legend=top-left)](https://www.star-history.com/#zhukunpenglinyutong/idea-claude-code-gui&type=date&legend=top-left)
+[![Star History](https://star-history.dera.page/svg?repos=zhukunpenglinyutong/jetbrains-cc-gui&type=date&legend=top-left)](https://star-history.dera.page/#zhukunpenglinyutong/jetbrains-cc-gui&type=date&legend=top-left)
 
 <!-- LINK GROUP -->
 

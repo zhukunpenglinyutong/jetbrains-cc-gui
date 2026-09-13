@@ -1,6 +1,8 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.provider.CustomPricingProvider;
 import com.github.claudecodegui.session.ClaudeSession.Message;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
@@ -8,8 +10,11 @@ import com.google.gson.JsonObject;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -45,14 +50,27 @@ public class ClaudeMessageHandlerResultUsageTest {
         callback = new RecordingCallback();
         callbackHandler.setCallback(callback);
 
+        // No env mappings: pricing must stay on the built-in table, and must never read
+        // the developer's real ~/.codemoss/config.json.
         handler = new ClaudeMessageHandler(
                 null,
                 state,
                 callbackHandler,
                 messageParser,
                 messageMerger,
-                gson
+                gson,
+                fakeSettings("{}")
         );
+    }
+
+    /** Fake settings service returning a fixed claude settings JSON. */
+    private static CodemossSettingsService fakeSettings(String settingsJson) {
+        return new CodemossSettingsService() {
+            @Override
+            public JsonObject readClaudeSettings() throws IOException {
+                return new Gson().fromJson(settingsJson, JsonObject.class);
+            }
+        };
     }
 
     @Test
@@ -79,6 +97,40 @@ public class ClaudeMessageHandlerResultUsageTest {
         JsonObject messageUsage = msg.raw.getAsJsonObject("message").getAsJsonObject("usage");
         assertEquals(37, messageUsage.get("input_tokens").getAsInt());
         assertEquals(353, messageUsage.get("output_tokens").getAsInt());
+    }
+
+    @Test
+    public void billsTurnWithProviderMappedModelInsteadOfClaudeSlotId() throws Exception {
+        Path config = Files.createTempFile("pricing-test", ".json");
+        Files.writeString(config, "{\"customModelPricing\":{\"claude\":{\"deepseek-v4-flash\":{"
+                + "\"inputCostPer1M\":1.0,\"outputCostPer1M\":2.0,\"cacheReadCostPer1M\":0.02}}}}");
+        CustomPricingProvider.setInstanceForTests(CustomPricingProvider.createForTests(config));
+        try {
+            // Session selected the claude-sonnet-4-6 slot, but the provider env maps it to
+            // deepseek-v4-flash (as in ~/.codemoss config). The turn must be billed at the
+            // custom deepseek rate, NOT the built-in sonnet rate.
+            handler = new ClaudeMessageHandler(
+                    null,
+                    state,
+                    new CallbackHandler(),
+                    new MessageParser(),
+                    new MessageMerger(),
+                    new GsonBuilder().create(),
+                    fakeSettings("{\"env\":{\"ANTHROPIC_DEFAULT_SONNET_MODEL\":\"deepseek-v4-flash\"}}")
+            );
+
+            Message msg = newAssistantMessageWithUsage(37, 353);
+            setCurrentAssistantMessage(msg);
+            invokeHandleResult("{\"type\":\"result\",\"subtype\":\"success\",\"usage\":{"
+                    + "\"input_tokens\":1200,\"cache_creation_input_tokens\":4096,"
+                    + "\"cache_read_input_tokens\":363100,\"output_tokens\":4560}}");
+
+            // 1200*1 + 363100*0.02 + 4560*2 per 1M = 0.0012 + 0.007262 + 0.00912
+            assertEquals(0.017582, msg.raw.get("turnCostUsd").getAsDouble(), 0.000001);
+        } finally {
+            CustomPricingProvider.setInstanceForTests(null);
+            Files.deleteIfExists(config);
+        }
     }
 
     @Test

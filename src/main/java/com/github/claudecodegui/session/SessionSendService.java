@@ -6,12 +6,17 @@ import com.github.claudecodegui.settings.CodexSettingsManager;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.grok.GrokSDKBridge;
+import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.github.claudecodegui.provider.common.MessageCallback;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -30,6 +35,8 @@ public class SessionSendService {
     private final Gson gson;
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
+    private final GrokSDKBridge grokSDKBridge;
+    private final Map<String, MarkerCliBridge> cliBridges;
     private final SessionContextService contextService;
 
     public SessionSendService(
@@ -41,7 +48,25 @@ public class SessionSendService {
             Gson gson,
             ClaudeSDKBridge claudeSDKBridge,
             CodexSDKBridge codexSDKBridge,
+            Map<String, MarkerCliBridge> cliBridges,
             SessionContextService contextService
+    ) {
+        this(project, state, callbackFacade, messageParser, messageMerger, gson,
+                claudeSDKBridge, codexSDKBridge, cliBridges, contextService, null);
+    }
+
+    public SessionSendService(
+            Project project,
+            SessionState state,
+            SessionCallbackFacade callbackFacade,
+            MessageParser messageParser,
+            MessageMerger messageMerger,
+            Gson gson,
+            ClaudeSDKBridge claudeSDKBridge,
+            CodexSDKBridge codexSDKBridge,
+            Map<String, MarkerCliBridge> cliBridges,
+            SessionContextService contextService,
+            GrokSDKBridge grokSDKBridge
     ) {
         this.project = project;
         this.state = state;
@@ -51,6 +76,8 @@ public class SessionSendService {
         this.gson = gson;
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
+        this.grokSDKBridge = grokSDKBridge;
+        this.cliBridges = cliBridges != null ? cliBridges : Collections.emptyMap();
         this.contextService = contextService;
     }
 
@@ -89,7 +116,8 @@ public class SessionSendService {
             List<String> fileTagPaths,
             String requestedPermissionMode,
             String requestedReasoningEffort,
-            String requestedCodexFastMode
+            String requestedCodexFastMode,
+            String requestedDshPreset
     ) {
         String agentPrompt = externalAgentPrompt;
         if (agentPrompt == null) {
@@ -132,6 +160,36 @@ public class SessionSendService {
                     effectivePermissionMode,
                     normalizedRequestedEffort,
                     effectiveCodexServiceTier
+            );
+        }
+
+        if ("grok".equals(currentProvider) && grokSDKBridge != null) {
+            return sendToGrok(
+                    channelId,
+                    input,
+                    attachments,
+                    openedFilesJson,
+                    agentPrompt,
+                    fileTagPaths,
+                    effectivePermissionMode,
+                    normalizedRequestedEffort
+            );
+        }
+
+        if (cliBridges.containsKey(currentProvider) && !"grok".equals(currentProvider)) {
+            if ("dsh".equals(currentProvider) && requestedDshPreset != null) {
+                state.setDshPreset(requestedDshPreset);
+            }
+            return sendToCliProvider(
+                    currentProvider,
+                    channelId,
+                    input,
+                    attachments,
+                    openedFilesJson,
+                    agentPrompt,
+                    fileTagPaths,
+                    normalizedRequestedEffort,
+                    effectivePermissionMode
             );
         }
 
@@ -178,7 +236,14 @@ public class SessionSendService {
             resolvedMode = "default";
         }
 
-        if ("codex".equals(provider) && "plan".equals(resolvedMode)) {
+        // Codex and Grok run as full SDK bridges (not MarkerCli providers, so they
+        // are absent from CLI_PROVIDER_IDS), but like the headless CLI providers
+        // they have no plan-mode equivalent — so plan still downgrades to default.
+        // EXCEPT omp, where "plan" is a model role (`omp --model plan`), not Claude
+        // plan mode.
+        if (("codex".equals(provider) || "grok".equals(provider)
+                || (SessionProviderRouter.isCliProvider(provider) && !"omp".equals(provider)))
+                && "plan".equals(resolvedMode)) {
             return "default";
         }
         return resolvedMode;
@@ -279,6 +344,193 @@ public class SessionSendService {
                 effectiveCodexServiceTier,
                 handler
         ).thenApply(result -> null);
+    }
+
+    private CompletableFuture<Void> sendToGrok(
+            String channelId,
+            String input,
+            List<ClaudeSession.Attachment> attachments,
+            JsonObject openedFilesJson,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String effectivePermissionMode,
+            String requestedReasoningEffort
+    ) {
+        if (grokSDKBridge == null) {
+            LOG.error("[Lifecycle] sendToGrok called but GrokSDKBridge is null");
+            callbackFacade.notifyStateChange(false, false, "Grok bridge not available");
+            return CompletableFuture.completedFuture(null);
+        }
+        GrokMessageHandler handler = new GrokMessageHandler(state, callbackFacade.getCallbackHandler());
+        Boolean streaming = readStreamingEnabled();
+        final String runtimeSessionEpoch = state.getRuntimeSessionEpoch();
+        final String currentModel = state.getModel();
+        String projectBase = project != null ? project.getBasePath() : null;
+        String guardedCwd = com.github.claudecodegui.util.PathUtils.guardWorkingDirectory(
+                state.getCwd(), projectBase);
+        if (guardedCwd == null) {
+            guardedCwd = state.getCwd();
+        } else if (state.getCwd() == null || !guardedCwd.equals(state.getCwd())) {
+            LOG.warn("[Lifecycle] sendToGrok cwd guard: " + state.getCwd() + " -> " + guardedCwd);
+            state.setCwd(guardedCwd);
+        }
+        LOG.info("[Lifecycle] sendToGrok sessionId=" + (state.getSessionId() != null ? state.getSessionId() : "(new)")
+                + ", epoch=" + runtimeSessionEpoch
+                + ", cwd=" + guardedCwd
+                + ", model=" + currentModel
+                + ", fileTags=" + (fileTagPaths != null ? fileTagPaths.size() : 0));
+
+        return grokSDKBridge.sendMessage(
+                channelId,
+                input,
+                state.getSessionId(),
+                runtimeSessionEpoch,
+                guardedCwd,
+                attachments,
+                effectivePermissionMode,
+                currentModel,
+                openedFilesJson,
+                agentPrompt,
+                streaming,
+                false,
+                requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort(),
+                handler
+        ).thenApply(result -> null);
+    }
+
+    private CompletableFuture<Void> sendToCliProvider(
+            String provider,
+            String channelId,
+            String input,
+            List<ClaudeSession.Attachment> attachments,
+            JsonObject openedFilesJson,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String requestedReasoningEffort,
+            String permissionMode
+    ) {
+        MarkerCliBridge bridge = cliBridges.get(provider);
+        if (bridge == null) {
+            MessageCallback missingHandler = createCliMessageHandler(provider);
+            missingHandler.onError("CLI provider not registered: " + provider);
+            return CompletableFuture.completedFuture(null);
+        }
+
+        // Grok has a dedicated handler (multi-turn assistant ownership + no user-echo
+        // dupes). Other CLI providers reuse Codex streaming marker handling.
+        MessageCallback handler = createCliMessageHandler(provider);
+
+        String contextAppend = contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
+        String finalInput = (input != null ? input : "") + contextAppend;
+        if (agentPrompt != null && !agentPrompt.isEmpty()) {
+            finalInput = finalInput + "\n\n## Agent Role and Instructions\n\n" + agentPrompt;
+            LOG.info("[Agent] ✓ Appending agentPrompt to user message for " + provider
+                    + " (length: " + agentPrompt.length() + " chars)");
+        }
+
+        String effort = normalizeCliReasoningEffort(
+                requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort()
+        );
+        String modelForCli = normalizeCliModelForProvider(provider, state.getModel());
+        String effectiveMode = permissionMode != null && !permissionMode.isBlank()
+                ? permissionMode
+                : "default";
+        int attachmentCount = attachments != null ? attachments.size() : 0;
+
+        LOG.info("[Lifecycle] sendToCli provider=" + provider
+                + " sessionId=" + (state.getSessionId() != null ? state.getSessionId() : "(new)")
+                + ", cwd=" + state.getCwd()
+                + ", modelRaw=" + state.getModel()
+                + ", modelCli=" + (modelForCli != null ? modelForCli : "(config-default)")
+                + ", effort=" + effort
+                + ", permissionMode=" + effectiveMode
+                + ", attachments=" + attachmentCount);
+
+        return bridge.sendMessage(
+                channelId,
+                finalInput,
+                state.getSessionId(),
+                state.getCwd(),
+                modelForCli != null ? modelForCli : "",
+                effort,
+                attachments,
+                effectiveMode,
+                "dsh".equals(provider) ? state.getDshPreset() : null,
+                handler
+        ).thenApply(result -> null);
+    }
+
+    /**
+     * Build the marker-stream callback for a CLI provider.
+     * Grok uses {@link GrokMessageHandler} so each stream owns a dedicated assistant
+     * bubble and ACP user echoes never re-append the send-time user message.
+     */
+    MessageCallback createCliMessageHandler(String provider) {
+        CallbackHandler callbacks = callbackFacade.getCallbackHandler();
+        if ("grok".equals(provider)) {
+            return new GrokMessageHandler(state, callbacks);
+        }
+        return new CodexMessageHandler(state, callbacks);
+    }
+
+    static String normalizeCliReasoningEffort(String effort) {
+        if (effort == null) {
+            return "medium";
+        }
+        String normalized = effort.trim().toLowerCase();
+        if ("low".equals(normalized) || "medium".equals(normalized) || "high".equals(normalized)) {
+            return normalized;
+        }
+        return "medium";
+    }
+
+    /**
+     * Map UI model selection to CLI model flag. Returns null to omit the flag
+     * (provider CLI uses its own default / config).
+     */
+    static String normalizeCliModelForProvider(String provider, String model) {
+        if (model == null) {
+            return null;
+        }
+        String trimmed = model.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        String lower = trimmed.toLowerCase();
+        if ("__config_default__".equals(lower)
+                || "auto".equals(lower)
+                || "default".equals(lower)
+                || "(default)".equals(lower)
+                || "config-default".equals(lower)
+                || "config_default".equals(lower)
+                || "opencode default".equals(lower)
+                || "opencode-default".equals(lower)
+                || "dsh-default".equals(lower)) {
+            return null;
+        }
+        // Leftovers after a provider switch without model reset. OpenCode
+        // legitimately supports OpenAI models, so gpt-* is only filtered for
+        // the other CLI providers.
+        if (lower.startsWith("claude-") || (lower.startsWith("gpt-") && !"opencode".equals(provider))) {
+            LOG.warn("[" + provider + "] Ignoring non-provider model leftover for CLI: " + trimmed);
+            return null;
+        }
+        if ("grok".equals(provider)) {
+            if ("grok".equals(lower) || "default".equals(lower) || "(default)".equals(lower)
+                    || "grok-4.5".equals(lower)) {
+                LOG.info("[Grok] Normalizing sentinel model id '" + trimmed + "' to default model 'grok-4.6'");
+                return "grok-4.6";
+            }
+        }
+        return trimmed;
+    }
+
+    /**
+     * @deprecated use {@link #normalizeCliModelForProvider(String, String)}
+     */
+    @Deprecated
+    static String normalizeGrokModelForCli(String model) {
+        return normalizeCliModelForProvider("grok", model);
     }
 
     private CompletableFuture<Void> sendToClaude(

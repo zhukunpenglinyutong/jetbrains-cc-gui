@@ -2,6 +2,29 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DropdownItemData, DropdownPosition, TriggerQuery } from '../types.js';
 import { debugError, debugLog } from '../../../utils/debug.js';
 
+/** Local helpers for optimistic @-search refilter (keep independent of file provider). */
+function isAbsoluteLikePathLocal(path: string): boolean {
+  if (!path) return false;
+  if (path.startsWith('/') || path.startsWith('\\')) return true;
+  if (/^[a-zA-Z]:[\\/]/.test(path)) return true;
+  if (path.startsWith('//') || path.startsWith('\\\\')) return true;
+  return false;
+}
+
+function fuzzySubsequenceMatchLocal(text: string, query: string): boolean {
+  if (!query) return true;
+  if (!text) return false;
+  let ti = 0;
+  let qi = 0;
+  while (ti < text.length && qi < query.length) {
+    if (text.charAt(ti) === query.charAt(qi)) {
+      qi += 1;
+    }
+    ti += 1;
+  }
+  return qi === query.length;
+}
+
 interface CompletionDropdownOptions<T> {
   /** Trigger symbol */
   trigger: string;
@@ -20,7 +43,13 @@ interface CompletionDropdownOptions<T> {
 interface CompletionDropdownState {
   isOpen: boolean;
   items: DropdownItemData[];
+  /** Items currently selectable (aligned 1:1 with `items`). */
   rawItems: unknown[];
+  /**
+   * Last full server payload. Used for optimistic client re-filter on keystroke
+   * without waiting for Java, and so backspace can widen results again.
+   */
+  sourceRawItems: unknown[];
   activeIndex: number;
   position: DropdownPosition | null;
   triggerQuery: TriggerQuery | null;
@@ -46,6 +75,7 @@ export function useCompletionDropdown<T>({
     isOpen: false,
     items: [],
     rawItems: [],
+    sourceRawItems: [],
     activeIndex: 0,
     position: null,
     triggerQuery: null,
@@ -80,6 +110,7 @@ export function useCompletionDropdown<T>({
       navigationMode: 'keyboard',
       items: [],
       rawItems: [],
+      sourceRawItems: [],
       loading: true, // Set loading immediately on open
     }));
   }, []);
@@ -121,7 +152,13 @@ export function useCompletionDropdown<T>({
 
     // Check minimum query length
     if (query.length < minQueryLength) {
-      setState(prev => ({ ...prev, items: [], rawItems: [], loading: false }));
+      setState(prev => ({
+        ...prev,
+        items: [],
+        rawItems: [],
+        sourceRawItems: [],
+        loading: false,
+      }));
       return;
     }
 
@@ -134,8 +171,10 @@ export function useCompletionDropdown<T>({
     try {
       const results = await provider(query, controller.signal);
 
-      // Check if aborted
-      if (controller.signal.aborted) return;
+      // A newer search has taken over — do not clobber its state
+      if (abortControllerRef.current !== controller || controller.signal.aborted) {
+        return;
+      }
 
       const items = results.map(toDropdownItem);
       const endedAt = performance.now?.() ?? Date.now();
@@ -146,15 +185,31 @@ export function useCompletionDropdown<T>({
         ...prev,
         items,
         rawItems: results as unknown[],
+        sourceRawItems: results as unknown[],
         loading: false,
         activeIndex: 0,
       }));
     } catch (error) {
-      // Ignore abort errors
-      if ((error as Error).name === 'AbortError') return;
+      // Ignore abort from a superseded request; only clear loading if we still own it
+      if ((error as Error).name === 'AbortError') {
+        if (abortControllerRef.current === controller) {
+          setState(prev => ({ ...prev, loading: false }));
+        }
+        return;
+      }
+
+      if (abortControllerRef.current !== controller) {
+        return;
+      }
 
       debugError('[useCompletionDropdown] Search error:', error);
-      setState(prev => ({ ...prev, items: [], rawItems: [], loading: false }));
+      setState(prev => ({
+        ...prev,
+        items: [],
+        rawItems: [],
+        sourceRawItems: [],
+        loading: false,
+      }));
     }
   }, [provider, toDropdownItem, minQueryLength]);
 
@@ -174,13 +229,82 @@ export function useCompletionDropdown<T>({
   }, [search, debounceMs]);
 
   /**
-   * Update query
+   * Update query.
+   * Immediately re-filters the last server payload so typing feels fuzzy/responsive
+   * while Java is still responding (avoids stale unfiltered rows flashing by).
+   * sourceRawItems is the full last payload; rawItems stays 1:1 with displayed items
+   * so keyboard/click selection stays correct. Backspace widens from sourceRawItems.
    */
   const updateQuery = useCallback((triggerQuery: TriggerQuery) => {
     debugLog('[useCompletionDropdown] updateQuery:', triggerQuery);
-    setState(prev => ({ ...prev, triggerQuery }));
-    debouncedSearch(triggerQuery.query);
-  }, [debouncedSearch]);
+    const nextQuery = triggerQuery.query ?? '';
+
+    setState(prev => {
+      const source = (prev.sourceRawItems.length > 0
+        ? prev.sourceRawItems
+        : prev.rawItems) as T[];
+
+      if (!source.length || !prev.isOpen) {
+        return { ...prev, triggerQuery };
+      }
+
+      const q = nextQuery.trim().toLowerCase();
+
+      if (!q) {
+        return {
+          ...prev,
+          triggerQuery,
+          items: source.map(toDropdownItem),
+          rawItems: source as unknown[],
+          activeIndex: 0,
+        };
+      }
+
+      // Path-navigation queries ("src/comp") can never match a plain filename
+      // label or a (relative) description — match on the trailing segment only,
+      // mirroring the backend parseQuery split.
+      const lastSlash = q.lastIndexOf('/');
+      if (lastSlash >= 0 && lastSlash === q.length - 1) {
+        // Just entered a directory ("@src/"): keep previous items visible
+        // until the server responds instead of flashing an empty list.
+        return { ...prev, triggerQuery };
+      }
+      const matchTerm = lastSlash >= 0 ? q.slice(lastSlash + 1) : q;
+
+      const filteredRaw: T[] = [];
+      const filteredItems: DropdownItemData[] = [];
+      for (const raw of source) {
+        const item = toDropdownItem(raw);
+        const label = (item.label || '').toLowerCase();
+        const desc = (item.description || '').toLowerCase();
+        // Prefer filename label. Absolute description paths must not match —
+        // project roots like "jetbrains-cc-gui" would match nearly every letter.
+        if (label.includes(matchTerm) || fuzzySubsequenceMatchLocal(label, matchTerm)) {
+          filteredRaw.push(raw);
+          filteredItems.push(item);
+          continue;
+        }
+        if (
+          desc &&
+          !isAbsoluteLikePathLocal(desc) &&
+          (desc.includes(matchTerm) || fuzzySubsequenceMatchLocal(desc, matchTerm))
+        ) {
+          filteredRaw.push(raw);
+          filteredItems.push(item);
+        }
+      }
+
+      return {
+        ...prev,
+        triggerQuery,
+        items: filteredItems,
+        rawItems: filteredRaw as unknown[],
+        activeIndex: 0,
+      };
+    });
+
+    debouncedSearch(nextQuery);
+  }, [debouncedSearch, toDropdownItem]);
 
   /**
    * Select active item

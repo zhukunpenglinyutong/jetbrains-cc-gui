@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ClaudeMessage } from '../types';
 import {
   getMessageKey,
+  reconcileMessageKeys,
   getContentBlocks,
   mergeConsecutiveAssistantMessages,
   formatCommandForDisplay,
@@ -70,6 +71,89 @@ describe('getMessageKey', () => {
   it('falls back to type-index when no uuid, __turnId, or timestamp', () => {
     const msg: ClaudeMessage = { type: 'assistant', content: 'hi' };
     expect(getMessageKey(msg, 7)).toBe('assistant-7');
+  });
+});
+
+describe('reconcileMessageKeys', () => {
+  it('deduplicates repeated UUIDs, turn IDs, timestamps, and fallback keys', () => {
+    const messages = [
+      { type: 'user', content: 'a', raw: { uuid: 'same' } },
+      { type: 'user', content: 'b', raw: { uuid: 'same' } },
+      { type: 'assistant', content: 'c', __turnId: 7 },
+      { type: 'assistant', content: 'd', __turnId: 7 },
+      { type: 'user', content: 'e', timestamp: '2026-01-01T00:00:00Z' },
+      { type: 'user', content: 'f', timestamp: '2026-01-01T00:00:00Z' },
+      { type: 'error', content: 'g' },
+      { type: 'error', content: 'h' },
+    ] as ClaudeMessage[];
+
+    const snapshot = reconcileMessageKeys(messages, undefined, 'session-a');
+
+    expect(new Set(snapshot.keys).size).toBe(messages.length);
+  });
+
+  it('keeps existing keys when a duplicate is prepended', () => {
+    const existing = { type: 'user', content: 'existing', raw: { uuid: 'duplicate' } } as ClaudeMessage;
+    const first = reconcileMessageKeys([existing], undefined, 'session-a');
+    const prepended = { type: 'user', content: 'new', raw: { uuid: 'duplicate' } } as ClaudeMessage;
+
+    const next = reconcileMessageKeys([prepended, existing], first, 'session-a');
+
+    expect(next.keys[1]).toBe(first.keys[0]);
+    expect(next.keys[0]).not.toBe(next.keys[1]);
+  });
+
+  it('does not let a prepended timestamp match steal a later UUID key', () => {
+    const oldA = {
+      type: 'user', content: 'A', timestamp: 'shared-time', raw: { uuid: 'uuid-a' },
+    } as ClaudeMessage;
+    const oldB = {
+      type: 'user', content: 'B', timestamp: 'shared-time', raw: { uuid: 'uuid-b' },
+    } as ClaudeMessage;
+    const first = reconcileMessageKeys([oldA, oldB], undefined, 'session-a');
+    const newC = {
+      type: 'user', content: 'C', timestamp: 'shared-time', raw: { uuid: 'uuid-c' },
+    } as ClaudeMessage;
+    const replayA = { ...oldA, raw: { uuid: 'uuid-a' } } as ClaudeMessage;
+    const replayB = { ...oldB, raw: { uuid: 'uuid-b' } } as ClaudeMessage;
+
+    const next = reconcileMessageKeys([newC, replayA, replayB], first, 'session-a');
+
+    expect(next.keys[1]).toBe(first.keys[0]);
+    expect(next.keys[2]).toBe(first.keys[1]);
+    expect(next.keys[0]).not.toBe(first.keys[0]);
+  });
+
+  it('retains one key through turn ID and UUID identity enrichment', () => {
+    const turnOnly = { type: 'assistant', content: '', __turnId: 42 } as ClaudeMessage;
+    const first = reconcileMessageKeys([turnOnly], undefined, 'session-a');
+    const enriched = {
+      ...turnOnly,
+      raw: { uuid: 'assistant-uuid' },
+    } as ClaudeMessage;
+    const second = reconcileMessageKeys([enriched], first, 'session-a');
+    const uuidOnly = { ...enriched, __turnId: undefined } as ClaudeMessage;
+    const third = reconcileMessageKeys([uuidOnly], second, 'session-a');
+
+    expect(second.keys[0]).toBe(first.keys[0]);
+    expect(third.keys[0]).toBe(first.keys[0]);
+  });
+
+  it('keeps duplicate references unique and stable by occurrence', () => {
+    const message = { type: 'assistant', content: 'duplicate reference' } as ClaudeMessage;
+    const first = reconcileMessageKeys([message, message], undefined, 'session-a');
+    const second = reconcileMessageKeys([message, message], first, 'session-a');
+
+    expect(new Set(first.keys).size).toBe(2);
+    expect(second.keys).toEqual(first.keys);
+  });
+
+  it('changes the key namespace when the session scope changes', () => {
+    const message = { type: 'user', content: 'same', raw: { uuid: 'message-1' } } as ClaudeMessage;
+    const first = reconcileMessageKeys([message], undefined, 'session-a');
+    const second = reconcileMessageKeys([message], first, 'session-b');
+
+    expect(second.keys[0]).not.toBe(first.keys[0]);
   });
 });
 

@@ -3,15 +3,14 @@ import type { Attachment, SelectedAgent, QueuedMessage } from './types.js';
 import { AttachmentList } from './AttachmentList.js';
 import { ContextBar } from './ContextBar.js';
 import { MessageQueue } from './MessageQueue.js';
-import { useUIState } from '../../contexts/UIStateContext';
-import { copyToClipboard } from '../../utils/copyUtils';
-
-const GITHUB_REPO_URL = 'https://github.com/zhukunpenglinyutong/jetbrains-cc-gui';
+import { openBrowser, GITHUB_REPO_URL } from '../../utils/bridge';
 
 export function ChatInputBoxHeader({
   sdkStatusLoading,
+  sdkStatusError,
   sdkInstalled,
   currentProvider,
+  onRetrySdkStatus,
   onInstallSdk,
   t,
   attachments,
@@ -39,7 +38,9 @@ export function ChatInputBoxHeader({
 }: {
   sdkInstalled: boolean;
   sdkStatusLoading: boolean;
+  sdkStatusError: boolean;
   currentProvider: string;
+  onRetrySdkStatus?: () => void;
   onInstallSdk?: () => void;
   t: TFunction;
   attachments: Attachment[];
@@ -65,13 +66,8 @@ export function ChatInputBoxHeader({
   autoOpenFileEnabled?: boolean;
   onRequestEnableFileContext?: () => void;
 }) {
-  const { addToast } = useUIState();
-
-  const handleStarProject = async () => {
-    const copied = await copyToClipboard(GITHUB_REPO_URL);
-    if (copied) {
-      addToast(t('chat.openSourceBannerStarToast'), 'success');
-    }
+  const handleStarProject = () => {
+    openBrowser(GITHUB_REPO_URL);
   };
 
   return (
@@ -107,8 +103,8 @@ export function ChatInputBoxHeader({
         </div>
       )}
 
-      {/* SDK status loading or not installed warning bar */}
-      {(sdkStatusLoading || !sdkInstalled) && (
+      {/* SDK status loading, query error, or not installed warning bar */}
+      {(sdkStatusLoading || sdkStatusError || !sdkInstalled) && (
         <div className={`sdk-warning-bar ${sdkStatusLoading ? 'sdk-loading' : ''}`}>
           <span
             className={`codicon ${sdkStatusLoading ? 'codicon-loading codicon-modifier-spin' : 'codicon-warning'}`}
@@ -116,11 +112,24 @@ export function ChatInputBoxHeader({
           <span className="sdk-warning-text">
             {sdkStatusLoading
               ? t('chat.sdkStatusLoading')
+              : sdkStatusError
+                ? t('chat.sdkStatusUnavailable')
               : t('chat.sdkNotInstalled', {
                   provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code',
                 })}
           </span>
-          {!sdkStatusLoading && (
+          {sdkStatusError ? (
+            <button
+              className="sdk-install-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRetrySdkStatus?.();
+              }}
+            >
+              <span className="codicon codicon-refresh" />
+              <span>{t('chat.retrySdkStatus')}</span>
+            </button>
+          ) : !sdkStatusLoading && (
             <button
               className="sdk-install-btn"
               onClick={(e) => {
@@ -170,4 +179,3 @@ export function ChatInputBoxHeader({
     </>
   );
 }
-

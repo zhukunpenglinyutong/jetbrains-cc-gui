@@ -132,17 +132,16 @@ public class FileHandler extends BaseMessageHandler {
      */
     private void handleListFiles(String content) {
         CompletableFuture.runAsync(() -> {
+            // Parse outside try so we can still echo requestId on failure
+            FileListRequest request = parseRequest(content);
             try {
-                // 1. Parse request
-                FileListRequest request = parseRequest(content);
-
-                // 2. Get base path
+                // 1. Get base path
                 String basePath = getEffectiveBasePath();
 
-                // 3. Initialize file set (deduplication)
+                // 2. Initialize file set (deduplication)
                 FileSet fileSet = new FileSet();
 
-                // 4. Collect files
+                // 3. Collect files
                 List<JsonObject> files = new ArrayList<>();
 
                 // Priority 0: Active Terminals
@@ -160,15 +159,19 @@ public class FileHandler extends BaseMessageHandler {
                 // Priority 3: File system scan
                 fileSystemCollector.collect(files, fileSet, basePath, request);
 
-                // 5. Sort
-                sortFiles(files);
+                // 4. Sort (match score when searching, else priority/path)
+                sortFiles(files, request);
 
-                // 6. Return result
-                sendResult(files);
+                // 5. Return result (echo requestId so frontend can drop stale responses)
+                sendResult(files, request.requestId);
             } catch (ProcessCanceledException e) {
+                // Still reply so the frontend does not hang on an empty dropdown
+                sendResult(new ArrayList<>(), request.requestId);
                 throw e;
             } catch (Exception e) {
                 LOG.error("[FileHandler] Failed to list files: " + e.getMessage(), e);
+                // Always respond — a silent failure shows as "flash then empty" in the UI
+                sendResult(new ArrayList<>(), request.requestId);
             }
         });
     }
@@ -176,9 +179,12 @@ public class FileHandler extends BaseMessageHandler {
     /**
      * Send results back to the frontend.
      */
-    private void sendResult(List<JsonObject> files) {
+    private void sendResult(List<JsonObject> files, Long requestId) {
         JsonObject result = new JsonObject();
         result.add("files", GSON.toJsonTree(files));
+        if (requestId != null) {
+            result.addProperty("requestId", requestId);
+        }
         String resultJson = GSON.toJson(result);
 
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -191,17 +197,25 @@ public class FileHandler extends BaseMessageHandler {
      */
     private FileListRequest parseRequest(String content) {
         if (content == null || content.isEmpty()) {
-            return new FileListRequest("", "");
+            return new FileListRequest("", "", null);
         }
 
         try {
             JsonObject json = GSON.fromJson(content, JsonObject.class);
             String query = json.has("query") ? json.get("query").getAsString() : "";
             String currentPath = json.has("currentPath") ? json.get("currentPath").getAsString() : "";
-            return new FileListRequest(query, currentPath);
+            Long requestId = null;
+            if (json.has("requestId") && !json.get("requestId").isJsonNull()) {
+                try {
+                    requestId = json.get("requestId").getAsLong();
+                } catch (Exception ignored) {
+                    // Non-numeric requestId — leave null; frontend falls back to client re-filter
+                }
+            }
+            return new FileListRequest(query, currentPath, requestId);
         } catch (Exception e) {
             // If not JSON, treat as plain text query
-            return new FileListRequest(content.trim(), "");
+            return new FileListRequest(content.trim(), "", null);
         }
     }
 
@@ -239,8 +253,10 @@ public class FileHandler extends BaseMessageHandler {
 
     /**
      * Sort files.
+     * When the user is searching, rank by fuzzy match score (filename prefix >
+     * substring > relative path > subsequence) before priority/path heuristics.
      */
-    private void sortFiles(List<JsonObject> files) {
+    private void sortFiles(List<JsonObject> files, FileListRequest request) {
         if (files.isEmpty()) { return; }
 
         // 1. Wrap as SortItem, pre-read/compute sorting fields
@@ -249,10 +265,19 @@ public class FileHandler extends BaseMessageHandler {
             items.add(new FileSortItem(json));
         }
 
+        final boolean rankByQuery = request != null && request.hasQuery;
+
         // 2. Sort
         items.sort((a, b) -> {
-            // Priority 1 & 2: Keep original order (stability)
-            if (a.priority < 3 && b.priority < 3) {
+            if (rankByQuery) {
+                int scoreDiff = request.score(b.name, b.path) - request.score(a.name, a.path);
+                if (scoreDiff != 0) {
+                    return scoreDiff;
+                }
+            }
+
+            // Priority 1 & 2: Keep original order (stability) when not searching
+            if (!rankByQuery && a.priority < 3 && b.priority < 3) {
                 return 0;
             }
 
@@ -285,14 +310,31 @@ public class FileHandler extends BaseMessageHandler {
     // --- Static utility methods shared with collectors ---
 
     /**
-     * Get relative path.
+     * Get relative path. Never throws — falls back to the file name when the
+     * absolute path is not under basePath (symlink / normalization mismatch).
      */
     static String getRelativePath(File file, String basePath) {
-        String relativePath = file.getAbsolutePath().substring(basePath.length());
-        if (relativePath.startsWith(File.separator)) {
-            relativePath = relativePath.substring(1);
+        if (file == null) {
+            return "";
         }
-        return relativePath.replace("\\", "/");
+        String absolute = file.getAbsolutePath().replace("\\", "/");
+        if (basePath == null || basePath.isEmpty()) {
+            return absolute;
+        }
+        String normalizedBase = basePath.replace("\\", "/");
+        // Ensure base ends without trailing slash for clean prefix check
+        while (normalizedBase.endsWith("/")) {
+            normalizedBase = normalizedBase.substring(0, normalizedBase.length() - 1);
+        }
+        if (absolute.equals(normalizedBase)) {
+            return "";
+        }
+        if (absolute.startsWith(normalizedBase + "/")) {
+            return absolute.substring(normalizedBase.length() + 1);
+        }
+        // Not under base (different canonicalization) — use name only so matching
+        // does not use absolute path segments like "jetbrains".
+        return file.getName();
     }
 
     /**
@@ -355,13 +397,21 @@ public class FileHandler extends BaseMessageHandler {
         }
         if (!fileSet.tryAdd(path)) { return; }
 
-        // Calculate relative path
+        // Calculate relative path (safe when path is not under basePath)
         String relativePath = path;
-        if (path.startsWith(basePath)) {
-            relativePath = path.substring(basePath.length());
-            if (relativePath.startsWith("/")) {
-                relativePath = relativePath.substring(1);
-            }
+        String normalizedBase = basePath.replace("\\", "/");
+        while (normalizedBase.endsWith("/")) {
+            normalizedBase = normalizedBase.substring(0, normalizedBase.length() - 1);
+        }
+        String normalizedPath = path.replace("\\", "/");
+        if (normalizedPath.equals(normalizedBase)) {
+            relativePath = name;
+        } else if (normalizedPath.startsWith(normalizedBase + "/")) {
+            relativePath = normalizedPath.substring(normalizedBase.length() + 1);
+        } else {
+            // Outside base / normalization mismatch — use basename only so
+            // absolute segments (e.g. "jetbrains") never drive matching.
+            relativePath = name;
         }
 
         // Match query
@@ -383,19 +433,110 @@ public class FileHandler extends BaseMessageHandler {
         final String queryLower;
         final String currentPath;
         final boolean hasQuery;
+        /** Correlates async frontend requests; may be null for legacy callers. */
+        final Long requestId;
 
         FileListRequest(String query, String currentPath) {
+            this(query, currentPath, null);
+        }
+
+        FileListRequest(String query, String currentPath, Long requestId) {
             this.query = query != null ? query : "";
             this.queryLower = this.query.toLowerCase();
             this.currentPath = currentPath != null ? currentPath : "";
             this.hasQuery = !this.query.isEmpty();
+            this.requestId = requestId;
         }
 
+        /**
+         * Match query against file name and relative path only.
+         * Supports substring and subsequence (fuzzy) matching.
+         * Absolute paths are intentionally ignored — a project root like
+         * {@code jetbrains-cc-gui} would otherwise match nearly every letter.
+         */
         boolean matches(String name, String relativePath) {
-            if (!hasQuery) { return true; }
-            String lowerName = name.toLowerCase();
-            String lowerPath = relativePath.toLowerCase();
-            return (lowerName.contains(queryLower) || lowerPath.contains(queryLower));
+            return score(name, relativePath) > 0 || !hasQuery;
+        }
+
+        /**
+         * Higher is better. 0 means no match when {@link #hasQuery} is true.
+         */
+        int score(String name, String relativePath) {
+            if (!hasQuery) {
+                return 1;
+            }
+            String lowerName = name != null ? name.toLowerCase() : "";
+            String pathForMatch = pathForMatching(relativePath);
+
+            if (lowerName.equals(queryLower)) {
+                return 1000;
+            }
+            if (lowerName.startsWith(queryLower)) {
+                return 900;
+            }
+            if (lowerName.contains(queryLower)) {
+                return 800;
+            }
+            if (!pathForMatch.isEmpty() && pathForMatch.contains(queryLower)) {
+                return 600;
+            }
+            if (fuzzySubsequenceMatch(lowerName, queryLower)) {
+                return 400;
+            }
+            if (!pathForMatch.isEmpty() && fuzzySubsequenceMatch(pathForMatch, queryLower)) {
+                return 200;
+            }
+            return 0;
+        }
+
+        /**
+         * Use only relative-looking paths for matching. Absolute paths (and
+         * failed relativization leftovers) would over-match via project folder
+         * names.
+         */
+        private static String pathForMatching(String relativePath) {
+            if (relativePath == null || relativePath.isEmpty()) {
+                return "";
+            }
+            String normalized = relativePath.replace('\\', '/');
+            if (isAbsoluteLikePath(normalized)) {
+                return "";
+            }
+            return normalized.toLowerCase();
+        }
+
+        private static boolean isAbsoluteLikePath(String path) {
+            if (path.startsWith("/") || path.startsWith("\\")) {
+                return true;
+            }
+            if (path.length() >= 3
+                    && Character.isLetter(path.charAt(0))
+                    && path.charAt(1) == ':'
+                    && (path.charAt(2) == '/' || path.charAt(2) == '\\')) {
+                return true;
+            }
+            return path.startsWith("//") || path.startsWith("\\\\");
+        }
+
+        /**
+         * Every query character appears in order in text (IDE-style fuzzy).
+         */
+        static boolean fuzzySubsequenceMatch(String text, String query) {
+            if (query == null || query.isEmpty()) {
+                return true;
+            }
+            if (text == null || text.isEmpty()) {
+                return false;
+            }
+            int ti = 0;
+            int qi = 0;
+            while (ti < text.length() && qi < query.length()) {
+                if (text.charAt(ti) == query.charAt(qi)) {
+                    qi++;
+                }
+                ti++;
+            }
+            return qi == query.length();
         }
     }
 

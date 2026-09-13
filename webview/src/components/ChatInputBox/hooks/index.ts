@@ -3,6 +3,7 @@ export { useCompletionDropdown } from './useCompletionDropdown.js';
 export { useCompletionTriggerDetection } from './useCompletionTriggerDetection.js';
 export { useTextContent } from './useTextContent.js';
 export { useFileTags } from './useFileTags.js';
+export { useQuoteTags } from './useQuoteTags.js';
 export { useTooltip } from './useTooltip.js';
 export { useKeyboardNavigation } from './useKeyboardNavigation.js';
 export { useIMEComposition } from './useIMEComposition.js';
@@ -38,5 +39,11 @@ export { useChatInputSelectionController } from './useChatInputSelectionControll
 export { useOpenSourceBannerState } from './useOpenSourceBannerState.js';
 export { useResetAttachmentsOnSessionChange } from './useResetAttachmentsOnSessionChange.js';
 export { useSpaceKeyListener } from './useSpaceKeyListener.js';
+export { useCompositionSafeTagRendering } from './useCompositionSafeTagRendering.js';
 export { useResizableChatInputBox, computeResize } from './useResizableChatInputBox.js';
 export { useInlineHistoryCompletion } from './useInlineHistoryCompletion.js';
+export {
+  useToolbarSelectorCompact,
+  shouldCollapseToolbarSelectors,
+  TOOLBAR_SELECTOR_MIN_GAP_PX,
+} from './useToolbarSelectorCompact.js';

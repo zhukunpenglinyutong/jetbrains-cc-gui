@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import HistoryView from './components/history/HistoryView';
 import SettingsView from './components/settings';
 import { sendBridgeEvent } from './utils/bridge';
+import { ompModeForModelId } from './hooks/providers/cliProviders';
+import { useOmpRoles } from './hooks/providers/useCliModels';
 import { preloadSlashCommands, forceRefreshPrompts } from './components/ChatInputBox/providers';
 import {
   useScrollBehavior,
@@ -10,6 +12,7 @@ import {
   useStreamingMessages,
   useWindowCallbacks,
   useRewindHandlers,
+  useRollbackHandlers,
   useHistoryLoader,
   useMessageQueue,
   useThemeInit,
@@ -26,7 +29,15 @@ import {
   CONTEXT_COMMANDS,
 } from './hooks/useMessageSender';
 import { applyDiffTheme, getStoredDiffTheme } from './utils/diffTheme';
+import { collectTaskEventsFromMessages } from './utils/taskNotificationMessage';
+import type { ClaudeMessage } from './types';
 import type { Attachment, ChatInputBoxHandle } from './components/ChatInputBox/types';
+import {
+  apply1MContextSuffix,
+  isValidPermissionMode,
+  normalizeClaudeModelId,
+  strip1MContextSuffix,
+} from './components/ChatInputBox/types';
 import { ToastContainer } from './components/Toast';
 import { ChatHeader } from './components/ChatHeader';
 import { ChatScreen } from './components/ChatScreen';
@@ -88,9 +99,11 @@ const App = () => {
   const {
     currentView, setCurrentView,
     settingsInitialTab, setSettingsInitialTab,
+    settingsProviderSubTab, setSettingsProviderSubTab,
     toasts, addToast, dismissToast, clearToasts,
     setContextInfo,
     searchOpen, setSearchOpen,
+    setDraftInput,
   } = useUIState();
 
   // ── Permission dialog timeout (synced with backend config) ──
@@ -147,27 +160,35 @@ const App = () => {
   // ── Model/Provider state ──
   const {
     currentProvider, selectedModel, permissionMode,
-    selectedAgent, sdkStatusLoaded, currentSdkInstalled,
+    selectedAgent, sdkStatusLoading, sdkStatusError, currentSdkInstalled,
     claudeSdkMeetsMinimum,
     currentProviderRef,
     activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
-    reasoningEffort, codexFastMode, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
+    reasoningEffort, codexFastMode, dshPreset, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
     longContextEnabled,
     usagePercentage, usageUsedTokens, usageMaxTokens,
-    setPermissionMode,
+    setPermissionMode, setCurrentProvider,
     setClaudePermissionMode, setCodexPermissionMode,
     setSelectedClaudeModel, setSelectedCodexModel,
+    setSelectedGrokModel, setSelectedKimiModel,
+    setSelectedOpenCodeModel, setSelectedPiModel, setSelectedDshModel,
+    setSelectedOmpModel, setOmpPermissionMode,
+    setLongContextEnabled, setReasoningEffort, setCodexFastMode,
     setProviderConfigVersion, setActiveProviderConfig,
     setClaudeSettingsAlwaysThinkingEnabled, setStreamingEnabledSetting,
     setSendShortcut, setAutoOpenFileEnabled,
-    setSdkStatus, setSdkStatusLoaded, setSelectedAgent,
+    setSdkStatus, setSdkStatusLoaded, setSdkStatusError, retrySdkStatus, setSelectedAgent,
     setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
     syncActiveProviderModelMapping,
     handleModeSelect, handleModelSelect, handleProviderSelect,
-    handleReasoningChange, handleCodexFastModeChange, handleAgentSelect, handleToggleThinking,
+    handleReasoningChange, handleCodexFastModeChange, handleDshPresetChange, handleAgentSelect, handleToggleThinking,
     handleStreamingEnabledChange, handleSendShortcutChange,
     handleAutoOpenFileEnabledChange, handleLongContextChange,
   } = useModelProviderState({ addToast, t });
+
+  // Dynamic omp model roles (listModels payload; static smol/slow/plan until
+  // loaded) — needed by applyHistoryModel's omp mode⇔model unification.
+  const ompRoles = useOmpRoles();
 
   // ── Global drag event interception ──
   useEffect(() => {
@@ -253,6 +274,35 @@ const App = () => {
     if (currentView === 'chat') { forceRefreshPrompts(); }
   }, [currentView]);
 
+  // Recover task events from task-notification user messages. Recent Claude Code
+  // delivers a background agent's terminal report as a plain user message (XML
+  // in content) instead of an SDK task_notification event, so history replay —
+  // and any live session that never fired the SDK path — would otherwise leave
+  // the subagent card stuck on the launch ack text. Derived entries only fill
+  // gaps: a real SDK event already in the map is kept as-is.
+  // Messages update immutably, so unchanged messages keep their object identity;
+  // tracking scanned objects avoids re-scanning the whole conversation on every
+  // streaming chunk.
+  const scannedTaskNotificationMessagesRef = useRef(new WeakSet<ClaudeMessage>());
+  useEffect(() => {
+    const scanned = scannedTaskNotificationMessagesRef.current;
+    const fresh = messages.filter((m) => !scanned.has(m));
+    if (fresh.length === 0) return;
+    for (const m of fresh) scanned.add(m);
+    const derived = collectTaskEventsFromMessages(fresh);
+    if (Object.keys(derived).length === 0) return;
+    setTaskEvents((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [id, event] of Object.entries(derived)) {
+        if (next[id]) continue;
+        next[id] = event;
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [messages, setTaskEvents]);
+
   // ── Session management ──
   const {
     showNewSessionConfirm, showInterruptConfirm,
@@ -271,6 +321,55 @@ const App = () => {
     setTaskEvents,
     setSubagentHistories,
     clearToasts, addToast, t,
+    applyHistoryModel: (provider, model, agent) => {
+      // Switch provider first when history row differs, then apply model.
+      if (provider && provider !== currentProvider) {
+        handleProviderSelect(provider);
+      }
+      if (model) {
+        // handleModelSelect reads currentProvider; after provider switch state
+        // may not have flushed yet — send bridge + setter for the target provider.
+        if (provider === 'codex') {
+          setSelectedCodexModel(model);
+          sendBridgeEvent('set_model', model);
+        } else if (provider === 'grok') {
+          setSelectedGrokModel(model);
+          sendBridgeEvent('set_model', model);
+        } else if (provider === 'kimi') {
+          setSelectedKimiModel(model);
+          sendBridgeEvent('set_model', model);
+        } else if (provider === 'opencode') {
+          setSelectedOpenCodeModel(model);
+          sendBridgeEvent('set_model', model);
+        } else if (provider === 'pi') {
+          setSelectedPiModel(model);
+          sendBridgeEvent('set_model', model);
+        } else if (provider === 'omp') {
+          setSelectedOmpModel(model);
+          sendBridgeEvent('set_model', model);
+          const ompMode = ompModeForModelId(model, ompRoles);
+          setOmpPermissionMode(ompMode);
+          // Dynamic roles are not in Java's static mode whitelist — set_model
+          // above already carries the role; skip set_mode for them.
+          if (isValidPermissionMode(ompMode)) {
+            sendBridgeEvent('set_mode', ompMode);
+          }
+        } else if (provider === 'dsh') {
+          setSelectedDshModel(model);
+          sendBridgeEvent('set_model', model);
+        } else {
+          // claude (or unrecognized): apply the claude model directly —
+          // handleModelSelect reads currentProvider from a stale closure
+          // right after a provider switch.
+          const normalized = normalizeClaudeModelId(strip1MContextSuffix(model));
+          setSelectedClaudeModel(normalized);
+          sendBridgeEvent('set_model', apply1MContextSuffix(normalized, longContextEnabled));
+        }
+      }
+      if (agent && provider === 'claude') {
+        handleAgentSelect({ id: agent, name: agent, prompt: '' });
+      }
+    },
   });
 
   useHistoryLoader({ currentView, currentProvider });
@@ -281,12 +380,13 @@ const App = () => {
     setMessages, setStatus, setLoading, setLoadingStartTime,
     setIsThinking, setStreamingActive, setHistoryData,
     setCurrentSessionId, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
-    setPermissionMode, setClaudePermissionMode, setCodexPermissionMode,
+    setPermissionMode, setCurrentProvider, setClaudePermissionMode, setCodexPermissionMode,
     setSelectedClaudeModel, setSelectedCodexModel,
+    setLongContextEnabled, setReasoningEffort, setCodexFastMode,
     setProviderConfigVersion, setActiveProviderConfig,
     setClaudeSettingsAlwaysThinkingEnabled, setStreamingEnabledSetting,
     setSendShortcut, setAutoOpenFileEnabled,
-    setSdkStatus, setSdkStatusLoaded,
+    setSdkStatus, setSdkStatusLoaded, setSdkStatusError,
     setIsRewinding, setRewindDialogOpen, setCurrentRewindRequest,
     setContextInfo, setSelectedAgent,
     setSubagentHistories,
@@ -331,8 +431,8 @@ const App = () => {
     interruptSession,
   } = useMessageSender({
     t, addToast,
-    currentProvider, selectedModel, permissionMode, reasoningEffort, selectedAgent, codexFastMode,
-    sdkStatusLoaded, currentSdkInstalled,
+    currentProvider, selectedModel, permissionMode, reasoningEffort, selectedAgent, codexFastMode, dshPreset,
+    sdkStatusLoading, currentSdkInstalled,
     sentAttachmentsRef, chatInputRef, messagesContainerRef,
     isUserAtBottomRef, userPausedRef, isStreamingRef,
     setMessages, setLoading, setLoadingStartTime, setStreamingActive,
@@ -400,14 +500,18 @@ const App = () => {
     getMessageText, getContentBlocks,
   });
 
-  const { handleUndoFile, handleDiscardAll: handleDiscardAllRaw, handleKeepAll } = fileChangeMgmt;
+  const { handleUndoFile, handleDiscardAll: handleDiscardAllRaw, handleKeepAll, resetProcessedFiles } = fileChangeMgmt;
   const onDiscardAll = useCallback(
     () => { handleDiscardAllRaw(filteredFileChanges); },
     [handleDiscardAllRaw, filteredFileChanges],
   );
 
   // Stabilize context value references for SubagentContext consumers.
-  const { subagentHistoryCtxValue, sessionIdCtxValue } = useSubagentContextValues(subagentHistories, currentSessionId);
+  const { subagentHistoryCtxValue, sessionIdCtxValue } = useSubagentContextValues(
+    subagentHistories,
+    currentSessionId,
+    currentProvider,
+  );
 
   const handleNavigateToProviderSettings = useCallback(() => {
     setSettingsInitialTab('providers');
@@ -452,6 +556,26 @@ const App = () => {
     setIsRewinding, isRewinding,
   });
 
+  // ── Rollback handlers ──
+  const {
+    rollbackDialogOpen,
+    currentRollbackRequest,
+    isRollingBack,
+    showRollbackDialog,
+    handleRollbackConfirm,
+    handleRollbackCancel,
+  } = useRollbackHandlers({
+    t,
+    addToast,
+    messages: mergedMessages,
+    getContentBlocks,
+    findToolResult,
+    getMessageText,
+    setDraftInput,
+    resetProcessedFiles,
+    streamingActive,
+  });
+
   const statusPanelExpanded = !userCollapsedRef.current;
 
   // ── Render ──
@@ -468,6 +592,7 @@ const App = () => {
         onHistory={() => setCurrentView('history')}
         onSettings={() => {
           setSettingsInitialTab(undefined);
+          setSettingsProviderSubTab(undefined);
           setCurrentView('settings');
         }}
         onOpenSearch={() => setSearchOpen(true)}
@@ -484,6 +609,7 @@ const App = () => {
         <SettingsView
           onClose={() => setCurrentView('chat')}
           initialTab={settingsInitialTab}
+          initialProviderSubTab={settingsProviderSubTab}
           currentProvider={currentProvider}
           streamingEnabled={streamingEnabledSetting}
           onStreamingEnabledChange={handleStreamingEnabledChange}
@@ -494,82 +620,99 @@ const App = () => {
           permissionDialogTimeoutSeconds={permissionDialogTimeoutSeconds}
           onPermissionDialogTimeoutChange={setPermissionDialogTimeoutSeconds}
         />
-      ) : currentView === 'chat' ? (
-        <ChatScreen
-          mergedMessages={mergedMessages}
-          sessionTitle={sessionTitle}
-          getMessageText={getMessageText}
-          getContentBlocks={getContentBlocks}
-          findToolResult={findToolResult}
-          getToolResultRaw={getToolResultRaw}
-          subagents={subagents}
-          globalTodos={globalTodos}
-          filteredFileChanges={filteredFileChanges}
-          subagentHistoryCtxValue={subagentHistoryCtxValue}
-          sessionIdCtxValue={sessionIdCtxValue}
-          chatInputRef={chatInputRef}
-          messagesContainerRef={messagesContainerRef}
-          messagesEndRef={messagesEndRef}
-          inputAreaRef={inputAreaRef}
-          messageNodeMapRef={messageNodeMapRef}
-          userCollapsedRef={userCollapsedRef}
-          messageListRef={messageListRef}
-          isAutoScrollingRef={isAutoScrollingRef}
-          anchorCollapsedCount={anchorCollapsedCount}
-          setAnchorCollapsedCount={setAnchorCollapsedCount}
-          onMessageNodeRef={handleMessageNodeRef}
-          statusPanelExpanded={statusPanelExpanded}
-          forceStatusUpdate={forceStatusUpdate}
-          onUndoFile={handleUndoFile}
-          onDiscardAll={onDiscardAll}
-          onKeepAll={handleKeepAll}
-          onSubmit={handleSubmit}
-          onInterrupt={interruptSession}
-          onRewind={handleOpenRewindSelectDialog}
-          onNavigateToProviderSettings={handleNavigateToProviderSettings}
-          onProviderSelect={wrappedHandleProviderSelect}
-          currentProvider={currentProvider}
-          selectedModel={selectedModel}
-          permissionMode={permissionMode}
-          selectedAgent={selectedAgent}
-          sdkStatusLoaded={sdkStatusLoaded}
-          currentSdkInstalled={currentSdkInstalled}
-          activeProviderConfig={activeProviderConfig}
-          claudeSettingsAlwaysThinkingEnabled={claudeSettingsAlwaysThinkingEnabled}
-          reasoningEffort={reasoningEffort}
-          codexFastMode={codexFastMode}
-          streamingEnabledSetting={streamingEnabledSetting}
-          sendShortcut={sendShortcut}
-          autoOpenFileEnabled={autoOpenFileEnabled}
-          longContextEnabled={longContextEnabled}
-          usagePercentage={usagePercentage}
-          usageUsedTokens={usageUsedTokens}
-          usageMaxTokens={usageMaxTokens}
-          onModeSelect={handleModeSelect}
-          onModelSelect={handleModelSelect}
-          onAgentSelect={handleAgentSelect}
-          onReasoningChange={handleReasoningChange}
-          onCodexFastModeChange={handleCodexFastModeChange}
-          onToggleThinking={handleToggleThinking}
-          onStreamingEnabledChange={handleStreamingEnabledChange}
-          onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
-          onLongContextChange={handleLongContextChange}
-          messageQueue={messageQueue}
-          onRemoveFromQueue={dequeueMessage}
-        />
       ) : (
-        <HistoryView
-          historyData={historyData}
-          currentProvider={currentProvider}
-          currentSessionId={currentSessionId}
-          onLoadSession={loadHistorySession}
-          onDeleteSession={deleteHistorySession}
-          onDeleteSessions={deleteHistorySessions}
-          onExportSession={exportHistorySession}
-          onToggleFavorite={toggleFavoriteSession}
-          onUpdateTitle={updateHistoryTitle}
-          onConvertToCliSession={convertToCliSession}
-        />
+        <>
+          {/* Keep ChatScreen mounted while browsing history so model catalog,
+              scroll position, and draft attachments survive history ↔ chat. */}
+          <div
+            style={currentView === 'chat'
+              ? { display: 'flex', flex: 1, minHeight: 0, flexDirection: 'column', overflow: 'hidden' }
+              : { display: 'none' }}
+          >
+            <ChatScreen
+              mergedMessages={mergedMessages}
+              sessionTitle={sessionTitle}
+              getMessageText={getMessageText}
+              getContentBlocks={getContentBlocks}
+              findToolResult={findToolResult}
+              getToolResultRaw={getToolResultRaw}
+              subagents={subagents}
+              globalTodos={globalTodos}
+              filteredFileChanges={filteredFileChanges}
+              subagentHistoryCtxValue={subagentHistoryCtxValue}
+              sessionIdCtxValue={sessionIdCtxValue}
+              chatInputRef={chatInputRef}
+              messagesContainerRef={messagesContainerRef}
+              messagesEndRef={messagesEndRef}
+              inputAreaRef={inputAreaRef}
+              messageNodeMapRef={messageNodeMapRef}
+              userCollapsedRef={userCollapsedRef}
+              messageListRef={messageListRef}
+              isAutoScrollingRef={isAutoScrollingRef}
+              anchorCollapsedCount={anchorCollapsedCount}
+              setAnchorCollapsedCount={setAnchorCollapsedCount}
+              onMessageNodeRef={handleMessageNodeRef}
+              statusPanelExpanded={statusPanelExpanded}
+              forceStatusUpdate={forceStatusUpdate}
+              onUndoFile={handleUndoFile}
+              onDiscardAll={onDiscardAll}
+              onKeepAll={handleKeepAll}
+              onSubmit={handleSubmit}
+              onInterrupt={interruptSession}
+              onRewind={handleOpenRewindSelectDialog}
+              onNavigateToProviderSettings={handleNavigateToProviderSettings}
+              onProviderSelect={wrappedHandleProviderSelect}
+              currentProvider={currentProvider}
+              selectedModel={selectedModel}
+              permissionMode={permissionMode}
+              selectedAgent={selectedAgent}
+              sdkStatusLoading={sdkStatusLoading}
+              sdkStatusError={sdkStatusError}
+              onRetrySdkStatus={retrySdkStatus}
+              currentSdkInstalled={currentSdkInstalled}
+              activeProviderConfig={activeProviderConfig}
+              claudeSettingsAlwaysThinkingEnabled={claudeSettingsAlwaysThinkingEnabled}
+              reasoningEffort={reasoningEffort}
+              codexFastMode={codexFastMode}
+              dshPreset={dshPreset}
+              streamingEnabledSetting={streamingEnabledSetting}
+              sendShortcut={sendShortcut}
+              autoOpenFileEnabled={autoOpenFileEnabled}
+              longContextEnabled={longContextEnabled}
+              usagePercentage={usagePercentage}
+              usageUsedTokens={usageUsedTokens}
+              usageMaxTokens={usageMaxTokens}
+              onModeSelect={handleModeSelect}
+              onModelSelect={handleModelSelect}
+              onAgentSelect={handleAgentSelect}
+              onReasoningChange={handleReasoningChange}
+              onCodexFastModeChange={handleCodexFastModeChange}
+              onDshPresetChange={handleDshPresetChange}
+              onToggleThinking={handleToggleThinking}
+              onStreamingEnabledChange={handleStreamingEnabledChange}
+              onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
+              onLongContextChange={handleLongContextChange}
+              messageQueue={messageQueue}
+              onRemoveFromQueue={dequeueMessage}
+              onRollbackUserMessage={showRollbackDialog}
+              isRollingBack={isRollingBack}
+            />
+          </div>
+          {currentView === 'history' && (
+            <HistoryView
+              historyData={historyData}
+              currentProvider={currentProvider}
+              currentSessionId={currentSessionId}
+              onLoadSession={loadHistorySession}
+              onDeleteSession={deleteHistorySession}
+              onDeleteSessions={deleteHistorySessions}
+              onExportSession={exportHistorySession}
+              onToggleFavorite={toggleFavoriteSession}
+              onUpdateTitle={updateHistoryTitle}
+              onConvertToCliSession={convertToCliSession}
+            />
+          )}
+        </>
       )}
 
       <div id="image-preview-root" />
@@ -588,6 +731,11 @@ const App = () => {
         onRewindCancel={handleRewindCancel}
         currentProvider={currentProvider}
         permissionDialogTimeoutSeconds={permissionDialogTimeoutSeconds}
+        rollbackDialogOpen={rollbackDialogOpen}
+        currentRollbackRequest={currentRollbackRequest}
+        isRollingBack={isRollingBack}
+        onRollbackConfirm={handleRollbackConfirm}
+        onRollbackCancel={handleRollbackCancel}
       />
     </>
   );

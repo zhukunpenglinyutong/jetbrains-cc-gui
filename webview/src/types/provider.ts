@@ -104,6 +104,17 @@ export function isValidCodexCustomModel(model: unknown): model is CodexCustomMod
   // description is optional, but must be a string if present
   if (obj.description !== undefined && typeof obj.description !== 'string') return false;
 
+  // contextWindowTokens is optional, but must fit the Java int-based usage pipeline
+  if (obj.contextWindowTokens !== undefined) {
+    if (
+      typeof obj.contextWindowTokens !== 'number'
+      || !Number.isSafeInteger(obj.contextWindowTokens)
+      || obj.contextWindowTokens < 1_000
+      || obj.contextWindowTokens % 1_000 !== 0
+      || obj.contextWindowTokens > 2_147_483_647
+    ) return false;
+  }
+
   // pricing is optional; when present every provided field must be a non-negative number
   if (obj.pricing !== undefined) {
     if (!isValidModelPricing(obj.pricing)) return false;
@@ -217,6 +228,8 @@ export interface CodexCustomModel {
   label: string;
   /** Model description */
   description?: string;
+  /** Optional context window size in tokens for plugin usage display */
+  contextWindowTokens?: number;
   /** Optional per-million-token pricing for cost calculation */
   pricing?: ModelPricing;
 }

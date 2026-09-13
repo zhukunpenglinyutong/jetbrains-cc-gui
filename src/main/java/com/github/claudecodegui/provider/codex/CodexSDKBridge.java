@@ -45,7 +45,9 @@ public class CodexSDKBridge extends BaseSDKBridge {
     private static final String SANDBOX_MODE_READ_ONLY = "read-only";
     private static final String APPROVAL_POLICY_NEVER = "never";
     private static final String APPROVAL_POLICY_ON_REQUEST = "on-request";
-    private static final String APPROVAL_POLICY_UNTRUSTED = "untrusted";
+    // Note: 'untrusted' was removed in Codex CLI v0.149.0 - its semantics were merged
+    // into 'on-request'. Injecting it makes new CLI versions exit with
+    // "approval_policy = \"untrusted\" is no longer supported" (#1702).
     private static final String ENV_CODEX_APPROVAL_POLICY = "CODEX_APPROVAL_POLICY";
     private static final String ENV_CODEX_SANDBOX_MODE = "CODEX_SANDBOX_MODE";
     private static final String ENV_CODEX_SANDBOX = "CODEX_SANDBOX";
@@ -216,7 +218,12 @@ public class CodexSDKBridge extends BaseSDKBridge {
                         return;
                     }
 
-                    result.messages.add(msg);
+                    // event_msg is protocol metadata (for example token_count), not a
+                    // conversation message. Route it to the callback without inflating
+                    // SDKResult.messageCount.
+                    if (!"event_msg".equals(msgType)) {
+                        result.messages.add(msg);
+                    }
 
                     if ("assistant".equals(msgType)) {
                         try {
@@ -496,13 +503,13 @@ public class CodexSDKBridge extends BaseSDKBridge {
                         case "plan":
                             env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
                             env.put(ENV_CODEX_SANDBOX, sandboxMode);
-                            env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_UNTRUSTED);
+                            env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_ON_REQUEST);
                             break;
                         default:
                             // Default mode: use configured sandbox mode with confirmation
                             env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
                             env.put(ENV_CODEX_SANDBOX, sandboxMode);
-                            env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_UNTRUSTED);
+                            env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_ON_REQUEST);
                             break;
                     }
                     LOG.info("[Codex] Permission env override: SANDBOX_MODE=" +

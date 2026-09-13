@@ -2,11 +2,8 @@
  * Shared icon component that renders the correct vendor icon based on
  * provider ID and/or model ID.
  *
- * Replaces the duplicated ProviderIcon switch statements across:
- * - ModelSelect.tsx
- * - ProviderSelect.tsx
- * - BlinkingLogo/index.tsx
- * - HistoryView.tsx
+ * Used by ModelSelect, ProviderSelect, BlinkingLogo (CLI-only, no modelId),
+ * HistoryView, and provider settings panels.
  */
 import ClaudeColor from '@lobehub/icons/es/Claude/components/Color';
 import ClaudeMono from '@lobehub/icons/es/Claude/components/Mono';
@@ -96,6 +93,49 @@ const XiaomiMiMoIcon = (size: number, colored: boolean): ReactElement => {
 };
 
 /**
+ * Official Pi Coding Agent mark (https://pi.dev/logo-auto.svg).
+ * Geometric "P" block + "i" square. Monochrome brand — use currentColor so it
+ * follows light/dark UI chrome the same way Grok / OpenCode mono icons do.
+ */
+const PiIcon = (size: number): ReactElement => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 800 800"
+    width={size}
+    height={size}
+    aria-label="Pi"
+    role="img"
+    style={{ flex: 'none', display: 'block' }}
+  >
+    <title>Pi</title>
+    {/* P shape: outer boundary clockwise, inner hole counter-clockwise */}
+    <path
+      fill="currentColor"
+      fillRule="evenodd"
+      d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
+    />
+    {/* i dot */}
+    <path fill="currentColor" d="M517.36 400H634.72V634.72H517.36Z" />
+  </svg>
+);
+
+/** Official OMP mark (https://omp.sh/favicon.svg), mono via currentColor. */
+const OmpIcon = (size: number): ReactElement => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 64 64"
+    width={size}
+    height={size}
+    aria-label="OMP"
+    role="img"
+    style={{ flex: 'none', display: 'block' }}
+  >
+    <title>OMP</title>
+    <path fill="currentColor" d="M14 16h36v8H40v32h-8V24h-6v22h-8V24h-4z" />
+  </svg>
+);
+
+/**
  * Icon renderers for each vendor.
  * Returns [coloredVersion, avatarVersion] JSX elements.
  */
@@ -119,8 +159,13 @@ const VENDOR_ICON_MAP: Record<
     colored ? <BailianColor size={size} /> : <BailianMono size={size} />,
   longcat: (size, colored) =>
     colored ? <LongCatColor size={size} /> : <LongCatMono size={size} />,
+  // Avatar variant pulls @lobehub/ui (not a webview dependency); Mono only.
   opencode: (size, _colored) =>
     <OpenCodeMono size={size} />,
+  // Official geometric mark from pi.dev; mono via currentColor (no lobehub icon).
+  pi: (size, _colored) =>
+    PiIcon(size),
+  omp: (size, _colored) => OmpIcon(size),
   moonshot: (size, _colored) =>
     <MoonshotMono size={size} />,
   zhipu: (size, colored) =>

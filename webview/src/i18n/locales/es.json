@@ -46,6 +46,7 @@
     "removeAttachment": "Eliminar adjunto",
     "closePreview": "Cerrar vista previa",
     "loadingDropdown": "Cargando...",
+    "modelsLoadFailed": "Error al cargar los modelos. Haz clic para reintentar",
     "addAttachment": "Añadir adjunto",
     "stopGeneration": "Detener generación",
     "generatingResponse": "Generando respuesta",
@@ -81,10 +82,11 @@
     "disabled": "Deshabilitado",
     "sdkNotInstalled": "{{provider}} SDK no está instalado. Instala el SDK para comenzar a chatear.",
     "sdkStatusLoading": "Checking SDK status...",
+    "sdkStatusUnavailable": "No se pudo comprobar el estado del SDK.",
+    "retrySdkStatus": "Reintentar",
     "openSourceBanner": "Este proyecto garantiza ser 100% de código abierto y gratuito (cuidado con los proyectos pirateados)",
     "openSourceBannerStar": "Star",
-    "openSourceBannerStarToast": "Enlace copiado al portapapeles — pégalo en el navegador para acceder ⭐",
-    "openSourceBannerStarAria": "Copiar enlace y dar una estrella en GitHub",
+    "openSourceBannerStarAria": "Abrir el repositorio en GitHub y dar una estrella",
     "goInstallSdk": "Ir a instalar",
     "commandNotImplemented": "La función `{{command}}` aún no está implementada.",
     "clearCommandDescription": "Borrar historial de conversación e iniciar nueva sesión",
@@ -230,26 +232,36 @@
         "providerUnavailable": "Currently unavailable",
         "provider": {
           "claude": "Claude Code",
-          "codex": "Codex"
+          "codex": "Codex",
+          "grok": "Grok CLI",
+          "kimi": "Kimi CLI",
+          "opencode": "OpenCode",
+          "pi": "PI CLI",
+          "omp": "OMP CLI"
         },
         "currentProviderAuto": "Currently using automatic selection: {{provider}}",
         "currentProviderManual": "Currently using manually selected provider: {{provider}}",
-        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
+        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}",
+        "modeLabel": "Modo de selección",
+        "modeAuto": "Auto",
+        "modeManual": "Manual",
+        "autoSummary": "Sigue el CLI del chat actual · actualmente {{provider}}",
+        "autoUnavailable": "No hay CLI disponible. Cambia a Manual para elegir uno."
       },
       "diffExpanded": {
         "label": "Expandir diferencias por defecto",
-        "enabled": "Expandido",
-        "disabled": "Colapsado",
+        "enabled": "Activado",
+        "disabled": "Desactivado",
         "hint": "Cuando está habilitado, las diferencias de código en el chat se expandirán por defecto. Cuando está deshabilitado, las diferencias comienzan colapsadas."
       },
       "taskCompletionNotification": {
-        "label": "Notificación de tarea completada",
+        "label": "Notificación del sistema por tarea completada",
         "enabled": "Activado",
         "disabled": "Desactivado",
         "hint": "Cuando está activado, muestra una notificación del sistema cuando la tarea AI se completa. Cuando está desactivado, no aparece ninguna notificación."
       },
       "askUserQuestionNotification": {
-        "label": "Notificación de pregunta al usuario",
+        "label": "Notificación del sistema por pregunta",
         "enabled": "Activado",
         "disabled": "Desactivado",
         "hint": "Cuando está activado, muestra una notificación del sistema cuando Claude te hace una pregunta, para que no la pierdas. Cuando está desactivado, no aparece ninguna notificación."
@@ -259,6 +271,40 @@
         "enabled": "Activado",
         "disabled": "Desactivado",
         "hint": "Cuando está activada, el pie de cada mensaje muestra el coste estimado del turno cuando esté disponible e incluye los aciertos de caché dentro del resumen de tokens de entrada. El uso de tokens siempre permanece visible."
+      },
+      "askUserQuestionSoundNotification": {
+        "label": "Sonido de alerta por pregunta",
+        "enabled": "Activado",
+        "disabled": "Desactivado",
+        "hint": "Cuando está activado, reproduce el sonido de alerta configurado cuando Claude te hace una pregunta. Usa la selección de sonido y las reglas de foco de abajo."
+      },
+      "systemNotificationOnlyWhenUnfocused": {
+        "label": "Mostrar notificaciones del sistema solo cuando el IDE no tenga el foco",
+        "enabled": "Activado",
+        "disabled": "Desactivado",
+        "hint": "Cuando está activado, las notificaciones del sistema por tarea completada y pregunta solo se muestran cuando el IDE no tiene el foco."
+      },
+      "soundNotification": {
+        "label": "Sonido de alerta por tarea completada",
+        "enabled": "Activado",
+        "disabled": "Desactivado",
+        "hint": "Cuando está activado, se reproduce un sonido de notificación cuando la IA completa una tarea, para que lo sepas aunque estés lejos de la pantalla.",
+        "onlyWhenUnfocused": "Reproducir sonidos de alerta solo cuando el IDE no tenga el foco",
+        "onlyWhenUnfocusedHint": "Cuando está activado, los sonidos de alerta por tarea completada y pregunta solo se reproducen cuando el IDE no tiene el foco.",
+        "selectSound": "Sonido de notificación",
+        "soundDefault": "Predeterminado",
+        "soundChime": "Campanilla",
+        "soundBell": "Campana",
+        "soundDing": "Ding",
+        "soundSuccess": "Éxito",
+        "soundCustom": "Personalizado...",
+        "customSound": "Archivo de sonido personalizado",
+        "customSoundPlaceholder": "Selecciona o introduce la ruta del archivo de audio",
+        "customSoundHint": "Admite formatos WAV, MP3 y AIFF",
+        "testSound": "Probar",
+        "browse": "Examinar",
+        "useDefault": "Usar predeterminado",
+        "customSoundSaved": "Sonido personalizado guardado"
       },
       "sendShortcut": {
         "label": "Atajo de envío",
@@ -278,6 +324,12 @@
         "reset": "Restablecer",
         "hint": "Personalizar el color de fondo del área de chat. Dejar vacío para seguir el tema predeterminado."
       },
+      "chatBarColor": {
+        "label": "Color del encabezado y la barra de estado",
+        "custom": "Personalizado",
+        "reset": "Restablecer",
+        "hint": "Usa un color de tema para el encabezado de sesión y la barra de estado de tareas. Déjalo vacío para seguir el tema actual."
+      },
       "userMsgColor": {
         "label": "Color de mensajes del usuario",
         "custom": "Personalizado",
@@ -295,7 +347,8 @@
     "providersDesc": "Gestionar configuración de proveedores de API Claude y Codex, cambiar entre diferentes proveedores de servicio API",
     "providerTab": {
       "claude": "Claude Code",
-      "codex": "Codex"
+      "codex": "Codex",
+      "cli": "CLI"
     },
     "pluginModels": {
       "title": "Modelos personalizados",
@@ -316,6 +369,13 @@
         "cacheReadShort": "Lectura de caché",
         "invalidValue": "El precio debe ser un número no negativo",
         "defaultPricing": "Usando el precio predeterminado"
+      },
+      "contextWindow": {
+        "label": "Contexto máximo (K tokens)",
+        "placeholder": "p. ej. 500",
+        "hint": "Opcional. Introduce un número entero de miles de tokens (500 = 500.000 tokens). Solo se usa para mostrar el uso de contexto del plugin.",
+        "invalidValue": "El contexto máximo debe ser un entero positivo en unidades K",
+        "summary": "Contexto: {{value}} tokens"
       },
       "configuredSectionTitle": "Modelos de Claude configurados",
       "configuredSectionDesc": "Los modelos del proveedor de Claude activo o settings.json ya aparecen en el selector. Aquí solo se puede modificar el precio.",
@@ -371,7 +431,12 @@
         "providerUnavailable": "No disponible",
         "currentProviderAuto": "Actualmente usando selección automática: {{provider}}",
         "currentProviderManual": "Actualmente usando el proveedor seleccionado manualmente: {{provider}}",
-        "currentProviderUnavailable": "El proveedor seleccionado no está disponible actualmente: {{provider}}"
+        "currentProviderUnavailable": "El proveedor seleccionado no está disponible actualmente: {{provider}}",
+        "modeLabel": "Modo de selección",
+        "modeAuto": "Auto",
+        "modeManual": "Manual",
+        "autoSummary": "Sigue el CLI del chat actual · actualmente {{provider}}",
+        "autoUnavailable": "No hay CLI disponible. Cambia a Manual para elegir uno."
       },
       "prompt": {
         "label": "Additional Prompt",
@@ -449,11 +514,18 @@
     "communityDesc": "Escanea el código QR a continuación para unirte al grupo oficial de WeChat para obtener las últimas noticias y soporte técnico",
     "communityQrTip": "Escanea con WeChat para unirte a la comunidad",
     "communityQrAlt": "Código QR de la comunidad oficial de WeChat",
-    "githubTitle": "Repositorio GitHub",
-    "githubDesc": "Este proyecto es de código abierto en GitHub. ¡Dale una estrella para apoyarnos!",
-    "githubCopyBtn": "Copiar URL del repositorio",
-    "githubCopied": "URL del repositorio copiada al portapapeles. Por favor, ábrela en tu navegador.",
-    "githubCopyFailed": "Error al copiar. Por favor, copia manualmente.",
+    "socialDocs": "Documentación oficial",
+    "socialTitle": "Síguenos",
+    "socialGithub": "Repositorio de GitHub — ¡danos una estrella!",
+    "socialX": "X (Twitter) @ZPeng31310",
+    "socialZhihu": "Zhihu @vscodeai",
+    "socialXiaohongshu": "Xiaohongshu (RED)",
+    "socialDouyin": "Douyin — pasa el cursor para escanear y seguir",
+    "socialYoutube": "Canal de YouTube",
+    "douyinQrAlt": "Código QR de Douyin",
+    "douyinId": "ID de Douyin: nengyongai",
+    "douyinCopied": "ID de Douyin copiado al portapapeles",
+    "douyinCopyFailed": "Error al copiar. Por favor, copia manualmente.",
     "sponsor": "Sponsor",
     "sponsorDesc": "If this project helps you, consider sponsoring to support ongoing maintenance!",
     "alipay": "Alipay",
@@ -760,6 +832,64 @@
         "confirmAdd": "Create",
         "saveChanges": "Save"
       }
+    },
+    "cli": {
+      "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
+      "refresh": "Re-check",
+      "retry": "Retry",
+      "loading": "Checking CLI installation status…",
+      "loadFailed": "Detection failed. Please try again.",
+      "status": {
+        "installed": "Installed",
+        "notInstalled": "Not installed"
+      },
+      "viewInstallGuide": "Install guide",
+      "howToInstall": "Install guide",
+      "copy": "Copy",
+      "copied": "Copied to clipboard",
+      "copyFailed": "Failed to copy",
+      "tools": {
+        "grok": {
+          "name": "Grok CLI",
+          "description": "xAI Grok terminal coding agent"
+        },
+        "kimi": {
+          "name": "Kimi CLI",
+          "description": "Moonshot Kimi Code CLI"
+        },
+        "opencode": {
+          "name": "OpenCode",
+          "description": "Open-source terminal AI coding agent"
+        },
+        "pi": {
+          "name": "PI CLI",
+          "description": "Agente de codificación de terminal minimalista con soporte multi-proveedor"
+        },
+        "omp": {
+          "name": "OMP CLI",
+          "description": "Agente de codificación de terminal Oh My Pi con soporte multi-proveedor"
+        }
+      },
+      "installDialog": {
+        "title": "Install {{name}}",
+        "lead": "Install {{name}} in your system terminal first and make sure `{{binary}}` is available, then come back and click Re-check. This plugin will not run the installer for you.",
+        "stepOpenTerminal": "Open your system terminal (Terminal / iTerm / PowerShell, etc.)",
+        "stepRunCommand": "Copy and run the install command below",
+        "stepVerify": "After install, run `{{binary}} --version` to verify",
+        "stepReturn": "Return here and click Re-check",
+        "primaryCommand": "Recommended install command (macOS / Linux)",
+        "windowsCommand": "Windows (PowerShell)",
+        "altCommand": "Alternative install method",
+        "openDocs": "Open official docs"
+      },
+      "listTitle": "Herramientas CLI locales",
+      "summary": "{{installed}} / {{total}} instaladas",
+      "moreComingSoon": "Pronto más compatibilidad",
+      "copyPath": "Copiar ruta",
+      "visibility": {
+        "hide": "Ocultar en el selector de proveedor",
+        "show": "Mostrar en el selector de proveedor"
+      }
     }
   },
   "history": {
@@ -788,7 +918,7 @@
     "loading": "Cargando historial...",
     "loadFailed": "Error al cargar",
     "noSessions": "Sin sesiones históricas",
-    "noSessionsDesc": "No se encontraron registros de sesión de Claude en el proyecto actual",
+    "noSessionsDesc": "No se encontraron registros de sesión en el proyecto actual",
     "totalSessions": "{{count}} sesiones · {{total}} mensajes",
     "messageCount": "{{count}} mensajes",
     "searchPlaceholder": "Buscar título de sesión...",
@@ -911,6 +1041,7 @@
   },
   "config": {
     "clickToCopy": "Haz clic para copiar",
+    "officialDocs": "Documentación oficial",
     "switch": "Cambiar",
     "switchProvider": "Cambiar proveedor",
     "runtimeProvider": {
@@ -962,7 +1093,13 @@
   "markdown": {
     "copyCode": "Copiar código",
     "copyMessage": "Copiar mensaje",
-    "copySuccess": "¡Copiado!"
+    "copySuccess": "¡Copiado!",
+    "quoteMessage": "Citar mensaje",
+    "quoteSuccess": "¡Citado!"
+  },
+  "contextMenu": {
+    "copy": "Copiar",
+    "quote": "Citar"
   },
   "usage": {
     "checkingLabel": "Comprobando tokentracker-cli…",
@@ -1215,6 +1352,25 @@
     "stopped": "Detenido",
     "progress": "{{completed}} de {{total}} tareas completadas"
   },
+  "subagent": {
+    "process": {
+      "title": "Proceso del agente",
+      "prompt": "Indicación",
+      "thought": "Razonamiento",
+      "filesRead_one": "Leer {{count}} archivo",
+      "filesRead_other": "Leer {{count}} archivos",
+      "otherTools": "Otras herramientas",
+      "result": "Resultado",
+      "showFullOutput": "Ver salida completa",
+      "loading": "Cargando proceso del agente…",
+      "unavailable": "El registro del proceso no está disponible hasta que la sesión tenga un id.",
+      "reportGenerated": "Informe de análisis estructurado generado",
+      "unitMs": "ms",
+      "unitS": "s",
+      "unitTools": "herramientas",
+      "unitTokens": "tokens"
+    }
+  },
   "statusPanel": {
     "todoTab": "Plan",
     "tasksTab": "Tareas",
@@ -1243,7 +1399,9 @@
     "keepAllConfirmMessage": "Aceptar los cambios actuales como base. Los cambios futuros se rastrearán desde cero.",
     "discardAllSuccess": "Todos los cambios descartados",
     "discardAllFailed": "Error al descartar: {{error}}",
-    "keepAllSuccess": "Todos los cambios mantenidos, seguimiento reiniciado"
+    "keepAllSuccess": "Todos los cambios mantenidos, seguimiento reiniciado",
+    "multiAgentBadge": "Multi-agente",
+    "multiAgentEdited": "{{count}} agentes editaron este archivo en esta sesión — revísalo con cuidado"
   },
   "skills": {
     "title": "Skills",
@@ -1389,6 +1547,9 @@
     "searchPlaceholder": "Buscar modelos",
     "noModelsFound": "No se encontraron modelos",
     "hiddenModelCount": "+ {{count}} modelos más. Escribe para buscar.",
+    "pinned": "Fijados",
+    "pin": "Fijar",
+    "unpin": "Quitar fijado",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",
@@ -1396,11 +1557,7 @@
       },
       "sonnet5": {
         "label": "Sonnet 5",
-        "description": "Sonnet 5 · Modelo mejorado de Sonnet 4.6"
-      },
-      "sonnet47": {
-        "label": "Sonnet 4.7",
-        "description": "Sonnet 4.7 · Modelo recomendado por defecto"
+        "description": "Sonnet 5 · Modelo recomendado por defecto"
       },
       "opus5": {
         "label": "Opus 5",
@@ -1477,7 +1634,7 @@
   "codexModes": {
     "default": {
       "label": "Suggest (approval)",
-      "tooltip": "Codex approval_policy=untrusted – prompts before editing files or running shell commands.",
+      "tooltip": "Codex approval_policy=on-request – prompts before editing files or running shell commands.",
       "description": "Safest option. Every write or command requires your approval."
     },
     "plan": {
@@ -1496,6 +1653,28 @@
       "description": "Hands-off mode. Codex executes edits and shell commands immediately."
     }
   },
+  "ompModes": {
+    "default": {
+      "label": "Predeterminado",
+      "tooltip": "Usa el modelo seleccionado (o OMP auto)",
+      "description": "Usa el modelo elegido en el menú desplegable de modelos, o el predeterminado de OMP CLI cuando está en Auto."
+    },
+    "smol": {
+      "label": "Smol",
+      "tooltip": "Rol de modelo rápido (omp --model smol)",
+      "description": "Ejecuta esta conversación con el modelo configurado para el rol smol de omp. Anula el menú desplegable de modelos."
+    },
+    "slow": {
+      "label": "Slow",
+      "tooltip": "Rol de modelo de razonamiento (omp --model slow)",
+      "description": "Ejecuta esta conversación con el modelo configurado para el rol slow de omp. Anula el menú desplegable de modelos."
+    },
+    "plan": {
+      "label": "Plan",
+      "tooltip": "Rol de modelo de planificación (omp --model plan)",
+      "description": "Ejecuta esta conversación con el modelo configurado para el rol plan de omp. Anula el menú desplegable de modelos."
+    }
+  },
   "providers": {
     "claude": {
       "label": "Claude Code"
@@ -1503,11 +1682,23 @@
     "codex": {
       "label": "Codex"
     },
+    "grok": {
+      "label": "Grok CLI"
+    },
+    "kimi": {
+      "label": "Kimi CLI"
+    },
     "gemini": {
       "label": "Gemini Cli"
     },
     "opencode": {
       "label": "OpenCode"
+    },
+    "pi": {
+      "label": "PI CLI"
+    },
+    "omp": {
+      "label": "OMP CLI"
     }
   },
   "promptEnhancer": {
@@ -1522,7 +1713,18 @@
     "keepOriginal": "Keep Original",
     "enhanceFailed": "Failed to enhance prompt",
     "emptyPrompt": "Please enter a prompt first",
-    "copyEnhanced": "Copy Enhanced"
+    "copyEnhanced": "Copy Enhanced",
+    "modeLabel": "Modo",
+    "modeAuto": "Auto",
+    "modeManual": "Manual",
+    "modeUnavailable": "No disponible",
+    "providerLabel": "CLI",
+    "providerUnresolved": "CLI no resuelto",
+    "modelLabel": "Modelo",
+    "modelUnresolved": "Modelo predeterminado",
+    "openSettings": "Configurar",
+    "openSettingsTooltip": "Abrir configuración del mejorador de prompts",
+    "resolvingUsage": "Resolviendo configuración…"
   },
   "fileContext": {
     "placeholder": "Contexto de archivo",

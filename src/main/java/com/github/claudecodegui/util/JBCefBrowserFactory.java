@@ -8,6 +8,7 @@ import com.intellij.openapi.util.registry.Registry;
 import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.ui.jcef.JBCefBrowserBase;
 import com.intellij.ui.jcef.JBCefBrowserBuilder;
+import com.intellij.ui.jcef.JBCefOSRHandlerFactory;
 import org.cef.browser.CefBrowser;
 import org.cef.handler.CefKeyboardHandler;
 import org.cef.handler.CefKeyboardHandlerAdapter;
@@ -18,6 +19,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 /**
  * JBCefBrowser factory.
@@ -34,6 +36,12 @@ public final class JBCefBrowserFactory {
     private static final Logger LOG = Logger.getInstance(JBCefBrowserFactory.class);
     private static final int CONTROL_CHAR_MAX = 0x1F;
     private static final String JCEF_ENABLED_REGISTRY_KEY = "ide.browser.jcef.enabled";
+    /**
+     * Toggles JCEF's out-of-process (remote CEF server) mode. On by default from
+     * IntelliJ 2025.2 / JCEF 144, where it triggers JBR-9234: an NPE in
+     * RemoteMessageRouterImpl when a JBCefJSQuery message router is created.
+     */
+    private static final String JCEF_OUT_OF_PROCESS_REGISTRY_KEY = "ide.browser.jcef.out-of-process.enabled";
     private static final ConcurrentMap<Class<?>, Optional<Method>> IS_CLOSED_METHODS = new ConcurrentHashMap<>();
 
     /**
@@ -66,32 +74,113 @@ public final class JBCefBrowserFactory {
      * @return a JBCefBrowser instance
      */
     public static JBCefBrowser create() {
+        return create((JBCefOSRHandlerFactory) null);
+    }
+
+    /**
+     * Create a browser with an optional OSR handler factory.
+     *
+     * <p>The factory is always attached to the builder when supplied. Remote JCEF may override a
+     * platform's requested windowed mode and create an OSR browser, so the pre-build mode is not
+     * authoritative. A genuinely windowed browser simply does not use the OSR factory.</p>
+     *
+     * @param osrHandlerFactory custom OSR factory, or {@code null} for the platform default.
+     * @return a configured JBCefBrowser instance.
+     */
+    public static JBCefBrowser create(JBCefOSRHandlerFactory osrHandlerFactory) {
         boolean isOffScreenRendering = determineOsrMode();
         boolean isDevMode = PlatformUtils.isPluginDevMode();
         LOG.info("Creating JBCefBrowser with OSR=" + isOffScreenRendering
                 + " (platform=" + getPlatformName() + ", ideaVersion=" + getIdeaMajorVersion()
                 + ", devMode=" + isDevMode + ")");
 
+        JBCefBrowser browser = null;
+        Throwable builderFailure;
         try {
-            JBCefBrowserBuilder builder = JBCefBrowser.createBuilder()
-                    .setOffScreenRendering(isOffScreenRendering)
-                    .setEnableOpenDevToolsMenuItem(isDevMode);
-                    // .setCreateImmediately(true) // Causes new tabs to permanently stall on "Checking SDK status..." - commented out; using default lazy-load mode instead
-            JBCefBrowser browser = builder.build();
+            JBCefBrowserBuilder builder = configureBuilder(
+                    JBCefBrowser.createBuilder(),
+                    isOffScreenRendering,
+                    isDevMode,
+                    osrHandlerFactory);
+            // .setCreateImmediately(true) causes new tabs to stall on "Checking SDK status".
+            browser = builder.build();
             configureKeyboardWorkaround(browser);
             configureContextMenu(browser, isDevMode);
-            LOG.info("JBCefBrowser created successfully using builder");
+            LOG.info("JBCefBrowser created successfully using builder"
+                    + ", osrFactoryInstalled=" + (osrHandlerFactory != null));
             return browser;
         } catch (Exception | LinkageError e) {
-            LOG.warn("JBCefBrowser builder failed, falling back to default constructor (missing OSR and dev-tools config)", e);
+            builderFailure = e;
+            disposeQuietly(browser);
+        }
+
+        if (osrHandlerFactory != null) {
+            LOG.error("JBCefBrowser builder failed while a required OSR handler factory was installed; "
+                    + "refusing an unwrapped Remote OSR fallback", builderFailure);
+            throw newJcefUnavailableException(builderFailure);
+        }
+
+        LOG.warn("JBCefBrowser builder failed, falling back to default constructor "
+                + "(missing OSR and dev-tools config)", builderFailure);
+        try {
+            JBCefBrowser fallbackBrowser = new JBCefBrowser();
             try {
-                JBCefBrowser browser = new JBCefBrowser();
-                configureContextMenu(browser, isDevMode);
-                configureKeyboardWorkaround(browser);
-                return browser;
-            } catch (Exception | LinkageError fallbackFailure) {
-                throw newJcefUnavailableException(fallbackFailure);
+                configureContextMenu(fallbackBrowser, isDevMode);
+                configureKeyboardWorkaround(fallbackBrowser);
+                return fallbackBrowser;
+            } catch (Exception | LinkageError configurationFailure) {
+                disposeQuietly(fallbackBrowser);
+                throw configurationFailure;
             }
+        } catch (Exception | LinkageError fallbackFailure) {
+            throw newJcefUnavailableException(fallbackFailure);
+        }
+    }
+
+    /**
+     * Applies browser-builder options while preserving a custom OSR factory even when the
+     * requested rendering mode is windowed. Remote JCEF can force OSR only during build.
+     */
+    static JBCefBrowserBuilder configureBuilder(
+            JBCefBrowserBuilder builder,
+            boolean offScreenRendering,
+            boolean devMode,
+            JBCefOSRHandlerFactory osrHandlerFactory
+    ) {
+        applyBuilderOptions(
+                offScreenRendering,
+                devMode,
+                osrHandlerFactory,
+                builder::setOffScreenRendering,
+                builder::setEnableOpenDevToolsMenuItem,
+                builder::setOSRHandlerFactory);
+        return builder;
+    }
+
+    /** Applies builder options through injectable setters so wiring is testable without JCEF. */
+    static void applyBuilderOptions(
+            boolean offScreenRendering,
+            boolean devMode,
+            JBCefOSRHandlerFactory osrHandlerFactory,
+            Consumer<Boolean> osrModeSetter,
+            Consumer<Boolean> devToolsSetter,
+            Consumer<JBCefOSRHandlerFactory> osrFactorySetter
+    ) {
+        osrModeSetter.accept(offScreenRendering);
+        devToolsSetter.accept(devMode);
+        if (osrHandlerFactory != null) {
+            osrFactorySetter.accept(osrHandlerFactory);
+        }
+    }
+
+    private static void disposeQuietly(JBCefBrowser browser) {
+        if (browser == null) {
+            return;
+        }
+        try {
+            browser.dispose();
+        } catch (Exception | LinkageError disposalFailure) {
+            LOG.warn("Failed to dispose partially configured JBCefBrowser", disposalFailure);
         }
     }
 
@@ -307,6 +396,28 @@ public final class JBCefBrowserFactory {
             return Registry.is(JCEF_ENABLED_REGISTRY_KEY, true);
         } catch (Exception | LinkageError e) {
             LOG.warn("Failed to enable JCEF in IDE registry: " + e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * Disable the IDE registry flag that runs JCEF in out-of-process (remote CEF
+     * server) mode. That mode throws {@code NullPointerException} in
+     * {@code RemoteMessageRouterImpl} on the JCEF builds bundled with IntelliJ
+     * 2025.2+ (JCEF 144) whenever a {@code JBCefJSQuery} message router is
+     * created — <a href="https://youtrack.jetbrains.com/issue/JBR-9234">JBR-9234</a>.
+     * Flipping it off is the documented workaround; the flag is read during
+     * JBCefApp initialization, so an IDE restart is required for it to take effect.
+     *
+     * @return true when the registry value was updated successfully
+     */
+    public static boolean disableOutOfProcessJcefInRegistry() {
+        try {
+            Registry.get(JCEF_OUT_OF_PROCESS_REGISTRY_KEY).setValue(false);
+            // The key defaults to true, so a successful write must read back false.
+            return !Registry.is(JCEF_OUT_OF_PROCESS_REGISTRY_KEY, true);
+        } catch (Exception | LinkageError e) {
+            LOG.warn("Failed to disable out-of-process JCEF in IDE registry: " + e.getMessage(), e);
             return false;
         }
     }

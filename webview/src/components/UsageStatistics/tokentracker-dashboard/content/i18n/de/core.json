@@ -391,6 +391,7 @@
   "settings.menubar.confettiOnReset": "Konfetti beim Reset",
   "settings.menubar.confettiOnResetHint": "Zeigt ein Feuerwerk an, wenn ein Nutzungslimit zurücksetzt, nachdem du nah dran warst.",
   "shared.action.apply": "Übernehmen",
+  "shared.action.clear": "Leeren",
   "shared.time.d_ago": "vor {{n}} T",
   "shared.time.h_ago": "vor {{n}} Std",
   "shared.time.m_ago": "vor {{n}} Min",

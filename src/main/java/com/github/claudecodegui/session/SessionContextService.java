@@ -1,6 +1,5 @@
 package com.github.claudecodegui.session;
 
-import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.service.RunConfigMonitorService;
 import com.github.claudecodegui.terminal.TerminalMonitorService;
 import com.google.gson.JsonArray;
@@ -11,10 +10,6 @@ import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Computable;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,11 +26,9 @@ public class SessionContextService {
     private static final Logger LOG = Logger.getInstance(SessionContextService.class);
 
     private final Project project;
-    private final int maxFileSizeBytes;
 
-    public SessionContextService(Project project, int maxFileSizeBytes) {
+    public SessionContextService(Project project) {
         this.project = project;
-        this.maxFileSizeBytes = maxFileSizeBytes;
     }
 
     public ClaudeSession.Message buildUserMessage(String normalizedInput, List<ClaudeSession.Attachment> attachments) {
@@ -171,23 +164,18 @@ public class SessionContextService {
         }
 
         if (!regularFilePaths.isEmpty()) {
+            // Path references only: CLI providers are agentic and read files
+            // themselves. Never inline file content here — it bloats every
+            // prompt and overflows the Windows command-line length limit
+            // (32,767 chars) when the prompt is passed as a CLI argument.
             sb.append("\n\n## Referenced Files\n\n");
             sb.append("The following files were referenced by the user:\n\n");
-
             for (String filePath : regularFilePaths) {
-                String fileContent = readFileContent(filePath);
-                if (fileContent != null) {
-                    String extension = getFileExtension(filePath);
-                    sb.append("### `").append(filePath).append("`\n\n");
-                    sb.append("```").append(extension).append("\n");
-                    sb.append(fileContent);
-                    if (!fileContent.endsWith("\n")) {
-                        sb.append("\n");
-                    }
-                    sb.append("```\n\n");
-                    hasContent = true;
-                }
+                sb.append("- `").append(filePath).append("`\n");
             }
+            sb.append("\nRead them with your file tools as needed; ")
+                .append("the user expects answers based on their content.\n");
+            hasContent = true;
         }
 
         if (openedFilesJson != null && !openedFilesJson.isJsonNull()) {
@@ -214,40 +202,32 @@ public class SessionContextService {
                 }
             }
 
-            if (selectedText != null && !selectedText.trim().isEmpty()) {
+            if (selectedText != null && !selectedText.trim().isEmpty()
+                    && activeFile != null && !activeFile.trim().isEmpty()) {
+                // Reference the selection by path + line range only; the agent
+                // reads the file itself. Never inline selected code either.
                 sb.append("\n\n## IDE Context\n\n");
-                if (activeFile != null && !activeFile.trim().isEmpty()) {
-                    sb.append("Active file: `").append(activeFile);
-                    if (startLine != null && endLine != null) {
-                        if (startLine.equals(endLine)) {
-                            sb.append("#L").append(startLine);
-                        } else {
-                            sb.append("#L").append(startLine).append("-").append(endLine);
-                        }
+                sb.append("Active file: `").append(activeFile);
+                if (startLine != null && endLine != null) {
+                    if (startLine.equals(endLine)) {
+                        sb.append("#L").append(startLine);
+                    } else {
+                        sb.append("#L").append(startLine).append("-").append(endLine);
                     }
-                    sb.append("`\n\n");
                 }
-                sb.append("Selected code:\n```\n");
-                sb.append(selectedText);
-                sb.append("\n```\n");
-                sb.append("The selected code above is the primary subject of the user's question.\n");
+                sb.append("`\n\n");
+                sb.append("The user has selected the referenced lines in this file; ")
+                    .append("the selection is the primary subject of the user's question. ")
+                    .append("Read the file to see the selected code.\n");
                 hasContent = true;
             } else if (activeFile != null && !activeFile.trim().isEmpty()) {
-                String fileContent = readFileContent(activeFile);
-                if (fileContent != null) {
-                    String extension = getFileExtension(activeFile);
-                    sb.append("\n\n## User's Current IDE Context\n\n");
-                    sb.append("The user is viewing this file in their IDE. This is the PRIMARY SUBJECT of the user's question.\n\n");
-                    sb.append("### `").append(activeFile).append("`\n\n");
-                    sb.append("```").append(extension).append("\n");
-                    sb.append(fileContent);
-                    if (!fileContent.endsWith("\n")) {
-                        sb.append("\n");
-                    }
-                    sb.append("```\n\n");
-                    hasContent = true;
-                    LOG.info("[Codex Context] Injected active file content: " + activeFile);
-                }
+                sb.append("\n\n## User's Current IDE Context\n\n");
+                sb.append("The user is viewing this file in their IDE. ")
+                    .append("This is the PRIMARY SUBJECT of the user's question: `")
+                    .append(activeFile).append("`\n\n");
+                sb.append("Read it with your file tools as needed.\n");
+                hasContent = true;
+                LOG.info("[Codex Context] Referenced active file: " + activeFile);
             }
         }
 
@@ -416,51 +396,5 @@ public class SessionContextService {
             return "[Uploaded Attachments: " + String.join(", ", names.subList(0, 3)) + ", ...]";
         }
         return "[Uploaded Attachments: " + String.join(", ", names) + "]";
-    }
-
-    private String readFileContent(String filePath) {
-        try {
-            File file = new File(NodeDetector.toVfsPath(filePath));
-            if (!file.exists() || !file.isFile() || !file.canRead()) {
-                LOG.warn("[Codex Context] File not accessible: " + filePath);
-                return null;
-            }
-
-            long fileSize = file.length();
-            if (fileSize > maxFileSizeBytes) {
-                LOG.info("[Codex Context] File too large, reading first "
-                        + (maxFileSizeBytes / 1024)
-                        + "KB: " + filePath + " (" + fileSize + " bytes)");
-                try (FileInputStream fis = new FileInputStream(file)) {
-                    byte[] buffer = new byte[maxFileSizeBytes];
-                    int bytesRead = fis.read(buffer);
-                    if (bytesRead > 0) {
-                        return new String(buffer, 0, bytesRead, StandardCharsets.UTF_8)
-                                + "\n\n... (file truncated, showing first "
-                                + (maxFileSizeBytes / 1024)
-                                + "KB of " + (fileSize / 1024) + "KB)";
-                    }
-                }
-                return null;
-            }
-
-            String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
-            LOG.info("[Codex Context] Read file content: " + filePath + " (" + fileSize + " bytes)");
-            return content;
-        } catch (Exception e) {
-            LOG.warn("[Codex Context] Failed to read file: " + filePath + ", error: " + e.getMessage());
-            return null;
-        }
-    }
-
-    private String getFileExtension(String filePath) {
-        if (filePath == null) {
-            return "";
-        }
-        int lastDot = filePath.lastIndexOf('.');
-        if (lastDot > 0 && lastDot < filePath.length() - 1) {
-            return filePath.substring(lastDot + 1).toLowerCase();
-        }
-        return "";
     }
 }

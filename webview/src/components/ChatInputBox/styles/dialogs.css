@@ -113,3 +113,65 @@
   background: rgba(0, 0, 0, 0.1);
 }
 
+/* Inline quote chip — mirrors the file tag with an accented left edge */
+.quote-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  margin: 0 2px;
+  background: var(--dropdown-bg);
+  border: 1px solid var(--input-border);
+  border-left: 2px solid var(--accent-color, #6ea8fe);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: default;
+  user-select: none;
+  vertical-align: middle;
+}
+
+.quote-tag-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.quote-tag-text {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.quote-tag-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  border-radius: 2px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.quote-tag-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="light"] .quote-tag {
+  background: #f3f3f3;
+  border-color: #d0d0d0;
+  color: #333;
+}
+
+[data-theme="light"] .quote-tag-close:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+

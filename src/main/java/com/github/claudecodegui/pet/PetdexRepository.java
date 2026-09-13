@@ -246,7 +246,7 @@ public final class PetdexRepository {
         uninstall(resolvePetRoot(), slug);
     }
 
-    static void uninstall(Path configuredRoot, String slug) throws IOException {
+    public static void uninstall(Path configuredRoot, String slug) throws IOException {
         validateSlug(slug);
         ReentrantLock lock = operationLock(slug);
         lock.lock();

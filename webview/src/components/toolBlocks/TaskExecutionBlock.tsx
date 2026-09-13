@@ -3,8 +3,21 @@ import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { normalizeToolName } from '../../utils/toolConstants';
 import { sendBridgeEvent } from '../../utils/bridge';
-import { extractResultText, isAsyncAgentInput, parseAgentToolMeta } from '../../utils/subagentResult';
-import { useSubagentHistories, useSessionId, useGetToolResultRaw, useTaskEvent } from '../../contexts/SubagentContext';
+import {
+  extractResultText,
+  hasSubagentTranscript,
+  isAsyncAgentInput,
+  parseAgentToolMeta,
+  parseSpawnAgentMeta,
+  readToolUseStatus,
+} from '../../utils/subagentResult';
+import {
+  useSubagentHistories,
+  useSessionId,
+  useSessionProvider,
+  useGetToolResultRaw,
+  useTaskEvent,
+} from '../../contexts/SubagentContext';
 import SubagentProcessDetails from '../StatusPanel/SubagentProcessDetails';
 
 const MONO_FONT_STYLE: React.CSSProperties = {
@@ -20,67 +33,6 @@ interface TaskExecutionBlockProps {
   isStreaming?: boolean;
 }
 
-type SpawnAgentMeta = {
-  agentId?: string;
-  nickname?: string;
-  model?: string;
-  reasoningEffort?: string;
-};
-
-function parseSpawnAgentMeta(input: ToolInput, result?: ToolResultBlock | null): SpawnAgentMeta {
-  const text = extractResultText(result)?.trim();
-  let parsed: Record<string, unknown> | null = null;
-
-  if (text && (text.startsWith('{') || text.startsWith('['))) {
-    try {
-      const candidate = JSON.parse(text);
-      if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
-        parsed = candidate as Record<string, unknown>;
-      }
-    } catch {
-      parsed = null;
-    }
-  }
-
-  const getString = (...values: unknown[]): string | undefined => {
-    for (const value of values) {
-      if (typeof value === 'string' && value.trim()) {
-        return value.trim();
-      }
-    }
-    return undefined;
-  };
-
-  // Reuse a single regex match for both model and reasoningEffort instead of
-  // running the same pattern twice over the text.
-  const modelMatch = text?.match(/\(([A-Za-z0-9._:-]+)(?:\s+(low|medium|high|xhigh))?\)/i);
-  const agentId = getString(
-    parsed?.agent_id,
-    parsed?.agentId,
-    parsed?.agent_path,
-    parsed?.agentPath,
-  ) ?? text?.match(/\b([0-9a-f]{8}-[0-9a-f-]{27})\b/i)?.[1];
-
-  const nickname = getString(
-    parsed?.nickname,
-    parsed?.name,
-  );
-
-  const model = getString(
-    parsed?.model,
-    input.model,
-  ) ?? modelMatch?.[1];
-
-  const reasoningEffort = getString(
-    parsed?.reasoning_effort,
-    parsed?.reasoningEffort,
-    input.reasoning_effort,
-    input.reasoningEffort,
-  ) ?? modelMatch?.[2];
-
-  return { agentId, nickname, model, reasoningEffort };
-}
-
 function shortenAgentId(agentId?: string): string | undefined {
   if (!agentId) return undefined;
   return agentId.length > 8 ? `${agentId.slice(0, 8)}…` : agentId;
@@ -91,6 +43,7 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
   const [expanded, setExpanded] = useState(false);
   const histories = useSubagentHistories();
   const currentSessionId = useSessionId();
+  const currentProvider = useSessionProvider();
   const getToolResultRaw = useGetToolResultRaw();
   const taskEvent = useTaskEvent(toolId);
 
@@ -115,12 +68,19 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
     agentPath: _agentPathCamel,
     ...rest
   } = input ?? ({} as ToolInput);
-  const spawnMeta = isSpawnAgent && input ? parseSpawnAgentMeta(input, result) : {};
+  const spawnMeta = isSpawnAgent && input
+    ? parseSpawnAgentMeta(input as Record<string, unknown>, result)
+    : {};
   const agentToolMeta = !isSpawnAgent && input ? parseAgentToolMeta(getToolResultRaw, toolId) : {};
   const agentId = spawnMeta.agentId ?? agentToolMeta.agentId;
-  const identityLabel = spawnMeta.nickname || (typeof subagentType === 'string' && subagentType ? subagentType : undefined);
+  const agentPath = spawnMeta.agentPath;
+  const identityLabel = spawnMeta.identityLabel
+    ?? (typeof subagentType === 'string' && subagentType ? subagentType : undefined);
   const modelSummary = [spawnMeta.model, spawnMeta.reasoningEffort].filter(Boolean).join(' ');
   const shortAgentId = shortenAgentId(agentId);
+  const historyDescription = isSpawnAgent
+    ? spawnMeta.description
+    : typeof description === 'string' ? description : undefined;
 
   // A background (run_in_background) Agent only gets a launch acknowledgment
   // tool_result; its real terminal status arrives later via a task_notification
@@ -130,8 +90,12 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
   // was registered) returns an is_error tool_result and never emits a
   // task_notification, so treat that as an error instead of staying stuck.
   // isAsyncAgentInput centralizes the strict === true check shared with
-  // useSubagents and AgentGroupBlock.
-  const isAsync = input ? isAsyncAgentInput(input) : false;
+  // useSubagents and AgentGroupBlock. The launch ack text and tool-use status
+  // are passed as fallbacks so an agent spawned without run_in_background is
+  // still recognized as async.
+  const isAsync = input
+    ? isAsyncAgentInput(input, normalizedName, result, readToolUseStatus(toolId ? getToolResultRaw(toolId) : null))
+    : false;
   const hasTerminalResult = result !== undefined && result !== null;
   const taskFailed = taskEvent?.status === 'failed' || taskEvent?.status === 'stopped';
   // Async completion has two authoritative sources: the live task_notification,
@@ -139,31 +103,36 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
   // assistant/end_turn. A settled main turn alone proves only that the launch
   // turn ended; the background sidechain may still be running.
   const history = (toolId ? histories[toolId] : undefined) ?? (agentId ? histories[agentId] : undefined);
+  const resolvedAgentId = history?.agentId ?? agentId;
+  const resolvedAgentPath = history?.agentPath ?? agentPath;
+  const historyFailed = history?.status === 'error';
   const isCompleted = isAsync
     ? (taskEvent ? !taskFailed : history?.completed === true)
     : hasTerminalResult;
   const isError = isAsync
-    ? (taskEvent ? taskFailed : result?.is_error === true)
+    ? (taskEvent ? taskFailed : historyFailed || result?.is_error === true)
     : hasTerminalResult && result?.is_error === true;
 
   // For background agents the task_notification carries the authoritative usage
   // and summary (the launch ack has none); prefer it over toolUseResult. Sync
   // agents keep reading toolUseResult as before.
-  const detailAgentId = (isAsync ? taskEvent?.agentId : undefined) ?? agentId;
+  const detailAgentId = (isAsync ? taskEvent?.agentId : undefined) ?? resolvedAgentId;
   const detailDurationMs = (isAsync ? taskEvent?.totalDurationMs : undefined) ?? agentToolMeta.totalDurationMs;
   const detailTokens = (isAsync ? taskEvent?.totalTokens : undefined) ?? agentToolMeta.totalTokens;
   const detailToolUseCount = (isAsync ? taskEvent?.totalToolUseCount : undefined) ?? agentToolMeta.totalToolUseCount;
   const detailResultText = (isAsync ? taskEvent?.summary : undefined) ?? extractResultText(result);
 
   useEffect(() => {
-    if (!input || !expanded || !isAgentTool || !currentSessionId || !toolId || history) return;
+    if (!input || !expanded || !isAgentTool || !currentSessionId || !toolId || hasSubagentTranscript(history)) return;
     sendBridgeEvent('load_subagent_session', JSON.stringify({
       sessionId: currentSessionId,
-      agentId,
-      description: typeof description === 'string' ? description : undefined,
+      provider: currentProvider,
+      agentId: resolvedAgentId,
+      agentPath: resolvedAgentPath,
+      description: historyDescription,
       toolUseId: toolId,
     }));
-  }, [input, agentId, currentSessionId, description, expanded, history, isAgentTool, toolId]);
+  }, [input, currentProvider, currentSessionId, expanded, history, historyDescription, isAgentTool, resolvedAgentId, resolvedAgentPath, toolId]);
 
   // Poll while an expanded async Agent is unresolved, including after a main
   // turn settles. This lets a reloaded session observe the sidechain's terminal
@@ -182,13 +151,15 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
     const timer = window.setInterval(() => {
       sendBridgeEvent('load_subagent_session', JSON.stringify({
         sessionId: currentSessionId,
-        agentId,
-        description: typeof description === 'string' ? description : undefined,
+        provider: currentProvider,
+        agentId: resolvedAgentId,
+        agentPath: resolvedAgentPath,
+        description: historyDescription,
         toolUseId: toolId,
       }));
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [input, agentId, currentSessionId, description, shouldPollHistory, toolId]);
+  }, [input, currentProvider, currentSessionId, historyDescription, resolvedAgentId, resolvedAgentPath, shouldPollHistory, toolId]);
 
   if (!input) {
     return null;
@@ -268,12 +239,13 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
                 totalTokens={detailTokens}
                 totalToolUseCount={detailToolUseCount}
                 resultText={detailResultText}
+                prompt={!isSpawnAgent && typeof prompt === 'string' ? prompt : undefined}
                 history={history}
                 canLoad={Boolean(currentSessionId)}
               />
             )}
 
-            {typeof prompt === 'string' && (
+            {!isSpawnAgent && typeof prompt === 'string' && (
               <div className="task-field">
                 <div className="task-field-label">
                   <span className="codicon codicon-comment" />
@@ -283,7 +255,9 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
               </div>
             )}
 
-            {Object.entries(rest).map(([key, value]) => (
+            {Object.entries(rest)
+              .filter(([key]) => !isSpawnAgent || !['message', 'items', 'task_name', 'taskName'].includes(key))
+              .map(([key, value]) => (
               <div key={key} className="task-field">
                 <div className="task-field-label">{key}</div>
                 <div className="task-field-content">
@@ -292,7 +266,7 @@ const TaskExecutionBlock = memo(function TaskExecutionBlock({ name, input, resul
                     : String(value)}
                 </div>
               </div>
-            ))}
+              ))}
           </div>
         </div>
       )}

@@ -17,28 +17,60 @@ import {
   loadCodexSdk,
   isCodexSdkAvailable,
 } from '../utils/sdk-loader.js';
-import { setupApiKey, buildCliEnv, buildWebviewControlledSettingsOverride } from '../config/api-config.js';
-import { mapModelIdToSdkName } from '../utils/model-utils.js';
+import {
+  setupApiKey,
+  buildCliEnv,
+  buildWebviewControlledSettingsOverride,
+  loadClaudeSettings,
+  getCliUserAgent,
+} from '../config/api-config.js';
+import { mapModelIdToSdkName, resolveModelFromSettings } from '../utils/model-utils.js';
 import { getRealHomeDir } from '../utils/path-utils.js';
 import { getClaudeCliPathOverride } from '../utils/claude-cli-path.js';
+import { ensureAnthropicSdk } from './claude/message-utils.js';
 import { buildCodexCliEnvironment } from './codex/codex-utils.js';
+import { askCliProvider, isCliAskProvider } from './cli-ask.js';
 
 let claudeSdk = null;
 let codexSdk = null;
+
+// stdout protocol markers (line-oriented; keep payloads JSON-encoded for deltas)
+//   [CONTENT_DELTA] <json-string>  — progressive token chunk
+//   [ENHANCED]<text>               — final success (newlines as {{NEWLINE}})
+//   [ENHANCED_ERROR]<msg>          — final failure
+
+/** Mirrors chat AVAILABLE_PROVIDERS / webview AiFeatureProvider. */
+const AI_FEATURE_PROVIDERS = ['claude', 'codex', 'grok', 'kimi', 'opencode', 'pi', 'omp'];
+const CLI_ONLY_PROVIDERS = new Set(['grok', 'kimi', 'opencode', 'pi', 'omp']);
 
 const DEFAULT_PROMPT_ENHANCER_CONFIG = {
   provider: null,
   effectiveProvider: 'claude',
   resolutionSource: 'auto',
   models: {
-    claude: 'claude-sonnet-4-6',
+    // claude-sonnet-4-6/4-7 are retired - defaults must stay on live models (#1678, #1693).
+    claude: 'claude-sonnet-5',
     codex: 'gpt-5.5',
+    grok: 'grok',
+    kimi: 'auto',
+    opencode: 'opencode-default',
+    pi: 'auto',
+    omp: 'auto',
   },
   availability: {
     claude: false,
     codex: false,
+    grok: false,
+    kimi: false,
+    opencode: false,
+    pi: false,
+    omp: false,
   },
 };
+
+function isAiFeatureProvider(value) {
+  return typeof value === 'string' && AI_FEATURE_PROVIDERS.includes(value);
+}
 
 async function ensureClaudeSdk() {
   if (!claudeSdk) {
@@ -231,24 +263,67 @@ function normalizePromptEnhancerConfig(config) {
     return structuredClone(DEFAULT_PROMPT_ENHANCER_CONFIG);
   }
 
+  const models = { ...DEFAULT_PROMPT_ENHANCER_CONFIG.models };
+  const availability = { ...DEFAULT_PROMPT_ENHANCER_CONFIG.availability };
+  for (const provider of AI_FEATURE_PROVIDERS) {
+    if (typeof config.models?.[provider] === 'string' && config.models[provider].trim()) {
+      models[provider] = config.models[provider].trim();
+    }
+    if (config.availability && provider in config.availability) {
+      availability[provider] = Boolean(config.availability[provider]);
+    }
+  }
+
   return {
-    provider: config.provider === 'claude' || config.provider === 'codex' ? config.provider : null,
-    effectiveProvider: config.effectiveProvider === 'claude' || config.effectiveProvider === 'codex'
-      ? config.effectiveProvider
-      : null,
+    provider: isAiFeatureProvider(config.provider) ? config.provider : null,
+    effectiveProvider: isAiFeatureProvider(config.effectiveProvider) ? config.effectiveProvider : null,
     resolutionSource: typeof config.resolutionSource === 'string' ? config.resolutionSource : 'auto',
-    models: {
-      claude: config.models?.claude || DEFAULT_PROMPT_ENHANCER_CONFIG.models.claude,
-      codex: config.models?.codex || DEFAULT_PROMPT_ENHANCER_CONFIG.models.codex,
-    },
-    availability: {
-      claude: Boolean(config.availability?.claude),
-      codex: Boolean(config.availability?.codex),
-    },
+    models,
+    availability,
   };
 }
 
-export function resolvePromptEnhancerRuntimeConfig({ promptEnhancerConfig, legacyModel } = {}) {
+/**
+ * In auto mode, prefer the model currently selected in the chat input when the
+ * resolved enhancer provider matches the chat provider. Manual mode keeps the
+ * remembered per-provider enhancer model.
+ *
+ * @param {object} options
+ * @param {string} options.provider - resolved effective provider
+ * @param {string} options.configuredModel - models[provider] from settings
+ * @param {string} [options.resolutionSource]
+ * @param {string} [options.chatProvider]
+ * @param {string} [options.chatModel]
+ * @returns {string}
+ */
+export function resolveAutoChatModel({
+  provider,
+  configuredModel,
+  resolutionSource,
+  chatProvider,
+  chatModel,
+} = {}) {
+  const isAuto = resolutionSource === 'auto';
+  if (!isAuto || !provider) {
+    return configuredModel;
+  }
+  const chatProv = typeof chatProvider === 'string' ? chatProvider.trim().toLowerCase() : '';
+  const chatMod = typeof chatModel === 'string' ? chatModel.trim() : '';
+  if (!chatProv || !chatMod) {
+    return configuredModel;
+  }
+  if (chatProv !== String(provider).trim().toLowerCase()) {
+    return configuredModel;
+  }
+  return chatMod;
+}
+
+export function resolvePromptEnhancerRuntimeConfig({
+  promptEnhancerConfig,
+  legacyModel,
+  chatProvider,
+  chatModel,
+} = {}) {
   if (!promptEnhancerConfig) {
     return {
       provider: 'claude',
@@ -261,18 +336,19 @@ export function resolvePromptEnhancerRuntimeConfig({ promptEnhancerConfig, legac
   const claudeSdkInstalled = isClaudeSdkAvailable();
   const codexSdkInstalled = isCodexSdkAvailable();
 
-  if (config.effectiveProvider === 'codex') {
+  // Prefer Java-resolved effectiveProvider (includes CLI providers when available).
+  if (isAiFeatureProvider(config.effectiveProvider)) {
+    const provider = config.effectiveProvider;
+    const configuredModel = config.models[provider] || DEFAULT_PROMPT_ENHANCER_CONFIG.models[provider];
     return {
-      provider: 'codex',
-      model: config.models.codex || DEFAULT_PROMPT_ENHANCER_CONFIG.models.codex,
-      resolutionSource: config.resolutionSource,
-    };
-  }
-
-  if (config.effectiveProvider === 'claude') {
-    return {
-      provider: 'claude',
-      model: config.models.claude || DEFAULT_PROMPT_ENHANCER_CONFIG.models.claude,
+      provider,
+      model: resolveAutoChatModel({
+        provider,
+        configuredModel,
+        resolutionSource: config.resolutionSource,
+        chatProvider,
+        chatModel,
+      }),
       resolutionSource: config.resolutionSource,
     };
   }
@@ -291,14 +367,136 @@ export function resolvePromptEnhancerRuntimeConfig({ promptEnhancerConfig, legac
     throw new Error('Claude Code prompt enhancer is unavailable because no active Claude Code provider is configured.');
   }
 
+  if (config.provider && CLI_ONLY_PROVIDERS.has(config.provider)) {
+    throw new Error(
+      `${config.provider} prompt enhancer is unavailable because the CLI is not installed or not detected. Install it and re-check Settings → Provider Management → CLI.`
+    );
+  }
+
   if (!codexSdkInstalled && !claudeSdkInstalled) {
     throw new Error('No available prompt enhancer provider is configured because both Claude Code and Codex SDKs are not installed.');
   }
 
-  throw new Error('No available prompt enhancer provider is configured. Please configure Codex or Claude Code in Settings.');
+  throw new Error('No available prompt enhancer provider is configured. Please configure a provider in Settings → Prompt Enhancer.');
 }
 
-async function enhancePromptWithClaude(originalPrompt, systemPrompt, model, context) {
+export function extractAppendedDelta(previousText, nextText) {
+  const previous = typeof previousText === 'string' ? previousText : '';
+  const next = typeof nextText === 'string' ? nextText : '';
+  if (!next.trim()) return '';
+  if (!previous) return next;
+  if (next === previous) return '';
+  if (!next.startsWith(previous)) return next;
+  return next.slice(previous.length);
+}
+
+/**
+ * Whether the Anthropic messages.stream "ask" path can be used.
+ * Requires a concrete API key / auth token (not CLI login / helper / Bedrock).
+ */
+export function canUseAnthropicAskPath(config) {
+  if (!config || !config.apiKey) return false;
+  return config.authType === 'api_key' || config.authType === 'auth_token';
+}
+
+/**
+ * Cap output tokens based on input size so long requirements are not truncated
+ * while short prompts stay cheap.
+ */
+export function computeMaxTokens(promptLength) {
+  const len = typeof promptLength === 'number' && Number.isFinite(promptLength) && promptLength > 0
+    ? promptLength
+    : 0;
+  return Math.min(8192, Math.max(2048, Math.ceil(len * 2)));
+}
+
+/**
+ * Emit a progressive content delta marker for the Java process runner.
+ * Uses stdout.write so markers stay line-atomic and unbuffered relative to logs.
+ */
+export function emitContentDelta(text) {
+  if (typeof text !== 'string' || !text) return;
+  process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(text)}\n`);
+}
+
+/**
+ * Fast Claude path: Anthropic SDK messages.stream (no Agent SDK cold start).
+ * Native SSE token streaming via .on('text').
+ */
+async function enhancePromptWithClaudeAsk(originalPrompt, systemPrompt, model, context) {
+  const anthropicModule = await ensureAnthropicSdk();
+  const Anthropic = anthropicModule.default || anthropicModule.Anthropic || anthropicModule;
+
+  const config = setupApiKey();
+  if (!canUseAnthropicAskPath(config)) {
+    throw new Error('Anthropic ask path unavailable for current auth');
+  }
+
+  const settings = loadClaudeSettings();
+  const modelId = resolveModelFromSettings(model, settings && settings.env);
+  const fullPrompt = buildFullPrompt(originalPrompt, context);
+  const maxTokens = computeMaxTokens(fullPrompt.length);
+
+  console.log(`[PromptEnhancer] Claude ask path model: ${model} -> ${modelId}`);
+  console.log(`[PromptEnhancer] Base URL: ${config.baseUrl || 'https://api.anthropic.com'}`);
+  console.log(`[PromptEnhancer] Auth type: ${config.authType}`);
+  console.log(`[PromptEnhancer] Full prompt length: ${fullPrompt.length}, max_tokens: ${maxTokens}`);
+
+  const clientOpts = {
+    baseURL: config.baseUrl || undefined,
+    defaultHeaders: { 'x-app': 'cli', 'User-Agent': getCliUserAgent() },
+  };
+  if (config.authType === 'auth_token') {
+    clientOpts.authToken = config.apiKey;
+    clientOpts.apiKey = null;
+  } else {
+    clientOpts.apiKey = config.apiKey;
+  }
+  const client = new Anthropic(clientOpts);
+
+  console.log('[PromptEnhancer] Streaming via Anthropic SDK messages.stream()...');
+
+  let streamedText = '';
+  const request = {
+    model: modelId,
+    max_tokens: maxTokens,
+    messages: [{ role: 'user', content: fullPrompt }],
+  };
+  if (systemPrompt && String(systemPrompt).trim()) {
+    request.system = String(systemPrompt).trim();
+  }
+
+  const stream = client.messages.stream(request);
+  stream.on('text', (text) => {
+    if (text) {
+      emitContentDelta(text);
+      streamedText += text;
+    }
+  });
+
+  const finalMessage = await stream.finalMessage();
+
+  if (!streamedText.trim() && finalMessage && Array.isArray(finalMessage.content)) {
+    for (const block of finalMessage.content) {
+      if (block && block.type === 'text' && block.text) {
+        emitContentDelta(block.text);
+        streamedText += block.text;
+      }
+    }
+  }
+
+  console.log(`[PromptEnhancer] Claude ask response length: ${streamedText.length}`);
+  if (streamedText.trim()) {
+    return streamedText.trim();
+  }
+  throw new Error('Claude enhancement response is empty');
+}
+
+/**
+ * Fallback Claude path: Agent SDK (CLI login / apiKeyHelper / Bedrock).
+ * Emits CONTENT_DELTA from stream_event text deltas when available.
+ */
+async function enhancePromptWithClaudeAgent(originalPrompt, systemPrompt, model, context) {
   const sdk = await ensureClaudeSdk();
   const { query } = sdk;
 
@@ -307,7 +505,7 @@ async function enhancePromptWithClaude(originalPrompt, systemPrompt, model, cont
   console.log(`[PromptEnhancer] Base URL: ${config.baseUrl || 'https://api.anthropic.com'}`);
 
   const sdkModelName = mapModelIdToSdkName(model);
-  console.log(`[PromptEnhancer] Claude model mapping: ${model} -> ${sdkModelName}`);
+  console.log(`[PromptEnhancer] Claude Agent model mapping: ${model} -> ${sdkModelName}`);
 
   const workingDirectory = getRealHomeDir();
   const fullPrompt = buildFullPrompt(originalPrompt, context);
@@ -327,6 +525,7 @@ async function enhancePromptWithClaude(originalPrompt, systemPrompt, model, cont
     systemPrompt,
     settingSources: ['user'],
     canUseTool: async () => ({ behavior: 'deny', message: 'Prompt enhancement does not execute tools' }),
+    includePartialMessages: true,
     ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride }),
   };
 
@@ -338,27 +537,51 @@ async function enhancePromptWithClaude(originalPrompt, systemPrompt, model, cont
   });
 
   let responseText = '';
+  let hasStreamDeltas = false;
   let messageCount = 0;
 
   for await (const msg of result) {
     messageCount += 1;
     console.log(`[PromptEnhancer] Claude message #${messageCount}, type: ${msg.type}`);
 
-    if (msg.type === 'assistant') {
+    if (msg.type === 'stream_event') {
+      const event = msg.event;
+      if (event?.type === 'content_block_delta' && event.delta?.type === 'text_delta' && event.delta.text) {
+        hasStreamDeltas = true;
+        emitContentDelta(event.delta.text);
+        responseText += event.delta.text;
+      }
+      continue;
+    }
+
+    if (msg.type === 'assistant' && !hasStreamDeltas) {
       const content = msg.message?.content;
+      let snapshot = '';
       if (Array.isArray(content)) {
         for (const block of content) {
-          if (block.type === 'text') {
-            responseText += block.text;
+          if (block.type === 'text' && block.text) {
+            snapshot += block.text;
           }
         }
       } else if (typeof content === 'string') {
-        responseText += content;
+        snapshot = content;
+      }
+      if (!snapshot) continue;
+
+      if (!responseText) {
+        emitContentDelta(snapshot);
+        responseText = snapshot;
+      } else if (snapshot.startsWith(responseText)) {
+        const delta = snapshot.slice(responseText.length);
+        if (delta) {
+          emitContentDelta(delta);
+          responseText = snapshot;
+        }
       }
     }
   }
 
-  console.log(`[PromptEnhancer] Claude response text length: ${responseText.length}`);
+  console.log(`[PromptEnhancer] Claude Agent response length: ${responseText.length}`);
   if (responseText.trim()) {
     return responseText.trim();
   }
@@ -366,14 +589,17 @@ async function enhancePromptWithClaude(originalPrompt, systemPrompt, model, cont
   throw new Error('Claude enhancement response is empty');
 }
 
-export function extractAppendedDelta(previousText, nextText) {
-  const previous = typeof previousText === 'string' ? previousText : '';
-  const next = typeof nextText === 'string' ? nextText : '';
-  if (!next.trim()) return '';
-  if (!previous) return next;
-  if (next === previous) return '';
-  if (!next.startsWith(previous)) return next;
-  return next.slice(previous.length);
+async function enhancePromptWithClaude(originalPrompt, systemPrompt, model, context) {
+  const config = setupApiKey();
+  // Prefer the lightweight Anthropic messages.stream path when a real API key is present.
+  // Do not fall back mid-stream: partial CONTENT_DELTA markers may already have been
+  // flushed to Java, and a second path would corrupt the progressive UI.
+  if (canUseAnthropicAskPath(config)) {
+    console.log('[PromptEnhancer] Using Anthropic ask (messages.stream) path');
+    return enhancePromptWithClaudeAsk(originalPrompt, systemPrompt, model, context);
+  }
+  console.log(`[PromptEnhancer] Using Agent SDK path (auth: ${config.authType || 'unknown'})`);
+  return enhancePromptWithClaudeAgent(originalPrompt, systemPrompt, model, context);
 }
 
 async function enhancePromptWithCodex(originalPrompt, systemPrompt, model, context) {
@@ -415,6 +641,7 @@ async function enhancePromptWithCodex(originalPrompt, systemPrompt, model, conte
       if (item?.type === 'agent_message' && typeof item.text === 'string') {
         const delta = extractAppendedDelta(lastAgentMessage, item.text);
         if (delta) {
+          emitContentDelta(delta);
           responseText += delta;
         }
         lastAgentMessage = item.text;
@@ -440,15 +667,60 @@ async function enhancePromptWithCodex(originalPrompt, systemPrompt, model, conte
   throw new Error('Codex enhancement response is empty');
 }
 
+/**
+ * Headless CLI path (Grok / Kimi / OpenCode / PI).
+ * Session-less ask — never emits chat markers; only CONTENT_DELTA via onDelta.
+ */
+async function enhancePromptWithCli(originalPrompt, systemPrompt, provider, model, context) {
+  const systemPromptText = (systemPrompt || '').trim();
+  const parts = [];
+  if (systemPromptText) {
+    parts.push(systemPromptText);
+  }
+  parts.push(buildFullPrompt(originalPrompt, context));
+  parts.push('Remember: output only the optimized prompt text with no explanation. Do not run tools.');
+  const fullPrompt = parts.join('\n\n');
+
+  console.log(`[PromptEnhancer] CLI ask provider=${provider}, model=${model || '(default)'}, promptLen=${fullPrompt.length}`);
+
+  return askCliProvider({
+    provider,
+    prompt: fullPrompt,
+    model,
+    cwd: getRealHomeDir(),
+    onDelta: emitContentDelta,
+  });
+}
+
 async function enhancePrompt(originalPrompt, systemPrompt, runtimeConfig, context) {
   if (runtimeConfig.provider === 'codex') {
     return enhancePromptWithCodex(originalPrompt, systemPrompt, runtimeConfig.model, context);
+  }
+  if (runtimeConfig.provider === 'claude') {
+    return enhancePromptWithClaude(originalPrompt, systemPrompt, runtimeConfig.model, context);
+  }
+  if (isCliAskProvider(runtimeConfig.provider) || CLI_ONLY_PROVIDERS.has(runtimeConfig.provider)) {
+    return enhancePromptWithCli(
+      originalPrompt,
+      systemPrompt,
+      runtimeConfig.provider,
+      runtimeConfig.model,
+      context,
+    );
   }
   return enhancePromptWithClaude(originalPrompt, systemPrompt, runtimeConfig.model, context);
 }
 
 export async function runPromptEnhancerRequest(data) {
-  const { prompt, systemPrompt, legacyModel, context, promptEnhancerConfig } = data;
+  const {
+    prompt,
+    systemPrompt,
+    legacyModel,
+    context,
+    promptEnhancerConfig,
+    chatProvider,
+    chatModel,
+  } = data;
 
   if (!prompt) {
     return '';
@@ -457,6 +729,8 @@ export async function runPromptEnhancerRequest(data) {
   const runtimeConfig = resolvePromptEnhancerRuntimeConfig({
     promptEnhancerConfig,
     legacyModel,
+    chatProvider,
+    chatModel,
   });
   console.log(`[PromptEnhancer] Resolved provider: ${runtimeConfig.provider}, model: ${runtimeConfig.model}, source: ${runtimeConfig.resolutionSource}`);
 
@@ -471,7 +745,7 @@ async function main() {
     const { prompt, context } = data;
 
     if (!prompt) {
-      console.log('[ENHANCED]');
+      process.stdout.write('[ENHANCED]\n');
       process.exit(0);
     }
 
@@ -495,11 +769,12 @@ async function main() {
 
     const enhancedPrompt = await runPromptEnhancerRequest(data);
     const encodedPrompt = enhancedPrompt.replace(/\n/g, '{{NEWLINE}}');
-    console.log(`[ENHANCED]${encodedPrompt}`);
+    process.stdout.write(`[ENHANCED]${encodedPrompt}\n`);
     process.exit(0);
   } catch (error) {
-    console.error('[PromptEnhancer] Error:', error.message);
-    console.log(`[ENHANCED]Enhancement failed: ${error.message}`);
+    const message = error && error.message ? error.message : String(error);
+    console.error('[PromptEnhancer] Error:', message);
+    process.stdout.write(`[ENHANCED_ERROR]${message}\n`);
     process.exit(1);
   }
 }

@@ -1,5 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { __testing } from './persistent-query-service.js';
 import { createTurnSink } from './runtime-lifecycle.js';
 
@@ -301,3 +306,86 @@ test('messages route to turnSink when active, not when null', () => {
 });
 
 console.log('\n✅ All persistent-query-service tests updated with turnSink coverage');
+
+// ============================================================================
+// Regression: fresh turn after an abort must not inherit abortRequested
+// ============================================================================
+
+test('executeTurn resets abortRequested at the start of a new turn', async () => {
+  // abortCurrentTurn leaves abortRequested=true on the runtime. If a fresh
+  // turn then fails (e.g. the runtime was disposed mid-abort), sendInternal's
+  // wasAborted check would swallow the failure as a graceful "User
+  // interrupted" and silently drop the user's message. The reset scopes the
+  // flag to the turn that actually aborted.
+  const runtime = {
+    closed: false,
+    abortRequested: true,
+    sessionId: null,
+    runtimeSessionEpoch: null,
+    activeTurnCount: 0,
+    inputStream: { enqueue() {}, done() {} },
+    query: { close() {} },
+  };
+
+  // Start the turn; executeTurn blocks on turnSink.take() until the sink is
+  // failed (as abortCurrentTurn does to unblock a live turn).
+  const failSink = __testing.executeTurn(runtime, {
+    requestedSessionId: null,
+    runtimeSessionEpoch: null,
+    options: { cwd: '/tmp' },
+    permissionMode: 'default',
+    streamingEnabled: false,
+    userMessage: { type: 'user', message: { role: 'user', content: 'hi' } },
+  });
+
+  // executeTurn awaits waitForReaderQuiescent before creating the turnSink,
+  // so the sink is only registered after at least one macrotask — poll for it.
+  while (!runtime.turnSink) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  // Simulate the CLI closing the stream out from under the turn.
+  runtime.turnSink.fail(new Error('stream ended'));
+  runtime.closed = true;
+
+  await assert.rejects(failSink, /stream ended/);
+  assert.equal(runtime.abortRequested, false);
+});
+
+// ============================================================================
+// Regression: a fresh send must never reuse a closed runtime
+// ============================================================================
+
+test('acquireRuntime discards a closed runtime still registered from an abort', () => {
+  // abortCurrentTurn marks the runtime closed but only removes it from the
+  // registry after its async query.close() completes. A send that races that
+  // window used to reuse the closed runtime, hit "Runtime is closed", and —
+  // because abortRequested was still true — have the failure swallowed as a
+  // graceful "User interrupted": the user's message was silently eaten.
+  //
+  // Runs in a child process with a mock SDK (mirroring the [1m]-toggle test)
+  // so acquireRuntime never touches the real SDK loader or credentials.
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-closed-runtime-'));
+  try {
+    fs.mkdirSync(path.join(tempHome, '.codemoss'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tempHome, '.codemoss', 'config.json'),
+      JSON.stringify({ claude: { current: '__cli_login__', providers: {} } }),
+      'utf8'
+    );
+
+    const childPath = fileURLToPath(
+      new URL('./runtime-lifecycle.closed-runtime.child.mjs', import.meta.url)
+    );
+    const output = execFileSync(process.execPath, [childPath], {
+      cwd: process.cwd(),
+      env: { ...process.env, HOME: tempHome, USERPROFILE: tempHome },
+      encoding: 'utf8',
+      timeout: 30000,
+    });
+
+    assert.match(output, /SCENARIO_OK/, `child scenario did not pass:\n${output}`);
+  } finally {
+    fs.rmSync(tempHome, { recursive: true, force: true });
+  }
+});

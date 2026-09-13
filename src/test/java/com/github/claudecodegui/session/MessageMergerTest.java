@@ -228,6 +228,32 @@ public class MessageMergerTest {
     }
 
     @Test
+    public void mergeAssistantMessageKeepsMarkdownThinkingBlocksSeparatedAcrossSegments() {
+        MessageMerger merger = new MessageMerger();
+
+        JsonObject existingRaw = assistantMessage(
+                thinkingBlock("**Inspecting multi-factor login controller toggles**")
+        );
+        JsonObject newRaw = assistantMessage(
+                thinkingBlock("**Investigating login filter and authentication flow**")
+        );
+
+        JsonArray mergedContent = merger.mergeAssistantMessage(existingRaw, newRaw)
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+
+        assertEquals("Independent thinking snapshots must remain separate blocks", 2, mergedContent.size());
+        assertEquals(
+                "**Inspecting multi-factor login controller toggles**",
+                mergedContent.get(0).getAsJsonObject().get("thinking").getAsString()
+        );
+        assertEquals(
+                "**Investigating login filter and authentication flow**",
+                mergedContent.get(1).getAsJsonObject().get("thinking").getAsString()
+        );
+    }
+
+    @Test
     public void mergeAssistantMessageKeepsMoreCompleteThinkingBlockFromSnapshot() {
         MessageMerger merger = new MessageMerger();
 

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 export type AlertType = 'error' | 'warning' | 'info' | 'success';
@@ -76,7 +77,9 @@ const AlertDialog = ({
     lineHeight: 1,
   };
 
-  return (
+  // Portal to body: .button-area container-type makes position:fixed
+  // descendants toolbar-sized, which clips the confirm button.
+  return createPortal(
     <div className="confirm-dialog-overlay" onClick={onClose}>
       <div className="confirm-dialog alert-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="confirm-dialog-header" style={DIALOG_HEADER_STYLE}>
@@ -95,7 +98,8 @@ const AlertDialog = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

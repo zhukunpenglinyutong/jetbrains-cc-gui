@@ -7,6 +7,7 @@ import {
   apply1MContextSuffix,
 } from '../components/ChatInputBox/types';
 import type { Attachment, ChatInputBoxHandle, PermissionMode, ReasoningEffort, SelectedAgent, CodexFastMode } from '../components/ChatInputBox/types';
+import { expandQuoteTokens } from '../components/ChatInputBox/utils/quoteRegistry';
 import type { ViewMode } from './useModelProviderState';
 
 /**
@@ -42,8 +43,9 @@ export interface UseMessageSenderOptions {
   permissionMode: PermissionMode;
   reasoningEffort: ReasoningEffort;
   codexFastMode: CodexFastMode;
+  dshPreset?: string;
   selectedAgent: SelectedAgent | null;
-  sdkStatusLoaded: boolean;
+  sdkStatusLoading: boolean;
   currentSdkInstalled: boolean;
   sentAttachmentsRef: RefObject<Map<string, Array<{ fileName: string; mediaType: string }>>>;
   chatInputRef: RefObject<ChatInputBoxHandle | null>;
@@ -75,8 +77,9 @@ export function useMessageSender({
   permissionMode,
   reasoningEffort,
   codexFastMode,
+  dshPreset,
   selectedAgent,
-  sdkStatusLoaded,
+  sdkStatusLoading,
   currentSdkInstalled,
   sentAttachmentsRef,
   chatInputRef,
@@ -280,6 +283,7 @@ export function useMessageSender({
           fileTags: fileTagsInfo,
           permissionMode: effectivePermissionMode,
           ...reasoningEffortPayload,
+          ...(currentProvider === 'dsh' ? { dshPreset: dshPreset || '' } : {}),
           codexFastMode,
         });
         sendBridgeEvent('send_message_with_attachments', payload);
@@ -291,6 +295,7 @@ export function useMessageSender({
           fileTags: fileTagsInfo,
           permissionMode: effectivePermissionMode,
           ...reasoningEffortPayload,
+          ...(currentProvider === 'dsh' ? { dshPreset: dshPreset || '' } : {}),
           codexFastMode,
         });
         sendBridgeEvent('send_message', fallbackPayload);
@@ -302,23 +307,25 @@ export function useMessageSender({
         fileTags: fileTagsInfo,
         permissionMode: effectivePermissionMode,
         ...reasoningEffortPayload,
+        ...(currentProvider === 'dsh' ? { dshPreset: dshPreset || '' } : {}),
         codexFastMode,
       });
       sendBridgeEvent('send_message', payload);
     }
-  }, [codexFastMode, currentProvider, selectedModel, reasoningEffort]);
+  }, [codexFastMode, currentProvider, dshPreset, selectedModel, reasoningEffort]);
 
   /**
    * Execute message sending (from queue or directly)
    */
   const executeMessage = useCallback((content: string, attachments?: Attachment[]) => {
-    const text = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    // Expand inline quote chips (tokens) into their full Markdown blockquotes.
+    const text = expandQuoteTokens(content).replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
     if (!text && !hasAttachments) return;
 
     // Check SDK status
-    if (!sdkStatusLoaded) {
+    if (sdkStatusLoading) {
       addToast(t('chat.sdkStatusLoading'), 'info');
       return;
     }
@@ -397,9 +404,10 @@ export function useMessageSender({
     // Send message to backend
     sendMessageToBackend(text, attachments, agentInfo, fileTagsInfo, permissionMode);
   }, [
-    sdkStatusLoaded,
+    sdkStatusLoading,
     currentSdkInstalled,
     currentProvider,
+    dshPreset,
     permissionMode,
     selectedAgent,
     buildUserContentBlocks,

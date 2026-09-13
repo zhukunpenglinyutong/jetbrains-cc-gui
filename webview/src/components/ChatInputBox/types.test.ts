@@ -20,7 +20,12 @@ describe('normalizeClaudeModelId', () => {
 
   it('migrates retired Sonnet 4.6 to the current default', () => {
     // Saved by versions <= 0.4.7 where sonnet-4-6 was the default model.
-    expect(normalizeClaudeModelId('claude-sonnet-4-6')).toBe('claude-sonnet-4-7');
+    expect(normalizeClaudeModelId('claude-sonnet-4-6')).toBe('claude-sonnet-5');
+  });
+
+  it('migrates retired Sonnet 4.7 to the current default', () => {
+    // Saved by versions <= 0.5.2 where sonnet-4-7 was the default model (#1678).
+    expect(normalizeClaudeModelId('claude-sonnet-4-7')).toBe('claude-sonnet-5');
   });
 
   it('migrates retired Opus 4.6 to Opus 4.8', () => {
@@ -28,7 +33,8 @@ describe('normalizeClaudeModelId', () => {
   });
 
   it('migrates retired IDs carrying a [1m] suffix', () => {
-    expect(normalizeClaudeModelId('claude-sonnet-4-6[1m]')).toBe('claude-sonnet-4-7');
+    expect(normalizeClaudeModelId('claude-sonnet-4-6[1m]')).toBe('claude-sonnet-5');
+    expect(normalizeClaudeModelId('claude-sonnet-4-7[1m]')).toBe('claude-sonnet-5');
     expect(normalizeClaudeModelId('claude-opus-4-6[1m]')).toBe('claude-opus-4-8');
   });
 

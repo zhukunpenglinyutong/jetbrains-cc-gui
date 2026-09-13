@@ -90,6 +90,70 @@ public class ProviderManagerTest {
     }
 
     /**
+     * Local Settings provider must skip startup repair so we don't overwrite
+     * the user's hand-managed {@code ~/.claude/settings.json}.
+     */
+    @Test
+    public void repairActiveProviderSkipsLocalSettingsMode() throws Exception {
+        AtomicReference<JsonObject> configRef = new AtomicReference<>(
+                createConfigWithCurrent(ProviderManager.LOCAL_SETTINGS_PROVIDER_ID));
+        ProviderManager manager = createProviderManager(configRef);
+
+        boolean changed = manager.repairActiveProviderToClaudeSettings();
+
+        assertFalse("Local settings provider must skip repair", changed);
+    }
+
+    /**
+     * CLI Login provider must skip startup repair — the SDK owns auth via
+     * native OAuth, so the plugin must not touch settings.json.
+     */
+    @Test
+    public void repairActiveProviderSkipsCliLoginMode() throws Exception {
+        AtomicReference<JsonObject> configRef = new AtomicReference<>(
+                createConfigWithCurrent(ProviderManager.CLI_LOGIN_PROVIDER_ID));
+        ProviderManager manager = createProviderManager(configRef);
+
+        boolean changed = manager.repairActiveProviderToClaudeSettings();
+
+        assertFalse("CLI login provider must skip repair", changed);
+    }
+
+    /**
+     * Disabled mode (persisted as an explicitly blank current id) must skip
+     * startup repair — there is no active provider to repair from.
+     */
+    @Test
+    public void repairActiveProviderSkipsDisabledMode() throws Exception {
+        AtomicReference<JsonObject> configRef = new AtomicReference<>(createConfigWithCurrent(""));
+        ProviderManager manager = createProviderManager(configRef);
+
+        boolean changed = manager.repairActiveProviderToClaudeSettings();
+
+        assertFalse("Disabled (blank current) must skip repair", changed);
+    }
+
+    /**
+     * A provider with an empty {@code settingsConfig.env} payload is incomplete
+     * state (same invariant as {@link ClaudeSettingsSyncPlan}) and must skip
+     * startup repair — it must not stamp model / provider id into settings.json.
+     */
+    @Test
+    public void repairActiveProviderSkipsEmptyEnvProvider() throws Exception {
+        JsonObject config = createConfigWithCurrent("provider-a");
+        // createProvider() adds an empty settingsConfig with no env payload.
+        config.getAsJsonObject("claude")
+                .getAsJsonObject("providers")
+                .add("provider-a", createProvider("Provider A"));
+        AtomicReference<JsonObject> configRef = new AtomicReference<>(config);
+        ProviderManager manager = createProviderManager(configRef);
+
+        boolean changed = manager.repairActiveProviderToClaudeSettings();
+
+        assertFalse("Provider with empty env payload must skip repair", changed);
+    }
+
+    /**
      * Build a ProviderManager backed only by in-memory config to avoid depending on the real filesystem in tests.
      */
     private ProviderManager createProviderManager(AtomicReference<JsonObject> configRef) {

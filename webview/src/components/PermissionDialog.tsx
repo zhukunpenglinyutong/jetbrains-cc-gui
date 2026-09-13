@@ -64,8 +64,9 @@ const getCommandContent = (inputs: Record<string, unknown>): string => {
   if ('text' in inputs && inputs.text !== undefined) {
     return formatInputValue(inputs.text);
   }
-  // For other tools, format all inputs
+  // For other tools, format all inputs (skip internal policy fields)
   return Object.entries(inputs)
+    .filter(([key]) => !key.startsWith('_'))
     .map(([key, value]) => `${key}: ${formatInputValue(value)}`)
     .join('\n');
 };

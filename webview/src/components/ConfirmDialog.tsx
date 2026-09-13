@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useId, type ReactNode } from 'react';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -27,6 +27,8 @@ const ConfirmDialog = ({
   onCancel,
   children,
 }: ConfirmDialogProps) => {
+  const titleId = useId();
+
   useEffect(() => {
     if (isOpen) {
       const handleEscape = (e: KeyboardEvent) => {
@@ -45,9 +47,15 @@ const ConfirmDialog = ({
 
   return (
     <div className="confirm-dialog-overlay" onClick={onCancel}>
-      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="confirm-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="confirm-dialog-header">
-          <h3 className="confirm-dialog-title">{title}</h3>
+          <h3 id={titleId} className="confirm-dialog-title">{title}</h3>
         </div>
         <div className="confirm-dialog-body">
           <p className="confirm-dialog-message">{message}</p>

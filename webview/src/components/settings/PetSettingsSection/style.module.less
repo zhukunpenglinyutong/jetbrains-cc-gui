@@ -1,6 +1,6 @@
 .section {
   width: 100%;
-  max-width: 800px;
+  max-width: 1180px;
   padding-bottom: 24px;
   color: var(--text-primary);
 }
@@ -23,17 +23,13 @@
 }
 
 .scopeBar {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
   margin-top: 16px;
-  padding: 12px 0 16px;
+  padding: 0 0 16px;
   border-bottom: 1px solid var(--border-primary);
-}
-
-.scopeHeader {
-  display: grid;
-  justify-items: start;
-  gap: 8px;
 }
 
 .scopeTitle {
@@ -76,8 +72,7 @@
   gap: 3px;
 }
 
-.scopeDescription,
-.scopePositionHint {
+.scopeDescription {
   margin: 0;
   line-height: 1.5;
 }
@@ -85,11 +80,6 @@
 .scopeDescription {
   color: var(--text-secondary);
   font-size: 13px;
-}
-
-.scopePositionHint {
-  color: var(--text-tertiary);
-  font-size: 12px;
 }
 
 .tabbedGroup {
@@ -145,7 +135,7 @@
 
 .tabPanel {
   min-width: 0;
-  padding-top: 20px;
+  padding-top: 18px;
 }
 
 .tabPanel > .controlSection:first-child,
@@ -160,6 +150,60 @@
   margin-top: 24px;
   padding-top: 20px;
   border-top: 1px solid var(--border-primary);
+}
+
+.basicLayout {
+  display: grid;
+  grid-template-columns: minmax(290px, 0.9fr) minmax(430px, 1.4fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.previewPanel,
+.operationsPanel,
+.actionPreview {
+  min-width: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
+  border-radius: 6px;
+}
+
+.previewPanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 396px;
+  padding: 14px;
+}
+
+.previewPanelHeader,
+.previewPanelFooter,
+.operationsHeader,
+.actionPreviewHeader,
+.hatchHeader,
+.hatchFooter,
+.hatchDirectoryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.previewPanelHeader,
+.previewPanelFooter {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.previewStatus {
+  color: var(--color-success);
+}
+
+.previewEnabledToggle {
+  color: var(--color-success);
+}
+
+.previewEnabledToggle input:not(:checked) + span {
+  color: var(--text-tertiary);
 }
 
 .sectionHeader,
@@ -192,38 +236,27 @@
   accent-color: var(--accent-primary);
 }
 
-.previewAndControls {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: 16px;
-  width: 100%;
-  margin-top: 20px;
-}
-
 .previewStage {
   display: grid;
+  flex: 1;
   place-items: center;
-  width: 176px;
-  max-width: 100%;
-  height: 176px;
+  min-height: 330px;
+  margin: 14px 0;
   overflow: hidden;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-secondary);
-  border-radius: 6px;
+  background: var(--bg-primary);
+  border: 1px dashed var(--border-secondary);
 }
 
 .spritePreview {
   display: block;
+  width: 104px;
+  height: 113px;
   background-repeat: no-repeat;
-  background-position: 0 0;
-  background-size: 800% auto;
+  background-size: 800% 900%;
   image-rendering: pixelated;
 }
 
-.spritePreview {
-  width: 104px;
-  height: 113px;
+.spritePreviewAnimated {
   animation: pet-preview-idle 840ms steps(5, end) infinite;
 }
 
@@ -240,15 +273,322 @@
   font-size: 70px;
 }
 
-.controls {
-  width: 80%;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
+.operationsPanel {
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
 
-.controls > .rangeGrid {
+.operationsHeader {
+  min-height: 52px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.operationsHeader h4,
+.actionPreviewHeader h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.operationsActions,
+.hatchHeaderActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.operationsBody {
+  padding: 0;
+}
+
+.operationRow {
   display: grid;
+  grid-template-columns: minmax(160px, 0.82fr) minmax(250px, 1.18fr);
+  align-items: center;
+  gap: 18px;
+  min-height: 58px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.operationRow:last-child {
+  border-bottom: 0;
+}
+
+.operationRow p,
+.actionPreviewHeader p,
+.hatchFooter > span,
+.hatchDirectoryRow p {
+  margin: 2px 0 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.operationLabel {
+  display: block;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.operationRow > .petSelect,
+.operationRow > .switchLabel,
+.operationRow > .aliasEditor,
+.operationRow > .rangeControl {
+  min-width: 0;
+}
+
+.operationRow > .switchLabel {
+  justify-self: start;
+}
+
+.operationRangeRow {
+  cursor: default;
+}
+
+.rangeControl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 10px;
+}
+
+.rangeControl strong {
+  color: var(--text-primary);
+  font-family: var(--code-font-family, monospace);
+  font-size: 12px;
+  text-align: right;
+}
+
+.aliasEditor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.actionWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 0.42fr);
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.actionEditor {
+  min-width: 0;
+  overflow: visible;
+}
+
+.actionConfigurationBar {
+  margin-top: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.actionStateTabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(68px, 1fr));
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.actionStateTab,
+.actionStateTabActive {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  gap: 5px;
+  padding: 0 8px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.actionStateTab:hover {
+  background: var(--bg-hover);
+}
+
+.actionStateTabActive {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
+.actionStateTab em {
+  color: var(--text-tertiary);
+  font-family: var(--code-font-family, monospace);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.actionStateTabActive em {
+  color: var(--accent-primary);
+}
+
+.actionOption small,
+.actionEditorHeader p {
+  margin: 3px 0 0;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.actionEditorHeader > span {
+  flex: 0 0 auto;
+  color: var(--accent-primary);
+  font-family: var(--code-font-family, monospace);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.actionEditorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  padding-right: 0;
+  padding-left: 0;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.actionEditorHeader h5 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.actionEditorHeader p {
+  margin-bottom: 0;
+}
+
+.actionOptionGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border-primary);
+  border: 1px solid var(--border-primary);
+}
+
+.actionOption,
+.actionOptionSelected {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: flex-start;
+  min-height: 58px;
+  gap: 8px;
+  padding: 9px 10px;
+  color: var(--text-primary);
+  text-align: left;
+  background: var(--bg-secondary);
+  border: 0;
+  cursor: pointer;
+}
+
+.actionOption strong,
+.actionOptionSelected strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.actionOption input,
+.actionOptionSelected input {
+  width: 14px;
+  height: 14px;
+  margin: 2px 0 0;
+  accent-color: var(--accent-primary);
+  cursor: inherit;
+}
+
+.actionOption:hover {
+  background: var(--bg-hover);
+}
+
+.actionOptionSelected {
+  background: color-mix(in srgb, var(--accent-primary) 6%, var(--bg-secondary));
+}
+
+.actionPreview {
+  display: grid;
+  grid-template-rows: auto auto minmax(180px, 1fr) auto auto;
+  gap: 12px;
+  min-height: 0;
+  padding: 0 0 0 14px;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--border-primary);
+  border-radius: 0;
+}
+
+.actionPreviewHeader {
+  align-items: flex-start;
+}
+
+.actionPreviewStage {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  overflow: hidden;
+  background: var(--bg-primary);
+  border: 1px dashed var(--border-secondary);
+}
+
+.previewTimeline {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.previewTimeline input {
+  width: 100%;
+  accent-color: var(--accent-primary);
+}
+
+.previewTimeline strong {
+  color: var(--accent-primary);
+  font-family: var(--code-font-family, monospace);
+  font-size: 11px;
+  text-align: right;
+}
+
+.actionPreviewCaption {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.actionMappingHint {
+  margin: 14px 0 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
 }
 
 .field {
@@ -420,41 +760,15 @@
   text-align: center;
 }
 
-.aliasField {
-  display: grid;
-  gap: 5px;
-}
-
-.aliasField p {
-  margin: 0;
-  color: var(--text-tertiary);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.aliasEditor {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 8px;
-}
-
-.rangeGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-}
-
-.basicHeaderContent,
 .bubbleHeaderContent {
   width: 100%;
 }
 
-.basicActions,
 .bubbleActions {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
-  gap: 30px;
+  flex-wrap: wrap;
+  gap: 10px 24px;
   min-height: 32px;
   margin-top: 12px;
 }
@@ -549,39 +863,21 @@
   border-bottom: 1px solid var(--border-primary);
 }
 
-.hatchForm {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  width: 100%;
-  margin-top: 18px;
-}
-
-.hatchDescriptionField,
-.referencePicker,
-.hatchActions {
-  grid-column: auto;
-}
-
 .hatchHeader {
-  display: grid;
-  gap: 10px;
+  align-items: flex-start;
 }
 
-.hatchTitleRow,
-.hatchDirectoryRow {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.hatchTitleRow h4 {
-  margin-right: 4px;
+.hatchSection {
+  margin-top: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
 
 .hatchDescriptionField textarea {
-  min-height: 72px;
+  min-height: 260px;
+  height: 100%;
   padding: 8px;
   resize: vertical;
   color: var(--text-primary);
@@ -591,7 +887,76 @@
   outline: none;
 }
 
-.referencePicker,
+.hatchWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
+  gap: 18px;
+  align-items: stretch;
+  margin-top: 18px;
+}
+
+.hatchFields {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+  min-height: 318px;
+}
+
+.hatchFieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.referenceWorkspace {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: start;
+  gap: 14px;
+  padding-left: 18px;
+  border-left: 1px solid var(--border-primary);
+}
+
+.referencePicker {
+  display: grid;
+  gap: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.referenceChooseButton {
+  justify-self: start;
+}
+
+.referenceDropzone {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-height: 132px;
+  gap: 7px;
+  padding: 10px;
+  color: var(--text-tertiary);
+  text-align: center;
+  border: 1px dashed var(--border-secondary);
+}
+
+.referenceDropzone > .codicon {
+  color: var(--text-tertiary);
+  font-size: 20px;
+}
+
+.referenceDropzone p {
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .hatchActions {
   display: flex;
   align-items: center;
@@ -600,7 +965,41 @@
 
 .hatchActions {
   flex-wrap: wrap;
-  margin-top: 14px;
+}
+
+.hatchHeaderActions {
+  flex-wrap: nowrap;
+}
+
+.hatchDirectoryShortcut {
+  margin-top: 12px;
+}
+
+.hatchFooter {
+  display: grid;
+  align-items: start;
+  justify-content: initial;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.hatchDirectoryRow {
+  align-items: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.hatchDirectoryRow > div {
+  min-width: 0;
+}
+
+.hatchDirectoryRow > div > span {
+  display: block;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .pathText {
@@ -871,27 +1270,106 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spritePreview,
+  .spritePreviewAnimated,
   .remotePreviewLoaded {
     animation: none;
   }
 }
 
+@media (max-width: 960px) {
+  .basicLayout,
+  .actionWorkspace,
+  .hatchWorkspace {
+    grid-template-columns: 1fr;
+  }
+
+  .previewPanel {
+    min-height: 370px;
+  }
+
+  .previewStage {
+    min-height: clamp(300px, 38vw, 380px);
+  }
+
+  .actionPreview {
+    min-height: 0;
+    padding: 14px 0 0;
+    border-top: 1px solid var(--border-primary);
+    border-left: 0;
+  }
+
+  .hatchFields {
+    min-height: 0;
+  }
+
+  .hatchDescriptionField textarea {
+    min-height: 220px;
+  }
+
+  .referenceWorkspace {
+    padding-top: 16px;
+    padding-left: 0;
+    border-top: 1px solid var(--border-primary);
+    border-left: 0;
+  }
+}
+
 @media (max-width: 640px) {
+  .scopeBar,
   .sectionHeader,
-  .catalogHeader {
+  .catalogHeader,
+  .hatchHeader,
+  .hatchFooter {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .scopeBar {
+    gap: 12px;
+  }
+
+  .segmentedControl {
+    width: 172px;
   }
 
   .repositorySettings {
     grid-template-columns: 1fr;
   }
 
-  .basicActions,
   .bubbleActions {
     flex-wrap: wrap;
     gap: 10px 16px;
+  }
+
+  .operationRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .operationsActions,
+  .hatchHeaderActions,
+  .hatchFooter > .hatchActions {
+    justify-content: flex-start;
+  }
+
+  .hatchFieldGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .actionOptionGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .referenceDropzone {
+    min-height: 132px;
+  }
+
+  .previewPanel {
+    min-height: 0;
+  }
+
+  .previewStage {
+    min-height: 300px;
   }
 
   .placeholderTable th:first-child,

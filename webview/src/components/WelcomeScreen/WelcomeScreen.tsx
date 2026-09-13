@@ -19,9 +19,8 @@ const LOGO_WRAPPER_STYLE: React.CSSProperties = { position: 'relative', display:
 const VERSION_TAG_STYLE: React.CSSProperties = { cursor: 'pointer' };
 
 export interface WelcomeScreenProps {
+  /** Runtime CLI provider (claude / codex / opencode / …); welcome logo follows CLI only */
   currentProvider: string;
-  /** Current model ID for vendor-specific icon display */
-  currentModelId?: string;
   t: TFunction;
   onProviderChange: (provider: string) => void;
   onVersionClick?: () => void;
@@ -29,7 +28,6 @@ export interface WelcomeScreenProps {
 
 export const WelcomeScreen = memo(function WelcomeScreen({
   currentProvider,
-  currentModelId,
   t,
   onProviderChange,
   onVersionClick,
@@ -37,14 +35,17 @@ export const WelcomeScreen = memo(function WelcomeScreen({
   const providerLabels: Record<string, string> = {
     claude: t('providers.claude.label'),
     codex: t('providers.codex.label'),
-    gemini: t('providers.gemini.label'),
+    grok: t('providers.grok.label'),
+    kimi: t('providers.kimi.label'),
     opencode: t('providers.opencode.label'),
+    pi: t('providers.pi.label'),
+    dsh: t('providers.dsh.label'),
   };
 
   return (
     <div style={ROOT_STYLE}>
       <div style={LOGO_WRAPPER_STYLE}>
-        <BlinkingLogo provider={currentProvider} modelId={currentModelId} onProviderChange={onProviderChange} />
+        <BlinkingLogo provider={currentProvider} onProviderChange={onProviderChange} />
         <span
           className="version-tag"
           role="button"

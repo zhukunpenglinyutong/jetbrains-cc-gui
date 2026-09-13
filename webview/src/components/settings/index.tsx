@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CodexProviderConfig } from '../../types/provider';
 import { ToastContainer } from '../Toast';
@@ -7,7 +7,7 @@ import { ToastContainer } from '../Toast';
 import SettingsHeader from './SettingsHeader';
 import SettingsSidebar, { type SettingsTab } from './SettingsSidebar';
 import BasicConfigSection from './BasicConfigSection';
-import ProviderTabSection from './ProviderTabSection';
+import ProviderTabSection, { type ProviderManageTab } from './ProviderTabSection';
 import DependencySection from './DependencySection';
 import UsageSection from './UsageSection';
 import PlaceholderSection from './PlaceholderSection';
@@ -36,12 +36,11 @@ import {
 
 import styles from './style.module.less';
 
-const BLOCK_STYLE: React.CSSProperties = { display: 'block' };
-const NONE_STYLE: React.CSSProperties = { display: 'none' };
-
 interface SettingsViewProps {
   onClose: () => void;
   initialTab?: SettingsTab;
+  /** Deep link into the Providers tab's sub-tab (claude/codex/cli) */
+  initialProviderSubTab?: ProviderManageTab;
   currentProvider: 'claude' | 'codex' | string;
   // Streaming configuration (passed from App.tsx for state sync)
   streamingEnabled?: boolean;
@@ -60,6 +59,7 @@ interface SettingsViewProps {
 const SettingsView = ({
   onClose,
   initialTab,
+  initialProviderSubTab,
   currentProvider,
   streamingEnabled: streamingEnabledProp,
   onStreamingEnabledChange: onStreamingEnabledChangeProp,
@@ -104,6 +104,8 @@ const SettingsView = ({
     setChatBgColor,
     userMsgColor,
     setUserMsgColor,
+    chatBarColor,
+    setChatBarColor,
     diffTheme,
     setDiffTheme,
   } = useSettingsThemeSync();
@@ -202,6 +204,12 @@ const SettingsView = ({
     handleAskUserQuestionNotificationEnabledChange,
     detailedOutputEnabled,
     handleDetailedOutputEnabledChange,
+    systemNotificationOnlyWhenUnfocused,
+    setSystemNotificationOnlyWhenUnfocused,
+    handleSystemNotificationOnlyWhenUnfocusedChange,
+    askUserQuestionSoundNotificationEnabled,
+    setAskUserQuestionSoundNotificationEnabled,
+    handleAskUserQuestionSoundNotificationEnabledChange,
     permissionDialogTimeoutSeconds,
     handlePermissionDialogTimeoutChange,
     commitAiConfig,
@@ -221,6 +229,7 @@ const SettingsView = ({
     onAutoOpenFileEnabledChangeProp,
     permissionDialogTimeoutSecondsProp,
     onPermissionDialogTimeoutChangeProp,
+    currentProvider,
   });
 
   // Use provider management hook
@@ -304,6 +313,31 @@ const SettingsView = ({
 
   // Note: Prompt management is now handled internally by PromptSection component
 
+  // Load heavy list / AI-feature data only when the corresponding tab is first opened.
+  // Opening Settings previously stampeded providers + agents + CLI probes at once.
+  // Commit / prompt-enhancer config probes multiple CLIs and must stay off first paint.
+  const loadedListTabsRef = useRef(new Set<SettingsTab>());
+  useEffect(() => {
+    if (currentTab === 'providers' && !loadedListTabsRef.current.has('providers')) {
+      loadedListTabsRef.current.add('providers');
+      loadProviders();
+      loadCodexProviders();
+    }
+    if (currentTab === 'agents' && !loadedListTabsRef.current.has('agents')) {
+      loadedListTabsRef.current.add('agents');
+      loadAgents();
+    }
+    if (currentTab === 'commit' && !loadedListTabsRef.current.has('commit')) {
+      loadedListTabsRef.current.add('commit');
+      window.sendToJava?.('get_commit_prompt:');
+      window.sendToJava?.('get_commit_ai_config:');
+    }
+    if (currentTab === 'promptEnhancer' && !loadedListTabsRef.current.has('promptEnhancer')) {
+      loadedListTabsRef.current.add('promptEnhancer');
+      window.sendToJava?.('get_prompt_enhancer_config:');
+    }
+  }, [currentTab, loadProviders, loadCodexProviders, loadAgents]);
+
   // Register window callbacks for Java bridge communication
   useSettingsWindowCallbacks({
     setNodePath,
@@ -357,6 +391,8 @@ const SettingsView = ({
     setStatusBarWidgetEnabled,
     setTaskCompletionNotificationEnabled,
     setAskUserQuestionNotificationEnabled,
+    setSystemNotificationOnlyWhenUnfocused,
+    setAskUserQuestionSoundNotificationEnabled,
   });
 
   // Save provider (wrapper function with validation logic)
@@ -464,10 +500,11 @@ const SettingsView = ({
           }
         />
 
-        {/* Content area */}
+        {/* Content area — mount only the active tab.
+            Previously every tab stayed mounted under display:none, which made
+            Settings open cost ~all sections (MCP/Skills/TokenTracker/…) at once. */}
         <div className={`${styles.settingsContent} ${currentTab === 'providers' ? styles.providerSettingsContent : ''}`}>
-          {/* Basic configuration */}
-          <div style={currentTab === 'basic' ? BLOCK_STYLE : NONE_STYLE}>
+          {currentTab === 'basic' && (
             <BasicConfigSection
               theme={themePreference}
               onThemeChange={setThemePreference}
@@ -506,6 +543,8 @@ const SettingsView = ({
               onChatBgColorChange={setChatBgColor}
               userMsgColor={userMsgColor}
               onUserMsgColorChange={setUserMsgColor}
+              chatBarColor={chatBarColor}
+              onChatBarColorChange={setChatBarColor}
               diffTheme={diffTheme}
               onDiffThemeChange={setDiffTheme}
               diffExpandedByDefault={diffExpandedByDefault}
@@ -547,15 +586,19 @@ const SettingsView = ({
               onAskUserQuestionNotificationEnabledChange={handleAskUserQuestionNotificationEnabledChange}
               detailedOutputEnabled={detailedOutputEnabled}
               onDetailedOutputEnabledChange={handleDetailedOutputEnabledChange}
+              systemNotificationOnlyWhenUnfocused={systemNotificationOnlyWhenUnfocused}
+              onSystemNotificationOnlyWhenUnfocusedChange={handleSystemNotificationOnlyWhenUnfocusedChange}
+              askUserQuestionSoundNotificationEnabled={askUserQuestionSoundNotificationEnabled}
+              onAskUserQuestionSoundNotificationEnabledChange={handleAskUserQuestionSoundNotificationEnabledChange}
               permissionDialogTimeoutSeconds={permissionDialogTimeoutSeconds}
               onPermissionDialogTimeoutChange={handlePermissionDialogTimeoutChange}
             />
-          </div>
+          )}
 
-          {/* Provider management (Claude + Codex internal tab switching) */}
-          <div style={currentTab === 'providers' ? BLOCK_STYLE : NONE_STYLE}>
+          {currentTab === 'providers' && (
             <ProviderTabSection
               currentProvider={currentProvider}
+              initialSubTab={initialProviderSubTab}
               providers={providers}
               loading={loading}
               onAddProvider={handleAddProvider}
@@ -565,53 +608,45 @@ const SettingsView = ({
               codexProviders={codexProviders}
               codexLoading={codexLoading}
               onAddCodexProvider={handleAddCodexProvider}
-                onEditCodexProvider={handleEditCodexProvider}
-                onDeleteCodexProvider={handleDeleteCodexProvider}
-                onSwitchCodexProvider={handleSwitchCodexProvider}
-                onRevokeCodexLocalConfigAuthorization={handleRevokeCodexLocalConfigAuthorization}
-                addToast={addToast}
-              />
-          </div>
+              onEditCodexProvider={handleEditCodexProvider}
+              onDeleteCodexProvider={handleDeleteCodexProvider}
+              onSwitchCodexProvider={handleSwitchCodexProvider}
+              onRevokeCodexLocalConfigAuthorization={handleRevokeCodexLocalConfigAuthorization}
+              addToast={addToast}
+            />
+          )}
 
-          {/* SDK dependency management */}
-          <div style={currentTab === 'dependencies' ? BLOCK_STYLE : NONE_STYLE}>
-            <DependencySection addToast={addToast} isActive={currentTab === 'dependencies'} />
-          </div>
+          {currentTab === 'dependencies' && (
+            <DependencySection addToast={addToast} isActive />
+          )}
 
-          {/* Usage statistics (vendored TokenTracker dashboard) */}
-          <div style={currentTab === 'usage' ? BLOCK_STYLE : NONE_STYLE}>
-            <UsageSection />
-          </div>
+          {currentTab === 'usage' && <UsageSection />}
 
-          {/* MCP servers */}
-          <div style={currentTab === 'mcp' ? BLOCK_STYLE : NONE_STYLE}>
+          {currentTab === 'mcp' && (
             <PlaceholderSection type="mcp" currentProvider={currentProvider} />
-          </div>
+          )}
 
-          {/* Permissions configuration */}
-          <div style={currentTab === 'permissions' ? BLOCK_STYLE : NONE_STYLE}>
-            {currentProvider === 'codex' ? (
+          {currentTab === 'permissions' && (
+            currentProvider === 'codex' ? (
               <PermissionsSection
                 codexSandboxMode={codexSandboxMode}
                 onCodexSandboxModeChange={handleCodexSandboxModeChange}
               />
             ) : (
               <PlaceholderSection type="permissions" />
-            )}
-          </div>
+            )
+          )}
 
-          {/* Prompt enhancer configuration */}
-          <div style={currentTab === 'promptEnhancer' ? BLOCK_STYLE : NONE_STYLE}>
+          {currentTab === 'promptEnhancer' && (
             <PromptEnhancerSection
               promptEnhancerConfig={promptEnhancerConfig}
               onPromptEnhancerProviderChange={handlePromptEnhancerProviderChange}
               onPromptEnhancerModelChange={handlePromptEnhancerModelChange}
               onPromptEnhancerResetToDefault={handlePromptEnhancerResetToDefault}
             />
-          </div>
+          )}
 
-          {/* Commit AI configuration */}
-          <div style={currentTab === 'commit' ? BLOCK_STYLE : NONE_STYLE}>
+          {currentTab === 'commit' && (
             <CommitSection
               commitAiConfig={commitAiConfig}
               onCommitAiProviderChange={handleCommitAiProviderChange}
@@ -626,10 +661,9 @@ const SettingsView = ({
               savingCommitPrompt={savingCommitPrompt}
               savingProjectCommitPrompt={savingProjectCommitPrompt}
             />
-          </div>
+          )}
 
-          {/* Agents */}
-          <div style={currentTab === 'agents' ? BLOCK_STYLE : NONE_STYLE}>
+          {currentTab === 'agents' && (
             <AgentSection
               agents={agents}
               loading={agentsLoading}
@@ -639,27 +673,22 @@ const SettingsView = ({
               onExport={handleExportAgents}
               onImport={handleImportAgentsFile}
             />
-          </div>
+          )}
 
-          {/* Prompts */}
-          <div style={currentTab === 'prompts' ? BLOCK_STYLE : NONE_STYLE}>
+          {currentTab === 'prompts' && (
             <PromptSection
               currentProvider={currentProvider}
               onSuccess={(msg) => addToast(msg, 'success')}
             />
-          </div>
+          )}
 
-          {/* Skills */}
-          <div style={currentTab === 'skills' ? BLOCK_STYLE : NONE_STYLE}>
+          {currentTab === 'skills' && (
             <SkillsSettingsSection currentProvider={currentProvider} />
-          </div>
+          )}
 
-          <div style={currentTab === 'pet' ? BLOCK_STYLE : NONE_STYLE}>
-            {currentTab === 'pet' && <PetSettingsSection addToast={addToast} />}
-          </div>
+          {currentTab === 'pet' && <PetSettingsSection addToast={addToast} />}
 
-          {/* Other settings */}
-          <div style={currentTab === 'other' ? BLOCK_STYLE : NONE_STYLE}>
+          {currentTab === 'other' && (
             <OtherSettingsSection
               historyCompletionEnabled={historyCompletionEnabled}
               onHistoryCompletionEnabledChange={(enabled) => {
@@ -669,12 +698,11 @@ const SettingsView = ({
                 window.dispatchEvent(new CustomEvent('historyCompletionChanged', { detail: { enabled } }));
               }}
             />
-          </div>
+          )}
 
-          {/* Community */}
-          <div style={currentTab === 'community' ? BLOCK_STYLE : NONE_STYLE}>
+          {currentTab === 'community' && (
             <CommunitySection addToast={addToast} />
-          </div>
+          )}
         </div>
       </div>
 

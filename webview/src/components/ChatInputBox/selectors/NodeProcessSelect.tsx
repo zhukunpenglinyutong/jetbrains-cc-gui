@@ -596,11 +596,15 @@ export const NodeProcessSelect = ({ embedded = false, onClose, onToast }: NodePr
         right: '100%',
         marginLeft: 0,
         marginRight: `-${embeddedLayout.horizontalOverlap}px`,
+        ['--selector-enter-x' as string]: '8px',
+        ['--selector-enter-y' as string]: '0px',
       }
     : {
         ...DROPDOWN_STYLE_EMBEDDED,
         ...embeddedWidthStyle,
         marginLeft: `-${embeddedLayout.horizontalOverlap}px`,
+        ['--selector-enter-x' as string]: '-8px',
+        ['--selector-enter-y' as string]: '0px',
       };
 
   const renderDropdown = () => (

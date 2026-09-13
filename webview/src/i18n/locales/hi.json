@@ -46,6 +46,7 @@
     "removeAttachment": "अटैचमेंट हटाएं",
     "closePreview": "पूर्वावलोकन बंद करें",
     "loadingDropdown": "लोड हो रहा है...",
+    "modelsLoadFailed": "मॉडल लोड करने में विफल। पुनः प्रयास के लिए क्लिक करें",
     "addAttachment": "अटैचमेंट जोड़ें",
     "stopGeneration": "जनरेशन रोकें",
     "generatingResponse": "प्रतिक्रिया उत्पन्न हो रही है",
@@ -81,10 +82,11 @@
     "disabled": "अक्षम",
     "sdkNotInstalled": "{{provider}} SDK इंस्टॉल नहीं है। चैट शुरू करने के लिए कृपया SDK इंस्टॉल करें।",
     "sdkStatusLoading": "Checking SDK status...",
+    "sdkStatusUnavailable": "SDK स्थिति की जांच नहीं हो सकी।",
+    "retrySdkStatus": "पुनः प्रयास करें",
     "openSourceBanner": "यह प्रोजेक्ट 100% ओपन सोर्स और मुफ़्त है (नकली प्रोजेक्ट से सावधान रहें)",
     "openSourceBannerStar": "Star",
-    "openSourceBannerStarToast": "रिपॉजिटरी लिंक क्लिपबोर्ड पर कॉपी हो गया — ब्राउज़र में पेस्ट करके खोलें ⭐",
-    "openSourceBannerStarAria": "रिपॉजिटरी लिंक कॉपी करें और GitHub पर स्टार करें",
+    "openSourceBannerStarAria": "GitHub पर रिपॉजिटरी खोलें और स्टार करें",
     "goInstallSdk": "इंस्टॉल करने जाएं",
     "commandNotImplemented": "`{{command}}` सुविधा अभी तक लागू नहीं की गई है।",
     "clearCommandDescription": "बातचीत इतिहास साफ़ करें और नया सत्र शुरू करें",
@@ -230,26 +232,36 @@
         "providerUnavailable": "Currently unavailable",
         "provider": {
           "claude": "Claude Code",
-          "codex": "Codex"
+          "codex": "Codex",
+          "grok": "Grok CLI",
+          "kimi": "Kimi CLI",
+          "opencode": "OpenCode",
+          "pi": "PI CLI",
+          "omp": "OMP CLI"
         },
         "currentProviderAuto": "Currently using automatic selection: {{provider}}",
         "currentProviderManual": "Currently using manually selected provider: {{provider}}",
-        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
+        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}",
+        "modeLabel": "चयन मोड",
+        "modeAuto": "स्वचालित",
+        "modeManual": "मैनुअल",
+        "autoSummary": "वर्तमान चैट CLI का अनुसरण · वर्तमान में {{provider}}",
+        "autoUnavailable": "कोई CLI उपलब्ध नहीं। मैन्युअल चुनें।"
       },
       "diffExpanded": {
         "label": "डिफ़ॉल्ट रूप से अंतर दिखाएं",
-        "enabled": "विस्तारित",
-        "disabled": "संक्षिप्त",
+        "enabled": "सक्षम",
+        "disabled": "अक्षम",
         "hint": "सक्षम होने पर, चैट में कोड अंतर डिफ़ॉल्ट रूप से विस्तारित होंगे। अक्षम होने पर, अंतर संक्षिप्त शुरू होते हैं।"
       },
       "taskCompletionNotification": {
-        "label": "कार्य पूर्ण सूचना",
+        "label": "कार्य पूर्ण सिस्टम सूचना",
         "enabled": "सक्षम",
         "disabled": "अक्षम",
         "hint": "सक्षम होने पर, AI कार्य पूरा होने पर सिस्टम सूचना दिखाता है। अक्षम होने पर, कोई सूचना नहीं दिखती।"
       },
       "askUserQuestionNotification": {
-        "label": "उपयोगकर्ता प्रश्न सूचना",
+        "label": "प्रश्न सिस्टम सूचना",
         "enabled": "सक्षम",
         "disabled": "अक्षम",
         "hint": "सक्षम होने पर, Claude द्वारा प्रश्न पूछने पर सिस्टम सूचना दिखाता है ताकि आप इसे मिस न करें। अक्षम होने पर, कोई सूचना नहीं दिखती।"
@@ -259,6 +271,40 @@
         "enabled": "चालू",
         "disabled": "बंद",
         "hint": "चालू होने पर, उपलब्ध होने पर संदेशों के नीचे अनुमानित टर्न लागत दिखेगी और इनपुट Token सारांश में कैश हिट शामिल होंगे। Token उपयोग हमेशा दिखाई देता रहेगा।"
+      },
+      "askUserQuestionSoundNotification": {
+        "label": "प्रश्न चेतावनी ध्वनि",
+        "enabled": "सक्षम",
+        "disabled": "अक्षम",
+        "hint": "सक्षम होने पर, Claude द्वारा प्रश्न पूछने पर कॉन्फ़िगर की गई चेतावनी ध्वनि चलती है। नीचे दिए गए ध्वनि चयन और फोकस नियमों का उपयोग करता है."
+      },
+      "systemNotificationOnlyWhenUnfocused": {
+        "label": "सिस्टम सूचनाएं केवल तब दिखाएं जब IDE फोकस में न हो",
+        "enabled": "सक्षम",
+        "disabled": "अक्षम",
+        "hint": "सक्षम होने पर, कार्य पूर्ण और प्रश्न सिस्टम सूचनाएं केवल तब दिखती हैं जब IDE फोकस में न हो।"
+      },
+      "soundNotification": {
+        "label": "कार्य पूर्ण चेतावनी ध्वनि",
+        "enabled": "सक्षम",
+        "disabled": "अक्षम",
+        "hint": "सक्षम होने पर, AI कार्य पूरा होने पर सूचना ध्वनि चलेगी, ताकि स्क्रीन से दूर होने पर भी आपको पता चल सके।",
+        "onlyWhenUnfocused": "चेतावनी ध्वनियां केवल तब चलाएं जब IDE फोकस में न हो",
+        "onlyWhenUnfocusedHint": "सक्षम होने पर, कार्य पूर्ण और प्रश्न चेतावनी ध्वनियां केवल तब चलती हैं जब IDE फोकस में न हो।",
+        "selectSound": "सूचना ध्वनि",
+        "soundDefault": "डिफ़ॉल्ट",
+        "soundChime": "चाइम",
+        "soundBell": "घंटी",
+        "soundDing": "डिंग",
+        "soundSuccess": "सफलता",
+        "soundCustom": "कस्टम...",
+        "customSound": "कस्टम ध्वनि फ़ाइल",
+        "customSoundPlaceholder": "ऑडियो फ़ाइल पथ चुनें या दर्ज करें",
+        "customSoundHint": "WAV, MP3, AIFF प्रारूप समर्थित हैं",
+        "testSound": "परीक्षण",
+        "browse": "ब्राउज़",
+        "useDefault": "डिफ़ॉल्ट उपयोग करें",
+        "customSoundSaved": "कस्टम ध्वनि सहेजी गई"
       },
       "sendShortcut": {
         "label": "भेजने का शॉर्टकट",
@@ -278,6 +324,12 @@
         "reset": "रीसेट करें",
         "hint": "चैट क्षेत्र के पृष्ठभूमि रंग को अनुकूलित करें। थीम डिफ़ॉल्ट का पालन करने के लिए खाली छोड़ दें।"
       },
+      "chatBarColor": {
+        "label": "हेडर और स्टेटस बार का रंग",
+        "custom": "कस्टम",
+        "reset": "रीसेट करें",
+        "hint": "सेशन हेडर और टास्क स्टेटस बार के लिए एक थीम रंग चुनें। वर्तमान UI थीम अपनाने के लिए इसे खाली छोड़ें।"
+      },
       "userMsgColor": {
         "label": "उपयोगकर्ता संदेश रंग",
         "custom": "कस्टम",
@@ -295,7 +347,8 @@
     "providersDesc": "Claude और Codex API प्रदाता कॉन्फ़िगरेशन प्रबंधित करें, विभिन्न API सेवा प्रदाताओं के बीच स्विच करें",
     "providerTab": {
       "claude": "Claude Code",
-      "codex": "Codex"
+      "codex": "Codex",
+      "cli": "CLI"
     },
     "pluginModels": {
       "title": "कस्टम मॉडल",
@@ -316,6 +369,13 @@
         "cacheReadShort": "कैश पठन",
         "invalidValue": "मूल्य एक गैर-ऋणात्मक संख्या होना चाहिए",
         "defaultPricing": "डिफ़ॉल्ट मूल्य उपयोग में"
+      },
+      "contextWindow": {
+        "label": "अधिकतम कॉन्टेक्स्ट (K टोकन)",
+        "placeholder": "उदा. 500",
+        "hint": "वैकल्पिक। टोकन को हजारों में पूर्णांक के रूप में दर्ज करें (500 = 500,000 टोकन)। इसका उपयोग केवल प्लगइन के कॉन्टेक्स्ट उपयोग प्रदर्शन में होता है।",
+        "invalidValue": "अधिकतम कॉन्टेक्स्ट K इकाइयों में एक धनात्मक पूर्णांक होना चाहिए",
+        "summary": "कॉन्टेक्स्ट: {{value}} टोकन"
       },
       "configuredSectionTitle": "कॉन्फ़िगर किए गए Claude मॉडल",
       "configuredSectionDesc": "सक्रिय Claude प्रदाता या settings.json के मॉडल पहले से ही चयनकर्ता में दिखते हैं। यहाँ केवल मूल्य बदला जा सकता है।",
@@ -371,7 +431,12 @@
         "providerUnavailable": "अनुपलब्ध",
         "currentProviderAuto": "वर्तमान में स्वचालित चयन का उपयोग: {{provider}}",
         "currentProviderManual": "वर्तमान में मैन्युअल रूप से चयनित प्रदाता का उपयोग: {{provider}}",
-        "currentProviderUnavailable": "चयनित प्रदाता वर्तमान में अनुपलब्ध है: {{provider}}"
+        "currentProviderUnavailable": "चयनित प्रदाता वर्तमान में अनुपलब्ध है: {{provider}}",
+        "modeLabel": "चयन मोड",
+        "modeAuto": "स्वचालित",
+        "modeManual": "मैनुअल",
+        "autoSummary": "वर्तमान चैट CLI का अनुसरण · वर्तमान में {{provider}}",
+        "autoUnavailable": "कोई CLI उपलब्ध नहीं। मैन्युअल चुनें।"
       },
       "prompt": {
         "label": "Additional Prompt",
@@ -449,11 +514,18 @@
     "communityDesc": "नवीनतम जानकारी और तकनीकी सहायता के लिए आधिकारिक WeChat समूह में शामिल होने के लिए नीचे QR कोड स्कैन करें",
     "communityQrTip": "WeChat से स्कैन करके समुदाय में शामिल हों",
     "communityQrAlt": "आधिकारिक WeChat समुदाय QR कोड",
-    "githubTitle": "GitHub रिपॉजिटरी",
-    "githubDesc": "यह प्रोजेक्ट GitHub पर ओपन सोर्स है। सपोर्ट के लिए Star करें!",
-    "githubCopyBtn": "रिपॉजिटरी URL कॉपी करें",
-    "githubCopied": "रिपॉजिटरी URL क्लिपबोर्ड पर कॉपी हो गया। कृपया इसे अपने ब्राउज़र में खोलें।",
-    "githubCopyFailed": "कॉपी करने में विफल। कृपया मैन्युअल रूप से कॉपी करें।",
+    "socialDocs": "आधिकारिक दस्तावेज़",
+    "socialTitle": "हमें फॉलो करें",
+    "socialGithub": "GitHub रिपॉजिटरी — Star करें!",
+    "socialX": "X (Twitter) @ZPeng31310",
+    "socialZhihu": "Zhihu @vscodeai",
+    "socialXiaohongshu": "Xiaohongshu (RED)",
+    "socialDouyin": "Douyin — फॉलो करने के लिए होवर करके स्कैन करें",
+    "socialYoutube": "YouTube चैनल",
+    "douyinQrAlt": "Douyin QR कोड",
+    "douyinId": "Douyin ID: nengyongai",
+    "douyinCopied": "Douyin ID क्लिपबोर्ड पर कॉपी हो गया",
+    "douyinCopyFailed": "कॉपी करने में विफल। कृपया मैन्युअल रूप से कॉपी करें।",
     "sponsor": "Sponsor",
     "sponsorDesc": "If this project helps you, consider sponsoring to support ongoing maintenance!",
     "alipay": "Alipay",
@@ -760,6 +832,64 @@
         "confirmAdd": "Create",
         "saveChanges": "Save"
       }
+    },
+    "cli": {
+      "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
+      "refresh": "Re-check",
+      "retry": "Retry",
+      "loading": "Checking CLI installation status…",
+      "loadFailed": "Detection failed. Please try again.",
+      "status": {
+        "installed": "Installed",
+        "notInstalled": "Not installed"
+      },
+      "viewInstallGuide": "Install guide",
+      "howToInstall": "Install guide",
+      "copy": "Copy",
+      "copied": "Copied to clipboard",
+      "copyFailed": "Failed to copy",
+      "tools": {
+        "grok": {
+          "name": "Grok CLI",
+          "description": "xAI Grok terminal coding agent"
+        },
+        "kimi": {
+          "name": "Kimi CLI",
+          "description": "Moonshot Kimi Code CLI"
+        },
+        "opencode": {
+          "name": "OpenCode",
+          "description": "Open-source terminal AI coding agent"
+        },
+        "pi": {
+          "name": "PI CLI",
+          "description": "मल्टी-प्रोवाइडर मॉडल सपोर्ट वाला मिनिमल टर्मिनल कोडिंग एजेंट"
+        },
+        "omp": {
+          "name": "OMP CLI",
+          "description": "मल्टी-प्रोवाइडर मॉडल सपोर्ट वाला Oh My Pi टर्मिनल कोडिंग एजेंट"
+        }
+      },
+      "installDialog": {
+        "title": "Install {{name}}",
+        "lead": "Install {{name}} in your system terminal first and make sure `{{binary}}` is available, then come back and click Re-check. This plugin will not run the installer for you.",
+        "stepOpenTerminal": "Open your system terminal (Terminal / iTerm / PowerShell, etc.)",
+        "stepRunCommand": "Copy and run the install command below",
+        "stepVerify": "After install, run `{{binary}} --version` to verify",
+        "stepReturn": "Return here and click Re-check",
+        "primaryCommand": "Recommended install command (macOS / Linux)",
+        "windowsCommand": "Windows (PowerShell)",
+        "altCommand": "Alternative install method",
+        "openDocs": "Open official docs"
+      },
+      "listTitle": "स्थानीय CLI टूल",
+      "summary": "{{installed}} / {{total}} स्थापित",
+      "moreComingSoon": "जल्द और समर्थन",
+      "copyPath": "पथ कॉपी करें",
+      "visibility": {
+        "hide": "प्रदाता स्विचर में छिपाएँ",
+        "show": "प्रदाता स्विचर में दिखाएँ"
+      }
     }
   },
   "history": {
@@ -788,7 +918,7 @@
     "loading": "इतिहास लोड हो रहा है...",
     "loadFailed": "लोड विफल",
     "noSessions": "कोई इतिहास सत्र नहीं",
-    "noSessionsDesc": "वर्तमान परियोजना में Claude सत्र रिकॉर्ड नहीं मिले",
+    "noSessionsDesc": "वर्तमान परियोजना में सत्र रिकॉर्ड नहीं मिले",
     "totalSessions": "कुल {{count}} सत्र · {{total}} संदेश",
     "messageCount": "{{count}} संदेश",
     "searchPlaceholder": "सत्र शीर्षक खोजें...",
@@ -911,6 +1041,7 @@
   },
   "config": {
     "clickToCopy": "कॉपी करने के लिए क्लिक करें",
+    "officialDocs": "आधिकारिक दस्तावेज़",
     "switch": "स्विच",
     "switchProvider": "प्रदाता स्विच करें",
     "runtimeProvider": {
@@ -962,7 +1093,13 @@
   "markdown": {
     "copyCode": "कोड कॉपी करें",
     "copyMessage": "संदेश कॉपी करें",
-    "copySuccess": "कॉपी हो गया"
+    "copySuccess": "कॉपी हो गया",
+    "quoteMessage": "संदेश उद्धृत करें",
+    "quoteSuccess": "उद्धृत किया गया!"
+  },
+  "contextMenu": {
+    "copy": "कॉपी करें",
+    "quote": "उद्धृत करें"
   },
   "usage": {
     "checkingLabel": "tokentracker-cli की जाँच हो रही है…",
@@ -1214,6 +1351,25 @@
     "allCompleted": "{{completed}}/{{total}} कार्य पूर्ण",
     "stopped": "रुका हुआ"
   },
+  "subagent": {
+    "process": {
+      "title": "एजेंट प्रक्रिया",
+      "prompt": "प्रॉम्प्ट",
+      "thought": "विचार",
+      "filesRead_one": "{{count}} फ़ाइल पढ़ें",
+      "filesRead_other": "{{count}} फ़ाइलें पढ़ें",
+      "otherTools": "अन्य उपकरण",
+      "result": "परिणाम",
+      "showFullOutput": "पूरा आउटपुट देखें",
+      "loading": "एजेंट प्रक्रिया लोड हो रही है…",
+      "unavailable": "जब तक सत्र का id नहीं है, प्रक्रिया लॉग उपलब्ध नहीं है।",
+      "reportGenerated": "संरचित विश्लेषण रिपोर्ट तैयार की गई",
+      "unitMs": "मि॰से॰",
+      "unitS": "से॰",
+      "unitTools": "उपकरण",
+      "unitTokens": "टोकन"
+    }
+  },
   "statusPanel": {
     "todoTab": "योजना",
     "tasksTab": "कार्य",
@@ -1242,7 +1398,9 @@
     "keepAllConfirmMessage": "वर्तमान परिवर्तनों को आधार के रूप में स्वीकार करें। भविष्य के परिवर्तन शून्य से ट्रैक किए जाएंगे।",
     "discardAllSuccess": "सभी परिवर्तन हटा दिए गए",
     "discardAllFailed": "हटाना विफल: {{error}}",
-    "keepAllSuccess": "सभी परिवर्तन रखे गए, ट्रैकिंग रीसेट"
+    "keepAllSuccess": "सभी परिवर्तन रखे गए, ट्रैकिंग रीसेट",
+    "multiAgentBadge": "मल्टी-एजेंट",
+    "multiAgentEdited": "इस सत्र में {{count}} एजेंटों ने इस फ़ाइल को संपादित किया — सावधानी से देखें"
   },
   "skills": {
     "title": "Skills",
@@ -1388,6 +1546,9 @@
     "searchPlaceholder": "मॉडल खोजें",
     "noModelsFound": "कोई मॉडल नहीं मिला",
     "hiddenModelCount": "+ {{count}} और मॉडल. खोजने के लिए टाइप करें.",
+    "pinned": "पिन किए गए",
+    "pin": "पिन करें",
+    "unpin": "अनपिन करें",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",
@@ -1395,11 +1556,7 @@
       },
       "sonnet5": {
         "label": "Sonnet 5",
-        "description": "Sonnet 5 · Sonnet 4.6 का अपग्रेड मॉडल"
-      },
-      "sonnet47": {
-        "label": "Sonnet 4.7",
-        "description": "Sonnet 4.7 · डिफ़ॉल्ट अनुशंसित मॉडल"
+        "description": "Sonnet 5 · डिफ़ॉल्ट अनुशंसित मॉडल"
       },
       "opus5": {
         "label": "Opus 5",
@@ -1476,7 +1633,7 @@
   "codexModes": {
     "default": {
       "label": "Suggest (approval)",
-      "tooltip": "Codex approval_policy=untrusted – prompts before editing files or running shell commands.",
+      "tooltip": "Codex approval_policy=on-request – prompts before editing files or running shell commands.",
       "description": "Safest option. Every write or command requires your approval."
     },
     "plan": {
@@ -1495,6 +1652,28 @@
       "description": "Hands-off mode. Codex executes edits and shell commands immediately."
     }
   },
+  "ompModes": {
+    "default": {
+      "label": "डिफ़ॉल्ट",
+      "tooltip": "चयनित मॉडल का उपयोग करें (या OMP auto)",
+      "description": "मॉडल ड्रॉपडाउन में चुने गए मॉडल का उपयोग करता है, या Auto पर सेट होने पर OMP CLI डिफ़ॉल्ट का उपयोग करता है।"
+    },
+    "smol": {
+      "label": "Smol",
+      "tooltip": "तेज़ मॉडल रोल (omp --model smol)",
+      "description": "इस वार्तालाप को omp की smol भूमिका के लिए कॉन्फ़िगर किए गए मॉडल के साथ चलाता है। मॉडल ड्रॉपडाउन को ओवरराइड करता है।"
+    },
+    "slow": {
+      "label": "Slow",
+      "tooltip": "रीज़निंग मॉडल रोल (omp --model slow)",
+      "description": "इस वार्तालाप को omp की slow भूमिका के लिए कॉन्फ़िगर किए गए मॉडल के साथ चलाता है। मॉडल ड्रॉपडाउन को ओवरराइड करता है।"
+    },
+    "plan": {
+      "label": "Plan",
+      "tooltip": "प्लानिंग मॉडल रोल (omp --model plan)",
+      "description": "इस वार्तालाप को omp की plan भूमिका के लिए कॉन्फ़िगर किए गए मॉडल के साथ चलाता है। मॉडल ड्रॉपडाउन को ओवरराइड करता है।"
+    }
+  },
   "providers": {
     "claude": {
       "label": "Claude Code"
@@ -1507,6 +1686,12 @@
     },
     "opencode": {
       "label": "OpenCode"
+    },
+    "pi": {
+      "label": "PI CLI"
+    },
+    "omp": {
+      "label": "OMP CLI"
     }
   },
   "promptEnhancer": {
@@ -1521,7 +1706,18 @@
     "keepOriginal": "Keep Original",
     "enhanceFailed": "Failed to enhance prompt",
     "emptyPrompt": "Please enter a prompt first",
-    "copyEnhanced": "Copy Enhanced"
+    "copyEnhanced": "Copy Enhanced",
+    "modeLabel": "Mode",
+    "modeAuto": "Auto",
+    "modeManual": "Manual",
+    "modeUnavailable": "Unavailable",
+    "providerLabel": "CLI",
+    "providerUnresolved": "No CLI resolved",
+    "modelLabel": "Model",
+    "modelUnresolved": "Default model",
+    "openSettings": "Configure",
+    "openSettingsTooltip": "Open prompt enhancer settings",
+    "resolvingUsage": "Resolving runtime config…"
   },
   "fileContext": {
     "placeholder": "File Context",

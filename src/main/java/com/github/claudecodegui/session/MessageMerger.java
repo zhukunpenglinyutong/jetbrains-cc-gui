@@ -230,7 +230,7 @@ public class MessageMerger {
             // prefix relation, whereas the lenient suffix-prefix overlap would fire
             // on incidental shared boundaries (code fences, Markdown markers) and
             // wrongly merge a new segment into the previous one.
-            return textLooksRelatedStrict(getTextContent(existingBlock), getTextContent(incomingBlock));
+            return contentLooksRelatedStrict(getTextContent(existingBlock), getTextContent(incomingBlock));
         }
 
         if ("thinking".equals(type)) {
@@ -241,7 +241,11 @@ public class MessageMerger {
             if (existingThinking.isEmpty() || incomingThinking.isEmpty()) {
                 return true;
             }
-            return textLooksRelated(existingThinking, incomingThinking);
+            // Thinking blocks can cross the same segment boundaries as text blocks.
+            // A suffix-prefix overlap is especially easy to trigger with Markdown
+            // markers (for example, adjacent "**...**" summaries), so only a
+            // prefix-related snapshot may update the existing block.
+            return contentLooksRelatedStrict(existingThinking, incomingThinking);
         }
 
         return existingBlock.equals(incomingBlock);
@@ -296,54 +300,26 @@ public class MessageMerger {
         return getTextContent(block);
     }
 
-    // Whether two non-empty texts are equal or one is a prefix of the other:
-    // the "same segment, possibly grown" relation shared by the strict text
-    // check and the lenient thinking check's prefix stage.
+    // Whether two non-empty block contents are equal or one is a prefix of the other:
+    // both relations describe one segment that is being filled by a fuller snapshot.
     private boolean isPrefixRelated(String existing, String incoming) {
         return existing.equals(incoming)
                 || existing.startsWith(incoming)
                 || incoming.startsWith(existing);
     }
 
-    // Strict prefix-only relatedness for text blocks across segments. Omits the
-    // suffix-prefix overlap that textLooksRelated keeps for fragmented thinking:
-    // for text, overlap frequently fires on incidental shared boundaries (code
-    // fences, Markdown markers) between two segments separated by a tool_use,
-    // wrongly merging a new segment into the previous one.
-    private boolean textLooksRelatedStrict(String existingText, String incomingText) {
+    // Strict prefix-only relatedness for unkeyed text/thinking blocks. Omitting
+    // suffix-prefix overlap prevents incidental shared boundaries (for example,
+    // Markdown markers) from joining two independent streaming segments.
+    private boolean contentLooksRelatedStrict(String existingText, String incomingText) {
         String existing = existingText != null ? existingText : "";
         String incoming = incomingText != null ? incomingText : "";
         // isPrefixRelated already treats an empty string as a prefix of any string,
-        // so an empty text block and a non-empty one are the same segment (the empty
+        // so an empty block and a non-empty one are the same segment (the empty
         // one is the segment's leading edge before content arrives). This lets a
         // later, fuller snapshot fill an empty placeholder instead of duplicating
-        // it, mirroring the thinking branch's empty-is-same-segment rule.
+        // it.
         return isPrefixRelated(existing, incoming);
-    }
-
-    private boolean textLooksRelated(String existingText, String incomingText) {
-        String existing = existingText != null ? existingText : "";
-        String incoming = incomingText != null ? incomingText : "";
-
-        if (existing.isEmpty() || incoming.isEmpty()) {
-            return existing.isEmpty() && incoming.isEmpty();
-        }
-
-        if (isPrefixRelated(existing, incoming)) {
-            return true;
-        }
-
-        // Check suffix-prefix overlap (streaming may produce partial overlaps)
-        int maxOverlap = Math.min(existing.length(), incoming.length());
-        maxOverlap = Math.min(maxOverlap, 200);
-        int eLen = existing.length();
-        for (int overlap = maxOverlap; overlap > 0; overlap--) {
-            if (existing.regionMatches(eLen - overlap, incoming, 0, overlap)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private String preferMoreCompleteContent(String existingText, String incomingText) {

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CodexFastMode } from '../types';
+import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
@@ -16,6 +17,9 @@ const MODE_INFO_STYLE: React.CSSProperties = { display: 'flex', flexDirection: '
 interface CodexFastModeSelectProps {
   value: CodexFastMode;
   onChange: (mode: CodexFastMode) => void;
+  embedded?: boolean;
+  triggerRef?: React.RefObject<HTMLElement | null>;
+  onClose?: () => void;
 }
 
 const CODEX_FAST_MODE_OPTIONS: Array<{
@@ -38,11 +42,25 @@ const CODEX_FAST_MODE_OPTIONS: Array<{
   },
 ];
 
-export const CodexFastModeSelect = ({ value, onChange }: CodexFastModeSelectProps) => {
+export const CodexFastModeSelect = ({
+  value,
+  onChange,
+  embedded = false,
+  triggerRef,
+  onClose,
+}: CodexFastModeSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { positionedStyle, maxHeight, maxWidth, recalculate } = useDropdownPosition({
+    buttonRef: (embedded ? triggerRef : buttonRef) as React.RefObject<HTMLElement | null>,
+    dropdownRef,
+    preferredAlignment: 'right',
+    submenu: embedded,
+    minWidth: embedded ? 180 : 200,
+    maxWidth: 280,
+  });
 
   const currentMode = CODEX_FAST_MODE_OPTIONS.find(mode => mode.id === value) || CODEX_FAST_MODE_OPTIONS[0];
 
@@ -52,16 +70,21 @@ export const CodexFastModeSelect = ({ value, onChange }: CodexFastModeSelectProp
 
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsOpen(!isOpen);
-  }, [isOpen]);
+    const nextOpen = !isOpen;
+    setIsOpen(nextOpen);
+    if (nextOpen) {
+      recalculate();
+    }
+  }, [isOpen, recalculate]);
 
   const handleSelect = useCallback((mode: CodexFastMode) => {
     onChange(mode);
     setIsOpen(false);
-  }, [onChange]);
+    onClose?.();
+  }, [onChange, onClose]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (embedded || !isOpen) return;
 
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -82,26 +105,32 @@ export const CodexFastModeSelect = ({ value, onChange }: CodexFastModeSelectProp
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen]);
+  }, [embedded, isOpen]);
 
-  return (
-    <div style={RELATIVE_INLINE_BLOCK_STYLE}>
-      <button
-        ref={buttonRef}
-        className={`selector-button${value === 'fast' ? ' codex-fast-active' : ''}`}
-        onClick={handleToggle}
-        title={t('codexFastMode.title', { defaultValue: 'Select Codex speed mode' })}
-      >
-        <span className={`codicon ${currentMode.icon}`} />
-        <span className="selector-button-text">{getModeText(currentMode, 'label')}</span>
-        <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={CHEVRON_ICON_STYLE} />
-      </button>
+  useLayoutEffect(() => {
+    if (embedded || isOpen) {
+      recalculate();
+    }
+  }, [embedded, isOpen, recalculate]);
 
-      {isOpen && (
+  const dropdownStyle: React.CSSProperties = embedded
+    ? {
+        minWidth: 0,
+        maxWidth: maxWidth ?? 280,
+        ...(maxHeight != null
+          ? { maxHeight: `${Math.min(300, maxHeight)}px`, overflowY: 'auto' as const }
+          : { overflowY: 'visible' as const }),
+        ...positionedStyle,
+      }
+    : { ...DROPDOWN_STYLE, ...positionedStyle };
+
+  const renderDropdown = () => (
         <div
           ref={dropdownRef}
           className="selector-dropdown"
-          style={DROPDOWN_STYLE}
+          data-testid="codex-fast-mode-dropdown"
+          style={dropdownStyle}
+          onMouseEnter={(e) => e.stopPropagation()}
         >
           {CODEX_FAST_MODE_OPTIONS.map((mode) => (
             <div
@@ -121,7 +150,26 @@ export const CodexFastModeSelect = ({ value, onChange }: CodexFastModeSelectProp
             </div>
           ))}
         </div>
-      )}
+  );
+
+  if (embedded) {
+    return renderDropdown();
+  }
+
+  return (
+    <div style={RELATIVE_INLINE_BLOCK_STYLE}>
+      <button
+        ref={buttonRef}
+        className={`selector-button${value === 'fast' ? ' codex-fast-active' : ''}`}
+        onClick={handleToggle}
+        title={t('codexFastMode.title', { defaultValue: 'Select Codex speed mode' })}
+      >
+        <span className={`codicon ${currentMode.icon}`} />
+        <span className="selector-button-text">{getModeText(currentMode, 'label')}</span>
+        <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={CHEVRON_ICON_STYLE} />
+      </button>
+
+      {isOpen && renderDropdown()}
     </div>
   );
 };

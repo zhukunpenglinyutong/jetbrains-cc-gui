@@ -82,6 +82,13 @@ export interface ClaudeMessage {
   content?: string;
   raw?: ClaudeRawMessage | string;
   timestamp?: string;
+  /**
+   * Backend-assigned, provider-independent message id. Unlike `raw.uuid` it exists as
+   * soon as the message is created, so it lets the webview address a message whose
+   * provider uuid has not been back-filled yet. Absent on optimistic user messages,
+   * which the webview creates before the backend knows about them.
+   */
+  localId?: string;
   isStreaming?: boolean;
   isOptimistic?: boolean;
   /**
@@ -121,7 +128,11 @@ export interface HistorySessionSummary {
   lastTimestamp?: string;
   isFavorited?: boolean;
   favoritedAt?: number;
-  provider?: string; // 'claude' or 'codex'
+  provider?: string; // 'claude' | 'codex' | 'grok' | 'opencode' | …
+  /** Model used by this session when known (restored on open). */
+  model?: string;
+  /** Agent name when known (OpenCode / Claude). */
+  agent?: string;
   fileSize?: number;
   entrypoint?: string; // Session entrypoint: 'cli', 'sdk-cli', 'claude-vscode', etc.
 }
@@ -138,4 +149,13 @@ export interface HistoryData {
 export type { FileChangeStatus, EditOperation, FileChangeSummary } from './fileChanges';
 
 // Subagent types
-export type { SubagentStatus, SubagentInfo, SubagentHistoryResponse, TaskEvent, TaskEventMap, TaskEventStatus } from './subagent';
+export type {
+  SubagentStatus,
+  SubagentInfo,
+  SubagentHistoryResponse,
+  SubagentStatusSnapshot,
+  SubagentStatusesResponse,
+  TaskEvent,
+  TaskEventMap,
+  TaskEventStatus,
+} from './subagent';

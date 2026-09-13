@@ -161,4 +161,36 @@ describe('ReasoningSelect', () => {
 
     expect(screen.queryByRole('button')).toBeNull();
   });
+
+  it('does not force a scrollbar on the embedded submenu when all levels fit', () => {
+    const trigger = document.createElement('div');
+    trigger.getBoundingClientRect = () => ({
+      x: 20,
+      y: 80,
+      top: 80,
+      left: 20,
+      bottom: 108,
+      right: 200,
+      width: 180,
+      height: 28,
+      toJSON() {
+        return {};
+      },
+    });
+
+    render(
+      <ReasoningSelect
+        embedded
+        triggerRef={{ current: trigger }}
+        value="high"
+        onChange={vi.fn()}
+        currentProvider="kimi"
+        selectedModel="kimi-k3"
+      />,
+    );
+
+    const dropdown = screen.getByTestId('reasoning-selector-dropdown');
+    expect(dropdown.style.overflowY).not.toBe('auto');
+    expect(dropdown.style.maxHeight).toBe('');
+  });
 });

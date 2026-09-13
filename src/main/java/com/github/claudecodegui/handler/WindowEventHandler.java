@@ -9,14 +9,16 @@ import com.intellij.openapi.diagnostic.Logger;
 
 /**
  * Handles window-level events from the frontend:
- * heartbeat, tab status changes, session lifecycle signals.
+ * heartbeat, tab status changes, session lifecycle signals, and DOM commit acknowledgments.
  */
 public class WindowEventHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(WindowEventHandler.class);
     private static final String[] SUPPORTED_TYPES = {
         "heartbeat", "tab_loading_changed", "tab_status_changed",
-        "create_new_session", "frontend_ready", "refresh_slash_commands"
+        "create_new_session", "frontend_ready", "history_dom_committed",
+        "history_render_complete", "surface_damage_applied",
+        "refresh_slash_commands"
     };
 
     /**
@@ -28,6 +30,8 @@ public class WindowEventHandler extends BaseMessageHandler {
         void onTabStatusChanged(String status);
         void onCreateNewSession();
         void onFrontendReady();
+        void onHistoryRenderComplete(long commitEpoch);
+        void onSurfaceDamageApplied(String token, String phase, boolean applied);
         void onRefreshSlashCommands();
     }
 
@@ -55,6 +59,15 @@ public class WindowEventHandler extends BaseMessageHandler {
                 return true;
             case "frontend_ready":
                 callback.onFrontendReady();
+                return true;
+            case "history_dom_committed":
+                callback.onHistoryRenderComplete(parseHistoryCommitEpoch(content));
+                return true;
+            case "history_render_complete":
+                callback.onHistoryRenderComplete(1L);
+                return true;
+            case "surface_damage_applied":
+                handleSurfaceDamageApplied(content);
                 return true;
             case "refresh_slash_commands":
                 callback.onRefreshSlashCommands();
@@ -86,6 +99,28 @@ public class WindowEventHandler extends BaseMessageHandler {
             callback.onTabStatusChanged(statusStr);
         } catch (Exception e) {
             LOG.warn("[TabStatus] Failed to parse tab status: " + e.getMessage());
+        }
+    }
+
+    private void handleSurfaceDamageApplied(String content) {
+        try {
+            JsonObject json = new Gson().fromJson(content, JsonObject.class);
+            String token = json.has("token") ? json.get("token").getAsString() : "";
+            String phase = json.has("phase") ? json.get("phase").getAsString() : "";
+            boolean applied = json.has("applied") && json.get("applied").getAsBoolean();
+            callback.onSurfaceDamageApplied(token, phase, applied);
+        } catch (Exception e) {
+            LOG.warn("[WebviewSurface] Failed to parse damage acknowledgment: "
+                    + e.getMessage());
+        }
+    }
+
+    private long parseHistoryCommitEpoch(String content) {
+        try {
+            return Math.max(1L, Long.parseLong(content == null ? "" : content.trim()));
+        } catch (NumberFormatException e) {
+            LOG.warn("[WebviewSurface] Invalid history commit epoch: " + content);
+            return 1L;
         }
     }
 }

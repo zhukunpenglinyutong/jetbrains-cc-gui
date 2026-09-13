@@ -18,14 +18,17 @@ v0.1.5-beta1，v0.1.5-beta2，v0.1.5-beta3，..... 直到 v0.1.5
 
 ---
 
-###  Branch Merge Guidelines（分支合并规范）
+### Branch Merge Guidelines（分支合并规范）
 
-Currently, main is the primary branch and develop is the development branch. All PR merges must first be merged into the develop branch.
+- `main` is the stable/release branch. Do **not** open PRs against `main` by default.
+- Active development happens on the **current version branch**, named `feature/vX.Y.Z` (for example, the current target is `feature/v0.5.2`).
+- All community PRs must target the **latest in-progress version branch** (not `main`, not `develop`, and not an older `feature/v*` branch unless fixing that release).
+- After you open a PR, an AI review report is generated. Medium-risk and high-risk findings must be fixed in the PR before it can be merged.
 
-After submitting a PR, a PR AI review report will be generated. If there are medium-risk or high-risk issues identified, they must be fixed in the PR before merging can proceed.
-
-目前main为主分支，develop为开发分支，任何PR合并需要先往develop上进行合并
-提交PR之后，会生成一个PR AI审查报告，如果有中风险，和高风险问题，需要在PR中修复后才可进行合并
+- `main` 为稳定/发版分支，**默认不要**直接向 `main` 提 PR。
+- 日常开发在**当前版本分支**上进行，命名为 `feature/vX.Y.Z`（例如当前目标分支为 `feature/v0.5.2`）。
+- 社区 PR 必须合并到**当前正在迭代的最新版本分支**（不要合到 `main`、`develop`，也不要合到已结束的旧 `feature/v*` 分支，除非是专门修那个版本）。
+- 提交 PR 后会生成 PR AI 审查报告；若存在中风险或高风险问题，必须在 PR 中修复后才可合并。
 
 ---
 

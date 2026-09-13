@@ -7,8 +7,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 8px 8px 8px 16px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-primary);
+    background: var(--color-chat-bars-bg, var(--bg-secondary));
+    border-bottom: 1px solid var(--color-chat-bars-border, var(--border-primary));
     min-height: 50px;
     flex-shrink: 0;
 }
@@ -22,7 +22,7 @@
     .flex-gap-horizontal(12px);
 
     > * {
-        color: var(--text-secondary);
+        color: var(--color-chat-bars-text, var(--text-secondary));
         font-weight: 500;
     }
 }
@@ -58,7 +58,7 @@
 .back-button {
     background: transparent;
     border: none;
-    color: var(--text-tertiary);
+    color: var(--color-chat-bars-muted-text, var(--text-tertiary));
     cursor: pointer;
     font-size: 13px;
     padding: 4px 8px;
@@ -71,14 +71,14 @@
 }
 
 .back-button:hover {
-    background: var(--bg-hover);
-    color: var(--text-secondary);
+    background: var(--color-chat-bars-hover-bg, var(--bg-hover));
+    color: var(--color-chat-bars-text, var(--text-secondary));
 }
 
 .icon-button {
     background: transparent;
     border: none;
-    color: var(--text-tertiary);
+    color: var(--color-chat-bars-muted-text, var(--text-tertiary));
     width: 32px;
     height: 32px;
     border-radius: 4px;
@@ -92,8 +92,8 @@
 }
 
 .icon-button:hover {
-    background: var(--bg-hover);
-    color: var(--text-secondary);
+    background: var(--color-chat-bars-hover-bg, var(--bg-hover));
+    color: var(--color-chat-bars-text, var(--text-secondary));
 }
 
 .icon-button svg {
@@ -126,7 +126,7 @@
 .session-title-edit-btn {
     background: transparent;
     border: none;
-    color: var(--text-tertiary);
+    color: var(--color-chat-bars-muted-text, var(--text-tertiary));
     cursor: pointer;
     font-size: 13px;
     padding: 4px;

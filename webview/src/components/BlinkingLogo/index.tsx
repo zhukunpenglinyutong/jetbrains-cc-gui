@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next';
 import styles from './style.module.less';
 import { AVAILABLE_PROVIDERS } from '../ChatInputBox/types';
 import { ProviderModelIcon } from '../shared/ProviderModelIcon';
+import AlertDialog from '../AlertDialog';
+import { useBetaProviderNotice } from '../../hooks/useBetaProviderNotice';
+import { useHiddenCliProviders } from '../../hooks/useCliProviderVisibility';
 
 const ROOT_STYLE: React.CSSProperties = {
   position: 'relative',
@@ -28,16 +31,14 @@ function getProviderOptionStyle(enabled: boolean): React.CSSProperties {
 }
 
 interface BlinkingLogoProps {
+  /** Runtime CLI provider id (claude / codex / opencode / …). Icon follows CLI, not model. */
   provider: string;
-  /** Current model ID, used to show vendor-specific icon */
-  modelId?: string;
   onProviderChange?: (providerId: string) => void;
 }
 
-export const BlinkingLogo = ({ provider, modelId, onProviderChange }: BlinkingLogoProps) => {
+export const BlinkingLogo = ({ provider, onProviderChange }: BlinkingLogoProps) => {
   const { t } = useTranslation();
   const [displayProvider, setDisplayProvider] = useState(provider);
-  const [displayModelId, setDisplayModelId] = useState(modelId);
   const [animationState, setAnimationState] = useState<'idle' | 'closing' | 'opening'>('idle');
 
   // Dropdown state
@@ -46,16 +47,19 @@ export const BlinkingLogo = ({ provider, modelId, onProviderChange }: BlinkingLo
   const [toastMessage, setToastMessage] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const betaNotice = useBetaProviderNotice();
+  const hiddenProviders = useHiddenCliProviders();
+  const visibleProviders = AVAILABLE_PROVIDERS.filter((p) => !hiddenProviders.has(p.id));
 
   useEffect(() => {
-    if (provider !== displayProvider || modelId !== displayModelId) {
+    if (provider !== displayProvider) {
       if (animationState === 'idle') {
         setAnimationState('closing');
       } else if (animationState === 'opening') {
          setAnimationState('closing');
       }
     }
-  }, [provider, modelId, displayProvider, displayModelId, animationState]);
+  }, [provider, displayProvider, animationState]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -63,7 +67,6 @@ export const BlinkingLogo = ({ provider, modelId, onProviderChange }: BlinkingLo
     if (animationState === 'closing') {
       timer = setTimeout(() => {
         setDisplayProvider(provider);
-        setDisplayModelId(modelId);
         setAnimationState('opening');
       }, 200);
     } else if (animationState === 'opening') {
@@ -75,7 +78,7 @@ export const BlinkingLogo = ({ provider, modelId, onProviderChange }: BlinkingLo
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [animationState, provider, modelId]);
+  }, [animationState, provider]);
 
   // Click outside handler
   useEffect(() => {
@@ -112,19 +115,22 @@ export const BlinkingLogo = ({ provider, modelId, onProviderChange }: BlinkingLo
   };
 
   const handleSelect = (providerId: string) => {
-    const provider = AVAILABLE_PROVIDERS.find(p => p.id === providerId);
-    if (!provider) return;
+    const selected = AVAILABLE_PROVIDERS.find(p => p.id === providerId);
+    if (!selected) return;
 
-    if (!provider.enabled) {
-      showToastMessage(t('settings.provider.featureComingSoon'));
-      setIsOpen(false);
-      return;
-    }
+    const proceed = () => {
+      if (!selected.enabled) {
+        showToastMessage(t('settings.provider.featureComingSoon'));
+        return;
+      }
+      onProviderChange?.(providerId);
+    };
 
-    if (onProviderChange) {
-      onProviderChange(providerId);
-    }
+    // Close the menu immediately so the beta dialog is not hidden behind it.
     setIsOpen(false);
+    // First click on a Beta provider shows an informational notice once.
+    // Disabled providers skip the notice — they only show the coming-soon toast.
+    betaNotice.requestSelect(!!selected.beta && selected.enabled, proceed);
   };
 
   const getProviderLabel = (providerId: string) => {
@@ -145,7 +151,6 @@ export const BlinkingLogo = ({ provider, modelId, onProviderChange }: BlinkingLo
       >
         <ProviderModelIcon
           providerId={displayProvider}
-          modelId={displayModelId}
           size={displayProvider === 'codex' ? 64 : 58}
           colored
         />
@@ -154,10 +159,10 @@ export const BlinkingLogo = ({ provider, modelId, onProviderChange }: BlinkingLo
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="selector-dropdown"
+          className="selector-dropdown provider-dropdown"
           style={DROPDOWN_STYLE}
         >
-          {AVAILABLE_PROVIDERS.map((p) => (
+          {visibleProviders.map((p) => (
             <div
               key={p.id}
               className={`selector-option ${p.id === provider ? 'selected' : ''} ${!p.enabled ? 'disabled' : ''}`}
@@ -169,9 +174,16 @@ export const BlinkingLogo = ({ provider, modelId, onProviderChange }: BlinkingLo
             >
               <ProviderModelIcon providerId={p.id} size={16} colored />
               <span>{getProviderLabel(p.id)}</span>
-              {p.id === provider && (
-                <span className="codicon codicon-check check-mark" />
-              )}
+              <span className="provider-option-trailing">
+                {p.id === provider && (
+                  <span className="provider-active-dot" aria-hidden="true" />
+                )}
+                {p.beta && (
+                  <span className="provider-beta-badge">
+                    {t('providers.beta.badge', { defaultValue: 'Beta' })}
+                  </span>
+                )}
+              </span>
             </div>
           ))}
         </div>
@@ -183,6 +195,18 @@ export const BlinkingLogo = ({ provider, modelId, onProviderChange }: BlinkingLo
           {toastMessage}
         </div>
       )}
+
+      <AlertDialog
+        isOpen={betaNotice.isOpen}
+        type="warning"
+        title={t('providers.beta.title', { defaultValue: 'Beta Feature' })}
+        message={t('providers.beta.message', {
+          defaultValue:
+            'This feature is still in Beta. If you encounter any bugs, please report them to the author promptly.',
+        })}
+        confirmText={t('common.gotIt', { defaultValue: 'Got it' })}
+        onClose={betaNotice.close}
+      />
     </div>
   );
 };

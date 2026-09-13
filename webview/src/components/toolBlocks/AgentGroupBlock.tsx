@@ -4,8 +4,21 @@ import type { ClaudeContentBlock, ToolResultBlock } from '../../types';
 import { normalizeToolName } from '../../utils/toolConstants';
 import { sendBridgeEvent } from '../../utils/bridge';
 import { getPersistedExpanded, setPersistedExpanded } from '../../utils/expandedState';
-import { extractResultText, isAsyncAgentInput, parseAgentToolMeta } from '../../utils/subagentResult';
-import { useSubagentHistories, useSessionId, useGetToolResultRaw, useTaskEvent } from '../../contexts/SubagentContext';
+import {
+  extractResultText,
+  hasSubagentTranscript,
+  isAsyncAgentInput,
+  parseAgentToolMeta,
+  parseSpawnAgentMeta,
+  readToolUseStatus,
+} from '../../utils/subagentResult';
+import {
+  useSubagentHistories,
+  useSessionId,
+  useSessionProvider,
+  useGetToolResultRaw,
+  useTaskEvent,
+} from '../../contexts/SubagentContext';
 import SubagentProcessDetails from '../StatusPanel/SubagentProcessDetails';
 import { ContentBlockRenderer } from '../MessageItem/ContentBlockRenderer';
 
@@ -51,6 +64,7 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
   const { t } = useTranslation();
   const histories = useSubagentHistories();
   const currentSessionId = useSessionId();
+  const currentProvider = useSessionProvider();
   const getToolResultRaw = useGetToolResultRaw();
 
   const toolId = agentBlock.type === 'tool_use' ? agentBlock.id : undefined;
@@ -67,23 +81,38 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
   const input = agentBlock.type === 'tool_use' ? (agentBlock.input as Record<string, unknown> | undefined) : undefined;
   const result = findToolResult(toolId, messageIndex);
   const hasTerminalResult = result !== undefined && result !== null;
+  const toolName = agentBlock.type === 'tool_use' ? normalizeToolName(agentBlock.name ?? '') : '';
 
   // A background (run_in_background) Agent only gets a launch acknowledgment
   // tool_result; its real terminal status arrives later via task_notification,
   // so stay "running" until that event lands. Sync agents complete inline.
   // isAsyncAgentInput centralizes the strict === true check (and the snake/camel
-  // guard) shared with useSubagents and TaskExecutionBlock.
-  const isAsync = isAsyncAgentInput(input);
+  // guard) shared with useSubagents and TaskExecutionBlock. The launch ack text
+  // and tool-use status are passed as fallbacks so an agent spawned without
+  // run_in_background is still recognized as async.
+  const isAsync = isAsyncAgentInput(input, toolName, result, readToolUseStatus(toolId ? getToolResultRaw(toolId) : null));
   const taskEvent = useTaskEvent(toolId);
   const taskFailed = taskEvent?.status === 'failed' || taskEvent?.status === 'stopped';
 
-  const agentType = getAgentType(agentBlock);
-  const summary = getAgentSummary(agentBlock);
-  const toolName = agentBlock.type === 'tool_use' ? normalizeToolName(agentBlock.name ?? '') : '';
-
   const agentToolMeta = parseAgentToolMeta(getToolResultRaw, toolId);
-  const agentId = agentToolMeta.agentId ?? (input?.agent_id as string | undefined) ?? (input?.agentId as string | undefined);
+  const spawnMeta = toolName === 'spawn_agent'
+    ? parseSpawnAgentMeta(input ?? {}, result)
+    : {};
+  const agentType = toolName === 'spawn_agent'
+    ? spawnMeta.identityLabel ?? ''
+    : getAgentType(agentBlock);
+  const summary = toolName === 'spawn_agent'
+    ? spawnMeta.description?.slice(0, MAX_SUMMARY_LENGTH) ?? ''
+    : getAgentSummary(agentBlock);
+  const agentId = spawnMeta.agentId
+    ?? agentToolMeta.agentId
+    ?? (input?.agent_id as string | undefined)
+    ?? (input?.agentId as string | undefined);
+  const agentPath = spawnMeta.agentPath;
   const history = (toolId ? histories[toolId] : undefined) ?? (agentId ? histories[agentId] : undefined);
+  const resolvedAgentId = history?.agentId ?? agentId;
+  const resolvedAgentPath = history?.agentPath ?? agentPath;
+  const historyFailed = history?.status === 'error';
   // A settled main turn is only the launch boundary for a background Agent. Use
   // the live task_notification or a terminal sidechain end_turn as completion.
   // A failed launch (validation error before the task was registered) returns an
@@ -93,7 +122,7 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
     ? (taskEvent ? !taskFailed : history?.completed === true)
     : hasTerminalResult;
   const isError = isAsync
-    ? (taskEvent ? taskFailed : result?.is_error === true)
+    ? (taskEvent ? taskFailed : historyFailed || result?.is_error === true)
     : hasTerminalResult && result?.is_error === true;
 
   const noopToggleThinking = useCallback(() => {}, []);
@@ -102,14 +131,16 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
   const pollingTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!expanded || !currentSessionId || !toolId || history) return;
+    if (!expanded || !currentSessionId || !toolId || hasSubagentTranscript(history)) return;
     sendBridgeEvent('load_subagent_session', JSON.stringify({
       sessionId: currentSessionId,
-      agentId,
+      provider: currentProvider,
+      agentId: resolvedAgentId,
+      agentPath: resolvedAgentPath,
       description: typeof summary === 'string' ? summary : undefined,
       toolUseId: toolId,
     }));
-  }, [agentId, currentSessionId, summary, expanded, history, toolId]);
+  }, [currentProvider, currentSessionId, summary, expanded, history, resolvedAgentId, resolvedAgentPath, toolId]);
 
   useEffect(() => {
     // Clear existing timer when dependencies change or conditions no longer met
@@ -126,7 +157,9 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
       pollingTimerRef.current = window.setInterval(() => {
         sendBridgeEvent('load_subagent_session', JSON.stringify({
           sessionId: currentSessionId,
-          agentId,
+          provider: currentProvider,
+          agentId: resolvedAgentId,
+          agentPath: resolvedAgentPath,
           description: typeof summary === 'string' ? summary : undefined,
           toolUseId: toolId,
         }));
@@ -139,7 +172,7 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
         pollingTimerRef.current = null;
       }
     };
-  }, [agentId, currentSessionId, summary, expanded, isCompleted, isError, toolId]);
+  }, [currentProvider, currentSessionId, summary, expanded, isCompleted, isError, resolvedAgentId, resolvedAgentPath, toolId]);
 
   return (
     <div className="task-container agent-group-container">
@@ -181,11 +214,12 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
       {expanded && (
         <div className="task-details agent-group-content">
           <SubagentProcessDetails
-            agentId={(isAsync ? taskEvent?.agentId : undefined) ?? agentId}
+            agentId={(isAsync ? taskEvent?.agentId : undefined) ?? resolvedAgentId}
             totalDurationMs={(isAsync ? taskEvent?.totalDurationMs : undefined) ?? agentToolMeta.totalDurationMs}
             totalTokens={(isAsync ? taskEvent?.totalTokens : undefined) ?? agentToolMeta.totalTokens}
             totalToolUseCount={(isAsync ? taskEvent?.totalToolUseCount : undefined) ?? agentToolMeta.totalToolUseCount}
             resultText={(isAsync ? taskEvent?.summary : undefined) ?? extractResultText(result)}
+            prompt={toolName !== 'spawn_agent' && typeof input?.prompt === 'string' ? input.prompt : undefined}
             history={history}
             canLoad={Boolean(currentSessionId)}
           />

@@ -155,10 +155,12 @@ export class CodexPermissionMapper {
     switch (core) {
       case UnifiedPermissionMode.SANDBOX:
         // Sandbox: Read-only mode (always prompt when attempting to write)
+        // 'untrusted' was removed in Codex CLI v0.149 - its ask-before-run semantics
+        // were merged into 'on-request', which older CLI versions also support (#1702).
         return {
           skipGitRepoCheck: true,
           sandbox: 'read-only',
-          approvalPolicy: 'untrusted'
+          approvalPolicy: 'on-request'
         };
 
       case UnifiedPermissionMode.YOLO:
@@ -173,10 +175,11 @@ export class CodexPermissionMapper {
       default:
         // Default: Allow workspace writes but still prompt before executing risky actions
         // On Windows, use danger-full-access since sandbox is experimental
+        // 'untrusted' was removed in Codex CLI v0.149 - see the SANDBOX case above (#1702).
         return {
           skipGitRepoCheck: true,
           sandbox: onWindows ? 'danger-full-access' : 'workspace-write',
-          approvalPolicy: 'untrusted'
+          approvalPolicy: 'on-request'
         };
     }
   }

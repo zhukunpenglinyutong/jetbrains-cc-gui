@@ -65,6 +65,7 @@ public class CodexPetHandler extends BaseMessageHandler {
         "get_petdex_preview",
         "install_petdex_pet",
         "uninstall_petdex_pet",
+        "delete_codex_pet",
         "set_petdex_pet_alias",
         "open_petdex_website",
         "open_codex_pet_directory",
@@ -141,6 +142,9 @@ public class CodexPetHandler extends BaseMessageHandler {
                 return true;
             case "uninstall_petdex_pet":
                 runAsync(() -> uninstallPet(readString(content, "slug")));
+                return true;
+            case "delete_codex_pet":
+                runAsync(() -> deletePet(readString(content, "petId")));
                 return true;
             case "set_petdex_pet_alias":
                 runAsync(() -> setPetAlias(
@@ -301,6 +305,125 @@ public class CodexPetHandler extends BaseMessageHandler {
         } catch (Exception e) {
             LOG.warn("[Petdex] Uninstall failed for " + slug + ": " + e.getMessage(), e);
             pushOperation("uninstall", false, slug, null, errorCode(e));
+        }
+    }
+
+    private void deletePet(String petId) {
+        try {
+            String selectedPetId = floatingService().snapshot().get("selectedPetId").getAsString();
+            DeletePetResult result = deletePetAsset(petRoot(), petId);
+            if (selectedPetId.equals(petId)
+                    || (result.packageSlug != null && selectedPetId.startsWith(result.packageSlug + "/"))) {
+                JsonObject config = new JsonObject();
+                config.addProperty("selectedPetId", "builtin");
+                floatingService().applyConfig(config);
+            }
+            pushOperation("delete", true, result.packageSlug, petId, null);
+            pushJson("updateCodexPetConfig", floatingService().snapshot());
+            publishPetAssetsChanged(true);
+        } catch (Exception e) {
+            LOG.warn("[CodexPet] Failed to delete local pet " + petId + ": " + e.getMessage(), e);
+            pushOperation("delete", false, null, petId, localPetErrorCode(e));
+        }
+    }
+
+    static DeletePetResult deletePetAsset(Path configuredRoot, String petId) throws IOException {
+        IMPORTED_PET_OPERATION_LOCK.lock();
+        try {
+            Path root = resolvePetRoot(configuredRoot, false);
+            Path candidate = resolvePetAsset(root, petId);
+            Path relative = root.relativize(candidate);
+            String packageSlug = relative.getNameCount() > 1 ? relative.getName(0).toString() : null;
+            if (packageSlug != null && PetdexRepository.isManagedInstall(root, packageSlug)) {
+                PetdexRepository.uninstall(root, packageSlug);
+                return new DeletePetResult(packageSlug);
+            }
+            if (packageSlug != null && isImportedPet(root, packageSlug)) {
+                deleteTree(root.resolve(packageSlug));
+                return new DeletePetResult(packageSlug);
+            }
+            if (packageSlug != null && isStandardPetPackage(root.resolve(packageSlug), candidate)) {
+                deleteTree(root.resolve(packageSlug));
+                return new DeletePetResult(packageSlug);
+            }
+            Files.delete(candidate);
+            return new DeletePetResult(null);
+        } finally {
+            IMPORTED_PET_OPERATION_LOCK.unlock();
+        }
+    }
+
+    private static Path resolvePetAsset(Path root, String petId) throws IOException {
+        if (petId == null || petId.isBlank() || petId.length() > 512 || "builtin".equals(petId)) {
+            throw new IOException("INVALID_LOCAL_PET_ID");
+        }
+        Path relative;
+        try {
+            relative = Path.of(petId.replace('/', java.io.File.separatorChar));
+        } catch (RuntimeException e) {
+            throw new IOException("INVALID_LOCAL_PET_ID", e);
+        }
+        if (relative.isAbsolute() || relative.getNameCount() == 0) {
+            throw new IOException("INVALID_LOCAL_PET_ID");
+        }
+        for (Path part : relative) {
+            if ("..".equals(part.toString()) || ".".equals(part.toString())) {
+                throw new IOException("PET_PATH_OUTSIDE_ROOT");
+            }
+        }
+        Path candidate = root.resolve(relative).normalize();
+        if (!candidate.startsWith(root)
+                || !Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS)
+                || Files.isSymbolicLink(candidate)) {
+            throw new IOException("LOCAL_PET_NOT_FOUND");
+        }
+        // Follow intermediate links so a crafted petId cannot escape through a linked directory.
+        Path realCandidate = candidate.toRealPath();
+        if (!realCandidate.startsWith(root)) {
+            throw new IOException("PET_PATH_OUTSIDE_ROOT");
+        }
+        return realCandidate;
+    }
+
+    private static boolean isStandardPetPackage(Path directory, Path selectedAsset) {
+        try {
+            if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(directory)) {
+                return false;
+            }
+            Path petJson = directory.resolve("pet.json");
+            if (!Files.isRegularFile(petJson, LinkOption.NOFOLLOW_LINKS)
+                    || Files.isSymbolicLink(petJson)
+                    || Files.size(petJson) > PetdexRepository.MAX_PET_JSON_BYTES) {
+                return false;
+            }
+            JsonObject metadata = JsonParser.parseString(readBoundedUtf8(
+                    petJson, PetdexRepository.MAX_PET_JSON_BYTES, "INVALID_PET_JSON")).getAsJsonObject();
+            String spritesheetPath = readString(metadata, "spritesheetPath");
+            if (spritesheetPath == null || spritesheetPath.isBlank()) {
+                return false;
+            }
+            Path configuredAsset = directory.resolve(
+                    spritesheetPath.replace('/', java.io.File.separatorChar)).normalize();
+            if (!configuredAsset.startsWith(directory)
+                    || !Files.isRegularFile(configuredAsset, LinkOption.NOFOLLOW_LINKS)
+                    || Files.isSymbolicLink(configuredAsset)) {
+                return false;
+            }
+            Path realConfiguredAsset = configuredAsset.toRealPath();
+            return realConfiguredAsset.startsWith(directory) && realConfiguredAsset.equals(selectedAsset);
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
+    private static void deleteTree(Path directory) throws IOException {
+        if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(directory)) {
+            throw new IOException("PET_NOT_MANAGED_BY_PLUGIN");
+        }
+        try (Stream<Path> paths = Files.walk(directory)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
         }
     }
 
@@ -849,11 +972,11 @@ public class CodexPetHandler extends BaseMessageHandler {
             throw new IOException("INVALID_LOCAL_PET_IMAGE");
         }
         boolean spriteSheet = CodexPetImageSupport.isCanonicalPetdexSheet(dimensions);
-        byte[] previewBytes = spriteSheet ? PetdexRepository.createPreviewPng(decodedImage) : bytes;
-        String previewMimeType = spriteSheet ? "image/png" : mimeType;
         JsonObject result = new JsonObject();
-        result.addProperty("dataUrl", "data:" + previewMimeType + ";base64,"
-                + Base64.getEncoder().encodeToString(previewBytes));
+        // The settings action preview needs the complete 8x9 sheet to select individual frames.
+        // Sending a compact first-frame strip while marking it as a spritesheet makes CSS crop it again.
+        result.addProperty("dataUrl", "data:" + mimeType + ";base64,"
+                + Base64.getEncoder().encodeToString(bytes));
         result.addProperty("spriteSheet", spriteSheet);
         return result;
     }
@@ -1051,6 +1174,18 @@ public class CodexPetHandler extends BaseMessageHandler {
             this.source = source;
             this.managed = managed;
             this.slug = slug;
+        }
+    }
+
+    static final class DeletePetResult {
+        private final String packageSlug;
+
+        private DeletePetResult(String packageSlug) {
+            this.packageSlug = packageSlug;
+        }
+
+        String getPackageSlug() {
+            return packageSlug;
         }
     }
 

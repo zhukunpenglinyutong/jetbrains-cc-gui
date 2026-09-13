@@ -46,6 +46,7 @@
     "removeAttachment": "移除附件",
     "closePreview": "關閉預覽",
     "loadingDropdown": "載入中...",
+    "modelsLoadFailed": "模型列表載入失敗，點擊重試",
     "addAttachment": "新增附件",
     "stopGeneration": "停止生成",
     "generatingResponse": "正在生成響應",
@@ -81,17 +82,18 @@
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安裝，請先安裝 SDK 才能開始對話",
     "sdkStatusLoading": "Checking SDK status...",
+    "sdkStatusUnavailable": "無法檢查 SDK 狀態。",
+    "retrySdkStatus": "重試",
     "openSourceBanner": "本專案保證100%開源和免費（謹防盜版項目）",
     "openSourceBannerStar": "點個 Star",
-    "openSourceBannerStarToast": "已複製倉庫地址到剪貼簿，複製到瀏覽器即可訪問 ⭐",
-    "openSourceBannerStarAria": "複製倉庫地址並前往 GitHub 點 Star",
+    "openSourceBannerStarAria": "前往 GitHub 點 Star",
     "goInstallSdk": "前往安裝",
     "commandNotImplemented": "`{{command}}` 功能尚未實現。",
     "clearCommandDescription": "清除對話歷史並新建會話",
     "attachmentFile": "[附件: {{fileName}}]",
     "unknownFile": "Unknown file",
     "attachmentsUploaded": "[已上傳附件]",
-    "streamingConnected": "{{provider}} 已成功連接，正在理解問題",
+    "streamingConnected": "AI 已成功連接，正在理解問題",
     "showEarlierMessages": "顯示之前的 {{count}} 則訊息",
     "showEarlierTurns": "顯示更早的 {{count}} 輪對話（目前已載入尚餘 {{remaining}} 輪）",
     "loadEarlierTurns": "從磁碟載入更早的 {{count}} 輪（共 {{total}} 輪，尚餘 {{remaining}} 輪）",
@@ -230,26 +232,36 @@
         "providerUnavailable": "目前不可用",
         "provider": {
           "claude": "Claude Code",
-          "codex": "Codex"
+          "codex": "Codex",
+          "grok": "Grok CLI",
+          "kimi": "Kimi CLI",
+          "opencode": "OpenCode",
+          "pi": "PI CLI",
+          "omp": "OMP CLI"
         },
         "currentProviderAuto": "目前使用自動選擇：{{provider}}",
         "currentProviderManual": "目前使用手動選擇的 provider：{{provider}}",
-        "currentProviderUnavailable": "目前所選 provider 不可用：{{provider}}"
+        "currentProviderUnavailable": "目前所選 provider 不可用：{{provider}}",
+        "modeLabel": "使用方式",
+        "modeAuto": "自動",
+        "modeManual": "手動",
+        "autoSummary": "自動跟隨目前聊天 CLI · 現在解析為 {{provider}}",
+        "autoUnavailable": "目前沒有可用的 CLI，請切換到手動並選擇。"
       },
       "diffExpanded": {
         "label": "預設展開差異",
-        "enabled": "已展開",
-        "disabled": "已折疊",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
         "hint": "開啟後，聊天中的程式碼差異將預設展開顯示。關閉後，差異預設摺疊，可點擊展開。"
       },
       "taskCompletionNotification": {
-        "label": "任務完成通知",
+        "label": "任務完成系統通知",
         "enabled": "已開啟",
         "disabled": "已關閉",
         "hint": "開啟後，當 AI 任務完成時顯示系統通知。關閉後不顯示系統通知。"
       },
       "askUserQuestionNotification": {
-        "label": "詢問使用者提醒通知",
+        "label": "提問系統通知",
         "enabled": "已開啟",
         "disabled": "已關閉",
         "hint": "開啟後，當 Claude 向你提問時顯示系統通知提醒，避免錯過。關閉後不顯示通知。"
@@ -259,6 +271,40 @@
         "enabled": "已開啟",
         "disabled": "已關閉",
         "hint": "開啟後，訊息底部會在可用時顯示本輪預估費用，並在輸入 Token 中標明快取命中。Token 消耗資訊始終保持顯示。"
+      },
+      "askUserQuestionSoundNotification": {
+        "label": "提問提示音",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "開啟後，當 Claude 向你提問時播放已設定的提示音。會使用下方的音效選擇與焦點規則。"
+      },
+      "systemNotificationOnlyWhenUnfocused": {
+        "label": "僅在 IDE 未聚焦時顯示系統通知",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "開啟後，僅在 IDE 視窗未聚焦時顯示任務完成與提問系統通知。"
+      },
+      "soundNotification": {
+        "label": "任務完成提示音",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "開啟後，AI 完成任務時會播放提示音，方便你離開螢幕時也能知道任務已完成。",
+        "onlyWhenUnfocused": "僅在 IDE 未聚焦時播放提示音",
+        "onlyWhenUnfocusedHint": "開啟後，僅在 IDE 視窗未聚焦時播放任務完成與提問提示音。",
+        "selectSound": "提示音",
+        "soundDefault": "預設",
+        "soundChime": "清脆鈴聲",
+        "soundBell": "鐘聲",
+        "soundDing": "叮咚",
+        "soundSuccess": "成功音",
+        "soundCustom": "自訂...",
+        "customSound": "自訂聲音檔",
+        "customSoundPlaceholder": "選擇或輸入音訊檔路徑",
+        "customSoundHint": "支援 WAV、MP3、AIFF 格式",
+        "testSound": "測試",
+        "browse": "瀏覽",
+        "useDefault": "使用預設",
+        "customSoundSaved": "自訂提示音已儲存"
       },
       "sendShortcut": {
         "label": "發送快捷鍵",
@@ -278,6 +324,12 @@
         "reset": "恢復預設",
         "hint": "自訂聊天區域的背景顏色，留空則跟隨主題預設顏色"
       },
+      "chatBarColor": {
+        "label": "標題列與狀態列顏色",
+        "custom": "自訂",
+        "reset": "恢復預設",
+        "hint": "統一設定會話標題列與工作狀態列的主題顏色，留空則跟隨目前介面主題"
+      },
       "userMsgColor": {
         "label": "使用者訊息顏色",
         "custom": "自訂",
@@ -295,7 +347,8 @@
     "providersDesc": "管理 Claude 和 Codex API 供應商配置，切換不同的 API 服務提供商",
     "providerTab": {
       "claude": "Claude Code",
-      "codex": "Codex"
+      "codex": "Codex",
+      "cli": "CLI"
     },
     "pluginModels": {
       "title": "自訂模型",
@@ -316,6 +369,13 @@
         "cacheReadShort": "快取讀取",
         "invalidValue": "價格必須是非負數字",
         "defaultPricing": "使用預設價格"
+      },
+      "contextWindow": {
+        "label": "最大上下文（K tokens）",
+        "placeholder": "例如 500",
+        "hint": "選填。請輸入整數 K 值（500 = 500,000 tokens），僅用於外掛顯示上下文用量。",
+        "invalidValue": "最大上下文必須是正整數（單位 K）",
+        "summary": "上下文：{{value}} tokens"
       },
       "configuredSectionTitle": "已設定的 Claude 模型",
       "configuredSectionDesc": "這些模型來自目前 Claude 供應商或 settings.json，已經會顯示在模型選擇器中。這裡只能修改價格。",
@@ -371,7 +431,12 @@
         "providerUnavailable": "當前不可用",
         "currentProviderAuto": "當前使用自動選擇：{{provider}}",
         "currentProviderManual": "當前使用手動選擇的 provider：{{provider}}",
-        "currentProviderUnavailable": "當前所選 provider 不可用：{{provider}}"
+        "currentProviderUnavailable": "當前所選 provider 不可用：{{provider}}",
+        "modeLabel": "使用方式",
+        "modeAuto": "自動",
+        "modeManual": "手動",
+        "autoSummary": "自動跟隨目前聊天 CLI · 現在解析為 {{provider}}",
+        "autoUnavailable": "目前沒有可用的 CLI，請切換到手動並選擇。"
       },
       "prompt": {
         "label": "Additional Prompt",
@@ -454,11 +519,18 @@
     "communityDesc": "掃描下方二維碼加入官方微信交流群，獲取最新資訊和技術支援",
     "communityQrTip": "使用微信掃一掃加入交流群",
     "communityQrAlt": "官方微信交流群二維碼",
-    "githubTitle": "GitHub 開源地址",
-    "githubDesc": "本專案已在 GitHub 開源，歡迎 Star 支持",
-    "githubCopyBtn": "複製開源地址",
-    "githubCopied": "開源地址已複製到剪貼簿，請在瀏覽器中訪問",
-    "githubCopyFailed": "複製失敗，請手動複製",
+    "socialDocs": "官方文檔",
+    "socialTitle": "關注我們",
+    "socialGithub": "GitHub 開源倉庫，歡迎 Star",
+    "socialX": "X（Twitter）@ZPeng31310",
+    "socialZhihu": "知乎 @vscodeai",
+    "socialXiaohongshu": "小紅書",
+    "socialDouyin": "抖音，滑鼠懸停掃碼關注",
+    "socialYoutube": "YouTube 頻道 @昆鹏马上优化",
+    "douyinQrAlt": "抖音二維碼",
+    "douyinId": "抖音號：nengyongai",
+    "douyinCopied": "抖音號已複製到剪貼簿",
+    "douyinCopyFailed": "複製失敗，請手動複製",
     "sponsor": "贊助支持",
     "sponsorDesc": "如果這個項目對你有幫助，歡迎贊助支持，你的支持是我持續維護的動力！",
     "alipay": "支付寶",
@@ -765,6 +837,88 @@
         "confirmAdd": "Create",
         "saveChanges": "Save"
       }
+    },
+    "cli": {
+      "hint": "以下 CLI 需在系統終端自行安裝並完成設定。外掛只負責偵測是否已安裝及版本號，不會替你自動安裝。請先在終端確認可正常使用，再回到此處使用。",
+      "refresh": "Re-check",
+      "retry": "Retry",
+      "loading": "Checking CLI installation status…",
+      "loadFailed": "Detection failed. Please try again.",
+      "status": {
+        "installed": "Installed",
+        "notInstalled": "Not installed"
+      },
+      "viewInstallGuide": "Install guide",
+      "howToInstall": "Install guide",
+      "copy": "Copy",
+      "copied": "Copied to clipboard",
+      "copyFailed": "Failed to copy",
+      "tools": {
+        "grok": {
+          "name": "Grok CLI",
+          "description": "xAI Grok 終端編碼助手"
+        },
+        "kimi": {
+          "name": "Kimi CLI",
+          "description": "月之暗面 Kimi Code CLI"
+        },
+        "opencode": {
+          "name": "OpenCode",
+          "description": "開源終端 AI 編碼代理"
+        },
+        "pi": {
+          "name": "PI CLI",
+          "description": "極簡終端編碼代理，支援多提供商模型"
+        },
+        "omp": {
+          "name": "OMP CLI",
+          "description": "支援多提供商模型的 Oh My Pi 終端編碼代理"
+        },
+        "dsh": {
+          "name": "DeepSeek Harness",
+          "description": "DeepSeek 終端智慧體 CLI（dsh）"
+        }
+      },
+      "installDialog": {
+        "title": "Install {{name}}",
+        "lead": "Install {{name}} in your system terminal first and make sure `{{binary}}` is available, then come back and click Re-check. This plugin will not run the installer for you.",
+        "stepOpenTerminal": "Open your system terminal (Terminal / iTerm / PowerShell, etc.)",
+        "stepRunCommand": "Copy and run the install command below",
+        "stepVerify": "After install, run `{{binary}} --version` to verify",
+        "stepReturn": "Return here and click Re-check",
+        "primaryCommand": "Recommended install command (macOS / Linux)",
+        "windowsCommand": "Windows (PowerShell)",
+        "altCommand": "Alternative install method",
+        "openDocs": "Open official docs"
+      },
+      "listTitle": "本機 CLI 工具",
+      "summary": "{{installed}} / {{total}} 已安裝",
+      "moreComingSoon": "即將支援更多",
+      "copyPath": "複製路徑",
+      "visibility": {
+        "hide": "在切換選單中隱藏",
+        "show": "在切換選單中顯示"
+      },
+      "dsh": {
+        "groupTitle": "DeepSeek Harness",
+        "cliRowTitle": "CLI 安裝",
+        "cardTitle": "本機宿主",
+        "rowHint": "啟動或接管本機 dsh web",
+        "hint": "DSH 由本機一個常駐 dsh web 宿主承載所有工作階段；外掛會接管已在執行的宿主，而不會重複啟動。",
+        "state": {
+          "checking": "檢測中…",
+          "notInstalled": "未安裝",
+          "notRunning": "未執行",
+          "connected": "已連線"
+        },
+        "adopted": "已接管",
+        "adoptedHint": "已接管正在執行的宿主；外掛不會停止它。",
+        "openWebUi": "開啟 DSH Web UI",
+        "startHost": "立即啟動",
+        "stopHost": "關閉（僅限外掛啟動的宿主）",
+        "autoStart": "需要時自動啟動",
+        "moreActions": "更多"
+      }
     }
   },
   "history": {
@@ -793,7 +947,7 @@
     "loading": "載入歷史記錄中...",
     "loadFailed": "載入失敗",
     "noSessions": "暫無歷史會話",
-    "noSessionsDesc": "目前專案下沒有找到 Claude 會話記錄",
+    "noSessionsDesc": "目前專案下沒有找到會話記錄",
     "totalSessions": "共 {{count}} 個會話 · {{total}} 條訊息",
     "messageCount": "{{count}} 條訊息",
     "searchPlaceholder": "搜尋會話標題...",
@@ -916,6 +1070,7 @@
   },
   "config": {
     "clickToCopy": "點選複製",
+    "officialDocs": "官方文件",
     "switch": "切換",
     "switchProvider": "切換供應商",
     "runtimeProvider": {
@@ -967,7 +1122,13 @@
   "markdown": {
     "copyCode": "複製程式碼",
     "copyMessage": "複製訊息",
-    "copySuccess": "複製成功"
+    "copySuccess": "複製成功",
+    "quoteMessage": "引用訊息",
+    "quoteSuccess": "已引用！"
+  },
+  "contextMenu": {
+    "copy": "複製",
+    "quote": "引用"
   },
   "usage": {
     "checkingLabel": "正在偵測 tokentracker-cli…",
@@ -1220,6 +1381,25 @@
     "stopped": "已停止",
     "progress": "已完成 {{completed}}/{{total}} 個任務"
   },
+  "subagent": {
+    "process": {
+      "title": "Agent 程序",
+      "prompt": "提示詞",
+      "thought": "思考",
+      "filesRead_one": "讀取 {{count}} 個檔案",
+      "filesRead_other": "讀取 {{count}} 個檔案",
+      "otherTools": "其他工具",
+      "result": "結果",
+      "showFullOutput": "檢視完整輸出",
+      "loading": "正在載入 Agent 程序…",
+      "unavailable": "本次工作階段未產生程序記錄（需要工作階段 ID）。",
+      "reportGenerated": "已產生結構化分析報告",
+      "unitMs": "毫秒",
+      "unitS": "秒",
+      "unitTools": "個工具",
+      "unitTokens": "tokens"
+    }
+  },
   "statusPanel": {
     "todoTab": "計畫",
     "tasksTab": "任務",
@@ -1248,7 +1428,9 @@
     "keepAllConfirmMessage": "將當前改動作為新基準，後續改動從零開始記錄。",
     "discardAllSuccess": "已撤銷所有檔案更改",
     "discardAllFailed": "撤銷失敗: {{error}}",
-    "keepAllSuccess": "已保存全部，改動記錄已重置"
+    "keepAllSuccess": "已保存全部，改動記錄已重置",
+    "multiAgentBadge": "多 Agent",
+    "multiAgentEdited": "本會話有 {{count}} 個 Agent 修改過此檔案，請留意合併衝突"
   },
   "skills": {
     "title": "Skills",
@@ -1394,6 +1576,9 @@
     "searchPlaceholder": "搜尋模型",
     "noModelsFound": "找不到模型",
     "hiddenModelCount": "+ 還有 {{count}} 個模型。輸入以搜尋。",
+    "pinned": "置頂",
+    "pin": "置頂",
+    "unpin": "取消置頂",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",
@@ -1401,11 +1586,7 @@
       },
       "sonnet5": {
         "label": "Sonnet 5",
-        "description": "Sonnet 5 · Sonnet 4.6 升級模型"
-      },
-      "sonnet47": {
-        "label": "Sonnet 4.7",
-        "description": "Sonnet 4.7 · 預設推薦模型"
+        "description": "Sonnet 5 · 預設推薦模型"
       },
       "opus5": {
         "label": "Opus 5",
@@ -1457,32 +1638,45 @@
       }
     }
   },
+  "modelConfig": {
+    "title": "模型設定",
+    "context": "1M 上下文",
+    "contextDefault": "預設",
+    "effort": "思考強度",
+    "speed": "速度",
+    "preset": "預設組合",
+    "model": "模型"
+  },
   "modes": {
     "default": {
-      "label": "Default Mode",
-      "tooltip": "Standard permission behavior",
-      "description": "Requires manual confirmation for each operation, suitable for cautious use"
+      "label": "預設模式",
+      "shortLabel": "預設",
+      "tooltip": "標準權限行為",
+      "description": "需要手動確認每個操作，適合謹慎使用"
     },
     "plan": {
-      "label": "Plan Mode",
-      "tooltip": "Plan mode - read-only analysis",
-      "description": "Uses only read-only tools, generates plan for user approval"
+      "label": "規劃模式",
+      "shortLabel": "規劃",
+      "tooltip": "規劃模式——唯讀分析",
+      "description": "僅使用唯讀工具，產生計劃供使用者審批後執行"
     },
     "acceptEdits": {
-      "label": "Agent Mode",
-      "tooltip": "Automatically accept file edits",
-      "description": "Automatically accept file creation/editing, reducing confirmation steps"
+      "label": "代理模式",
+      "shortLabel": "代理",
+      "tooltip": "自動接受檔案編輯",
+      "description": "自動接受檔案建立/編輯，減少確認步驟"
     },
     "bypassPermissions": {
-      "label": "Auto Mode",
-      "tooltip": "Bypass all permission checks",
-      "description": "Fully automated, bypassing all permission checks [Use with caution]"
+      "label": "自動模式",
+      "shortLabel": "自動",
+      "tooltip": "略過所有權限檢查",
+      "description": "完全自動化，略過所有權限檢查【請謹慎使用】"
     }
   },
   "codexModes": {
     "default": {
       "label": "Suggest (approval)",
-      "tooltip": "Codex approval_policy=untrusted – prompts before editing files or running shell commands.",
+      "tooltip": "Codex approval_policy=on-request – prompts before editing files or running shell commands.",
       "description": "Safest option. Every write or command requires your approval."
     },
     "plan": {
@@ -1501,6 +1695,28 @@
       "description": "Hands-off mode. Codex executes edits and shell commands immediately."
     }
   },
+  "ompModes": {
+    "default": {
+      "label": "預設",
+      "tooltip": "使用所選模型（或 OMP auto）",
+      "description": "使用模型下拉選單中選擇的模型；設為 Auto 時使用 OMP CLI 預設模型。"
+    },
+    "smol": {
+      "label": "Smol",
+      "tooltip": "快速模型角色 (omp --model smol)",
+      "description": "使用為 omp 的 smol 角色設定的模型執行此對話。覆寫模型下拉選單的選擇。"
+    },
+    "slow": {
+      "label": "Slow",
+      "tooltip": "推理模型角色 (omp --model slow)",
+      "description": "使用為 omp 的 slow 角色設定的模型執行此對話。覆寫模型下拉選單的選擇。"
+    },
+    "plan": {
+      "label": "Plan",
+      "tooltip": "規劃模型角色 (omp --model plan)",
+      "description": "使用為 omp 的 plan 角色設定的模型執行此對話。覆寫模型下拉選單的選擇。"
+    }
+  },
   "providers": {
     "claude": {
       "label": "Claude Code"
@@ -1508,12 +1724,33 @@
     "codex": {
       "label": "Codex"
     },
+    "grok": {
+      "label": "Grok CLI"
+    },
+    "kimi": {
+      "label": "Kimi CLI"
+    },
     "gemini": {
       "label": "Gemini Cli"
     },
     "opencode": {
       "label": "OpenCode"
-    }
+    },
+    "pi": {
+      "label": "PI CLI"
+    },
+    "omp": {
+      "label": "OMP CLI"
+    },
+    "beta": {
+      "badge": "Beta",
+      "title": "Beta 功能",
+      "message": "此功能仍處於 Beta 階段。如果遇到使用 Bug，請及時回饋給作者。"
+    },
+    "dsh": {
+      "label": "DeepSeek Harness"
+    },
+    "manageCli": "CLI 設定管理"
   },
   "promptEnhancer": {
     "title": "Prompt Enhancer",
@@ -1527,7 +1764,18 @@
     "keepOriginal": "Keep Original",
     "enhanceFailed": "Failed to enhance prompt",
     "emptyPrompt": "Please enter a prompt first",
-    "copyEnhanced": "Copy Enhanced"
+    "copyEnhanced": "Copy Enhanced",
+    "modeLabel": "模式",
+    "modeAuto": "自動",
+    "modeManual": "手動",
+    "modeUnavailable": "不可用",
+    "providerLabel": "CLI",
+    "providerUnresolved": "未解析 CLI",
+    "modelLabel": "模型",
+    "modelUnresolved": "預設模型",
+    "openSettings": "設定",
+    "openSettingsTooltip": "開啟增強提示詞設定",
+    "resolvingUsage": "正在解析執行設定…"
   },
   "fileContext": {
     "placeholder": "檔案上下文",
@@ -1640,6 +1888,15 @@
       "label": "Fast",
       "description": "Codex 快速回應模式（會產生額外消耗）"
     }
+  },
+  "dshPresets": {
+    "title": "選擇 DeepSeek Harness Agent 預設",
+    "none": { "label": "預設", "description": "dsh 預設 headless 組合（完整工具集）" },
+    "standard": { "label": "標準模式", "description": "功能完整的標準編碼工具集" },
+    "code": { "label": "PTC 模式", "description": "標準能力加 Code Mode" },
+    "minimal": { "label": "極簡模式", "description": "僅提供 bash 與 str_replace_editor" },
+    "cordis": { "label": "創造模式", "description": "標準能力加組合編排能力" },
+    "user": { "description": "安裝在 DSH 主目錄中的自訂預設" }
   },
   "error": {
     "providerNotConfigured": "供應商未設定",

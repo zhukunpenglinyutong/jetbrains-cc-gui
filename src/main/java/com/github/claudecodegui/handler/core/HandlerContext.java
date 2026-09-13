@@ -3,8 +3,8 @@ package com.github.claudecodegui.handler.core;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.settings.CodemossSettingsService;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.jcef.JBCefBrowser;
 
@@ -17,12 +17,13 @@ import java.util.function.Supplier;
  */
 public class HandlerContext {
 
-    public static final String DEFAULT_MODEL = "claude-sonnet-4-7";
+    public static final String DEFAULT_MODEL = "claude-sonnet-5";
     public static final String DEFAULT_PROVIDER = "claude";
 
     private final Project project;
     private final ClaudeSDKBridge claudeSDKBridge;
     private final CodexSDKBridge codexSDKBridge;
+    private final GrokSDKBridge grokSDKBridge;
     private final CodemossSettingsService settingsService;
     private final JsCallback jsCallback;
     private final BooleanSupplier activeContentSupplier;
@@ -42,6 +43,9 @@ public class HandlerContext {
     public interface JsCallback {
         void callJavaScript(String functionName, String... args);
         String escapeJs(String str);
+
+        default void executeJavaScript(String jsCode) {
+        }
     }
 
     public HandlerContext(
@@ -51,7 +55,7 @@ public class HandlerContext {
             CodemossSettingsService settingsService,
             JsCallback jsCallback
     ) {
-        this(project, claudeSDKBridge, codexSDKBridge, settingsService, jsCallback, () -> true, () -> null);
+        this(project, claudeSDKBridge, codexSDKBridge, null, settingsService, jsCallback, () -> true, () -> null);
     }
 
     public HandlerContext(
@@ -63,9 +67,24 @@ public class HandlerContext {
             BooleanSupplier activeContentSupplier,
             Supplier<String> contentTitleSupplier
     ) {
+        this(project, claudeSDKBridge, codexSDKBridge, null, settingsService, jsCallback,
+                activeContentSupplier, contentTitleSupplier);
+    }
+
+    public HandlerContext(
+            Project project,
+            ClaudeSDKBridge claudeSDKBridge,
+            CodexSDKBridge codexSDKBridge,
+            GrokSDKBridge grokSDKBridge,
+            CodemossSettingsService settingsService,
+            JsCallback jsCallback,
+            BooleanSupplier activeContentSupplier,
+            Supplier<String> contentTitleSupplier
+    ) {
         this.project = project;
         this.claudeSDKBridge = claudeSDKBridge;
         this.codexSDKBridge = codexSDKBridge;
+        this.grokSDKBridge = grokSDKBridge;
         this.settingsService = settingsService;
         this.jsCallback = jsCallback;
         this.activeContentSupplier = activeContentSupplier == null ? () -> true : activeContentSupplier;
@@ -83,6 +102,10 @@ public class HandlerContext {
 
     public CodexSDKBridge getCodexSDKBridge() {
         return codexSDKBridge;
+    }
+
+    public GrokSDKBridge getGrokSDKBridge() {
+        return grokSDKBridge;
     }
 
     public CodemossSettingsService getSettingsService() {
@@ -182,23 +205,13 @@ public class HandlerContext {
     }
 
     /**
-     * Execute JavaScript on the EDT (Event Dispatch Thread).
+     * Execute JavaScript through the window's ordered webview event queue
+     * (which marshals to the EDT and batches with callback events).
      */
-    public void executeJavaScriptOnEDT(String jsCode) {
-        JBCefBrowser targetBrowser = this.browser;
-        if (targetBrowser == null || this.disposed) {
+    public void executeJavaScriptQueued(String jsCode) {
+        if (this.disposed || this.jsCallback == null) {
             return;
         }
-        ApplicationManager.getApplication().invokeLater(() -> {
-            if (this.disposed || this.browser != targetBrowser) {
-                return;
-            }
-            try {
-                org.cef.browser.CefBrowser cefBrowser = targetBrowser.getCefBrowser();
-                cefBrowser.executeJavaScript(jsCode, cefBrowser.getURL(), 0);
-            } catch (Exception | LinkageError ignored) {
-                // The webview may be disposed between the generation check and execution.
-            }
-        });
+        this.jsCallback.executeJavaScript(jsCode);
     }
 }

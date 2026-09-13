@@ -17,6 +17,15 @@ import { installRuntimeProviderDispatchers } from './utils/runtimeProviderCapabi
 import { sendBridgeEvent } from './utils/bridge';
 import { debugLog } from './utils/debug';
 import { forceWebviewRepaint } from './utils/forceWebviewRepaint';
+import {
+  advanceSurfaceDamagePulse,
+  beginSurfaceDamagePulse,
+  cancelSurfaceDamagePulse,
+  finishSurfaceDamagePulse,
+  replaceSurfaceDamagePulse,
+  runAfterSurfaceDamagePulse,
+} from './utils/surfaceDamagePulse';
+import { requestDependencyStatusUntilSettled, waitForBridge } from './utils/bridgeStartup';
 import type { UiFontConfig, CodeFontConfig } from './types/uiFontConfig';
 
 // Silence noisy console output in production (including third-party libs).
@@ -126,8 +135,6 @@ if (enableVConsole) {
  * a resize recalculation for components relying on window size.
  */
 function setupScaleRecovery() {
-  type CSSStyleDeclarationWithZoom = CSSStyleDeclaration & { zoom: string };
-
   const getExpectedScale = (): string => {
     const fromCss = getComputedStyle(document.documentElement).getPropertyValue('--font-scale').trim();
     if (fromCss) return fromCss;
@@ -152,41 +159,20 @@ function setupScaleRecovery() {
   const RECOVERY_COOLDOWN_MS = 1500;
 
   const forceReapply = (reason: string) => {
-    const app = document.getElementById('app') as HTMLElement | null;
     const expected = getExpectedScale();
+    const app = document.getElementById('app');
+    const computedZoom = app
+      ? (getComputedStyle(app) as CSSStyleDeclaration & { zoom?: string }).zoom
+      : '';
+    const expectedNumber = Number.parseFloat(expected);
+    const computedNumber = Number.parseFloat(computedZoom || '');
+    const needsZoomNudge = !!app
+      && Number.isFinite(expectedNumber)
+      && (!Number.isFinite(computedNumber) || Math.abs(computedNumber - expectedNumber) > 0.01);
 
     // Re-set the CSS variable to ensure width/height calc(100vw/scale) is refreshed.
     document.documentElement.style.setProperty('--font-scale', expected);
-
-    const computedZoom = app
-      ? (getComputedStyle(app) as unknown as CSSStyleDeclarationWithZoom).zoom
-      : null;
-    const computedZoomNumber = typeof computedZoom === 'string' ? parseFloat(computedZoom) : Number.NaN;
-    const expectedNumber = parseFloat(expected);
-
-    const needsZoomNudge =
-      !!app &&
-      Number.isFinite(expectedNumber) &&
-      (!Number.isFinite(computedZoomNumber) || Math.abs(computedZoomNumber - expectedNumber) > 0.01);
-
-    if (app && needsZoomNudge) {
-      const appStyle = app.style as unknown as CSSStyleDeclarationWithZoom;
-      // Toggle inline zoom to ensure Chromium/JCEF re-applies scaling after resume.
-      // Keep the final value aligned with the CSS variable.
-      appStyle.zoom = '1';
-      // Force a sync layout.
-      void app.offsetHeight;
-      appStyle.zoom = expected;
-    }
-
-    // Let components recompute layout (some rely on window resize).
-    requestAnimationFrame(() => {
-      window.dispatchEvent(new Event('resize'));
-      if (app && needsZoomNudge) {
-        const appStyle = app.style as unknown as CSSStyleDeclarationWithZoom;
-        // One more tick to reduce flakiness on macOS/JCEF.
-        appStyle.zoom = expected;
-      }
+    const completeRecovery = () => {
       debugLog('[ScaleRecovery] Applied scale recovery:', {
         reason,
         expected,
@@ -194,7 +180,19 @@ function setupScaleRecovery() {
         needsZoomNudge,
       });
       lastRecoveryAt = Date.now();
-    });
+    };
+    if (needsZoomNudge) {
+      // The shared coordinator is the sole inline-zoom writer. If an OSR pulse is
+      // active this request remains coalesced until that exact token settles.
+      forceWebviewRepaint(`scale-recovery:${reason}`, completeRecovery);
+      return;
+    }
+    const resizeOnly = () => {
+      if (runAfterSurfaceDamagePulse(resizeOnly)) return;
+      window.dispatchEvent(new Event('resize'));
+      completeRecovery();
+    };
+    requestAnimationFrame(resizeOnly);
   };
 
   const schedule = (reason: string) => {
@@ -522,6 +520,16 @@ if (typeof window !== 'undefined' && !window.updateMessages) {
   };
 }
 
+// Pre-register historyLoadComplete for fast history restores that finish before
+// React installs the real callback. Keep an object wrapper so an explicit zero
+// message count is distinguishable from no pending callback.
+if (typeof window !== 'undefined' && !window.historyLoadComplete) {
+  debugLog('[Main] Pre-registering historyLoadComplete placeholder');
+  window.historyLoadComplete = (expectedMessageCount?: string | number) => {
+    window.__pendingHistoryLoadComplete = { expectedMessageCount };
+  };
+}
+
 // Pre-register updateStatus to handle backend status text that arrives before React initializes
 if (typeof window !== 'undefined' && !window.updateStatus) {
   debugLog('[Main] Pre-registering updateStatus placeholder');
@@ -582,6 +590,7 @@ if (typeof window !== 'undefined' && !window.setSessionId) {
 
 // Pre-register updateDependencyStatus to handle backend status responses that arrive before React initializes
 if (typeof window !== 'undefined' && !window.updateDependencyStatus) {
+  window.__dependencyStatusState = 'pending';
   debugLog('[Main] Pre-registering updateDependencyStatus placeholder');
   window.updateDependencyStatus = (json: string) => {
     debugLog('[Main] Storing pending dependency status, length=' + (json ? json.length : 0));
@@ -634,6 +643,22 @@ if (typeof window !== 'undefined' && !window.onModeReceived) {
   };
 }
 
+// Java may refresh recovery usage immediately after frontend_ready, before
+// React's callback effect mounts. Retain the latest snapshot until registration.
+if (typeof window !== 'undefined' && !window.onUsageUpdate) {
+  window.onUsageUpdate = (json: string) => {
+    window.__pendingUsageUpdate = json;
+  };
+}
+
+// Java can answer frontend_ready before React's callback effect mounts. Keep
+// the authoritative recovery snapshot until the real callback is registered.
+if (typeof window !== 'undefined' && !window.applyBackendTabState) {
+  window.applyBackendTabState = (json: string) => {
+    window.__pendingBackendTabState = json;
+  };
+}
+
 if (typeof window !== 'undefined' && !window.showPermissionDialog) {
   debugLog('[Main] Pre-registering showPermissionDialog placeholder');
   window.showPermissionDialog = (json: string) => {
@@ -662,6 +687,11 @@ if (typeof window !== 'undefined' && !window.showPlanApprovalDialog) {
 }
 
 if (typeof window !== 'undefined') {
+  window.__ccguiSurfaceDamagePhaseA = beginSurfaceDamagePulse;
+  window.__ccguiSurfaceDamagePhaseB = advanceSurfaceDamagePulse;
+  window.__ccguiSurfaceDamageReplace = replaceSurfaceDamagePulse;
+  window.__ccguiSurfaceDamageFinish = finishSurfaceDamagePulse;
+  window.__ccguiSurfaceDamageCancel = cancelSurfaceDamagePulse;
   window.updateLinkifyCapabilities = (json: string) => {
     applyLinkifyCapabilitiesPayload(json);
   };
@@ -692,24 +722,6 @@ ReactDOM.createRoot(document.getElementById('app') as HTMLElement).render(
  */
 setupScaleRecovery();
 
-function waitForBridge(callback: () => void, maxAttempts = 50, interval = 100) {
-  let attempts = 0;
-
-  const check = () => {
-    attempts++;
-    if (window.sendToJava) {
-      debugLog('[Main] Bridge available after ' + attempts + ' attempts');
-      callback();
-    } else if (attempts < maxAttempts) {
-      setTimeout(check, interval);
-    } else {
-      console.error('[Main] Bridge not available after ' + maxAttempts + ' attempts');
-    }
-  };
-
-  check();
-}
-
 // Once the bridge is available, initialize slash commands
 waitForBridge(() => {
   debugLog('[Main] Bridge ready, setting up slash commands');
@@ -725,7 +737,7 @@ waitForBridge(() => {
 
   // Ensure SDK dependency status is fetched on initial load (not only after opening Settings).
   debugLog('[Main] Requesting dependency status');
-  sendBridgeEvent('get_dependency_status');
+  requestDependencyStatusUntilSettled();
 
   sendBridgeEvent('get_linkify_capabilities');
 });

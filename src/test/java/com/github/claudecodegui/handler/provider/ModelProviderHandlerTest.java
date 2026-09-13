@@ -1,7 +1,14 @@
 package com.github.claudecodegui.handler.provider;
 
+import com.github.claudecodegui.handler.UsagePushService;
+import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.provider.CustomModelContextWindowProvider;
+import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.JsonObject;
 import org.junit.Test;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -118,6 +125,150 @@ public class ModelProviderHandlerTest {
         assertEquals(500_000, ModelProviderHandler.getModelContextLimit("custom-model[500k]"));
         assertEquals(2_000_000, ModelProviderHandler.getModelContextLimit("custom-model[2m]"));
         assertEquals(100_000, ModelProviderHandler.getModelContextLimit("custom-model[100K]"));
+    }
+
+    @Test
+    public void shouldPreferConfiguredCustomContextAndKeepExistingFallbacks() throws Exception {
+        Path config = Files.createTempFile("model-context-limit", ".json");
+        Files.writeString(config, """
+                {
+                  "customModelContextWindows": {
+                    "codex": {
+                      "custom-model": 750000
+                    }
+                  }
+                }
+                """);
+        CustomModelContextWindowProvider.setInstanceForTests(
+                CustomModelContextWindowProvider.createForTests(config)
+        );
+
+        try {
+            assertEquals(750_000, ModelProviderHandler.getModelContextLimit("codex", "custom-model"));
+            assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("codex", "custom-model[1m]"));
+            assertEquals(500_000, ModelProviderHandler.getModelContextLimit("codex", "legacy-model[500k]"));
+            assertEquals(200_000, ModelProviderHandler.getModelContextLimit("codex", "unknown-model"));
+        } finally {
+            CustomModelContextWindowProvider.setInstanceForTests(null);
+        }
+    }
+
+    @Test
+    public void shouldIgnoreConfiguredCustomContextForClaude() throws Exception {
+        Path config = Files.createTempFile("model-context-limit", ".json");
+        Files.writeString(config, """
+                {
+                  "customModelContextWindows": {
+                    "claude": {
+                      "custom-claude": 750000
+                    }
+                  }
+                }
+                """);
+        CustomModelContextWindowProvider.setInstanceForTests(
+                CustomModelContextWindowProvider.createForTests(config)
+        );
+
+        try {
+            assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude", "custom-claude"));
+            assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude", "custom-claude[1m]"));
+        } finally {
+            CustomModelContextWindowProvider.setInstanceForTests(null);
+        }
+    }
+
+    /**
+     * Verifies only a real cross-provider transition invalidates provider-owned context usage.
+     */
+    @Test
+    public void shouldDetectOnlyActualProviderSwitches() {
+        assertTrue(ModelProviderHandler.isActualProviderSwitch("claude", "codex"));
+        assertFalse(ModelProviderHandler.isActualProviderSwitch("codex", "codex"));
+        assertFalse(ModelProviderHandler.isActualProviderSwitch(null, "codex"));
+        assertFalse(ModelProviderHandler.isActualProviderSwitch("", "codex"));
+    }
+
+    /**
+     * Verifies same-model reaffirmation remains a no-op so dynamic context capacity is retained.
+     */
+    @Test
+    public void shouldDetectOnlyActualModelSwitches() {
+        assertTrue(ModelProviderHandler.isActualModelSwitch("gpt-5.3-codex", "gpt-5.6-sol"));
+        assertFalse(ModelProviderHandler.isActualModelSwitch("gpt-5.6-sol", "gpt-5.6-sol"));
+        assertFalse(ModelProviderHandler.isActualModelSwitch(null, "gpt-5.6-sol"));
+        assertFalse(ModelProviderHandler.isActualModelSwitch("", "gpt-5.6-sol"));
+    }
+
+    /**
+     * Verifies startup model synchronization treats the restored Session model as
+     * authoritative when HandlerContext still contains its default, preserving the
+     * usage snapshot for a same-value frontend set_model command.
+     */
+    @Test
+    public void handleSetModelPreservesUsageWhenRestoredSessionAlreadyOwnsModel() {
+        HandlerContext context = createHandlerContext();
+        ClaudeSession session = new ClaudeSession(null, null, null, null);
+        session.setProvider("codex");
+        session.setModel("gpt-5.6-sol");
+        JsonObject raw = new JsonObject();
+        raw.add("usage", createUsage(49300, 258400));
+        session.getState().addMessage(new ClaudeSession.Message(
+                ClaudeSession.Message.Type.ASSISTANT, "restored", raw));
+        context.setSession(session);
+        context.setCurrentProvider("codex");
+        context.setCurrentModel(HandlerContext.DEFAULT_MODEL);
+        RecordingUsagePushService usagePushService = new RecordingUsagePushService(context);
+
+        new ModelProviderHandler(context, usagePushService).handleSetModel("gpt-5.6-sol");
+
+        assertEquals("gpt-5.6-sol", context.getCurrentModel());
+        assertTrue(raw.has("usage"));
+        assertFalse(usagePushService.cleared);
+        assertFalse(usagePushService.recalculated);
+    }
+
+    private static HandlerContext createHandlerContext() {
+        return new HandlerContext(null, null, null, null, new HandlerContext.JsCallback() {
+            @Override
+            public void callJavaScript(String functionName, String... args) {
+                // No-op callback for handler state tests.
+            }
+
+            @Override
+            public String escapeJs(String str) {
+                return str;
+            }
+        });
+    }
+
+    private static JsonObject createUsage(int inputTokens, int contextWindow) {
+        JsonObject usage = new JsonObject();
+        usage.addProperty("input_tokens", inputTokens);
+        usage.addProperty("output_tokens", 0);
+        usage.addProperty("model_context_window", contextWindow);
+        return usage;
+    }
+
+    /**
+     * Records whether a model command attempted to invalidate or recalculate usage.
+     */
+    private static final class RecordingUsagePushService extends UsagePushService {
+        private boolean cleared;
+        private boolean recalculated;
+
+        private RecordingUsagePushService(HandlerContext context) {
+            super(context);
+        }
+
+        @Override
+        public void clearUsageDisplay() {
+            cleared = true;
+        }
+
+        @Override
+        public void pushUsageUpdateAfterModelChange(int newMaxTokens) {
+            recalculated = true;
+        }
     }
 
     // ============================================================================

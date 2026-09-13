@@ -10,6 +10,8 @@ interface SubagentProcessDetailsProps {
   totalTokens?: number;
   totalToolUseCount?: number;
   resultText?: string;
+  /** The original prompt the user sent the agent off with (tool_use input.prompt). */
+  prompt?: string;
   history?: SubagentHistoryResponse;
   canLoad: boolean;
 }
@@ -27,6 +29,7 @@ const SubagentProcessDetails = memo(function SubagentProcessDetails({
   totalTokens,
   totalToolUseCount,
   resultText,
+  prompt,
   history,
   canLoad,
 }: SubagentProcessDetailsProps) {
@@ -42,7 +45,8 @@ const SubagentProcessDetails = memo(function SubagentProcessDetails({
   ].filter(Boolean).join(' · ');
   const process = buildSubagentProcessModel(history);
   const finalSummary = firstMeaningfulLine(resultText, t);
-  const hasContent = process.notes.length > 0 || process.readFiles.length > 0 || process.toolCalls.length > 0 || Boolean(finalSummary);
+  const hasPrompt = Boolean(prompt && prompt.trim());
+  const hasContent = hasPrompt || process.notes.length > 0 || process.readFiles.length > 0 || process.toolCalls.length > 0 || Boolean(finalSummary);
 
   return (
     <div className="subagent-details subagent-process-card">
@@ -54,10 +58,26 @@ const SubagentProcessDetails = memo(function SubagentProcessDetails({
         {stats && <div className="subagent-process-stats">{stats}</div>}
       </div>
 
-      {history?.error && <div className="subagent-error">{history.error}</div>}
+      {/* Codex pending snapshots carry transient "not found yet" text with a
+          running status; those stay hidden. Non-Codex providers (Claude) report
+          real lookup failures the same way ("Subagent log not found"), and
+          those must remain visible. */}
+      {history?.error && (history.status === 'error' || history.provider !== 'codex') && (
+        <div className="subagent-error">{history.error}</div>
+      )}
 
       {hasContent ? (
         <div className="subagent-process-sections">
+          {hasPrompt && (
+            <section className="subagent-process-section">
+              <div className="subagent-section-heading">
+                <span className="codicon codicon-comment" />
+                {t('subagent.process.prompt')}
+              </div>
+              <div className="subagent-prompt-card">{prompt}</div>
+            </section>
+          )}
+
           {process.notes.length > 0 && (
             <section className="subagent-process-section">
               <div className="subagent-section-heading">

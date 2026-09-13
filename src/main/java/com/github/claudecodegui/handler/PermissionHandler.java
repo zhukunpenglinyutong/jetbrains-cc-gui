@@ -6,9 +6,11 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.util.SoundNotificationService;
 import com.github.claudecodegui.util.SystemNotificationService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -51,6 +53,14 @@ public class PermissionHandler extends BaseMessageHandler {
         CancellableTask schedule(Runnable task, long delaySeconds);
     }
 
+    interface AskUserQuestionVisualNotifier {
+        void remind();
+    }
+
+    interface AskUserQuestionSoundNotifier {
+        void play();
+    }
+
     private static final SafetyNetScheduler DEFAULT_SAFETY_NET_SCHEDULER = (task, delaySeconds) -> {
         ScheduledFuture<?> scheduledFuture = AppExecutorUtil.getAppScheduledExecutorService()
                 .schedule(task, delaySeconds, TimeUnit.SECONDS);
@@ -58,6 +68,8 @@ public class PermissionHandler extends BaseMessageHandler {
     };
 
     private final SafetyNetScheduler safetyNetScheduler;
+    private final AskUserQuestionVisualNotifier askUserQuestionVisualNotifier;
+    private final AskUserQuestionSoundNotifier askUserQuestionSoundNotifier;
 
     // Permission request map
     private final Map<String, CompletableFuture<Integer>> pendingPermissionRequests = new ConcurrentHashMap<>();
@@ -80,8 +92,20 @@ public class PermissionHandler extends BaseMessageHandler {
     }
 
     PermissionHandler(HandlerContext context, SafetyNetScheduler safetyNetScheduler) {
+        this(context, safetyNetScheduler,
+                () -> SystemNotificationService.getInstance()
+                        .showAskUserQuestionReminderToast(context.getProject()),
+                () -> SoundNotificationService.getInstance()
+                        .playAskUserQuestionReminderSound());
+    }
+
+    PermissionHandler(HandlerContext context, SafetyNetScheduler safetyNetScheduler,
+                      AskUserQuestionVisualNotifier askUserQuestionVisualNotifier,
+                      AskUserQuestionSoundNotifier askUserQuestionSoundNotifier) {
         super(context);
         this.safetyNetScheduler = safetyNetScheduler;
+        this.askUserQuestionVisualNotifier = askUserQuestionVisualNotifier;
+        this.askUserQuestionSoundNotifier = askUserQuestionSoundNotifier;
     }
 
     long getSafetyNetTimeoutSeconds() {
@@ -125,11 +149,11 @@ public class PermissionHandler extends BaseMessageHandler {
         String escapedId = escapeJs(safeId);
         String jsCode = "if (typeof window." + fnName + " === 'function') { "
                 + "window." + fnName + "('" + escapedId + "'); }";
-        // executeJavaScriptOnEDT already marshals to the EDT and no-ops when the
+        // executeJavaScriptQueued already marshals to the EDT and no-ops when the
         // browser is absent, so call it directly. Wrapping it in another
         // invokeLater would both double-post and NPE in unit tests, where
         // ApplicationManager.getApplication() is null.
-        context.executeJavaScriptOnEDT(jsCode);
+        context.executeJavaScriptQueued(jsCode);
     }
 
     public void setPermissionDeniedCallback(PermissionDeniedCallback callback) {
@@ -196,7 +220,7 @@ public class PermissionHandler extends BaseMessageHandler {
                     "  } " +
                     "})(30);";
 
-                context.executeJavaScriptOnEDT(jsCode);
+                context.executeJavaScriptQueued(jsCode);
             });
 
             scheduleSafetyNet(future, () -> {
@@ -416,14 +440,14 @@ public class PermissionHandler extends BaseMessageHandler {
 
         pendingAskUserQuestionRequests.put(requestId, future);
 
-        // Remind the user (via the opt-in system toast) that Claude is waiting for an
+        // Remind the user (via the opt-in system toast and sound) that Claude is waiting for an
         // answer. Triggered here — before the JS dialog render — so the toast fires
         // for every AskUserQuestion regardless of whether the webview is reachable.
         try {
-            SystemNotificationService.getInstance()
-                .showAskUserQuestionReminderToast(context.getProject());
+            askUserQuestionVisualNotifier.remind();
+            askUserQuestionSoundNotifier.play();
         } catch (Exception e) {
-            LOG.warn("[ASK_USER_QUESTION][SHOW_DIALOG] Failed to show reminder toast: " + e.getMessage());
+            LOG.warn("[ASK_USER_QUESTION][SHOW_DIALOG] Failed to show reminder notification: " + e.getMessage());
         }
 
         try {
@@ -431,19 +455,24 @@ public class PermissionHandler extends BaseMessageHandler {
             String requestJson = gson.toJson(questionsData);
             String escapedJson = escapeJs(requestJson);
 
-            ApplicationManager.getApplication().invokeLater(() -> {
-                String jsCode = "(function retryShowAskUserQuestion(retries) { " +
-                    "  if (window.showAskUserQuestionDialog) { " +
-                    "    window.showAskUserQuestionDialog('" + escapedJson + "'); " +
-                    "  } else if (retries > 0) { " +
-                    "    setTimeout(function() { retryShowAskUserQuestion(retries - 1); }, 200); " +
-                    "  } else { " +
-                    "    console.error('[ASK_USER_QUESTION][JS] FAILED: showAskUserQuestionDialog not available!'); " +
-                    "  } " +
-                    "})(30);";
+            Application application = ApplicationManager.getApplication();
+            if (application != null) {
+                application.invokeLater(() -> {
+                    String jsCode = "(function retryShowAskUserQuestion(retries) { " +
+                        "  if (window.showAskUserQuestionDialog) { " +
+                        "    window.showAskUserQuestionDialog('" + escapedJson + "'); " +
+                        "  } else if (retries > 0) { " +
+                        "    setTimeout(function() { retryShowAskUserQuestion(retries - 1); }, 200); " +
+                        "  } else { " +
+                        "    console.error('[ASK_USER_QUESTION][JS] FAILED: showAskUserQuestionDialog not available!'); " +
+                        "  } " +
+                        "})(30);";
 
-                context.executeJavaScriptOnEDT(jsCode);
-            });
+                    context.executeJavaScriptQueued(jsCode);
+                });
+            } else {
+                LOG.debug("[ASK_USER_QUESTION][SHOW_DIALOG] Application unavailable, skipping JS dialog dispatch");
+            }
 
             scheduleSafetyNet(future, () -> {
                 if (future.complete(new JsonObject())) {
@@ -517,7 +546,7 @@ public class PermissionHandler extends BaseMessageHandler {
                     "  } " +
                     "})(30);";
 
-                context.executeJavaScriptOnEDT(jsCode);
+                context.executeJavaScriptQueued(jsCode);
             });
 
             scheduleSafetyNet(future, () -> {

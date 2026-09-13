@@ -19,8 +19,14 @@ export function formatSubagentDuration(
 
 function getRawContent(message: unknown): unknown[] {
   if (!message || typeof message !== 'object') return [];
-  const raw = message as Record<string, any>;
-  const content = raw.message?.content ?? raw.content;
+  const record = message as Record<string, unknown>;
+  const frontendRaw = record.raw && typeof record.raw === 'object'
+    ? record.raw as Record<string, unknown>
+    : undefined;
+  const nestedMessage = record.message && typeof record.message === 'object'
+    ? record.message as Record<string, unknown>
+    : undefined;
+  const content = frontendRaw?.content ?? nestedMessage?.content ?? record.content;
   return Array.isArray(content) ? content : [];
 }
 
@@ -54,8 +60,16 @@ export function buildSubagentProcessModel(history?: SubagentHistoryResponse): Su
     getRawContent(message).forEach((block, blockIndex) => {
       if (!block || typeof block !== 'object') return;
       const item = block as Record<string, any>;
-      if (item.type === 'text' && raw.type === 'assistant' && typeof item.text === 'string' && item.text.trim()) {
-        model.notes.push(item.text.trim());
+      if (item.type === 'thinking'
+        && raw.type === 'assistant'
+        && typeof item.thinking === 'string'
+        && item.thinking.trim()) {
+        // The "thought" section must show the agent's actual reasoning, not
+        // its output. A sidechain transcript's assistant messages carry
+        // thinking blocks throughout and a single final text block with the
+        // terminal report — collecting text here would surface the report in
+        // the thought section, duplicating the result section.
+        model.notes.push(item.thinking.trim());
         return;
       }
       if (item.type !== 'tool_use') return;

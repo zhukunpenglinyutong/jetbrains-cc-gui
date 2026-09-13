@@ -138,6 +138,82 @@ test('shouldOutputMessage: streaming assistant with multiple tool_use blocks ret
   assert.equal(shouldOutputMessage(msg, state), true);
 });
 
+test('REGRESSION: non-cumulative assistant blocks keep thinking boundaries within one response', () => {
+  const state = makeTurnState(true);
+  const chunks = [
+    '**Planning document updates for fixes**\n**Analyzing architecture for Nacos config**',
+    '**Defining MFA role configuration semantics**\n**Designing role-based MFA configuration map**',
+    '**Defining explicit role-based MFA configuration**\n**Mapping front-end and backend MFA configs**',
+  ];
+
+  const captured = captureStdout(() => {
+    chunks.forEach((thinking, index) => {
+      processMessageContent(
+        {
+          type: 'assistant',
+          uuid: `assistant-block-${index}`,
+          message: {
+            id: 'response-1',
+            content: [{ type: 'thinking', thinking }],
+          },
+        },
+        state,
+      );
+    });
+  });
+
+  const resetLines = tagLines(captured, '[BLOCK_RESET]');
+  const thinkingLines = tagLines(captured, '[THINKING_DELTA]');
+  const emitted = thinkingLines
+    .map((line) => JSON.parse(line.replace(/^\[THINKING_DELTA\]\s+/, '').trim()))
+    .join('');
+
+  assert.equal(resetLines.length, chunks.length - 1, 'each later normalized block needs one boundary');
+  assert.equal(thinkingLines.length, chunks.length);
+  assert.equal(emitted, chunks.join(''));
+});
+
+test('REGRESSION: assistant snapshots replaying stream thinking deltas are absorbed', () => {
+  const state = makeTurnState(true);
+  const chunks = ['A', 'B', 'C'];
+
+  const captured = captureStdout(() => {
+    chunks.forEach((thinking, index) => {
+      processStreamEvent(
+        {
+          type: 'stream_event',
+          event: {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'thinking_delta', thinking },
+          },
+        },
+        state,
+      );
+      processMessageContent(
+        {
+          type: 'assistant',
+          uuid: `assistant-block-${index}`,
+          message: {
+            id: 'response-1',
+            content: [{ type: 'thinking', thinking }],
+          },
+        },
+        state,
+      );
+    });
+  });
+
+  const thinkingLines = tagLines(captured, '[THINKING_DELTA]');
+  const emitted = thinkingLines
+    .map((line) => JSON.parse(line.replace(/^\[THINKING_DELTA\]\s+/, '').trim()))
+    .join('');
+
+  assert.equal(thinkingLines.length, chunks.length, 'snapshot replays must not emit duplicate deltas');
+  assert.equal(emitted, 'ABC');
+  assert.equal(tagLines(captured, '[BLOCK_RESET]').length, 0);
+});
+
 test('end-to-end: streaming pure-text response emits no [MESSAGE], no duplicate [CONTENT_DELTA]', () => {
   const state = makeTurnState(true);
 
@@ -1161,4 +1237,37 @@ test('REGRESSION (#1371) companion: snapshot path absorbs incoming === previous 
   // Exactly two stream deltas emitted; snapshot replay added nothing.
   assert.equal(deltaLines.length, 2, `snapshot replay must not emit; got ${JSON.stringify(deltaLines)}`);
   assert.equal(emitted, 'Hello world', `accumulated content must remain "Hello world"; got "${emitted}"`);
+});
+
+test('BLOCK_RESET: later content_block_start separates streamed thinking blocks', () => {
+  const state = makeTurnState(true);
+  const captured = captureStdout(() => {
+    for (const thinking of ['first', 'second']) {
+      processStreamEvent(
+        {
+          type: 'stream_event',
+          event: { type: 'content_block_start', index: 0, content_block: { type: 'thinking' } },
+        },
+        state,
+      );
+      processStreamEvent(
+        {
+          type: 'stream_event',
+          event: {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'thinking_delta', thinking },
+          },
+        },
+        state,
+      );
+    }
+  });
+
+  assert.equal(tagLines(captured, '[BLOCK_RESET]').length, 1);
+  assert.deepEqual(
+    tagLines(captured, '[THINKING_DELTA]').map((line) =>
+      JSON.parse(line.replace(/^\[THINKING_DELTA\]\s+/, '').trim())),
+    ['first', 'second'],
+  );
 });

@@ -11,6 +11,7 @@ import com.intellij.openapi.diagnostic.Logger;
  */
 public class MessageParser {
     private static final Logger LOG = Logger.getInstance(MessageParser.class);
+    private static final String NO_RESPONSE_REQUESTED = "No response requested.";
 
     /**
      * Parse a server-returned message.
@@ -43,6 +44,12 @@ public class MessageParser {
         // lives under "raw", is inspected the same way as a live SDK message; for live
         // messages resolveRawMessage returns msg unchanged, so this is a no-op there.
         if (shouldFilterCommandMessage(rawMessage, type)) {
+            return null;
+        }
+
+        // Claude Code uses this assistant placeholder for commands that do not need a response.
+        if ("assistant".equals(type)
+                && NO_RESPONSE_REQUESTED.equals(extractMessageContent(msg).trim())) {
             return null;
         }
 

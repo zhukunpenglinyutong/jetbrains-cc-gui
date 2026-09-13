@@ -12,8 +12,12 @@
         <action id="ClaudeCodeGUI.SendTerminalSelectionToInputAction"
                 class="com.github.claudecodegui.terminal.SendTerminalSelectionToInputAction"
                 icon="/icons/cc-gui-icon.svg">
-            <add-to-group group-id="Terminal.OutputContextMenu" anchor="last"/>
-            <add-to-group group-id="Terminal.PromptContextMenu" anchor="last"/>
+            <!-- Only the EditorPopupMenu is registered statically because it exists
+                 across all supported IDE builds. Terminal.OutputContextMenu and
+                 Terminal.PromptContextMenu were introduced in later IDE versions and
+                 are absent from 2023.3 (build 233), so registering them here raises a
+                 PluginException at startup. They are registered dynamically at runtime
+                 instead — see SendTerminalSelectionToInputAction.registerForTerminalContextMenu. -->
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
     </actions>

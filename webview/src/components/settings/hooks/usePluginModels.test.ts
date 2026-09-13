@@ -23,6 +23,7 @@ describe('usePluginModels', () => {
         {
           id: 'vendor/custom-claude',
           label: 'Custom Claude',
+          contextWindowTokens: 500_000,
           pricing: {
             inputCostPer1M: 0.2,
             outputCostPer1M: 0.8,
@@ -60,6 +61,21 @@ describe('usePluginModels', () => {
         },
       ],
     }));
+  });
+
+  it('drops stale context metadata when reading Claude custom models', () => {
+    localStorage.setItem(STORAGE_KEYS.CLAUDE_CUSTOM_MODELS, JSON.stringify([{
+      id: 'vendor/custom-claude',
+      label: 'Custom Claude',
+      contextWindowTokens: 500_000,
+    }]));
+
+    const { result } = renderHook(() => usePluginModels(STORAGE_KEYS.CLAUDE_CUSTOM_MODELS));
+
+    expect(result.current.models).toEqual([{
+      id: 'vendor/custom-claude',
+      label: 'Custom Claude',
+    }]);
   });
 
   it('keeps configured Claude model pricing when syncing user custom models', () => {
@@ -149,6 +165,33 @@ describe('usePluginModels', () => {
     const expectedModels = [
       { id: 'valid-codex', label: 'Valid Codex', pricing: { inputCostPer1M: 0.1 } },
     ];
+
+    expect(result.current.models).toEqual(expectedModels);
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEYS.CODEX_CUSTOM_MODELS) || '[]')).toEqual(expectedModels);
+    expect(sendBridgeEventMock).toHaveBeenLastCalledWith('set_custom_model_pricing', JSON.stringify({
+      provider: 'codex',
+      models: expectedModels,
+    }));
+  });
+
+  it('persists and syncs a custom context window alongside pricing', () => {
+    const { result } = renderHook(() => usePluginModels(STORAGE_KEYS.CODEX_CUSTOM_MODELS));
+
+    act(() => {
+      result.current.updateModels([{
+        id: 'vendor/context-model',
+        label: 'Context Model',
+        contextWindowTokens: 500_000,
+        pricing: { inputCostPer1M: 0.1 },
+      }]);
+    });
+
+    const expectedModels = [{
+      id: 'vendor/context-model',
+      label: 'Context Model',
+      contextWindowTokens: 500_000,
+      pricing: { inputCostPer1M: 0.1 },
+    }];
 
     expect(result.current.models).toEqual(expectedModels);
     expect(JSON.parse(localStorage.getItem(STORAGE_KEYS.CODEX_CUSTOM_MODELS) || '[]')).toEqual(expectedModels);

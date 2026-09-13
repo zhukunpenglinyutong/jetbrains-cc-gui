@@ -1,4 +1,9 @@
 import { useEffect, useState } from 'react';
+import {
+  applyChatBarThemeColor,
+  CHAT_BAR_COLOR_STORAGE_KEY,
+  isValidHexColor,
+} from '../utils/chatBarTheme';
 
 /**
  * Manages IDE theme initialization and synchronization.
@@ -56,7 +61,6 @@ export function useThemeInit() {
     document.documentElement.style.setProperty('--font-scale', scale.toString());
 
     // Initialize chat background color (validate hex format before applying)
-    const isValidHexColor = (c: string) => /^#[0-9a-fA-F]{6}$/.test(c);
     const savedChatBgColor = localStorage.getItem('chatBgColor');
     if (savedChatBgColor && isValidHexColor(savedChatBgColor)) {
       document.documentElement.style.setProperty('--bg-chat', savedChatBgColor);
@@ -67,6 +71,10 @@ export function useThemeInit() {
     if (savedUserMsgColor && isValidHexColor(savedUserMsgColor)) {
       document.documentElement.style.setProperty('--color-message-user-bg', savedUserMsgColor);
     }
+
+    // Initialize the shared chat header and status bar theme color
+    const savedChatBarColor = localStorage.getItem(CHAT_BAR_COLOR_STORAGE_KEY) || '';
+    applyChatBarThemeColor(savedChatBarColor);
 
     // Apply the user's explicit theme choice (light/dark) first
     const savedTheme = localStorage.getItem('theme');

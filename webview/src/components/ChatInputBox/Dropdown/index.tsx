@@ -164,10 +164,14 @@ export const CompletionDropdown = ({
       onClose={onClose}
     >
       <div ref={listRef}>
-        {loading ? (
-          <div className="dropdown-loading">{t('chat.loadingDropdown')}</div>
-        ) : items.length === 0 ? (
-          <div className="dropdown-empty">{emptyText || t('chat.loadingDropdown')}</div>
+        {/* Keep previous items visible while loading — replacing with a spinner
+            causes the "flash then empty" UX on every keystroke of @ search. */}
+        {items.length === 0 ? (
+          <div className={loading ? 'dropdown-loading' : 'dropdown-empty'}>
+            {loading
+              ? t('chat.loadingDropdown')
+              : (emptyText || t('chat.loadingDropdown'))}
+          </div>
         ) : (
           items.map((item) => {
             // Calculate index within selectable items

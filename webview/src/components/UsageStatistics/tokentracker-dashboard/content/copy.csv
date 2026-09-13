@@ -810,6 +810,7 @@ shared.action.undo,shared,*,Shared,action_undo,"Undo",,active
 shared.action.dismiss,shared,*,Shared,action_dismiss,"Dismiss",,active
 shared.action.cancel,shared,*,Shared,action_cancel,"Cancel",,active
 shared.action.apply,shared,*,Shared,action_apply,"Apply",,active
+shared.action.clear,shared,*,Shared,action_clear,"Clear",,active
 skills.empty.my,ui,SkillsPage,SkillsPage,empty_my,"No skills yet. Open Discover to search and install.",,active
 skills.empty.my_cta,ui,SkillsPage,SkillsPage,empty_my_cta,"Browse",,active
 skills.empty.browse,ui,SkillsPage,SkillsPage,empty_browse,"No skills found for this source.",,active

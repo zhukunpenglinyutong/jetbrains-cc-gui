@@ -10,8 +10,12 @@ import type { MutableRefObject } from 'react';
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import { downloadJSON } from '../../../utils/exportMarkdown';
 import { releaseSessionTransition } from '../sessionTransition';
-import { drainAndRequestDependencyStatus } from '../settingsBootstrap';
+import { drainPendingDependencyStatus } from '../settingsBootstrap';
 import { sendBridgeEvent } from '../../../utils/bridge';
+import {
+  isDependencyStatusResponse,
+  settleDependencyStatusRequest,
+} from '../../../utils/bridgeStartup';
 
 // Matches session-titles-service.cjs#updateTitle, which rejects longer titles.
 const CUSTOM_TITLE_MAX_LENGTH = 50;
@@ -25,6 +29,7 @@ export function registerSessionAndSdkCallbacks(
     setCurrentSessionId,
     setSdkStatus,
     setSdkStatusLoaded,
+    setSdkStatusError,
     setIsRewinding,
     setRewindDialogOpen,
     setCurrentRewindRequest,
@@ -92,10 +97,25 @@ export function registerSessionAndSdkCallbacks(
   window.updateDependencyStatus = (jsonStr: string) => {
     try {
       const data = JSON.parse(jsonStr);
+      if (!isDependencyStatusResponse(data)) {
+        console.error('[Frontend] Dependency status request failed:', data);
+        const error = typeof data.error === 'string' && data.error.trim()
+          ? data.error
+          : 'dependency_status_unavailable';
+        setSdkStatusLoaded(false);
+        setSdkStatusError(error);
+        settleDependencyStatusRequest('error');
+        return;
+      }
       setSdkStatus(data);
       setSdkStatusLoaded(true);
+      setSdkStatusError(null);
+      settleDependencyStatusRequest('ready');
     } catch (error) {
       console.error('[Frontend] Failed to parse dependency status:', error);
+      setSdkStatusLoaded(false);
+      setSdkStatusError(error instanceof Error ? error.message : 'invalid_dependency_status');
+      settleDependencyStatusRequest('error');
     }
     if (
       originalUpdateDependencyStatus &&
@@ -107,7 +127,7 @@ export function registerSessionAndSdkCallbacks(
   (window as unknown as Record<string, unknown>)._appUpdateDependencyStatus =
     window.updateDependencyStatus;
 
-  drainAndRequestDependencyStatus();
+  drainPendingDependencyStatus();
 
   // =========================================================================
   // Rewind Result Callback

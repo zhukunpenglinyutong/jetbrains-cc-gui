@@ -22,6 +22,15 @@ function createQueryFactory() {
   return {
     runtimes,
     queryFn({ prompt, options }) {
+      // A real SDK query stream blocks on next() while idle and only ends when
+      // the runtime is torn down. Returning {done:true} immediately makes the
+      // perpetual reader treat the stream as ended out-of-band and evict the
+      // runtime via disposeRuntime - which races acquireRuntime's ownership
+      // check (the runtime can be closed between createRuntime and the assert).
+      // Block on a promise that settles only when close() runs, so the reader
+      // idles like the real SDK between turns.
+      let closeReject;
+      const idle = new Promise((_, reject) => { closeReject = reject; });
       const runtime = {
         prompt,
         options,
@@ -31,9 +40,10 @@ function createQueryFactory() {
         setMaxThinkingTokens: async () => {},
         close() {
           this.closed = true;
+          closeReject(new Error('runtime closed'));
         },
-        async next() {
-          return { done: true, value: undefined };
+        next() {
+          return idle;
         }
       };
       runtimes.push(runtime);
@@ -351,6 +361,9 @@ test('abortCurrentTurn still disposes an active runtime explicitly', async () =>
   await __testing.abortCurrentTurn();
   nextDeferred.reject(new Error('runtime terminated'));
 
-  await assert.rejects(turnPromise, /runtime terminated/);
+  // abortCurrentTurn fails the turnSink with 'Turn aborted' before the reader's
+  // next() rejects, so the turn promise settles on the abort signal rather than
+  // the downstream 'runtime terminated' rejection.
+  await assert.rejects(turnPromise, /Turn aborted/);
   assert.equal(runtime.closed, true);
 });

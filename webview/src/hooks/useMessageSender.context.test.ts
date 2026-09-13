@@ -14,7 +14,7 @@ describe('useMessageSender - /context command', () => {
     reasoningEffort: 'high',
     codexFastMode: 'normal',
     selectedAgent: null,
-    sdkStatusLoaded: true,
+    sdkStatusLoading: false,
     currentSdkInstalled: true,
     sentAttachmentsRef: { current: new Map() },
     chatInputRef: { current: null },

@@ -7,7 +7,13 @@ import org.junit.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -15,6 +21,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class PermissionServiceRefactorTest {
+
+    private static final long TWO_HOURS_MS = TimeUnit.HOURS.toMillis(2);
+    private static final long THREE_HOURS_MS = TimeUnit.HOURS.toMillis(3);
 
     @Test
     public void decisionStoreRemembersToolAndParameterScopesIndependently() {
@@ -104,7 +113,11 @@ public class PermissionServiceRefactorTest {
             Path ownResponse = Files.writeString(permissionDir.resolve("response-session-a-1.json"), "{}");
             Path ownRequest = Files.writeString(permissionDir.resolve("request-session-a-2.json"), "{}");
             Path ownAsk = Files.writeString(permissionDir.resolve("ask-user-question-session-a-3.json"), "{}");
+            Path ownAskResponse = Files.writeString(
+                    permissionDir.resolve("ask-user-question-response-session-a-3.json"), "{}");
             Path ownPlan = Files.writeString(permissionDir.resolve("plan-approval-session-a-4.json"), "{}");
+            Path ownPlanResponse = Files.writeString(
+                    permissionDir.resolve("plan-approval-response-session-a-4.json"), "{}");
             Path otherSession = Files.writeString(permissionDir.resolve("response-session-b-1.json"), "{}");
             Path unrelated = Files.writeString(permissionDir.resolve("notes.txt"), "keep");
 
@@ -113,10 +126,135 @@ public class PermissionServiceRefactorTest {
             assertFalse(Files.exists(ownResponse));
             assertFalse(Files.exists(ownRequest));
             assertFalse(Files.exists(ownAsk));
+            assertFalse(Files.exists(ownAskResponse));
             assertFalse(Files.exists(ownPlan));
+            assertFalse(Files.exists(ownPlanResponse));
             assertTrue(Files.exists(otherSession));
             assertTrue(Files.exists(unrelated));
         } finally {
+            deleteDirectory(permissionDir);
+        }
+    }
+
+    @Test
+    public void fileProtocolStaleCleanupKeepsFreshFilesAndRemovesExpiredOnes() throws IOException {
+        Path permissionDir = Files.createTempDirectory("permission-protocol-stale-cleanup");
+        try {
+            PermissionFileProtocol protocol = new PermissionFileProtocol(
+                    permissionDir,
+                    "session-a",
+                    new Gson(),
+                    (tag, message) -> {
+                    }
+            );
+
+            long now = System.currentTimeMillis();
+            Path freshAsk = Files.writeString(
+                    permissionDir.resolve("ask-user-question-session-a-fresh.json"), "{\"fresh\":true}");
+            Path staleAsk = Files.writeString(
+                    permissionDir.resolve("ask-user-question-session-a-stale.json"), "{\"stale\":true}");
+            Path staleOtherSession = Files.writeString(
+                    permissionDir.resolve("ask-user-question-session-b-stale.json"), "{}");
+            Files.setLastModifiedTime(freshAsk, FileTime.fromMillis(now));
+            Files.setLastModifiedTime(staleAsk, FileTime.fromMillis(now - THREE_HOURS_MS));
+            Files.setLastModifiedTime(staleOtherSession, FileTime.fromMillis(now - THREE_HOURS_MS));
+
+            protocol.cleanupStaleSessionFiles(TWO_HOURS_MS);
+
+            assertTrue("fresh request must survive watcher-start stale cleanup", Files.exists(freshAsk));
+            assertFalse("expired request for this session must be removed", Files.exists(staleAsk));
+            assertTrue("other session files must never be touched", Files.exists(staleOtherSession));
+        } finally {
+            deleteDirectory(permissionDir);
+        }
+    }
+
+    @Test
+    public void fileProtocolStaleCleanupWithNonPositiveAgeIsNoOp() throws IOException {
+        Path permissionDir = Files.createTempDirectory("permission-protocol-stale-noop");
+        try {
+            PermissionFileProtocol protocol = new PermissionFileProtocol(
+                    permissionDir,
+                    "session-a",
+                    new Gson(),
+                    (tag, message) -> {
+                    }
+            );
+            Path ask = Files.writeString(
+                    permissionDir.resolve("ask-user-question-session-a-1.json"), "{}");
+            Files.setLastModifiedTime(ask, FileTime.fromMillis(System.currentTimeMillis() - THREE_HOURS_MS));
+
+            protocol.cleanupStaleSessionFiles(0L);
+            protocol.cleanupStaleSessionFiles(-1L);
+
+            assertTrue(Files.exists(ask));
+        } finally {
+            deleteDirectory(permissionDir);
+        }
+    }
+
+    @Test
+    public void watcherRestartConsumesRequestCreatedBeforeRestart() throws Exception {
+        Path permissionDir = Files.createTempDirectory("permission-watcher-restart");
+        PermissionRequestWatcher watcher = null;
+        try {
+            PermissionFileProtocol protocol = new PermissionFileProtocol(
+                    permissionDir,
+                    "session-a",
+                    new Gson(),
+                    (tag, message) -> {
+                    }
+            );
+
+            // Simulate Node writing the request before the Java watcher (re)starts.
+            Path preStartAsk = Files.writeString(
+                    permissionDir.resolve("ask-user-question-session-a-pre-start.json"),
+                    "{\"requestId\":\"pre-start\"}"
+            );
+            assertTrue(Files.exists(preStartAsk));
+
+            CountDownLatch consumed = new CountDownLatch(1);
+            AtomicReference<Path> seen = new AtomicReference<>();
+            List<Path> seenPaths = new ArrayList<>();
+
+            watcher = new PermissionRequestWatcher(
+                    permissionDir,
+                    "session-a",
+                    protocol,
+                    (tag, message) -> {
+                    }
+            );
+            watcher.start(new PermissionRequestWatcher.RequestHandler() {
+                @Override
+                public void handlePermissionRequest(Path requestFile) {
+                }
+
+                @Override
+                public void handleAskUserQuestionRequest(Path requestFile) {
+                    seenPaths.add(requestFile);
+                    seen.set(requestFile);
+                    consumed.countDown();
+                }
+
+                @Override
+                public void handlePlanApprovalRequest(Path requestFile) {
+                }
+            });
+
+            assertTrue(
+                    "watcher must consume a request that existed before start()",
+                    consumed.await(5, TimeUnit.SECONDS)
+            );
+            assertNotNull(seen.get());
+            assertTrue(seen.get().getFileName().toString().contains("pre-start"));
+            assertTrue("pre-start request file must still exist until handler deletes it",
+                    Files.exists(preStartAsk));
+            assertFalse("stale-only start cleanup must not wipe a just-written request",
+                    seenPaths.isEmpty());
+        } finally {
+            if (watcher != null) {
+                watcher.stop();
+            }
             deleteDirectory(permissionDir);
         }
     }

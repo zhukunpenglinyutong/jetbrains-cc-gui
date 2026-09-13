@@ -57,7 +57,8 @@
   margin-top: 2px;
 }
 
-.modelItemPricing {
+.modelItemPricing,
+.modelItemMetadata {
   font-size: 11px;
   color: var(--text-secondary);
   margin-top: 4px;
@@ -99,6 +100,24 @@
   color: var(--error-color, #f44336);
   font-size: 12px;
   margin-bottom: 8px;
+}
+
+.contextWindowField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.contextWindowField label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.fieldHint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
 }
 
 .pricingSection {

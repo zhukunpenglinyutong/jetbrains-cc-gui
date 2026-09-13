@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChangelogEntry } from '../version/changelog';
-
+import { openBrowser, GITHUB_REPO_URL } from '../utils/bridge';
 interface ChangelogDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -10,20 +10,52 @@ interface ChangelogDialogProps {
 }
 
 /**
- * Resolve content to display. Shows both EN and ZH when both exist,
- * otherwise shows whichever is available.
+ * Whether the UI language should prefer Chinese changelog content first.
+ * Covers simplified (`zh`) and traditional (`zh-TW`) locales.
  */
-function resolveContent(entry: ChangelogEntry): string[] {
+function prefersChineseChangelog(language: string | undefined): boolean {
+  if (!language) return false;
+  return language === 'zh' || language === 'zh-TW' || language.startsWith('zh-') || language.startsWith('zh_');
+}
+
+/**
+ * Resolve content to display. Shows both EN and ZH when both exist,
+ * ordered by the active UI language (Chinese first for zh / zh-TW).
+ */
+function resolveContent(entry: ChangelogEntry, language?: string): string[] {
   const { en, zh } = entry.content;
   const parts: string[] = [];
-  if (en) parts.push(en);
-  if (zh) parts.push(zh);
+  if (prefersChineseChangelog(language)) {
+    if (zh) parts.push(zh);
+    if (en) parts.push(en);
+  } else {
+    if (en) parts.push(en);
+    if (zh) parts.push(zh);
+  }
   return parts;
+}
+
+const INLINE_CODE_RE = /`([^`]+)`/g;
+const BOLD_ITALIC_RE = /\*\*\*([^*]+)\*\*\*/g;
+const BOLD_RE = /\*\*([^*]+)\*\*/g;
+const ITALIC_RE = /\*([^*]+)\*/g;
+
+/**
+ * Apply inline markdown formatting: inline code, bold, italic, and bold-italic.
+ * Must run after HTML escaping, which preserves `*` and backticks. The emphasis
+ * patterns are matched longest-first so `***x***` is not swallowed by `**`/`*`.
+ */
+function renderInline(text: string): string {
+  return escapeHtml(text)
+    .replace(INLINE_CODE_RE, '<code>$1</code>')
+    .replace(BOLD_ITALIC_RE, '<strong><em>$1</em></strong>')
+    .replace(BOLD_RE, '<strong>$1</strong>')
+    .replace(ITALIC_RE, '<em>$1</em>');
 }
 
 /**
  * Simple markdown-to-HTML renderer for changelog content.
- * Handles: headings, bullet lists, bold, inline code, and emoji.
+ * Handles: headings, bullet lists, bold, italic, inline code, and emoji.
  */
 function renderChangelogMarkdown(text: string): string {
   if (!text) return '';
@@ -49,11 +81,7 @@ function renderChangelogMarkdown(text: string): string {
         htmlParts.push('<ul>');
         inList = true;
       }
-      const itemText = escapeHtml(trimmed.substring(2)).replace(
-        /`([^`]+)`/g,
-        '<code>$1</code>'
-      );
-      htmlParts.push(`<li>${itemText}</li>`);
+      htmlParts.push(`<li>${renderInline(trimmed.substring(2))}</li>`);
       continue;
     }
 
@@ -80,7 +108,7 @@ function renderChangelogMarkdown(text: string): string {
     }
 
     // Plain text
-    htmlParts.push(`<p>${escapeHtml(trimmed)}</p>`);
+    htmlParts.push(`<p>${renderInline(trimmed)}</p>`);
   }
 
   if (inList) {
@@ -99,7 +127,7 @@ function escapeHtml(text: string): string {
 }
 
 const ChangelogDialog = ({ isOpen, onClose, entries, initialPage = 0 }: ChangelogDialogProps) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [currentPage, setCurrentPage] = useState(initialPage);
 
   // Reset page when dialog opens
@@ -138,7 +166,7 @@ const ChangelogDialog = ({ isOpen, onClose, entries, initialPage = 0 }: Changelo
   if (!isOpen || entries.length === 0) return null;
 
   const entry = entries[currentPage];
-  const contentParts = resolveContent(entry);
+  const contentParts = resolveContent(entry, i18n.language);
   const totalPages = entries.length;
   const hasPrev = currentPage > 0;
   const hasNext = currentPage < totalPages - 1;
@@ -155,6 +183,22 @@ const ChangelogDialog = ({ isOpen, onClose, entries, initialPage = 0 }: Changelo
           </div>
           <button className="changelog-close-btn" onClick={onClose}>
             <span className="codicon codicon-close" />
+          </button>
+        </div>
+
+        {/* Open source banner (reuses the chat header banner styles) */}
+        <div className="open-source-banner">
+          <span className="banner-text">{t('chat.openSourceBanner')}</span>
+          <button
+            type="button"
+            className="banner-star"
+            aria-label={t('chat.openSourceBannerStarAria')}
+            onClick={() => openBrowser(GITHUB_REPO_URL)}
+          >
+            <svg className="star-icon" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+              <path d="M12 2.5l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.11-6.46-4.7-4.58 6.49-.94z" />
+            </svg>
+            <span className="banner-star-text">{t('chat.openSourceBannerStar')}</span>
           </button>
         </div>
 

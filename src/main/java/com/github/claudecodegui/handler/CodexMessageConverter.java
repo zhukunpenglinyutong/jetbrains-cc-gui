@@ -639,6 +639,7 @@ public class CodexMessageConverter {
             output = safeGetAsString(outputElement, "");
         }
         toolResult.addProperty("content", output);
+        toolResult.addProperty("is_error", isExplicitToolError(payload, outputElement, output));
 
         JsonArray content = new JsonArray();
         content.add(toolResult);
@@ -655,6 +656,29 @@ public class CodexMessageConverter {
         }
 
         return frontendMsg;
+    }
+
+    private static boolean isExplicitToolError(JsonObject payload, JsonElement outputElement, String output) {
+        if (hasErrorStatus(payload)
+                || (outputElement != null && outputElement.isJsonObject()
+                && hasErrorStatus(outputElement.getAsJsonObject()))) {
+            return true;
+        }
+        if (output == null) {
+            return false;
+        }
+        String normalized = output.stripLeading().toLowerCase(Locale.ROOT);
+        return normalized.startsWith("error:")
+                || normalized.startsWith("failed to parse")
+                || normalized.startsWith("failed-to-parse")
+                || normalized.startsWith("permission denied")
+                || normalized.startsWith("permission-denied")
+                || normalized.startsWith("command denied")
+                || normalized.startsWith("command-denied");
+    }
+
+    private static boolean hasErrorStatus(JsonObject object) {
+        return "error".equalsIgnoreCase(safeGetAsString(object.get("status"), ""));
     }
 
     /**

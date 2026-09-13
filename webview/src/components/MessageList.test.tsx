@@ -1,8 +1,9 @@
 import { act, fireEvent, render, screen, cleanup } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createRef, useState } from 'react';
+import { createRef, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../types';
 import { MessageList } from './MessageList';
+import { reconcileMessageKeys, type MessageKeySnapshot } from '../utils/messageUtils';
 
 // Mock MessageItem to keep this suite focused on list-level paging behaviour.
 vi.mock('./MessageItem', () => ({
@@ -90,12 +91,46 @@ const noopGetText = (m: ClaudeMessage) => m.content ?? '';
 const noopGetBlocks = (_m: ClaudeMessage): ClaudeContentBlock[] => [];
 const noopFindToolResult = (_id: string | undefined, _i: number): ToolResultBlock | null => null;
 const noopExtractMd = (_m: ClaudeMessage) => '';
+const keysFor = (messages: ClaudeMessage[]) =>
+  reconcileMessageKeys(messages, undefined, 'test-session').keys;
+
+function StableMessageList({
+  messages,
+}: {
+  messages: ClaudeMessage[];
+}) {
+  const previousRef = useRef<MessageKeySnapshot | undefined>(undefined);
+  const snapshot = useMemo(
+    () => reconcileMessageKeys(messages, previousRef.current, 'test-session'),
+    [messages],
+  );
+  useLayoutEffect(() => {
+    previousRef.current = snapshot;
+  }, [snapshot]);
+  return (
+    <MessageList
+      messages={messages}
+      messageKeys={snapshot.keys}
+      streamingActive
+      isThinking
+      loading={false}
+      loadingStartTime={null}
+      t={t}
+      getMessageText={noopGetText}
+      getContentBlocks={noopGetBlocks}
+      findToolResult={noopFindToolResult}
+      extractMarkdownContent={noopExtractMd}
+      messagesEndRef={createRef<HTMLDivElement>()}
+    />
+  );
+}
 
 function renderList(messages: ClaudeMessage[]) {
   const endRef = createRef<HTMLDivElement>();
   return render(
     <MessageList
       messages={messages}
+      messageKeys={keysFor(messages)}
       streamingActive={false}
       isThinking={false}
       loading={false}
@@ -182,6 +217,7 @@ describe('MessageList paged collapse', () => {
     const { rerender, container } = render(
       <MessageList
         messages={messages}
+        messageKeys={keysFor(messages)}
         streamingActive={false}
         isThinking={false}
         loading={false}
@@ -207,6 +243,7 @@ describe('MessageList paged collapse', () => {
     rerender(
       <MessageList
         messages={makeMessages(50, 'session2')}
+        messageKeys={keysFor(makeMessages(50, 'session2'))}
         streamingActive={false}
         isThinking={false}
         loading={false}
@@ -236,6 +273,7 @@ describe('MessageList paged collapse', () => {
     const { container, rerender } = render(
       <MessageList
         messages={firstSession}
+        messageKeys={keysFor(firstSession)}
         streamingActive={false}
         isThinking={false}
         loading={false}
@@ -255,6 +293,7 @@ describe('MessageList paged collapse', () => {
     rerender(
       <MessageList
         messages={secondSession}
+        messageKeys={keysFor(secondSession)}
         streamingActive={false}
         isThinking={false}
         loading={false}
@@ -278,6 +317,7 @@ describe('MessageList paged collapse', () => {
     const { container } = render(
       <MessageList
         messages={makeMessages(20)}
+        messageKeys={keysFor(makeMessages(20))}
         streamingActive={false}
         isThinking={false}
         loading={false}
@@ -337,22 +377,7 @@ describe('MessageList container behaviour', () => {
         },
       },
     };
-    const endRef = createRef<HTMLDivElement>();
-    const renderMessageList = (messages: ClaudeMessage[]) => (
-      <MessageList
-        messages={messages}
-        streamingActive
-        isThinking
-        loading={false}
-        loadingStartTime={null}
-        t={t}
-        getMessageText={noopGetText}
-        getContentBlocks={noopGetBlocks}
-        findToolResult={noopFindToolResult}
-        extractMarkdownContent={noopExtractMd}
-        messagesEndRef={endRef}
-      />
-    );
+    const renderMessageList = (messages: ClaudeMessage[]) => <StableMessageList messages={messages} />;
     const { rerender } = render(renderMessageList([initialMessage]));
     const liveItem = screen.getByTestId('message-item');
 
@@ -374,13 +399,13 @@ describe('MessageList container behaviour', () => {
     rerender(renderMessageList([toolSnapshot]));
 
     expect(screen.getByTestId('message-item')).toBe(liveItem);
-    expect(liveItem.getAttribute('data-key')).toBe('turn-42');
+    expect(liveItem.getAttribute('data-key')).toBe('test-session:turn-42');
     expect(liveItem.getAttribute('data-local-state')).toBe('preserved');
 
     rerender(renderMessageList([{ ...toolSnapshot, __turnId: undefined }]));
 
     expect(screen.getByTestId('message-item')).toBe(liveItem);
-    expect(liveItem.getAttribute('data-key')).toBe('turn-42');
+    expect(liveItem.getAttribute('data-key')).toBe('test-session:turn-42');
     expect(liveItem.getAttribute('data-local-state')).toBe('preserved');
   });
 
@@ -396,22 +421,7 @@ describe('MessageList container behaviour', () => {
         },
       },
     };
-    const endRef = createRef<HTMLDivElement>();
-    const renderMessageList = (message: ClaudeMessage) => (
-      <MessageList
-        messages={[message]}
-        streamingActive
-        isThinking
-        loading={false}
-        loadingStartTime={null}
-        t={t}
-        getMessageText={noopGetText}
-        getContentBlocks={noopGetBlocks}
-        findToolResult={noopFindToolResult}
-        extractMarkdownContent={noopExtractMd}
-        messagesEndRef={endRef}
-      />
-    );
+    const renderMessageList = (message: ClaudeMessage) => <StableMessageList messages={[message]} />;
     const { rerender } = render(renderMessageList(replayMessage));
     const replayItem = screen.getByTestId('message-item');
 
@@ -419,7 +429,7 @@ describe('MessageList container behaviour', () => {
     rerender(renderMessageList({ ...replayMessage, isStreaming: true, __turnId: 43 }));
 
     expect(screen.getByTestId('message-item')).toBe(replayItem);
-    expect(replayItem.getAttribute('data-key')).toBe('replay-assistant-uuid');
+    expect(replayItem.getAttribute('data-key')).toBe('test-session:replay-assistant-uuid');
     expect(replayItem.getAttribute('data-local-state')).toBe('preserved');
   });
 
@@ -437,6 +447,7 @@ describe('MessageList container behaviour', () => {
     render(
       <MessageList
         messages={makeMessages(3)}
+        messageKeys={keysFor(makeMessages(3))}
         streamingActive={false}
         isThinking={false}
         loading={true}

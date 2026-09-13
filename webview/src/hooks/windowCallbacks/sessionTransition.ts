@@ -81,11 +81,20 @@ export const buildResetTransientUiState = (opts: ResetTransientUiStateOptions) =
 
 /**
  * Release the session transition guard flags set by beginSessionTransition
- * (useSessionManagement).
+ * (useSessionManagement). Flushes any history snapshot that arrived while the
+ * guard was active so updateMessages racing the transition is not lost.
  */
 export const releaseSessionTransition = (): void => {
   if (window.__sessionTransitioning) {
     window.__sessionTransitioning = false;
   }
   window.__sessionTransitionToken = null;
+  if (typeof window.__flushDeferredTransitionUpdateMessages === 'function') {
+    window.__flushDeferredTransitionUpdateMessages();
+  }
+};
+
+/** Drop a deferred transition snapshot (new transition / clearMessages). */
+export const clearDeferredTransitionUpdateMessages = (): void => {
+  window.__deferredTransitionUpdateMessages = null;
 };

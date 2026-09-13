@@ -5,8 +5,10 @@ import type { ProviderConfig, CodexProviderConfig } from '../../../types/provide
 import type { AgentConfig } from '../../../types/agent';
 import type { PromptConfig } from '../../../types/prompt';
 import type { CommitAiConfig } from '../../../types/aiFeatureConfig';
+import { normalizeAiFeatureConfig, DEFAULT_COMMIT_AI_CONFIG } from '../../../types/aiFeatureConfig';
 import type { UiFontConfig, CodeFontConfig } from './useSettingsBasicActions';
 import type { PromptEnhancerConfig } from '../../../types/promptEnhancer';
+import { normalizePromptEnhancerConfig } from '../../../types/promptEnhancer';
 import type { AlertType } from '../../AlertDialog';
 import type { ToastMessage } from '../../Toast';
 import {
@@ -15,12 +17,43 @@ import {
   subscribeCodexProviderList,
   subscribeProviderList,
 } from '../../../utils/runtimeProviderCapabilities';
+import { scheduleBatchedBridgeRequests } from './scheduleBatchedBridgeRequests';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
     window.sendToJava(message);
   }
 };
+
+/**
+ * Settings bootstrap bridge messages, ordered by first-paint priority.
+ * Batched on open so CEF/Java is not hit with ~20 messages in one frame.
+ */
+export const SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES = [
+  // Environment + permissions (visible / used early on basic tab)
+  'get_node_path:',
+  'get_claude_cli_path:',
+  'get_working_directory:',
+  'get_streaming_enabled:',
+  'get_codex_sandbox_mode:',
+  'get_permission_dialog_timeout:',
+  // Appearance fonts
+  'get_editor_font_config:',
+  'get_ui_font_config:',
+  'get_code_font_config:',
+  // Behavior / feature toggles (basic tab sub-views)
+  'get_sound_notification_config:',
+  'get_commit_generation_enabled:',
+  'get_ai_title_generation_enabled:',
+  'get_status_bar_widget_enabled:',
+  'get_task_completion_notification_enabled:',
+  'get_ask_user_question_notification_enabled:',
+  'get_system_notification_only_when_unfocused:',
+  'get_ask_user_question_sound_notification_enabled:',
+  // NOTE: commit prompt / commit AI / prompt-enhancer configs are intentionally
+  // NOT bootstrapped here. Their handlers probe CLI availability (spawn processes)
+  // on the JCEF UI thread and freeze Settings until complete. Load on tab open.
+] as const;
 
 export interface SettingsWindowCallbacksDeps {
   // State setters
@@ -54,6 +87,8 @@ export interface SettingsWindowCallbacksDeps {
   setStatusBarWidgetEnabled?: (enabled: boolean) => void;
   setTaskCompletionNotificationEnabled?: (enabled: boolean) => void;
   setAskUserQuestionNotificationEnabled?: (enabled: boolean) => void;
+  setSystemNotificationOnlyWhenUnfocused?: (enabled: boolean) => void;
+  setAskUserQuestionSoundNotificationEnabled?: (enabled: boolean) => void;
   // Sound notification setters
   setSoundNotificationEnabled?: (enabled: boolean) => void;
   setSoundOnlyWhenUnfocused?: (enabled: boolean) => void;
@@ -297,7 +332,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.updatePromptEnhancerConfig = (jsonStr: string) => {
       try {
         const data = JSON.parse(jsonStr);
-        d().setPromptEnhancerConfig(data);
+        d().setPromptEnhancerConfig(normalizePromptEnhancerConfig(data));
       } catch (error) {
         console.error('[SettingsView] Failed to parse prompt enhancer config:', error);
       }
@@ -306,7 +341,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     window.updateCommitAiConfig = (jsonStr: string) => {
       try {
         const data = JSON.parse(jsonStr);
-        d().setCommitAiConfig(data);
+        d().setCommitAiConfig(normalizeAiFeatureConfig(data, DEFAULT_COMMIT_AI_CONFIG));
       } catch (error) {
         console.error('[SettingsView] Failed to parse commit AI config:', error);
       }
@@ -375,6 +410,26 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         d().setAskUserQuestionNotificationEnabled?.(data.askUserQuestionNotificationEnabled ?? false);
       } catch (error) {
         console.error('[SettingsView] Failed to parse ask user question notification config:', error);
+      }
+    };
+
+    // System notification focus gate config callback (default false)
+    window.updateSystemNotificationOnlyWhenUnfocused = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setSystemNotificationOnlyWhenUnfocused?.(data.systemNotificationOnlyWhenUnfocused ?? false);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse system notification focus config:', error);
+      }
+    };
+
+    // AskUserQuestion reminder sound notification config callback (opt-in feature, default false)
+    window.updateAskUserQuestionSoundNotificationEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setAskUserQuestionSoundNotificationEnabled?.(data.askUserQuestionSoundNotificationEnabled ?? false);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse ask user question sound notification config:', error);
       }
     };
 
@@ -517,32 +572,18 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
-    // Initial data loading
-    d().loadProviders();
-    d().loadCodexProviders();
-    d().loadAgents();
-    // Note: loadPrompts is now handled by PromptSection component
-    d().loadPrompts?.();
-    sendToJava('get_node_path:');
-    sendToJava('get_claude_cli_path:');
-    sendToJava('get_working_directory:');
-    sendToJava('get_editor_font_config:');
-    sendToJava('get_ui_font_config:');
-    sendToJava('get_code_font_config:');
-    sendToJava('get_streaming_enabled:');
-    sendToJava('get_codex_sandbox_mode:');
-    sendToJava('get_commit_prompt:');
-    sendToJava('get_commit_ai_config:');
-    sendToJava('get_prompt_enhancer_config:');
-    sendToJava('get_sound_notification_config:');
-    sendToJava('get_commit_generation_enabled:');
-    sendToJava('get_ai_title_generation_enabled:');
-    sendToJava('get_status_bar_widget_enabled:');
-    sendToJava('get_task_completion_notification_enabled:');
-    sendToJava('get_ask_user_question_notification_enabled:');
-    sendToJava('get_permission_dialog_timeout:');
+    // Initial data loading for the default (basic) settings surface only.
+    // Provider / agent / prompt lists are fetched when their tabs first mount.
+    // Bootstrap messages are batched so open-settings does not stampede CEF.
+    const bootstrapRequests = scheduleBatchedBridgeRequests({
+      messages: SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES,
+      batchSize: 5,
+      batchDelayMs: 16,
+      send: sendToJava,
+    });
 
     return () => {
+      bootstrapRequests.cancel();
       d().cleanupAgentsTimeout();
       d().cleanupPromptsTimeout?.();
 
@@ -578,6 +619,8 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateStatusBarWidgetEnabled = undefined;
       window.updateTaskCompletionNotificationEnabled = undefined;
       window.updateAskUserQuestionNotificationEnabled = undefined;
+      window.updateSystemNotificationOnlyWhenUnfocused = undefined;
+      window.updateAskUserQuestionSoundNotificationEnabled = undefined;
       window.updateAgents = previousUpdateAgents;
       window.agentOperationResult = undefined;
       window.agentImportPreviewResult = undefined;

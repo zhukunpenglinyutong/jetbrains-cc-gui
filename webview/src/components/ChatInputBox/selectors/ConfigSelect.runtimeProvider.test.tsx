@@ -181,4 +181,15 @@ describe('ConfigSelect runtime provider submenu', () => {
       expect(dropdown?.style.right).toBe('100%');
     });
   });
+  it.each(['grok', 'kimi', 'opencode', 'pi', 'omp', 'dsh'])(
+    'hides the runtime provider entry for the %s CLI',
+    (provider) => {
+      render(<ConfigSelect currentProvider={provider} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /Configure/i }));
+
+      expect(screen.queryByText('Switch provider')).toBeNull();
+      expect(screen.getByText('Node processes')).toBeTruthy();
+    },
+  );
 });

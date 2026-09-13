@@ -69,7 +69,22 @@ const FileChangeRow = memo(({ fileChange, isUndoing, onOpen, onShowDiff, onUndo,
         {fileChange.fileName}
       </span>
 
-      {/* Stats */}
+      {/* Multiple agents in this session edited the same file */}
+      {fileChange.multiAgent === true && (
+        <span
+          className="file-change-multi-agent"
+          title={t('statusPanel.multiAgentEdited', {
+            count: fileChange.agentIds?.length ?? 2,
+          })}
+        >
+          <span className="codicon codicon-organization" aria-hidden />
+          <span className="file-change-multi-agent-label">
+            {t('statusPanel.multiAgentBadge')}
+          </span>
+        </span>
+      )}
+
+      {/* Stats — net session baseline→current, not sum of ops */}
       {(fileChange.additions > 0 || fileChange.deletions > 0) && (
         <span className="file-change-stats">
           {fileChange.additions > 0 && <span className="additions">+{fileChange.additions}</span>}

@@ -57,6 +57,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -76,6 +77,7 @@ public final class CodexPetFloatingService
     private static final Logger LOG = Logger.getInstance(CodexPetFloatingService.class);
     private static final Gson GSON = new GsonBuilder().create();
     private static final String GLOBAL_STATE_KEY = "claudecodegui.codexPetFloating.globalState";
+    private static final String DELETE_CONFIRMATION_KEY = "claudecodegui.codexPetFloating.confirmBeforeDelete";
     private static final AtomicLong GLOBAL_STATE_VERSION = new AtomicLong();
     private static final Set<CodexPetFloatingService> INSTANCES =
             Collections.newSetFromMap(new WeakHashMap<>());
@@ -104,6 +106,9 @@ public final class CodexPetFloatingService
     private static final String DEFAULT_TAB_TITLE = "Current session";
     private static final String[] BUBBLE_EVENTS = {
         "task_started", "thinking", "running", "task_success", "task_error", "idle"
+    };
+    private static final String[] ANIMATION_STATES = {
+        "idle", "success", "thinking", "running", "error"
     };
     public static final int MIN_CATALOG_PAGE_SIZE = 12;
     public static final int MAX_CATALOG_PAGE_SIZE = 48;
@@ -136,6 +141,8 @@ public final class CodexPetFloatingService
     private volatile ActiveBubble activeBubble;
     private volatile VisualState visualState = VisualState.IDLE;
     private volatile int animationFrame;
+    private final EnumMap<VisualState, AnimationAction> selectedAnimationActions =
+            new EnumMap<>(VisualState.class);
     private long lastSourcePrune;
 
     public CodexPetFloatingService(@NotNull Project project) {
@@ -187,6 +194,7 @@ public final class CodexPetFloatingService
     @Override
     public synchronized void loadState(@NotNull PetState loadedState) {
         state = sanitizeState(loadedState);
+        selectedAnimationActions.clear();
     }
 
     public synchronized JsonObject snapshot() {
@@ -204,6 +212,9 @@ public final class CodexPetFloatingService
         result.addProperty("catalogPageSize", current.catalogPageSize);
         result.addProperty("catalogSort", current.catalogSort);
         result.addProperty("showStatusIndicator", current.showStatusIndicator);
+        result.addProperty("confirmBeforeDelete",
+                PropertiesComponent.getInstance().getBoolean(DELETE_CONFIRMATION_KEY, true));
+        result.add("actionMappings", actionMappingsToJson(current.actionMappings));
         result.addProperty("bubbleEnabled", current.bubbleEnabled);
         result.addProperty("bubbleDurationSeconds", current.bubbleDurationSeconds);
         result.addProperty("bubbleSize", current.bubbleSize);
@@ -245,7 +256,13 @@ public final class CodexPetFloatingService
             return defaults;
         }
         try {
-            PetState loaded = GSON.fromJson(json, PetState.class);
+            JsonObject object = GSON.fromJson(json, JsonObject.class);
+            JsonElement actionMappings = object == null ? null : object.remove("actionMappings");
+            PetState loaded = object == null ? null : GSON.fromJson(object, PetState.class);
+            if (loaded == null) {
+                loaded = new PetState();
+            }
+            loaded.actionMappings = readActionMappings(actionMappings, loaded.actionMappings);
             loaded = sanitizeState(loaded);
             loaded.scope = SCOPE_GLOBAL;
             return loaded;
@@ -306,6 +323,10 @@ public final class CodexPetFloatingService
             globalState = loadGlobalState();
             observedGlobalStateVersion = version;
             activeGlobalScope = SCOPE_GLOBAL.equals(state.scope);
+            if (activeGlobalScope) {
+                selectedAnimationActions.clear();
+                animationFrame = 0;
+            }
             reloadPet = activeGlobalScope && globalState.enabled
                     && !Objects.equals(previousPetId, globalState.selectedPetId);
         }
@@ -320,10 +341,15 @@ public final class CodexPetFloatingService
 
     public void applyConfig(JsonObject config) {
         Objects.requireNonNull(config, "config");
+        if (config.has("confirmBeforeDelete")) {
+            PropertiesComponent.getInstance().setValue(
+                    DELETE_CONFIRMATION_KEY, readBoolean(config, "confirmBeforeDelete"), true);
+        }
         String previousPetId;
         boolean reloadPet;
         synchronized (this) {
             previousPetId = activeState().selectedPetId;
+            String previousScope = state.scope;
             if (config.has("scope")) {
                 state.scope = normalizeScope(readString(config, "scope"));
             }
@@ -339,6 +365,7 @@ public final class CodexPetFloatingService
             int catalogPageSize = target.catalogPageSize;
             String catalogSort = target.catalogSort;
             boolean showStatusIndicator = target.showStatusIndicator;
+            Map<String, List<String>> actionMappings = target.actionMappings;
             boolean bubbleEnabled = target.bubbleEnabled;
             int bubbleDurationSeconds = target.bubbleDurationSeconds;
             String bubbleSize = target.bubbleSize;
@@ -380,6 +407,9 @@ public final class CodexPetFloatingService
             if (config.has("showStatusIndicator")) {
                 showStatusIndicator = readBoolean(config, "showStatusIndicator");
             }
+            if (config.has("actionMappings")) {
+                actionMappings = readActionMappings(config.get("actionMappings"), target.actionMappings);
+            }
             if (config.has("bubbleEnabled")) {
                 bubbleEnabled = readBoolean(config, "bubbleEnabled");
             }
@@ -407,11 +437,18 @@ public final class CodexPetFloatingService
             target.catalogPageSize = catalogPageSize;
             target.catalogSort = catalogSort;
             target.showStatusIndicator = showStatusIndicator;
+            boolean actionMappingsChanged = !Objects.equals(target.actionMappings, actionMappings);
+            boolean scopeChanged = !Objects.equals(previousScope, state.scope);
+            target.actionMappings = actionMappings;
             target.bubbleEnabled = bubbleEnabled;
             target.bubbleDurationSeconds = bubbleDurationSeconds;
             target.bubbleSize = bubbleSize;
             target.bubbleShowForBackgroundTabs = bubbleShowForBackgroundTabs;
             target.bubbleTemplates = bubbleTemplates;
+            if (actionMappingsChanged || scopeChanged) {
+                selectedAnimationActions.clear();
+                animationFrame = 0;
+            }
             persistActiveState();
             reloadPet = !Objects.equals(previousPetId, target.selectedPetId);
         }
@@ -458,6 +495,7 @@ public final class CodexPetFloatingService
             VisualState nextState = aggregateVisualState(sourceStates, sourceActive);
             if (nextState != visualState) {
                 visualState = nextState;
+                selectedAnimationActions.clear();
                 animationFrame = 0;
             }
         }
@@ -818,7 +856,12 @@ public final class CodexPetFloatingService
                 if (sourceExpired) {
                     sourceStates.keySet().retainAll(sourceLastSeen.keySet());
                     sourceActive.keySet().retainAll(sourceLastSeen.keySet());
-                    visualState = aggregateVisualState(sourceStates, sourceActive);
+                    VisualState nextState = aggregateVisualState(sourceStates, sourceActive);
+                    if (nextState != visualState) {
+                        visualState = nextState;
+                        selectedAnimationActions.clear();
+                        animationFrame = 0;
+                    }
                 }
             }
         }
@@ -954,6 +997,7 @@ public final class CodexPetFloatingService
         result.catalogColumns = clamp(result.catalogColumns, 3, 6);
         result.catalogPageSize = normalizeCatalogPageSize(result.catalogPageSize);
         result.catalogSort = normalizeCatalogSort(result.catalogSort);
+        result.actionMappings = sanitizeActionMappings(result.actionMappings);
         result.bubbleDurationSeconds = clamp(result.bubbleDurationSeconds,
                 MIN_BUBBLE_DURATION_SECONDS, MAX_BUBBLE_DURATION_SECONDS);
         result.bubbleSize = BubbleSize.normalize(result.bubbleSize).wireValue;
@@ -963,6 +1007,143 @@ public final class CodexPetFloatingService
 
     public static String normalizeScope(String value) {
         return SCOPE_GLOBAL.equals(value) ? SCOPE_GLOBAL : SCOPE_PROJECT;
+    }
+
+    private static JsonObject actionMappingsToJson(Map<String, List<String>> mappings) {
+        JsonObject result = new JsonObject();
+        Map<String, List<String>> safeMappings = sanitizeActionMappings(mappings);
+        for (String stateName : ANIMATION_STATES) {
+            JsonArray actions = new JsonArray();
+            for (String action : safeMappings.get(stateName)) {
+                actions.add(action);
+            }
+            result.add(stateName, actions);
+        }
+        return result;
+    }
+
+    private static Map<String, List<String>> readActionMappings(
+            JsonElement value, Map<String, List<String>> fallback) {
+        if (value == null || !value.isJsonObject()) {
+            return sanitizeActionMappings(fallback);
+        }
+        Map<String, List<String>> result = sanitizeActionMappings(fallback);
+        Map<String, List<String>> defaults = defaultActionMappings();
+        JsonObject object = value.getAsJsonObject();
+        for (String stateName : ANIMATION_STATES) {
+            JsonElement action = object.get(stateName);
+            if (action == null) {
+                continue;
+            }
+            result.put(stateName, normalizeActionList(parseActionList(action), defaults.get(stateName)));
+        }
+        return result;
+    }
+
+    static Map<String, List<String>> sanitizeActionMappings(Map<String, ?> mappings) {
+        Map<String, List<String>> defaults = defaultActionMappings();
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        for (String stateName : ANIMATION_STATES) {
+            List<String> fallback = defaults.get(stateName);
+            Object rawConfigured = mappings == null ? null : mappings.get(stateName);
+            List<String> configured = coerceActionList(rawConfigured);
+            result.put(stateName, normalizeActionList(configured, fallback));
+        }
+        return result;
+    }
+
+    private static Map<String, List<String>> defaultActionMappings() {
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        result.put("idle", List.of("idle"));
+        result.put("success", List.of("jumping"));
+        result.put("thinking", List.of("review"));
+        result.put("running", List.of("running"));
+        result.put("error", List.of("failed"));
+        return result;
+    }
+
+    private static List<String> parseActionList(JsonElement value) {
+        List<String> result = new ArrayList<>();
+        if (value == null) {
+            return result;
+        }
+        if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
+            addNormalizedAction(result, value.getAsString());
+            return result;
+        }
+        if (!value.isJsonArray()) {
+            return result;
+        }
+        for (JsonElement entry : value.getAsJsonArray()) {
+            if (entry.isJsonPrimitive() && entry.getAsJsonPrimitive().isString()) {
+                addNormalizedAction(result, entry.getAsString());
+            }
+        }
+        return result;
+    }
+
+    private static void addNormalizedAction(List<String> actions, String value) {
+        String normalized = normalizeConfiguredAction(value);
+        if (normalized != null && !actions.contains(normalized)
+                && actions.size() < AnimationAction.values().length) {
+            actions.add(normalized);
+        }
+    }
+
+    private static List<String> normalizeActionList(List<String> configured, List<String> fallback) {
+        List<String> result = new ArrayList<>();
+        if (configured != null) {
+            for (String value : configured) {
+                addNormalizedAction(result, value);
+            }
+        }
+        if (result.isEmpty()) {
+            result.addAll(fallback == null ? List.of("idle") : fallback);
+        }
+        return result;
+    }
+
+    private static List<String> coerceActionList(Object value) {
+        if (value instanceof String) {
+            return List.of((String) value);
+        }
+        if (!(value instanceof List<?>)) {
+            return null;
+        }
+        List<String> result = new ArrayList<>();
+        for (Object entry : (List<?>) value) {
+            if (entry instanceof String) {
+                result.add((String) entry);
+            }
+        }
+        return result;
+    }
+
+    private static @Nullable String normalizeConfiguredAction(String value) {
+        if (value == null) {
+            return null;
+        }
+        for (AnimationAction action : AnimationAction.values()) {
+            if (action.wireValue.equals(value)) {
+                return action.wireValue;
+            }
+        }
+        return null;
+    }
+
+    private synchronized AnimationAction animationActionFor(VisualState stateValue) {
+        List<String> configured = activeState().actionMappings.get(stateValue.wireValue);
+        List<String> safeConfigured = normalizeActionList(configured,
+                defaultActionMappings().get(stateValue.wireValue));
+        AnimationAction selected = selectedAnimationActions.get(stateValue);
+        if (selected != null && safeConfigured.contains(selected.wireValue)) {
+            return selected;
+        }
+        String selectedWireValue = safeConfigured.get(
+                ThreadLocalRandom.current().nextInt(safeConfigured.size()));
+        selected = AnimationAction.fromWireValue(selectedWireValue);
+        selectedAnimationActions.put(stateValue, selected);
+        return selected;
     }
 
     private static JsonObject bubbleTemplatesToJson(Map<String, List<String>> templates) {
@@ -1279,6 +1460,7 @@ public final class CodexPetFloatingService
             sourceStates.clear();
             sourceLastSeen.clear();
             sourceActive.clear();
+            selectedAnimationActions.clear();
         }
     }
 
@@ -1297,6 +1479,7 @@ public final class CodexPetFloatingService
         public int catalogPageSize = DEFAULT_CATALOG_PAGE_SIZE;
         public String catalogSort = DEFAULT_CATALOG_SORT;
         public boolean showStatusIndicator = false;
+        public Map<String, List<String>> actionMappings = defaultActionMappings();
         public boolean bubbleEnabled = true;
         public int bubbleDurationSeconds = DEFAULT_BUBBLE_DURATION_SECONDS;
         public String bubbleSize = BubbleSize.MEDIUM.wireValue;
@@ -1331,21 +1514,19 @@ public final class CodexPetFloatingService
     }
 
     private enum VisualState {
-        IDLE(new Color(150, 155, 165), 0, 6, 0),
-        SUCCESS(new Color(76, 175, 80), 4, 5, 1),
-        THINKING(new Color(255, 183, 77), 8, 6, 2),
-        RUNNING(new Color(66, 165, 245), 7, 6, 3),
-        ERROR(new Color(239, 83, 80), 5, 8, 4);
+        IDLE("idle", new Color(150, 155, 165), 0),
+        SUCCESS("success", new Color(76, 175, 80), 1),
+        THINKING("thinking", new Color(255, 183, 77), 2),
+        RUNNING("running", new Color(66, 165, 245), 3),
+        ERROR("error", new Color(239, 83, 80), 4);
 
+        private final String wireValue;
         private final Color indicatorColor;
-        private final int spriteRow;
-        private final int frameCount;
         private final int priority;
 
-        VisualState(Color indicatorColor, int spriteRow, int frameCount, int priority) {
+        VisualState(String wireValue, Color indicatorColor, int priority) {
+            this.wireValue = wireValue;
             this.indicatorColor = indicatorColor;
-            this.spriteRow = spriteRow;
-            this.frameCount = frameCount;
             this.priority = priority;
         }
 
@@ -1361,6 +1542,37 @@ public final class CodexPetFloatingService
             }
             if ("success".equals(value)) {
                 return SUCCESS;
+            }
+            return IDLE;
+        }
+    }
+
+    private enum AnimationAction {
+        IDLE("idle", 0, 6),
+        RUNNING_RIGHT("running-right", 1, 8),
+        RUNNING_LEFT("running-left", 2, 8),
+        WAVING("waving", 3, 4),
+        JUMPING("jumping", 4, 5),
+        FAILED("failed", 5, 8),
+        WAITING("waiting", 6, 6),
+        RUNNING("running", 7, 6),
+        REVIEW("review", 8, 6);
+
+        private final String wireValue;
+        private final int spriteRow;
+        private final int frameCount;
+
+        AnimationAction(String wireValue, int spriteRow, int frameCount) {
+            this.wireValue = wireValue;
+            this.spriteRow = spriteRow;
+            this.frameCount = frameCount;
+        }
+
+        private static AnimationAction fromWireValue(String value) {
+            for (AnimationAction action : values()) {
+                if (action.wireValue.equals(value)) {
+                    return action;
+                }
             }
             return IDLE;
         }
@@ -1592,9 +1804,10 @@ public final class CodexPetFloatingService
 
         private void paintSpriteFrame(Graphics2D g2, LoadedPet pet, int petWidth, int petHeight) {
             VisualState currentState = visualState;
+            AnimationAction action = animationActionFor(currentState);
             int maxRows = pet.height / CodexPetImageSupport.PETDEX_FRAME_HEIGHT;
-            int row = Math.min(currentState.spriteRow, Math.max(0, maxRows - 1));
-            int frame = animationFrame % currentState.frameCount;
+            int row = Math.min(action.spriteRow, Math.max(0, maxRows - 1));
+            int frame = animationFrame % action.frameCount;
             int sourceX = frame * CodexPetImageSupport.PETDEX_FRAME_WIDTH;
             int sourceY = row * CodexPetImageSupport.PETDEX_FRAME_HEIGHT;
             g2.drawImage(pet.image,

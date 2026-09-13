@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 
 import {
   resolvePromptEnhancerRuntimeConfig,
+  resolveAutoChatModel,
   buildFullPrompt,
   extractAppendedDelta,
+  canUseAnthropicAskPath,
+  computeMaxTokens,
 } from './prompt-enhancer.js';
 
 test('resolvePromptEnhancerRuntimeConfig prefers Codex when auto mode has both providers available', () => {
@@ -14,18 +17,73 @@ test('resolvePromptEnhancerRuntimeConfig prefers Codex when auto mode has both p
       effectiveProvider: 'codex',
       resolutionSource: 'auto',
       models: {
-        claude: 'claude-sonnet-4-6',
+        claude: 'claude-sonnet-5',
         codex: 'gpt-5.5',
+        grok: 'grok',
       },
       availability: {
         claude: true,
         codex: true,
+        grok: true,
       },
     },
   });
 
   assert.equal(resolved.provider, 'codex');
   assert.equal(resolved.model, 'gpt-5.5');
+});
+
+test('resolvePromptEnhancerRuntimeConfig accepts Grok when effectiveProvider is grok', () => {
+  const resolved = resolvePromptEnhancerRuntimeConfig({
+    promptEnhancerConfig: {
+      provider: 'grok',
+      effectiveProvider: 'grok',
+      resolutionSource: 'manual',
+      models: {
+        claude: 'claude-sonnet-5',
+        codex: 'gpt-5.5',
+        grok: 'grok',
+      },
+      availability: {
+        claude: true,
+        codex: true,
+        grok: true,
+      },
+    },
+  });
+
+  assert.equal(resolved.provider, 'grok');
+  assert.equal(resolved.model, 'grok');
+});
+
+test('resolvePromptEnhancerRuntimeConfig accepts Kimi / OpenCode / PI / OMP CLI providers', () => {
+  for (const provider of ['kimi', 'opencode', 'pi', 'omp']) {
+    const resolved = resolvePromptEnhancerRuntimeConfig({
+      promptEnhancerConfig: {
+        provider,
+        effectiveProvider: provider,
+        resolutionSource: 'manual',
+        models: {
+          claude: 'claude-sonnet-5',
+          codex: 'gpt-5.5',
+          kimi: 'kimi-k2',
+          opencode: 'opencode/gpt',
+          pi: 'pi-fast',
+          omp: 'omp-fast',
+        },
+        availability: {
+          claude: true,
+          codex: true,
+          kimi: true,
+          opencode: true,
+          pi: true,
+          omp: true,
+        },
+      },
+    });
+    assert.equal(resolved.provider, provider);
+    assert.ok(resolved.model);
+  }
 });
 
 test('resolvePromptEnhancerRuntimeConfig throws a strict error when manual provider is unavailable', () => {
@@ -47,6 +105,110 @@ test('resolvePromptEnhancerRuntimeConfig throws a strict error when manual provi
     }),
     /Claude Code.*unavailable/i
   );
+});
+
+test('resolveAutoChatModel uses chat model in auto mode when provider matches', () => {
+  assert.equal(
+    resolveAutoChatModel({
+      provider: 'opencode',
+      configuredModel: 'opencode-default',
+      resolutionSource: 'auto',
+      chatProvider: 'opencode',
+      chatModel: 'opencode/deepseek-v4-flash-free',
+    }),
+    'opencode/deepseek-v4-flash-free'
+  );
+});
+
+test('resolveAutoChatModel keeps configured model in manual mode', () => {
+  assert.equal(
+    resolveAutoChatModel({
+      provider: 'opencode',
+      configuredModel: 'opencode-default',
+      resolutionSource: 'manual',
+      chatProvider: 'opencode',
+      chatModel: 'opencode/deepseek-v4-flash-free',
+    }),
+    'opencode-default'
+  );
+});
+
+test('resolveAutoChatModel ignores chat model when provider differs', () => {
+  assert.equal(
+    resolveAutoChatModel({
+      provider: 'claude',
+      configuredModel: 'claude-sonnet-5',
+      resolutionSource: 'auto',
+      chatProvider: 'opencode',
+      chatModel: 'opencode/deepseek-v4-flash-free',
+    }),
+    'claude-sonnet-5'
+  );
+});
+
+test('resolvePromptEnhancerRuntimeConfig auto follows chat model for OpenCode', () => {
+  const resolved = resolvePromptEnhancerRuntimeConfig({
+    promptEnhancerConfig: {
+      provider: null,
+      effectiveProvider: 'opencode',
+      resolutionSource: 'auto',
+      models: {
+        claude: 'claude-sonnet-5',
+        codex: 'gpt-5.5',
+        opencode: 'opencode-default',
+      },
+      availability: {
+        claude: true,
+        codex: true,
+        opencode: true,
+      },
+    },
+    chatProvider: 'opencode',
+    chatModel: 'opencode/deepseek-v4-flash-free',
+  });
+
+  assert.equal(resolved.provider, 'opencode');
+  assert.equal(resolved.model, 'opencode/deepseek-v4-flash-free');
+  assert.equal(resolved.resolutionSource, 'auto');
+});
+
+test('resolvePromptEnhancerRuntimeConfig manual does not follow chat model', () => {
+  const resolved = resolvePromptEnhancerRuntimeConfig({
+    promptEnhancerConfig: {
+      provider: 'opencode',
+      effectiveProvider: 'opencode',
+      resolutionSource: 'manual',
+      models: {
+        opencode: 'opencode-default',
+      },
+      availability: {
+        opencode: true,
+      },
+    },
+    chatProvider: 'opencode',
+    chatModel: 'opencode/deepseek-v4-flash-free',
+  });
+
+  assert.equal(resolved.model, 'opencode-default');
+});
+
+// ---------- canUseAnthropicAskPath / computeMaxTokens ----------
+
+test('canUseAnthropicAskPath requires api key with api_key or auth_token', () => {
+  assert.equal(canUseAnthropicAskPath({ apiKey: 'sk-x', authType: 'api_key' }), true);
+  assert.equal(canUseAnthropicAskPath({ apiKey: 'tok', authType: 'auth_token' }), true);
+  assert.equal(canUseAnthropicAskPath({ apiKey: null, authType: 'api_key' }), false);
+  assert.equal(canUseAnthropicAskPath({ apiKey: 'x', authType: 'cli_login' }), false);
+  assert.equal(canUseAnthropicAskPath({ apiKey: 'x', authType: 'api_key_helper' }), false);
+  assert.equal(canUseAnthropicAskPath(null), false);
+});
+
+test('computeMaxTokens scales with prompt length and stays within bounds', () => {
+  assert.equal(computeMaxTokens(0), 2048);
+  assert.equal(computeMaxTokens(100), 2048);
+  assert.equal(computeMaxTokens(2000), 4000);
+  assert.equal(computeMaxTokens(10000), 8192);
+  assert.equal(computeMaxTokens(-1), 2048);
 });
 
 // ---------- extractAppendedDelta ----------

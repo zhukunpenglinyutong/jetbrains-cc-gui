@@ -53,6 +53,7 @@ public final class SlashCommandRegistry {
             new SlashCommand("/context", "Visualize current context usage as a colored grid", "builtin"),
             new SlashCommand("/goal", "Keep working across turns until the goal condition is met", "builtin"),
             new SlashCommand("/init", "Initialize a new CLAUDE.md file with codebase documentation", "builtin"),
+            new SlashCommand("/mcp", "List configured MCP servers and their connection status", "builtin"),
             new SlashCommand("/plan", "Switch to plan mode", "builtin"),
             new SlashCommand("/resume", "Resume a previous conversation", "builtin"),
             new SlashCommand("/review", "Review a pull request", "builtin"),

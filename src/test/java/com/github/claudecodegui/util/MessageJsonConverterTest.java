@@ -15,6 +15,24 @@ import static org.junit.Assert.assertTrue;
 public class MessageJsonConverterTest {
 
     @Test
+    public void convertMessagesToJsonExposesLocalIdNextToRaw() {
+        ClaudeSession.Message sessionMessage = new ClaudeSession.Message(
+                ClaudeSession.Message.Type.USER,
+                "hello"
+        );
+
+        JsonArray transportMessages = JsonParser.parseString(
+                MessageJsonConverter.convertMessagesToJson(List.of(sessionMessage))
+        ).getAsJsonArray();
+
+        JsonObject transportMessage = transportMessages.get(0).getAsJsonObject();
+        assertEquals(sessionMessage.localId, transportMessage.get("localId").getAsString());
+        // It travels beside raw rather than inside it: raw is a provider-payload
+        // whitelist, so a locally assigned id would not survive there.
+        assertFalse(transportMessage.has("raw"));
+    }
+
+    @Test
     public void convertMessagesToJsonKeepsOnlyFrontendRelevantRawFields() {
         JsonObject textBlock = new JsonObject();
         textBlock.addProperty("type", "text");

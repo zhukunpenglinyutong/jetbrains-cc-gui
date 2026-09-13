@@ -24,6 +24,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -162,6 +163,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             }
             if (window.getCodexSDKBridge() != null) {
                 window.getCodexSDKBridge().cleanupAllProcesses();
+            }
+            if (window.getCliBridges() != null) {
+                for (com.github.claudecodegui.provider.common.MarkerCliBridge bridge
+                        : window.getCliBridges().values()) {
+                    if (bridge != null) {
+                        bridge.cleanupAllProcesses();
+                    }
+                }
             }
         } catch (Exception e) {
             LOG.error("[ShutdownHook] Error cleaning up processes: " + e.getMessage(), e);
@@ -545,6 +554,14 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
     public static void addSelectionFromExternal(Project project, String selectionInfo) {
         codeSnippetManager.addSelectionFromExternal(project, selectionInfo);
+    }
+
+    /**
+     * Send project-tree file references to the selected chat tab as structured
+     * paths, keeping spaces inside a path separate from multi-file routing.
+     */
+    public static void addFileReferencesFromExternal(Project project, List<String> filePaths) {
+        codeSnippetManager.addFileReferencesFromExternal(project, filePaths);
     }
 
     /**

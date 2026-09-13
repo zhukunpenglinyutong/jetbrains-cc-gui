@@ -1,11 +1,14 @@
-import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ButtonAreaProps, CodexFastMode, ModelInfo, PermissionMode, ReasoningEffort } from './types';
-import { CodexFastModeSelect, ConfigSelect, ModelSelect, ModeSelect, ProviderSelect, ReasoningSelect } from './selectors';
-import { CLAUDE_MODELS, CODEX_MODELS } from './types';
+import { DEFAULT_CLAUDE_MODEL_ID } from './types';
+import { ConfigSelect, ModeSelect, ModelConfigSelect, ProviderSelect } from './selectors';
 import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
 import type { CodexCustomModel } from '../../types/provider';
 import { readClaudeModelMapping } from '../../utils/claudeModelMapping';
+import { useCliModels, useOmpRoles } from '../../hooks/providers/useCliModels';
+import { useToolbarSelectorCompact } from './hooks/useToolbarSelectorCompact';
+import { resolveProviderModels } from './resolveProviderModels';
 
 /**
  * Get custom Codex model list from localStorage
@@ -71,10 +74,11 @@ export const ButtonArea = ({
   hasInputContent = false,
   isLoading = false,
   isEnhancing = false,
-  selectedModel = 'claude-sonnet-4-7',
+  selectedModel = DEFAULT_CLAUDE_MODEL_ID,
   permissionMode = 'default',
   currentProvider = 'claude',
   reasoningEffort = 'high',
+  dshPreset = '',
   codexFastMode = 'normal',
   onSubmit,
   onStop,
@@ -83,6 +87,7 @@ export const ButtonArea = ({
   onProviderSelect,
   onReasoningChange,
   onCodexFastModeChange,
+  onDshPresetChange,
   onEnhancePrompt,
   alwaysThinkingEnabled = false,
   onToggleThinking,
@@ -92,11 +97,15 @@ export const ButtonArea = ({
   onAgentSelect,
   onOpenAgentSettings,
   onAddModel,
+  onOpenCliSettings,
   longContextEnabled = true,
   onLongContextChange,
 }: ButtonAreaProps) => {
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
+  const { cliModels, cliModelsLoading, cliModelsError, cliDefaultModel, cliCatalogHasEntries, refreshCliModels } = useCliModels(currentProvider);
+  // Dynamic omp roles (static smol/slow/plan fallback until loaded).
+  const ompRoles = useOmpRoles();
 
   // Track changes to custom models in localStorage
   // When localStorage changes, updating this version number triggers useMemo recalculation
@@ -126,73 +135,62 @@ export const ButtonArea = ({
     };
   }, []);
 
-  /**
-   * Apply model name mapping
-   * Maps base model IDs to actual model names (e.g., versions with capacity suffixes)
-   */
-  const applyModelMapping = useCallback((model: ModelInfo, mapping: { main?: string; haiku?: string; sonnet?: string; opus?: string }): ModelInfo => {
-    const modelKeyMap: Record<string, keyof typeof mapping> = {
-      'claude-sonnet-5': 'sonnet',
-      'claude-sonnet-4-7': 'sonnet',
-      'claude-sonnet-4-6': 'sonnet',
-      'claude-opus-5': 'opus',
-      'claude-opus-4-8': 'opus',
-      'claude-haiku-4-5': 'haiku',
-    };
-
-    const key = modelKeyMap[model.id];
-    const resolvedMapping = (key ? mapping[key] : undefined) || mapping.main;
-    if (resolvedMapping) {
-      const actualModel = String(resolvedMapping).trim();
-      if (actualModel.length > 0) {
-        // Keep the original id as unique identifier, only modify label to custom name
-        // This ensures id remains unique even if multiple models share the same displayName
-        return { ...model, label: actualModel };
-      }
-    }
-    return model;
-  }, []);
-
-  // Select model list based on current provider
-  // customModelsVersion triggers recalculation when localStorage changes
+  // Select model list based on current provider — shared with Prompt Enhancer /
+  // Commit AI settings so the three surfaces never diverge.
+  // customModelsVersion triggers recalculation when localStorage changes.
   const availableModels = useMemo(() => {
-    if (currentProvider === 'codex') {
-      // Merge built-in models and custom models
-      const customModels = getCustomCodexModels();
-      if (customModels.length === 0) {
-        return CODEX_MODELS;
-      }
-      // Custom models first, built-in models after
-      // Filter out built-in models that duplicate custom models
-      const customIds = new Set(customModels.map(m => m.id));
-      const filteredBuiltIn = CODEX_MODELS.filter(m => !customIds.has(m.id));
-      return [...customModels, ...filteredBuiltIn];
-    }
-    if (typeof window === 'undefined' || !window.localStorage) {
-      return CLAUDE_MODELS;
-    }
-
-    // Apply model mapping to built-in models
-    let builtInModels = CLAUDE_MODELS;
+    let claudeMapping = null;
     try {
-      const mapping = readClaudeModelMapping();
-      if (Object.keys(mapping).length > 0) {
-        builtInModels = CLAUDE_MODELS.map((m) => applyModelMapping(m, mapping));
-      }
+      claudeMapping = readClaudeModelMapping();
     } catch {
-      // ignore
+      claudeMapping = null;
     }
+    return resolveProviderModels({
+      provider: currentProvider,
+      cliModels,
+      cliCatalogHasEntries,
+      claudeCustomModels: getCustomClaudeModels(),
+      codexCustomModels: getCustomCodexModels(),
+      claudeMapping,
+    });
+    // customModelsVersion intentionally forces re-read of localStorage customs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProvider, customModelsVersion, cliModels, cliCatalogHasEntries]);
 
-    // Merge custom models (displayed before built-in models)
-    const customModels = getCustomClaudeModels();
-    if (customModels.length === 0) {
-      return builtInModels;
+  // When a dynamic model catalog arrives, ensure selection is a real entry.
+  useEffect(() => {
+    const isDynamicProvider = currentProvider === 'kimi' || currentProvider === 'opencode'
+      || currentProvider === 'pi' || currentProvider === 'codex'
+      || currentProvider === 'grok' || currentProvider === 'omp'
+      || currentProvider === 'dsh';
+    if (!isDynamicProvider) return;
+    // Only correct once a *real* catalog arrived. Static fallback lists
+    // (OPENCODE_MODELS = just "opencode-default", CODEX built-ins, …) must not
+    // clobber the user's choice — especially when ChatScreen remounts after
+    // leaving history and briefly shows the fallback before the cache/fetch
+    // lands.
+    if (!cliCatalogHasEntries) return;
+    if (cliModelsLoading) return;
+    if (!availableModels.length || !onModelSelect) return;
+    // OMP roles are not in the model list (they live in ModeSelect), so an
+    // active role must count as a valid selection — otherwise picking
+    // 'smol' in the mode selector would be clobbered back to the default
+    // the moment a catalog arrives.
+    const exists = availableModels.some((model) => model.id === selectedModel)
+      || (currentProvider === 'omp' && ompRoles.some((role) => role.id === selectedModel));
+    if (!exists) {
+      onModelSelect(cliDefaultModel ?? availableModels[0].id);
     }
-    // Filter out built-in models that duplicate custom models
-    const customIds = new Set(customModels.map(m => m.id));
-    const filteredBuiltIn = builtInModels.filter(m => !customIds.has(m.id));
-    return [...customModels, ...filteredBuiltIn];
-  }, [currentProvider, applyModelMapping, customModelsVersion]);
+  }, [
+    availableModels,
+    currentProvider,
+    onModelSelect,
+    selectedModel,
+    cliDefaultModel,
+    cliCatalogHasEntries,
+    cliModelsLoading,
+    ompRoles,
+  ]);
 
   /**
    * Handle submit button click
@@ -245,6 +243,10 @@ export const ButtonArea = ({
     onCodexFastModeChange?.(mode);
   }, [onCodexFastModeChange]);
 
+  const handleDshPresetChange = useCallback((preset: string) => {
+    onDshPresetChange?.(preset);
+  }, [onDshPresetChange]);
+
   /**
    * Handle enhance prompt button click
    */
@@ -253,10 +255,35 @@ export const ButtonArea = ({
     onEnhancePrompt?.();
   }, [onEnhancePrompt]);
 
+  // Collapse selector labels for every CLI when left cluster is about to hit the send cluster (10px).
+  const buttonAreaRef = useRef<HTMLDivElement>(null);
+  const buttonAreaLeftRef = useRef<HTMLDivElement>(null);
+  const buttonAreaRightRef = useRef<HTMLDivElement>(null);
+  const selectorContentKey = [
+    currentProvider,
+    selectedModel,
+    permissionMode,
+    reasoningEffort,
+    codexFastMode,
+    dshPreset,
+    selectedAgent?.id ?? '',
+    cliModelsLoading ? 'loading' : 'ready',
+  ].join('|');
+  const selectorsCompact = useToolbarSelectorCompact(
+    buttonAreaRef,
+    buttonAreaLeftRef,
+    buttonAreaRightRef,
+    selectorContentKey,
+  );
+
   return (
-    <div className="button-area" data-provider={currentProvider}>
+    <div
+      ref={buttonAreaRef}
+      className={`button-area${selectorsCompact ? ' button-area--compact' : ''}`}
+      data-provider={currentProvider}
+    >
       {/* Left side: selectors */}
-      <div className="button-area-left">
+      <div ref={buttonAreaLeftRef} className="button-area-left">
         <ConfigSelect
           alwaysThinkingEnabled={alwaysThinkingEnabled}
           onToggleThinking={onToggleThinking}
@@ -270,18 +297,32 @@ export const ButtonArea = ({
         <ProviderSelect
           value={currentProvider}
           onChange={handleProviderSelect}
+          onOpenCliSettings={onOpenCliSettings}
           compact
         />
         <ModeSelect value={permissionMode} onChange={handleModeSelect} provider={currentProvider} />
-        <ModelSelect value={selectedModel} onChange={handleModelSelect} models={availableModels} currentProvider={currentProvider} onAddModel={onAddModel} longContextEnabled={longContextEnabled} onLongContextChange={onLongContextChange} />
-        <ReasoningSelect value={reasoningEffort} onChange={handleReasoningChange} selectedModel={selectedModel} currentProvider={currentProvider} />
-        {currentProvider === 'codex' && (
-          <CodexFastModeSelect value={codexFastMode} onChange={handleCodexFastModeChange} />
-        )}
+        <ModelConfigSelect
+          selectedModel={selectedModel}
+          onModelSelect={handleModelSelect}
+          models={availableModels}
+          currentProvider={currentProvider}
+          loading={cliModelsLoading}
+          error={cliModelsError}
+          onRetry={() => refreshCliModels(currentProvider)}
+          onAddModel={onAddModel}
+          longContextEnabled={longContextEnabled}
+          onLongContextChange={onLongContextChange}
+          reasoningEffort={reasoningEffort}
+          onReasoningChange={handleReasoningChange}
+          codexFastMode={codexFastMode}
+          onCodexFastModeChange={handleCodexFastModeChange}
+          dshPreset={dshPreset}
+          onDshPresetChange={handleDshPresetChange}
+        />
       </div>
 
       {/* Right side: tool buttons */}
-      <div className="button-area-right">
+      <div ref={buttonAreaRightRef} className="button-area-right">
         <div className="button-divider" />
 
         {/* Enhance prompt button */}

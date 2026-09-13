@@ -120,6 +120,89 @@
   color: var(--text-primary);
 }
 
+/* Usage meta bar: mode · CLI · model + settings shortcut */
+.prompt-enhancer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--dropdown-border);
+  background: rgba(255, 255, 255, 0.03);
+  min-height: 40px;
+}
+
+.prompt-enhancer-meta-items {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+  flex: 1;
+}
+
+.prompt-enhancer-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 0;
+}
+
+.prompt-enhancer-meta-chip .codicon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.prompt-enhancer-meta-chip.is-auto {
+  color: var(--button-primary);
+}
+
+.prompt-enhancer-meta-chip.is-manual {
+  color: var(--text-primary);
+}
+
+.prompt-enhancer-meta-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.prompt-enhancer-meta-separator {
+  color: var(--text-secondary);
+  opacity: 0.5;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.prompt-enhancer-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--dropdown-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.prompt-enhancer-settings-btn:hover {
+  background: var(--button-hover);
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.prompt-enhancer-settings-btn .codicon {
+  font-size: 13px;
+}
+
 .prompt-enhancer-content {
   flex: 1;
   overflow-y: auto;
@@ -214,6 +297,19 @@
   animation: spin 1s linear infinite;
 }
 
+.prompt-streaming-cursor {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  color: var(--button-primary);
+  vertical-align: middle;
+}
+
+.prompt-streaming-cursor .codicon-loading {
+  font-size: 12px;
+  animation: spin 1s linear infinite;
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -272,6 +368,10 @@
 /* Light theme adaptation */
 [data-theme="light"] .prompt-enhancer-overlay {
   background: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="light"] .prompt-enhancer-meta {
+  background: rgba(0, 0, 0, 0.02);
 }
 
 [data-theme="light"] .original-prompt {

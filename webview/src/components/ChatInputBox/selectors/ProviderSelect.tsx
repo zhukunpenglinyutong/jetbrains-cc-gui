@@ -3,12 +3,15 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AVAILABLE_PROVIDERS } from '../types';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
+import AlertDialog from '../../AlertDialog';
 import {
   fetchCodexSubscriptionQuota,
   subscribeCodexSubscriptionQuota,
   type CodexSubscriptionQuotaSnapshot,
 } from '../../../utils/codexSubscriptionQuotaCapabilities';
 import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
+import { useBetaProviderNotice } from '../../../hooks/useBetaProviderNotice';
+import { useHiddenCliProviders } from '../../../hooks/useCliProviderVisibility';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
 const CHEVRON_ICON_STYLE: React.CSSProperties = { fontSize: '10px', marginLeft: '2px' };
@@ -61,6 +64,8 @@ interface ProviderSelectProps {
   onChange?: (providerId: string) => void;
   /** When true, shows only the provider icon without text or chevron */
   compact?: boolean;
+  /** Open Settings → Providers → CLI management from the dropdown footer */
+  onOpenCliSettings?: () => void;
 }
 
 /**
@@ -68,7 +73,7 @@ interface ProviderSelectProps {
  * Supports switching between Claude, Codex, Gemini, and other providers
  * compact mode: icon-only button for toolbar use
  */
-export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSelectProps) => {
+export const ProviderSelect = ({ value, onChange, compact = false, onOpenCliSettings }: ProviderSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
@@ -82,8 +87,13 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { positionedStyle, recalculate } = useDropdownPosition({ buttonRef, dropdownRef });
+  const betaNotice = useBetaProviderNotice();
 
   const currentProvider = AVAILABLE_PROVIDERS.find(p => p.id === value) || AVAILABLE_PROVIDERS[0];
+  // Hidden CLI providers stay usable when already active; they are only
+  // removed from the switcher menu below.
+  const hiddenProviders = useHiddenCliProviders();
+  const visibleProviders = AVAILABLE_PROVIDERS.filter((p) => !hiddenProviders.has(p.id));
 
   // Helper function to get translated provider label
   const getProviderLabel = (providerId: string) => {
@@ -135,17 +145,20 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
 
     if (!provider) return;
 
-    if (!provider.enabled) {
-      // If provider is unavailable, show toast
-      showToastMessage(t('settings.provider.featureComingSoon'));
-      setIsOpen(false);
-      return;
-    }
+    const proceed = () => {
+      if (!provider.enabled) {
+        showToastMessage(t('settings.provider.featureComingSoon'));
+        return;
+      }
+      onChange?.(providerId);
+    };
 
-    // Provider available, perform switch
-    onChange?.(providerId);
+    // Close the menu immediately so the beta dialog is not hidden behind it.
     setIsOpen(false);
-  }, [onChange, showToastMessage]);
+    // First click on a Beta provider shows an informational notice once.
+    // Disabled providers skip the notice — they only show the coming-soon toast.
+    betaNotice.requestSelect(!!provider.beta && provider.enabled, proceed);
+  }, [onChange, showToastMessage, t, betaNotice]);
 
   /**
    * Close on outside click
@@ -305,10 +318,10 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
         {isOpen && (
           <div
             ref={dropdownRef}
-            className="selector-dropdown"
+            className="selector-dropdown provider-dropdown"
             style={{ ...DROPDOWN_STYLE, ...positionedStyle }}
           >
-            {AVAILABLE_PROVIDERS.map((provider) => (
+            {visibleProviders.map((provider) => (
               <div
                 key={provider.id}
                 className={`selector-option ${provider.id === value ? 'selected' : ''} ${!provider.enabled ? 'disabled' : ''}`}
@@ -341,20 +354,42 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
               >
                 <ProviderModelIcon providerId={provider.id} size={16} colored />
                 <span>{getProviderLabel(provider.id)}</span>
-                {provider.id === value && (
-                  <span className="codicon codicon-check check-mark" />
-                )}
-                {provider.id === 'codex' && (
-                  <span
-                    className="codicon codicon-chevron-right"
-                    style={{ fontSize: '10px', marginLeft: provider.id === value ? '2px' : 'auto' }}
-                  />
-                )}
+                <span className="provider-option-trailing">
+                  {provider.id === value && (
+                    <span className="provider-active-dot" aria-hidden="true" />
+                  )}
+                  {provider.beta && (
+                    <span className="provider-beta-badge">
+                      {t('providers.beta.badge', { defaultValue: 'Beta' })}
+                    </span>
+                  )}
+                  {provider.id === 'codex' && (
+                    <span
+                      className="codicon codicon-chevron-right"
+                      style={{ fontSize: '10px' }}
+                    />
+                  )}
+                </span>
                 {provider.id === 'codex' && activeSubmenu === 'codexQuota' && (
                   renderCodexQuotaSubmenu()
                 )}
               </div>
             ))}
+            {onOpenCliSettings && (
+              <div className="provider-cli-footer">
+                <button
+                  type="button"
+                  className="provider-cli-footer-btn"
+                  onClick={() => {
+                    setIsOpen(false);
+                    onOpenCliSettings();
+                  }}
+                >
+                  <span className="codicon codicon-settings" />
+                  <span>{t('providers.manageCli', { defaultValue: 'CLI Settings' })}</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -366,6 +401,18 @@ export const ProviderSelect = ({ value, onChange, compact = false }: ProviderSel
         </div>,
         document.body
       )}
+
+      <AlertDialog
+        isOpen={betaNotice.isOpen}
+        type="warning"
+        title={t('providers.beta.title', { defaultValue: 'Beta Feature' })}
+        message={t('providers.beta.message', {
+          defaultValue:
+            'This feature is still in Beta. If you encounter any bugs, please report them to the author promptly.',
+        })}
+        confirmText={t('common.gotIt', { defaultValue: 'Got it' })}
+        onClose={betaNotice.close}
+      />
     </>
   );
 };

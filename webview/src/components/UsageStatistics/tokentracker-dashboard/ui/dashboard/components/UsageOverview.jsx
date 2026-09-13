@@ -25,6 +25,7 @@ import { Popover } from "@base-ui/react/popover";
 import { Card, Button, Counter } from "../../components";
 import { Select } from "../../components/Select.jsx";
 import { useTheme } from "../../../hooks/useTheme.js";
+import { useDashboardPortalContainer } from "../../../hooks/useDashboardPortalContainer.js";
 import { useCurrency } from "../../../hooks/useCurrency.js";
 import { useTokenFormat } from "../../../hooks/useTokenFormat.js";
 import { copy, getCopyLocale } from "../../../lib/copy";
@@ -240,6 +241,7 @@ export function UsageOverview({
   // Nothing is expanded by default; every card toggles open/closed.
   const [expandedProvider, setExpandedProvider] = useState(null);
   const { resolvedTheme } = useTheme();
+  const portalContainer = useDashboardPortalContainer();
   const { currency, rate } = useCurrency();
   const { formatTokens } = useTokenFormat();
   const isDark = resolvedTheme === "dark";
@@ -354,7 +356,7 @@ export function UsageOverview({
                     >
                       {customLabel}
                     </Popover.Trigger>
-                    <Popover.Portal>
+                    <Popover.Portal container={portalContainer}>
                       <Popover.Positioner sideOffset={8} side="bottom" align="start" className="!z-[9999]">
                         <Popover.Popup className="bg-white dark:bg-oai-gray-900 border border-oai-gray-200 dark:border-oai-gray-700 rounded-xl shadow-lg">
                           <DateRangePopover

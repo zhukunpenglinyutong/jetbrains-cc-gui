@@ -213,7 +213,7 @@ public class HistoryDeleteServiceTest {
         private boolean interrupted;
 
         private RecordingClaudeSession(String sessionId, String provider) {
-            super(null, null, null);
+            super(null, null, null, null);
             this.sessionId = sessionId;
             this.provider = provider;
         }

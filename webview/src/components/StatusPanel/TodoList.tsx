@@ -5,9 +5,10 @@ import { statusClassMap, statusIconMap } from './types';
 
 interface TodoListProps {
   todos: TodoItem[];
+  isStreaming?: boolean;
 }
 
-const TodoList = memo(({ todos }: TodoListProps) => {
+const TodoList = memo(({ todos, isStreaming = false }: TodoListProps) => {
   const { t } = useTranslation();
 
   if (todos.length === 0) {
@@ -24,7 +25,7 @@ const TodoList = memo(({ todos }: TodoListProps) => {
 
         return (
           <div key={todo.id ?? index} className={`status-panel-todo-item ${statusClass}`}>
-            <div className={`status-panel-todo-icon ${statusClass}`}>
+            <div className={`status-panel-todo-icon ${statusClass}${status === 'in_progress' && isStreaming ? ' is-streaming' : ''}`}>
               <span className={`codicon ${iconClass}`} />
             </div>
             <div className="status-panel-todo-content">

@@ -42,7 +42,7 @@ tasks.named('checkstyleTest') {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.4.9'
+version = '0.5.5'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -88,9 +88,12 @@ repositories {
 
 dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'org.tomlj:tomlj:1.1.1'
     implementation 'javazoom:jlayer:1.0.1'
     implementation 'org.snakeyaml:snakeyaml-engine:3.0.1'
     implementation 'com.twelvemonkeys.imageio:imageio-webp:3.12.0'
+    // OpenCode 1.x stores sessions in ~/.local/share/opencode/opencode.db
+    implementation 'org.xerial:sqlite-jdbc:3.46.1.3'
     testImplementation 'junit:junit:4.13.2'
 
     intellijPlatform {
@@ -114,6 +117,11 @@ dependencies {
             // Enable Terminal Plugin support
             bundledPlugin('org.jetbrains.plugins.terminal')
         }
+
+        // Git4Idea is bundled in all JetBrains IDEs that support Git
+        // (IC/PC/PY/RD). Required so we can run a real `git diff` via
+        // git4idea.commands.* for the Commit AI feature.
+        bundledPlugin('Git4Idea')
 
         instrumentationTools()
 
@@ -233,6 +241,41 @@ patchPluginXml {
     }
 
     changeNotes = computedChangeNotes ?: '<p>No changelog found.</p>'
+}
+
+// macOS: Finder may recreate .DS_Store inside build/ while Gradle's Delete task is
+// removing it, which fails with "New files were found". Bypass Gradle's strict
+// directory-delete check and remove build/ with a tolerant strategy instead.
+tasks.named('clean', Delete) {
+    // Clear targets registered by the Java plugin so the strict Delete action is a no-op.
+    delete = []
+    doLast {
+        def buildDir = layout.buildDirectory.get().asFile
+        if (!buildDir.exists()) {
+            return
+        }
+        // Prefer shell rm on macOS — more resilient to concurrent .DS_Store writes.
+        def isMac = System.getProperty('os.name', '').toLowerCase().contains('mac')
+        if (isMac) {
+            providers.exec {
+                commandLine 'rm', '-rf', buildDir.absolutePath
+            }.result.get()
+        } else {
+            ant.delete(dir: buildDir, failonerror: false)
+        }
+        if (buildDir.exists()) {
+            // One more attempt after stripping junk metadata files
+            buildDir.eachFileRecurse(groovy.io.FileType.FILES) { f ->
+                if (f.name == '.DS_Store' || f.name == 'Thumbs.db') {
+                    f.delete()
+                }
+            }
+            ant.delete(dir: buildDir, failonerror: false)
+        }
+        if (buildDir.exists()) {
+            throw new GradleException("Unable to delete build directory: ${buildDir}")
+        }
+    }
 }
 
 // Disable product-specific searchable options/instrument tasks if present

@@ -12,8 +12,13 @@
 
 import type { MutableRefObject } from 'react';
 import type { UseWindowCallbacksOptions } from '../useWindowCallbacks';
+import type {
+  SubagentHistoryResponse,
+  SubagentStatusesResponse,
+} from '../../types';
 import { parseTaskNotification } from '../../utils/taskEventParser';
 import { deepEqual } from '../../utils/deepEqual';
+import { isLatestCodexStatusRequest } from '../../utils/codexStatusRequestTracker';
 import {
   setupSlashCommandsCallback,
   resetSlashCommandsState,
@@ -33,15 +38,35 @@ import { registerSessionAndSdkCallbacks } from './registerCallbacks/sessionCallb
 import { registerUsageModeCallbacks } from './registerCallbacks/usageModeCallbacks';
 import { registerPermissionCallbacks } from './registerCallbacks/permissionCallbacks';
 import { registerAgentAndSelectionCallbacks } from './registerCallbacks/agentCallbacks';
+import {
+  isCurrentSubagentResponse,
+  mergeSubagentHistory,
+  toSubagentHistoryResponse,
+} from './subagentHistoryMerge';
 
-function areSubagentMessagesEquivalent(previousMessages: unknown[] | undefined, nextMessages: unknown[] | undefined): boolean {
-  if (previousMessages === nextMessages) return true;
-  return deepEqual(previousMessages, nextMessages);
+const pendingSubagentHistoryChunks = new Map<string, string[]>();
+const MAX_PENDING_SUBAGENT_HISTORY_TRANSFERS = 16;
+
+function appendSubagentHistoryChunk(transferId: string, chunk: string, isFinal: string | boolean): void {
+  if (!transferId) return;
+  const chunks = pendingSubagentHistoryChunks.get(transferId) ?? [];
+  chunks.push(chunk);
+  if (isFinal === true || isFinal === 'true') {
+    pendingSubagentHistoryChunks.delete(transferId);
+    window.onSubagentHistoryLoaded?.(chunks.join(''));
+    return;
+  }
+  if (pendingSubagentHistoryChunks.size >= MAX_PENDING_SUBAGENT_HISTORY_TRANSFERS) {
+    const oldestTransferId = pendingSubagentHistoryChunks.keys().next().value;
+    if (oldestTransferId) pendingSubagentHistoryChunks.delete(oldestTransferId);
+  }
+  pendingSubagentHistoryChunks.set(transferId, chunks);
 }
 
 export function registerWindowCallbacks(
   options: UseWindowCallbacksOptions,
   tRef: MutableRefObject<UseWindowCallbacksOptions['t']>,
+  requestHistoryRenderCommit: (refreshEpoch: number) => void,
 ): void {
   // -------------------------------------------------------------------------
   // Session transition helpers
@@ -74,36 +99,73 @@ export function registerWindowCallbacks(
   // Register callback groups
   // =========================================================================
 
-  registerMessageCallbacks(options, resetTransientUiState);
+  registerMessageCallbacks(options, resetTransientUiState, requestHistoryRenderCommit);
   registerStreamingCallbacks(options);
   registerSessionAndSdkCallbacks(options, tRef);
   registerUsageModeCallbacks(options);
   registerPermissionCallbacks(options);
   registerAgentAndSelectionCallbacks(options);
 
+  window.onSubagentHistoryChunk = appendSubagentHistoryChunk;
+
   window.onSubagentHistoryLoaded = (json: string) => {
     try {
       if (!options.setSubagentHistories) return;
-      const result = JSON.parse(json);
+      const result = JSON.parse(json) as SubagentHistoryResponse;
+      if (!isCurrentSubagentResponse(
+        result,
+        options.currentSessionIdRef.current,
+        options.currentProviderRef.current,
+      )) return;
       const key = result.toolUseId || result.agentId;
       if (!key) return;
       options.setSubagentHistories((prev) => {
         const existing = prev[key];
+        const merged = mergeSubagentHistory(existing, result);
         // Skip state update when the payload is structurally identical.
         // This prevents cascading re-renders and scroll jumps caused by
         // periodic subagent polling (every 2 s) returning unchanged data.
-        if (existing && existing.success === result.success
-          && existing.error === result.error
-          && existing.sessionId === result.sessionId
-          && existing.toolUseId === result.toolUseId
-          && existing.agentId === result.agentId
-          && areSubagentMessagesEquivalent(existing.messages, result.messages)) {
+        if (existing && deepEqual(existing, merged)) {
           return prev;
         }
-        return { ...prev, [key]: result };
+        return { ...prev, [key]: merged };
       });
     } catch {
       // Ignore malformed callback payloads; the request can be retried by reopening the Agent row.
+    }
+  };
+
+  window.onSubagentStatusesLoaded = (json: string) => {
+    try {
+      if (!options.setSubagentHistories) return;
+      const result = JSON.parse(json) as SubagentStatusesResponse;
+      if (!isCurrentSubagentResponse(
+        result,
+        options.currentSessionIdRef.current,
+        options.currentProviderRef.current,
+      ) || !Array.isArray(result.statuses)) return;
+      // Drop late/out-of-order poll responses: only the answer to the latest
+      // request the frontend sent may be merged.
+      if (!isLatestCodexStatusRequest(result.requestId)) return;
+
+      options.setSubagentHistories((prev) => {
+        let next = prev;
+        for (const snapshot of result.statuses ?? []) {
+          const key = snapshot.toolUseId || snapshot.agentId;
+          if (!key) continue;
+          const existing = next[key];
+          const merged = mergeSubagentHistory(
+            existing,
+            toSubagentHistoryResponse(snapshot, result),
+          );
+          if (existing && deepEqual(existing, merged)) continue;
+          if (next === prev) next = { ...prev };
+          next[key] = merged;
+        }
+        return next;
+      });
+    } catch {
+      // Ignore malformed status batches; the next bounded poll will retry.
     }
   };
 

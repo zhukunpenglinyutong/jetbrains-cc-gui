@@ -1,133 +1,76 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../types';
-import type { FileChangeSummary, EditOperation, FileChangeStatus } from '../types/fileChanges';
-import { getFileName } from '../utils/helpers';
-import { FILE_MODIFY_TOOL_NAMES, isToolName, normalizeToolName } from '../utils/toolConstants';
+import type { FileChangeSummary } from '../types/fileChanges';
+import type { SubagentHistoryResponse } from '../types/subagent';
+import {
+  FILE_MODIFY_TOOL_NAMES,
+  AGENT_TOOL_NAMES,
+  isToolName,
+  normalizeToolName,
+} from '../utils/toolConstants';
 import { normalizeToolInput } from '../utils/toolInputNormalization';
 import { getToolLineInfo } from '../utils/toolPresentation';
+import {
+  buildSessionFileLedger,
+  diffLineStats,
+  ledgerEntriesToSummaries,
+  type LedgerOp,
+} from '../utils/sessionFileLedger';
+import {
+  isMultiActorPath,
+  loadFileTouchMap,
+  recordFileTouches,
+  wasTouchedOutsideSession,
+} from '../utils/fileTouchRegistry';
 
-/** Write tool names that indicate a new file */
-const WRITE_TOOL_NAMES = new Set(['write', 'write_file', 'create_file']);
-
-/**
- * Maximum lines to use LCS algorithm.
- * LCS has O(n*m) time and space complexity.
- * For files > 100 lines, we use a faster estimation to prevent UI freezes.
- * Threshold chosen based on: 100*100 = 10,000 operations, acceptable for UI thread.
- */
-const LCS_MAX_LINES = 100;
-
-/** Cache for diff calculations to avoid redundant computations */
+/** Cache for per-snippet diff calculations (EditToolBlock / op metadata) */
 const diffCache = new Map<string, { additions: number; deletions: number }>();
 const DIFF_CACHE_MAX_SIZE = 100;
 
-/**
- * Generate cache key from strings (using hash-like approach for large strings)
- */
-function getDiffCacheKey(oldString: string, newString: string): string {
-  // For small strings, use direct comparison
-  if (oldString.length + newString.length < 500) {
-    return `${oldString.length}:${newString.length}:${oldString.slice(0, 50)}:${newString.slice(0, 50)}`;
+/** Clear module-level diff cache (for tests). */
+export function clearDiffCache(): void {
+  diffCache.clear();
+}
+
+function hashString(value: string): string {
+  let hash = 5381;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) + hash) ^ value.charCodeAt(i);
   }
-  // For larger strings, use length + first/last chars as key
-  return `${oldString.length}:${newString.length}:${oldString.slice(0, 30)}:${oldString.slice(-20)}:${newString.slice(0, 30)}:${newString.slice(-20)}`;
+  return (hash >>> 0).toString(36);
+}
+
+function getDiffCacheKey(oldString: string, newString: string): string {
+  return `${oldString.length}:${newString.length}:${hashString(oldString)}:${hashString(newString)}`;
 }
 
 /**
- * Compute diff statistics (additions and deletions count)
- * Using LCS-based algorithm for accuracy, with fallback for large files.
- * Results are cached to avoid redundant computations.
+ * Compute diff statistics (additions and deletions count).
+ * Small snippets use LCS; large ones use multiset estimation.
+ * Used for per-operation metadata; file-level StatusPanel stats use the session ledger.
  */
-function computeDiffStats(oldString: string, newString: string): { additions: number; deletions: number } {
-  // Check cache first
+export function computeDiffStats(
+  oldString: string,
+  newString: string,
+): { additions: number; deletions: number } {
   const cacheKey = getDiffCacheKey(oldString, newString);
   const cached = diffCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const oldLines = oldString ? oldString.split('\n') : [];
-  const newLines = newString ? newString.split('\n') : [];
+  const result = diffLineStats(oldString, newString);
 
-  let result: { additions: number; deletions: number };
-
-  if (oldLines.length === 0 && newLines.length === 0) {
-    result = { additions: 0, deletions: 0 };
-  } else if (oldLines.length === 0) {
-    result = { additions: newLines.length, deletions: 0 };
-  } else if (newLines.length === 0) {
-    result = { additions: 0, deletions: oldLines.length };
-  } else {
-    const m = oldLines.length;
-    const n = newLines.length;
-
-    if (m > LCS_MAX_LINES || n > LCS_MAX_LINES) {
-      // Fallback to simple estimation for large files to prevent UI freezes
-      const diff = n - m;
-      result = diff >= 0
-        ? { additions: diff, deletions: 0 }
-        : { additions: 0, deletions: -diff };
-    } else {
-      // LCS-based diff count for reasonable file sizes
-      result = computeLcsDiff(oldLines, newLines, m, n);
+  if (diffCache.size >= DIFF_CACHE_MAX_SIZE) {
+    const firstKey = diffCache.keys().next().value;
+    if (firstKey) {
+      diffCache.delete(firstKey);
     }
   }
-
-  // Cache result with size limit
-  if (diffCache.size >= DIFF_CACHE_MAX_SIZE) {
-    // Remove oldest entry (first key)
-    const firstKey = diffCache.keys().next().value;
-    if (firstKey) diffCache.delete(firstKey);
-  }
   diffCache.set(cacheKey, result);
-
   return result;
 }
 
-/**
- * LCS-based diff calculation (extracted for clarity)
- */
-function computeLcsDiff(
-  oldLines: string[],
-  newLines: string[],
-  m: number,
-  n: number
-): { additions: number; deletions: number } {
-  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      if (oldLines[i - 1] === newLines[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-      }
-    }
-  }
-
-  let additions = 0;
-  let deletions = 0;
-  let i = m, j = n;
-
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
-      i--; j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      additions++;
-      j--;
-    } else {
-      deletions++;
-      i--;
-    }
-  }
-
-  return { additions, deletions };
-}
-
-/**
- * Extract file path from tool input (handles various naming conventions)
- * Ensures the returned value is a string, not an object (e.g., MCP tool path can be an object)
- */
 function extractFilePath(input: Record<string, unknown>): string | null {
   const pathValue = input.path;
   const filePathValue = input.file_path;
@@ -136,57 +79,244 @@ function extractFilePath(input: Record<string, unknown>): string | null {
   const notebookPathValue = input.notebook_path;
 
   return (
-    (typeof input.filePath === 'string' ? input.filePath : undefined) ??
-    (typeof filePathValue === 'string' ? filePathValue : undefined) ??
-    (typeof pathValue === 'string' ? pathValue : undefined) ??
-    (typeof targetFileValue === 'string' ? targetFileValue : undefined) ??
-    (typeof targetFileValue2 === 'string' ? targetFileValue2 : undefined) ??
-    (typeof notebookPathValue === 'string' ? notebookPathValue : undefined) ??
-    null
+    (typeof input.filePath === 'string' ? input.filePath : undefined)
+    ?? (typeof filePathValue === 'string' ? filePathValue : undefined)
+    ?? (typeof pathValue === 'string' ? pathValue : undefined)
+    ?? (typeof targetFileValue === 'string' ? targetFileValue : undefined)
+    ?? (typeof targetFileValue2 === 'string' ? targetFileValue2 : undefined)
+    ?? (typeof notebookPathValue === 'string' ? notebookPathValue : undefined)
+    ?? null
   );
 }
 
-/**
- * Extract old and new strings from tool input
- */
-function extractStrings(input: Record<string, unknown>): { oldString: string; newString: string; replaceAll?: boolean } {
+interface StringPair {
+  oldString: string;
+  newString: string;
+  replaceAll?: boolean;
+  filePath?: string | null;
+}
+
+function pairFromRecord(record: Record<string, unknown>): StringPair {
   const oldString =
-    (typeof input.old_string === 'string' ? input.old_string : undefined) ??
-    (typeof input.oldString === 'string' ? input.oldString : undefined) ??
-    '';
+    (typeof record.old_string === 'string' ? record.old_string : undefined)
+    ?? (typeof record.oldString === 'string' ? record.oldString : undefined)
+    ?? (typeof record.oldText === 'string' ? record.oldText : undefined)
+    ?? '';
   const newString =
-    (typeof input.new_string === 'string' ? input.new_string : undefined) ??
-    (typeof input.newString === 'string' ? input.newString : undefined) ??
-    (typeof input.content === 'string' ? input.content : undefined) ?? // Write tool uses 'content'
-    '';
-  const replaceAll = typeof input.replace_all === 'boolean' ? input.replace_all : (typeof input.replaceAll === 'boolean' ? input.replaceAll : undefined);
+    (typeof record.new_string === 'string' ? record.new_string : undefined)
+    ?? (typeof record.newString === 'string' ? record.newString : undefined)
+    ?? (typeof record.newText === 'string' ? record.newText : undefined)
+    ?? (typeof record.content === 'string' ? record.content : undefined)
+    ?? '';
+  const replaceAll =
+    typeof record.replace_all === 'boolean'
+      ? record.replace_all
+      : (typeof record.replaceAll === 'boolean' ? record.replaceAll : undefined);
 
-  return { oldString, newString, replaceAll };
+  return {
+    oldString,
+    newString,
+    replaceAll,
+    filePath: extractFilePath(record),
+  };
 }
 
-/**
- * Determine file status (A = Added, M = Modified)
- */
-function determineFileStatus(operations: EditOperation[]): FileChangeStatus {
-  if (operations.length === 0) return 'M';
+function extractEditPairs(input: Record<string, unknown>): StringPair[] {
+  const edits = input.edits;
+  if (Array.isArray(edits) && edits.length > 0) {
+    const pairs: StringPair[] = [];
+    for (const item of edits) {
+      if (!item || typeof item !== 'object') continue;
+      const pair = pairFromRecord(item as Record<string, unknown>);
+      if (pair.oldString === '' && pair.newString === '') continue;
+      pairs.push(pair);
+    }
+    if (pairs.length > 0) return pairs;
+  }
 
-  const firstOp = operations[0];
-  // Write/create_file tools indicate a new file
-  if (WRITE_TOOL_NAMES.has(normalizeToolName(firstOp.toolName))) {
-    return 'A';
-  }
-  // If first operation has empty oldString, it's likely a new file
-  if (firstOp.oldString === '' && firstOp.newString !== '') {
-    return 'A';
-  }
-  return 'M';
+  return [pairFromRecord(input)];
 }
 
-/**
- * Check if a tool result indicates success
- */
 function isSuccessfulResult(result?: ToolResultBlock | null): boolean {
   return result !== undefined && result !== null && result.is_error !== true;
+}
+
+/**
+ * Content equality for summaries. The enrich effect stores derived state; callers
+ * may pass unstable function props (new identity per render), which would otherwise
+ * retrigger the effect forever — bailing out on equal content breaks that cycle.
+ */
+function sameFileChangeSummaries(a: FileChangeSummary[], b: FileChangeSummary[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    const x = a[i];
+    const y = b[i];
+    if (
+      x.filePath !== y.filePath
+      || x.fileName !== y.fileName
+      || x.status !== y.status
+      || x.additions !== y.additions
+      || x.deletions !== y.deletions
+      || x.multiAgent !== y.multiAgent
+      || x.lineStart !== y.lineStart
+      || x.lineEnd !== y.lineEnd
+    ) {
+      return false;
+    }
+    const xAgents = x.agentIds ?? [];
+    const yAgents = y.agentIds ?? [];
+    if (xAgents.length !== yAgents.length || xAgents.some((id, j) => id !== yAgents[j])) {
+      return false;
+    }
+    const xOps = x.operations;
+    const yOps = y.operations;
+    if (xOps.length !== yOps.length) return false;
+    for (let k = 0; k < xOps.length; k += 1) {
+      const p = xOps[k];
+      const q = yOps[k];
+      if (
+        p.toolName !== q.toolName
+        || p.oldString !== q.oldString
+        || p.newString !== q.newString
+        || p.additions !== q.additions
+        || p.deletions !== q.deletions
+        || p.replaceAll !== q.replaceAll
+        || p.lineStart !== q.lineStart
+        || p.lineEnd !== q.lineEnd
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function collectLedgerOpsFromToolUse(params: {
+  toolName: string;
+  rawName?: string;
+  input: Record<string, unknown>;
+  result: ToolResultBlock | null | undefined;
+  agentId: string;
+  out: LedgerOp[];
+}): void {
+  const { toolName, rawName, input, result, agentId, out } = params;
+  if (!isToolName(toolName, FILE_MODIFY_TOOL_NAMES)) return;
+  if (!isSuccessfulResult(result)) return;
+
+  const normalized = normalizeToolInput(rawName ?? toolName, input) as Record<string, unknown>;
+  const defaultPath = extractFilePath(normalized);
+  const pairs = extractEditPairs(normalized);
+  const lineInfo = getToolLineInfo(normalized, undefined, result);
+
+  for (const pair of pairs) {
+    const filePath = pair.filePath || defaultPath;
+    if (!filePath) continue;
+    if (pair.oldString === '' && pair.newString === '') continue;
+
+    out.push({
+      filePath,
+      toolName,
+      oldString: pair.oldString,
+      newString: pair.newString,
+      replaceAll: pair.replaceAll,
+      agentId,
+      lineStart: lineInfo.start,
+      lineEnd: lineInfo.end,
+    });
+  }
+}
+
+function getRawContentBlocks(message: unknown): unknown[] {
+  if (!message || typeof message !== 'object') return [];
+  const record = message as Record<string, unknown>;
+  const nested = record.message;
+  if (nested && typeof nested === 'object') {
+    const nestedContent = (nested as Record<string, unknown>).content;
+    if (Array.isArray(nestedContent)) return nestedContent;
+  }
+  if (Array.isArray(record.content)) return record.content;
+  return [];
+}
+
+function isAssistantLike(message: unknown): boolean {
+  if (!message || typeof message !== 'object') return false;
+  const record = message as Record<string, unknown>;
+  if (record.type === 'assistant' || record.role === 'assistant') return true;
+  const nested = record.message;
+  if (nested && typeof nested === 'object') {
+    const role = (nested as Record<string, unknown>).role;
+    if (role === 'assistant') return true;
+  }
+  return false;
+}
+
+function findToolResultInRawMessages(
+  messages: unknown[],
+  toolUseId: string,
+): ToolResultBlock | null {
+  for (const message of messages) {
+    for (const block of getRawContentBlocks(message)) {
+      if (!block || typeof block !== 'object') continue;
+      const item = block as Record<string, unknown>;
+      if (item.type === 'tool_result' && item.tool_use_id === toolUseId) {
+        return item as unknown as ToolResultBlock;
+      }
+    }
+  }
+  return null;
+}
+
+function collectFromSubagentHistories(
+  out: LedgerOp[],
+  subagentHistories: Record<string, SubagentHistoryResponse>,
+  allowedKeys: Set<string> | null,
+): void {
+  for (const [key, history] of Object.entries(subagentHistories)) {
+    if (!history?.success || !Array.isArray(history.messages)) continue;
+    if (allowedKeys && !allowedKeys.has(key)) {
+      if (!history.agentId || !allowedKeys.has(history.agentId)) {
+        if (!history.toolUseId || !allowedKeys.has(history.toolUseId)) {
+          continue;
+        }
+      }
+    }
+
+    const agentId =
+      (typeof history.agentId === 'string' && history.agentId)
+      || (typeof history.toolUseId === 'string' && history.toolUseId)
+      || key;
+
+    const rawMessages = history.messages;
+    for (const message of rawMessages) {
+      if (!isAssistantLike(message)) continue;
+      for (const block of getRawContentBlocks(message)) {
+        if (!block || typeof block !== 'object') continue;
+        const item = block as Record<string, unknown>;
+        if (item.type !== 'tool_use') continue;
+
+        const name = typeof item.name === 'string' ? item.name : '';
+        const toolName = normalizeToolName(name);
+        if (!isToolName(toolName, FILE_MODIFY_TOOL_NAMES)) continue;
+
+        const toolUseId = typeof item.id === 'string' ? item.id : undefined;
+        if (!toolUseId) continue;
+
+        const result = findToolResultInRawMessages(rawMessages, toolUseId);
+        const rawInput = item.input;
+        if (!rawInput || typeof rawInput !== 'object') continue;
+
+        collectLedgerOpsFromToolUse({
+          toolName,
+          rawName: name,
+          input: rawInput as Record<string, unknown>,
+          result,
+          agentId,
+          out,
+        });
+      }
+    }
+  }
 }
 
 interface UseFileChangesParams {
@@ -195,105 +325,163 @@ interface UseFileChangesParams {
   findToolResult: (toolUseId?: string, messageIndex?: number) => ToolResultBlock | null;
   /** Start processing messages from this index (for Keep All feature) */
   startFromIndex?: number;
+  /** Background agent sidechain transcripts — their Edit/Write tools must also count */
+  subagentHistories?: Record<string, SubagentHistoryResponse>;
+  /** Current chat tab session id — for cross-tab multi-agent marks */
+  currentSessionId?: string | null;
 }
 
 /**
- * Hook to extract and aggregate file changes from messages
+ * Attribute main-stream tool_use blocks the same way groupBlocks absorbs them
+ * into Agent/Task groups: after an Agent/Task id, following tool_use blocks belong
+ * to that agent until a non-tool boundary (text/thinking/…). Without this, every
+ * Edit is labeled "main" and multi-agent badges never appear when two agents
+ * both write via the main transcript (or absorbed tools after Task).
+ */
+function resolveAgentIdForMainStreamBlocks(
+  blocks: ClaudeContentBlock[],
+): Map<string, string> {
+  /** tool_use id → agent key ("main" or Agent/Task tool_use id) */
+  const ownerByToolId = new Map<string, string>();
+  let activeAgentId = 'main';
+
+  for (const block of blocks) {
+    if (block.type !== 'tool_use') {
+      // Same boundary as groupBlocks: non-tool ends agent absorption
+      activeAgentId = 'main';
+      continue;
+    }
+
+    const rawName = block.name ?? '';
+    const toolName = normalizeToolName(rawName);
+    const toolId = typeof block.id === 'string' ? block.id : undefined;
+
+    if (isToolName(toolName, AGENT_TOOL_NAMES) && toolId) {
+      activeAgentId = toolId;
+      ownerByToolId.set(toolId, toolId);
+      continue;
+    }
+
+    if (toolId) {
+      ownerByToolId.set(toolId, activeAgentId);
+    }
+  }
+
+  return ownerByToolId;
+}
+
+/**
+ * Extract file changes from messages using a session ledger:
+ * net diff(baseline, current) per file, multi-agent flag when ≥2 agents touch a file.
+ * Rebuilds from messages so switching back from history keeps stats.
  */
 export function useFileChanges({
   messages,
   getContentBlocks,
   findToolResult,
   startFromIndex = 0,
+  subagentHistories,
+  currentSessionId = null,
 }: UseFileChangesParams): FileChangeSummary[] {
-  return useMemo(() => {
-    // Map to collect operations by file path
-    const fileOperationsMap = new Map<string, EditOperation[]>();
+  // Pure derivation: messages → ledger entries → summaries. No side effects in
+  // this memo (localStorage touch recording lives in the effect below), so
+  // StrictMode double-invocation and per-message streaming renders stay cheap.
+  const base = useMemo(() => {
+    const ops: LedgerOp[] = [];
+    const agentKeysAfterBase = new Set<string>();
 
-    // Iterate through messages starting from startFromIndex
     messages.forEach((message, messageIndex) => {
-      // Skip messages before startFromIndex
       if (messageIndex < startFromIndex) return;
-
       if (message.type !== 'assistant') return;
 
       const blocks = getContentBlocks(message);
+      const ownerByToolId = resolveAgentIdForMainStreamBlocks(blocks);
 
       blocks.forEach((block) => {
         if (block.type !== 'tool_use') return;
 
-        const toolName = normalizeToolName(block.name ?? '');
+        const rawName = block.name ?? '';
+        const toolName = normalizeToolName(rawName);
 
-        // Check if this is a file modification tool
+        if (isToolName(toolName, AGENT_TOOL_NAMES) && block.id) {
+          agentKeysAfterBase.add(block.id);
+        }
+
         if (!isToolName(toolName, FILE_MODIFY_TOOL_NAMES)) return;
 
         const rawInput = block.input as Record<string, unknown> | undefined;
-        const input = rawInput ? normalizeToolInput(block.name, rawInput) as Record<string, unknown> : undefined;
-        if (!input) return;
+        if (!rawInput) return;
 
-        const filePath = extractFilePath(input);
-        if (!filePath) return;
+        const toolId = typeof block.id === 'string' ? block.id : undefined;
+        const agentId = (toolId && ownerByToolId.get(toolId)) || 'main';
 
-        // Check if operation completed successfully
         const result = findToolResult(block.id, messageIndex);
-        if (!isSuccessfulResult(result)) return;
-
-        const { oldString, newString, replaceAll } = extractStrings(input);
-        const { additions, deletions } = computeDiffStats(oldString, newString);
-        const lineInfo = getToolLineInfo(input, undefined, result);
-
-        const operation: EditOperation = {
+        collectLedgerOpsFromToolUse({
           toolName,
-          oldString,
-          newString,
-          additions,
-          deletions,
-          replaceAll,
-          lineStart: lineInfo.start,
-          lineEnd: lineInfo.end,
-        };
-
-        // Group by file path
-        const existing = fileOperationsMap.get(filePath) ?? [];
-        existing.push(operation);
-        fileOperationsMap.set(filePath, existing);
+          rawName,
+          input: rawInput,
+          result,
+          agentId,
+          out: ops,
+        });
       });
     });
 
-    // Convert map to array of summaries
-    const summaries: FileChangeSummary[] = [];
+    if (subagentHistories && Object.keys(subagentHistories).length > 0) {
+      const allowedKeys = startFromIndex > 0 ? agentKeysAfterBase : null;
+      collectFromSubagentHistories(
+        ops,
+        subagentHistories,
+        allowedKeys && allowedKeys.size > 0
+          ? allowedKeys
+          : (startFromIndex > 0 ? agentKeysAfterBase : null),
+      );
+    }
 
-    fileOperationsMap.forEach((operations, filePath) => {
-      // Calculate totals
-      const totalAdditions = operations.reduce((sum, op) => sum + (op.additions || 0), 0);
-      const totalDeletions = operations.reduce((sum, op) => sum + (op.deletions || 0), 0);
+    const entries = buildSessionFileLedger(ops);
+    const summaries = ledgerEntriesToSummaries(entries);
+    return { entries, summaries };
+  }, [messages, getContentBlocks, findToolResult, startFromIndex, subagentHistories]);
 
-      // Defensive: ensure status is a valid string
-      const rawStatus = determineFileStatus(operations);
-      const status: FileChangeStatus = rawStatus === 'A' ? 'A' : 'M';
+  const [enriched, setEnriched] = useState<FileChangeSummary[]>(base.summaries);
 
-      const firstLineOperation = operations.find((op) => typeof op.lineStart === 'number');
+  // Cross-tab / multi-agent: persist who touched each path, then enrich badges.
+  // Recording is idempotent per actor key, so re-runs on new entries are safe;
+  // setEnriched bails out when content is unchanged so unstable caller props
+  // (new function identity per render) cannot loop effect → state → render.
+  useEffect(() => {
+    const { entries, summaries } = base;
+    if (!currentSessionId || summaries.length === 0) {
+      setEnriched((prev) => (sameFileChangeSummaries(prev, summaries) ? prev : summaries));
+      return;
+    }
 
-      summaries.push({
-        filePath: String(filePath || ''),
-        fileName: String(getFileName(filePath) || filePath || 'unknown'),
-        status,
-        additions: totalAdditions,
-        deletions: totalDeletions,
-        lineStart: firstLineOperation?.lineStart,
-        lineEnd: firstLineOperation?.lineEnd,
-        operations,
-      });
+    const agentsByPath = new Map<string, string[]>();
+    for (const e of entries) {
+      agentsByPath.set(e.filePath, e.agentIds.length > 0 ? e.agentIds : ['main']);
+    }
+    // Snapshot BEFORE recording this session so "outside session" still sees others
+    const priorMap = loadFileTouchMap();
+    recordFileTouches(
+      summaries.map((s) => s.filePath),
+      currentSessionId,
+      agentsByPath,
+    );
+    const mapAfter = loadFileTouchMap();
+
+    const next = summaries.map((s) => {
+      const crossMulti = isMultiActorPath(s.filePath, mapAfter);
+      const outside = wasTouchedOutsideSession(s.filePath, currentSessionId, priorMap);
+      return {
+        ...s,
+        multiAgent: s.multiAgent === true || crossMulti,
+        // Write overwrote a file another tab already touched → show M not A
+        status: outside && s.status === 'A' ? 'M' : s.status,
+        agentIds: s.agentIds,
+      };
     });
+    setEnriched((prev) => (sameFileChangeSummaries(prev, next) ? prev : next));
+  }, [base, currentSessionId]);
 
-    // Sort: Added files first, then by file path
-    summaries.sort((a, b) => {
-      if (a.status !== b.status) {
-        return a.status === 'A' ? -1 : 1;
-      }
-      return a.filePath.localeCompare(b.filePath);
-    });
-
-    return summaries;
-  }, [messages, getContentBlocks, findToolResult, startFromIndex]);
+  return enriched;
 }

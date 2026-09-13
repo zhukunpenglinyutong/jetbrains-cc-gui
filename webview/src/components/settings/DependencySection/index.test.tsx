@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { requestDependencyStatusUntilSettled } from '../../../utils/bridgeStartup';
 import DependencySection from './index';
 
 const translations: Record<string, string> = {
@@ -48,6 +49,84 @@ describe('DependencySection', () => {
     window.sendToJava = vi.fn();
     window.__pendingDependencyUpdates = undefined;
     window.__pendingDependencyVersions = undefined;
+    window.__dependencyStatusState = 'pending';
+  });
+
+  afterEach(() => {
+    window.dispatchEvent(new Event('pagehide'));
+  });
+
+  it('shows an error state with manual retry instead of SDK install actions', () => {
+    render(<DependencySection isActive={false} />);
+
+    act(() => {
+      window.updateDependencyStatus?.(JSON.stringify({
+        success: false,
+        error: 'status unavailable',
+      }));
+    });
+
+    expect(screen.getByText('chat.sdkStatusUnavailable')).toBeTruthy();
+    expect(screen.queryByText('Claude Code SDK')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'chat.retrySdkStatus' }));
+
+    expect(window.sendToJava).toHaveBeenCalledWith('get_dependency_status:');
+    expect(screen.getByText(translations['settings.dependency.loading'])).toBeTruthy();
+  });
+
+  it('returns to loading when the dependency tab retries a previous error', () => {
+    const view = render(<DependencySection isActive={false} />);
+
+    act(() => {
+      window.updateDependencyStatus?.(JSON.stringify({
+        success: false,
+        error: 'status unavailable',
+      }));
+    });
+    expect(screen.getByText('chat.sdkStatusUnavailable')).toBeTruthy();
+
+    view.rerender(<DependencySection isActive />);
+
+    expect(screen.queryByText('chat.sdkStatusUnavailable')).toBeNull();
+    expect(screen.getByText(translations['settings.dependency.loading'])).toBeTruthy();
+  });
+
+  it('reuses the startup request while dependency status is pending', () => {
+    requestDependencyStatusUntilSettled();
+
+    render(<DependencySection isActive />);
+
+    const sendToJavaMock = vi.mocked(window.sendToJava!);
+    const statusRequests = sendToJavaMock.mock.calls
+      .filter(([message]) => message === 'get_dependency_status:');
+    expect(statusRequests).toHaveLength(1);
+  });
+
+  it('queues an installation refresh behind the active status request', async () => {
+    requestDependencyStatusUntilSettled();
+    render(<DependencySection isActive={false} />);
+
+    act(() => {
+      window.dependencyInstallResult?.(JSON.stringify({
+        success: true,
+        sdkId: 'claude-sdk',
+      }));
+    });
+
+    const sendToJavaMock = vi.mocked(window.sendToJava!);
+    const countStatusRequests = () => sendToJavaMock.mock.calls
+      .filter(([message]) => message === 'get_dependency_status:').length;
+    expect(countStatusRequests()).toBe(1);
+
+    await act(async () => {
+      window.updateDependencyStatus?.(JSON.stringify({
+        'claude-sdk': { status: 'installed' },
+      }));
+      await Promise.resolve();
+    });
+
+    expect(countStatusRequests()).toBe(2);
   });
 
   it('removes the custom version input and keeps a compact version selector with actions', () => {

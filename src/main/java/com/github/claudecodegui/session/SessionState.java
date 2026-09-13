@@ -1,6 +1,7 @@
 package com.github.claudecodegui.session;
 
 
+import com.github.claudecodegui.util.PlatformUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -26,6 +27,10 @@ public class SessionState {
         modes.add("acceptEdits");
         modes.add("autoEdit");
         modes.add("bypassPermissions");
+        // omp model-role modes (`omp --model smol|slow`); only offered by the
+        // webview for the omp provider, but validated here so set_mode accepts them.
+        modes.add("smol");
+        modes.add("slow");
         VALID_PERMISSION_MODES = Collections.unmodifiableSet(modes);
     }
 
@@ -57,6 +62,42 @@ public class SessionState {
         return effort != null && VALID_REASONING_EFFORTS.contains(effort.trim());
     }
 
+    /**
+     * Check whether the given DSH agent preset id is recognized.
+     */
+    public static boolean isValidDshPreset(String preset) {
+        if (preset == null) {
+            return false;
+        }
+        String normalized = preset.trim();
+        // Keep aligned with DSH_PRESET_IDS in ai-bridge/services/dsh/preset-overlay.js
+        // (router-standard ships with the dsh-routing-suite user presets).
+        return normalized.isEmpty()
+                || Set.of("standard", "code", "minimal", "cordis", "router-standard").contains(normalized)
+                || discoverUserDshPresetIds().contains(normalized);
+    }
+
+    public static List<String> discoverUserDshPresetIds() {
+        List<String> ids = new ArrayList<>();
+        String dshHome = System.getenv("DSH_HOME");
+        java.nio.file.Path dshRoot = dshHome != null && !dshHome.trim().isEmpty()
+                ? java.nio.file.Paths.get(dshHome.trim())
+                : java.nio.file.Paths.get(PlatformUtils.getHomeDirectory(), ".dsh");
+        java.nio.file.Path root = dshRoot.resolve(".agent-presets");
+        try (java.nio.file.DirectoryStream<java.nio.file.Path> stream =
+                     java.nio.file.Files.newDirectoryStream(root)) {
+            for (java.nio.file.Path entry : stream) {
+                if (java.nio.file.Files.isDirectory(entry)
+                        && java.nio.file.Files.isRegularFile(entry.resolve("agent.cordis.yml"))) {
+                    ids.add(entry.getFileName().toString());
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        java.util.Collections.sort(ids);
+        return ids;
+    }
+
     // Session identifiers
     private volatile String sessionId;
     private volatile String channelId;
@@ -83,12 +124,13 @@ public class SessionState {
     // explicit, informed opt-in — see security remediation A: shipping bypass as the
     // out-of-the-box default removed the only confirmation gate for AI-issued commands.
     private volatile String permissionMode = "default";
-    private volatile String model = "claude-sonnet-4-7";
+    private volatile String model = "claude-sonnet-5";
     private volatile String provider = "claude";
     // Reasoning effort (thinking depth). Null means "do not override SDK/settings".
     private volatile String reasoningEffort = null;
     // Codex service tier: null = use Codex defaults, "fast" = Codex /fast.
     private volatile String codexServiceTier = null;
+    private volatile String dshPreset = "";
 
     // Slash commands — volatile for cross-thread visibility (same reason as permissionMode/model/provider)
     private volatile List<String> slashCommands = new ArrayList<>();
@@ -157,6 +199,10 @@ public class SessionState {
         return codexServiceTier;
     }
 
+    public String getDshPreset() {
+        return dshPreset;
+    }
+
     public String getRuntimeSessionEpoch() {
         return runtimeSessionEpoch;
     }
@@ -213,7 +259,50 @@ public class SessionState {
     }
 
     public void setModel(String model) {
-        this.model = model;
+        this.model = normalizeRetiredModelId(model);
+    }
+
+    /**
+     * Migrate retired Claude model ids to their live replacement on write.
+     *
+     * <p>Persisted tab state (.idea/claudeCodeTabState.xml) and history sessions keep
+     * whatever model id was saved forever. When a model is retired from the API
+     * (sonnet-4-6, sonnet-4-7, ...), restoring such a tab would otherwise spawn a CLI
+     * pinned to a dead model that fails on every send ("It may not exist or you may
+     * not have access to it") - see #1678. Migrating here self-heals restored tabs
+     * without touching the persisted XML.</p>
+     *
+     * @param model raw model id (may be null, blank, carry a [1m] suffix, or be retired)
+     * @return the model id to store - retired ids mapped to their live replacement,
+     *         anything else (including non-Claude ids) passed through unchanged
+     */
+    public static String normalizeRetiredModelId(String model) {
+        if (model == null) {
+            return null;
+        }
+        String trimmed = model.trim();
+        if (trimmed.isEmpty()) {
+            // Blank input normalizes to "" like every other path returns trimmed.
+            return trimmed;
+        }
+        String base = trimmed;
+        boolean oneM = false;
+        if (base.endsWith("[1m]")) {
+            base = base.substring(0, base.length() - "[1m]".length());
+            oneM = true;
+        }
+        switch (base) {
+            case "claude-sonnet-4-6":
+            case "claude-sonnet-4-7":
+                base = "claude-sonnet-5";
+                break;
+            case "claude-opus-4-6":
+                base = "claude-opus-4-8";
+                break;
+            default:
+                return trimmed;
+        }
+        return oneM ? base + "[1m]" : base;
     }
 
     public void setProvider(String provider) {
@@ -234,6 +323,12 @@ public class SessionState {
 
     public void setCodexServiceTier(String codexServiceTier) {
         this.codexServiceTier = codexServiceTier;
+    }
+
+    public void setDshPreset(String preset) {
+        if (isValidDshPreset(preset)) {
+            this.dshPreset = preset.trim();
+        }
     }
 
     public void setRuntimeSessionEpoch(String runtimeSessionEpoch) {
@@ -272,6 +367,21 @@ public class SessionState {
      */
     public void clearMessages() {
         messages.clear();
+    }
+
+    /**
+     * Truncate messages, keeping only the first {@code keepCount} entries.
+     * If keepCount >= messages.size(), this is a no-op.
+     * @param keepCount number of messages to retain from the beginning
+     */
+    public void truncateMessages(int keepCount) {
+        if (keepCount < 0) {
+            return;
+        }
+        if (keepCount >= messages.size()) {
+            return;
+        }
+        messages.subList(keepCount, messages.size()).clear();
     }
 
     /**

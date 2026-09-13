@@ -38,6 +38,11 @@ interface UseSessionManagementOptions {
   clearToasts: () => void;
   addToast: (message: string, type?: ToastType) => void;
   t: TFunction;
+  /**
+   * Apply model (and optional agent) from a history row so the input bar
+   * matches the session being opened.
+   */
+  applyHistoryModel?: (provider: string, model: string, agent?: string | null) => void;
 }
 
 interface UseSessionManagementReturn {
@@ -51,7 +56,7 @@ interface UseSessionManagementReturn {
   handleCancelNewSession: () => void;
   handleConfirmInterrupt: () => void;
   handleCancelInterrupt: () => void;
-  loadHistorySession: (sessionId: string, provider?: string) => void;
+  loadHistorySession: (sessionId: string, provider?: string, model?: string, agent?: string) => void;
   deleteHistorySession: (sessionId: string) => void;
   deleteHistorySessions: (sessionIds: string[]) => void;
   exportHistorySession: (sessionId: string, title: string) => void;
@@ -88,6 +93,7 @@ export function useSessionManagement({
   clearToasts,
   addToast,
   t,
+  applyHistoryModel,
 }: UseSessionManagementOptions): UseSessionManagementReturn {
   const [showNewSessionConfirm, setShowNewSessionConfirm] = useState(false);
   const [showInterruptConfirm, setShowInterruptConfirm] = useState(false);
@@ -108,6 +114,8 @@ export function useSessionManagement({
   const beginSessionTransition = useCallback((nextSessionId: string | null, nextTitle: string | null) => {
     window.__sessionTransitioning = true;
     window.__sessionTransitionToken = createSessionTransitionToken();
+    // Discard any deferred snapshot from a prior transition / outgoing session.
+    window.__deferredTransitionUpdateMessages = null;
     // Clear expand/collapse cache on session switch to avoid unbounded growth
     clearAllPersistedExpanded();
     // Use the single cleanup entry point exposed by useWindowCallbacks.
@@ -160,6 +168,10 @@ export function useSessionManagement({
         console.warn('[SessionManagement] Transition guard timed out — auto-releasing');
         window.__sessionTransitioning = false;
         window.__sessionTransitionToken = null;
+        // Apply any history snapshot that arrived while the guard was stuck.
+        if (typeof window.__flushDeferredTransitionUpdateMessages === 'function') {
+          window.__flushDeferredTransitionUpdateMessages();
+        }
       }
     }, 15_000); // 15 seconds — generous enough for slow history loads
   }, [clearToasts, currentSessionIdRef, setStatus, setLoadingState, setIsThinking, setStreamingActive, setMessages, setCurrentSessionId, setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens, setTaskEvents, setSubagentHistories]);
@@ -247,28 +259,41 @@ export function useSessionManagement({
   }, []);
 
   // Load history session
-  const loadHistorySession = useCallback((sessionId: string, provider?: string) => {
+  const loadHistorySession = useCallback((
+    sessionId: string,
+    provider?: string,
+    model?: string,
+    agent?: string,
+  ) => {
     const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
     const effectiveProvider = provider || session?.provider || currentProvider || 'claude';
+    const effectiveModel = (model || session?.model || '').trim();
+    const effectiveAgent = (agent || session?.agent || '').trim();
 
-    // Re-opening the very session already active: don't interrupt the in-flight
-    // turn or wipe the view - just ask the backend to soft-reload the transcript
-    // from the server. The backend sessionLoadCallback detects the same-session
-    // case and routes through reloadActiveSessionMessages (reusing the
-    // session_updated reload path, never interrupting).
-    // Claude only: codex goes through loadCodexSession, which lacks streaming
-    // defer - skipping interrupt there would clearMessages mid-stream and
-    // disturb the live reply.
-    if (sessionId === currentSessionId && effectiveProvider === 'claude') {
+    // Restore the session's model/agent in the UI before (or with) the load so
+    // the next send continues with the same selection the history used.
+    if (effectiveModel && applyHistoryModel) {
+      applyHistoryModel(effectiveProvider, effectiveModel, effectiveAgent || null);
+    }
+
+    // Re-opening the session already active: soft-reload only — do NOT
+    // beginSessionTransition (which clears messages and holds the transition
+    // guard). Backend routes same-session to reloadActiveSessionMessages.
+    // Codex still uses a full transition: its loadCodexSession path is separate
+    // and mid-stream soft-reload without interrupt can clearMessages under the
+    // live reply.
+    const isSameSession = sessionId === currentSessionId;
+    if (isSameSession && effectiveProvider !== 'codex') {
       sendBridgeEvent('load_session', JSON.stringify({
         sessionId,
         provider: effectiveProvider,
+        ...(effectiveModel ? { model: effectiveModel } : {}),
       }));
       setCurrentView('chat');
       return;
     }
 
-    // Switching to a different session (or codex same-session): interrupt first
+    // Switching to a different session (or Codex same-session): interrupt first
     // if the AI is mid-reply, then do a full session swap.
     if (loading) {
       sendBridgeEvent('interrupt_session');
@@ -277,9 +302,10 @@ export function useSessionManagement({
     sendBridgeEvent('load_session', JSON.stringify({
       sessionId,
       provider: effectiveProvider,
+      ...(effectiveModel ? { model: effectiveModel } : {}),
     }));
     setCurrentView('chat');
-  }, [beginSessionTransition, currentProvider, loading, setCurrentView, currentSessionId]);
+  }, [applyHistoryModel, beginSessionTransition, currentProvider, loading, setCurrentView, currentSessionId]);
 
   // Delete history session
   const deleteHistorySession = useCallback((sessionId: string) => {
@@ -363,9 +389,14 @@ export function useSessionManagement({
 
   // Export history session
   const exportHistorySession = useCallback((sessionId: string, title: string) => {
-    const exportData = JSON.stringify({ sessionId, title });
+    const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
+    const exportData = JSON.stringify({
+      sessionId,
+      title,
+      provider: session?.provider || currentProvider || 'claude',
+    });
     sendBridgeEvent('export_session', exportData);
-  }, []);
+  }, [currentProvider]);
 
   // Toggle favorite status
   const toggleFavoriteSession = useCallback((sessionId: string) => {

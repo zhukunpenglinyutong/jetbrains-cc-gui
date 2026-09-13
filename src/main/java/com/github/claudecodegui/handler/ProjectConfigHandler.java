@@ -365,36 +365,49 @@ public class ProjectConfigHandler {
     }
 
     public void handleGetPromptEnhancerConfig() {
-        try {
-            pushJson("window.updatePromptEnhancerConfig", settingsService.getPromptEnhancerConfig());
-        } catch (Exception e) {
-            LOG.error("[ProjectConfigHandler] Failed to get prompt enhancer config: " + e.getMessage(), e);
-            showError(ClaudeCodeGuiBundle.message("projectConfig.promptEnhancer.getFailed", e.getMessage()));
-        }
+        // Availability probes spawn CLI processes; never do that on the JCEF UI thread
+        // (handleJavaScriptMessage → MessageDispatcher), or Settings freezes on open.
+        final String preferredProvider = context.getCurrentProvider();
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            try {
+                // Auto mode display follows the current chat provider.
+                pushJson("window.updatePromptEnhancerConfig",
+                        settingsService.getPromptEnhancerConfig(preferredProvider));
+            } catch (Exception e) {
+                LOG.error("[ProjectConfigHandler] Failed to get prompt enhancer config: " + e.getMessage(), e);
+                showError(ClaudeCodeGuiBundle.message("projectConfig.promptEnhancer.getFailed", e.getMessage()));
+            }
+        });
     }
 
     public void handleSetPromptEnhancerConfig(String content) {
         applyAiProviderConfig(content,
             settingsService::setPromptEnhancerConfig,
-            settingsService::getPromptEnhancerConfig,
+            () -> settingsService.getPromptEnhancerConfig(context.getCurrentProvider()),
             "window.updatePromptEnhancerConfig",
             "Failed to set prompt enhancer config",
             "projectConfig.promptEnhancer.saveFailed");
     }
 
     public void handleGetCommitAiConfig() {
-        try {
-            pushJson("window.updateCommitAiConfig", settingsService.getCommitAiConfig());
-        } catch (Exception e) {
-            LOG.error("[ProjectConfigHandler] Failed to get commit AI config: " + e.getMessage(), e);
-            showError(ClaudeCodeGuiBundle.message("projectConfig.commitAi.getFailed", e.getMessage()));
-        }
+        // Same as prompt enhancer: CLI availability detection must not block JCEF UI.
+        final String preferredProvider = context.getCurrentProvider();
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            try {
+                // Auto mode display follows the current chat provider (same as prompt enhancer).
+                pushJson("window.updateCommitAiConfig",
+                        settingsService.getCommitAiConfig(preferredProvider));
+            } catch (Exception e) {
+                LOG.error("[ProjectConfigHandler] Failed to get commit AI config: " + e.getMessage(), e);
+                showError(ClaudeCodeGuiBundle.message("projectConfig.commitAi.getFailed", e.getMessage()));
+            }
+        });
     }
 
     public void handleSetCommitAiConfig(String content) {
         applyAiProviderConfig(content,
             settingsService::setCommitAiConfig,
-            settingsService::getCommitAiConfig,
+            () -> settingsService.getCommitAiConfig(context.getCurrentProvider()),
             "window.updateCommitAiConfig",
             "Failed to set commit AI config",
             "projectConfig.commitAi.saveFailed");
@@ -402,7 +415,7 @@ public class ProjectConfigHandler {
 
     @FunctionalInterface
     private interface AiProviderSetter {
-        void apply(String provider, String claudeModel, String codexModel) throws Exception;
+        void apply(String provider, JsonObject models) throws Exception;
     }
 
     @FunctionalInterface
@@ -418,7 +431,8 @@ public class ProjectConfigHandler {
             JsonObject models = json != null && json.has("models") && json.get("models").isJsonObject()
                     ? json.getAsJsonObject("models")
                     : new JsonObject();
-            setter.apply(provider, readString(models, "claude", null), readString(models, "codex", null));
+            // Full models map (claude/codex/grok/kimi/opencode/pi) — matches chat CLI list.
+            setter.apply(provider, models);
             pushJson(jsCallback, getter.get());
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] " + errorLogMessage + ": " + e.getMessage(), e);
@@ -713,6 +727,38 @@ public class ProjectConfigHandler {
             settingsService::setAskUserQuestionNotificationEnabled,
             "window.updateAskUserQuestionNotificationEnabled",
             "Failed to save ask user question notification setting");
+    }
+
+    public void handleGetSystemNotificationOnlyWhenUnfocused() {
+        respondWithJson("window.updateSystemNotificationOnlyWhenUnfocused",
+            () -> jsonOf("systemNotificationOnlyWhenUnfocused", settingsService.getSystemNotificationOnlyWhenUnfocused()),
+            jsonOf("systemNotificationOnlyWhenUnfocused", false),
+            "Failed to get system notification only-when-unfocused");
+    }
+
+    public void handleSetSystemNotificationOnlyWhenUnfocused(String content) {
+        handleBooleanToggle(content, "systemNotificationOnlyWhenUnfocused", false,
+            "system notification only when unfocused",
+            settingsService::setSystemNotificationOnlyWhenUnfocused,
+            "window.updateSystemNotificationOnlyWhenUnfocused",
+            "Failed to save system notification focus setting");
+    }
+
+    public void handleGetAskUserQuestionSoundNotificationEnabled() {
+        respondWithJson("window.updateAskUserQuestionSoundNotificationEnabled",
+            () -> jsonOf("askUserQuestionSoundNotificationEnabled",
+                    settingsService.getAskUserQuestionSoundNotificationEnabled()),
+            jsonOf("askUserQuestionSoundNotificationEnabled", false),
+            "Failed to get ask user question sound notification enabled");
+    }
+
+    public void handleSetAskUserQuestionSoundNotificationEnabled(String content) {
+        // Default to disabled when payload is missing or the field is absent/null (opt-in feature).
+        handleBooleanToggle(content, "askUserQuestionSoundNotificationEnabled", false,
+            "ask user question sound notification enabled",
+            settingsService::setAskUserQuestionSoundNotificationEnabled,
+            "window.updateAskUserQuestionSoundNotificationEnabled",
+            "Failed to save ask user question sound notification setting");
     }
 
     private void dispatchUiFontConfigUpdate() {

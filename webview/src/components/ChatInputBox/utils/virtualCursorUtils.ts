@@ -16,6 +16,21 @@ function textEndsWithNewline(text: string | null): boolean {
 }
 
 /**
+ * Virtual length of an inline tag element in getTextContent() terms.
+ * File tags read as "@" + path; quote tags read as their token (id length + 2
+ * delimiters). Returns null for elements that are not inline tags.
+ */
+function inlineTagVirtualLength(element: HTMLElement): number | null {
+  if (element.classList.contains('file-tag')) {
+    return (element.getAttribute('data-file-path') || '').length + 1;
+  }
+  if (element.classList.contains('quote-tag')) {
+    return (element.getAttribute('data-quote-id') || '').length + 2;
+  }
+  return null;
+}
+
+/**
  * Get the virtual cursor position in a contenteditable element.
  *
  * "Virtual position" means the character offset in the text returned by getTextContent(),
@@ -81,11 +96,9 @@ export function getVirtualCursorPosition(element: HTMLElement): number {
               const childTag = childEl.tagName.toLowerCase();
               if (childTag === 'br') {
                 position += 1;
-              } else if (childEl.classList.contains('file-tag')) {
-                const filePath = childEl.getAttribute('data-file-path') || '';
-                position += filePath.length + 1;
               } else {
-                position += childEl.textContent?.length || 0;
+                const inlineTagLength = inlineTagVirtualLength(childEl);
+                position += inlineTagLength ?? (childEl.textContent?.length || 0);
               }
             }
           }
@@ -99,16 +112,14 @@ export function getVirtualCursorPosition(element: HTMLElement): number {
         return false;
       }
 
-      if (el.classList.contains('file-tag')) {
-        const filePath = el.getAttribute('data-file-path') || '';
-        const tagLength = filePath.length + 1;
-
+      const standaloneTagLength = inlineTagVirtualLength(el);
+      if (standaloneTagLength !== null) {
         if (el.contains(range.endContainer)) {
-          position += tagLength;
+          position += standaloneTagLength;
           found = true;
           return true;
         }
-        position += tagLength;
+        position += standaloneTagLength;
         endsWithNewline = false;
       } else {
         if (range.endContainer === el) {
@@ -122,11 +133,9 @@ export function getVirtualCursorPosition(element: HTMLElement): number {
               const childTag = childEl.tagName.toLowerCase();
               if (childTag === 'br') {
                 position += 1;
-              } else if (childEl.classList.contains('file-tag')) {
-                const filePath = childEl.getAttribute('data-file-path') || '';
-                position += filePath.length + 1;
               } else {
-                position += childEl.textContent?.length || 0;
+                const inlineTagLength = inlineTagVirtualLength(childEl);
+                position += inlineTagLength ?? (childEl.textContent?.length || 0);
               }
             }
           }
@@ -213,17 +222,15 @@ export function setVirtualCursorPosition(
         return false;
       }
 
-      if (el.classList.contains('file-tag')) {
-        const filePath = el.getAttribute('data-file-path') || '';
-        const tagLength = filePath.length + 1;
-
-        if (position + tagLength >= virtualOffset) {
-          // Target is inside file tag; place cursor after the tag
+      const standaloneTagLength = inlineTagVirtualLength(el);
+      if (standaloneTagLength !== null) {
+        if (position + standaloneTagLength >= virtualOffset) {
+          // Target is inside an inline tag; place cursor after the tag
           targetNode = el;
           targetOffset = -1; // sentinel: means "after this element"
           return true;
         }
-        position += tagLength;
+        position += standaloneTagLength;
         endsWithNewline = false;
       } else {
         for (const child of Array.from(node.childNodes)) {

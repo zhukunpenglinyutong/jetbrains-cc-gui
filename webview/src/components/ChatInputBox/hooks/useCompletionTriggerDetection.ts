@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type RefObject } from 'react';
 import { useTriggerDetection } from './useTriggerDetection.js';
 import { debounce } from '../utils/debounce.js';
 import { perfTimer } from '../../../utils/debug.js';
@@ -219,12 +219,22 @@ export function useCompletionTriggerDetection({
     isDollarTriggerEnabled,
   ]);
 
-  // Create debounced version of detectAndTriggerCompletion
-  // Reduced from 150ms to improve responsiveness for trigger detection
+  // Keep a stable debounced instance: detectAndTriggerCompletion is recreated
+  // every render (completion objects are fresh literals), which would otherwise
+  // spawn a new debounce per render — orphaned timers then fire with stale
+  // closures (e.g. isOpen=false) and redundantly re-open/clear the dropdown.
+  const detectRef = useRef(detectAndTriggerCompletion);
+  detectRef.current = detectAndTriggerCompletion;
+
   const debouncedDetectCompletion = useMemo(
-    () => debounce(detectAndTriggerCompletion, DEBOUNCE_TIMING.COMPLETION_DETECTION_MS),
-    [detectAndTriggerCompletion]
+    () => debounce(() => detectRef.current(), DEBOUNCE_TIMING.COMPLETION_DETECTION_MS),
+    []
   );
+
+  // Cancel pending detection on unmount
+  useEffect(() => {
+    return () => debouncedDetectCompletion.cancel();
+  }, [debouncedDetectCompletion]);
 
   return {
     detectAndTriggerCompletion,

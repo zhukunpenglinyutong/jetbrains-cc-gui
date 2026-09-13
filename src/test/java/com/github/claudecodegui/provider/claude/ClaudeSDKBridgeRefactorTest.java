@@ -8,6 +8,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import org.junit.Test;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -126,6 +127,42 @@ public class ClaudeSDKBridgeRefactorTest {
         assertEquals("Hello\nWorld", assistantContent.toString());
         assertFalse(hadSendError.get());
         assertEquals(null, lastNodeError.get());
+    }
+
+    @Test
+    public void streamAdapterRoutesBlockResetLines() {
+        ClaudeStreamAdapter adapter = new ClaudeStreamAdapter(new Gson());
+        RecordingCallback callback = new RecordingCallback();
+        SDKResult result = new SDKResult();
+        AtomicBoolean hadSendError = new AtomicBoolean(false);
+        AtomicReference<String> lastNodeError = new AtomicReference<>(null);
+        AtomicBoolean wasAborted = new AtomicBoolean(false);
+
+        adapter.processOutputLine("[BLOCK_RESET]", callback, result, new StringBuilder(),
+                hadSendError, lastNodeError, wasAborted);
+
+        assertEquals(1, callback.events.size());
+        assertEquals("block_reset", callback.events.get(0).type);
+        assertEquals("", callback.events.get(0).payload);
+    }
+
+    @Test
+    public void processInvokerRecognizesBlockResetAsBridgeLine() throws Exception {
+        ClaudeProcessInvoker invoker = new ClaudeProcessInvoker(
+                null,
+                new Gson(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new ClaudeStreamAdapter(new Gson())
+        );
+        Method method = ClaudeProcessInvoker.class.getDeclaredMethod("isRecognizedBridgeLine", String.class);
+        method.setAccessible(true);
+
+        assertTrue((Boolean) method.invoke(invoker, "[BLOCK_RESET]"));
     }
 
     @Test

@@ -4,7 +4,7 @@ import type { ToolInput, ToolResultBlock } from '../../types';
 import { useIsToolDenied } from '../../hooks/useIsToolDenied';
 import { useResolvedFileLinkTooltip } from '../../hooks/useResolvedFileLinkTooltip';
 import { openFile } from '../../utils/bridge';
-import { formatParamValue, truncate } from '../../utils/helpers';
+import { formatParamValue, truncate, truncatePathFromStart } from '../../utils/helpers';
 import { extractToolResultImages } from '../../utils/toolResultImages';
 import { getFileIcon, getFolderIcon } from '../../utils/fileIcons';
 import { isCommandToolName, parseCommandType } from '../../utils/toolCommandPath';
@@ -119,6 +119,10 @@ const getToolDisplayName = (t: any, name?: string, input?: ToolInput) => {
     'write': 'tools.writeFile',
     'write_to_file': 'tools.writeFile',
     'replace_string': 'tools.replaceString',
+    'search_replace': 'tools.replaceString',
+    'searchreplace': 'tools.replaceString',
+    'str_replace': 'tools.replaceString',
+    'strreplace': 'tools.replaceString',
     'bash': 'tools.runCommand',
     'run_terminal_cmd': 'tools.runCommand',
     'execute_command': 'tools.executeCommand',
@@ -274,7 +278,7 @@ const GenericToolBlock = memo(function GenericToolBlock({ name, input, result, t
     const parsed = parseCommandType(commandStr);
     if (parsed.type === 'read' && parsed.path) {
       const pathParts = parsed.path.split('/');
-      summary = pathParts[pathParts.length - 1] || parsed.path;
+      summary = pathParts[pathParts.length - 1] || truncatePathFromStart(parsed.path);
     } else {
       summary = summarizeToolCommand(commandStr) ?? truncate(commandStr);
     }

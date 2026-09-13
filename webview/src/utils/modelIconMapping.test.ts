@@ -25,6 +25,11 @@ describe('modelIconMapping', () => {
     expect(resolveIconVendor('bailian-coding')).toBe('bailian');
     expect(resolveIconVendor('longcat')).toBe('longcat');
     expect(resolveIconVendor('opencode-go')).toBe('opencode');
+    // Runtime CLI provider (ProviderSelect / BlinkingLogo), not only the go preset
+    expect(resolveIconVendor('opencode')).toBe('opencode');
+    // Runtime CLI provider — must not fall through to Claude default
+    expect(resolveIconVendor('pi')).toBe('pi');
+    expect(resolveIconVendor('omp')).toBe('omp');
   });
 
   it('resolves vendor from the provider base URL host', () => {

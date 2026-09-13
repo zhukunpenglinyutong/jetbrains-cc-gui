@@ -44,9 +44,31 @@ export interface SubagentHistoryResponse {
   completed?: boolean;
   toolUseId?: string;
   agentId?: string;
+  agentPath?: string;
   sessionId?: string;
+  provider?: string;
+  status?: SubagentStatus;
   error?: string;
   messages?: unknown[];
+}
+
+/** Lightweight Codex sidechain status returned without loading its transcript. */
+export interface SubagentStatusSnapshot {
+  success: boolean;
+  completed?: boolean;
+  toolUseId?: string;
+  agentId?: string;
+  agentPath?: string;
+  status?: SubagentStatus;
+  error?: string;
+}
+
+/** Batched response for restoring Codex subagent lifecycle state. */
+export interface SubagentStatusesResponse {
+  sessionId?: string;
+  provider?: string;
+  requestId?: string;
+  statuses?: SubagentStatusSnapshot[];
 }
 
 /**
@@ -73,6 +95,8 @@ export interface SubagentInfo {
   messageIndex: number;
   /** Stable runtime agent id returned by Claude Code, used to locate sidechain logs */
   agentId?: string;
+  /** Codex agent path derived from spawn_agent task_name. */
+  agentPath?: string;
   /** Total runtime in milliseconds */
   totalDurationMs?: number;
   /** Total tokens reported by the Agent tool */

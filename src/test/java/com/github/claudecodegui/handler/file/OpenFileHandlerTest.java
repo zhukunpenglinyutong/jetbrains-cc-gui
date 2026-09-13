@@ -7,6 +7,7 @@ import org.junit.Test;
 import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -145,6 +146,76 @@ public class OpenFileHandlerTest {
     public void extractPathSuffix_singleSegment_returnsNull() {
         // Only one segment => no meaningful suffix.
         assertNull(OpenFileHandler.extractPathSuffix("Bar.java"));
+    }
+
+    // ---------- pickBestFuzzyMatchPath / isSegmentAlignedSuffixMatch (#1682) ----------
+
+    @Test
+    public void pickBestFuzzyMatchPath_prefersSegmentAlignedSuffixMatch() {
+        // Django-style project: several apps each have models.py. The message
+        // references "blog/models.py" - only the blog app must win.
+        List<String> candidates = List.of(
+                "/proj/accounts/models.py",
+                "/proj/blog/models.py",
+                "/proj/myblog/models.py"
+        );
+
+        String best = OpenFileHandler.pickBestFuzzyMatchPath(candidates, "blog/models.py", List.of());
+
+        assertEquals("/proj/blog/models.py", best);
+    }
+
+    @Test
+    public void pickBestFuzzyMatchPath_prefersRecentlyOpenFileWhenNoSuffix() {
+        // Bare filename "models.py" with two candidates and no path hint: the one
+        // currently open in the editor must win over index iteration order.
+        List<String> candidates = List.of(
+                "/proj/accounts/models.py",
+                "/proj/blog/models.py"
+        );
+        List<String> recentOpen = List.of("/proj/blog/models.py", "/proj/settings.py");
+
+        String best = OpenFileHandler.pickBestFuzzyMatchPath(candidates, null, recentOpen);
+
+        assertEquals("/proj/blog/models.py", best);
+    }
+
+    @Test
+    public void pickBestFuzzyMatchPath_fallsBackToShortestPathDeterministically() {
+        // No suffix, no open files: source-root heuristic is irrelevant for Django
+        // apps, so the shortest path must win - deterministically, not by index order.
+        List<String> candidates = List.of(
+                "/proj/verylongappname/models.py",
+                "/proj/app/models.py",
+                "/proj/another/models.py"
+        );
+
+        String best = OpenFileHandler.pickBestFuzzyMatchPath(candidates, null, List.of());
+
+        assertEquals("/proj/app/models.py", best);
+    }
+
+    @Test
+    public void pickBestFuzzyMatchPath_returnsNullForEmptyCandidates() {
+        assertNull(OpenFileHandler.pickBestFuzzyMatchPath(List.of(), "blog/models.py", List.of()));
+    }
+
+    @Test
+    public void segmentAlignedSuffixMatch_rejectsEmbeddedSegment() {
+        // "blog/models.py" must NOT match ".../myblog/models.py" - the occurrence
+        // has to start on a '/' boundary (#1682).
+        assertTrue(OpenFileHandler.isSegmentAlignedSuffixMatch(
+                "/proj/blog/models.py", "blog/models.py"));
+        assertFalse(OpenFileHandler.isSegmentAlignedSuffixMatch(
+                "/proj/myblog/models.py", "blog/models.py"));
+    }
+
+    @Test
+    public void segmentAlignedSuffixMatch_acceptsWindowsSeparators() {
+        assertTrue(OpenFileHandler.isSegmentAlignedSuffixMatch(
+                "D:\\proj\\blog\\models.py", "blog\\models.py"));
+        assertFalse(OpenFileHandler.isSegmentAlignedSuffixMatch(
+                "D:\\proj\\myblog\\models.py", "blog\\models.py"));
     }
 
     @Test

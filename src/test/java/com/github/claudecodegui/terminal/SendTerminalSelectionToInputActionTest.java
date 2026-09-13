@@ -103,12 +103,40 @@ public class SendTerminalSelectionToInputActionTest {
     }
 
     @Test
-    public void terminalFeaturesDoNotRegisterActionForReworkedTerminalContextMenuStatically() throws IOException {
+    public void terminalFeaturesDoNotRegisterVersionSpecificContextMenusStatically() throws IOException {
         try (InputStream stream = getClass().getClassLoader().getResourceAsStream("META-INF/terminal-features.xml")) {
             Assert.assertNotNull("terminal-features.xml should be on the test classpath", stream);
             String xml = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+            // These groups only exist in newer IDE builds (2024.1+/2024.3+); static
+            // registration would raise PluginException on 2023.3 (build 233).
+            Assert.assertFalse(xml.contains("group-id=\"Terminal.OutputContextMenu\""));
+            Assert.assertFalse(xml.contains("group-id=\"Terminal.PromptContextMenu\""));
             Assert.assertFalse(xml.contains("group-id=\"Terminal.ReworkedTerminalContextMenu\""));
         }
+    }
+
+    @Test
+    public void outputContextMenuIsRegisteredOnlyWhenGroupExists() {
+        TestActionManager actionManager = new TestActionManager();
+        DefaultActionGroup group = new DefaultActionGroup();
+        actionManager.registerAction(SendTerminalSelectionToInputAction.ACTION_ID, new SendTerminalSelectionToInputAction());
+        actionManager.registerAction(SendTerminalSelectionToInputAction.TERMINAL_OUTPUT_CONTEXT_MENU, group);
+
+        Assert.assertTrue(SendTerminalSelectionToInputAction.registerForTerminalContextMenu(
+                actionManager, SendTerminalSelectionToInputAction.TERMINAL_OUTPUT_CONTEXT_MENU));
+        Assert.assertEquals(
+                Collections.singletonList(SendTerminalSelectionToInputAction.ACTION_ID),
+                childIds(actionManager, group)
+        );
+    }
+
+    @Test
+    public void outputContextMenuRegistrationIsSkippedWhenGroupIsMissing() {
+        TestActionManager actionManager = new TestActionManager();
+        actionManager.registerAction(SendTerminalSelectionToInputAction.ACTION_ID, new SendTerminalSelectionToInputAction());
+
+        Assert.assertFalse(SendTerminalSelectionToInputAction.registerForTerminalContextMenu(
+                actionManager, SendTerminalSelectionToInputAction.TERMINAL_OUTPUT_CONTEXT_MENU));
     }
 
     @Test

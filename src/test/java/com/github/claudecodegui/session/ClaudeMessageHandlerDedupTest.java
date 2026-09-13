@@ -2,6 +2,7 @@ package com.github.claudecodegui.session;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -36,6 +37,23 @@ public class ClaudeMessageHandlerDedupTest {
                 messageMerger,
                 gson
         );
+    }
+
+    @Test
+    public void blockReset_startsNewThinkingBlockForIndependentAssistantTurn() {
+        handler.onMessage("stream_start", "");
+        handler.onMessage("thinking_delta", "first thought");
+        handler.onMessage("block_reset", "");
+        handler.onMessage("thinking_delta", "second thought");
+
+        List<ClaudeSession.Message> messages = callbackHandler.messageUpdates.get(
+                callbackHandler.messageUpdates.size() - 1
+        );
+        JsonArray content = messages.get(0).raw.getAsJsonObject("message").getAsJsonArray("content");
+
+        assertEquals("Independent thinking turns must remain separate blocks", 2, content.size());
+        assertEquals("first thought", content.get(0).getAsJsonObject().get("thinking").getAsString());
+        assertEquals("second thought", content.get(1).getAsJsonObject().get("thinking").getAsString());
     }
 
     /**
@@ -300,12 +318,18 @@ public class ClaudeMessageHandlerDedupTest {
     private static class RecordingCallbackHandler extends CallbackHandler {
         final List<String> contentDeltas = new ArrayList<>();
         final List<String> thinkingDeltas = new ArrayList<>();
+        final List<List<ClaudeSession.Message>> messageUpdates = new ArrayList<>();
         int streamStartCount = 0;
         int streamEndCount = 0;
 
         void clear() {
             contentDeltas.clear();
             thinkingDeltas.clear();
+        }
+
+        @Override
+        public void notifyMessageUpdate(List<ClaudeSession.Message> messages) {
+            messageUpdates.add(messages);
         }
 
         @Override

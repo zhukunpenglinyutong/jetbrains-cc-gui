@@ -295,6 +295,22 @@ public class SlashCommandSourceScannersTest {
         assertEquals(0, skills.size());
     }
 
+    @Test
+    public void codexSkillTogglePathMustExistInsideConfiguredSkillDirectory() throws IOException {
+        Path root = Files.createTempDirectory("codex-skill-toggle-path");
+        Path allowedSkill = Files.createDirectories(
+                root.resolve(".agents").resolve("skills").resolve("review"));
+        Path allowedSkillFile = allowedSkill.resolve("SKILL.md");
+        Files.writeString(allowedSkillFile, validSkill("review"));
+        Path outsideSkill = Files.createDirectories(root.resolve("outside")).resolve("SKILL.md");
+        Files.writeString(outsideSkill, validSkill("outside"));
+
+        assertTrue(CodexSkillService.isToggleSkillPathAllowed(allowedSkillFile.toString(), root.toString()));
+        assertFalse(CodexSkillService.isToggleSkillPathAllowed(outsideSkill.toString(), root.toString()));
+        assertFalse(CodexSkillService.isToggleSkillPathAllowed(
+                allowedSkill.resolve("missing").resolve("SKILL.md").toString(), root.toString()));
+    }
+
     private boolean hasSkillNamed(JsonObject skills, String name) {
         return skills.entrySet().stream()
                 .map(entry -> entry.getValue().getAsJsonObject())

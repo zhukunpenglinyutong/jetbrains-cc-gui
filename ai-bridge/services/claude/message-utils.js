@@ -63,6 +63,7 @@ export const AUTO_RETRY_CONFIG = {
  */
 export function isRetryableError(error) {
   const msg = error?.message || String(error);
+  const normalizedMessage = msg.toLowerCase();
   const retryablePatterns = [
     'API request failed',
     'ECONNRESET',
@@ -75,9 +76,19 @@ export function isRetryableError(error) {
     'getaddrinfo',
     'connect EHOSTUNREACH',
     'No conversation found with session ID',
-    'conversation not found'
+    'conversation not found',
+    'rate_limit_error',
+    'rate limit',
+    'overloaded_error',
+    'temporarily unavailable'
   ];
-  return retryablePatterns.some(pattern => msg.toLowerCase().includes(pattern.toLowerCase()));
+  if (retryablePatterns.some(pattern => normalizedMessage.includes(pattern.toLowerCase()))) {
+    return true;
+  }
+
+  // Claude SDK errors may expose transient HTTP status codes without the
+  // generic "API request failed" prefix that the retry policy used before.
+  return /\b(?:429|500|502|503|504|529)\b/.test(msg);
 }
 
 export function isNoConversationFoundError(error) {
@@ -158,6 +169,32 @@ export function truncateErrorContent(content, maxLen = 1000) {
   const isError = ERROR_CONTENT_PREFIXES.some(prefix => content.startsWith(prefix));
   if (!isError) return content;
   return content.substring(0, maxLen) + `... [truncated, total ${content.length} chars]`;
+}
+
+/**
+ * Extract the human-readable error text from an SDK error result message.
+ * Mirrors the Claude Agent SDK's own precedence (see sdk.mjs): a result whose
+ * subtype is "success" carries its text in `result`, all other error results
+ * report in the `errors` array. Reading only `result`/`message` silently
+ * dropped the real failure and left users staring at a generic fallback.
+ * @param {object} msg - The SDK result message
+ * @returns {string} The best available error text, or a generic fallback
+ */
+export function extractResultError(msg) {
+  if (!msg) return 'API request failed';
+  // Mirror the SDK's own precedence (sdk.mjs): an error result whose subtype is
+  // "success" carries its text in `result`; every other error result reports in
+  // the `errors` array. Reading the wrong field silently lost the real failure.
+  if (msg.subtype === 'success') {
+    return msg.result || msg.message || 'API request failed';
+  }
+  if (Array.isArray(msg.errors) && msg.errors.length > 0) {
+    // The SDK joins with `|| void 0`, so an all-blank errors array must not
+    // surface as an empty string — fall through to the generic fallback.
+    const joined = msg.errors.map((r) => String(r).trim()).filter(Boolean).join('; ');
+    if (joined) return joined;
+  }
+  return msg?.result || msg?.message || 'API request failed';
 }
 
 /**

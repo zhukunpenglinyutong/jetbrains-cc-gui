@@ -22,6 +22,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Codex MCP Server Manager
@@ -58,9 +59,13 @@ public class CodexMcpServerManager {
     private static final int STDIO_HANDSHAKE_TIMEOUT_MS = 3000; // 3 seconds timeout for STDIO checks
 
     private final CodexSettingsManager settingsManager;
+    private final CodexSettingsManager.ConfigAccessGuard accessGuard;
 
-    public CodexMcpServerManager(CodexSettingsManager settingsManager) {
+    public CodexMcpServerManager(
+            CodexSettingsManager settingsManager,
+            CodexSettingsManager.ConfigAccessGuard accessGuard) {
         this.settingsManager = settingsManager;
+        this.accessGuard = accessGuard;
     }
 
     /**
@@ -196,27 +201,42 @@ public class CodexMcpServerManager {
         }
 
         String serverId = server.get("id").getAsString();
-
-        // Read current config
-        Map<String, Object> config = settingsManager.readConfigToml();
-        if (config == null) {
-            config = new LinkedHashMap<>();
-        }
-
-        // Ensure mcp_servers section exists
-        @SuppressWarnings("unchecked")
-        Map<String, Object> mcpServers = (Map<String, Object>) config.computeIfAbsent("mcp_servers",
-                k -> new LinkedHashMap<String, Object>());
-
-        // Build server config map from JsonObject
         Map<String, Object> serverConfig = buildServerConfigMap(server);
-
-        // Add or update server
-        mcpServers.put(serverId, serverConfig);
-
-        // Write back
-        settingsManager.writeConfigToml(config);
+        settingsManager.updateConfigToml(accessGuard, config -> {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> mcpServers = (Map<String, Object>) config.computeIfAbsent(
+                    "mcp_servers", key -> new LinkedHashMap<String, Object>());
+            mcpServers.put(serverId, serverConfig);
+            return true;
+        });
         LOG.info("[CodexMcpServerManager] Upserted MCP server: " + serverId);
+    }
+
+    /** Atomically renames and updates an MCP server. */
+    public void renameMcpServer(String oldServerId, JsonObject server) throws IOException {
+        if (oldServerId == null || oldServerId.isBlank() || !server.has("id")) {
+            throw new IllegalArgumentException("Old and new server IDs are required");
+        }
+        String newServerId = server.get("id").getAsString();
+        Map<String, Object> serverConfig = buildServerConfigMap(server);
+        settingsManager.updateConfigToml(accessGuard, config -> {
+            Object mcpServersValue = config.get("mcp_servers");
+            if (!(mcpServersValue instanceof Map)) {
+                throw new IOException("MCP server '" + oldServerId + "' not found");
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> mcpServers = (Map<String, Object>) mcpServersValue;
+            if (!mcpServers.containsKey(oldServerId)) {
+                throw new IOException("MCP server '" + oldServerId + "' not found");
+            }
+            if (!oldServerId.equals(newServerId) && mcpServers.containsKey(newServerId)) {
+                throw new IOException("MCP server '" + newServerId + "' already exists");
+            }
+            mcpServers.remove(oldServerId);
+            mcpServers.put(newServerId, serverConfig);
+            return true;
+        });
+        LOG.info("[CodexMcpServerManager] Renamed MCP server: " + oldServerId + " -> " + newServerId);
     }
 
     /**
@@ -292,29 +312,21 @@ public class CodexMcpServerManager {
      * Delete an MCP server by ID
      */
     public boolean deleteMcpServer(String serverId) throws IOException {
-        Map<String, Object> config = settingsManager.readConfigToml();
-        if (config == null) {
-            return false;
+        AtomicBoolean deleted = new AtomicBoolean();
+        settingsManager.updateConfigToml(accessGuard, config -> {
+            Object mcpServersObj = config.get("mcp_servers");
+            if (!(mcpServersObj instanceof Map)) {
+                return false;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> mcpServers = (Map<String, Object>) mcpServersObj;
+            deleted.set(mcpServers.remove(serverId) != null);
+            return deleted.get();
+        });
+        if (deleted.get()) {
+            LOG.info("[CodexMcpServerManager] Deleted MCP server: " + serverId);
         }
-
-        Object mcpServersObj = config.get("mcp_servers");
-        if (!(mcpServersObj instanceof Map)) {
-            return false;
-        }
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> mcpServers = (Map<String, Object>) mcpServersObj;
-
-        if (!mcpServers.containsKey(serverId)) {
-            return false;
-        }
-
-        mcpServers.remove(serverId);
-
-        // Write back
-        settingsManager.writeConfigToml(config);
-        LOG.info("[CodexMcpServerManager] Deleted MCP server: " + serverId);
-        return true;
+        return deleted.get();
     }
 
     /**

@@ -153,6 +153,22 @@ public class SessionCallbackAdapterStreamEndTest {
         assertEquals("onStreamEnd:20", jsTarget.calls.get(2));
     }
 
+    @Test
+    public void duplicateSessionIdsAreForwardedOnlyOnce() {
+        RecordingJsTarget jsTarget = new RecordingJsTarget();
+        SessionCallbackAdapter adapter = new SessionCallbackAdapter(
+                null, jsTarget, null, () -> true, null);
+
+        adapter.onSessionIdReceived("session-1");
+        adapter.onSessionIdReceived("session-1");
+        adapter.onSessionIdReceived("session-2");
+
+        assertEquals(2, jsTarget.calls.size());
+        assertEquals("setSessionId:session-1", jsTarget.calls.get(0));
+        assertEquals("setSessionId:session-2", jsTarget.calls.get(1));
+        adapter.deactivate();
+    }
+
     /**
      * Verify the flush LongConsumer callback contract:
      * when StreamMessageCoalescer.flush() invokes the callback with a
@@ -176,5 +192,38 @@ public class SessionCallbackAdapterStreamEndTest {
         assertEquals(1, jsTarget.calls.size());
         assertEquals("onStreamEnd:77", jsTarget.calls.get(0));
     }
-}
 
+    /**
+     * Regression: block boundaries now fire mid-response (one per content-block
+     * edge), so deltas still buffered in the delta throttlers when onBlockReset
+     * runs belong to the ending block. The adapter must flush them to the
+     * frontend BEFORE resetting; a bare reset() silently drops the buffered tail
+     * and forces the frontend onto updateMessages snapshot rendering (visible as
+     * thinking text jumping in chunks instead of streaming).
+     *
+     * <p>Exercised through the real SessionCallbackAdapter with test-friendly
+     * collaborators; the throttlers' default constructor flushes synchronously
+     * via flushNow(), and the ordered webview target records the callbacks directly.
+     */
+    @Test
+    public void blockResetFlushesBufferedDeltasBeforeClearing() throws Exception {
+        RecordingJsTarget jsTarget = new RecordingJsTarget();
+        SessionCallbackAdapter adapter = new SessionCallbackAdapter(
+                null,
+                jsTarget,
+                null,
+                () -> true,
+                null
+        );
+
+        // Deltas arrive and sit in the throttlers' 33ms window...
+        adapter.onContentDelta("text-tail");
+        adapter.onThinkingDelta("thinking-tail");
+
+        adapter.onBlockReset();
+
+        assertTrue(jsTarget.calls.contains("onContentDelta:text-tail"));
+        assertTrue(jsTarget.calls.contains("onThinkingDelta:thinking-tail"));
+        adapter.deactivate();
+    }
+}

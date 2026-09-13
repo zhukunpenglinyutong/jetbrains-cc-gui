@@ -1,6 +1,8 @@
 import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getFileIcon } from '../../utils/fileIcons';
+import { useClaudePlanUsage } from '../../hooks/useClaudePlanUsage';
+import { PlanUsageIndicator } from './PlanUsageIndicator';
 import { TokenIndicator } from './TokenIndicator';
 import type { SelectedAgent } from './types';
 
@@ -63,6 +65,8 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
 }) => {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isClaude = currentProvider === 'claude';
+  const claudePlanUsage = useClaudePlanUsage(currentProvider);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [showEnablePopover, setShowEnablePopover] = useState(false);
 
@@ -265,6 +269,13 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
 
       {/* Right side tools - StatusPanel toggle and Rewind button */}
       <div className="context-tools-right">
+        {isClaude && (
+          <PlanUsageIndicator
+            snapshot={claudePlanUsage.snapshot}
+            status={claudePlanUsage.status}
+          />
+        )}
+
         {/* StatusPanel expand/collapse toggle - always visible */}
         {onToggleStatusPanel && (
           <button

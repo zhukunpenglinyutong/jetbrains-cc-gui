@@ -142,6 +142,37 @@ public class MessageDispatchGateTest {
         assertFalse(gate.isDisposed());
     }
 
+    @Test(timeout = 5000)
+    public void pageActivationWaitsForOldDispatchAndRejectsStaleMessages() throws Exception {
+        MessageDispatchGate gate = new MessageDispatchGate();
+        gate.activatePageGeneration(1);
+        CountDownLatch dispatchEntered = new CountDownLatch(1);
+        CountDownLatch releaseDispatch = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Boolean> dispatchFuture = executor.submit(() ->
+                    gate.runInDispatch(1, () -> {
+                        dispatchEntered.countDown();
+                        awaitUninterrupted(releaseDispatch);
+                    }));
+            assertTrue(dispatchEntered.await(2, TimeUnit.SECONDS));
+
+            Future<?> activationFuture = executor.submit(() -> gate.activatePageGeneration(2));
+            Thread.sleep(150);
+            assertFalse("page activation must wait for old dispatch", activationFuture.isDone());
+
+            releaseDispatch.countDown();
+            assertTrue(dispatchFuture.get(2, TimeUnit.SECONDS));
+            activationFuture.get(2, TimeUnit.SECONDS);
+
+            assertFalse(gate.runInDispatch(1, () -> { }));
+            assertTrue(gate.runInDispatch(2, () -> { }));
+        } finally {
+            executor.shutdownNow();
+            executor.awaitTermination(2, TimeUnit.SECONDS);
+        }
+    }
+
     private static void awaitUninterrupted(CountDownLatch latch) {
         try {
             latch.await();

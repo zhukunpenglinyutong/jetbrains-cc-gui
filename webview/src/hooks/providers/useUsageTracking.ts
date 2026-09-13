@@ -1,4 +1,10 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  DEPENDENCY_STATUS_REQUEST_STARTED_EVENT,
+  retryDependencyStatusRequest,
+} from '../../utils/bridgeStartup';
+
+import { CLI_ONLY_PROVIDERS } from './cliProviders';
 
 const PROVIDER_TO_SDK: Record<string, string> = {
   claude: 'claude-sdk',
@@ -6,6 +12,12 @@ const PROVIDER_TO_SDK: Record<string, string> = {
   bedrock: 'claude-sdk',
   codex: 'codex-sdk',
   openai: 'codex-sdk',
+  // CLI providers have no npm SDK — markers are only for lookups.
+  grok: 'grok-cli',
+  kimi: 'kimi-cli',
+  opencode: 'opencode-cli',
+  pi: 'pi-cli',
+  omp: 'omp-cli',
 };
 
 type SdkStatus = Record<string, {
@@ -28,16 +40,51 @@ export function useUsageTracking() {
   const [usageMaxTokens, setUsageMaxTokens] = useState<number | undefined>(undefined);
   const [sdkStatus, setSdkStatus] = useState<SdkStatus>({});
   const [sdkStatusLoaded, setSdkStatusLoaded] = useState(false);
+  const [sdkStatusError, setSdkStatusError] = useState<string | null>(null);
+  const sdkStatusLoading = !sdkStatusLoaded && sdkStatusError === null;
+
+  useEffect(() => {
+    const handleStatusRequestStarted = () => {
+      setSdkStatusError(null);
+      setSdkStatusLoaded(false);
+    };
+    window.addEventListener(DEPENDENCY_STATUS_REQUEST_STARTED_EVENT, handleStatusRequestStarted);
+    return () => {
+      window.removeEventListener(DEPENDENCY_STATUS_REQUEST_STARTED_EVENT, handleStatusRequestStarted);
+    };
+  }, []);
 
   const isSdkInstalled = useCallback(
     (providerId: string): boolean => {
-      if (!sdkStatusLoaded) return false;
+      // Grok CLI is system-installed; do not gate on Claude/Codex SDK status.
+      if (CLI_ONLY_PROVIDERS.has(providerId)) return true;
       const sdkId = PROVIDER_TO_SDK[providerId] || 'claude-sdk';
       const status = sdkStatus[sdkId];
-      return status?.status === 'installed' || status?.installed === true;
+      if (status?.status === 'installed' || status?.installed === true) return true;
+      if (status?.status === 'not_installed' || status?.installed === false) return false;
+      // A failed query means "unknown", not "not installed". Let chat proceed;
+      // the backend will still report an actionable SDK startup error if needed.
+      if (sdkStatusError !== null) return true;
+      if (!sdkStatusLoaded) return false;
+      return false;
     },
-    [sdkStatusLoaded, sdkStatus],
+    [sdkStatusError, sdkStatusLoaded, sdkStatus],
   );
+
+  const isSdkStatusKnown = useCallback((providerId: string): boolean => {
+    if (CLI_ONLY_PROVIDERS.has(providerId)) return true;
+    const sdkId = PROVIDER_TO_SDK[providerId] || 'claude-sdk';
+    const status = sdkStatus[sdkId];
+    return status?.status === 'installed'
+      || status?.status === 'not_installed'
+      || typeof status?.installed === 'boolean';
+  }, [sdkStatus]);
+
+  const retrySdkStatus = useCallback(() => {
+    setSdkStatusError(null);
+    setSdkStatusLoaded(false);
+    retryDependencyStatusRequest();
+  }, []);
 
   return {
     usagePercentage,
@@ -50,7 +97,12 @@ export function useUsageTracking() {
     setSdkStatus,
     sdkStatusLoaded,
     setSdkStatusLoaded,
+    sdkStatusLoading,
+    sdkStatusError,
+    setSdkStatusError,
+    retrySdkStatus,
     isSdkInstalled,
+    isSdkStatusKnown,
   };
 }
 

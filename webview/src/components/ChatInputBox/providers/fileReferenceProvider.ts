@@ -3,10 +3,17 @@ import { getFileIcon, getFolderIcon } from '../../../utils/fileIcons';
 import { icon_terminal, icon_server } from '../../../utils/icons';
 import { debugError, debugLog, debugWarn } from '../../../utils/debug.js';
 
-// Request queue management
-let pendingResolve: ((files: FileItem[]) => void) | null = null;
-let pendingReject: ((error: Error) => void) | null = null;
-let lastQuery: string = '';
+interface PendingRequest {
+  requestId: number;
+  searchQuery: string;
+  resolve: (files: FileItem[]) => void;
+  reject: (error: Error) => void;
+}
+
+/** In-flight list_files requests keyed by requestId (supports out-of-order Java replies). */
+const pendingById = new Map<number, PendingRequest>();
+/** Monotonic id; also used as "latest request" for UI. */
+let requestSeq = 0;
 
 /**
  * Reset file reference provider state
@@ -14,35 +21,105 @@ let lastQuery: string = '';
  */
 export function resetFileReferenceState() {
   debugLog('[fileReferenceProvider] Resetting file reference state');
-  pendingResolve = null;
-  pendingReject = null;
-  lastQuery = '';
+  for (const pending of pendingById.values()) {
+    try {
+      pending.reject(new DOMException('Aborted', 'AbortError'));
+    } catch {
+      // ignore
+    }
+  }
+  pendingById.clear();
+  // Keep requestSeq increasing so late replies from a previous session stay stale.
 }
 
 /**
- * Register Java callback
+ * Always (re)bind the Java callback so hot reload / remounts pick up latest logic.
  */
 function setupFileListCallback() {
-  if (typeof window !== 'undefined' && !window.onFileListResult) {
-    window.onFileListResult = (json: string) => {
-      try {
-        const data = JSON.parse(json);
-        let files: FileItem[] = data.files || data || [];
-
-        // Filter out files that should be hidden
-        files = files.filter(file => !shouldHideFile(file.name));
-
-        const result = files.length > 0 ? files : filterFiles(DEFAULT_FILES, lastQuery);
-        pendingResolve?.(result);
-      } catch (error) {
-        debugError('[fileReferenceProvider] Parse error:', error);
-        pendingReject?.(error as Error);
-      } finally {
-        pendingResolve = null;
-        pendingReject = null;
-      }
-    };
+  if (typeof window === 'undefined') {
+    return;
   }
+
+  window.onFileListResult = (json: string) => {
+    let data: { files?: FileItem[]; requestId?: number | string } | FileItem[];
+    try {
+      data = JSON.parse(json);
+    } catch (error) {
+      debugError('[fileReferenceProvider] Parse error:', error);
+      // Reject the latest pending request if any — parse errors are rare and global.
+      const latest = [...pendingById.values()].pop();
+      if (latest) {
+        pendingById.delete(latest.requestId);
+        latest.reject(error as Error);
+      }
+      return;
+    }
+
+    const responseRequestId = (() => {
+      if (Array.isArray(data) || data == null || typeof data !== 'object') {
+        return null;
+      }
+      const raw = (data as { requestId?: number | string }).requestId;
+      if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+      if (typeof raw === 'string' && raw !== '') {
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : null;
+      }
+      return null;
+    })();
+
+    let pending: PendingRequest | undefined;
+    if (responseRequestId != null) {
+      pending = pendingById.get(responseRequestId);
+      if (!pending) {
+        // Late / aborted request — safe to drop.
+        debugLog('[fileReferenceProvider] Ignoring response for unknown/aborted requestId', {
+          responseRequestId,
+          pendingCount: pendingById.size,
+        });
+        return;
+      }
+      pendingById.delete(responseRequestId);
+    } else {
+      // Legacy backend without requestId: deliver to the most recent waiter only.
+      let latestId = -1;
+      for (const id of pendingById.keys()) {
+        if (id > latestId) latestId = id;
+      }
+      if (latestId < 0) {
+        debugLog('[fileReferenceProvider] Ignoring unsolicited file list response');
+        return;
+      }
+      pending = pendingById.get(latestId);
+      pendingById.delete(latestId);
+    }
+
+    if (!pending) {
+      return;
+    }
+
+    let files: FileItem[] = Array.isArray(data)
+      ? data
+      : ((data as { files?: FileItem[] }).files || []);
+
+    files = files.filter(file => !shouldHideFile(file.name));
+
+    // Hard-filter + rank by basename / relative path only.
+    // Never fall back to unfiltered backend rows: absolute-path over-matching
+    // (e.g. project folder "jetbrains-cc-gui" vs query "b") must not leak into UI.
+    // Empty is correct when nothing actually matches the query.
+    const searchQuery = pending.searchQuery;
+    if (searchQuery) {
+      files = filterFiles(files, searchQuery);
+    }
+
+    debugLog('[fileReferenceProvider] Delivering file list', {
+      requestId: pending.requestId,
+      searchQuery,
+      count: files.length,
+    });
+    pending.resolve(files);
+  };
 }
 
 /**
@@ -60,36 +137,102 @@ function sendToJava(event: string, payload: Record<string, unknown>) {
  * Check if a file should be hidden (not displayed in the list)
  */
 function shouldHideFile(fileName: string): boolean {
-  // Hidden files/folders list
   const hiddenItems = [
-    '.DS_Store',      // macOS system file
-    '.git',           // Git repository folder
-    'node_modules',   // npm dependency folder
-    '.idea',          // IntelliJ IDEA configuration folder
+    '.DS_Store',
+    '.git',
+    'node_modules',
+    '.idea',
   ];
 
   return hiddenItems.includes(fileName);
 }
 
-/**
- * Default file list (returns empty list when Java side is not implemented)
- */
 const DEFAULT_FILES: FileItem[] = [];
 
 /**
- * Filter files
+ * True when path looks absolute (POSIX, Windows drive, UNC).
  */
-function filterFiles(files: FileItem[], query: string): FileItem[] {
-  // First filter out files that should be hidden
+export function isAbsoluteLikePath(path: string): boolean {
+  if (!path) return false;
+  if (path.startsWith('/') || path.startsWith('\\')) return true;
+  if (/^[a-zA-Z]:[\\/]/.test(path)) return true;
+  if (path.startsWith('//') || path.startsWith('\\\\')) return true;
+  return false;
+}
+
+/**
+ * Subsequence fuzzy match (IDE-style): every query char appears in order.
+ */
+export function fuzzySubsequenceMatch(text: string, query: string): boolean {
+  if (!query) return true;
+  if (!text) return false;
+  let ti = 0;
+  let qi = 0;
+  while (ti < text.length && qi < query.length) {
+    if (text.charAt(ti) === query.charAt(qi)) {
+      qi += 1;
+    }
+    ti += 1;
+  }
+  return qi === query.length;
+}
+
+/**
+ * Score a file against a query for ranking (higher is better).
+ * Prefer filename prefix/substring over path or pure fuzzy subsequence.
+ * Absolute paths never contribute (avoids matching "jetbrains" on query "b").
+ */
+export function scoreFileMatch(file: FileItem, query: string): number {
+  if (!query) return 0;
+  const q = query.toLowerCase();
+  const name = (file.name || '').toLowerCase();
+  const path = (file.path || '').toLowerCase();
+  const pathForMatch = isAbsoluteLikePath(path) ? '' : path;
+
+  if (name === q) return 1000;
+  if (name.startsWith(q)) return 900;
+  if (name.includes(q)) return 800;
+  if (pathForMatch && pathForMatch.includes(q)) return 600;
+  if (fuzzySubsequenceMatch(name, q)) return 400;
+  if (pathForMatch && fuzzySubsequenceMatch(pathForMatch, q)) return 200;
+  return 0;
+}
+
+export function fileMatchesQuery(file: FileItem, query: string): boolean {
+  if (!query) return true;
+  return scoreFileMatch(file, query) > 0;
+}
+
+/** Sort by match score without dropping items. */
+export function rankFiles(files: FileItem[], query: string): FileItem[] {
+  if (!query) return files;
+  return [...files].sort((a, b) => {
+    const scoreDiff = scoreFileMatch(b, query) - scoreFileMatch(a, query);
+    if (scoreDiff !== 0) return scoreDiff;
+    const depthA = (a.path || '').split(/[/\\]/).length;
+    const depthB = (b.path || '').split(/[/\\]/).length;
+    if (depthA !== depthB) return depthA - depthB;
+    return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+  });
+}
+
+/**
+ * Filter and rank files by search keyword (used for local/default lists & tests).
+ */
+export function filterFiles(files: FileItem[], query: string): FileItem[] {
   let filtered = files.filter(file => !shouldHideFile(file.name));
 
-  // If there's a search keyword, filter by keyword as well
   if (query) {
-    const lowerQuery = query.toLowerCase();
-    filtered = filtered.filter(file =>
-      file.name.toLowerCase().includes(lowerQuery) ||
-      file.path.toLowerCase().includes(lowerQuery)
-    );
+    filtered = filtered
+      .filter(file => fileMatchesQuery(file, query))
+      .sort((a, b) => {
+        const scoreDiff = scoreFileMatch(b, query) - scoreFileMatch(a, query);
+        if (scoreDiff !== 0) return scoreDiff;
+        const depthA = (a.path || '').split(/[/\\]/).length;
+        const depthB = (b.path || '').split(/[/\\]/).length;
+        if (depthA !== depthB) return depthA - depthB;
+        return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+      });
   }
 
   return filtered;
@@ -97,26 +240,18 @@ function filterFiles(files: FileItem[], query: string): FileItem[] {
 
 /**
  * Extract current path and search keyword from query string
- * Examples:
- *   "" → { currentPath: "", searchQuery: "" }
- *   "src/" → { currentPath: "src/", searchQuery: "" }
- *   "src/com" → { currentPath: "src/", searchQuery: "com" }
- *   "but" → { currentPath: "", searchQuery: "but" }
  */
-function parseQuery(query: string): { currentPath: string; searchQuery: string } {
+export function parseQuery(query: string): { currentPath: string; searchQuery: string } {
   if (!query) {
     return { currentPath: '', searchQuery: '' };
   }
 
-  // Check if the query contains a / character
   const lastSlashIndex = query.lastIndexOf('/');
 
   if (lastSlashIndex === -1) {
-    // No slash means searching in root directory
     return { currentPath: '', searchQuery: query };
   }
 
-  // Has slash, separate path and search term
   const currentPath = query.substring(0, lastSlashIndex + 1);
   const searchQuery = query.substring(lastSlashIndex + 1);
 
@@ -130,62 +265,59 @@ export async function fileReferenceProvider(
   query: string,
   signal: AbortSignal
 ): Promise<FileItem[]> {
-  // Check if aborted
   if (signal.aborted) {
     throw new DOMException('Aborted', 'AbortError');
   }
 
-  // Set up callback
   setupFileListCallback();
 
   return new Promise((resolve, reject) => {
-    // Check if aborted
     if (signal.aborted) {
       reject(new DOMException('Aborted', 'AbortError'));
       return;
     }
 
-    // Parse query: separate path and search keyword
     const { currentPath, searchQuery } = parseQuery(query);
+    const requestId = ++requestSeq;
 
-    // Save callbacks
-    pendingResolve = resolve;
-    pendingReject = reject;
-    lastQuery = query;
+    const pending: PendingRequest = {
+      requestId,
+      searchQuery,
+      resolve,
+      reject,
+    };
+    pendingById.set(requestId, pending);
 
-    // Listen for abort signal (once: true prevents listener accumulation when
-    // a long-lived signal is reused across multiple invocations).
+    const cleanup = () => {
+      pendingById.delete(requestId);
+    };
+
     signal.addEventListener('abort', () => {
-      pendingResolve = null;
-      pendingReject = null;
+      cleanup();
       reject(new DOMException('Aborted', 'AbortError'));
     }, { once: true });
 
-    // Check if sendToJava is available
     if (!window.sendToJava) {
-      // Use default file list for local filtering
-      const filtered = filterFiles(DEFAULT_FILES, searchQuery);
-      pendingResolve = null;
-      pendingReject = null;
-      resolve(filtered);
+      cleanup();
+      resolve(filterFiles(DEFAULT_FILES, searchQuery));
       return;
     }
 
-    // Send request with current path and search keyword
     sendToJava('list_files', {
-      query: searchQuery,        // Search keyword
-      currentPath: currentPath,  // Current path
+      query: searchQuery,
+      currentPath,
+      requestId,
     });
 
-    // Timeout handling (3 seconds), fall back to default file list on timeout
+    // Timeout: resolve empty rather than hang forever
     setTimeout(() => {
-      if (pendingResolve === resolve) {
-        pendingResolve = null;
-        pendingReject = null;
-        // Return filtered default file list on timeout
-        resolve(filterFiles(DEFAULT_FILES, searchQuery));
+      if (!pendingById.has(requestId)) {
+        return;
       }
-    }, 3000);
+      pendingById.delete(requestId);
+      debugWarn('[fileReferenceProvider] list_files timed out', { requestId, searchQuery });
+      resolve(filterFiles(DEFAULT_FILES, searchQuery));
+    }, 5000);
   });
 }
 
@@ -211,10 +343,10 @@ export function fileToDropdownItem(file: FileItem): DropdownItemData {
   }
 
   return {
-    id: file.path,
+    id: file.path || file.absolutePath || file.name,
     label: file.name,
-    description: file.absolutePath || file.path, // Prefer full path
-    icon: iconSvg, // Use SVG string directly
+    description: file.absolutePath || file.path,
+    icon: iconSvg,
     type: type,
     data: { file },
   };

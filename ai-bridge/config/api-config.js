@@ -203,6 +203,15 @@ export function buildWebviewControlledSettingsOverride(modelId) {
     MAX_THINKING_TOKENS: '',
   };
 
+  // Clear model routing vars from settings.json so the per-request values
+  // set by setModelEnvironmentVariables() (via process.env) are the single
+  // source of truth. Without this, a stale ANTHROPIC_MODEL in settings.json
+  // overrides the webview-selected model, causing all model families to
+  // resolve to the same value (issue #1509).
+  for (const varName of MODEL_ROUTING_ENV_VARS) {
+    env[varName] = '';
+  }
+
   const normalizedModel = typeof modelId === 'string' ? modelId.trim() : '';
   if (normalizedModel) {
     env.CLAUDE_CODE_DISABLE_1M_CONTEXT = /\[1m\]$/i.test(normalizedModel) ? '' : '1';

@@ -200,6 +200,14 @@ public class ClaudeNotifier {
         });
     }
 
+    /**
+     * Clear context usage retained by the IDE status bar when the active
+     * provider, model, or session no longer owns the previous snapshot.
+     */
+    public static void clearTokenUsage(@NotNull Project project) {
+        setTokenUsage(project, 0, 0);
+    }
+
     private static String formatTokenUsage(int used, int max) {
         if (used == 0) { return ""; }
         String usedStr = formatNumber(used);

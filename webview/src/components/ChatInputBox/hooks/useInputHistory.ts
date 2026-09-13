@@ -52,7 +52,7 @@ type KeyEventLike = {
 export interface UseInputHistoryOptions {
   editableRef: EditableRef;
   getTextContent: () => string;
-  handleInput: (isComposingFromEvent?: boolean) => void;
+  handleInput: (inputType?: string) => void;
 }
 
 export interface UseInputHistoryReturn {
@@ -101,7 +101,7 @@ export function useInputHistory({
       } catch {
         // Defensive: JCEF/IME edge cases can throw on DOM selection APIs.
       } finally {
-        handleInput(false);
+        handleInput();
       }
     },
     [editableRef, handleInput]

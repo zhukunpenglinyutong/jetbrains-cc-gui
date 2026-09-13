@@ -43,8 +43,53 @@ public class CodemossSettingsServicePromptEnhancerConfigTest {
         assertEquals("auto", config.get("resolutionSource").getAsString());
         assertTrue(config.getAsJsonObject("availability").get("claude").getAsBoolean());
         assertTrue(config.getAsJsonObject("availability").get("codex").getAsBoolean());
-        assertEquals("claude-sonnet-4-6", config.getAsJsonObject("models").get("claude").getAsString());
+        assertEquals("claude-sonnet-5", config.getAsJsonObject("models").get("claude").getAsString());
         assertEquals("gpt-5.5", config.getAsJsonObject("models").get("codex").getAsString());
+        // Same CLI set as the main chat selector
+        assertEquals("grok", config.getAsJsonObject("models").get("grok").getAsString());
+        assertEquals("auto", config.getAsJsonObject("models").get("kimi").getAsString());
+        assertEquals("opencode-default", config.getAsJsonObject("models").get("opencode").getAsString());
+        assertEquals("auto", config.getAsJsonObject("models").get("pi").getAsString());
+        assertEquals("auto", config.getAsJsonObject("models").get("omp").getAsString());
+        assertTrue(config.getAsJsonObject("availability").has("grok"));
+        assertTrue(config.getAsJsonObject("availability").has("kimi"));
+        assertTrue(config.getAsJsonObject("availability").has("opencode"));
+        assertTrue(config.getAsJsonObject("availability").has("pi"));
+        assertTrue(config.getAsJsonObject("availability").has("omp"));
+    }
+
+    @Test
+    public void shouldPreferCurrentChatProviderInAutoModeWhenAvailable() throws Exception {
+        Path tempHome = Files.createTempDirectory("prompt-enhancer-prefer-chat-home");
+        useTemporaryHomeDirectory(tempHome);
+        writeConfig(tempHome, "claude-a", "codex-a");
+        installSdk(tempHome, "claude-sdk", "@anthropic-ai/claude-agent-sdk", "0.2.88");
+        installSdk(tempHome, "codex-sdk", "@openai/codex-sdk", "0.117.0");
+
+        CodemossSettingsService service = new CodemossSettingsService();
+
+        // Preferred provider unavailable → still Codex
+        JsonObject withoutGrok = invokeGetPromptEnhancerConfig(service, "grok");
+        assertTrue(withoutGrok.get("provider").isJsonNull());
+        // Grok CLI may or may not be installed on the machine; if not, fall back to codex.
+        String effectiveWithoutInstalledGrok = withoutGrok.get("effectiveProvider").isJsonNull()
+                ? null
+                : withoutGrok.get("effectiveProvider").getAsString();
+        if (!withoutGrok.getAsJsonObject("availability").get("grok").getAsBoolean()) {
+            assertEquals("codex", effectiveWithoutInstalledGrok);
+        } else {
+            assertEquals("grok", effectiveWithoutInstalledGrok);
+        }
+
+        // Preferred Claude is installed → follow chat provider over Codex
+        JsonObject preferClaude = invokeGetPromptEnhancerConfig(service, "claude");
+        assertTrue(preferClaude.get("provider").isJsonNull());
+        assertEquals("claude", preferClaude.get("effectiveProvider").getAsString());
+        assertEquals("auto", preferClaude.get("resolutionSource").getAsString());
+
+        // Preferred Codex still works
+        JsonObject preferCodex = invokeGetPromptEnhancerConfig(service, "codex");
+        assertEquals("codex", preferCodex.get("effectiveProvider").getAsString());
     }
 
     @Test
@@ -83,6 +128,34 @@ public class CodemossSettingsServicePromptEnhancerConfigTest {
         assertEquals("manual", config.get("resolutionSource").getAsString());
         assertEquals("claude-opus-4-8", config.getAsJsonObject("models").get("claude").getAsString());
         assertEquals("gpt-5.4", config.getAsJsonObject("models").get("codex").getAsString());
+        // Partial legacy set keeps default CLI models
+        assertEquals("grok", config.getAsJsonObject("models").get("grok").getAsString());
+    }
+
+    @Test
+    public void shouldPersistManualGrokProviderAndModel() throws Exception {
+        Path tempHome = Files.createTempDirectory("prompt-enhancer-grok-home");
+        useTemporaryHomeDirectory(tempHome);
+        writeConfig(tempHome, "claude-a", "codex-a");
+        installSdk(tempHome, "claude-sdk", "@anthropic-ai/claude-agent-sdk", "0.2.88");
+        installSdk(tempHome, "codex-sdk", "@openai/codex-sdk", "0.117.0");
+
+        CodemossSettingsService service = new CodemossSettingsService();
+        JsonObject models = new JsonObject();
+        models.addProperty("claude", "claude-sonnet-5");
+        models.addProperty("codex", "gpt-5.5");
+        models.addProperty("grok", "grok");
+
+        Method setMethod = CodemossSettingsService.class.getMethod(
+                "setPromptEnhancerConfig", String.class, JsonObject.class);
+        setMethod.invoke(service, "grok", models);
+
+        JsonObject config = invokeGetPromptEnhancerConfig(service);
+        assertEquals("grok", config.get("provider").getAsString());
+        assertEquals("grok", config.getAsJsonObject("models").get("grok").getAsString());
+        // effectiveProvider depends on whether Grok CLI is installed on the machine
+        String source = config.get("resolutionSource").getAsString();
+        assertTrue("manual".equals(source) || "unavailable".equals(source));
     }
 
     @Test
@@ -112,6 +185,20 @@ public class CodemossSettingsServicePromptEnhancerConfigTest {
             throw e;
         }
         return (JsonObject) method.invoke(service);
+    }
+
+    private JsonObject invokeGetPromptEnhancerConfig(
+            CodemossSettingsService service,
+            String preferredProvider
+    ) throws Exception {
+        Method method;
+        try {
+            method = CodemossSettingsService.class.getMethod("getPromptEnhancerConfig", String.class);
+        } catch (NoSuchMethodException e) {
+            fail("CodemossSettingsService should expose getPromptEnhancerConfig(String preferredProvider)");
+            throw e;
+        }
+        return (JsonObject) method.invoke(service, preferredProvider);
     }
 
     private void invokeSetPromptEnhancerConfig(

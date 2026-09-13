@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler.history;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.NodeJsServiceCaller;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.provider.dsh.DshHistoryReader;
 
 import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
@@ -230,6 +231,24 @@ class HistoryDeleteService {
         if ("codex".equals(currentProvider)) {
             return new DeleteResult(deleteCodexSession(sessionId), 0);
         }
+        if ("grok".equals(currentProvider)) {
+            return new DeleteResult(deleteGrokSession(sessionId), 0);
+        }
+        if ("pi".equals(currentProvider)) {
+            return new DeleteResult(deletePiSession(sessionId), 0);
+        }
+        if ("omp".equals(currentProvider)) {
+            return new DeleteResult(deleteOmpSession(sessionId), 0);
+        }
+        if ("opencode".equals(currentProvider)) {
+            return new DeleteResult(deleteOpenCodeSession(sessionId), 0);
+        }
+        if ("kimi".equals(currentProvider)) {
+            return new DeleteResult(deleteKimiSession(sessionId), 0);
+        }
+        if ("dsh".equals(currentProvider)) {
+            return new DeleteResult(deleteDshSession(sessionId), 0);
+        }
 
         String rawPath = context.resolveEffectiveWorkingDirectory();
         String nodePath = NodeDetector.getInstance().getCachedNodePath();
@@ -241,6 +260,72 @@ class HistoryDeleteService {
 
         int[] result = deleteClaudeSession(sessionId, projectPath);
         return new DeleteResult(result[0] == 1, result[1]);
+    }
+
+    private boolean deleteGrokSession(String sessionId) throws java.io.IOException {
+        String rawPath = context.resolveEffectiveWorkingDirectory();
+        String nodePath = NodeDetector.getInstance().getCachedNodePath();
+        String projectPath = NodeDetector.isWslPath(nodePath) ? NodeDetector.convertToWslPath(rawPath) : rawPath;
+        com.github.claudecodegui.provider.grok.GrokHistoryReader reader =
+                new com.github.claudecodegui.provider.grok.GrokHistoryReader();
+        boolean deleted = reader.deleteSession(sessionId, projectPath);
+        LOG.info("[HistoryHandler] Delete Grok session " + sessionId + ": " + (deleted ? "ok" : "not found"));
+        return deleted;
+    }
+
+    private boolean deletePiSession(String sessionId) throws java.io.IOException {
+        String rawPath = context.resolveEffectiveWorkingDirectory();
+        String nodePath = NodeDetector.getInstance().getCachedNodePath();
+        String projectPath = NodeDetector.isWslPath(nodePath) ? NodeDetector.convertToWslPath(rawPath) : rawPath;
+        com.github.claudecodegui.provider.pi.PiHistoryReader reader =
+                new com.github.claudecodegui.provider.pi.PiHistoryReader();
+        boolean deleted = reader.deleteSession(sessionId, projectPath);
+        LOG.info("[HistoryHandler] Delete PI session " + sessionId + ": " + (deleted ? "ok" : "not found"));
+        return deleted;
+    }
+
+    private boolean deleteOmpSession(String sessionId) throws java.io.IOException {
+        String rawPath = context.resolveEffectiveWorkingDirectory();
+        String nodePath = NodeDetector.getInstance().getCachedNodePath();
+        String projectPath = NodeDetector.isWslPath(nodePath) ? NodeDetector.convertToWslPath(rawPath) : rawPath;
+        com.github.claudecodegui.provider.omp.OmpHistoryReader reader =
+                new com.github.claudecodegui.provider.omp.OmpHistoryReader();
+        boolean deleted = reader.deleteSession(sessionId, projectPath);
+        LOG.info("[HistoryHandler] Delete OMP session " + sessionId + ": " + (deleted ? "ok" : "not found"));
+        return deleted;
+    }
+
+    private boolean deleteOpenCodeSession(String sessionId) throws java.io.IOException {
+        String rawPath = context.resolveEffectiveWorkingDirectory();
+        String nodePath = NodeDetector.getInstance().getCachedNodePath();
+        String projectPath = NodeDetector.isWslPath(nodePath) ? NodeDetector.convertToWslPath(rawPath) : rawPath;
+        com.github.claudecodegui.provider.opencode.OpenCodeHistoryReader reader =
+                new com.github.claudecodegui.provider.opencode.OpenCodeHistoryReader();
+        boolean deleted = reader.deleteSession(sessionId, projectPath);
+        LOG.info("[HistoryHandler] Delete OpenCode session " + sessionId + ": " + (deleted ? "ok" : "not found"));
+        return deleted;
+    }
+
+    private boolean deleteKimiSession(String sessionId) throws java.io.IOException {
+        String rawPath = context.resolveEffectiveWorkingDirectory();
+        String nodePath = NodeDetector.getInstance().getCachedNodePath();
+        String projectPath = NodeDetector.isWslPath(nodePath) ? NodeDetector.convertToWslPath(rawPath) : rawPath;
+        com.github.claudecodegui.provider.kimi.KimiHistoryReader reader =
+                new com.github.claudecodegui.provider.kimi.KimiHistoryReader();
+        boolean deleted = reader.deleteSession(sessionId, projectPath);
+        LOG.info("[HistoryHandler] Delete Kimi session " + sessionId + ": " + (deleted ? "ok" : "not found"));
+        return deleted;
+    }
+
+    private boolean deleteDshSession(String sessionId) throws java.io.IOException {
+        String rawPath = context.resolveEffectiveWorkingDirectory();
+        String nodePath = NodeDetector.getInstance().getCachedNodePath();
+        String projectPath = NodeDetector.isWslPath(nodePath) ? NodeDetector.convertToWslPath(rawPath) : rawPath;
+        DshHistoryReader reader = new DshHistoryReader();
+        // DSH "delete" is a host-side archive — the event log stays in $DSH_HOME.
+        boolean archived = reader.deleteSession(sessionId, projectPath);
+        LOG.info("[HistoryHandler] Archive DSH session " + sessionId + ": " + (archived ? "ok" : "failed"));
+        return archived;
     }
 
     private boolean deleteCodexSession(String sessionId) throws java.io.IOException {

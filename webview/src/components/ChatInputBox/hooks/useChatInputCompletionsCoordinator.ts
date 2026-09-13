@@ -227,8 +227,9 @@ export function useChatInputCompletionsCoordinator({
     isDollarTriggerEnabled: currentProvider === 'codex',
   });
 
-  // Note: completion objects from useCompletionDropdown are stable references.
-  // We access .isOpen at call time, so we don't need .isOpen in deps.
+  // Note: completion objects are fresh object literals each render (NOT stable
+  // references). Reading .isOpen at call time is still correct because this
+  // callback is recreated per render and handleInputRef always holds the latest.
   const syncInlineCompletion = useCallback((text: string) => {
     const isOtherCompletionOpen =
       fileCompletion.isOpen ||

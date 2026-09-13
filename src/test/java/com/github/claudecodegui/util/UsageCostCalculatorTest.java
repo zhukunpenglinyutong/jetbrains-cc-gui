@@ -1,7 +1,11 @@
 package com.github.claudecodegui.util;
 
+import com.github.claudecodegui.provider.CustomPricingProvider;
 import com.google.gson.JsonObject;
 import org.junit.Test;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -60,6 +64,33 @@ public class UsageCostCalculatorTest {
         // Bare "gpt-5.6" is aliased to gpt-5.6-sol, matching CodexPricingTable.
         double aliasCost = UsageCostCalculator.calculateTurnCostUsd("codex", usage, "gpt-5.6");
         assertEquals(0.032195, aliasCost, 0.0000001);
+    }
+
+    @Test
+    public void pricesMappedCustomModelUsingConfiguredRates() throws Exception {
+        Path config = Files.createTempFile("pricing-test", ".json");
+        Files.writeString(config, "{\"customModelPricing\":{\"claude\":{\"deepseek-v4-flash\":{"
+                + "\"inputCostPer1M\":1.0,\"outputCostPer1M\":2.0,\"cacheReadCostPer1M\":0.02}}}}");
+        CustomPricingProvider.setInstanceForTests(CustomPricingProvider.createForTests(config));
+        try {
+            // Turn from the real-world deepseek-v4-flash session:
+            // 1.2M input (95% cache-hit => 62K uncached + 1178K read), 11.1K output.
+            JsonObject usage = new JsonObject();
+            usage.addProperty("input_tokens", 62000);
+            usage.addProperty("cache_creation_input_tokens", 0);
+            usage.addProperty("cache_read_input_tokens", 1178000);
+            usage.addProperty("output_tokens", 11100);
+
+            // Model arrives as the Claude slot ID with the 1m suffix; pricing lookup must
+            // resolve it to the configured base model (mapping done by ModelProviderHandler).
+            double cost = UsageCostCalculator.calculateTurnCostUsd("claude", usage, "deepseek-v4-flash[1m]");
+
+            // 0.062 * 1 + 1.178 * 0.02 + 0.0111 * 2 = 0.10776
+            assertEquals(0.10776, cost, 0.00001);
+        } finally {
+            CustomPricingProvider.setInstanceForTests(null);
+            Files.deleteIfExists(config);
+        }
     }
 
     @Test

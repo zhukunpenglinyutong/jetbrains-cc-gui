@@ -10,6 +10,16 @@ interface SkillsSettingsSectionProps {
   currentProvider?: string;
 }
 
+interface SkillToggleResult {
+  success: boolean;
+  enabled?: boolean;
+  id?: string;
+  requestId?: string;
+  name?: string;
+  error?: string;
+  conflict?: boolean;
+}
+
 /**
  * Skills settings component
  * Manages Claude/Codex Skills
@@ -37,6 +47,9 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
 
   // Skills currently being toggled (used to disable buttons and prevent duplicate clicks)
   const [togglingSkills, setTogglingSkills] = useState<Set<string>>(new Set());
+  const toggleTimeoutsRef = useRef<Map<string, number>>(new Map());
+  const latestToggleRequestsRef = useRef<Map<string, string>>(new Map());
+  const toggleRequestSequenceRef = useRef(0);
 
   // Toast state
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -52,6 +65,10 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
   };
 
   const isCodex = currentProvider === 'codex';
+
+  useEffect(() => {
+    setTogglingSkills(new Set());
+  }, [currentProvider]);
 
   // Compute Skills lists (provider-aware: Claude uses global/local, Codex uses user/repo)
   const primarySkillList = useMemo(
@@ -188,19 +205,22 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
     // Register callback: enable/disable result
     window.skillToggleResult = (jsonStr: string) => {
       try {
-        const result = JSON.parse(jsonStr);
-        // Remove in-progress state
+        const result = JSON.parse(jsonStr) as SkillToggleResult;
+        if (!result.id || !result.requestId
+            || latestToggleRequestsRef.current.get(result.id) !== result.requestId) {
+          return;
+        }
+
+        latestToggleRequestsRef.current.delete(result.id);
+        const timeoutId = toggleTimeoutsRef.current.get(result.id);
+        if (timeoutId !== undefined) {
+          window.clearTimeout(timeoutId);
+          toggleTimeoutsRef.current.delete(result.id);
+        }
         setTogglingSkills(prev => {
-          const newSet = new Set(prev);
-          if (result.name) {
-            // Try to remove possible ID variants
-            newSet.forEach(id => {
-              if (id.includes(result.name)) {
-                newSet.delete(id);
-              }
-            });
-          }
-          return newSet;
+          const next = new Set(prev);
+          next.delete(result.id as string);
+          return next;
         });
 
         if (result.success) {
@@ -215,7 +235,6 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
         }
       } catch (error) {
         console.error('[SkillsSettings] Failed to parse toggle result:', error);
-        setTogglingSkills(new Set()); // Clear on error
       }
     };
 
@@ -235,6 +254,9 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
       window.skillImportResult = undefined;
       window.skillDeleteResult = undefined;
       window.skillToggleResult = undefined;
+      toggleTimeoutsRef.current.forEach(timeoutId => window.clearTimeout(timeoutId));
+      toggleTimeoutsRef.current.clear();
+      latestToggleRequestsRef.current.clear();
       document.removeEventListener('click', handleClickOutside);
     };
   }, [loadSkills, addToast]);
@@ -314,10 +336,28 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
   // Enable/disable Skill
   const handleToggle = (skill: Skill, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent triggering card expand
-    if (togglingSkills.has(skill.id)) return; // Prevent duplicate clicks
+    if (togglingSkills.has(skill.id) || toggleTimeoutsRef.current.has(skill.id)) return;
 
+    const requestId = `${Date.now()}-${++toggleRequestSequenceRef.current}`;
+    latestToggleRequestsRef.current.set(skill.id, requestId);
     setTogglingSkills(prev => new Set(prev).add(skill.id));
+    const timeoutId = window.setTimeout(() => {
+      if (latestToggleRequestsRef.current.get(skill.id) !== requestId) {
+        return;
+      }
+      latestToggleRequestsRef.current.delete(skill.id);
+      toggleTimeoutsRef.current.delete(skill.id);
+      setTogglingSkills(prev => {
+        const next = new Set(prev);
+        next.delete(skill.id);
+        return next;
+      });
+      addToast(t('skills.operationError'), 'error');
+    }, 15000);
+    toggleTimeoutsRef.current.set(skill.id, timeoutId);
     sendToJava('toggle_skill', {
+      id: skill.id,
+      requestId,
       name: skill.name,
       scope: skill.scope,
       enabled: skill.enabled,

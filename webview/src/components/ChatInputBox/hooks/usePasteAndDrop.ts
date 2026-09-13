@@ -2,6 +2,11 @@ import { useCallback, useEffect } from 'react';
 import type { Attachment } from '../types.js';
 import { generateId } from '../utils/generateId.js';
 import { insertTextAtCursor } from '../utils/selectionUtils.js';
+import {
+  parseExplicitFileReferences,
+  registerAbsoluteFileReference,
+  registerLineFileReference,
+} from '../utils/fileReferences.js';
 import { perfTimer } from '../../../utils/debug.js';
 
 declare global {
@@ -20,7 +25,7 @@ interface UsePasteAndDropOptions {
   setInternalAttachments: React.Dispatch<React.SetStateAction<Attachment[]>>;
   onInput?: (content: string) => void;
   closeAllCompletions: () => void;
-  handleInput: (isComposingFromEvent?: boolean) => void;
+  handleInput: (inputType?: string) => void;
   /** Immediately flush pending debounced onInput to sync parent state */
   flushInput: () => void;
 }
@@ -137,12 +142,23 @@ export function usePasteAndDrop({
               .getClipboardFilePath()
               .then((fullPath: string) => {
                 if (fullPath && fullPath.trim()) {
-                  // Insert full path using modern Selection API
-                  insertTextAtCursor(fullPath, editableRef.current);
+                  const registeredPath = registerAbsoluteFileReference(
+                    pathMappingRef.current,
+                    fullPath,
+                  );
+                  // A real clipboard file is structured input from Java, so it
+                  // can safely become a file reference without text guessing.
+                  insertTextAtCursor(
+                    registeredPath ? `@${registeredPath} ` : fullPath,
+                    editableRef.current,
+                  );
                   // Bypass IME guard (isComposingRef may be stale after recent compositionEnd)
-                  handleInput(false);
+                  handleInput();
                   // Immediately sync parent state without waiting for debounce
                   flushInput();
+                  if (registeredPath) {
+                    requestAnimationFrame(() => renderFileTags());
+                  }
                 }
               })
               .catch(() => {
@@ -156,13 +172,29 @@ export function usePasteAndDrop({
           const timer = perfTimer('handlePaste-text');
           timer.mark(`text-length:${text.length}`);
 
+          // Only an entire, explicitly marked @ absolute-path payload is
+          // promoted to file references. Mixed prose/code/email/annotation
+          // text remains ordinary pasted text and never enters the mapping.
+          const lineReference = registerLineFileReference(pathMappingRef.current, text);
+          const explicitPaths = lineReference ? null : parseExplicitFileReferences(text);
+          const registeredPaths = explicitPaths?.map((filePath) =>
+            registerAbsoluteFileReference(pathMappingRef.current, filePath)
+          );
+          const normalizedFileReferenceText = lineReference
+            ? `@${lineReference} `
+            : registeredPaths &&
+              registeredPaths.every((filePath): filePath is string => filePath !== null)
+              ? `${registeredPaths.map((filePath) => `@${filePath}`).join(' ')} `
+              : null;
+          const textToInsert = normalizedFileReferenceText ?? text;
+
           // Use modern Selection API to insert plain text (maintains cursor position)
-          insertTextAtCursor(text, editableRef.current);
+          insertTextAtCursor(textToInsert, editableRef.current);
           timer.mark('insertText');
 
           // Trigger input event to update state
           // Pass false to bypass IME guard (isComposingRef may be stale after recent compositionEnd)
-          handleInput(false);
+          handleInput();
           timer.mark('handleInput');
 
           // Immediately sync parent state without waiting for debounce
@@ -171,6 +203,9 @@ export function usePasteAndDrop({
           // Scroll to make cursor visible after paste
           // Use requestAnimationFrame to ensure DOM updates are complete
           requestAnimationFrame(() => {
+            if (normalizedFileReferenceText) {
+              renderFileTags();
+            }
             // Get the wrapper element that has overflow scroll
             const wrapper = editableRef.current?.parentElement;
             if (wrapper && editableRef.current) {
@@ -183,7 +218,14 @@ export function usePasteAndDrop({
         }
       }
     },
-    [setInternalAttachments, handleInput, flushInput]
+    [
+      editableRef,
+      pathMappingRef,
+      renderFileTags,
+      setInternalAttachments,
+      handleInput,
+      flushInput,
+    ]
   );
 
   /**
@@ -250,16 +292,12 @@ export function usePasteAndDrop({
 
       // No image files, process text (file path or other text)
       if (text && text.trim()) {
-        // Extract file path and add to path mapping
-        const filePath = text.trim();
-        const fileName = filePath.split(/[/\\]/).pop() || filePath;
-
-        // Add path to pathMappingRef to make it a "valid reference"
-        pathMappingRef.current.set(fileName, filePath);
-        pathMappingRef.current.set(filePath, filePath);
-
-        // Auto-add @ prefix (if not already present), and add space to trigger rendering
-        const textToInsert = (text.startsWith('@') ? text : `@${text}`) + ' ';
+        // Reuse the same absolute-path registration used by paste and the
+        // dedicated Java bridge. Relative/non-path drops remain plain text.
+        const filePath = registerAbsoluteFileReference(pathMappingRef.current, text);
+        const textToInsert = filePath
+          ? `@${filePath} `
+          : `${text.startsWith('@') ? text : `@${text}`} `;
 
         // Get current cursor position
         const selection = window.getSelection();

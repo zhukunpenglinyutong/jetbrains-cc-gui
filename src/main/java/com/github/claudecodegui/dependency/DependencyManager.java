@@ -876,7 +876,7 @@ public class DependencyManager {
      *
      * @return negative if v1 < v2, 0 if equal, positive if v1 > v2
      */
-    private int compareVersions(String v1, String v2) {
+    static int compareVersions(String v1, String v2) {
         if (v1 == null || v2 == null) {
             return 0;
         }
@@ -944,7 +944,7 @@ public class DependencyManager {
         return packages;
     }
 
-    private List<String> parseVersionList(String rawJson) {
+    static List<String> parseVersionList(String rawJson) {
         List<String> versions = new ArrayList<>();
 
         try {
@@ -953,7 +953,21 @@ public class DependencyManager {
                 return versions;
             }
 
-            for (com.google.gson.JsonElement item : element.getAsJsonArray()) {
+            // npm >= 9 wraps the version list in an extra array layer
+            // (`[["0.0.4", ..., "0.3.221"]]`), while older npm emits a flat array
+            // (`["0.0.4", ..., "0.3.221"]`). Unwrap leading array-of-array layers so
+            // both shapes reach the same primitive-version leaves; otherwise every
+            // element is itself an array, `isJsonPrimitive()` is false, and the whole
+            // list is silently dropped (causing the misleading "remote versions
+            // unavailable" fallback).
+            com.google.gson.JsonArray array = element.getAsJsonArray();
+            while (!array.isEmpty()
+                    && array.get(0).isJsonArray()
+                    && array.size() == 1) {
+                array = array.get(0).getAsJsonArray();
+            }
+
+            for (com.google.gson.JsonElement item : array) {
                 if (!item.isJsonPrimitive()) {
                     continue;
                 }
@@ -975,7 +989,7 @@ public class DependencyManager {
     /**
      * Parses a single segment of a version string.
      */
-    private int parseVersionPart(String part) {
+    private static int parseVersionPart(String part) {
         // Strip non-numeric suffixes (e.g. -beta, -alpha)
         Pattern pattern = Pattern.compile("^(\\d+)");
         Matcher matcher = pattern.matcher(part);

@@ -20,16 +20,16 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 32px 0;
-  margin-top: 20px;
+  padding: 20px 0;
+  margin-top: 12px;
 }
 
 .qrcodeWrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 24px;
+  gap: 10px;
+  padding: 16px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: 8px;
@@ -37,8 +37,8 @@
 }
 
 .qrcodeImage {
-  width: 280px;
-  height: 280px;
+  width: 200px;
+  height: 200px;
   object-fit: contain;
   border-radius: 4px;
   background: #ffffff;
@@ -52,65 +52,167 @@
   text-align: center;
 }
 
-/* GitHub open source */
-.githubSection {
-  margin-top: 48px;
-  padding-top: 32px;
+/* Social links + version history */
+.socialSection {
+  margin-top: 40px;
+  padding-top: 24px;
   border-top: 1px solid var(--border-primary);
 }
 
-.githubBtn {
+.socialHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+
+  .sectionTitle {
+    margin: 0;
+    font-size: 15px;
+  }
+}
+
+.socialHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.socialRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.socialChip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 20px;
-  border-radius: 6px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 500;
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
 
   &:hover {
     background: var(--bg-hover);
     border-color: var(--border-hover);
+    color: var(--text-primary);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--border-focus, #4d9fff);
+    outline-offset: 2px;
   }
 
   .codicon {
-    font-size: 14px;
+    font-size: 16px;
   }
 }
 
-/* Version history */
-.versionHistorySection {
-  margin-top: 48px;
-  padding-top: 32px;
-  border-top: 1px solid var(--border-primary);
+/* Brand accent colors on hover */
+.socialChipZhihu:hover {
+  color: #3388ff;
+}
+
+.socialChipXiaohongshu:hover {
+  color: #ff2442;
+}
+
+.socialChipDouyin:hover {
+  color: #fe2c55;
+}
+
+.socialChipYoutube:hover {
+  color: #ff4d4f;
+}
+
+/* Douyin QR popover (hover/focus, no navigation) */
+.douyinChip {
+  position: relative;
+}
+
+.douyinPopover {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translate(-50%, 6px);
+  width: 200px;
+  padding: 10px 10px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+  z-index: 100;
+
+  /* arrow */
+  &::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--border-primary);
+  }
+}
+
+.douyinChip:hover .douyinPopover,
+.douyinChip:focus-within .douyinPopover {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+
+.douyinPopoverImage {
+  display: block;
+  width: 100%;
+  border-radius: 6px;
+}
+
+.douyinPopoverTip {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: center;
 }
 
 .versionHistoryBtn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 20px;
+  gap: 6px;
+  padding: 5px 14px;
+  text-decoration: none;
   border-radius: 6px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  color: var(--text-primary);
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 
   &:hover {
     background: var(--bg-hover);
     border-color: var(--border-hover);
+    color: var(--text-primary);
   }
 
   .codicon {
-    font-size: 14px;
+    font-size: 13px;
   }
 }
 
@@ -127,16 +229,16 @@
   }
 
   .qrcodeContainer {
-    padding: 24px 0;
+    padding: 16px 0;
   }
 
   .qrcodeWrapper {
-    padding: 20px;
+    padding: 14px;
   }
 
   .qrcodeImage {
-    width: 240px;
-    height: 240px;
+    width: 176px;
+    height: 176px;
   }
 
   .qrcodeTip {

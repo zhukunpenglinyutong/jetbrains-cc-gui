@@ -9,7 +9,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('CustomModelDialog', () => {
-  it('adds a custom model with optional pricing', () => {
+  it('adds a custom model with optional context window and pricing', () => {
     const onModelsChange = vi.fn();
 
     render(
@@ -18,6 +18,7 @@ describe('CustomModelDialog', () => {
         models={[]}
         onModelsChange={onModelsChange}
         onClose={vi.fn()}
+        contextWindowEnabled
         initialAddMode
       />,
     );
@@ -27,6 +28,9 @@ describe('CustomModelDialog', () => {
     });
     fireEvent.change(screen.getByLabelText('settings.codexProvider.dialog.modelLabelPlaceholder'), {
       target: { value: 'Custom Model' },
+    });
+    fireEvent.change(screen.getByLabelText('settings.pluginModels.contextWindow.label'), {
+      target: { value: '500' },
     });
     // Pricing is collapsed by default — expand it to enter rates.
     fireEvent.click(screen.getByRole('button', { name: /settings\.pluginModels\.pricing\.title/ }));
@@ -47,6 +51,7 @@ describe('CustomModelDialog', () => {
         id: 'vendor/custom-model',
         label: 'Custom Model',
         description: undefined,
+        contextWindowTokens: 500000,
         pricing: {
           inputCostPer1M: 0.2,
           outputCostPer1M: 0.8,
@@ -54,6 +59,145 @@ describe('CustomModelDialog', () => {
         },
       },
     ]);
+  });
+
+  it('omits the context window when the field is blank', () => {
+    const onModelsChange = vi.fn();
+
+    render(
+      <CustomModelDialog
+        isOpen
+        models={[]}
+        onModelsChange={onModelsChange}
+        onClose={vi.fn()}
+        contextWindowEnabled
+        initialAddMode
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('settings.codexProvider.dialog.modelIdPlaceholder'), {
+      target: { value: 'vendor/default-context' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'common.add' }));
+
+    expect(onModelsChange).toHaveBeenCalledWith([{
+      id: 'vendor/default-context',
+      label: 'vendor/default-context',
+      description: undefined,
+    }]);
+  });
+
+  it('rejects fractional K input', () => {
+    const onModelsChange = vi.fn();
+
+    render(
+      <CustomModelDialog
+        isOpen
+        models={[]}
+        onModelsChange={onModelsChange}
+        onClose={vi.fn()}
+        contextWindowEnabled
+        initialAddMode
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('settings.codexProvider.dialog.modelIdPlaceholder'), {
+      target: { value: 'vendor/decimal-context' },
+    });
+    fireEvent.change(screen.getByLabelText('settings.pluginModels.contextWindow.label'), {
+      target: { value: '500.5' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'common.add' }));
+
+    expect(onModelsChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toBe('Maximum context must be a positive integer in K units');
+  });
+
+  it('blocks saving when the context window is not a valid positive K value', () => {
+    const onModelsChange = vi.fn();
+
+    render(
+      <CustomModelDialog
+        isOpen
+        models={[]}
+        onModelsChange={onModelsChange}
+        onClose={vi.fn()}
+        contextWindowEnabled
+        initialAddMode
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('settings.codexProvider.dialog.modelIdPlaceholder'), {
+      target: { value: 'vendor/invalid-context' },
+    });
+    fireEvent.change(screen.getByLabelText('settings.pluginModels.contextWindow.label'), {
+      target: { value: '0' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'common.add' }));
+
+    expect(onModelsChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toBe('Maximum context must be a positive integer in K units');
+  });
+
+  it('uses whole-K input constraints only when Codex context configuration is enabled', () => {
+    const { rerender } = render(
+      <CustomModelDialog
+        isOpen
+        models={[]}
+        onModelsChange={vi.fn()}
+        onClose={vi.fn()}
+        initialAddMode
+      />,
+    );
+
+    expect(screen.queryByLabelText('settings.pluginModels.contextWindow.label')).toBeNull();
+
+    rerender(
+      <CustomModelDialog
+        isOpen
+        models={[]}
+        onModelsChange={vi.fn()}
+        onClose={vi.fn()}
+        contextWindowEnabled
+        initialAddMode
+      />,
+    );
+
+    const contextInput = screen.getByLabelText('settings.pluginModels.contextWindow.label') as HTMLInputElement;
+    expect(contextInput.min).toBe('1');
+    expect(contextInput.step).toBe('1');
+    expect(contextInput.inputMode).toBe('numeric');
+  });
+
+  it('clears a previously configured context window', () => {
+    const onModelsChange = vi.fn();
+
+    render(
+      <CustomModelDialog
+        isOpen
+        models={[{
+          id: 'vendor/context-model',
+          label: 'Context Model',
+          contextWindowTokens: 500_000,
+        }]}
+        onModelsChange={onModelsChange}
+        onClose={vi.fn()}
+        contextWindowEnabled
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'common.edit vendor/context-model' }));
+    const contextInput = screen.getByLabelText('settings.pluginModels.contextWindow.label') as HTMLInputElement;
+    expect(contextInput.value).toBe('500');
+
+    fireEvent.change(contextInput, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+
+    expect(onModelsChange).toHaveBeenCalledWith([{
+      id: 'vendor/context-model',
+      label: 'Context Model',
+      description: undefined,
+    }]);
   });
 
   it('blocks saving when a pricing field is negative', () => {
@@ -138,6 +282,7 @@ describe('CustomModelDialog', () => {
     expect((screen.getByLabelText('settings.codexProvider.dialog.modelIdPlaceholder') as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByLabelText('settings.codexProvider.dialog.modelLabelPlaceholder') as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByLabelText('settings.codexProvider.dialog.modelDescPlaceholder') as HTMLInputElement).disabled).toBe(true);
+    expect(screen.queryByLabelText('settings.pluginModels.contextWindow.label')).toBeNull();
 
     fireEvent.change(screen.getByLabelText('settings.pluginModels.pricing.inputLabel'), {
       target: { value: '0.2' },

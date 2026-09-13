@@ -31,12 +31,18 @@ import {
   truncateString,
   truncateErrorContent,
   emitUsageTag,
-  buildConfigErrorPayload
+  buildConfigErrorPayload,
+  extractResultError
 } from './message-utils.js';
 import { createPreToolUseHook } from './permission-mode.js';
 import { loadMcpServersConfigAsRecord } from './mcp-status/config-loader.js';
 import { setActiveQueryResult } from './message-session-registry.js';
-import { normalizeStreamDelta, resolveSnapshotDelta, resetTurnBlockState } from './stream-delta-normalizer.js';
+import {
+  normalizeStreamDelta,
+  resolveSnapshotDelta,
+  resetTurnBlockState,
+  prepareAssistantSnapshotBlock,
+} from './stream-delta-normalizer.js';
 import { generateSessionTitle } from '../session-title-service.js';
 import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
 
@@ -74,7 +80,7 @@ function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, max
     cwd: workingDirectory,
     permissionMode,
     model: sdkModelName,
-    maxTurns: 100,
+    maxTurns: 1000,
     enableFileCheckpointing: true,
     env: buildCliEnv(),
     settings: buildWebviewControlledSettingsOverride(modelId),
@@ -213,11 +219,37 @@ function processStreamMessage(msg, state, logPrefix) {
           }
         }
       }
-      if (event.type === 'content_block_start' && event.content_block?.type === 'thinking') {
-        console.log('[THINKING_START]');
+      if (event.type === 'content_block_start' && event.content_block) {
+        const hasPreviousBlock =
+          (state.textBlockContentByIndex instanceof Map && state.textBlockContentByIndex.size > 0)
+          || (state.thinkingBlockContentByIndex instanceof Map
+            && state.thinkingBlockContentByIndex.size > 0);
+        if (hasPreviousBlock) {
+          resetTurnBlockState(state);
+          process.stdout.write('[BLOCK_RESET]\n');
+        }
       }
     }
     return;
+  }
+
+  // Assistant messages can represent one normalized content block rather than
+  // one cumulative response. Prepare the boundary before emitting [MESSAGE] so
+  // Java never merges a new thinking block into the previous one.
+  if (state.streamingEnabled && msg.type === 'assistant') {
+    const content = msg.message?.content;
+    const blocks = Array.isArray(content)
+      ? content
+      : typeof content === 'string' ? [{ type: 'text', text: content }] : [];
+    for (let i = 0; i < blocks.length; i += 1) {
+      const block = blocks[i];
+      if (block.type === 'text' || block.type === 'thinking') {
+        const blockText = block.type === 'thinking' ? block.thinking || block.text || '' : block.text || '';
+        if (prepareAssistantSnapshotBlock(state, block.type, i, blockText, msg)) {
+          process.stdout.write('[BLOCK_RESET]\n');
+        }
+      }
+    }
   }
 
   // Determine whether to output the full [MESSAGE] tag
@@ -269,14 +301,19 @@ function processStreamMessage(msg, state, logPrefix) {
   // Capture session_id
   if (msg.type === 'system' && msg.session_id) {
     state.currentSessionId = msg.session_id;
-    console.log('[SESSION_ID]', msg.session_id);
-    setActiveQueryResult(msg.session_id, state.queryResult);
+    if (state.lastEmittedSessionId !== msg.session_id) {
+      state.lastEmittedSessionId = msg.session_id;
+      console.log('[SESSION_ID]', msg.session_id);
+      setActiveQueryResult(msg.session_id, state.queryResult);
+    }
   }
 
   // Error result detection
   if (msg.type === 'result' && msg.is_error) {
     console.error(`[DEBUG]${logPrefix ? ` ${logPrefix}` : ''} Received error result:`, JSON.stringify(msg));
-    throw new Error(msg.result || msg.message || 'API request failed');
+    // The SDK reports the real error text in msg.errors (array); extractResultError
+    // reads it so the actual failure surfaces instead of a generic fallback.
+    throw new Error(extractResultError(msg));
   }
 }
 
@@ -321,7 +358,7 @@ async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSes
 
   while (retryAttempt <= AUTO_RETRY_CONFIG.maxRetries) {
     const state = {
-      currentSessionId: resumeSessionId, messageCount: 0, hasStreamEvents: false,
+      currentSessionId: resumeSessionId, lastEmittedSessionId: null, messageCount: 0, hasStreamEvents: false,
       lastAssistantContent: '', lastThinkingContent: '', accumulatedUsage: null,
       streamingEnabled, streamStarted: outerStreamState.streamStarted,
       streamEnded: outerStreamState.streamEnded, queryResult: null

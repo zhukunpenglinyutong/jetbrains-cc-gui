@@ -57,7 +57,7 @@ public class CodexSettingsManagerModelAliasTest {
         provider.addProperty("id", "proxy");
         provider.addProperty("configToml", "model = \"gpt-5.5\"\n\n[model_aliases]\n\"gpt-5.5\" = \"proxy-gpt-5.5\"\n");
 
-        manager.applyProviderToCodexSettings(provider);
+        manager.transitionProvider(null, provider, false, () -> { });
 
         String written = Files.readString(home.resolve(".codex/config.toml"), StandardCharsets.UTF_8);
         assertTrue(written.contains("[model_aliases]"));

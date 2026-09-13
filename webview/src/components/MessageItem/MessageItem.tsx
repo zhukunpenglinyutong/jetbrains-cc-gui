@@ -18,6 +18,7 @@ import {
 import { ContentBlockRenderer } from './ContentBlockRenderer';
 import { formatTime } from '../../utils/helpers';
 import { copyToClipboard } from '../../utils/copyUtils';
+import { quoteToChatInput } from '../../utils/quoteUtils';
 import { READ_TOOL_NAMES, EDIT_TOOL_NAMES, BASH_TOOL_NAMES, SEARCH_TOOL_NAMES, AGENT_TOOL_NAMES, isToolName, isNonRenderedToolUse } from '../../utils/toolConstants';
 
 export interface MessageItemProps {
@@ -38,6 +39,10 @@ export interface MessageItemProps {
   toolResultSignature?: string;
   /** Current active provider id (e.g. 'claude', 'codex'); drives the streaming-connect label. */
   currentProvider?: string;
+  /** Callback when user clicks the rollback button on a user message */
+  onRollback?: (messageIndex: number, message: ClaudeMessage) => void;
+  /** Whether a rollback operation is currently in progress */
+  isRollingBack?: boolean;
   /** Show opt-in detailed footer extras such as turn cost and cache-hit ratio. */
   detailedOutputEnabled?: boolean;
 }
@@ -45,6 +50,14 @@ export interface MessageItemProps {
 /** Map provider id to a human-readable label used in UI text. */
 function getProviderDisplayName(providerId?: string): string {
   if (providerId === 'codex') return 'Codex';
+  if (providerId === 'grok') return 'Grok';
+  if (providerId === 'gemini') return 'Gemini';
+  if (providerId === 'opencode') return 'OpenCode';
+  if (providerId === 'kimi') return 'Kimi';
+  if (providerId === 'pi') return 'Pi';
+  if (providerId === 'omp') return 'OMP';
+  if (providerId === 'dsh') return 'DSH';
+  if (providerId) return providerId.charAt(0).toUpperCase() + providerId.slice(1);
   return 'Claude';
 }
 
@@ -61,6 +74,14 @@ const CopyIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M4 4l0 8a2 2 0 0 0 2 2l8 0a2 2 0 0 0 2 -2l0 -8a2 2 0 0 0 -2 -2l-8 0a2 2 0 0 0 -2 2zm2 0l8 0l0 8l-8 0l0 -8z" fill="currentColor" fillOpacity="0.9"/>
     <path d="M2 2l0 8l-2 0l0 -8a2 2 0 0 1 2 -2l8 0l0 2l-8 0z" fill="currentColor" fillOpacity="0.6"/>
+  </svg>
+);
+
+/** Rollback icon SVG */
+const RollbackIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M5 3.5L1.5 7L5 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M1.5 7L9.5 7C12 7 14 8.5 14 11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
   </svg>
 );
 
@@ -91,6 +112,45 @@ const CopyButton = memo(function CopyButton({
         <CopyIcon />
       </span>
       <span className="copy-tooltip">{copySuccessText}</span>
+    </button>
+  );
+});
+
+/** Quote icon (chat bubble with a right-arrow) used by the message quote button */
+const QuoteIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H6l-3 3v-3H3a1 1 0 0 1-1-1z" fill="currentColor" fillOpacity="0.6"/>
+    <path d="M7.5 4.5l2.5 2.5-2.5 2.5M5 7h5" stroke="var(--bg-secondary)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+interface QuoteButtonProps {
+  className?: string;
+  isQuoted: boolean;
+  onClick: () => void;
+  quoteLabel: string;
+  quoteSuccessText: string;
+}
+
+const QuoteButton = memo(function QuoteButton({
+  className,
+  isQuoted,
+  onClick,
+  quoteLabel,
+  quoteSuccessText,
+}: QuoteButtonProps) {
+  return (
+    <button
+      type="button"
+      className={`message-copy-btn message-quote-btn${className ? ` ${className}` : ''} ${isQuoted ? 'copied' : ''}`}
+      onClick={onClick}
+      title={quoteLabel}
+      aria-label={quoteLabel}
+    >
+      <span className="copy-icon">
+        <QuoteIcon />
+      </span>
+      <span className="copy-tooltip">{quoteSuccessText}</span>
     </button>
   );
 });
@@ -353,13 +413,17 @@ export const MessageItem = memo(function MessageItem({
   onNavigateToDependencySettings,
   toolResultSignature: _toolResultSignature,
   currentProvider,
+  onRollback,
+  isRollingBack = false,
   detailedOutputEnabled = false,
 }: MessageItemProps): React.ReactElement {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
+  const [quotedMessageIndex, setQuotedMessageIndex] = useState<number | null>(null);
   const [showStreamingConnectHint, setShowStreamingConnectHint] = useState(false);
 
   // Track timeout to properly cleanup on unmount
   const copyTimeoutRef = useRef<number | null>(null);
+  const quoteTimeoutRef = useRef<number | null>(null);
 
   // Manage thinking expansion state locally to avoid prop drilling and unnecessary re-renders
   const [expandedThinking, setExpandedThinking] = useState<Record<number, boolean>>({});
@@ -420,12 +484,29 @@ export const MessageItem = memo(function MessageItem({
     }
   }, [hasCopyableText, markdownContent, messageIndex, copiedMessageIndex]);
 
+  const handleQuoteMessage = useCallback(() => {
+    if (!hasCopyableText) return;
+    if (!quoteToChatInput(markdownContent)) return;
+    setQuotedMessageIndex(messageIndex);
+    if (quoteTimeoutRef.current !== null) {
+      window.clearTimeout(quoteTimeoutRef.current);
+    }
+    quoteTimeoutRef.current = window.setTimeout(() => {
+      setQuotedMessageIndex(null);
+      quoteTimeoutRef.current = null;
+    }, 1500);
+  }, [hasCopyableText, markdownContent, messageIndex]);
+
   // Cleanup timeout on unmount to prevent memory leaks
   useEffect(() => {
     return () => {
       if (copyTimeoutRef.current !== null) {
         window.clearTimeout(copyTimeoutRef.current);
         copyTimeoutRef.current = null;
+      }
+      if (quoteTimeoutRef.current !== null) {
+        window.clearTimeout(quoteTimeoutRef.current);
+        quoteTimeoutRef.current = null;
       }
     };
   }, []);
@@ -669,9 +750,8 @@ export const MessageItem = memo(function MessageItem({
       }
 
       if (grouped.type === 'agent_group') {
-        const agentToolId = grouped.agentBlock.type === 'tool_use' ? grouped.agentBlock.id : undefined;
         return (
-          <div key={`agentgroup-${agentToolId ?? grouped.startIndex}`} className="content-block">
+          <div key={`${messageKey}-agentgroup-${grouped.startIndex}`} className="content-block">
             <AgentGroupBlock
               agentBlock={grouped.agentBlock}
               followingBlocks={grouped.followingBlocks}
@@ -724,25 +804,58 @@ export const MessageItem = memo(function MessageItem({
             {formatTime(message.timestamp)}
           </div>
           {hasCopyableText && (
-            <CopyButton
-              className="message-copy-btn-inline"
-              isCopied={copiedMessageIndex === messageIndex}
-              onClick={handleCopyMessage}
-              copyLabel={t('markdown.copyMessage')}
-              copySuccessText={t('markdown.copySuccess')}
-            />
+            <>
+              <QuoteButton
+                className="message-copy-btn-inline"
+                isQuoted={quotedMessageIndex === messageIndex}
+                onClick={handleQuoteMessage}
+                quoteLabel={t('markdown.quoteMessage', 'Quote message')}
+                quoteSuccessText={t('markdown.quoteSuccess', 'Quoted!')}
+              />
+              <CopyButton
+                className="message-copy-btn-inline"
+                isCopied={copiedMessageIndex === messageIndex}
+                onClick={handleCopyMessage}
+                copyLabel={t('markdown.copyMessage')}
+                copySuccessText={t('markdown.copySuccess')}
+              />
+            </>
+          )}
+          {onRollback && !streamingActive && !isRollingBack && (
+            <button
+              type="button"
+              className="message-rollback-btn"
+              onClick={() => onRollback(messageIndex, message)}
+              title={t('rollback.tooltip', 'Rollback to here')}
+              aria-label={t('rollback.tooltip', 'Rollback to here')}
+            >
+              <span className="rollback-icon">
+                <RollbackIcon />
+              </span>
+              <span className="rollback-tooltip">
+                {t('rollback.tooltip', 'Rollback to here')}
+              </span>
+            </button>
           )}
         </div>
       )}
 
-      {/* Copy button for assistant messages only */}
+      {/* Copy and quote buttons for assistant messages only */}
       {message.type === 'assistant' && !isMessageStreaming && hasCopyableText && (
-        <CopyButton
-          isCopied={copiedMessageIndex === messageIndex}
-          onClick={handleCopyMessage}
-          copyLabel={t('markdown.copyMessage')}
-          copySuccessText={t('markdown.copySuccess')}
-        />
+        <>
+          <QuoteButton
+            isQuoted={quotedMessageIndex === messageIndex}
+            onClick={handleQuoteMessage}
+            quoteLabel={t('markdown.quoteMessage', 'Quote message')}
+            quoteSuccessText={t('markdown.quoteSuccess', 'Quoted!')}
+          />
+          <CopyButton
+            isCopied={copiedMessageIndex === messageIndex}
+            onClick={handleCopyMessage}
+            copyLabel={t('markdown.copyMessage')}
+            copySuccessText={t('markdown.copySuccess')}
+          />
+        </>
       )}
 
       {/* Role label for non-user/assistant messages — hidden for notification types */}

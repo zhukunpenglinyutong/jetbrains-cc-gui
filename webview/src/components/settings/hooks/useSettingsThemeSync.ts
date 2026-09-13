@@ -1,6 +1,11 @@
 // hooks/useSettingsThemeSync.ts
 import { useState, useEffect } from 'react';
 import { applyDiffTheme, getStoredDiffTheme, type DiffThemeMode } from '../../../utils/diffTheme';
+import {
+  applyChatBarThemeColor,
+  CHAT_BAR_COLOR_STORAGE_KEY,
+  isValidHexColor,
+} from '../../../utils/chatBarTheme';
 
 // Extend window type for IDE theme injection
 declare global {
@@ -20,6 +25,8 @@ export interface UseSettingsThemeSyncReturn {
   setChatBgColor: (color: string) => void;
   userMsgColor: string;
   setUserMsgColor: (color: string) => void;
+  chatBarColor: string;
+  setChatBarColor: (color: string) => void;
   diffTheme: DiffThemeMode;
   setDiffTheme: (theme: DiffThemeMode) => void;
 }
@@ -67,6 +74,12 @@ export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
       return saved;
     }
     return '';
+  });
+
+  // Shared chat header and status bar color configuration
+  const [chatBarColor, setChatBarColor] = useState<string>(() => {
+    const saved = localStorage.getItem(CHAT_BAR_COLOR_STORAGE_KEY);
+    return saved && isValidHexColor(saved) ? saved : '';
   });
 
   // Diff theme configuration
@@ -134,6 +147,16 @@ export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
     }
   }, [userMsgColor]);
 
+  // Shared chat header and status bar color handler
+  useEffect(() => {
+    applyChatBarThemeColor(chatBarColor);
+    if (isValidHexColor(chatBarColor)) {
+      localStorage.setItem(CHAT_BAR_COLOR_STORAGE_KEY, chatBarColor);
+    } else {
+      localStorage.removeItem(CHAT_BAR_COLOR_STORAGE_KEY);
+    }
+  }, [chatBarColor]);
+
   // Diff theme handler
   useEffect(() => {
     applyDiffTheme(diffTheme, ideTheme);
@@ -150,6 +173,8 @@ export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
     setChatBgColor,
     userMsgColor,
     setUserMsgColor,
+    chatBarColor,
+    setChatBarColor,
     diffTheme,
     setDiffTheme,
   };

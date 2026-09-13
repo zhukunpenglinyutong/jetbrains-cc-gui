@@ -243,16 +243,18 @@ public class SkillHandler extends BaseMessageHandler {
         try {
             JsonObject json = GSON.fromJson(content, JsonObject.class);
             String skillName = json.get("name").getAsString();
+            String skillId = json.has("id") ? json.get("id").getAsString() : null;
+            String requestId = json.has("requestId") ? json.get("requestId").getAsString() : null;
             String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
             boolean currentEnabled = json.has("enabled") ? json.get("enabled").getAsBoolean() : true;
             String workspaceRoot = context.getProject().getBasePath();
             boolean isCodex = "codex".equalsIgnoreCase(context.getCurrentProvider());
+            String skillPath = isCodex && json.has("skillPath") ? json.get("skillPath").getAsString() : null;
 
             CompletableFuture.runAsync(() -> {
                 try {
                     JsonObject result;
                     if (isCodex) {
-                        String skillPath = json.has("skillPath") ? json.get("skillPath").getAsString() : null;
                         if (skillPath == null || skillPath.isEmpty()) {
                             result = new JsonObject();
                             result.addProperty("success", false);
@@ -264,9 +266,19 @@ public class SkillHandler extends BaseMessageHandler {
                         } else {
                             result = CodexSkillService.toggleSkill(skillPath, currentEnabled, workspaceRoot);
                         }
+                        // The frontend's skillToggleResult handler clears its in-progress
+                        // set by matching on result.name. CodexSkillService.toggleSkill only
+                        // returns success/enabled and omits name, which would leave the row
+                        // stuck in the spinning state forever. Echo the requested skill name
+                        // so the frontend can clear the in-progress flag (mirrors the Claude
+                        // SkillService.enableSkill/disableSkill contract).
+                        if (!result.has("name") && skillName != null && !skillName.isEmpty()) {
+                            result.addProperty("name", skillName);
+                        }
                     } else {
                         result = SkillService.toggleSkill(skillName, scope, currentEnabled, workspaceRoot);
                     }
+                    attachToggleCorrelation(result, skillId, requestId, skillName);
                     String resultJson = GSON.toJson(result);
 
                     ApplicationManager.getApplication().invokeLater(() -> {
@@ -277,6 +289,7 @@ public class SkillHandler extends BaseMessageHandler {
                     JsonObject errorResult = new JsonObject();
                     errorResult.addProperty("success", false);
                     errorResult.addProperty("error", e.getMessage());
+                    attachToggleCorrelation(errorResult, skillId, requestId, skillName);
                     ApplicationManager.getApplication().invokeLater(() -> {
                         callJavaScript("window.skillToggleResult", escapeJs(GSON.toJson(errorResult)));
                     });
@@ -287,9 +300,42 @@ public class SkillHandler extends BaseMessageHandler {
             JsonObject errorResult = new JsonObject();
             errorResult.addProperty("success", false);
             errorResult.addProperty("error", e.getMessage());
+            attachToggleCorrelationFromContent(errorResult, content);
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.skillToggleResult", escapeJs(GSON.toJson(errorResult)));
             });
+        }
+    }
+
+    private static void attachToggleCorrelation(
+            JsonObject result,
+            String skillId,
+            String requestId,
+            String skillName) {
+        if (skillId != null && !skillId.isEmpty()) {
+            result.addProperty("id", skillId);
+        }
+        if (requestId != null && !requestId.isEmpty()) {
+            result.addProperty("requestId", requestId);
+        }
+        result.addProperty("name", skillName);
+    }
+
+    private static void attachToggleCorrelationFromContent(JsonObject result, String content) {
+        try {
+            JsonObject request = GSON.fromJson(content, JsonObject.class);
+            String skillId = request.has("id") && request.get("id").isJsonPrimitive()
+                    ? request.get("id").getAsString()
+                    : null;
+            String skillName = request.has("name") && request.get("name").isJsonPrimitive()
+                    ? request.get("name").getAsString()
+                    : null;
+            String requestId = request.has("requestId") && request.get("requestId").isJsonPrimitive()
+                    ? request.get("requestId").getAsString()
+                    : null;
+            attachToggleCorrelation(result, skillId, requestId, skillName);
+        } catch (Exception ignored) {
+            // Invalid requests cannot be correlated safely.
         }
     }
 

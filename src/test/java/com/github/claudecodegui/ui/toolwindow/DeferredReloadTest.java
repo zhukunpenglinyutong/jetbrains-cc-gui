@@ -28,6 +28,13 @@ import static org.junit.Assert.assertTrue;
  */
 public class DeferredReloadTest {
 
+    @Test
+    public void reconcilesCompletedGrokTurnsFromFinalHistory() {
+        assertTrue(ClaudeChatWindow.shouldReconcileTranscriptAtStreamEnd("grok", "session-1"));
+        assertFalse(ClaudeChatWindow.shouldReconcileTranscriptAtStreamEnd("grok", ""));
+        assertFalse(ClaudeChatWindow.shouldReconcileTranscriptAtStreamEnd("claude", "session-1"));
+    }
+
     // ── Park + take-and-clear ────────────────────────────────────────────────
 
     @Test

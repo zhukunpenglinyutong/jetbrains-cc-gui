@@ -5,6 +5,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 
 /**
  * HTML loader.
@@ -126,6 +127,62 @@ public class HtmlLoader {
             LOG.error("Failed to inject initial tab state: " + e.getMessage(), e);
         }
         return html;
+    }
+
+    /**
+     * Inject locally installed DSH preset ids before the frontend bundle starts.
+     */
+    public String injectInitialDshPresets(String html, List<String> presetIds) {
+        try {
+            StringBuilder values = new StringBuilder("[");
+            if (presetIds != null) {
+                boolean first = true;
+                for (String presetId : presetIds) {
+                    if (presetId == null || presetId.isBlank()) {
+                        continue;
+                    }
+                    if (!first) {
+                        values.append(',');
+                    }
+                    values.append('\'')
+                            .append(escapeForSingleQuotedJs(presetId.trim()))
+                            .append('\'');
+                    first = false;
+                }
+            }
+            values.append(']');
+            String scriptInjection = "\n    <script>window.__INITIAL_DSH_PRESETS__ = "
+                    + values + ";</script>";
+            int headIndex = html.indexOf("<head>");
+            if (headIndex != -1) {
+                int insertPos = headIndex + "<head>".length();
+                return html.substring(0, insertPos) + scriptInjection + html.substring(insertPos);
+            }
+        } catch (Exception e) {
+            LOG.error("Failed to inject initial DSH presets: " + e.getMessage(), e);
+        }
+        return html;
+    }
+
+    /**
+     * Marks the Java-owned page context as unavailable before the frontend bundle executes.
+     * The active runtime generation is injected later by {@code WebviewInitializer}, immediately
+     * before the page-specific bridge becomes visible.
+     */
+    public String injectPageContextBootstrap(String html) {
+        String scriptInjection = "\n    <script>"
+                + "window.__CCG_PAGE_GENERATION__ = undefined;"
+                + "window.__CCGUI_PAGE_CONTEXT_READY__ = false;"
+                + "window.__CCGUI_PAGE_LOAD_KIND__ = undefined;"
+                + "window.__CCGUI_RECOVERY_RELOAD__ = undefined;"
+                + "window.__CCGUI_RECOVERY_STATE_APPLIED__ = false;"
+                + "</script>";
+        int headIndex = html.indexOf("<head>");
+        if (headIndex == -1) {
+            return html;
+        }
+        int insertPos = headIndex + "<head>".length();
+        return html.substring(0, insertPos) + scriptInjection + html.substring(insertPos);
     }
 
     private static String escapeForSingleQuotedJs(String value) {

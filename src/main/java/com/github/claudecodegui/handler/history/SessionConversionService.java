@@ -388,7 +388,7 @@ class SessionConversionService {
         if (project != null && !project.isDisposed()) {
             String escapedJson = this.context.escapeJs(this.gson.toJson(result));
             String jsCode = "if (window.onConversionResult) { window.onConversionResult('" + escapedJson + "'); }";
-            this.context.executeJavaScriptOnEDT(jsCode);
+            this.context.executeJavaScriptQueued(jsCode);
         }
     }
 }

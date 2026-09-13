@@ -6,8 +6,12 @@
   border: 1px solid var(--border-secondary);
   border-radius: 8px;
   padding: 24px;
-  width: 100%;
-  max-width: 100%;
+  /* Float as a card instead of hugging the tool-window edges: the full border
+     and rounded corners must stay visible, otherwise the left border line is
+     clipped by the plugin's display boundary. Stretch within the overlay minus
+     these insets, including while collapsed mode aligns its children to the end. */
+  align-self: stretch;
+  margin: 0 8px 8px;
   box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;

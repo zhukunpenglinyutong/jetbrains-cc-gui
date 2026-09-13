@@ -1,5 +1,6 @@
 package com.github.claudecodegui.provider.codex;
 
+import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.provider.CustomPricingProvider;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader.CodexMessage;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader.SessionInfo;
@@ -72,6 +73,67 @@ public class CodexHistoryReaderRefactorTest {
             assertEquals(Instant.parse("2026-03-10T10:03:00Z").toEpochMilli(), session.lastTimestamp);
             assertTrue(session.title.contains("review"));
             assertTrue(session.title.endsWith("..."));
+            assertTrue(parser.isValidSession(session));
+        } finally {
+            deleteDirectory(sessionsDir);
+        }
+    }
+
+    @Test
+    public void parserBuildsSessionInfoFromResponseItemUserMessage() throws IOException {
+        Path sessionsDir = Files.createTempDirectory("codex-history-parser-response-item");
+        try {
+            Path sessionFile = writeSessionFile(
+                    sessionsDir,
+                    "session-response-item",
+                    line("2026-08-21T12:40:29Z", "session_meta",
+                            "{\"id\":\"01a0229e-d4d9-7850-876d-1a3b36867785\",\"cwd\":\"/workspace/demo\",\"timestamp\":\"2026-08-21T12:40:29Z\"}"),
+                    line("2026-08-21T12:40:30Z", "event_msg",
+                            "{\"type\":\"task_started\"}"),
+                    line("2026-08-21T12:40:31Z", "response_item",
+                            "{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hello from Codex 0.149\"}]}"),
+                    line("2026-08-21T12:40:32Z", "response_item",
+                            "{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"hi\"}]}")
+            );
+
+            CodexHistoryParser parser = new CodexHistoryParser(new Gson());
+            SessionInfo session = parser.parseSessionFile(sessionFile);
+
+            assertNotNull(session);
+            assertEquals("01a0229e-d4d9-7850-876d-1a3b36867785", session.sessionId);
+            assertEquals("/workspace/demo", session.cwd);
+            assertTrue(session.messageCount >= 1);
+            assertTrue(session.title.contains("hello from Codex 0.149"));
+            assertTrue(parser.isValidSession(session));
+        } finally {
+            deleteDirectory(sessionsDir);
+        }
+    }
+
+    @Test
+    public void parserSkipsInstructionPayloadsAndUsesRealUserPrompt() throws IOException {
+        Path sessionsDir = Files.createTempDirectory("codex-history-parser-skip-instructions");
+        try {
+            Path sessionFile = writeSessionFile(
+                    sessionsDir,
+                    "session-skip-instructions",
+                    line("2026-08-21T12:40:29Z", "session_meta",
+                            "{\"id\":\"01a0229e-d4d9-7850-876d-1a3b36867785\",\"cwd\":\"/workspace/demo\"}"),
+                    line("2026-08-21T12:40:30Z", "response_item",
+                            "{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"<agents-instructions>Global Instructions</agents-instructions>\"}]}"),
+                    line("2026-08-21T12:40:31Z", "response_item",
+                            "{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"<skill>name: plan</skill>\"}]}"),
+                    line("2026-08-21T12:40:32Z", "response_item",
+                            "{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"# AGENTS.md instructions\\nYOU ARE AN AUTONOMOUS CODING AGENT.\"}]}"),
+                    line("2026-08-21T12:40:33Z", "response_item",
+                            "{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"修复 Codex 历史会话不显示\"}]}")
+            );
+
+            CodexHistoryParser parser = new CodexHistoryParser(new Gson());
+            SessionInfo session = parser.parseSessionFile(sessionFile);
+
+            assertNotNull(session);
+            assertEquals("修复 Codex 历史会话不显示", session.title);
             assertTrue(parser.isValidSession(session));
         } finally {
             deleteDirectory(sessionsDir);
@@ -204,6 +266,32 @@ public class CodexHistoryReaderRefactorTest {
 
             assertEquals(1, sessions.size());
             assertEquals("session-5", sessions.get(0).sessionId);
+        } finally {
+            deleteDirectory(sessionsDir);
+        }
+    }
+
+    @Test
+    public void historyReaderIndexesRolloutSessionsWithoutEventMsgUserMessage() throws IOException {
+        Path sessionsDir = Files.createTempDirectory("codex-history-reader-rollout");
+        try {
+            writeSessionFile(
+                    sessionsDir.resolve("2026/08/21"),
+                    "rollout-2026-08-21T12-40-29-01a0229e-d4d9-7850-876d-1a3b36867785",
+                    line("2026-08-21T12:40:29Z", "session_meta",
+                            "{\"id\":\"01a0229e-d4d9-7850-876d-1a3b36867785\",\"cwd\":\"/workspace/demo\",\"timestamp\":\"2026-08-21T12:40:29Z\"}"),
+                    line("2026-08-21T12:40:31Z", "response_item",
+                            "{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hello\"}]}"),
+                    line("2026-08-21T12:40:32Z", "response_item",
+                            "{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"hi\"}]}")
+            );
+
+            CodexHistoryIndexService service = new CodexHistoryIndexService(sessionsDir, new CodexHistoryParser(gson));
+            CodexHistoryIndexService.ScanResult result = service.incrementalScanLite(new SessionIndexManager.ProjectIndex());
+
+            assertEquals(1, result.sessions().size());
+            assertEquals("01a0229e-d4d9-7850-876d-1a3b36867785", result.sessions().get(0).sessionId);
+            assertTrue(result.sessions().get(0).title.contains("hello"));
         } finally {
             deleteDirectory(sessionsDir);
         }

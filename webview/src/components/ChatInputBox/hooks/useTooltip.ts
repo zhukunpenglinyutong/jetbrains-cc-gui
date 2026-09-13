@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState, type RefObject } from 'react';
 import { getAppViewport } from '../../../utils/viewport';
 
 export interface TooltipState {
@@ -21,8 +21,13 @@ interface UseTooltipReturn {
   handleMouseLeave: () => void;
 }
 
+interface UseTooltipOptions {
+  /** Element whose DOM replacement can invalidate the visible tooltip. */
+  containerRef?: RefObject<HTMLElement | null>;
+}
+
 const TOOLTIP_TARGET_SELECTOR =
-  '.file-tag.has-tooltip, .context-tool-btn.has-tooltip, .enhance-prompt-button.has-tooltip';
+  '.file-tag.has-tooltip, .quote-tag.has-tooltip, .context-tool-btn.has-tooltip, .enhance-prompt-button.has-tooltip';
 
 /**
  * useTooltip - Manage tooltip state for hoverable elements
@@ -31,8 +36,29 @@ const TOOLTIP_TARGET_SELECTOR =
  * with smart positioning to avoid viewport overflow. Uses fixed positioning to
  * break out of overflow constraints in the input box container.
  */
-export function useTooltip(): UseTooltipReturn {
+export function useTooltip({ containerRef }: UseTooltipOptions = {}): UseTooltipReturn {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+
+  // File tags are rebuilt with innerHTML. If the pointer remains over the same
+  // visual location, no new mouseover event is guaranteed, so the old tooltip
+  // text can otherwise survive after its tag has been replaced.
+  useEffect(() => {
+    const container = containerRef?.current;
+    if (!container || typeof MutationObserver === 'undefined') return;
+
+    const observer = new MutationObserver(() => {
+      setTooltip(null);
+    });
+    observer.observe(container, {
+      attributes: true,
+      attributeFilter: ['data-file-path', 'data-tooltip'],
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+
+    return () => observer.disconnect();
+  }, [containerRef]);
 
   /**
    * Handle mouse over to show tooltip (small floating popup style)

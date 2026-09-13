@@ -28,9 +28,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -231,6 +235,13 @@ class OpenFileHandler {
         // Extract path suffix for matching
         String pathSuffix = extractPathSuffix(pathHint);
 
+        // FileEditorManager.getOpenFiles() is EDT-only — collect the open file
+        // paths before entering the background read action below (calling it
+        // from a read action on a pooled thread would also risk a deadlock:
+        // the pooled thread waits for the EDT while holding the read lock the
+        // EDT may be waiting on).
+        List<String> recentOpenPaths = collectRecentOpenPaths(project);
+
         // FilenameIndex requires read access
         return ApplicationManager.getApplication().runReadAction((Computable<VirtualFile>) () -> {
             // Search for files with matching name in project scope
@@ -243,36 +254,148 @@ class OpenFileHandler {
                 return null;
             }
 
-            // If there's a path hint (e.g., "utils/linkify.ts"), try to match by path suffix
-            if (pathSuffix != null && !pathSuffix.isBlank()) {
-                for (VirtualFile match : matches) {
-                    String matchPath = match.getPath();
-                    if (matchPath.endsWith(pathSuffix) || matchPath.contains(pathSuffix)) {
-                        return match;
-                    }
-                }
-            }
-
-            // If multiple matches, prefer files in common source directories
-            VirtualFile bestMatch = null;
+            // Disambiguate same-named files (e.g. every Django app has models.py)
+            // deterministically - see pickBestFuzzyMatchPath for the priority order.
+            Map<String, VirtualFile> matchesByPath = new LinkedHashMap<>();
             for (VirtualFile match : matches) {
-                String matchPath = match.getPath();
-                // Prefer src/, main/, or project root files
-                if (matchPath.contains("/src/") || matchPath.contains("\\src\\")) {
-                    if (bestMatch == null || !bestMatch.getPath().contains("/src/")) {
-                        bestMatch = match;
-                    }
-                } else if (matchPath.contains("/main/") || matchPath.contains("\\main\\")) {
-                    if (bestMatch == null) {
-                        bestMatch = match;
-                    }
-                } else if (bestMatch == null) {
-                    bestMatch = match;
+                matchesByPath.put(match.getPath(), match);
+            }
+            String bestPath = pickBestFuzzyMatchPath(matchesByPath.keySet(), pathSuffix, recentOpenPaths);
+            return bestPath != null ? matchesByPath.get(bestPath) : null;
+        });
+    }
+
+    /**
+     * Collect the paths of files currently open in the editor, most recent first.
+     * Used to disambiguate fuzzy matches: the file under discussion in the chat is
+     * very likely one the user (or the AI tool window) has open right now.
+     *
+     * <p>{@link FileEditorManager#getOpenFiles()} must run on the EDT; callers on
+     * a background thread are bounced via {@code invokeAndWait}.</p>
+     */
+    private List<String> collectRecentOpenPaths(Project project) {
+        try {
+            AtomicReference<VirtualFile[]> openFilesRef = new AtomicReference<>();
+            if (ApplicationManager.getApplication().isDispatchThread()) {
+                openFilesRef.set(FileEditorManager.getInstance(project).getOpenFiles());
+            } else {
+                ApplicationManager.getApplication().invokeAndWait(
+                        () -> openFilesRef.set(FileEditorManager.getInstance(project).getOpenFiles()));
+            }
+            VirtualFile[] openFiles = openFilesRef.get();
+            if (openFiles == null) {
+                return Collections.emptyList();
+            }
+            List<String> paths = new ArrayList<>(openFiles.length);
+            for (VirtualFile openFile : openFiles) {
+                paths.add(openFile.getPath());
+            }
+            return paths;
+        } catch (Exception e) {
+            LOG.debug("Failed to collect open files for fuzzy match disambiguation: " + e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Pick the best fuzzy-match candidate deterministically. Priority:
+     * <ol>
+     *   <li>A segment-aligned path-suffix match (unique) - "blog/models.py" only
+     *       matches ".../blog/models.py", never ".../myblog/models.py"</li>
+     *   <li>A candidate currently open in the editor (most recent first)</li>
+     *   <li>Common source-root heuristic (src/, main/)</li>
+     *   <li>Shortest path as the final deterministic tiebreaker</li>
+     * </ol>
+     * Previously the fallback returned whichever candidate the filename index
+     * happened to iterate first, which opened arbitrary same-named files (#1682).
+     *
+     * @param candidatePaths paths of all same-named candidates (unsorted)
+     * @param pathSuffix relative path hint from the message (may be null/blank)
+     * @param recentOpenPaths editor-open file paths, most recent first (may be empty)
+     * @return the best candidate path, or null when candidates is empty
+     */
+    // VisibleForTesting
+    static String pickBestFuzzyMatchPath(Collection<String> candidatePaths, String pathSuffix, List<String> recentOpenPaths) {
+        List<String> candidates = new ArrayList<>(candidatePaths);
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        // 1. Narrow by segment-aligned path suffix
+        if (pathSuffix != null && !pathSuffix.isBlank()) {
+            List<String> suffixMatches = new ArrayList<>();
+            for (String candidate : candidates) {
+                if (isSegmentAlignedSuffixMatch(candidate, pathSuffix)) {
+                    suffixMatches.add(candidate);
                 }
             }
+            if (!suffixMatches.isEmpty()) {
+                candidates = suffixMatches;
+            }
+        }
+        if (candidates.size() == 1) {
+            return candidates.get(0);
+        }
 
-            return bestMatch;
-        });
+        // 2. Prefer a file currently open in the editor (most recent first)
+        for (String recentPath : recentOpenPaths) {
+            for (String candidate : candidates) {
+                if (candidate.equals(recentPath)) {
+                    return candidate;
+                }
+            }
+        }
+
+        // 3./4. Source-root heuristic, then shortest path as deterministic tiebreaker
+        String best = null;
+        int bestRank = -1;
+        for (String candidate : candidates) {
+            String normalized = candidate.replace('\\', '/');
+            int rank;
+            if (normalized.contains("/src/")) {
+                rank = 0;
+            } else if (normalized.contains("/main/")) {
+                rank = 1;
+            } else {
+                rank = 2;
+            }
+            if (best == null
+                    || rank < bestRank
+                    || (rank == bestRank && candidate.length() < best.length())) {
+                best = candidate;
+                bestRank = rank;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Check whether {@code candidatePath} ends with (or contains, on segment
+     * boundaries only) the given relative {@code suffix}. Both separators are
+     * normalized to '/'.
+     *
+     * <p>"/project/blog/models.py" matches "blog/models.py";
+     * "/project/myblog/models.py" does NOT - the occurrence must start right
+     * after a '/' so a directory named "myblog" cannot satisfy "blog".</p>
+     */
+    // VisibleForTesting
+    static boolean isSegmentAlignedSuffixMatch(String candidatePath, String suffix) {
+        String candidate = candidatePath.replace('\\', '/');
+        String target = suffix.replace('\\', '/');
+        if (candidate.equals(target) || candidate.endsWith("/" + target)) {
+            return true;
+        }
+        // Legacy "contains" behavior, restricted to segment-aligned occurrences
+        int idx = candidate.indexOf(target);
+        while (idx >= 0) {
+            int end = idx + target.length();
+            boolean startsOnSegment = idx == 0 || candidate.charAt(idx - 1) == '/';
+            if (startsOnSegment && end == candidate.length()) {
+                return true;
+            }
+            idx = candidate.indexOf(target, idx + 1);
+        }
+        return false;
     }
 
     /**

@@ -2,7 +2,9 @@
  * streamingCallbacks.ts
  *
  * Registers window bridge callbacks for streaming:
- * onStreamStart, onContentDelta, onThinkingDelta, onStreamEnd, onPermissionDenied.
+ * onStreamStart, onContentDelta, onThinkingDelta, onStreamEnd, onBlockReset,
+ * onStreamingHeartbeat, onPermissionDenied, plus __flushDeferredStreamingRenders
+ * (called after a pending structural snapshot is applied to resume delta rendering).
  */
 
 import { startTransition } from 'react';
@@ -137,9 +139,8 @@ export function collectUnresolvedToolUseIds(
  *
  * Set to 60s to avoid false positives during long tool execution phases
  * (e.g., command execution, file operations) where no content deltas arrive
- * but the backend is still actively processing.  The backend heartbeat
- * mechanism in StreamMessageCoalescer keeps __lastStreamActivityAt bumped
- * via periodic updateMessages re-pushes.
+ * but the backend is still actively processing. The backend heartbeat keeps
+ * __lastStreamActivityAt bumped without requiring another message snapshot.
  */
 const STREAM_STALL_TIMEOUT_MS = 60_000;
 const STREAM_STALL_CHECK_INTERVAL_MS = 5_000;
@@ -274,6 +275,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     window.__streamEndProcessedTurnId = undefined;
     // Record turn start time for duration calculation in onStreamEnd
     window.__turnStartedAt = Date.now();
+    window.__streamingDeltaRenderDeferred = false;
     streamingContentRef.current = '';
     streamingThinkingRef.current = '';
     isStreamingRef.current = true;
@@ -403,11 +405,25 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
   const scheduleContentRaf = createStreamingRafScheduler(contentUpdateTimeoutRef, lastContentUpdateRef);
   const scheduleThinkingRaf = createStreamingRafScheduler(thinkingUpdateTimeoutRef, lastThinkingUpdateRef);
 
+  window.__flushDeferredStreamingRenders = () => {
+    if (!window.__streamingDeltaRenderDeferred || !isStreamingRef.current) return;
+    window.__streamingDeltaRenderDeferred = false;
+    scheduleContentRaf();
+    scheduleThinkingRaf();
+  };
+
   window.onContentDelta = (delta: string) => {
     if (window.__sessionTransitioning) return;
     if (!isStreamingRef.current) return;
     window.__lastStreamActivityAt = Date.now();
     streamingContentRef.current += delta;
+    if (window.__pendingUpdateRaf != null || window.__pendingUpdateJson != null) {
+      // Let the pending structural snapshot establish the message identity first.
+      // The snapshot merge already consumes this buffer, so a second React update
+      // here would only race the authoritative structural update.
+      window.__streamingDeltaRenderDeferred = true;
+      return;
+    }
     scheduleContentRaf();
   };
 
@@ -416,6 +432,10 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     if (!isStreamingRef.current) return;
     window.__lastStreamActivityAt = Date.now();
     streamingThinkingRef.current += delta;
+    if (window.__pendingUpdateRaf != null || window.__pendingUpdateJson != null) {
+      window.__streamingDeltaRenderDeferred = true;
+      return;
+    }
     scheduleThinkingRaf();
   };
 

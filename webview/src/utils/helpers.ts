@@ -19,6 +19,34 @@ export const truncate = (text: string, maxLength = 60) => {
   }
   return `${text.substring(0, maxLength)}...`;
 };
+/**
+ * Truncate a long path from the front, keeping whole trailing segments:
+ * 'webview/src/components/ChatInputBox/selectors/index.ts' -> '…/ChatInputBox/selectors/index.ts'
+ */
+export const truncatePathFromStart = (path: string, maxLength = 36) => {
+  if (typeof path !== 'string' || path.length <= maxLength) {
+    return path || '';
+  }
+  const separator = path.includes('\\') ? '\\' : '/';
+  const trailingSeparator = path.endsWith(separator) ? separator : '';
+  const segments = path.split(separator).filter(Boolean);
+
+  let tail = '';
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const candidate = tail ? `${segments[i]}${separator}${tail}` : segments[i];
+    // Reserve room for the '…/' prefix
+    if (candidate.length + 2 > maxLength) {
+      break;
+    }
+    tail = candidate;
+  }
+
+  if (!tail) {
+    // Even the final segment overflows the budget: hard-truncate characters
+    return `…${path.slice(-(maxLength - 1))}`;
+  }
+  return `…${separator}${tail}${trailingSeparator}`;
+};
 
 /**
  * Format timestamp to time string (HH:mm)

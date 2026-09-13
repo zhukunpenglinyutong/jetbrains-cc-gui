@@ -15,7 +15,7 @@ public class ClaudeSessionTest {
 
     @Test
     public void setSessionInfoNotifiesSessionIdWhenRestoringHistorySession() {
-        ClaudeSession session = new ClaudeSession(null, null, null);
+        ClaudeSession session = new ClaudeSession(null, null, null, null);
         RecordingCallback callback = new RecordingCallback();
         session.setCallback(callback);
 
@@ -28,7 +28,7 @@ public class ClaudeSessionTest {
 
     @Test
     public void hasNoTurnStartTimestampBeforeFirstSubmission() {
-        ClaudeSession session = new ClaudeSession(null, null, null);
+        ClaudeSession session = new ClaudeSession(null, null, null, null);
 
         assertEquals(0L, session.getLastTurnStartedAtMillis());
     }
@@ -36,7 +36,7 @@ public class ClaudeSessionTest {
     @Test
     public void interruptDoesNotResetAReplacementChannel() throws Exception {
         BlockingCodexBridge bridge = new BlockingCodexBridge(false);
-        ClaudeSession session = new ClaudeSession(null, null, bridge);
+        ClaudeSession session = new ClaudeSession(null, null, bridge, null);
         session.setProvider("codex");
         session.getState().setChannelId("old-channel");
         session.getState().setBusy(true);
@@ -58,7 +58,7 @@ public class ClaudeSessionTest {
     @Test(expected = CompletionException.class)
     public void interruptCompletesExceptionallyWhenProviderInterruptFails() {
         BlockingCodexBridge bridge = new BlockingCodexBridge(true);
-        ClaudeSession session = new ClaudeSession(null, null, bridge);
+        ClaudeSession session = new ClaudeSession(null, null, bridge, null);
         session.setProvider("codex");
         session.getState().setChannelId("failing-channel");
 

@@ -11,12 +11,33 @@ const STORAGE_KEY_TO_PROVIDER: Partial<Record<string, 'claude' | 'codex'>> = {
 /**
  * Read plugin-level custom models from localStorage
  */
+function stripContextWindowMetadata(value: unknown): unknown {
+  if (!Array.isArray(value)) {
+    return value;
+  }
+  return value.map(model => {
+    if (!model || typeof model !== 'object' || Array.isArray(model)) {
+      return model;
+    }
+    return Object.fromEntries(
+      Object.entries(model).filter(([key]) => key !== 'contextWindowTokens'),
+    );
+  });
+}
+
+function validatePluginModels(storageKey: string, value: unknown): CodexCustomModel[] {
+  const candidate = storageKey === STORAGE_KEYS.CLAUDE_CUSTOM_MODELS
+    ? stripContextWindowMetadata(value)
+    : value;
+  return validateCodexCustomModels(candidate);
+}
+
 function readPluginModels(storageKey: string): CodexCustomModel[] {
   try {
     const stored = localStorage.getItem(storageKey);
     if (!stored) return [];
     const parsed = JSON.parse(stored);
-    return validateCodexCustomModels(parsed);
+    return validatePluginModels(storageKey, parsed);
   } catch {
     return [];
   }
@@ -62,11 +83,11 @@ function normalizeComparableModelId(modelId: string): string {
 }
 
 /**
- * Mirror custom model pricing into the Java config file used by usage aggregators.
- * The complete model list is sent because deleting a model or clearing all pricing
- * must replace the provider's persisted pricing map, not merge with stale entries.
+ * Mirror custom model metadata into the Java config file used by usage displays and aggregators.
+ * The complete model list is sent because deleting a model or clearing optional metadata
+ * must replace the provider's persisted maps, not merge with stale entries.
  */
-function syncCustomModelPricing(storageKey: string, models: CodexCustomModel[]) {
+function syncCustomModelMetadata(storageKey: string, models: CodexCustomModel[]) {
   const provider = STORAGE_KEY_TO_PROVIDER[storageKey];
   if (!provider) {
     return;
@@ -118,10 +139,10 @@ export function usePluginModels(storageKey: string) {
   }, [storageKey]);
 
   const updateModels = useCallback((newModels: CodexCustomModel[]) => {
-    const validModels = validateCodexCustomModels(newModels);
+    const validModels = validatePluginModels(storageKey, newModels);
     setModels(validModels);
     writePluginModels(storageKey, validModels);
-    syncCustomModelPricing(storageKey, validModels);
+    syncCustomModelMetadata(storageKey, validModels);
   }, [storageKey]);
 
   return { models, updateModels };

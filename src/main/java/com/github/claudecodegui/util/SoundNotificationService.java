@@ -68,26 +68,43 @@ public class SoundNotificationService {
      * Play task completion notification sound based on user settings.
      */
     public void playTaskCompleteSound() {
+        playConfiguredSound("[SoundNotification]", settings -> settings.getSoundNotificationEnabled());
+    }
+
+    /**
+     * Play AskUserQuestion reminder sound based on the AskUserQuestion notification setting.
+     */
+    public void playAskUserQuestionReminderSound() {
+        playConfiguredSound("[AskUserQuestionSoundNotification]",
+                settings -> settings.getAskUserQuestionSoundNotificationEnabled());
+    }
+
+    private void playConfiguredSound(String logPrefix, SoundNotificationGate gate) {
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
                 CodemossSettingsService settings = new CodemossSettingsService();
 
-                if (!settings.getSoundNotificationEnabled()) {
-                    LOG.debug("[SoundNotification] Sound notification is disabled");
+                if (!gate.isEnabled(settings)) {
+                    LOG.debug(logPrefix + " Sound notification is disabled");
                     return;
                 }
 
-                if (settings.getSoundOnlyWhenUnfocused() && ApplicationManager.getApplication().isActive()) {
-                    LOG.debug("[SoundNotification] IDE window is focused, skipping notification sound");
+                if (settings.getSoundOnlyWhenUnfocused() && IdeFocusState.isIdeApplicationFocused()) {
+                    LOG.debug(logPrefix + " IDE window is focused, skipping notification sound");
                     return;
                 }
 
                 String selectedSound = settings.getSelectedSound();
                 playBySelection(selectedSound, settings.getCustomSoundPath());
             } catch (Exception e) {
-                LOG.warn("[SoundNotification] Failed to play notification sound: " + e.getMessage(), e);
+                LOG.warn(logPrefix + " Failed to play notification sound: " + e.getMessage(), e);
             }
         });
+    }
+
+    @FunctionalInterface
+    private interface SoundNotificationGate {
+        boolean isEnabled(CodemossSettingsService settings) throws Exception;
     }
 
     /**

@@ -34,8 +34,6 @@ class ClaudeSessionQueryService {
     private static final int PROCESS_TIMEOUT_SECONDS = 30;
     private static final Pattern VALID_SESSION_ID = Pattern.compile("[a-zA-Z0-9_\\-]+");
     private static final Pattern IMAGE_REFERENCE_PATTERN = Pattern.compile("(?m)^\\[Image #\\d+:\\s*(.+?)\\]\\s*$");
-    private static final String IMAGE_ATTACHMENT_HINT =
-            "The user has attached the image(s) above. Please use the Read tool to view them.";
 
     private final Logger log;
     private final Gson gson;
@@ -184,6 +182,17 @@ class ClaudeSessionQueryService {
             throw new RuntimeException("Failed to extract JSON from Node.js output");
         }
 
+        // A well-formed JSON object must end with '}'. If it doesn't, the Node child
+        // exited before its stdout buffer fully drained (a known race for large
+        // getSession payloads) and the JSON was truncated mid-stream. Log the lengths
+        // so the failure is diagnosable instead of leaving only a cryptic Gson error.
+        // extractLastJsonLine already trims its return value, so no trim is needed here
+        // (avoiding an O(n) copy of the multi-megabyte payload on every getSession).
+        if (!jsonStr.endsWith("}")) {
+            log.warn("[" + logPrefix + "] Extracted JSON appears truncated: jsonLength="
+                    + jsonStr.length() + ", rawOutputLength=" + outputStr.length());
+        }
+
         if (log.isDebugEnabled()) {
             log.debug("[" + logPrefix + "] Extracted JSON: "
                     + (jsonStr.length() > 500 ? jsonStr.substring(0, 500) + "..." : jsonStr));
@@ -311,18 +320,7 @@ class ClaudeSessionQueryService {
     }
 
     private static String normalizeRemainingText(String text) {
-        if (text == null) {
-            return "";
-        }
-        String normalized = text.replace("\r\n", "\n");
-        normalized = normalized.replace("\r", "\n");
-        normalized = normalized.replace(IMAGE_ATTACHMENT_HINT, "");
-        normalized = UserMessageSanitizer.sanitizeUserFacingText(normalized);
-        normalized = normalized.replaceAll("(?m)^[ \\t]+$", "");
-        normalized = normalized.replaceAll("\n{3,}", "\n\n");
-        normalized = normalized.replaceAll("^(?:\\s*\\n)+", "");
-        normalized = normalized.replaceAll("(?:\\n\\s*)+$", "");
-        return normalized.trim();
+        return UserMessageSanitizer.normalizeForComparison(text);
     }
 
     private static void appendTextBlock(JsonArray contentBlocks, String text) {

@@ -7,9 +7,12 @@
   border-radius: 8px;
   padding: 24px;
   padding-top: 28px; /* extra space for resize handle */
-  /* Set to 100% width */
-  max-width: 100%;
-  width: 100%;
+  /* Float as a card instead of hugging the tool-window edges: the full border
+     and rounded corners must stay visible, otherwise the left border line is
+     clipped by the plugin's display boundary. Stretch within the overlay minus
+     these insets (align-items: stretch on the overlay does the filling). */
+  align-self: stretch;
+  margin: 0 8px 8px;
   max-height: 80vh;
   overflow-y: auto;
   box-shadow: var(--shadow-lg);
@@ -197,8 +200,11 @@
   border: 1px solid var(--border-secondary);
   border-radius: 8px;
   box-shadow: var(--shadow-md);
-  width: 100%;
-  max-width: 100%;
+  /* Same edge inset as the expanded card so the collapsed bar never hugs the
+     tool-window edge either. Override the overlay's end alignment to retain
+     the full-width compact layout. */
+  align-self: stretch;
+  margin: 0 8px 8px;
 }
 
 .collapsed-header {
@@ -403,7 +409,6 @@
 @media (max-width: 600px) {
   .plan-approval-dialog {
     padding: 16px;
-    width: 100%;
   }
 
   .plan-approval-dialog-title {

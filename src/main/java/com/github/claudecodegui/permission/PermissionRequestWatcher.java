@@ -4,6 +4,7 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
 /**
@@ -22,6 +23,12 @@ class PermissionRequestWatcher {
     private static final Logger LOG = Logger.getInstance(PermissionRequestWatcher.class);
     private static final int POLL_INTERVAL_MS = 500;
     private static final int ERROR_RETRY_DELAY_MS = 1000;
+    /**
+     * On start, only purge session IPC files older than this. Fresh requests that
+     * Node may have written just before a watcher restart must survive so they
+     * can still be consumed (AskUserQuestion / permission hang regression).
+     */
+    static final long STALE_SESSION_FILE_MAX_AGE_MS = TimeUnit.HOURS.toMillis(2);
 
     private final Path permissionDir;
     private final String sessionId;
@@ -49,7 +56,8 @@ class PermissionRequestWatcher {
             return;
         }
 
-        fileProtocol.cleanupSessionFiles();
+        // Stale-only cleanup: never wipe an in-flight request created moments ago.
+        fileProtocol.cleanupStaleSessionFiles(STALE_SESSION_FILE_MAX_AGE_MS);
         running = true;
         watchThread = new Thread(() -> watchLoop(handler), "PermissionWatcher-" + sessionId);
         watchThread.setDaemon(true);

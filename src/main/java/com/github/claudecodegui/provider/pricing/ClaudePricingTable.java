@@ -13,7 +13,7 @@ import java.util.Map;
  */
 public final class ClaudePricingTable {
 
-    public static final String DEFAULT_MODEL = "claude-sonnet-4-7";
+    public static final String DEFAULT_MODEL = "claude-sonnet-5";
 
     private static final ClaudePricing DEFAULT_PRICING = new ClaudePricing(3.0, 15.0, 3.75, 0.30);
     private static final ClaudePricing TIERED_SONNET_PRICING = new ClaudePricing(3.0, 15.0, 3.75, 0.30, 6.0, 22.5, 7.5, 0.60);

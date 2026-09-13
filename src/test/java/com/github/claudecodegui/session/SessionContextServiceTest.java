@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class SessionContextServiceTest {
@@ -21,7 +22,7 @@ public class SessionContextServiceTest {
 
     @Test
     public void buildUserMessageIncludesImageBlockAndTextContent() {
-        SessionContextService service = new SessionContextService(null, 1024);
+        SessionContextService service = new SessionContextService(null);
         List<ClaudeSession.Attachment> attachments = List.of(
                 new ClaudeSession.Attachment("diagram.png", "image/png", "base64-data")
         );
@@ -39,7 +40,7 @@ public class SessionContextServiceTest {
     }
 
     @Test
-    public void buildCodexContextAppendIncludesReferencedFilesAndSelectionContext() throws Exception {
+    public void buildCodexContextAppendReferencesPathsWithoutInliningContent() throws Exception {
         File referencedFile = temporaryFolder.newFile("ReferencedExample.java");
         Files.writeString(referencedFile.toPath(), "class ReferencedExample {}", StandardCharsets.UTF_8);
 
@@ -55,7 +56,7 @@ public class SessionContextServiceTest {
         selection.addProperty("selectedText", "logger.info(\"hello\");");
         openedFilesJson.add("selection", selection);
 
-        SessionContextService service = new SessionContextService(null, 1024);
+        SessionContextService service = new SessionContextService(null);
 
         String context = service.buildCodexContextAppend(
                 openedFilesJson,
@@ -66,9 +67,30 @@ public class SessionContextServiceTest {
         assertTrue(context.contains("`backend-shell`"));
         assertTrue(context.contains("## Referenced Files"));
         assertTrue(context.contains(referencedFile.getAbsolutePath()));
-        assertTrue(context.contains("class ReferencedExample {}"));
         assertTrue(context.contains("## IDE Context"));
         assertTrue(context.contains(activeFile.getAbsolutePath() + "#L3-5"));
-        assertTrue(context.contains("logger.info(\"hello\");"));
+
+        // Content injection was removed: file contents and selected code must
+        // never be inlined into the prompt (Windows argv length limit, token cost).
+        assertFalse(context.contains("class ReferencedExample {}"));
+        assertFalse(context.contains("class ActiveExample {}"));
+        assertFalse(context.contains("logger.info(\"hello\");"));
+    }
+
+    @Test
+    public void buildCodexContextAppendReferencesActiveFileWithoutContent() throws Exception {
+        File activeFile = temporaryFolder.newFile("ActiveExample.java");
+        Files.writeString(activeFile.toPath(), "class ActiveExample {}", StandardCharsets.UTF_8);
+
+        JsonObject openedFilesJson = new JsonObject();
+        openedFilesJson.addProperty("active", activeFile.getAbsolutePath());
+
+        SessionContextService service = new SessionContextService(null);
+
+        String context = service.buildCodexContextAppend(openedFilesJson, null);
+
+        assertTrue(context.contains("## User's Current IDE Context"));
+        assertTrue(context.contains(activeFile.getAbsolutePath()));
+        assertFalse(context.contains("class ActiveExample {}"));
     }
 }

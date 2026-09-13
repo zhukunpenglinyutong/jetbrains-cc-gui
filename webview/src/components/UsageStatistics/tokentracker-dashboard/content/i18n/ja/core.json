@@ -352,6 +352,7 @@
   "shared.action.undo": "元に戻す",
   "shared.action.cancel": "キャンセル",
   "shared.action.apply": "適用",
+  "shared.action.clear": "クリア",
   "skills.empty.my": "まだ skill がありません。「探す」で検索またはインストールしましょう。",
   "skills.empty.my_cta": "探しに行く",
   "skills.empty.browse": "このソースにはスキルが見つかりませんでした。",

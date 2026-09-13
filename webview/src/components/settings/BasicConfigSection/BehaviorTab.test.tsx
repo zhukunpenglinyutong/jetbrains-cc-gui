@@ -33,6 +33,10 @@ function renderBehaviorTab(overrides: Partial<ComponentProps<typeof BehaviorTab>
     onAskUserQuestionNotificationEnabledChange: vi.fn(),
     detailedOutputEnabled: false,
     onDetailedOutputEnabledChange: vi.fn(),
+    systemNotificationOnlyWhenUnfocused: false,
+    onSystemNotificationOnlyWhenUnfocusedChange: vi.fn(),
+    askUserQuestionSoundNotificationEnabled: false,
+    onAskUserQuestionSoundNotificationEnabledChange: vi.fn(),
     permissionDialogTimeoutSeconds: 300,
     onPermissionDialogTimeoutChange: vi.fn(),
     ...overrides,
@@ -101,6 +105,72 @@ describe('BehaviorTab detailed output toggle', () => {
 
     fireEvent.click(checkbox);
     expect(onDetailedOutputEnabledChange).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('BehaviorTab ask user question sound notification toggle', () => {
+  it('fires the sound callback independently from the visual notification callback', () => {
+    const onAskUserQuestionNotificationEnabledChange = vi.fn();
+    const onAskUserQuestionSoundNotificationEnabledChange = vi.fn();
+    renderBehaviorTab({
+      onAskUserQuestionNotificationEnabledChange,
+      onAskUserQuestionSoundNotificationEnabledChange,
+    });
+
+    const checkbox = screen.getByRole('checkbox', {
+      name: /settings.basic.askUserQuestionSoundNotification.disabled/i,
+    }) as HTMLInputElement;
+
+    fireEvent.click(checkbox);
+
+    expect(onAskUserQuestionSoundNotificationEnabledChange).toHaveBeenCalledWith(true);
+    expect(onAskUserQuestionNotificationEnabledChange).not.toHaveBeenCalled();
+  });
+
+  it('shows shared sound settings when only ask user question sound is enabled', () => {
+    renderBehaviorTab({
+      soundNotificationEnabled: false,
+      askUserQuestionSoundNotificationEnabled: true,
+    });
+
+    expect(screen.getByText('settings.basic.soundNotification.onlyWhenUnfocused')).toBeTruthy();
+  });
+});
+
+describe('BehaviorTab system notification focus gate toggle', () => {
+  it('fires the focus gate callback when clicked', () => {
+    const onSystemNotificationOnlyWhenUnfocusedChange = vi.fn();
+    renderBehaviorTab({
+      taskCompletionNotificationEnabled: true,
+      onSystemNotificationOnlyWhenUnfocusedChange,
+    });
+
+    const checkbox = screen.getByRole('checkbox', {
+      name: /settings.basic.systemNotificationOnlyWhenUnfocused.disabled/i,
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+
+    fireEvent.click(checkbox);
+
+    expect(onSystemNotificationOnlyWhenUnfocusedChange).toHaveBeenCalledWith(true);
+  });
+
+  it('is hidden when all system notifications are disabled', () => {
+    renderBehaviorTab({
+      taskCompletionNotificationEnabled: false,
+      askUserQuestionNotificationEnabled: false,
+    });
+
+    expect(screen.queryByText('settings.basic.systemNotificationOnlyWhenUnfocused.label')).toBeNull();
+  });
+
+  it('is shown when only ask user question system notification is enabled', () => {
+    renderBehaviorTab({
+      taskCompletionNotificationEnabled: false,
+      askUserQuestionNotificationEnabled: true,
+    });
+
+    expect(screen.getByText('settings.basic.systemNotificationOnlyWhenUnfocused.label')).toBeTruthy();
   });
 });
 

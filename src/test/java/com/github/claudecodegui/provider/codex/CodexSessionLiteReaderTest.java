@@ -102,6 +102,45 @@ public class CodexSessionLiteReaderTest {
     }
 
     @Test
+    public void parseSessionInfoFromLite_responseItemUserMessage() {
+        String sessionId = "01a0229e-d4d9-7850-876d-1a3b36867785";
+        SessionLiteReader.LiteSessionFile lite = new SessionLiteReader.LiteSessionFile(
+                System.currentTimeMillis(), 1000,
+                "{\"type\":\"session_meta\",\"payload\":{\"id\":\"01a0229e-d4d9-7850-876d-1a3b36867785\",\"cwd\":\"/workspace\",\"timestamp\":\"2026-08-21T12:40:29Z\"}}\n"
+                        + "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hello from Codex 0.149\"}]}}\n",
+                ""
+        );
+
+        CodexSessionLiteReader.CodexLiteSessionInfo info = reader.parseSessionInfoFromLite(sessionId, lite);
+        assertNotNull(info);
+        assertEquals("01a0229e-d4d9-7850-876d-1a3b36867785", info.sessionId);
+        assertTrue(info.summary.contains("hello from Codex 0.149"));
+        assertEquals("/workspace", info.cwd);
+    }
+
+    @Test
+    public void readSessionLite_rolloutFilenameWithResponseItemUserMessage() throws IOException {
+        Path tempDir = Files.createTempDirectory("codex-lite-rollout-test");
+        try {
+            Path tempFile = tempDir.resolve("rollout-2026-08-21T12-40-29-01a0229e-d4d9-7850-876d-1a3b36867785.jsonl");
+            String content = "{\"type\":\"session_meta\",\"payload\":{\"id\":\"01a0229e-d4d9-7850-876d-1a3b36867785\",\"cwd\":\"/workspace/demo\",\"timestamp\":\"2026-08-21T12:40:29Z\",\"source\":\"cli\"}}\n"
+                    + "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hello\"}]}}\n"
+                    + "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"hi\"}]}}\n";
+            Files.writeString(tempFile, content);
+
+            CodexSessionLiteReader.CodexLiteSessionInfo info = reader.readSessionLite(tempFile);
+            assertNotNull(info);
+            assertEquals("01a0229e-d4d9-7850-876d-1a3b36867785", info.sessionId);
+            assertTrue(info.summary.contains("hello"));
+            assertEquals("/workspace/demo", info.cwd);
+        } finally {
+            Files.walk(tempDir).sorted((a, b) -> b.compareTo(a)).forEach(p -> {
+                try { Files.deleteIfExists(p); } catch (IOException ignored) {}
+            });
+        }
+    }
+
+    @Test
     public void readSessionLite_invalidSessionId() throws IOException {
         Path tempDir = Files.createTempDirectory("codex-lite-test");
         try {

@@ -269,6 +269,21 @@ public class PermissionHandlerTest {
         assertTrue(scheduler.task.cancelled);
     }
 
+    @Test
+    public void showAskUserQuestionDialogTriggersReminderNotification() {
+        FakeSafetyNetScheduler scheduler = new FakeSafetyNetScheduler();
+        FakeAskUserQuestionVisualNotifier visualNotifier = new FakeAskUserQuestionVisualNotifier();
+        FakeAskUserQuestionSoundNotifier soundNotifier = new FakeAskUserQuestionSoundNotifier();
+        PermissionHandler configuredHandler = new PermissionHandler(
+                contextStub(), scheduler, visualNotifier, soundNotifier);
+
+        JsonObject questions = new JsonObject();
+        configuredHandler.showAskUserQuestionDialog("ask-1", questions);
+
+        assertEquals(1, visualNotifier.callCount);
+        assertEquals(1, soundNotifier.callCount);
+    }
+
     // --- reflection helpers (the three pending-request maps are private) ---
 
     @SuppressWarnings("unchecked")
@@ -367,6 +382,24 @@ public class PermissionHandlerTest {
         @Override
         public void cancel() {
             cancelled = true;
+        }
+    }
+
+    private static class FakeAskUserQuestionVisualNotifier implements PermissionHandler.AskUserQuestionVisualNotifier {
+        private int callCount;
+
+        @Override
+        public void remind() {
+            callCount++;
+        }
+    }
+
+    private static class FakeAskUserQuestionSoundNotifier implements PermissionHandler.AskUserQuestionSoundNotifier {
+        private int callCount;
+
+        @Override
+        public void play() {
+            callCount++;
         }
     }
 }

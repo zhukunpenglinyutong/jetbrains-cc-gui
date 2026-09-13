@@ -673,12 +673,17 @@ public class TerminalMonitorService implements ProjectActivity {
     private static void ensureReworkedTerminalMenuRegistration() {
         try {
             ActionManager actionManager = ActionManager.getInstance();
-            boolean added = SendTerminalSelectionToInputAction.registerForReworkedTerminalContextMenu(actionManager);
-            if (added) {
-                LOG.info("[TerminalSend] Registered send action into Terminal.ReworkedTerminalContextMenu at runtime");
+            boolean addedOutput = SendTerminalSelectionToInputAction.registerForTerminalContextMenu(
+                    actionManager, SendTerminalSelectionToInputAction.TERMINAL_OUTPUT_CONTEXT_MENU);
+            boolean addedPrompt = SendTerminalSelectionToInputAction.registerForTerminalContextMenu(
+                    actionManager, SendTerminalSelectionToInputAction.TERMINAL_PROMPT_CONTEXT_MENU);
+            boolean addedReworked = SendTerminalSelectionToInputAction.registerForTerminalContextMenu(
+                    actionManager, SendTerminalSelectionToInputAction.TERMINAL_REWORKED_CONTEXT_MENU);
+            if (addedOutput || addedPrompt || addedReworked) {
+                LOG.info("[TerminalSend] Registered send action into terminal context menus at runtime");
             }
         } catch (Exception | LinkageError e) {
-            LOG.debug("[TerminalSend] Failed to register reworked terminal context menu action", e);
+            LOG.debug("[TerminalSend] Failed to register terminal context menu action", e);
         }
     }
 

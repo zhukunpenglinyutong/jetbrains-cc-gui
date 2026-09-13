@@ -367,6 +367,7 @@
   "shared.action.undo": "撤銷",
   "shared.action.cancel": "取消",
   "shared.action.apply": "套用",
+  "shared.action.clear": "清除",
   "skills.empty.my": "還沒有 Skill。去「發現」搜尋或安裝。",
   "skills.empty.my_cta": "去發現",
   "skills.empty.browse": "這個來源下沒有找到 Skill。",

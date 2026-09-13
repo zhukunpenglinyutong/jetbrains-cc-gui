@@ -4,6 +4,106 @@
   gap: 14px;
 }
 
+.modeRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.modeLabel {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+// Matches PetSettingsSection segmented control language.
+.segmentedControl {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(64px, 1fr));
+  flex: 0 0 auto;
+  min-width: 148px;
+  max-width: 100%;
+  padding: 2px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+
+.segment,
+.segmentActive {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.segment:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.segmentActive {
+  color: var(--text-white, #fff);
+  background: var(--accent-primary);
+}
+
+.autoSummary {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.autoSummaryWarn {
+  border-color: rgba(255, 171, 0, 0.35);
+  background: rgba(255, 171, 0, 0.06);
+}
+
+.autoSummaryIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.autoSummaryBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.autoSummaryTitle {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.autoSummaryText {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .selectGroup {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
@@ -11,6 +111,22 @@
   min-width: 0;
 }
 
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+// Custom listbox (not native <select>) — required for reliable clicks in JCEF.
 .selectWrap {
   position: relative;
   display: flex;
@@ -31,72 +147,37 @@
   pointer-events: none;
 }
 
-.actionsRow {
+.selectTrigger {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.providerSelect,
-.modelSelect {
+  gap: 8px;
   width: 100%;
-  height: 36px;
+  height: 32px;
+  padding: 0 32px 0 12px;
   border: 1px solid var(--border-secondary);
   border-radius: 8px;
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-size: 13px;
   font-family: inherit;
-  appearance: none;
+  text-align: left;
   cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
-  &:hover {
-    border-color: var(--border-hover);
+  &.withIcon {
+    padding-left: 36px;
   }
-
-  &:focus {
-    outline: none;
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 0 1px var(--accent-primary);
-  }
-
-  option {
-    background: var(--bg-primary);
-    color: var(--text-primary);
-  }
-}
-
-.providerSelect {
-  padding: 0 36px 0 36px;
-}
-
-.modelSelect {
-  padding: 0 36px 0 12px;
-}
-
-.resetBtn {
-  flex: 0 0 auto;
-  height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--border-secondary);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: all 0.2s ease;
 
   &:hover:not(:disabled) {
     border-color: var(--border-hover);
-    color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.04);
+  }
+
+  &:focus,
+  &.open {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary);
   }
 
   &:disabled {
@@ -105,24 +186,114 @@
   }
 }
 
+.selectValue {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectArrow {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  transition: transform 0.15s ease, color 0.15s ease;
+
+  .selectTrigger.open & {
+    color: var(--accent-primary);
+    transform: translateY(-50%) rotate(180deg);
+  }
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  max-height: 220px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover,
+  &:focus {
+    background: var(--bg-tertiary);
+    outline: none;
+  }
+
+  &.selected {
+    background: rgba(33, 150, 243, 0.14);
+    color: var(--accent-primary);
+  }
+
+  .codicon {
+    flex-shrink: 0;
+    font-size: 14px;
+  }
+}
+
+.optionLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .statusHint {
   display: flex;
   align-items: center;
-  flex: 1 1 auto;
-  min-width: 0;
   gap: 8px;
-  height: 36px;
-  padding: 0 12px;
-  border-radius: 10px;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
   color: var(--text-secondary);
   font-size: 12px;
-  line-height: 1;
+  line-height: 1.35;
 
   .codicon {
     flex: 0 0 auto;
     color: var(--text-tertiary);
     font-size: 12px;
+  }
+}
+
+.statusHintWarn {
+  border: 1px solid rgba(255, 171, 0, 0.35);
+  background: rgba(255, 171, 0, 0.06);
+  color: var(--text-primary);
+
+  .codicon {
+    color: #ffab00;
   }
 }
 
@@ -133,12 +304,17 @@
   white-space: nowrap;
 }
 
-.selectArrow {
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  transform: translateY(-50%);
-  pointer-events: none;
-  color: var(--text-tertiary);
-  font-size: 12px;
+@media (max-width: 480px) {
+  .modeRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .segmentedControl {
+    width: 100%;
+  }
+
+  .selectGroup {
+    grid-template-columns: 1fr;
+  }
 }

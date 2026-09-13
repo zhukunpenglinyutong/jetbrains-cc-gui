@@ -13,10 +13,12 @@ const SubagentHistoryContext = createContext<Record<string, SubagentHistoryRespo
 
 interface SessionIdContextValue {
   currentSessionId: string | null;
+  currentProvider: string;
 }
 
 const SessionIdContext = createContext<SessionIdContextValue>({
   currentSessionId: null,
+  currentProvider: 'claude',
 });
 
 export type GetToolResultRawFn = (toolUseId: string) => ClaudeRawMessage | null;
@@ -94,6 +96,11 @@ export function useSessionId(): string | null {
   return useContext(SessionIdContext).currentSessionId;
 }
 
+/** Current provider paired with the session ID for provider-specific history reads. */
+export function useSessionProvider(): string {
+  return useContext(SessionIdContext).currentProvider;
+}
+
 /**
  * Hook for looking up the raw message that contains a given tool result.
  */
@@ -120,8 +127,15 @@ export function useTaskEvent(toolUseId: string | undefined): TaskEvent | undefin
  * `currentSessionId` so SessionIdContext consumers don't re-render on every
  * history update.
  */
-export function useSubagentContextValues(subagentHistories: Record<string, SubagentHistoryResponse>, currentSessionId: string | null) {
-  const sessionIdCtxValue = useMemo(() => ({ currentSessionId }), [currentSessionId]);
+export function useSubagentContextValues(
+  subagentHistories: Record<string, SubagentHistoryResponse>,
+  currentSessionId: string | null,
+  currentProvider: string,
+) {
+  const sessionIdCtxValue = useMemo(
+    () => ({ currentSessionId, currentProvider }),
+    [currentProvider, currentSessionId],
+  );
   return { subagentHistoryCtxValue: subagentHistories, sessionIdCtxValue };
 }
 

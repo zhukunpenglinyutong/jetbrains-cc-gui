@@ -1,0 +1,69 @@
+package com.github.claudecodegui.cli;
+
+import org.junit.Test;
+
+import java.io.File;
+import java.util.Map;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * Unit tests for the login-shell lookup script builder and output parser in
+ * {@link CliStatusDetector}. Process-spawning behavior is covered implicitly by
+ * the parser contract: only {@code name=absolute-existing-path} lines survive.
+ */
+public class CliStatusDetectorLoginShellTest {
+
+    @Test
+    public void buildLookupScriptEmitsOneLinePerTool() {
+        String script = CliStatusDetector.buildLookupScript(false);
+        for (CliToolId tool : CliToolId.values()) {
+            String binary = tool.getBinaryName();
+            assertTrue("script must query " + binary,
+                    script.contains("echo \"" + binary + "=$(command -v " + binary + " 2>/dev/null)\""));
+        }
+    }
+
+    @Test
+    public void buildLookupScriptUsesFishSyntaxForFish() {
+        String script = CliStatusDetector.buildLookupScript(true);
+        for (CliToolId tool : CliToolId.values()) {
+            String binary = tool.getBinaryName();
+            assertTrue("fish script must query " + binary,
+                    script.contains("echo \"" + binary + "=\"(command -v " + binary + " 2>/dev/null)"));
+        }
+        // POSIX command substitution is a syntax error in fish.
+        assertFalse(script.contains("$("));
+    }
+
+    @Test
+    public void parseLoginShellLookupKeepsAbsoluteExistingPaths() {
+        String existing = new File("/bin/sh").getAbsolutePath();
+        Map<String, String> parsed = CliStatusDetector.parseLoginShellLookup(
+                "omp=" + existing + "\n"
+                        + "pi=\n"                       // not found: empty value dropped
+                        + "kimi=omp not found\n"        // shell noise dropped
+                        + "prompt% grok=relative/path\n"// non-absolute dropped
+                        + "\n");
+        assertEquals(Map.of("omp", existing), parsed);
+    }
+
+    @Test
+    public void parseLoginShellLookupHandlesNullAndBlank() {
+        assertTrue(CliStatusDetector.parseLoginShellLookup(null).isEmpty());
+        assertTrue(CliStatusDetector.parseLoginShellLookup("").isEmpty());
+        assertTrue(CliStatusDetector.parseLoginShellLookup("   \n  ").isEmpty());
+    }
+
+    @Test
+    public void parseLoginShellLookupSplitsOnFirstEqualsOnly() {
+        String existing = new File("/bin/sh").getAbsolutePath();
+        // Values containing '=' (unusual but legal in paths) must not break parsing.
+        Map<String, String> parsed = CliStatusDetector.parseLoginShellLookup(
+                "omp=" + existing + "=extra\n");
+        // "/bin/sh=extra" does not exist → dropped; key itself stays intact.
+        assertTrue(parsed.isEmpty());
+    }
+}

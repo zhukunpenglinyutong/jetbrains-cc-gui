@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sendToJava } from '../../utils/bridge';
 import {
   DEFAULT_BUBBLE_TEMPLATES,
+  DEFAULT_ACTION_MAPPINGS,
   parseCatalog,
   parseConfig,
+  parseActionMappings,
   parseHatchCommand,
   parseHatchStatus,
   parseLocalPreview,
@@ -34,6 +36,14 @@ describe('petBridge payload validation', () => {
       catalogPageSize: 24,
       catalogSort: 'name_desc',
       showStatusIndicator: true,
+      confirmBeforeDelete: false,
+      actionMappings: {
+        idle: 'waving',
+        success: 'unknown',
+        thinking: 'waiting',
+        running: 123,
+        error: 'running-left',
+      },
       bubbleEnabled: true,
       bubbleDurationSeconds: 6,
       bubbleSize: 'large',
@@ -58,6 +68,14 @@ describe('petBridge payload validation', () => {
       catalogPageSize: 24,
       catalogSort: 'name_desc',
       showStatusIndicator: true,
+      confirmBeforeDelete: false,
+      actionMappings: {
+        idle: ['waving'],
+        success: [...DEFAULT_ACTION_MAPPINGS.success],
+        thinking: ['waiting'],
+        running: [...DEFAULT_ACTION_MAPPINGS.running],
+        error: ['running-left'],
+      },
       bubbleEnabled: true,
       bubbleDurationSeconds: 6,
       bubbleSize: 'large',
@@ -79,6 +97,22 @@ describe('petBridge payload validation', () => {
       catalogSort: 'invalid',
     }))).toMatchObject({ catalogColumns: 4 });
     expect(parseConfig('{"enabled":true}')).toBeNull();
+  });
+
+  it('accepts legacy action strings and sanitizes multi-action mappings', () => {
+    expect(parseActionMappings({
+      idle: ['waving', 'waving', 'invalid', 'review'],
+      success: [],
+      thinking: 'waiting',
+      running: [123, 'running-left'],
+      error: null,
+    })).toEqual({
+      idle: ['waving', 'review'],
+      success: [...DEFAULT_ACTION_MAPPINGS.success],
+      thinking: ['waiting'],
+      running: ['running-left'],
+      error: [...DEFAULT_ACTION_MAPPINGS.error],
+    });
   });
 
   it('accepts metadata-only local pets and drops unsafe image payloads', () => {
@@ -240,6 +274,7 @@ describe('petBridge payload validation', () => {
     petBridge.getPreview('pixel-cat-preview');
     petBridge.install('pixel-cat');
     petBridge.uninstall('pixel-cat');
+    petBridge.deleteLocalPet('custom-cat/spritesheet.png');
     petBridge.setAlias('pixel-cat', 'Desk Cat');
     petBridge.updateState('session-1', 'running');
     petBridge.showBubble({
@@ -274,24 +309,29 @@ describe('petBridge payload validation', () => {
     expect(sendToJava).toHaveBeenNthCalledWith(6, 'uninstall_petdex_pet', { slug: 'pixel-cat' });
     expect(sendToJava).toHaveBeenNthCalledWith(
       7,
+      'delete_codex_pet',
+      { petId: 'custom-cat/spritesheet.png' },
+    );
+    expect(sendToJava).toHaveBeenNthCalledWith(
+      8,
       'set_petdex_pet_alias',
       { slug: 'pixel-cat', alias: 'Desk Cat' },
     );
     expect(sendToJava).toHaveBeenNthCalledWith(
-      8,
+      9,
       'set_codex_pet_state',
       { sourceId: 'session-1', state: 'running' },
     );
     expect(sendToJava).toHaveBeenNthCalledWith(
-      9,
+      10,
       'show_codex_pet_bubble',
       { event: 'task_success', sourceId: 'session-1', tabTitle: 'Tab', durationMs: 12_800 },
     );
-    expect(sendToJava).toHaveBeenNthCalledWith(10, 'open_codex_pet_directory');
-    expect(sendToJava).toHaveBeenNthCalledWith(11, 'get_hatch_pet_status');
-    expect(sendToJava).toHaveBeenNthCalledWith(12, 'open_hatch_pet_website');
-    expect(sendToJava).toHaveBeenNthCalledWith(13, 'choose_hatch_pet_reference');
-    expect(sendToJava).toHaveBeenNthCalledWith(14, 'prepare_hatch_pet_command', {
+    expect(sendToJava).toHaveBeenNthCalledWith(11, 'open_codex_pet_directory');
+    expect(sendToJava).toHaveBeenNthCalledWith(12, 'get_hatch_pet_status');
+    expect(sendToJava).toHaveBeenNthCalledWith(13, 'open_hatch_pet_website');
+    expect(sendToJava).toHaveBeenNthCalledWith(14, 'choose_hatch_pet_reference');
+    expect(sendToJava).toHaveBeenNthCalledWith(15, 'prepare_hatch_pet_command', {
       action: 'create', name: 'Desk Cat',
     });
   });

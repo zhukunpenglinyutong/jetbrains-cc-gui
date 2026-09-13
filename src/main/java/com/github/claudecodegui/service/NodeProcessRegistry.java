@@ -3,6 +3,7 @@ package com.github.claudecodegui.service;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.DaemonBridge;
+import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
 import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.github.claudecodegui.util.PlatformUtils;
@@ -22,6 +23,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 
 /**
  * Project-scoped service that aggregates all Node.js subprocess data for the
@@ -29,8 +31,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>Three data sources are unified:
  * <ol>
- *   <li><b>Claude daemon processes</b>: one per {@link ClaudeChatWindow}, accessed via
- *       {@link ClaudeSDKBridge#getCurrentDaemonBridgeForInspection()}.</li>
+ *   <li><b>Daemon processes</b>: Claude and Grok each own a long-lived {@code daemon.js}
+ *       via {@link ClaudeSDKBridge#getCurrentDaemonBridgeForInspection()} /
+ *       {@link GrokSDKBridge#getCurrentDaemonBridgeForInspection()}.</li>
  *   <li><b>Per-channel processes</b>: tracked in each bridge's {@code ProcessManager}.</li>
  *   <li><b>Orphan processes</b>: discovered by scanning {@link ProcessHandle#allProcesses()}
  *       for {@code daemon.js} / {@code channel-manager.js} command lines that don't match
@@ -102,97 +105,68 @@ public final class NodeProcessRegistry implements Disposable {
             // the user. The physical SDK type is preserved in the command tooltip.
             String tabProvider = safeGetCurrentProvider(window);
 
-            // -- DAEMON entries from ClaudeSDKBridge --
+            // -- DAEMON + CHANNEL entries from Claude / Grok / Codex bridges --
             ClaudeSDKBridge claudeBridge = safeClaudeBridge(window);
+            GrokSDKBridge grokBridge = safeGrokBridge(window);
             if (claudeBridge != null) {
-                DaemonBridge daemon = claudeBridge.getCurrentDaemonBridgeForInspection();
-                if (daemon != null && daemon.isAlive()) {
-                    Process daemonProcess = daemon.getDaemonProcessForInspection();
-                    if (daemonProcess != null && daemonProcess.isAlive()) {
-                        long pid = daemonProcess.pid();
-                        knownPids.add(pid);
-                        ProcessHandle.Info info = safeInfo(daemonProcess);
-                        long startedAt = info != null
-                                ? info.startInstant().map(Instant::toEpochMilli).orElse(-1L)
-                                : -1L;
-                        result.add(NodeProcessInfo.builder()
-                                .kind(NodeProcessInfo.Kind.DAEMON)
-                                .provider(tabProvider)
-                                .pid(pid)
-                                .alive(true)
-                                .startedAtMs(startedAt)
-                                .uptimeMs(startedAt > 0 ? Math.max(0, now - startedAt) : 0L)
-                                .command(extractCommand(info))
-                                .activeRequestCount(daemon.getActiveRequestCount())
-                                .sessionId(sessionId)
-                                .tabName(tabName)
-                                .build());
-
-                        // Also include daemon's child processes (e.g., spawned Claude CLI).
-                        // These are "owned" by us, so add to knownPids to keep them out of orphan list.
-                        try {
-                            daemonProcess.toHandle().descendants().forEach(child -> knownPids.add(child.pid()));
-                        } catch (Exception ignored) {
-                        }
-                    }
-                }
+                collectDaemonEntry(
+                        result,
+                        knownPids,
+                        claudeBridge.getCurrentDaemonBridgeForInspection(),
+                        tabProvider,
+                        sessionId,
+                        tabName,
+                        now
+                );
 
                 // -- CHANNEL entries from claudeBridge.processManager --
-                Map<String, Process> claudeChannels = claudeBridge.getProcessManager().getActiveChannelSnapshot();
-                for (Map.Entry<String, Process> entry : claudeChannels.entrySet()) {
-                    Process p = entry.getValue();
-                    if (p == null || !p.isAlive()) {
-                        continue;
-                    }
-                    long pid = p.pid();
-                    knownPids.add(pid);
-                    ProcessHandle.Info info = safeInfo(p);
-                    long startedAt = info != null
-                            ? info.startInstant().map(Instant::toEpochMilli).orElse(-1L)
-                            : -1L;
-                    result.add(NodeProcessInfo.builder()
-                            .kind(NodeProcessInfo.Kind.CHANNEL)
-                            .provider(tabProvider)
-                            .pid(pid)
-                            .alive(true)
-                            .startedAtMs(startedAt)
-                            .uptimeMs(startedAt > 0 ? Math.max(0, now - startedAt) : 0L)
-                            .command(extractCommand(info))
-                            .channelId(entry.getKey())
-                            .sessionId(sessionId)
-                            .tabName(tabName)
-                            .build());
-                }
+                collectChannelEntries(
+                        result,
+                        knownPids,
+                        claudeBridge.getProcessManager().getActiveChannelSnapshot(),
+                        tabProvider,
+                        sessionId,
+                        tabName,
+                        now
+                );
             }
 
-            // -- CHANNEL entries from codexBridge.processManager (per-message processes) --
+            // Grok persistent ACP daemon (grok agent stdio under daemon.js).
+            // Without this, the live Grok daemon is mislabeled ORPHAN and "Kill all
+            // orphans" / panel kill destroys multi-turn ACP state.
+            if (grokBridge != null) {
+                collectDaemonEntry(
+                        result,
+                        knownPids,
+                        grokBridge.getCurrentDaemonBridgeForInspection(),
+                        tabProvider,
+                        sessionId,
+                        tabName,
+                        now
+                );
+                collectChannelEntries(
+                        result,
+                        knownPids,
+                        grokBridge.getProcessManager().getActiveChannelSnapshot(),
+                        tabProvider,
+                        sessionId,
+                        tabName,
+                        now
+                );
+            }
+
+            // -- CHANNEL entries from codex (per-message processes) --
             CodexSDKBridge codexBridge = safeCodexBridge(window);
             if (codexBridge != null) {
-                Map<String, Process> codexChannels = codexBridge.getProcessManager().getActiveChannelSnapshot();
-                for (Map.Entry<String, Process> entry : codexChannels.entrySet()) {
-                    Process p = entry.getValue();
-                    if (p == null || !p.isAlive()) {
-                        continue;
-                    }
-                    long pid = p.pid();
-                    knownPids.add(pid);
-                    ProcessHandle.Info info = safeInfo(p);
-                    long startedAt = info != null
-                            ? info.startInstant().map(Instant::toEpochMilli).orElse(-1L)
-                            : -1L;
-                    result.add(NodeProcessInfo.builder()
-                            .kind(NodeProcessInfo.Kind.CHANNEL)
-                            .provider(tabProvider)
-                            .pid(pid)
-                            .alive(true)
-                            .startedAtMs(startedAt)
-                            .uptimeMs(startedAt > 0 ? Math.max(0, now - startedAt) : 0L)
-                            .command(extractCommand(info))
-                            .channelId(entry.getKey())
-                            .sessionId(sessionId)
-                            .tabName(tabName)
-                            .build());
-                }
+                collectChannelEntries(
+                        result,
+                        knownPids,
+                        codexBridge.getProcessManager().getActiveChannelSnapshot(),
+                        tabProvider,
+                        sessionId,
+                        tabName,
+                        now
+                );
             }
         }
 
@@ -349,25 +323,36 @@ public final class NodeProcessRegistry implements Disposable {
     public boolean restartDaemonByPid(long pid) {
         Set<ClaudeChatWindow> windows = ClaudeSDKToolWindow.getAllChatWindowsForProject(project);
         for (ClaudeChatWindow window : windows) {
-            ClaudeSDKBridge bridge = safeClaudeBridge(window);
-            if (bridge == null) {
-                continue;
+            ClaudeSDKBridge claudeBridge = safeClaudeBridge(window);
+            if (tryRestartDaemon(claudeBridge != null ? claudeBridge.getCurrentDaemonBridgeForInspection() : null,
+                    claudeBridge != null ? claudeBridge::shutdownDaemon : null, pid)) {
+                return true;
             }
-            DaemonBridge daemon = bridge.getCurrentDaemonBridgeForInspection();
-            if (daemon == null || !daemon.isAlive()) {
-                continue;
+            GrokSDKBridge grokBridge = safeGrokBridge(window);
+            if (tryRestartDaemon(grokBridge != null ? grokBridge.getCurrentDaemonBridgeForInspection() : null,
+                    grokBridge != null ? grokBridge::shutdownDaemon : null, pid)) {
+                return true;
             }
-            Process p = daemon.getDaemonProcessForInspection();
-            if (p == null || p.pid() != pid) {
-                continue;
-            }
-            LOG.info("[NodeProcessRegistry] Restarting daemon for window PID=" + pid);
-            // shutdownDaemon stops the current daemon; next message will lazily start a new one
-            bridge.shutdownDaemon();
-            return true;
         }
         // PID didn't match any tracked daemon — fall back to plain kill
         return killByPid(pid);
+    }
+
+    private boolean tryRestartDaemon(
+            @Nullable DaemonBridge daemon,
+            @Nullable Runnable shutdown,
+            long pid
+    ) {
+        if (daemon == null || !daemon.isAlive() || shutdown == null) {
+            return false;
+        }
+        Process p = daemon.getDaemonProcessForInspection();
+        if (p == null || p.pid() != pid) {
+            return false;
+        }
+        LOG.info("[NodeProcessRegistry] Restarting daemon for window PID=" + pid);
+        shutdown.run();
+        return true;
     }
 
     /**
@@ -405,21 +390,134 @@ public final class NodeProcessRegistry implements Disposable {
     }
 
     // Package-private for unit testing.
+    //
+    // Provider names are matched on word boundaries, not as bare substrings:
+    // a coincidental path segment (username "grokky", folder "gemini-old") must
+    // not mislabel an unrelated process. `\b` sits between [a-z0-9_] and anything
+    // else, so "grok-agent" and ".antig-grok" still match while "grokky" does not.
+    private static final Pattern GROK_WORD = Pattern.compile("\\bgrok\\b");
+    private static final Pattern GEMINI_WORD = Pattern.compile("\\bgemini\\b");
+
     static @Nullable String detectProviderFromCmd(String cmd) {
         if (cmd == null) {
             return null;
         }
         String lower = cmd.toLowerCase();
+        boolean hasGrok = GROK_WORD.matcher(lower).find();
+        boolean hasGemini = GEMINI_WORD.matcher(lower).find();
+        // Shared daemon.js is used by Claude and Grok; channel-manager fingerprints are clearer.
+        if (lower.contains("channel-manager") && hasGrok) {
+            return "grok";
+        }
+        if (lower.contains("channel-manager") && hasGemini) {
+            return "gemini";
+        }
+        if (lower.contains("channel-manager") && lower.contains("codex")) {
+            return "codex";
+        }
         if (lower.contains("daemon.js")) {
+            // Cannot distinguish Claude vs Grok daemon from cmd alone.
             return "claude";
         }
         if (lower.contains("codex")) {
             return "codex";
         }
+        if (hasGrok) {
+            return "grok";
+        }
+        if (hasGemini) {
+            return "gemini";
+        }
         if (lower.contains("claude")) {
             return "claude";
         }
         return null;
+    }
+
+    private static void collectDaemonEntry(
+            List<NodeProcessInfo> result,
+            Set<Long> knownPids,
+            @Nullable DaemonBridge daemon,
+            String tabProvider,
+            @Nullable String sessionId,
+            @Nullable String tabName,
+            long now
+    ) {
+        if (daemon == null || !daemon.isAlive()) {
+            return;
+        }
+        Process daemonProcess = daemon.getDaemonProcessForInspection();
+        if (daemonProcess == null || !daemonProcess.isAlive()) {
+            return;
+        }
+        long pid = daemonProcess.pid();
+        knownPids.add(pid);
+        ProcessHandle.Info info = safeInfo(daemonProcess);
+        long startedAt = info != null
+                ? info.startInstant().map(Instant::toEpochMilli).orElse(-1L)
+                : -1L;
+        result.add(NodeProcessInfo.builder()
+                .kind(NodeProcessInfo.Kind.DAEMON)
+                .provider(tabProvider)
+                .pid(pid)
+                .alive(true)
+                .startedAtMs(startedAt)
+                .uptimeMs(startedAt > 0 ? Math.max(0, now - startedAt) : 0L)
+                .command(extractCommand(info))
+                .activeRequestCount(daemon.getActiveRequestCount())
+                .sessionId(sessionId)
+                .tabName(tabName)
+                .build());
+
+        // Include daemon children (Claude CLI / grok agent stdio) so they are not
+        // listed as orphans and "Kill all orphans" does not tear down live ACP turns.
+        try {
+            daemonProcess.toHandle().descendants().forEach(child -> knownPids.add(child.pid()));
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static void collectChannelEntries(
+            List<NodeProcessInfo> result,
+            Set<Long> knownPids,
+            @Nullable Map<String, Process> channels,
+            String tabProvider,
+            @Nullable String sessionId,
+            @Nullable String tabName,
+            long now
+    ) {
+        if (channels == null || channels.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, Process> entry : channels.entrySet()) {
+            Process p = entry.getValue();
+            if (p == null || !p.isAlive()) {
+                continue;
+            }
+            long pid = p.pid();
+            knownPids.add(pid);
+            // channel-manager children (e.g. grok agent stdio one-shot path)
+            try {
+                p.toHandle().descendants().forEach(child -> knownPids.add(child.pid()));
+            } catch (Exception ignored) {
+            }
+            ProcessHandle.Info info = safeInfo(p);
+            long startedAt = info != null
+                    ? info.startInstant().map(Instant::toEpochMilli).orElse(-1L)
+                    : -1L;
+            result.add(NodeProcessInfo.builder()
+                    .kind(NodeProcessInfo.Kind.CHANNEL)
+                    .provider(tabProvider)
+                    .pid(pid)
+                    .alive(true)
+                    .startedAtMs(startedAt)
+                    .uptimeMs(startedAt > 0 ? Math.max(0, now - startedAt) : 0L)
+                    .command(extractCommand(info))
+                    .channelId(entry.getKey())
+                    .sessionId(sessionId)
+                    .tabName(tabName)
+                    .build());
+        }
     }
 
     private static @Nullable ProcessHandle.Info safeInfo(Process p) {
@@ -445,6 +543,14 @@ public final class NodeProcessRegistry implements Disposable {
     private static @Nullable ClaudeSDKBridge safeClaudeBridge(ClaudeChatWindow window) {
         try {
             return window != null ? window.getClaudeSDKBridge() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static @Nullable GrokSDKBridge safeGrokBridge(ClaudeChatWindow window) {
+        try {
+            return window != null ? window.getGrokSDKBridge() : null;
         } catch (Exception e) {
             return null;
         }

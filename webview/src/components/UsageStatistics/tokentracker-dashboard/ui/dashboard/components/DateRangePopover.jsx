@@ -112,6 +112,15 @@ export function DateRangePopover({ from, to, onApply, onCancel }) {
               : ""}
           </span>
         )}
+        {hasSelection && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setRange({ from: undefined, to: undefined })}
+          >
+            {copy("shared.action.clear")}
+          </Button>
+        )}
         <Button variant="secondary" size="sm" onClick={onCancel}>
           {copy("shared.action.cancel")}
         </Button>

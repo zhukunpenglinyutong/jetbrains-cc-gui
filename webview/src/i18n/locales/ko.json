@@ -46,6 +46,7 @@
     "removeAttachment": "첨부파일 제거",
     "closePreview": "미리보기 닫기",
     "loadingDropdown": "로딩 중...",
+    "modelsLoadFailed": "모델을 불러오지 못했습니다. 클릭하여 다시 시도",
     "addAttachment": "첨부파일 추가",
     "stopGeneration": "생성 중지",
     "generatingResponse": "응답 생성 중",
@@ -81,10 +82,11 @@
     "disabled": "비활성화됨",
     "sdkNotInstalled": "{{provider}} SDK가 설치되어 있지 않습니다. 채팅을 시작하려면 SDK를 설치해주세요.",
     "sdkStatusLoading": "SDK 상태 확인 중...",
+    "sdkStatusUnavailable": "SDK 상태를 확인할 수 없습니다.",
+    "retrySdkStatus": "다시 시도",
     "openSourceBanner": "이 프로젝트는 100% 오픈소스이며 무료입니다 (유사품에 주의하세요)",
     "openSourceBannerStar": "Star",
-    "openSourceBannerStarToast": "저장소 주소를 클립보드에 복사했습니다. 브라우저에 붙여넣어 방문하세요 ⭐",
-    "openSourceBannerStarAria": "저장소 주소 복사 후 GitHub에서 Star",
+    "openSourceBannerStarAria": "GitHub에서 저장소를 열고 Star",
     "goInstallSdk": "설치하러 가기",
     "commandNotImplemented": "`{{command}}` 기능은 아직 구현되지 않았습니다.",
     "clearCommandDescription": "대화 기록을 지우고 새 세션을 시작합니다",
@@ -230,26 +232,36 @@
         "providerUnavailable": "Currently unavailable",
         "provider": {
           "claude": "Claude Code",
-          "codex": "Codex"
+          "codex": "Codex",
+          "grok": "Grok CLI",
+          "kimi": "Kimi CLI",
+          "opencode": "OpenCode",
+          "pi": "PI CLI",
+          "omp": "OMP CLI"
         },
         "currentProviderAuto": "Currently using automatic selection: {{provider}}",
         "currentProviderManual": "Currently using manually selected provider: {{provider}}",
-        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}"
+        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}",
+        "modeLabel": "선택 방식",
+        "modeAuto": "자동",
+        "modeManual": "수동",
+        "autoSummary": "현재 채팅 CLI를 따름 · 현재 {{provider}}",
+        "autoUnavailable": "사용 가능한 CLI가 없습니다. 수동으로 전환해 선택하세요."
       },
       "diffExpanded": {
         "label": "Diff 기본 펼침",
-        "enabled": "펼침",
-        "disabled": "접힘",
+        "enabled": "활성화",
+        "disabled": "비활성화",
         "hint": "활성화하면 채팅의 코드 diff가 기본적으로 펼쳐집니다. 비활성화하면 접힌 상태로 시작하며 클릭하여 펼칠 수 있습니다."
       },
       "taskCompletionNotification": {
-        "label": "작업 완료 알림",
+        "label": "작업 완료 시스템 알림",
         "enabled": "활성화",
         "disabled": "비활성화",
         "hint": "활성화하면 AI 작업이 완료될 때 시스템 알림이 표시됩니다. 비활성화하면 알림이 표시되지 않습니다."
       },
       "askUserQuestionNotification": {
-        "label": "사용자 질문 알림",
+        "label": "질문 시스템 알림",
         "enabled": "활성화",
         "disabled": "비활성화",
         "hint": "활성화하면 Claude가 질문할 때 시스템 알림을 표시하여 놓치지 않도록 합니다. 비활성화하면 알림이 표시되지 않습니다."
@@ -259,6 +271,18 @@
         "enabled": "켜짐",
         "disabled": "꺼짐",
         "hint": "켜면 사용 가능한 경우 메시지 하단에 이번 턴의 예상 비용을 표시하고 입력 Token 요약 안에 캐시 히트를 함께 표시합니다. Token 사용량은 항상 표시됩니다."
+      },
+      "askUserQuestionSoundNotification": {
+        "label": "질문 알림음",
+        "enabled": "활성화",
+        "disabled": "비활성화",
+        "hint": "활성화하면 Claude가 질문할 때 설정된 알림음을 재생합니다. 아래의 사운드 선택과 포커스 규칙을 사용합니다."
+      },
+      "systemNotificationOnlyWhenUnfocused": {
+        "label": "IDE가 포커스되지 않았을 때만 시스템 알림 표시",
+        "enabled": "활성화",
+        "disabled": "비활성화",
+        "hint": "활성화하면 IDE가 포커스되지 않았을 때만 작업 완료 및 질문 시스템 알림이 표시됩니다."
       },
       "sendShortcut": {
         "label": "전송 단축키",
@@ -278,13 +302,19 @@
         "reset": "초기화",
         "hint": "채팅 영역의 배경색을 사용자 지정합니다. 비워두면 테마 기본값을 따릅니다."
       },
+      "chatBarColor": {
+        "label": "헤더 및 상태 표시줄 색상",
+        "custom": "사용자 지정",
+        "reset": "초기화",
+        "hint": "세션 헤더와 작업 상태 표시줄에 공통 테마 색상을 사용합니다. 비워 두면 현재 UI 테마를 따릅니다."
+      },
       "soundNotification": {
         "label": "작업 완료 알림음",
         "enabled": "활성화",
         "disabled": "비활성화",
         "hint": "활성화하면 AI가 작업을 완료했을 때 알림음이 재생되어, 화면에서 떨어져 있을 때에도 알 수 있습니다.",
-        "onlyWhenUnfocused": "IDE가 포커스되지 않았을 때만 재생",
-        "onlyWhenUnfocusedHint": "활성화하면 IDE 창이 포커스되지 않았을 때만 알림음이 재생됩니다.",
+        "onlyWhenUnfocused": "IDE가 포커스되지 않았을 때만 알림음 재생",
+        "onlyWhenUnfocusedHint": "활성화하면 IDE가 포커스되지 않았을 때만 작업 완료 및 질문 알림음이 재생됩니다.",
         "selectSound": "알림음",
         "soundDefault": "기본",
         "soundChime": "Chime",
@@ -317,7 +347,8 @@
     "providersDesc": "Claude와 Codex API 제공자 설정을 관리하고 다른 API 서비스 제공자 간 전환",
     "providerTab": {
       "claude": "Claude Code",
-      "codex": "Codex"
+      "codex": "Codex",
+      "cli": "CLI"
     },
     "pluginModels": {
       "title": "사용자 지정 모델",
@@ -338,6 +369,13 @@
         "cacheReadShort": "캐시 읽기",
         "invalidValue": "가격은 0 이상의 숫자여야 합니다",
         "defaultPricing": "기본 요금 사용 중"
+      },
+      "contextWindow": {
+        "label": "최대 컨텍스트(K 토큰)",
+        "placeholder": "예: 500",
+        "hint": "선택 사항입니다. 토큰을 천 단위의 정수로 입력하세요(500 = 500,000 토큰). 플러그인의 사용량 표시에만 사용됩니다.",
+        "invalidValue": "최대 컨텍스트는 K 단위의 양의 정수여야 합니다",
+        "summary": "컨텍스트: {{value}} 토큰"
       },
       "configuredSectionTitle": "구성된 Claude 모델",
       "configuredSectionDesc": "현재 Claude 제공자 또는 settings.json의 모델은 이미 모델 선택기에 표시됩니다. 여기서는 가격만 변경할 수 있습니다.",
@@ -404,7 +442,12 @@
         "providerUnavailable": "사용 불가",
         "currentProviderAuto": "현재 자동 선택 사용 중: {{provider}}",
         "currentProviderManual": "현재 수동 선택된 제공자 사용 중: {{provider}}",
-        "currentProviderUnavailable": "선택된 제공자를 현재 사용할 수 없습니다: {{provider}}"
+        "currentProviderUnavailable": "선택된 제공자를 현재 사용할 수 없습니다: {{provider}}",
+        "modeLabel": "선택 방식",
+        "modeAuto": "자동",
+        "modeManual": "수동",
+        "autoSummary": "현재 채팅 CLI를 따름 · 현재 {{provider}}",
+        "autoUnavailable": "사용 가능한 CLI가 없습니다. 수동으로 전환해 선택하세요."
       },
       "prompt": {
         "label": "추가 프롬프트",
@@ -479,11 +522,18 @@
     "versionHistoryDesc": "모든 버전 업데이트 기록 보기",
     "communityQrTip": "WeChat으로 스캔하여 커뮤니티에 참여하세요",
     "communityQrAlt": "공식 WeChat 커뮤니티 QR 코드",
-    "githubTitle": "GitHub 저장소",
-    "githubDesc": "이 프로젝트는 GitHub에서 오픈소스로 공개되어 있습니다. Star를 눌러 응원해주세요!",
-    "githubCopyBtn": "저장소 URL 복사",
-    "githubCopied": "저장소 URL이 클립보드에 복사되었습니다. 브라우저에서 방문해주세요.",
-    "githubCopyFailed": "복사에 실패했습니다. 수동으로 복사해주세요.",
+    "socialDocs": "공식 문서",
+    "socialTitle": "팔로우하기",
+    "socialGithub": "GitHub 저장소 — Star를 눌러주세요!",
+    "socialX": "X (Twitter) @ZPeng31310",
+    "socialZhihu": "Zhihu @vscodeai",
+    "socialXiaohongshu": "Xiaohongshu (RED)",
+    "socialDouyin": "Douyin — 마우스를 올려 스캔하여 팔로우",
+    "socialYoutube": "YouTube 채널",
+    "douyinQrAlt": "Douyin QR 코드",
+    "douyinId": "Douyin ID: nengyongai",
+    "douyinCopied": "Douyin ID가 클립보드에 복사되었습니다",
+    "douyinCopyFailed": "복사에 실패했습니다. 수동으로 복사해주세요.",
     "sponsor": "후원",
     "sponsorDesc": "이 프로젝트가 도움이 되셨다면, 지속적인 유지보수를 위해 후원을 고려해주세요!",
     "alipay": "Alipay",
@@ -876,6 +926,64 @@
         "selectHint": "내보낼 프롬프트를 선택하세요",
         "confirmExport": "내보내기 확인"
       }
+    },
+    "cli": {
+      "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
+      "refresh": "Re-check",
+      "retry": "Retry",
+      "loading": "Checking CLI installation status…",
+      "loadFailed": "Detection failed. Please try again.",
+      "status": {
+        "installed": "Installed",
+        "notInstalled": "Not installed"
+      },
+      "viewInstallGuide": "Install guide",
+      "howToInstall": "Install guide",
+      "copy": "Copy",
+      "copied": "Copied to clipboard",
+      "copyFailed": "Failed to copy",
+      "tools": {
+        "grok": {
+          "name": "Grok CLI",
+          "description": "xAI Grok terminal coding agent"
+        },
+        "kimi": {
+          "name": "Kimi CLI",
+          "description": "Moonshot Kimi Code CLI"
+        },
+        "opencode": {
+          "name": "OpenCode",
+          "description": "Open-source terminal AI coding agent"
+        },
+        "pi": {
+          "name": "PI CLI",
+          "description": "멀티 프로바이더 모델을 지원하는 미니멀 터미널 코딩 에이전트"
+        },
+        "omp": {
+          "name": "OMP CLI",
+          "description": "멀티 프로바이더 모델을 지원하는 Oh My Pi 터미널 코딩 에이전트"
+        }
+      },
+      "installDialog": {
+        "title": "Install {{name}}",
+        "lead": "Install {{name}} in your system terminal first and make sure `{{binary}}` is available, then come back and click Re-check. This plugin will not run the installer for you.",
+        "stepOpenTerminal": "Open your system terminal (Terminal / iTerm / PowerShell, etc.)",
+        "stepRunCommand": "Copy and run the install command below",
+        "stepVerify": "After install, run `{{binary}} --version` to verify",
+        "stepReturn": "Return here and click Re-check",
+        "primaryCommand": "Recommended install command (macOS / Linux)",
+        "windowsCommand": "Windows (PowerShell)",
+        "altCommand": "Alternative install method",
+        "openDocs": "Open official docs"
+      },
+      "listTitle": "로컬 CLI 도구",
+      "summary": "{{installed}} / {{total}} 설치됨",
+      "moreComingSoon": "곧 더 많은 CLI 지원 예정",
+      "copyPath": "경로 복사",
+      "visibility": {
+        "hide": "제공자 전환 메뉴에서 숨기기",
+        "show": "제공자 전환 메뉴에 표시"
+      }
     }
   },
   "history": {
@@ -904,7 +1012,7 @@
     "loading": "히스토리 로딩 중...",
     "loadFailed": "로딩 실패",
     "noSessions": "히스토리 세션 없음",
-    "noSessionsDesc": "현재 프로젝트에서 Claude 세션 기록을 찾을 수 없습니다",
+    "noSessionsDesc": "현재 프로젝트에서 세션 기록을 찾을 수 없습니다",
     "totalSessions": "{{count}}개 세션 · {{total}}개 메시지",
     "messageCount": "{{count}}개 메시지",
     "searchPlaceholder": "세션 제목 검색...",
@@ -1027,6 +1135,7 @@
   },
   "config": {
     "clickToCopy": "클릭하여 복사",
+    "officialDocs": "공식 문서",
     "switch": "전환",
     "switchProvider": "제공자 전환",
     "runtimeProvider": {
@@ -1078,7 +1187,13 @@
   "markdown": {
     "copyCode": "코드 복사",
     "copyMessage": "메시지 복사",
-    "copySuccess": "복사됨!"
+    "copySuccess": "복사됨!",
+    "quoteMessage": "메시지 인용",
+    "quoteSuccess": "인용됨!"
+  },
+  "contextMenu": {
+    "copy": "복사",
+    "quote": "인용"
   },
   "usage": {
     "checkingLabel": "tokentracker-cli 확인 중…",
@@ -1332,6 +1447,25 @@
     "allCompleted": "모두 완료 {{completed}}/{{total}} 작업",
     "stopped": "중단됨"
   },
+  "subagent": {
+    "process": {
+      "title": "에이전트 프로세스",
+      "prompt": "프롬프트",
+      "thought": "생각",
+      "filesRead_one": "파일 {{count}}개 읽기",
+      "filesRead_other": "파일 {{count}}개 읽기",
+      "otherTools": "기타 도구",
+      "result": "결과",
+      "showFullOutput": "전체 출력 보기",
+      "loading": "에이전트 프로세스 로드 중…",
+      "unavailable": "세션에 id가 생기기 전까지 프로세스 로그를 사용할 수 없습니다.",
+      "reportGenerated": "구조화된 분석 보고서가 생성됨",
+      "unitMs": "ms",
+      "unitS": "초",
+      "unitTools": "도구",
+      "unitTokens": "토큰"
+    }
+  },
   "statusPanel": {
     "todoTab": "계획",
     "tasksTab": "작업",
@@ -1360,7 +1494,9 @@
     "keepAllConfirmMessage": "현재 변경 사항을 기준선으로 수락합니다. 이후 변경 사항은 처음부터 추적됩니다.",
     "discardAllSuccess": "모든 변경 사항이 버려졌습니다",
     "discardAllFailed": "버리기 실패: {{error}}",
-    "keepAllSuccess": "모든 변경 사항이 유지되었으며, 추적이 초기화되었습니다"
+    "keepAllSuccess": "모든 변경 사항이 유지되었으며, 추적이 초기화되었습니다",
+    "multiAgentBadge": "다중 Agent",
+    "multiAgentEdited": "이 세션에서 {{count}}개 Agent가 이 파일을 수정했습니다. 주의해서 확인하세요"
   },
   "skills": {
     "title": "스킬",
@@ -1506,6 +1642,9 @@
     "searchPlaceholder": "모델 검색",
     "noModelsFound": "모델을 찾을 수 없습니다",
     "hiddenModelCount": "+ {{count}}개 모델 더 있음. 입력하여 검색하세요.",
+    "pinned": "고정",
+    "pin": "고정",
+    "unpin": "고정 해제",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",
@@ -1513,11 +1652,7 @@
       },
       "sonnet5": {
         "label": "Sonnet 5",
-        "description": "Sonnet 5 · Sonnet 4.6 업그레이드 모델"
-      },
-      "sonnet47": {
-        "label": "Sonnet 4.7",
-        "description": "Sonnet 4.7 · 기본 모델 사용"
+        "description": "Sonnet 5 · 기본 모델 사용"
       },
       "opus5": {
         "label": "Opus 5",
@@ -1594,7 +1729,7 @@
   "codexModes": {
     "default": {
       "label": "제안 (승인 필요)",
-      "tooltip": "Codex approval_policy=untrusted – 파일 편집이나 셸 명령 실행 전에 확인합니다.",
+      "tooltip": "Codex approval_policy=on-request – 파일 편집이나 셸 명령 실행 전에 확인합니다.",
       "description": "가장 안전한 옵션. 모든 쓰기 또는 명령에 승인이 필요합니다."
     },
     "plan": {
@@ -1613,6 +1748,28 @@
       "description": "자율 모드. Codex가 편집과 셸 명령을 즉시 실행합니다."
     }
   },
+  "ompModes": {
+    "default": {
+      "label": "기본",
+      "tooltip": "선택한 모델 사용 (또는 OMP auto)",
+      "description": "모델 드롭다운에서 선택한 모델을 사용하며, Auto로 설정된 경우 OMP CLI 기본값을 사용합니다."
+    },
+    "smol": {
+      "label": "Smol",
+      "tooltip": "빠른 모델 역할 (omp --model smol)",
+      "description": "omp의 smol 역할에 구성된 모델로 이 대화를 실행합니다. 모델 드롭다운을 재정의합니다."
+    },
+    "slow": {
+      "label": "Slow",
+      "tooltip": "추론 모델 역할 (omp --model slow)",
+      "description": "omp의 slow 역할에 구성된 모델로 이 대화를 실행합니다. 모델 드롭다운을 재정의합니다."
+    },
+    "plan": {
+      "label": "Plan",
+      "tooltip": "계획 모델 역할 (omp --model plan)",
+      "description": "omp의 plan 역할에 구성된 모델로 이 대화를 실행합니다. 모델 드롭다운을 재정의합니다."
+    }
+  },
   "providers": {
     "claude": {
       "label": "Claude Code"
@@ -1620,11 +1777,23 @@
     "codex": {
       "label": "Codex"
     },
+    "grok": {
+      "label": "Grok CLI"
+    },
+    "kimi": {
+      "label": "Kimi CLI"
+    },
     "gemini": {
       "label": "Gemini Cli"
     },
     "opencode": {
       "label": "OpenCode"
+    },
+    "pi": {
+      "label": "PI CLI"
+    },
+    "omp": {
+      "label": "OMP CLI"
     }
   },
   "promptEnhancer": {
@@ -1639,7 +1808,18 @@
     "keepOriginal": "원본 유지",
     "enhanceFailed": "프롬프트 강화 실패",
     "emptyPrompt": "먼저 프롬프트를 입력해주세요",
-    "copyEnhanced": "강화된 프롬프트 복사"
+    "copyEnhanced": "강화된 프롬프트 복사",
+    "modeLabel": "모드",
+    "modeAuto": "자동",
+    "modeManual": "수동",
+    "modeUnavailable": "사용 불가",
+    "providerLabel": "CLI",
+    "providerUnresolved": "CLI 미확인",
+    "modelLabel": "모델",
+    "modelUnresolved": "기본 모델",
+    "openSettings": "설정",
+    "openSettingsTooltip": "프롬프트 강화 설정 열기",
+    "resolvingUsage": "실행 설정 확인 중…"
   },
   "fileContext": {
     "placeholder": "파일 컨텍스트",

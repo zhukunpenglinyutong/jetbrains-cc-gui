@@ -3,6 +3,7 @@ package com.github.claudecodegui.session;
 import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.util.TokenUsageUtils;
+import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -51,7 +52,12 @@ public class SessionMessageOrchestrator {
                 messageParser,
                 callbackFacade,
                 historyAccess,
-                (usedTokens, maxTokens) -> ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens),
+                (usedTokens, maxTokens) -> {
+                    if (project != null) {
+                        ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
+                    }
+                    callbackFacade.notifyUsageUpdate(usedTokens, maxTokens);
+                },
                 100,
                 50
         );
@@ -76,7 +82,10 @@ public class SessionMessageOrchestrator {
     }
 
     public CompletableFuture<Void> syncUserMessageUuidsAfterSend() {
-        if ("codex".equals(state.getProvider()) || findLatestUnresolvedUserMessage() == null) {
+        String provider = state.getProvider();
+        if ("codex".equals(provider)
+                || SessionProviderRouter.isCliProvider(provider)
+                || findLatestUnresolvedUserMessage() == null) {
             return CompletableFuture.completedFuture(null);
         }
 
@@ -197,7 +206,7 @@ public class SessionMessageOrchestrator {
                 if (localMsg.raw != null && localMsg.raw.has("uuid") && !localMsg.raw.get("uuid").isJsonNull()) {
                     continue;
                 }
-                if (!historyContent.equals(localMsg.content)) {
+                if (!UserMessageSanitizer.matchesUserText(historyContent, localMsg.content)) {
                     continue;
                 }
 
@@ -283,13 +292,15 @@ public class SessionMessageOrchestrator {
 
     private void restoreTokenUsage(List<JsonObject> serverMessages) {
         try {
-            JsonObject lastUsage = TokenUsageUtils.findLastUsageFromRawMessages(serverMessages);
+            JsonObject lastUsage = TokenUsageUtils.findLastUsageFromRawMessages(serverMessages, state.getProvider());
             if (lastUsage == null) {
                 return;
             }
 
-            int usedTokens = TokenUsageUtils.extractUsedTokens(lastUsage, state.getProvider());
-            int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
+            int usedTokens = TokenUsageUtils.extractContextTokens(lastUsage, state.getProvider());
+            int fallbackMaxTokens = SettingsHandler.getModelContextLimit(
+                    state.getProvider(), state.getModel());
+            int maxTokens = TokenUsageUtils.extractMaxTokens(lastUsage, fallbackMaxTokens);
             usageDisplay.show(usedTokens, maxTokens);
             LOG.debug("Restored token usage from history: " + usedTokens + " / " + maxTokens);
         } catch (Exception e) {

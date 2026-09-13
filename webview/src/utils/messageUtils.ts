@@ -51,9 +51,111 @@ export type { LocalizeMessageFn } from './contentBlockNormalize';
  */
 export function getMessageKey(message: ClaudeMessage, index: number): string {
   const rawObj = typeof message.raw === 'object' ? message.raw as Record<string, unknown> : null;
-  if (rawObj?.uuid) return rawObj.uuid as string;
+  if (typeof rawObj?.uuid === 'string' && rawObj.uuid) return rawObj.uuid;
   if (message.__turnId !== undefined) return `turn-${message.__turnId}`;
   return message.timestamp ? `${message.type}-${message.timestamp}` : `${message.type}-${index}`;
+}
+
+interface MessageKeyRecord {
+  message: ClaudeMessage;
+  key: string;
+  aliases: string[];
+}
+
+export interface MessageKeySnapshot {
+  scope: string;
+  keys: string[];
+  records: MessageKeyRecord[];
+}
+
+function getMessageKeyAliases(message: ClaudeMessage): string[] {
+  const aliases: string[] = [];
+  const rawObj = typeof message.raw === 'object' && message.raw !== null
+    ? message.raw as Record<string, unknown>
+    : null;
+  if (typeof rawObj?.uuid === 'string' && rawObj.uuid) aliases.push(`uuid:${rawObj.uuid}`);
+  if (typeof message.__turnId === 'number') aliases.push(`turn:${message.__turnId}`);
+  if (typeof message.id === 'string' && message.id) aliases.push(`id:${message.id}`);
+  if (message.timestamp !== undefined && message.timestamp !== null && message.timestamp !== '') {
+    aliases.push(`timestamp:${message.type}:${message.timestamp}`);
+  }
+  return aliases;
+}
+
+/**
+ * Reconcile one unique message key per array item while retaining keys across
+ * streaming identity enrichment and history prepends. The returned snapshot is
+ * shared by MessageList and MessageAnchorRail so DOM registration and anchor
+ * navigation always use the same identifiers.
+ */
+export function reconcileMessageKeys(
+  messages: ClaudeMessage[],
+  previous: MessageKeySnapshot | undefined,
+  scope: string,
+): MessageKeySnapshot {
+  const reusablePrevious = previous?.scope === scope ? previous : undefined;
+  const records: MessageKeyRecord[] = messages.map((message) => ({
+    message,
+    key: '',
+    aliases: getMessageKeyAliases(message),
+  }));
+  const usedPreviousRecords = new Set<MessageKeyRecord>();
+  const usedKeys = new Set<string>();
+
+  if (reusablePrevious) {
+    const previousByMessage = new Map<ClaudeMessage, MessageKeyRecord[]>();
+    for (const record of reusablePrevious.records) {
+      const candidates = previousByMessage.get(record.message) ?? [];
+      candidates.push(record);
+      previousByMessage.set(record.message, candidates);
+    }
+    for (const record of records) {
+      const matched = previousByMessage.get(record.message)
+        ?.find((candidate) => !usedPreviousRecords.has(candidate));
+      if (!matched) continue;
+      record.key = matched.key;
+      usedPreviousRecords.add(matched);
+      usedKeys.add(matched.key);
+    }
+
+    const previousByAlias = new Map<string, MessageKeyRecord[]>();
+    for (const record of reusablePrevious.records) {
+      if (usedPreviousRecords.has(record)) continue;
+      for (const alias of record.aliases) {
+        const candidates = previousByAlias.get(alias) ?? [];
+        candidates.push(record);
+        previousByAlias.set(alias, candidates);
+      }
+    }
+    for (const aliasPrefix of ['uuid:', 'turn:', 'id:', 'timestamp:']) {
+      for (const record of records) {
+        if (record.key) continue;
+        const aliases = record.aliases.filter((alias) => alias.startsWith(aliasPrefix));
+        const matched = aliases
+          .flatMap((alias) => previousByAlias.get(alias) ?? [])
+          .find((candidate) => !usedPreviousRecords.has(candidate));
+        if (!matched) continue;
+        record.key = matched.key;
+        usedPreviousRecords.add(matched);
+        usedKeys.add(matched.key);
+      }
+    }
+  }
+
+  records.forEach((record, index) => {
+    if (record.key) return;
+    const base = `${scope}:${getMessageKey(record.message, index)}`;
+    let key = base;
+    let occurrence = 1;
+    while (usedKeys.has(key)) {
+      key = `${base}-${occurrence}`;
+      occurrence += 1;
+    }
+    record.key = key;
+    usedKeys.add(key);
+  });
+
+  return { scope, keys: records.map((record) => record.key), records };
 }
 
 // ---------------------------------------------------------------------------
