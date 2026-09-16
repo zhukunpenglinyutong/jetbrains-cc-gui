@@ -13,6 +13,7 @@ import CommitSection from './CommitSection';
 import PromptEnhancerSection from './PromptEnhancerSection';
 import OtherSettingsSection from './OtherSettingsSection';
 import PetSettingsSection from './PetSettingsSection';
+import AiDataStorageSection from './AiDataStorageSection';
 import { SkillsSettingsSection } from '../skills/SkillsSettingsSection';
 import type {
   UseSettingsThemeSyncReturn,
@@ -136,6 +137,10 @@ export const SkillsPanel = ({ currentProvider }: SettingsTabPanelProps) => (
 
 export const PetPanel = ({ addToast }: SettingsTabPanelProps) => (
   <PetSettingsSection addToast={addToast} />
+);
+
+export const StoragePanel = ({ addToast }: SettingsTabPanelProps) => (
+  <AiDataStorageSection addToast={addToast} />
 );
 
 export const OtherPanel = ({ basicActions }: SettingsTabPanelProps) => (

@@ -242,9 +242,9 @@ export const openBrowserExternal = (url?: string) => {
   sendBridgeEvent('open_browser_external', url);
 };
 
-export const sendToJava = (message: string, payload: any = {}) => {
+export const sendToJava = (message: string, payload: any = {}): boolean => {
   const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
-  sendBridgeEvent(message, payloadStr);
+  return sendBridgeEvent(message, payloadStr);
 };
 
 export const refreshFile = (filePath: string) => {

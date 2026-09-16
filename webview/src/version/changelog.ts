@@ -79,11 +79,13 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
       en: `🔧 Improvements
 - Update the **Claude model lineup**: add \`claude-fable-5-1\` (Fable 5.1, Mythos-class) as the new top entry with 200K / 1M context handling, xhigh / max reasoning-effort support, fable-family model mapping, localized labels across all 10 languages, and \$10/\$50 usage pricing; Fable 5 stays available as the previous Fable generation (by @zkpaiminmin)
 - Add **GPT-6 Astra** (\`gpt-6-astra\`) to the Codex model list above GPT-5.6 Sol, with 1.05M context, max reasoning-effort support, and \$10/\$50 usage pricing (by @zkpaiminmin)
-- Remove the retired **Opus 4.8** entry; saved \`claude-opus-4-8\` / \`claude-opus-4-6\` sessions now migrate to \`claude-opus-5\` (by @zkpaiminmin)`,
+- Remove the retired **Opus 4.8** entry; saved \`claude-opus-4-8\` / \`claude-opus-4-6\` sessions now migrate to \`claude-opus-5\` (by @zkpaiminmin)
+- Add **AI data storage relocation** in Settings: move Claude Code, Codemoss, and Codex data to another disk with verified copies, stable links, migration recovery, and backup cleanup (by @zhukunpenglinyutong)`,
       zh: `🔧 优化
 - 更新 **Claude 模型清单**：新增 \`claude-fable-5-1\`（Fable 5.1，Mythos 级）为新的首位模型，支持 200K / 1M 上下文、xhigh / max 推理强度、fable 家族模型映射与全部 10 种语言本地化标签，并添加 \$10/\$50 用量计价；Fable 5 保留为前代 Fable 模型入口（by @zkpaiminmin）
 - Codex 模型列表在 GPT-5.6 Sol 之上新增 **GPT-6 Astra**（\`gpt-6-astra\`），支持 1.05M 上下文、max 推理强度与 \$10/\$50 用量计价（by @zkpaiminmin）
-- 移除已下线的 **Opus 4.8** 入口；已保存的 \`claude-opus-4-8\` / \`claude-opus-4-6\` 会话现在迁移到 \`claude-opus-5\`（by @zkpaiminmin）`,
+- 移除已下线的 **Opus 4.8** 入口；已保存的 \`claude-opus-4-8\` / \`claude-opus-4-6\` 会话现在迁移到 \`claude-opus-5\`（by @zkpaiminmin）
+- 在设置中新增 **AI 数据存储迁移**：将 Claude Code、Codemoss 和 Codex 数据迁移到其他磁盘，提供复制校验、稳定访问链接、迁移恢复和备份清理（by @zhukunpenglinyutong）`,
     },
   },
   {

@@ -181,6 +181,9 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
   // Setters are stable; deps left empty to ensure single execution.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    let syncTimer: number | undefined;
+    let cancelled = false;
+
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       // Per-tab restore (issue #1353): when the Java backend has loaded a saved
@@ -479,6 +482,10 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
       const MAX_SYNC_RETRIES = 30;
 
       const syncToBackend = () => {
+        if (cancelled) {
+          return;
+        }
+
         if (window.sendToJava) {
           // Native watchdog reload reuses the original HTML snapshot. Java
           // pushes the current Session state after frontend_ready; echoing the
@@ -522,15 +529,22 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         } else {
           syncRetryCount++;
           if (syncRetryCount < MAX_SYNC_RETRIES) {
-            setTimeout(syncToBackend, 100);
+            syncTimer = window.setTimeout(syncToBackend, 100);
           }
         }
       };
-      setTimeout(syncToBackend, 200);
+      syncTimer = window.setTimeout(syncToBackend, 200);
     } catch {
       // Failed to load model selection state — fall back to defaults already
       // set by individual slice hooks.
     }
+
+    return () => {
+      cancelled = true;
+      if (syncTimer !== undefined) {
+        window.clearTimeout(syncTimer);
+      }
+    };
   }, []);
 
   // Persist snapshot whenever any of the persisted keys change.
