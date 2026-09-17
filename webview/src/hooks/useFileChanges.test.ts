@@ -5,6 +5,7 @@ import {
   useFileChanges,
   computeDiffStats,
   clearDiffCache,
+  editOperationKey,
 } from './useFileChanges';
 import { clearFileTouchRegistry } from '../utils/fileTouchRegistry';
 
@@ -609,7 +610,7 @@ describe('useFileChanges', () => {
     expect(r2.current[0].status).toBe('M');
   });
 
-  it('respects startFromIndex (Keep All baseline) when rebuilding from history', () => {
+  it('excludes acknowledged operations when rebuilding from history (Keep All)', () => {
     const messages: ClaudeMessage[] = [
       assistantWithTools([
         {
@@ -629,15 +630,84 @@ describe('useFileChanges', () => {
       userWithResults([{ toolUseId: 'new' }]),
     ];
 
+    const findToolResult = makeFindToolResult(messages);
+    const { result: beforeKeepAll } = renderHook(() =>
+      useFileChanges({ messages, getContentBlocks, findToolResult }),
+    );
+    expect(beforeKeepAll.current.map((f) => f.filePath).sort())
+      .toEqual(['/proj/new.ts', '/proj/old.ts']);
+
+    // Acknowledge everything currently listed, the way Keep All does.
+    const acknowledged = new Set<string>();
+    for (const change of beforeKeepAll.current) {
+      for (const op of change.operations) {
+        acknowledged.add(editOperationKey({
+          filePath: change.filePath,
+          toolName: op.toolName,
+          oldString: op.oldString,
+          newString: op.newString,
+          replaceAll: op.replaceAll,
+        }));
+      }
+    }
+
     const { result } = renderHook(() =>
       useFileChanges({
         messages,
         getContentBlocks,
-        findToolResult: makeFindToolResult(messages),
-        startFromIndex: 2,
+        findToolResult,
+        confirmedEditKeys: acknowledged,
       }),
     );
 
-    expect(result.current.map((f) => f.filePath)).toEqual(['/proj/new.ts']);
+    expect(result.current).toEqual([]);
+  });
+
+  // The regression this mechanism exists for: a reloaded transcript is rebuilt
+  // from the backend and is not isomorphic to the live-assembled array — it can
+  // carry messages the live array never had, which shifts every position-based
+  // baseline. Content fingerprints are immune to that.
+  it('keeps acknowledged operations excluded when the reloaded transcript has extra messages', () => {
+    const liveMessages: ClaudeMessage[] = [
+      assistantWithTools([
+        {
+          id: 'e1',
+          name: 'Edit',
+          input: { file_path: '/proj/kept.ts', old_string: 'a', new_string: 'b' },
+        },
+      ]),
+      userWithResults([{ toolUseId: 'e1' }]),
+    ];
+
+    const findToolResult = makeFindToolResult(liveMessages);
+    const { result: live } = renderHook(() =>
+      useFileChanges({ messages: liveMessages, getContentBlocks, findToolResult }),
+    );
+    const change = live.current[0];
+    const acknowledged = new Set(change.operations.map((op) => editOperationKey({
+      filePath: change.filePath,
+      toolName: op.toolName,
+      oldString: op.oldString,
+      newString: op.newString,
+      replaceAll: op.replaceAll,
+    })));
+
+    // Reload: the same edits, plus history the live array did not carry, in
+    // front of them.
+    const reloadedMessages: ClaudeMessage[] = [
+      assistantWithTools([{ id: 'r0', name: 'Read', input: { file_path: '/proj/kept.ts' } }]),
+      userWithResults([{ toolUseId: 'r0' }]),
+      ...liveMessages,
+    ];
+    const { result } = renderHook(() =>
+      useFileChanges({
+        messages: reloadedMessages,
+        getContentBlocks,
+        findToolResult: makeFindToolResult(reloadedMessages),
+        confirmedEditKeys: acknowledged,
+      }),
+    );
+
+    expect(result.current).toEqual([]);
   });
 });

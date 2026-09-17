@@ -27,7 +27,7 @@ import {
 import { FILE_MODIFY_TOOL_NAMES, isToolName } from '../utils/toolConstants';
 import { extractSubagentsFromMessages, useSubagents } from './useSubagents';
 import { useCodexSubagentStatusPolling } from './useCodexSubagentStatusPolling';
-import { useFileChanges } from './useFileChanges';
+import { editOperationKey, useFileChanges } from './useFileChanges';
 import { useFileChangesManagement } from './useFileChangesManagement';
 import type { useMessageProcessing } from './useMessageProcessing';
 
@@ -184,7 +184,7 @@ export function useChatComputations({
   });
   const fileChanges = useFileChanges({
     messages, getContentBlocks, findToolResult,
-    startFromIndex: fileChangeMgmt.baseMessageIndex,
+    confirmedEditKeys: fileChangeMgmt.confirmedEditKeys,
     // Sidechain Edit/Write from Agent/Task tools must appear in the Edits tab too
     subagentHistories,
     currentSessionId,
@@ -194,6 +194,27 @@ export function useChatComputations({
     if (fileChangeMgmt.processedFiles.length === 0) return fileChanges;
     return fileChanges.filter((fc) => !fileChangeMgmt.processedFiles.includes(fc.filePath));
   }, [fileChanges, fileChangeMgmt.processedFiles]);
+
+  // Keep All acknowledges every operation the ledger currently holds, so the
+  // ledger rebuilds from whatever comes after. Keyed on operation content rather
+  // than on a transcript position — see editOperationKey for why a position
+  // cannot survive a session reload. Uses the unfiltered list so files already
+  // handled one-by-one (processedFiles) are acknowledged too.
+  const handleKeepAll = useCallback(() => {
+    const keys: string[] = [];
+    for (const change of fileChanges) {
+      for (const op of change.operations) {
+        keys.push(editOperationKey({
+          filePath: change.filePath,
+          toolName: op.toolName,
+          oldString: op.oldString,
+          newString: op.newString,
+          replaceAll: op.replaceAll,
+        }));
+      }
+    }
+    fileChangeMgmt.confirmEdits(keys);
+  }, [fileChanges, fileChangeMgmt]);
 
   const latestTurnMessages = useMemo(() => sliceLatestConversationTurn(messages), [messages]);
 
@@ -331,6 +352,7 @@ export function useChatComputations({
     getToolResultRaw,
     fileChangeMgmt,
     filteredFileChanges,
+    handleKeepAll,
     subagents,
     globalTodos,
     rewindableMessages,

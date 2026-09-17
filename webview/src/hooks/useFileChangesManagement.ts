@@ -1,7 +1,18 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { ClaudeMessage, ToolResultBlock } from '../types';
 import { debugLog } from '../utils/debug';
-import { clearLedgerMeta } from '../utils/sessionFileLedger';
+
+/** localStorage prefix for the edit operations acknowledged via Keep All (per session). */
+const CONFIRMED_EDITS_PREFIX = 'confirmed-edits-';
+/**
+ * Superseded Keep All baselines from earlier releases. Both were position-based
+ * (a raw array index, then a message identity) and cannot be mapped onto a
+ * rebuilt transcript, so they are dropped rather than read back.
+ */
+const LEGACY_BASELINE_PREFIXES = ['keep-all-base-', 'keep-all-anchor-'] as const;
+
+/** Cap on remembered operation fingerprints per session (oldest are dropped). */
+const MAX_CONFIRMED_EDITS = 1000;
 
 export interface UseFileChangesManagementOptions {
   currentSessionId: string | null;
@@ -16,26 +27,45 @@ export interface FileChange {
   [key: string]: any;
 }
 
+/** Read a persisted string list, ignoring anything malformed. */
+function parseStringList(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
- * Manages file change tracking: processedFiles, baseMessageIndex,
- * undo/discard/keep handlers, diff result callbacks, and session state restore.
+ * Manages file change tracking: processedFiles, the Keep All acknowledgements,
+ * undo/discard handlers, diff result callbacks, and session state restore.
  */
 export function useFileChangesManagement({
   currentSessionId,
   currentSessionIdRef,
-  messages,
 }: UseFileChangesManagementOptions) {
   // List of processed file paths (filtered from fileChanges after Apply/Reject, persisted to localStorage)
   const [processedFiles, setProcessedFiles] = useState<string[]>([]);
-  // Base message index (for Keep All feature, only counts changes after this index)
-  const [baseMessageIndex, setBaseMessageIndex] = useState(0);
+  // Fingerprints of the edit operations the user acknowledged via Keep All.
+  //
+  // Keep All marks a moment in time, and the only thing that survives a session
+  // reload intact is the operations themselves: the transcript is rebuilt from
+  // the backend snapshot and is not isomorphic to the live-assembled array
+  // (history can carry messages the live array did not have, after the point
+  // that was "last" at Keep All time), so neither an array index nor a message
+  // identity can delimit it.
+  const [confirmedEdits, setConfirmedEdits] = useState<string[]>([]);
 
-  // Ref to always hold the latest messages array, avoiding stale closure issues
-  // in handleKeepAll when messages.length changes between renders.
-  const messagesRef = useRef(messages);
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
+  // Ref to always hold the latest acknowledged list, so handlers can compute and
+  // persist the next list outside of the state updater.
+  const confirmedEditsRef = useRef(confirmedEdits);
+  // Acknowledgements made before the session had an id to persist them under.
+  const pendingConfirmedEditsRef = useRef<string[] | null>(null);
+  const previousSessionIdRef = useRef<string | null>(currentSessionId);
+
+  const confirmedEditKeys = useMemo(() => new Set(confirmedEdits), [confirmedEdits]);
 
   // Ref to always hold the latest processedFiles list, so handlers can compute
   // and persist the next list outside of the state updater.
@@ -109,24 +139,45 @@ export function useFileChangesManagement({
     }
   }, [currentSessionId]);
 
-  // Callback for Keep All - set current changes as the new baseline (ledger rebuilds from index)
-  const handleKeepAll = useCallback(() => {
-    // Use ref to get the latest messages.length, avoiding stale closure issues
-    const newBaseIndex = messagesRef.current.length;
-    setBaseMessageIndex(newBaseIndex);
+  // Callback for Keep All - acknowledge the given operations so the ledger
+  // rebuilds without them (the remaining changes start from a fresh baseline).
+  const confirmEdits = useCallback((operationKeys: string[]) => {
     processedFilesRef.current = [];
     setProcessedFiles([]);
 
-    if (currentSessionId) {
+    if (operationKeys.length === 0) return;
+
+    const merged = new Set(confirmedEditsRef.current);
+    for (const key of operationKeys) {
+      merged.add(key);
+    }
+    let next = Array.from(merged);
+    if (next.length > MAX_CONFIRMED_EDITS) {
+      next = next.slice(next.length - MAX_CONFIRMED_EDITS);
+    }
+
+    confirmedEditsRef.current = next;
+    setConfirmedEdits(next);
+
+    // Read the id from the ref: a freshly created session receives its id from
+    // the backend asynchronously, so the state value can still be stale here.
+    const sessionId = currentSessionIdRef.current;
+    if (sessionId) {
       try {
-        localStorage.setItem(`keep-all-base-${currentSessionId}`, String(newBaseIndex));
-        localStorage.removeItem(`processed-files-${currentSessionId}`);
-        clearLedgerMeta(currentSessionId);
+        localStorage.setItem(
+          `${CONFIRMED_EDITS_PREFIX}${sessionId}`,
+          JSON.stringify(next)
+        );
       } catch (e) {
         console.error('Failed to persist Keep All state:', e);
       }
+      pendingConfirmedEditsRef.current = null;
+      return;
     }
-  }, [currentSessionId]);
+    // No id yet (a new session before the backend reports one). Hold the list so
+    // the acknowledgement is not lost when the session is reopened from history.
+    pendingConfirmedEditsRef.current = next;
+  }, [currentSessionIdRef]);
 
   // Register window callbacks for editable diff operations from Java backend
   useEffect(() => {
@@ -171,65 +222,89 @@ export function useFileChangesManagement({
 
   // Restore/reset state on session switch
   useEffect(() => {
+    const previousSessionId = previousSessionIdRef.current;
+    previousSessionIdRef.current = currentSessionId;
+
+    // An id arriving where there was none means this same session just became
+    // addressable — flush whatever was acknowledged while it was not.
+    const pending = pendingConfirmedEditsRef.current;
+    pendingConfirmedEditsRef.current = null;
+    if (pending && currentSessionId && !previousSessionId) {
+      try {
+        localStorage.setItem(
+          `${CONFIRMED_EDITS_PREFIX}${currentSessionId}`,
+          JSON.stringify(pending)
+        );
+      } catch (e) {
+        console.error('Failed to persist Keep All state:', e);
+      }
+    }
+
     processedFilesRef.current = [];
     setProcessedFiles([]);
+    confirmedEditsRef.current = [];
+    setConfirmedEdits([]);
 
     if (!currentSessionId) {
-      setBaseMessageIndex(0);
       return;
     }
 
     // Cleanup old localStorage entries to prevent infinite growth
     const MAX_STORED_SESSIONS = 50;
     try {
-      const keysToCheck = Object.keys(localStorage)
-        .filter(k => k.startsWith('processed-files-') || k.startsWith('keep-all-base-'));
+      const keysToCheck = Object.keys(localStorage).filter((key) => (
+        key.startsWith('processed-files-')
+        || key.startsWith(CONFIRMED_EDITS_PREFIX)
+        || LEGACY_BASELINE_PREFIXES.some((prefix) => key.startsWith(prefix))
+      ));
       if (keysToCheck.length > MAX_STORED_SESSIONS) {
         const toRemove = keysToCheck.slice(0, keysToCheck.length - MAX_STORED_SESSIONS);
-        toRemove.forEach(k => localStorage.removeItem(k));
+        toRemove.forEach((key) => localStorage.removeItem(key));
       }
     } catch {
       // Ignore cleanup errors
     }
 
-    // Restore processed files from localStorage
+    // Drop superseded position-based baselines: they cannot be mapped onto the
+    // rebuilt transcript and are never read back.
+    LEGACY_BASELINE_PREFIXES.forEach((prefix) => {
+      try {
+        localStorage.removeItem(`${prefix}${currentSessionId}`);
+      } catch {
+        // Ignore storage errors
+      }
+    });
+
     try {
-      const savedProcessedFiles = localStorage.getItem(
-        `processed-files-${currentSessionId}`
-      );
+      const savedProcessedFiles = localStorage.getItem(`processed-files-${currentSessionId}`);
       if (savedProcessedFiles) {
-        const files = JSON.parse(savedProcessedFiles);
-        if (Array.isArray(files)) {
-          processedFilesRef.current = files;
-          setProcessedFiles(files);
-        }
+        const files = parseStringList(savedProcessedFiles);
+        processedFilesRef.current = files;
+        setProcessedFiles(files);
       }
     } catch (e) {
       console.error('Failed to load processed files:', e);
     }
 
-    // Restore Keep All base index
     try {
-      const savedBaseIndex = localStorage.getItem(`keep-all-base-${currentSessionId}`);
-      if (savedBaseIndex) {
-        const index = parseInt(savedBaseIndex, 10);
-        if (!isNaN(index) && index >= 0) {
-          setBaseMessageIndex(index);
-          return;
-        }
+      const savedConfirmedEdits = localStorage.getItem(
+        `${CONFIRMED_EDITS_PREFIX}${currentSessionId}`
+      );
+      if (savedConfirmedEdits) {
+        const keys = parseStringList(savedConfirmedEdits);
+        confirmedEditsRef.current = keys;
+        setConfirmedEdits(keys);
       }
     } catch (e) {
       console.error('Failed to load Keep All state:', e);
     }
-
-    setBaseMessageIndex(0);
   }, [currentSessionId]);
 
   return {
     processedFiles,
-    baseMessageIndex,
+    confirmedEditKeys,
     handleUndoFile,
     handleDiscardAll,
-    handleKeepAll,
+    confirmEdits,
   };
 }

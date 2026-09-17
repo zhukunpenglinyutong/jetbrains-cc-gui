@@ -69,7 +69,14 @@ export interface MessageKeySnapshot {
   records: MessageKeyRecord[];
 }
 
-function getMessageKeyAliases(message: ClaudeMessage): string[] {
+/**
+ * All identities a message can be matched by (uuid / turnId / id / type+timestamp).
+ * Exported so callers that must recognise a message again later — after the
+ * backend has enriched it with a uuid it did not have before, or after a history
+ * reload that dropped its runtime-only __turnId — can match on any of them
+ * instead of re-deriving a single key whose precedence may change underneath them.
+ */
+export function getMessageKeyAliases(message: ClaudeMessage): string[] {
   const aliases: string[] = [];
   const rawObj = typeof message.raw === 'object' && message.raw !== null
     ? message.raw as Record<string, unknown>
