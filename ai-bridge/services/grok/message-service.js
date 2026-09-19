@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { buildGrokEnv, buildErrorPayload, resolveEffectiveGrokAuth } from './grok-utils.js';
 import { runAcpTurn } from './grok-acp-client.js';
 import { GrokEventNormalizer } from './grok-event-normalizer.js';
+import { loadEnvFile } from '../../utils/envLoader.js';
 
 /**
  * @param {object} options Claude-shaped options bag (preferred) OR legacy positional via channel
@@ -60,6 +61,7 @@ export async function sendMessage(
     agentPrompt = '',
     streaming = true,
     reasoningEffort = '',
+    envFile = '',
   } = opts;
 
   const normalizer = new GrokEventNormalizer({
@@ -98,6 +100,20 @@ export async function sendMessage(
       attachments: Array.isArray(atts) ? atts.length : 0,
       reasoningEffort: reasoningEffort || '(none)',
     });
+
+    if (envFile) {
+      console.error('[DEBUG] grok message-service: envFile path received=' + envFile);
+      const envVars = loadEnvFile(envFile);
+      const keys = Object.keys(envVars);
+      console.error('[DEBUG] grok message-service: envVars loaded=' + keys.length + ' keys=' + JSON.stringify(keys));
+      for (const [k, v] of Object.entries(envVars)) {
+        if (!(k in process.env) || !process.env[k]) {
+          process.env[k] = v;
+        }
+      }
+    } else {
+      console.error('[DEBUG] grok message-service: envFile is null/empty/undefined — no env file loaded');
+    }
 
     const env = buildGrokEnv(
       process.env,

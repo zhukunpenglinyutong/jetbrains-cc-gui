@@ -68,6 +68,8 @@ export interface McpServer {
   docs?: string;
   /** Whether enabled (legacy format compatibility) */
   enabled?: boolean;
+  /** Configuration source: "global" (from ~/.claude.json) or "project" (from .mcp.json) */
+  source?: 'global' | 'project';
   /** Allow extension fields */
   [key: string]: any;
 }

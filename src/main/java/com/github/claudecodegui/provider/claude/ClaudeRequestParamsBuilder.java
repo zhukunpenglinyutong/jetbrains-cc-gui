@@ -4,6 +4,7 @@ import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -14,6 +15,8 @@ import java.util.Map;
  * Builds the request payload shared by daemon and per-process Claude sends.
  */
 class ClaudeRequestParamsBuilder {
+
+    private static final Logger LOG = Logger.getInstance(ClaudeRequestParamsBuilder.class);
 
     private final Gson gson;
 
@@ -34,6 +37,25 @@ class ClaudeRequestParamsBuilder {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort
+    ) {
+        return buildSendParams(message, sessionId, runtimeSessionEpoch, cwd, permissionMode, model,
+                attachments, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, null);
+    }
+
+    JsonObject buildSendParams(
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            String permissionMode,
+            String model,
+            List<ClaudeSession.Attachment> attachments,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            String envFile
     ) {
         JsonObject params = new JsonObject();
         params.addProperty("message", message);
@@ -62,6 +84,11 @@ class ClaudeRequestParamsBuilder {
         }
         if (reasoningEffort != null && !reasoningEffort.trim().isEmpty()) {
             params.addProperty("reasoningEffort", reasoningEffort);
+        }
+        if (envFile != null && !envFile.isEmpty() && !"null".equals(envFile) && !"undefined".equals(envFile)) {
+            params.addProperty("envFile", envFile);
+        } else {
+            LOG.debug("[ClaudeRequestParamsBuilder] envFile is null/empty/notValid (value=" + envFile + ")");
         }
 
         return params;

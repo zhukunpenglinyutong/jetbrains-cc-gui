@@ -84,3 +84,9 @@ logs/*.log
 
 # Playwright MCP local test artifacts
 .playwright-mcp/
+
+# Task Master (agent task management)
+.taskmaster/
+
+# Local MCP server config (project-specific, user-managed)
+.mcp.json

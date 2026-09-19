@@ -4,6 +4,7 @@ import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.provider.common.DaemonBridge;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -24,6 +25,7 @@ class ClaudeDaemonCoordinator {
     private final NodeDetector nodeDetector;
     private final Supplier<BridgeDirectoryResolver> directoryResolverSupplier;
     private final EnvironmentConfigurator envConfigurator;
+    private final CodemossSettingsService settingsService = new CodemossSettingsService();
 
     private volatile DaemonBridge daemonBridge;
     private final Object daemonLock = new Object();
@@ -179,7 +181,9 @@ class ClaudeDaemonCoordinator {
                 params.addProperty("permissionMode", "");
                 params.addProperty("model", "");
                 params.addProperty("streaming", true);
-                params.add("env", ClaudeBridgeUtils.buildDaemonEnv(cwd));
+                String envFile = resolveEnvFile(cwd);
+                log.info("[DaemonCoordinator] Preconnect with envFile=" + (envFile != null ? envFile : "(null/empty)"));
+                params.add("env", ClaudeBridgeUtils.buildDaemonEnv(cwd, envFile));
 
                 CompletableFuture<Boolean> preconnectFuture = daemon.sendCommand(
                         "claude.preconnect",
@@ -262,6 +266,33 @@ class ClaudeDaemonCoordinator {
             resetFuture.get(15, TimeUnit.SECONDS);
         } catch (Exception e) {
             log.warn("[DaemonCoordinator] Runtime reset failed: " + e.getMessage());
+        }
+    }
+
+    private String resolveEnvFile(String cwd) {
+        try {
+            String envFile = settingsService.getEnvFile(cwd);
+            if (envFile == null) {
+                // No per-project setting — try default ".env" in project root
+                if (cwd != null) {
+                    java.io.File defaultEnvFile = new java.io.File(cwd, ".env");
+                    if (defaultEnvFile.exists() && defaultEnvFile.isFile()) {
+                        envFile = defaultEnvFile.getAbsolutePath();
+                        log.info("[DaemonCoordinator] Auto-discovered default .env at " + envFile);
+                    }
+                }
+            } else {
+                // Resolve relative env file paths against the project cwd
+                java.io.File envFileObj = new java.io.File(envFile);
+                if (!envFileObj.isAbsolute() && cwd != null) {
+                    envFileObj = new java.io.File(cwd, envFile);
+                    envFile = envFileObj.getAbsolutePath();
+                }
+            }
+            return envFile;
+        } catch (Exception e) {
+            log.warn("[DaemonCoordinator] Failed to read env file setting: " + e.getMessage());
+            return null;
         }
     }
 

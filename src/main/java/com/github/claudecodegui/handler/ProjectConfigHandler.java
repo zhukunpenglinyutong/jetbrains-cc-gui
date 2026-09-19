@@ -489,6 +489,58 @@ public class ProjectConfigHandler {
         }
     }
 
+    // ---- Environment File Configuration ----
+
+    public void handleGetEnvFile() {
+        try {
+            String projectPath = context.getProject().getBasePath();
+            String envFile = settingsService.getEnvFile(projectPath);
+            JsonObject response = new JsonObject();
+            // Default to ".env" so the UI shows a sensible placeholder
+            // instead of an empty field when the project hasn't been configured.
+            response.addProperty("envFile", envFile != null ? envFile : ".env");
+            pushJson("window.updateEnvFile", response);
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get env file: " + e.getMessage(), e);
+            pushJson("window.updateEnvFile", jsonOf("envFile", ".env"));
+        }
+    }
+
+    public void handleSetEnvFile(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            String envFile = readString(json, "envFile", null);
+            String projectPath = context.getProject().getBasePath();
+
+            if (envFile != null && !envFile.trim().isEmpty()) {
+                envFile = envFile.trim();
+                // Validate the file exists — resolve relative to project root
+                java.io.File envFileObj = new java.io.File(envFile);
+                if (!envFileObj.isAbsolute() && projectPath != null) {
+                    envFileObj = new java.io.File(projectPath, envFile);
+                }
+                if (!envFileObj.exists() || !envFileObj.isFile()) {
+                    showError("Env file does not exist: " + envFileObj.getAbsolutePath());
+                    // Push a response so the UI can reset its loading state
+                    pushJson("window.updateEnvFile", jsonOf("envFile", ""));
+                    return;
+                }
+                // Store the name/path as the user entered it. resolveEnvFile()
+                // will resolve relative names against the cwd at runtime,
+                // keeping per-project configs portable across machines.
+            }
+            settingsService.setEnvFile(projectPath, envFile);
+            LOG.info("[ProjectConfigHandler] Set env file for project '" + projectPath + "': " + (envFile != null ? envFile : "(cleared)"));
+            showSuccess("Env file config saved");
+            pushJson("window.updateEnvFile", jsonOf("envFile", envFile != null ? envFile : ""));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set env file: " + e.getMessage(), e);
+            showError("Failed to save env file config: " + e.getMessage());
+            // Reset UI loading state even on unexpected errors
+            pushJson("window.updateEnvFile", jsonOf("envFile", ""));
+        }
+    }
+
     public void handleGetIdeTheme() {
         try {
             String themeConfigJson = ThemeConfigService.getIdeThemeConfig().toString();

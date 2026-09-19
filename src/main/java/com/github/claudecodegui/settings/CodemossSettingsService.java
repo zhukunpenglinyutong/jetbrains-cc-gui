@@ -399,6 +399,7 @@ public class CodemossSettingsService {
     private static final String DEFAULT_AI_FEATURE_MINIMAX_MODEL = "auto";
     private static final String DEFAULT_AI_FEATURE_ZCODE_MODEL = "auto";
     private static final String USER_LANGUAGE_CONFIG_KEY = "language";
+    private static final String ENV_FILE_CONFIG_KEY = "envFile";
 
     private final Gson gson;
 
@@ -684,6 +685,101 @@ public class CodemossSettingsService {
         config.remove(USER_LANGUAGE_CONFIG_KEY);
         writeConfig(config);
         LOG.info("[CodemossSettings] Cleared user language override");
+    }
+
+    // ==================== Environment File Config Management ====================
+
+    /**
+     * Get the configured env file path for a specific project.
+     * Supports backward-compatible migration: if the stored value is a string
+     * (legacy format), it is returned as the default. When the stored value
+     * is a JSON object, per-project overrides are checked first, then the
+     * "default" key is used as fallback.
+     *
+     * @param projectPath the current project's base path (may be null for global)
+     * @return env file path, or null when not configured
+     */
+    public String getEnvFile(String projectPath) throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has(ENV_FILE_CONFIG_KEY) || config.get(ENV_FILE_CONFIG_KEY).isJsonNull()) {
+            LOG.info("[CodemossSettings] Env file is not configured (key missing or null)");
+            return null;
+        }
+
+        JsonElement envFileElement = config.get(ENV_FILE_CONFIG_KEY);
+
+        // Backward compatibility: legacy format stored as a plain string
+        if (envFileElement.isJsonPrimitive()) {
+            String envFile = envFileElement.getAsString();
+            String resolved = envFile == null || envFile.trim().isEmpty() ? null : envFile.trim();
+            LOG.info("[CodemossSettings] Env file resolved (legacy global): " + resolved);
+            return resolved;
+        }
+
+        // New format: JSON object with per-project overrides
+        if (envFileElement.isJsonObject()) {
+            JsonObject envFileObj = envFileElement.getAsJsonObject();
+
+            // Check project-specific config first
+            if (projectPath != null && envFileObj.has(projectPath)) {
+                String envFile = envFileObj.get(projectPath).getAsString();
+                String resolved = envFile == null || envFile.trim().isEmpty() ? null : envFile.trim();
+                if (resolved != null) {
+                    LOG.info("[CodemossSettings] Env file resolved (project-specific): " + resolved);
+                    return resolved;
+                }
+            }
+
+            // Fall back to default
+            if (envFileObj.has("default")) {
+                String envFile = envFileObj.get("default").getAsString();
+                String resolved = envFile == null || envFile.trim().isEmpty() ? null : envFile.trim();
+                LOG.info("[CodemossSettings] Env file resolved (default): " + resolved);
+                return resolved;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Persist the env file path for a specific project.
+     * Stores settings in a JSON object format:
+     *   {"envFile": {"default": "/global/.env", "/project/path": "/project/.env.ai"}}
+     * This allows per-project env file configuration while keeping a global default.
+     *
+     * @param projectPath the current project's base path (may be null for global default)
+     * @param envFile     file path, null or empty to clear
+     */
+    public void setEnvFile(String projectPath, String envFile) throws IOException {
+        JsonObject config = readConfig();
+        String v = envFile != null ? envFile.trim() : "";
+
+        JsonObject envFileObj;
+        // Convert legacy string format to object format, preserving the old
+        // value as the "default" entry.
+        JsonElement existing = config.get(ENV_FILE_CONFIG_KEY);
+        if (existing != null && existing.isJsonObject()) {
+            envFileObj = existing.getAsJsonObject();
+        } else {
+            envFileObj = new JsonObject();
+            if (existing != null && existing.isJsonPrimitive()
+                    && existing.getAsString() != null && !existing.getAsString().trim().isEmpty()) {
+                envFileObj.addProperty("default", existing.getAsString());
+            }
+        }
+
+        String key = projectPath != null ? projectPath : "default";
+        if (v.isEmpty()) {
+            envFileObj.remove(key);
+        } else {
+            envFileObj.addProperty(key, v);
+        }
+
+        config.remove(ENV_FILE_CONFIG_KEY);
+        config.add(ENV_FILE_CONFIG_KEY, envFileObj);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set env file for project '" + key + "': " + (v.isEmpty() ? "(cleared)" : v));
     }
 
     // ==================== Claude Settings Management ====================
@@ -1291,6 +1387,10 @@ public class CodemossSettingsService {
 
     public boolean deleteMcpServer(String serverId) throws IOException {
         return mcpServerManager.deleteMcpServer(serverId);
+    }
+
+    public boolean deleteMcpServer(String serverId, String projectPath) throws IOException {
+        return mcpServerManager.deleteMcpServer(serverId, projectPath);
     }
 
     public Map<String, Object> validateMcpServer(JsonObject server) {

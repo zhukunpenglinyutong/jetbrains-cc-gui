@@ -10,6 +10,7 @@ import {
   buildCliEnv,
   buildWebviewControlledSettingsOverride,
 } from '../../config/api-config.js';
+import { loadEnvFile } from '../../utils/envLoader.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
 import { mapModelIdToSdkName, resolveModelFromSettings, setModelEnvironmentVariables } from '../../utils/model-utils.js';
 import { AsyncStream } from '../../utils/async-stream.js';
@@ -491,7 +492,7 @@ function handleSendError(error, streamState, sdkStderrLines) {
  * @param {string} agentPrompt - Agent prompt (optional)
  * @param {boolean} streaming - Whether to enable streaming (optional, defaults to config value)
  */
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null) {
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null, envFile = null) {
   console.log('[DIAG] ========== sendMessage() START ==========');
   console.log('[DIAG] params:', { msgLen: message ? message.length : 0, resumeSessionId: resumeSessionId || '(new)', cwd, permissionMode, model });
 
@@ -525,6 +526,22 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     const maxThinkingTokens = (alwaysThinkingEnabled && !normalizedReasoningEffort) ? configuredMaxThinkingTokens : undefined;
     streamingEnabled = streaming != null ? streaming : (settings?.streamingEnabled ?? false);
     console.log('[DEBUG] Config:', { effectivePermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort: normalizedReasoningEffort });
+
+    // Load env file BEFORE MCP config expansion so ${VAR} placeholders
+    // in MCP server env blocks resolve correctly.
+    if (envFile) {
+      console.error('[DEBUG] message-sender: envFile path received=' + envFile);
+      const envVars = loadEnvFile(envFile);
+      const keys = Object.keys(envVars);
+      console.error('[DEBUG] message-sender: envVars loaded=' + keys.length + ' keys=' + JSON.stringify(keys));
+      for (const [k, v] of Object.entries(envVars)) {
+        if (!(k in process.env) || !process.env[k]) {
+          process.env[k] = v;
+        }
+      }
+    } else {
+      console.error('[DEBUG] message-sender: envFile is null/empty/undefined — no env file loaded');
+    }
 
     const preToolUseHook = createPreToolUseHook(effectivePermissionMode, workingDirectory);
     const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);

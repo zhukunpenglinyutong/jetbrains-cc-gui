@@ -15,6 +15,7 @@ export interface ServerCardHeaderProps {
   effectiveStatus: McpServerStatusInfo['status'] | undefined;
   emptyToolsWarning: boolean;
   isCodexMode: boolean;
+  isProjectLocal?: boolean;
   iconStyle: React.CSSProperties;
   statusColorStyle: React.CSSProperties;
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -35,6 +36,7 @@ export function ServerCardHeader({
   effectiveStatus,
   emptyToolsWarning,
   isCodexMode,
+  isProjectLocal = false,
   iconStyle,
   statusColorStyle,
   t,
@@ -52,6 +54,11 @@ export function ServerCardHeader({
           {getServerInitial(server)}
         </div>
         <span className="server-name">{server.name || server.id}</span>
+        {isProjectLocal && (
+          <span className="project-local-badge" title={t('mcp.projectLocal')}>
+            <span className="codicon codicon-repo"></span> {t('mcp.projectLocal')}
+          </span>
+        )}
         {/* Connection status indicator */}
         <ServerCardStatusBadge
           server={server}
@@ -100,7 +107,10 @@ export function ServerCardHeader({
           <input
             type="checkbox"
             checked={enabled}
-            onChange={(e) => onToggleServer(e.target.checked)}
+            onChange={(e) => {
+              if (!isProjectLocal) onToggleServer(e.target.checked);
+            }}
+            disabled={isProjectLocal}
           />
           <span className="toggle-slider"></span>
         </label>

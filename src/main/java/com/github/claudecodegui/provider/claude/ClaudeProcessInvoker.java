@@ -75,6 +75,7 @@ class ClaudeProcessInvoker {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
+            String envFile,
             MessageCallback callback
     ) {
         AtomicBoolean errorAlreadyReported = new AtomicBoolean(false);
@@ -113,9 +114,15 @@ class ClaudeProcessInvoker {
                         agentPrompt,
                         streaming,
                         disableThinking,
-                        reasoningEffort
+                        reasoningEffort,
+                        envFile
                 );
                 String stdinJson = gson.toJson(stdinInput);
+                if (stdinInput.has("envFile")) {
+                    log.debug("[ClaudeProcessInvoker] envFile in stdin=" + stdinInput.get("envFile").getAsString());
+                } else {
+                    log.debug("[ClaudeProcessInvoker] envFile NOT in stdin JSON");
+                }
                 String preview = logSanitizer.buildPreview(stdinJson, 500);
                 log.debug("[PROMPT] Sending to Node.js (" + stdinJson.length() + " chars):\n" + preview);
 

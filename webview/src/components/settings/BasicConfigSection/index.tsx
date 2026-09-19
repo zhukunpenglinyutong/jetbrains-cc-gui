@@ -34,6 +34,10 @@ interface BasicConfigSectionProps {
   onWorkingDirectoryChange?: (dir: string) => void;
   onSaveWorkingDirectory?: () => void;
   savingWorkingDirectory?: boolean;
+  envFile?: string;
+  onEnvFileChange?: (path: string) => void;
+  onSaveEnvFile?: () => void;
+  savingEnvFile?: boolean;
   editorFontConfig?: {
     fontFamily: string;
     fontSize: number;
@@ -223,6 +227,10 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onWorkingDirectoryChange={props.onWorkingDirectoryChange}
           onSaveWorkingDirectory={props.onSaveWorkingDirectory}
           savingWorkingDirectory={props.savingWorkingDirectory}
+          envFile={props.envFile}
+          onEnvFileChange={props.onEnvFileChange}
+          onSaveEnvFile={props.onSaveEnvFile}
+          savingEnvFile={props.savingEnvFile}
         />
       )}
     </div>

@@ -56,6 +56,8 @@ export interface UseSettingsBasicActionsReturn {
   savingClaudeCliPath: boolean;
   workingDirectory: string;
   savingWorkingDirectory: boolean;
+  envFile: string;
+  savingEnvFile: boolean;
   editorFontConfig:
     | {
         fontFamily: string;
@@ -104,6 +106,7 @@ export interface UseSettingsBasicActionsReturn {
   handleSaveNodePath: () => void;
   handleSaveClaudeCliPath: () => void;
   handleSaveWorkingDirectory: () => void;
+  handleSaveEnvFile: () => void;
   handleUiFontSelectionChange: (selection: string) => void;
   handleSaveUiFontCustomPath: (path: string) => void;
   handleBrowseUiFontFile: () => void;
@@ -152,6 +155,8 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setSavingClaudeCliPath: (saving: boolean) => void;
   /** @internal */ setWorkingDirectory: (dir: string) => void;
   /** @internal */ setSavingWorkingDirectory: (saving: boolean) => void;
+  /** @internal */ setEnvFile: (path: string) => void;
+  /** @internal */ setSavingEnvFile: (saving: boolean) => void;
   /** @internal */ setEditorFontConfig: (
     config:
       | {
@@ -213,6 +218,10 @@ export function useSettingsBasicActions({
   // Working directory configuration
   const [workingDirectory, setWorkingDirectory] = useState('');
   const [savingWorkingDirectory, setSavingWorkingDirectory] = useState(false);
+
+  // Environment file configuration
+  const [envFile, setEnvFile] = useState('');
+  const [savingEnvFile, setSavingEnvFile] = useState(false);
 
   // IDEA editor font configuration (read-only display)
   const [editorFontConfig, setEditorFontConfig] = useState<
@@ -363,6 +372,12 @@ export function useSettingsBasicActions({
     const payload = { customWorkingDir: (workingDirectory || '').trim() };
     sendToJava(`set_working_directory:${JSON.stringify(payload)}`);
   }, [workingDirectory]);
+
+  const handleSaveEnvFile = useCallback(() => {
+    setSavingEnvFile(true);
+    const payload = { envFile: (envFile || '').trim() };
+    sendToJava(`set_env_file:${JSON.stringify(payload)}`);
+  }, [envFile]);
 
   const handleUiFontSelectionChange = useCallback((selection: string) => {
     if (selection === 'followEditor') {
@@ -760,6 +775,10 @@ export function useSettingsBasicActions({
     setWorkingDirectory,
     savingWorkingDirectory,
     setSavingWorkingDirectory,
+    envFile,
+    setEnvFile,
+    savingEnvFile,
+    setSavingEnvFile,
     editorFontConfig,
     setEditorFontConfig,
     uiFontConfig,
@@ -798,6 +817,7 @@ export function useSettingsBasicActions({
     handleSaveNodePath,
     handleSaveClaudeCliPath,
     handleSaveWorkingDirectory,
+    handleSaveEnvFile,
     handleUiFontSelectionChange,
     handleSaveUiFontCustomPath,
     handleBrowseUiFontFile,

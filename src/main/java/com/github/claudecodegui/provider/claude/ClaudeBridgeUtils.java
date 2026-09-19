@@ -13,6 +13,8 @@ import java.nio.charset.StandardCharsets;
  */
 final class ClaudeBridgeUtils {
 
+    private static final Logger LOG = Logger.getInstance(ClaudeBridgeUtils.class);
+
     private ClaudeBridgeUtils() {
     }
 
@@ -21,11 +23,24 @@ final class ClaudeBridgeUtils {
      * Used by both {@link ClaudeDaemonCoordinator} and {@link ClaudeDaemonRequestExecutor}.
      */
     static JsonObject buildDaemonEnv(String cwd) {
+        return buildDaemonEnv(cwd, null);
+    }
+
+    /**
+     * Build the environment variables block sent to the daemon process.
+     * Includes envFile when non-null/non-empty.
+     */
+    static JsonObject buildDaemonEnv(String cwd, String envFile) {
         JsonObject envVars = new JsonObject();
         envVars.addProperty("CLAUDE_USE_STDIN", "true");
         if (isValidCwd(cwd)) {
             envVars.addProperty("IDEA_PROJECT_PATH", cwd);
             envVars.addProperty("PROJECT_PATH", cwd);
+        }
+        if (envFile != null && !envFile.isEmpty() && !"null".equals(envFile) && !"undefined".equals(envFile)) {
+            envVars.addProperty("envFile", envFile);
+        } else {
+            LOG.debug("[ClaudeBridgeUtils.buildDaemonEnv] envFile is null/empty/\"null\"/\"undefined\" (value=" + envFile + ")");
         }
         return envVars;
     }

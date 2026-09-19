@@ -14,6 +14,7 @@ export interface ServerCardProps {
   server: McpServer;
   isExpanded: boolean;
   isCodexMode: boolean;
+  isProjectLocal?: boolean;
   serverStatus: Map<string, McpServerStatusInfo>;
   refreshState?: ServerRefreshState[string];
   toolsInfo?: ServerToolsState[string];
@@ -36,6 +37,7 @@ export function ServerCard({
   server,
   isExpanded,
   isCodexMode,
+  isProjectLocal = false,
   serverStatus,
   toolsInfo,
   t,
@@ -75,6 +77,7 @@ export function ServerCard({
         effectiveStatus={effectiveStatus}
         emptyToolsWarning={emptyToolsWarning}
         isCodexMode={isCodexMode}
+        isProjectLocal={isProjectLocal}
         iconStyle={iconStyle}
         statusColorStyle={statusColorStyle}
         t={t}

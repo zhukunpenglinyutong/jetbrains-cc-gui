@@ -422,6 +422,13 @@
         "placeholder": "e.g. project1 or leave empty to use project root",
         "hint": "Specify the directory where Claude works. Can use relative path (relative to project root) or absolute path. Leave empty to use project root."
       },
+      "envFile": {
+        "label": "Environment File",
+        "projectLevel": "Project-level",
+        "placeholder": "e.g. /path/to/.env or leave empty",
+        "hint": "Specify a .env file to load environment variables for both Claude Code and Grok.",
+        "invalidPath": "Invalid file path: file does not exist or is not readable"
+      },
       "fontSize": {
         "label": "Font Size",
         "level1": "Small (80%)",
@@ -1639,6 +1646,8 @@
     "statusNeedsAuth": "Needs Authentication",
     "statusPending": "Connecting...",
     "statusUnknown": "Unknown",
+    "projectLocal": "Project-local",
+    "projectLocalReadOnly": "This server is managed in .mcp.json and cannot be modified from the UI",
     "errorDetails": "Error Details",
     "logs": {
       "title": "Connection Logs",
@@ -1661,6 +1670,7 @@
       "firstLoad": "First load, fetching server list...",
       "loadedServersSuccess": "Loaded server list: {{count}} servers found",
       "loadedServersFailed": "Failed to load server list: {{error}}",
+      "refreshOnFileChange": "MCP config file changed, refreshing server list...",
       "statusUpdateComplete": "Status update complete: {{total}} servers ({{connected}} connected, {{failed}} failed, {{pending}} pending, {{needsAuth}} need auth)",
       "loadedStatusFailed": "Failed to load server status: {{error}}",
       "cleared": "Refresh logs cleared",

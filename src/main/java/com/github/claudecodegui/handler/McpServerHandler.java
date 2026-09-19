@@ -284,8 +284,11 @@ public class McpServerHandler extends BaseMessageHandler {
         try {
             Gson gson = new Gson();
             JsonObject server = gson.fromJson(content, JsonObject.class);
+            String projectPath = context.getProject() != null
+                ? context.getProject().getBasePath()
+                : null;
 
-            context.getSettingsService().upsertMcpServer(server);
+            context.getSettingsService().upsertMcpServer(server, projectPath);
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.mcpServerUpdated", escapeJs(content));
@@ -308,8 +311,11 @@ public class McpServerHandler extends BaseMessageHandler {
             Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String serverId = json.get("id").getAsString();
+            String projectPath = context.getProject() != null
+                ? context.getProject().getBasePath()
+                : null;
 
-            boolean success = context.getSettingsService().deleteMcpServer(serverId);
+            boolean success = context.getSettingsService().deleteMcpServer(serverId, projectPath);
 
             if (success) {
                 ApplicationManager.getApplication().invokeLater(() -> {

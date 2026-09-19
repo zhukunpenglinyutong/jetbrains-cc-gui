@@ -48,6 +48,7 @@ afterEach(() => {
   delete window.updateMcpServerStatus;
   delete window.updateCodexMcpServers;
   delete window.updateCodexMcpServerStatus;
+  delete window.refreshMcpServers;
 });
 
 describe('useServerData terminal MCP status handling', () => {
@@ -106,6 +107,41 @@ describe('useServerData terminal MCP status handling', () => {
 
     expect(hook.result.current.serverTools[server.id]).toBeUndefined();
     expect(readToolsCache(server.id, cacheKeys)).toBeNull();
+    hook.unmount();
+  });
+});
+
+describe('useServerData refreshMcpServers callback', () => {
+  it('reloads servers and status when refreshMcpServers is called', () => {
+    const hook = renderServerData();
+    // Hook initialization already triggers initial load; clear to isolate the refresh call
+    sendToJavaMock.mockClear();
+
+    act(() => {
+      window.refreshMcpServers?.('{}');
+    });
+
+    expect(sendToJavaMock).toHaveBeenCalledWith('get_mcp_servers', {});
+    expect(sendToJavaMock).toHaveBeenCalledWith('get_mcp_server_status', {});
+    hook.unmount();
+  });
+
+  it('reloads only servers (not status) in codex mode', () => {
+    const hook = renderHook(() => useServerData({
+      isCodexMode: true,
+      messagePrefix: 'codex_',
+      cacheKeys,
+      t: translate,
+      onLog,
+    }));
+    sendToJavaMock.mockClear();
+
+    act(() => {
+      window.refreshMcpServers?.('{}');
+    });
+
+    expect(sendToJavaMock).toHaveBeenCalledWith('get_codex_mcp_servers', {});
+    expect(sendToJavaMock).not.toHaveBeenCalledWith('get_codex_mcp_server_status', {});
     hook.unmount();
   });
 });

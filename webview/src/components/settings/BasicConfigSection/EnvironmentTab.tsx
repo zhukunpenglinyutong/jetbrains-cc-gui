@@ -16,6 +16,11 @@ export interface EnvironmentTabProps {
   onWorkingDirectoryChange?: (dir: string) => void;
   onSaveWorkingDirectory?: () => void;
   savingWorkingDirectory?: boolean;
+  envFile?: string;
+  onEnvFileChange?: (path: string) => void;
+  onSaveEnvFile?: () => void;
+  savingEnvFile?: boolean;
+  envFileError?: string;
 }
 
 const EnvironmentTab = ({
@@ -33,6 +38,11 @@ const EnvironmentTab = ({
   onWorkingDirectoryChange = () => {},
   onSaveWorkingDirectory = () => {},
   savingWorkingDirectory = false,
+  envFile = '',
+  onEnvFileChange = () => {},
+  onSaveEnvFile = () => {},
+  savingEnvFile = false,
+  envFileError = '',
 }: EnvironmentTabProps) => {
   const { t } = useTranslation();
 
@@ -164,6 +174,50 @@ const EnvironmentTab = ({
             {t('settings.basic.workingDirectory.hint')}
           </span>
         </small>
+      </div>
+
+      {/* Environment file configuration */}
+      <div className={styles.nodePathSection}>
+        <div className={styles.fieldHeader}>
+          <span className="codicon codicon-key" />
+          <span className={styles.fieldLabel}>{t('settings.basic.envFile.label')}</span>
+          <span className={styles.projectLevelBadge}>
+            {t('settings.basic.envFile.projectLevel')}
+          </span>
+        </div>
+        <div className={styles.nodePathInputWrapper}>
+          <input
+            type="text"
+            className={styles.nodePathInput}
+            placeholder={t('settings.basic.envFile.placeholder')}
+            value={envFile}
+            onChange={(e) => onEnvFileChange((e.target as HTMLInputElement).value)}
+          />
+          <button
+            className={styles.saveBtn}
+            onClick={onSaveEnvFile}
+            disabled={savingEnvFile}
+          >
+            {savingEnvFile && (
+              <span
+                className="codicon codicon-loading codicon-modifier-spin"
+              />
+            )}
+            {t('common.save')}
+          </button>
+        </div>
+        {envFileError && (
+          <small className={styles.formHintError}>
+            <span className="codicon codicon-error" />
+            <span>{envFileError}</span>
+          </small>
+        )}
+        {!envFileError && (
+          <small className={styles.formHint}>
+            <span className="codicon codicon-info" />
+            <span>{t('settings.basic.envFile.hint')}</span>
+          </small>
+        )}
       </div>
     </div>
   );

@@ -24,6 +24,8 @@ describe('useSettingsWindowCallbacks', () => {
     setSavingClaudeCliPath: vi.fn(),
     setWorkingDirectory: vi.fn(),
     setSavingWorkingDirectory: vi.fn(),
+    setEnvFile: vi.fn(),
+    setSavingEnvFile: vi.fn(),
     setCommitPrompt: vi.fn(),
     setSavingCommitPrompt: vi.fn(),
     setCommitAiConfig: vi.fn(),

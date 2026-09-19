@@ -422,6 +422,13 @@
         "placeholder": "例如 project1 或留空使用项目根目录",
         "hint": "指定 Claude 工作的目录。可以使用相对路径（相对于项目根目录）或绝对路径。留空则使用项目根目录。"
       },
+      "envFile": {
+        "label": "环境文件",
+        "projectLevel": "项目级别",
+        "placeholder": "例如 /path/to/.env 或留空",
+        "hint": "指定一个 .env 文件，用于为 Claude Code 和 Grok 加载环境变量。",
+        "invalidPath": "无效的文件路径：文件不存在或无法读取"
+      },
       "fontSize": {
         "label": "字体大小",
         "level1": "小（80%）",
@@ -1666,6 +1673,7 @@
       "firstLoad": "首次加载，正在获取服务器列表...",
       "loadedServersSuccess": "加载服务器列表成功：找到 {{count}} 个服务器",
       "loadedServersFailed": "加载服务器列表失败：{{error}}",
+      "refreshOnFileChange": "MCP配置文件已更改，正在刷新服务器列表...",
       "statusUpdateComplete": "服务器状态更新完成：{{total}} 个服务器 ({{connected}} 已连接, {{failed}} 失败, {{pending}} 待定, {{needsAuth}} 需要认证)",
       "loadedStatusFailed": "加载服务器状态失败：{{error}}",
       "cleared": "刷新日志已清空",

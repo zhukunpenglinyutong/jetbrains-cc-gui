@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -60,6 +61,7 @@ public class McpServerManager {
     /**
      * Get all MCP servers (with project path support).
      * Merges global and project-level mcpServers; project-level servers override global ones with the same name.
+     * Also reads project-level .mcp.json from the project root and marks those servers with source="project".
      *
      * @param projectPath the project path, used to read project-level MCP configuration
      */
@@ -172,6 +174,18 @@ public class McpServerManager {
                             }
                         }
 
+                        // 1b. Merge project-level .mcp.json servers from project root (if projectPath provided)
+                        if (projectPath != null) {
+                            List<JsonObject> projectJsonServers = loadProjectMcpJson(projectPath);
+                            if (!projectJsonServers.isEmpty()) {
+                                for (JsonObject server : projectJsonServers) {
+                                    result.add(server);
+                                }
+                                LOG.info("[McpServerManager] Merged " + projectJsonServers.size()
+                                         + " MCP servers from .mcp.json at " + projectPath);
+                            }
+                        }
+
                         LOG.info("[McpServerManager] Loaded " + result.size()
                                          + " MCP servers from ~/.claude.json (disabled: " + disabledServers.size() + ")");
                         return result;
@@ -184,7 +198,15 @@ public class McpServerManager {
             LOG.warn("[McpServerManager] Error accessing ~/.claude.json: " + e.getMessage());
         }
 
-        // 2. Fall back to ~/.codemoss/config.json (array format)
+        // If we get here but have a projectPath, still try .mcp.json
+        if (projectPath != null) {
+            List<JsonObject> projectJsonServers = loadProjectMcpJson(projectPath);
+            if (!projectJsonServers.isEmpty()) {
+                result.addAll(projectJsonServers);
+                LOG.info("[McpServerManager] Loaded " + projectJsonServers.size()
+                         + " MCP servers from .mcp.json at " + projectPath);
+            }
+        }
         JsonObject config = configReader.apply(null);
         if (config.has("mcpServers")) {
             JsonArray servers = config.getAsJsonArray("mcpServers");
@@ -220,6 +242,16 @@ public class McpServerManager {
 
         String serverId = server.get("id").getAsString();
         boolean isEnabled = !server.has("enabled") || server.get("enabled").getAsBoolean();
+
+        // 0. If this is a project-local server, update .mcp.json
+        boolean isProjectLocal = server.has("source")
+            && "project".equals(server.get("source").getAsString());
+        if (isProjectLocal && projectPath != null && !projectPath.isEmpty()) {
+            if (upsertInProjectMcpJson(server, serverId, isEnabled, projectPath)) {
+                LOG.info("[McpServerManager] Upserted MCP server in .mcp.json at " + projectPath + ": " + serverId);
+                return;
+            }
+        }
 
         // 1. Try to update ~/.claude.json
         try {
@@ -372,7 +404,28 @@ public class McpServerManager {
      * falling back to ~/.codemoss/config.json.
      */
     public boolean deleteMcpServer(String serverId) throws IOException {
+        return deleteMcpServer(serverId, null);
+    }
+
+    /**
+     * Delete an MCP server (with project path support).
+     * If the server has source="project", it will be removed from the project's
+     * .mcp.json file instead of ~/.claude.json.
+     *
+     * @param serverId the server ID to delete
+     * @param projectPath the project root path (for .mcp.json support)
+     */
+    public boolean deleteMcpServer(String serverId, String projectPath) throws IOException {
         boolean removed = false;
+
+        // 0. If a projectPath is provided, try deleting from .mcp.json first
+        if (projectPath != null && !projectPath.isEmpty()) {
+            removed = deleteFromProjectMcpJson(serverId, projectPath);
+            if (removed) {
+                LOG.info("[McpServerManager] Deleted MCP server from .mcp.json at " + projectPath + ": " + serverId);
+                return true;
+            }
+        }
 
         // 1. Try to delete from ~/.claude.json
         try {
@@ -493,5 +546,203 @@ public class McpServerManager {
         result.put("valid", errors.isEmpty());
         result.put("errors", errors);
         return result;
+    }
+
+    /**
+     * Read project-level .mcp.json from the project root directory.
+     * Servers from .mcp.json are marked with source="project" and enabled=true
+     * so the webview can display them as read-only (managed on-disk).
+     *
+     * @param projectPath the project root directory
+     * @return list of MCP server JsonObject entries, marked as project-local
+     */
+    /**
+     * Upsert (update or insert) an MCP server in the project-level .mcp.json file.
+     * The server's spec is extracted from the "server" field (or flattened if absent).
+     * @param server the server JsonObject (with id, name, enabled, server spec, etc.)
+     * @param serverId the server ID
+     * @param isEnabled whether the server is enabled
+     * @param projectPath the project root directory
+     * @return true if the operation succeeded, false otherwise
+     */
+    private boolean upsertInProjectMcpJson(JsonObject server, String serverId, boolean isEnabled, String projectPath) {
+        File mcpJsonFile = Paths.get(projectPath, ".mcp.json").toFile();
+        if (!mcpJsonFile.exists()) {
+            LOG.warn("[McpServerManager] .mcp.json not found at " + projectPath + ", cannot upsert");
+            return false;
+        }
+
+        try (FileReader reader = new FileReader(mcpJsonFile, StandardCharsets.UTF_8)) {
+            JsonObject projectConfig = JsonParser.parseReader(reader).getAsJsonObject();
+            if (!projectConfig.has("mcpServers") || !projectConfig.get("mcpServers").isJsonObject()) {
+                projectConfig.add("mcpServers", new JsonObject());
+            }
+            JsonObject mcpServers = projectConfig.getAsJsonObject("mcpServers");
+
+            // Extract server spec from "server" field, or build from server itself
+            JsonObject serverSpec;
+            if (server.has("server") && server.get("server").isJsonObject()) {
+                serverSpec = server.getAsJsonObject("server").deepCopy();
+            } else {
+                serverSpec = server.deepCopy();
+                serverSpec.remove("id");
+                serverSpec.remove("name");
+                serverSpec.remove("enabled");
+                serverSpec.remove("apps");
+                serverSpec.remove("server");
+                serverSpec.remove("source");
+            }
+
+            mcpServers.add(serverId, serverSpec);
+
+            // Update disabledMcpServers list
+            if (!projectConfig.has("disabledMcpServers") || !projectConfig.get("disabledMcpServers").isJsonArray()) {
+                projectConfig.add("disabledMcpServers", new JsonArray());
+            }
+            JsonArray disabledArray = projectConfig.getAsJsonArray("disabledMcpServers");
+            JsonArray newDisabled = new JsonArray();
+            for (JsonElement elem : disabledArray) {
+                if (elem.isJsonPrimitive() && !elem.getAsString().equals(serverId)) {
+                    newDisabled.add(elem);
+                }
+            }
+            if (!isEnabled) {
+                newDisabled.add(serverId);
+            }
+            projectConfig.add("disabledMcpServers", newDisabled);
+
+            try (FileWriter writer = new FileWriter(mcpJsonFile, StandardCharsets.UTF_8)) {
+                gson.toJson(projectConfig, writer);
+                writer.flush();
+            }
+
+            return true;
+        } catch (Exception e) {
+            LOG.warn("[McpServerManager] Failed to upsert in .mcp.json at " + projectPath + ": " + e.getMessage());
+            return false;
+        }
+    }
+
+    private List<JsonObject> loadProjectMcpJson(String projectPath) {
+        List<JsonObject> servers = new ArrayList<>();
+        Set<String> disabledServers = new HashSet<>();
+        if (projectPath == null || projectPath.isEmpty()) {
+            return servers;
+        }
+
+        File mcpJsonFile = Paths.get(projectPath, ".mcp.json").toFile();
+        if (!mcpJsonFile.exists()) {
+            LOG.info("[McpServerManager] .mcp.json not found at " + projectPath);
+            return servers;
+        }
+
+        try (FileReader reader = new FileReader(mcpJsonFile, StandardCharsets.UTF_8)) {
+            JsonObject projectConfig = JsonParser.parseReader(reader).getAsJsonObject();
+
+            if (projectConfig.has("mcpServers") && projectConfig.get("mcpServers").isJsonObject()) {
+                JsonObject projectMcpServers = projectConfig.getAsJsonObject("mcpServers");
+                if (projectConfig.has("disabledMcpServers") && projectConfig.get("disabledMcpServers").isJsonArray()) {
+                    JsonArray disabledArray = projectConfig.getAsJsonArray("disabledMcpServers");
+                    for (JsonElement elem : disabledArray) {
+                        if (elem.isJsonPrimitive()) {
+                            disabledServers.add(elem.getAsString());
+                        }
+                    }
+                }
+
+                for (String serverId : projectMcpServers.keySet()) {
+                    JsonElement serverElem = projectMcpServers.get(serverId);
+                    if (serverElem.isJsonObject()) {
+                        JsonObject server = serverElem.getAsJsonObject();
+
+                        // Ensure id and name fields exist
+                        if (!server.has("id")) {
+                            server.addProperty("id", serverId);
+                        }
+                        if (!server.has("name")) {
+                            server.addProperty("name", serverId);
+                        }
+
+                        // Wrap type, command, args, env, etc. into the server field
+                        if (!server.has("server")) {
+                            JsonObject serverSpec = new JsonObject();
+
+                            Set<String> excludedFields = new HashSet<>();
+                            excludedFields.add("id");
+                            excludedFields.add("name");
+                            excludedFields.add("enabled");
+                            excludedFields.add("apps");
+                            excludedFields.add("server");
+
+                            for (String key : server.keySet()) {
+                                if (!excludedFields.contains(key)) {
+                                    serverSpec.add(key, server.get(key));
+                                }
+                            }
+
+                            server.add("server", serverSpec);
+                        }
+
+                        // Mark as project-local (read-only in UI)
+                        server.addProperty("source", "project");
+
+                        // Set enabled/disabled status
+                        boolean isEnabled = !disabledServers.contains(serverId);
+                        server.addProperty("enabled", isEnabled);
+
+                        servers.add(server);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("[McpServerManager] Failed to read .mcp.json at " + projectPath + ": " + e.getMessage());
+        }
+
+        LOG.info("[McpServerManager] Loaded " + servers.size()
+                 + " MCP servers from .mcp.json at " + projectPath
+                 + " (disabled: " + disabledServers.size() + ")");
+        return servers;
+    }
+
+    /**
+     * Delete an MCP server from the project-level .mcp.json file.
+     * @param serverId the server ID to remove
+     * @param projectPath the project root directory
+     * @return true if the server was found and removed, false otherwise
+     */
+    private boolean deleteFromProjectMcpJson(String serverId, String projectPath) {
+        if (projectPath == null || projectPath.isEmpty()) {
+            return false;
+        }
+
+        File mcpJsonFile = Paths.get(projectPath, ".mcp.json").toFile();
+        if (!mcpJsonFile.exists()) {
+            return false;
+        }
+
+        try (FileReader reader = new FileReader(mcpJsonFile, StandardCharsets.UTF_8)) {
+            JsonObject projectConfig = JsonParser.parseReader(reader).getAsJsonObject();
+            if (!projectConfig.has("mcpServers") || !projectConfig.get("mcpServers").isJsonObject()) {
+                return false;
+            }
+
+            JsonObject mcpServers = projectConfig.getAsJsonObject("mcpServers");
+            if (!mcpServers.has(serverId)) {
+                return false;
+            }
+
+            mcpServers.remove(serverId);
+
+            // Write back to file
+            try (FileWriter writer = new FileWriter(mcpJsonFile, StandardCharsets.UTF_8)) {
+                gson.toJson(projectConfig, writer);
+                writer.flush();
+            }
+
+            return true;
+        } catch (Exception e) {
+            LOG.warn("[McpServerManager] Failed to update .mcp.json at " + projectPath + ": " + e.getMessage());
+            return false;
+        }
     }
 }

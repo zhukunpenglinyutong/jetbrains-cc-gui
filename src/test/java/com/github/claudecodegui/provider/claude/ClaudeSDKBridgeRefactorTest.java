@@ -227,6 +227,7 @@ public class ClaudeSDKBridgeRefactorTest {
                 Boolean.TRUE,
                 null,
                 null,
+                null,
                 callback
         ).get();
 

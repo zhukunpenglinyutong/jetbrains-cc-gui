@@ -386,6 +386,19 @@ export async function sendMessage(
  * @param {string} serverId
  * @param {Object} rawServerConfig
  */
+/**
+ * Helper: write a single line to stdout and await flush completion.
+ * Awaiting the callback guarantees the entire payload — including the
+ * trailing newline —has been accepted by the OS pipe buffer before this
+ * function returns. This prevents stderr writes (merged via
+ * redirectErrorStream(true) on the Java side) from interleaving with
+ * large JSON payloads and corrupting them.
+ * @param {string} line - Line to write (should already include trailing \n)
+ */
+const writeLineAndWait = (line) => new Promise((resolve) => {
+  process.stdout.write(line, 'utf8', resolve);
+});
+
 export async function getMcpServerTools(serverId, rawServerConfig) {
   try {
     if (!serverId) {
@@ -395,8 +408,7 @@ export async function getMcpServerTools(serverId, rawServerConfig) {
         error: 'Missing serverId',
         tools: []
       };
-      console.log('[MCP_SERVER_TOOLS]' + JSON.stringify(invalid));
-      console.log(JSON.stringify(invalid));
+      await writeLineAndWait('[MCP_SERVER_TOOLS]' + JSON.stringify(invalid) + '\n');
       return;
     }
 
@@ -407,8 +419,7 @@ export async function getMcpServerTools(serverId, rawServerConfig) {
         error: 'Missing serverConfig',
         tools: []
       };
-      console.log('[MCP_SERVER_TOOLS]' + JSON.stringify(invalid));
-      console.log(JSON.stringify(invalid));
+      await writeLineAndWait('[MCP_SERVER_TOOLS]' + JSON.stringify(invalid) + '\n');
       return;
     }
 
@@ -426,8 +437,9 @@ export async function getMcpServerTools(serverId, rawServerConfig) {
     };
 
     const resultJson = JSON.stringify(result);
-    console.log('[MCP_SERVER_TOOLS]' + resultJson);
-    console.log(resultJson);
+    // Await full flush to prevent stderr interleaving with large JSON
+    // payloads (>64KB OS pipe buffer) that corrupts the output.
+    await writeLineAndWait('[MCP_SERVER_TOOLS]' + resultJson + '\n');
   } catch (error) {
     const errorResult = {
       success: false,
@@ -436,8 +448,7 @@ export async function getMcpServerTools(serverId, rawServerConfig) {
       tools: []
     };
     const resultJson = JSON.stringify(errorResult);
-    console.log('[MCP_SERVER_TOOLS]' + resultJson);
-    console.log(resultJson);
+    await writeLineAndWait('[MCP_SERVER_TOOLS]' + resultJson + '\n');
   }
 }
 

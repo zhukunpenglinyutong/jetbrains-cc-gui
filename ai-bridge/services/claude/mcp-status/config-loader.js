@@ -32,15 +32,19 @@ function expandEnvPlaceholders(value, projectEnv, userEnv) {
   // ${VAR} only - no command substitution, nesting, or defaults syntax
   return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, name) => {
     if (Object.prototype.hasOwnProperty.call(projectEnv, name)) {
+      console.error('[DEBUG] MCP Config: ${' + name + '} resolved from projectEnv=' + (projectEnv[name] ? '[SET]' : '[UNSET]'));
       return String(projectEnv[name]);
     }
     if (Object.prototype.hasOwnProperty.call(userEnv, name)) {
+      console.error('[DEBUG] MCP Config: ${' + name + '} resolved from userEnv=' + (userEnv[name] ? '[SET]' : '[UNSET]'));
       return String(userEnv[name]);
     }
     if (Object.prototype.hasOwnProperty.call(process.env, name)) {
+      console.error('[DEBUG] MCP Config: ${' + name + '} resolved from process.env=' + (process.env[name] ? '[SET]' : '[UNSET]'));
       return process.env[name];
     }
     log('warn', `[MCP Config] Unresolved \${${name}} placeholder left as-is in MCP env`);
+    console.error('[DEBUG] MCP Config: ${' + name + '} unresolved (not found in projectEnv, userEnv, or process.env)');
     return match;
   });
 }
@@ -162,6 +166,60 @@ function validateConfigStructure(config) {
 }
 
 /**
+ * Load a project-level .mcp.json file from the project root.
+ *
+ * Claude Code also supports a .mcp.json file at the project root (separate from
+ * the project-level mcpServers block inside ~/.claude.json). This function reads
+ * that file and returns its mcpServers and disabledMcpServers, or null if the
+ * file doesn't exist.
+ *
+ * @param {string|null} cwd - Project root directory
+ * @returns {Promise<{mcpServers: Object, disabledServers: Set<string>} | null>} Parsed config, or null
+ */
+async function loadProjectMcpJson(cwd = null) {
+  if (!cwd) return null;
+  const mcpJsonPath = join(cwd, '.mcp.json');
+  if (!existsSync(mcpJsonPath)) {
+    log('info', '[MCP Config] .mcp.json not found at', mcpJsonPath);
+    return null;
+  }
+  try {
+    const content = await readFile(mcpJsonPath, 'utf8');
+    const config = JSON.parse(content);
+    log('info', '[MCP Config] Loaded .mcp.json from', mcpJsonPath);
+    return {
+      mcpServers: config.mcpServers || {},
+      disabledServers: new Set(config.disabledMcpServers || []),
+    };
+  } catch (e) {
+    log('warn', '[MCP Config] Failed to read .mcp.json:', e.message);
+    return null;
+  }
+}
+
+/**
+ * Merge project-level .mcp.json servers into the existing server map.
+ * Project servers are marked with source: 'project' to distinguish them from
+ * ~/.claude.json servers in the UI (read-only display).
+ * @param {Object} mcpServers - Existing server config map (from ~/.claude.json)
+ * @param {Object} projectMcpServers - Servers from .mcp.json
+ * @returns {Object} Merged server map
+ */
+function mergeProjectMcpServers(mcpServers, projectMcpServers) {
+  if (!projectMcpServers) return mcpServers;
+  const merged = {};
+  // First, copy any env-expansion already applied to mcpServers entries
+  for (const [name, config] of Object.entries(mcpServers || {})) {
+    merged[name] = config;
+  }
+  // Then overlay project servers, marking them with source: 'project'
+  for (const [name, config] of Object.entries(projectMcpServers)) {
+    merged[name] = { ...config, source: 'project' };
+  }
+  return merged;
+}
+
+/**
  * Parse the server list and disabled list from the MCP configuration file
  * Extracts shared logic used by both loadMcpServersConfig and loadAllMcpServersInfo
  * @param {string} cwd - Current working directory (used for project detection)
@@ -238,6 +296,18 @@ async function parseMcpConfig(cwd = null) {
     disabledServers = new Set(config.disabledMcpServers || []);
   }
 
+  // Merge project-level .mcp.json servers (if present at the project root).
+  // These are marked with source: 'project' for read-only UI display.
+  const projectMcpJson = await loadProjectMcpJson(cwd);
+  if (projectMcpJson) {
+    mcpServers = mergeProjectMcpServers(mcpServers, projectMcpJson.mcpServers);
+    for (const name of projectMcpJson.disabledServers) {
+      disabledServers.add(name);
+    }
+    const projectServerCount = Object.keys(projectMcpJson.mcpServers || {}).length;
+    log('info', '[MCP Config] Merged', projectServerCount, 'servers from .mcp.json');
+  }
+
   // Expand ${VAR} placeholders in server env values (e.g. from
   // .claude/settings.local.json) so spawned servers receive real values,
   // matching Claude Code's behaviour for the same config (#1722).
@@ -246,6 +316,16 @@ async function parseMcpConfig(cwd = null) {
 
   return { mcpServers, disabledServers };
 }
+
+/**
+ * Read MCP server configuration from ~/.claude.json
+ * Supports two modes:
+ * 1. Global config - uses the global mcpServers
+ * 2. Project config - uses project-specific mcpServers
+ * @param {string} cwd - Current working directory (used for project detection)
+ * @returns {Promise<Array<{name: string, config: Object}>>} List of enabled MCP servers
+ */
+export { loadProjectMcpJson, mergeProjectMcpServers };
 
 /**
  * Read MCP server configuration from ~/.claude.json

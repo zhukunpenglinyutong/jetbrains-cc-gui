@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
@@ -26,6 +27,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
 
     private final ClaudeStreamAdapter streamAdapter;
     private final ClaudeRequestParamsBuilder requestParamsBuilder;
+    private final CodemossSettingsService settingsService = new CodemossSettingsService();
     private final ClaudeJsonOutputExtractor jsonOutputExtractor;
     private final ClaudeDaemonCoordinator daemonCoordinator;
     private final ClaudeProcessInvoker processInvoker;
@@ -404,13 +406,14 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         String normalizedCwd = normalizeCwdForNode(cwd);
+        String envFile = resolveEnvFile(cwd);
 
         // Try daemon mode first (avoids per-request Node.js process spawning)
         DaemonBridge db = daemonCoordinator.getDaemonBridge();
         if (db != null) {
             return sendMessageViaDaemon(db, channelId, message, sessionId, runtimeSessionEpoch, normalizedCwd,
                     attachments, permissionMode, model, openedFiles, agentPrompt,
-                    streaming, disableThinking, reasoningEffort, callback);
+                    streaming, disableThinking, reasoningEffort, envFile, callback);
         }
 
         // Fallback: per-process mode (spawns a new Node.js process per request)
@@ -429,8 +432,44 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 streaming,
                 disableThinking,
                 reasoningEffort,
+                envFile,
                 callback
         );
+    }
+
+    private String resolveEnvFile(String cwd) {
+        try {
+            String projectPath = cwd != null ? cwd : null;
+            String envFile = settingsService.getEnvFile(projectPath);
+            if (envFile == null) {
+                // No per-project setting configured — try the default ".env"
+                // in the project root so users get automatic env loading
+                // without any configuration.
+                if (cwd != null) {
+                    java.io.File defaultEnvFile = new java.io.File(cwd, ".env");
+                    if (defaultEnvFile.exists() && defaultEnvFile.isFile()) {
+                        envFile = defaultEnvFile.getAbsolutePath();
+                        LOG.debug("[ClaudeSDKBridge.resolveEnvFile] auto-discovered default .env at " + envFile);
+                    } else {
+                        LOG.debug("[ClaudeSDKBridge.resolveEnvFile] no env file configured and no .env found in cwd");
+                    }
+                } else {
+                    LOG.debug("[ClaudeSDKBridge.resolveEnvFile] envFile is null and no cwd for default discovery");
+                }
+            } else {
+                // Resolve relative env file paths against the project cwd
+                java.io.File envFileObj = new java.io.File(envFile);
+                if (!envFileObj.isAbsolute() && cwd != null) {
+                    envFileObj = new java.io.File(cwd, envFile);
+                    envFile = envFileObj.getAbsolutePath();
+                }
+                LOG.debug("[ClaudeSDKBridge.resolveEnvFile] envFile=" + envFile);
+            }
+            return envFile;
+        } catch (Exception e) {
+            LOG.warn("[ClaudeSDKBridge] Failed to read env file setting: " + e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -720,6 +759,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
+            String envFile,
             MessageCallback callback
     ) {
         return daemonRequestExecutor.sendMessageViaDaemon(
@@ -737,6 +777,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 streaming,
                 disableThinking,
                 reasoningEffort,
+                envFile,
                 callback
         );
     }

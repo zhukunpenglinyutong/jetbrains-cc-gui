@@ -65,6 +65,7 @@ import {
   getRuntimeSnapshot as getZcodeRuntimeSnapshot
 } from './services/zcode/persistent-zcode-service.js';
 import { injectStartupEnvVars, isWebviewControlledEnvVar, isDangerousEnvVar } from './config/api-config.js';
+import { loadEnvFile } from './utils/envLoader.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
 
 // =============================================================================
@@ -463,11 +464,60 @@ async function processRequest(request) {
   const savedEnv = {};
 
   try {
+    // Parse method: "claude.send" -> provider="claude", command="send"
+    const dotIndex = method.indexOf('.');
+    if (dotIndex < 0) {
+      throw new Error(`Invalid method format: ${method}. Expected "provider.command"`);
+    }
+    const provider = method.substring(0, dotIndex);
+    const command = method.substring(dotIndex + 1);
+
+    // Build stdinData from params (mimics what channel-manager.js does)
+    const stdinData = { ...params };
+    // Extract envFile from params.env into stdinData.envFile so downstream
+    // handlers (buildRequestContext, message-sender) can access it.
+    if (params.env && typeof params.env === 'object' && params.env.envFile) {
+      stdinData.envFile = params.env.envFile;
+    }
+    delete stdinData.env; // env is handled separately
+
+    // Load env file for any command that carries envFile.
+    // This ensures env vars are available in process.env before MCP server
+    // config is loaded (MCP servers read ${VAR} placeholders from env).
+    // During preconnect, the loaded vars persist for the session. For
+    // send/sendWithAttachments commands, the vars are applied again to
+    // ensure they're available even if preconnect ran before envFile was
+    // configured.
+    if (stdinData.envFile) {
+      console.error('[DEBUG] daemon.js: loading envFile=' + stdinData.envFile + ' for method=' + method);
+      const envVars = loadEnvFile(stdinData.envFile);
+      const keys = Object.keys(envVars);
+      console.error('[DEBUG] daemon.js: envFile loaded ' + keys.length + ' vars=' + JSON.stringify(keys));
+      console.error('[DEBUG] daemon.js: process.env before applying=' + JSON.stringify(
+        Object.fromEntries(Object.entries(process.env).filter(([k]) => keys.includes(k))))
+      );
+      for (const [k, v] of Object.entries(envVars)) {
+        if (!(k in process.env) || !process.env[k]) {
+          savedEnv[k] = process.env[k];
+          process.env[k] = v;
+          console.error('[DEBUG] daemon.js: set process.env.' + k + '=true (was: ' + (savedEnv[k] || '(unset)') + ')');
+        } else {
+          console.error('[DEBUG] daemon.js: skip ' + k + ' already set in process.env');
+        }
+      }
+    }
+
     // Apply environment variables from params (with save for restore).
     // NOTE: Heartbeat/status requests bypass the command queue and may run
     // concurrently. This is safe because they never read process.env values
     // set here — they only return timestamps and memory usage.
     if (params.env && typeof params.env === 'object') {
+      console.error('[DEBUG] daemon.js: params.env received=' + JSON.stringify(params.env));
+      if (params.env.envFile) {
+        console.error('[DEBUG] daemon.js: envFile in params.env=' + params.env.envFile);
+      } else {
+        console.error('[DEBUG] daemon.js: envFile NOT present in params.env');
+      }
       for (const [key, value] of Object.entries(params.env)) {
         // Request env can include settings.json values. Do not let stale
         // environment controls override the webview's per-turn model, context,
@@ -490,18 +540,6 @@ async function processRequest(request) {
         }
       }
     }
-
-    // Parse method: "claude.send" -> provider="claude", command="send"
-    const dotIndex = method.indexOf('.');
-    if (dotIndex < 0) {
-      throw new Error(`Invalid method format: ${method}. Expected "provider.command"`);
-    }
-    const provider = method.substring(0, dotIndex);
-    const command = method.substring(dotIndex + 1);
-
-    // Build stdinData from params (mimics what channel-manager.js does)
-    const stdinData = { ...params };
-    delete stdinData.env; // env is handled separately
 
     if (provider === 'claude' && command === 'send') {
       await sendMessagePersistent(stdinData);

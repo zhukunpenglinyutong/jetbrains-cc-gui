@@ -57,6 +57,7 @@ export function McpServerList({
                 server={server}
                 isExpanded={expandedServers.has(server.id)}
                 isCodexMode={isCodexMode}
+                isProjectLocal={server.source === 'project'}
                 serverStatus={serverStatus}
                 refreshState={serverRefreshStates[server.id]}
                 toolsInfo={serverTools[server.id]}

@@ -140,6 +140,7 @@ public class ChatWindowDelegate {
     private volatile MessageCallback pendingQuickFixCallback = null;
     // Reference to the SettingsHandler for clean theme-callback unregistration on dispose.
     private com.github.claudecodegui.handler.SettingsHandler settingsHandler;
+    private com.github.claudecodegui.watcher.McpConfigFileWatcher mcpConfigFileWatcher;
 
     public ChatWindowDelegate(DelegateHost host) {
         this.host = host;
@@ -356,6 +357,15 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new ClaudePlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new CustomModelPricingHandler(handlerContext, settingsService));
         messageDispatcher.registerHandler(new McpServerHandler(handlerContext));
+
+        // Watch for .mcp.json changes to auto-refresh the server list in the UI
+        if (project != null) {
+            mcpConfigFileWatcher = new com.github.claudecodegui.watcher.McpConfigFileWatcher(project, () -> {
+                handlerContext.callJavaScript("window.refreshMcpServers", "{}");
+            });
+            mcpConfigFileWatcher.startWatching();
+        }
+
         messageDispatcher.registerHandler(new McpMarketplaceHandler(handlerContext));
         messageDispatcher.registerHandler(new McpServerImportHandler(handlerContext));
         messageDispatcher.registerHandler(new CodexMcpServerHandler(handlerContext, settingsService.getCodexMcpServerManager()));
@@ -794,6 +804,10 @@ public class ChatWindowDelegate {
         if (settingsHandler != null) {
             settingsHandler.dispose();
             settingsHandler = null;
+        }
+        if (mcpConfigFileWatcher != null) {
+            mcpConfigFileWatcher.stopWatching();
+            mcpConfigFileWatcher = null;
         }
     }
 }

@@ -7,6 +7,14 @@ interface Window {
    */
   sendToJava?: (message: string) => void;
 
+  /**
+   * Electron/Electron-API bridge for file dialogs and Node integration.
+   */
+  electronAPI?: {
+    browseEnvFile?: () => Promise<{ canceled: boolean; filePaths: string[] } | null>;
+    showOpenDialog?: (options: { properties: string[]; filters?: Array<{ name: string; extensions: string[] }> }) => Promise<{ canceled: boolean; filePaths: string[] } | null>;
+  };
+
   /** Legacy windowed-JCEF repaint requested after its IntelliJ content tab is activated. */
   onTabActivated?: () => void;
 
@@ -330,6 +338,12 @@ interface Window {
   updateMcpServers?: (json: string) => void;
 
   /**
+   * Signal frontend to refresh MCP server list from backend.
+   * Triggered when .mcp.json or mcp.json file changes are detected by the file watcher.
+   */
+  refreshMcpServers?: (json: string) => void;
+
+  /**
    * Update MCP server connection status
    */
   updateMcpServerStatus?: (json: string) => void;
@@ -490,6 +504,11 @@ interface Window {
    * Update working directory configuration
    */
   updateWorkingDirectory?: (json: string) => void;
+
+  /**
+   * Update environment file path
+   */
+  updateEnvFile?: (json: string) => void;
 
   /**
    * Update linkify/navigation capabilities used by Markdown rendering.

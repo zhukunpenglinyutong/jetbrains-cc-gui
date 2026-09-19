@@ -179,6 +179,13 @@
         "placeholder": "예: project1 또는 프로젝트 루트를 사용하려면 비워두세요",
         "hint": "Claude가 작업하는 디렉토리를 지정합니다. 상대 경로(프로젝트 루트 기준) 또는 절대 경로를 사용할 수 있습니다. 비워두면 프로젝트 루트를 사용합니다."
       },
+      "envFile": {
+        "label": "환경 파일",
+        "projectLevel": "프로젝트 레벨",
+        "placeholder": "예: /path/to/.env 또는 비워두기",
+        "hint": "Claude Code와 Grok 모두에서 환경 변수를 로드하는 .env 파일을 지정합니다.",
+        "invalidPath": "잘못된 파일 경로: 파일이 존재하지 않거나 읽을 수 없습니다"
+      },
       "fontSize": {
         "label": "글꼴 크기",
         "level1": "작게 (80%)",
@@ -1317,6 +1324,7 @@
       "firstLoad": "첫 로드, 서버 목록을 가져오는 중...",
       "loadedServersSuccess": "서버 목록 로드됨: {{count}}개 서버 발견",
       "loadedServersFailed": "서버 목록 로드 실패: {{error}}",
+      "refreshOnFileChange": "MCP 구성 파일이 변경되었습니다. 서버 목록을 새로고침하는 중...",
       "statusUpdateComplete": "상태 업데이트 완료: {{total}}개 서버 ({{connected}}개 연결됨, {{failed}}개 실패, {{pending}}개 대기 중, {{needsAuth}}개 인증 필요)",
       "loadedStatusFailed": "서버 상태 로드 실패: {{error}}",
       "cleared": "새로고침 로그 지움",

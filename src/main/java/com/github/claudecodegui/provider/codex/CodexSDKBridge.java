@@ -729,7 +729,10 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
                 ProcessBuilder pb = new ProcessBuilder(command);
                 pb.directory(bridgeDir);
-                pb.redirectErrorStream(true);
+                // Do NOT merge stderr into stdout: large JSON payloads (>64KB
+                // OS pipe buffer) are written across multiple uv_write chunks,
+                // and merged stderr lines can interleave at the byte level,
+                // corrupting the JSON. Drain stderr in a daemon thread instead.
                 envConfigurator.updateProcessEnvironment(pb, node);
                 pb.environment().put("CODEX_USE_STDIN", "true");
 
@@ -744,6 +747,22 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
                     stdin.flush();
                 }
+
+                // Drain stderr so the pipe buffer doesn't fill and block the
+                // Node process. Diagnostic output is logged at debug level only.
+                Thread stderrDrainThread = new Thread(() -> {
+                    try (BufferedReader errReader = new BufferedReader(
+                            new InputStreamReader(finalProcess.getErrorStream(), StandardCharsets.UTF_8))) {
+                        String errLine;
+                        while ((errLine = errReader.readLine()) != null) {
+                            LOG.debug("[CodexMcpTools] [stderr] " + errLine);
+                        }
+                    } catch (Exception e) {
+                        LOG.debug("[CodexMcpTools] stderr drain exception: " + e.getMessage());
+                    }
+                });
+                stderrDrainThread.setDaemon(true);
+                stderrDrainThread.start();
 
                 AtomicBoolean found = new AtomicBoolean(false);
                 AtomicBoolean readerDone = new AtomicBoolean(false);

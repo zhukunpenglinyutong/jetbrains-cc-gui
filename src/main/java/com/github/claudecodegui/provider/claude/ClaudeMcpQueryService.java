@@ -205,7 +205,12 @@ class ClaudeMcpQueryService {
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.directory(bridgeDir);
-            pb.redirectErrorStream(true);
+            // Do NOT merge stderr into stdout (pb.redirectErrorStream(true)).
+            // Large stdout payloads (>64KB, the OS pipe buffer) are written
+            // across multiple uv_write chunks. If stderr is merged into the
+            // same pipe, console.error/console.warn calls can interleave at
+            // the byte level, inserting raw newlines mid-JSON and causing
+            // Gson MalformedJsonException: Unterminated string.
             envConfigurator.updateProcessEnvironment(pb, node);
             pb.environment().put("CLAUDE_USE_STDIN", "true");
 
@@ -218,6 +223,23 @@ class ClaudeMcpQueryService {
             CountDownLatch markerLatch = new CountDownLatch(1);
             AtomicReference<String> markerJson = new AtomicReference<>(null);
             final StringBuilder output = new StringBuilder();
+
+            // Drain stderr in a daemon thread so the pipe buffer never fills
+            // and blocks the Node process. Diagnostic output is logged at
+            // debug level only and never interferes with stdout JSON.
+            Thread stderrDrainThread = new Thread(() -> {
+                try (BufferedReader errReader = new BufferedReader(
+                        new InputStreamReader(finalProcess.getErrorStream(), StandardCharsets.UTF_8))) {
+                    String errLine;
+                    while ((errLine = errReader.readLine()) != null) {
+                        log.debug(logPrefix + " [stderr] " + errLine);
+                    }
+                } catch (Exception e) {
+                    log.debug(logPrefix + " stderr drain exception: " + e.getMessage());
+                }
+            });
+            stderrDrainThread.setDaemon(true);
+            stderrDrainThread.start();
 
             Thread readerThread = new Thread(() -> {
                 try (BufferedReader reader = new BufferedReader(

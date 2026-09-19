@@ -179,6 +179,13 @@
         "placeholder": "例: project1 または空欄でプロジェクトルートを使用",
         "hint": "Claudeが作業するディレクトリを指定します。相対パス(プロジェクトルートからの相対)または絶対パスを使用できます。空欄の場合はプロジェクトルートを使用します。"
       },
+      "envFile": {
+        "label": "環境ファイル",
+        "projectLevel": "プロジェクトレベル",
+        "placeholder": "例: /path/to/.env または空欄",
+        "hint": "Claude CodeとGrokの両方で環境変数を読み込む.envファイルを指定します。",
+        "invalidPath": "無効なファイルパス: ファイルが存在しないか、読み取りできません"
+      },
       "fontSize": {
         "label": "フォントサイズ",
         "level1": "小 (80%)",
@@ -1228,6 +1235,7 @@
       "firstLoad": "First load, fetching server list...",
       "loadedServersSuccess": "Loaded server list: {{count}} servers found",
       "loadedServersFailed": "Failed to load server list: {{error}}",
+      "refreshOnFileChange": "MCP設定ファイルが変更されました。サーバー一覧を更新しています...",
       "statusUpdateComplete": "Status update complete: {{total}} servers ({{connected}} connected, {{failed}} failed, {{pending}} pending, {{needsAuth}} need auth)",
       "loadedStatusFailed": "Failed to load server status: {{error}}",
       "cleared": "Refresh logs cleared",
