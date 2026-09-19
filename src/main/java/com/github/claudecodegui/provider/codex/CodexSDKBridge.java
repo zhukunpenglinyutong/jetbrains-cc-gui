@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import com.github.claudecodegui.handler.CodexCliPathHandler;
 import com.github.claudecodegui.handler.history.HistoryMessageInjector;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
@@ -16,6 +17,8 @@ import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.settings.ConfigPathManager;
 import com.github.claudecodegui.util.PlatformUtils;
+
+import com.intellij.ide.util.PropertiesComponent;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -489,6 +492,14 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 envConfigurator.configureTempDir(env, processTempDir);
                 env.put("CODEX_USE_STDIN", "true");
 
+                // Inject custom Codex CLI path override (mirrors CLAUDE_CODE_PATH)
+                String codexCliPath = PropertiesComponent.getInstance()
+                        .getValue(CodexCliPathHandler.CODEX_CLI_PATH_PROPERTY_KEY);
+                if (codexCliPath != null && !codexCliPath.trim().isEmpty()) {
+                    env.put("CODEX_CODE_PATH", codexCliPath.trim());
+                    LOG.info("[Codex] Using custom Codex CLI: " + codexCliPath.trim());
+                }
+
                 // Set model via environment variable if specified
                 if (model != null && !model.isEmpty()) {
                     env.put("CODEX_MODEL", model);
@@ -732,6 +743,13 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 pb.redirectErrorStream(true);
                 envConfigurator.updateProcessEnvironment(pb, node);
                 pb.environment().put("CODEX_USE_STDIN", "true");
+
+                // Inject custom Codex CLI path override (mirrors CLAUDE_CODE_PATH)
+                String codexCliPath = PropertiesComponent.getInstance()
+                        .getValue(CodexCliPathHandler.CODEX_CLI_PATH_PROPERTY_KEY);
+                if (codexCliPath != null && !codexCliPath.trim().isEmpty()) {
+                    pb.environment().put("CODEX_CODE_PATH", codexCliPath.trim());
+                }
 
                 // Inject custom "mcp" env vars from active provider
                 injectCustomEnvVars(pb.environment(), "mcp");
