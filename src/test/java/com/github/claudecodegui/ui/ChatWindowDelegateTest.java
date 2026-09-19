@@ -122,7 +122,13 @@ public class ChatWindowDelegateTest {
                 (StreamMessageCoalescer.JsCallbackTarget) Proxy.newProxyInstance(
                         StreamMessageCoalescer.JsCallbackTarget.class.getClassLoader(),
                         new Class<?>[]{StreamMessageCoalescer.JsCallbackTarget.class},
-                        (proxy, method, args) -> defaultValue(method.getReturnType())
+                        (proxy, method, args) -> {
+                            if ("callJavaScript".equals(method.getName())
+                                    || "isAvailable".equals(method.getName())) {
+                                return true;
+                            }
+                            return defaultValue(method.getReturnType());
+                        }
                 );
         StreamMessageCoalescer coalescer = new StreamMessageCoalescer(coalescerTarget);
         // handleFrontendReady replays pending dialogs through the host's permission

@@ -175,7 +175,7 @@ public class DeferredReloadTest {
         // The orphan-rescue case: something is parked, the stream is no longer
         // active, and no onStreamEnded edge arrived for this defer — drain now.
         assertEquals(ClaudeChatWindow.SafetyDrainAction.DRAIN,
-                ClaudeChatWindow.decideDeferredReloadSafety(false, true, false));
+                ClaudeChatWindow.decideDeferredReloadSafety(false, true, false, false));
     }
 
     @Test
@@ -183,26 +183,42 @@ public class DeferredReloadTest {
         // Parked but a stream is active: reloading now would race the streaming
         // append, so wait and re-check rather than drain.
         assertEquals(ClaudeChatWindow.SafetyDrainAction.RECHECK_LATER,
-                ClaudeChatWindow.decideDeferredReloadSafety(false, true, true));
+                ClaudeChatWindow.decideDeferredReloadSafety(false, true, true, false));
+    }
+
+    @Test
+    public void safetyRechecksWhileFinalSnapshotIsStillBeingBuilt() {
+        // Parked, stream already inactive, but the final snapshot has not reached
+        // the webview yet. Draining now would clear the live state before that
+        // snapshot is queued, so the parked reload must wait for it too — the same
+        // hazard as an active stream, one step later in the turn.
+        assertEquals(ClaudeChatWindow.SafetyDrainAction.RECHECK_LATER,
+                ClaudeChatWindow.decideDeferredReloadSafety(false, true, false, true));
+        assertEquals(ClaudeChatWindow.SafetyDrainAction.RECHECK_LATER,
+                ClaudeChatWindow.decideDeferredReloadSafety(false, true, true, true));
     }
 
     @Test
     public void safetyStopsWhenNothingParked() {
         // The fast onStreamEnded path already drained it: nothing to do, and the
-        // poll must stop (both idle and still-streaming variants).
+        // poll must stop (idle, still-streaming, and snapshot-pending variants).
         assertEquals(ClaudeChatWindow.SafetyDrainAction.DONE,
-                ClaudeChatWindow.decideDeferredReloadSafety(false, false, false));
+                ClaudeChatWindow.decideDeferredReloadSafety(false, false, false, false));
         assertEquals(ClaudeChatWindow.SafetyDrainAction.DONE,
-                ClaudeChatWindow.decideDeferredReloadSafety(false, false, true));
+                ClaudeChatWindow.decideDeferredReloadSafety(false, false, true, false));
+        assertEquals(ClaudeChatWindow.SafetyDrainAction.DONE,
+                ClaudeChatWindow.decideDeferredReloadSafety(false, false, false, true));
     }
 
     @Test
     public void safetyStopsWhenDisposedEvenIfParked() {
         // A disposed window must never drive a reload, parked or not.
         assertEquals(ClaudeChatWindow.SafetyDrainAction.DONE,
-                ClaudeChatWindow.decideDeferredReloadSafety(true, true, false));
+                ClaudeChatWindow.decideDeferredReloadSafety(true, true, false, false));
         assertEquals(ClaudeChatWindow.SafetyDrainAction.DONE,
-                ClaudeChatWindow.decideDeferredReloadSafety(true, true, true));
+                ClaudeChatWindow.decideDeferredReloadSafety(true, true, true, false));
+        assertEquals(ClaudeChatWindow.SafetyDrainAction.DONE,
+                ClaudeChatWindow.decideDeferredReloadSafety(true, true, false, true));
     }
 
     private static void awaitQuietly(CountDownLatch latch) {

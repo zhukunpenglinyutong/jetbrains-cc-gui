@@ -182,7 +182,10 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, trigg
   useEffect(() => {
     if (!isOpen) return;
 
+    let armed = false;
+    const timer = setTimeout(() => { armed = true; }, 0);
     const handleClickOutside = (event: MouseEvent) => {
+      if (!armed) return;
       if (
         dropdownRef.current &&
         !dropdownRef.current.contains(event.target as Node) &&
@@ -193,10 +196,7 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, trigg
       }
     };
 
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClickOutside);
@@ -259,7 +259,15 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, trigg
             <div
               key={provider.id}
               className={`selector-option ${selected ? 'selected' : ''}`}
+              role="button"
+              tabIndex={0}
               onClick={() => handleSelect(provider)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  handleSelect(provider);
+                }
+              }}
               title={description || getProviderDisplayName(provider, providerKind)}
             >
               <span className="codicon codicon-key" />

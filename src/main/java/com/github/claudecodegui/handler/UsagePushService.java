@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.TokenUsageUtils;
 import com.github.claudecodegui.util.IgnoreRuleMatcher;
 import com.github.claudecodegui.settings.CodemossSettingsService;
@@ -16,8 +17,6 @@ import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.vfs.VirtualFile;
-
-import java.util.List;
 
 /**
  * Handles usage statistics push and context bar refresh operations.
@@ -45,19 +44,27 @@ public class UsagePushService {
                 return;
             }
 
-            // Extract the latest usage information from the current session
-            List<ClaudeSession.Message> messages = session.getMessages();
-            JsonObject lastUsage = TokenUsageUtils.findLastUsageFromSessionMessages(
-                    messages,
-                    context.getCurrentProvider()
-            );
-            if (lastUsage == null) {
+            // Extract the latest usage information from the current session. The walk
+            // is read-only, so it borrows the live list under the message lock instead
+            // of paying for a full transport deep copy.
+            SessionState state = session.getState();
+            Integer usedTokens = null;
+            synchronized (state.getMessageStateLock()) {
+                JsonObject lastUsage = TokenUsageUtils.findLastUsageFromSessionMessages(
+                        state.getMessagesReference(),
+                        context.getCurrentProvider()
+                );
+                if (lastUsage != null) {
+                    usedTokens = TokenUsageUtils.extractContextTokens(
+                            lastUsage, context.getCurrentProvider());
+                }
+            }
+            if (usedTokens == null) {
                 // No provider snapshot is available yet. Keep the context unknown
                 // instead of presenting a static capacity as session truth.
                 clearUsageDisplay();
                 return;
             }
-            int usedTokens = TokenUsageUtils.extractContextTokens(lastUsage, context.getCurrentProvider());
 
             // Send update
             sendUsageUpdate(usedTokens, newMaxTokens);
@@ -83,14 +90,21 @@ public class UsagePushService {
             }
 
             String provider = session.getProvider();
-            JsonObject lastUsage = TokenUsageUtils.findLastUsageFromSessionMessages(
-                    session.getMessages(), provider);
-            if (lastUsage == null) {
+            SessionState state = session.getState();
+            Integer usedTokens = null;
+            int maxTokens = 0;
+            synchronized (state.getMessageStateLock()) {
+                JsonObject lastUsage = TokenUsageUtils.findLastUsageFromSessionMessages(
+                        state.getMessagesReference(), provider);
+                if (lastUsage != null) {
+                    usedTokens = TokenUsageUtils.extractContextTokens(lastUsage, provider);
+                    maxTokens = TokenUsageUtils.extractMaxTokens(lastUsage, fallbackMaxTokens);
+                }
+            }
+            if (usedTokens == null) {
                 return false;
             }
 
-            int usedTokens = TokenUsageUtils.extractContextTokens(lastUsage, provider);
-            int maxTokens = TokenUsageUtils.extractMaxTokens(lastUsage, fallbackMaxTokens);
             sendUsageUpdate(usedTokens, maxTokens);
             return true;
         } catch (Exception e) {

@@ -56,6 +56,14 @@ export function ImageBlock({ block, messageType, t }: ImageBlockProps) {
     <div
       className={`message-image-block ${messageType === 'user' ? 'user-image' : ''}`}
       onClick={handleImagePreview}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleImagePreview();
+        }
+      }}
       style={IMAGE_BLOCK_STYLE}
       title={t('chat.clickToPreview')}
     >

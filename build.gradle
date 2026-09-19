@@ -118,9 +118,11 @@ dependencies {
             bundledPlugin('org.jetbrains.plugins.terminal')
         }
 
-        // Git4Idea is bundled in all JetBrains IDEs that support Git
-        // (IC/PC/PY/RD). Required so we can run a real `git diff` via
-        // git4idea.commands.* for the Commit AI feature.
+        // Compile-time dependency only. Git4Idea is bundled in all JetBrains
+        // IDEs that support Git (IC/PC/PY/RD); plugin.xml declares it as an
+        // optional <depends> (git-features.xml) so CC GUI also installs in
+        // Git-less IDE configurations. Used for real `git diff` via
+        // git4idea.commands.* in the Commit AI feature.
         bundledPlugin('Git4Idea')
 
         instrumentationTools()

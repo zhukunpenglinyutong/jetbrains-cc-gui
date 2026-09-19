@@ -3,10 +3,13 @@
  * desktop-cc-gui engine/dsh/session.rs).
  *
  * Callers use the legacy spelling of every endpoint; `DshHostClient` maps it
- * onto the host's dialect. Only the payload *shapes* differ per dialect and
- * are adapted here: a modern session binds its working directory directly
- * (`session/create {cwd}`) instead of going through `workspace.create`, and
- * `session/prompt` requires a client-minted `requestId`.
+ * onto the host's dialect. The payload *shapes* differ per dialect and are
+ * adapted here, plus the one behavioral rule this module owns: a session is
+ * never created from a bare `cwd`. The host files such a session under
+ * "Ungrouped" and never adopts it by directory afterwards, so both dialects
+ * bind through the Workspace first (`workspace.create` → `session/create
+ * {workspaceId}`). `session/prompt` additionally requires a client-minted
+ * `requestId` on modern hosts.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -35,12 +38,19 @@ export function threadIdForSession(sessionId) {
   return `${THREAD_PREFIX}${sessionId}`;
 }
 
+/**
+ * Bind one project directory as a Workspace and return the host's value.
+ *
+ * Both dialects expose it, and it is idempotent per canonical directory: the
+ * host resolves the path first and answers `created: false` for a directory it
+ * already owns, so binding once per turn cannot duplicate the user's workspace
+ * list.
+ *
+ * @param {object} client - negotiated host client.
+ * @param {string} path - absolute project directory.
+ * @returns {Promise<object>} the host's `{ workspace }` value.
+ */
 export async function createWorkspace(client, path) {
-  if (isModern(client)) {
-    // Modern hosts bind a session to `cwd` directly; creating a workspace per
-    // turn would litter the user's workspace list for no benefit.
-    return null;
-  }
   return client.call('workspace.create', { path: String(path || '') });
 }
 
@@ -53,41 +63,26 @@ export function workspaceIdFromCreate(value) {
 }
 
 /**
- * Extract the session membership of a workspace.create result.
- * Returns { sessionIds: Set<string>|null, archivedSessionIds: Set<string> }.
- * A null sessionIds set means the host did not report membership (fall back
- * to cwd matching, same as desktop-cc-gui).
+ * Create — or idempotently adopt — one session owned by a Workspace.
+ *
+ * `cwd` is deliberately never sent: a session created from a cwd alone has no
+ * Workspace owner on the host, so it is filed under "Ungrouped" and stays
+ * there — the host groups by explicit ownership, and only its very first
+ * startup adopts sessions by directory. The Workspace, whose path is the
+ * session's directory, is what puts the session under its project.
+ *
+ * @param {object} client - negotiated host client.
+ * @param {string} workspaceId - Workspace that must own the session.
+ * @param {string} [sessionId] - existing session to adopt into that Workspace.
+ * @returns {Promise<string>} the session id the host settled on.
+ * @throws when no Workspace id is available: an ungrouped session is a bug, not
+ *   a fallback.
  */
-export function workspaceMembership(value) {
-  const workspace = value && value.workspace;
-  if (!workspace || typeof workspace !== 'object') {
-    return { sessionIds: null, archivedSessionIds: new Set() };
+export async function createSession(client, workspaceId, sessionId) {
+  if (typeof workspaceId !== 'string' || !workspaceId) {
+    throw new Error('dsh session.create requires a workspaceId to keep the session grouped');
   }
-  const sessionIds = Array.isArray(workspace.sessionIds)
-    ? new Set(workspace.sessionIds.filter((id) => typeof id === 'string'))
-    : null;
-  const archivedSessionIds = new Set(
-    Array.isArray(workspace.archivedSessionIds)
-      ? workspace.archivedSessionIds.filter((id) => typeof id === 'string')
-      : []
-  );
-  return { sessionIds, archivedSessionIds };
-}
-
-/**
- * @param {object} client
- * @param {string} [workspaceId] legacy workspace binding ('' when unused)
- * @param {string} [sessionId] explicit session id to adopt
- * @param {string} [cwd] working directory (modern hosts bind this directly)
- */
-export async function createSession(client, workspaceId, sessionId, cwd) {
-  const payload = {};
-  if (typeof workspaceId === 'string' && workspaceId) {
-    payload.workspaceId = workspaceId;
-  }
-  if (isModern(client) && typeof cwd === 'string' && cwd) {
-    payload.cwd = cwd;
-  }
+  const payload = { workspaceId };
   if (typeof sessionId === 'string' && sessionId.trim()) {
     payload.sessionId = sessionId.trim();
   }

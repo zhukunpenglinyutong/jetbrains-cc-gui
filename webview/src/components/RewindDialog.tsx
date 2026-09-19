@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useEffectEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export interface RewindRequest {
@@ -26,17 +26,18 @@ const RewindDialog = ({
 }: RewindDialogProps) => {
   const { t } = useTranslation();
 
+  const handleEscapeKey = useEffectEvent((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onCancel();
+    }
+  });
+
   useEffect(() => {
     if (isOpen) {
-      const handleEscape = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          onCancel();
-        }
-      };
-      window.addEventListener('keydown', handleEscape);
-      return () => window.removeEventListener('keydown', handleEscape);
+      window.addEventListener('keydown', handleEscapeKey);
+      return () => window.removeEventListener('keydown', handleEscapeKey);
     }
-  }, [isOpen, onCancel]);
+  }, [isOpen]);
 
   if (!isOpen || !request) {
     return null;

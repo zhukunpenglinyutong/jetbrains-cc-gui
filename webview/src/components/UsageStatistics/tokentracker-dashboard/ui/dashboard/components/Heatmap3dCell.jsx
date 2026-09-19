@@ -6,7 +6,7 @@ export function Heatmap3dCell({ cell, interactive, isHovered, onMouseEnter, onMo
     <g
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className="transition-all duration-200"
+      className="transition-[filter] duration-200"
       style={{
         filter: isHovered ? "brightness(1.15) drop-shadow(0 4px 6px rgba(0,0,0,0.15))" : "none",
         cursor: interactive ? "pointer" : "default"

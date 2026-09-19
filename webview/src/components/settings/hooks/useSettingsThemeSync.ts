@@ -1,11 +1,18 @@
 // hooks/useSettingsThemeSync.ts
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { applyDiffTheme, getStoredDiffTheme, type DiffThemeMode } from '../../../utils/diffTheme';
 import {
   applyChatBarThemeColor,
   CHAT_BAR_COLOR_STORAGE_KEY,
   isValidHexColor,
 } from '../../../utils/chatBarTheme';
+import { forceWebviewRepaint } from '../../../utils/forceWebviewRepaint';
+import {
+  FONT_SIZE_LEVEL_STORAGE_KEY,
+  fontSizeLevelToScale,
+  isValidFontSizeLevel,
+  parseFontSizeLevel,
+} from '../../../utils/fontScale';
 
 // Extend window type for IDE theme injection
 declare global {
@@ -51,12 +58,25 @@ export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
     return null;
   });
 
-  // Font size level state (1-6, default is 2, i.e. 90%)
-  const [fontSizeLevel, setFontSizeLevel] = useState<number>(() => {
-    const savedLevel = localStorage.getItem('fontSizeLevel');
-    const level = savedLevel ? parseInt(savedLevel, 10) : 2;
-    return level >= 1 && level <= 6 ? level : 2;
-  });
+  // Font size level state (1-6); default and level->scale mapping live in utils/fontScale.ts
+  const [fontSizeLevel, setFontSizeLevelState] = useState<number>(
+    () => parseFontSizeLevel(localStorage.getItem(FONT_SIZE_LEVEL_STORAGE_KEY))
+  );
+
+  // SettingsView is conditionally mounted, so the font-size effect runs once on
+  // mount with an unchanged scale; only a real level change needs the OSR nudge.
+  const isFirstFontSizeSyncEffect = useRef(true);
+
+  const setFontSizeLevel = useCallback((level: number) => {
+    if (!isValidFontSizeLevel(level)) {
+      return;
+    }
+    // Persist on the explicit change instead of in the effect: writing on
+    // mount would make a stored default indistinguishable from a deliberate
+    // pick and pin users to the default of the version they opened Settings in.
+    localStorage.setItem(FONT_SIZE_LEVEL_STORAGE_KEY, level.toString());
+    setFontSizeLevelState(level);
+  }, []);
 
   // Chat background color configuration
   const [chatBgColor, setChatBgColor] = useState<string>(() => {
@@ -107,22 +127,18 @@ export function useSettingsThemeSync(): UseSettingsThemeSyncReturn {
 
   // Font size scaling handler
   useEffect(() => {
-    // Map level to scale ratio
-    const fontSizeMap: Record<number, number> = {
-      1: 0.8,   // 80%
-      2: 0.9,   // 90% (default)
-      3: 1.0,   // 100%
-      4: 1.1,   // 110%
-      5: 1.2,   // 120%
-      6: 1.4,   // 140%
-    };
-    const scale = fontSizeMap[fontSizeLevel] || 1.0;
-
     // Apply to root element
-    document.documentElement.style.setProperty('--font-scale', scale.toString());
+    document.documentElement.style.setProperty('--font-scale', fontSizeLevelToScale(fontSizeLevel).toString());
 
-    // Save to localStorage
-    localStorage.setItem('fontSizeLevel', fontSizeLevel.toString());
+    if (isFirstFontSizeSyncEffect.current) {
+      isFirstFontSizeSyncEffect.current = false;
+      return;
+    }
+
+    // A pure CSS variable change does not invalidate the OSR compositor surface
+    // (Linux), leaving the rendered viewport stale until a real window resize.
+    // Nudge it like every other --font-scale write path does.
+    forceWebviewRepaint('font-scale-change');
   }, [fontSizeLevel]);
 
   // Chat background color handler

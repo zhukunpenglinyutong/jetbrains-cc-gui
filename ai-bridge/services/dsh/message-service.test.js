@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { splitModelTuple } from './message-service.js';
+import { bindWorkspaceSession, splitModelTuple } from './message-service.js';
 import { buildPromptContent } from './session.js';
 
 test('splitModelTuple splits "<provider>/<model>" tuples', () => {
@@ -45,4 +45,77 @@ test('buildPromptContent skips image parts without data and defaults mediaType',
   ]);
   assert.equal(content.length, 2);
   assert.deepEqual(content[1], { type: 'image', mediaType: 'image/png', data: 'AAAA' });
+});
+
+/** Minimal host double: records the RPCs the workspace/session binding makes. */
+function stubHost(responses = {}) {
+  const calls = [];
+  return {
+    calls,
+    async call(method, payload) {
+      calls.push({ method, payload });
+      const response = responses[method];
+      if (response instanceof Error) {
+        throw response;
+      }
+      return response;
+    },
+  };
+}
+
+test('bindWorkspaceSession binds a new session to its project workspace', async () => {
+  const client = stubHost({
+    'workspace.create': { workspace: { workspaceId: 'w1' } },
+    'session.create': { sessionId: 's1' },
+  });
+  assert.equal(await bindWorkspaceSession(client, 'D:/proj'), 's1');
+  assert.deepEqual(client.calls, [
+    { method: 'workspace.create', payload: { path: 'D:/proj' } },
+    { method: 'session.create', payload: { workspaceId: 'w1' } },
+  ]);
+});
+
+test('bindWorkspaceSession re-binds a resumed thread into the workspace', async () => {
+  const client = stubHost({
+    'workspace.create': { workspace: { workspaceId: 'w1' } },
+    'session.create': { sessionId: 's9' },
+  });
+  assert.equal(await bindWorkspaceSession(client, 'D:/proj', 'dsh:s9'), 's9');
+  assert.deepEqual(client.calls, [
+    { method: 'workspace.create', payload: { path: 'D:/proj' } },
+    { method: 'session.create', payload: { workspaceId: 'w1', sessionId: 's9' } },
+  ]);
+});
+
+test('a refused re-bind never fails the turn', async () => {
+  const client = stubHost({
+    'workspace.create': { workspace: { workspaceId: 'w1' } },
+    'session.create': new Error('session/conflict: cwd differs'),
+  });
+  assert.equal(await bindWorkspaceSession(client, 'D:/proj', 's9'), 's9');
+});
+
+test('a failed workspace binding is loud and keeps its message', async () => {
+  const unreachable = stubHost({ 'workspace.create': new Error('boom') });
+  await assert.rejects(
+    () => bindWorkspaceSession(unreachable, 'D:/proj'),
+    /dsh workspace\.create failed: boom/
+  );
+
+  const noId = stubHost({ 'workspace.create': { workspace: {} } });
+  await assert.rejects(
+    () => bindWorkspaceSession(noId, 'D:/proj'),
+    /dsh workspace\.create failed: dsh workspace\.create missing workspaceId/
+  );
+});
+
+test('a new session the host refuses is loud', async () => {
+  const client = stubHost({
+    'workspace.create': { workspace: { workspaceId: 'w1' } },
+    'session.create': new Error('nope'),
+  });
+  await assert.rejects(
+    () => bindWorkspaceSession(client, 'D:/proj'),
+    /dsh session\.create failed: nope/
+  );
 });

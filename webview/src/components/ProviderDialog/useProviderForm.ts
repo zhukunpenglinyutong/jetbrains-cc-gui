@@ -203,8 +203,15 @@ export function useProviderForm({ isOpen, provider, onClose, onSave }: UseProvid
     }
   };
 
-  // Initialize form
-  useEffect(() => {
+  // Initialize form via render-time adjustment: re-initializes whenever the
+  // dialog is (re-)opened or the edited provider changes, without an extra
+  // commit. `null` sentinel also covers being mounted while already open.
+  const [prevFormKey, setPrevFormKey] = useState<{
+    isOpen: boolean;
+    provider?: ProviderConfig | null;
+  } | null>(null);
+  if (prevFormKey === null || prevFormKey.isOpen !== isOpen || prevFormKey.provider !== provider) {
+    setPrevFormKey({ isOpen, provider });
     if (isOpen) {
       if (provider) {
         // Edit mode
@@ -243,7 +250,7 @@ export function useProviderForm({ isOpen, provider, onClose, onSave }: UseProvid
       setShowApiKey(false);
       setJsonError('');
     }
-  }, [isOpen, provider]);
+  }
 
   // Close on ESC key press
   useEffect(() => {

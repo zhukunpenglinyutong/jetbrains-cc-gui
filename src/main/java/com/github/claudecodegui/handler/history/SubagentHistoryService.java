@@ -13,13 +13,16 @@ import com.google.gson.JsonSyntaxException;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.util.concurrency.AppExecutorUtil;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -37,6 +40,13 @@ class SubagentHistoryService {
     private static final Pattern SAFE_REQUEST_ID = Pattern.compile("[A-Za-z0-9_:-]{1,256}");
     private static final Gson GSON = new Gson();
     private static final int MAX_JSONL_LINES = 50_000;
+    /**
+     * How long a torn tail may sit unmodified before the writer is presumed gone.
+     * A live writer completes a mid-append line within milliseconds; a line still
+     * torn after this grace means the process crashed or was killed, and polling
+     * must not report "running" forever.
+     */
+    private static final long TORN_TAIL_GRACE_MS = 10_000;
 
     private final HandlerContext context;
     private final CodexSubagentHistoryLoader codexLoader;
@@ -103,6 +113,15 @@ class SubagentHistoryService {
             response.addProperty("completed", hasCompleted(messages));
             response.addProperty("status", hasCompleted(messages) ? "completed" : "running");
             response.add("messages", messages);
+        } catch (TranscriptIncompleteException e) {
+            // The last line is still being appended: the subagent is healthy and
+            // the panel's next poll retries. Reported as running with no error —
+            // SubagentProcessError renders any error for Claude regardless of
+            // status, which would flash a failure banner on a healthy subagent.
+            LOG.debug("[SubagentHistory] Subagent log still being written: " + e.getMessage());
+            response.addProperty("success", false);
+            response.addProperty("completed", false);
+            response.addProperty("status", "running");
         } catch (Exception e) {
             LOG.warn("[SubagentHistory] Failed to load subagent log: " + e.getMessage());
             response.addProperty("success", false);
@@ -282,8 +301,19 @@ class SubagentHistoryService {
 
     private Path resolveSubagentFile(String sessionId, String agentId) {
         validateId("agentId", agentId);
-        Path projectDir = Path.of(NodeDetector.resolveHomeForFileOps(), ".claude", "projects", projectKey());
-        return projectDir.resolve(sessionId)
+        List<String> projectKeys = projectKeys();
+        for (String projectKey : projectKeys) {
+            Path file = Path.of(NodeDetector.resolveHomeForFileOps(), ".claude", "projects", projectKey)
+                    .resolve(sessionId)
+                    .resolve("subagents")
+                    .resolve("agent-" + agentId + ".jsonl")
+                    .normalize();
+            if (Files.isRegularFile(file)) {
+                return file;
+            }
+        }
+        return Path.of(NodeDetector.resolveHomeForFileOps(), ".claude", "projects", projectKeys.get(0))
+                .resolve(sessionId)
                 .resolve("subagents")
                 .resolve("agent-" + agentId + ".jsonl")
                 .normalize();
@@ -293,21 +323,36 @@ class SubagentHistoryService {
         if (description == null || description.isEmpty()) {
             throw new IllegalArgumentException("Missing agentId and description");
         }
-        Path subagentsDir = Path.of(NodeDetector.resolveHomeForFileOps(), ".claude", "projects", projectKey())
-                .resolve(sessionId)
-                .resolve("subagents")
-                .normalize();
-        if (!Files.isDirectory(subagentsDir)) {
-            return subagentsDir.resolve("missing.jsonl");
+
+        List<Path> subagentsDirs = new ArrayList<>();
+        for (String projectKey : projectKeys()) {
+            Path subagentsDir = Path.of(NodeDetector.resolveHomeForFileOps(), ".claude", "projects", projectKey)
+                    .resolve(sessionId)
+                    .resolve("subagents")
+                    .normalize();
+            if (Files.isDirectory(subagentsDir)) {
+                subagentsDirs.add(subagentsDir);
+            }
+        }
+        if (subagentsDirs.isEmpty()) {
+            return Path.of(NodeDetector.resolveHomeForFileOps(), ".claude", "projects", projectKeys().get(0))
+                    .resolve(sessionId)
+                    .resolve("subagents")
+                    .resolve("missing.jsonl");
         }
 
-        try (var stream = Files.list(subagentsDir)) {
-            Optional<Path> meta = stream
-                    .filter(path -> path.getFileName().toString().endsWith(".meta.json"))
-                    .filter(path -> description.equals(readDescription(path)))
-                    .max(Comparator.comparingLong(this::lastModifiedMillis));
-            return meta.map(this::metaToJsonl).orElse(subagentsDir.resolve("missing.jsonl"));
+        List<Path> metaFiles = new ArrayList<>();
+        for (Path subagentsDir : subagentsDirs) {
+            try (Stream<Path> stream = Files.list(subagentsDir)) {
+                stream.filter(path -> path.getFileName().toString().endsWith(".meta.json"))
+                        .filter(path -> description.equals(readDescription(path)))
+                        .forEach(metaFiles::add);
+            }
         }
+        return metaFiles.stream()
+                .max(Comparator.comparingLong(this::lastModifiedMillis))
+                .map(this::metaToJsonl)
+                .orElse(subagentsDirs.get(0).resolve("missing.jsonl"));
     }
 
     private String readDescription(Path metaFile) {
@@ -340,30 +385,135 @@ class SubagentHistoryService {
         return null;
     }
 
-    private String projectKey() {
+    private List<String> projectKeys() {
         String rawPath = context.getProject().getBasePath();
         String nodePath = NodeDetector.getInstance().getCachedNodePath();
         String basePath = NodeDetector.isWslPath(nodePath) ? NodeDetector.convertToWslPath(rawPath) : rawPath;
         if (basePath == null || basePath.isEmpty()) {
             throw new IllegalStateException("Project base path is null");
         }
-        return PathUtils.sanitizePath(basePath);
+        return PathUtils.getSanitizedPathCandidates(basePath);
     }
 
-    private JsonArray readJsonl(Path file) throws IOException {
+    /**
+     * Return the preferred project key for callers that only need one location.
+     *
+     * <p>The single-key method remains as a compatibility seam for existing tests and
+     * integrations; subagent lookup uses {@link #projectKeys()} to support legacy paths.
+     *
+     * @return the canonical project key
+     */
+    private String projectKey() {
+        return projectKeys().get(0);
+    }
+
+    /**
+     * Signals that a transcript's last line is still being written.
+     *
+     * <p>Distinct from a read failure: the subagent is mid-append, so the caller
+     * reports it as still running and lets the next poll retry, instead of
+     * surfacing an error for a healthy subagent.</p>
+     */
+    static class TranscriptIncompleteException extends IOException {
+
+        private static final long serialVersionUID = 1L;
+
+        /**
+         * Creates an exception for a transcript whose writer is mid-append.
+         *
+         * @param message description of the incomplete state
+         */
+        TranscriptIncompleteException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Read a JSONL subagent transcript, skipping interior corruption but refusing
+     * a transcript whose last line is torn.
+     *
+     * <p>Package-private and static so the torn-tail decision is unit-testable
+     * without a HandlerContext.</p>
+     *
+     * @param file transcript to read
+     * @return the parsed records, capped at {@link #MAX_JSONL_LINES}
+     * @throws IOException when the writer is still mid-append
+     */
+    static JsonArray readJsonl(Path file) throws IOException {
         JsonArray messages = new JsonArray();
-        try (Stream<String> lines = Files.lines(file, StandardCharsets.UTF_8)) {
-            lines.filter(s -> !s.isBlank())
-                    .limit(MAX_JSONL_LINES)
-                    .forEach(line -> {
-                        try {
-                            messages.add(JsonParser.parseString(line));
-                        } catch (JsonSyntaxException e) {
-                            LOG.warn("Skipping malformed JSONL line in subagent history: " + e.getMessage());
-                        }
-                    });
+        // True while the most recent non-blank line failed to parse. A valid line
+        // clears it, so this ends up describing the LAST non-blank line alone —
+        // which is exactly what a torn tail is: only a malformed final line means
+        // the writer is still mid-append. Interior corruption followed by valid
+        // lines clears the flag and must not block reads forever, since retries
+        // would re-read the same permanently damaged bytes.
+        boolean tailMalformed = false;
+        int acceptedLines = 0;
+        // Streaming keeps memory flat for large subagent transcripts; every line still
+        // participates in the torn-tail check even after the accepted-lines cap.
+        // Decode with REPLACE, not Files.lines' REPORT: a mid-append read whose write
+        // boundary splits a multi-byte UTF-8 character (CJK text, emoji) must degrade
+        // to an unparseable last line — i.e. the torn-tail path below — instead of
+        // throwing UncheckedIOException, which the caller cannot tell from a genuine
+        // read failure and would surface as an error banner on a healthy subagent.
+        // This mirrors the Node bridge, whose utf8 decoding emits U+FFFD.
+        try (BufferedReader reader = newBufferedLenientReader(file)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.isBlank()) {
+                    continue;
+                }
+                try {
+                    JsonElement parsed = JsonParser.parseString(line);
+                    tailMalformed = false;
+                    if (acceptedLines < MAX_JSONL_LINES) {
+                        messages.add(parsed);
+                        acceptedLines++;
+                    }
+                } catch (JsonSyntaxException e) {
+                    tailMalformed = true;
+                    LOG.warn("Malformed JSONL line in subagent history: " + e.getMessage());
+                }
+            }
+        }
+        if (tailMalformed) {
+            // A live writer finishes its mid-append line within milliseconds. If the
+            // file has not changed beyond the grace window, the writer is gone and
+            // the tail will never heal: serve the parseable prefix (the interior
+            // corruption policy) instead of reporting "running" forever.
+            if (isStaleTornTail(file)) {
+                LOG.warn("Serving subagent history with a permanently torn tail (writer inactive): " + file);
+                return messages;
+            }
+            throw new TranscriptIncompleteException(
+                    "Subagent history is incomplete; retry after the history writer finishes");
         }
         return messages;
+    }
+
+    /**
+     * Open a reader whose UTF-8 decoder replaces malformed input with U+FFFD
+     * instead of throwing.
+     */
+    private static BufferedReader newBufferedLenientReader(Path file) throws IOException {
+        return new BufferedReader(new InputStreamReader(Files.newInputStream(file),
+                StandardCharsets.UTF_8.newDecoder()
+                        .onMalformedInput(CodingErrorAction.REPLACE)
+                        .onUnmappableCharacter(CodingErrorAction.REPLACE)));
+    }
+
+    /**
+     * Return whether a torn tail has outlived {@link #TORN_TAIL_GRACE_MS}, meaning
+     * the writer is presumed dead. An unreadable timestamp fails safe: keep
+     * reporting the transcript as incomplete.
+     */
+    private static boolean isStaleTornTail(Path file) {
+        try {
+            long ageMs = System.currentTimeMillis() - Files.getLastModifiedTime(file).toMillis();
+            return ageMs > TORN_TAIL_GRACE_MS;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     static boolean hasCompleted(JsonArray messages) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DropdownProps, DropdownItemData } from '../types';
 import { DropdownItem } from './DropdownItem';
@@ -29,28 +29,33 @@ export const Dropdown = ({
   void _selectedIndex;
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Read the latest onClose without re-subscribing the listener on every render.
+  const notifyClose = useEffectEvent(() => {
+    onClose?.();
+  });
+
   /**
    * Close on outside click
    */
   useEffect(() => {
     if (!isVisible) return;
 
+    // Delay arming the listener to prevent the opening click from closing it
+    let armed = false;
+    const timer = setTimeout(() => { armed = true; }, 0);
     const handleClickOutside = (e: MouseEvent) => {
+      if (!armed) return;
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        onClose?.();
+        notifyClose();
       }
     };
 
-    // Delay adding event listener to prevent immediate trigger
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isVisible]); // Remove onClose from dependencies - it's stable from props
+  }, [isVisible]);
 
   if (!isVisible || !position) {
     return null;

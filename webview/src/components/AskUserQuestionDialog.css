@@ -301,6 +301,25 @@
   margin: -8px 0 0 0;
 }
 
+/* Supporting detail (a plan under review) shown above the options */
+.question-detail {
+  max-height: 40vh;
+  overflow: auto;
+  margin: 0 0 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, rgba(128, 128, 128, 0.35));
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  font-size: 13px;
+}
+
+.question-detail-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
 /* "Other" option styles */
 .question-option.other-option {
   border-style: dashed;

@@ -21,14 +21,14 @@ import static org.junit.Assert.assertTrue;
  * catch regressions in the actual onStreamStart/onStreamEnd lifecycle: the
  * {@code streamActive} transition and per-turn repetition. The deferred-reload
  * drain no longer hangs off this lifecycle — it is owned by the adapter's
- * stream-end callback, which fires only after the final snapshot has entered
- * the ordered webview queue.
+ * stream-end callback, which fires only after the final snapshot has been
+ * accepted by the ordered webview queue.
  */
 public class StreamMessageCoalescerStreamEndHookTest {
 
     /** Minimal JsCallbackTarget that records nothing; lifecycle only. */
     private static final class CountingTarget implements StreamMessageCoalescer.JsCallbackTarget {
-        @Override public void callJavaScript(String functionName, String... args) {}
+        @Override public boolean callJavaScript(String functionName, String... args) { return true; }
         @Override public boolean isDisposed() { return false; }
         @Override public HandlerContext getHandlerContext() { return null; }
     }
@@ -184,6 +184,113 @@ public class StreamMessageCoalescerStreamEndHookTest {
                 .getAsJsonArray("content")
                 .get(0).getAsJsonObject()
                 .get("input").getAsString());
+    }
+
+    @Test
+    public void sessionStateSnapshotDoesNotShareMutableRawTrees() {
+        SessionState state = new SessionState();
+        JsonObject block = new JsonObject();
+        block.addProperty("type", "tool_use");
+        block.addProperty("id", "tool-1");
+        JsonArray content = new JsonArray();
+        content.add(block);
+        JsonObject message = new JsonObject();
+        message.add("content", content);
+        JsonObject raw = new JsonObject();
+        raw.add("message", message);
+        state.addMessage(new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, "", raw));
+
+        List<ClaudeSession.Message> snapshot = state.getMessagesSnapshot();
+        block.addProperty("id", "tool-2");
+        content.add(new JsonObject());
+
+        JsonArray snapshotContent = snapshot.get(0).raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals(1, snapshotContent.size());
+        assertEquals("tool-1", snapshotContent.get(0).getAsJsonObject().get("id").getAsString());
+    }
+
+    @Test
+    public void resetDeliveryBaselineStillRunsAPendingAfterFlushCallback() {
+        // The stream-end signal rides flush()'s afterFlush callback. A page reload
+        // during streaming drops the queued snapshot, but it must NOT drop that
+        // callback: without it the frontend waits out the adapter's multi-second
+        // fallback before it learns the turn ended.
+        List<String> callbacks = new ArrayList<>();
+        StreamMessageCoalescer coalescer = new StreamMessageCoalescer(new CountingTarget());
+        try {
+            coalescer.onStreamStart();
+            coalescer.flush((List<ClaudeSession.Message>) null, sequence -> callbacks.add("after-flush:" + sequence));
+
+            coalescer.resetDeliveryBaseline();
+
+            assertEquals(1, callbacks.size());
+            assertTrue(callbacks.get(0).startsWith("after-flush:"));
+        } finally {
+            coalescer.dispose();
+        }
+    }
+
+    @Test
+    public void parkedSnapshotStateDoesNotReportBuildPending() {
+        StreamMessageCoalescer coalescer = new StreamMessageCoalescer(new CountingTarget());
+        try {
+            coalescer.flush(messages(4), null);
+            awaitSnapshotBuildIdle(coalescer);
+            assertFalse("serialization has finished", coalescer.isSnapshotBuildPending());
+
+            // The live state is retained so the next ready page can replay it, but
+            // nothing is being serialized. isSnapshotBuildPending must stay false: the
+            // deferred-reload pollers re-arm on it, so reporting retained state as work
+            // in flight would spin them on a condition they cannot resolve.
+            coalescer.resetDeliveryBaseline();
+
+            assertFalse("a parked snapshot is not serialization work",
+                    coalescer.isSnapshotBuildPending());
+        } finally {
+            coalescer.dispose();
+        }
+    }
+
+    @Test
+    public void usagePushFailureAfterAcceptStillRunsTheAfterFlush() {
+        // The snapshot was accepted by the queue; a failure in the trailing usage
+        // push (foreign HandlerContext code, e.g. mid-teardown) must not park the
+        // delivered snapshot's afterFlush — that callback carries the stream-end
+        // signal, and parking it would stall the frontend until the fallback alarm.
+        List<String> callbacks = new ArrayList<>();
+        StreamMessageCoalescer coalescer = new StreamMessageCoalescer(
+                new StreamMessageCoalescer.JsCallbackTarget() {
+                    @Override public boolean callJavaScript(String functionName, String... args) {
+                        return true;
+                    }
+                    @Override public boolean isDisposed() { return false; }
+                    @Override public HandlerContext getHandlerContext() {
+                        throw new IllegalStateException("handler context torn down");
+                    }
+                });
+        try {
+            coalescer.flush(messages(2), sequence -> callbacks.add("after-flush:" + sequence));
+            awaitSnapshotBuildIdle(coalescer);
+
+            assertEquals("afterFlush runs exactly once for the delivered snapshot",
+                    1, callbacks.size());
+        } finally {
+            coalescer.dispose();
+        }
+    }
+
+    private static void awaitSnapshotBuildIdle(StreamMessageCoalescer coalescer) {
+        long deadline = System.currentTimeMillis() + 5_000L;
+        while (coalescer.isSnapshotBuildPending() && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(5L);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
     }
 
     private static List<ClaudeSession.Message> messages(int count) {

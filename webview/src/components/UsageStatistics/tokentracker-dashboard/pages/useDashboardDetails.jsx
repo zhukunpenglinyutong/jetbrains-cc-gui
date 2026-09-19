@@ -1,6 +1,6 @@
 // Details-table state for DashboardPage: sort, pagination, daily-breakdown
 // rows, and the cell/date render helpers handed to DashboardView.
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { copy } from "../lib/copy";
 import { getDetailsSortColumns, sortDailyRows } from "../lib/daily";
 import { DETAILS_PAGE_SIZE, paginateRows, trimLeadingZeroMonths } from "../lib/details";
@@ -34,13 +34,18 @@ export function useDashboardDetails({
   const dailyBreakdownDateKey = "day";
   const dailyBreakdownColumns = useMemo(() => getDetailsSortColumns(dailyBreakdownDateKey), []);
   const [sort, setSort] = useState(() => ({ key: "day", dir: "desc" }));
-  useEffect(() => {
+  // Render-time adjustment (React-sanctioned): when the period's date key
+  // changes, coerce a stale sort key — same observable result as the old
+  // effect, without an extra commit.
+  const [prevDetailsDateKey, setPrevDetailsDateKey] = useState(detailsDateKey);
+  if (prevDetailsDateKey !== detailsDateKey) {
+    setPrevDetailsDateKey(detailsDateKey);
     setSort((prev) => {
       if (!DETAILS_DATE_KEYS.has(prev.key)) return prev;
       if (prev.key === detailsDateKey) return prev;
       return { key: detailsDateKey, dir: prev.dir };
     });
-  }, [detailsDateKey]);
+  }
   const effectiveSort = useMemo(() => {
     if (DETAILS_DATE_KEYS.has(sort.key) && sort.key !== detailsDateKey) {
       return { ...sort, key: detailsDateKey };
@@ -84,17 +89,29 @@ export function useDashboardDetails({
     return count > 0 ? count : 1;
   }, [period, sortedDetails.length]);
   const [detailsPage, setDetailsPage] = useState(0);
-  useEffect(() => {
-    if (!DETAILS_PAGED_PERIODS.has(period)) {
-      setDetailsPage(0);
-      return;
-    }
-    setDetailsPage((prev) => Math.min(prev, detailsPageCount - 1));
-  }, [detailsPageCount, period]);
-  useEffect(() => {
-    if (!DETAILS_PAGED_PERIODS.has(period)) return;
+  // Render-time adjustments replacing the old reset/clamp effects:
+  // any period or sort change restarts pagination at page 0…
+  const [prevPageScope, setPrevPageScope] = useState({
+    period,
+    sortKey: sort.key,
+    sortDir: sort.dir,
+  });
+  if (
+    prevPageScope.period !== period ||
+    prevPageScope.sortKey !== sort.key ||
+    prevPageScope.sortDir !== sort.dir
+  ) {
+    setPrevPageScope({ period, sortKey: sort.key, sortDir: sort.dir });
     setDetailsPage(0);
-  }, [period, sort.dir, sort.key]);
+  }
+  // …and a shrinking page count clamps the current page.
+  const [prevPageCount, setPrevPageCount] = useState(detailsPageCount);
+  if (prevPageCount !== detailsPageCount) {
+    setPrevPageCount(detailsPageCount);
+    setDetailsPage((prev) =>
+      DETAILS_PAGED_PERIODS.has(period) ? Math.min(prev, detailsPageCount - 1) : 0,
+    );
+  }
   const pagedDetails = useMemo(() => {
     if (!DETAILS_PAGED_PERIODS.has(period)) return sortedDetails;
     return paginateRows(sortedDetails, detailsPage, DETAILS_PAGE_SIZE);

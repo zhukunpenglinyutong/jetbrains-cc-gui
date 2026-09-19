@@ -44,6 +44,7 @@ export default function JsonConfigSection({
         <div className="json-editor-wrapper">
           <textarea
             className="json-editor"
+            aria-label={t('settings.provider.dialog.jsonConfig')}
             value={jsonConfig}
             onChange={onJsonChange}
             placeholder={`{

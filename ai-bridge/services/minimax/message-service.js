@@ -8,19 +8,22 @@
  *   minimax exec --output-format stream-json --cwd <dir> --permission <policy>
  *        [--model <provider/model>] [--session <id>] "<prompt>"
  *
- * Verified stream event types (mcode >= 0.2.x):
- *   {"type":"heartbeat","turnId":...}
- *   {"type":"message","message":{"role":"user"|"assistant","content",...,"usage":{...}}}
- *   {"type":"generic","eventType":...}                       (UI noise)
- *   {"type":"session-status","status":"started"|"finished"}
- *   {"type":"delta","role":"assistant","thinking":"..."|"content":"...",...}
- *   {"type":"delta","role":"assistant","toolCalls":[{"id","name","status","input","output"}]}
- *   {"type":"done","turnId":...}
- *   {"type":"exec.result","sessionId":"mvs_...","answer":...,"status":"succeeded"}
+ * mcode >= 0.4.x stream events (schemaVersion 1 envelope, item-based):
+ *   {"type":"exec.started"|"session.started"|"turn.started",...}
+ *   {"type":"item.started"|"item.updated","item":{"id","type","contentDelta"}}
+ *   {"type":"item.completed","item":{"id","type","content"}}
+ *   item.type: "reasoning" (thinking) | "agent_message" (answer text)
+ *            | "tool_call" (payload in item.toolCall: {id,name,status,input,output})
+ *   {"type":"turn.completed","usage":{...},"durationMs":...}
+ *   {"type":"turn.failed","status":"failed","error":{category,message,...}}
+ *   {"type":"exec.completed","result":{"type":"exec.result","sessionId","status",...}}
  *
- * toolCalls status: 1 = call started, 2 = finished (with output.content[]).
- * The CLI keeps running after exec.result — the child tree is killed once the
- * result line is seen (shouldTerminate in runCliStreaming).
+ * toolCall status: 1 = call started (with input), 2 = finished (with
+ * output.content[]); 4/5 are queued/running pre-states with no payload yet.
+ * Legacy mcode 0.2.x flat events ({"type":"delta",...}, {"type":"message",...},
+ * top-level {"type":"exec.result",...}) are still parsed for compatibility.
+ * The CLI keeps running after exec.completed — the child tree is killed once
+ * the result line is seen (shouldTerminate in runCliStreaming).
  *
  * Auth/config comes from the MiniMax CLI native home (~/.minimax).
  */
@@ -125,6 +128,21 @@ function parseToolArguments(raw) {
 }
 
 /**
+ * Extract a human-readable message from mcode 0.4.x error payloads, which can
+ * be a string or an object like {category, message, retryable}.
+ */
+function extractErrorText(...candidates) {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+    if (candidate && typeof candidate === 'object'
+      && typeof candidate.message === 'string' && candidate.message.trim()) {
+      return candidate.message.trim();
+    }
+  }
+  return '';
+}
+
+/**
  * Map one mcode stream-json line onto a small event descriptor.
  */
 export function parseMiniMaxStreamLine(line) {
@@ -154,9 +172,9 @@ export function parseMiniMaxStreamLine(line) {
           const id = typeof call.id === 'string' ? call.id : '';
           const name = typeof call.name === 'string' && call.name ? call.name : 'tool';
           const toolCall = { id: id || `minimax-tool-${name}`, name, input: parseToolArguments(call.input) };
-          if (call.status === 2) {
+          if (Number(call.status) === 2) {
             events.push({ kind: 'tool_done', call: toolCall, output: extractToolOutputText(call.output) });
-          } else if (call.status === 1) {
+          } else if (Number(call.status) === 1) {
             events.push({ kind: 'tool_start', call: toolCall });
           }
         }
@@ -173,16 +191,89 @@ export function parseMiniMaxStreamLine(line) {
       }
       return { kind: 'other' };
     }
+    case 'item.started':
+    case 'item.updated':
+    case 'item.completed': {
+      const item = value.item;
+      if (!item || typeof item !== 'object') return { kind: 'other' };
+      const itemType = typeof item.type === 'string' ? item.type : '';
+      const messageId = typeof item.id === 'string' ? item.id : '';
+
+      if (itemType === 'tool_call') {
+        const call = item.toolCall;
+        if (!call || typeof call !== 'object') return { kind: 'other' };
+        const id = typeof call.id === 'string' ? call.id : '';
+        const name = typeof call.name === 'string' && call.name ? call.name : 'tool';
+        const toolCall = { id: id || `minimax-tool-${name}`, name, input: parseToolArguments(call.input) };
+        if (Number(call.status) === 2) {
+          return { kind: 'tool_done', call: toolCall, output: extractToolOutputText(call.output) };
+        }
+        if (Number(call.status) === 1) {
+          return { kind: 'tool_start', call: toolCall };
+        }
+        // 4/5 are queued/running pre-states with no new payload.
+        return { kind: 'other' };
+      }
+
+      // reasoning / agent_message stream deltas in contentDelta and repeat the
+      // full text in content on item.completed.
+      const isFinal = type === 'item.completed';
+      const data = isFinal
+        ? (typeof item.content === 'string' ? item.content : '')
+        : (typeof item.contentDelta === 'string' ? item.contentDelta : '');
+      if (!data) return { kind: 'other' };
+
+      if (itemType === 'reasoning') {
+        return isFinal
+          ? { kind: 'completed_item', itemType, messageId, content: data }
+          : { kind: 'thinking', data, messageId };
+      }
+      if (itemType === 'agent_message') {
+        return isFinal
+          ? { kind: 'completed_item', itemType, messageId, content: data }
+          : { kind: 'text', data, messageId };
+      }
+      return { kind: 'other' };
+    }
+    case 'turn.failed': {
+      // 0.4.x turn failures carry a structured error object; surface it so a
+      // failed turn is not silently swallowed before exec.completed arrives.
+      const errorMessage = extractErrorText(value.error, value.message);
+      if (!errorMessage) return { kind: 'other' };
+      return { kind: 'turn_failed', errorMessage };
+    }
+    case 'turn.completed': {
+      if (value.usage && typeof value.usage === 'object') {
+        return { kind: 'usage', usage: value.usage };
+      }
+      return { kind: 'other' };
+    }
+    case 'exec.completed': {
+      const result = value.result && typeof value.result === 'object' ? value.result : {};
+      const sessionId = typeof result.sessionId === 'string' && result.sessionId.trim()
+        ? result.sessionId.trim()
+        : (typeof value.sessionId === 'string' ? value.sessionId.trim() : '');
+      const status = typeof result.status === 'string' ? result.status : '';
+      const answer = typeof result.answer === 'string' ? result.answer : '';
+      // Anything other than an explicit success counts as failure: the stream
+      // is terminated on this line, so a failed run must not end in silence.
+      const failed = status !== '' && status.toLowerCase() !== 'succeeded';
+      const errorMessage = failed
+        ? extractErrorText(result.error, result.message, value.error, value.message)
+        : '';
+      return { kind: 'result', sessionId, status, failed, errorMessage, answer };
+    }
     case 'exec.result': {
       const sessionId = typeof value.sessionId === 'string' ? value.sessionId.trim() : '';
       const status = typeof value.status === 'string' ? value.status : '';
+      const answer = typeof value.answer === 'string' ? value.answer : '';
       const errorMessage = typeof value.error === 'string' && value.error.trim()
         ? value.error.trim()
         : (typeof value.message === 'string' ? value.message.trim() : '');
       // Anything other than an explicit success counts as failure: the stream
       // is terminated on this line, so a failed run must not end in silence.
       const failed = status !== '' && status.toLowerCase() !== 'succeeded';
-      return { kind: 'result', sessionId, status, failed, errorMessage };
+      return { kind: 'result', sessionId, status, failed, errorMessage, answer };
     }
     default:
       return { kind: 'other' };
@@ -268,6 +359,12 @@ export async function sendMessage(
   const seenToolResultIds = new Set();
   const streamedContentMessageIds = new Set();
   const streamedThinkingMessageIds = new Set();
+  // Dedup keys for stream items that carry no id: fall back to one key per
+  // item kind so a completed item without an id still emits its full text once
+  // (and only when no delta for that kind already streamed).
+  const ANON_CONTENT_KEY = '<anon-agent_message>';
+  const ANON_THINKING_KEY = '<anon-reasoning>';
+  let sendErrorEmitted = false;
 
   const handleEvent = (event) => {
     if (!event || typeof event !== 'object') return;
@@ -317,9 +414,43 @@ export async function sendMessage(
           }
         }
         break;
+      case 'completed_item': {
+        // 0.4.x item.completed carries the full text; skip items whose deltas
+        // already streamed so the answer is not duplicated.
+        if (!event.content) break;
+        if (event.itemType === 'agent_message') {
+          const key = event.messageId || ANON_CONTENT_KEY;
+          if (!streamedContentMessageIds.has(key)) {
+            streamedContentMessageIds.add(key);
+            emitJsonStringMarker('[CONTENT_DELTA]', event.content);
+          }
+        } else if (event.itemType === 'reasoning') {
+          const key = event.messageId || ANON_THINKING_KEY;
+          if (!streamedThinkingMessageIds.has(key)) {
+            streamedThinkingMessageIds.add(key);
+            emitJsonStringMarker('[THINKING_DELTA]', event.content);
+          }
+        }
+        break;
+      }
+      case 'turn_failed': {
+        // Surface a failed turn immediately; the exec.completed result line
+        // may carry the same failure, so emit only once.
+        if (!sendErrorEmitted) {
+          sendErrorEmitted = true;
+          emitSendError(event.errorMessage, 'MiniMax');
+        }
+        break;
+      }
       case 'result': {
         if (event.sessionId && isNonEmptySessionId(event.sessionId)) {
           emitSessionId(event.sessionId);
+        }
+        // Final fallback: if the run produced no streamed content at all but
+        // the result carries a full answer, emit it once.
+        if (event.answer && streamedContentMessageIds.size === 0) {
+          streamedContentMessageIds.add(ANON_CONTENT_KEY);
+          emitJsonStringMarker('[CONTENT_DELTA]', event.answer);
         }
         // shouldTerminate kills the CLI on this line and suppresses the
         // non-zero exit code, so a failed run with no streamed output would
@@ -327,7 +458,8 @@ export async function sendMessage(
         const nothingStreamed = streamedContentMessageIds.size === 0
           && streamedThinkingMessageIds.size === 0
           && seenToolUseIds.size === 0;
-        if (event.failed && nothingStreamed) {
+        if (event.failed && nothingStreamed && !sendErrorEmitted) {
+          sendErrorEmitted = true;
           emitSendError(
             event.errorMessage || `MiniMax CLI run failed (status: ${event.status})`,
             'MiniMax'
@@ -353,14 +485,17 @@ export async function sendMessage(
         // fallback in handleEvent does not duplicate their text.
         const events = event.kind === 'multi' ? event.events : [event];
         for (const ev of events) {
-          if (!ev || typeof ev !== 'object' || !ev.messageId) continue;
-          if (ev.kind === 'text') streamedContentMessageIds.add(ev.messageId);
-          if (ev.kind === 'thinking') streamedThinkingMessageIds.add(ev.messageId);
+          if (!ev || typeof ev !== 'object') continue;
+          if (ev.kind === 'text') streamedContentMessageIds.add(ev.messageId || ANON_CONTENT_KEY);
+          if (ev.kind === 'thinking') streamedThinkingMessageIds.add(ev.messageId || ANON_THINKING_KEY);
         }
         handleEvent(event);
       },
       // mcode exec keeps running after the final result line — stop there.
-      shouldTerminate: (line) => line.includes('"type":"exec.result"'),
+      // 0.4.x emits a nested exec.result inside exec.completed; 0.2.x emitted
+      // it as a top-level event.
+      shouldTerminate: (line) => line.includes('"type":"exec.result"')
+        || line.includes('"type":"exec.completed"'),
     });
   } finally {
     await cleanupMaterializedImagePaths(imagePaths);

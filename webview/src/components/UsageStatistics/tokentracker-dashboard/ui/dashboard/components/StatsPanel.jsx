@@ -144,9 +144,9 @@ export function StatsPanel({
         {/* Subscriptions */}
         {subscriptionItems.length > 0 && (
           <div className="mt-3 pt-3 border-t border-oai-gray-100 dark:border-oai-gray-800 flex flex-wrap gap-1.5">
-            {subscriptionItems.map((entry, index) => (
+            {subscriptionItems.map((entry) => (
               <Badge
-                key={`${entry.tool}:${entry.plan}:${index}`}
+                key={`${entry.tool}:${entry.plan}`}
                 variant="secondary"
                 size="sm"
               >

@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useLayoutEffect, useMemo, useState } from "react";
+import React, { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import { setCopyLocale } from "../../lib/copy";
 import {
   getInitialLocalePreference,
@@ -9,8 +9,7 @@ import {
 } from "../../lib/locale";
 import { isNativeEmbed, setNativeSetting } from "../../lib/native-bridge.js";
 
-export const LocaleContext = createContext(null);
-
+import { LocaleContext } from "./locale-context.js";
 function getInitialResolvedLocale() {
   return resolvePreferredLocale(getInitialLocalePreference());
 }

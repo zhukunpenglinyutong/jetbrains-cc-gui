@@ -92,7 +92,7 @@ public class MessageParser {
      * Only applies to user messages - assistant messages may contain
      * command tags in code examples and should not be filtered.
      */
-    private boolean shouldFilterCommandMessage(JsonObject msg, String type) {
+    private static boolean shouldFilterCommandMessage(JsonObject msg, String type) {
         // Only filter user messages - assistant messages may contain command tags in code examples
         if (!"user".equals(type)) {
             return false;
@@ -141,6 +141,32 @@ public class MessageParser {
             }
         }
 
+        return false;
+    }
+
+    /**
+     * Return whether a live session message can be reproduced by a history read.
+     *
+     * <p>{@link #parseServerMessage(JsonObject)} permanently filters some rows the
+     * live pipeline admits — the {@code "No response requested."} assistant
+     * placeholder and command-tag user rows (the live handlers filter neither).
+     * Consumers that compare a loaded history against the live list (the
+     * staleness guard in SessionMessageOrchestrator) must count only rows the
+     * parser would keep, or one filtered row makes the live list permanently
+     * longer than any history read and every later reload is rejected.</p>
+     *
+     * @param message live session message
+     * @return true when a history read could produce this row
+     */
+    static boolean isHistoryReproducible(ClaudeSession.Message message) {
+        if (message.type == ClaudeSession.Message.Type.ASSISTANT) {
+            return message.content == null
+                    || !NO_RESPONSE_REQUESTED.equals(message.content.trim());
+        }
+        if (message.type == ClaudeSession.Message.Type.USER) {
+            return message.raw == null || !shouldFilterCommandMessage(message.raw, "user");
+        }
+        // ERROR bubbles, SYSTEM notices and other synthesized rows are never persisted.
         return false;
     }
 

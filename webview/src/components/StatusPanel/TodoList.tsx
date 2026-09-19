@@ -17,14 +17,14 @@ const TodoList = memo(({ todos, isStreaming = false }: TodoListProps) => {
 
   return (
     <div className="status-panel-todo-list">
-      {todos.map((todo, index) => {
+      {todos.map((todo) => {
         const status = todo.status ?? 'pending';
         const statusClass = statusClassMap[status] ?? '';
         const iconClass = statusIconMap[status] ?? '';
         const hasBlockedBy = todo.blockedBy && todo.blockedBy.length > 0;
 
         return (
-          <div key={todo.id ?? index} className={`status-panel-todo-item ${statusClass}`}>
+          <div key={todo.id ?? todo.content} className={`status-panel-todo-item ${statusClass}`}>
             <div className={`status-panel-todo-icon ${statusClass}${status === 'in_progress' && isStreaming ? ' is-streaming' : ''}`}>
               <span className={`codicon ${iconClass}`} />
             </div>

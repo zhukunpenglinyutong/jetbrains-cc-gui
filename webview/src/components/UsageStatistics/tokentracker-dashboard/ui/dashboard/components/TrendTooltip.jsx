@@ -69,7 +69,7 @@ function TrendTooltipBreakdown({ bar, formatTokens, formatTokensTooltip }) {
               </div>
               <div className="w-full h-1 bg-oai-gray-100 dark:bg-oai-gray-800/85 rounded-full overflow-hidden">
                 <div
-                  className="h-full rounded-full transition-all duration-300"
+                  className="h-full rounded-full transition-[width] duration-300"
                   style={{
                     width: `${pct}%`,
                     backgroundColor: color,
@@ -93,7 +93,7 @@ export function TrendTooltip({ hoveredBar, tooltipPos, isZoom }) {
 
   return (
     <div
-      className="absolute z-[9999] w-0 h-0 transition-all duration-100 ease-out pointer-events-none"
+      className="absolute z-[9999] w-0 h-0 transition-[left,top] duration-100 ease-out pointer-events-none"
       style={{
         left: `${tooltipPos.x}px`,
         top: `${tooltipPos.y}px`,

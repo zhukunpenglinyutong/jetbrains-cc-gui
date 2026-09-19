@@ -1,12 +1,45 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
   foldHistoryEvents,
   isDshRuntimeContextText,
+  pathsEqualForWorkspace,
   sanitizeDshSidebarTitle,
   toClaudeMessages,
 } from './history-service.js';
+
+test('pathsEqualForWorkspace matches a symlinked project path against the host-canonicalized cwd', () => {
+  // The host records the canonical Workspace path as the session cwd (macOS
+  // /tmp -> /private/tmp); the IDE passes the directory as opened. Both
+  // spellings of the same directory must compare equal, distinct ones not.
+  const realDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-ws-real-'));
+  const linkDir = `${realDir}-link`;
+  try {
+    let linkCreated = true;
+    try {
+      fs.symlinkSync(realDir, linkDir, 'dir');
+    } catch {
+      linkCreated = false; // platform refused to create a symlink
+    }
+    if (linkCreated) {
+      assert.equal(pathsEqualForWorkspace(linkDir, fs.realpathSync(linkDir)), true);
+      assert.equal(pathsEqualForWorkspace(linkDir, realDir), true);
+    }
+    assert.equal(pathsEqualForWorkspace(realDir, `${realDir}-other`), false);
+    assert.equal(pathsEqualForWorkspace(realDir, realDir), true);
+  } finally {
+    try {
+      fs.unlinkSync(linkDir);
+    } catch {
+      // link may not exist when creation failed
+    }
+    fs.rmSync(realDir, { recursive: true, force: true });
+  }
+});
 
 test('isDshRuntimeContextText catches runtime snapshot and skill XML', () => {
   assert.equal(isDshRuntimeContextText('Current runtime context. This snapshot supersedes…'), true);

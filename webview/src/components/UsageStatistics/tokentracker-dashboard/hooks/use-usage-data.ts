@@ -279,11 +279,9 @@ export function useUsageData({
     includeDaily,
     includeSummary,
     mockEnabled,
-    guestAllowed,
     cacheAllowed,
     now,
     readCache,
-    tokenReady,
     timeZone,
     to,
     tzOffsetMinutes,
@@ -354,6 +352,12 @@ export function useUsageData({
     clearCache,
     isLocalMode,
     includeSummary,
+    from,
+    to,
+    includeDaily,
+    timeZone,
+    tzOffsetMinutes,
+    now,
   ]);
 
   // Auto-refresh when the dashboard regains focus / becomes visible again.

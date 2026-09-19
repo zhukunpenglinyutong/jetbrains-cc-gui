@@ -1,7 +1,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { copy } from "../../../lib/copy";
-import { getAITooltipMessage } from "./ActivityHeatmap3D";
+import { getAITooltipMessage } from "./activityHeatmap3dUtils";
 
 // 2D 精致 Hover Tooltip — portaled to body so the modal's
 // `overflow-hidden` + `transform` ancestors can't clip it.
@@ -17,7 +17,7 @@ export function ActivityHeatmapTooltip({
 
   return createPortal(
     <div
-      className="fixed z-[9999] w-0 h-0 transition-all duration-100 ease-out pointer-events-none"
+      className="fixed z-[9999] w-0 h-0 transition-[left,top] duration-100 ease-out pointer-events-none"
       style={{
         // Inline position: the Windows WebView2 shell injects
         // `body.tt-native-glass-shell>*{position:relative}` which outranks
@@ -104,7 +104,7 @@ export function ActivityHeatmapTooltip({
                         </div>
                         <div className="w-full h-1 bg-oai-gray-100 dark:bg-oai-gray-800/85 rounded-full overflow-hidden">
                           <div
-                            className="h-full rounded-full transition-all duration-300"
+                            className="h-full rounded-full transition-[width] duration-300"
                             style={{
                               width: `${pct}%`,
                               backgroundColor: heatmapColors[4],

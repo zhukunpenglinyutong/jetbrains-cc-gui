@@ -25,8 +25,8 @@ export default function ModelMappingSection({
 
   return (
     <div className="form-group">
-      <label>{t('settings.provider.dialog.modelMapping')}</label>
-      <div className="model-mapping-grid">
+      <label htmlFor="provider-model-mapping">{t('settings.provider.dialog.modelMapping')}</label>
+      <div className="model-mapping-grid" id="provider-model-mapping">
         <div className="model-mapping-field">
           <label htmlFor="fableModel">{t('settings.provider.dialog.fableModel')}</label>
           <input

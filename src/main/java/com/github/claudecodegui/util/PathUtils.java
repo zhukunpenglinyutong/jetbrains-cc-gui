@@ -72,6 +72,55 @@ public class PathUtils {
     }
 
     /**
+     * Resolve a path to its real filesystem path, following symlinks.
+     *
+     * <p>This mirrors the Claude CLI, which derives the {@code ~/.claude/projects/<key>}
+     * storage key from {@code realpathSync(process.cwd())}: a session opened via a
+     * symlinked project path is stored under the physical path's key, so history
+     * lookups must resolve the project path the same way (issue #1789). Note this is
+     * the opposite trade-off of {@link #normalizeAbsolute(String)}, which deliberately
+     * avoids canonicalization to match Node's lexical {@code path.resolve()} — the two
+     * are used at different stages: resolution for storage keys, lexical normalization
+     * for guard comparisons.
+     *
+     * @param path the original path
+     * @return the real path, or the input unchanged when it is a WSL UNC path
+     *         (JVM path parsing corrupts the {@code //wsl...} prefix) or when
+     *         resolution fails (nonexistent path, permission error)
+     */
+    public static String realPath(String path) {
+        if (path == null || path.isEmpty() || isWslUncPath(path)) {
+            return path;
+        }
+        try {
+            return java.nio.file.Paths.get(path).toRealPath().toString();
+        } catch (Exception e) {
+            return path;
+        }
+    }
+
+    /**
+     * Return the canonical and legacy sanitized keys for a project path.
+     *
+     * <p>The canonical key follows symlinks like Claude CLI. The raw key keeps
+     * sessions written by older bridge versions readable until they are naturally retired.
+     *
+     * @param path the original path
+     * @return canonical key followed by a distinct legacy key when necessary
+     */
+    public static List<String> getSanitizedPathCandidates(String path) {
+        String canonicalKey = sanitizePath(realPath(path));
+        String legacyKey = sanitizePath(path);
+        if (canonicalKey.equals(legacyKey)) {
+            return List.of(canonicalKey);
+        }
+        List<String> candidates = new ArrayList<>(2);
+        candidates.add(canonicalKey);
+        candidates.add(legacyKey);
+        return candidates;
+    }
+
+    /**
      * Guard a provider daemon's requested working directory against the project
      * base so it cannot be pointed outside the project.
      *

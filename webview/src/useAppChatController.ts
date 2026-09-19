@@ -289,6 +289,7 @@ export const useAppChatController = ({
     enqueue: enqueueMessage,
     dequeue: dequeueMessage,
     clearQueue,
+    reorder: reorderMessageQueue,
   } = useMessageQueue({ isLoading: loading, onExecute: executeMessage });
 
   // Point the session-transition indirection at the real clearQueue.
@@ -383,7 +384,7 @@ export const useAppChatController = ({
     chatInputRef, messagesContainerRef, messagesEndRef, inputAreaRef, isAutoScrollingRef,
     // Message actions
     handleUndoFile, onDiscardAll, handleKeepAll,
-    handleSubmit, interruptSession, messageQueue, dequeueMessage,
+    handleSubmit, interruptSession, messageQueue, dequeueMessage, reorderMessageQueue,
     handleOpenRewindSelectDialog, handleNavigateToProviderSettings, wrappedHandleProviderSelect,
     // Session management
     createNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,

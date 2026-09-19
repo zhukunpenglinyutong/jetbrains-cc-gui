@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import { CurrencyContext } from "../ui/foundation/CurrencyProvider.jsx";
+import { CurrencyContext } from "../ui/foundation/currency-context.js";
 import { CURRENCY_USD, DEFAULT_RATES } from "../lib/currency";
 
 const FALLBACK_CURRENCY_VALUE = Object.freeze({

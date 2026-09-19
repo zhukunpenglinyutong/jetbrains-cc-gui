@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { m } from "motion/react";
 import { useCurrency } from "../../../hooks/useCurrency.js";
 import { useTokenFormat } from "../../../hooks/useTokenFormat.js";
@@ -28,9 +28,18 @@ export function ProviderDistribution({ fleetData, period, from, to, selectedDevi
   const [expandedProvider, setExpandedProvider] = useState(null);
   // A new time/device scope collapses back to the card grid — drill-down
   // stays an explicit user action rather than a forced default.
-  useEffect(() => {
+  // Render-time adjustment (React-sanctioned): same observable reset as the
+  // old effect, without an extra commit.
+  const [prevScope, setPrevScope] = useState({ period, from, to, selectedDevice });
+  if (
+    prevScope.period !== period ||
+    prevScope.from !== from ||
+    prevScope.to !== to ||
+    prevScope.selectedDevice !== selectedDevice
+  ) {
+    setPrevScope({ period, from, to, selectedDevice });
     setExpandedProvider(null);
-  }, [period, from, to, selectedDevice]);
+  }
 
   // FleetData is already grouped by provider.
   const providers = fleetData.filter((f) => f.models?.length > 0);
@@ -72,11 +81,11 @@ export function ProviderDistribution({ fleetData, period, from, to, selectedDevi
           return (
             <m.div
               key={provider.label}
-              initial={{ width: 0 }}
-              animate={{ width: `${getProviderPercentValue(provider)}%` }}
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
               transition={{ duration: 0.5, delay: 0.45 + idx * 0.04, ease: [0.16, 1, 0.3, 1] }}
               className="h-full"
-              style={{ backgroundColor: color }}
+              style={{ width: `${getProviderPercentValue(provider)}%`, transformOrigin: "left", backgroundColor: color }}
               title={`${displayLabel}: ${percentLabel}%`}
             />
           );

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupBlocks } from './MessageItem';
+import { groupBlocks } from './groupBlocks';
 import type { ClaudeContentBlock } from '../../types';
 
 const tool = (id: string, name: string): ClaudeContentBlock => ({ type: 'tool_use', id, name, input: {} });

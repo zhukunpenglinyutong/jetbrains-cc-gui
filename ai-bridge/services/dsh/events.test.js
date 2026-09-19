@@ -5,11 +5,13 @@ import {
   DshGoalSettlement,
   bridgeModernApproval,
   bridgeModernQuestion,
+  mapQuestionAnswers,
   peekMuxSessionId,
   projectFollowFrame,
   projectMuxFrame,
   projectRemoteEventFrame,
   unwrapMuxEnvelope,
+  waterfallBelongsToSession,
 } from './events.js';
 
 test('unwrapMuxEnvelope handles wrapped and bare frames', () => {
@@ -178,18 +180,30 @@ test('projectRemoteEventFrame distinguishes ready, waterfalls and cancel', () =>
       type: 'waterfall',
       event: 'approval/request',
       eventId: 'e1',
+      agentId: 'session-a',
       request: { toolName: 'pwsh', reason: 'escalate' },
     }),
-    { kind: 'approval-request', eventId: 'e1', request: { toolName: 'pwsh', reason: 'escalate' } }
+    {
+      kind: 'approval-request',
+      eventId: 'e1',
+      agentId: 'session-a',
+      request: { toolName: 'pwsh', reason: 'escalate' },
+    }
   );
   assert.deepEqual(
     projectRemoteEventFrame({
       type: 'waterfall',
       event: 'user-questions/request',
       eventId: 'e2',
+      agentId: 'session-b',
       request: { questions: [{ id: 'q1', question: 'Pick' }] },
     }),
-    { kind: 'question-request', eventId: 'e2', request: { questions: [{ id: 'q1', question: 'Pick' }] } }
+    {
+      kind: 'question-request',
+      eventId: 'e2',
+      agentId: 'session-b',
+      request: { questions: [{ id: 'q1', question: 'Pick' }] },
+    }
   );
   assert.deepEqual(projectRemoteEventFrame({ type: 'cancel', eventId: 'e3' }), {
     kind: 'cancel',
@@ -200,6 +214,31 @@ test('projectRemoteEventFrame distinguishes ready, waterfalls and cancel', () =>
   assert.equal(projectRemoteEventFrame({ type: 'waterfall', event: 'other/event', eventId: 'e' }), null);
   assert.equal(projectRemoteEventFrame({ type: 'ready' }), null);
   assert.equal(projectRemoteEventFrame(undefined), null);
+});
+
+// A `$events` stream is host-wide: every client is offered every session's
+// waterfalls. Answering one that belongs to another session popped this window's
+// dialog for a question nobody here asked and stole the reply (the host settles
+// a waterfall for whoever answers first). The frame's agentId IS the session id.
+test('waterfallBelongsToSession accepts only this session (and unknown owners)', () => {
+  assert.equal(waterfallBelongsToSession('session-a', 'session-a'), true);
+  assert.equal(waterfallBelongsToSession('session-b', 'session-a'), false);
+  assert.equal(waterfallBelongsToSession('session-a-sub', 'session-a'), false);
+  // Older hosts that omit the owner keep the previous behaviour.
+  assert.equal(waterfallBelongsToSession('', 'session-a'), true);
+  assert.equal(waterfallBelongsToSession(undefined, 'session-a'), true);
+  // A session-less turn cannot claim a scoped waterfall.
+  assert.equal(waterfallBelongsToSession('session-a', ''), false);
+  // A mapping that carries the owner through applies the same rule.
+  const instruction = projectRemoteEventFrame({
+    type: 'waterfall',
+    event: 'user-questions/request',
+    eventId: 'e9',
+    agentId: 'other-session',
+    request: { questions: [{ id: 'q1', question: 'Pick' }] },
+  });
+  assert.equal(waterfallBelongsToSession(instruction.agentId, 'session-a'), false);
+  assert.equal(waterfallBelongsToSession(instruction.agentId, 'other-session'), true);
 });
 test('modern bridges skip a waterfall the host already withdrew', async () => {
   const posted = [];
@@ -220,4 +259,109 @@ test('modern bridges skip a waterfall the host already withdrew', async () => {
   // A withdrawn waterfall must never reach $events/result — and must not
   // prompt the user at all (the pre-check runs before the Java IPC).
   assert.equal(posted.length, 0);
+});
+
+// ── Answer mapping ──────────────────────────────────────────────────
+// The plugin dialog keys answers by question TEXT (Claude's AskUserQuestion
+// matches on that text). DSH echoes the caller-declared `question.id` and keeps
+// free text in `custom`, so the bridge must translate. Regression: the raw keys
+// were forwarded as ids, and the asking model — which never issued those ids —
+// received an answer batch it could not attribute to its questions.
+
+const DSH_QUESTIONS = [
+  {
+    id: 'commit_cadence',
+    question: '你希望怎样确认提交？',
+    header: '提交确认',
+    options: [
+      { label: '按阶段批量确认（推荐）' },
+      { label: '每个任务单独确认' },
+      { label: '全部先暂存，最后一次性提交' },
+    ],
+  },
+  {
+    id: 'sibling_fix',
+    question: '另一处同款问题要一起改吗？',
+    multiSelect: true,
+    options: [{ label: '一起改 (Recommended)' }, { label: '先不动' }],
+  },
+];
+
+test('mapQuestionAnswers echoes the declared question ids, not the question text', () => {
+  const mapped = mapQuestionAnswers(
+    {
+      '你希望怎样确认提交？': '全部先暂存，最后一次性提交',
+      '另一处同款问题要一起改吗？': ['一起改 (Recommended)'],
+    },
+    DSH_QUESTIONS
+  );
+  assert.deepEqual(mapped, [
+    { id: 'commit_cadence', selected: ['全部先暂存，最后一次性提交'] },
+    { id: 'sibling_fix', selected: ['一起改 (Recommended)'] },
+  ]);
+  // The ids the model declared must be the only ids that travel back.
+  assert.deepEqual(mapped.map((item) => item.id), ['commit_cadence', 'sibling_fix']);
+});
+
+test('mapQuestionAnswers moves dialog free text into DSH `custom`', () => {
+  // Single-select: a custom answer REPLACES the choice (selected stays empty).
+  assert.deepEqual(
+    mapQuestionAnswers({ '你希望怎样确认提交？': ['这个我自己决定'] }, DSH_QUESTIONS),
+    [{ id: 'commit_cadence', selected: [], custom: '这个我自己决定' }, { id: 'sibling_fix', selected: [] }]
+  );
+  // Multi-select: custom may accompany the labels.
+  assert.deepEqual(
+    mapQuestionAnswers(
+      { '另一处同款问题要一起改吗？': ['一起改 (Recommended)', '顺带看看日志'] },
+      [DSH_QUESTIONS[1]]
+    ),
+    [{ id: 'sibling_fix', selected: ['一起改 (Recommended)'], custom: '顺带看看日志' }]
+  );
+});
+
+test('mapQuestionAnswers treats every answer as custom when the question offers no options', () => {
+  assert.deepEqual(
+    mapQuestionAnswers({ '你用的是哪个版本？': 'v2' }, [{ id: 'version', question: '你用的是哪个版本？' }]),
+    [{ id: 'version', selected: [], custom: 'v2' }]
+  );
+});
+
+// A restored dialog draft can disagree with itself: a picked label AND free
+// text on a single-select question. The DSH encoding gives `custom` precedence
+// (it replaces the choice), so `selected` must be emptied even then.
+test('mapQuestionAnswers lets custom win over a picked label on single-select', () => {
+  assert.deepEqual(
+    mapQuestionAnswers(
+      { '你希望怎样确认提交？': ['按阶段批量确认（推荐）', '这个我自己定'] },
+      DSH_QUESTIONS
+    ),
+    [
+      { id: 'commit_cadence', selected: [], custom: '这个我自己定' },
+      { id: 'sibling_fix', selected: [] },
+    ]
+  );
+});
+
+test('mapQuestionAnswers reports skipped questions and an empty cancel', () => {
+  assert.deepEqual(
+    mapQuestionAnswers({ '你希望怎样确认提交？': '每个任务单独确认' }, DSH_QUESTIONS),
+    [
+      { id: 'commit_cadence', selected: ['每个任务单独确认'] },
+      { id: 'sibling_fix', selected: [] },
+    ]
+  );
+  // A cancelled dialog must stay "no answers" — not a batch of skipped items.
+  assert.deepEqual(mapQuestionAnswers({}, DSH_QUESTIONS), []);
+  assert.deepEqual(mapQuestionAnswers(null, DSH_QUESTIONS), []);
+});
+
+test('mapQuestionAnswers falls back to the dialog keys when no question matches', () => {
+  // Legacy hosts (and Claude-shaped payloads) carry no ids: deliver verbatim
+  // rather than dropping the human's answer on the floor.
+  assert.deepEqual(
+    mapQuestionAnswers({ 'Pick one': 'A' }, [{ question: 'Pick one' }]),
+    [{ id: 'Pick one', selected: ['A'] }]
+  );
+  assert.deepEqual(mapQuestionAnswers({ 'Pick one': ['A', 'B'] }), [{ id: 'Pick one', selected: ['A', 'B'] }]);
+  assert.deepEqual(mapQuestionAnswers({ 'Pick one': { answers: ['A'] } }), [{ id: 'Pick one', selected: ['A'] }]);
 });

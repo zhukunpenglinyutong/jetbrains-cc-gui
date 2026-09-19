@@ -1,7 +1,9 @@
 package com.github.claudecodegui.provider.codex;
 
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.util.PathUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -10,8 +12,10 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -40,6 +44,13 @@ public class CodexHistoryReader {
         this.gson = gson;
         this.parser = new CodexHistoryParser(gson);
         this.indexService = new CodexHistoryIndexService(sessionsDir, parser);
+        this.sessionService = new CodexHistorySessionService(sessionsDir, gson);
+    }
+
+    CodexHistoryReader(Path sessionsDir, Gson gson, SessionIndexManager indexManager) {
+        this.gson = gson;
+        this.parser = new CodexHistoryParser(gson);
+        this.indexService = new CodexHistoryIndexService(sessionsDir, parser, indexManager);
         this.sessionService = new CodexHistorySessionService(sessionsDir, gson);
     }
 
@@ -115,6 +126,13 @@ public class CodexHistoryReader {
             // Normalize the project path for comparison
             String normalizedProjectPath = normalizePath(projectPath);
 
+            // The CLI records the physical (symlink-resolved) cwd in rollout files, so
+            // sessions opened via a symlinked project path only match the resolved form.
+            // Accept both candidates to cover either layout (issue #1789).
+            Set<String> projectPathCandidates = new LinkedHashSet<>();
+            projectPathCandidates.add(normalizedProjectPath);
+            projectPathCandidates.add(normalizePath(PathUtils.realPath(projectPath)));
+
             LOG.info("[CodexHistoryReader] Filtering sessions for project: " + normalizedProjectPath);
             LOG.info("[CodexHistoryReader] Total sessions before filtering: " + allSessions.size());
 
@@ -125,9 +143,10 @@ public class CodexHistoryReader {
                                                                  return false;
                                                              }
                                                              String normalizedCwd = normalizePath(session.cwd);
-                                                             // Match if cwd equals project path or is a subdirectory of it
-                                                             boolean matches = normalizedCwd.equals(normalizedProjectPath) ||
-                                                                                       normalizedCwd.startsWith(normalizedProjectPath + "/");
+                                                             // Match if cwd equals a project path candidate or is a subdirectory of it
+                                                             boolean matches = projectPathCandidates.stream()
+                                                                                        .anyMatch(candidate -> normalizedCwd.equals(candidate) ||
+                                                                                                                normalizedCwd.startsWith(candidate + "/"));
                                                              if (matches) {
                                                                  LOG.debug("[CodexHistoryReader] Session " + session.sessionId + " matches (cwd: " + session.cwd + ")");
                                                              }

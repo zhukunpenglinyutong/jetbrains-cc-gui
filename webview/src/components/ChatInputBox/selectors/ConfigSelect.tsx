@@ -127,7 +127,7 @@ export const ConfigSelect = ({
         setAgentsLoading(false);
       }
     }
-  }, []);
+  }, [t]);
 
   const showProviderToast = useCallback((providerName: string) => {
     if (toastTimerRef.current !== undefined) {
@@ -177,7 +177,10 @@ export const ConfigSelect = ({
   useEffect(() => {
     if (!isOpen) return;
 
+    let armed = false;
+    const timer = setTimeout(() => { armed = true; }, 0);
     const handleClickOutside = (e: MouseEvent) => {
+      if (!armed) return;
       // 当确认对话框打开时跳过外部点击处理：点击确认/取消按钮会先触发 mousedown，
       // 若此时关闭 ConfigSelect 会让确认框随之卸载，导致 onConfirm 永不执行（issue #1522）
       if (document.querySelector('.confirm-dialog-overlay')) {
@@ -194,10 +197,7 @@ export const ConfigSelect = ({
       }
     };
 
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClickOutside);

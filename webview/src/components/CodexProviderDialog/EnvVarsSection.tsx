@@ -26,22 +26,26 @@ export default function EnvVarsSection({
 
       {/* Message Environment Variables */}
       <div className="form-group" style={{ marginTop: '16px' }}>
-        <label>{t('settings.codexProvider.dialog.messageEnvLabel')}</label>
+        <label htmlFor="codex-message-env-vars">{t('settings.codexProvider.dialog.messageEnvLabel')}</label>
         <small className="form-hint">{t('settings.codexProvider.dialog.messageEnvHint')}</small>
-        <EnvVarEditor
-          entries={messageEnvVars}
-          onChange={onMessageEnvVarsChange}
-        />
+        <div id="codex-message-env-vars">
+          <EnvVarEditor
+            entries={messageEnvVars}
+            onChange={onMessageEnvVarsChange}
+          />
+        </div>
       </div>
 
       {/* MCP Environment Variables */}
       <div className="form-group">
-        <label>{t('settings.codexProvider.dialog.mcpEnvLabel')}</label>
+        <label htmlFor="codex-mcp-env-vars">{t('settings.codexProvider.dialog.mcpEnvLabel')}</label>
         <small className="form-hint">{t('settings.codexProvider.dialog.mcpEnvHint')}</small>
-        <EnvVarEditor
-          entries={mcpEnvVars}
-          onChange={onMcpEnvVarsChange}
-        />
+        <div id="codex-mcp-env-vars">
+          <EnvVarEditor
+            entries={mcpEnvVars}
+            onChange={onMcpEnvVarsChange}
+          />
+        </div>
       </div>
     </details>
   );

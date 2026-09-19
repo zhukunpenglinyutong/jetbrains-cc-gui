@@ -339,6 +339,7 @@ export const ButtonArea = ({
           onClick={handleEnhanceClick}
           disabled={disabled || !hasInputContent || isLoading || isEnhancing}
           data-tooltip={`${t('promptEnhancer.tooltip')} (${t('promptEnhancer.shortcut')})`}
+          aria-label={t('promptEnhancer.tooltip')}
         >
           <span className={`codicon ${isEnhancing ? 'codicon-loading codicon-modifier-spin' : 'codicon-sparkle'}`} />
         </button>

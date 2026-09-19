@@ -3,7 +3,7 @@ import { toFiniteNumber } from "../../../lib/format";
 import { useTokenFormat } from "../../../hooks/useTokenFormat.js";
 import { useProjectUsageDetail } from "../../../hooks/use-project-usage-detail";
 import { getLocalDayKey } from "../../../lib/timezone";
-import { splitProjectKey, projectRefHost } from "./project-usage-utils.jsx";
+import { splitProjectKey, projectRefHost } from "./projectForgeUtils.js";
 
 const MAX_TREND_BARS = 60;
 

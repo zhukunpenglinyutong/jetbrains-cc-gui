@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 import { readClaudeModelMapping } from '../../../utils/claudeModelMapping';
@@ -153,29 +153,31 @@ export const ModelConfigSelect = ({
     }
   }, [resetSubmenu, isOpen, mainRecalculate]);
 
+  const closeMenuOnOutsideClick = useEffectEvent(closeMenu);
+
   useEffect(() => {
     if (!isOpen) return;
 
+    let armed = false;
+    const timer = setTimeout(() => { armed = true; }, 0);
     const handleClickOutside = (event: MouseEvent) => {
+      if (!armed) return;
       if (
         dropdownRef.current
         && !dropdownRef.current.contains(event.target as Node)
         && buttonRef.current
         && !buttonRef.current.contains(event.target as Node)
       ) {
-        closeMenu();
+        closeMenuOnOutsideClick();
       }
     };
 
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [closeMenu, isOpen]);
+  }, [isOpen]);
 
   useLayoutEffect(() => {
     if (isOpen) {

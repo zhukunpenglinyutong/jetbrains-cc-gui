@@ -83,7 +83,10 @@ export const DshPresetSelect = ({
   useEffect(() => {
     if (embedded || !isOpen) return undefined;
 
+    let armed = false;
+    const timer = setTimeout(() => { armed = true; }, 0);
     const handleClickOutside = (event: MouseEvent) => {
+      if (!armed) return;
       if (
         dropdownRef.current
         && !dropdownRef.current.contains(event.target as Node)
@@ -94,7 +97,7 @@ export const DshPresetSelect = ({
       }
     };
 
-    const timer = setTimeout(() => document.addEventListener('mousedown', handleClickOutside), 0);
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClickOutside);
@@ -131,7 +134,15 @@ export const DshPresetSelect = ({
               key={preset.id}
               data-testid={`dsh-preset-option-${preset.id || 'none'}`}
               className={`selector-option ${preset.id === value ? 'selected' : ''}`}
+              role="button"
+              tabIndex={0}
               onClick={() => handleSelect(preset.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  handleSelect(preset.id);
+                }
+              }}
               title={getPresetText(preset.id, 'description')}
             >
               <span className={`codicon ${preset.id === '' ? 'codicon-circle-outline' : 'codicon-symbol-class'}`} />

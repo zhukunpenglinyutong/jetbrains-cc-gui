@@ -86,6 +86,15 @@ class ClaudeDaemonCoordinator {
                 return current;
             }
 
+            if (current != null && current.isIdleRetired()) {
+                if (current.ensureRunning()) {
+                    daemonRetryAfter = 0;
+                    return current;
+                }
+                daemonRetryAfter = System.currentTimeMillis() + DAEMON_RETRY_DELAY_MS;
+                return null;
+            }
+
             daemonRetryAfter = System.currentTimeMillis() + DAEMON_RETRY_DELAY_MS;
             try {
                 if (current != null) {

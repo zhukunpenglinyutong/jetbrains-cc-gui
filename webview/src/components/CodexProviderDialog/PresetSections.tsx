@@ -20,8 +20,8 @@ export default function PresetSections({ activePreset, onPresetClick }: PresetSe
       </div>
 
       <div className="form-group">
-        <label>{t('settings.provider.dialog.officialSectionTitle')}</label>
-        <div className="preset-buttons" role="radiogroup" aria-label={t('settings.provider.dialog.officialSectionTitle')}>
+        <label htmlFor="codex-official-presets">{t('settings.provider.dialog.officialSectionTitle')}</label>
+        <div className="preset-buttons" role="radiogroup" id="codex-official-presets" aria-label={t('settings.provider.dialog.officialSectionTitle')}>
           <button
             type="button"
             role="radio"
@@ -39,8 +39,8 @@ export default function PresetSections({ activePreset, onPresetClick }: PresetSe
       </div>
 
       <div className="form-group">
-        <label>{t('settings.provider.dialog.proxySectionTitle')}</label>
-        <div className="preset-buttons" role="radiogroup" aria-label={t('settings.provider.dialog.proxySectionTitle')}>
+        <label htmlFor="codex-proxy-presets">{t('settings.provider.dialog.proxySectionTitle')}</label>
+        <div className="preset-buttons" role="radiogroup" id="codex-proxy-presets" aria-label={t('settings.provider.dialog.proxySectionTitle')}>
           {CODEX_PROVIDER_PRESETS.map((preset) => (
             <button
               key={preset.id}

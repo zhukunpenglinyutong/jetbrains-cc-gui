@@ -90,6 +90,18 @@
   text-overflow: ellipsis;
 }
 
+/* Codex uses one picker for commands and skills; keep only a small content gap. */
+.dropdown-item-type {
+  flex: 0 0 auto;
+  padding-left: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1;
+  text-align: right;
+  white-space: nowrap;
+  text-transform: lowercase;
+}
+
 /* Portal tooltip animation */
 @keyframes tooltip-fade-in {
   from {
@@ -115,4 +127,3 @@
   color: var(--text-secondary);
   font-size: 12px;
 }
-

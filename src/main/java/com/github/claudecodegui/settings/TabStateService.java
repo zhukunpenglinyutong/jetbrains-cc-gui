@@ -179,6 +179,10 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
      * Per-tab persisted session snapshot.
      */
     public static class TabSessionState {
+        /**
+         * Project base path that owns this session binding.
+         */
+        public String projectPath;
         public String provider;
         public String sessionId;
         public String cwd;
@@ -188,6 +192,7 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
 
         public TabSessionState copy() {
             TabSessionState copy = new TabSessionState();
+            copy.projectPath = this.projectPath;
             copy.provider = this.provider;
             copy.sessionId = this.sessionId;
             copy.cwd = this.cwd;

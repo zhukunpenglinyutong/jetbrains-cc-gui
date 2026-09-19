@@ -45,7 +45,6 @@ export interface UseSubmitHandlerOptions {
 export function useSubmitHandler({
   getTextContent,
   attachments,
-  isLoading,
   sdkStatusLoading,
   sdkInstalled,
   currentProvider,
@@ -122,7 +121,6 @@ export function useSubmitHandler({
     getTextContent,
     invalidateCache,
     attachments,
-    isLoading,
     sdkStatusLoading,
     sdkInstalled,
     currentProvider,

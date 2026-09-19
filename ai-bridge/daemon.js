@@ -656,6 +656,16 @@ async function runDaemonMain() {
   // Command requests must be serialized because they share `activeRequestId`
   // for stdout interception. Heartbeats/status are safe to run concurrently.
   let commandQueue = Promise.resolve();
+  let pendingIdleShutdownToken = null;
+  const deferredIdleLines = [];
+
+  const cancelPendingIdleShutdown = () => {
+    if (pendingIdleShutdownToken === null) return;
+    pendingIdleShutdownToken = null;
+    idleShutdownGeneration++;
+    idleShutdownInFlight = false;
+    lastCommandActivityAt = Date.now();
+  };
 
   // A daemon is deliberately lazy: after all provider runtimes have been
   // released, keep the lightweight bridge around briefly for quick reuse and
@@ -681,27 +691,31 @@ async function runDaemonMain() {
       await shutdownPersistentRuntimes();
       await grokShutdownPersistentRuntimes().catch(() => {});
       await zcodeShutdownPersistentRuntimes().catch(() => {});
-      // A command may have arrived while provider shutdown was awaiting an
-      // SDK/client close. In that case the command wins: its runtime will be
-      // recreated lazily and the daemon must stay alive to service it.
+      // Commands arriving during provider cleanup wait until every close has
+      // finished, then resume on this daemon with fresh runtimes.
       if (shutdownGeneration !== idleShutdownGeneration) {
         idleShutdownInFlight = false;
+        for (const deferredLine of deferredIdleLines.splice(0)) {
+          handleInputLine(deferredLine);
+        }
         return;
       }
-      sendDaemonEvent('shutdown', { reason: 'idle_timeout' });
-      isDaemonMode = false;
-      // Keep stdin open until exit: a command racing the shutdown commit gets
-      // an explicit daemon_shutting_down error from the gate in the line
-      // handler instead of being silently dropped mid-pipe.
-      setTimeout(() => _originalExit(0), 100).unref();
+      // Java owns the request registry. Only it can atomically reject new
+      // requests and confirm that no command was sent during this idle check.
+      pendingIdleShutdownToken = shutdownGeneration;
+      sendDaemonEvent('idle_shutdown_request', { token: shutdownGeneration });
     } catch (error) {
       idleShutdownInFlight = false;
+      pendingIdleShutdownToken = null;
+      for (const deferredLine of deferredIdleLines.splice(0)) {
+        handleInputLine(deferredLine);
+      }
       _originalStderrWrite(`[daemon] Idle shutdown failed: ${error?.message || error}\n`, 'utf8');
     }
   }, DAEMON_IDLE_CHECK_INTERVAL_MS);
   idleReaper.unref();
 
-  rl.on('line', (line) => {
+  const handleInputLine = (line) => {
     // Skip empty lines
     if (!line.trim()) return;
 
@@ -716,10 +730,28 @@ async function runDaemonMain() {
       return;
     }
 
+    if (request.method === 'idle_shutdown_ack'
+        || request.method === 'idle_shutdown_cancel') {
+      if (request.params?.token !== pendingIdleShutdownToken
+          || pendingIdleShutdownToken === null) return;
+      if (request.method === 'idle_shutdown_cancel') {
+        cancelPendingIdleShutdown();
+        for (const deferredLine of deferredIdleLines.splice(0)) {
+          handleInputLine(deferredLine);
+        }
+      } else {
+        pendingIdleShutdownToken = null;
+        deferredIdleLines.length = 0;
+        sendDaemonEvent('shutdown', { reason: 'idle_timeout' });
+        isDaemonMode = false;
+        setTimeout(() => _originalExit(0), 100).unref();
+      }
+      return;
+    }
+
     if (request.method !== 'heartbeat' && request.method !== 'status') {
-      // The idle reaper already committed to exit: fail the command fast so the
-      // Java side retries on a freshly spawned daemon instead of waiting for
-      // process-death detection. Heartbeats/status remain answerable.
+      // A retired Java generation should not send commands here. Return an
+      // explicit error if a stale writer races the final exit.
       if (!isDaemonMode) {
         writeRawLine({
           id: request.id || '0',
@@ -730,11 +762,25 @@ async function runDaemonMain() {
         return;
       }
       lastCommandActivityAt = Date.now();
-      // Cancel an idle shutdown whose provider cleanup is still awaiting. The
-      // request is still accepted and serialized normally below.
+      // Wait until provider cleanup finishes, or until Java resolves the idle
+      // request. Processing now could let cleanup close a newly made runtime.
+      if (idleShutdownInFlight && request.method !== 'shutdown') {
+        deferredIdleLines.push(line);
+        if (pendingIdleShutdownToken === null) {
+          idleShutdownGeneration++;
+        }
+        return;
+      }
+      // Explicit shutdown may bypass the idle wait because Java is disposing
+      // of this daemon regardless of any queued work.
       if (idleShutdownInFlight) {
-        idleShutdownGeneration++;
-        idleShutdownInFlight = false;
+        if (pendingIdleShutdownToken !== null) {
+          cancelPendingIdleShutdown();
+          deferredIdleLines.length = 0;
+        } else {
+          idleShutdownGeneration++;
+          idleShutdownInFlight = false;
+        }
       }
     }
 
@@ -827,7 +873,8 @@ async function runDaemonMain() {
           'utf8'
         );
       });
-  });
+  };
+  rl.on('line', handleInputLine);
 
   rl.on('close', async () => {
     // Idle reaper already performed graceful provider shutdown and scheduled

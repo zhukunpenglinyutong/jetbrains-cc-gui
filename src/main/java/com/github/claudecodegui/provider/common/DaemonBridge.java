@@ -66,6 +66,7 @@ public class DaemonBridge {
     private boolean restartInProgress;
     private boolean desiredRunning;
     private long stopEpoch;
+    private volatile boolean idleRetired;
     private final AtomicLong startAttemptCounter = new AtomicLong(0);
     private StartAttempt activeStartAttempt;
     private final AtomicLong requestIdCounter = new AtomicLong(0);
@@ -259,6 +260,7 @@ public class DaemonBridge {
                     return false;
                 }
                 startedContext.publishStartup();
+                idleRetired = false;
                 activeStartAttempt = null;
                 attempt.complete(true);
             }
@@ -385,6 +387,7 @@ public class DaemonBridge {
         synchronized (startLock) {
             desiredRunning = false;
             stopEpoch++;
+            idleRetired = false;
             StartAttempt startAttempt = activeStartAttempt;
             activeStartAttempt = null;
             if (startAttempt != null) {
@@ -500,6 +503,11 @@ public class DaemonBridge {
                 && context.isActive() && context.process.isAlive();
     }
 
+    /** Whether the last daemon was retired by its idle timeout. */
+    public boolean isIdleRetired() {
+        return idleRetired;
+    }
+
     /**
      * Returns the underlying daemon Process for inspection by NodeProcessRegistry.
      * May be null when no daemon is running. Callers must NOT destroy/kill through
@@ -548,53 +556,60 @@ public class DaemonBridge {
             JsonObject params,
             DaemonOutputCallback callback
     ) {
-        if (!ensureRunning()) {
-            CompletableFuture<Boolean> f = new CompletableFuture<>();
-            f.completeExceptionally(new IOException("Daemon not running"));
-            return f;
-        }
-        DaemonGenerationContext context = daemonContext;
-        if (context == null || !context.isActive() || !context.process.isAlive()) {
-            CompletableFuture<Boolean> f = new CompletableFuture<>();
-            f.completeExceptionally(new IOException("Daemon generation changed before request"));
-            return f;
-        }
+        // The idle handshake may retire a generation between ensureRunning()
+        // and registration. No command has been written in that case, so it is
+        // safe to start the next generation and register once more.
+        for (int attempt = 0; attempt < 2; attempt++) {
+            if (!ensureRunning()) {
+                return failedCommand(new IOException("Daemon not running"));
+            }
+            DaemonGenerationContext context = daemonContext;
+            if (context == null || !context.isActive() || !context.process.isAlive()) {
+                continue;
+            }
+            lifecycleHooks.beforeRequestRegistration(context.generation);
 
-        String requestId = String.valueOf(requestIdCounter.incrementAndGet());
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        boolean countsAsActiveRequest = !"heartbeat".equals(method) && !"status".equals(method);
+            String requestId = String.valueOf(requestIdCounter.incrementAndGet());
+            CompletableFuture<Boolean> future = new CompletableFuture<>();
+            boolean countsAsActiveRequest = !"heartbeat".equals(method) && !"status".equals(method);
 
-        RequestHandler handler = new RequestHandler(callback, future);
-        if (!context.registerRequest(requestId, handler, countsAsActiveRequest, timeSource)) {
-            future.completeExceptionally(new IOException("Daemon generation is no longer active"));
+            RequestHandler handler = new RequestHandler(callback, future);
+            if (!context.registerRequest(requestId, handler, countsAsActiveRequest, timeSource)) {
+                continue;
+            }
+
+            // Ensure cleanup when future completes (e.g., via timeout or cancellation)
+            future.whenComplete((result, ex) -> context.removeRequest(requestId));
+
+            JsonObject request = new JsonObject();
+            request.addProperty("id", requestId);
+            request.addProperty("method", method);
+            request.add("params", params);
+
+            try {
+                synchronized (context.stdin) {
+                    if (!context.isActive()) {
+                        throw new IOException("Daemon generation changed before write");
+                    }
+                    context.stdin.write(request.toString());
+                    context.stdin.newLine();
+                    context.stdin.flush();
+                }
+                LOG.info("[DaemonBridge] Sent request " + requestId + ": " + method);
+            } catch (IOException e) {
+                context.removeRequest(requestId);
+                future.completeExceptionally(e);
+                LOG.error("[DaemonBridge] Failed to send request: " + e.getMessage());
+            }
+
             return future;
         }
+        return failedCommand(new IOException("Daemon generation changed before request"));
+    }
 
-        // Ensure cleanup when future completes (e.g., via timeout or cancellation)
-        future.whenComplete((result, ex) -> context.removeRequest(requestId));
-
-        // Build request JSON
-        JsonObject request = new JsonObject();
-        request.addProperty("id", requestId);
-        request.addProperty("method", method);
-        request.add("params", params);
-
-        try {
-            synchronized (context.stdin) {
-                if (!context.isActive()) {
-                    throw new IOException("Daemon generation changed before write");
-                }
-                context.stdin.write(request.toString());
-                context.stdin.newLine();
-                context.stdin.flush();
-            }
-            LOG.info("[DaemonBridge] Sent request " + requestId + ": " + method);
-        } catch (IOException e) {
-            context.removeRequest(requestId);
-            future.completeExceptionally(e);
-            LOG.error("[DaemonBridge] Failed to send request: " + e.getMessage());
-        }
-
+    private static CompletableFuture<Boolean> failedCommand(IOException error) {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        future.completeExceptionally(error);
         return future;
     }
 
@@ -834,6 +849,12 @@ public class DaemonBridge {
                 LOG.info("[DaemonBridge] Daemon shutting down");
                 break;
 
+            case "idle_shutdown_request":
+                if (obj.has("token")) {
+                    handleIdleShutdownRequest(context, obj.get("token").getAsLong());
+                }
+                break;
+
             case "title_log": {
                 String titleLevel = obj.has("level") ? obj.get("level").getAsString() : "info";
                 String titleMsg = obj.has("message") ? obj.get("message").getAsString() : "";
@@ -913,6 +934,49 @@ public class DaemonBridge {
 
             default:
                 LOG.debug("[DaemonBridge] Unhandled daemon event: " + event);
+        }
+    }
+
+    private void handleIdleShutdownRequest(DaemonGenerationContext context, long token) {
+        boolean approved = false;
+        synchronized (context) {
+            synchronized (startLock) {
+                if (daemonContext == context && context.isActive()
+                        && context.isStartupPublished() && desiredRunning
+                        && !context.hasPendingRequests()) {
+                    // Registration and this decision share the context lock.
+                    // Once retired, a new request must start a fresh daemon.
+                    context.stop();
+                    daemonContext = null;
+                    desiredRunning = false;
+                    stopEpoch++;
+                    idleRetired = true;
+                    restartAttempts.set(0);
+                    approved = true;
+                }
+            }
+        }
+
+        JsonObject response = new JsonObject();
+        response.addProperty("method", approved ? "idle_shutdown_ack" : "idle_shutdown_cancel");
+        JsonObject params = new JsonObject();
+        params.addProperty("token", token);
+        response.add("params", params);
+        try {
+            synchronized (context.stdin) {
+                context.stdin.write(response.toString());
+                context.stdin.newLine();
+                context.stdin.flush();
+            }
+        } catch (IOException e) {
+            if (approved) {
+                destroyProcess(context.process);
+            }
+            LOG.debug("[DaemonBridge] Failed to respond to idle shutdown: " + e.getMessage());
+        }
+        if (approved) {
+            LOG.info("[DaemonBridge] Daemon retired after idle timeout, generation="
+                    + context.generation);
         }
     }
 
@@ -1469,6 +1533,10 @@ public class DaemonBridge {
             activeRequestCount.set(0);
             return handlers;
         }
+
+        synchronized boolean hasPendingRequests() {
+            return !pendingRequests.isEmpty();
+        }
     }
 
     private static final class PendingRequest {
@@ -1543,6 +1611,10 @@ public class DaemonBridge {
         }
 
         default void beforeHeartbeatCheck(long generation) {
+            // No-op in production.
+        }
+
+        default void beforeRequestRegistration(long generation) {
             // No-op in production.
         }
     }

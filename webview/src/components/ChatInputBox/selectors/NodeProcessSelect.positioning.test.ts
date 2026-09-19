@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getEmbeddedNodeProcessDropdownLayout } from './NodeProcessSelect';
+import { getEmbeddedNodeProcessDropdownLayout } from './nodeProcessDropdownLayout';
 
 describe('NodeProcessSelect dropdown positioning', () => {
   it('keeps the submenu flipped left after right-side overflow is detected', () => {

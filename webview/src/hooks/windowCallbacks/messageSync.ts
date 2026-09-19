@@ -31,10 +31,8 @@ export const getStreamEndHandlingMode = (
 // ---------------------------------------------------------------------------
 
 export const getRawUuid = (msg: ClaudeMessage | undefined): string | undefined => {
-  const raw = msg?.raw;
-  if (!raw || typeof raw !== 'object') return undefined;
-  const rawObj = raw as Record<string, unknown>;
-  return typeof rawObj.uuid === 'string' ? rawObj.uuid : undefined;
+  const raw = parseRawMessage(msg?.raw);
+  return typeof raw?.uuid === 'string' ? raw.uuid : undefined;
 };
 
 export const stripUuidFromRaw = (raw: unknown): unknown => {
@@ -330,8 +328,8 @@ const getTextLikeContent = (block: Record<string, unknown>): string => {
  * while structural blocks (tool_use, tool_result, image, attachment) are
  * always taken from the backend (authoritative source for message structure).
  *
- * Matching is positional: the i-th text/thinking block in prevRaw is compared
- * against the i-th text/thinking block in nextRaw.
+ * Match text and thinking separately so reordering the two types cannot leak
+ * reasoning into visible text or discard a newer streamed suffix.
  *
  * Returns nextRaw unchanged (same reference) when no block needs protecting.
  */
@@ -362,19 +360,18 @@ export const mergeRawBlocksDuringStreaming = (
 
   if (nextBlocks.length === 0) return nextRaw;
 
-  let prevTextLikeIdx = 0;
+  const previousText = prevBlocks.filter((block) => isTextLikeBlock(block) && block.type === 'text');
+  const previousThinking = prevBlocks.filter((block) => isTextLikeBlock(block) && block.type === 'thinking');
+  let textIndex = 0;
+  let thinkingIndex = 0;
   let changed = false;
 
   const mergedBlocks = nextBlocks.map((nextBlock) => {
     if (!isTextLikeBlock(nextBlock)) return nextBlock;
 
-    // Advance to the next text-like block in prev
-    while (prevTextLikeIdx < prevBlocks.length && !isTextLikeBlock(prevBlocks[prevTextLikeIdx])) {
-      prevTextLikeIdx += 1;
-    }
-
-    const prevBlock = prevBlocks[prevTextLikeIdx] as Record<string, unknown> | undefined;
-    prevTextLikeIdx += 1;
+    const prevBlock = (nextBlock.type === 'text'
+      ? previousText[textIndex++]
+      : previousThinking[thinkingIndex++]) as Record<string, unknown> | undefined;
 
     if (!prevBlock) return nextBlock;
 
@@ -410,10 +407,216 @@ export const mergeRawBlocksDuringStreaming = (
 
   if (!changed) return nextRaw;
 
-  if (nextMsg !== undefined) {
-    return { ...nextObj, message: { ...nextMsg, content: mergedBlocks } };
+  return setRawBlocks(nextObj, mergedBlocks);
+};
+
+/** Structural types mirrored by Java's MessageStructure. */
+export const STRUCTURAL_BLOCK_TYPES = ['tool_use', 'tool_result', 'attachment', 'image'] as const;
+
+/**
+ * Return the identity of a structural block, or null when the block carries no
+ * structure (text/thinking) or cannot be identified. Structural identity — never
+ * payload — is what lets a lagging snapshot be compared against the blocks the
+ * UI already holds.
+ *
+ * Java mirrors these rules in MessageStructure.structuralBlockKey; keep the two
+ * in step via STRUCTURAL_BLOCK_TYPES above.
+ */
+const structuralBlockKey = (block: unknown): string | null => {
+  if (!block || typeof block !== 'object') return null;
+  const candidate = block as Record<string, unknown>;
+  const type = candidate.type;
+  if (type === 'tool_use' && typeof candidate.id === 'string' && candidate.id) {
+    return `tool_use:${candidate.id}`;
   }
-  return { ...nextObj, content: mergedBlocks };
+  if (type === 'tool_result'
+    && typeof candidate.tool_use_id === 'string' && candidate.tool_use_id) {
+    return `tool_result:${candidate.tool_use_id}`;
+  }
+  if (type === 'attachment' && typeof candidate.fileName === 'string' && candidate.fileName) {
+    return `attachment:${candidate.fileName}`;
+  }
+  if (type === 'image' && typeof candidate.src === 'string' && candidate.src) {
+    return `image:${candidate.src}`;
+  }
+  return null;
+};
+
+/**
+ * Normalize a raw message that may arrive as an object or as a JSON string.
+ * Returns null when it is neither, or when the string does not parse to an object.
+ */
+const parseRawMessage = (value: unknown): Record<string, unknown> | null => {
+  if (!value || (typeof value !== 'object' && typeof value !== 'string')) return null;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
+    } catch {
+      return null;
+    }
+  }
+  return value as Record<string, unknown>;
+};
+
+/**
+ * Read the content block array of a raw message, whichever shape it uses.
+ *
+ * Nested `message.content` wins over a flat `content` — the same order
+ * MessageStructure.findContentArray uses on the Java side, so a raw carrying
+ * both shapes resolves to the same blocks in the history guards and here.
+ */
+const getRawBlocks = (raw: Record<string, unknown> | null): unknown[] => {
+  if (!raw) return [];
+  const nested = raw.message as Record<string, unknown> | undefined;
+  if (Array.isArray(nested?.content)) return nested.content;
+  return Array.isArray(raw.content) ? raw.content : [];
+};
+
+/**
+ * Write the content block array back into the shape the raw message already uses.
+ *
+ * A message-shaped raw whose `message` carries no content array yet — the
+ * metadata-only snapshot `{uuid, type, message:{stop_reason}}` — has no existing
+ * shape to follow, so the nested one is adopted: that is the shape the provider
+ * uses for every other message, and the one the readers check first.
+ */
+const setRawBlocks = (
+  raw: Record<string, unknown>,
+  blocks: unknown[],
+): Record<string, unknown> => {
+  const nested = raw.message as Record<string, unknown> | undefined;
+  if (nested && typeof nested === 'object') {
+    if (Array.isArray(nested.content) || !Array.isArray(raw.content)) {
+      return { ...raw, message: { ...nested, content: blocks } };
+    }
+  }
+  return { ...raw, content: blocks };
+};
+
+export const mergeRawBlocksForFinalization = (
+  prevRaw: unknown,
+  backendRaw: unknown,
+): unknown => {
+  const previous = parseRawMessage(prevRaw);
+  const backend = parseRawMessage(backendRaw);
+  if (!backend) return prevRaw;
+  if (!previous) return backend;
+
+  const previousBlocks = getRawBlocks(previous);
+  const backendBlocks = getRawBlocks(backend);
+  if (previousBlocks.length === 0 && backendBlocks.length === 0) {
+    return backend;
+  }
+
+  const backendKeys = new Set<string>();
+  let backendTextCount = 0;
+  let backendThinkingCount = 0;
+  for (const block of backendBlocks) {
+    const key = structuralBlockKey(block);
+    if (key) backendKeys.add(key);
+    if (block && typeof block === 'object') {
+      const type = (block as Record<string, unknown>).type;
+      if (type === 'text') backendTextCount += 1;
+      else if (type === 'thinking') backendThinkingCount += 1;
+    }
+  }
+
+  // Keep blocks absent from a lagging snapshot in their previous relative order.
+  // Text and thinking have no IDs, so pair occurrences within each type.
+  let textSeen = 0;
+  let thinkingSeen = 0;
+  const survivors = previousBlocks.filter((block) => {
+    const key = structuralBlockKey(block);
+    if (key != null) return !backendKeys.has(key);
+    if (!block || typeof block !== 'object') return false;
+    const type = (block as Record<string, unknown>).type;
+    if (type === 'text') {
+      textSeen += 1;
+      return textSeen > backendTextCount;
+    }
+    if (type === 'thinking') {
+      thinkingSeen += 1;
+      return thinkingSeen > backendThinkingCount;
+    }
+    return false;
+  });
+  if (survivors.length === 0) {
+    return mergeRawBlocksDuringStreaming(previous, backend);
+  }
+  const mergedBlocks = mergeBlocksInPreviousOrder(previousBlocks, backendBlocks, survivors);
+  return mergeRawBlocksDuringStreaming(previous, setRawBlocks(backend, mergedBlocks));
+};
+
+/** Anchor missing blocks after the nearest retained predecessor. */
+const mergeBlocksInPreviousOrder = (
+  previousBlocks: unknown[],
+  backendBlocks: unknown[],
+  survivors: unknown[],
+): unknown[] => {
+  // Survivors are references from previousBlocks.
+  const survivorSet = new Set(survivors);
+  // First occurrence wins: a duplicated key cannot anchor to two places.
+  const backendAnchorIndex = new Map<string, number>();
+  const backendTextIndexes: number[] = [];
+  const backendThinkingIndexes: number[] = [];
+  backendBlocks.forEach((block, index) => {
+    const key = structuralBlockKey(block);
+    if (key != null) {
+      if (!backendAnchorIndex.has(key)) {
+        backendAnchorIndex.set(key, index);
+      }
+      return;
+    }
+    if (!block || typeof block !== 'object') return;
+    const type = (block as Record<string, unknown>).type;
+    if (type === 'text') backendTextIndexes.push(index);
+    else if (type === 'thinking') backendThinkingIndexes.push(index);
+  });
+
+  // Anchor index -> survivors that sat below it, in their previous relative order.
+  // -1 collects survivors that sat above every backend block.
+  const survivorsByAnchor = new Map<number, unknown[]>();
+  let currentAnchor = -1;
+  let textSeen = 0;
+  let thinkingSeen = 0;
+  for (const previousBlock of previousBlocks) {
+    if (survivorSet.has(previousBlock)) {
+      const bucket = survivorsByAnchor.get(currentAnchor);
+      if (bucket) bucket.push(previousBlock);
+      else survivorsByAnchor.set(currentAnchor, [previousBlock]);
+      continue;
+    }
+    const key = structuralBlockKey(previousBlock);
+    if (key != null) {
+      const anchorIndex = backendAnchorIndex.get(key);
+      if (anchorIndex !== undefined) currentAnchor = anchorIndex;
+      continue;
+    }
+    if (!previousBlock || typeof previousBlock !== 'object') continue;
+    const type = (previousBlock as Record<string, unknown>).type;
+    if (type === 'text') {
+      const partnerIndex = backendTextIndexes[textSeen];
+      textSeen += 1;
+      if (partnerIndex !== undefined) currentAnchor = partnerIndex;
+    } else if (type === 'thinking') {
+      const partnerIndex = backendThinkingIndexes[thinkingSeen];
+      thinkingSeen += 1;
+      if (partnerIndex !== undefined) currentAnchor = partnerIndex;
+    }
+  }
+
+  const result: unknown[] = [];
+  const emitSurvivors = (anchor: number): void => {
+    const bucket = survivorsByAnchor.get(anchor);
+    if (bucket) result.push(...bucket);
+  };
+  emitSurvivors(-1);
+  backendBlocks.forEach((block, index) => {
+    result.push(block);
+    emitSurvivors(index);
+  });
+  return result;
 };
 
 /**

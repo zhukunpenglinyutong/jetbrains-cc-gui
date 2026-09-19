@@ -27,7 +27,7 @@ export function useActivityHeatmapData({ heatmap }) {
     [heatmap?.to, heatmap?.weeks, weekStartsOn]
   );
 
-  const weeks = normalized?.weeks || [];
+  const weeks = useMemo(() => normalized?.weeks || [], [normalized]);
 
   // 动态计算年度 Token 洞察统计数据
   const stats = useMemo(

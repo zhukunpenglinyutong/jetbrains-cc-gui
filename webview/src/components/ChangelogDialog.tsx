@@ -181,7 +181,7 @@ const ChangelogDialog = ({ isOpen, onClose, entries, initialPage = 0 }: Changelo
             <span className="changelog-version-badge">v{entry.version}</span>
             <span className="changelog-date">{entry.date}</span>
           </div>
-          <button className="changelog-close-btn" onClick={onClose}>
+          <button className="changelog-close-btn" onClick={onClose} aria-label={t('common.close')}>
             <span className="codicon codicon-close" />
           </button>
         </div>
@@ -229,9 +229,9 @@ const ChangelogDialog = ({ isOpen, onClose, entries, initialPage = 0 }: Changelo
           <div className="changelog-pagination">
             {totalPages <= 10 ? (
               <div className="changelog-dots">
-                {entries.map((_, idx) => (
+                {entries.map((pageEntry, idx) => (
                   <button
-                    key={idx}
+                    key={`${pageEntry.version}-${pageEntry.date}`}
                     className={`changelog-dot ${idx === currentPage ? 'active' : ''}`}
                     onClick={() => setCurrentPage(idx)}
                     aria-label={`Page ${idx + 1}`}

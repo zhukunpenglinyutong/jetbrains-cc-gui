@@ -79,7 +79,7 @@ export default function ProviderDialog({
       <div className="dialog provider-dialog">
         <div className="dialog-header">
           <h3>{isAdding ? t('settings.provider.dialog.addTitle') : t('settings.provider.dialog.editTitle', { name: provider?.name })}</h3>
-          <button className="close-btn" onClick={onClose}>
+          <button className="close-btn" onClick={onClose} aria-label={t('common.close')}>
             <span className="codicon codicon-close"></span>
           </button>
         </div>

@@ -75,6 +75,15 @@ export const AttachmentList = ({
             className="attachment-item"
             onClick={() => handleClick(attachment)}
             title={attachment.fileName}
+            role="button"
+            tabIndex={0}
+            aria-label={attachment.fileName}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleClick(attachment);
+              }
+            }}
           >
             {isImageAttachment(attachment) ? (
               <img
@@ -109,6 +118,8 @@ export const AttachmentList = ({
           onClick={closePreview}
           onKeyDown={(e) => e.key === 'Escape' && closePreview()}
           tabIndex={0}
+          role="button"
+          aria-label={t('chat.closePreview')}
         >
           <img
             className="image-preview-content"

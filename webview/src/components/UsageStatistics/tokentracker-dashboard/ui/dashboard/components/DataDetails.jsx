@@ -4,11 +4,8 @@ import { toFiniteNumber } from "../../../lib/format";
 import { useTokenFormat } from "../../../hooks/useTokenFormat.js";
 import { ProviderIcon } from "./ProviderIcon";
 import { ProjectDetailModal } from "./ProjectDetailModal.jsx";
-import {
-  ProjectAvatar,
-  githubOwnerFor,
-  splitProjectKey,
-} from "./project-usage-utils.jsx";
+import { ProjectAvatar } from "./project-usage-utils.jsx";
+import { githubOwnerFor, splitProjectKey } from "./projectForgeUtils.js";
 
 const PROJECT_SOURCE_ICON_LIMIT = 5;
 
@@ -189,9 +186,9 @@ export function DataDetails({
         }, 0);
         return (
           <div className="space-y-1">
-            {visibleEntries.map((entry, idx) => (
+            {visibleEntries.map((entry) => (
               <ProjectRow
-                key={entry?.project_key || entry?.project_ref || `entry-${idx}`}
+                key={entry?.project_key || entry?.project_ref || entry?.project_name}
                 entry={entry}
                 maxTokens={maxTokens}
                 copy={copy}

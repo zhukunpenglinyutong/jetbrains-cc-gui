@@ -32,7 +32,7 @@ const FileChangeRow = memo(({ fileChange, isUndoing, onOpen, onShowDiff, onUndo,
     onOpen(fileChange);
   }, [onOpen, fileChange]);
 
-  const handleOpenKeyDown = useCallback((event: React.KeyboardEvent<HTMLSpanElement>) => {
+  const handleOpenKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       onOpen(fileChange);
@@ -58,16 +58,15 @@ const FileChangeRow = memo(({ fileChange, isUndoing, onOpen, onShowDiff, onUndo,
       <FileIcon filePath={fileChange.filePath} />
 
       {/* File name — keyboard accessible since it acts as a button */}
-      <span
+      <button
+        type="button"
         className="file-change-name"
-        role="button"
-        tabIndex={0}
         onClick={handleOpen}
         onKeyDown={handleOpenKeyDown}
         title={fileChange.filePath}
       >
         {fileChange.fileName}
-      </span>
+      </button>
 
       {/* Multiple agents in this session edited the same file */}
       {fileChange.multiAgent === true && (

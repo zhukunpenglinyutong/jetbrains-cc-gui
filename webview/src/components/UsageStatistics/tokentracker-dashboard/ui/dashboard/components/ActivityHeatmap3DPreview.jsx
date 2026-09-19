@@ -8,8 +8,17 @@ import { Maximize2 } from "lucide-react";
 export function ActivityHeatmap3DPreview({ weeks, isDark, palette, onOpen }) {
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={copy("heatmap.3d.hover_tip")}
       onClick={onOpen}
-      className="cursor-pointer group relative overflow-hidden rounded-lg hover:border-oai-gray-400 dark:hover:border-oai-gray-700 border border-transparent transition-all"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen?.(e);
+        }
+      }}
+      className="cursor-pointer group relative overflow-hidden rounded-lg hover:border-oai-gray-400 dark:hover:border-oai-gray-700 border border-transparent transition-colors"
       title={copy("heatmap.3d.hover_tip")}
     >
       <ActivityHeatmap3D weeks={weeks} isDark={isDark} palette={palette} />

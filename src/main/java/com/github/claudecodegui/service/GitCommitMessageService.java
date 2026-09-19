@@ -133,7 +133,8 @@ public class GitCommitMessageService {
 
     /**
      * Generate the unified git diff for the changes. Delegates to
-     * {@link CommitDiffProvider} (real git4idea diff, with a content fallback).
+     * {@link CommitDiffProvider} (real git4idea diff when Git4Idea is present,
+     * otherwise the content fallback).
      */
     protected String generateGitDiff(@NotNull Collection<Change> changes) {
         return diffProvider.generate(changes);

@@ -147,27 +147,29 @@ const PermissionDialog = ({
     onSkip(request.channelId);
   }, [request, markSubmitted, onSkip]);
 
-  useEffect(() => {
-    if (!isOpen || !request) {
-      setHydratedRequestKey(null);
-      return;
+  // Hydrate draft state exactly once per request via render-time adjustment:
+  // the key is derived during render and the previous-key state tracks which
+  // request has already been hydrated (no effect chain, no extra commit).
+  const requestKey = isOpen && request ? request.dialogToken ?? request.channelId : null;
+  if (hydratedRequestKey !== requestKey) {
+    setHydratedRequestKey(requestKey);
+    if (requestKey !== null && request) {
+      const draft = readDialogDraft<PermissionDialogDraft>('permission', request.channelId, request.deadlineMs, request.dialogToken);
+      const restoredIndex = draft?.selectedIndex;
+      setShowCommand(draft?.showCommand !== false);
+      setSelectedIndex(
+        typeof restoredIndex === 'number' && Number.isInteger(restoredIndex)
+          ? Math.max(0, Math.min(2, restoredIndex))
+          : 0,
+      );
+      setDialogHeight(null);
     }
-    const draft = readDialogDraft<PermissionDialogDraft>('permission', request.channelId, request.deadlineMs, request.dialogToken);
-    const restoredIndex = draft?.selectedIndex;
-    setShowCommand(draft?.showCommand !== false);
-    setSelectedIndex(
-      typeof restoredIndex === 'number' && Number.isInteger(restoredIndex)
-        ? Math.max(0, Math.min(2, restoredIndex))
-        : 0,
-    );
-    setDialogHeight(null);
-    setHydratedRequestKey(request.dialogToken ?? request.channelId);
-  }, [isOpen, request?.channelId, request?.dialogToken, request?.deadlineMs, setDialogHeight]);
+  }
 
   useEffect(() => {
     const channelId = request?.channelId;
     const deadlineMs = request?.deadlineMs;
-    if (!isOpen || channelId === undefined || hydratedRequestKey !== (request?.dialogToken ?? channelId)) {
+    if (!isOpen || channelId === undefined) {
       return;
     }
     writeDialogDraft('permission', channelId, {
@@ -176,7 +178,7 @@ const PermissionDialog = ({
       showCommand,
       selectedIndex,
     });
-  }, [hydratedRequestKey, isOpen, request?.channelId, request?.dialogToken, request?.deadlineMs, selectedIndex, showCommand]);
+  }, [isOpen, request?.channelId, request?.dialogToken, request?.deadlineMs, selectedIndex, showCommand]);
 
   // Latest-handler ref: the keydown subscription stays stable across
   // selectedIndex/callback changes instead of re-subscribing every render.

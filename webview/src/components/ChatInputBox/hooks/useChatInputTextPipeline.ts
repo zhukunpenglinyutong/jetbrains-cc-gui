@@ -99,7 +99,7 @@ export function useChatInputTextPipeline({
       // Notify parent component that input is cleared
       onInput?.('');
     }
-  }, [onInput]);
+  }, [editableRef, onInput, setHasContent]);
 
   /**
    * Adjust input box height
@@ -115,7 +115,7 @@ export function useChatInputTextPipeline({
     el.style.height = 'auto';
     // Hide inner scrollbar, completely rely on outer container scrolling
     el.style.overflowY = 'hidden';
-  }, []);
+  }, [editableRef]);
 
   const {
     scheduleTagRendering,
@@ -171,7 +171,7 @@ export function useChatInputTextPipeline({
         }
         onInput?.(text);
       }, DEBOUNCE_TIMING.ON_INPUT_CALLBACK_MS),
-    [onInput]
+    [isExternalUpdateRef, onInput, sharedComposingRef]
   );
 
   /**
@@ -258,6 +258,9 @@ export function useChatInputTextPipeline({
       scheduleTagRendering,
       invalidateCache,
       syncInlineCompletion,
+      setHasContent,
+      editableRef,
+      sharedComposingRef,
     ]
   );
 
@@ -282,12 +285,12 @@ export function useChatInputTextPipeline({
     sharedComposingRef.current = true;
     cancelTagRendering();
     rawHandleCompositionStart();
-  }, [cancelTagRendering, rawHandleCompositionStart]);
+  }, [cancelTagRendering, rawHandleCompositionStart, sharedComposingRef]);
 
   const handleCompositionEnd = useCallback(() => {
     rawHandleCompositionEnd();
     sharedComposingRef.current = false;
-  }, [rawHandleCompositionEnd]);
+  }, [rawHandleCompositionEnd, sharedComposingRef]);
 
   useEffect(() => {
     setRenderFileTags(renderTagsNowIfSafe);

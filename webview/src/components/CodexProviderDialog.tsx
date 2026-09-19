@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useEffectEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CodexProviderConfig } from '../types/provider';
 import EnvVarsSection from './CodexProviderDialog/EnvVarsSection';
@@ -45,17 +45,18 @@ export default function CodexProviderDialog({
   } = useCodexProviderForm({ isOpen, provider, onSave, onClose, addToast });
 
   // ESC key to close
+  const handleEscapeKey = useEffectEvent((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onClose();
+    }
+  });
+
   useEffect(() => {
     if (isOpen) {
-      const handleEscape = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          onClose();
-        }
-      };
-      window.addEventListener('keydown', handleEscape);
-      return () => window.removeEventListener('keydown', handleEscape);
+      window.addEventListener('keydown', handleEscapeKey);
+      return () => window.removeEventListener('keydown', handleEscapeKey);
     }
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) {
     return null;
@@ -70,7 +71,7 @@ export default function CodexProviderDialog({
               ? t('settings.codexProvider.dialog.addTitle')
               : t('settings.codexProvider.dialog.editTitle', { name: provider?.name })}
           </h3>
-          <button className="close-btn" onClick={onClose}>
+          <button className="close-btn" onClick={onClose} aria-label={t('common.close')}>
             <span className="codicon codicon-close"></span>
           </button>
         </div>

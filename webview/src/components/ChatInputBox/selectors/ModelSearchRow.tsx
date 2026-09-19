@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface ModelSearchRowProps {
@@ -13,16 +14,22 @@ export const ModelSearchRow = ({
   onSearchQueryChange,
 }: ModelSearchRowProps) => {
   const { t } = useTranslation();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Focus on open — the row mounts together with the dropdown.
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   return (
     <div className="selector-search-row selector-search-row--sticky">
       <input
+        ref={inputRef}
         className="selector-search-input"
         data-testid="model-search-input"
         value={searchQuery}
         onChange={(event) => onSearchQueryChange(event.target.value)}
         placeholder={t('models.searchPlaceholder', { defaultValue: 'Search models' })}
-        autoFocus
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       />

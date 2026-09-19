@@ -1,6 +1,7 @@
 import React from "react";
 import { copy } from "../../../lib/copy";
-import { ActivityHeatmap3D, PALETTES } from "./ActivityHeatmap3D";
+import { ActivityHeatmap3D } from "./ActivityHeatmap3D";
+import { PALETTES } from "./activityHeatmap3dUtils";
 import { PALETTE_ACCENTS } from "./activityHeatmapScale";
 import { RotateCcw, X, Terminal, Info, Play, Pause } from "lucide-react";
 
@@ -42,7 +43,8 @@ export function ActivityHeatmapModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 z-50 p-2 rounded-full border border-oai-gray-200/60 dark:border-oai-gray-800/60 bg-white/50 dark:bg-oai-gray-900/50 text-oai-gray-500 dark:text-oai-gray-400 hover:text-oai-gray-900 dark:hover:text-white hover:rotate-90 hover:scale-105 active:scale-95 transition-all duration-300"
+          aria-label={copy("trend.zoom.close_aria")}
+          className="absolute top-4 right-4 z-50 p-2 rounded-full border border-oai-gray-200/60 dark:border-oai-gray-800/60 bg-white/50 dark:bg-oai-gray-900/50 text-oai-gray-500 dark:text-oai-gray-400 hover:text-oai-gray-900 dark:hover:text-white hover:rotate-90 hover:scale-105 active:scale-95 transition-[color,transform] duration-300"
         >
           <X size={16} />
         </button>
@@ -75,7 +77,7 @@ export function ActivityHeatmapModal({
             {/* 1. Total Tokens */}
             <div className="flex flex-col gap-1 relative group cursor-help">
               {/* Detailed Interactive Tooltip */}
-              <div className="absolute left-0 bottom-full mb-2 pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 z-50">
+              <div className="absolute left-0 bottom-full mb-2 pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-[opacity,transform] duration-200 z-50">
                 <div className="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 text-[10px] font-semibold font-mono rounded-lg px-2.5 py-1.5 shadow-xl border border-zinc-200 dark:border-zinc-800/80 whitespace-nowrap flex flex-col">
                   <span className="text-[9px] text-zinc-400 dark:text-zinc-500">{copy("heatmap.3d.modal.stats.precision_total_tokens")}</span>
                   <span className="mt-0.5 font-bold text-zinc-900 dark:text-zinc-50">
@@ -137,7 +139,7 @@ export function ActivityHeatmapModal({
             {/* 5. Peak Day & Value */}
             <div className="flex flex-col gap-1 col-span-2 relative group cursor-help">
               {/* Detailed Tooltip */}
-              <div className="absolute left-0 bottom-full mb-2 pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 z-50">
+              <div className="absolute left-0 bottom-full mb-2 pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-[opacity,transform] duration-200 z-50">
                 <div className="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 text-[10px] font-semibold font-mono rounded-lg px-2.5 py-1.5 shadow-xl border border-zinc-200 dark:border-zinc-800/80 whitespace-nowrap flex flex-col">
                   <span className="text-[9px] text-zinc-400 dark:text-zinc-500">{copy("heatmap.3d.modal.stats.precision_peak_value")}</span>
                   <span className="mt-0.5 font-bold text-zinc-900 dark:text-zinc-50">
@@ -176,7 +178,7 @@ export function ActivityHeatmapModal({
             </div>
 
             <div
-              className="pl-3.5 border-l-2 relative transition-all duration-300 group"
+              className="pl-3.5 border-l-2 relative transition-[border-color] duration-300 group"
               style={{ borderColor: activeAccent.rawColor }}
             >
               {/* Subtle blur background reflection */}
@@ -217,7 +219,7 @@ export function ActivityHeatmapModal({
         <div className="flex-1 h-full relative flex items-center justify-center overflow-hidden p-4">
 
           {/* Decorative Ambient Radial Glow Spheres */}
-          <div className="absolute top-1/4 left-1/3 w-96 h-96 rounded-full blur-[130px] pointer-events-none -translate-x-1/2 -translate-y-1/2 transition-all duration-500" style={{ backgroundColor: activeAccent.rawColor + "15" }} />
+          <div className="absolute top-1/4 left-1/3 w-96 h-96 rounded-full blur-[130px] pointer-events-none -translate-x-1/2 -translate-y-1/2 transition-[background-color] duration-500" style={{ backgroundColor: activeAccent.rawColor + "15" }} />
           <div className="absolute bottom-1/4 right-1/3 w-80 h-80 rounded-full blur-[120px] pointer-events-none translate-x-1/2 translate-y-1/2 bg-purple-500/[0.04] dark:bg-purple-500/[0.08]" />
 
           {/* Floating Interactive HUD Capsule */}
@@ -232,7 +234,7 @@ export function ActivityHeatmapModal({
                     type="button"
                     onClick={() => onPaletteChange(key)}
                     title={copy(`heatmap.3d.modal.palette.${key}`)}
-                    className={`w-3.5 h-3.5 rounded-full transition-all duration-200 relative hover:scale-125 ${
+                    className={`w-3.5 h-3.5 rounded-full transition-transform duration-200 relative hover:scale-125 ${
                       key === "emerald" ? "bg-[#10b981]" : key === "ocean" ? "bg-[#3b82f6]" : key === "neon" ? "bg-[#a855f7]" : "bg-[#f59e0b]"
                     }`}
                   >
@@ -258,7 +260,7 @@ export function ActivityHeatmapModal({
                   if (resetViewRef.current) resetViewRef.current.toggleAutoRotate(next);
                 }}
                 title={modalAutoRotate ? copy("heatmap.3d.modal.control.pause") : copy("heatmap.3d.modal.control.play")}
-                className={`p-1.5 rounded-full transition-all duration-200 hover:bg-oai-gray-100 dark:hover:bg-oai-gray-800 ${
+                className={`p-1.5 rounded-full transition-colors duration-200 hover:bg-oai-gray-100 dark:hover:bg-oai-gray-800 ${
                   modalAutoRotate ? activeAccent.accentText : "text-oai-gray-400 hover:text-oai-gray-600 dark:hover:text-oai-gray-250"
                 }`}
               >
@@ -273,7 +275,7 @@ export function ActivityHeatmapModal({
                   if (resetViewRef.current) resetViewRef.current.reset();
                 }}
                 title={copy("heatmap.3d.modal.control.reset")}
-                className="p-1.5 rounded-full text-oai-gray-400 hover:text-oai-gray-600 dark:hover:text-oai-gray-250 hover:bg-oai-gray-100 dark:hover:bg-oai-gray-800 transition-all duration-200"
+                className="p-1.5 rounded-full text-oai-gray-400 hover:text-oai-gray-600 dark:hover:text-oai-gray-250 hover:bg-oai-gray-100 dark:hover:bg-oai-gray-800 transition-colors duration-200"
               >
                 <RotateCcw size={12} />
               </button>

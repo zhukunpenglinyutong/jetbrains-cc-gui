@@ -6,6 +6,8 @@ import { useInlineHistoryCompletion } from './useInlineHistoryCompletion.js';
 import {
   agentProvider,
   agentToDropdownItem,
+  codexCommandProvider,
+  codexCommandToDropdownItem,
   commandToDropdownItem,
   dollarCommandProvider,
   dollarCommandToDropdownItem,
@@ -17,6 +19,10 @@ import {
   type AgentItem,
   type PromptItem,
 } from '../providers/index.js';
+import {
+  getCommandInsertionText,
+  isCommandPlaceholder,
+} from '../utils/commandCompletionUtils.js';
 import { setCursorOffset } from '../utils/selectionUtils.js';
 
 interface UseChatInputCompletionsCoordinatorOptions {
@@ -65,6 +71,11 @@ export function useChatInputCompletionsCoordinator({
   onOpenPromptSettings,
 }: UseChatInputCompletionsCoordinatorOptions) {
   const renderFileTagsRef = useRef<() => void>(() => {});
+  const isCodexProvider = currentProvider === 'codex';
+  const commandProvider = isCodexProvider ? codexCommandProvider : slashCommandProvider;
+  const commandItemConverter = isCodexProvider ? codexCommandToDropdownItem : commandToDropdownItem;
+  const dollarProvider = isCodexProvider ? codexCommandProvider : dollarCommandProvider;
+  const dollarItemConverter = isCodexProvider ? codexCommandToDropdownItem : dollarCommandToDropdownItem;
 
   const fileCompletion = useCompletionDropdown<FileItem>({
     trigger: '@',
@@ -98,14 +109,14 @@ export function useChatInputCompletionsCoordinator({
 
   const commandCompletion = useCompletionDropdown<CommandItem>({
     trigger: '/',
-    provider: slashCommandProvider,
-    toDropdownItem: commandToDropdownItem,
+    provider: commandProvider,
+    toDropdownItem: commandItemConverter,
     onSelect: (command, query) => {
-      if (!editableRef.current || !query) return;
+      if (!editableRef.current || !query || isCommandPlaceholder(command)) return;
       replaceTextAndSync(
         editableRef,
         getTextContent(),
-        `${command.label} `,
+        isCodexProvider ? getCommandInsertionText(command) : `${command.label} `,
         query,
         commandCompletion.replaceText,
         () => handleInputRef.current()
@@ -182,14 +193,14 @@ export function useChatInputCompletionsCoordinator({
 
   const dollarCommandCompletion = useCompletionDropdown<CommandItem>({
     trigger: '$',
-    provider: dollarCommandProvider,
-    toDropdownItem: dollarCommandToDropdownItem,
+    provider: dollarProvider,
+    toDropdownItem: dollarItemConverter,
     onSelect: (skill, query) => {
-      if (!editableRef.current || !query) return;
+      if (!editableRef.current || !query || isCommandPlaceholder(skill)) return;
       replaceTextAndSync(
         editableRef,
         getTextContent(),
-        `${skill.label} `,
+        isCodexProvider ? getCommandInsertionText(skill) : `${skill.label} `,
         query,
         dollarCommandCompletion.replaceText,
         () => handleInputRef.current()

@@ -190,9 +190,9 @@ export const ConversationSearch = memo(function ConversationSearch({
     (query.trim().length > 0 && !isSearching && matches.length === 0);
 
   return (
-    <div
-      className="cc-search-panel"
+    <search
       role="search"
+      className="cc-search-panel"
       aria-label={t('chat.search.ariaLabel', { defaultValue: 'Search in conversation' })}
       onMouseDown={(e) => {
         // Prevent clicks inside the panel from blurring the input
@@ -282,6 +282,6 @@ export const ConversationSearch = memo(function ConversationSearch({
           })}
         </div>
       )}
-    </div>
+    </search>
   );
 });

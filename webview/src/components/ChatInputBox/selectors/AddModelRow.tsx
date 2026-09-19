@@ -20,7 +20,15 @@ export const AddModelRow = ({ onAddModelClick }: AddModelRowProps) => {
       <div className="selector-divider" />
       <div
         className="selector-option selector-option-add"
+        role="button"
+        tabIndex={0}
         onClick={onAddModelClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onAddModelClick();
+          }
+        }}
       >
         <span className="codicon codicon-add selector-add-icon" />
         <span>{t('models.addModel')}</span>

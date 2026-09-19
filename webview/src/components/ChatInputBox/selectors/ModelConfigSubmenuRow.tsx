@@ -47,9 +47,18 @@ export const ModelConfigSubmenuRow = ({
       className={`selector-option${active ? ' selected' : ''}`}
       data-testid={testId}
       onMouseEnter={onHover}
+      role="button"
+      tabIndex={0}
       onClick={(event) => {
         event.stopPropagation();
         onOpen();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          event.stopPropagation();
+          onOpen();
+        }
       }}
       style={OPTION_RELATIVE_STYLE}
     >

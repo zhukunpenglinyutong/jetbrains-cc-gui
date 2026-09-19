@@ -36,13 +36,15 @@ export const ContextTools: React.FC<ContextToolsProps> = memo(({
 
   return (
     <div className="context-tools">
-      <div
+      <button
+        type="button"
         className="context-tool-btn"
         onClick={handleAttachClick}
         title="Add attachment"
+        aria-label="Add attachment"
       >
         <span className="codicon codicon-attach" />
-      </div>
+      </button>
 
       {/* Token Indicator */}
       {showUsage && (
@@ -64,6 +66,7 @@ export const ContextTools: React.FC<ContextToolsProps> = memo(({
         className="hidden-file-input"
         onChange={handleFileChange}
         style={HIDDEN_INPUT_STYLE}
+        aria-label="Add attachment"
       />
 
       <div className="context-tool-divider" />

@@ -9,7 +9,7 @@ import { join } from 'path';
 import { setupApiKey, loadClaudeSettings, getCliUserAgent } from '../config/api-config.js';
 import { ensureAnthropicSdk, ensureBedrockSdk } from './claude/message-utils.js';
 import { resolveModelFromSettings } from '../utils/model-utils.js';
-import { getClaudeProjectSessionFilePath, getCodemossDir } from '../utils/path-utils.js';
+import { getExistingClaudeProjectSessionFilePath, getCodemossDir } from '../utils/path-utils.js';
 
 const DEFAULT_HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 const MAX_CONVERSATION_TEXT = 1000;
@@ -133,7 +133,7 @@ async function isTitleGenerationEnabled() {
 }
 
 function getSessionFilePath(sessionId, cwd) {
-  return getClaudeProjectSessionFilePath(sessionId, cwd);
+  return getExistingClaudeProjectSessionFilePath(sessionId, cwd);
 }
 
 // --- API ---

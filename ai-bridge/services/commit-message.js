@@ -192,10 +192,52 @@ async function generateWithClaudeAsk(prompt, model, config) {
   console.log('[MESSAGE_END]');
 
   console.log(`[CommitMessage] Claude response text length: ${streamedText.length}`);
+
+  // Third-party Anthropic-compatible endpoints (e.g. DeepSeek) intermittently
+  // return empty text on the streaming protocol even though the plain JSON path
+  // is reliable. Fall back to a non-streaming create() call before giving up,
+  // so a transient empty stream no longer fails the whole generation.
+  if (!streamedText.trim()) {
+    streamedText = await askClaudeNonStreaming(client, modelId, prompt);
+  }
+
   if (streamedText.trim()) {
     return streamedText.trim();
   }
   throw new Error('Claude commit response is empty');
+}
+
+/**
+ * Non-streaming one-shot "ask" via messages.create(). Third-party
+ * Anthropic-compatible endpoints (DeepSeek) intermittently return empty text on
+ * the streaming protocol; the plain create() JSON response maps text blocks
+ * reliably. Retries once on an empty result to absorb transient flakiness.
+ * Exposed for tests.
+ */
+export async function askClaudeNonStreaming(client, modelId, prompt) {
+  const ATTEMPTS = 2;
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+    console.log(`[CommitMessage] Non-streaming messages.create() attempt ${attempt}/${ATTEMPTS}...`);
+    // Same request shape as the streaming ask path: reasoning models (DeepSeek)
+    // otherwise spend the whole budget on thinking blocks and emit no text.
+    const response = await client.messages.create(buildCommitAskRequest(modelId, prompt));
+    let text = '';
+    if (response && Array.isArray(response.content)) {
+      for (const block of response.content) {
+        if (block && block.type === 'text' && block.text) {
+          text += block.text;
+        }
+      }
+    }
+    console.log(`[CommitMessage] Non-streaming attempt ${attempt} text length: ${text.length}`);
+    if (text.trim()) {
+      return text;
+    }
+    if (attempt < ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+  return '';
 }
 
 /**

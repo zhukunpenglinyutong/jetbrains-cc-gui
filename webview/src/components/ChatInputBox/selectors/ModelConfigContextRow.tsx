@@ -32,10 +32,20 @@ export const ModelConfigContextRow = ({
     <div
       className="selector-option"
       data-testid="model-config-option-context"
+      role="button"
+      tabIndex={0}
       onClick={(event) => {
         event.stopPropagation();
         if (!supported) return;
         onChange?.(!enabled);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!supported) return;
+          onChange?.(!enabled);
+        }
       }}
       onMouseEnter={onHover}
       style={CONTEXT_SWITCH_STYLE}

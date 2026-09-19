@@ -88,7 +88,7 @@ function FlatBar({ kind, isPreview }) {
       data-trend-bar="true"
       data-trend-kind={kind}
       className={cn(
-        "h-full w-full group-hover:brightness-110 transition-all",
+        "h-full w-full group-hover:brightness-110 transition-[filter]",
         kind === "real" ? "" : "bg-oai-gray-100 dark:bg-oai-gray-800",
       )}
       style={{
@@ -109,7 +109,7 @@ function SegmentedBar({ segments, totalSegmentsValue }) {
       <div
         key={sIdx}
         data-trend-bar={sIdx === 0 ? "true" : undefined}
-        className="w-full group-hover:brightness-110 transition-all"
+        className="w-full group-hover:brightness-110 transition-[filter]"
         style={{
           height: segHeight,
           background: segColor,
@@ -160,7 +160,7 @@ export const TrendBar = React.memo(function TrendBar({
       <div className="absolute inset-x-0 top-0 bottom-0 bg-oai-gray-100/70 dark:bg-white/[0.08] opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none" />
 
       <div
-        className="absolute inset-x-0 bottom-0 flex flex-col-reverse justify-start overflow-hidden cursor-pointer transition-all duration-200"
+        className="absolute inset-x-0 bottom-0 flex flex-col-reverse justify-start overflow-hidden cursor-pointer transition-[height,min-height] duration-200"
         style={{
           height: barHeight,
           minHeight,

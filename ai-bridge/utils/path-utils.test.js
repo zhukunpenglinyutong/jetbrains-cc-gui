@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir } from 'os';
@@ -10,6 +12,7 @@ import {
   normalizePathForComparison,
   getClaudeProjectKey,
   getClaudeProjectSessionFilePath,
+  getClaudeProjectSessionFileCandidates,
 } from './path-utils.js';
 
 // This test sits in <bridge>/utils/, so the bridge install dir is one level up.
@@ -108,6 +111,38 @@ test('selectWorkingDirectory skips bridge dir when it appears as process.cwd() c
 test('getClaudeProjectKey matches the session writer for common paths', () => {
   assert.equal(getClaudeProjectKey('D:\\Projects\\My Project'), 'D--Projects-My-Project');
   assert.equal(getClaudeProjectKey('/Users/test/demo'), '-Users-test-demo');
+});
+
+test('getClaudeProjectKey resolves symlinked project paths like the CLI (issue #1789)', () => {
+  const realDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-key-real-'));
+  const linkDir = `${realDir}-link`;
+  try {
+    let linkCreated = true;
+    try {
+      fs.symlinkSync(realDir, linkDir, 'dir');
+    } catch {
+      linkCreated = false;
+    }
+    if (!linkCreated) return; // platform refused to create a symlink
+    assert.equal(getClaudeProjectKey(linkDir), realDir.replace(/[^a-zA-Z0-9]/g, '-'));
+    const sessionFile = getClaudeProjectSessionFilePath('session-1', linkDir);
+    assert.ok(sessionFile.includes(realDir.replace(/[^a-zA-Z0-9]/g, '-')));
+    const candidates = getClaudeProjectSessionFileCandidates('session-1', linkDir);
+    assert.equal(candidates.length, 2);
+    assert.ok(candidates[1].includes(linkDir.replace(/[^a-zA-Z0-9]/g, '-')));
+  } finally {
+    try {
+      fs.unlinkSync(linkDir);
+    } catch {
+      // link may not exist when creation failed
+    }
+    fs.rmSync(realDir, { recursive: true, force: true });
+  }
+});
+
+test('getClaudeProjectKey falls back to raw encoding for nonexistent paths', () => {
+  const ghost = path.join(os.tmpdir(), 'cc-gui-nonexistent-ghost');
+  assert.equal(getClaudeProjectKey(ghost), ghost.replace(/[^a-zA-Z0-9]/g, '-'));
 });
 
 test('getClaudeProjectKey preserves the complete key for long paths', () => {

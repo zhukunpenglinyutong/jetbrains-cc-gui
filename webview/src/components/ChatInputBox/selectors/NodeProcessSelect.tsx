@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import ConfirmDialog from '../../ConfirmDialog';
 import { NodeProcessList } from './NodeProcessList';
+import {
+  DROPDOWN_MAX_HEIGHT_PX,
+  DROPDOWN_MAX_WIDTH_PX,
+  getEmbeddedNodeProcessDropdownLayout,
+  type EmbeddedNodeProcessDropdownLayout,
+} from './nodeProcessDropdownLayout';
 import { getAppViewport } from '../../../utils/viewport';
 import {
   fetchNodeProcesses,
@@ -36,13 +42,7 @@ const DROPDOWN_STYLE_EMBEDDED: React.CSSProperties = {
   padding: '6px 0',
 };
 
-const DROPDOWN_SIDE_OVERLAP_PX = 30;
-const DROPDOWN_VIEWPORT_PADDING_PX = 8;
 const DROPDOWN_MIN_WIDTH_PX = 260;
-const DROPDOWN_MIN_FLUSH_WIDTH_PX = 180;
-const DROPDOWN_MAX_WIDTH_PX = 360;
-const DROPDOWN_MAX_HEIGHT_PX = 380;
-const DROPDOWN_BOTTOM_CLEARANCE_PX = 72;
 
 // Pending PIDs are per-component-instance state. Each ConfigSelect (one per tab)
 // owns its own pending set — sharing across instances would surface
@@ -52,62 +52,6 @@ type PendingConfirm =
   | { kind: 'kill'; proc: NodeProcessInfo }
   | { kind: 'restart'; proc: NodeProcessInfo }
   | { kind: 'killAll'; orphans: NodeProcessInfo[] };
-
-export interface EmbeddedNodeProcessDropdownLayout {
-  flipToLeft: boolean;
-  maxWidth: number;
-  maxHeight: number;
-  topOffset: number;
-  horizontalOverlap: number;
-}
-
-export interface EmbeddedNodeProcessDropdownLayoutInput {
-  parentRect: { left: number; right: number; top: number };
-  viewportWidth: number;
-  viewportHeight: number;
-  dropdownHeight: number;
-}
-
-export function getEmbeddedNodeProcessDropdownLayout({
-  parentRect,
-  viewportWidth,
-  viewportHeight,
-  dropdownHeight,
-}: EmbeddedNodeProcessDropdownLayoutInput): EmbeddedNodeProcessDropdownLayout {
-  const normalAvailableWidth = Math.max(
-    0,
-    viewportWidth - DROPDOWN_VIEWPORT_PADDING_PX - parentRect.right,
-  );
-  const flippedAvailableWidth = Math.max(
-    0,
-    parentRect.left - DROPDOWN_VIEWPORT_PADDING_PX,
-  );
-  const normalShortfall = Math.max(0, DROPDOWN_MIN_FLUSH_WIDTH_PX - normalAvailableWidth);
-  const flippedShortfall = Math.max(0, DROPDOWN_MIN_FLUSH_WIDTH_PX - flippedAvailableWidth);
-  const flipToLeft = normalShortfall > 0 && flippedShortfall < normalShortfall;
-  const availableWidthWithoutOverlap = flipToLeft ? flippedAvailableWidth : normalAvailableWidth;
-  const horizontalOverlap = Math.min(
-    DROPDOWN_SIDE_OVERLAP_PX,
-    Math.max(0, DROPDOWN_MIN_FLUSH_WIDTH_PX - availableWidthWithoutOverlap),
-  );
-  const availableWidth = availableWidthWithoutOverlap + horizontalOverlap;
-  const desiredHeight = Math.min(DROPDOWN_MAX_HEIGHT_PX, Math.max(1, Math.ceil(dropdownHeight)));
-  const availableBelow = viewportHeight - DROPDOWN_VIEWPORT_PADDING_PX - parentRect.top;
-  const minTopOffset = DROPDOWN_VIEWPORT_PADDING_PX - parentRect.top;
-  const topOffset = Math.max(
-    minTopOffset,
-    Math.min(0, availableBelow - desiredHeight - DROPDOWN_BOTTOM_CLEARANCE_PX),
-  );
-  const availableHeight = viewportHeight - DROPDOWN_VIEWPORT_PADDING_PX - parentRect.top - topOffset;
-
-  return {
-    flipToLeft,
-    maxWidth: Math.max(1, Math.min(DROPDOWN_MAX_WIDTH_PX, Math.floor(availableWidth))),
-    maxHeight: Math.max(1, Math.min(DROPDOWN_MAX_HEIGHT_PX, Math.floor(availableHeight))),
-    topOffset,
-    horizontalOverlap,
-  };
-}
 
 /**
  * NodeProcessSelect - secondary menu that lists all Node.js child processes
@@ -370,17 +314,24 @@ export const NodeProcessSelect = ({ embedded = false, onClose, onToast }: NodePr
 
   // Click-outside to close when not embedded (parent ConfigSelect already handles close-on-outside
   // in embedded mode, so we only auto-close when used standalone).
+  const notifyClose = useEffectEvent(() => {
+    onClose?.();
+  });
+
   useEffect(() => {
     if (embedded) return;
+    let armed = false;
+    const id = window.setTimeout(() => { armed = true; }, 0);
     const handleClickOutside = () => {
-      onClose?.();
+      if (!armed) return;
+      notifyClose();
     };
-    const id = window.setTimeout(() => document.addEventListener('mousedown', handleClickOutside), 0);
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
       window.clearTimeout(id);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [embedded, onClose]);
+  }, [embedded]);
 
   return (
     <>

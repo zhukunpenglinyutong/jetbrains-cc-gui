@@ -293,12 +293,10 @@ export function useTrendData({
     baseUrl,
     from,
     mockEnabled,
-    guestAllowed,
     cacheAllowed,
     mode,
     months,
     readCache,
-    tokenReady,
     sharedEnabled,
     sharedFrom,
     sharedRows,
@@ -402,6 +400,12 @@ export function useTrendData({
     cacheAllowed,
     clearCache,
     isLocalMode,
+    from,
+    to,
+    mode,
+    timeZone,
+    tzOffsetMinutes,
+    now,
   ]);
 
   const normalizedSource = mockEnabled ? "mock" : source;

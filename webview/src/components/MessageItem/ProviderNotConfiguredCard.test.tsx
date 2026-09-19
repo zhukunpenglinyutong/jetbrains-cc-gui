@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isProviderNotConfiguredError } from './ProviderNotConfiguredCard';
+import { isProviderNotConfiguredError } from './providerNotConfigured';
 
 describe('isProviderNotConfiguredError', () => {
   it('matches legacy provider-not-configured errors', () => {

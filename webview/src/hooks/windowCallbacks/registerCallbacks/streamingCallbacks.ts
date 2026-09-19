@@ -13,7 +13,7 @@ import type { ClaudeMessage, ClaudeRawMessage } from '../../../types';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import { THROTTLE_INTERVAL } from '../../useStreamingMessages';
 import { parseSequence } from '../parseSequence';
-import { getStreamEndHandlingMode } from '../messageSync';
+import { getStreamEndHandlingMode, getRawUuid, mergeRawBlocksForFinalization } from '../messageSync';
 
 /**
  * Pour every tool_use_id carried by tool_result blocks inside one message's raw
@@ -163,31 +163,18 @@ function streamingBubbleHasContent(message: ClaudeMessage): boolean {
   return false;
 }
 
-// Helper to measure total text length from raw blocks (for comparing completeness).
-// Handles both object and JSON string formats of raw.
-type TextBlock = { type: 'text'; text: string };
-const hasTextBlocks = (value: unknown): value is { message: { content: TextBlock[] } } => {
-  if (!value || typeof value !== 'object') return false;
-  const msg = (value as { message?: unknown }).message;
-  if (!msg || typeof msg !== 'object') return false;
-  const content = (msg as { content?: unknown }).content;
-  return Array.isArray(content);
-};
-const getTextLenFromRaw = (raw: unknown): number => {
-  let parsedRaw: unknown = raw;
-  if (typeof raw === 'string') {
-    try {
-      parsedRaw = JSON.parse(raw);
-    } catch (error) {
-      console.warn('[Frontend] Failed to parse raw JSON for length comparison:', error);
-      return 0;
-    }
-  }
-  if (!hasTextBlocks(parsedRaw)) return 0;
-  return parsedRaw.message.content
-    .filter((b): b is TextBlock => b?.type === 'text' && typeof b.text === 'string')
-    .reduce((sum, b) => sum + b.text.length, 0);
-};
+/** UUIDs distinguish existing backend rows from local placeholders. */
+type MessageIdentity = 'same' | 'conflict' | 'unknown';
+
+function compareMessageIdentity(
+  candidate: ClaudeMessage | undefined,
+  incoming: ClaudeMessage,
+): MessageIdentity {
+  const candidateUuid = candidate ? getRawUuid(candidate) : undefined;
+  const incomingUuid = getRawUuid(incoming);
+  if (!candidateUuid || !incomingUuid) return 'unknown';
+  return candidateUuid === incomingUuid ? 'same' : 'conflict';
+}
 
 export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): void {
   const {
@@ -212,6 +199,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     lastThinkingUpdateRef,
     thinkingUpdateTimeoutRef,
     getOrCreateStreamingAssistantIndex,
+    findLastAssistantIndex,
     patchAssistantForStreaming,
   } = options;
 
@@ -532,20 +520,23 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // remain stuck in "pending" state (spinner) even though the tool had completed.
     let backendSnapshotContent: string | undefined;
     let backendSnapshotRaw: ClaudeRawMessage | string | undefined = undefined;
+    let backendSnapshotAssistant: ClaudeMessage | undefined;
     const pendingToolResultMsgs: Array<{ content: string; raw: Record<string, unknown> }> = [];
     if (typeof window.__pendingUpdateJson === 'string' && window.__pendingUpdateJson.length > 0) {
       try {
         const parsed = JSON.parse(window.__pendingUpdateJson) as Array<Record<string, unknown>>;
         for (let i = parsed.length - 1; i >= 0; i--) {
           if (parsed[i]?.type === 'assistant') {
+            const candidate = parsed[i] as unknown as ClaudeMessage;
             const rawContent = parsed[i].content;
             const content = typeof rawContent === 'string' ? rawContent : '';
-            if (content) {
-              backendSnapshotContent = content;
-              const rawVal = parsed[i].raw;
-              if (rawVal != null && (typeof rawVal === 'object' || typeof rawVal === 'string')) {
-                backendSnapshotRaw = rawVal as ClaudeRawMessage | string;
-              }
+            backendSnapshotAssistant = candidate;
+            backendSnapshotContent = content;
+            const rawVal = parsed[i].raw;
+            if (rawVal != null && (typeof rawVal === 'object' || typeof rawVal === 'string')) {
+              // Keep raw even when content is empty: tool-only assistant messages
+              // carry their complete structure exclusively in raw.message.content.
+              backendSnapshotRaw = rawVal as ClaudeRawMessage | string;
             }
             break;
           }
@@ -667,31 +658,86 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
       // streaming assistant. Without this, the final content flush is silently
       // dropped. The re-scan only runs when the primary index is invalid, so the
       // hot path (index still valid) pays no cost.
+      const belongsToEndedTurn = (message: ClaudeMessage | undefined): boolean => {
+        if (message?.type !== 'assistant') return false;
+        if (message.__turnId != null) {
+          if (message.__turnId !== endedStreamingTurnId) return false;
+          // A bubble stamped with the ended turn id IS this turn's bubble. The
+          // backend row's uuid rotates per tool-loop iteration (Java's
+          // MessageMerger copies every top-level field, uuid included, onto the
+          // single live row), and the bubble inherits it from its last APPLIED
+          // flush. When the final flush is still parked in __pendingUpdateJson,
+          // the bubble carries iteration N's uuid against the snapshot's N+1 —
+          // a conflict that proves nothing about turn identity. Rejecting here
+          // would append a second bubble for the same turn.
+          return true;
+        }
+        // No turn stamp: uuid is the only identity evidence available.
+        return !backendSnapshotAssistant
+          || compareMessageIdentity(message, backendSnapshotAssistant) !== 'conflict';
+      };
       let idx = endedStreamingMessageIndex;
-      if (!(idx >= 0 && idx < prev.length && prev[idx]?.type === 'assistant')
+      if (!belongsToEndedTurn(prev[idx])
           && endedStreamingTurnId > 0) {
         for (let i = prev.length - 1; i >= 0; i--) {
           const msg = prev[i];
-          if (msg?.type === 'assistant' && msg.__turnId === endedStreamingTurnId) {
+          if (belongsToEndedTurn(msg) && msg.__turnId === endedStreamingTurnId) {
             idx = i;
             break;
           }
         }
       }
-      if (idx >= 0 && idx < prev.length && prev[idx]?.type === 'assistant') {
-        newMessages = [...prev];
+      if (!belongsToEndedTurn(prev[idx]) && backendSnapshotAssistant) {
+        let fallbackAssistantIndex = findLastAssistantIndex(prev);
+        for (let i = prev.length - 1; i >= 0; i--) {
+          if (prev[i].type === 'assistant'
+              && compareMessageIdentity(prev[i], backendSnapshotAssistant) === 'same') {
+            fallbackAssistantIndex = i;
+            break;
+          }
+        }
+        const fallbackAssistant = fallbackAssistantIndex >= 0 ? prev[fallbackAssistantIndex] : undefined;
+        const identity = compareMessageIdentity(fallbackAssistant, backendSnapshotAssistant);
+        if (identity === 'same') {
+          // The same assistant already sits in the list, finalized by an earlier
+          // path. Patch it in place instead of appending, which would leave two
+          // bubbles for one turn.
+          idx = fallbackAssistantIndex;
+        } else if (identity === 'unknown' && fallbackAssistant?.isStreaming
+            && belongsToEndedTurn(fallbackAssistant)) {
+          // No uuid to compare on either side, but a still-streaming last assistant
+          // is this turn's target: its uuid arrives at finalize time, so its missing
+          // identity cannot be used to prove it belongs to a different turn.
+          idx = fallbackAssistantIndex;
+        } else {
+          // Either a proven different turn, or nothing streaming to patch. Appending
+          // is safe against duplicates: the identity check above already rejected the
+          // case where this assistant is present, and Java defers history reloads
+          // while a stream (or its final snapshot) is pending, so no history load can
+          // have inserted the same message in between. __turnId is stamped by the
+          // finalize block below, which every path through here reaches.
+          newMessages = [...prev, {
+            ...backendSnapshotAssistant,
+            isStreaming: false,
+          }];
+          idx = newMessages.length - 1;
+        }
+      }
+      if (idx >= 0 && idx < newMessages.length && newMessages[idx]?.type === 'assistant'
+          && (newMessages !== prev || belongsToEndedTurn(newMessages[idx]))) {
+        if (newMessages === prev) {
+          newMessages = [...prev];
+        }
         // FIX: Keep __turnId on the message for a short period to prevent
         // incorrect merging with history messages. The __turnId will be
         // removed later when history is loaded or a new turn starts.
         const finalContent = endedStreamingContent || newMessages[idx].content || '';
-        // Use backend raw blocks only if they are more complete than the existing raw.
-        // The backend snapshot may be from an earlier coalescer flush, so the existing
-        // raw (updated by subsequent deltas) could actually be more up-to-date.
+        // Merge backend structure into the latest frontend raw instead of choosing by
+        // text length. A tool-only assistant can contain more structural information
+        // while having fewer text characters than the locally accumulated snapshot.
         let finalRaw = newMessages[idx].raw;
         if (endedBackendRaw != null) {
-          if (getTextLenFromRaw(endedBackendRaw) >= getTextLenFromRaw(finalRaw)) {
-            finalRaw = endedBackendRaw;
-          }
+          finalRaw = mergeRawBlocksForFinalization(finalRaw, endedBackendRaw) as ClaudeMessage['raw'];
         }
         newMessages[idx] = {
           ...newMessages[idx],

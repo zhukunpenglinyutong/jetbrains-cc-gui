@@ -12,6 +12,7 @@ import {
   getUsageHeatmap,
 } from "../lib/api";
 import { isTauriRuntime } from "../lib/tt-transport";
+import { useLatestRequestGuard } from "./use-latest-request-guard";
 import { touchLocalStorageCacheKey } from "../lib/local-storage-lru";
 
 // Bounds the per-range response cache keys (they embed weeks/tz/device, so
@@ -90,8 +91,22 @@ export function useActivityHeatmap({
     }
   }, [storageKey]);
 
+  const beginRequest = useLatestRequestGuard([
+    baseUrl,
+    accessToken,
+    range.from,
+    range.to,
+    weeks,
+    weekStartsOn,
+    deviceId,
+    timeZone,
+    tzOffsetMinutes,
+  ]);
+
   const refresh = useCallback(async () => {
+    const isCurrent = beginRequest();
     const resolvedToken = await resolveAuthAccessToken(accessToken);
+    if (!isCurrent()) return;
     if (!resolvedToken && !mockEnabled && !isLocalMode) return;
     const tokenForFetch = resolvedToken;
     const heatmapFetcher = getUsageHeatmap;
@@ -110,6 +125,7 @@ export function useActivityHeatmap({
           timeZone,
           tzOffsetMinutes,
         });
+        if (!isCurrent()) return;
         const weeksData = Array.isArray(res?.weeks) ? res.weeks : [];
         if (!weeksData.length && cacheAllowed) {
           const cached = readCache();
@@ -207,6 +223,7 @@ export function useActivityHeatmap({
         timeZone,
         tzOffsetMinutes,
       });
+      if (!isCurrent()) return;
       const rows = Array.isArray(dailyRes?.data) ? dailyRes.data : [];
       setDaily(rows);
       const localHeatmap = buildActivityHeatmap({
@@ -241,6 +258,7 @@ export function useActivityHeatmap({
         clearCache();
       }
     } catch (e) {
+      if (!isCurrent()) return;
       if (cacheAllowed) {
         const cached = readCache();
         if (cached?.heatmap) {
@@ -263,18 +281,16 @@ export function useActivityHeatmap({
         setSource("edge");
       }
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, [
     accessToken,
     baseUrl,
     mockEnabled,
-    guestAllowed,
     cacheAllowed,
     range.from,
     range.to,
     readCache,
-    tokenReady,
     timeZone,
     tzOffsetMinutes,
     weekStartsOn,
@@ -283,6 +299,7 @@ export function useActivityHeatmap({
     writeCache,
     isLocalMode,
     deviceId,
+    beginRequest,
   ]);
 
   useEffect(() => {

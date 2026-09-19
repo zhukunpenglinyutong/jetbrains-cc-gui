@@ -1,12 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClaudeMessage } from '../types';
 import { getLogicalOffsetTop } from '../utils/viewport';
-
-interface AnchorItem {
-  id: string;
-  position: number;
-  preview: string;
-}
+import { sampleAnchorItems, type AnchorItem } from './sampleAnchorItems';
 
 interface MessageAnchorRailProps {
   messages: ClaudeMessage[];
@@ -18,18 +13,7 @@ interface MessageAnchorRailProps {
 }
 
 const MAX_PREVIEW_LENGTH = 300;
-const MAX_ANCHOR_COUNT = 30;
 const TOOLTIP_DELAY_MS = 500;
-
-export function sampleAnchorItems(items: AnchorItem[], maxCount = MAX_ANCHOR_COUNT): AnchorItem[] {
-  if (items.length <= maxCount || maxCount < 2) {
-    return items;
-  }
-  return Array.from({ length: maxCount }, (_, index) => {
-    const sourceIndex = Math.round((index / (maxCount - 1)) * (items.length - 1));
-    return items[sourceIndex];
-  });
-}
 
 function getAnchorStyle(position: number): React.CSSProperties {
   return { top: `${position * 100}%` };
@@ -111,11 +95,16 @@ export const MessageAnchorRail = memo(function MessageAnchorRail({
     }));
   }, [messages, messageKeys, collapsedCount]);
 
-  useEffect(() => {
+  // Render-time adjustment: prune active/tooltip anchor ids that no longer
+  // exist after the anchor set changes (same pruning the old effect did in
+  // its functional updates, without the extra commit).
+  const [prevAnchors, setPrevAnchors] = useState(anchors);
+  if (prevAnchors !== anchors) {
+    setPrevAnchors(anchors);
     const anchorIds = new Set(anchors.map((anchor) => anchor.id));
-    setActiveAnchorId((current) => current && !anchorIds.has(current) ? null : current);
-    setTooltipAnchorId((current) => current && !anchorIds.has(current) ? null : current);
-  }, [anchors]);
+    if (activeAnchorId && !anchorIds.has(activeAnchorId)) setActiveAnchorId(null);
+    if (tooltipAnchorId && !anchorIds.has(tooltipAnchorId)) setTooltipAnchorId(null);
+  }
 
   // Scroll to a specific anchor message
   const scrollToAnchor = useCallback((messageId: string) => {
@@ -194,7 +183,7 @@ export const MessageAnchorRail = memo(function MessageAnchorRail({
   if (anchors.length === 0) return null;
 
   return (
-    <div className="messages-anchor-rail" role="navigation" aria-label="Message anchors">
+    <nav className="messages-anchor-rail" aria-label="Message anchors">
       <div className="messages-anchor-track" aria-hidden="true" />
       {anchors.map((anchor, index) => {
         const isActive = activeAnchorId === anchor.id;
@@ -223,6 +212,6 @@ export const MessageAnchorRail = memo(function MessageAnchorRail({
           </div>
         );
       })}
-    </div>
+    </nav>
   );
 });

@@ -77,45 +77,47 @@ public class CodexMessageHandler implements MessageCallback {
      */
     @Override
     public void onMessage(String type, String content) {
-        // [FIX] Handle multiple message types
-        // Codex message-service.js sends:
-        // - type='assistant': contains thinking, tool_use, text
-        // - type='user': contains tool_result
-        LOG.debug("CodexMessageHandler.onMessage: type=" + type + ", content length=" + (content != null ? content.length() : 0));
+        synchronized (state.getMessageStateLock()) {
+            // [FIX] Handle multiple message types
+            // Codex message-service.js sends:
+            // - type='assistant': contains thinking, tool_use, text
+            // - type='user': contains tool_result
+            LOG.debug("CodexMessageHandler.onMessage: type=" + type + ", content length=" + (content != null ? content.length() : 0));
 
-        if ("assistant".equals(type)) {
-            // Handle assistant message (thinking, tool_use, text)
-            handleAssistantMessage(content);
-        } else if ("user".equals(type)) {
-            // Handle user message (tool_result)
-            handleUserMessage(content);
-        } else if ("result".equals(type)) {
-            // Handle result message (usage stats, etc.)
-            handleResultMessage(content);
-        } else if ("session_id".equals(type)) {
-            // Handle session_id/thread_id (for session recovery)
-            handleSessionId(content);
-        } else if ("event_msg".equals(type)) {
-            handleEventMessage(content);
-        } else if ("stream_start".equals(type)) {
-            handleStreamStart();
-        } else if ("stream_end".equals(type)) {
-            handleStreamEnd();
-        } else if ("thinking_delta".equals(type)) {
-            handleThinkingDelta(content);
-        } else if ("content_delta".equals(type) || "content".equals(type)) {
-            // Handle streaming content delta (legacy format, kept for compatibility)
-            // content_delta: streaming incremental
-            // content: complete content block
-            handleContentDelta(content);
-        } else if ("status".equals(type)) {
-            if (content != null && !content.trim().isEmpty()) {
-                callbackHandler.notifyStatusMessage(content);
+            if ("assistant".equals(type)) {
+                // Handle assistant message (thinking, tool_use, text)
+                handleAssistantMessage(content);
+            } else if ("user".equals(type)) {
+                // Handle user message (tool_result)
+                handleUserMessage(content);
+            } else if ("result".equals(type)) {
+                // Handle result message (usage stats, etc.)
+                handleResultMessage(content);
+            } else if ("session_id".equals(type)) {
+                // Handle session_id/thread_id (for session recovery)
+                handleSessionId(content);
+            } else if ("event_msg".equals(type)) {
+                handleEventMessage(content);
+            } else if ("stream_start".equals(type)) {
+                handleStreamStart();
+            } else if ("stream_end".equals(type)) {
+                handleStreamEnd();
+            } else if ("thinking_delta".equals(type)) {
+                handleThinkingDelta(content);
+            } else if ("content_delta".equals(type) || "content".equals(type)) {
+                // Handle streaming content delta (legacy format, kept for compatibility)
+                // content_delta: streaming incremental
+                // content: complete content block
+                handleContentDelta(content);
+            } else if ("status".equals(type)) {
+                if (content != null && !content.trim().isEmpty()) {
+                    callbackHandler.notifyStatusMessage(content);
+                }
+            } else if ("message_end".equals(type)) {
+                handleMessageEnd();
+            } else {
+                LOG.debug("CodexMessageHandler: Unhandled message type: " + type);
             }
-        } else if ("message_end".equals(type)) {
-            handleMessageEnd();
-        } else {
-            LOG.debug("CodexMessageHandler: Unhandled message type: " + type);
         }
     }
 
@@ -127,35 +129,37 @@ public class CodexMessageHandler implements MessageCallback {
      */
     @Override
     public void onError(String error) {
-        boolean wasStreaming = isStreaming;
-        isStreaming = false;
-        streamEndedThisTurn = false;
-        state.setError(error);
-        state.setBusy(false);
-        state.setLoading(false);
+        synchronized (state.getMessageStateLock()) {
+            boolean wasStreaming = isStreaming;
+            isStreaming = false;
+            streamEndedThisTurn = false;
+            state.setError(error);
+            state.setBusy(false);
+            state.setLoading(false);
 
-        Message errorMessage = new Message(Message.Type.ERROR, error);
-        state.addMessage(errorMessage);
+            Message errorMessage = new Message(Message.Type.ERROR, error);
+            state.addMessage(errorMessage);
 
-        // Signal stream-end BEFORE pushing the error snapshot (mirrors the PR #1421
-        // fix in ClaudeMessageHandler.onError). The webview's onStreamEnd cancels any
-        // pending updateMessages rAF; pushing the error snapshot first lets that
-        // cancellation drop it, so the "API request failed" bubble never renders.
-        // Ending the stream first lets the subsequent snapshot land normally.
-        //
-        // Kept conditional on wasStreaming — deliberately NOT unconditional like the
-        // Claude handler. A non-streaming Codex turn maps to the webview's 'minimal'
-        // stream-end mode (getStreamEndHandlingMode: provider === 'codex'), which only
-        // cancels pending updates and does NOT run the dangling-tool cleanup the Claude
-        // 'skip' mode does. So an unconditional call would buy no tool cleanup here
-        // while adding a redundant minimal-mode pass. The dangling-tool-on-non-
-        // streaming-error case needs a separate webview-side fix, not this ordering one.
-        if (wasStreaming) {
-            callbackHandler.notifyStreamEnd();
+            // Signal stream-end BEFORE pushing the error snapshot (mirrors the PR #1421
+            // fix in ClaudeMessageHandler.onError). The webview's onStreamEnd cancels any
+            // pending updateMessages rAF; pushing the error snapshot first lets that
+            // cancellation drop it, so the "API request failed" bubble never renders.
+            // Ending the stream first lets the subsequent snapshot land normally.
+            //
+            // Kept conditional on wasStreaming — deliberately NOT unconditional like the
+            // Claude handler. A non-streaming Codex turn maps to the webview's 'minimal'
+            // stream-end mode (getStreamEndHandlingMode: provider === 'codex'), which only
+            // cancels pending updates and does NOT run the dangling-tool cleanup the Claude
+            // 'skip' mode does. So an unconditional call would buy no tool cleanup here
+            // while adding a redundant minimal-mode pass. The dangling-tool-on-non-
+            // streaming-error case needs a separate webview-side fix, not this ordering one.
+            if (wasStreaming) {
+                callbackHandler.notifyStreamEnd();
+            }
+            callbackHandler.notifyMessageUpdate(state.getMessages());
+            resetStreamingAccumulator();
+            callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
         }
-        callbackHandler.notifyMessageUpdate(state.getMessages());
-        resetStreamingAccumulator();
-        callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
 
     /**
@@ -166,23 +170,25 @@ public class CodexMessageHandler implements MessageCallback {
      */
     @Override
     public void onComplete(SDKResult result) {
-        boolean streamEndedBeforeComplete = streamEndedThisTurn;
-        boolean wasStreaming = isStreaming;
+        synchronized (state.getMessageStateLock()) {
+            boolean streamEndedBeforeComplete = streamEndedThisTurn;
+            boolean wasStreaming = isStreaming;
 
-        isStreaming = false;
-        streamEndedThisTurn = false;
-        state.setBusy(false);
-        state.setLoading(false);
-        state.updateLastModifiedTime();
+            isStreaming = false;
+            streamEndedThisTurn = false;
+            state.setBusy(false);
+            state.setLoading(false);
+            state.updateLastModifiedTime();
 
-        if (wasStreaming && !streamEndedBeforeComplete) {
-            LOG.warn("Codex onComplete called without prior stream_end; forcing stream cleanup");
-            callbackHandler.notifyMessageUpdate(state.getMessages());
-            callbackHandler.notifyStreamEnd();
+            if (wasStreaming && !streamEndedBeforeComplete) {
+                LOG.warn("Codex onComplete called without prior stream_end; forcing stream cleanup");
+                callbackHandler.notifyMessageUpdate(state.getMessages());
+                callbackHandler.notifyStreamEnd();
+            }
+
+            resetStreamingAccumulator();
+            callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
         }
-
-        resetStreamingAccumulator();
-        callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
 
     // ===== Private methods =====

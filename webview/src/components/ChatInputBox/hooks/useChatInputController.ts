@@ -308,7 +308,7 @@ export function useChatInputController({
     };
     document.addEventListener('ideaSend', handler);
     return () => document.removeEventListener('ideaSend', handler);
-  }, [handleSubmit, isLoading]);
+  }, [handleSubmit, isLoading, isComposingRef]);
 
   // Paste and drop hook
   const { handlePaste, handleDragOver, handleDrop } = usePasteAndDrop({

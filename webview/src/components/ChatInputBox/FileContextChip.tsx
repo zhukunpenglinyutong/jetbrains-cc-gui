@@ -46,11 +46,13 @@ export const FileContextChip: React.FC<FileContextChipProps> = memo(({
   const [showEnablePopover, setShowEnablePopover] = useState(false);
 
   // Reset popover state when autoOpenFileEnabled changes
-  useEffect(() => {
+  const [prevAutoOpenFileEnabled, setPrevAutoOpenFileEnabled] = useState(autoOpenFileEnabled);
+  if (prevAutoOpenFileEnabled !== autoOpenFileEnabled) {
+    setPrevAutoOpenFileEnabled(autoOpenFileEnabled);
     if (autoOpenFileEnabled) {
       setShowEnablePopover(false);
     }
-  }, [autoOpenFileEnabled]);
+  }
 
   // Click outside or Escape to close popover
   useEffect(() => {
@@ -118,6 +120,15 @@ export const FileContextChip: React.FC<FileContextChipProps> = memo(({
           className="codicon codicon-close context-close"
           onClick={onClearFile}
           title="Remove file context"
+          role="button"
+          tabIndex={0}
+          aria-label="Remove file context"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onClearFile?.();
+            }
+          }}
         />
       </div>
     );

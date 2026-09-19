@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getCachedNativeSystemDark,
   isNativeEmbed,
@@ -6,6 +6,7 @@ import {
   subscribeNativeSystemAppearance,
   syncNativeChromeAppearance,
 } from "../../lib/native-bridge.js";
+import { ThemeContext } from "./theme-context.js";
 
 const THEME_STORAGE_KEY = "tokentracker-theme";
 
@@ -13,9 +14,6 @@ const THEME_STORAGE_KEY = "tokentracker-theme";
  * @typedef {"light" | "dark" | "system"} Theme
  * @typedef {{ theme: Theme, setTheme: (theme: Theme) => void, toggleTheme: () => void, resolvedTheme: "light" | "dark" }} ThemeContextValue
  */
-
-/** @type {React.Context<ThemeContextValue | null>} */
-export const ThemeContext = createContext(null);
 
 /**
  * Get initial theme from localStorage or default to "system"
@@ -41,6 +39,16 @@ function getInitialTheme() {
 function getSystemTheme() {
   if (typeof window === "undefined") return "light";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+// 读取当前系统外观：原生嵌入时优先用模块级缓存（always-on listener 维护），
+// 缓存为空再用 matchMedia 兜底（WKWebView 的 matchMedia 不完全可信，但
+// 作为兜底总比锁死旧值好）。
+function readSystemAppearance() {
+  if (isNativeEmbed()) {
+    const cached = getCachedNativeSystemDark();
+    if (typeof cached === "boolean") return cached ? "dark" : "light";
+  }
+  return getSystemTheme();
 }
 
 /**
@@ -69,15 +77,20 @@ function applyThemeToDOM(resolvedTheme) {
  */
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(getInitialTheme);
-  const [resolvedTheme, setResolvedTheme] = useState(() => {
-    if (theme !== "system") return theme;
-    if (isNativeEmbed()) {
-      // 优先用原生缓存（模块加载时已挂上 always-on listener）
-      const cached = getCachedNativeSystemDark();
-      if (typeof cached === "boolean") return cached ? "dark" : "light";
+  // resolvedTheme 由 theme 派生：非 system 直接等于 theme；system 时读取
+  // 系统外观（原生缓存优先，matchMedia 兜底）。派生发生在渲染期，不再经过
+  // layout effect → setState → effect 的链路。
+  const [systemTheme, setSystemTheme] = useState(readSystemAppearance);
+  const resolvedTheme = theme === "system" ? systemTheme : theme;
+
+  // 进入 system 模式时立刻同步一次系统外观（渲染期调整），避免停留在旧值一帧。
+  const [prevTheme, setPrevTheme] = useState(theme);
+  if (prevTheme !== theme) {
+    setPrevTheme(theme);
+    if (theme === "system") {
+      setSystemTheme(readSystemAppearance());
     }
-    return getSystemTheme();
-  });
+  }
 
   const themeRef = useRef(theme);
   useEffect(() => {
@@ -94,25 +107,11 @@ export function ThemeProvider({ children }) {
     };
   }, [resolvedTheme]);
 
-  // theme 切换时先同步 resolved（避免 native push 还没到时停留在旧值一帧）
-  useLayoutEffect(() => {
-    if (theme === "system") {
-      if (isNativeEmbed()) {
-        // 用模块级缓存立即得到当前系统外观；缓存空时再用 matchMedia 兜底
-        const cached = getCachedNativeSystemDark();
-        if (typeof cached === "boolean") {
-          setResolvedTheme(cached ? "dark" : "light");
-        } else {
-          // 不信 WKWebView 的 matchMedia（手动切过亮/暗后常驻 light），但作为兜底总比锁死旧值好
-          setResolvedTheme(getSystemTheme());
-        }
-        // 主动请求一次最新值以刷新缓存
-        requestNativeSystemAppearance();
-        return;
-      }
-      setResolvedTheme(getSystemTheme());
-    } else {
-      setResolvedTheme(theme);
+  // theme 切换为 system 时主动请求一次最新原生外观以刷新缓存（渲染期调整
+  // 已经同步了当前值，这里只是触发原生侧推送，属于真正的副作用）。
+  useEffect(() => {
+    if (theme === "system" && isNativeEmbed()) {
+      requestNativeSystemAppearance();
     }
   }, [theme]);
 
@@ -121,7 +120,7 @@ export function ThemeProvider({ children }) {
     if (!isNativeEmbed()) return;
     const unsubscribe = subscribeNativeSystemAppearance((isDark) => {
       if (themeRef.current === "system") {
-        setResolvedTheme(isDark ? "dark" : "light");
+        setSystemTheme(isDark ? "dark" : "light");
       }
     });
     return unsubscribe;
@@ -137,7 +136,7 @@ export function ThemeProvider({ children }) {
 
     const handleChange = (e) => {
       const newResolved = e.matches ? "dark" : "light";
-      setResolvedTheme(newResolved);
+      setSystemTheme(newResolved);
     };
 
     // Modern API

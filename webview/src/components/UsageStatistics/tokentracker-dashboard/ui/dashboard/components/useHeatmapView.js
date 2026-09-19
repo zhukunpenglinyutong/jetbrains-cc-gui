@@ -34,7 +34,7 @@ export function useHeatmapView({ embedded, scrollRef, weeks }) {
     if (view !== "2d") return;
     const el = scrollRef.current;
     if (el) el.scrollLeft = el.scrollWidth;
-  }, [weeks, view]);
+  }, [weeks, view, scrollRef]);
 
   return { view, setView };
 }

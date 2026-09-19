@@ -99,40 +99,54 @@ class ClaudeHistorySearchService {
             return details;
         }
 
-        String sanitizedPath = PathUtils.sanitizePath(projectPath);
-        Path projectDir = projectsDir.resolve(sanitizedPath);
+        List<Path> projectDirs = resolveExistingProjectDirs(projectPath);
 
-        if (Files.exists(projectDir) && Files.isDirectory(projectDir)) {
+        if (!projectDirs.isEmpty()) {
             details.put("exists", true);
 
-            try {
-                List<Map<String, Object>> conversations = new ArrayList<>();
-
-                Files.list(projectDir)
-                        .filter(Files::isDirectory)
-                        .forEach(subDir -> {
-                            Path convFile = subDir.resolve("conversation.json");
-                            if (Files.exists(convFile)) {
-                                try {
-                                    String content = new String(Files.readAllBytes(convFile), java.nio.charset.StandardCharsets.UTF_8);
-                                    Map<String, Object> convData = new HashMap<>();
-                                    convData.put("id", subDir.getFileName().toString());
-                                    convData.put("data", JsonParser.parseString(content));
-                                    convData.put("timestamp", Files.getLastModifiedTime(convFile).toMillis());
-                                    conversations.add(convData);
-                                } catch (Exception e) {
-                                    // Skip read failures
+            Map<String, Map<String, Object>> conversationsById = new HashMap<>();
+            for (Path projectDir : projectDirs) {
+                try (java.util.stream.Stream<Path> subDirs = Files.list(projectDir)) {
+                    subDirs.filter(Files::isDirectory)
+                            .forEach(subDir -> {
+                                String conversationId = subDir.getFileName().toString();
+                                if (conversationsById.containsKey(conversationId)) {
+                                    return;
                                 }
-                            }
-                        });
-
-                details.put("conversations", conversations);
-            } catch (IOException e) {
-                // Ignore read failures
+                                Path convFile = subDir.resolve("conversation.json");
+                                if (Files.exists(convFile)) {
+                                    try {
+                                        String content = new String(Files.readAllBytes(convFile), java.nio.charset.StandardCharsets.UTF_8);
+                                        Map<String, Object> convData = new HashMap<>();
+                                        convData.put("id", conversationId);
+                                        convData.put("data", JsonParser.parseString(content));
+                                        convData.put("timestamp", Files.getLastModifiedTime(convFile).toMillis());
+                                        conversationsById.put(conversationId, convData);
+                                    } catch (Exception e) {
+                                        // Skip read failures
+                                    }
+                                }
+                            });
+                } catch (IOException e) {
+                    // Ignore read failures
+                }
             }
+
+            details.put("conversations", new ArrayList<>(conversationsById.values()));
         }
 
         return details;
+    }
+
+    private List<Path> resolveExistingProjectDirs(String projectPath) {
+        List<Path> projectDirs = new ArrayList<>();
+        for (String projectKey : PathUtils.getSanitizedPathCandidates(projectPath)) {
+            Path projectDir = projectsDir.resolve(projectKey);
+            if (Files.isDirectory(projectDir)) {
+                projectDirs.add(projectDir);
+            }
+        }
+        return projectDirs;
     }
 
     /**
@@ -168,15 +182,15 @@ class ClaudeHistorySearchService {
                 return gson.toJson(new ArrayList<>());
             }
 
-            String sanitizedPath = PathUtils.sanitizePath(projectPath);
-            Path projectDir = projectsDir.resolve(sanitizedPath);
-
-            if (!Files.exists(projectDir) || !Files.isDirectory(projectDir)) {
-                return gson.toJson(new ArrayList<>());
+            Path sessionFile = null;
+            for (String projectKey : PathUtils.getSanitizedPathCandidates(projectPath)) {
+                Path candidate = projectsDir.resolve(projectKey).resolve(sessionId + ".jsonl");
+                if (Files.isRegularFile(candidate)) {
+                    sessionFile = candidate;
+                    break;
+                }
             }
-
-            Path sessionFile = projectDir.resolve(sessionId + ".jsonl");
-            if (!Files.exists(sessionFile)) {
+            if (sessionFile == null) {
                 return gson.toJson(new ArrayList<>());
             }
 

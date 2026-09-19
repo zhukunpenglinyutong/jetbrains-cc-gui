@@ -144,4 +144,37 @@ describe('useMessageQueue', () => {
     expect(result.current.queueApi.hasQueuedMessages).toBe(false);
     expect(onExecute).not.toHaveBeenCalled();
   });
+  it('reorders the queue by ordered ids', () => {
+    const { result } = renderQueue(true);
+
+    act(() => {
+      result.current.queueApi.enqueue('first');
+      result.current.queueApi.enqueue('second');
+      result.current.queueApi.enqueue('third');
+    });
+    const [a, b, c] = result.current.queueApi.queue;
+    act(() => {
+      result.current.queueApi.reorder([c.id, a.id, b.id]);
+    });
+
+    expect(result.current.queueApi.queue.map(m => m.content)).toEqual(['third', 'first', 'second']);
+  });
+
+  it('reorder appends items enqueued mid-drag and ignores unknown or duplicate ids', () => {
+    const { result } = renderQueue(true);
+
+    act(() => {
+      result.current.queueApi.enqueue('first');
+      result.current.queueApi.enqueue('second');
+      result.current.queueApi.enqueue('third');
+    });
+    const [a, , c] = result.current.queueApi.queue;
+    // 'second' is absent from orderedIds (as if enqueued mid-drag); the
+    // unknown and duplicated ids must be dropped without losing anything.
+    act(() => {
+      result.current.queueApi.reorder([c.id, 'unknown-id', a.id, a.id]);
+    });
+
+    expect(result.current.queueApi.queue.map(m => m.content)).toEqual(['third', 'first', 'second']);
+  });
 });

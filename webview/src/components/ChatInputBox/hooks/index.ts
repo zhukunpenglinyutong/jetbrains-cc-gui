@@ -42,6 +42,7 @@ export { useSpaceKeyListener } from './useSpaceKeyListener.js';
 export { useCompositionSafeTagRendering } from './useCompositionSafeTagRendering.js';
 export { useResizableChatInputBox, computeResize } from './useResizableChatInputBox.js';
 export { useInlineHistoryCompletion } from './useInlineHistoryCompletion.js';
+export { useDragAutoScroll, computeAutoScrollDelta } from './useDragAutoScroll.js';
 export {
   useToolbarSelectorCompact,
   shouldCollapseToolbarSelectors,

@@ -34,7 +34,7 @@ public class MessageMerger {
             if ("message".equals(entry.getKey())) {
                 continue;
             }
-            merged.add(entry.getKey(), entry.getValue());
+            merged.add(entry.getKey(), entry.getValue().deepCopy());
         }
 
         JsonObject incomingMessage = newRaw.has("message") && newRaw.get("message").isJsonObject()
@@ -54,7 +54,7 @@ public class MessageMerger {
             if ("content".equals(entry.getKey())) {
                 continue;
             }
-            mergedMessage.add(entry.getKey(), entry.getValue());
+            mergedMessage.add(entry.getKey(), entry.getValue().deepCopy());
         }
 
         mergeAssistantContentArray(mergedMessage, incomingMessage);

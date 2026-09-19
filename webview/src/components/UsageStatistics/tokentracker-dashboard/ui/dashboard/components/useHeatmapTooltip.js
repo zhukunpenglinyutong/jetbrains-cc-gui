@@ -26,7 +26,7 @@ export function useHeatmapTooltip(scrollRef) {
     };
     el.addEventListener("scroll", handleScroll);
     return () => el.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [scrollRef]);
 
   const handleCellMouseEnter = (e, cell) => {
     if (!cell || !cell.day) return;

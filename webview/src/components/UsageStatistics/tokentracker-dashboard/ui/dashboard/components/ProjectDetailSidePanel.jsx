@@ -3,11 +3,8 @@ import { GitBranch } from "lucide-react";
 import { copy } from "../../../lib/copy";
 import { toDisplayNumber } from "../../../lib/format";
 import { ProviderIcon } from "./ProviderIcon";
-import {
-  ProjectAvatar,
-  forgeKindFromHost,
-  githubOwnerFor,
-} from "./project-usage-utils.jsx";
+import { ProjectAvatar } from "./project-usage-utils.jsx";
+import { forgeKindFromHost, githubOwnerFor } from "./projectForgeUtils.js";
 import { formatPercent } from "./projectDetailModalUtils.jsx";
 
 // Shares the terminal-native inspection language of TrendMonitorZoomModal /

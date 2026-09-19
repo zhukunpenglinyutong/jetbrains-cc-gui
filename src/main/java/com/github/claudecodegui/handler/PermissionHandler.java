@@ -861,6 +861,12 @@ public class PermissionHandler extends BaseMessageHandler {
 
     /**
      * Handle AskUserQuestion response messages from JavaScript.
+     *
+     * <p>A response that does not match the pending request is ignored, but
+     * never silently: a stale dialog token used to leave the future untouched
+     * until the safety net resolved it with an empty answer, which the bridge
+     * forwards as {@code {"answers":[]}} — indistinguishable from the user
+     * cancelling. The WARN below is what makes that distinguishable in a log.
      */
     private void handleAskUserQuestionResponse(String jsonContent) {
         LOG.debug("[ASK_USER_QUESTION][HANDLE_RESPONSE] payloadLength=" + payloadLength(jsonContent));
@@ -871,14 +877,28 @@ public class PermissionHandler extends BaseMessageHandler {
             JsonObject answers = response.has("answers") && !response.get("answers").isJsonNull()
                 ? response.get("answers").getAsJsonObject()
                 : new JsonObject();
+            String dialogToken = responseToken(response);
 
             PendingDialogShow<JsonObject> pendingFuture;
             synchronized (dialogLock) {
                 pendingFuture = pendingAskUserQuestionRequests.get(requestId);
-                if (pendingFuture == null || !Objects.equals(pendingFuture.dialogToken, responseToken(response))) {
+                if (pendingFuture != null && !Objects.equals(pendingFuture.dialogToken, dialogToken)) {
+                    // Keep the pending request: it belongs to a newer dialog that
+                    // reused this request id (session switch, webview reload).
+                    LOG.warn("[ASK_USER_QUESTION][HANDLE_RESPONSE] Ignoring a stale response for requestId="
+                            + requestId + " (token " + dialogToken + " != pending "
+                            + pendingFuture.dialogToken + "); the pending dialog stays open");
                     return;
                 }
-                pendingAskUserQuestionRequests.remove(requestId);
+                if (pendingFuture != null) {
+                    pendingAskUserQuestionRequests.remove(requestId);
+                }
+            }
+
+            if (pendingFuture == null) {
+                LOG.warn("[ASK_USER_QUESTION][HANDLE_RESPONSE] No pending request for requestId="
+                        + requestId + " (already answered, cleared, or timed out) — ignoring the response");
+                return;
             }
 
             LOG.debug("[ASK_USER_QUESTION][HANDLE_RESPONSE] Completing future with answerCount=" + answers.size());

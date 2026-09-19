@@ -518,7 +518,14 @@ export function registerMessageCallbacks(
           ? Math.max(0, storedBaseIndex)
           : 0;
         const backendMessageCount = prev.length - prependedCount;
+        // A tail cannot bridge a missing prefix in an existing full transcript.
+        // Retain it until a complete snapshot arrives; empty pages can start a window.
         const hasFullPrefix = currentBaseIndex === 0 && baseIndex <= backendMessageCount;
+        const startsTailWindow = baseIndex > 0
+          && (currentBaseIndex > 0 || prev.length === 0);
+        if (!hasFullPrefix && !startsTailWindow && baseIndex > 0) {
+          return prev;
+        }
         let merged = hasFullPrefix
           ? [...prev.slice(0, prependedCount + baseIndex), ...tail]
           : [...prependedHistory, ...tail];
@@ -801,6 +808,7 @@ export function registerMessageCallbacks(
     }
     window.__deniedToolIds?.clear();
     window.__codexHistoryPageInfo = undefined;
+    window.__claudeHistoryPageInfo = undefined;
     for (const pending of pendingCodexHistoryPages.values()) {
       clearTimeout(pending.timeoutId);
     }
@@ -973,6 +981,45 @@ export function registerMessageCallbacks(
       addToast(error.message || 'Failed to load earlier Codex history', 'error');
     } catch (parseError) {
       console.error('[Frontend] Failed to parse Codex history page error:', parseError);
+    }
+  };
+
+  // Claude history pagination callbacks
+  window.claudeHistoryPageInfo = (json: string) => {
+    try {
+      const info = JSON.parse(json) as CodexHistoryPageInfo;
+      if (currentSessionIdRef.current !== info.sessionId) return;
+      // Cache so a MessageList that mounts after this callback (e.g. provider
+      // switch remount) can still restore the pagination state.
+      // The Java bridge sends a slimmer payload than the codex one; fill the
+      // CodexHistoryPageInfo fields it lacks so both caches share one shape.
+      window.__claudeHistoryPageInfo = {
+        pageId: '',
+        sessionId: info.sessionId,
+        mode: info.cursorReset ? 'replace' : 'prepend',
+        fromTurn: info.fromTurn,
+        toTurn: info.fromTurn,
+        totalTurns: info.totalTurns,
+        hasMore: info.hasMore,
+        loadedMessageCount: 0,
+        cursorReset: info.cursorReset,
+      };
+      window.dispatchEvent(new CustomEvent<CodexHistoryPageInfo>('claude-history-page-info', {
+        detail: info,
+      }));
+    } catch (error) {
+      console.error('[Frontend] Failed to parse Claude history page info:', error);
+    }
+  };
+
+  window.claudeHistoryPageError = (json: string) => {
+    try {
+      const error = JSON.parse(json) as { sessionId?: string; message?: string };
+      if (error.sessionId && currentSessionIdRef.current !== error.sessionId) return;
+      window.dispatchEvent(new CustomEvent('claude-history-page-error', { detail: error }));
+      addToast(error.message || 'Failed to load earlier Claude history', 'error');
+    } catch (parseError) {
+      console.error('[Frontend] Failed to parse Claude history page error:', parseError);
     }
   };
 

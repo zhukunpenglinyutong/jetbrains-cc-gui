@@ -1,0 +1,24 @@
+<idea-plugin>
+    <!--
+    Git-specific features for CC GUI.
+    This configuration is only loaded when the Git4Idea plugin is available.
+    Git4Idea is bundled in all JetBrains IDEs that support Git, but keeping the
+    dependency optional lets CC GUI install in Git-less IDE configurations.
+    Classes that import git4idea must be registered here, not referenced from
+    always-loaded plugin code.
+    -->
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationService
+                serviceInterface="com.github.claudecodegui.service.commit.GitDiffBackend"
+                serviceImplementation="com.github.claudecodegui.service.commit.Git4IdeaDiffBackend"/>
+    </extensions>
+    <actions>
+        <!-- Generate Commit Message with AI Action (streams a real git4idea diff) -->
+        <action id="ClaudeCodeGUI.GenerateCommitMessageAction"
+                class="com.github.claudecodegui.action.vcs.GenerateCommitMessageAction"
+                icon="/icons/logo-16.png">
+            <!-- Add to VCS Commit toolbar -->
+            <add-to-group group-id="Vcs.MessageActionGroup" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

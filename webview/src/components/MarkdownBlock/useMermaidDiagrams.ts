@@ -152,7 +152,7 @@ export function useMermaidDiagrams(
     }
 
     return renderedAny;
-  }, []);
+  }, [containerRef]);
 
   // Render mermaid diagrams after HTML updates (skip during streaming to prevent flicker)
   useEffect(() => {

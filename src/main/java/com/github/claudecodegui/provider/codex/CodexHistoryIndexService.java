@@ -39,11 +39,17 @@ class CodexHistoryIndexService {
     private final Path sessionsDir;
     private final CodexHistoryParser parser;
     private final CodexSessionLiteReader liteReader;
+    private final SessionIndexManager indexManager;
 
     CodexHistoryIndexService(Path sessionsDir, CodexHistoryParser parser) {
+        this(sessionsDir, parser, SessionIndexManager.getInstance());
+    }
+
+    CodexHistoryIndexService(Path sessionsDir, CodexHistoryParser parser, SessionIndexManager indexManager) {
         this.sessionsDir = sessionsDir;
         this.parser = parser;
         this.liteReader = new CodexSessionLiteReader();
+        this.indexManager = indexManager;
     }
 
     List<CodexHistoryReader.SessionInfo> readAllSessions() throws IOException {
@@ -75,7 +81,7 @@ class CodexHistoryIndexService {
             }
         }
 
-        SessionIndexManager indexManager = SessionIndexManager.getInstance();
+        SessionIndexManager indexManager = this.indexManager;
         SessionIndexManager.SessionIndex index = indexManager.readCodexIndex();
         SessionIndexManager.ProjectIndex projectIndex = index.projects.get(cacheKey);
         SessionIndexManager.UpdateType updateType = indexManager.getUpdateTypeRecursive(projectIndex, sessionsDir);

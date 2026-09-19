@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo } from "react";
 import { m, useMotionValue, useReducedMotion, useSpring, useTransform } from "motion/react";
+import { getCounterPlaces } from "./counterUtils.js";
 
 function getStaticTokenStyle(token, height) {
   if (token === ".") {
@@ -60,33 +61,6 @@ function normalizeNearInteger(num) {
 function getValueRoundedToPlace(value, place) {
   const scaled = value / place;
   return Math.floor(normalizeNearInteger(scaled));
-}
-
-export function getCounterPlaces(displayValue) {
-  const source = String(displayValue ?? "");
-  const chars = Array.from(source);
-  const decimalIndex = chars.indexOf(".");
-  let digitsBeforeDecimal = chars.filter(
-    (char, index) => /\d/.test(char) && (decimalIndex === -1 || index < decimalIndex),
-  ).length;
-  let decimalPlaces = 0;
-  let pastDecimal = false;
-
-  return chars.map((char) => {
-    if (!/\d/.test(char)) {
-      if (char === ".") pastDecimal = true;
-      return char;
-    }
-
-    if (!pastDecimal) {
-      const place = 10 ** Math.max(digitsBeforeDecimal - 1, 0);
-      digitsBeforeDecimal -= 1;
-      return place;
-    }
-
-    decimalPlaces += 1;
-    return 10 ** -decimalPlaces;
-  });
 }
 
 function StaticToken({ place, height, digitStyle }) {

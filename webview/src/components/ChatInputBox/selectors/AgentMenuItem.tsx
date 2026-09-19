@@ -145,21 +145,34 @@ export const AgentMenuItem = ({
               const isCreate = agent.id === CREATE_NEW_AGENT_ID;
               const isSelected = !!selectedAgent && selectedAgent.id === agent.id;
 
+              const handleActivate = () => {
+                if (isInfo) return;
+
+                if (isCreate) {
+                  onCreateAgent();
+                  return;
+                }
+
+                onSelectAgent({ id: agent.id, name: agent.name, prompt: agent.prompt });
+              };
+
               return (
                 <div
                   key={agent.id}
                   className={`selector-option ${isSelected ? 'selected' : ''} ${isInfo ? 'disabled' : ''}`}
                   style={getAgentOptionStyle(isInfo)}
+                  role="button"
+                  tabIndex={0}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (isInfo) return;
-
-                    if (isCreate) {
-                      onCreateAgent();
-                      return;
+                    handleActivate();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleActivate();
                     }
-
-                    onSelectAgent({ id: agent.id, name: agent.name, prompt: agent.prompt });
                   }}
                 >
                   <span className={`codicon ${isCreate ? 'codicon-add' : isInfo ? 'codicon-info' : 'codicon-robot'}`} />

@@ -19,8 +19,8 @@ export default function PresetSections({
   return (
     <>
       <div className="form-group">
-        <label>{t('settings.provider.dialog.officialSectionTitle')}</label>
-        <div className="preset-buttons" role="radiogroup" aria-label={t('settings.provider.dialog.officialSectionTitle')}>
+        <label htmlFor="provider-official-presets">{t('settings.provider.dialog.officialSectionTitle')}</label>
+        <div className="preset-buttons" role="radiogroup" id="provider-official-presets" aria-label={t('settings.provider.dialog.officialSectionTitle')}>
           <button
             type="button"
             role="radio"
@@ -38,8 +38,8 @@ export default function PresetSections({
       </div>
 
       <div className="form-group">
-        <label>{t('settings.provider.dialog.proxySectionTitle')}</label>
-        <div className="preset-buttons" role="radiogroup" aria-label={t('settings.provider.dialog.proxySectionTitle')}>
+        <label htmlFor="provider-proxy-presets">{t('settings.provider.dialog.proxySectionTitle')}</label>
+        <div className="preset-buttons" role="radiogroup" id="provider-proxy-presets" aria-label={t('settings.provider.dialog.proxySectionTitle')}>
           {thirdPartyPresets.map((preset) => (
             <button
               key={preset.id}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { convertAtFileRefsToLinks } from './CollapsibleTextBlock';
+import { convertAtFileRefsToLinks } from './convertAtFileRefsToLinks';
 
 describe('convertAtFileRefsToLinks', () => {
   // ── 基本路径匹配 ──────────────────────────────────

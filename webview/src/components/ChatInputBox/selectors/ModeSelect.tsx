@@ -159,7 +159,11 @@ export const ModeSelect = ({
   useEffect(() => {
     if (!isOpen) return;
 
+    // Delay arming the listener to prevent the opening click from closing it
+    let armed = false;
+    const timer = setTimeout(() => { armed = true; }, 0);
     const handleClickOutside = (e: MouseEvent) => {
+      if (!armed) return;
       if (
         dropdownRef.current &&
         !dropdownRef.current.contains(e.target as Node) &&
@@ -170,11 +174,7 @@ export const ModeSelect = ({
       }
     };
 
-    // Delay adding event listener to prevent immediate trigger
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClickOutside);
@@ -211,7 +211,15 @@ export const ModeSelect = ({
               key={mode.id}
               data-testid={`mode-option-${mode.id}`}
               className={`selector-option ${mode.id === value ? 'selected' : ''} ${mode.disabled ? 'disabled' : ''}`}
+              role="button"
+              tabIndex={0}
               onClick={() => handleSelect(mode.id, mode.disabled)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleSelect(mode.id, mode.disabled);
+                }
+              }}
               title={getModeText(mode.id, 'tooltip')}
               style={getModeOptionStyle(!!mode.disabled)}
             >

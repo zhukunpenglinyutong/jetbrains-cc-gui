@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import { TokenFormatContext } from "../ui/foundation/TokenFormatProvider.jsx";
+import { TokenFormatContext } from "../ui/foundation/token-format-context.js";
 import {
   TOKEN_FORMAT_MODES,
   formatTokenCount,

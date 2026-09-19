@@ -35,9 +35,18 @@ export const ConfigSwitchOption = ({
 }: ConfigSwitchOptionProps) => (
   <div
     className="selector-option"
+    role="button"
+    tabIndex={0}
     onClick={(e) => {
       e.stopPropagation();
       onChange?.(!value);
+    }}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+        onChange?.(!value);
+      }
     }}
     onMouseEnter={onMouseEnter}
     style={SWITCH_OPTION_STYLE}

@@ -71,10 +71,10 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     >
       {items.map((item, i) =>
         item.separator ? (
-          <div key={`sep-${i}`} className="context-menu-separator" role="separator" />
+          <hr key={`sep-${i}`} className="context-menu-separator" />
         ) : (
           <div
-            key={`item-${i}`}
+            key={item.label}
             className={`context-menu-item${item.disabled ? ' disabled' : ''}`}
             role="menuitem"
             aria-disabled={item.disabled || false}

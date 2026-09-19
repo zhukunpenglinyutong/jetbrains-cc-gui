@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import { ThemeContext } from "../ui/foundation/ThemeProvider.jsx";
+import { ThemeContext } from "../ui/foundation/theme-context.js";
 
 /**
  * @typedef {"light" | "dark" | "system"} Theme

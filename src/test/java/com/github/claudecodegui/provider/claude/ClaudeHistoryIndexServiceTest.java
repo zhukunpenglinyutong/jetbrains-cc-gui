@@ -2,6 +2,7 @@ package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
+import com.github.claudecodegui.util.PathUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -18,6 +19,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 /**
  * Verifies that incrementalScanLite correctly distinguishes unchanged / mtime-drifted /
@@ -394,7 +396,46 @@ public class ClaudeHistoryIndexServiceTest {
         }
     }
 
-    // --- helpers -----------------------------------------------------------
+    @Test
+    public void readProjectSessions_includesLegacyRawKeyAlongsideCanonicalKey() throws IOException {
+        Path projectsDir = tmp.newFolder("claude-legacy-projects").toPath();
+        Path realProject = tmp.newFolder("claude-legacy-real").toPath();
+        Path symlinkProject = tmp.getRoot().toPath().resolve("claude-legacy-link");
+        boolean linkCreated;
+        try {
+            Files.createSymbolicLink(symlinkProject, realProject);
+            linkCreated = true;
+        } catch (IOException | UnsupportedOperationException e) {
+            linkCreated = false;
+        }
+        assumeTrue("filesystem refuses symlink creation", linkCreated);
+
+        String projectPath = symlinkProject.toString();
+        List<String> projectKeys = PathUtils.getSanitizedPathCandidates(projectPath);
+        Path canonicalDir = Files.createDirectories(projectsDir.resolve(projectKeys.get(0)));
+        Path legacyDir = Files.createDirectories(projectsDir.resolve(projectKeys.get(1)));
+        writeSession(legacyDir, UUID_1, "Legacy session", "2026-04-21T10:00:00Z");
+        writeSession(canonicalDir, UUID_2, "Canonical session", "2026-04-21T11:00:00Z");
+
+        SessionIndexCache cache = SessionIndexCache.getInstance();
+        SessionIndexManager indexManager = new SessionIndexManager(tmp.newFolder("claude-legacy-index").toPath());
+        cache.clearProject(projectPath);
+        try {
+            ClaudeHistoryIndexService service = new ClaudeHistoryIndexService(
+                    projectsDir, new ClaudeHistoryParser(), indexManager);
+
+            List<ClaudeHistoryReader.SessionInfo> sessions = service.readProjectSessions(projectPath);
+
+            assertEquals(2, sessions.size());
+            assertEquals(UUID_2, sessions.get(0).sessionId);
+            assertEquals(UUID_1, sessions.get(1).sessionId);
+        } finally {
+            cache.clearProject(projectPath);
+            indexManager.clearProjectIndex("claude", projectPath);
+            Files.deleteIfExists(symlinkProject);
+        }
+    }
+
 
     private ClaudeHistoryIndexService newService(Path projectDir) {
         return new ClaudeHistoryIndexService(projectDir, new ClaudeHistoryParser());

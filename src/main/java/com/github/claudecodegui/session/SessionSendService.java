@@ -108,8 +108,14 @@ public class SessionSendService {
     }
 
     public void updateSessionStateForSend(ClaudeSession.Message userMessage, String normalizedInput) {
-        state.addMessage(userMessage);
-        callbackFacade.notifyMessageUpdate(state.getMessages());
+        // The message lock covers only the list mutation and the transport copy it
+        // feeds: enqueue's structural-signature walk requires the caller to hold this
+        // lock. Summary and busy/loading state don't touch the message list, so they
+        // stay outside it on the handler thread.
+        synchronized (state.getMessageStateLock()) {
+            state.addMessage(userMessage);
+            callbackFacade.notifyMessageUpdate(state.getMessages());
+        }
 
         if (state.getSummary() == null) {
             String baseSummary = (userMessage.content != null && !userMessage.content.isEmpty())

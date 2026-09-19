@@ -1,6 +1,7 @@
-import { type RefObject } from 'react';
+import { useEffect, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Question } from '../AskUserQuestionDialog';
+import MarkdownBlock from '../MarkdownBlock';
 import QuestionOptionRow from './QuestionOptionRow';
 import { OTHER_OPTION_MARKER, MAX_CUSTOM_INPUT_LENGTH } from './constants';
 
@@ -23,6 +24,15 @@ const QuestionSection = ({
 }: QuestionSectionProps) => {
   const { t } = useTranslation();
   const isOtherSelected = selectedLabels.has(OTHER_OPTION_MARKER);
+  const hasOptions = question.options.length > 0;
+
+  // A question without options IS the custom answer: focus it so the user can
+  // type straight away instead of having to discover the "Other" row first.
+  useEffect(() => {
+    if (!hasOptions) {
+      customInputRef.current?.focus();
+    }
+  }, [hasOptions, question.question, customInputRef]);
 
   return (
     <div className="ask-user-question-dialog-question">
@@ -30,6 +40,19 @@ const QuestionSection = ({
         <span className="question-tag">{question.header}</span>
       </div>
       <p className="question-text">{question.question}</p>
+
+      {/* Supporting detail (DSH's plan under review). It is the thing being
+          approved or declined, so it must be readable in the dialog. */}
+      {question.detail && (
+        <div className="question-detail">
+          {question.intent?.kind === 'plan-review' && (
+            <div className="question-detail-label">
+              {t('askUserQuestion.planDetail', '计划内容')}
+            </div>
+          )}
+          <MarkdownBlock content={question.detail} />
+        </div>
+      )}
 
       {/* Options list */}
       <div className="question-options">
@@ -44,31 +67,35 @@ const QuestionSection = ({
           />
         ))}
 
-        {/* "Other" option - allows custom user input */}
-        <QuestionOptionRow
-          label={t('askUserQuestion.otherOption', '其他')}
-          description={t('askUserQuestion.otherOptionDesc', '输入自定义答案')}
-          isSelected={isOtherSelected}
-          multiSelect={question.multiSelect}
-          className="other-option"
-          onToggle={() => onOptionToggle(OTHER_OPTION_MARKER)}
-        />
+        {/* "Other" option - marks the answer as a custom one. A question without
+            options needs no marker row: the input below is the only answer. */}
+        {hasOptions && (
+          <QuestionOptionRow
+            label={t('askUserQuestion.otherOption', '其他')}
+            description={t('askUserQuestion.otherOptionDesc', '输入自定义答案')}
+            isSelected={isOtherSelected}
+            multiSelect={question.multiSelect}
+            className="other-option"
+            onToggle={() => onOptionToggle(OTHER_OPTION_MARKER)}
+          />
+        )}
       </div>
 
-      {/* Custom input field - only shown when "Other" is selected */}
-      {isOtherSelected && (
-        <div className="custom-input-container">
-          <textarea
-            ref={customInputRef}
-            className="custom-input"
-            value={customInput}
-            onChange={(e) => onCustomInputChange(e.target.value)}
-            placeholder={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}
-            rows={3}
-            maxLength={MAX_CUSTOM_INPUT_LENGTH}
-          />
-        </div>
-      )}
+      {/* Custom answer. Always available: typing selects "Other" automatically,
+          so a manual answer can be combined with the options (multi-select) or
+          replace the choice (single-select) without an extra click. */}
+      <div className="custom-input-container">
+        <textarea
+          ref={customInputRef}
+          className="custom-input"
+          value={customInput}
+          onChange={(e) => onCustomInputChange(e.target.value)}
+          placeholder={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}
+          aria-label={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}
+          rows={3}
+          maxLength={MAX_CUSTOM_INPUT_LENGTH}
+        />
+      </div>
 
       {/* Hint text */}
       {question.multiSelect && (

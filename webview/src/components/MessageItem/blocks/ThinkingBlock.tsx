@@ -28,6 +28,14 @@ export function ThinkingBlock({
       <div
         className="thinking-header"
         onClick={onToggleThinking}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggleThinking();
+          }
+        }}
       >
         <span className="thinking-title">
           {isThinking && isLastMessage && isLastBlock

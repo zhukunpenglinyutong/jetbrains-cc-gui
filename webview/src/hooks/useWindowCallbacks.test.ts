@@ -1052,6 +1052,49 @@ describe('useWindowCallbacks integration', () => {
     expect(window.__minAcceptedUpdateSequence).toBe(8);
   });
 
+  it('ignores a tail this page cannot place instead of erasing the transcript', () => {
+    const { opts, buffer } = createOptsWithMessages([
+      { type: 'user', content: 'known-user' },
+      { type: 'assistant', content: 'known-answer' },
+    ]);
+    renderHook(() => useWindowCallbacks(opts));
+    window.__messageBaseIndex = 0;
+
+    // Base 220 with a two-message list at base 0: messages 2..219 are missing, so
+    // splicing would drop the known tail and replacing would erase the transcript.
+    act(() => window.updateMessageTail!(JSON.stringify([
+      { type: 'assistant', content: 'tail-only' },
+    ]), 220, 7));
+
+    expect(buffer.current.map((message) => message.content)).toEqual([
+      'known-user',
+      'known-answer',
+    ]);
+    expect(window.__messageBaseIndex).toBe(0);
+  });
+
+  it('continues an existing tail window across a growing tail', () => {
+    const { opts, buffer } = createOptsWithMessages([]);
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => window.updateMessageTail!(JSON.stringify([
+      { type: 'user', content: 'message-220' },
+      { type: 'assistant', content: 'message-221' },
+    ]), 220, 7));
+    expect(window.__messageBaseIndex).toBe(220);
+
+    act(() => window.updateMessageTail!(JSON.stringify([
+      { type: 'user', content: 'message-221' },
+      { type: 'assistant', content: 'message-222' },
+    ]), 221, 8));
+
+    expect(buffer.current.map((message) => message.content)).toEqual([
+      'message-221',
+      'message-222',
+    ]);
+    expect(window.__messageBaseIndex).toBe(221);
+  });
+
   it('resets the tail base when a full snapshot arrives', () => {
     const { opts, buffer } = createOptsWithMessages([]);
     renderHook(() => useWindowCallbacks(opts));

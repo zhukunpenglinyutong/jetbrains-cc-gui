@@ -98,6 +98,8 @@ export interface DropdownItemData {
   icon?: string;
   /** Item type */
   type: CompletionType;
+  /** Semantic command content type, used by the Codex picker */
+  contentType?: 'command' | 'skill';
   /** Whether selected (for selectors) */
   checked?: boolean;
   /** Associated data */
@@ -132,6 +134,8 @@ export interface CommandItem {
   description?: string;
   /** Category */
   category?: string;
+  /** Semantic content type used to choose the invocation prefix */
+  contentType?: 'command' | 'skill';
 }
 
 /**
@@ -152,7 +156,7 @@ export interface DropdownPosition {
  * Trigger query information
  */
 export interface TriggerQuery {
-  /** Trigger symbol ('@' or '/' or '#' or '!') */
+  /** Trigger symbol ('@', '/', '#', '!' or '$') */
   trigger: string;
   /** Search keyword */
   query: string;
@@ -949,6 +953,8 @@ export interface ChatInputBoxProps {
   messageQueue?: QueuedMessage[];
   /** Remove message from queue callback */
   onRemoveFromQueue?: (id: string) => void;
+  /** Reorder message queue callback (orderedIds[0] executes first) */
+  onReorderQueue?: (orderedIds: string[]) => void;
 
   /** Whether auto open file is enabled */
   autoOpenFileEnabled?: boolean;

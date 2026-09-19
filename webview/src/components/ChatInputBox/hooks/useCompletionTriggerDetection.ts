@@ -51,7 +51,7 @@ export function useCompletionTriggerDetection({
 
   /**
    * Detect and handle completion triggers
-   * Optimized: only start detection when @ or / or # is input
+   * Optimized: only start detection when a supported trigger symbol is present
    */
   const detectAndTriggerCompletion = useCallback(() => {
     const timer = perfTimer('detectAndTriggerCompletion');

@@ -45,12 +45,6 @@ interface CompactSummaryBlockProps {
 export const CompactSummaryBlock = memo(function CompactSummaryBlock({ block, t }: CompactSummaryBlockProps) {
   const [expanded, setExpanded] = useState(false);
   const toggleExpanded = useCallback(() => setExpanded(e => !e), []);
-  const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      setExpanded(prev => !prev);
-    }
-  }, []);
   const meta = block.metadata;
   const hasCountMeta = meta && typeof meta.messagesSummarized === 'number';
   const compactionStats = meta ? formatCompactionStats(meta) : null;
@@ -60,19 +54,17 @@ export const CompactSummaryBlock = memo(function CompactSummaryBlock({ block, t 
 
   return (
     <div className="compact-summary-block">
-      <div
+      <button
+        type="button"
         className="compact-summary-title"
-        role="button"
-        tabIndex={0}
         aria-expanded={expanded}
         aria-label={`${titleText} — ${toggleLabel}`}
         onClick={toggleExpanded}
-        onKeyDown={onKeyDown}
       >
         <span className="compact-summary-icon" aria-hidden="true">●</span>
         <span className="compact-summary-title-text">{titleText}</span>
         <span className="compact-summary-toggle" aria-hidden="true">{expanded ? '▼' : '▶'}</span>
-      </div>
+      </button>
       {hasMeta && (
         <div className="compact-summary-metadata">
           {hasCountMeta && (

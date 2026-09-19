@@ -205,6 +205,78 @@
   font-size: 12px;
   color: var(--text-primary);
   min-height: 28px;
+  /* Anchor for the insert-line pseudo-elements below */
+  position: relative;
+}
+
+/* Drag state: insert line drawn in the 4px gap above / below the hovered row */
+.message-queue-item.insert-above::before,
+.message-queue-item.insert-below::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent-primary);
+  pointer-events: none;
+}
+
+.message-queue-item.insert-above::before {
+  top: -4px;
+}
+
+.message-queue-item.insert-below::after {
+  bottom: -4px;
+}
+
+/* Drag state: item currently being dragged */
+.message-queue-item.dragging {
+  opacity: 0.5;
+  transform: scale(0.98);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Drag state: item currently hovered as drop target */
+.message-queue-item.drag-over {
+  border-color: var(--accent-primary);
+  border-style: dashed;
+  background: color-mix(in srgb, var(--accent-primary) 5%, transparent);
+}
+
+/* Drag handle (gripper icon) used to reorder queue items */
+.message-queue-drag-handle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 18px;
+  /* Pull the handle closer to the row edge and the number badge to keep the row compact */
+  margin: 0 -4px 0 -4px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transition: all 0.15s;
+}
+
+.message-queue-drag-handle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.message-queue-drag-handle:active {
+  cursor: grabbing;
+}
+.message-queue-drag-handle:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -1px;
+}
+
+.message-queue-drag-handle .codicon {
+  font-size: 12px;
 }
 
 .message-queue-number {

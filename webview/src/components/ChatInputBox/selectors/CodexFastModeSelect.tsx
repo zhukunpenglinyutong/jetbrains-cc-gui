@@ -86,7 +86,10 @@ export const CodexFastModeSelect = ({
   useEffect(() => {
     if (embedded || !isOpen) return;
 
+    let armed = false;
+    const timer = setTimeout(() => { armed = true; }, 0);
     const handleClickOutside = (e: MouseEvent) => {
+      if (!armed) return;
       if (
         dropdownRef.current &&
         !dropdownRef.current.contains(e.target as Node) &&
@@ -97,10 +100,7 @@ export const CodexFastModeSelect = ({
       }
     };
 
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClickOutside);
@@ -136,7 +136,15 @@ export const CodexFastModeSelect = ({
             <div
               key={mode.id}
               className={`selector-option ${mode.id === value ? 'selected' : ''}`}
+              role="button"
+              tabIndex={0}
               onClick={() => handleSelect(mode.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleSelect(mode.id);
+                }
+              }}
               title={getModeText(mode, 'description')}
             >
               <span className={`codicon ${mode.icon}`} />

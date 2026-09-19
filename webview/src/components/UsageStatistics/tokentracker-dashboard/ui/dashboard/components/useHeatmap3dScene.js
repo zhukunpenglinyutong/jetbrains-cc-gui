@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { rotatePoint, rotateVector, shadeColor } from "./activityHeatmap3dUtils";
 
 export function useHeatmap3dScene({ weeks, interactive, angle, zoom, colors, isDark, growthWave }) {
@@ -60,10 +60,10 @@ export function useHeatmap3dScene({ weeks, interactive, angle, zoom, colors, isD
     return out;
   }, [weeks]);
 
-  const levelToHeight = (level) => {
+  const levelToHeight = useCallback((level) => {
     // 0 级保留极薄的边缘厚度以供辨认
     return Math.max(1.8, (Number(level) / 4) * HEIGHT_MAX);
-  };
+  }, [HEIGHT_MAX]);
 
   // 渲染正交投影后的 Voxel 几何面数据
   const projectedCells = useMemo(() => {
@@ -153,7 +153,7 @@ export function useHeatmap3dScene({ weeks, interactive, angle, zoom, colors, isD
         renderedFaces,
       };
     });
-  }, [cells, angle, colors, weeks.length, growthWave, UNIT_SIZE, SIZE, HEIGHT_MAX]);
+  }, [cells, angle, colors, weeks.length, growthWave, UNIT_SIZE, SIZE, HEIGHT_MAX, isDark, levelToHeight]);
 
   // 8. 画家算法 (Painter's Algorithm)：由远及近（深度升序）排序渲染
   const sortedCells = useMemo(() => {

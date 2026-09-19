@@ -2,8 +2,6 @@ import React from "react";
 import { copy } from "../../../lib/copy";
 import { useTokenFormat } from "../../../hooks/useTokenFormat.js";
 import {
-  PALETTES,
-  getAITooltipMessage,
   resolvePalette,
   rotatePoint,
   computeTooltipScreenPos,
@@ -12,9 +10,6 @@ import { useHeatmap3dView } from "./useHeatmap3dView";
 import { useHeatmap3dScene } from "./useHeatmap3dScene";
 import { Heatmap3dCell } from "./Heatmap3dCell";
 import { Heatmap3dTooltip } from "./Heatmap3dTooltip";
-
-// 保持既有导入路径稳定：外部仍从本文件引入 PALETTES 与 getAITooltipMessage
-export { PALETTES, getAITooltipMessage };
 
 export function ActivityHeatmap3D({
   weeks,
@@ -89,10 +84,19 @@ export function ActivityHeatmap3D({
           ? "cursor-grab active:cursor-grabbing w-full h-full flex items-center justify-center"
           : "w-full overflow-hidden flex justify-center"
       }`}
-      onMouseDown={handleMouseDown}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
+      {...(interactive
+        ? {
+            // Drag-rotate viewport: only interactive instances carry the
+            // gesture handlers (they all early-return otherwise), so the
+            // role/label only applies where the interaction really exists.
+            role: "application",
+            "aria-label": copy("heatmap.iso.aria") || "3D interactive activity heatmap",
+            onMouseDown: handleMouseDown,
+            onTouchStart: handleTouchStart,
+            onTouchMove: handleTouchMove,
+            onTouchEnd: handleTouchEnd,
+          }
+        : {})}
     >
       <svg
         ref={svgRef}

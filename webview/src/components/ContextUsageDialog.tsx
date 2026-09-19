@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useCallback, useId, memo } from 'react';
+import { useEffect, useRef, useMemo, useCallback, useId, memo, useEffectEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import './ContextUsageDialog.css';
 import { useTranslateCategoryName } from './contextUsageUtils';
@@ -109,14 +109,15 @@ const ContextUsageDialog = memo(function ContextUsageDialog({
     return { visibleCategories: visible, freeSpace: free, autoCompactBuffer: buffer };
   }, [data?.categories]);
 
+  const handleEscapeKey = useEffectEvent((e: KeyboardEvent) => {
+    if (e.key === 'Escape') closeDialog();
+  });
+
   useEffect(() => {
     if (!isOpen) return;
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeDialog();
-    };
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
-  }, [isOpen, closeDialog]);
+    window.addEventListener('keydown', handleEscapeKey);
+    return () => window.removeEventListener('keydown', handleEscapeKey);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -169,7 +170,10 @@ const ContextUsageDialog = memo(function ContextUsageDialog({
   } = data;
 
   return (
-    <div className="context-usage-overlay" onMouseDown={handleCloseMouseDown}>
+    <div
+      className="context-usage-overlay"
+      onMouseDown={handleCloseMouseDown}
+    >
       <div
         className="context-usage-dialog"
         ref={dialogRef}

@@ -5,7 +5,10 @@
 
 import { isClaudeSdkAvailable, loadAnthropicSdk, loadBedrockSdk, loadClaudeSdk } from '../../utils/sdk-loader.js';
 import { existsSync } from 'fs';
-import { getClaudeProjectSessionFilePath as resolveClaudeProjectSessionFilePath } from '../../utils/path-utils.js';
+import {
+  getClaudeProjectSessionFilePath as resolveClaudeProjectSessionFilePath,
+  getExistingClaudeProjectSessionFilePath
+} from '../../utils/path-utils.js';
 import { loadClaudeSettings } from '../../config/api-config.js';
 
 // SDK cache (module-internal, accessed via ensure* functions)
@@ -118,7 +121,7 @@ export function hasClaudeProjectSessionFile(sessionId, cwd) {
   try {
     if (!sessionId || typeof sessionId !== 'string') return false;
     if (sessionId.includes('/') || sessionId.includes('\\')) return false;
-    const sessionFile = getClaudeProjectSessionFilePath(sessionId, cwd);
+    const sessionFile = getExistingClaudeProjectSessionFilePath(sessionId, cwd);
     return existsSync(sessionFile);
   } catch {
     return false;

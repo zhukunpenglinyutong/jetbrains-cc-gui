@@ -38,11 +38,11 @@ export function ChatHeader({
   const [editValue, setEditValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (!titleEditable) {
-      setEditing(false);
-    }
-  }, [titleEditable]);
+  // Render-time adjustment: stop editing when the title becomes non-editable
+  // (same reset the old prop-change effect performed, without an extra commit).
+  if (!titleEditable && editing) {
+    setEditing(false);
+  }
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -136,13 +136,14 @@ export function ChatHeader({
       <div className="header-right">
         {currentView === 'chat' && (
           <>
-            <button className="icon-button" onClick={onNewSession} data-tooltip={t('common.newSession')}>
+            <button className="icon-button" onClick={onNewSession} data-tooltip={t('common.newSession')} aria-label={t('common.newSession')}>
               <span className="codicon codicon-plus" />
             </button>
             <button
               className="icon-button"
               onClick={onNewTab}
               data-tooltip={t('common.newTab')}
+              aria-label={t('common.newTab')}
             >
               <span className="codicon codicon-split-horizontal" />
             </button>
@@ -160,6 +161,7 @@ export function ChatHeader({
               className="icon-button"
               onClick={onHistory}
               data-tooltip={t('common.history')}
+              aria-label={t('common.history')}
             >
               <span className="codicon codicon-history" />
             </button>
@@ -167,6 +169,7 @@ export function ChatHeader({
               className="icon-button"
               onClick={onSettings}
               data-tooltip={t('common.settings')}
+              aria-label={t('common.settings')}
             >
               <span className="codicon codicon-settings-gear" />
             </button>

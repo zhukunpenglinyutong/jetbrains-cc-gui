@@ -399,6 +399,123 @@ public class DaemonBridgeTest {
                 true, 5, 4, claimed, claimed, 1));
     }
 
+    /** An idle exit is owned by Java and the next command starts a new daemon. */
+    @Test
+    public void idleShutdownDoesNotAutoRestartAndNextCommandStartsOnDemand() throws Exception {
+        ControlledProcess first = new ControlledProcess(201);
+        ControlledProcess second = new ControlledProcess(202);
+        first.emitReady();
+        second.emitReady();
+        AtomicInteger launchCount = new AtomicInteger();
+        DaemonBridge bridge = new DaemonBridge(
+                null, null, null,
+                new MutableTimeSource(0, nanos(0)),
+                () -> launchCount.getAndIncrement() == 0 ? first : second,
+                null);
+
+        try {
+            assertTrue(bridge.start());
+            first.emitIdleShutdownRequest(7);
+            awaitStdinContains(first, "\"method\":\"idle_shutdown_ack\"");
+            assertFalse(bridge.isAlive());
+            assertTrue(bridge.isIdleRetired());
+
+            first.exit();
+            Thread.sleep(100);
+            assertEquals(1, launchCount.get());
+
+            CompletableFuture<Boolean> request = bridge.sendCommand(
+                    "claude.preconnect", new JsonObject(), new NoOpDaemonOutputCallback());
+            awaitStdinContains(second, "claude.preconnect");
+            second.emitLine("{\"id\":\"1\",\"done\":true,\"success\":true}");
+            assertTrue(request.get(2, TimeUnit.SECONDS));
+            assertEquals(2, launchCount.get());
+            assertFalse(bridge.isIdleRetired());
+        } finally {
+            bridge.stop();
+        }
+    }
+
+    /** A request registered before the idle decision keeps the current daemon. */
+    @Test
+    public void pendingRequestCancelsIdleShutdown() throws Exception {
+        ControlledProcess process = new ControlledProcess(203);
+        process.emitReady();
+        AtomicInteger launchCount = new AtomicInteger();
+        DaemonBridge bridge = new DaemonBridge(
+                null, null, null,
+                new MutableTimeSource(0, nanos(0)),
+                () -> {
+                    launchCount.incrementAndGet();
+                    return process;
+                },
+                null);
+
+        try {
+            assertTrue(bridge.start());
+            CompletableFuture<Boolean> request = bridge.sendCommand(
+                    "claude.preconnect", new JsonObject(), new NoOpDaemonOutputCallback());
+            awaitStdinContains(process, "claude.preconnect");
+            process.emitIdleShutdownRequest(8);
+            awaitStdinContains(process, "\"method\":\"idle_shutdown_cancel\"");
+            assertTrue(bridge.isAlive());
+            assertFalse(bridge.isIdleRetired());
+            process.emitLine("{\"id\":\"1\",\"done\":true,\"success\":true}");
+            assertTrue(request.get(2, TimeUnit.SECONDS));
+            assertEquals(1, launchCount.get());
+        } finally {
+            bridge.stop();
+        }
+    }
+
+    /** A command paused before registration moves to the next generation safely. */
+    @Test
+    public void requestRacingIdleApprovalUsesFreshDaemon() throws Exception {
+        ControlledProcess first = new ControlledProcess(204);
+        ControlledProcess second = new ControlledProcess(205);
+        first.emitReady();
+        second.emitReady();
+        AtomicInteger launchCount = new AtomicInteger();
+        CountDownLatch beforeRegistration = new CountDownLatch(1);
+        CountDownLatch allowRegistration = new CountDownLatch(1);
+        DaemonBridge.DaemonLifecycleHooks hooks = new DaemonBridge.DaemonLifecycleHooks() {
+            @Override
+            public void beforeRequestRegistration(long generation) {
+                if (generation == 1) {
+                    beforeRegistration.countDown();
+                    await(allowRegistration);
+                }
+            }
+        };
+        DaemonBridge bridge = new DaemonBridge(
+                null, null, null,
+                new MutableTimeSource(0, nanos(0)),
+                () -> launchCount.getAndIncrement() == 0 ? first : second,
+                hooks);
+
+        try {
+            assertTrue(bridge.start());
+            CompletableFuture<CompletableFuture<Boolean>> submitted = new CompletableFuture<>();
+            Thread sender = new Thread(() -> submitted.complete(bridge.sendCommand(
+                    "claude.preconnect", new JsonObject(), new NoOpDaemonOutputCallback())));
+            sender.start();
+            assertTrue(beforeRegistration.await(2, TimeUnit.SECONDS));
+
+            first.emitIdleShutdownRequest(9);
+            awaitStdinContains(first, "\"method\":\"idle_shutdown_ack\"");
+            allowRegistration.countDown();
+            CompletableFuture<Boolean> request = submitted.get(2, TimeUnit.SECONDS);
+            awaitStdinContains(second, "claude.preconnect");
+            second.emitLine("{\"id\":\"2\",\"done\":true,\"success\":true}");
+            assertTrue(request.get(2, TimeUnit.SECONDS));
+            assertEquals(2, launchCount.get());
+            sender.join(2_000);
+        } finally {
+            allowRegistration.countDown();
+            bridge.stop();
+        }
+    }
+
     /** Verifies a concurrent explicit stop prevents the claimed daemon from launching B. */
     @Test
     public void stopDuringDeathCleanupPreventsAutomaticReplacementProcess() throws Exception {
@@ -619,6 +736,15 @@ public class DaemonBridgeTest {
         }
     }
 
+    private static void awaitStdinContains(ControlledProcess process, String expected)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (!process.stdinText().contains(expected) && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        assertTrue("Missing daemon input: " + expected, process.stdinText().contains(expected));
+    }
+
     /** Mutable dual clock used to reproduce platform-specific suspend behavior. */
     private static final class MutableTimeSource implements DaemonBridge.TimeSource {
         private long wallTimeMs;
@@ -724,6 +850,20 @@ public class DaemonBridgeTest {
             stdoutWriter.write(("{\"type\":\"daemon\",\"event\":\"ready\","
                     + "\"sdkPreloaded\":true}\n").getBytes(StandardCharsets.UTF_8));
             stdoutWriter.flush();
+        }
+
+        private void emitIdleShutdownRequest(long token) throws java.io.IOException {
+            emitLine("{\"type\":\"daemon\",\"event\":\"idle_shutdown_request\","
+                    + "\"token\":" + token + "}");
+        }
+
+        private void emitLine(String line) throws java.io.IOException {
+            stdoutWriter.write((line + "\n").getBytes(StandardCharsets.UTF_8));
+            stdoutWriter.flush();
+        }
+
+        private String stdinText() {
+            return ((ByteArrayOutputStream) stdin).toString(StandardCharsets.UTF_8);
         }
 
         private void exit() throws java.io.IOException {

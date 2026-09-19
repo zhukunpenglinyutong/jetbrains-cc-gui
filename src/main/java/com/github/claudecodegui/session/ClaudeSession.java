@@ -75,9 +75,9 @@ public class ClaudeSession {
         }
 
         public Type type;
-        // Message state is read by callback and UI threads. The coalescer takes a
-        // deep transport snapshot before asynchronous serialization, while volatile
-        // keeps direct readers from observing stale field references.
+        // Provider callbacks and history reloads share SessionState's message lock;
+        // transport snapshots are captured while that lock is held before any async
+        // serialization begins.
         public volatile String content;
         public long timestamp;
         public volatile JsonObject raw; // Raw message data from SDK
@@ -159,6 +159,27 @@ public class ClaudeSession {
          */
         default void onTaskEvent(String eventJson) {
         }
+
+        /**
+         * Called when Claude history page metadata is available (for pagination).
+         * @param sessionId the session ID
+         * @param fromTurn the first turn index in the current page
+         * @param totalTurns total number of turns in the session
+         * @param hasMore whether there are more pages to load
+         * @param cursorReset true when the server rejected the client cursor and
+         *        returned the latest page instead; the client must treat the
+         *        current transcript as replaced, not prepended
+         */
+        default void onClaudeHistoryPageInfo(String sessionId, int fromTurn, int totalTurns, boolean hasMore, boolean cursorReset) {
+        }
+
+        /**
+         * Called when an earlier Claude history page fails to load.
+         * @param sessionId the session ID, or null when unknown
+         * @param message human-readable error description
+         */
+        default void onClaudeHistoryPageError(String sessionId, String message) {
+        }
     }
 
     public ClaudeSession(
@@ -231,6 +252,11 @@ public class ClaudeSession {
                     public JsonObject getLatestClaudeUserMessage(String sessionId, String cwd) {
                         return claudeSDKBridge.getLatestClaudeUserMessage(sessionId, cwd);
                     }
+
+                    @Override
+                    public JsonObject getProviderSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit) {
+                        return claudeSDKBridge.getSessionMessagesPage(sessionId, cwd, beforeTurn, limit);
+                    }
                 }
         );
 
@@ -246,6 +272,10 @@ public class ClaudeSession {
 
     public com.github.claudecodegui.session.EditorContextCollector getContextCollector() {
         return contextCollector;
+    }
+
+    public SessionMessageOrchestrator getOrchestrator() {
+        return messageOrchestrator;
     }
 
     // Getters - delegated to SessionState
@@ -281,6 +311,15 @@ public class ClaudeSession {
 
     public List<Message> getMessages() {
         return state.getMessages();
+    }
+
+    /**
+     * Return a deep snapshot that can safely cross asynchronous transport boundaries.
+     *
+     * @return an independent message snapshot
+     */
+    public List<Message> getMessagesSnapshot() {
+        return state.getMessagesSnapshot();
     }
 
     /**

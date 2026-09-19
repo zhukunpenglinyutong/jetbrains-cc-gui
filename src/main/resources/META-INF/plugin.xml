@@ -64,9 +64,10 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
-    <!-- Git support — required for Commit AI to run a real `git diff`.
+    <!-- Git support — optional: Commit AI (real git4idea `git diff` + commit toolbar action)
+         lives in git-features.xml and only loads when Git4Idea is present.
          Git4Idea is bundled in all JetBrains IDEs that support Git. -->
-    <depends>Git4Idea</depends>
+    <depends optional="true" config-file="git-features.xml">Git4Idea</depends>
     <!-- JCEF is a separate platform module in IntelliJ IDEA 2026.2+, but older
          IDEs may provide JCEF from the platform without exposing this module. -->
     <depends optional="true" config-file="jcef-features.xml">com.intellij.modules.jcef</depends>
@@ -179,14 +180,6 @@
                 class="com.github.claudecodegui.action.console.SendConsoleSelectionToInputAction"
                 icon="/icons/cc-gui-icon.svg">
             <add-to-group group-id="ConsoleView.PopupMenu" anchor="last"/>
-        </action>
-
-        <!-- Generate Commit Message with AI Action -->
-        <action id="ClaudeCodeGUI.GenerateCommitMessageAction"
-                class="com.github.claudecodegui.action.vcs.GenerateCommitMessageAction"
-                icon="/icons/logo-16.png">
-            <!-- Add to VCS Commit toolbar -->
-            <add-to-group group-id="Vcs.MessageActionGroup" anchor="last"/>
         </action>
 
         <!-- Chat tool window clipboard actions (scoped to CCG tool window) -->

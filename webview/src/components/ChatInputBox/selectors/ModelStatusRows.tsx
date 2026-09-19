@@ -42,7 +42,15 @@ export const ModelStatusRows = ({
           data-testid="model-load-error"
           style={{ ...LOADING_OPTION_STYLE, cursor: onRetry ? 'pointer' : 'default' }}
           title={error}
+          role={onRetry ? 'button' : undefined}
+          tabIndex={onRetry ? 0 : undefined}
           onClick={() => onRetry?.()}
+          onKeyDown={(e) => {
+            if (onRetry && (e.key === 'Enter' || e.key === ' ')) {
+              e.preventDefault();
+              onRetry();
+            }
+          }}
         >
           <span className="codicon codicon-warning" />
           <span style={{ flex: 1, minWidth: 0 }}>{t('chat.modelsLoadFailed')}</span>

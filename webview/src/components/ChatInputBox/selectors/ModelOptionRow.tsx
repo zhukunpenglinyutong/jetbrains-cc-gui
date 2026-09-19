@@ -42,7 +42,15 @@ export const ModelOptionRow = ({
   return (
     <div
       className={`selector-option ${isSelected ? 'selected' : ''}`}
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(model.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect(model.id);
+        }
+      }}
       data-testid={`model-option-${model.id}`}
     >
       <ProviderModelIcon

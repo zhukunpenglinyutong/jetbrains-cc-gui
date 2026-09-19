@@ -1,8 +1,7 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../hooks/useLocale.js";
 import { copy } from "../../lib/copy";
 import {
-  TOKEN_FORMAT_MODES,
   TOKEN_FORMAT_STORAGE_KEY,
   formatTokenCount,
   formatTokenTooltip,
@@ -11,8 +10,7 @@ import {
   readTokenFormatMode,
 } from "../../lib/token-format.js";
 
-export const TokenFormatContext = createContext(null);
-
+import { TokenFormatContext } from "./token-format-context.js";
 export function TokenFormatProvider({ children }) {
   const { resolvedLocale } = useLocale();
   const [mode, setModeState] = useState(readTokenFormatMode);
@@ -87,5 +85,3 @@ export function TokenFormatModeOverride({ children, mode }) {
 
   return <TokenFormatContext.Provider value={value}>{children}</TokenFormatContext.Provider>;
 }
-
-export { TOKEN_FORMAT_MODES };

@@ -38,10 +38,20 @@ export const OfficialDocsOption = ({ onClose, onMouseEnter }: OfficialDocsOption
     <div
       className="selector-option"
       data-testid="config-option-official-docs"
+      role="button"
+      tabIndex={0}
       onClick={(e) => {
         e.stopPropagation();
         openBrowser(resolveDocsUrl(i18n.language));
         onClose();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          openBrowser(resolveDocsUrl(i18n.language));
+          onClose();
+        }
       }}
       onMouseEnter={onMouseEnter}
     >

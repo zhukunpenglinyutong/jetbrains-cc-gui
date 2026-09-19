@@ -459,6 +459,18 @@ class ErrorBoundary extends Component<Props, State> {
                       'var(--vscode-button-background, #0e639c)';
                   }
                 }}
+                onFocus={(e) => {
+                  if (!this.state.copied) {
+                    e.currentTarget.style.backgroundColor =
+                      'var(--vscode-button-hoverBackground, #1177bb)';
+                  }
+                }}
+                onBlur={(e) => {
+                  if (!this.state.copied) {
+                    e.currentTarget.style.backgroundColor =
+                      'var(--vscode-button-background, #0e639c)';
+                  }
+                }}
               >
                 <span
                   className={this.state.copied ? 'codicon codicon-check' : 'codicon codicon-copy'}
@@ -479,6 +491,14 @@ class ErrorBoundary extends Component<Props, State> {
                     'var(--vscode-button-secondaryHoverBackground, #45494e)';
                 }}
                 onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor =
+                    'var(--vscode-button-secondaryBackground, #3a3d41)';
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.backgroundColor =
+                    'var(--vscode-button-secondaryHoverBackground, #45494e)';
+                }}
+                onBlur={(e) => {
                   e.currentTarget.style.backgroundColor =
                     'var(--vscode-button-secondaryBackground, #3a3d41)';
                 }}

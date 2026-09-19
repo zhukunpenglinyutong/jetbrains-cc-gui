@@ -39,7 +39,7 @@ const ConfirmDialog = ({
       window.addEventListener('keydown', handleEscape);
       return () => window.removeEventListener('keydown', handleEscape);
     }
-  }, [isOpen]); // Remove onCancel from dependencies - it's stable from props
+  }, [isOpen, onCancel]);
 
   if (!isOpen) {
     return null;

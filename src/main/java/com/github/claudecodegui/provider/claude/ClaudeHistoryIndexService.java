@@ -78,9 +78,36 @@ class ClaudeHistoryIndexService {
             return new ArrayList<>();
         }
 
-        String sanitizedPath = PathUtils.sanitizePath(projectPath);
-        Path projectDir = this.projectsDir.resolve(sanitizedPath);
+        List<String> projectKeys = PathUtils.getSanitizedPathCandidates(projectPath);
+        Path primaryDir = this.projectsDir.resolve(projectKeys.get(0));
+        if (projectKeys.size() == 1) {
+            return this.readProjectSessionsAtDirectory(projectPath, primaryDir, limit, offset);
+        }
 
+        Path legacyDir = this.projectsDir.resolve(projectKeys.get(1));
+        if (!Files.isDirectory(primaryDir)) {
+            return this.readProjectSessionsAtDirectory(projectPath, legacyDir, limit, offset);
+        }
+        if (!Files.isDirectory(legacyDir)) {
+            return this.readProjectSessionsAtDirectory(projectPath, primaryDir, limit, offset);
+        }
+
+        List<ClaudeHistoryReader.SessionInfo> sessions = new ArrayList<>(this.readProjectSessionsAtDirectory(
+                projectPath,
+                primaryDir,
+                0,
+                0
+        ));
+        sessions.addAll(this.scanProjectSessionsLite(legacyDir, 0, 0).sessions);
+        return paginateMergedSessions(mergeSessions(sessions), limit, offset);
+    }
+
+    private List<ClaudeHistoryReader.SessionInfo> readProjectSessionsAtDirectory(
+            String projectPath,
+            Path projectDir,
+            int limit,
+            int offset
+    ) throws IOException {
         if (!Files.exists(projectDir) || !Files.isDirectory(projectDir)) {
             return new ArrayList<>();
         }
@@ -152,6 +179,40 @@ class ClaudeHistoryIndexService {
         }
 
         return scanResult.sessions;
+    }
+
+    private static List<ClaudeHistoryReader.SessionInfo> mergeSessions(
+            List<ClaudeHistoryReader.SessionInfo> sessions
+    ) {
+        Map<String, ClaudeHistoryReader.SessionInfo> byId = new LinkedHashMap<>();
+        for (ClaudeHistoryReader.SessionInfo session : sessions) {
+            if (session == null || session.sessionId == null || session.sessionId.isEmpty()) {
+                continue;
+            }
+            ClaudeHistoryReader.SessionInfo existing = byId.get(session.sessionId);
+            if (existing == null || session.lastTimestamp > existing.lastTimestamp) {
+                byId.put(session.sessionId, session);
+            }
+        }
+        List<ClaudeHistoryReader.SessionInfo> merged = new ArrayList<>(byId.values());
+        merged.sort((first, second) -> {
+            int timestampComparison = Long.compare(second.lastTimestamp, first.lastTimestamp);
+            if (timestampComparison != 0) {
+                return timestampComparison;
+            }
+            return second.sessionId.compareTo(first.sessionId);
+        });
+        return merged;
+    }
+
+    private static List<ClaudeHistoryReader.SessionInfo> paginateMergedSessions(
+            List<ClaudeHistoryReader.SessionInfo> sessions,
+            int limit,
+            int offset
+    ) {
+        int fromIndex = offset > 0 ? Math.min(offset, sessions.size()) : 0;
+        int toIndex = limit > 0 ? Math.min(fromIndex + limit, sessions.size()) : sessions.size();
+        return new ArrayList<>(sessions.subList(fromIndex, toIndex));
     }
 
     /**

@@ -188,7 +188,15 @@ export const DropdownItem = ({
       <div
         ref={itemRef}
         className={`dropdown-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
+        role={isDisabled ? undefined : 'button'}
+        tabIndex={isDisabled ? undefined : 0}
         onClick={isDisabled ? undefined : onClick}
+        onKeyDown={isDisabled ? undefined : (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onClick?.();
+          }
+        }}
         onMouseEnter={() => {
           // Call the original onMouseEnter (for keyboard navigation highlighting)
           onMouseEnter?.();
@@ -205,6 +213,9 @@ export const DropdownItem = ({
             <div className="dropdown-item-description">{item.description}</div>
           )}
         </div>
+        {item.contentType && (
+          <span className="dropdown-item-type">{item.contentType}</span>
+        )}
       </div>
       {renderTooltip()}
     </>

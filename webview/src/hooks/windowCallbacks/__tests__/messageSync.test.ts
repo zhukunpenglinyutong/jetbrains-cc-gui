@@ -8,6 +8,8 @@ import {
   getStreamEndHandlingMode,
   getRawUuid,
   getMessageTimestampMs,
+  mergeRawBlocksForFinalization,
+  STRUCTURAL_BLOCK_TYPES,
   preserveLastAssistantIdentity,
   preserveLatestMessagesOnShrink,
   preserveMessageIdentity,
@@ -1238,5 +1240,247 @@ describe('preserveStreamingAssistantContent — raw blocks protection', () => {
     expect(blocks[0].type).toBe('thinking');
     expect((blocks[0].thinking as string).length).toBe(longThinking.length);
     expect(blocks[1].text).toBe('answer');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mergeRawBlocksForFinalization — structural survivors keep their position
+// ---------------------------------------------------------------------------
+
+const rawWithBlocks = (blocks: unknown[]): Record<string, unknown> => ({
+  message: { content: blocks },
+});
+
+const toolUse = (id: string): Record<string, unknown> => ({
+  type: 'tool_use', id, name: 'Bash', input: { command: 'ls' },
+});
+
+const textBlock = (text: string): Record<string, unknown> => ({ type: 'text', text });
+
+const blocksOf = (raw: unknown): unknown[] =>
+  ((raw as Record<string, unknown>)?.message as { content?: unknown[] })?.content ?? [];
+
+const typesOf = (raw: unknown): string[] =>
+  blocksOf(raw).map((block) => (block as { type?: string })?.type ?? '?');
+
+describe('mergeRawBlocksForFinalization', () => {
+  it('keeps distinct images with the same length and data URL prefix', () => {
+    const prefix = `data:image/png;base64,${'A'.repeat(100)}`;
+    const first = { type: 'image', src: `${prefix}B` };
+    const second = { type: 'image', src: `${prefix}C` };
+
+    expect(blocksOf(mergeRawBlocksForFinalization(rawWithBlocks([first]), rawWithBlocks([second]))))
+      .toEqual([first, second]);
+  });
+
+  it('keeps streamed text when the backend reorders thinking and text', () => {
+    const previous = rawWithBlocks([
+      { type: 'thinking', thinking: 'private reasoning' },
+      textBlock('answer with the final suffix'),
+    ]);
+    const backend = rawWithBlocks([
+      textBlock('answer'),
+      { type: 'thinking', thinking: 'private' },
+    ]);
+
+    expect(blocksOf(mergeRawBlocksForFinalization(previous, backend))).toEqual([
+      textBlock('answer with the final suffix'),
+      { type: 'thinking', thinking: 'private reasoning', text: 'private reasoning' },
+    ]);
+  });
+
+  it('does not fill empty visible text with reasoning', () => {
+    const previous = rawWithBlocks([{ type: 'thinking', thinking: 'private reasoning' }]);
+    const backend = rawWithBlocks([textBlock(''), { type: 'thinking', thinking: 'private' }]);
+
+    expect(blocksOf(mergeRawBlocksForFinalization(previous, backend))[0]).toEqual(textBlock(''));
+  });
+
+  it('recognises exactly the mirrored set of block types', () => {
+    // Java keeps its own copy of these rules in MessageStructure.structuralBlockKey
+    // and cannot share this code. This list is the contract between them: adding a
+    // block type on one side alone fails here (or in MessageStructureTest), which
+    // is the only warning available before the two silently disagree about which
+    // blocks are structural — Java's copy decides whether a history reload is
+    // dropped, this one whether a tool card survives a finalize merge.
+    expect([...STRUCTURAL_BLOCK_TYPES]).toEqual(['tool_use', 'tool_result', 'attachment', 'image']);
+
+    // Every advertised type must actually produce a key. The UI holds each
+    // candidate block and the backend omits it, so a type that stops being
+    // recognised shows up as a survivor the merge failed to keep.
+    for (const type of STRUCTURAL_BLOCK_TYPES) {
+      const block = {
+        type,
+        id: 'probe',
+        tool_use_id: 'probe',
+        fileName: 'probe',
+        src: 'probe',
+      };
+      const merged = mergeRawBlocksForFinalization(
+        rawWithBlocks([block]),
+        rawWithBlocks([{ type: 'text', text: 'final' }]),
+      );
+      expect(typesOf(merged), `type ${type} must be recognised`).toContain(type);
+    }
+  });
+
+  it('rejects empty and non-string identities like the Java mirror', () => {
+    // Pinned against MessageStructure.structuralBlockKey: an empty or non-string
+    // identity field yields no key on either side. Exercised through the merge:
+    // an unidentifiable block must NOT survive when the backend omits it.
+    const merged = mergeRawBlocksForFinalization(
+      rawWithBlocks([
+        { type: 'image', src: '' },
+        { type: 'tool_use', id: 123, name: 'Bash' },
+      ]),
+      rawWithBlocks([{ type: 'text', text: 'final' }]),
+    );
+    expect(typesOf(merged)).toEqual(['text']);
+  });
+
+  it('keeps a tool_use the backend snapshot dropped, above the final text', () => {
+    // The pending snapshot lags: it carries only the trailing text, while the UI
+    // already observed the tool call that preceded it. Appending the survivor
+    // would jump the tool card below the answer it produced.
+    const previous = rawWithBlocks([toolUse('tool-1'), textBlock('partial')]);
+    const backend = rawWithBlocks([textBlock('final answer')]);
+
+    const merged = mergeRawBlocksForFinalization(previous, backend);
+
+    expect(typesOf(merged)).toEqual(['tool_use', 'text']);
+    expect((blocksOf(merged)[0] as { id: string }).id).toBe('tool-1');
+    expect((blocksOf(merged)[1] as { text: string }).text).toBe('final answer');
+  });
+
+  it('anchors a survivor to the backend block it sat below', () => {
+    // Backend grew a tool_use the UI never saw. The survivor's position is defined
+    // by its anchor (tool-1), not by its old index, so it must stay directly after
+    // tool-1 rather than drifting a slot.
+    const previous = rawWithBlocks([toolUse('tool-1'), toolUse('tool-2')]);
+    const backend = rawWithBlocks([toolUse('tool-1'), toolUse('tool-3')]);
+
+    const merged = mergeRawBlocksForFinalization(previous, backend);
+
+    expect(typesOf(merged)).toEqual(['tool_use', 'tool_use', 'tool_use']);
+    const ids = blocksOf(merged).map((block) => (block as { id: string }).id);
+    expect(ids).toEqual(['tool-1', 'tool-2', 'tool-3']);
+  });
+
+  it('keeps a survivor that sat above every backend block at the front', () => {
+    const previous = rawWithBlocks([toolUse('tool-1'), textBlock('draft')]);
+    const backend = rawWithBlocks([textBlock('answer')]);
+
+    const merged = mergeRawBlocksForFinalization(previous, backend);
+
+    expect(typesOf(merged)).toEqual(['tool_use', 'text']);
+  });
+
+  it('falls back to the backend when the UI holds no structure to protect', () => {
+    const previous = rawWithBlocks([textBlock('draft')]);
+    const backend = rawWithBlocks([textBlock('answer')]);
+
+    const merged = mergeRawBlocksForFinalization(previous, backend);
+
+    expect(typesOf(merged)).toEqual(['text']);
+    expect((blocksOf(merged)[0] as { text: string }).text).toBe('answer');
+  });
+
+  it('accepts a JSON string on either side', () => {
+    const previous = JSON.stringify(rawWithBlocks([toolUse('tool-1')]));
+    const backend = rawWithBlocks([textBlock('answer')]);
+
+    const merged = mergeRawBlocksForFinalization(previous, backend);
+
+    expect(typesOf(merged)).toEqual(['tool_use', 'text']);
+  });
+
+  it('returns the previous raw when the backend raw cannot be parsed', () => {
+    const previous = rawWithBlocks([textBlock('kept')]);
+
+    expect(mergeRawBlocksForFinalization(previous, undefined)).toBe(previous);
+    expect(mergeRawBlocksForFinalization(previous, '{not json')).toBe(previous);
+  });
+
+  it('treats an image as structural identity, not as payload', () => {
+    const src = `data:image/png;base64,${'A'.repeat(4096)}`;
+    const previous = rawWithBlocks([{ type: 'image', src }]);
+    const backend = rawWithBlocks([textBlock('answer')]);
+
+    const merged = mergeRawBlocksForFinalization(previous, backend);
+
+    expect(typesOf(merged)).toEqual(['image', 'text']);
+  });
+
+  // A backend snapshot that carries no content array at all still parses — a
+  // metadata-only assistant row ({uuid, type, message:{stop_reason}}) is exactly
+  // that shape. Every block the UI holds is then unpartnered, and taking the
+  // backend as the result would erase the whole streamed turn.
+  it('keeps every block when the backend carries no content array', () => {
+    const previous = rawWithBlocks([
+      textBlock('let me check'),
+      toolUse('tool-1'),
+      textBlock('the answer'),
+    ]);
+    const backend = { uuid: 'u1', type: 'assistant', message: { stop_reason: 'end_turn' } };
+
+    const merged = mergeRawBlocksForFinalization(previous, backend);
+
+    expect(typesOf(merged)).toEqual(['text', 'tool_use', 'text']);
+    expect(merged).toMatchObject({ uuid: 'u1' });
+  });
+
+  it('keeps every block when the backend content array is empty', () => {
+    const previous = rawWithBlocks([textBlock('let me check'), toolUse('tool-1')]);
+    const backend = rawWithBlocks([]);
+
+    expect(typesOf(mergeRawBlocksForFinalization(previous, backend)))
+      .toEqual(['text', 'tool_use']);
+  });
+
+  // The backend dropped only the trailing text while keeping the tool card. The
+  // survivor's partner is absent, so it must be re-inserted after its anchor
+  // rather than at the front, which would render the answer above the tool call
+  // that produced it.
+  it('re-inserts a text block the backend dropped after its anchor', () => {
+    const previous = rawWithBlocks([
+      textBlock('let me check'),
+      toolUse('tool-1'),
+      textBlock('the answer'),
+    ]);
+    const backend = rawWithBlocks([textBlock('let me check'), toolUse('tool-1')]);
+
+    const merged = mergeRawBlocksForFinalization(previous, backend);
+
+    expect(typesOf(merged)).toEqual(['text', 'tool_use', 'text']);
+    expect((blocksOf(merged)[2] as { text: string }).text).toBe('the answer');
+  });
+
+  // Pairing is per type, so a thinking block never consumes a text block's
+  // partner. Counting the combined text-like sequence would leave the trailing
+  // text unpartnered here and emit it twice.
+  it('pairs thinking and text against their own type', () => {
+    const previous = rawWithBlocks([
+      { type: 'thinking', thinking: 'reasoning' },
+      textBlock('answer'),
+    ]);
+    const backend = rawWithBlocks([textBlock('answer')]);
+
+    const merged = mergeRawBlocksForFinalization(previous, backend);
+
+    expect(typesOf(merged)).toEqual(['thinking', 'text']);
+    expect(blocksOf(merged).filter((block) => (block as { type?: string }).type === 'text'))
+      .toHaveLength(1);
+  });
+
+  it('counts thinking blocks separately when choosing survivors', () => {
+    const previous = rawWithBlocks([
+      { type: 'thinking', thinking: 'first pass' },
+      { type: 'thinking', thinking: 'second pass' },
+    ]);
+    const backend = rawWithBlocks([{ type: 'thinking', thinking: 'first pass' }]);
+
+    const merged = mergeRawBlocksForFinalization(previous, backend);
+
+    expect(typesOf(merged)).toEqual(['thinking', 'thinking']);
   });
 });

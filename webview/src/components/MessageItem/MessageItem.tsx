@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, memo, useEffect, useRef } from 'react';
 import type { TFunction } from 'i18next';
 import type { ClaudeMessage, ClaudeContentBlock, ToolResultBlock } from '../../types';
 
-import { isProviderNotConfiguredError } from './ProviderNotConfiguredCard';
+import { isProviderNotConfiguredError } from './providerNotConfigured';
 import { matchErrorPattern } from '../../utils/errorMatcher';
 import { UserMessageHeader, AssistantMessageActions, MessageRoleLabel } from './MessageActionButtons';
 import { MessageDurationFooter } from './MessageDurationFooter';
@@ -11,9 +11,6 @@ import { copyToClipboard } from '../../utils/copyUtils';
 import { quoteToChatInput } from '../../utils/quoteUtils';
 import { isNonRenderedToolUse } from '../../utils/toolConstants';
 import { groupBlocks } from './groupBlocks';
-
-// Re-exported so existing imports (`groupBlocks.test.ts`) keep working.
-export { groupBlocks };
 
 export interface MessageItemProps {
   message: ClaudeMessage;
@@ -182,41 +179,40 @@ export const MessageItem = memo(function MessageItem({
     return () => window.clearTimeout(timer);
   }, [isEmptyStreamingPlaceholder]);
 
-  // Ref to track the last auto-expanded thinking block index to avoid overriding user interaction
-  const lastAutoExpandedIndexRef = useRef<number>(-1);
-
-  // Auto-expand the latest thinking block during streaming
-  useEffect(() => {
-    if (!isMessageStreaming) return;
-
-    const thinkingIndices: number[] = [];
-    renderedBlocks.forEach((block, index) => {
-      if (block.type === 'thinking') thinkingIndices.push(index);
-    });
-
-    if (thinkingIndices.length === 0) return;
-
-    const lastThinkingIndex = thinkingIndices[thinkingIndices.length - 1];
-
-    if (lastThinkingIndex !== lastAutoExpandedIndexRef.current) {
-      setExpandedThinking((prev) => {
-        const newState = { ...prev };
-        // Only collapse thinking blocks that were NOT manually expanded by the user
-        thinkingIndices.forEach((idx) => {
-          // Preserve manually expanded state
-          if (!manuallyExpandedThinking[idx]) {
-            newState[idx] = false;
-          }
-        });
-        // Auto-expand the latest one (unless user manually collapsed it)
-        if (!manuallyExpandedThinking[lastThinkingIndex] || prev[lastThinkingIndex] === undefined) {
-          newState[lastThinkingIndex] = true;
+  // Auto-expand the latest thinking block during streaming — render-time
+  // adjustment keyed on the last thinking block index (same transitions the
+  // old effect produced, without the extra commit). The tracked index avoids
+  // overriding user interaction with the same block.
+  const thinkingIndices: number[] = [];
+  renderedBlocks.forEach((block, index) => {
+    if (block.type === 'thinking') thinkingIndices.push(index);
+  });
+  const lastThinkingIndex = thinkingIndices.length > 0
+    ? thinkingIndices[thinkingIndices.length - 1]
+    : -1;
+  const [lastAutoExpandedIndex, setLastAutoExpandedIndex] = useState(-1);
+  if (
+    isMessageStreaming &&
+    lastThinkingIndex !== -1 &&
+    lastThinkingIndex !== lastAutoExpandedIndex
+  ) {
+    setLastAutoExpandedIndex(lastThinkingIndex);
+    setExpandedThinking((prev) => {
+      const newState = { ...prev };
+      // Only collapse thinking blocks that were NOT manually expanded by the user
+      thinkingIndices.forEach((idx) => {
+        // Preserve manually expanded state
+        if (!manuallyExpandedThinking[idx]) {
+          newState[idx] = false;
         }
-        return newState;
       });
-      lastAutoExpandedIndexRef.current = lastThinkingIndex;
-    }
-  }, [renderedBlocks, isMessageStreaming, manuallyExpandedThinking]);
+      // Auto-expand the latest one (unless user manually collapsed it)
+      if (!manuallyExpandedThinking[lastThinkingIndex] || prev[lastThinkingIndex] === undefined) {
+        newState[lastThinkingIndex] = true;
+      }
+      return newState;
+    });
+  }
 
   const groupedBlocks = useMemo(() => groupBlocks(renderedBlocks), [renderedBlocks]);
 

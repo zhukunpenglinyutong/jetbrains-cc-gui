@@ -27,6 +27,7 @@ function getLocalNewSessionCommands(): CommandItem[] {
     label: '/clear',
     description: i18n.t('chat.clearCommandDescription'),
     category: 'system',
+    contentType: 'command',
   }];
 }
 
@@ -64,6 +65,22 @@ interface SDKSlashCommand {
   name: string;
   description?: string;
   source?: string;
+  type?: string;
+}
+
+function isSDKSlashCommand(value: unknown): value is SDKSlashCommand {
+  if (typeof value !== 'object' || value === null) return false;
+  const name = (value as { name?: unknown }).name;
+  return typeof name === 'string' && name.length > 0 && name.length <= 128;
+}
+
+function getContentType(command: Pick<SDKSlashCommand, 'name' | 'source' | 'type'>): 'command' | 'skill' {
+  const type = typeof command.type === 'string' ? command.type.toLowerCase() : '';
+  const source = typeof command.source === 'string' ? command.source.toLowerCase() : '';
+  if (type === 'skill' || source === 'codex-skill') {
+    return 'skill';
+  }
+  return command.name.startsWith('$') ? 'skill' : 'command';
 }
 
 export function setupSlashCommandsCallback() {
@@ -71,32 +88,42 @@ export function setupSlashCommandsCallback() {
   if (callbackRegistered && window.updateSlashCommands) return;
 
   const handler = (json: string) => {
-    debugLog('[SlashCommand] Received data from backend, length=' + json.length);
+    debugLog('[SlashCommand] Received data from backend, length=' + (typeof json === 'string' ? json.length : 0));
 
     try {
-      const parsed = JSON.parse(json);
+      if (typeof json !== 'string') {
+        throw new Error('Slash commands payload must be a string');
+      }
+      const parsed: unknown = JSON.parse(json);
       let commands: CommandItem[] = [];
 
       if (Array.isArray(parsed)) {
-        if (parsed.length > 0) {
-          if (typeof parsed[0] === 'object' && parsed[0] !== null && 'name' in parsed[0]) {
-            const sdkCommands: SDKSlashCommand[] = parsed;
-            commands = sdkCommands.map(cmd => ({
-              id: cmd.name.replace(/^\//, ''),
-              label: cmd.name.startsWith('/') ? cmd.name : `/${cmd.name}`,
-              description: formatCommandDescription(cmd.description || '', cmd.source),
-              category: getCategoryFromCommand(cmd.name),
-            }));
-          } else if (typeof parsed[0] === 'string') {
-            const commandNames: string[] = parsed;
-            commands = commandNames.map(name => ({
-              id: name.replace(/^\//, ''),
-              label: name.startsWith('/') ? name : `/${name}`,
-              description: '',
-              category: getCategoryFromCommand(name),
-            }));
+        commands = parsed.flatMap(item => {
+          if (isSDKSlashCommand(item)) {
+            return [{
+              id: item.name.replace(/^\//, ''),
+              label: item.name.startsWith('/') ? item.name : `/${item.name}`,
+              description: formatCommandDescription(
+                typeof item.description === 'string' ? item.description : '',
+                typeof item.source === 'string' ? item.source : undefined
+              ),
+              category: getCategoryFromCommand(item.name),
+              contentType: getContentType(item),
+            }];
           }
-        }
+
+          if (typeof item === 'string' && item.length > 0) {
+            return [{
+              id: item.replace(/^\//, ''),
+              label: item.startsWith('/') ? item : `/${item}`,
+              description: '',
+              category: getCategoryFromCommand(item),
+              contentType: 'command' as const,
+            }];
+          }
+
+          return [];
+        });
 
         cachedSdkCommands = commands;
         loadingState = 'success';

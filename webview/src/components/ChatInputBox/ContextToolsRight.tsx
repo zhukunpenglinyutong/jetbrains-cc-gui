@@ -38,6 +38,7 @@ export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
           className={`context-tool-btn status-panel-toggle has-tooltip ${statusPanelExpanded ? 'expanded' : 'collapsed'}`}
           onClick={onToggleStatusPanel}
           data-tooltip={statusPanelExpanded ? t('statusPanel.collapse') : t('statusPanel.expand')}
+          aria-label={statusPanelExpanded ? t('statusPanel.collapse') : t('statusPanel.expand')}
         >
           <span className={`codicon ${statusPanelExpanded ? 'codicon-chevron-down' : 'codicon-layers'}`} />
         </button>
@@ -50,6 +51,7 @@ export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
           onClick={onRewind}
           disabled={!hasMessages}
           data-tooltip={t('rewind.tooltip')}
+          aria-label={t('rewind.tooltip')}
         >
           <span className="codicon codicon-discard" />
         </button>

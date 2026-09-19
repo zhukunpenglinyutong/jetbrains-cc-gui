@@ -3,16 +3,7 @@ import { Toast } from "@base-ui/react/toast";
 import { X } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { copy } from "../../lib/copy";
-
-// Single app-wide toast manager. `showToast(...)` works from anywhere (event
-// handlers, plain functions) because the manager is a module singleton wired to
-// the Provider below. Replaces the hand-rolled toast div with the @base-ui
-// headless Toast primitive (timeout, swipe-to-dismiss, enter/exit handled for us).
-export const toastManager = Toast.createToastManager();
-
-export function showToast(options) {
-  return toastManager.add(options);
-}
+import { toastManager } from "./toastManager.js";
 
 export function ToastProvider({ children }) {
   return (
@@ -36,7 +27,7 @@ function ToastList() {
         key={toast.id}
         toast={toast}
         className={cn(
-          "pointer-events-auto flex w-full items-center gap-3 rounded-xl border border-oai-gray-200 bg-oai-white px-4 py-3 shadow-xl transition-all duration-200 ease-out",
+          "pointer-events-auto flex w-full items-center gap-3 rounded-xl border border-oai-gray-200 bg-oai-white px-4 py-3 shadow-xl transition-[transform,opacity] duration-200 ease-out",
           "data-[starting-style]:-translate-y-3 data-[starting-style]:opacity-0",
           "data-[ending-style]:-translate-y-3 data-[ending-style]:opacity-0",
           "dark:border-oai-gray-800 dark:bg-oai-gray-900",

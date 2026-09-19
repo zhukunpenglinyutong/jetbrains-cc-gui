@@ -53,12 +53,11 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
     );
   }, [fileChanges]);
 
-  // Close popover when collapsed
-  useEffect(() => {
-    if (!expanded) {
-      setOpenPopover(null);
-    }
-  }, [expanded]);
+  // Close popover when collapsed — render-time adjustment (self-bounding
+  // condition, so no prev-prop tracking is needed).
+  if (!expanded && openPopover !== null) {
+    setOpenPopover(null);
+  }
 
   // Close popover when clicking outside
   useEffect(() => {
@@ -232,6 +231,14 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
         <div
           className={`status-panel-tab ${openPopover === 'todo' ? 'active' : ''}`}
           onClick={() => handleTabClick('todo')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleTabClick('todo');
+            }
+          }}
         >
           <span className="codicon codicon-checklist" />
           <span className="tab-label">
@@ -251,6 +258,14 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
         <div
           className={`status-panel-tab ${openPopover === 'subagent' ? 'active' : ''}`}
           onClick={() => handleTabClick('subagent')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleTabClick('subagent');
+            }
+          }}
         >
           <span className="codicon codicon-hubot" />
           <span className="tab-label">{t('statusPanel.subagentTab')}</span>
@@ -268,6 +283,14 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
         <div
           className={`status-panel-tab ${openPopover === 'files' ? 'active' : ''}`}
           onClick={() => handleTabClick('files')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleTabClick('files');
+            }
+          }}
         >
           <span className="codicon codicon-edit" />
           <span className="tab-label">{t('statusPanel.editsTab')}</span>

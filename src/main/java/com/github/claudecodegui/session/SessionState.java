@@ -104,12 +104,17 @@ public class SessionState {
     private volatile String channelId;
     private volatile String runtimeSessionEpoch = UUID.randomUUID().toString();
 
-    // Session state — accessed only on EDT / single handler thread, no volatile needed.
-    private boolean busy = false;
-    private boolean loading = false;
-    private String error = null;
+    // State callbacks and history loads also run on provider and worker threads.
+    private volatile boolean busy = false;
+    private volatile boolean loading = false;
+    private volatile String error = null;
+    // Claims and releases share messageStateLock with history application.
+    private volatile Object loadingOwner;
 
-    // Message history
+    // Message history is also updated by daemon reader and history-loader threads.
+    // Every message callback and history replacement takes this lock so a transport
+    // snapshot never traverses a list or raw tree while another thread is changing it.
+    private final Object messageStateLock = new Object();
     private final List<ClaudeSession.Message> messages = new ArrayList<>();
 
     // Session metadata — cwd is written in handler thread before send(), read inside send();
@@ -160,12 +165,52 @@ public class SessionState {
         return error;
     }
 
+    /**
+     * Return a shallow list copy for ordinary read-only consumers.
+     *
+     * <p>Use {@code getMessagesSnapshot()} when the list is crossing an asynchronous
+     * boundary. Provider callbacks own the message-state lock while enqueuing the
+     * shallow list, so the coalescer can capture a consistent transport copy.</p>
+     *
+     * @return a defensive list copy
+     */
     public List<ClaudeSession.Message> getMessages() {
-        return new ArrayList<>(messages);
+        synchronized (messageStateLock) {
+            return new ArrayList<>(messages);
+        }
     }
 
+    /**
+     * Return an independent deep copy suitable for asynchronous transport.
+     *
+     * @return a stable message snapshot
+     */
+    List<ClaudeSession.Message> getMessagesSnapshot() {
+        synchronized (messageStateLock) {
+            return StreamMessageCoalescer.copyMessagesForTransport(messages);
+        }
+    }
+
+    /**
+     * Return the live message list for code that already owns the message-state lock.
+     *
+     * <p>Callers must hold {@link #getMessageStateLock()} for the entire read or write
+     * operation. The list is intentionally exposed only for the provider handlers that
+     * update individual message objects in place.</p>
+     *
+     * @return the live message list
+     */
     public List<ClaudeSession.Message> getMessagesReference() {
         return messages;
+    }
+
+    /**
+     * Return the lock that protects the message list and every nested raw message tree.
+     *
+     * @return the message-state lock
+     */
+    public Object getMessageStateLock() {
+        return messageStateLock;
     }
 
     public String getSummary() {
@@ -231,8 +276,60 @@ public class SessionState {
         this.busy = busy;
     }
 
+    /**
+     * Set the loading flag directly.
+     *
+     * <p>This is the unclaimed path: it takes ownership of the flag for whoever
+     * called it, so a history load still in flight can no longer clear it when it
+     * finishes. Asynchronous owners release it atomically through {@link #releaseLoading(Object)}.</p>
+     *
+     * @param loading the new loading state
+     */
     public void setLoading(boolean loading) {
-        this.loading = loading;
+        synchronized (messageStateLock) {
+            this.loading = loading;
+            this.loadingOwner = null;
+        }
+    }
+
+    /**
+     * Claim the loading flag for an asynchronous operation.
+     *
+     * @param owner identifies the operation; compared by identity
+     */
+    public void claimLoading(Object owner) {
+        synchronized (messageStateLock) {
+            this.loading = true;
+            this.loadingOwner = owner;
+        }
+    }
+
+    /**
+     * Return whether {@code owner} is the operation currently allowed to clear the
+     * loading flag. An owner that was superseded must leave the flag alone.
+     *
+     * @param owner the operation asking
+     * @return true when the flag still belongs to this owner
+     */
+    public boolean ownsLoading(Object owner) {
+        return this.loadingOwner == owner;
+    }
+
+    /**
+     * Release loading only if the asynchronous operation still owns it.
+     *
+     * @param owner the operation completing
+     * @return true when this operation released the flag
+     */
+    public boolean releaseLoading(Object owner) {
+        synchronized (messageStateLock) {
+            if (!ownsLoading(owner)) {
+                return false;
+            }
+            this.loadingOwner = null;
+            this.loading = false;
+            return true;
+        }
     }
 
     public void setError(String error) {
@@ -369,14 +466,41 @@ public class SessionState {
      * Add a message to the history.
      */
     public void addMessage(ClaudeSession.Message message) {
-        messages.add(message);
+        synchronized (messageStateLock) {
+            messages.add(message);
+        }
+    }
+
+    /**
+     * Replace the complete message history atomically.
+     *
+     * @param replacementMessages the already parsed message list
+     */
+    public void replaceMessages(List<ClaudeSession.Message> replacementMessages) {
+        synchronized (messageStateLock) {
+            messages.clear();
+            messages.addAll(replacementMessages);
+        }
+    }
+
+    /**
+     * Prepend earlier history messages atomically.
+     *
+     * @param earlierMessages the already parsed, older messages
+     */
+    public void prependMessages(List<ClaudeSession.Message> earlierMessages) {
+        synchronized (messageStateLock) {
+            messages.addAll(0, earlierMessages);
+        }
     }
 
     /**
      * Clear all messages.
      */
     public void clearMessages() {
-        messages.clear();
+        synchronized (messageStateLock) {
+            messages.clear();
+        }
     }
 
     /**

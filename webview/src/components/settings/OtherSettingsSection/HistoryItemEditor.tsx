@@ -35,14 +35,14 @@ export function HistoryItemEditor({
 
   // Reset form when opening
   useEffect(() => {
-    if (isOpen) {
-      setText(initialText);
-      setImportance(initialImportance);
-      // Focus textarea after a short delay (for animation)
-      setTimeout(() => {
-        textareaRef.current?.focus();
-      }, 100);
-    }
+    if (!isOpen) return;
+    setText(initialText);
+    setImportance(initialImportance);
+    // Focus textarea after a short delay (for animation)
+    const timer = setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
   }, [isOpen, initialText, initialImportance]);
 
   const handleSave = useCallback(() => {

@@ -1,6 +1,7 @@
 package com.github.claudecodegui.util;
 
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.intellij.ide.ui.UISettings;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.openapi.editor.colors.EditorColorsScheme;
 import com.intellij.openapi.editor.colors.FontPreferences;
@@ -45,7 +46,8 @@ public class FontConfigService {
 
                 // Primary font name
                 String fontName = scheme.getEditorFontName();
-                int fontSize = scheme.getEditorFontSize();
+                int rawFontSize = scheme.getEditorFontSize();
+                int fontSize = toLogicalFontSize(rawFontSize);
                 float lineSpacing = scheme.getLineSpacing();
 
                 config.addProperty("fontFamily", fontName);
@@ -64,6 +66,7 @@ public class FontConfigService {
 
                 LOG.info("[FontConfig] Retrieved IDEA font config: fontFamily=" + fontName
                         + ", fontSize=" + fontSize
+                        + (fontSize != rawFontSize ? " (raw=" + rawFontSize + ")" : "")
                         + ", lineSpacing=" + lineSpacing
                         + ", fallbackFonts=" + fallbackFonts);
             } else {
@@ -102,7 +105,7 @@ public class FontConfigService {
             java.awt.Font uiFont = UIManager.getFont("Label.font");
 
             String fontName = uiFont != null ? uiFont.getFamily() : "Dialog";
-            int fontSize = uiFont != null ? uiFont.getSize() : 13;
+            int fontSize = uiFont != null ? toLogicalFontSize(uiFont.getSize()) : 13;
 
             config.addProperty("fontFamily", fontName);
             config.addProperty("fontSize", fontSize);
@@ -338,6 +341,25 @@ public class FontConfigService {
             LOG.error("[FontConfig] Failed to get line spacing: " + e.getMessage());
         }
         return 1.2f;
+    }
+
+    /**
+     * Convert an IDE-reported font size to logical (CSS) pixels.
+     * In the IDE-managed HiDPI mode (e.g. Linux with JRE HiDPI scaling disabled) font
+     * sizes are expressed in dpi-dependent points and Swing renders them unscaled, while
+     * the Webview works in CSS pixels that JCEF multiplies by devicePixelRatio; injecting
+     * the raw value therefore double-scales the text. Dividing by the default font scale
+     * restores the logical size; the scale is 1.0 (no-op) in the JRE-managed mode.
+     *
+     * @param rawFontSize size as reported by the IDE
+     * @return size in logical (CSS) pixels
+     */
+    private static int toLogicalFontSize(int rawFontSize) {
+        float defFontScale = UISettings.getDefFontScale();
+        if (defFontScale > 0.0f && defFontScale != 1.0f) {
+            return Math.round(rawFontSize / defFontScale);
+        }
+        return rawFontSize;
     }
 
     private static JsonObject resolveFontConfig(

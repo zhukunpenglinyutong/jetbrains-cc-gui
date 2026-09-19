@@ -184,17 +184,17 @@ export function useModelSelectOutsideClick({
   useEffect(() => {
     if (embedded || !isOpen) return;
 
+    // Delay arming the listener to prevent the opening click from closing it
+    let armed = false;
+    const timer = setTimeout(() => { armed = true; }, 0);
     const handleClickOutside = (e: MouseEvent) => {
+      if (!armed) return;
       if (isOutsideDropdown(e.target as Node, buttonRef, dropdownRef)) {
         resetSearchAndClose();
       }
     };
 
-    // Delay adding event listener to prevent immediate trigger
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClickOutside);

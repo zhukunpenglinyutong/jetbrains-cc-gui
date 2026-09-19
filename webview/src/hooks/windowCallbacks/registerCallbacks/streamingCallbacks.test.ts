@@ -50,6 +50,8 @@ function createHarness(initialMessages: ClaudeMessage[], turnIdCounter: number) 
     setExpandedThinking: () => {},
     getOrCreateStreamingAssistantIndex: () => -1,
     patchAssistantForStreaming: (message: ClaudeMessage) => message,
+    findLastAssistantIndex: (list: ClaudeMessage[]) =>
+      list.reduce((acc, m, i) => (m.type === 'assistant' ? i : acc), -1),
   } as unknown as UseWindowCallbacksOptions;
 
   registerStreamingCallbacks(options);
@@ -247,6 +249,44 @@ describe('onStreamEnd finalizes dangling tool_use when the turn never streamed',
     expect(getMessages()).toHaveLength(2);
   });
 
+  it('does not lose a tool-only assistant carried only by the pending backend snapshot', () => {
+    const initialMessages: ClaudeMessage[] = [
+      {
+        type: 'assistant',
+        content: '',
+        isStreaming: true,
+        __turnId: 1,
+      },
+    ];
+
+    const { refs, getMessages } = createHarness(initialMessages, 1);
+    refs.isStreamingRef.current = true;
+    refs.streamingMessageIndexRef.current = 0;
+    refs.streamingTurnIdRef.current = 1;
+
+    window.__pendingUpdateJson = JSON.stringify([
+      {
+        type: 'assistant',
+        content: '',
+        raw: {
+          message: {
+            content: [
+              { type: 'tool_use', id: 'tool-only', name: 'Bash', input: { command: 'ls' } },
+            ],
+          },
+        },
+      },
+    ]);
+
+    window.onStreamEnd!('1');
+
+    const raw = getMessages()[0].raw as any;
+    const blocks = raw?.message?.content ?? [];
+    expect(blocks.some((block: any) =>
+      block?.type === 'tool_use' && block.id === 'tool-only'
+    )).toBe(true);
+  });
+
   it('is a no-op when the tool_use already has a matching tool_result', () => {
     const { getMessages } = createHarness(
       [
@@ -267,5 +307,174 @@ describe('onStreamEnd finalizes dangling tool_use when the turn never streamed',
     // Nothing dangling → no id denied, and the list reference is unchanged.
     expect(window.__deniedToolIds?.has('tool-2') ?? false).toBe(false);
     expect(getMessages()).toBe(before);
+  });
+});
+
+describe('onStreamEnd append guard for a pending backend snapshot', () => {
+  let harness: ReturnType<typeof createHarness>;
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  afterEach(() => {
+    delete (window as any).__pendingUpdateJson;
+    delete (window as any).__deniedToolIds;
+    // onStreamEnd records the finalized turn id; without clearing it the next
+    // case reusing the same turn id would take the idempotency early-return.
+    delete (window as any).__streamEndProcessedTurnId;
+    void harness;
+  });
+
+  it('does not overwrite another assistant at a stale but valid index', () => {
+    const older: ClaudeMessage = {
+      type: 'assistant', content: 'older answer', __turnId: 1,
+      raw: { uuid: 'older', message: { content: [{ type: 'text', text: 'older answer' }] } },
+    } as unknown as ClaudeMessage;
+    harness = createHarness([older], 2);
+    harness.refs.isStreamingRef.current = true;
+    harness.refs.streamingMessageIndexRef.current = 0;
+    harness.refs.streamingTurnIdRef.current = 2;
+    window.__pendingUpdateJson = JSON.stringify([{
+      type: 'assistant', content: 'new answer',
+      raw: { uuid: 'new', message: { content: [{ type: 'text', text: 'new answer' }] } },
+    }]);
+
+    window.onStreamEnd!('1');
+
+    expect(harness.getMessages().map(message => message.content)).toEqual(['older answer', 'new answer']);
+    expect(harness.getMessages()[0]).toEqual(older);
+  });
+
+  it('finds an existing UUID before the last assistant even when raw is a JSON string', () => {
+    const existing: ClaudeMessage = {
+      type: 'assistant', content: 'answer',
+      raw: JSON.stringify({ uuid: 'matching', message: { content: [{ type: 'text', text: 'answer' }] } }),
+    } as unknown as ClaudeMessage;
+    harness = createHarness([existing, { type: 'assistant', content: 'later answer' }], 1);
+    harness.refs.isStreamingRef.current = true;
+    harness.refs.streamingTurnIdRef.current = 1;
+    window.__pendingUpdateJson = JSON.stringify([{
+      ...existing, raw: { uuid: 'matching', message: { content: [{ type: 'text', text: 'answer' }] } },
+    }]);
+
+    window.onStreamEnd!('1');
+
+    expect(harness.getMessages()).toHaveLength(2);
+    expect(harness.getMessages()[1].content).toBe('later answer');
+  });
+
+  it('patches the existing assistant instead of appending a duplicate bubble', () => {
+    // The list already holds this turn's assistant, finalized by an earlier path
+    // and carrying no __turnId (so the scan above cannot find it). The pending
+    // snapshot must land on it: appending would render two bubbles for one answer.
+    const existing: ClaudeMessage = {
+      type: 'assistant',
+      content: 'answer',
+      isStreaming: false,
+      raw: { uuid: 'turn-1', message: { content: [{ type: 'text', text: 'answer' }] } },
+    } as unknown as ClaudeMessage;
+
+    harness = createHarness([existing], 1);
+    harness.refs.isStreamingRef.current = true;
+    // The snapshot index is stale, and the turn id belongs to a turn the list has
+    // no message for — both primary lookups miss, leaving only the identity guard.
+    harness.refs.streamingMessageIndexRef.current = -1;
+    harness.refs.streamingTurnIdRef.current = 2;
+
+    window.__pendingUpdateJson = JSON.stringify([
+      {
+        type: 'assistant',
+        content: 'answer',
+        raw: { uuid: 'turn-1', message: { content: [{ type: 'text', text: 'answer' }] } },
+      },
+    ]);
+
+    window.onStreamEnd!('1');
+
+    expect(harness.getMessages()).toHaveLength(1);
+    expect(harness.getMessages()[0].content).toBe('answer');
+  });
+
+  it('appends when the pending assistant is genuinely new to the list', () => {
+    harness = createHarness([], 1);
+    harness.refs.isStreamingRef.current = true;
+    harness.refs.streamingTurnIdRef.current = 1;
+
+    window.__pendingUpdateJson = JSON.stringify([
+      {
+        type: 'assistant',
+        content: 'fresh',
+        raw: { uuid: 'turn-9', message: { content: [{ type: 'text', text: 'fresh' }] } },
+      },
+    ]);
+
+    window.onStreamEnd!('1');
+
+    expect(harness.getMessages()).toHaveLength(1);
+    expect(harness.getMessages()[0].content).toBe('fresh');
+  });
+
+  it('patches the turn-stamped bubble even when its uuid lags the final snapshot', () => {
+    // The backend row's uuid rotates per tool-loop iteration (Java's
+    // MessageMerger copies every top-level field, uuid included, onto the single
+    // live row), and the bubble inherits it from its last APPLIED flush. When the
+    // turn ends right after a tool iteration — instant denial, instant error,
+    // abort — the final flush is still parked in __pendingUpdateJson, so the
+    // bubble carries iteration N's uuid against the snapshot's N+1. That conflict
+    // must not append a second bubble: the __turnId stamp already proves the
+    // bubble belongs to the ended turn.
+    const bubble: ClaudeMessage = {
+      type: 'assistant', content: 'partial', isStreaming: true, __turnId: 1,
+      raw: { uuid: 'iter-1', message: { content: [{ type: 'text', text: 'partial' }] } },
+    } as unknown as ClaudeMessage;
+    harness = createHarness([bubble], 1);
+    harness.refs.isStreamingRef.current = true;
+    harness.refs.streamingMessageIndexRef.current = 0;
+    harness.refs.streamingTurnIdRef.current = 1;
+
+    window.__pendingUpdateJson = JSON.stringify([{
+      type: 'assistant', content: 'final answer',
+      raw: { uuid: 'iter-2', message: { content: [{ type: 'text', text: 'final answer' }] } },
+    }]);
+
+    window.onStreamEnd!('1');
+
+    expect(harness.getMessages()).toHaveLength(1);
+    expect(harness.getMessages()[0].content).toBe('final answer');
+    expect(harness.getMessages()[0].isStreaming).toBe(false);
+  });
+
+  it('does not patch a still-streaming assistant with a provably different uuid', () => {
+    // A streaming bubble from another turn sits last in the list. The pending
+    // snapshot carries a different uuid, so the isStreaming fallback must reject
+    // it and append instead — patching would overwrite unrelated content.
+    const otherTurn: ClaudeMessage = {
+      type: 'assistant',
+      content: 'other turn',
+      isStreaming: true,
+      raw: { uuid: 'turn-other', message: { content: [{ type: 'text', text: 'other turn' }] } },
+    } as unknown as ClaudeMessage;
+
+    harness = createHarness([otherTurn], 1);
+    harness.refs.isStreamingRef.current = true;
+    harness.refs.streamingMessageIndexRef.current = -1;
+    harness.refs.streamingTurnIdRef.current = 2;
+
+    window.__pendingUpdateJson = JSON.stringify([
+      {
+        type: 'assistant',
+        content: 'incoming',
+        raw: { uuid: 'turn-1', message: { content: [{ type: 'text', text: 'incoming' }] } },
+      },
+    ]);
+
+    window.onStreamEnd!('1');
+
+    expect(harness.getMessages()).toHaveLength(2);
+    expect(harness.getMessages()[1].content).toBe('incoming');
+    // The conflicting streaming bubble is left untouched.
+    expect(harness.getMessages()[0].content).toBe('other turn');
+    expect(harness.getMessages()[0].isStreaming).toBe(true);
   });
 });

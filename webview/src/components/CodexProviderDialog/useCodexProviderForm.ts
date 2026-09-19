@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CodexProviderConfig, EnvVarEntry } from '../../types/provider';
 import {
@@ -50,8 +50,15 @@ export function useCodexProviderForm({
   const [mcpEnvVars, setMcpEnvVars] = useState<EnvVarEntry[]>([]);
   const [activePreset, setActivePreset] = useState('custom');
 
-  // Initialize form
-  useEffect(() => {
+  // Initialize form via render-time adjustment: re-initializes whenever the
+  // dialog is (re-)opened or the edited provider changes, without an extra
+  // commit. `null` sentinel also covers being mounted while already open.
+  const [prevFormKey, setPrevFormKey] = useState<{
+    isOpen: boolean;
+    provider?: CodexProviderConfig | null;
+  } | null>(null);
+  if (prevFormKey === null || prevFormKey.isOpen !== isOpen || prevFormKey.provider !== provider) {
+    setPrevFormKey({ isOpen, provider });
     if (isOpen) {
       if (provider) {
         // Edit mode - load existing data
@@ -71,7 +78,7 @@ export function useCodexProviderForm({
         setActivePreset(OFFICIAL_DIRECT_PRESET_ID);
       }
     }
-  }, [isOpen, provider]);
+  }
 
   const handlePresetClick = (presetId: string) => {
     if (presetId === OFFICIAL_DIRECT_PRESET_ID) {

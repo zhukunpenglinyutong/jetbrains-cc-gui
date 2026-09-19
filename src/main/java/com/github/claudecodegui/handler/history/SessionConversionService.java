@@ -364,7 +364,8 @@ class SessionConversionService {
      * @return Project directory path.
      */
     private Path getProjectDir(Path projectsDir, String projectPath) {
-        String sanitized = PathUtils.sanitizePath(projectPath);
+        // Resolve symlinks first: the CLI stores sessions under the physical path's key (issue #1789)
+        String sanitized = PathUtils.sanitizePath(PathUtils.realPath(projectPath));
         return projectsDir.resolve(sanitized);
     }
 

@@ -22,7 +22,10 @@ export function ContextUsageLoading({
   const { t } = useTranslation();
 
   return (
-    <div className="context-usage-overlay" onMouseDown={onCloseMouseDown}>
+    <div
+      className="context-usage-overlay"
+      onMouseDown={onCloseMouseDown}
+    >
       <div
         className="context-usage-dialog context-usage-loading"
         ref={dialogRef}

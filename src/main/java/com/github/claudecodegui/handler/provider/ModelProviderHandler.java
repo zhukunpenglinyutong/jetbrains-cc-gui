@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.UsagePushService;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.session.SessionSendService;
+import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.provider.CustomModelContextWindowProvider;
 import com.github.claudecodegui.util.EditorFileUtils;
@@ -117,8 +118,7 @@ public class ModelProviderHandler {
             if (context.getSession() != null) {
                 context.getSession().setModel(model);
                 if (modelChanged) {
-                    TokenUsageUtils.clearContextUsageFromSessionMessages(
-                            context.getSession().getMessages());
+                    clearSessionUsage();
                 }
                 LOG.info("[ModelProviderHandler] Updated session model to canonical ID: " + model);
             }
@@ -186,8 +186,7 @@ public class ModelProviderHandler {
             if (context.getSession() != null) {
                 context.getSession().setProvider(provider);
                 if (providerChanged) {
-                    TokenUsageUtils.clearContextUsageFromSessionMessages(
-                            context.getSession().getMessages());
+                    clearSessionUsage();
                 }
             }
 
@@ -485,6 +484,14 @@ public class ModelProviderHandler {
         return CustomModelContextWindowProvider.getInstance()
                 .getContextWindow(provider, model)
                 .orElseGet(() -> getModelContextLimit(model));
+    }
+
+    private void clearSessionUsage() {
+        // Both call sites already verified the session is non-null.
+        SessionState state = context.getSession().getState();
+        synchronized (state.getMessageStateLock()) {
+            TokenUsageUtils.clearContextUsageFromSessionMessages(state.getMessagesReference());
+        }
     }
 
 }

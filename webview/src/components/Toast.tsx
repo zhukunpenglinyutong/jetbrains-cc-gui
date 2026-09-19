@@ -52,6 +52,7 @@ const Toast: React.FC<ToastProps> = ({ message, onDismiss, duration = 1000 }) =>
         )}
         <button
           className="toast-close"
+          aria-label="Dismiss"
           onClick={() => {
             setIsExiting(true);
             setTimeout(() => onDismiss(message.id), 300);

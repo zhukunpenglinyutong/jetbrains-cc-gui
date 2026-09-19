@@ -29,6 +29,7 @@
 
 .context-menu-separator {
   height: 1px;
+  border: none;
   margin: 4px 8px;
   background: var(--vscode-menu-separatorBackground, #454545);
 }

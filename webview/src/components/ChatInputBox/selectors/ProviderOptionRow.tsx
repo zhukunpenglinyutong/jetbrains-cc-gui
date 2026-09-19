@@ -37,7 +37,15 @@ export const ProviderOptionRow = ({
   return (
     <div
       className={`selector-option ${isSelected ? 'selected' : ''} ${!provider.enabled ? 'disabled' : ''}`}
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(provider.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect(provider.id);
+        }
+      }}
       style={{
         ...getProviderOptionStyle(!!provider.enabled),
         ...(provider.id === 'codex' ? { position: 'relative' } : {}),

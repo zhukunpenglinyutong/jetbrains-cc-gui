@@ -21,6 +21,7 @@ import java.io.File;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.LongConsumer;
 
 /**
  * Manages session lifecycle operations: creation, history loading,
@@ -309,11 +310,21 @@ public class SessionLifecycleManager {
             host.callJavaScript("historyLoadComplete", String.valueOf(messageCount));
             return;
         }
-        coalescer.flush(seq -> {
+        LongConsumer signalComplete = seq -> {
             if (!host.isDisposed()) {
                 host.callJavaScript("historyLoadComplete", String.valueOf(messageCount));
             }
-        });
+        };
+        // Same lock contract as enqueue: the flush may deep-copy live messages, and
+        // a loaded session is exactly the case where a writer can still exist. No
+        // session means no live writer, so the lockless call is safe.
+        if (loadedSession != null) {
+            synchronized (loadedSession.getState().getMessageStateLock()) {
+                coalescer.flush(signalComplete);
+            }
+        } else {
+            coalescer.flush(signalComplete);
+        }
     }
 
     /**

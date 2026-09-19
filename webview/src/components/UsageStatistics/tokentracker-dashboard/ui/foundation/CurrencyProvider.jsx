@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CURRENCY_USD,
   DEFAULT_RATES,
@@ -14,8 +14,7 @@ import {
 import { fetchUsdRates, shouldRefetch } from "../../lib/exchange-rate";
 import { isNativeEmbed, setNativeSetting } from "../../lib/native-bridge.js";
 
-export const CurrencyContext = createContext(null);
-
+import { CurrencyContext } from "./currency-context.js";
 function pushNative(currency, rate, symbol) {
   if (!isNativeEmbed()) return;
   setNativeSetting("currency", currency);

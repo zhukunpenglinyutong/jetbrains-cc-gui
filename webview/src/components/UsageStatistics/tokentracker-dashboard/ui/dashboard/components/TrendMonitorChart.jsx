@@ -4,6 +4,11 @@ import { cn } from "../../../lib/cn";
 import { formatTickLabel } from "../../../lib/trend-stats";
 import { TrendBar } from "./TrendBar";
 
+// Rows are time buckets: day/hour/month uniquely identifies each bucket.
+function trendRowKey(row) {
+  return row?.day ?? row?.hour ?? row?.month ?? row?.label;
+}
+
 function getBarDisplayValue(row, index, interpolatedValues, scale) {
   const isGap = row?.missing || row?.future;
   // Real observations (incl. 0) use the y-clipped value so they
@@ -26,7 +31,7 @@ function TrendTickRow({ series, seriesValues, granularity, locale }) {
         const justify =
           index === 0 ? "justify-start" : index === last ? "justify-end" : "justify-center";
         return (
-          <div key={index} className={cn("flex-1 min-w-0 flex", justify)}>
+          <div key={trendRowKey(row)} className={cn("flex-1 min-w-0 flex", justify)}>
             {isTick && (
               <span className="text-[9px] text-oai-gray-400 dark:text-oai-gray-500 whitespace-nowrap font-mono">
                 {formatTickLabel(row, granularity, locale)}
@@ -72,7 +77,7 @@ export function TrendMonitorChart({
               const displayValue = getBarDisplayValue(row, index, interpolatedValues, scale);
               return (
                 <TrendBar
-                  key={index}
+                  key={trendRowKey(row)}
                   value={value}
                   displayValue={displayValue}
                   scale={scale}

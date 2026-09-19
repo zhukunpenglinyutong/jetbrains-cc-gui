@@ -51,110 +51,115 @@ public class GrokMessageHandler implements MessageCallback {
 
     @Override
     public void onMessage(String type, String content) {
-        LOG.debug("GrokMessageHandler.onMessage: type=" + type);
+        synchronized (state.getMessageStateLock()) {
+            LOG.debug("GrokMessageHandler.onMessage: type=" + type);
 
-        switch (type) {
-            case "assistant":
-            case "message":
-                handleAssistantMessage(content);
-                break;
-            case "user":
-                handleUserMessage(content);
-                break;
-            case "result":
-                handleResultMessage(content);
-                break;
-            case "session_id":
-            case "thread_id":
-                handleSessionId(content);
-                break;
-            case "stream_start":
-                handleStreamStart();
-                break;
-            case "stream_end":
-                handleStreamEnd();
-                break;
-            case "block_reset":
-                handleBlockReset();
-                break;
-            case "content_delta":
-            case "content":
-                handleContentDelta(content);
-                break;
-            case "thinking":
-                handleThinking();
-                break;
-            case "thinking_delta":
-                handleThinkingDelta(content);
-                break;
-            case "tool_result":
-                handleToolResult(content);
-                break;
-            case "usage":
-                handleUsage(content);
-                break;
-            case "status":
-                if (content != null && !content.trim().isEmpty()) {
-                    callbackHandler.notifyStatusMessage(content);
-                }
-                break;
-            case "message_start":
-                // lifecycle marker; stream_start drives UI
-                break;
-            case "message_end":
-                handleMessageEnd();
-                break;
-            default:
-                LOG.debug("GrokMessageHandler: Unhandled message type: " + type);
+            switch (type) {
+                case "assistant":
+                case "message":
+                    handleAssistantMessage(content);
+                    break;
+                case "user":
+                    handleUserMessage(content);
+                    break;
+                case "result":
+                    handleResultMessage(content);
+                    break;
+                case "session_id":
+                case "thread_id":
+                    handleSessionId(content);
+                    break;
+                case "stream_start":
+                    handleStreamStart();
+                    break;
+                case "stream_end":
+                    handleStreamEnd();
+                    break;
+                case "block_reset":
+                    handleBlockReset();
+                    break;
+                case "content_delta":
+                case "content":
+                    handleContentDelta(content);
+                    break;
+                case "thinking":
+                    handleThinking();
+                    break;
+                case "thinking_delta":
+                    handleThinkingDelta(content);
+                    break;
+                case "tool_result":
+                    handleToolResult(content);
+                    break;
+                case "usage":
+                    handleUsage(content);
+                    break;
+                case "status":
+                    if (content != null && !content.trim().isEmpty()) {
+                        callbackHandler.notifyStatusMessage(content);
+                    }
+                    break;
+                case "message_start":
+                    // lifecycle marker; stream_start drives UI
+                    break;
+                case "message_end":
+                    handleMessageEnd();
+                    break;
+                default:
+                    LOG.debug("GrokMessageHandler: Unhandled message type: " + type);
+            }
         }
     }
 
     @Override
     public void onError(String error) {
-        boolean wasStreaming = isStreaming;
-        isStreaming = false;
-        streamEndedThisTurn = false;
-        if (isThinking) {
-            isThinking = false;
-            callbackHandler.notifyThinkingStatusChanged(false);
+        synchronized (state.getMessageStateLock()) {
+            isStreaming = false;
+            streamEndedThisTurn = false;
+            if (isThinking) {
+                isThinking = false;
+                callbackHandler.notifyThinkingStatusChanged(false);
+            }
+            state.setError(error);
+            state.setBusy(false);
+            state.setLoading(false);
+
+            Message errorMessage = new Message(Message.Type.ERROR, error);
+            state.addMessage(errorMessage);
+
+            // Always end stream so tool cards / loading state finalize
+            callbackHandler.notifyStreamEnd();
+            callbackHandler.notifyMessageUpdate(state.getMessages());
+            resetStreamingAccumulator();
+            callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
         }
-        state.setError(error);
-        state.setBusy(false);
-        state.setLoading(false);
-
-        Message errorMessage = new Message(Message.Type.ERROR, error);
-        state.addMessage(errorMessage);
-
-        // Always end stream so tool cards / loading state finalize
-        callbackHandler.notifyStreamEnd();
-        callbackHandler.notifyMessageUpdate(state.getMessages());
-        resetStreamingAccumulator();
-        callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
 
     @Override
     public void onComplete(SDKResult result) {
-        boolean streamEndedBeforeComplete = streamEndedThisTurn;
-        boolean wasStreaming = isStreaming;
+        synchronized (state.getMessageStateLock()) {
+            boolean streamEndedBeforeComplete = streamEndedThisTurn;
+            boolean wasStreaming = isStreaming;
 
-        isStreaming = false;
-        streamEndedThisTurn = false;
-        if (isThinking) {
-            isThinking = false;
-            callbackHandler.notifyThinkingStatusChanged(false);
+            isStreaming = false;
+            streamEndedThisTurn = false;
+            if (isThinking) {
+                isThinking = false;
+                callbackHandler.notifyThinkingStatusChanged(false);
+            }
+            state.setBusy(false);
+            state.setLoading(false);
+            state.updateLastModifiedTime();
+
+            if (wasStreaming && !streamEndedBeforeComplete) {
+                LOG.warn("Grok onComplete called without prior stream_end; forcing stream cleanup");
+                callbackHandler.notifyMessageUpdate(state.getMessages());
+                callbackHandler.notifyStreamEnd();
+            }
+
+            resetStreamingAccumulator();
+            callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
         }
-        state.setBusy(false);
-        state.setLoading(false);
-        state.updateLastModifiedTime();
-
-        if (wasStreaming && !streamEndedBeforeComplete) {
-            LOG.warn("Grok onComplete called without prior stream_end; forcing stream cleanup");
-            callbackHandler.notifyMessageUpdate(state.getMessages());
-            callbackHandler.notifyStreamEnd();
-        }
-
-        resetStreamingAccumulator();
-        callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
 
     // ===== Private handlers =====

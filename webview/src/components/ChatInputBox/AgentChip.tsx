@@ -31,6 +31,15 @@ export const AgentChip: React.FC<AgentChipProps> = memo(({ agent, onClearAgent }
       className="codicon codicon-close context-close"
       onClick={onClearAgent}
       title="Remove agent"
+      role="button"
+      tabIndex={0}
+      aria-label="Remove agent"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClearAgent?.();
+        }
+      }}
     />
   </div>
 ));

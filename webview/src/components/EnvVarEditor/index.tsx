@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EnvVarEntry } from '../../types/provider';
 import {
@@ -7,6 +7,11 @@ import {
   ENV_VAR_VALUE_MAX_LENGTH,
 } from '../../types/provider';
 import styles from './style.module.less';
+
+// Module-scope id counter for stable React row keys (replaces a render-time
+// ref read/increment). Ids only need to be unique among sibling rows.
+let nextEnvRowId = 0;
+const newRowId = () => `env-${nextEnvRowId++}`;
 
 interface EnvVarEditorProps {
   /** Current env var entries */
@@ -27,25 +32,25 @@ export default function EnvVarEditor({ entries, onChange, disabled }: EnvVarEdit
 
   // Stable ids for React keys, parallel to entries array.
   // Avoids using array index as key which causes focus loss on delete.
-  const nextIdRef = useRef(0);
   const [rowIds, setRowIds] = useState<string[]>(() =>
-    entries.map(() => `env-${nextIdRef.current++}`)
+    entries.map(() => newRowId())
   );
 
-  // Sync rowIds when entries length changes externally (e.g., dialog reset)
-  useEffect(() => {
-    if (rowIds.length === entries.length) {
-      return;
-    }
+  // Sync rowIds when entries length changes externally (e.g., dialog reset).
+  // Render-time adjustment: the condition is self-bounding (after the update
+  // the lengths match), and it guarantees rowIds is parallel to entries by
+  // the time the rows below render — same reconciliation the old sync effect
+  // performed.
+  if (rowIds.length !== entries.length) {
     const next = [...rowIds];
     while (next.length < entries.length) {
-      next.push(`env-${nextIdRef.current++}`);
+      next.push(newRowId());
     }
     if (next.length > entries.length) {
       next.length = entries.length;
     }
     setRowIds(next);
-  }, [entries.length, rowIds]);
+  }
 
   const validateEntries = useCallback((newEntries: EnvVarEntry[]): ValidationErrors => {
     const newErrors: ValidationErrors = {};
@@ -114,8 +119,7 @@ export default function EnvVarEditor({ entries, onChange, disabled }: EnvVarEdit
   const handleAdd = useCallback(() => {
     const newEntries = [...entries, { key: '', value: '' }];
     onChange(newEntries);
-    const newRowId = `env-${nextIdRef.current++}`;
-    setRowIds((prev) => [...prev, newRowId]);
+    setRowIds((prev) => [...prev, newRowId()]);
   }, [entries, onChange]);
 
   const handleBlur = useCallback(() => {
@@ -131,7 +135,9 @@ export default function EnvVarEditor({ entries, onChange, disabled }: EnvVarEdit
       ) : (
         <div className={styles.envVarList}>
           {entries.map((entry, index) => {
-            const rowId = rowIds[index] ?? `env-fallback-${index}`;
+            // rowIds is kept parallel to entries by the render-time sync above,
+            // so this id is always defined and stable across edits/deletes.
+            const rowId = rowIds[index];
             return (
               <div key={rowId} className={styles.envVarItem}>
                 <input

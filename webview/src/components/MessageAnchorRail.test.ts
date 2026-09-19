@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sampleAnchorItems } from './MessageAnchorRail';
+import { sampleAnchorItems } from './sampleAnchorItems';
 
 describe('sampleAnchorItems', () => {
   it('keeps short conversations unchanged', () => {

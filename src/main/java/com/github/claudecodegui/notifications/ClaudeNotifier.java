@@ -2,6 +2,7 @@ package com.github.claudecodegui.notifications;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.SoundNotificationService;
 import com.github.claudecodegui.util.SystemNotificationService;
 import com.google.gson.JsonArray;
@@ -81,24 +82,47 @@ public class ClaudeNotifier {
      * Build a short preview from the most recent assistant message in the session.
      * Returns {@code fallback} when no assistant content is available.
      * <p>
-     * {@code session.getMessages()} returns a defensive copy, but the underlying
-     * {@code ArrayList} is not synchronized. If the message list is mutated on a
-     * different thread during the copy, the resulting {@link ConcurrentModificationException}
-     * (or any other read failure) causes us to fall back gracefully rather than
-     * propagate the error into the completion callback.
+     * The scan runs under the session's message lock, so a provider callback mutating
+     * the current turn cannot interleave. Deliberately not {@code getMessagesSnapshot()}:
+     * that deep-copies every raw tree in the transcript, and this method runs on the EDT
+     * from the stream-end handler while only ever reading the last few assistant
+     * messages. Any read failure still falls back gracefully rather than propagating
+     * into the completion callback.
      */
     public static String buildPreviewFromSession(@Nullable ClaudeSession session, String fallback) {
         if (session == null) {
             return fallback;
         }
         try {
-            List<ClaudeSession.Message> messages = session.getMessages();
-            if (messages == null || messages.isEmpty()) {
-                return fallback;
-            }
+            String preview = readLastAssistantPreview(session);
+            return preview == null ? fallback : preview;
+        } catch (Exception e) {
+            // Any failure (CME, IOOBE, etc.) just means we don't have a preview.
+            return fallback;
+        }
+    }
+
+    /**
+     * Return the condensed text of the last assistant message that yields a non-empty
+     * preview, or {@code null}.
+     *
+     * <p>Callers must not hold the message lock; this method takes it. The regex work
+     * stays inside the critical section on purpose: {@link #condenseForToast} caps its
+     * input at {@link #CONDENSE_MAX_INPUT}, so each candidate costs microseconds, and
+     * keeping it here preserves the "walk further back when a message condenses to
+     * nothing" behaviour without re-entering the lock.</p>
+     *
+     * @param session session to read
+     * @return the preview text, or {@code null} when none is available
+     */
+    @Nullable
+    private static String readLastAssistantPreview(@NotNull ClaudeSession session) {
+        SessionState state = session.getState();
+        synchronized (state.getMessageStateLock()) {
+            List<ClaudeSession.Message> messages = state.getMessagesReference();
             for (int i = messages.size() - 1; i >= 0; i--) {
                 ClaudeSession.Message m = messages.get(i);
-                if (m == null || m.type != ClaudeSession.Message.Type.ASSISTANT) {
+                if (m.type != ClaudeSession.Message.Type.ASSISTANT) {
                     continue;
                 }
                 // Prefer the last text block from raw JSON: in tool-use turns the
@@ -119,11 +143,8 @@ public class ClaudeNotifier {
                     return preview;
                 }
             }
-        } catch (Exception e) {
-            // Any failure (CME, IOOBE, etc.) just means we don't have a preview.
-            return fallback;
         }
-        return fallback;
+        return null;
     }
 
     /**

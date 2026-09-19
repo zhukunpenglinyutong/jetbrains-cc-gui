@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useEffectEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PromptConfig } from '../types/prompt';
 
@@ -24,8 +24,15 @@ export default function PromptDialog({
   const [content, setContent] = useState('');
   const [nameError, setNameError] = useState('');
 
-  // Initialize form
-  useEffect(() => {
+  // Initialize form via render-time adjustment: re-initializes whenever the
+  // dialog is (re-)opened or the edited prompt changes, without an extra
+  // commit. `null` sentinel also covers being mounted while already open.
+  const [prevFormKey, setPrevFormKey] = useState<{
+    isOpen: boolean;
+    prompt?: PromptConfig | null;
+  } | null>(null);
+  if (prevFormKey === null || prevFormKey.isOpen !== isOpen || prevFormKey.prompt !== prompt) {
+    setPrevFormKey({ isOpen, prompt });
     if (isOpen) {
       if (prompt) {
         // Edit mode
@@ -38,20 +45,21 @@ export default function PromptDialog({
       }
       setNameError('');
     }
-  }, [isOpen, prompt]);
+  }
 
   // Close on ESC key
+  const handleEscapeKey = useEffectEvent((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onClose();
+    }
+  });
+
   useEffect(() => {
     if (isOpen) {
-      const handleEscape = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          onClose();
-        }
-      };
-      window.addEventListener('keydown', handleEscape);
-      return () => window.removeEventListener('keydown', handleEscape);
+      window.addEventListener('keydown', handleEscapeKey);
+      return () => window.removeEventListener('keydown', handleEscapeKey);
     }
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -92,7 +100,7 @@ export default function PromptDialog({
       <div className="dialog prompt-dialog">
         <div className="dialog-header">
           <h3>{isAdding ? t('settings.prompt.dialog.addTitle') : t('settings.prompt.dialog.editTitle')}</h3>
-          <button className="close-btn" onClick={onClose}>
+          <button className="close-btn" onClick={onClose} aria-label={t('common.close')}>
             <span className="codicon codicon-close"></span>
           </button>
         </div>

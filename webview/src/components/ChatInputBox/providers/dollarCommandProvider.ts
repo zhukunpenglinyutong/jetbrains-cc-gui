@@ -9,6 +9,14 @@ import i18n from '../../../i18n/config';
 interface DollarCommandItem {
   name: string;
   description?: string;
+  type?: string;
+  source?: string;
+}
+
+function isDollarCommandItem(value: unknown): value is DollarCommandItem {
+  if (typeof value !== 'object' || value === null) return false;
+  const name = (value as { name?: unknown }).name;
+  return typeof name === 'string' && name.length > 0 && name.length <= 128;
 }
 
 type LoadingState = 'idle' | 'loading' | 'success' | 'failed';
@@ -16,6 +24,16 @@ type LoadingState = 'idle' | 'loading' | 'success' | 'failed';
 let cachedCommands: CommandItem[] = [];
 let loadingState: LoadingState = 'idle';
 let callbackRegistered = false;
+let pendingWaiters: Array<() => void> = [];
+// Match slash-command wait: Codex skill scan is local but can hitch on large trees,
+// and the merged picker would otherwise return commands while skills are still in flight.
+const LOADING_TIMEOUT = 30000;
+
+function notifyDollarWaiters(): void {
+  const waiters = pendingWaiters;
+  pendingWaiters = [];
+  waiters.forEach(resolve => resolve());
+}
 
 // ============================================================================
 // Core Functions
@@ -28,6 +46,7 @@ export function resetDollarCommandsState() {
   cachedCommands = [];
   loadingState = 'idle';
   callbackRegistered = false;
+  notifyDollarWaiters();
   // Clear the window callback to prevent handler chain growth on repeated provider switches
   if (typeof window !== 'undefined') {
     delete window.updateDollarCommands;
@@ -45,21 +64,21 @@ export function setupDollarCommandsCallback() {
   loadingState = 'loading';
 
   const handler = (json: string) => {
-    debugLog('[DollarCommand] Received data from backend, length=' + json.length);
+    debugLog('[DollarCommand] Received data from backend, length=' + (typeof json === 'string' ? json.length : 0));
     try {
-      const parsed: DollarCommandItem[] = JSON.parse(json);
+      if (typeof json !== 'string') {
+        throw new Error('Dollar commands payload must be a string');
+      }
+      const parsed: unknown = JSON.parse(json);
       if (!Array.isArray(parsed)) {
         debugWarn('[DollarCommand] Invalid payload (not array)');
         loadingState = 'failed';
+        notifyDollarWaiters();
         return;
       }
 
       cachedCommands = parsed.flatMap(item => {
-        if (
-          typeof item !== 'object' || item === null ||
-          typeof item.name !== 'string' || item.name.length === 0 ||
-          item.name.length > 128
-        ) {
+        if (!isDollarCommandItem(item)) {
           return [];
         }
         return [{
@@ -69,13 +88,19 @@ export function setupDollarCommandsCallback() {
             ? item.description.substring(0, 1024)
             : '',
           category: 'skill',
+          contentType: (typeof item.type === 'string' && item.type.toLowerCase() === 'command')
+            || (typeof item.source === 'string' && item.source.toLowerCase() === 'codex-command')
+            ? 'command'
+            : 'skill',
         }];
       });
 
       loadingState = 'success';
+      notifyDollarWaiters();
       debugLog('[DollarCommand] Loaded ' + cachedCommands.length + ' commands');
     } catch (error) {
       loadingState = 'failed';
+      notifyDollarWaiters();
       debugWarn('[DollarCommand] Failed to parse commands: ' + error);
     }
   };
@@ -99,6 +124,54 @@ export function setupDollarCommandsCallback() {
   }
 }
 
+function waitForDollarCommands(signal: AbortSignal, timeoutMs: number): Promise<void> {
+  if (loadingState === 'success' || loadingState === 'failed') {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+
+    const cleanup = () => {
+      pendingWaiters = pendingWaiters.filter(item => item !== settle);
+      clearTimeout(timeoutId);
+      signal.removeEventListener('abort', onAbort);
+    };
+
+    const onAbort = () => {
+      cleanup();
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
+      // Fail fast on later queries instead of re-waiting the full timeout each
+      // keystroke when the backend never pushes the dollar payload. A late
+      // payload still recovers through the registered handler.
+      if (loadingState !== 'success' && loadingState !== 'failed') {
+        loadingState = 'failed';
+        debugWarn('[DollarCommand] Loading timeout');
+        notifyDollarWaiters();
+      }
+      resolve();
+    }, timeoutMs);
+
+    const settle = () => {
+      cleanup();
+      resolve();
+    };
+
+    signal.addEventListener('abort', onAbort, { once: true });
+    pendingWaiters.push(settle);
+    if (loadingState === 'success' || loadingState === 'failed') {
+      settle();
+    }
+  });
+}
+
 /**
  * Dollar command provider for $ autocomplete.
  * Filters cached commands by query string.
@@ -112,6 +185,10 @@ export async function dollarCommandProvider(
   }
 
   setupDollarCommandsCallback();
+
+  if (loadingState !== 'success' && loadingState !== 'failed') {
+    await waitForDollarCommands(signal, LOADING_TIMEOUT);
+  }
 
   if (loadingState === 'success') {
     if (!query) return cachedCommands;

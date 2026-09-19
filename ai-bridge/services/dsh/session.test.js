@@ -61,12 +61,33 @@ test('a legacy session still binds through workspace.create', async () => {
   assert.deepEqual(client.calls[1], { method: 'session.create', payload: { workspaceId: 'w1' } });
 });
 
-test('a modern session binds the cwd and skips workspace.create', async () => {
-  const client = stubClient('modern', { 'session.create': { sessionId: 's2' } });
-  assert.equal(await createWorkspace(client, 'D:/proj'), null);
-  assert.equal(client.calls.length, 0, 'no workspace is created on a modern host');
-  assert.equal(await createSession(client, '', undefined, 'D:/proj'), 's2');
-  assert.deepEqual(client.calls[0], { method: 'session.create', payload: { cwd: 'D:/proj' } });
+test('a modern session binds through workspace.create too', async () => {
+  const client = stubClient('modern', {
+    'workspace.create': { workspace: { workspaceId: 'w2' } },
+    'session.create': { sessionId: 's2' },
+  });
+  const workspace = await createWorkspace(client, 'D:/proj');
+  assert.deepEqual(client.calls[0], { method: 'workspace.create', payload: { path: 'D:/proj' } });
+  assert.equal(workspaceIdFromCreate(workspace), 'w2');
+  assert.equal(await createSession(client, 'w2'), 's2');
+  assert.deepEqual(client.calls[1], { method: 'session.create', payload: { workspaceId: 'w2' } });
+});
+
+test('createSession never sends a bare cwd — that files the session under Ungrouped', async () => {
+  const client = stubClient('modern', { 'session.create': { sessionId: 's3' } });
+  assert.equal(await createSession(client, 'w3'), 's3');
+  assert.ok(!('cwd' in client.calls[0].payload), 'the workspace, not the cwd, is the binding');
+  await assert.rejects(() => createSession(client, ''), /workspaceId/);
+  assert.equal(client.calls.length, 1, 'an unbound session is refused before any RPC');
+});
+
+test('createSession adopts an existing session into its workspace', async () => {
+  const client = stubClient('modern', { 'session.create': { sessionId: 's4' } });
+  assert.equal(await createSession(client, 'w4', ' s4 '), 's4');
+  assert.deepEqual(client.calls[0], {
+    method: 'session.create',
+    payload: { workspaceId: 'w4', sessionId: 's4' },
+  });
 });
 
 test('a modern prompt carries a client-minted requestId', async () => {

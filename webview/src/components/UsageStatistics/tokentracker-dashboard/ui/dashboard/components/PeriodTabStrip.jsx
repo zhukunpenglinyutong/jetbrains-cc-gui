@@ -4,7 +4,8 @@ import { Popover } from "@base-ui/react/popover";
 import { Select } from "../../components/Select.jsx";
 import { useDashboardPortalContainer } from "../../../hooks/useDashboardPortalContainer.js";
 import { copy, getCopyLocale } from "../../../lib/copy";
-import { DateRangePopover, formatDateShort, getDateFnsLocale } from "./DateRangePopover.jsx";
+import { DateRangePopover } from "./DateRangePopover.jsx";
+import { formatDateShort, getDateFnsLocale } from "./dateRangeUtils.js";
 import { RefreshButton } from "./RefreshButton.jsx";
 import { normalizePeriods } from "./usageOverviewUtils.js";
 

@@ -71,7 +71,7 @@ const App = () => {
     subagentHistoryCtxValue, sessionIdCtxValue,
     chatInputRef, messagesContainerRef, messagesEndRef, inputAreaRef, isAutoScrollingRef,
     handleUndoFile, onDiscardAll, handleKeepAll,
-    handleSubmit, interruptSession, messageQueue, dequeueMessage,
+    handleSubmit, interruptSession, messageQueue, dequeueMessage, reorderMessageQueue,
     handleOpenRewindSelectDialog, handleNavigateToProviderSettings, wrappedHandleProviderSelect,
     createNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
     exportHistorySession, toggleFavoriteSession, updateHistoryTitle, convertToCliSession,
@@ -171,6 +171,7 @@ const App = () => {
           onLongContextChange={model.handleLongContextChange}
           messageQueue={messageQueue}
           onRemoveFromQueue={dequeueMessage}
+          onReorderQueue={reorderMessageQueue}
           onLoadSession={loadHistorySession}
           onDeleteSession={deleteHistorySession}
           onDeleteSessions={deleteHistorySessions}

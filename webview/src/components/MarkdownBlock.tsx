@@ -7,7 +7,6 @@ import markedKatex from 'marked-katex-extension';
 import {
   captureRangeOffsets,
   restoreRangeOffsets,
-  type TextSelectionOffsets,
 } from '../utils/selectionOffsets';
 import { useMarkdownFileLinkTooltip } from '../hooks/useMarkdownFileLinkTooltip';
 import {
@@ -664,24 +663,23 @@ const BlockSection = memo(function BlockSection({
   //
   // committedHtmlRef is read here but only mutated inside the layout effect
   // below, so a discarded concurrent render can't poison the "last committed"
-  // comparison. rescuedSelectionRef is written during render as a deferred
-  // payload for that effect; the value is idempotent across double-invoked
-  // renders and never influences render output.
+  // comparison.
   const committedHtmlRef = useRef(html);
-  const rescuedSelectionRef = useRef<TextSelectionOffsets | null>(null);
-
-  if (committedHtmlRef.current !== html && containerRef.current) {
-    rescuedSelectionRef.current = captureRangeOffsets(containerRef.current);
-  }
+  // The rescued selection is a render-scoped local (not a ref): it is
+  // computed from DOM state that is still valid during render and handed to
+  // the layout effect via closure, so nothing mutable is written during
+  // render and a discarded concurrent render leaves no residue.
+  const rescued =
+    committedHtmlRef.current !== html && containerRef.current
+      ? captureRangeOffsets(containerRef.current)
+      : null;
 
   useLayoutEffect(() => {
     committedHtmlRef.current = html;
-    const rescued = rescuedSelectionRef.current;
     if (rescued && containerRef.current) {
       restoreRangeOffsets(containerRef.current, rescued);
     }
-    rescuedSelectionRef.current = null;
-  }, [html, containerRef]);
+  }, [html, containerRef, rescued]);
 
   return <div className="md-block" dangerouslySetInnerHTML={{ __html: html }} />;
 });
@@ -724,6 +722,16 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   useMermaidDiagrams(containerRef, isStreaming, normalizedContent);
 
   const handleClick = useMarkdownClickHandler(containerRef, setPreviewSrc);
+  // Keyboard mirror of the delegated click handler: Enter/Space act like a
+  // click at the focused element (links, copy buttons, images rendered via
+  // dangerouslySetInnerHTML). preventDefault suppresses the native activation
+  // click so the handler never runs twice for one key press.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      void handleClick(e as unknown as React.MouseEvent<HTMLDivElement>);
+    }
+  };
 
   // Selection preservation lives inside each BlockSection: stable blocks are
   // never rewritten (memoized identical `__html`), only the streaming tail
@@ -734,9 +742,18 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
         ref={containerRef}
         className="markdown-content"
         onClick={handleClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
         onMouseOver={fileLinkTooltip.handleMouseOver}
         onMouseMove={fileLinkTooltip.handleMouseMove}
         onMouseOut={fileLinkTooltip.handleMouseOut}
+        onFocus={(e) =>
+          fileLinkTooltip.handleMouseOver(e as unknown as React.MouseEvent<HTMLDivElement>)
+        }
+        onBlur={(e) =>
+          fileLinkTooltip.handleMouseOut(e as unknown as React.MouseEvent<HTMLDivElement>)
+        }
       >
         {blocks.map((source, index) => (
           <BlockSection

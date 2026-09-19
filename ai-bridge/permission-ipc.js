@@ -134,6 +134,11 @@ export async function requestAskUserQuestionAnswers(input) {
       timestamp: new Date().toISOString(),
       cwd: process.cwd()
     };
+    // The dialog titles itself by provider (Claude when unset). DSH asks through
+    // the same dialog, so it names itself instead of being labelled "Claude".
+    if (typeof input.provider === 'string' && input.provider.trim()) {
+      requestData.provider = input.provider.trim();
+    }
 
     debugLog('ASK_USER_QUESTION_FILE_WRITE', `Writing question request file`, { requestFile, responseFile });
 

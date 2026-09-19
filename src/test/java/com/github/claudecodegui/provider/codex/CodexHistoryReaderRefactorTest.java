@@ -1,5 +1,6 @@
 package com.github.claudecodegui.provider.codex;
 
+import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.provider.CustomPricingProvider;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader.CodexMessage;
@@ -29,23 +30,32 @@ public class CodexHistoryReaderRefactorTest {
     private final Gson gson = new Gson();
 
     private Path pricingIsolationDir;
+    private Path indexCacheIsolationDir;
 
     /**
      * The aggregator consults the CustomPricingProvider singleton, which reads the developer's
      * real ~/.codemoss/config.json. Point it at an empty config so the exact-cost assertions
      * below stay hermetic regardless of local custom pricing.
+     *
+     * The SessionIndexCache memory cache keys the "__all__" entry without a sessionsDir
+     * dimension, so one test's scan would otherwise be served to the next; clear it around
+     * each test.
      */
     @Before
     public void isolateCustomPricingFromLocalConfig() throws IOException {
         pricingIsolationDir = Files.createTempDirectory("codex-history-pricing-isolation");
         CustomPricingProvider.setInstanceForTests(
                 CustomPricingProvider.createForTests(pricingIsolationDir.resolve("config.json")));
+        indexCacheIsolationDir = Files.createTempDirectory("codex-history-index-cache");
+        SessionIndexCache.getInstance().clearAll();
     }
 
     @After
     public void restoreCustomPricingSingleton() throws IOException {
         CustomPricingProvider.setInstanceForTests(null);
+        SessionIndexCache.getInstance().clearAll();
         Files.deleteIfExists(pricingIsolationDir);
+        deleteDirectory(indexCacheIsolationDir);
     }
 
     @Test
@@ -320,7 +330,11 @@ public class CodexHistoryReaderRefactorTest {
     }
 
     private CodexHistoryReader createReaderWithLocalConfigAuthorization(Path sessionsDir, boolean authorized) {
-        return new CodexHistoryReader(sessionsDir, gson) {
+        // Isolate the disk index from the developer's real ~/.codemoss/cache: a leftover
+        // __all__ index whose fileCount matches the fixture makes getUpdateTypeRecursive
+        // return NONE and restore unrelated sessions instead of scanning.
+        SessionIndexManager indexManager = new SessionIndexManager(indexCacheIsolationDir);
+        return new CodexHistoryReader(sessionsDir, gson, indexManager) {
             @Override
             boolean isCodexLocalConfigAuthorized() {
                 return authorized;

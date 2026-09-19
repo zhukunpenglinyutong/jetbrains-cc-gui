@@ -24,8 +24,15 @@ export default function AgentDialog({
   const [prompt, setPrompt] = useState('');
   const [nameError, setNameError] = useState('');
 
-  // Initialize form
-  useEffect(() => {
+  // Initialize form via render-time adjustment: re-initializes whenever the
+  // dialog is (re-)opened or the edited agent changes, without an extra
+  // commit. `null` sentinel also covers being mounted while already open.
+  const [prevFormKey, setPrevFormKey] = useState<{
+    isOpen: boolean;
+    agent?: AgentConfig | null;
+  } | null>(null);
+  if (prevFormKey === null || prevFormKey.isOpen !== isOpen || prevFormKey.agent !== agent) {
+    setPrevFormKey({ isOpen, agent });
     if (isOpen) {
       if (agent) {
         // Edit mode
@@ -38,7 +45,7 @@ export default function AgentDialog({
       }
       setNameError('');
     }
-  }, [isOpen, agent]);
+  }
 
   // Close on ESC key
   useEffect(() => {
@@ -51,7 +58,7 @@ export default function AgentDialog({
       window.addEventListener('keydown', handleEscape);
       return () => window.removeEventListener('keydown', handleEscape);
     }
-  }, [isOpen]); // Remove onClose from dependencies - it's stable from props
+  }, [isOpen, onClose]);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -92,7 +99,7 @@ export default function AgentDialog({
       <div className="dialog agent-dialog">
         <div className="dialog-header">
           <h3>{isAdding ? t('settings.agent.dialog.addTitle') : t('settings.agent.dialog.editTitle')}</h3>
-          <button className="close-btn" onClick={onClose}>
+          <button className="close-btn" onClick={onClose} aria-label={t('common.close')}>
             <span className="codicon codicon-close"></span>
           </button>
         </div>

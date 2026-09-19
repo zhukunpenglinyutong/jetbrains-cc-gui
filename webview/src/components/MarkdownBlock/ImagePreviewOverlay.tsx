@@ -14,6 +14,8 @@ export function ImagePreviewOverlay({ src, closeTitle, onClose }: ImagePreviewOv
       onClick={onClose}
       onKeyDown={(e) => e.key === 'Escape' && onClose()}
       tabIndex={0}
+      role="button"
+      aria-label={closeTitle}
     >
       <img
         className="image-preview-content"

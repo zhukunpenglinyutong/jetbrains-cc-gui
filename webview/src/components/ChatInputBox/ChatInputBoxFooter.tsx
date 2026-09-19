@@ -206,7 +206,7 @@ export function ChatInputBoxFooter({
         onMouseEnter={promptCompletion.handleMouseEnter}
       />
 
-      {/* $ command dropdown menu */}
+      {/* Codex command and skill dropdown menu, available from both / and $ */}
       {dollarCommandCompletion && (
         <CompletionDropdown
           isVisible={dollarCommandCompletion.isOpen}

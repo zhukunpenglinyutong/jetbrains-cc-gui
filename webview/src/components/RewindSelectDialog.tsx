@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useEffectEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ClaudeMessage } from '../types';
 
@@ -25,17 +25,18 @@ const RewindSelectDialog = ({
 }: RewindSelectDialogProps) => {
   const { t } = useTranslation();
 
+  const handleEscapeKey = useEffectEvent((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onCancel();
+    }
+  });
+
   useEffect(() => {
     if (isOpen) {
-      const handleEscape = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          onCancel();
-        }
-      };
-      window.addEventListener('keydown', handleEscape);
-      return () => window.removeEventListener('keydown', handleEscape);
+      window.addEventListener('keydown', handleEscapeKey);
+      return () => window.removeEventListener('keydown', handleEscapeKey);
     }
-  }, [isOpen, onCancel]);
+  }, [isOpen]);
 
   // Sort messages by index descending (most recent first)
   const sortedMessages = useMemo(() => {
@@ -73,7 +74,15 @@ const RewindSelectDialog = ({
                 <div
                   key={item.messageIndex}
                   className="rewind-select-item"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onSelect(item)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelect(item);
+                    }
+                  }}
                 >
                   <div className="rewind-select-item-content">
                     <span className="rewind-select-timestamp">[{sortedMessages.length - index}]</span>

@@ -55,10 +55,27 @@ export function getClaudeDir() {
 
 const CLAUDE_SESSION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 
+function encodeClaudeProjectKey(projectPath) {
+  return projectPath.replace(/[^a-zA-Z0-9]/g, '-');
+}
+
+function getLegacyClaudeProjectKey(projectPath) {
+  if (!projectPath || typeof projectPath !== 'string') {
+    return '';
+  }
+  return encodeClaudeProjectKey(projectPath);
+}
+
 /**
  * Convert a project path into the directory key used under ~/.claude/projects.
  * Claude Code replaces every non-alphanumeric character with a hyphen and does
  * not truncate long keys.
+ *
+ * The Claude CLI derives the storage key from realpathSync(process.cwd()), so a
+ * session started via a symlinked project path is stored under the physical
+ * path's key. Realpath the input here to match; fall back to the raw encoding
+ * when the path cannot be resolved (nonexistent/inaccessible), which keeps the
+ * previous behavior for ghost paths.
  * @param {string} projectPath
  * @returns {string}
  */
@@ -66,7 +83,30 @@ export function getClaudeProjectKey(projectPath) {
   if (!projectPath || typeof projectPath !== 'string') {
     return '';
   }
-  return projectPath.replace(/[^a-zA-Z0-9]/g, '-');
+  let resolved = projectPath;
+  try {
+    resolved = fs.realpathSync(projectPath);
+  } catch {
+    // Path does not exist or is inaccessible: encode the raw path as before
+  }
+  return encodeClaudeProjectKey(resolved);
+}
+
+/**
+ * Resolve the canonical and legacy Claude session file paths.
+ * The legacy path keeps sessions written before symlink-aware keying readable.
+ * @param {string} sessionId
+ * @param {string|null} cwd
+ * @returns {string[]}
+ */
+export function getClaudeProjectSessionFileCandidates(sessionId, cwd = null) {
+  if (typeof sessionId !== 'string' || !CLAUDE_SESSION_ID_PATTERN.test(sessionId)) {
+    throw new Error('Invalid session ID');
+  }
+  const projectsDir = join(getClaudeDir(), 'projects');
+  const projectPath = cwd || process.cwd();
+  const keys = [getClaudeProjectKey(projectPath), getLegacyClaudeProjectKey(projectPath)];
+  return [...new Set(keys)].map((projectKey) => join(projectsDir, projectKey, `${sessionId}.jsonl`));
 }
 
 /**
@@ -76,12 +116,18 @@ export function getClaudeProjectKey(projectPath) {
  * @returns {string}
  */
 export function getClaudeProjectSessionFilePath(sessionId, cwd = null) {
-  if (typeof sessionId !== 'string' || !CLAUDE_SESSION_ID_PATTERN.test(sessionId)) {
-    throw new Error('Invalid session ID');
-  }
-  const projectsDir = join(getClaudeDir(), 'projects');
-  const projectKey = getClaudeProjectKey(cwd || process.cwd());
-  return join(projectsDir, projectKey, `${sessionId}.jsonl`);
+  return getClaudeProjectSessionFileCandidates(sessionId, cwd)[0];
+}
+
+/**
+ * Resolve the existing Claude session file, preferring the canonical path.
+ * @param {string} sessionId
+ * @param {string|null} cwd
+ * @returns {string}
+ */
+export function getExistingClaudeProjectSessionFilePath(sessionId, cwd = null) {
+  const candidates = getClaudeProjectSessionFileCandidates(sessionId, cwd);
+  return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
 }
 
 /**

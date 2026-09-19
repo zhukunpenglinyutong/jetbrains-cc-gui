@@ -91,6 +91,9 @@ export function InputEditableArea({
         ref={editableRef}
         className="input-editable"
         contentEditable={!disabled}
+        role="textbox"
+        aria-multiline="true"
+        aria-label={placeholder}
         spellCheck={false}
         data-placeholder={placeholder}
         data-completion-suffix={completionSuffix}

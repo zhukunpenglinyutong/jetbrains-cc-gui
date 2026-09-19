@@ -33,7 +33,7 @@ export const PlanUsageIndicator: React.FC<PlanUsageIndicatorProps> = memo(({
     return resolveDisplayWindow(snapshot, windowId);
   }, [snapshot, windowId]);
 
-  const windows = snapshot?.windows ?? [];
+  const windows = useMemo(() => snapshot?.windows ?? [], [snapshot]);
   const canSwitch = windows.length > 1;
 
   const onCycleWindow = useCallback((e: React.MouseEvent) => {
@@ -59,7 +59,7 @@ export const PlanUsageIndicator: React.FC<PlanUsageIndicatorProps> = memo(({
     worstColor,
     color,
     t,
-  }), [present, snapshot?.message, snapshot?.level, snapshot?.stale, tp, fullReset, display, windows, worstColor, color, t]);
+  }), [present, snapshot, tp, fullReset, display, windows, worstColor, color, t]);
 
   if (status === 'idle') return null;
 
