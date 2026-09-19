@@ -621,6 +621,16 @@ interface Window {
   updateCommitAiConfig?: (json: string) => void;
 
   /**
+   * Update code completion (DeepSeek FIM) settings config from backend
+   */
+  updateCodeCompletionSettings?: (json: string) => void;
+
+  /**
+   * Code completion "test connection" result from backend
+   */
+  onCodeCompletionTestResult?: (json: string) => void;
+
+  /**
    * Update session title (called when AI generates a title).
    * @param sessionId - The session ID the title belongs to
    * @param title - The generated title text

@@ -11,6 +11,7 @@ import AgentSection from './AgentSection';
 import PromptSection from './PromptSection';
 import CommitSection from './CommitSection';
 import PromptEnhancerSection from './PromptEnhancerSection';
+import CodeCompletionSection from './CodeCompletionSection';
 import OtherSettingsSection from './OtherSettingsSection';
 import PetSettingsSection from './PetSettingsSection';
 import { SkillsSettingsSection } from '../skills/SkillsSettingsSection';
@@ -69,6 +70,8 @@ export const DependenciesPanel = ({ addToast }: SettingsTabPanelProps) => (
 );
 
 export const UsagePanel = () => <UsageSection />;
+
+export const CodeCompletionPanel = () => <CodeCompletionSection />;
 
 export const McpPanel = ({ currentProvider }: SettingsTabPanelProps) => (
   <PlaceholderSection type="mcp" currentProvider={currentProvider} />

@@ -1,0 +1,105 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  max-width: 640px;
+}
+
+.description {
+  margin: 0;
+  opacity: 0.75;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.label {
+  min-width: 160px;
+  flex-shrink: 0;
+}
+
+.radioOption {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+}
+
+.hint {
+  margin: -4px 0 0 168px;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.saveButton {
+  align-self: flex-start;
+  padding: 6px 20px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  background: var(--button-bg, #4f7cff);
+  color: #fff;
+}
+
+.saveButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.testButton {
+  align-self: flex-start;
+  padding: 6px 20px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color, #ccc);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.testButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.testOk,
+.testFail {
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.testOk {
+  background: rgba(60, 160, 90, 0.12);
+}
+
+.testFail {
+  background: rgba(200, 60, 60, 0.12);
+}
+
+.snippet {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  font-family: monospace;
+}
