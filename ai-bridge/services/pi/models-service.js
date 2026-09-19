@@ -102,7 +102,10 @@ export function listModels() {
     return;
   }
 
-  const models = parsePiModelsOutput(stdout);
+  // Windows `pi.cmd` npm shim launched via `cmd.exe /d /s /c` can route all
+  // output through stderr; prefer the non-empty stream for parsing.
+  const parseSource = stdout.trim() ? stdout : stderr;
+  const models = parsePiModelsOutput(parseSource);
   // Keep a default entry so UI always has a selectable fallback.
   if (models.length === 0) {
     models.push({
@@ -110,6 +113,22 @@ export function listModels() {
       label: 'PI Auto',
       description: 'Use PI CLI default model',
     });
+    // Diagnostic surface: status was 0 but the parser found nothing. Java's
+    // CliModelsHandler logs `payload.debug` so we can tell apart "stdout was
+    // empty", "format changed", and "spawn hit a different pi binary".
+    const stdoutTail = stdout.replace(/\s+$/, '').slice(-400);
+    const stderrTail = stderr.replace(/\s+$/, '').slice(-400);
+    console.log(JSON.stringify({
+      success: true,
+      provider: 'pi',
+      models,
+      debug: {
+        reason: 'parsePiModelsOutput returned no models',
+        stdoutTail,
+        stderrTail,
+      },
+    }));
+    return;
   }
 
   console.log(JSON.stringify({ success: true, provider: 'pi', models }));
