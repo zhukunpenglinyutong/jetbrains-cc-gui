@@ -52,6 +52,28 @@ export function resolveTurnPromptTimeoutMs(env = process.env) {
 export const TURN_PROMPT_TIMEOUT_MS = resolveTurnPromptTimeoutMs();
 
 /**
+ * Grok's leader owns session settings; process environment variables cannot
+ * update them. Use the CLI's typed ACP option and verify the persisted value.
+ * Apply before each user prompt so resumed and warm sessions follow the UI.
+ */
+export async function applyReasoningEffortToSession(client, sessionId, reasoningEffort) {
+  const effort = String(reasoningEffort || '').trim();
+  if (!effort) return;
+
+  const result = await client.request('session/set_config_option', {
+    sessionId,
+    configId: 'reasoning_effort',
+    value: effort,
+  });
+  const option = result?.configOptions?.find((item) => item.id === 'reasoning_effort');
+  const current = option?.currentValue;
+  const actual = typeof current === 'string' ? current : current?.value;
+  if (actual !== effort) {
+    throw new Error(`Grok CLI did not apply reasoning effort "${effort}" (actual: ${actual ?? 'unavailable'}).`);
+  }
+}
+
+/**
  * Reusable helpers for both one-shot (runAcpTurn) and persistent runtime paths.
  * These allow init+auth+session to be done once, then prompt() reused.
  */
@@ -616,6 +638,7 @@ export async function runAcpTurn({
   apiKey = '',
   baseUrl = '',
   permissionMode = '',
+  reasoningEffort = '',
   agentPrompt = '',
   openedFiles = null,
   attachments = [],
@@ -756,6 +779,7 @@ export async function runAcpTurn({
     // keeps requesting session/request_permission instead of silent auto-run).
     // Keep liveStreaming=false: this control prompt must not enter the UI stream.
     await applyPermissionModeToSession(client, activeSessionId, effectiveMode);
+    await applyReasoningEffortToSession(client, activeSessionId, reasoningEffort);
 
     const promptBlocks = buildPromptBlocks({
       message,
