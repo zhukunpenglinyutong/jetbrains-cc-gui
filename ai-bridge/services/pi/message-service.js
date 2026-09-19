@@ -7,7 +7,13 @@
  *
  * CLI:
  *   pi --print --mode json "<text>"
- *      [--model <pattern>] [--session-id <id>] [--thinking <level>]
+ *      [--model <pattern>] [--thinking <level>] [--continue]
+ *
+ * Session continuity: PI has no --session-id flag. When the Java side has
+ * captured a session id from a previous turn, we pass --continue so PI
+ * resumes the most recent session for the same cwd (sessions live under
+ * ~/.pi/agent/sessions/<encoded-cwd>/). Without --continue, each --print
+ * call creates a new session and the model loses prior context.
  *
  * Stream events (NDJSON):
  *   { "type":"session", "id":"..." }
@@ -100,8 +106,10 @@ function buildPiArgs({ message, sessionId, model, reasoningEffort }) {
   if (modelFlag) {
     args.push('--model', modelFlag);
   }
+  // Resume the most recent PI session for this cwd so multi-turn stays in
+  // context. PI has no --session-id flag; --continue is the supported way.
   if (isNonEmptySessionId(sessionId)) {
-    args.push('--session-id', sessionId.trim());
+    args.push('--continue');
   }
   const thinkingFlag = resolveThinkingFlag(reasoningEffort);
   if (thinkingFlag) {
@@ -147,9 +155,6 @@ export async function sendMessage(
 
   const bin = resolvePiCliPath();
   const args = buildPiArgs({ message: promptText, sessionId, model, reasoningEffort });
-  if (isNonEmptySessionId(sessionId)) {
-    emitSessionId(sessionId.trim());
-  }
 
   logDebug('spawn', bin, args.slice(0, -1).join(' '),
     `promptLen=${String(promptText || '').length}`);
