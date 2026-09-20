@@ -77,8 +77,13 @@ export async function handleClaudeCommand(command, args, stdinData) {
       const sessionId = stdinData?.sessionId || args[0];
       const cwd = stdinData?.cwd || args[1] || null;
       const beforeTurnRaw = stdinData?.beforeTurn ?? (args[2] !== '' && args[2] !== undefined ? args[2] : null);
-      const parsedBeforeTurn = Number(beforeTurnRaw);
-      const beforeTurn = Number.isInteger(parsedBeforeTurn) && parsedBeforeTurn >= 0 ? parsedBeforeTurn : null;
+      // Number(null) === 0, so coerce only a real value: an absent cursor must
+      // stay null ("latest page") instead of becoming 0 ("page before turn 0"),
+      // which returns an empty page and breaks initial session restore.
+      const parsedBeforeTurn = beforeTurnRaw == null ? null : Number(beforeTurnRaw);
+      const beforeTurn = parsedBeforeTurn != null && Number.isInteger(parsedBeforeTurn) && parsedBeforeTurn >= 0
+        ? parsedBeforeTurn
+        : null;
       const parsedLimit = Number(stdinData?.limit ?? args[3]);
       const limit = Number.isInteger(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 200) : 30;
       await claudeGetSessionMessagesPage(sessionId, cwd, beforeTurn, limit);
