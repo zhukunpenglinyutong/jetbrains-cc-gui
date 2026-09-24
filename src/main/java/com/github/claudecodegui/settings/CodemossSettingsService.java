@@ -355,6 +355,35 @@ public class CodemossSettingsService {
         config.add(DSH_SECTION_KEY, dsh);
         writeConfig(config);
     }
+
+    // ============================================================================
+    // Code completion (DeepSeek FIM) settings — persisted in the plugin config's
+    // `codeCompletion` section. Credentials are stored in the same private config
+    // file (0600) as other provider settings.
+    // ============================================================================
+
+    private static final String CODE_COMPLETION_SECTION_KEY = "codeCompletion";
+
+    public CodeCompletionSettings getCodeCompletionSettings() throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has(CODE_COMPLETION_SECTION_KEY) || config.get(CODE_COMPLETION_SECTION_KEY).isJsonNull()) {
+            return new CodeCompletionSettings();
+        }
+        return CodeCompletionSettings.fromJson(config.getAsJsonObject(CODE_COMPLETION_SECTION_KEY));
+    }
+
+    public void setCodeCompletionSettings(CodeCompletionSettings settings) throws IOException {
+        if (settings == null) {
+            settings = new CodeCompletionSettings();
+        }
+        settings.normalize();
+        JsonObject config = readConfig();
+        config.add(CODE_COMPLETION_SECTION_KEY, settings.toJson());
+        writeConfig(config);
+        LOG.info("[CodemossSettingsService] Saved codeCompletion (enabled=" + settings.isEnabled()
+                + ", preset=" + settings.getPreset() + ")");
+    }
+
     private static final String COMMIT_AI_KEY = "commitAi";
     private static final String PROMPT_ENHANCER_KEY = "promptEnhancer";
     private static final String AI_FEATURE_PROVIDER_KEY = "provider";

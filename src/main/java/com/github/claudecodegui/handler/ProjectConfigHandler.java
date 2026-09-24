@@ -3,6 +3,9 @@ package com.github.claudecodegui.handler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
+import com.github.claudecodegui.provider.common.DeepSeekFimClient;
+import com.github.claudecodegui.settings.CodeCompletionCredentialResolver;
+import com.github.claudecodegui.settings.CodeCompletionSettings;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.action.SendShortcutSync;
 import com.github.claudecodegui.util.FontConfigService;
@@ -497,6 +500,153 @@ public class ProjectConfigHandler {
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to get IDE theme: " + e.getMessage(), e);
         }
+    }
+
+    // ---- Code completion (DeepSeek FIM) settings ---------------------------
+
+    /**
+     * Handle get_code_completion_settings: push the persisted code-completion
+     * config to the webview. The API key is never sent in full — only a masked
+     * preview is exposed so the user can identify the stored credential.
+     */
+    public void handleGetCodeCompletionSettings() {
+        try {
+            CodeCompletionSettings settings = settingsService.getCodeCompletionSettings();
+            CodeCompletionCredentialResolver.Resolution resolved =
+                    CodeCompletionCredentialResolver.resolve(settings);
+            JsonObject payload = settings.toJson();
+            payload.addProperty("apiKey", CodeCompletionSettings.maskApiKey(resolved.apiKey));
+            payload.addProperty("apiKeyResolvedFrom", resolved.sourceName);
+            pushJson("window.updateCodeCompletionSettings", payload);
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to get code completion settings: " + e.getMessage(), e);
+            showError("Failed to load code completion settings: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Handle set_code_completion_settings: persist the code-completion config.
+     * An empty or masked apiKey in the payload means "keep the stored key" —
+     * the webview never sees the real key, so it cannot accidentally wipe it.
+     */
+    public void handleSetCodeCompletionSettings(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            if (json == null) {
+                LOG.warn("[ProjectConfigHandler] set_code_completion_settings rejected: empty payload");
+                return;
+            }
+            CodeCompletionSettings current = settingsService.getCodeCompletionSettings();
+            CodeCompletionSettings incoming = CodeCompletionSettings.fromJson(json);
+            // Empty or masked means "keep what is already stored": a masked value
+            // can arrive even when nothing is stored, because GET echoes the mask
+            // of a key borrowed from a configured provider.
+            incoming.keepStoredKeyWhenMasked(current.getApiKey());
+            settingsService.setCodeCompletionSettings(incoming);
+            LOG.info("[ProjectConfigHandler] Saved code completion settings"
+                    + (incoming.isEnabled() ? " (enabled)" : " (disabled)"));
+            JsonObject payload = incoming.toJson();
+            payload.addProperty("apiKey", CodeCompletionSettings.maskApiKey(incoming.getApiKey()));
+            pushJson("window.updateCodeCompletionSettings", payload);
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to save code completion settings: " + e.getMessage(), e);
+            showError("Failed to save code completion settings: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Handle test_code_completion: run one real FIM call and push the outcome
+     * (status, error text, snippet) back to the webview. This is the primary way
+     * to diagnose a silent "no suggestion".
+     *
+     * <p>The webview sends the settings it is showing, and those are what get
+     * tested: measuring the persisted config instead made the button report on
+     * whatever was saved last, so switching platform and testing could answer
+     * with a completely different endpoint's result.
+     */
+    public void handleTestCodeCompletionSettings(String content) {
+        try {
+            CodeCompletionSettings stored = settingsService.getCodeCompletionSettings();
+            CodeCompletionSettings settings = draftOrStoredSettings(content, stored);
+            CodeCompletionCredentialResolver.Resolution resolved =
+                    CodeCompletionCredentialResolver.resolve(settings);
+            if (resolved.apiKey == null || resolved.apiKey.isEmpty()) {
+                JsonObject payload = new JsonObject();
+                payload.addProperty("ok", false);
+                payload.addProperty("error", "No API key configured");
+                payload.addProperty("apiKeyResolvedFrom", resolved.sourceName);
+                pushJson("window.onCodeCompletionTestResult", payload);
+                return;
+            }
+            DeepSeekFimClient client = new DeepSeekFimClient();
+            // The probe gets a longer budget than the editor has; the client
+            // applies it to the request itself, so nothing keeps running after
+            // the caller stops waiting.
+            client.call(TEST_PROMPT, TEST_SUFFIX, settings, resolved.apiKey,
+                            TEST_TIMEOUT_SECONDS * 1000)
+                    .whenComplete((result, err) -> {
+                        JsonObject payload = new JsonObject();
+                        payload.addProperty("apiKeyResolvedFrom", resolved.sourceName);
+                        if (result != null) {
+                            payload.addProperty("ok", result.ok);
+                            payload.addProperty("httpStatus", result.httpStatus);
+                            payload.addProperty("endpoint", result.endpoint);
+                            if (result.ok) {
+                                payload.addProperty("snippet", truncate(result.text, 500));
+                            } else {
+                                payload.addProperty("error", truncate(result.error, 500));
+                            }
+                        } else {
+                            payload.addProperty("ok", false);
+                            String message = err == null ? "Unknown error" : String.valueOf(err.getMessage());
+                            payload.addProperty("error", truncate(message, 500));
+                        }
+                        pushJson("window.onCodeCompletionTestResult", payload);
+                    });
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] failed to test code completion: " + e.getMessage(), e);
+            showError("Failed to test code completion: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Settings to test: the draft the webview is showing, falling back to the
+     * persisted config when it sent none (or something unreadable). The key
+     * follows the same rule as saving — a mask or an empty field keeps the
+     * stored credential.
+     *
+     * @param content raw draft JSON from the webview, or null/blank.
+     * @param stored persisted settings, used as the fallback and key source.
+     * @return the settings to run the probe with.
+     */
+    static CodeCompletionSettings draftOrStoredSettings(String content, CodeCompletionSettings stored) {
+        if (content == null || content.trim().isEmpty()) {
+            return stored;
+        }
+        try {
+            JsonObject json = new Gson().fromJson(content, JsonObject.class);
+            if (json == null) {
+                return stored;
+            }
+            CodeCompletionSettings draft = CodeCompletionSettings.fromJson(json);
+            draft.keepStoredKeyWhenMasked(stored == null ? "" : stored.getApiKey());
+            return draft;
+        } catch (Exception e) {
+            LOG.warn("[ProjectConfigHandler] test_code_completion: unreadable draft payload, "
+                    + "testing the saved settings instead (" + e.getMessage() + ")");
+            return stored;
+        }
+    }
+
+    private static final String TEST_PROMPT = "public static int add(int a, int b) {";
+    private static final String TEST_SUFFIX = "}";
+    private static final int TEST_TIMEOUT_SECONDS = 15;
+
+    private static String truncate(String s, int max) {
+        if (s == null) {
+            return "";
+        }
+        return s.length() > max ? s.substring(0, max) : s;
     }
 
     public void handleGetEditorFontConfig() {

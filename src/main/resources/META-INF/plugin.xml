@@ -95,6 +95,14 @@
         <!-- Monitor Run/Debug Service Output -->
         <postStartupActivity implementation="com.github.claudecodegui.service.RunConfigMonitorService"/>
 
+        <!-- DeepSeek FIM code completion (native completion items).
+             order="last" so built-in completions are not delayed by a slow
+             FIM network request. Disabled by default (settings). -->
+        <completion.contributor language="any"
+                               id="ccguiFimCompletion"
+                               order="last"
+                               implementationClass="com.github.claudecodegui.completion.FimCompletionContributor"/>
+
         <!-- StatusBar widget for task notification -->
         <statusBarWidgetFactory id="ClaudeStatusBarWidget"
                                 implementation="com.github.claudecodegui.notifications.ClaudeStatusBarWidget$Factory"/>

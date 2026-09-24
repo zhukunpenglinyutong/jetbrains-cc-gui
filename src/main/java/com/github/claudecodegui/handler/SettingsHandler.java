@@ -93,6 +93,9 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_commit_ai_config",
         "get_prompt_enhancer_config",
         "set_prompt_enhancer_config",
+        "get_code_completion_settings",
+        "set_code_completion_settings",
+        "test_code_completion",
         "get_project_commit_prompt",
         "set_project_commit_prompt",
         "get_input_history",
@@ -336,6 +339,15 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_prompt_enhancer_config":
                 projectConfigHandler.handleSetPromptEnhancerConfig(content);
+                return true;
+            case "get_code_completion_settings":
+                projectConfigHandler.handleGetCodeCompletionSettings();
+                return true;
+            case "set_code_completion_settings":
+                projectConfigHandler.handleSetCodeCompletionSettings(content);
+                return true;
+            case "test_code_completion":
+                projectConfigHandler.handleTestCodeCompletionSettings(content);
                 return true;
             case "get_project_commit_prompt":
                 projectConfigHandler.handleGetProjectCommitPrompt();
