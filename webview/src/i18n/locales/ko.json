@@ -1680,6 +1680,8 @@
     "pinned": "고정",
     "pin": "고정",
     "unpin": "고정 해제",
+    "retiredBadge": "지원 종료",
+    "retiredCustomHint": "API에서 더 이상 제공하지 않는 모델 ID입니다. 사용자 정의 모델로 추가했기 때문에 바꾸지 않고 그대로 전송합니다.",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",

@@ -93,10 +93,13 @@ test('buildRequestContext preserves resolved model mapping for context usage run
         ANTHROPIC_DEFAULT_SONNET_MODEL: 'custom-sonnet-model',
       }),
       {
-        sdkModelName: 'sonnet',
+        // The exact resolved id is handed to the SDK. The 'sonnet' alias would
+        // resolve through ANTHROPIC_DEFAULT_SONNET_MODEL, which the settings
+        // override blanks - so the alias silently falls back to the CLI default.
+        sdkModelName: 'custom-sonnet-model',
         resolvedModelId: 'custom-sonnet-model',
       },
-      'resolved model state should honor mapped sonnet model settings',
+      'resolved model state should hand the exact mapped model to the SDK',
     );
     assert.equal(requestContext.resolvedModelId, 'custom-sonnet-model');
     assert.equal(requestContext.options.env.ANTHROPIC_MODEL, 'custom-sonnet-model');
@@ -174,7 +177,7 @@ test('getContextUsagePersistent reuses runtime and calls setModel when model cha
   const factory = createContextAwareQueryFactory({ totalTokens: 5000 });
   __testing.setQueryFn(factory.queryFn);
 
-  // Pre-acquire a runtime for session 'sess-2' with model 'opus'
+  // Pre-acquire a runtime for session 'sess-2' with an exact Opus id
   const requestContext = await __testing.buildRequestContext({
     sessionId: 'sess-2',
     model: 'claude-opus-4-7',
@@ -183,7 +186,10 @@ test('getContextUsagePersistent reuses runtime and calls setModel when model cha
   await __testing.acquireRuntime(requestContext);
 
   assert.equal(factory.runtimes.length, 1, 'should have 1 runtime initially');
-  assert.equal(factory.runtimes[0].currentModel, 'opus', 'runtime should have opus model');
+  // The SDK receives the exact id, not the 'opus' family alias (the alias would
+  // resolve to the CLI default because the settings override blanks
+  // ANTHROPIC_DEFAULT_OPUS_MODEL).
+  assert.equal(factory.runtimes[0].currentModel, 'claude-opus-4-7', 'runtime should carry the exact model id');
 
   // Request context usage with a DIFFERENT model (sonnet instead of opus)
   // The runtime should be reused and setModel called to update the model

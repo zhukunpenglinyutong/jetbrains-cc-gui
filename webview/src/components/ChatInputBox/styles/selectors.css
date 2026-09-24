@@ -300,6 +300,21 @@
   user-select: none;
 }
 
+/* "Retired" tag for a custom Claude model whose id the API no longer serves */
+.model-retired-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  flex-shrink: 0;
+  user-select: none;
+}
+
 .selector-option .model-description {
   font-size: 11px;
   color: var(--text-secondary);

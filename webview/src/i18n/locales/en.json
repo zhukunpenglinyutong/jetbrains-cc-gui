@@ -2051,6 +2051,8 @@
     "pinned": "Pinned",
     "pin": "Pin",
     "unpin": "Unpin",
+    "retiredBadge": "Retired",
+    "retiredCustomHint": "This model id is no longer served by the API. It is sent as-is because you added it as a custom model.",
     "longContext": {
       "label": "1M",
       "shortLabel": "1M context",

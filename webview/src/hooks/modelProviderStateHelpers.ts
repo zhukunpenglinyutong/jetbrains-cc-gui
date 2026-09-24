@@ -7,6 +7,7 @@ import {
 } from '../components/ChatInputBox/types';
 import type { ModelInfo, PermissionMode } from '../components/ChatInputBox/types';
 import type { ProviderConfig } from '../types/provider';
+import { readCustomClaudeModelIds } from '../utils/customClaudeModels';
 import { normalizeCliPermissionMode, ompModeForModelId } from './providers/cliProviders';
 
 /**
@@ -198,7 +199,8 @@ export function applyModelSelect(
 ): void {
   if (providerId === 'claude') {
     const strippedModelId = strip1MContextSuffix(modelId);
-    const normalizedModelId = normalizeClaudeModelId(strippedModelId);
+    // Explicit user pick: a custom model id is forwarded verbatim, never migrated.
+    const normalizedModelId = normalizeClaudeModelId(strippedModelId, readCustomClaudeModelIds());
     actions.setSelectedClaudeModel(normalizedModelId);
     sendBridgeEvent('set_model', apply1MContextSuffix(normalizedModelId, longContextEnabled));
     return;

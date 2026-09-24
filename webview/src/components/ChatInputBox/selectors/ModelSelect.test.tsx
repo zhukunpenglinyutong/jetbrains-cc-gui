@@ -293,4 +293,56 @@ describe('ModelSelect', () => {
     expect(screen.getByRole('button').textContent).toContain('Sonnet 4.6');
     expect(screen.getByRole('button').textContent).not.toContain('glm-4');
   });
+
+  describe('自定义模型与已下线迁移表', () => {
+    const opus5: ModelInfo = { id: 'claude-opus-5', label: 'Opus 5' };
+    const customOpus48: ModelInfo = { id: 'claude-opus-4-8', label: 'My Opus 4.8', isCustom: true };
+
+    it('选中的自定义模型只勾选自己，不会同时勾选它在迁移表里的替代模型', () => {
+      render(
+        <ModelSelect
+          value="claude-opus-4-8"
+          onChange={vi.fn()}
+          models={[opus5, customOpus48]}
+          currentProvider="claude"
+        />,
+      );
+      fireEvent.click(screen.getByRole('button'));
+
+      expect(screen.getByTestId('model-option-claude-opus-4-8').className).toContain('selected');
+      expect(screen.getByTestId('model-option-claude-opus-5').className).not.toContain('selected');
+    });
+
+    it('自定义模型命中迁移表时显示"已下线"标签，内置模型不显示', () => {
+      render(
+        <ModelSelect
+          value="claude-opus-5"
+          onChange={vi.fn()}
+          models={[opus5, customOpus48]}
+          currentProvider="claude"
+        />,
+      );
+      fireEvent.click(screen.getByRole('button'));
+
+      expect(screen.getByTestId('model-retired-claude-opus-4-8')).toBeTruthy();
+      expect(screen.queryByTestId('model-retired-claude-opus-5')).toBeNull();
+    });
+
+    it('未命中迁移表的自定义模型（如 claude-opus-4-6）不显示标签', () => {
+      const customOpus46: ModelInfo = { id: 'claude-opus-4-6', label: 'Opus 4.6', isCustom: true };
+      render(
+        <ModelSelect
+          value="claude-opus-4-6"
+          onChange={vi.fn()}
+          models={[opus5, customOpus46]}
+          currentProvider="claude"
+        />,
+      );
+      fireEvent.click(screen.getByRole('button'));
+
+      expect(screen.queryByTestId('model-retired-claude-opus-4-6')).toBeNull();
+      expect(screen.getByTestId('model-option-claude-opus-4-6').className).toContain('selected');
+      expect(screen.getByTestId('model-option-claude-opus-5').className).not.toContain('selected');
+    });
+  });
 });

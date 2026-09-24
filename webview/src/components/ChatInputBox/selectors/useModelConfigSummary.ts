@@ -32,7 +32,10 @@ export const useCurrentModel = (
   currentProvider: string,
 ) => {
   const strippedValue = strip1MContextSuffix(selectedModel);
-  const normalizedValue = currentProvider === 'claude' ? normalizeClaudeModelId(strippedValue) : strippedValue;
+  const customModelIds = new Set(models.filter((model) => model.isCustom).map((model) => model.id));
+  const normalizedValue = currentProvider === 'claude'
+    ? normalizeClaudeModelId(strippedValue, customModelIds)
+    : strippedValue;
   return models.find((model) => model.id === normalizedValue)
     || models.find((model) => model.id === strippedValue)
     || (strippedValue

@@ -233,8 +233,11 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
       // branches (saved localStorage / fresh backend-only) share the same logic
       // and each getCustomModels localStorage read happens at most once.
       const applyClaudeModel = (modelId: string) => {
-        const normalized = normalizeClaudeModelId(strip1MContextSuffix(modelId));
         const customs = getCustomModels('claude-custom-models');
+        // A saved custom id is restored verbatim even if it is in the retired
+        // table; only built-in retired ids are migrated to their replacement.
+        const customIds = new Set(customs.map(m => m.id));
+        const normalized = normalizeClaudeModelId(strip1MContextSuffix(modelId), customIds);
         if (CLAUDE_MODELS.find(m => m.id === normalized) || customs.find(m => m.id === normalized)) {
           restoredClaudeModel = normalized;
           setSelectedClaudeModel(normalized);

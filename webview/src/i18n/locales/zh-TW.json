@@ -1614,6 +1614,8 @@
     "pinned": "置頂",
     "pin": "置頂",
     "unpin": "取消置頂",
+    "retiredBadge": "已下線",
+    "retiredCustomHint": "官方 API 已不再提供此模型 ID。因為它是你新增的自訂模型，外掛會原樣送出，不做替換。",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",

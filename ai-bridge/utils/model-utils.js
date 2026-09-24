@@ -32,6 +32,26 @@ export function mapModelIdToSdkName(modelId) {
 }
 
 /**
+ * Pick the `model` value handed to the Claude SDK for a request.
+ *
+ * Prefer the exact resolved id (e.g. 'claude-opus-4-6[1m]' or a provider
+ * mapping like 'MiniMax-M2.5') over the family alias from mapModelIdToSdkName.
+ * The alias ('opus') only works if the CLI can read ANTHROPIC_DEFAULT_OPUS_MODEL,
+ * but buildWebviewControlledSettingsOverride blanks that variable so stale
+ * settings.json values cannot leak in - which also blanks the per-request value
+ * and makes 'opus' silently resolve to the CLI's default Opus. Passing the
+ * exact id sidesteps env precedence entirely.
+ *
+ * @param {string|null} modelId - Original model ID from the webview
+ * @param {string|null} resolvedModelId - Output of resolveModelFromSettings
+ * @returns {string} Value for the SDK `model` option
+ */
+export function resolveSdkModelName(modelId, resolvedModelId) {
+  const exact = typeof resolvedModelId === 'string' ? resolvedModelId.trim() : '';
+  return exact || mapModelIdToSdkName(modelId);
+}
+
+/**
  * Resolve the actual model name for API calls from user's settings.json.
  * When the user configures a model mapping in their provider config (e.g. sonnet -> "MiniMax-M2.5"),
  * those values are written to ~/.claude/settings.json as ANTHROPIC_DEFAULT_*_MODEL env vars.

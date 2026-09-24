@@ -37,18 +37,23 @@ public class ChatPasteAction extends ChatToolWindowAction {
             if (text.isEmpty()) {
                 // No text in clipboard - check for image data
                 if (clipboard.isDataFlavorAvailable(DataFlavor.imageFlavor)) {
-                    BufferedImage image = (BufferedImage) clipboard.getData(DataFlavor.imageFlavor);
-                    if (image != null) {
-                        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-                            ImageIO.write(image, "png", baos);
-                            String base64 = Base64.getEncoder().encodeToString(baos.toByteArray());
-                            // Use Gson JSON encoding to safely embed base64 data, consistent with text paste below
-                            String jsonBase64 = GSON.toJson(base64);
-                            chatWindow.executeJavaScriptCode(
-                                "(function(){" +
-                                "  window.dispatchEvent(new CustomEvent('java-paste-image',{detail:{base64:" + jsonBase64 + ",mediaType:'image/png'}}));" +
-                                "})()"
-                            );
+                    Object imageData = clipboard.getData(DataFlavor.imageFlavor);
+                    if (imageData instanceof Image) {
+                        // macOS 27+ may return MultiResolutionCachedImage, which is not a
+                        // BufferedImage; downcast directly would throw ClassCastException.
+                        BufferedImage image = toBufferedImage((Image) imageData);
+                        if (image != null) {
+                            try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                                ImageIO.write(image, "png", baos);
+                                String base64 = Base64.getEncoder().encodeToString(baos.toByteArray());
+                                // Use Gson JSON encoding to safely embed base64 data, consistent with text paste below
+                                String jsonBase64 = GSON.toJson(base64);
+                                chatWindow.executeJavaScriptCode(
+                                    "(function(){" +
+                                    "  window.dispatchEvent(new CustomEvent('java-paste-image',{detail:{base64:" + jsonBase64 + ",mediaType:'image/png'}}));" +
+                                    "})()"
+                                );
+                            }
                         }
                     }
                 }
@@ -77,5 +82,28 @@ public class ChatPasteAction extends ChatToolWindowAction {
         } catch (Exception ex) {
             LOG.warn("Failed to read clipboard for paste action", ex);
         }
+    }
+
+    /**
+     * Converts an arbitrary clipboard Image (e.g. macOS MultiResolutionCachedImage)
+     * into a renderable BufferedImage.
+     */
+    private static BufferedImage toBufferedImage(Image img) {
+        if (img == null) {
+            return null;
+        }
+        if (img instanceof BufferedImage) {
+            return (BufferedImage) img;
+        }
+        int w = img.getWidth(null);
+        int h = img.getHeight(null);
+        if (w <= 0 || h <= 0) {
+            return null;
+        }
+        BufferedImage buffered = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = buffered.createGraphics();
+        g.drawImage(img, 0, 0, null);
+        g.dispose();
+        return buffered;
     }
 }

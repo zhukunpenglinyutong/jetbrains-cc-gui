@@ -120,7 +120,9 @@ public class ModelProviderHandler {
             context.setCurrentModel(model);
 
             if (context.getSession() != null) {
-                context.getSession().setModel(model);
+                // Explicit user pick from the webview: store verbatim so a custom
+                // model id is never rewritten by the retired-model migration.
+                context.getSession().setModelVerbatim(model);
                 if (modelChanged) {
                     clearSessionUsage();
                 }
@@ -399,6 +401,9 @@ public class ModelProviderHandler {
     }
 
     private String resolveConfiguredClaudeModelFromSettings(String baseModel) {
+        if (context.getSettingsService() == null) {
+            return baseModel;
+        }
         try {
             JsonObject claudeSettings = context.getSettingsService().readClaudeSettings();
             if (claudeSettings == null || !claudeSettings.has("env") || !claudeSettings.get("env").isJsonObject()) {

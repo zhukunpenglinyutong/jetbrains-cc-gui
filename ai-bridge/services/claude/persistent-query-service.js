@@ -12,8 +12,8 @@ import {
 } from '../../config/api-config.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
 import {
-  mapModelIdToSdkName,
   resolveModelFromSettings,
+  resolveSdkModelName,
   setModelEnvironmentVariables
 } from '../../utils/model-utils.js';
 import { canUseTool } from '../../permission-handler.js';
@@ -120,9 +120,12 @@ function buildSystemPromptAppend(params) {
 }
 
 function resolveRequestModelState(modelId, settingsEnv) {
+  const resolvedModelId = resolveModelFromSettings(modelId, settingsEnv);
   return {
-    sdkModelName: mapModelIdToSdkName(modelId),
-    resolvedModelId: resolveModelFromSettings(modelId, settingsEnv),
+    // Exact id, not the family alias: the settings override blanks the
+    // ANTHROPIC_DEFAULT_*_MODEL vars the alias would otherwise resolve through.
+    sdkModelName: resolveSdkModelName(modelId, resolvedModelId),
+    resolvedModelId,
   };
 }
 

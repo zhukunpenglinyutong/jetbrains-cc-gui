@@ -1735,6 +1735,8 @@
     "pinned": "Fixados",
     "pin": "Fixar",
     "unpin": "Desafixar",
+    "retiredBadge": "Descontinuado",
+    "retiredCustomHint": "A API não oferece mais este ID de modelo. Ele é enviado como está porque você o adicionou como modelo personalizado.",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",

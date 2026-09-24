@@ -1,4 +1,5 @@
 import { sendBridgeEvent } from './utils/bridge';
+import { readCustomClaudeModelIds } from './utils/customClaudeModels';
 import { ompModeForModelId } from './hooks/providers/cliProviders';
 import type { ModelInfo, PermissionMode } from './components/ChatInputBox/types';
 import type { ChatScreenProps } from './components/ChatScreen';
@@ -111,7 +112,7 @@ export const createApplyHistoryModel = ({
         // claude (or unrecognized): apply the claude model directly —
         // handleModelSelect reads currentProvider from a stale closure
         // right after a provider switch.
-        const normalized = normalizeClaudeModelId(strip1MContextSuffix(model));
+        const normalized = normalizeClaudeModelId(strip1MContextSuffix(model), readCustomClaudeModelIds());
         setSelectedClaudeModel(normalized);
         sendBridgeEvent('set_model', apply1MContextSuffix(normalized, longContextEnabled));
       }

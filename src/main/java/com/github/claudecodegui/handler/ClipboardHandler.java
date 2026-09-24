@@ -11,6 +11,10 @@ import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.util.Base64;
+import javax.imageio.ImageIO;
 
 /**
  * Handler for clipboard operations from webview.
@@ -19,10 +23,11 @@ import java.awt.datatransfer.StringSelection;
 public class ClipboardHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(ClipboardHandler.class);
-    private static final String[] SUPPORTED_TYPES = {"read_clipboard", "write_clipboard"};
+    private static final String[] SUPPORTED_TYPES = {"read_clipboard", "write_clipboard", "paste_image"};
 
     private static final long MIN_READ_INTERVAL_MS = 200;
     private static final int MAX_CLIPBOARD_WRITE_SIZE = 10 * 1024 * 1024; // 10 MB
+    private static final int MAX_IMAGE_SIZE = 20 * 1024 * 1024; // 20 MB base64 limit
 
     private volatile long lastReadTime = 0;
 
@@ -44,6 +49,10 @@ public class ClipboardHandler extends BaseMessageHandler {
             }
             case "write_clipboard" -> {
                 handleWriteClipboard(content);
+                yield true;
+            }
+            case "paste_image" -> {
+                handlePasteImage();
                 yield true;
             }
             default -> false;
@@ -93,5 +102,50 @@ public class ClipboardHandler extends BaseMessageHandler {
                 LOG.warn("Failed to write clipboard", e);
             }
         }, ModalityState.any());
+    }
+
+    private void handlePasteImage() {
+        try {
+            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            if (!clipboard.isDataFlavorAvailable(DataFlavor.imageFlavor)) {
+                return;
+            }
+            Image image = (Image) clipboard.getData(DataFlavor.imageFlavor);
+            if (image == null) {
+                return;
+            }
+
+            BufferedImage buffered;
+            if (image instanceof BufferedImage) {
+                buffered = (BufferedImage) image;
+            } else {
+                buffered = new BufferedImage(
+                        image.getWidth(null), image.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+                Graphics2D g = buffered.createGraphics();
+                g.drawImage(image, 0, 0, null);
+                g.dispose();
+            }
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(buffered, "png", baos);
+            byte[] bytes = baos.toByteArray();
+
+            if (bytes.length == 0) {
+                LOG.warn("Clipboard image produced empty PNG");
+                return;
+            }
+
+            String base64 = Base64.getEncoder().encodeToString(bytes);
+            if (base64.length() > MAX_IMAGE_SIZE) {
+                LOG.warn("Clipboard image too large (" + base64.length() + " chars), skipping");
+                return;
+            }
+
+            String js = "window.dispatchEvent(new CustomEvent('java-paste-image', " +
+                    "{ detail: { base64: '" + base64 + "', mediaType: 'image/png' } }));";
+            executeJavaScript(js);
+        } catch (Exception e) {
+            LOG.warn("Failed to read clipboard image", e);
+        }
     }
 }

@@ -32,7 +32,7 @@ import {
   loadClaudeSettings,
   getCliUserAgent,
 } from '../config/api-config.js';
-import { mapModelIdToSdkName, resolveModelFromSettings } from '../utils/model-utils.js';
+import { resolveModelFromSettings, resolveSdkModelName } from '../utils/model-utils.js';
 import { getRealHomeDir } from '../utils/path-utils.js';
 import { getClaudeCliPathOverride } from '../utils/claude-cli-path.js';
 import { ensureAnthropicSdk } from './claude/message-utils.js';
@@ -251,7 +251,9 @@ async function generateWithClaudeAgent(prompt, model, config) {
 
   console.log(`[CommitMessage] Agent SDK path (auth: ${config.authType}, base URL: ${config.baseUrl || 'https://api.anthropic.com'})`);
 
-  const sdkModelName = mapModelIdToSdkName(model);
+  // Exact id, not the family alias - see resolveSdkModelName.
+  const commitSettings = loadClaudeSettings();
+  const sdkModelName = resolveSdkModelName(model, resolveModelFromSettings(model, commitSettings && commitSettings.env));
   console.log(`[CommitMessage] Claude Agent model mapping: ${model} -> ${sdkModelName}`);
 
   const workingDirectory = getRealHomeDir();

@@ -369,6 +369,20 @@ public class SessionState {
     }
 
     /**
+     * Store the model id exactly as given, skipping retired-id migration.
+     *
+     * <p>Used for explicit user selections (the webview's {@code set_model}), where
+     * the id may be a user-defined custom model. The user typed that id on
+     * purpose, so it must reach the CLI unchanged even if it is in the retired
+     * table - the API error is the right feedback, not a silent substitute.
+     * Restore paths (persisted tab state, history, session templates) keep using
+     * {@link #setModel(String)} so stale built-in ids still self-heal.</p>
+     */
+    public void setModelVerbatim(String model) {
+        this.model = model == null ? null : model.trim();
+    }
+
+    /**
      * Migrate retired Claude model ids to their live replacement on write.
      *
      * <p>Persisted tab state (.idea/claudeCodeTabState.xml) and history sessions keep
@@ -377,6 +391,10 @@ public class SessionState {
      * pinned to a dead model that fails on every send ("It may not exist or you may
      * not have access to it") - see #1678. Migrating here self-heals restored tabs
      * without touching the persisted XML.</p>
+     *
+     * <p>Only ids that actually fail at the API belong here. claude-opus-4-6 is still
+     * served and is commonly added as a custom model, so it is intentionally absent:
+     * listing it rewrote the user's explicit choice to opus-5.</p>
      *
      * @param model raw model id (may be null, blank, carry a [1m] suffix, or be retired)
      * @return the model id to store - retired ids mapped to their live replacement,
@@ -402,7 +420,6 @@ public class SessionState {
             case "claude-sonnet-4-7":
                 base = "claude-sonnet-5";
                 break;
-            case "claude-opus-4-6":
             case "claude-opus-4-8":
                 base = "claude-opus-5";
                 break;

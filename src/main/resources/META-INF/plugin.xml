@@ -95,6 +95,12 @@
         <!-- Monitor Run/Debug Service Output -->
         <postStartupActivity implementation="com.github.claudecodegui.service.RunConfigMonitorService"/>
 
+        <!-- macOS 27+: Cmd+V keydown is swallowed before reaching CEF when the JCEF
+             webview (OSR) has focus, breaking image paste. Registers an AWT-level
+             fallback listener plus a CEF-level keyboard hook that detects the
+             orphaned Cmd+V KEYUP and forwards clipboard images to the webview. -->
+        <postStartupActivity implementation="com.github.claudecodegui.startup.PasteKeyInitializer"/>
+
         <!-- StatusBar widget for task notification -->
         <statusBarWidgetFactory id="ClaudeStatusBarWidget"
                                 implementation="com.github.claudecodegui.notifications.ClaudeStatusBarWidget$Factory"/>

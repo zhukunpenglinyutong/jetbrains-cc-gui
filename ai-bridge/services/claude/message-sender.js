@@ -11,7 +11,7 @@ import {
   buildWebviewControlledSettingsOverride,
 } from '../../config/api-config.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
-import { mapModelIdToSdkName, resolveModelFromSettings, setModelEnvironmentVariables } from '../../utils/model-utils.js';
+import { resolveModelFromSettings, resolveSdkModelName, setModelEnvironmentVariables } from '../../utils/model-utils.js';
 import { AsyncStream } from '../../utils/async-stream.js';
 import { canUseTool } from '../../permission-handler.js';
 import { buildContentBlocks, loadAttachments } from './attachment-service.js';
@@ -510,9 +510,10 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     try { process.chdir(workingDirectory); } catch (e) { console.error('[WARNING] chdir failed:', e.message); }
     console.log('[DEBUG] Working directory:', workingDirectory);
 
-    const sdkModelName = mapModelIdToSdkName(model);
     const settings = loadClaudeSettings();
     const resolvedModel = resolveModelFromSettings(model, settings?.env);
+    // Exact id, not the family alias - see resolveSdkModelName.
+    const sdkModelName = resolveSdkModelName(model, resolvedModel);
     console.log('[DEBUG] Model:', model, '->', sdkModelName, '(API:', resolvedModel + ')');
     setModelEnvironmentVariables(resolvedModel, model);
 
@@ -580,9 +581,9 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 
     const systemPromptAppend = buildSystemPromptAppend(openedFiles, agentPrompt, message);
 
-    const sdkModelName = mapModelIdToSdkName(model);
     const settings = loadClaudeSettings();
     const resolvedAttachModel = resolveModelFromSettings(model, settings?.env);
+    const sdkModelName = resolveSdkModelName(model, resolvedAttachModel);
     console.log('[DEBUG] (withAttachments) Model:', model, '->', resolvedAttachModel);
     setModelEnvironmentVariables(resolvedAttachModel, model);
 

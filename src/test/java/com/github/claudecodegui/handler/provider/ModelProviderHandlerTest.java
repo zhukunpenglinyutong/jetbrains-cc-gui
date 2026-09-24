@@ -234,6 +234,26 @@ public class ModelProviderHandlerTest {
         assertFalse(usagePushService.recalculated);
     }
 
+    /**
+     * A set_model from the webview is an explicit user choice. A custom model id
+     * that is also in the retired-migration table must reach the session verbatim
+     * instead of being rewritten to its replacement (custom opus-4-8 -> opus-5).
+     */
+    @Test
+    public void handleSetModelStoresCustomRetiredIdVerbatim() {
+        HandlerContext context = createHandlerContext();
+        ClaudeSession session = new ClaudeSession(null, null, null, null);
+        session.setProvider("claude");
+        context.setSession(session);
+        context.setCurrentProvider("claude");
+        RecordingUsagePushService usagePushService = new RecordingUsagePushService(context);
+
+        new ModelProviderHandler(context, usagePushService).handleSetModel("claude-opus-4-8[1m]");
+
+        assertEquals("claude-opus-4-8[1m]", context.getCurrentModel());
+        assertEquals("claude-opus-4-8[1m]", session.getModel());
+    }
+
     private static HandlerContext createHandlerContext() {
         return new HandlerContext(null, null, null, null, new HandlerContext.JsCallback() {
             @Override

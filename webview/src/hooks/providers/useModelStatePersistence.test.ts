@@ -242,6 +242,27 @@ describe('useModelStatePersistence — retired model migration', () => {
     expect(bridgeEventsFor('set_model')).toEqual([['set_model', 'claude-sonnet-5']]);
   });
 
+  it('restores a saved custom model verbatim even when its id is in the retired table', () => {
+    // The user added claude-opus-4-8 as a custom model on purpose. Restoring it
+    // must not rewrite it to opus-5 the way a stale built-in id would be.
+    const setSelectedClaudeModel = vi.fn();
+    localStorage.setItem('claude-custom-models', JSON.stringify([
+      { id: 'claude-opus-4-8', label: 'My Opus 4.8' },
+    ]));
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'claude',
+      claudeModel: 'claude-opus-4-8',
+      longContextEnabled: true,
+    }));
+
+    renderHook(() => useModelStatePersistence(makeOptions({ setSelectedClaudeModel })));
+    vi.advanceTimersByTime(200);
+
+    expect(setSelectedClaudeModel).toHaveBeenCalledWith('claude-opus-4-8');
+    expect(setSelectedClaudeModel).not.toHaveBeenCalledWith('claude-opus-5');
+    expect(bridgeEventsFor('set_model')).toEqual([['set_model', 'claude-opus-4-8[1m]']]);
+  });
+
   it('migrates a backend-supplied retired model via __INITIAL_TAB_MODEL__', () => {
     const setSelectedClaudeModel = vi.fn();
     (window as unknown as { __INITIAL_TAB_PROVIDER__?: unknown }).__INITIAL_TAB_PROVIDER__ = 'claude';

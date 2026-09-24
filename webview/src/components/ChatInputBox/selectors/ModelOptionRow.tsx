@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { ModelInfo } from '../types';
+import { isRetiredClaudeModelId } from '../types';
 import type { ClaudeModelMapping } from '../../../utils/claudeModelMapping';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
 import {
@@ -38,6 +39,9 @@ export const ModelOptionRow = ({
   onTogglePin,
 }: ModelOptionRowProps) => {
   const { t } = useTranslation();
+  // A custom model whose id the API no longer serves. Shown as a hint only:
+  // the id is still sent verbatim because the user configured it on purpose.
+  const isRetiredCustom = currentProvider === 'claude' && !!model.isCustom && isRetiredClaudeModelId(model.id);
 
   return (
     <div
@@ -65,6 +69,17 @@ export const ModelOptionRow = ({
           <span className="model-description" style={MODEL_TEXT_STYLE}>{description}</span>
         )}
       </div>
+      {isRetiredCustom && (
+        <span
+          className="model-retired-badge"
+          data-testid={`model-retired-${model.id}`}
+          title={t('models.retiredCustomHint', {
+            defaultValue: 'This model id is no longer served by the API. It is sent as-is because you added it as a custom model.',
+          })}
+        >
+          {t('models.retiredBadge', { defaultValue: 'Retired' })}
+        </span>
+      )}
       <button
         type="button"
         className={`model-pin-button ${isPinned ? 'is-pinned' : ''}`}

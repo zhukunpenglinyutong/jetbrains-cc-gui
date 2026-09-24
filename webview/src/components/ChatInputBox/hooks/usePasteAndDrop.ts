@@ -8,6 +8,7 @@ import {
   registerLineFileReference,
 } from '../utils/fileReferences.js';
 import { perfTimer } from '../../../utils/debug.js';
+import { sendBridgeEvent } from '../../../utils/bridge.js';
 
 declare global {
   interface Window {
@@ -68,7 +69,10 @@ export function usePasteAndDrop({
     (e: React.ClipboardEvent) => {
       const items = e.clipboardData?.items;
 
-      if (!items) {
+      if (!items || items.length === 0) {
+        // JCEF may have intercepted the paste event; ask Java side to check clipboard for images
+        e.preventDefault();
+        sendBridgeEvent('paste_image');
         return;
       }
 
@@ -215,6 +219,9 @@ export function usePasteAndDrop({
           });
 
           timer.end();
+        } else {
+          // No image, no text, no file — JCEF may have intercepted a clipboard image
+          sendBridgeEvent('paste_image');
         }
       }
     },

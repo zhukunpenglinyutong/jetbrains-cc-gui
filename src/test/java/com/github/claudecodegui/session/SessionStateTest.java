@@ -25,10 +25,8 @@ public class SessionStateTest {
     }
 
     @Test
-    public void setModelMigratesRetiredOpus46ToOpus5() {
+    public void setModelMigratesRetiredOpus48ToOpus5() {
         SessionState state = new SessionState();
-        state.setModel("claude-opus-4-6");
-        Assert.assertEquals("claude-opus-5", state.getModel());
         state.setModel("claude-opus-4-8");
         Assert.assertEquals("claude-opus-5", state.getModel());
     }
@@ -47,6 +45,9 @@ public class SessionStateTest {
         Assert.assertEquals("claude-sonnet-5", state.getModel());
         state.setModel("claude-fable-5-1[1m]");
         Assert.assertEquals("claude-fable-5-1[1m]", state.getModel());
+        // claude-opus-4-6 is still live and is commonly added as a custom model.
+        state.setModel("claude-opus-4-6[1m]");
+        Assert.assertEquals("claude-opus-4-6[1m]", state.getModel());
     }
 
     @Test
@@ -90,6 +91,19 @@ public class SessionStateTest {
         SessionState state = new SessionState();
         state.setPermissionMode(" autoEdit ");
         Assert.assertEquals("acceptEdits", state.getPermissionMode());
+    }
+
+    @Test
+    public void setModelVerbatimKeepsRetiredIdsForExplicitUserSelection() {
+        SessionState state = new SessionState();
+        // A user-defined custom model that happens to be in the retired table
+        // must be stored as typed - the user chose it on purpose.
+        state.setModelVerbatim("claude-opus-4-8[1m]");
+        Assert.assertEquals("claude-opus-4-8[1m]", state.getModel());
+        state.setModelVerbatim("  claude-sonnet-4-7  ");
+        Assert.assertEquals("claude-sonnet-4-7", state.getModel());
+        state.setModelVerbatim(null);
+        Assert.assertNull(state.getModel());
     }
 
     @Test

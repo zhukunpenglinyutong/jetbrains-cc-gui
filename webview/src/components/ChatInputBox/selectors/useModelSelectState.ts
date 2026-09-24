@@ -31,7 +31,15 @@ export function useModelSelectState({ value, models, currentProvider, longContex
 
   // Strip [1m] suffix for finding the model in the list
   const strippedValue = strip1MContextSuffix(value);
-  const normalizedValue = currentProvider === 'claude' ? normalizeClaudeModelId(strippedValue) : strippedValue;
+  // User-defined models are never alias-migrated: a custom claude-opus-4-8
+  // must match its own row, not the built-in Opus 5 row (double check mark).
+  const customModelIds = useMemo(
+    () => new Set(models.filter(m => m.isCustom).map(m => m.id)),
+    [models],
+  );
+  const normalizedValue = currentProvider === 'claude'
+    ? normalizeClaudeModelId(strippedValue, customModelIds)
+    : strippedValue;
   // Prefer the user's selection even when the catalog is still loading / only a
   // static fallback is available. Falling back to models[0] made OpenCode (and
   // other dynamic providers) visually snap back to the first entry after leaving
@@ -51,7 +59,7 @@ export function useModelSelectState({ value, models, currentProvider, longContex
     if (currentProvider !== 'claude') {
       return modelId === strippedValue;
     }
-    return normalizeClaudeModelId(modelId) === normalizedValue;
+    return normalizeClaudeModelId(modelId, customModelIds) === normalizedValue;
   };
 
   const getModelLabel = (model: ModelInfo, show1MContext = false): string => {

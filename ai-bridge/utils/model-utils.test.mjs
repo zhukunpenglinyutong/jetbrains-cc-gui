@@ -4,8 +4,26 @@ import assert from 'node:assert/strict';
 import {
   mapModelIdToSdkName,
   resolveModelFromSettings,
+  resolveSdkModelName,
   setModelEnvironmentVariables,
 } from './model-utils.js';
+
+// --- resolveSdkModelName --------------------------------------------------
+
+test('resolveSdkModelName hands the exact resolved id to the SDK, alias only as fallback', () => {
+  // A specific Opus generation must not collapse to the 'opus' alias: the
+  // settings override blanks ANTHROPIC_DEFAULT_OPUS_MODEL, so the alias would
+  // resolve to the CLI default (opus-5) instead of the requested model.
+  assert.equal(resolveSdkModelName('claude-opus-4-6[1m]', 'claude-opus-4-6[1m]'), 'claude-opus-4-6[1m]');
+  assert.equal(resolveSdkModelName('claude-opus-4-6', 'claude-opus-4-6'), 'claude-opus-4-6');
+  // Provider mappings (settings.json env) are passed through verbatim.
+  assert.equal(resolveSdkModelName('claude-sonnet-5', 'MiniMax-M2.5'), 'MiniMax-M2.5');
+  assert.equal(resolveSdkModelName('claude-sonnet-5', '  custom  '), 'custom');
+  // No resolved id -> family alias, matching the previous behavior.
+  assert.equal(resolveSdkModelName('claude-opus-5', ''), 'opus');
+  assert.equal(resolveSdkModelName('claude-opus-5', null), 'opus');
+  assert.equal(resolveSdkModelName(null, undefined), 'sonnet');
+});
 
 // --- mapModelIdToSdkName ------------------------------------------------
 

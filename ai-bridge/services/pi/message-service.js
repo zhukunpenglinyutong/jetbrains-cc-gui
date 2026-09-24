@@ -7,7 +7,15 @@
  *
  * CLI:
  *   pi --print --mode json "<text>"
- *      [--model <pattern>] [--session-id <id>] [--thinking <level>]
+ *      [--model <pattern>] [--thinking <level>] [--session <id>]
+ *
+ * Session continuity: resume the exact session the Java side captured from a
+ * previous turn via `--session <id>` (accepts an exact or partial session
+ * UUID; sessions live under ~/.pi/agent/sessions/<encoded-cwd>/). Older PI builds
+ * reject `--session-id` ('Unknown option'), while `--continue` would resume the
+ * cwd's *most recent* session — the wrong one whenever several conversations
+ * share a project. Without a session flag, each --print call creates a new
+ * session and the model loses prior context.
  *
  * Stream events (NDJSON):
  *   { "type":"session", "id":"..." }
@@ -94,14 +102,17 @@ function extractToolResultText(result) {
   }
 }
 
-function buildPiArgs({ message, sessionId, model, reasoningEffort }) {
+export function buildPiArgs({ message, sessionId, model, reasoningEffort }) {
   const args = ['--print', '--mode', 'json'];
   const modelFlag = resolveModelFlag(model);
   if (modelFlag) {
     args.push('--model', modelFlag);
   }
+  // Resume the exact session from the previous turn so multi-turn stays in
+  // context. `--continue` would bind to the cwd's most recent session, which
+  // may belong to a different conversation; `--session` pins the id.
   if (isNonEmptySessionId(sessionId)) {
-    args.push('--session-id', sessionId.trim());
+    args.push('--session', sessionId.trim());
   }
   const thinkingFlag = resolveThinkingFlag(reasoningEffort);
   if (thinkingFlag) {
@@ -147,9 +158,6 @@ export async function sendMessage(
 
   const bin = resolvePiCliPath();
   const args = buildPiArgs({ message: promptText, sessionId, model, reasoningEffort });
-  if (isNonEmptySessionId(sessionId)) {
-    emitSessionId(sessionId.trim());
-  }
 
   logDebug('spawn', bin, args.slice(0, -1).join(' '),
     `promptLen=${String(promptText || '').length}`);

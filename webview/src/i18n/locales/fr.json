@@ -1585,6 +1585,8 @@
     "pinned": "Épinglés",
     "pin": "Épingler",
     "unpin": "Désépingler",
+    "retiredBadge": "Retiré",
+    "retiredCustomHint": "L'API ne propose plus cet identifiant de modèle. Il est envoyé tel quel car vous l'avez ajouté comme modèle personnalisé.",
     "claude": {
       "sonnet46": {
         "label": "Sonnet 4.6",

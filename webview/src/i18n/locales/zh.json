@@ -2056,6 +2056,8 @@
     "pinned": "置顶",
     "pin": "置顶",
     "unpin": "取消置顶",
+    "retiredBadge": "已下线",
+    "retiredCustomHint": "官方 API 已不再提供此模型 ID。因为它是你添加的自定义模型，插件会原样发送，不做替换。",
     "longContext": {
       "label": "1M",
       "shortLabel": "1M上下文",

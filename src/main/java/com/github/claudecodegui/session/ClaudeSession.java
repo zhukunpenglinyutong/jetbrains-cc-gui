@@ -788,6 +788,15 @@ public class ClaudeSession {
     }
 
     /**
+     * Set the model exactly as given (no retired-id migration). For explicit
+     * user selections; see {@link SessionState#setModelVerbatim(String)}.
+     */
+    public void setModelVerbatim(String model) {
+        state.setModelVerbatim(model);
+        LOG.info("Model updated (verbatim) to: " + model);
+    }
+
+    /**
      * Get the model.
      */
     public String getModel() {

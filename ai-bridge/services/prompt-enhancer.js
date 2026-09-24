@@ -24,7 +24,7 @@ import {
   loadClaudeSettings,
   getCliUserAgent,
 } from '../config/api-config.js';
-import { mapModelIdToSdkName, resolveModelFromSettings } from '../utils/model-utils.js';
+import { resolveModelFromSettings, resolveSdkModelName } from '../utils/model-utils.js';
 import { getRealHomeDir } from '../utils/path-utils.js';
 import { getClaudeCliPathOverride } from '../utils/claude-cli-path.js';
 import { ensureAnthropicSdk } from './claude/message-utils.js';
@@ -520,7 +520,9 @@ async function enhancePromptWithClaudeAgent(originalPrompt, systemPrompt, model,
   console.log(`[PromptEnhancer] Auth type: ${config.authType}`);
   console.log(`[PromptEnhancer] Base URL: ${config.baseUrl || 'https://api.anthropic.com'}`);
 
-  const sdkModelName = mapModelIdToSdkName(model);
+  // Exact id, not the family alias - see resolveSdkModelName.
+  const enhancerSettings = loadClaudeSettings();
+  const sdkModelName = resolveSdkModelName(model, resolveModelFromSettings(model, enhancerSettings && enhancerSettings.env));
   console.log(`[PromptEnhancer] Claude Agent model mapping: ${model} -> ${sdkModelName}`);
 
   const workingDirectory = getRealHomeDir();
