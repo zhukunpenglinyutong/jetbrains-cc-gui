@@ -38,6 +38,34 @@ function parseStringList(raw: string | null): string[] {
   }
 }
 
+/** Merge two acknowledgement lists, keeping order and dropping duplicates. */
+function mergeAcknowledged(existing: string[], added: string[]): string[] {
+  const merged = new Set(existing);
+  for (const key of added) {
+    merged.add(key);
+  }
+  let next = Array.from(merged);
+  if (next.length > MAX_CONFIRMED_EDITS) {
+    next = next.slice(next.length - MAX_CONFIRMED_EDITS);
+  }
+  return next;
+}
+
+/**
+ * Drop the per-file Apply/Reject marks for a session. Keep All acknowledges the
+ * whole session so far, so those marks must go with it — the restore effect
+ * would otherwise bring them back on the next load and hide later edits to the
+ * same file behind a file the user once accepted.
+ */
+function clearPersistedProcessedFiles(sessionId: string | null): void {
+  if (!sessionId) return;
+  try {
+    localStorage.removeItem(`processed-files-${sessionId}`);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 /**
  * Manages file change tracking: processedFiles, the Keep All acknowledgements,
  * undo/discard handlers, diff result callbacks, and session state restore.
@@ -45,6 +73,7 @@ function parseStringList(raw: string | null): string[] {
 export function useFileChangesManagement({
   currentSessionId,
   currentSessionIdRef,
+  messages,
 }: UseFileChangesManagementOptions) {
   // List of processed file paths (filtered from fileChanges after Apply/Reject, persisted to localStorage)
   const [processedFiles, setProcessedFiles] = useState<string[]>([]);
@@ -64,6 +93,12 @@ export function useFileChangesManagement({
   // Acknowledgements made before the session had an id to persist them under.
   const pendingConfirmedEditsRef = useRef<string[] | null>(null);
   const previousSessionIdRef = useRef<string | null>(currentSessionId);
+  // Latest transcript, so the pending flush below can tell an id landing on its
+  // own session apart from a switch to a different one (see that flush).
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const confirmedEditKeys = useMemo(() => new Set(confirmedEdits), [confirmedEdits]);
 
@@ -144,18 +179,14 @@ export function useFileChangesManagement({
   const confirmEdits = useCallback((operationKeys: string[]) => {
     processedFilesRef.current = [];
     setProcessedFiles([]);
+    // Keep All acknowledges the session's work as a whole, so the per-file
+    // Apply/Reject marks go with it. Cleared before any early return below:
+    // a Keep All with nothing new to acknowledge still clears those marks.
+    clearPersistedProcessedFiles(currentSessionIdRef.current);
 
     if (operationKeys.length === 0) return;
 
-    const merged = new Set(confirmedEditsRef.current);
-    for (const key of operationKeys) {
-      merged.add(key);
-    }
-    let next = Array.from(merged);
-    if (next.length > MAX_CONFIRMED_EDITS) {
-      next = next.slice(next.length - MAX_CONFIRMED_EDITS);
-    }
-
+    const next = mergeAcknowledged(confirmedEditsRef.current, operationKeys);
     confirmedEditsRef.current = next;
     setConfirmedEdits(next);
 
@@ -225,16 +256,30 @@ export function useFileChangesManagement({
     const previousSessionId = previousSessionIdRef.current;
     previousSessionIdRef.current = currentSessionId;
 
-    // An id arriving where there was none means this same session just became
-    // addressable — flush whatever was acknowledged while it was not.
+    // An id arriving where there was none means this session just became
+    // addressable — flush whatever was acknowledged while it was not. But
+    // `!previousSessionId` cannot tell "this session just got its id" from "the
+    // user switched to some existing session": writing on the latter would wipe
+    // that session's own acknowledgements. Switching always empties the
+    // transcript first (beginSessionTransition), so a non-empty transcript is
+    // what marks this as the same session. If in doubt the pending list is
+    // dropped — losing one Keep All beats corrupting another session's state.
     const pending = pendingConfirmedEditsRef.current;
     pendingConfirmedEditsRef.current = null;
-    if (pending && currentSessionId && !previousSessionId) {
+    const pendingBelongsToThisSession = messagesRef.current.length > 0;
+    if (pending && currentSessionId && !previousSessionId && pendingBelongsToThisSession) {
       try {
+        const existing = parseStringList(
+          localStorage.getItem(`${CONFIRMED_EDITS_PREFIX}${currentSessionId}`)
+        );
+        // Merge rather than overwrite, so a wrong guess cannot erase what is
+        // already recorded for this session.
         localStorage.setItem(
           `${CONFIRMED_EDITS_PREFIX}${currentSessionId}`,
-          JSON.stringify(pending)
+          JSON.stringify(mergeAcknowledged(existing, pending))
         );
+        // There was no id to clear these against when the user pressed Keep All.
+        clearPersistedProcessedFiles(currentSessionId);
       } catch (e) {
         console.error('Failed to persist Keep All state:', e);
       }

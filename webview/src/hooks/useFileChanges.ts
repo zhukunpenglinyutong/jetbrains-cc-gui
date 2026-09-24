@@ -53,6 +53,13 @@ function getDiffCacheKey(oldString: string, newString: string): string {
  * live-assembled array (the reloaded history can carry messages after the one
  * that was last at Keep All time), so no message index or message identity can
  * mark "everything up to here" reliably.
+ *
+ * Known tradeoff (intentional, not a bug): two byte-identical operations — the
+ * same file, the same old/new text, e.g. an agent undoing a change and redoing
+ * it later — share one fingerprint, so a redo made after Keep All is treated as
+ * already acknowledged and stays out of the Edits tab (and cannot be undone
+ * from there). Accepting it is the price of a baseline that survives reloads;
+ * a position-keyed baseline cannot tell a redo apart either.
  */
 export function editOperationKey(op: {
   filePath: string;

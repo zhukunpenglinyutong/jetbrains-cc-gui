@@ -3,15 +3,22 @@ import type { RefObject } from 'react';
 import { useFileChangesManagement } from './useFileChangesManagement.js';
 import type { ClaudeMessage } from '../types';
 
-function makeOptions(sessionId: string | null) {
+function makeOptions(sessionId: string | null, messages: ClaudeMessage[] = []) {
   const currentSessionIdRef: RefObject<string | null> = { current: sessionId };
   return {
     currentSessionId: sessionId,
     currentSessionIdRef,
-    messages: [] as ClaudeMessage[],
+    messages,
     getContentBlocks: () => [],
     findToolResult: () => null,
   };
+}
+
+function makeMessages(count = 1): ClaudeMessage[] {
+  return Array.from({ length: count }, (_, i) => ({
+    type: 'assistant',
+    timestamp: `2026-01-01T00:00:${String(i).padStart(2, '0')}.000Z`,
+  }) as unknown as ClaudeMessage);
 }
 
 function readStored(sessionId: string): string[] | null {
@@ -90,9 +97,40 @@ describe('useFileChangesManagement > confirmEdits (Keep All)', () => {
     expect(result.current.confirmedEditKeys.size).toBe(0);
   });
 
+  it('clears the persisted per-file marks along with the acknowledgements', () => {
+    // A file the user accepted one by one earlier must not come back after Keep
+    // All: on the next load it would hide later edits to that same file, and the
+    // list would no longer offer a way to undo it.
+    localStorage.setItem('processed-files-session-1', '["/proj/x.ts"]');
+
+    const { result } = renderHook((props) => useFileChangesManagement(props), {
+      initialProps: makeOptions('session-1'),
+    });
+    act(() => {
+      result.current.confirmEdits(['op-a']);
+    });
+
+    expect(localStorage.getItem('processed-files-session-1')).toBeNull();
+    expect(readStored('session-1')).toEqual(['op-a']);
+  });
+
+  it('clears the persisted per-file marks even when there is nothing new to acknowledge', () => {
+    localStorage.setItem('processed-files-session-1', '["/proj/x.ts"]');
+
+    const { result } = renderHook((props) => useFileChangesManagement(props), {
+      initialProps: makeOptions('session-1'),
+    });
+    act(() => {
+      result.current.confirmEdits([]);
+    });
+
+    expect(localStorage.getItem('processed-files-session-1')).toBeNull();
+  });
+
   it('flushes the acknowledgements once the session id arrives', () => {
+    const messages = makeMessages(2);
     const { result, rerender } = renderHook((props) => useFileChangesManagement(props), {
-      initialProps: makeOptions(null),
+      initialProps: makeOptions(null, messages),
     });
 
     // A brand-new session has no id until the backend reports one.
@@ -103,13 +141,38 @@ describe('useFileChangesManagement > confirmEdits (Keep All)', () => {
     // The in-memory effect is immediate regardless.
     expect(result.current.confirmedEditKeys.size).toBe(1);
 
-    // window.setSessionId updates both the ref and the state.
-    const adopted = makeOptions('session-late');
+    // window.setSessionId updates both the ref and the state; the transcript is
+    // left alone, and that is what marks the id as belonging to this session.
+    const adopted = makeOptions('session-late', messages);
     adopted.currentSessionIdRef.current = 'session-late';
     rerender(adopted);
 
     expect(readStored('session-late')).toEqual(['op-a']);
     expect([...result.current.confirmedEditKeys]).toEqual(['op-a']);
+  });
+
+  // Switching to another existing session also goes from "no id" to "an id", so
+  // a pending acknowledgement must not be flushed onto — and overwrite — that
+  // session's own record.
+  it('does not flush a pending acknowledgement onto a different session', () => {
+    const { result, rerender } = renderHook((props) => useFileChangesManagement(props), {
+      initialProps: makeOptions(null, makeMessages(2)),
+    });
+
+    act(() => {
+      result.current.confirmEdits(['op-a']);
+    });
+
+    // The other session already has its own acknowledgements.
+    localStorage.setItem('confirmed-edits-session-B', '["op-b"]');
+    // Switching empties the transcript first, so the pending list has nothing
+    // to be recognised by and is dropped.
+    const switched = makeOptions('session-B');
+    switched.currentSessionIdRef.current = 'session-B';
+    rerender(switched);
+
+    expect(readStored('session-B')).toEqual(['op-b']);
+    expect([...result.current.confirmedEditKeys]).toEqual(['op-b']);
   });
 
   it('ignores a malformed persisted list', () => {
