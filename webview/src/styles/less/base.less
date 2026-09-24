@@ -24,6 +24,12 @@
     --idea-editor-font-family: 'JetBrains Mono', 'Consolas', monospace;
     --idea-editor-font-size: 14px;
     --idea-editor-line-spacing: 1.5;
+    /* 用户选择的字号档位；默认值 1 对应设置中的 100%。 */
+    --font-scale: 1;
+    /* 会话正文、代码块和输入框统一使用 IDE 编辑器基准字号 × 用户档位。
+     * JCEF 的 OSR 位图不随 CSS zoom 重新按目标字号光栅化，直接缩放整个应用会
+     * 导致非 100% 档位的文字模糊；计算真实字号可让 Chromium 原生绘制字形。 */
+    --cc-gui-chat-font-size: calc(var(--idea-editor-font-size, 14px) * var(--font-scale, 1));
 }
 
 body {
@@ -40,21 +46,14 @@ html {
 }
 
 #app {
-    /* 
-     * 当使用 zoom 缩放时，容器的渲染尺寸会变大。
-     * 为了适应视口，我们需要反向调整容器的 CSS 尺寸。
-     * 例如：zoom: 1.2 (120%) 时，高度设置为 100vh / 1.2，
-     * 这样渲染出来的高度刚好是 100vh。
-     */
-    height: calc(100vh / var(--font-scale, 1));
-    width: calc(100vw / var(--font-scale, 1));
-    
+    /* 字号档位只影响文字，不再缩放容器及固定 px 尺寸。 */
+    height: 100vh;
+    width: 100vw;
+
     display: flex;
     flex-direction: column;
     border-left: 1px solid var(--border-primary);
     overflow: hidden;
-    /* 应用字体缩放 - 使用 zoom 属性缩放整个应用，包括所有 px 单位 */
-    zoom: var(--font-scale, 1);
 }
 
 /* Global Scrollbar Styles - Force Override */
