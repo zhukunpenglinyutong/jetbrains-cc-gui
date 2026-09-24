@@ -559,8 +559,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 AtomicLong lastOutputAt = new AtomicLong(System.currentTimeMillis());
                 AtomicReference<String> timeoutReason = new AtomicReference<>(null);
                 try {
-                    process = pb.start();
-                    processManager.registerProcess(channelId, process);
+                    process = processManager.startManagedProcess(channelId, pb);
 
                     final Process watchedProcess = process;
                     final long startedAt = System.currentTimeMillis();
@@ -736,8 +735,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 // Inject custom "mcp" env vars from active provider
                 injectCustomEnvVars(pb.environment(), "mcp");
 
-                process = pb.start();
-                processManager.registerProcess(channelId, process);
+                process = processManager.startManagedProcess(channelId, pb);
                 final Process finalProcess = process;
 
                 try (java.io.OutputStream stdin = process.getOutputStream()) {
