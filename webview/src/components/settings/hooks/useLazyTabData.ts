@@ -5,6 +5,7 @@ interface LazyTabLoaders {
   loadProviders: () => void;
   loadCodexProviders: () => void;
   loadAgents: () => void;
+  loadHooks: () => void;
 }
 
 // Load heavy list / AI-feature data only when the corresponding tab is first opened.
@@ -12,7 +13,7 @@ interface LazyTabLoaders {
 // Commit / prompt-enhancer config probes multiple CLIs and must stay off first paint.
 export function useLazyTabData(
   currentTab: SettingsTab,
-  { loadProviders, loadCodexProviders, loadAgents }: LazyTabLoaders
+  { loadProviders, loadCodexProviders, loadAgents, loadHooks }: LazyTabLoaders
 ) {
   const loadedListTabsRef = useRef(new Set<SettingsTab>());
   useEffect(() => {
@@ -25,6 +26,10 @@ export function useLazyTabData(
       loadedListTabsRef.current.add('agents');
       loadAgents();
     }
+    if (currentTab === 'hooks' && !loadedListTabsRef.current.has('hooks')) {
+      loadedListTabsRef.current.add('hooks');
+      loadHooks();
+    }
     if (currentTab === 'commit' && !loadedListTabsRef.current.has('commit')) {
       loadedListTabsRef.current.add('commit');
       window.sendToJava?.('get_commit_prompt:');
@@ -34,5 +39,5 @@ export function useLazyTabData(
       loadedListTabsRef.current.add('promptEnhancer');
       window.sendToJava?.('get_prompt_enhancer_config:');
     }
-  }, [currentTab, loadProviders, loadCodexProviders, loadAgents]);
+  }, [currentTab, loadProviders, loadCodexProviders, loadAgents, loadHooks]);
 }

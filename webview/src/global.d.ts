@@ -672,6 +672,10 @@ interface Window {
    * Update agents list
    */
   updateAgents?: (json: string) => void;
+  updateHooks?: (json: string) => void;
+  hookSourceResult?: (json: string) => void;
+  hookMutationResult?: (json: string) => void;
+  hookToggleResult?: (json: string) => void;
 
   /**
    * Agent operation result callback

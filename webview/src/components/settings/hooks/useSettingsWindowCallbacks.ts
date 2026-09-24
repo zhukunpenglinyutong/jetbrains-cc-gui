@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig, CodexProviderConfig } from '../../../types/provider';
 import type { AgentConfig } from '../../../types/agent';
+import type { HookCatalog, HookMutationResult, HookSourcePayload, HookToggleResult } from '../../../types/hooks';
 import type { PromptConfig } from '../../../types/prompt';
 import type { CommitAiConfig } from '../../../types/aiFeatureConfig';
 import { normalizeAiFeatureConfig, DEFAULT_COMMIT_AI_CONFIG } from '../../../types/aiFeatureConfig';
@@ -102,6 +103,10 @@ export interface SettingsWindowCallbacksDeps {
   loadCodexProviders: () => void;
   loadAgents: () => void;
   updateAgents: (agents: AgentConfig[]) => void;
+  updateHooks: (catalog: HookCatalog) => void;
+  updateHookSource: (payload: HookSourcePayload) => void;
+  updateHookMutationResult: (payload: HookMutationResult) => void;
+  updateHookToggleResult?: (payload: HookToggleResult) => void;
   handleAgentOperationResult: (result: any) => void;
   handleAgentImportPreviewResult: (previewData: any) => void;
   handleAgentImportResult: (result: any) => void;
@@ -468,6 +473,42 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       previousUpdateAgents?.(jsonStr);
     };
 
+    window.updateHooks = (jsonStr: string) => {
+      try {
+        const catalog: HookCatalog = JSON.parse(jsonStr);
+        if (!Array.isArray(catalog.items) || !Array.isArray(catalog.sources)) {
+          throw new Error('Invalid hook catalog');
+        }
+        d().updateHooks(catalog);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse hooks:', error);
+      }
+    };
+
+    window.hookSourceResult = (jsonStr: string) => {
+      try {
+        d().updateHookSource(JSON.parse(jsonStr) as HookSourcePayload);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse hook source:', error);
+      }
+    };
+
+    window.hookMutationResult = (jsonStr: string) => {
+      try {
+        d().updateHookMutationResult(JSON.parse(jsonStr) as HookMutationResult);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse hook mutation result:', error);
+      }
+    };
+
+    window.hookToggleResult = (jsonStr: string) => {
+      try {
+        d().updateHookToggleResult?.(JSON.parse(jsonStr) as HookToggleResult);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse hook toggle result:', error);
+      }
+    };
+
     window.agentOperationResult = (jsonStr: string) => {
       try {
         const result = JSON.parse(jsonStr);
@@ -624,6 +665,10 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateSystemNotificationOnlyWhenUnfocused = undefined;
       window.updateAskUserQuestionSoundNotificationEnabled = undefined;
       window.updateAgents = previousUpdateAgents;
+      window.updateHooks = undefined;
+      window.hookSourceResult = undefined;
+      window.hookMutationResult = undefined;
+      window.hookToggleResult = undefined;
       window.agentOperationResult = undefined;
       window.agentImportPreviewResult = undefined;
       window.agentImportResult = undefined;
