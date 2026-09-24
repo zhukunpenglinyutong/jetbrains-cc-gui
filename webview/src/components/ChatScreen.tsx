@@ -74,7 +74,7 @@ export interface ChatScreenProps {
   forceStatusUpdate: React.Dispatch<React.SetStateAction<number>>;
   onUndoFile: FileChangeMgmt['handleUndoFile'];
   onDiscardAll: () => void;
-  onKeepAll: FileChangeMgmt['handleKeepAll'];
+  onKeepAll: () => void;
 
   // Submit / interrupt / nav
   onSubmit: (content: string, attachments?: Attachment[]) => void;

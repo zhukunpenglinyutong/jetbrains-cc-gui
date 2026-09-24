@@ -341,7 +341,7 @@ export const useAppChatController = ({
   const {
     findToolResult, getToolResultRaw,
     fileChangeMgmt,
-    filteredFileChanges, subagents, globalTodos, rewindableMessages, sessionTitle,
+    filteredFileChanges, handleKeepAll, subagents, globalTodos, rewindableMessages, sessionTitle,
   } = useChatComputations({
     t, messages, mergedMessages, subagentHistories, customSessionTitle, restoredSessionTitle,
     streamingActive, currentProvider,
@@ -349,7 +349,7 @@ export const useAppChatController = ({
     getMessageText, getContentBlocks,
   });
 
-  const { handleUndoFile, handleDiscardAll: handleDiscardAllRaw, handleKeepAll } = fileChangeMgmt;
+  const { handleUndoFile, handleDiscardAll: handleDiscardAllRaw } = fileChangeMgmt;
   const onDiscardAll = useCallback(
     () => { handleDiscardAllRaw(filteredFileChanges); },
     [handleDiscardAllRaw, filteredFileChanges],
