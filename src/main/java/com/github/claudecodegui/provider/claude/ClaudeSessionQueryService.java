@@ -15,6 +15,7 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,6 +24,9 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CountDownLatch;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.function.Supplier;
@@ -66,8 +70,13 @@ class ClaudeSessionQueryService {
     }
 
     List<JsonObject> getSessionMessages(String sessionId, String cwd) {
+        return getSessionMessages(sessionId, cwd, () -> false);
+    }
+
+    List<JsonObject> getSessionMessages(String sessionId, String cwd, BooleanSupplier cancellation) {
         try {
-            JsonObject jsonResult = runSessionQuery("getSession", sessionId, cwd, "getSessionMessages");
+            JsonObject jsonResult = runSessionQuery(
+                    "getSession", sessionId, cwd, "getSessionMessages", cancellation);
 
             if (jsonResult.has("missing") && jsonResult.get("missing").getAsBoolean()) {
                 throw new SessionHistoryNotFoundException(sessionId, cwd);
@@ -78,6 +87,7 @@ class ClaudeSessionQueryService {
                 if (jsonResult.has("messages")) {
                     JsonArray messagesArray = jsonResult.getAsJsonArray("messages");
                     for (var msg : messagesArray) {
+                        checkCancellation(cancellation);
                         messages.add(normalizeClaudeHistoryMessage(msg.getAsJsonObject()));
                     }
                 }
@@ -117,15 +127,21 @@ class ClaudeSessionQueryService {
      * @return the page payload, or null on failure (caller should fall back to getSessionMessages)
      */
     JsonObject getSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit) {
+        return getSessionMessagesPage(sessionId, cwd, beforeTurn, limit, () -> false);
+    }
+
+    JsonObject getSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit,
+                                      BooleanSupplier cancellation) {
         try {
             JsonObject jsonResult = runSessionQuery("getSessionPage", sessionId, cwd, "getSessionMessagesPage",
-                    beforeTurn == null ? "" : String.valueOf(beforeTurn), String.valueOf(limit));
+                    cancellation, beforeTurn == null ? "" : String.valueOf(beforeTurn), String.valueOf(limit));
 
             if (jsonResult.has("success") && jsonResult.get("success").getAsBoolean()) {
                 // Normalize messages in-place
                 if (jsonResult.has("messages")) {
                     JsonArray messagesArray = jsonResult.getAsJsonArray("messages");
                     for (int i = 0; i < messagesArray.size(); i++) {
+                        checkCancellation(cancellation);
                         messagesArray.set(i, normalizeClaudeHistoryMessage(messagesArray.get(i).getAsJsonObject()));
                     }
                 }
@@ -137,6 +153,8 @@ class ClaudeSessionQueryService {
                     : "Unknown error";
             log.warn("[getSessionMessagesPage] Page query failed: " + errorMsg);
             return null;
+        } catch (CancellationException e) {
+            throw e;
         } catch (Exception e) {
             log.warn("[getSessionMessagesPage] Page query error: " + e.getMessage(), e);
             return null;
@@ -166,10 +184,31 @@ class ClaudeSessionQueryService {
     }
 
     private JsonObject runSessionQuery(String commandName, String sessionId, String cwd, String logPrefix) throws Exception {
-        return runSessionQuery(commandName, sessionId, cwd, logPrefix, new String[0]);
+        return runSessionQuery(commandName, sessionId, cwd, logPrefix, () -> false, new String[0]);
     }
 
     private JsonObject runSessionQuery(String commandName, String sessionId, String cwd, String logPrefix, String... extraArgs) throws Exception {
+        return runSessionQuery(commandName, sessionId, cwd, logPrefix, () -> false, extraArgs);
+    }
+
+    private JsonObject runSessionQuery(
+            String commandName,
+            String sessionId,
+            String cwd,
+            String logPrefix,
+            BooleanSupplier cancellation
+    ) throws Exception {
+        return runSessionQuery(commandName, sessionId, cwd, logPrefix, cancellation, new String[0]);
+    }
+
+    private JsonObject runSessionQuery(
+            String commandName,
+            String sessionId,
+            String cwd,
+            String logPrefix,
+            BooleanSupplier cancellation,
+            String... extraArgs
+    ) throws Exception {
         if (sessionId == null || !VALID_SESSION_ID.matcher(sessionId).matches()) {
             throw new IllegalArgumentException("Invalid sessionId: " + sessionId);
         }
@@ -206,33 +245,51 @@ class ClaudeSessionQueryService {
         String channelId = ProcessManager.newChannelId("claude-session-query");
         Process process = null;
         StringBuilder output = new StringBuilder();
+        CountDownLatch outputReaderDone = new CountDownLatch(1);
+        Thread outputReader = null;
         try {
-            process = pb.start();
+            process = startProcess(pb);
             processManager.registerProcess(channelId, process);
+            checkCancellation(cancellation);
 
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
+            String readerThreadName = "claude-session-query-output-" + channelId;
+            Process runningProcess = process;
+            outputReader = new Thread(() -> drainOutput(runningProcess, output, outputReaderDone), readerThreadName);
+            outputReader.setDaemon(true);
+            outputReader.start();
+
+            long deadlineNanos = System.nanoTime()
+                    + TimeUnit.SECONDS.toNanos(PROCESS_TIMEOUT_SECONDS);
+            while (process.isAlive()) {
+                checkCancellation(cancellation);
+                long remainingNanos = deadlineNanos - System.nanoTime();
+                if (remainingNanos <= 0L) {
+                    terminateProcess(process);
+                    throw new RuntimeException(
+                            "Node.js process timed out after " + PROCESS_TIMEOUT_SECONDS + " seconds");
                 }
+                process.waitFor(Math.min(remainingNanos, TimeUnit.MILLISECONDS.toNanos(100L)),
+                        TimeUnit.NANOSECONDS);
             }
 
-            boolean finished = process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            if (!finished) {
-                PlatformUtils.terminateProcess(process);
-                throw new RuntimeException("Node.js process timed out after " + PROCESS_TIMEOUT_SECONDS + " seconds");
-            }
+            awaitOutputReader(outputReaderDone, outputReader);
+            checkCancellation(cancellation);
         } finally {
             if (process != null) {
                 if (process.isAlive()) {
-                    PlatformUtils.terminateProcess(process);
+                    terminateProcess(process);
+                }
+                if (outputReader != null && outputReader.isAlive()) {
+                    outputReader.interrupt();
                 }
                 processManager.unregisterProcess(channelId, process);
             }
         }
 
-        String outputStr = output.toString().trim();
+        String outputStr;
+        synchronized (output) {
+            outputStr = output.toString().trim();
+        }
         log.debug("[" + logPrefix + "] Raw output length: " + outputStr.length());
         if (log.isDebugEnabled()) {
             log.debug("[" + logPrefix + "] Raw output (first 300 chars): "
@@ -264,6 +321,58 @@ class ClaudeSessionQueryService {
         log.debug("[" + logPrefix + "] JSON parsed successfully, success="
                 + (jsonResult.has("success") ? jsonResult.get("success").getAsBoolean() : "null"));
         return jsonResult;
+    }
+
+    Process startProcess(ProcessBuilder processBuilder) throws IOException {
+        return processBuilder.start();
+    }
+
+    private void drainOutput(Process process, StringBuilder output, CountDownLatch outputReaderDone) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                synchronized (output) {
+                    output.append(line).append("\n");
+                }
+            }
+        } catch (Exception e) {
+            log.debug("[getSessionMessages] Output reader stopped: " + e.getMessage());
+        } finally {
+            outputReaderDone.countDown();
+        }
+    }
+
+    private void awaitOutputReader(CountDownLatch outputReaderDone, Thread outputReader) {
+        try {
+            if (!outputReaderDone.await(2L, TimeUnit.SECONDS) && outputReader != null) {
+                outputReader.interrupt();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            if (outputReader != null) {
+                outputReader.interrupt();
+            }
+        }
+    }
+
+    private void checkCancellation(BooleanSupplier cancellation) {
+        if (cancellation != null && cancellation.getAsBoolean()) {
+            throw new CancellationException("Claude session query was cancelled");
+        }
+    }
+
+    private void terminateProcess(Process process) {
+        PlatformUtils.terminateProcess(process);
+        try {
+            if (process.isAlive() && !process.waitFor(3L, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                process.waitFor(2L, TimeUnit.SECONDS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            process.destroyForcibly();
+        }
     }
 
     static JsonObject normalizeClaudeHistoryMessage(JsonObject originalMessage) {

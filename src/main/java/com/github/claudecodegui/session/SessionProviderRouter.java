@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 
 /**
  * Centralizes provider-specific bridge routing for session operations.
@@ -142,6 +143,28 @@ public class SessionProviderRouter {
             return bridge.getSessionMessages(sessionId, cwd);
         }
         return claudeSDKBridge.getSessionMessages(sessionId, cwd);
+    }
+
+    public List<JsonObject> getSessionMessages(
+            String provider,
+            String sessionId,
+            String cwd,
+            BooleanSupplier cancellation
+    ) {
+        if ("codex".equals(provider)) {
+            return codexSDKBridge.getSessionMessages(sessionId, cwd, cancellation);
+        }
+        if ("grok".equals(provider) && grokSDKBridge != null) {
+            return grokSDKBridge.getSessionMessages(sessionId, cwd, cancellation);
+        }
+        if ("zcode".equals(provider) && zcodeSDKBridge != null) {
+            return zcodeSDKBridge.getSessionMessages(sessionId, cwd, cancellation);
+        }
+        MarkerCliBridge bridge = cli(provider);
+        if (bridge != null) {
+            return bridge.getSessionMessages(sessionId, cwd, cancellation);
+        }
+        return claudeSDKBridge.getSessionMessages(sessionId, cwd, cancellation);
     }
 
     public Map<String, MarkerCliBridge> getCliBridges() {

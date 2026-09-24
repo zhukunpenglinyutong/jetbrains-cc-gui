@@ -1,4 +1,16 @@
 {
+  "startupHistory": {
+    "unloaded": "该恢复会话的历史消息尚未加载。",
+    "loading": "正在加载会话历史...",
+    "loaded_one": "已加载 {{count}} 条历史消息。",
+    "loaded_other": "已加载 {{count}} 条历史消息。",
+    "timeout": "会话历史加载超时，你仍可继续使用当前会话。",
+    "cancelled": "已取消会话历史加载。",
+    "failed": "会话历史加载失败，你仍可继续使用当前会话。",
+    "load": "加载历史",
+    "retry": "重试",
+    "cancel": "取消"
+  },
   "codexPet": {
     "title": "Codex 宠物",
     "close": "隐藏宠物",
@@ -466,6 +478,17 @@
         "enabled": "已开启",
         "disabled": "已关闭",
         "hint": "开启后，在项目树选择文件时会自动将文件路径告诉 AI（注意：只传递文件路径，不传文件内容）。关闭后需要手动操作。"
+      },
+      "loadHistoryOnStartup": {
+        "label": "启动时加载会话历史",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "开启后，恢复的会话会在 Webview 启动后自动加载消息历史。如果历史加载拖慢或阻塞启动，可关闭此项。"
+      },
+      "historyLoadTimeout": {
+        "label": "会话历史加载超时",
+        "unit": "秒",
+        "hint": "自动恢复和手动加载共用此超时设置（5-120 秒），超时后可在会话中重试。"
       },
       "promptEnhancer": {
         "label": "增强提示词",

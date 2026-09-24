@@ -15,6 +15,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 
@@ -65,6 +66,47 @@ public class CodemossSettingsService {
     public static final String GROK_AUTH_METHOD_OAUTH = "oauth";
     public static final String GROK_AUTH_METHOD_API_KEY = "api_key";
     public static final String DEFAULT_GROK_AUTH_METHOD = GROK_AUTH_METHOD_OAUTH;
+    public static final String LOAD_HISTORY_ON_STARTUP_PROPERTY_KEY = "ccgui.loadHistoryOnStartup";
+    public static final String HISTORY_LOAD_TIMEOUT_SECONDS_PROPERTY_KEY = "ccgui.historyLoadTimeoutSeconds";
+    public static final int DEFAULT_HISTORY_LOAD_TIMEOUT_SECONDS = 10;
+    public static final int MIN_HISTORY_LOAD_TIMEOUT_SECONDS = 5;
+    public static final int MAX_HISTORY_LOAD_TIMEOUT_SECONDS = 120;
+
+    /**
+     * Returns whether persisted session history should be loaded automatically when a tab starts.
+     * This is an application-level preference because all project windows share the same behavior.
+     */
+    public boolean isLoadHistoryOnStartup() {
+        return PropertiesComponent.getInstance().getBoolean(LOAD_HISTORY_ON_STARTUP_PROPERTY_KEY, false);
+    }
+
+    /** Persist the application-level startup history loading preference. */
+    public void setLoadHistoryOnStartup(boolean enabled) {
+        PropertiesComponent.getInstance().setValue(LOAD_HISTORY_ON_STARTUP_PROPERTY_KEY, enabled);
+        LOG.info("[CodemossSettingsService] Set load history on startup: " + enabled);
+    }
+
+    /** Returns the bounded timeout used by automatic and manual restored-history loads. */
+    public int getHistoryLoadTimeoutSeconds() {
+        int configured = PropertiesComponent.getInstance().getInt(
+                HISTORY_LOAD_TIMEOUT_SECONDS_PROPERTY_KEY,
+                DEFAULT_HISTORY_LOAD_TIMEOUT_SECONDS);
+        return clampHistoryLoadTimeoutSeconds(configured);
+    }
+
+    /** Persists a bounded restored-history loading timeout. */
+    public void setHistoryLoadTimeoutSeconds(int seconds) {
+        int bounded = clampHistoryLoadTimeoutSeconds(seconds);
+        PropertiesComponent.getInstance().setValue(
+                HISTORY_LOAD_TIMEOUT_SECONDS_PROPERTY_KEY,
+                String.valueOf(bounded));
+        LOG.info("[CodemossSettingsService] Set history load timeout: " + bounded + "s");
+    }
+
+    public static int clampHistoryLoadTimeoutSeconds(int seconds) {
+        return Math.max(MIN_HISTORY_LOAD_TIMEOUT_SECONDS,
+                Math.min(MAX_HISTORY_LOAD_TIMEOUT_SECONDS, seconds));
+    }
 
     public String getGrokAuthMethod() throws IOException {
         JsonObject config = readConfig();

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
@@ -129,6 +130,31 @@ public class SessionMessageOrchestratorTest {
         assertEquals("The stack trace points to SessionSendService.", state.getMessages().get(1).content);
         assertEquals(1, callback.messageUpdates.size());
         assertTrue(callback.stateChanges.contains("false:false:null"));
+    }
+
+    @Test
+    public void invisibleHistoryRestoreDoesNotTakeOwnershipFromUserLoad() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-restore");
+        state.setCwd("/workspace");
+        Object userLoadOwner = new Object();
+        state.claimLoading(userLoadOwner);
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                new SessionCallbackFacade(null),
+                historyAccess,
+                (usedTokens, maxTokens) -> { },
+                0,
+                0);
+
+        orchestrator.loadFromServer(() -> false).join();
+
+        assertTrue(state.isLoading());
+        assertTrue(state.ownsLoading(userLoadOwner));
+        assertEquals(0, historyAccess.providerHistoryRequests.get());
     }
 
     @Test
@@ -427,6 +453,50 @@ public class SessionMessageOrchestratorTest {
         // The result is discarded, but the spinner it started must not be left
         // behind: nothing else will clear it.
         assertFalse(state.isLoading());
+    }
+
+    @Test
+    public void cancellableHistoryLoadDoesNotCommitAfterCancellation() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-cancelled");
+        state.setCwd("/workspace");
+        state.addMessage(new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "existing", new JsonObject()));
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        historyAccess.providerHistory = List.of(createProviderMessage("assistant", "late result"));
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+        AtomicInteger cancellationChecks = new AtomicInteger();
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        try {
+            orchestrator.loadFromServer(() -> cancellationChecks.incrementAndGet() > 1).join();
+        } catch (Exception expected) {
+            // The cancellable overload must complete exceptionally after cancellation.
+        }
+
+        assertTrue(cancellationChecks.get() >= 2);
+        assertEquals(1, state.getMessages().size());
+        assertEquals("existing", state.getMessages().get(0).content);
+        assertFalse(state.isLoading());
+    }
+
+    @Test
+    public void defaultCommitGateReportsMutationThatAlreadyRan() {
+        AtomicBoolean cancelled = new AtomicBoolean();
+        SessionMessageOrchestrator.HistoryLoadCancellation cancellation = cancelled::get;
+
+        assertTrue(cancellation.commitIfActive(() -> cancelled.set(true)));
+        assertTrue(cancelled.get());
     }
 
     /**

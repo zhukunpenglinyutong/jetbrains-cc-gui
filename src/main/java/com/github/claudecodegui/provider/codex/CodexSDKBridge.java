@@ -23,6 +23,8 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 import java.util.Map;
 import java.util.Set;
 import java.nio.file.Path;
@@ -683,6 +685,21 @@ public class CodexSDKBridge extends BaseSDKBridge {
         } catch (Exception e) {
             LOG.warn("Failed to load Codex session history: " + e.getMessage(), e);
             return List.of();
+        }
+    }
+
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd, BooleanSupplier cancellation) {
+        try {
+            JsonArray historyItems = new JsonArray();
+            historyReader.forEachSessionMessage(sessionId, cancellation, historyItems::add);
+            if (cancellation.getAsBoolean()) {
+                throw new CancellationException("History loading was cancelled");
+            }
+            return HistoryMessageInjector.convertCodexMessagesToFrontendBatch(historyItems);
+        } catch (CancellationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to load Codex session history", e);
         }
     }
 

@@ -28,6 +28,32 @@ describe('useSettingsBasicActions', () => {
     window.sendToJava = vi.fn();
   });
 
+  it('updates the startup history loading preference and sends it to Java', () => {
+    const { result } = renderHook(() => useSettingsBasicActions({}));
+
+    act(() => {
+      result.current.handleLoadHistoryOnStartupChange(true);
+    });
+
+    expect(result.current.loadHistoryOnStartup).toBe(true);
+    expect(window.sendToJava).toHaveBeenCalledWith(
+      `set_load_history_on_startup:${JSON.stringify({ loadHistoryOnStartup: true })}`
+    );
+  });
+
+  it('clamps and sends the startup history timeout', () => {
+    const { result } = renderHook(() => useSettingsBasicActions({}));
+
+    act(() => {
+      result.current.handleHistoryLoadTimeoutChange(999);
+    });
+
+    expect(result.current.historyLoadTimeoutSeconds).toBe(120);
+    expect(window.sendToJava).toHaveBeenCalledWith(
+      `set_history_load_timeout:${JSON.stringify({ historyLoadTimeoutSeconds: 120 })}`
+    );
+  });
+
   it('updates commit AI provider without mutating prompt enhancer state', () => {
     const { result } = renderHook(() => useSettingsBasicActions({}));
 

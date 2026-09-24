@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 /**
  * OMP CLI bridge.
@@ -42,5 +43,12 @@ public class OmpCliBridge extends MarkerCliBridge {
             LOG.warn("[OMP] Failed to load session messages: " + e.getMessage());
             return Collections.emptyList();
         }
+    }
+
+    @Override
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd,
+                                               BooleanSupplier cancellation) {
+        return getSessionMessagesWithCancellation(cancellation,
+                token -> new OmpHistoryReader().getSessionMessages(sessionId, cwd, token), "OMP");
     }
 }

@@ -57,6 +57,7 @@ describe('useWindowCallbacks integration', () => {
     setSendShortcut: vi.fn(),
     setAutoOpenFileEnabled: vi.fn(),
     setPermissionDialogTimeoutSeconds: vi.fn(),
+    setStartupHistoryLoadState: vi.fn(),
     setSdkStatus: vi.fn(),
     setSdkStatusLoaded: vi.fn(),
     setSdkStatusError: vi.fn(),
@@ -134,6 +135,7 @@ describe('useWindowCallbacks integration', () => {
     delete window.__lastAcceptedMessageCount;
     delete window.__pendingHistoryRefreshMessageCount;
     delete window.__pendingHistoryLoadComplete;
+    delete window.__pendingStartupHistoryLoadState;
     delete window.__historySurfaceRefreshEpoch;
     vi.mocked(forceWebviewRepaint).mockClear();
     window.__dependencyStatusState = 'pending';
@@ -172,6 +174,48 @@ describe('useWindowCallbacks integration', () => {
     expect(opts.setCodexFastMode).toHaveBeenCalledWith('normal');
     expect(window.__CCGUI_RECOVERY_STATE_APPLIED__).toBe(true);
     expect((window.sendToJava as ReturnType<typeof vi.fn>).mock.calls.length).toBe(bridgeCallsBeforeRestore);
+  });
+
+  it('accepts the newest startup history generation and drops stale updates', () => {
+    let current: import('../types/startupHistory').StartupHistoryLoadState | null = null;
+    const setStartupHistoryLoadState = vi.fn((update) => {
+      current = typeof update === 'function' ? update(current) : update;
+    });
+    const opts = createOptions({
+      currentSessionIdRef: { current: 'session-1' },
+      setStartupHistoryLoadState: setStartupHistoryLoadState as never,
+    });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.updateStartupHistoryLoadState?.(JSON.stringify({
+        status: 'loading', sessionId: 'session-1', requestId: 'new',
+        generation: 2, messageCount: 0, retryable: false,
+      }));
+      window.updateStartupHistoryLoadState?.(JSON.stringify({
+        status: 'failed', sessionId: 'session-1', requestId: 'old',
+        generation: 1, messageCount: 0, retryable: true,
+      }));
+    });
+
+    expect(current).toEqual(expect.objectContaining({
+      requestId: 'new',
+      status: 'loading',
+    }));
+  });
+
+  it('ignores startup history state from another session', () => {
+    const opts = createOptions({ currentSessionIdRef: { current: 'session-current' } });
+    renderHook(() => useWindowCallbacks(opts));
+
+    act(() => {
+      window.updateStartupHistoryLoadState?.(JSON.stringify({
+        status: 'loaded', sessionId: 'session-old', requestId: 'old',
+        generation: 4, messageCount: 10, retryable: false,
+      }));
+    });
+
+    expect(opts.setStartupHistoryLoadState).not.toHaveBeenCalled();
   });
 
   it('drains Java recovery state buffered before React callback registration', () => {

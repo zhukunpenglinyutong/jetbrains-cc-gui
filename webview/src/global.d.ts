@@ -150,6 +150,8 @@ interface Window {
    * Triggers Markdown re-rendering to fix incorrect rendering on first history load.
    */
   historyLoadComplete?: (expectedMessageCount?: string | number) => void;
+  updateStartupHistoryLoadState?: (json: string) => void;
+  __pendingStartupHistoryLoadState?: string;
   /** Early history completion buffered before React installs the real callback. */
   __pendingHistoryLoadComplete?: { expectedMessageCount?: string | number };
   /** Number of messages in the latest full backend snapshot accepted by this page. */
@@ -390,6 +392,10 @@ interface Window {
    * Update streaming enabled setting
    */
   updateStreamingEnabled?: (json: string) => void;
+
+  /** Update application-level startup history loading preference. */
+  updateLoadHistoryOnStartup?: (json: string) => void;
+  updateHistoryLoadTimeout?: (json: string) => void;
 
   /**
    * Update Codex sandbox mode setting

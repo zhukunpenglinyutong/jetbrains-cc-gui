@@ -16,7 +16,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
+import java.util.function.BooleanSupplier;
 
 /**
  * Owns session-history loading and post-send message reconciliation.
@@ -29,6 +31,15 @@ public class SessionMessageOrchestrator {
     public interface SessionHistoryAccess {
         List<JsonObject> getProviderSessionMessages(String provider, String sessionId, String cwd);
 
+        default List<JsonObject> getProviderSessionMessages(
+                String provider,
+                String sessionId,
+                String cwd,
+                BooleanSupplier cancellation
+        ) {
+            return getProviderSessionMessages(provider, sessionId, cwd);
+        }
+
         JsonObject getLatestClaudeUserMessage(String sessionId, String cwd);
 
         /**
@@ -38,6 +49,33 @@ public class SessionMessageOrchestrator {
          */
         default JsonObject getProviderSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit) {
             return null;
+        }
+
+        default JsonObject getProviderSessionMessagesPage(
+                String sessionId,
+                String cwd,
+                Integer beforeTurn,
+                int limit,
+                BooleanSupplier cancellation
+        ) {
+            return getProviderSessionMessagesPage(sessionId, cwd, beforeTurn, limit);
+        }
+    }
+
+    @FunctionalInterface
+    public interface HistoryLoadCancellation {
+        boolean isCancelled();
+
+        /**
+         * Runs the final state mutation only while this request still owns the load generation.
+         * Stateful request implementations override this method to serialize cancellation and commit.
+         */
+        default boolean commitIfActive(Runnable mutation) {
+            if (isCancelled()) {
+                return false;
+            }
+            mutation.run();
+            return true;
         }
     }
 
@@ -166,6 +204,19 @@ public class SessionMessageOrchestrator {
     }
 
     public CompletableFuture<Void> loadFromServer() {
+        return loadFromServer(() -> false, true);
+    }
+
+    /**
+     * Load history for an automatic startup restore. Cancellation is checked around provider I/O,
+     * parsing and the final state commit so stale restore work cannot replace a newer transcript.
+     */
+    public CompletableFuture<Void> loadFromServer(HistoryLoadCancellation cancellation) {
+        return loadFromServer(cancellation, false);
+    }
+
+    private CompletableFuture<Void> loadFromServer(HistoryLoadCancellation cancellation,
+                                                    boolean updateSharedLoadingState) {
         String requestedSessionId = state.getSessionId();
         if (requestedSessionId == null) {
             return CompletableFuture.completedFuture(null);
@@ -175,22 +226,30 @@ public class SessionMessageOrchestrator {
         Object loadingToken = new Object();
         List<ClaudeSession.Message> messagesBeforeLoad;
         synchronized (state.getMessageStateLock()) {
+            if (!updateSharedLoadingState && state.isLoading()) {
+                return CompletableFuture.completedFuture(null);
+            }
             messagesBeforeLoad = state.getMessages();
-            state.claimLoading(loadingToken);
-            callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+            if (updateSharedLoadingState) {
+                state.claimLoading(loadingToken);
+                callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+            }
         }
 
         return CompletableFuture.runAsync(() -> {
             try {
+                checkHistoryLoadCancellation(cancellation);
                 LOG.info("Loading session from server: sessionId=" + requestedSessionId + ", cwd=" + requestedCwd);
 
                 List<JsonObject> serverMessages;
                 if ("claude".equals(requestedProvider)) {
-                    serverMessages = loadClaudeSessionWithPagination(requestedSessionId, requestedCwd);
+                    serverMessages = loadClaudeSessionWithPagination(
+                            requestedSessionId, requestedCwd, cancellation);
                 } else {
                     serverMessages = historyAccess.getProviderSessionMessages(
-                            requestedProvider, requestedSessionId, requestedCwd);
+                            requestedProvider, requestedSessionId, requestedCwd, cancellation::isCancelled);
                 }
+                checkHistoryLoadCancellation(cancellation);
                 if (serverMessages == null) {
                     throw new IllegalStateException("Session history provider returned no response");
                 }
@@ -198,19 +257,21 @@ public class SessionMessageOrchestrator {
                 LOG.debug("Received " + serverMessages.size() + " messages from server");
                 List<ClaudeSession.Message> loadedMessages = new ArrayList<>(serverMessages.size());
                 for (JsonObject msg : serverMessages) {
+                    checkHistoryLoadCancellation(cancellation);
                     ClaudeSession.Message message = messageParser.parseServerMessage(msg);
                     if (message != null) {
                         loadedMessages.add(message);
                     }
                 }
 
-                List<ClaudeSession.Message> callbackMessages;
                 // Measure the freshly parsed history before taking the state lock:
                 // the list is thread-local to this load, so its structural walk must
                 // not extend the lock window that streaming callbacks contend on.
                 Set<String> loadedStructure = MessageStructure.structuralBlockKeys(loadedMessages);
+                checkHistoryLoadCancellation(cancellation);
                 synchronized (state.getMessageStateLock()) {
-                    if (!ownsHistoryLoad(loadingToken, requestedSessionId, requestedCwd, requestedProvider)) {
+                    if (!ownsHistoryLoad(loadingToken, requestedSessionId, requestedCwd, requestedProvider,
+                            updateSharedLoadingState)) {
                         LOG.info("Ignoring history result for a session that changed while loading");
                         return;
                     }
@@ -234,28 +295,41 @@ public class SessionMessageOrchestrator {
                     // Replace only after the complete response has been parsed and all
                     // ownership checks pass. A failed or partial read must never clear
                     // the live list first and leave the UI with a shorter transcript.
-                    state.replaceMessages(loadedMessages);
-                    state.setError(null);
-                    callbackMessages = state.getMessagesSnapshot();
-                    restoreTokenUsage(serverMessages);
-                    callbackFacade.notifyMessageUpdate(callbackMessages);
+                    boolean committed = cancellation.commitIfActive(() -> {
+                        state.replaceMessages(loadedMessages);
+                        state.setError(null);
+                        restoreTokenUsage(serverMessages);
+                        callbackFacade.notifyMessageUpdate(state.getMessagesSnapshot());
+                    });
+                    if (!committed) {
+                        throw new CancellationException("History loading was cancelled before commit");
+                    }
                 }
             } catch (SessionHistoryNotFoundException e) {
+                checkHistoryLoadCancellation(cancellation);
                 // A missing history file is an explicit stale-session signal, so unlike
                 // the stale-result guards above it clears the live transcript.
                 synchronized (state.getMessageStateLock()) {
-                    if (!ownsHistoryLoad(loadingToken, requestedSessionId, requestedCwd, requestedProvider)) {
+                    if (!ownsHistoryLoad(loadingToken, requestedSessionId, requestedCwd, requestedProvider,
+                            updateSharedLoadingState)) {
                         return;
                     }
-                    state.setSessionId(null);
-                    state.clearMessages();
-                    state.setError(null);
-                    callbackFacade.notifyMessageUpdate(state.getMessagesSnapshot());
+                    boolean committed = cancellation.commitIfActive(() -> {
+                        state.setSessionId(null);
+                        state.clearMessages();
+                        state.setError(null);
+                        callbackFacade.notifyMessageUpdate(state.getMessagesSnapshot());
+                    });
+                    if (!committed) {
+                        throw new CancellationException("History loading was cancelled before commit");
+                    }
                 }
                 LOG.warn("Session history is unavailable; cleared stale session ID: " + e.getMessage());
             } catch (SessionHistoryIncompleteException e) {
+                checkHistoryLoadCancellation(cancellation);
                 synchronized (state.getMessageStateLock()) {
-                    if (!ownsHistoryLoad(loadingToken, requestedSessionId, requestedCwd, requestedProvider)) {
+                    if (!ownsHistoryLoad(loadingToken, requestedSessionId, requestedCwd, requestedProvider,
+                            updateSharedLoadingState)) {
                         return;
                     }
                     // An initial history open has no live transcript to keep. Let
@@ -266,18 +340,23 @@ public class SessionMessageOrchestrator {
                 }
                 LOG.info("Session history is still being written; keeping the live transcript: "
                         + e.getMessage());
+            } catch (CancellationException e) {
+                throw new CompletionException(e);
             } catch (Exception e) {
                 synchronized (state.getMessageStateLock()) {
-                    if (!ownsHistoryLoad(loadingToken, requestedSessionId, requestedCwd, requestedProvider)) {
+                    if (!ownsHistoryLoad(loadingToken, requestedSessionId, requestedCwd, requestedProvider,
+                            updateSharedLoadingState)) {
                         return;
                     }
-                    state.setError(e.getMessage());
+                    if (updateSharedLoadingState) {
+                        state.setError(e.getMessage());
+                    }
                 }
                 LOG.error("Error loading session: " + e.getMessage(), e);
                 throw new CompletionException(e);
             } finally {
                 synchronized (state.getMessageStateLock()) {
-                    if (state.releaseLoading(loadingToken)) {
+                    if (state.releaseLoading(loadingToken) && updateSharedLoadingState) {
                         callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
                     }
                 }
@@ -291,16 +370,23 @@ public class SessionMessageOrchestrator {
      * fails or returns invalid data, so a broken cursor never leaves the
      * user with an empty chat.
      */
-    private List<JsonObject> loadClaudeSessionWithPagination(String sessionId, String cwd) {
+    private List<JsonObject> loadClaudeSessionWithPagination(
+            String sessionId,
+            String cwd,
+            HistoryLoadCancellation cancellation
+    ) {
         // Try the paginated path first: latest page only, then prepend earlier
         // pages as the user scrolls up.
         try {
-            JsonObject page = historyAccess.getProviderSessionMessagesPage(sessionId, cwd, null, 30);
+            JsonObject page = historyAccess.getProviderSessionMessagesPage(
+                    sessionId, cwd, null, 30, cancellation::isCancelled);
+            checkHistoryLoadCancellation(cancellation);
             if (page != null && page.has("success") && page.get("success").getAsBoolean()) {
                 List<JsonObject> messages = new ArrayList<>();
                 if (page.has("messages")) {
                     JsonArray messagesArray = page.getAsJsonArray("messages");
                     for (JsonElement msg : messagesArray) {
+                        checkHistoryLoadCancellation(cancellation);
                         messages.add(msg.getAsJsonObject());
                     }
                 }
@@ -321,16 +407,19 @@ public class SessionMessageOrchestrator {
                         page.has("cursorReset") && page.get("cursorReset").getAsBoolean(), sessionTitle);
                 return messages;
             }
+        } catch (CancellationException e) {
+            throw e;
         } catch (Exception e) {
             LOG.warn("Paginated session load failed, falling back to full history: " + e.getMessage());
         }
 
+        checkHistoryLoadCancellation(cancellation);
         // Fallback: full history load (legacy behavior)
         LOG.info("Using full-history fallback for Claude session: " + sessionId);
         claudeHistoryFromTurn = 0;
         claudeHistoryTotalTurns = 0;
         claudeHistoryHasMore = false;
-        return historyAccess.getProviderSessionMessages("claude", sessionId, cwd);
+        return historyAccess.getProviderSessionMessages("claude", sessionId, cwd, cancellation::isCancelled);
     }
 
     /**
@@ -433,8 +522,9 @@ public class SessionMessageOrchestrator {
                 : null;
     }
 
-    private boolean ownsHistoryLoad(Object token, String sessionId, String cwd, String provider) {
-        return state.ownsLoading(token)
+    private boolean ownsHistoryLoad(Object token, String sessionId, String cwd, String provider,
+                                    boolean updateSharedLoadingState) {
+        return (updateSharedLoadingState ? state.ownsLoading(token) : !state.isLoading())
                 && Objects.equals(sessionId, state.getSessionId())
                 && Objects.equals(cwd, state.getCwd())
                 && Objects.equals(provider, state.getProvider());
@@ -449,6 +539,12 @@ public class SessionMessageOrchestrator {
             List<ClaudeSession.Message> currentMessages
     ) {
         return loadedStructure.containsAll(MessageStructure.structuralBlockKeys(currentMessages));
+    }
+
+    private void checkHistoryLoadCancellation(HistoryLoadCancellation cancellation) {
+        if (cancellation.isCancelled()) {
+            throw new CancellationException("History loading was cancelled");
+        }
     }
 
     /**

@@ -28,7 +28,9 @@ public class HistoryHandler extends BaseMessageHandler {
             "deep_search_history", // Deep search (clear cache and reload)
             "load_subagent_session", // Load Claude Code sidechain Agent process log
             "load_subagent_statuses", // Load lightweight Codex subagent statuses
-            "convert_to_cli_session" // Convert sidechain session to CLI-recognizable session
+            "convert_to_cli_session", // Convert sidechain session to CLI-recognizable session
+            "load_restored_history",
+            "cancel_restored_history"
     };
 
     // Session load callback interface
@@ -39,7 +41,14 @@ public class HistoryHandler extends BaseMessageHandler {
         void onLoadSession(String sessionId, String projectPath, String provider, String model);
     }
 
+    public interface RestoredHistoryCallback {
+        void onLoad();
+
+        void onCancel(String requestId);
+    }
+
     private SessionLoadCallback sessionLoadCallback;
+    private RestoredHistoryCallback restoredHistoryCallback;
     private String currentProvider = "claude"; // Default to claude
 
     private final HistoryLoadService historyLoadService;
@@ -64,6 +73,10 @@ public class HistoryHandler extends BaseMessageHandler {
 
     public void setSessionLoadCallback(SessionLoadCallback callback) {
         this.sessionLoadCallback = callback;
+    }
+
+    public void setRestoredHistoryCallback(RestoredHistoryCallback callback) {
+        this.restoredHistoryCallback = callback;
     }
 
     @Override
@@ -133,6 +146,16 @@ public class HistoryHandler extends BaseMessageHandler {
                 String conversionProjectPath = this.context.getProject() != null
                         ? this.context.getProject().getBasePath() : null;
                 this.sessionConversionService.convertSdkSession(content, conversionProjectPath);
+                return true;
+            case "load_restored_history":
+                if (restoredHistoryCallback != null) {
+                    restoredHistoryCallback.onLoad();
+                }
+                return true;
+            case "cancel_restored_history":
+                if (restoredHistoryCallback != null) {
+                    restoredHistoryCallback.onCancel(content != null ? content.trim() : "");
+                }
                 return true;
             default:
                 return false;

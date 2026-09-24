@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 /**
  * DeepSeek Harness (DSH) bridge.
@@ -52,5 +53,10 @@ public class DshCliBridge extends MarkerCliBridge {
             LOG.warn("[DSH] Failed to load session messages: " + e.getMessage());
             return Collections.emptyList();
         }
+    }
+
+    @Override
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd, BooleanSupplier cancellation) {
+        return new DshHistoryReader().getSessionMessages(sessionId, cwd, cancellation);
     }
 }

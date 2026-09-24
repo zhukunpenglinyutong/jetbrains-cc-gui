@@ -10,6 +10,7 @@
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import type { ClaudeMessage, CodexHistoryPageInfo } from '../../../types';
 import type { ContextUsageData } from '../../../components/ContextUsageDialog';
+import { isStartupHistoryLoadState } from '../../../types/startupHistory';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import { debugError } from '../../../utils/debug';
 import {
@@ -113,7 +114,30 @@ export function registerMessageCallbacks(
     closeContextUsageDialog,
     currentSessionIdRef,
     setRestoredSessionTitle,
+    setStartupHistoryLoadState,
   } = options;
+
+  window.updateStartupHistoryLoadState = (json: string) => {
+    try {
+      const next = JSON.parse(json) as unknown;
+      if (!isStartupHistoryLoadState(next)) return;
+      if (currentSessionIdRef.current && next.sessionId !== currentSessionIdRef.current) return;
+      setStartupHistoryLoadState((previous) => {
+        if (previous?.sessionId === next.sessionId && previous.generation > next.generation) {
+          return previous;
+        }
+        return next;
+      });
+    } catch {
+      // Ignore malformed native state; a later refresh or retry will replace it.
+    }
+  };
+
+  if (window.__pendingStartupHistoryLoadState) {
+    const pending = window.__pendingStartupHistoryLoadState;
+    window.__pendingStartupHistoryLoadState = undefined;
+    window.updateStartupHistoryLoadState(pending);
+  }
 
   const ensureStreamingAssistantPreserved = (prevList: ClaudeMessage[], resultList: ClaudeMessage[]): ClaudeMessage[] => {
     const { list, streamingIndex } = ensureStreamingAssistantInList(
