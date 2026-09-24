@@ -115,7 +115,8 @@
   min-height: calc(1.5em * 4);
   outline: none;
   color: var(--text-primary);
-  font-size: 14px;
+  /* 输入文字与会话正文使用同一字号档位。 */
+  font-size: var(--cc-gui-chat-font-size, 14px);
   font-family: inherit;
   line-height: 1.5;
   word-wrap: break-word;

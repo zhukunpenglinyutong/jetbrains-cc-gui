@@ -31,14 +31,10 @@ function acknowledgePhase(token: string, phase: SurfaceDamagePhase, applied: boo
   sendBridgeEvent('surface_damage_applied', JSON.stringify({ token, phase, applied }));
 }
 
-function parseEffectiveScale(scale: string): number {
-  const parsed = Number.parseFloat(scale || '1');
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-}
-
-function relativeNudge(scale: string): string {
-  return String(parseEffectiveScale(scale) * 0.999);
-}
+/**
+ * 通用重绘只需让 zoom 短暂偏离静止值；恢复后必须清空，而不是写回字号档位。
+ */
+const GENERIC_NUDGE_ZOOM = '1.001';
 
 function getOrCreateSentinel(): HTMLElement | null {
   const existing = document.getElementById(SENTINEL_ID);
@@ -183,16 +179,15 @@ export function runAfterSurfaceDamagePulse(waiter: () => void): boolean {
 }
 
 /**
- * Performs one generic zoom nudge while the coordinator is unowned.
- * The caller must retry later when this returns false.
+ * 在协调器空闲时临时修改 zoom 以触发 JCEF 重新光栅化。
+ * 调用方在返回 false 时需要等待当前 OSR 脉冲结束后重试。
  */
-export function performGenericSurfaceDamage(app: HTMLElement, restoreScale: string): boolean {
+export function performGenericSurfaceDamage(app: HTMLElement): boolean {
   if (activePulse) return false;
   const appStyle = app.style as CSSStyleDeclaration & { zoom?: string };
-  const restore = restoreScale || appStyle.zoom || '1';
-  appStyle.zoom = relativeNudge(restore);
+  appStyle.zoom = GENERIC_NUDGE_ZOOM;
   void app.offsetHeight;
-  appStyle.zoom = restore;
+  appStyle.zoom = '';
   window.dispatchEvent(new Event('resize'));
   return true;
 }

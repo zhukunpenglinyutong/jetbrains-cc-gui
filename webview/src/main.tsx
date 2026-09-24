@@ -28,7 +28,6 @@ import {
   cancelSurfaceDamagePulse,
   finishSurfaceDamagePulse,
   replaceSurfaceDamagePulse,
-  runAfterSurfaceDamagePulse,
 } from './utils/surfaceDamagePulse';
 import { requestDependencyStatusUntilSettled, waitForBridge } from './utils/bridgeStartup';
 import type { UiFontConfig, CodeFontConfig } from './types/uiFontConfig';
@@ -130,14 +129,8 @@ if (enableVConsole) {
  * Apply IDEA editor font configuration to CSS variables
  */
 /**
- * JCEF (macOS) may occasionally render with an incorrect zoom/layout after the IDE
- * stays in background / screen-off for a while. The UI uses CSS `zoom` with an
- * inverse `vw/vh` container size to implement font scaling. If the zoom is not
- * applied correctly after resume, the container becomes smaller than the viewport,
- * leaving blank areas and causing "misalignment".
- *
- * This recovery nudges Chromium/JCEF to re-apply the expected zoom and triggers
- * a resize recalculation for components relying on window size.
+ * JCEF 从后台或休眠恢复后可能保留过期的 OSR 位图。字号档位现在只通过 CSS
+ * 变量计算真实字号，因此恢复时只需重新声明变量并请求整页重绘。
  */
 function setupScaleRecovery() {
   const getExpectedScale = (): string => {
@@ -154,39 +147,12 @@ function setupScaleRecovery() {
 
   const forceReapply = (reason: string) => {
     const expected = getExpectedScale();
-    const app = document.getElementById('app');
-    const computedZoom = app
-      ? (getComputedStyle(app) as CSSStyleDeclaration & { zoom?: string }).zoom
-      : '';
-    const expectedNumber = Number.parseFloat(expected);
-    const computedNumber = Number.parseFloat(computedZoom || '');
-    const needsZoomNudge = !!app
-      && Number.isFinite(expectedNumber)
-      && (!Number.isFinite(computedNumber) || Math.abs(computedNumber - expectedNumber) > 0.01);
-
-    // Re-set the CSS variable to ensure width/height calc(100vw/scale) is refreshed.
+    // 重新声明唯一字号来源，避免 JCEF 恢复后保留旧的计算值。
     document.documentElement.style.setProperty('--font-scale', expected);
-    const completeRecovery = () => {
-      debugLog('[ScaleRecovery] Applied scale recovery:', {
-        reason,
-        expected,
-        computedZoom,
-        needsZoomNudge,
-      });
+    forceWebviewRepaint(`scale-recovery:${reason}`, () => {
+      debugLog('[ScaleRecovery] Applied scale recovery:', { reason, expected });
       lastRecoveryAt = Date.now();
-    };
-    if (needsZoomNudge) {
-      // The shared coordinator is the sole inline-zoom writer. If an OSR pulse is
-      // active this request remains coalesced until that exact token settles.
-      forceWebviewRepaint(`scale-recovery:${reason}`, completeRecovery);
-      return;
-    }
-    const resizeOnly = () => {
-      if (runAfterSurfaceDamagePulse(resizeOnly)) return;
-      window.dispatchEvent(new Event('resize'));
-      completeRecovery();
-    };
-    requestAnimationFrame(resizeOnly);
+    });
   };
 
   const schedule = (reason: string) => {
