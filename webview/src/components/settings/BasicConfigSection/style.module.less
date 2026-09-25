@@ -85,6 +85,18 @@
   color: var(--text-secondary);
 }
 
+.projectLevelBadge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-secondary);
+  white-space: nowrap;
+}
+
 .themeSelector {
   display: flex;
   gap: 8px;
@@ -520,6 +532,77 @@
 
 .workingDirSection {
   margin-bottom: 24px;
+}
+
+.formHintError {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-error, #f85149);
+
+  .codicon {
+    font-size: 12px;
+    margin-top: 2px;
+  }
+}
+
+/* Env file: effective state line + reset control */
+.envFileStateRow {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+
+  .codicon {
+    font-size: 13px;
+  }
+}
+
+.envFileStateLabel {
+  font-weight: 600;
+}
+
+.envFileStateDetail {
+  color: var(--text-tertiary);
+}
+
+.envFileActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.envFileResetBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent-primary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover:not(:disabled) {
+    background: var(--bg-tertiary);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .codicon {
+    font-size: 12px;
+  }
 }
 
 /* 🔧 流式传输开关样式 */

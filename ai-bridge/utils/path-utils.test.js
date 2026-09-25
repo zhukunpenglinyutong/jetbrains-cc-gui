@@ -124,9 +124,17 @@ test('getClaudeProjectKey resolves symlinked project paths like the CLI (issue #
       linkCreated = false;
     }
     if (!linkCreated) return; // platform refused to create a symlink
-    assert.equal(getClaudeProjectKey(linkDir), realDir.replace(/[^a-zA-Z0-9]/g, '-'));
+    // Expectation must be built from the *resolved* path: os.tmpdir() is itself a
+    // symlink on macOS (/var -> /private/var), and that is exactly the situation
+    // the CLI resolves, so asserting against the raw mkdtemp string would pin the
+    // test to a platform artefact instead of the symlink behaviour under test.
+    const realDirResolved = fs.realpathSync(realDir);
+    const realKey = realDirResolved.replace(/[^a-zA-Z0-9]/g, '-');
+    assert.equal(getClaudeProjectKey(linkDir), realKey);
+    // The point of issue #1789: the symlinked path and the real path must agree.
+    assert.equal(getClaudeProjectKey(realDir), realKey);
     const sessionFile = getClaudeProjectSessionFilePath('session-1', linkDir);
-    assert.ok(sessionFile.includes(realDir.replace(/[^a-zA-Z0-9]/g, '-')));
+    assert.ok(sessionFile.includes(realKey));
     const candidates = getClaudeProjectSessionFileCandidates('session-1', linkDir);
     assert.equal(candidates.length, 2);
     assert.ok(candidates[1].includes(linkDir.replace(/[^a-zA-Z0-9]/g, '-')));

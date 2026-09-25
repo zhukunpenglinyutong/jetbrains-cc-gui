@@ -42,6 +42,7 @@ class GrokDaemonRequestExecutor {
             Boolean streaming,
             boolean disableThinking,
             String reasoningEffort,
+            String envFile,
             MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
@@ -65,10 +66,18 @@ class GrokDaemonRequestExecutor {
                         agentPrompt,
                         streaming,
                         disableThinking,
-                        reasoningEffort
+                        reasoningEffort,
+                        envFile
                 );
 
-                params.add("env", new JsonObject()); // daemon will merge base env
+                JsonObject envObj = new JsonObject();
+                if (envFile != null && !envFile.isEmpty()) {
+                    envObj.addProperty("envFile", envFile);
+                    log.debug("[GrokDaemonRequestExecutor] envFile set in daemon env=" + envFile);
+                } else {
+                    log.info("[GrokDaemonRequestExecutor] envFile is null/empty — not adding to daemon env");
+                }
+                params.add("env", envObj); // daemon will merge base env
 
                 log.info("[GrokDaemonExecutor] Sending via daemon: grok.send");
 

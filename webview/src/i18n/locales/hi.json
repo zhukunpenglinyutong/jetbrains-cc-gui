@@ -179,6 +179,30 @@
         "placeholder": "e.g. project1 or leave empty to use project root",
         "hint": "Specify the directory where Claude works. Can use relative path (relative to project root) or absolute path. Leave empty to use project root."
       },
+      "envFile": {
+        "label": "Environment File",
+        "projectLevel": "प्रोजेक्ट-स्तर",
+        "placeholder": "e.g. /path/to/.env or leave empty",
+        "hint": "Specify a .env file to load environment variables for both Claude Code and Grok.",
+        "invalidPath": "Invalid file path: file does not exist or is not readable",
+        "reset": "Reset to automatic",
+        "resetHint": "Clear the custom path and let <project>/.env be discovered automatically again",
+        "state": {
+          "notConfigured": "Automatic",
+          "notConfiguredDetail": "no custom path — .env from the project root is discovered automatically",
+          "configured": "Custom path",
+          "configuredDetail": "the file below is loaded for every new session",
+          "disabled": "Disabled",
+          "disabledDetail": "no env file is loaded, and automatic discovery is off",
+          "unknown": "State unknown",
+          "unknownDetail": "the effective state could not be read from the plugin"
+        },
+        "error": {
+          "invalidCharacters": "Invalid path: control characters and NUL bytes are not allowed",
+          "parentTraversal": "Invalid path: \"..\" segments are not allowed",
+          "tooLong": "Invalid path: it is too long"
+        }
+      },
       "fontSize": {
         "label": "फ़ॉन्ट आकार",
         "level1": "छोटा (80%)",
@@ -1201,6 +1225,19 @@
     "statusNeedsAuth": "Needs Authentication",
     "statusPending": "Connecting...",
     "statusUnknown": "Unknown",
+    "projectLocal": "प्रोजेक्ट-लोकल",
+    "projectLocalReadOnly": "यह सर्वर .mcp.json में प्रबंधित है और UI से संशोधित नहीं किया जा सकता",
+    "pendingApprovalBadge": "प्रतीक्षा में",
+    "pendingApprovalDesc": "प्रोजेक्ट-लोकल MCP सर्वर की अनुमोत्‍िय के लिए प्रतीक्षा में",
+    "rejectedBadge": "अस्वीकृत",
+    "rejectedDesc": "अस्वीकृत प्रोजेक्ट-लोकल MCP सर्वर",
+    "approveTooltip": "सर्वर को अनुमोदित करें",
+    "rejectTooltip": "सर्वर को अस्वीकृत करें",
+    "trustNotGitVerifiedBadge": "git द्वारा सत्यापित नहीं",
+    "trustNotGitVerifiedDesc": "यह प्रोजेक्ट फ़ोल्डर git के नियंत्रण में नहीं है, इसलिए इस .mcp.json सर्वर की अनुमोति को इस मशीन की स्थानीय अनुमोति के रूप में पुष्टि नहीं की जा सकती",
+    "trustNotGitVerifiedDialogNote": "नोट: प्रोजेक्ट फ़ोल्डर git रिपॉज़िटरी नहीं है, इसलिए यह अनुमोति केवल आपकी पुष्टि पर आधारित है और git द्वारा समर्थित नहीं है।",
+    "approved": "अनुमोदित",
+    "rejected": "अस्वीकृत",
     "errorDetails": "Error Details",
     "logs": {
       "title": "Connection Logs",
@@ -1223,6 +1260,7 @@
       "firstLoad": "First load, fetching server list...",
       "loadedServersSuccess": "Loaded server list: {{count}} servers found",
       "loadedServersFailed": "Failed to load server list: {{error}}",
+      "refreshOnFileChange": "MCP कॉन्फ़िगरेशन फ़ाइल बदल गई, सर्वर सूची ताज़ा कर रहा है...",
       "statusUpdateComplete": "Status update complete: {{total}} servers ({{connected}} connected, {{failed}} failed, {{pending}} pending, {{needsAuth}} need auth)",
       "loadedStatusFailed": "Failed to load server status: {{error}}",
       "cleared": "Refresh logs cleared",
@@ -1312,7 +1350,15 @@
     "noParams": "No Parameters",
     "required": "Required",
     "optional": "Optional",
-    "refreshServer": "Refresh {{name}}"
+    "refreshServer": "Refresh {{name}}",
+    "configCopiedRedacted": "कॉन्फ़िगरेशन क्लिपबोर्ड पर कॉपी हो गया (संवेदनशील मान छिपाए गए)",
+    "approveConfirmTitle": "प्रोजेक्ट-स्थानीय MCP सर्वर स्वीकृत करें",
+    "approveConfirmMessage": "\"{{name}}\" को स्वीकार करने पर यह रिपॉज़िटरी आपकी मशीन पर चला सकेगा:\n\n{{target}}\n\nआपकी अनुमतियों के साथ। केवल उन सर्वरों को स्वीकार करें जिन पर आप भरोसा करते हैं।",
+    "approveConfirm": "स्वीकार करें और चलाएँ",
+    "approveConfirmUnknownTarget": "कोई अनिर्दिष्ट कमांड",
+    "copyConfigWarningTitle": "प्रोजेक्ट से कॉन्फ़िगरेशन कॉपी करें",
+    "copyConfigWarningMessage": "\"{{name}}\" इस रिपॉज़िटरी की .mcp.json में परिभाषित है। इसकी कॉन्फ़िगरेशन में रिपॉज़िटरी के लेखक के क्रेडेंशियल हो सकते हैं, आपके नहीं। इसे केवल तभी कॉपी करें जब आप इस सर्वर का उपयोग करना चाहते हैं।",
+    "copyConfigWarningConfirm": "फिर भी कॉपी करें"
   },
   "tools": {
     "toolCall": "उपकरण कॉल",

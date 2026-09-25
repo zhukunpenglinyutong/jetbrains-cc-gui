@@ -179,6 +179,30 @@
         "placeholder": "例: project1 または空欄でプロジェクトルートを使用",
         "hint": "Claudeが作業するディレクトリを指定します。相対パス(プロジェクトルートからの相対)または絶対パスを使用できます。空欄の場合はプロジェクトルートを使用します。"
       },
+      "envFile": {
+        "label": "環境ファイル",
+        "projectLevel": "プロジェクトレベル",
+        "placeholder": "例: /path/to/.env または空欄",
+        "hint": "Claude CodeとGrokの両方で環境変数を読み込む.envファイルを指定します。",
+        "invalidPath": "無効なファイルパス: ファイルが存在しないか、読み取りできません",
+        "reset": "自動検出に戻す",
+        "resetHint": "カスタムパスを解除し、<project>/.env の自動検出を再開します",
+        "state": {
+          "notConfigured": "自動",
+          "notConfiguredDetail": "カスタムパスは未設定 — プロジェクトルートの .env が自動的に検出されます",
+          "configured": "カスタムパス",
+          "configuredDetail": "以下のファイルが新しいセッションごとに読み込まれます",
+          "disabled": "無効",
+          "disabledDetail": "env ファイルは読み込まれず、自動検出も無効です",
+          "unknown": "状態不明",
+          "unknownDetail": "プラグインから有効な状態を取得できませんでした"
+        },
+        "error": {
+          "invalidCharacters": "無効なパス: 制御文字と NUL バイトは使用できません",
+          "parentTraversal": "無効なパス: \"..\" セグメントは使用できません",
+          "tooLong": "無効なパス: 長すぎます"
+        }
+      },
       "fontSize": {
         "label": "フォントサイズ",
         "level1": "小 (80%)",
@@ -1206,6 +1230,19 @@
     "statusNeedsAuth": "認証が必要",
     "statusPending": "接続中...",
     "statusUnknown": "不明",
+    "projectLocal": "プロジェクトローカル",
+    "projectLocalReadOnly": "このサーバーは .mcp.json で管理されているため、UI から変更できません",
+    "pendingApprovalBadge": "保留中",
+    "pendingApprovalDesc": "プロジェクトローカル MCP サーバーの承認待ち",
+    "rejectedBadge": "拒否",
+    "rejectedDesc": "拒否されたプロジェクトローカル MCP サーバー",
+    "approveTooltip": "サーバーを承認",
+    "rejectTooltip": "サーバーを拒否",
+    "trustNotGitVerifiedBadge": "git 未検証",
+    "trustNotGitVerifiedDesc": "このプロジェクトフォルダーは git の管理下になく、この .mcp.json サーバーの承認がこのマシンにローカルなものであることを git で確認できません",
+    "trustNotGitVerifiedDialogNote": "注意: プロジェクトフォルダーは git リポジトリではないため、この承認はあなたの確認のみに基づくもので、git による裏付けはありません。",
+    "approved": "承認済み",
+    "rejected": "拒否",
     "errorDetails": "Error Details",
     "logs": {
       "title": "Connection Logs",
@@ -1228,6 +1265,7 @@
       "firstLoad": "First load, fetching server list...",
       "loadedServersSuccess": "Loaded server list: {{count}} servers found",
       "loadedServersFailed": "Failed to load server list: {{error}}",
+      "refreshOnFileChange": "MCP設定ファイルが変更されました。サーバー一覧を更新しています...",
       "statusUpdateComplete": "Status update complete: {{total}} servers ({{connected}} connected, {{failed}} failed, {{pending}} pending, {{needsAuth}} need auth)",
       "loadedStatusFailed": "Failed to load server status: {{error}}",
       "cleared": "Refresh logs cleared",
@@ -1317,7 +1355,15 @@
     "noParams": "No Parameters",
     "required": "Required",
     "optional": "Optional",
-    "refreshServer": "Refresh {{name}}"
+    "refreshServer": "Refresh {{name}}",
+    "configCopiedRedacted": "設定をクリップボードにコピーしました（機微な値はマスクされます）",
+    "approveConfirmTitle": "プロジェクトローカルの MCP サーバーを承認",
+    "approveConfirmMessage": "「{{name}}」を承認すると、このリポジトリがあなたのマシンで次を実行できます：\n\n{{target}}\n\nあなたの権限で実行されます。信頼できるサーバーだけを承認してください。",
+    "approveConfirm": "承認して実行",
+    "approveConfirmUnknownTarget": "未指定のコマンド",
+    "copyConfigWarningTitle": "プロジェクトの設定をコピー",
+    "copyConfigWarningMessage": "「{{name}}」はこのリポジトリの .mcp.json に定義されています。その設定にはリポジトリ作者の資格情報が含まれる可能性があり、あなたのものではありません。このサーバーを使う予定がある場合のみコピーしてください。",
+    "copyConfigWarningConfirm": "コピーする"
   },
   "tools": {
     "toolCall": "ツール呼び出し",

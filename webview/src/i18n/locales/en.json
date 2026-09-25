@@ -422,6 +422,30 @@
         "placeholder": "e.g. project1 or leave empty to use project root",
         "hint": "Specify the directory where Claude works. Can use relative path (relative to project root) or absolute path. Leave empty to use project root."
       },
+      "envFile": {
+        "label": "Environment File",
+        "projectLevel": "Project-level",
+        "placeholder": "e.g. /path/to/.env or leave empty",
+        "hint": "Specify a .env file to load environment variables for both Claude Code and Grok.",
+        "invalidPath": "Invalid file path: file does not exist or is not readable",
+        "reset": "Reset to automatic",
+        "resetHint": "Clear the custom path and let <project>/.env be discovered automatically again",
+        "state": {
+          "notConfigured": "Automatic",
+          "notConfiguredDetail": "no custom path — .env from the project root is discovered automatically",
+          "configured": "Custom path",
+          "configuredDetail": "the file below is loaded for every new session",
+          "disabled": "Disabled",
+          "disabledDetail": "no env file is loaded, and automatic discovery is off",
+          "unknown": "State unknown",
+          "unknownDetail": "the effective state could not be read from the plugin"
+        },
+        "error": {
+          "invalidCharacters": "Invalid path: control characters and NUL bytes are not allowed",
+          "parentTraversal": "Invalid path: \"..\" segments are not allowed",
+          "tooLong": "Invalid path: it is too long"
+        }
+      },
       "fontSize": {
         "label": "Font Size",
         "level1": "Small (80%)",
@@ -1639,6 +1663,19 @@
     "statusNeedsAuth": "Needs Authentication",
     "statusPending": "Connecting...",
     "statusUnknown": "Unknown",
+    "projectLocal": "Project-local",
+    "projectLocalReadOnly": "This server is managed in .mcp.json and cannot be modified from the UI",
+    "pendingApprovalBadge": "Pending",
+    "pendingApprovalDesc": "Pending approval for project-local MCP server",
+    "rejectedBadge": "Rejected",
+    "rejectedDesc": "Rejected project-local MCP server",
+    "approveTooltip": "Approve server",
+    "rejectTooltip": "Reject server",
+    "trustNotGitVerifiedBadge": "Not git-verified",
+    "trustNotGitVerifiedDesc": "This project folder is not under git control, so the approval of this .mcp.json server cannot be confirmed as local to this machine",
+    "trustNotGitVerifiedDialogNote": "Note: the project folder is not a git repository, so this approval rests only on your confirmation and is not backed by git.",
+    "approved": "Approved",
+    "rejected": "Rejected",
     "errorDetails": "Error Details",
     "logs": {
       "title": "Connection Logs",
@@ -1661,6 +1698,7 @@
       "firstLoad": "First load, fetching server list...",
       "loadedServersSuccess": "Loaded server list: {{count}} servers found",
       "loadedServersFailed": "Failed to load server list: {{error}}",
+      "refreshOnFileChange": "MCP config file changed, refreshing server list...",
       "statusUpdateComplete": "Status update complete: {{total}} servers ({{connected}} connected, {{failed}} failed, {{pending}} pending, {{needsAuth}} need auth)",
       "loadedStatusFailed": "Failed to load server status: {{error}}",
       "cleared": "Refresh logs cleared",
@@ -1750,7 +1788,15 @@
     "noParams": "No Parameters",
     "required": "Required",
     "optional": "Optional",
-    "refreshServer": "Refresh {{name}}"
+    "refreshServer": "Refresh {{name}}",
+    "configCopiedRedacted": "Config copied to clipboard (sensitive values redacted)",
+    "approveConfirmTitle": "Approve project-local MCP server",
+    "approveConfirmMessage": "Approving \"{{name}}\" lets this repository run:\n\n{{target}}\n\non your machine, with your permissions. Only approve servers you trust.",
+    "approveConfirm": "Approve and run",
+    "approveConfirmUnknownTarget": "an unspecified command",
+    "copyConfigWarningTitle": "Copy config from a project",
+    "copyConfigWarningMessage": "\"{{name}}\" is defined in this repository's .mcp.json. Its configuration may contain credentials that belong to the repository's author, not to you. Copy it only if you intend to use this server.",
+    "copyConfigWarningConfirm": "Copy anyway"
   },
   "tools": {
     "toolCall": "Tool Call",

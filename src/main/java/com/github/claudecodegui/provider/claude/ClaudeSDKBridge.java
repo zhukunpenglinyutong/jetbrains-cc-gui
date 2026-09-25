@@ -4,11 +4,14 @@ import com.google.gson.JsonObject;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
+import com.github.claudecodegui.provider.common.EnvFileResolver;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.util.PathUtils;
 
 import java.io.File;
 import java.util.List;
@@ -26,6 +29,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
 
     private final ClaudeStreamAdapter streamAdapter;
     private final ClaudeRequestParamsBuilder requestParamsBuilder;
+    private final CodemossSettingsService settingsService = new CodemossSettingsService();
     private final ClaudeJsonOutputExtractor jsonOutputExtractor;
     private final ClaudeDaemonCoordinator daemonCoordinator;
     private final ClaudeProcessInvoker processInvoker;
@@ -404,13 +408,14 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         String normalizedCwd = normalizeCwdForNode(cwd);
+        String envFile = resolveEnvFile(cwd);
 
         // Try daemon mode first (avoids per-request Node.js process spawning)
         DaemonBridge db = daemonCoordinator.getDaemonBridge();
         if (db != null) {
             return sendMessageViaDaemon(db, channelId, message, sessionId, runtimeSessionEpoch, normalizedCwd,
                     attachments, permissionMode, model, openedFiles, agentPrompt,
-                    streaming, disableThinking, reasoningEffort, callback);
+                    streaming, disableThinking, reasoningEffort, envFile, callback);
         }
 
         // Fallback: per-process mode (spawns a new Node.js process per request)
@@ -429,8 +434,60 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 streaming,
                 disableThinking,
                 reasoningEffort,
+                envFile,
                 callback
         );
+    }
+
+    private String resolveEnvFile(String cwd) {
+        try {
+            String envFile = settingsService.getEnvFile(cwd);
+
+            // State 3: the user explicitly opted out — load nothing, and never
+            // fall back to the repository-controlled <cwd>/.env.
+            if (CodemossSettingsService.isEnvFileDisabled(envFile)) {
+                LOG.debug("[ClaudeSDKBridge.resolveEnvFile] env file explicitly disabled for cwd=" + cwd);
+                return null;
+            }
+
+            String projectDir = EnvFileResolver.resolveProjectDir(cwd);
+
+            // State 1: never configured — try the default ".env" in the project root
+            // so users get automatic env loading without any configuration.
+            if (envFile == null) {
+                if (projectDir != null) {
+                    java.io.File defaultEnvFile = new java.io.File(projectDir, ".env");
+                    if (defaultEnvFile.exists() && defaultEnvFile.isFile()) {
+                        String discovered = PathUtils.normalizeAbsolute(defaultEnvFile.getPath());
+                        LOG.debug("[ClaudeSDKBridge.resolveEnvFile] auto-discovered default .env at " + discovered);
+                        return discovered;
+                    }
+                    LOG.debug("[ClaudeSDKBridge.resolveEnvFile] no env file configured and no .env found in project dir");
+                } else {
+                    LOG.debug("[ClaudeSDKBridge.resolveEnvFile] envFile is null and no project dir for default discovery");
+                }
+                return null;
+            }
+
+            // State 2: explicitly configured. Relative paths always resolve against
+            // the project directory — never against the IDE process CWD, which would
+            // make the loaded file depend on where the IDE was launched from.
+            java.io.File envFileObj = new java.io.File(envFile);
+            if (!envFileObj.isAbsolute()) {
+                if (projectDir == null) {
+                    LOG.debug("[ClaudeSDKBridge.resolveEnvFile] refusing to resolve relative env file without a project dir");
+                    return null;
+                }
+                envFileObj = new java.io.File(projectDir, envFile);
+            }
+            String resolved = PathUtils.normalizeAbsolute(envFileObj.getPath());
+            LOG.debug("[ClaudeSDKBridge.resolveEnvFile] envFile=" + resolved);
+            return resolved;
+
+        } catch (Exception e) {
+            LOG.warn("[ClaudeSDKBridge] Failed to read env file setting: " + e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -456,7 +513,16 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * Get MCP server connection status.
      */
     public CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
-        return mcpQueryService.getMcpServerStatus(normalizeCwdForNode(cwd));
+        return getMcpServerStatus(cwd, null);
+    }
+
+    /**
+     * Get MCP server connection status, optionally restricted to specific servers.
+     * Verifying a server spawns a process (stdio) or issues a request (http/sse),
+     * so a targeted list avoids re-checking every configured server.
+     */
+    public CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd, List<String> serverNames) {
+        return mcpQueryService.getMcpServerStatus(normalizeCwdForNode(cwd), serverNames);
     }
 
     /**
@@ -720,6 +786,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
+            String envFile,
             MessageCallback callback
     ) {
         return daemonRequestExecutor.sendMessageViaDaemon(
@@ -737,6 +804,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 streaming,
                 disableThinking,
                 reasoningEffort,
+                envFile,
                 callback
         );
     }

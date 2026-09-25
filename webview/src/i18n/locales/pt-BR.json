@@ -179,6 +179,30 @@
         "placeholder": "ex: projeto1 ou deixe vazio para usar a raiz do projeto",
         "hint": "Especifique o diretório onde o Claude trabalha. Pode usar caminho relativo (relativo à raiz do projeto) ou caminho absoluto. Deixe vazio para usar a raiz do projeto."
       },
+      "envFile": {
+        "label": "Environment File",
+        "projectLevel": "Project-level",
+        "placeholder": "e.g. /path/to/.env or leave empty",
+        "hint": "Specify a .env file to load environment variables for both Claude Code and Grok.",
+        "invalidPath": "Invalid file path: file does not exist or is not readable",
+        "reset": "Reset to automatic",
+        "resetHint": "Clear the custom path and let <project>/.env be discovered automatically again",
+        "state": {
+          "notConfigured": "Automatic",
+          "notConfiguredDetail": "no custom path — .env from the project root is discovered automatically",
+          "configured": "Custom path",
+          "configuredDetail": "the file below is loaded for every new session",
+          "disabled": "Disabled",
+          "disabledDetail": "no env file is loaded, and automatic discovery is off",
+          "unknown": "State unknown",
+          "unknownDetail": "the effective state could not be read from the plugin"
+        },
+        "error": {
+          "invalidCharacters": "Invalid path: control characters and NUL bytes are not allowed",
+          "parentTraversal": "Invalid path: \"..\" segments are not allowed",
+          "tooLong": "Invalid path: it is too long"
+        }
+      },
       "fontSize": {
         "label": "Tamanho da Fonte",
         "level1": "Pequeno (80%)",
@@ -1349,6 +1373,19 @@
     "statusNeedsAuth": "Necessita Autenticação",
     "statusPending": "Conectando...",
     "statusUnknown": "Desconhecido",
+    "projectLocal": "Local do projeto",
+    "projectLocalReadOnly": "Este servidor é gerenciado no .mcp.json e não pode ser modificado pela UI",
+    "pendingApprovalBadge": "Pendente",
+    "pendingApprovalDesc": "Aguardando aprovação para servidor MCP local do projeto",
+    "rejectedBadge": "Rejeitado",
+    "rejectedDesc": "Servidor MCP local do projeto rejeitado",
+    "approveTooltip": "Aprovar servidor",
+    "rejectTooltip": "Rejeitar servidor",
+    "trustNotGitVerifiedBadge": "Não verificado pelo git",
+    "trustNotGitVerifiedDesc": "Esta pasta do projeto não está sob controle de versão do git, portanto não é possível confirmar que a aprovação deste servidor do .mcp.json é local desta máquina",
+    "trustNotGitVerifiedDialogNote": "Observação: a pasta do projeto não é um repositório git, portanto esta aprovação se baseia apenas na sua confirmação e não tem garantia do git.",
+    "approved": "Aprovado",
+    "rejected": "Rejeitado",
     "errorDetails": "Detalhes do Erro",
     "logs": {
       "title": "Logs de Conexão",
@@ -1371,6 +1408,7 @@
       "firstLoad": "Primeiro carregamento, buscando lista de servidores...",
       "loadedServersSuccess": "Lista de servidores carregada: {{count}} servidores encontrados",
       "loadedServersFailed": "Falha ao carregar lista de servidores: {{error}}",
+      "refreshOnFileChange": "Arquivo de configuração MCP alterado, atualizando a lista de servidores...",
       "statusUpdateComplete": "Atualização de status completa: {{total}} servidores ({{connected}} conectados, {{failed}} falhos, {{pending}} pendentes, {{needsAuth}} precisam de auth)",
       "loadedStatusFailed": "Falha ao carregar status do servidor: {{error}}",
       "cleared": "Logs de atualização limpos",
@@ -1460,7 +1498,15 @@
     "noParams": "Sem Parâmetros",
     "required": "Obrigatório",
     "optional": "Opcional",
-    "refreshServer": "Atualizar {{name}}"
+    "refreshServer": "Atualizar {{name}}",
+    "configCopiedRedacted": "Configuração copiada para a área de transferência (valores sensíveis ocultos)",
+    "approveConfirmTitle": "Aprovar servidor MCP local do projeto",
+    "approveConfirmMessage": "Aprovar \"{{name}}\" permite que este repositório execute na sua máquina:\n\n{{target}}\n\ncom as suas permissões. Aprove apenas servidores em que você confia.",
+    "approveConfirm": "Aprovar e executar",
+    "approveConfirmUnknownTarget": "um comando não especificado",
+    "copyConfigWarningTitle": "Copiar configuração de um projeto",
+    "copyConfigWarningMessage": "\"{{name}}\" está definido no .mcp.json deste repositório. A configuração pode conter credenciais do autor do repositório, não suas. Copie apenas se pretende usar este servidor.",
+    "copyConfigWarningConfirm": "Copiar mesmo assim"
   },
   "tools": {
     "toolCall": "Chamada de Ferramenta",

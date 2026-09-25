@@ -38,6 +38,7 @@ import {
   prepareSessionReplayBoundary,
   processCodexEventStream,
 } from './codex-event-handler.js';
+import { loadEnvFile, applyEnvFileVars } from '../../utils/envLoader.js';
 
 // Codex CLI rejects empty stdin even when --image is present.
 const EMPTY_PROMPT_SENTINEL = '\u2063';
@@ -77,6 +78,8 @@ export function buildCodexRunInput(message, attachments = []) {
  * @param {string} reasoningEffort - Reasoning effort level (optional)
  * @param {string} serviceTier - Codex service tier; "fast" matches Codex CLI /fast (optional)
  * @param {Array} attachments - Image attachments in local_image format (optional)
+ * @param {string|null} envFile - Path to a .env file whose variables are loaded into
+ *   process.env before the Codex SDK builds the child env (optional; same behavior as claude/grok)
  */
 export async function sendMessage(
   message,
@@ -88,7 +91,8 @@ export async function sendMessage(
   apiKey = null,
   reasoningEffort = 'medium',
   serviceTier = null,
-  attachments = []
+  attachments = [],
+  envFile = null
 ) {
   let streamStarted = false;
   let streamEnded = false;
@@ -102,6 +106,21 @@ export async function sendMessage(
 
   try {
     const normalizedPermissionMode = normalizeCodexPermissionMode(permissionMode || 'default');
+
+    // Apply the user's .env file (same behavior as claude/grok channels).
+    // Must run before buildCodexCliEnvironment(process.env) below, so the
+    // vars are included in the sanitized env passed to the Codex SDK.
+    // Security: loadEnvFile validates the path and filters dangerous env vars.
+    // Always provide a base directory for path validation to prevent path traversal.
+    if (envFile) {
+      // Always provide a base directory for path validation to prevent path
+      // traversal. If none is available, loadEnvFile fails closed rather than
+      // reading an arbitrary *.env* path (see validateEnvFilePath).
+      const baseDir = cwd && cwd.trim() !== '' ? cwd : (process.env.IDEA_PROJECT_PATH || process.env.PROJECT_PATH || null);
+      const envVars = await loadEnvFile(envFile, baseDir);
+      // Shared apply site: "only if unset" + the env-file denylist (incl. PATH).
+      applyEnvFileVars(envVars);
+    }
 
     console.log('[DEBUG] Codex sendMessage called with params:', {
       threadId,
@@ -386,6 +405,19 @@ export async function sendMessage(
  * @param {string} serverId
  * @param {Object} rawServerConfig
  */
+/**
+ * Helper: write a single line to stdout and await flush completion.
+ * Awaiting the callback guarantees the entire payload — including the
+ * trailing newline —has been accepted by the OS pipe buffer before this
+ * function returns. This prevents stderr writes (merged via
+ * redirectErrorStream(true) on the Java side) from interleaving with
+ * large JSON payloads and corrupting them.
+ * @param {string} line - Line to write (should already include trailing \n)
+ */
+const writeLineAndWait = (line) => new Promise((resolve) => {
+  process.stdout.write(line, 'utf8', resolve);
+});
+
 export async function getMcpServerTools(serverId, rawServerConfig) {
   try {
     if (!serverId) {
@@ -395,8 +427,7 @@ export async function getMcpServerTools(serverId, rawServerConfig) {
         error: 'Missing serverId',
         tools: []
       };
-      console.log('[MCP_SERVER_TOOLS]' + JSON.stringify(invalid));
-      console.log(JSON.stringify(invalid));
+      await writeLineAndWait('[MCP_SERVER_TOOLS]' + JSON.stringify(invalid) + '\n');
       return;
     }
 
@@ -407,8 +438,7 @@ export async function getMcpServerTools(serverId, rawServerConfig) {
         error: 'Missing serverConfig',
         tools: []
       };
-      console.log('[MCP_SERVER_TOOLS]' + JSON.stringify(invalid));
-      console.log(JSON.stringify(invalid));
+      await writeLineAndWait('[MCP_SERVER_TOOLS]' + JSON.stringify(invalid) + '\n');
       return;
     }
 
@@ -426,8 +456,9 @@ export async function getMcpServerTools(serverId, rawServerConfig) {
     };
 
     const resultJson = JSON.stringify(result);
-    console.log('[MCP_SERVER_TOOLS]' + resultJson);
-    console.log(resultJson);
+    // Await full flush to prevent stderr interleaving with large JSON
+    // payloads (>64KB OS pipe buffer) that corrupts the output.
+    await writeLineAndWait('[MCP_SERVER_TOOLS]' + resultJson + '\n');
   } catch (error) {
     const errorResult = {
       success: false,
@@ -436,8 +467,7 @@ export async function getMcpServerTools(serverId, rawServerConfig) {
       tools: []
     };
     const resultJson = JSON.stringify(errorResult);
-    console.log('[MCP_SERVER_TOOLS]' + resultJson);
-    console.log(resultJson);
+    await writeLineAndWait('[MCP_SERVER_TOOLS]' + resultJson + '\n');
   }
 }
 

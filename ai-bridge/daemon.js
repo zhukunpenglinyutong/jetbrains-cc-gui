@@ -65,7 +65,24 @@ import {
   getRuntimeSnapshot as getZcodeRuntimeSnapshot
 } from './services/zcode/persistent-zcode-service.js';
 import { injectStartupEnvVars, isWebviewControlledEnvVar, isDangerousEnvVar } from './config/api-config.js';
+import { loadEnvFile, applyEnvFileVars } from './utils/envLoader.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
+import { format } from 'node:util';
+
+// =============================================================================
+// Debug logging
+// =============================================================================
+
+// Matches envLoader.js: same CLAUDE_DEBUG switch, same prefix. Diagnostics here
+// are opt-in because the Java bridge copies this daemon's stderr verbatim into a
+// persistent idea.log (DaemonBridge), so anything printed unconditionally is
+// effectively permanent. Callers must pass NAMES / booleans, never values.
+const DAEMON_DEBUG = process.env.CLAUDE_DEBUG === '1' || process.env.CLAUDE_DEBUG === 'true';
+function debugLog(...args) {
+  if (DAEMON_DEBUG) {
+    console.error('[DEBUG]', format(...args));
+  }
+}
 
 // =============================================================================
 // Startup Environment Setup (must run before any HTTPS connection)
@@ -86,6 +103,16 @@ injectStartupEnvVars();
 const DAEMON_VERSION = '1.0.0';
 const DAEMON_IDLE_TIMEOUT_MS = 3 * 60 * 1000;
 const DAEMON_IDLE_CHECK_INTERVAL_MS = 15 * 1000;
+
+// Bounds on the idle-shutdown deferral queue. stdin is a pipe from our own Java
+// process, so these are a belt-and-braces guard against an unbounded buffer if
+// the IDE (or a wedged cleanup) ever keeps writing while the daemon waits: one
+// giant line, or thousands of lines, would otherwise sit in memory until the
+// idle shutdown resolved. Exceeding the queue cap is not an error we can just
+// drop on — the commands are the user's work — so we abort the idle wait and
+// drain instead (see handleInputLine).
+const MAX_DEFERRED_IDLE_LINES = 64;
+const MAX_INPUT_LINE_LENGTH = 8 * 1024 * 1024;
 
 // =============================================================================
 // State
@@ -463,12 +490,69 @@ async function processRequest(request) {
   const savedEnv = {};
 
   try {
+    // Parse method: "claude.send" -> provider="claude", command="send"
+    const dotIndex = method.indexOf('.');
+    if (dotIndex < 0) {
+      throw new Error(`Invalid method format: ${method}. Expected "provider.command"`);
+    }
+    const provider = method.substring(0, dotIndex);
+    const command = method.substring(dotIndex + 1);
+
+    // Build stdinData from params (mimics what channel-manager.js does)
+    const stdinData = { ...params };
+    // Extract envFile from params.env into stdinData.envFile so downstream
+    // handlers (buildRequestContext, message-sender) can access it.
+    if (params.env && typeof params.env === 'object' && params.env.envFile) {
+      stdinData.envFile = params.env.envFile;
+    }
+    delete stdinData.env; // env is handled separately
+
+    // Load env file for any command that carries envFile.
+    // This ensures env vars are available in process.env before MCP server
+    // config is loaded (MCP servers read ${VAR} placeholders from env).
+    // During preconnect, the loaded vars persist for the session. For
+    // send/sendWithAttachments commands, the vars are applied again to
+    // ensure they're available even if preconnect ran before envFile was
+    // configured.
+    if (stdinData.envFile) {
+      // Security: validate envFile path against project cwd to prevent path
+      // traversal. baseDir may legitimately be null (the Java bridge can fail to
+      // report a cwd); loadEnvFile then fails closed rather than reading an
+      // arbitrary *.env* path anywhere on disk — see validateEnvFilePath.
+      const baseDir = stdinData.cwd || process.env.IDEA_PROJECT_PATH || null;
+      debugLog('daemon.js: loading env file for method=%s (baseDir %s)', method, baseDir ? 'known' : 'MISSING');
+      const envVars = await loadEnvFile(stdinData.envFile, baseDir);
+      // Single shared apply site: owns the "only if unset" rule and the
+      // env-file denylist (incl. PATH), and records prior values into savedEnv
+      // so the finally-restore below puts process.env back.
+      const { applied, skipped } = applyEnvFileVars(envVars, { savedEnv });
+      // NAMES only, and behind CLAUDE_DEBUG. The daemon's stderr is mirrored
+      // line-by-line into a persistent idea.log by DaemonBridge, so any value
+      // printed here — including values that were ALREADY in process.env —
+      // would sit on disk indefinitely.
+      debugLog(
+        'daemon.js: env file applied %d vars (%s), skipped %d (%s)',
+        applied.length, applied.join(', '),
+        skipped.length, skipped.join(', ')
+      );
+    }
+
     // Apply environment variables from params (with save for restore).
     // NOTE: Heartbeat/status requests bypass the command queue and may run
     // concurrently. This is safe because they never read process.env values
     // set here — they only return timestamps and memory usage.
     if (params.env && typeof params.env === 'object') {
+      // Presence only, never the value: params.env carries settings.json env
+      // (API keys, tokens) and envFile is an absolute path on the user's disk.
+      debugLog('daemon.js: params.env has %d keys, envFile %s',
+        Object.keys(params.env).length,
+        params.env.envFile ? 'present' : 'absent');
       for (const [key, value] of Object.entries(params.env)) {
+        // envFile is handled separately (loadEnvFile) and must not leak into
+        // process.env — every child process would otherwise inherit it.
+        if (key === 'envFile') {
+          continue;
+        }
         // Request env can include settings.json values. Do not let stale
         // environment controls override the webview's per-turn model, context,
         // or reasoning selections.
@@ -484,24 +568,16 @@ async function processRequest(request) {
           continue;
         }
         if (value !== undefined && value !== null) {
-          // Save original value (undefined means key didn't exist)
-          savedEnv[key] = process.env[key];
+          // Save original value only once. The env-file loop above may have
+          // already saved the true original; overwriting it here would make
+          // the finally-restore leave the value permanently in process.env.
+          if (!(key in savedEnv)) {
+            savedEnv[key] = process.env[key];
+          }
           process.env[key] = String(value);
         }
       }
     }
-
-    // Parse method: "claude.send" -> provider="claude", command="send"
-    const dotIndex = method.indexOf('.');
-    if (dotIndex < 0) {
-      throw new Error(`Invalid method format: ${method}. Expected "provider.command"`);
-    }
-    const provider = method.substring(0, dotIndex);
-    const command = method.substring(dotIndex + 1);
-
-    // Build stdinData from params (mimics what channel-manager.js does)
-    const stdinData = { ...params };
-    delete stdinData.env; // env is handled separately
 
     if (provider === 'claude' && command === 'send') {
       await sendMessagePersistent(stdinData);
@@ -719,6 +795,17 @@ async function runDaemonMain() {
     // Skip empty lines
     if (!line.trim()) return;
 
+    // Refuse absurdly long lines before they reach JSON.parse. readline has
+    // already buffered the whole line by this point, so this only bounds what we
+    // retain and parse, not what the OS handed us.
+    if (line.length > MAX_INPUT_LINE_LENGTH) {
+      _originalStderrWrite(
+        `[daemon] Rejected input line of ${line.length} bytes (limit ${MAX_INPUT_LINE_LENGTH})\n`,
+        'utf8'
+      );
+      return;
+    }
+
     let request;
     try {
       request = JSON.parse(line);
@@ -732,6 +819,9 @@ async function runDaemonMain() {
 
     if (request.method === 'idle_shutdown_ack'
         || request.method === 'idle_shutdown_cancel') {
+      // Defense in depth: if the daemon has already retired (e.g., explicit
+      // shutdown raced with the idle ack), reject stale idle lifecycle commands.
+      if (!isDaemonMode) return;
       if (request.params?.token !== pendingIdleShutdownToken
           || pendingIdleShutdownToken === null) return;
       if (request.method === 'idle_shutdown_cancel') {
@@ -765,14 +855,33 @@ async function runDaemonMain() {
       // Wait until provider cleanup finishes, or until Java resolves the idle
       // request. Processing now could let cleanup close a newly made runtime.
       if (idleShutdownInFlight && request.method !== 'shutdown') {
-        deferredIdleLines.push(line);
+        // If pendingIdleShutdownToken is null while idleShutdownInFlight is true,
+        // the idle shutdown process already completed or errored out without
+        // properly clearing idleShutdownInFlight. Reset state and process the
+        // command immediately to avoid a deadlock where deferred commands
+        // are never processed.
         if (pendingIdleShutdownToken === null) {
-          idleShutdownGeneration++;
+          idleShutdownInFlight = false;
+        } else if (deferredIdleLines.length >= MAX_DEFERRED_IDLE_LINES) {
+          // Too much has piled up behind a slow idle shutdown. Stop waiting for
+          // it rather than grow without bound: cancel the wait (which clears
+          // idleShutdownInFlight) and drain what we already hold. The generation
+          // check in the reaper makes abandoning the shutdown safe — runtimes it
+          // was about to close are simply not closed.
+          _originalStderrWrite(
+            `[daemon] Deferred command queue hit the ${MAX_DEFERRED_IDLE_LINES}-line cap;`
+            + ' aborting the idle shutdown and draining\n',
+            'utf8'
+          );
+          cancelPendingIdleShutdown();
+          for (const deferredLine of deferredIdleLines.splice(0)) {
+            handleInputLine(deferredLine);
+          }
+        } else {
+          deferredIdleLines.push(line);
+          return;
         }
-        return;
       }
-      // Explicit shutdown may bypass the idle wait because Java is disposing
-      // of this daemon regardless of any queued work.
       if (idleShutdownInFlight) {
         if (pendingIdleShutdownToken !== null) {
           cancelPendingIdleShutdown();

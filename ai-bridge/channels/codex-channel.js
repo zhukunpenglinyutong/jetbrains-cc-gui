@@ -23,6 +23,7 @@ export async function handleCodexCommand(command, args, stdinData) {
           model,
           baseUrl,
           apiKey,
+          envFile,
           reasoningEffort,
           serviceTier,
           attachments  // Image attachments (local_image format)
@@ -37,7 +38,8 @@ export async function handleCodexCommand(command, args, stdinData) {
           apiKey || '',
           (reasoningEffort || 'medium'),
           serviceTier || '',
-          attachments || []  // Pass attachments to message service
+          attachments || [],  // Pass attachments to message service
+          envFile || ''
         );
       } else {
         await codexSendMessage(args[0], args[1], args[2], args[3], args[4]);

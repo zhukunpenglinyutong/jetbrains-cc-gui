@@ -14,6 +14,7 @@ export async function handleGrokCommand(command, args, stdinData) {
   switch (command) {
     case 'send': {
       if (stdinData && (stdinData.message !== undefined || stdinData.prompt !== undefined)) {
+        console.error('[DEBUG] grok-channel: stdinData.envFile=' + (stdinData.envFile || '(empty)'));
         const options = {
           message: stdinData.message ?? stdinData.prompt ?? '',
           sessionId: stdinData.sessionId || '',
@@ -29,6 +30,7 @@ export async function handleGrokCommand(command, args, stdinData) {
           agentPrompt: stdinData.agentPrompt || '',
           streaming: stdinData.streaming !== undefined ? stdinData.streaming : true,
           reasoningEffort: stdinData.reasoningEffort || '',
+          envFile: stdinData.envFile || '',
         };
         await grokSendMessage(options);
       } else {
