@@ -114,7 +114,10 @@ test('getClaudeProjectKey matches the session writer for common paths', () => {
 });
 
 test('getClaudeProjectKey resolves symlinked project paths like the CLI (issue #1789)', () => {
-  const realDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-key-real-'));
+  const created = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-key-real-'));
+  // macOS tmpdir is /var/folders, whose realpath is /private/var/folders.
+  // The key function realpaths, so the expected key must use that same path.
+  const realDir = fs.realpathSync(created);
   const linkDir = `${realDir}-link`;
   try {
     let linkCreated = true;

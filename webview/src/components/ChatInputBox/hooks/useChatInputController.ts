@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import type {
   ChatInputBoxHandle,
@@ -292,17 +292,18 @@ export function useChatInputController({
     handleCompositionEnd,
   });
 
-  const handleIdeaSend = useEffectEvent(() => {
-    if (!isComposingRef.current) {
-      handleSubmit();
-    }
-  });
+  const handleSubmitRef = useRef(handleSubmit);
+  handleSubmitRef.current = handleSubmit;
 
   useEffect(() => {
-    const handler = () => handleIdeaSend();
+    const handler = () => {
+      if (!isComposingRef.current) {
+        handleSubmitRef.current();
+      }
+    };
     document.addEventListener('ideaSend', handler);
     return () => document.removeEventListener('ideaSend', handler);
-  }, []);
+  }, [isComposingRef]);
 
   // Paste and drop hook
   const { handlePaste, handleDragOver, handleDrop } = usePasteAndDrop({
