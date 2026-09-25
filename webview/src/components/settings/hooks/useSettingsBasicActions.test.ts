@@ -282,4 +282,101 @@ describe('useSettingsBasicActions', () => {
 
     expect(window.sendToJava).not.toHaveBeenCalled();
   });
+
+  describe('env file', () => {
+    it('starts in the neutral unknown state, not a default "configured"', () => {
+      const { result } = renderHook(() => useSettingsBasicActions({}));
+      expect(result.current.envFileState).toBe('unknown');
+      expect(result.current.envFileError).toBeNull();
+    });
+
+    it('sends a trimmed path', () => {
+      const { result } = renderHook(() => useSettingsBasicActions({}));
+
+      act(() => {
+        result.current.handleEnvFileChange('  /projects/app/.env.local  ');
+      });
+      act(() => {
+        result.current.handleSaveEnvFile();
+      });
+
+      expect(window.sendToJava).toHaveBeenCalledWith(
+        'set_env_file:{"envFile":"/projects/app/.env.local"}'
+      );
+      expect(result.current.envFileError).toBeNull();
+      expect(result.current.savingEnvFile).toBe(true);
+    });
+
+    it('sends an empty envFile as the explicit opt-out', () => {
+      const { result } = renderHook(() => useSettingsBasicActions({}));
+
+      act(() => {
+        result.current.handleEnvFileChange('   ');
+      });
+      act(() => {
+        result.current.handleSaveEnvFile();
+      });
+
+      expect(window.sendToJava).toHaveBeenCalledWith('set_env_file:{"envFile":""}');
+    });
+
+    it('refuses to send a traversing path and reports the reason', () => {
+      const { result } = renderHook(() => useSettingsBasicActions({}));
+
+      act(() => {
+        result.current.handleEnvFileChange('../../etc/passwd');
+      });
+      act(() => {
+        result.current.handleSaveEnvFile();
+      });
+
+      expect(window.sendToJava).not.toHaveBeenCalled();
+      expect(result.current.envFileError).toBe('parentTraversal');
+      expect(result.current.savingEnvFile).toBe(false);
+    });
+
+    it('refuses to send a path with a NUL byte', () => {
+      const { result } = renderHook(() => useSettingsBasicActions({}));
+
+      act(() => {
+        result.current.handleEnvFileChange('/projects/app/.env\u0000.txt');
+      });
+      act(() => {
+        result.current.handleSaveEnvFile();
+      });
+
+      expect(window.sendToJava).not.toHaveBeenCalled();
+      expect(result.current.envFileError).toBe('invalidCharacters');
+    });
+
+    it('clears the error as soon as the user edits the field again', () => {
+      const { result } = renderHook(() => useSettingsBasicActions({}));
+
+      act(() => {
+        result.current.handleEnvFileChange('..');
+      });
+      act(() => {
+        result.current.handleSaveEnvFile();
+      });
+      expect(result.current.envFileError).toBe('parentTraversal');
+
+      act(() => {
+        result.current.handleEnvFileChange('/projects/app/.env');
+      });
+
+      expect(result.current.envFileError).toBeNull();
+      expect(result.current.envFile).toBe('/projects/app/.env');
+    });
+
+    it('resets to auto-discovery with the dedicated reset payload', () => {
+      const { result } = renderHook(() => useSettingsBasicActions({}));
+
+      act(() => {
+        result.current.handleResetEnvFile();
+      });
+
+      expect(window.sendToJava).toHaveBeenCalledWith('set_env_file:{"reset":true}');
+      expect(result.current.savingEnvFile).toBe(true);
+    });
+  });
 });

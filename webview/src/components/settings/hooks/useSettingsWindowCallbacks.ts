@@ -9,6 +9,8 @@ import { normalizeAiFeatureConfig, DEFAULT_COMMIT_AI_CONFIG } from '../../../typ
 import type { UiFontConfig, CodeFontConfig } from './useSettingsBasicActions';
 import type { PromptEnhancerConfig } from '../../../types/promptEnhancer';
 import { normalizePromptEnhancerConfig } from '../../../types/promptEnhancer';
+import type { EnvFileState } from '../../../types/envFile';
+import { parseEnvFileUpdate } from '../../../types/envFile';
 import type { AlertType } from '../../AlertDialog';
 import type { ToastMessage } from '../../Toast';
 import {
@@ -67,6 +69,8 @@ export interface SettingsWindowCallbacksDeps {
   setWorkingDirectory: (dir: string) => void;
   setSavingWorkingDirectory: (saving: boolean) => void;
   setEnvFile: (path: string) => void;
+  /** Optional so hosts that don't track the effective state still type-check. */
+  setEnvFileState?: (state: EnvFileState) => void;
   setSavingEnvFile: (saving: boolean) => void;
   setCommitPrompt: (prompt: string) => void;
   setSavingCommitPrompt: (saving: boolean) => void;
@@ -176,6 +180,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       d().setSavingNodePath(false);
       d().setSavingClaudeCliPath(false);
       d().setSavingWorkingDirectory(false);
+      d().setSavingEnvFile(false);
       d().setSavingCommitPrompt(false);
       d().setSavingProjectCommitPrompt(false);
     };
@@ -223,14 +228,12 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
     };
 
     window.updateEnvFile = (jsonStr: string) => {
-      try {
-        const data = JSON.parse(jsonStr);
-        d().setEnvFile(data.envFile || '');
-        d().setSavingEnvFile(false);
-      } catch (error) {
-        console.error('[SettingsView] Failed to parse env file:', error);
-        d().setSavingEnvFile(false);
-      }
+      // parseEnvFileUpdate never throws: a malformed payload lands on the
+      // neutral 'unknown' state instead of a fake "configured" one.
+      const update = parseEnvFileUpdate(jsonStr);
+      d().setEnvFile(update.envFile);
+      d().setEnvFileState?.(update.state);
+      d().setSavingEnvFile(false);
     };
 
     window.showSuccess = (message: string) => {

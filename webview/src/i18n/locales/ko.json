@@ -184,7 +184,24 @@
         "projectLevel": "프로젝트 레벨",
         "placeholder": "예: /path/to/.env 또는 비워두기",
         "hint": "Claude Code와 Grok 모두에서 환경 변수를 로드하는 .env 파일을 지정합니다.",
-        "invalidPath": "잘못된 파일 경로: 파일이 존재하지 않거나 읽을 수 없습니다"
+        "invalidPath": "잘못된 파일 경로: 파일이 존재하지 않거나 읽을 수 없습니다",
+        "reset": "자동 감지로 초기화",
+        "resetHint": "사용자 지정 경로를 지우고 <project>/.env 자동 감지를 다시 활성화합니다",
+        "state": {
+          "notConfigured": "자동",
+          "notConfiguredDetail": "사용자 지정 경로가 없습니다 — 프로젝트 루트의 .env를 자동으로 찾습니다",
+          "configured": "사용자 지정 경로",
+          "configuredDetail": "아래 파일이 새 세션마다 로드됩니다",
+          "disabled": "비활성화됨",
+          "disabledDetail": "env 파일을 로드하지 않으며 자동 감지도 꺼져 있습니다",
+          "unknown": "상태 알 수 없음",
+          "unknownDetail": "플러그인에서 유효한 상태를 읽지 못했습니다"
+        },
+        "error": {
+          "invalidCharacters": "잘못된 경로: 제어 문자와 NUL 바이트는 사용할 수 없습니다",
+          "parentTraversal": "잘못된 경로: \"..\" 세그먼트는 사용할 수 없습니다",
+          "tooLong": "잘못된 경로: 너무 깁니다"
+        }
       },
       "fontSize": {
         "label": "글꼴 크기",
@@ -1302,6 +1319,19 @@
     "statusNeedsAuth": "인증 필요",
     "statusPending": "연결 중...",
     "statusUnknown": "알 수 없음",
+    "projectLocal": "프로젝트 로컬",
+    "projectLocalReadOnly": "이 서버는 .mcp.json에서 관리되므로 UI에서 수정할 수 없습니다",
+    "pendingApprovalBadge": "승인 대기",
+    "pendingApprovalDesc": "프로젝트 로컬 MCP 서버 승인 대기 중",
+    "rejectedBadge": "거부됨",
+    "rejectedDesc": "거부된 프로젝트 로컬 MCP 서버",
+    "approveTooltip": "서버 승인",
+    "rejectTooltip": "서버 거부",
+    "trustNotGitVerifiedBadge": "git 미검증",
+    "trustNotGitVerifiedDesc": "이 프로젝트 폴더는 git으로 관리되지 않으므로 이 .mcp.json 서버의 승인이 이 컴퓨터의 로컬 승인임을 git으로 확인할 수 없습니다",
+    "trustNotGitVerifiedDialogNote": "참고: 프로젝트 폴더가 git 저장소가 아니므로 이 승인은 사용자의 확인에만 의존하며 git의 보증을 받지 못합니다.",
+    "approved": "승인됨",
+    "rejected": "거부됨",
     "errorDetails": "오류 세부정보",
     "logs": {
       "title": "연결 로그",
@@ -1414,7 +1444,15 @@
     "noParams": "매개변수 없음",
     "required": "필수",
     "optional": "선택사항",
-    "refreshServer": "{{name}} 새로고침"
+    "refreshServer": "{{name}} 새로고침",
+    "configCopiedRedacted": "설정을 클립보드에 복사했습니다(민감한 값은 마스킹됨)",
+    "approveConfirmTitle": "프로젝트 로컬 MCP 서버 승인",
+    "approveConfirmMessage": "\"{{name}}\"을(를) 승인하면 이 저장소가 사용자의 컴퓨터에서 다음을 실행할 수 있습니다:\n\n{{target}}\n\n사용자의 권한으로 실행됩니다. 신뢰하는 서버만 승인하세요.",
+    "approveConfirm": "승인하고 실행",
+    "approveConfirmUnknownTarget": "지정되지 않은 명령",
+    "copyConfigWarningTitle": "프로젝트 설정 복사",
+    "copyConfigWarningMessage": "\"{{name}}\"은(는) 이 저장소의 .mcp.json에 정의되어 있습니다. 해당 설정에는 저장소 작성자의 자격 증명이 포함되어 있을 수 있으며 사용자의 것이 아닙니다. 이 서버를 사용할 계획이 있을 때만 복사하세요.",
+    "copyConfigWarningConfirm": "그대로 복사"
   },
   "tools": {
     "toolCall": "도구 호출",

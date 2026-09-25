@@ -7,9 +7,11 @@ import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
+import com.github.claudecodegui.provider.common.EnvFileResolver;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.util.PathUtils;
 
 import java.io.File;
 import java.util.List;
@@ -439,33 +441,49 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
 
     private String resolveEnvFile(String cwd) {
         try {
-            String projectPath = cwd != null ? cwd : null;
-            String envFile = settingsService.getEnvFile(projectPath);
-            if (envFile == null) {
-                // No per-project setting configured — try the default ".env"
-                // in the project root so users get automatic env loading
-                // without any configuration.
-                if (cwd != null) {
-                    java.io.File defaultEnvFile = new java.io.File(cwd, ".env");
-                    if (defaultEnvFile.exists() && defaultEnvFile.isFile()) {
-                        envFile = defaultEnvFile.getAbsolutePath();
-                        LOG.debug("[ClaudeSDKBridge.resolveEnvFile] auto-discovered default .env at " + envFile);
-                    } else {
-                        LOG.debug("[ClaudeSDKBridge.resolveEnvFile] no env file configured and no .env found in cwd");
-                    }
-                } else {
-                    LOG.debug("[ClaudeSDKBridge.resolveEnvFile] envFile is null and no cwd for default discovery");
-                }
-            } else {
-                // Resolve relative env file paths against the project cwd
-                java.io.File envFileObj = new java.io.File(envFile);
-                if (!envFileObj.isAbsolute() && cwd != null) {
-                    envFileObj = new java.io.File(cwd, envFile);
-                    envFile = envFileObj.getAbsolutePath();
-                }
-                LOG.debug("[ClaudeSDKBridge.resolveEnvFile] envFile=" + envFile);
+            String envFile = settingsService.getEnvFile(cwd);
+
+            // State 3: the user explicitly opted out — load nothing, and never
+            // fall back to the repository-controlled <cwd>/.env.
+            if (CodemossSettingsService.isEnvFileDisabled(envFile)) {
+                LOG.debug("[ClaudeSDKBridge.resolveEnvFile] env file explicitly disabled for cwd=" + cwd);
+                return null;
             }
-            return envFile;
+
+            String projectDir = EnvFileResolver.resolveProjectDir(cwd);
+
+            // State 1: never configured — try the default ".env" in the project root
+            // so users get automatic env loading without any configuration.
+            if (envFile == null) {
+                if (projectDir != null) {
+                    java.io.File defaultEnvFile = new java.io.File(projectDir, ".env");
+                    if (defaultEnvFile.exists() && defaultEnvFile.isFile()) {
+                        String discovered = PathUtils.normalizeAbsolute(defaultEnvFile.getPath());
+                        LOG.debug("[ClaudeSDKBridge.resolveEnvFile] auto-discovered default .env at " + discovered);
+                        return discovered;
+                    }
+                    LOG.debug("[ClaudeSDKBridge.resolveEnvFile] no env file configured and no .env found in project dir");
+                } else {
+                    LOG.debug("[ClaudeSDKBridge.resolveEnvFile] envFile is null and no project dir for default discovery");
+                }
+                return null;
+            }
+
+            // State 2: explicitly configured. Relative paths always resolve against
+            // the project directory — never against the IDE process CWD, which would
+            // make the loaded file depend on where the IDE was launched from.
+            java.io.File envFileObj = new java.io.File(envFile);
+            if (!envFileObj.isAbsolute()) {
+                if (projectDir == null) {
+                    LOG.debug("[ClaudeSDKBridge.resolveEnvFile] refusing to resolve relative env file without a project dir");
+                    return null;
+                }
+                envFileObj = new java.io.File(projectDir, envFile);
+            }
+            String resolved = PathUtils.normalizeAbsolute(envFileObj.getPath());
+            LOG.debug("[ClaudeSDKBridge.resolveEnvFile] envFile=" + resolved);
+            return resolved;
+
         } catch (Exception e) {
             LOG.warn("[ClaudeSDKBridge] Failed to read env file setting: " + e.getMessage());
             return null;
@@ -487,7 +505,16 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * Get MCP server connection status.
      */
     public CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
-        return mcpQueryService.getMcpServerStatus(normalizeCwdForNode(cwd));
+        return getMcpServerStatus(cwd, null);
+    }
+
+    /**
+     * Get MCP server connection status, optionally restricted to specific servers.
+     * Verifying a server spawns a process (stdio) or issues a request (http/sse),
+     * so a targeted list avoids re-checking every configured server.
+     */
+    public CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd, List<String> serverNames) {
+        return mcpQueryService.getMcpServerStatus(normalizeCwdForNode(cwd), serverNames);
     }
 
     /**

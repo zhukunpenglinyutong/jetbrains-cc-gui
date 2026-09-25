@@ -92,7 +92,9 @@ export async function handleClaudeCommand(command, args, stdinData) {
 
     case 'getMcpServerStatus': {
       const cwd = stdinData?.cwd || args[0] || null;
-      await claudeGetMcpServerStatus(cwd);
+      // Optional: check only the named servers instead of the whole config.
+      const serverNames = Array.isArray(stdinData?.serverNames) ? stdinData.serverNames : null;
+      await claudeGetMcpServerStatus(cwd, serverNames);
       break;
     }
 

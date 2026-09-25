@@ -1,5 +1,6 @@
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
+import type { EnvFilePathIssue, EnvFileState } from '../../../types/envFile';
 
 export interface EnvironmentTabProps {
   nodePath: string;
@@ -20,8 +21,40 @@ export interface EnvironmentTabProps {
   onEnvFileChange?: (path: string) => void;
   onSaveEnvFile?: () => void;
   savingEnvFile?: boolean;
-  envFileError?: string;
+  /** Effective state reported by the backend; 'unknown' until it answers. */
+  envFileState?: EnvFileState;
+  /** Back to auto-discovery of <project>/.env. */
+  onResetEnvFile?: () => void;
+  /** Client-side rejection reason, translated here. */
+  envFileError?: EnvFilePathIssue | null;
 }
+
+/** Icon + i18n key describing each effective state. */
+const ENV_FILE_STATE_DISPLAY: Record<
+  EnvFileState,
+  { icon: string; labelKey: string; detailKey: string }
+> = {
+  notConfigured: {
+    icon: 'codicon-settings-gear',
+    labelKey: 'settings.basic.envFile.state.notConfigured',
+    detailKey: 'settings.basic.envFile.state.notConfiguredDetail',
+  },
+  configured: {
+    icon: 'codicon-file',
+    labelKey: 'settings.basic.envFile.state.configured',
+    detailKey: 'settings.basic.envFile.state.configuredDetail',
+  },
+  disabled: {
+    icon: 'codicon-circle-slash',
+    labelKey: 'settings.basic.envFile.state.disabled',
+    detailKey: 'settings.basic.envFile.state.disabledDetail',
+  },
+  unknown: {
+    icon: 'codicon-question',
+    labelKey: 'settings.basic.envFile.state.unknown',
+    detailKey: 'settings.basic.envFile.state.unknownDetail',
+  },
+};
 
 const EnvironmentTab = ({
   nodePath,
@@ -42,7 +75,9 @@ const EnvironmentTab = ({
   onEnvFileChange = () => {},
   onSaveEnvFile = () => {},
   savingEnvFile = false,
-  envFileError = '',
+  envFileState = 'unknown',
+  onResetEnvFile = () => {},
+  envFileError = null,
 }: EnvironmentTabProps) => {
   const { t } = useTranslation();
 
@@ -59,6 +94,10 @@ const EnvironmentTab = ({
 
   const majorVersion = parseMajorVersion(nodeVersion);
   const isVersionTooLow = nodeVersion && majorVersion > 0 && majorVersion < minNodeVersion;
+
+  // Only ever read from a closed set of keys — no user value is interpolated
+  // into markup.
+  const envStateDisplay = ENV_FILE_STATE_DISPLAY[envFileState] ?? ENV_FILE_STATE_DISPLAY.unknown;
 
   return (
     <div className={styles.tabContent}>
@@ -185,6 +224,17 @@ const EnvironmentTab = ({
             {t('settings.basic.envFile.projectLevel')}
           </span>
         </div>
+        {/* Effective state, straight from the backend. The draft field alone
+            cannot tell "opted out" from "never configured" — both look empty. */}
+        <small
+          className={styles.envFileStateRow}
+          data-testid="env-file-state"
+          data-state={envFileState}
+        >
+          <span className={`codicon ${envStateDisplay.icon}`} />
+          <span className={styles.envFileStateLabel}>{t(envStateDisplay.labelKey)}</span>
+          <span className={styles.envFileStateDetail}>{t(envStateDisplay.detailKey)}</span>
+        </small>
         <div className={styles.nodePathInputWrapper}>
           <input
             type="text"
@@ -206,10 +256,22 @@ const EnvironmentTab = ({
             {t('common.save')}
           </button>
         </div>
+        <div className={styles.envFileActions}>
+          <button
+            type="button"
+            className={styles.envFileResetBtn}
+            onClick={onResetEnvFile}
+            disabled={savingEnvFile}
+            title={t('settings.basic.envFile.resetHint')}
+          >
+            <span className="codicon codicon-refresh" />
+            {t('settings.basic.envFile.reset')}
+          </button>
+        </div>
         {envFileError && (
           <small className={styles.formHintError}>
             <span className="codicon codicon-error" />
-            <span>{envFileError}</span>
+            <span>{t(`settings.basic.envFile.error.${envFileError}`)}</span>
           </small>
         )}
         {!envFileError && (

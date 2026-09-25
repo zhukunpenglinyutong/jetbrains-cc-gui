@@ -184,7 +184,24 @@
         "projectLevel": "Project-level",
         "placeholder": "e.g. /path/to/.env or leave empty",
         "hint": "Specify a .env file to load environment variables for both Claude Code and Grok.",
-        "invalidPath": "Invalid file path: file does not exist or is not readable"
+        "invalidPath": "Invalid file path: file does not exist or is not readable",
+        "reset": "Reset to automatic",
+        "resetHint": "Clear the custom path and let <project>/.env be discovered automatically again",
+        "state": {
+          "notConfigured": "Automatic",
+          "notConfiguredDetail": "no custom path — .env from the project root is discovered automatically",
+          "configured": "Custom path",
+          "configuredDetail": "the file below is loaded for every new session",
+          "disabled": "Disabled",
+          "disabledDetail": "no env file is loaded, and automatic discovery is off",
+          "unknown": "State unknown",
+          "unknownDetail": "the effective state could not be read from the plugin"
+        },
+        "error": {
+          "invalidCharacters": "Invalid path: control characters and NUL bytes are not allowed",
+          "parentTraversal": "Invalid path: \"..\" segments are not allowed",
+          "tooLong": "Invalid path: it is too long"
+        }
       },
       "fontSize": {
         "label": "字體大小",
@@ -1237,6 +1254,19 @@
     "statusNeedsAuth": "Needs Authentication",
     "statusPending": "Connecting...",
     "statusUnknown": "Unknown",
+    "projectLocal": "專案本地",
+    "projectLocalReadOnly": "此伺服器由 .mcp.json 管理，無法從 UI 修改",
+    "pendingApprovalBadge": "待審核",
+    "pendingApprovalDesc": "專案本地 MCP 伺服器待審核",
+    "rejectedBadge": "已拒絕",
+    "rejectedDesc": "已拒絕的專案本地 MCP 伺服器",
+    "approveTooltip": "核准伺服器",
+    "rejectTooltip": "拒絕伺服器",
+    "trustNotGitVerifiedBadge": "未經 git 驗證",
+    "trustNotGitVerifiedDesc": "該專案資料夾不在 git 管理下，因此無法透過 git 確認此 .mcp.json 伺服器的核准是本機的本地核准",
+    "trustNotGitVerifiedDialogNote": "注意：專案資料夾不是 git 儲存庫，因此該核准僅基於你的確認，沒有 git 作為依據。",
+    "approved": "已核准",
+    "rejected": "已拒絕",
     "errorDetails": "Error Details",
     "logs": {
       "title": "Connection Logs",
@@ -1349,7 +1379,15 @@
     "noParams": "No Parameters",
     "required": "Required",
     "optional": "Optional",
-    "refreshServer": "Refresh {{name}}"
+    "refreshServer": "Refresh {{name}}",
+    "configCopiedRedacted": "設定已複製到剪貼簿（敏感值已隱藏）",
+    "approveConfirmTitle": "批准專案本機 MCP 伺服器",
+    "approveConfirmMessage": "批准「{{name}}」將允許本儲存庫在你的機器上執行：\n\n{{target}}\n\n並使用你的權限。請只批准你信任的伺服器。",
+    "approveConfirm": "批准並執行",
+    "approveConfirmUnknownTarget": "未指定的命令",
+    "copyConfigWarningTitle": "複製專案設定",
+    "copyConfigWarningMessage": "「{{name}}」定義在本儲存庫的 .mcp.json 中。其設定可能包含儲存庫作者的憑證，而非你的憑證。僅在你打算使用該伺服器時再複製。",
+    "copyConfigWarningConfirm": "仍要複製"
   },
   "tools": {
     "toolCall": "工具調用",

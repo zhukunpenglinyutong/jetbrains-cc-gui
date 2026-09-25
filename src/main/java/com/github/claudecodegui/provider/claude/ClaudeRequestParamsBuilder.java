@@ -61,7 +61,17 @@ class ClaudeRequestParamsBuilder {
         params.addProperty("message", message);
         params.addProperty("sessionId", sessionId != null ? sessionId : "");
         params.addProperty("runtimeSessionEpoch", runtimeSessionEpoch != null ? runtimeSessionEpoch : "");
-        params.addProperty("cwd", cwd != null ? cwd : "");
+        // Contract: "cwd" is either a real absolute project directory or absent.
+        // Writing "" instead made the Node side treat it as an unknown cwd, while
+        // buildDaemonEnv() rejected the very same value via isValidCwd() and dropped
+        // IDEA_PROJECT_PATH — so the bridge ended up with no base directory at all
+        // and every env file / relative path resolved against the bridge install dir.
+        String baseDir = ClaudeBridgeUtils.resolveBaseDir(cwd);
+        if (baseDir != null) {
+            params.addProperty("cwd", baseDir);
+        } else {
+            LOG.debug("[ClaudeRequestParamsBuilder] no valid cwd — omitting \"cwd\" so the bridge falls back to IDEA_PROJECT_PATH (value=" + cwd + ")");
+        }
         params.addProperty("permissionMode", permissionMode != null ? permissionMode : "");
         params.addProperty("model", model != null ? model : "");
 

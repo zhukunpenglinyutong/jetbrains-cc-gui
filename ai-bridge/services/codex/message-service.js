@@ -38,6 +38,7 @@ import {
   prepareSessionReplayBoundary,
   processCodexEventStream,
 } from './codex-event-handler.js';
+import { loadEnvFile, applyEnvFileVars } from '../../utils/envLoader.js';
 
 // Codex CLI rejects empty stdin even when --image is present.
 const EMPTY_PROMPT_SENTINEL = '\u2063';
@@ -77,6 +78,8 @@ export function buildCodexRunInput(message, attachments = []) {
  * @param {string} reasoningEffort - Reasoning effort level (optional)
  * @param {string} serviceTier - Codex service tier; "fast" matches Codex CLI /fast (optional)
  * @param {Array} attachments - Image attachments in local_image format (optional)
+ * @param {string|null} envFile - Path to a .env file whose variables are loaded into
+ *   process.env before the Codex SDK builds the child env (optional; same behavior as claude/grok)
  */
 export async function sendMessage(
   message,
@@ -88,7 +91,8 @@ export async function sendMessage(
   apiKey = null,
   reasoningEffort = 'medium',
   serviceTier = null,
-  attachments = []
+  attachments = [],
+  envFile = null
 ) {
   let streamStarted = false;
   let streamEnded = false;
@@ -102,6 +106,21 @@ export async function sendMessage(
 
   try {
     const normalizedPermissionMode = normalizeCodexPermissionMode(permissionMode || 'default');
+
+    // Apply the user's .env file (same behavior as claude/grok channels).
+    // Must run before buildCodexCliEnvironment(process.env) below, so the
+    // vars are included in the sanitized env passed to the Codex SDK.
+    // Security: loadEnvFile validates the path and filters dangerous env vars.
+    // Always provide a base directory for path validation to prevent path traversal.
+    if (envFile) {
+      // Always provide a base directory for path validation to prevent path
+      // traversal. If none is available, loadEnvFile fails closed rather than
+      // reading an arbitrary *.env* path (see validateEnvFilePath).
+      const baseDir = cwd && cwd.trim() !== '' ? cwd : (process.env.IDEA_PROJECT_PATH || process.env.PROJECT_PATH || null);
+      const envVars = await loadEnvFile(envFile, baseDir);
+      // Shared apply site: "only if unset" + the env-file denylist (incl. PATH).
+      applyEnvFileVars(envVars);
+    }
 
     console.log('[DEBUG] Codex sendMessage called with params:', {
       threadId,

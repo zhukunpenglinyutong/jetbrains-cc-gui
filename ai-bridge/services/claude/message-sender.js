@@ -10,7 +10,7 @@ import {
   buildCliEnv,
   buildWebviewControlledSettingsOverride,
 } from '../../config/api-config.js';
-import { loadEnvFile } from '../../utils/envLoader.js';
+import { loadEnvFile, applyEnvFileVars } from '../../utils/envLoader.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
 import { mapModelIdToSdkName, resolveModelFromSettings, setModelEnvironmentVariables } from '../../utils/model-utils.js';
 import { AsyncStream } from '../../utils/async-stream.js';
@@ -530,15 +530,12 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     // Load env file BEFORE MCP config expansion so ${VAR} placeholders
     // in MCP server env blocks resolve correctly.
     if (envFile) {
-      console.error('[DEBUG] message-sender: envFile path received=' + envFile);
-      const envVars = loadEnvFile(envFile);
-      const keys = Object.keys(envVars);
-      console.error('[DEBUG] message-sender: envVars loaded=' + keys.length + ' keys=' + JSON.stringify(keys));
-      for (const [k, v] of Object.entries(envVars)) {
-        if (!(k in process.env) || !process.env[k]) {
-          process.env[k] = v;
-        }
-      }
+      // Security: loadEnvFile validates the path against workingDirectory
+      // (fail-closed if that is somehow unknown) and drops denied names;
+      // applyEnvFileVars owns the "only if unset" rule so every provider
+      // behaves identically.
+      const envVars = await loadEnvFile(envFile, workingDirectory);
+      applyEnvFileVars(envVars);
     } else {
       console.error('[DEBUG] message-sender: envFile is null/empty/undefined — no env file loaded');
     }

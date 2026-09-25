@@ -7,6 +7,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { McpServer, McpServerStatusInfo, ServerToolsState, RefreshLog, CacheKeys } from '../types';
 import { sendToJava } from '../../../utils/bridge';
 import { clearToolsCache, readCache, readToolsCache, writeCache } from '../utils';
+import {
+  applyServerToolsUpdate,
+  buildServerCardIndex,
+  EMPTY_SERVER_CARD_INDEX,
+  getServerCardKey,
+  resolvePersistedCardKey,
+  type ServerCardIndex,
+} from '../serverCardKey';
 
 const TERMINAL_DISCONNECT_STATUSES = new Set<McpServerStatusInfo['status']>([
   'failed',
@@ -42,6 +50,36 @@ function getTerminalServerIds(servers: McpServer[], terminalStatusNames: Set<str
   });
 }
 
+/** Every name a status entry for this server could be keyed by. */
+function getKnownStatusKeys(servers: McpServer[]): Set<string> {
+  const keys = new Set<string>();
+  servers.forEach((server) => {
+    const id = normalizeServerKey(server.id);
+    if (id) keys.add(id);
+    const name = normalizeServerKey(server.name);
+    if (name) keys.add(name);
+  });
+  return keys;
+}
+
+/**
+ * Copy of the server list without its secrets, for persistence.
+ * env/headers hold API keys and the backend forwards them verbatim from
+ * ~/.claude.json / .mcp.json; caching them in localStorage would keep them readable
+ * on disk for the whole cache lifetime. The live state keeps the full spec — only
+ * the cached copy is trimmed.
+ */
+function toCacheableServers(servers: McpServer[]): McpServer[] {
+  return servers.map((server) => {
+    const spec = server.server;
+    if (!spec || spec.env === undefined && spec.headers === undefined) {
+      return server;
+    }
+    const { env, headers, ...restSpec } = spec;
+    return { ...server, server: restSpec };
+  });
+}
+
 export interface UseServerDataOptions {
   isCodexMode: boolean;
   messagePrefix: string;
@@ -56,7 +94,9 @@ export interface UseServerDataReturn {
   serverStatus: Map<string, McpServerStatusInfo>;
   loading: boolean;
   statusLoading: boolean;
+  /** Keyed by server card key (`getServerCardKey`), never by server id. */
   serverTools: ServerToolsState;
+  /** Server card keys (`getServerCardKey`), never server ids. */
   expandedServers: Set<string>;
 
   // State update functions
@@ -67,7 +107,7 @@ export interface UseServerDataReturn {
 
   // Data loading functions
   loadServers: () => void;
-  loadServerStatus: () => void;
+  loadServerStatus: (serverNames?: string[]) => void;
   loadServerTools: (server: McpServer, forceRefresh?: boolean) => void;
 }
 
@@ -86,21 +126,85 @@ export function useServerData({
   const [serverStatus, setServerStatus] = useState<Map<string, McpServerStatusInfo>>(new Map());
   const [loading, setLoading] = useState(true);
   const [statusLoading, setStatusLoading] = useState(false);
-  const [serverTools, setServerTools] = useState<ServerToolsState>({});
+  const [serverTools, setServerToolsState] = useState<ServerToolsState>({});
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set());
 
   // Refs
   const refreshTimersRef = useRef<number[]>([]);
   const serversRef = useRef<McpServer[]>([]);
   const terminalStatusNamesRef = useRef<Set<string>>(new Set());
+  // Card keys of the current list, and the cards waiting for a tools response, keyed by
+  // the server id the bridge will report that response under. See ../serverCardKey.
+  const cardIndexRef = useRef<ServerCardIndex>(EMPTY_SERVER_CARD_INDEX);
+  const pendingToolsCardsRef = useRef<Map<string, string[]>>(new Map());
+  const serverToolsRef = useRef<ServerToolsState>({});
 
   const setServers = useCallback((value: React.SetStateAction<McpServer[]>) => {
     // serversRef always holds the latest list, so functional updates can be
     // resolved synchronously here instead of inside the state updater.
     const next = typeof value === 'function' ? value(serversRef.current) : value;
     serversRef.current = next;
+
+    const index = buildServerCardIndex(next);
+    cardIndexRef.current = index;
+    // A card that left the list can never answer the request it made; drop the wait so a
+    // later response for that id is not handed to whatever card is queued behind it.
+    pendingToolsCardsRef.current.forEach((cardKeys, serverId) => {
+      const live = cardKeys.filter((cardKey) => index.cardKeys.has(cardKey));
+      if (live.length === 0) {
+        pendingToolsCardsRef.current.delete(serverId);
+      } else if (live.length !== cardKeys.length) {
+        pendingToolsCardsRef.current.set(serverId, live);
+      }
+    });
+
     setServersState(next);
   }, []);
+
+  /** Queue the card that asked for a tools list, so the response can be told apart. */
+  const expectToolsFor = useCallback((serverId: string, cardKey: string) => {
+    const pending = pendingToolsCardsRef.current.get(serverId) ?? [];
+    pendingToolsCardsRef.current.set(serverId, [...pending.filter((key) => key !== cardKey), cardKey]);
+  }, []);
+
+  /**
+   * Hand back the card that is waiting for the next response for this server id.
+   *
+   * The bridge identifies a tools response by server id alone, so with two colliding
+   * cards that id names both. Requests are queued in the order they were made, which is
+   * also the order the user expanded the cards in.
+   */
+  const claimToolsCard = useCallback((serverId: string): string | null => {
+    const pending = pendingToolsCardsRef.current.get(serverId);
+    if (!pending || pending.length === 0) return null;
+    const cardKey = pending.shift() as string;
+    if (pending.length === 0) {
+      pendingToolsCardsRef.current.delete(serverId);
+    }
+    return cardKey;
+  }, []);
+
+  /**
+   * `setServerTools` for the rest of the section.
+   *
+   * Everything the UI stores per card is keyed by card key, but the bridge callbacks that
+   * write this state only carry the backend server id. Translating here keeps a single
+   * key scheme in the state itself instead of asking every writer to know about both.
+   *
+   * Like `setServers`, the update is resolved against a ref rather than inside the state
+   * updater: matching an incoming update to the card that asked for it is a bookkeeping
+   * side effect (it consumes a pending request) and must happen exactly once.
+   */
+  const setServerTools = useCallback((value: React.SetStateAction<ServerToolsState>) => {
+    // A wholesale replacement ("refresh all" clears the map) leaves no card to answer an
+    // in-flight response, so the queue goes with it.
+    if (typeof value !== 'function' && !Object.keys(value).some((key) => cardIndexRef.current.cardKeys.has(key))) {
+      pendingToolsCardsRef.current.clear();
+    }
+    const next = applyServerToolsUpdate(serverToolsRef.current, value, cardIndexRef.current, claimToolsCard);
+    serverToolsRef.current = next;
+    setServerToolsState(next);
+  }, [claimToolsCard]);
 
   const clearToolsForTerminalStatuses = useCallback((
     currentServers: McpServer[],
@@ -112,6 +216,8 @@ export function useServerData({
     }
 
     terminalServerIds.forEach((serverId) => clearToolsCache(serverId, cacheKeys));
+    // Deleted by server id on purpose: setServerTools turns that into the card key(s) of
+    // every card carrying the id, and the persisted cache is keyed by the same id.
     setServerTools((previous) => {
       const next = { ...previous };
       terminalServerIds.forEach((serverId) => {
@@ -119,7 +225,7 @@ export function useServerData({
       });
       return next;
     });
-  }, [cacheKeys]);
+  }, [cacheKeys, setServerTools]);
 
   // Load server list
   const loadServers = useCallback(() => {
@@ -135,28 +241,44 @@ export function useServerData({
   }, [messagePrefix, t, onLog]);
 
   // Load server status
-  const loadServerStatus = useCallback(() => {
-    setStatusLoading(true);
+  // Passing serverNames restricts the check to those servers: verifying a server spawns a
+  // process (stdio) or issues a request (http/sse), so a full check disturbs every server.
+  const loadServerStatus = useCallback((serverNames?: string[]) => {
+    const isPartial = Array.isArray(serverNames) && serverNames.length > 0;
+    // A targeted refresh runs in the background — no section-wide spinner.
+    if (!isPartial) {
+      setStatusLoading(true);
+    }
     onLog(
       t('mcp.logs.refreshingStatus'),
       'info',
       undefined,
       undefined,
-      `get_${messagePrefix}mcp_server_status request to backend`,
+      `get_${messagePrefix}mcp_server_status request to backend`
+        + (isPartial ? ` (only: ${serverNames.join(', ')})` : ''),
       `Querying MCP server connection status via ${isCodexMode ? 'Codex' : 'Claude'} SDK`
     );
-    sendToJava(`get_${messagePrefix}mcp_server_status`, {});
+    sendToJava(
+      `get_${messagePrefix}mcp_server_status`,
+      isPartial ? { serverNames } : {}
+    );
   }, [messagePrefix, isCodexMode, t, onLog]);
 
   // Load server tools list
   const loadServerTools = useCallback((server: McpServer, forceRefresh = false) => {
+    const cardKey = getServerCardKey(server);
+    // The persisted tools cache is keyed by the backend server id (only the bridge
+    // callbacks write it), so it cannot tell two colliding cards apart. Reading it would
+    // hand one card the other card's tools; ask the backend instead.
+    const cacheIsShared = !cardIndexRef.current.hasUniqueServerId(server.id);
+
     // Check cache (unless force refresh)
-    if (!forceRefresh) {
+    if (!forceRefresh && !cacheIsShared) {
       const cachedTools = readToolsCache(server.id, cacheKeys);
       if (cachedTools && cachedTools.length > 0) {
         setServerTools(prev => ({
           ...prev,
-          [server.id]: {
+          [cardKey]: {
             tools: cachedTools,
             loading: false,
             error: undefined
@@ -175,7 +297,7 @@ export function useServerData({
     // Set loading state
     setServerTools(prev => ({
       ...prev,
-      [server.id]: {
+      [cardKey]: {
         tools: [],
         loading: true,
         error: undefined
@@ -192,8 +314,11 @@ export function useServerData({
       `get_${messagePrefix}mcp_server_tools request to backend`
     );
 
+    // The request is made on behalf of this card: remember which one, so the response —
+    // which names only the server id — lands on the right card.
+    expectToolsFor(server.id, cardKey);
     sendToJava(`get_${messagePrefix}mcp_server_tools`, { serverId: server.id, forceRefresh });
-  }, [cacheKeys, messagePrefix, t, onLog]);
+  }, [cacheKeys, messagePrefix, t, onLog, setServerTools, expectToolsFor]);
 
   // Initialization and data loading
   useEffect(() => {
@@ -244,23 +369,33 @@ export function useServerData({
       // Restore last expanded server
       if (hasValidCache) {
         try {
-          const lastServerId = localStorage.getItem(cacheKeys.LAST_SERVER_ID);
-          if (lastServerId) {
-            const serverExists = cachedServers.some(s => s.id === lastServerId);
-            if (serverExists) {
-              setExpandedServers(new Set([lastServerId]));
-              const cachedTools = readToolsCache(lastServerId, cacheKeys);
-              if (cachedTools && cachedTools.length > 0) {
-                setServerTools(prev => ({
-                  ...prev,
-                  [lastServerId]: {
-                    tools: cachedTools,
-                    loading: false,
-                    error: undefined
-                  }
-                }));
-                onLog(t('mcp.logs.loadedToolsFromCacheSimple', { count: cachedTools.length }), 'info', undefined, lastServerId);
-              }
+          // The persisted value is a card key. A value written before card keys existed
+          // is a bare server id and is only honoured when exactly one card carries that
+          // id; anything ambiguous resolves to null and simply restores nothing.
+          const cardKey = resolvePersistedCardKey(localStorage.getItem(cacheKeys.LAST_SERVER_ID), cardIndexRef.current);
+          if (cardKey) {
+            const restored = cardIndexRef.current.findServer(cardKey);
+            setExpandedServers(new Set([cardKey]));
+            // Same rule as loadServerTools: the persisted tools cache is keyed by server
+            // id, so with two cards sharing it its contents are not this card's.
+            const cachedTools = restored && cardIndexRef.current.hasUniqueServerId(restored.id)
+              ? readToolsCache(restored.id, cacheKeys)
+              : null;
+            if (cachedTools && cachedTools.length > 0) {
+              setServerTools(prev => ({
+                ...prev,
+                [cardKey]: {
+                  tools: cachedTools,
+                  loading: false,
+                  error: undefined
+                }
+              }));
+              onLog(
+                t('mcp.logs.loadedToolsFromCacheSimple', { count: cachedTools.length }),
+                'info',
+                undefined,
+                restored?.id
+              );
             }
           }
         } catch (e) {
@@ -276,6 +411,12 @@ export function useServerData({
 
     if (hasCache) {
       onLog(t('mcp.logs.usingCacheStrategy'), 'info');
+      // The cached copy is metadata-only (see toCacheableServers), so re-read the
+      // list from the backend in the background instead of making the user wait for
+      // it: editing a server must still see its env block. Cheap — it just re-parses
+      // the config files — and it does not re-run the status check, which would spawn
+      // every server's process.
+      loadServers();
     } else {
       onLog(t('mcp.logs.firstLoad'), 'info');
       loadServers();
@@ -285,7 +426,7 @@ export function useServerData({
     return () => {
       clearRefreshTimers();
     };
-  }, [cacheKeys, isCodexMode, loadServers, loadServerStatus, t, onLog, clearToolsForTerminalStatuses]);
+  }, [cacheKeys, isCodexMode, loadServers, loadServerStatus, t, onLog, clearToolsForTerminalStatuses, setServerTools]);
 
   // Register server list update callback
   useEffect(() => {
@@ -295,8 +436,9 @@ export function useServerData({
         setServers(serverList);
         clearToolsForTerminalStatuses(serverList, terminalStatusNamesRef.current);
         setLoading(false);
-        // Persist to cache so subsequent mounts can load instantly
-        writeCache(cacheKeys.SERVERS, serverList);
+        // Persist to cache so subsequent mounts can load instantly.
+        // Secrets (env/headers) are stripped — the live state still holds them.
+        writeCache(cacheKeys.SERVERS, toCacheableServers(serverList));
         onLog(t('mcp.logs.loadedServersSuccess', { count: serverList.length }), 'success');
       } catch (error) {
         console.error('[McpSettings] Failed to parse servers:', error);
@@ -344,6 +486,83 @@ export function useServerData({
       }
     };
 
+    /**
+     * Targeted status update. The backend calls this instead of updateMcpServerStatus when the
+     * request carried a serverNames filter (approve/reject only ever touches one server).
+     * The payload is merged into the existing map and cache — replacing it would wipe the
+     * statuses of every server that was not part of the request.
+     */
+    const handleServerStatusPartialUpdate = (jsonStr: string, requestedNamesJson?: string) => {
+      try {
+        const partial: McpServerStatusInfo[] = JSON.parse(jsonStr);
+        const returned = new Set(partial.map((status) => status.name));
+
+        // A rejected project .mcp.json server is removed from the config entirely, so a
+        // targeted query returns nothing for it. Treat the response as authoritative for
+        // the requested names: drop the ones that came back absent, or the card would keep
+        // showing the pre-reject "connected" status until a full refresh replaced the map.
+        let requested: string[] = [];
+        if (requestedNamesJson) {
+          try {
+            const parsed = JSON.parse(requestedNamesJson);
+            if (Array.isArray(parsed)) {
+              requested = parsed.filter((name): name is string => typeof name === 'string');
+            }
+          } catch {
+            // No usable name list — fall back to a pure merge.
+          }
+        }
+        // This callback is reachable by any script running in the view's context, so
+        // the names it names are not implicitly trusted: only entries that match a
+        // server we actually know about may be removed from the map and the cache.
+        const knownKeys = getKnownStatusKeys(serversRef.current);
+        const dropped = requested.filter((name) => !returned.has(name)
+          && knownKeys.has(normalizeServerKey(name)));
+        if (dropped.length > 0) {
+          console.warn('[MCP] Dropping stale status for removed server(s):', dropped.join(', '));
+        }
+
+        if (dropped.length > 0 || partial.length > 0) {
+          setServerStatus(prev => {
+            const next = new Map(prev);
+            partial.forEach((status) => next.set(status.name, status));
+            dropped.forEach((name) => next.delete(name));
+            return next;
+          });
+
+          const cached = readCache<McpServerStatusInfo[]>(cacheKeys.STATUS, cacheKeys) || [];
+          const byName = new Map(cached.map((status) => [status.name, status]));
+          partial.forEach((status) => byName.set(status.name, status));
+          dropped.forEach((name) => byName.delete(name));
+          writeCache(cacheKeys.STATUS, Array.from(byName.values()));
+        }
+
+        // Union rather than replace: this ref drives tool cleanup in handleServerListUpdate,
+        // so dropping the other servers' terminal names would leave stale tool lists behind.
+        const partialTerminal = getTerminalStatusNames(partial);
+        terminalStatusNamesRef.current = new Set([
+          ...terminalStatusNamesRef.current,
+          ...partialTerminal,
+        ]);
+        clearToolsForTerminalStatuses(serversRef.current, partialTerminal);
+
+        onLog(
+          t('mcp.logs.statusUpdateComplete', {
+            total: partial.length,
+            connected: partial.filter((s) => s.status === 'connected').length,
+            failed: partial.filter((s) => s.status === 'failed').length,
+            pending: partial.filter((s) => s.status === 'pending').length,
+            needsAuth: partial.filter((s) => s.status === 'needs-auth').length,
+          }),
+          partial.some((s) => s.status === 'failed') ? 'warning' : 'success'
+        );
+        // statusLoading is intentionally untouched: a partial request never raised it.
+      } catch (error) {
+        console.error('[McpSettings] Failed to parse partial server status:', error);
+        onLog(t('mcp.logs.loadedStatusFailed', { error: String(error) }), 'error');
+      }
+    };
+
     // Register callbacks
     if (isCodexMode) {
       window.updateCodexMcpServers = handleServerListUpdate;
@@ -351,6 +570,9 @@ export function useServerData({
     } else {
       window.updateMcpServers = handleServerListUpdate;
       window.updateMcpServerStatus = handleServerStatusUpdate;
+      // Approve/reject is Claude-only (.mcp.json project trust), so the targeted
+      // status callback has no Codex counterpart.
+      window.updateMcpServerStatusPartial = handleServerStatusPartialUpdate;
     }
 
     // Triggered by the backend file watcher when .mcp.json / mcp.json changes
@@ -370,10 +592,11 @@ export function useServerData({
       } else {
         window.updateMcpServers = undefined;
         window.updateMcpServerStatus = undefined;
+        window.updateMcpServerStatusPartial = undefined;
       }
       window.refreshMcpServers = undefined;
     };
-  }, [isCodexMode, t, onLog, clearToolsForTerminalStatuses, setServers, loadServers, loadServerStatus]);
+  }, [isCodexMode, t, onLog, cacheKeys, clearToolsForTerminalStatuses, setServers, loadServers, loadServerStatus]);
 
   return {
     // State

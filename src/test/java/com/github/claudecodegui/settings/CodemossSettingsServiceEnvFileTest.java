@@ -21,7 +21,8 @@ import static org.junit.Assert.assertFalse;
  * Covers:
  * - Per-project env file override with global default fallback
  * - Legacy string-to-object migration
- * - Clearing per-project and default settings
+ * - The three states reported by getEnvFile(): unconfigured (null), explicitly
+ *   configured (a path), and explicitly opted out (ENV_FILE_DISABLED)
  */
 public class CodemossSettingsServiceEnvFileTest {
     private String originalHomeDir;
@@ -120,7 +121,7 @@ public class CodemossSettingsServiceEnvFileTest {
     }
 
     @Test
-    public void shouldClearProjectEnvFileOnNull() throws Exception {
+    public void shouldRecordOptOutWhenClearingProjectEnvFile() throws Exception {
         Path tempHome = Files.createTempDirectory("envfile-clear-home");
         useTemporaryHomeDirectory(tempHome);
 
@@ -128,16 +129,15 @@ public class CodemossSettingsServiceEnvFileTest {
         service.setEnvFile("/projects/project-a", ".env.ai");
         service.setEnvFile("default", ".env");
 
-        // Clear project-specific setting
+        // Clearing the field is an explicit opt-out, not a "fall back to default".
         service.setEnvFile("/projects/project-a", null);
 
-        // Project should fall back to default
         String result = service.getEnvFile("/projects/project-a");
-        assertEquals(".env", result);
+        assertTrue(CodemossSettingsService.isEnvFileDisabled(result));
     }
 
     @Test
-    public void shouldClearDefaultWhenNull() throws Exception {
+    public void shouldRecordOptOutWhenClearingDefault() throws Exception {
         Path tempHome = Files.createTempDirectory("envfile-clear-default-home");
         useTemporaryHomeDirectory(tempHome);
 
@@ -145,8 +145,39 @@ public class CodemossSettingsServiceEnvFileTest {
         service.setEnvFile(null, ".env");
         service.setEnvFile(null, null);
 
-        assertNull(service.getEnvFile(null));
-        assertNull(service.getEnvFile("/any/project"));
+        assertTrue(CodemossSettingsService.isEnvFileDisabled(service.getEnvFile(null)));
+        assertTrue(CodemossSettingsService.isEnvFileDisabled(service.getEnvFile("/any/project")));
+    }
+
+    @Test
+    public void shouldResetToAutoDiscoveryOnReset() throws Exception {
+        Path tempHome = Files.createTempDirectory("envfile-reset-home");
+        useTemporaryHomeDirectory(tempHome);
+
+        CodemossSettingsService service = new CodemossSettingsService();
+        service.setEnvFile("/projects/project-a", ".env.ai");
+        service.setEnvFile("/projects/project-a", null);
+        service.resetEnvFile("/projects/project-a");
+
+        // Back to the unconfigured state → callers auto-discover <project>/.env again
+        assertNull(service.getEnvFile("/projects/project-a"));
+    }
+
+    @Test
+    public void shouldNotResurrectPreviousPathAfterClear() throws Exception {
+        Path tempHome = Files.createTempDirectory("envfile-roundtrip-home");
+        useTemporaryHomeDirectory(tempHome);
+
+        CodemossSettingsService service = new CodemossSettingsService();
+        service.setEnvFile("default", "/global/.env");
+        service.setEnvFile("/projects/project-a", ".env.ai");
+        service.setEnvFile("/projects/project-a", null);
+
+        // A per-project opt-out outranks the global default: the previously
+        // configured path must not come back, and neither must the default.
+        String result = service.getEnvFile("/projects/project-a");
+        assertTrue(CodemossSettingsService.isEnvFileDisabled(result));
+        assertEquals("/global/.env", service.getEnvFile("/projects/project-b"));
     }
 
     // ---- Legacy migration tests ----
@@ -167,7 +198,7 @@ public class CodemossSettingsServiceEnvFileTest {
     }
 
     @Test
-    public void shouldHandleEmptyStringAsClear() throws Exception {
+    public void shouldHandleEmptyStringAsOptOut() throws Exception {
         Path tempHome = Files.createTempDirectory("envfile-empty-home");
         useTemporaryHomeDirectory(tempHome);
 
@@ -175,12 +206,12 @@ public class CodemossSettingsServiceEnvFileTest {
         service.setEnvFile("/projects/project-a", ".env.ai");
         service.setEnvFile("/projects/project-a", "");
 
-        // Empty string should clear the project-specific entry
-        assertNull(service.getEnvFile("/projects/project-a"));
+        // Empty string = the user cleared the field on purpose → explicit opt-out
+        assertTrue(CodemossSettingsService.isEnvFileDisabled(service.getEnvFile("/projects/project-a")));
     }
 
     @Test
-    public void shouldHandleWhitespaceOnlyStringAsClear() throws Exception {
+    public void shouldHandleWhitespaceOnlyStringAsOptOut() throws Exception {
         Path tempHome = Files.createTempDirectory("envfile-whitespace-home");
         useTemporaryHomeDirectory(tempHome);
 
@@ -188,8 +219,19 @@ public class CodemossSettingsServiceEnvFileTest {
         service.setEnvFile("/projects/project-a", ".env.ai");
         service.setEnvFile("/projects/project-a", "   ");
 
-        // Whitespace-only should clear the project-specific entry
-        assertNull(service.getEnvFile("/projects/project-a"));
+        assertTrue(CodemossSettingsService.isEnvFileDisabled(service.getEnvFile("/projects/project-a")));
+    }
+
+    @Test
+    public void shouldMigrateLegacyOptOutSentinel() throws Exception {
+        Path tempHome = Files.createTempDirectory("envfile-legacy-disabled-home");
+        useTemporaryHomeDirectory(tempHome);
+
+        CodemossSettingsService service = new CodemossSettingsService();
+        service.setEnvFile(null, CodemossSettingsService.ENV_FILE_DISABLED);
+
+        assertTrue(CodemossSettingsService.isEnvFileDisabled(service.getEnvFile(null)));
+        assertTrue(CodemossSettingsService.isEnvFileDisabled(service.getEnvFile("/any/project")));
     }
 
     // ---- Helpers ----

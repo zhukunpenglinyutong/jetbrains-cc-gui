@@ -55,11 +55,12 @@ const writeLineAndWait = (line) => new Promise((resolve) => {
  * Get MCP server connection status.
  * Directly validates the actual connection status of each MCP server (via mcp-status-service module).
  * @param {string} [cwd=null] - Working directory (used to detect project-specific MCP configuration)
+ * @param {string[]|null} [serverNames=null] - Restrict the check to these server names (optional)
  */
-export async function getMcpServerStatus(cwd = null) {
+export async function getMcpServerStatus(cwd = null, serverNames = null) {
   try {
     // Use the mcp-status-service module to get status, passing cwd for project-specific config
-    const mcpStatus = await getMcpServersStatus(cwd);
+    const mcpStatus = await getMcpServersStatus(cwd, serverNames);
 
     // Output with [MCP_SERVER_STATUS] tag for fast identification on the Java side.
     // Also keep a compatible JSON format as fallback.

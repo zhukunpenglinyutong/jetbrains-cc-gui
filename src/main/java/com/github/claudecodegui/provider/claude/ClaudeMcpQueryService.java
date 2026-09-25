@@ -57,11 +57,27 @@ class ClaudeMcpQueryService {
     }
 
     CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
+        return getMcpServerStatus(cwd, null);
+    }
+
+    /**
+     * Query MCP server status, optionally restricted to specific servers.
+     *
+     * @param cwd         working directory used to resolve project-scoped config
+     * @param serverNames when non-empty, the bridge only verifies these servers
+     *                    instead of spawning/fetching every configured one
+     */
+    CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd, List<String> serverNames) {
         return CompletableFuture.supplyAsync(() -> {
-            log.info("[McpStatus] Starting getMcpServerStatus, cwd=" + cwd);
+            boolean filtered = serverNames != null && !serverNames.isEmpty();
+            log.info("[McpStatus] Starting getMcpServerStatus, cwd=" + cwd
+                    + (filtered ? ", serverNames=" + serverNames : ""));
 
             JsonObject stdinInput = new JsonObject();
             stdinInput.addProperty("cwd", cwd != null ? cwd : "");
+            if (filtered) {
+                stdinInput.add("serverNames", gson.toJsonTree(serverNames));
+            }
 
             MarkerResult result = executeMarkerQuery(
                     MCP_STATUS_CHANNEL_ID,

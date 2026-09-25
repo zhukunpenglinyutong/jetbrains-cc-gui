@@ -4,7 +4,9 @@ import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.provider.common.DaemonBridge;
+import com.github.claudecodegui.provider.common.EnvFileResolver;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.util.PathUtils;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -174,8 +176,24 @@ class ClaudeDaemonCoordinator {
                     return;
                 }
 
+                // Re-check generation right before sending the command to catch
+                // any shutdown that raced between getDaemonBridge() and here.
+                if (generation != lifecycleGeneration) {
+                    log.info("[DaemonCoordinator] Skip preconnect: generation changed during prewarm");
+                    daemon.stop();
+                    return;
+                }
+
                 JsonObject params = new JsonObject();
-                params.addProperty("cwd", cwd != null ? cwd : "");
+                // Same contract as ClaudeRequestParamsBuilder: real path or omitted,
+                // never "" — otherwise the daemon's IDEA_PROJECT_PATH fallback and the
+                // request cwd disagree about which directory is the project.
+                String preconnectCwd = ClaudeBridgeUtils.resolveBaseDir(cwd);
+                if (preconnectCwd != null) {
+                    params.addProperty("cwd", preconnectCwd);
+                } else {
+                    log.debug("[DaemonCoordinator] Preconnect without a valid cwd — omitting \"cwd\" (value=" + cwd + ")");
+                }
                 params.addProperty("sessionId", sessionId != null ? sessionId : "");
                 params.addProperty("runtimeSessionEpoch", runtimeSessionEpoch != null ? runtimeSessionEpoch : "");
                 params.addProperty("permissionMode", "");
@@ -272,24 +290,39 @@ class ClaudeDaemonCoordinator {
     private String resolveEnvFile(String cwd) {
         try {
             String envFile = settingsService.getEnvFile(cwd);
+
+            // State 3: explicit opt-out — load nothing, never auto-discover
+            if (CodemossSettingsService.isEnvFileDisabled(envFile)) {
+                log.debug("[DaemonCoordinator] Env file explicitly disabled for cwd=" + cwd);
+                return null;
+            }
+
+            String projectDir = EnvFileResolver.resolveProjectDir(cwd);
+
+            // State 1: never configured → allow auto-discovery of <project>/.env
             if (envFile == null) {
-                // No per-project setting — try default ".env" in project root
-                if (cwd != null) {
-                    java.io.File defaultEnvFile = new java.io.File(cwd, ".env");
+                if (projectDir != null) {
+                    java.io.File defaultEnvFile = new java.io.File(projectDir, ".env");
                     if (defaultEnvFile.exists() && defaultEnvFile.isFile()) {
-                        envFile = defaultEnvFile.getAbsolutePath();
-                        log.info("[DaemonCoordinator] Auto-discovered default .env at " + envFile);
+                        String discovered = PathUtils.normalizeAbsolute(defaultEnvFile.getPath());
+                        log.debug("[DaemonCoordinator] Auto-discovered default .env at " + discovered);
+                        return discovered;
                     }
                 }
-            } else {
-                // Resolve relative env file paths against the project cwd
-                java.io.File envFileObj = new java.io.File(envFile);
-                if (!envFileObj.isAbsolute() && cwd != null) {
-                    envFileObj = new java.io.File(cwd, envFile);
-                    envFile = envFileObj.getAbsolutePath();
-                }
+                return null;
             }
-            return envFile;
+
+            // State 2: explicit path → resolve relative to the project dir
+            java.io.File envFileObj = new java.io.File(envFile);
+            if (!envFileObj.isAbsolute()) {
+                if (projectDir == null) {
+                    log.debug("[DaemonCoordinator] Refusing to resolve relative env file without a project dir");
+                    return null;
+                }
+                envFileObj = new java.io.File(projectDir, envFile);
+            }
+            return PathUtils.normalizeAbsolute(envFileObj.getPath());
+
         } catch (Exception e) {
             log.warn("[DaemonCoordinator] Failed to read env file setting: " + e.getMessage());
             return null;

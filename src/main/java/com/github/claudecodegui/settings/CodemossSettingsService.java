@@ -690,19 +690,65 @@ public class CodemossSettingsService {
     // ==================== Environment File Config Management ====================
 
     /**
-     * Get the configured env file path for a specific project.
-     * Supports backward-compatible migration: if the stored value is a string
+     * Sentinel persisted in place of a path to express "the user explicitly opted
+     * out of env file loading for this project".
+     *
+     * <p>A dedicated sentinel (rather than an empty string) is required because
+     * {@code null} and {@code ""} both mean "not configured" and therefore keep the
+     * auto-discovery of {@code <project>/.env} active. Without a third state,
+     * clearing the field in the UI silently resurrected the repository-controlled
+     * {@code .env} while showing the user an empty box.
+     */
+    public static final String ENV_FILE_DISABLED = "<env-file-disabled>";
+
+    /**
+     * True when {@link #getEnvFile(String)} returned the explicit opt-out sentinel.
+     */
+    public static boolean isEnvFileDisabled(String envFile) {
+        return ENV_FILE_DISABLED.equals(envFile);
+    }
+
+    /**
+     * Normalize a stored / user-supplied env file value, preserving the opt-out
+     * sentinel. Blank input means "no value" (which callers read as auto-discovery).
+     */
+    private static String normalizeEnvFileValue(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String v = raw.trim();
+        if (v.isEmpty()) {
+            return null;
+        }
+        return ENV_FILE_DISABLED.equals(v) ? ENV_FILE_DISABLED : v;
+    }
+
+    /**
+     * Get the effective env file setting for a specific project.
+     *
+     * <p>Three distinct states are reported:
+     * <ol>
+     *   <li>{@code null} — never configured, callers may auto-discover
+     *       {@code <project>/.env}</li>
+     *   <li>{@link #ENV_FILE_DISABLED} — explicitly opted out, callers must load
+     *       nothing and must not auto-discover</li>
+     *   <li>a non-empty path — explicitly configured</li>
+     * </ol>
+     *
+     * <p>Supports backward-compatible migration: if the stored value is a string
      * (legacy format), it is returned as the default. When the stored value
      * is a JSON object, per-project overrides are checked first, then the
-     * "default" key is used as fallback.
+     * "default" key is used as fallback. A per-project opt-out outranks the
+     * global default, so disabling the env file for one project cannot be undone
+     * by a global setting.
      *
      * @param projectPath the current project's base path (may be null for global)
-     * @return env file path, or null when not configured
+     * @return env file path, {@link #ENV_FILE_DISABLED}, or null when not configured
      */
     public String getEnvFile(String projectPath) throws IOException {
         JsonObject config = readConfig();
         if (!config.has(ENV_FILE_CONFIG_KEY) || config.get(ENV_FILE_CONFIG_KEY).isJsonNull()) {
-            LOG.info("[CodemossSettings] Env file is not configured (key missing or null)");
+            LOG.debug("[CodemossSettings] Env file is not configured (key missing or null)");
             return null;
         }
 
@@ -710,9 +756,8 @@ public class CodemossSettingsService {
 
         // Backward compatibility: legacy format stored as a plain string
         if (envFileElement.isJsonPrimitive()) {
-            String envFile = envFileElement.getAsString();
-            String resolved = envFile == null || envFile.trim().isEmpty() ? null : envFile.trim();
-            LOG.info("[CodemossSettings] Env file resolved (legacy global): " + resolved);
+            String resolved = normalizeEnvFileValue(envFileElement.getAsString());
+            LOG.debug("[CodemossSettings] Env file resolved (legacy global): " + describeEnvFileValue(resolved));
             return resolved;
         }
 
@@ -722,19 +767,17 @@ public class CodemossSettingsService {
 
             // Check project-specific config first
             if (projectPath != null && envFileObj.has(projectPath)) {
-                String envFile = envFileObj.get(projectPath).getAsString();
-                String resolved = envFile == null || envFile.trim().isEmpty() ? null : envFile.trim();
+                String resolved = normalizeEnvFileValue(envFileObj.get(projectPath).getAsString());
                 if (resolved != null) {
-                    LOG.info("[CodemossSettings] Env file resolved (project-specific): " + resolved);
+                    LOG.debug("[CodemossSettings] Env file resolved (project-specific): " + describeEnvFileValue(resolved));
                     return resolved;
                 }
             }
 
             // Fall back to default
             if (envFileObj.has("default")) {
-                String envFile = envFileObj.get("default").getAsString();
-                String resolved = envFile == null || envFile.trim().isEmpty() ? null : envFile.trim();
-                LOG.info("[CodemossSettings] Env file resolved (default): " + resolved);
+                String resolved = normalizeEnvFileValue(envFileObj.get("default").getAsString());
+                LOG.debug("[CodemossSettings] Env file resolved (default): " + describeEnvFileValue(resolved));
                 return resolved;
             }
         }
@@ -743,43 +786,89 @@ public class CodemossSettingsService {
     }
 
     /**
-     * Persist the env file path for a specific project.
+     * Persist the env file setting for a specific project.
      * Stores settings in a JSON object format:
      *   {"envFile": {"default": "/global/.env", "/project/path": "/project/.env.ai"}}
      * This allows per-project env file configuration while keeping a global default.
      *
+     * <p>A {@code null} or blank {@code envFile} persists {@link #ENV_FILE_DISABLED}
+     * instead of removing the key: the user cleared the field on purpose, so the
+     * per-project auto-discovery of {@code <project>/.env} must stay off. Use
+     * {@link #resetEnvFile(String)} to return a project to the unconfigured
+     * (auto-discovery) state.
+     *
      * @param projectPath the current project's base path (may be null for global default)
-     * @param envFile     file path, null or empty to clear
+     * @param envFile     file path, or null/empty to record an explicit opt-out
      */
     public void setEnvFile(String projectPath, String envFile) throws IOException {
         JsonObject config = readConfig();
-        String v = envFile != null ? envFile.trim() : "";
+        String trimmed = envFile != null ? envFile.trim() : "";
+        String v = trimmed.isEmpty() ? ENV_FILE_DISABLED : trimmed;
 
-        JsonObject envFileObj;
-        // Convert legacy string format to object format, preserving the old
-        // value as the "default" entry.
-        JsonElement existing = config.get(ENV_FILE_CONFIG_KEY);
-        if (existing != null && existing.isJsonObject()) {
-            envFileObj = existing.getAsJsonObject();
-        } else {
-            envFileObj = new JsonObject();
-            if (existing != null && existing.isJsonPrimitive()
-                    && existing.getAsString() != null && !existing.getAsString().trim().isEmpty()) {
-                envFileObj.addProperty("default", existing.getAsString());
-            }
-        }
-
+        JsonObject envFileObj = readEnvFileObject(config);
         String key = projectPath != null ? projectPath : "default";
-        if (v.isEmpty()) {
-            envFileObj.remove(key);
-        } else {
-            envFileObj.addProperty(key, v);
-        }
+        envFileObj.addProperty(key, v);
 
         config.remove(ENV_FILE_CONFIG_KEY);
         config.add(ENV_FILE_CONFIG_KEY, envFileObj);
         writeConfig(config);
-        LOG.info("[CodemossSettings] Set env file for project '" + key + "': " + (v.isEmpty() ? "(cleared)" : v));
+        LOG.debug("[CodemossSettings] Set env file for project '" + key + "': " + describeEnvFileValue(v));
+    }
+
+    /**
+     * Drop the env file setting for a project entirely, returning it to the
+     * unconfigured state so {@code <project>/.env} is auto-discovered again.
+     * Unlike {@link #setEnvFile(String, String)} with a blank value this does not
+     * record an opt-out.
+     *
+     * @param projectPath the current project's base path (may be null for the global default)
+     */
+    public void resetEnvFile(String projectPath) throws IOException {
+        JsonObject config = readConfig();
+        JsonElement existing = config.get(ENV_FILE_CONFIG_KEY);
+        if (existing == null || !existing.isJsonObject()) {
+            LOG.debug("[CodemossSettings] Env file already unconfigured, nothing to reset");
+            return;
+        }
+        String key = projectPath != null ? projectPath : "default";
+        JsonObject envFileObj = existing.getAsJsonObject();
+        if (!envFileObj.has(key)) {
+            LOG.debug("[CodemossSettings] Env file already unconfigured for '" + key + "'");
+            return;
+        }
+        envFileObj.remove(key);
+        config.remove(ENV_FILE_CONFIG_KEY);
+        config.add(ENV_FILE_CONFIG_KEY, envFileObj);
+        writeConfig(config);
+        LOG.debug("[CodemossSettings] Reset env file for project '" + key + "' to auto-discovery");
+    }
+
+    /**
+     * Read the {@code envFile} config entry as an object, migrating the legacy
+     * plain-string format into a {@code "default"} entry.
+     */
+    private JsonObject readEnvFileObject(JsonObject config) {
+        JsonElement existing = config.get(ENV_FILE_CONFIG_KEY);
+        if (existing != null && existing.isJsonObject()) {
+            return existing.getAsJsonObject();
+        }
+        JsonObject envFileObj = new JsonObject();
+        if (existing != null && existing.isJsonPrimitive()
+                && normalizeEnvFileValue(existing.getAsString()) != null) {
+            envFileObj.addProperty("default", normalizeEnvFileValue(existing.getAsString()));
+        }
+        return envFileObj;
+    }
+
+    /** Log-safe description of a resolved env file value. */
+    private static String describeEnvFileValue(String value) {
+        if (value == null) {
+            return "(not configured)";
+        }
+        if (isEnvFileDisabled(value)) {
+            return "(explicitly disabled)";
+        }
+        return value;
     }
 
     // ==================== Claude Settings Management ====================
@@ -1395,6 +1484,14 @@ public class CodemossSettingsService {
 
     public Map<String, Object> validateMcpServer(JsonObject server) {
         return mcpServerManager.validateMcpServer(server);
+    }
+
+    public void approveProjectMcpJsonServer(String serverId, String projectPath) throws IOException {
+        mcpServerManager.approveProjectMcpJsonServer(serverId, projectPath);
+    }
+
+    public void rejectProjectMcpJsonServer(String serverId, String projectPath) throws IOException {
+        mcpServerManager.rejectProjectMcpJsonServer(serverId, projectPath);
     }
 
     // ==================== Codex MCP Server Management ====================

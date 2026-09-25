@@ -3,10 +3,11 @@
  * Provides functionality to read MCP server configuration from ~/.claude.json
  */
 
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { readFile } from 'fs/promises';
+import { spawnSync } from 'node:child_process';
 import { join } from 'path';
-import { getRealHomeDir } from '../../../utils/path-utils.js';
+import { getRealHomeDir, getManagedSettingsPath } from '../../../utils/path-utils.js';
 import { log } from './logger.js';
 
 /**
@@ -208,15 +209,367 @@ async function loadProjectMcpJson(cwd = null) {
 function mergeProjectMcpServers(mcpServers, projectMcpServers) {
   if (!projectMcpServers) return mcpServers;
   const merged = {};
-  // First, copy any env-expansion already applied to mcpServers entries
-  for (const [name, config] of Object.entries(mcpServers || {})) {
-    merged[name] = config;
-  }
-  // Then overlay project servers, marking them with source: 'project'
+  // Project entries first, then user entries override them — a project must
+  // NOT shadow a same-named user server (defense in depth).
   for (const [name, config] of Object.entries(projectMcpServers)) {
     merged[name] = { ...config, source: 'project' };
   }
+  for (const [name, config] of Object.entries(mcpServers || {})) {
+    merged[name] = config;
+  }
   return merged;
+}
+
+/**
+ * Settings keys controlling approval of project-scoped .mcp.json servers.
+ *
+ * These are deliberately distinct from `enabledMcpServers` / `disabledMcpServers`,
+ * which drive the per-project /mcp toggle list for ~/.claude.json servers.
+ * Conflating the two is the bug this gate exists to prevent.
+ */
+const PROJECT_APPROVAL_KEYS = {
+  ENABLED: 'enabledMcpjsonServers',
+  DISABLED: 'disabledMcpjsonServers',
+  ENABLE_ALL: 'enableAllProjectMcpServers',
+};
+
+/**
+ * Read and parse a settings file synchronously, tolerating every failure mode.
+ * @param {string|null} filePath - Absolute path, or null to skip
+ * @param {string} label - Human-readable label used in log messages
+ * @returns {Object|null} Parsed object, or null when missing/unparseable/not an object
+ */
+function readSettingsFileSync(filePath, label) {
+  if (!filePath || !existsSync(filePath)) return null;
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      log('warn', `[MCP Approve] ${label} is not a JSON object; ignoring`);
+      return null;
+    }
+    return parsed;
+  } catch (e) {
+    log('warn', `[MCP Approve] Failed to read ${label}:`, e.message);
+    return null;
+  }
+}
+
+/** Repo-relative path of the project-local settings file, used for git probes. */
+const PROJECT_LOCAL_SETTINGS_REL = '.claude/settings.local.json';
+
+/** git trust probes run on the project-open path; never let them stall the UI. */
+const GIT_TRUST_PROBE_TIMEOUT_MS = 5_000;
+
+/**
+ * Run a read-only `git` command inside the project directory.
+ *
+ * Never uses a shell: arguments are passed as an array, so a project path can
+ * never be reinterpreted as shell syntax. Follows the daemon's existing
+ * `spawnSync(bin, [args], { timeout })` style (utils/cli-path.js, dsh/supervisor.js).
+ *
+ * @param {string[]} args - git arguments, without the leading `git`
+ * @param {string} cwd - Project root to run the command in
+ * @returns {{ok: boolean, status: number|null, stdout: string, stderr: string, reason: string|null}} Probe result
+ */
+function runGitProbe(args, cwd) {
+  let result;
+  try {
+    result = spawnSync('git', args, {
+      cwd,
+      encoding: 'utf8',
+      timeout: GIT_TRUST_PROBE_TIMEOUT_MS,
+      maxBuffer: 1024 * 1024,
+      windowsHide: true,
+    });
+  } catch (e) {
+    return { ok: false, status: null, stdout: '', stderr: '', reason: `git probe threw: ${e.message}` };
+  }
+  if (!result) return { ok: false, status: null, stdout: '', stderr: '', reason: 'git returned no result' };
+  if (result.error) {
+    const code = result.error.code;
+    return {
+      ok: false,
+      status: null,
+      stdout: '',
+      stderr: '',
+      reason: code === 'ETIMEDOUT' ? 'git timed out' : `git unavailable (${code || 'spawn error'})`,
+    };
+  }
+  if (result.signal) {
+    return { ok: false, status: null, stdout: '', stderr: '', reason: `git killed by signal ${result.signal}` };
+  }
+  if (result.status !== 0) {
+    return {
+      ok: false,
+      status: result.status,
+      stdout: result.stdout || '',
+      stderr: result.stderr || '',
+      reason: `git ${args[0]} exited with code ${result.status}`,
+    };
+  }
+  return { ok: true, status: 0, stdout: result.stdout || '', stderr: result.stderr || '', reason: null };
+}
+
+/**
+ * Whether a failed git probe is git's own definitive "this directory is not a
+ * repository" answer (exit 128 + `fatal: not a git repository`), as opposed to a
+ * failure we simply could not interpret. Only the former may relax the gate.
+ *
+ * @param {{ok: boolean, status: number|null, stderr: string}} probe - Probe result
+ * @returns {boolean} True for a clean "not a repository" answer
+ */
+function isNotARepositoryFailure(probe) {
+  return probe.status === 128 && probe.stderr.includes('not a git repository');
+}
+
+/**
+ * Decide whether the project's `.claude/settings.local.json` may contribute
+ * approval state.
+ *
+ * Being called "local" is not evidence of anything: a hostile repository can
+ * simply commit `.claude/settings.local.json` (with `git add -f`, or with no
+ * .gitignore entry at all) and a clone then carries an
+ * `enableAllProjectMcpServers: true` that auto-approves every server in the
+ * committed `.mcp.json` — no Approve click, no prompt. So the claim is checked
+ * against git instead of assumed:
+ *
+ * 0. `git rev-parse --is-inside-work-tree` must exit 0. A definitive "not a
+ *    git repository" is the one case where no repository can ever commit the
+ *    file, so the explicit per-server lists are still read — otherwise Approve
+ *    would write a file that can never count and the UI would sit at "pending"
+ *    forever in every non-version-controlled project, buying nothing. The
+ *    verdict then carries `trustVerified: false`, because git did NOT confirm
+ *    anything, and the UI has to say so. Any other failure of this probe
+ *    (git missing, timeout) stays untrusted.
+ * 1. `git ls-files --error-unmatch -- <path>` must exit 1 (path NOT in the
+ *    index). Exit 0 means tracked/committed -> untrusted. Any other exit
+ *    (spawn failure, timeout) -> untrusted.
+ * 2. `git check-ignore --quiet -- <path>` must exit 0 (path covered by
+ *    .gitignore), so a later `git add .` cannot promote it. Exit 1 (not
+ *    ignored) or any error -> untrusted.
+ *
+ * Everything except step 0's clean "not a repository" is fail-closed: if git
+ * cannot answer the question, the file is not trusted. Only the path and the
+ * reason are logged — never file contents.
+ *
+ * @param {string} cwd - Project root
+ * @param {string} file - Absolute path to the candidate settings file
+ * @returns {{trusted: boolean, present: boolean, trustVerified: boolean, reason: string|null}} Trust verdict
+ */
+function checkProjectLocalSettingsTrust(cwd, file) {
+  if (!existsSync(file)) return { trusted: false, present: false, trustVerified: false, reason: null };
+
+  const inside = runGitProbe(['rev-parse', '--is-inside-work-tree'], cwd);
+  if (!inside.ok) {
+    if (isNotARepositoryFailure(inside)) {
+      log('warn', '[MCP Approve] project dir is not a git repository; reading explicit '
+        + 'enabledMcpjsonServers from settings.local.json, but the trust is NOT git-verified');
+      return { trusted: true, present: true, trustVerified: false, reason: null };
+    }
+    return { trusted: false, present: true, trustVerified: false, reason: inside.reason };
+  }
+
+  const tracked = runGitProbe(['ls-files', '--error-unmatch', '--', PROJECT_LOCAL_SETTINGS_REL], cwd);
+  if (tracked.ok) {
+    return {
+      trusted: false, present: true, trustVerified: false,
+      reason: 'the file is tracked by git (staged or committed)',
+    };
+  }
+  if (tracked.status !== 1) {
+    // null = git missing/spawn failure/timeout.
+    return { trusted: false, present: true, trustVerified: false, reason: tracked.reason };
+  }
+
+  const ignored = runGitProbe(['check-ignore', '--quiet', '--', PROJECT_LOCAL_SETTINGS_REL], cwd);
+  if (!ignored.ok) {
+    return {
+      trusted: false,
+      present: true,
+      trustVerified: false,
+      reason: ignored.status === 1 ? 'the file is not covered by .gitignore' : ignored.reason,
+    };
+  }
+
+  return { trusted: true, present: true, trustVerified: true, reason: null };
+}
+
+/**
+ * List the settings files whose approval entries may be trusted.
+ *
+ * Claude Code's trust model (v2.1.196+) is that a cloned repository cannot
+ * approve its own servers, so the project's committed `.claude/settings.json`
+ * is deliberately absent from this list: an `enabledMcpjsonServers` entry (or
+ * `enableAllProjectMcpServers`) committed there leaves the server at "pending
+ * approval". Only these sources count:
+ * - user `~/.claude/settings.json`
+ * - managed `managed-settings.json` (enterprise-controlled)
+ * - the project's `.claude/settings.local.json` — this plugin writes it when
+ *   the user clicks Approve, but only when it is genuinely machine-local,
+ *   i.e. untracked AND git-ignored (see checkProjectLocalSettingsTrust).
+ *   A tracked copy is dropped entirely, so a committed file cannot approve
+ *   anything.
+ *
+ * A `disabledMcpjsonServers` entry in any of them still rejects the server.
+ *
+ * @param {string|null} cwd - Project root
+ * @returns {Array<{label: string, file: string, scope: 'user'|'managed'|'project-local', trustVerified: boolean}>} Sources to read, in order
+ */
+function collectApprovalSettingsSources(cwd) {
+  // User/managed files live outside any repository, so their trust needs no git proof.
+  const sources = [
+    { label: 'user settings.json', file: join(getRealHomeDir(), '.claude', 'settings.json'), scope: 'user', trustVerified: true },
+    { label: 'managed-settings.json', file: getManagedSettingsPath(), scope: 'managed', trustVerified: true },
+  ];
+  if (cwd) {
+    const file = join(cwd, '.claude', 'settings.local.json');
+    const verdict = checkProjectLocalSettingsTrust(cwd, file);
+    if (verdict.trusted) {
+      sources.push({
+        label: 'project settings.local.json',
+        file,
+        scope: 'project-local',
+        trustVerified: verdict.trustVerified,
+      });
+    } else if (verdict.present) {
+      log('warn', `[MCP Approve] project settings.local.json is NOT trusted (${verdict.reason}); its approval entries are ignored`);
+    }
+  }
+  return sources;
+}
+
+/**
+ * Resolve the approval state for project-scoped .mcp.json servers.
+ *
+ * Rejection always wins: a name in `disabledMcpjsonServers` stays denied even
+ * when it also appears in `enabledMcpjsonServers` or `enableAllProjectMcpServers`
+ * is true, matching Claude Code's "blocks it in every permission mode".
+ *
+ * `enableAllProjectMcpServers` is accepted ONLY from user / managed scope. Even
+ * a machine-local `.claude/settings.local.json` may contribute an explicit list
+ * of names, but never a blanket "approve everything shipped in this repo's
+ * .mcp.json" — that is exactly the flag a hostile repository wants written for
+ * it, and it is a one-liner to add later.
+ *
+ * `trustVerified` reports, per approved name, whether the source that granted
+ * the approval was positively confirmed by git. It is `false` only when the
+ * name was approved exclusively through a project-local file in a directory
+ * that is not a git repository — the one case where trust rests on the absence
+ * of git rather than on git's answer. User/managed scope is always verified.
+ * A name listed in several sources counts as verified when ANY of them verifies
+ * it, so adding a user-scope entry repairs an unverified approval.
+ *
+ * @param {string|null} cwd - Project root
+ * @returns {{approved: Set<string>, denied: Set<string>, approveAll: boolean, trustVerified: Map<string, boolean>}} Resolved approval state
+ */
+function getProjectMcpApproval(cwd = null) {
+  const approved = new Set();
+  const denied = new Set();
+  const trustVerified = new Map();
+  let approveAll = false;
+
+  for (const source of collectApprovalSettingsSources(cwd)) {
+    const settings = readSettingsFileSync(source.file, source.label);
+    if (!settings) continue;
+
+    if (settings[PROJECT_APPROVAL_KEYS.ENABLE_ALL] === true) {
+      if (source.scope === 'project-local') {
+        log('warn', `[MCP Approve] ${source.label}: ignoring enableAllProjectMcpServers — ` +
+          'only user/managed scope may approve all project servers');
+      } else {
+        approveAll = true;
+        log('info', `[MCP Approve] ${source.label}: enableAllProjectMcpServers=true`);
+      }
+    }
+    for (const key of [PROJECT_APPROVAL_KEYS.ENABLED, PROJECT_APPROVAL_KEYS.DISABLED]) {
+      const list = settings[key];
+      if (!Array.isArray(list)) continue;
+      const isEnabledList = key === PROJECT_APPROVAL_KEYS.ENABLED;
+      const target = isEnabledList ? approved : denied;
+      for (const name of list) {
+        if (typeof name !== 'string' || name.length === 0) continue;
+        target.add(name);
+        if (isEnabledList) {
+          // Verified wins: a name approved by any verified source is verified.
+          if (trustVerified.get(name) !== true) {
+            trustVerified.set(name, source.trustVerified !== false);
+          }
+        }
+      }
+    }
+  }
+
+  return { approved, denied, approveAll, trustVerified };
+}
+
+/**
+ * Names explicitly approved for this project, or null when none are.
+ * @param {string|null} cwd - Project root
+ * @returns {Set<string>|null} Approved names
+ */
+function getApprovedProjectServers(cwd = null) {
+  const { approved, approveAll } = getProjectMcpApproval(cwd);
+  return approved.size === 0 && !approveAll ? null : approved;
+}
+
+/**
+ * Names explicitly rejected for this project, or null when none are.
+ * @param {string|null} cwd - Project root
+ * @returns {Set<string>|null} Rejected names
+ */
+function getDeniedProjectServers(cwd = null) {
+  const { denied } = getProjectMcpApproval(cwd);
+  return denied.size > 0 ? denied : null;
+}
+
+/**
+ * Whether a single project server may be spawned for this project.
+ * @param {string} name - Server name from .mcp.json
+ * @param {string|null} cwd - Project root
+ * @returns {boolean} True only when approved and not rejected
+ */
+function isProjectServerApproved(name, cwd = null) {
+  const { approved, denied, approveAll } = getProjectMcpApproval(cwd);
+  if (denied.has(name)) return false;
+  return approveAll || approved.has(name);
+}
+
+/**
+ * Classify a .mcp.json server's approval state for display in the UI.
+ * @param {string} name - Server name from .mcp.json
+ * @param {string|null} cwd - Project root
+ * @returns {'approved'|'rejected'|'pending'} Approval state
+ */
+function classifyProjectServerApproval(name, cwd = null) {
+  const { approved, denied, approveAll } = getProjectMcpApproval(cwd);
+  if (denied.has(name)) return 'rejected';
+  return approveAll || approved.has(name) ? 'approved' : 'pending';
+}
+
+/**
+ * Whether the trust behind a project .mcp.json server's approval is confirmed by
+ * git — the `trustVerified` field the UI has to surface.
+ *
+ * `true`  — the approval came from user ~/.claude/settings.json, from managed
+ *            settings, or from a project-local file that git proved is untracked
+ *            and git-ignored. Nothing is left to caveat.
+ * `false` — either the gate granted this server nothing (pending/rejected, so
+ *            there is no verified provenance to claim), or its approval rests
+ *            solely on a project-local file in a directory that is NOT a git
+ *            repository, where trust comes from the absence of git rather than
+ *            from git's answer. The UI must show that as "trust not verified".
+ *
+ * @param {string} name - Server name from .mcp.json
+ * @param {string|null} cwd - Project root
+ * @returns {boolean} True only when the trust basis is fully verified
+ */
+function isProjectServerTrustVerified(name, cwd = null) {
+  const { approved, denied, approveAll, trustVerified } = getProjectMcpApproval(cwd);
+  if (denied.has(name)) return false;
+  // approveAll is only ever set from user/managed scope, i.e. always verified.
+  if (approveAll) return true;
+  if (!approved.has(name)) return false;
+  return trustVerified.get(name) === true;
 }
 
 /**
@@ -296,16 +649,45 @@ async function parseMcpConfig(cwd = null) {
     disabledServers = new Set(config.disabledMcpServers || []);
   }
 
-  // Merge project-level .mcp.json servers (if present at the project root).
-  // These are marked with source: 'project' for read-only UI display.
+  // SECURITY: project-root .mcp.json can ship arbitrary command/args and is
+  // therefore gated behind per-project, per-server approval (matching Claude
+  // Code's supply-chain mitigation). Only servers the user explicitly approved
+  // for this project are merged into the spawn path.
   const projectMcpJson = await loadProjectMcpJson(cwd);
   if (projectMcpJson) {
-    mcpServers = mergeProjectMcpServers(mcpServers, projectMcpJson.mcpServers);
-    for (const name of projectMcpJson.disabledServers) {
-      disabledServers.add(name);
+    // Resolve approval ONCE (sync settings reads) instead of per-server.
+    // Denial wins over approval in every case, including enableAllProjectMcpServers.
+    const { approved, denied, approveAll } = getProjectMcpApproval(cwd);
+
+    const mergedProject = {};
+    for (const [name, config] of Object.entries(projectMcpJson.mcpServers || {})) {
+      if (denied.has(name)) {
+        log('warn', `[MCP Config] Project server "${name}" rejected by disabledMcpjsonServers; skipping`);
+        continue;
+      }
+      // A project may disable its OWN servers via .mcp.json disabledMcpServers.
+      // The list never reaches user-scope servers (see the NOTE below).
+      if (projectMcpJson.disabledServers && projectMcpJson.disabledServers.has(name)) {
+        log('info', `[MCP Config] Project server "${name}" disabled by .mcp.json; skipping`);
+        continue;
+      }
+      if (!approveAll && !approved.has(name)) {
+        log('warn', `[MCP Config] Project server "${name}" is pending approval; skipping`);
+        continue;
+      }
+      mergedProject[name] = config;
     }
-    const projectServerCount = Object.keys(projectMcpJson.mcpServers || {}).length;
-    log('info', '[MCP Config] Merged', projectServerCount, 'servers from .mcp.json');
+
+    if (Object.keys(mergedProject).length > 0) {
+      mcpServers = mergeProjectMcpServers(mcpServers, mergedProject);
+      log('info', '[MCP Config] Merged', Object.keys(mergedProject).length,
+          'approved project servers from .mcp.json');
+    } else {
+      log('info', '[MCP Config] No approved project servers in .mcp.json; nothing merged');
+    }
+
+    // NOTE: project disabledMcpServers must NOT affect user-scope servers.
+    // Do not add projectMcpJson.disabledServers to disabledServers here.
   }
 
   // Expand ${VAR} placeholders in server env values (e.g. from
@@ -317,15 +699,7 @@ async function parseMcpConfig(cwd = null) {
   return { mcpServers, disabledServers };
 }
 
-/**
- * Read MCP server configuration from ~/.claude.json
- * Supports two modes:
- * 1. Global config - uses the global mcpServers
- * 2. Project config - uses project-specific mcpServers
- * @param {string} cwd - Current working directory (used for project detection)
- * @returns {Promise<Array<{name: string, config: Object}>>} List of enabled MCP servers
- */
-export { loadProjectMcpJson, mergeProjectMcpServers };
+export { loadProjectMcpJson, mergeProjectMcpServers, getApprovedProjectServers, getDeniedProjectServers, isProjectServerApproved, classifyProjectServerApproval, isProjectServerTrustVerified, getProjectMcpApproval };
 
 /**
  * Read MCP server configuration from ~/.claude.json
@@ -400,7 +774,7 @@ export async function loadAllMcpServersInfo(cwd = null) {
     // Process servers resolved from project/global config (the parseMcpConfig result) first
     for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
       processedNames.add(serverName);
-      classifyServer(serverName, serverConfig, disabledServers, result);
+      classifyServer(serverName, serverConfig, disabledServers, result, cwd);
     }
 
     // If cwd is specified, global servers may have been overridden by project config.
@@ -411,7 +785,7 @@ export async function loadAllMcpServersInfo(cwd = null) {
         for (const [serverName, serverConfig] of Object.entries(globalParsed.mcpServers)) {
           if (processedNames.has(serverName)) continue; // Already covered by project config, skip
           processedNames.add(serverName);
-          classifyServer(serverName, serverConfig, globalParsed.disabledServers, result);
+          classifyServer(serverName, serverConfig, globalParsed.disabledServers, result, cwd);
         }
       }
     }
@@ -426,8 +800,24 @@ export async function loadAllMcpServersInfo(cwd = null) {
 
 /**
  * Classify a server into the enabled/disabled/invalid buckets
+ *
+ * Enabled entries carry the `trustVerified` flag the UI surfaces: for a
+ * project-scoped server it says whether git confirmed the trust behind its
+ * approval; for a user-scope server (no `source: 'project'`) the gate does not
+ * apply, so there is no unverified caveat to report.
+ *
+ * @param {string} serverName - Server name
+ * @param {Object} serverConfig - Server config (may carry `source: 'project'`)
+ * @param {Set<string>} disabledServers - Disabled server names
+ * @param {Object} result - Accumulator mutated in place
+ * @param {string|null} cwd - Project root, for the project approval gate
  */
-function classifyServer(serverName, serverConfig, disabledServers, result) {
+function classifyServer(serverName, serverConfig, disabledServers, result, cwd = null) {
+  const isProjectScoped = Boolean(serverConfig && serverConfig.source === 'project');
+  const trustVerified = isProjectScoped
+    ? isProjectServerTrustVerified(serverName, cwd)
+    : true;
+
   if (disabledServers.has(serverName)) {
     result.disabled.push(serverName);
   } else if (!isValidServerConfig(serverConfig)) {
@@ -436,8 +826,10 @@ function classifyServer(serverName, serverConfig, disabledServers, result) {
     const reason = !hasCommand && !hasUrl
       ? 'Missing command or url'
       : 'Invalid config structure';
-    result.invalid.push({ name: serverName, reason });
+    result.invalid.push({ name: serverName, reason, trustVerified });
   } else {
-    result.enabled.push({ name: serverName, config: serverConfig });
+    // trustVerified sits on the ENTRY, never inside `config` — this config object
+    // is also what feeds the SDK `mcpServers` spawn option.
+    result.enabled.push({ name: serverName, config: serverConfig, trustVerified });
   }
 }

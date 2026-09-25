@@ -70,6 +70,35 @@ export interface McpServer {
   enabled?: boolean;
   /** Configuration source: "global" (from ~/.claude.json) or "project" (from .mcp.json) */
   source?: 'global' | 'project';
+  /** Approval status for project-local .mcp.json servers: "approved" | "pending" | "rejected" */
+  approvalStatus?: 'approved' | 'pending' | 'rejected';
+  /**
+   * True when a project-local id collides with an already-merged server.
+   *
+   * The backend keeps BOTH records in that case: the shadowed one under its own id,
+   * this one under a synthetic map key, while `id` stays the real key from .mcp.json
+   * (actions such as approve/reject send `{ serverId: server.id }`). Both records
+   * therefore arrive here with the same `id`, and the UI has to tell them apart —
+   * see `getServerCardKey`. `conflictingWith` names the source of the shadowed record.
+   */
+  conflicting?: boolean;
+  /** Source of the record shadowed by a colliding project-local entry ("global", ...) */
+  conflictingWith?: string;
+  /**
+   * Whether the approval source of this server was confirmed by git.
+   *
+   * true — the approvals file is untracked and covered by .gitignore inside the
+   *       project repository, so its trust can be attributed to this machine only.
+   * false — the project directory is NOT a git repository, so trust rests solely on
+   *        "git could not confirm it" and must be surfaced to the user.
+   * undefined — a backend that does not report this field yet. This is a normal
+   *        state and must not be treated as unverified (no fail-open on truth, but
+   *        also no warning without an explicit `false`).
+   *
+   * Servers approved through the global user ~/.claude/settings.json always come
+   * back with `true`, so they never produce a warning.
+   */
+  trustVerified?: boolean;
   /** Allow extension fields */
   [key: string]: any;
 }

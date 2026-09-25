@@ -11,7 +11,6 @@ interface Window {
    * Electron/Electron-API bridge for file dialogs and Node integration.
    */
   electronAPI?: {
-    browseEnvFile?: () => Promise<{ canceled: boolean; filePaths: string[] } | null>;
     showOpenDialog?: (options: { properties: string[]; filters?: Array<{ name: string; extensions: string[] }> }) => Promise<{ canceled: boolean; filePaths: string[] } | null>;
   };
 
@@ -333,6 +332,15 @@ interface Window {
   updateMcpServerStatus?: (json: string) => void;
 
   /**
+   * Merge a targeted MCP status update (only the requested servers) into the
+   * existing status map, instead of replacing it like updateMcpServerStatus does.
+   * The second argument lists the servers that were requested: any of them missing
+   * from the response is dropped from the map, because "no status" for a targeted
+   * query means the server is no longer part of the effective config (e.g. rejected).
+   */
+  updateMcpServerStatusPartial?: (json: string, requestedNamesJson?: string) => void;
+
+  /**
    * Update MCP server tools list
    */
   updateMcpServerTools?: (json: string) => void;
@@ -341,6 +349,18 @@ interface Window {
   updateCodexMcpServerTools?: (json: string) => void;
 
   mcpServerToggled?: (json: string) => void;
+
+  /**
+   * A project-local .mcp.json server was approved: the backend already wrote the
+   * decision to .claude/settings.local.json. Success must be reported from here —
+   * a failure arrives as window.showError instead.
+   */
+  mcpServerApproved?: (serverId: string) => void;
+
+  /**
+   * A project-local .mcp.json server was rejected. Counterpart of mcpServerApproved.
+   */
+  mcpServerRejected?: (serverId: string) => void;
 
   /**
    * Update Codex MCP servers list (from ~/.codex/config.toml)
@@ -490,7 +510,15 @@ interface Window {
   updateWorkingDirectory?: (json: string) => void;
 
   /**
-   * Update environment file path
+   * Effective environment file state for the current project.
+   *
+   * The argument is a JSON *string* shaped like
+   * `{"envFile": "<path>", "envFileState": "configured" | "notConfigured" | "disabled",
+   *   "envFileDisabled": boolean}` — `envFile` is `""` when disabled and the
+   * placeholder `".env"` when the project was never configured. Values inside
+   * the file are never included. Parse it with `parseEnvFileUpdate` from
+   * `types/envFile`, which degrades to the neutral `'unknown'` state rather
+   * than assuming `'configured'`.
    */
   updateEnvFile?: (json: string) => void;
 

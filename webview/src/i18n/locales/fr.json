@@ -184,7 +184,24 @@
         "projectLevel": "Niveau projet",
         "placeholder": "e.g. /path/to/.env or leave empty",
         "hint": "Specify a .env file to load environment variables for both Claude Code and Grok.",
-        "invalidPath": "Invalid file path: file does not exist or is not readable"
+        "invalidPath": "Invalid file path: file does not exist or is not readable",
+        "reset": "Reset to automatic",
+        "resetHint": "Clear the custom path and let <project>/.env be discovered automatically again",
+        "state": {
+          "notConfigured": "Automatic",
+          "notConfiguredDetail": "no custom path — .env from the project root is discovered automatically",
+          "configured": "Custom path",
+          "configuredDetail": "the file below is loaded for every new session",
+          "disabled": "Disabled",
+          "disabledDetail": "no env file is loaded, and automatic discovery is off",
+          "unknown": "State unknown",
+          "unknownDetail": "the effective state could not be read from the plugin"
+        },
+        "error": {
+          "invalidCharacters": "Invalid path: control characters and NUL bytes are not allowed",
+          "parentTraversal": "Invalid path: \"..\" segments are not allowed",
+          "tooLong": "Invalid path: it is too long"
+        }
       },
       "fontSize": {
         "label": "Taille de police",
@@ -1210,6 +1227,17 @@
     "statusUnknown": "Unknown",
     "projectLocal": "Local au projet",
     "projectLocalReadOnly": "Ce serveur est géré dans .mcp.json et ne peut pas être modifié depuis l'interface",
+    "pendingApprovalBadge": "En attente",
+    "pendingApprovalDesc": "En attente d'approbation pour le serveur MCP local du projet",
+    "rejectedBadge": "Rejeté",
+    "rejectedDesc": "Serveur MCP local du projet rejeté",
+    "approveTooltip": "Approuver le serveur",
+    "rejectTooltip": "Rejeter le serveur",
+    "trustNotGitVerifiedBadge": "Non vérifié par git",
+    "trustNotGitVerifiedDesc": "Ce dossier de projet n'est pas sous contrôle git, l'approbation de ce serveur .mcp.json ne peut donc pas être confirmée comme locale à cette machine",
+    "trustNotGitVerifiedDialogNote": "Remarque : le dossier du projet n'est pas un dépôt git, cette approbation repose uniquement sur votre confirmation et n'est pas garantie par git.",
+    "approved": "Approuvé",
+    "rejected": "Rejeté",
     "errorDetails": "Error Details",
     "logs": {
       "title": "Connection Logs",
@@ -1322,7 +1350,15 @@
     "noParams": "No Parameters",
     "required": "Required",
     "optional": "Optional",
-    "refreshServer": "Refresh {{name}}"
+    "refreshServer": "Refresh {{name}}",
+    "configCopiedRedacted": "Configuration copiée dans le presse-papiers (valeurs sensibles masquées)",
+    "approveConfirmTitle": "Approuver le serveur MCP local du projet",
+    "approveConfirmMessage": "Approuver « {{name}} » autorise ce dépôt à exécuter sur votre machine :\n\n{{target}}\n\navec vos permissions. N’approuvez que les serveurs de confiance.",
+    "approveConfirm": "Approuver et exécuter",
+    "approveConfirmUnknownTarget": "une commande non spécifiée",
+    "copyConfigWarningTitle": "Copier la configuration d’un projet",
+    "copyConfigWarningMessage": "« {{name}} » est défini dans le .mcp.json de ce dépôt. Sa configuration peut contenir les identifiants de l’auteur du dépôt, pas les vôtres. Ne la copiez que si vous comptez utiliser ce serveur.",
+    "copyConfigWarningConfirm": "Copier quand même"
   },
   "tools": {
     "toolCall": "Appel d'outil",

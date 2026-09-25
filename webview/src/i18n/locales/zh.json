@@ -427,7 +427,24 @@
         "projectLevel": "项目级别",
         "placeholder": "例如 /path/to/.env 或留空",
         "hint": "指定一个 .env 文件，用于为 Claude Code 和 Grok 加载环境变量。",
-        "invalidPath": "无效的文件路径：文件不存在或无法读取"
+        "invalidPath": "无效的文件路径：文件不存在或无法读取",
+        "reset": "恢复自动检测",
+        "resetHint": "清除自定义路径，重新自动检测项目根目录下的 .env",
+        "state": {
+          "notConfigured": "自动",
+          "notConfiguredDetail": "未设置自定义路径 — 自动检测项目根目录的 .env",
+          "configured": "自定义路径",
+          "configuredDetail": "以下文件会在每个新会话中加载",
+          "disabled": "已禁用",
+          "disabledDetail": "不加载任何 env 文件，也不进行自动检测",
+          "unknown": "状态未知",
+          "unknownDetail": "无法从插件读取当前有效状态"
+        },
+        "error": {
+          "invalidCharacters": "路径无效：不允许控制字符和空字节",
+          "parentTraversal": "路径无效：不允许包含 \"..\" 路径段",
+          "tooLong": "路径无效：长度过长"
+        }
       },
       "fontSize": {
         "label": "字体大小",
@@ -1651,6 +1668,19 @@
     "statusNeedsAuth": "需要认证",
     "statusPending": "连接中...",
     "statusUnknown": "未知",
+    "projectLocal": "项目本地",
+    "projectLocalReadOnly": "该服务器由 .mcp.json 管理，无法从 UI 修改",
+    "pendingApprovalBadge": "待审核",
+    "pendingApprovalDesc": "项目本地 MCP 服务器待审核",
+    "rejectedBadge": "已拒绝",
+    "rejectedDesc": "已拒绝的项目本地 MCP 服务器",
+    "approveTooltip": "批准服务器",
+    "rejectTooltip": "拒绝服务器",
+    "trustNotGitVerifiedBadge": "未经 git 验证",
+    "trustNotGitVerifiedDesc": "该项目文件夹不在 git 管理下，因此无法通过 git 确认此 .mcp.json 服务器的批准是本机的本地批准",
+    "trustNotGitVerifiedDialogNote": "注意：项目文件夹不是 git 仓库，因此该批准仅基于你的确认，没有 git 作为依据。",
+    "approved": "已批准",
+    "rejected": "已拒绝",
     "errorDetails": "错误详情",
     "logs": {
       "title": "连接日志",
@@ -1763,7 +1793,15 @@
     "noParams": "无参数",
     "required": "必填",
     "optional": "可选",
-    "refreshServer": "刷新 {{name}}"
+    "refreshServer": "刷新 {{name}}",
+    "configCopiedRedacted": "配置已复制到剪贴板（敏感值已隐藏）",
+    "approveConfirmTitle": "批准项目本地 MCP 服务器",
+    "approveConfirmMessage": "批准“{{name}}”将允许本仓库在你的机器上运行：\n\n{{target}}\n\n并使用你的权限。请只批准你信任的服务器。",
+    "approveConfirm": "批准并运行",
+    "approveConfirmUnknownTarget": "未指定的命令",
+    "copyConfigWarningTitle": "复制项目配置",
+    "copyConfigWarningMessage": "“{{name}}”定义在本仓库的 .mcp.json 中。其配置可能包含仓库作者的凭据，而非你的凭据。仅在你打算使用该服务器时再复制。",
+    "copyConfigWarningConfirm": "仍要复制"
   },
   "tools": {
     "toolCall": "工具调用",

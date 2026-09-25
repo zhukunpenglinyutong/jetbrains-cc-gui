@@ -6,6 +6,7 @@ import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.action.SendShortcutSync;
 import com.github.claudecodegui.util.FontConfigService;
+import com.github.claudecodegui.util.PathUtils;
 import com.github.claudecodegui.util.ThemeConfigService;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
@@ -491,54 +492,101 @@ public class ProjectConfigHandler {
 
     // ---- Environment File Configuration ----
 
+    /**
+     * Report the effective env file state for the current project.
+     *
+     * <p>Payload contract (also used as the echo after {@link #handleSetEnvFile}):
+     * <pre>
+     * {"envFile": "&lt;path or \".env\" placeholder&gt;",
+     *  "envFileState": "configured" | "notConfigured" | "disabled",
+     *  "envFileDisabled": true | false}
+     * </pre>
+     * No environment variable <em>values</em> are ever included — the webview only
+     * ever learns the path, never the secrets the file contains.
+     */
     public void handleGetEnvFile() {
         try {
             String projectPath = context.getProject().getBasePath();
-            String envFile = settingsService.getEnvFile(projectPath);
-            JsonObject response = new JsonObject();
-            // Default to ".env" so the UI shows a sensible placeholder
-            // instead of an empty field when the project hasn't been configured.
-            response.addProperty("envFile", envFile != null ? envFile : ".env");
-            pushJson("window.updateEnvFile", response);
+            pushJson("window.updateEnvFile", buildEnvFileStatePayload(settingsService.getEnvFile(projectPath)));
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to get env file: " + e.getMessage(), e);
-            pushJson("window.updateEnvFile", jsonOf("envFile", ".env"));
+            pushJson("window.updateEnvFile", buildEnvFileStatePayload(null));
         }
     }
 
     public void handleSetEnvFile(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
-            String envFile = readString(json, "envFile", null);
+            String rawEnvFile = readString(json, "envFile", null);
+            boolean reset = readBoolean(json, "reset", false);
             String projectPath = context.getProject().getBasePath();
 
-            if (envFile != null && !envFile.trim().isEmpty()) {
-                envFile = envFile.trim();
-                // Validate the file exists — resolve relative to project root
-                java.io.File envFileObj = new java.io.File(envFile);
-                if (!envFileObj.isAbsolute() && projectPath != null) {
-                    envFileObj = new java.io.File(projectPath, envFile);
-                }
-                if (!envFileObj.exists() || !envFileObj.isFile()) {
-                    showError("Env file does not exist: " + envFileObj.getAbsolutePath());
-                    // Push a response so the UI can reset its loading state
-                    pushJson("window.updateEnvFile", jsonOf("envFile", ""));
-                    return;
-                }
-                // Store the name/path as the user entered it. resolveEnvFile()
-                // will resolve relative names against the cwd at runtime,
-                // keeping per-project configs portable across machines.
+            // Explicit "reset to auto-discovery" — distinct from clearing the field,
+            // which records an opt-out.
+            if (reset) {
+                settingsService.resetEnvFile(projectPath);
+                LOG.debug("[ProjectConfigHandler] Reset env file for project '" + projectPath + "' to auto-discovery");
+                showSuccess("Env file config reset to automatic discovery");
+                pushJson("window.updateEnvFile", buildEnvFileStatePayload(settingsService.getEnvFile(projectPath)));
+                return;
             }
-            settingsService.setEnvFile(projectPath, envFile);
-            LOG.info("[ProjectConfigHandler] Set env file for project '" + projectPath + "': " + (envFile != null ? envFile : "(cleared)"));
+
+            String envFile = rawEnvFile != null ? rawEnvFile.trim() : "";
+
+            if (envFile.isEmpty()) {
+                // Empty field == explicit opt-out. Persisted as a dedicated state so
+                // <project>/.env is no longer auto-discovered behind the user's back.
+                settingsService.setEnvFile(projectPath, null);
+                LOG.debug("[ProjectConfigHandler] Env file explicitly disabled for project '" + projectPath + "'");
+                showSuccess("Env file loading disabled for this project");
+                pushJson("window.updateEnvFile", buildEnvFileStatePayload(settingsService.getEnvFile(projectPath)));
+                return;
+            }
+
+            // Validate the file exists — resolve relative to the project root, the
+            // same base resolveEnvFile() uses at runtime.
+            java.io.File envFileObj = new java.io.File(envFile);
+            if (!envFileObj.isAbsolute() && projectPath != null) {
+                envFileObj = new java.io.File(projectPath, envFile);
+            }
+            if (!envFileObj.exists() || !envFileObj.isFile()) {
+                // Fail fast: neither persist nor confirm. Report only the value the
+                // user typed — the resolved absolute filesystem path stays out of the
+                // webview.
+                showError("Env file does not exist: " + envFile);
+                // Push the unchanged persisted state so the UI can drop its loading state.
+                pushJson("window.updateEnvFile", buildEnvFileStatePayload(settingsService.getEnvFile(projectPath)));
+                return;
+            }
+
+            // Persist the normalized absolute path so the value shown in the UI is
+            // byte-for-byte the one the runtime hands to the daemon.
+            String normalized = PathUtils.normalizeAbsolute(envFileObj.getPath());
+            settingsService.setEnvFile(projectPath, normalized);
+            LOG.debug("[ProjectConfigHandler] Set env file for project '" + projectPath + "': " + normalized);
             showSuccess("Env file config saved");
-            pushJson("window.updateEnvFile", jsonOf("envFile", envFile != null ? envFile : ""));
+            pushJson("window.updateEnvFile", buildEnvFileStatePayload(settingsService.getEnvFile(projectPath)));
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to set env file: " + e.getMessage(), e);
             showError("Failed to save env file config: " + e.getMessage());
             // Reset UI loading state even on unexpected errors
-            pushJson("window.updateEnvFile", jsonOf("envFile", ""));
+            pushJson("window.updateEnvFile", buildEnvFileStatePayload(null));
         }
+    }
+
+    /**
+     * Build the {@code window.updateEnvFile} payload for a resolved settings value,
+     * translating the three internal states into something the webview can render.
+     */
+    private static JsonObject buildEnvFileStatePayload(String envFile) {
+        boolean disabled = CodemossSettingsService.isEnvFileDisabled(envFile);
+        JsonObject response = new JsonObject();
+        // Default to ".env" so the UI shows a sensible placeholder
+        // instead of an empty field when the project hasn't been configured.
+        response.addProperty("envFile", disabled ? "" : (envFile != null ? envFile : ".env"));
+        response.addProperty("envFileState", disabled ? "disabled" : (envFile != null ? "configured" : "notConfigured"));
+        response.addProperty("envFileDisabled", disabled);
+        return response;
     }
 
     public void handleGetIdeTheme() {

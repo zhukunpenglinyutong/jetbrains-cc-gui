@@ -54,18 +54,45 @@ export async function verifyMcpServerStatus(serverName, serverConfig) {
 }
 
 /**
+ * Narrow a loaded server set down to the named servers.
+ *
+ * Verifying a server is not free — stdio servers get spawned, http/sse servers
+ * get a network request. Callers that only changed one server (e.g. approving a
+ * single project .mcp.json entry) use this to avoid disturbing the rest.
+ *
+ * @param {{enabled: Array<{name: string}>, disabled: string[], invalid: Array<{name: string}>}} allServers
+ * @param {string[]|null} serverNames - Names to keep; null/empty means "keep everything"
+ * @returns {{enabled: Array, disabled: string[], invalid: Array}}
+ */
+export function filterServersByName(allServers, serverNames) {
+  if (!Array.isArray(serverNames) || serverNames.length === 0) {
+    return allServers;
+  }
+  const keep = new Set(serverNames);
+  return {
+    enabled: allServers.enabled.filter((server) => keep.has(server.name)),
+    disabled: allServers.disabled.filter((name) => keep.has(name)),
+    invalid: allServers.invalid.filter((server) => keep.has(server.name)),
+  };
+}
+
+/**
  * Get the connection status of all MCP servers
  * Includes enabled, disabled, and invalid servers so the frontend gets a complete picture
  * @param {string} cwd - Current working directory (used to detect project config)
+ * @param {string[]|null} serverNames - Restrict the check to these server names (optional)
  * @returns {Promise<Object[]>} List of MCP server statuses
  */
-export async function getMcpServersStatus(cwd = null) {
+export async function getMcpServersStatus(cwd = null, serverNames = null) {
   try {
-    const allServers = await loadAllMcpServersInfo(cwd);
+    const loaded = await loadAllMcpServersInfo(cwd);
+    const isFiltered = Array.isArray(serverNames) && serverNames.length > 0;
+    const allServers = isFiltered ? filterServersByName(loaded, serverNames) : loaded;
 
     log('info', 'Found', allServers.enabled.length, 'enabled,',
       allServers.disabled.length, 'disabled,',
-      allServers.invalid.length, 'invalid MCP servers');
+      allServers.invalid.length, 'invalid MCP servers',
+      isFiltered ? '(filtered to ' + serverNames.join(', ') + ')' : '');
 
     // Verify all enabled servers in parallel
     const enabledResults = allServers.enabled.length > 0

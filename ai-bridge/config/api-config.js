@@ -195,6 +195,39 @@ export function isDangerousEnvVar(varName) {
   return DANGEROUS_ENV_VAR_SET.has(String(varName ?? '').toUpperCase());
 }
 
+// Security (D): extras that are only dangerous when they come from a user
+// configured .env file — NOT from request params / settings.json.
+//
+// PATH is the motivating case. The comment on DANGEROUS_ENV_VAR_SET explains
+// why PATH must stay out of that set: the daemon's own PATH is supplied by the
+// Java EnvironmentConfigurator and rejecting it would risk breaking the plugin.
+// That reasoning holds for the daemon's *own* env, but not for a value a
+// project hands us in .env. Every apply site guards with
+// `if (!(k in process.env) || !process.env[k])`, so a daemon that started
+// with an unset or empty PATH would let a single
+//   PATH=/tmp/attacker
+// line in .env redefine the binary search path for every subsequent spawn —
+// node, npx, the claude CLI itself — silently redirecting them into an
+// attacker-controlled directory. Rejecting PATH from env files costs nothing
+// legitimate: users who need to extend PATH configure it in the IDE, which
+// still flows through the untouched params.env path.
+const ENV_FILE_DENYLIST_EXTRA = new Set(['PATH']);
+
+/**
+ * Whether an env var must be rejected when it originates from a .env file.
+ *
+ * This is a strict superset of {@link isDangerousEnvVar} — it is NOT a
+ * substitute for it, and the params.env code path keeps using isDangerousEnvVar
+ * so that the IDE-provided PATH keeps working.
+ *
+ * @param {string} varName - Environment variable name
+ * @returns {boolean} true when the variable must not be taken from an env file
+ */
+export function isEnvFileDeniedEnvVar(varName) {
+  const upper = String(varName ?? '').toUpperCase();
+  return DANGEROUS_ENV_VAR_SET.has(upper) || ENV_FILE_DENYLIST_EXTRA.has(upper);
+}
+
 export function buildWebviewControlledSettingsOverride(modelId) {
   const env = {
     // Empty strings intentionally override settings.json env values while
