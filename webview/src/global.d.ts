@@ -487,6 +487,11 @@ interface Window {
   updateClaudeCliPath?: (path: string) => void;
 
   /**
+   * Update custom Codex CLI path
+   */
+  updateCodexCliPath?: (path: string) => void;
+
+  /**
    * Update working directory configuration
    */
   updateWorkingDirectory?: (json: string) => void;
