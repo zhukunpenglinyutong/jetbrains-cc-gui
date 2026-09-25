@@ -62,7 +62,9 @@ function mockTransport(t) {
       } });
       return configResult(effort);
     }
-    if (method === 'session/prompt' && params.prompt[0].text === 'test-user-message') {
+    const promptText = params.prompt?.[0]?.text || '';
+    // buildPromptBlocks may append ~/.grok/grok-rules.md after the user text.
+    if (method === 'session/prompt' && promptText.startsWith('test-user-message')) {
       prompts.push(effort);
       return { stopReason: 'end_turn' };
     }

@@ -81,6 +81,7 @@ describe('buildPromptBlocks multimodal', () => {
   it('injects fallback text for image-only turns', () => {
     const blocks = buildPromptBlocks({
       message: '',
+      loadGlobalRules: false,
       attachments: [
         { fileName: 'dot.png', mediaType: 'image/png', data: TINY_PNG_B64 },
       ],
