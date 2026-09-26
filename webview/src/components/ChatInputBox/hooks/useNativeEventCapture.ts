@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef } from 'react';
+import { useEffect, useEffectEvent, useLayoutEffect, useRef } from 'react';
 import type { SendShortcut } from '../types.js';
 import {
   catchStrayEnter,
@@ -50,6 +50,13 @@ function isAnyCompletionOpen(options: UseNativeEventCaptureOptions): boolean {
 export function useNativeEventCapture(options: UseNativeEventCaptureOptions): void {
   const { editableRef, sendShortcut, handleSubmit, handleEnhancePrompt } = options;
   const enterWasComposingRef = useRef(false);
+  // useEffectEvent keeps the first committed submit in JCEF. Enter would then
+  // still see the initial Claude frame, where SDK status is loading and the
+  // provider is not installed, and toast instead of sending.
+  const handleSubmitRef = useRef(handleSubmit);
+  useLayoutEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+  });
 
   // Effect Events only swap their implementation on commit, so the listeners
   // below stay subscribed for the element's lifetime yet never act on props
@@ -83,7 +90,7 @@ export function useNativeEventCapture(options: UseNativeEventCaptureOptions): vo
     if (isAnyCompletionOpen(options) || !isSendKey(sendShortcut, ev)) return;
 
     claimEnterPress(ev, options);
-    handleSubmit();
+    handleSubmitRef.current();
   });
 
   const onNativeKeyUp = useEffectEvent((ev: KeyboardEvent) => {
@@ -93,7 +100,9 @@ export function useNativeEventCapture(options: UseNativeEventCaptureOptions): vo
   });
 
   const onNativeBeforeInput = useEffectEvent((ev: InputEvent) => {
-    catchStrayEnter(ev, sendShortcut, options, isAnyCompletionOpen(options), handleSubmit);
+    catchStrayEnter(ev, sendShortcut, options, isAnyCompletionOpen(options), () => {
+      handleSubmitRef.current();
+    });
     if (
       ev.inputType === 'insertParagraph' &&
       options.isComposingRef.current &&

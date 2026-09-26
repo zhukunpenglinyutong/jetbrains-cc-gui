@@ -376,6 +376,41 @@ describe('useNativeEventCapture', () => {
     expect(submittedOnEnterRef.current).toBe(true);
   });
 
+  it('sends with the submit callback committed after the first frame', () => {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const firstSubmit = vi.fn();
+    const latestSubmit = vi.fn();
+    const submittedOnEnterRef = { current: false };
+    const completionSelectedRef = { current: false };
+    const base = {
+      editableRef: { current: el },
+      isComposingRef: { current: false },
+      lastCompositionEndTimeRef: { current: Date.now() - 1000 },
+      sendShortcut: 'enter' as const,
+      fileCompletion: { isOpen: false },
+      commandCompletion: { isOpen: false },
+      agentCompletion: { isOpen: false },
+      promptCompletion: { isOpen: false },
+      dollarCommandCompletion: { isOpen: false },
+      completionSelectedRef,
+      submittedOnEnterRef,
+      handleCompositionEnd: vi.fn(),
+      handleEnhancePrompt: () => {},
+    };
+
+    const { rerender } = renderHook(
+      ({ handleSubmit }) => useNativeEventCapture({ ...base, handleSubmit }),
+      { initialProps: { handleSubmit: firstSubmit } },
+    );
+    rerender({ handleSubmit: latestSubmit });
+    submittedOnEnterRef.current = false;
+
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13 }));
+    expect(firstSubmit).not.toHaveBeenCalled();
+    expect(latestSubmit).toHaveBeenCalledTimes(1);
+  });
+
   it('does not submit when completion is open', () => {
     const el = document.createElement('div');
     document.body.appendChild(el);
