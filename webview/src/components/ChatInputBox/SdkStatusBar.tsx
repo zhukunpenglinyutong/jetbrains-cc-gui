@@ -21,7 +21,9 @@ export const SdkStatusBar = ({
   onInstallSdk?: () => void;
   t: TFunction;
 }) => {
-  if (!(sdkStatusLoading || sdkStatusError || !sdkInstalled)) {
+  // An installed CLI does not need the Claude/Codex query. Showing the
+  // loading bar there is the "Checking SDK status..." the send key used to raise.
+  if (sdkInstalled && !sdkStatusError) {
     return null;
   }
 

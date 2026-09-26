@@ -67,7 +67,9 @@ export function useSubmitHandler({
     const content = getTextContent();
     const cleanContent = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 
-    if (sdkStatusLoading) {
+    // CLI providers are already known-installed. The global npm SDK query can
+    // still be in flight; waiting on it only toasts "Checking SDK status...".
+    if (sdkStatusLoading && !sdkInstalled) {
       addToast?.(t('chat.sdkStatusLoading'), 'info');
       return;
     }
