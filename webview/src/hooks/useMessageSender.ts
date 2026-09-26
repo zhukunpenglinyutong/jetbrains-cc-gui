@@ -328,8 +328,9 @@ export function useMessageSender({
 
     if (!text && !hasAttachments) return;
 
-    // Check SDK status
-    if (sdkStatusLoading) {
+    // Same gate as the input box: a provider that is already installed must
+    // not wait on the shared Claude/Codex SDK query.
+    if (sdkStatusLoading && !currentSdkInstalled) {
       addToast(t('chat.sdkStatusLoading'), 'info');
       return;
     }
