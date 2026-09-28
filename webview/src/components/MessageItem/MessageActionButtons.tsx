@@ -90,6 +90,9 @@ interface UserMessageHeaderProps {
   onQuote: () => void;
   onCopy: () => void;
   t: TFunction;
+  isSteered?: boolean;
+  /** The CLI has not folded this steer yet, so the model has not read it. */
+  isSteerPending?: boolean;
 }
 
 /** Timestamp and copy button for user messages */
@@ -102,10 +105,24 @@ export const UserMessageHeader = memo(function UserMessageHeader({
   onQuote,
   onCopy,
   t,
+  isSteered = false,
+  isSteerPending = false,
 }: UserMessageHeaderProps) {
   if (messageType !== 'user' || !timestamp) return null;
   return (
     <div className="message-header-row">
+      {isSteered && (
+        <span
+          className={`message-steered-badge${isSteerPending ? ' pending' : ''}`}
+          title={isSteerPending ? t('chat.queue.steering') : t('chat.queue.steerNow')}
+          aria-label={isSteerPending ? t('chat.queue.steering') : t('chat.queue.steerNow')}
+        >
+          <span className="codicon codicon-run-above" />
+          {isSteerPending && (
+            <span className="codicon codicon-loading codicon-modifier-spin message-steered-pending-spinner" />
+          )}
+        </span>
+      )}
       <div className="message-timestamp-header">
         {formatTime(timestamp)}
       </div>

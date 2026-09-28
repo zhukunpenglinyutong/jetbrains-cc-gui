@@ -10,6 +10,7 @@ export { useFileChanges } from './useFileChanges';
 export { useSubagents } from './useSubagents';
 export { useCodexSubagentStatusPolling } from './useCodexSubagentStatusPolling';
 export { useMessageQueue } from './useMessageQueue';
+export { useProviderCapabilities } from './useProviderCapabilities';
 export { useThemeInit } from './useThemeInit';
 export { useContextActions } from './useContextActions';
 export { useMessageProcessing } from './useMessageProcessing';
@@ -21,6 +22,7 @@ export type { UseWindowCallbacksOptions, ContextInfo } from './useWindowCallback
 export type { UseRewindHandlersOptions, UseRewindHandlersReturn } from './useRewindHandlers';
 export type { UseHistoryLoaderOptions } from './useHistoryLoader';
 export type { QueuedMessage, UseMessageQueueOptions, UseMessageQueueReturn } from './useMessageQueue';
+export type { ProviderCapabilities } from './useProviderCapabilities';
 export type { ViewMode, UseModelProviderStateOptions } from './useModelProviderState';
 export type { UseMessageProcessingOptions } from './useMessageProcessing';
 export type { UseMessageSenderOptions } from './useMessageSender';

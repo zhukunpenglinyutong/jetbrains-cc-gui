@@ -410,6 +410,48 @@ test('executeTurn refreshes lastUsedAt while processing query events', async () 
   assert.ok(runtime.lastUsedAt > 1);
 });
 
+test('executeTurn rejects a second send while a turn is in flight (plan B2/F3)', async () => {
+  const nextDeferred = createDeferred();
+  const enteredDeferred = createDeferred();
+  const factory = createSequencedQueryFactory([
+    async () => {
+      enteredDeferred.resolve();
+      return nextDeferred.promise;
+    }
+  ]);
+  __testing.setQueryFn(factory.queryFn);
+
+  const context = await __testing.buildRequestContext({
+    sessionId: 'session-guard',
+    runtimeSessionEpoch: 'epoch-guard',
+    cwd: process.cwd(),
+    message: 'first turn'
+  }, false);
+  const runtime = await __testing.acquireRuntime(context);
+
+  const turnPromise = __testing.executeTurn(runtime, context);
+  await enteredDeferred.promise;
+  await waitForTurnSink(runtime);
+  const inFlightSink = runtime.turnSink;
+
+  // A second send while the first turn is still consuming its sink must be
+  // rejected with a structured code, without overwriting the live sink or
+  // disturbing the active-turn pointer — the overwrite path turned the
+  // second message into an unread ghost transcript row.
+  await assert.rejects(
+    () => __testing.executeTurn(runtime, context),
+    (error) => {
+      assert.equal(error.code, 'turn_in_progress');
+      return true;
+    }
+  );
+  assert.equal(runtime.turnSink, inFlightSink);
+
+  nextDeferred.resolve({ done: false, value: { type: 'result', is_error: false } });
+  await turnPromise;
+  assert.equal(runtime.turnSink, null);
+});
+
 test('abortCurrentTurn still disposes an active runtime explicitly', async () => {
   const nextDeferred = createDeferred();
   const enteredDeferred = createDeferred();

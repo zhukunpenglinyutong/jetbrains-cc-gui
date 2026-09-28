@@ -9,6 +9,7 @@ import {
   useRewindHandlers,
   useHistoryLoader,
   useMessageQueue,
+  useProviderCapabilities,
   useMessageProcessing,
   useMessageSender,
   useChatComputations,
@@ -21,6 +22,8 @@ import {
   CONTEXT_COMMANDS,
 } from './hooks/useMessageSender';
 import type { Attachment, ChatInputBoxHandle, PermissionMode } from './components/ChatInputBox/types';
+import type { QueuedMessage } from './hooks/useMessageQueue';
+import { getSteerIdOf } from './utils/steerMessages';
 import type { ChatScreenProps } from './components/ChatScreen';
 import { useSubagentContextValues, useSetTaskEvents } from './contexts/SubagentContext';
 import { useMessages } from './contexts/MessagesContext';
@@ -177,6 +180,28 @@ export const useAppChatController = ({
     getOrCreateStreamingAssistantIndex, patchAssistantForStreaming,
   } = useStreamingMessages();
 
+  const { capabilities, applyCapabilities, resetCapabilities } = useProviderCapabilities();
+  const applyCapabilitiesRef = useRef(applyCapabilities);
+  applyCapabilitiesRef.current = applyCapabilities;
+  const resetCapabilitiesRef = useRef(resetCapabilities);
+  resetCapabilitiesRef.current = resetCapabilities;
+  const messageQueueSteerRef = useRef<{
+    markSteering: (id: string) => void;
+    restore: (id: string, fallback?: QueuedMessage) => void;
+    requeueAtHead: (item: QueuedMessage) => void;
+    dequeue: (id: string) => void;
+    steeringItemsRef: { current: Map<string, QueuedMessage> };
+    findSteeredBubble: (steerId: string) => QueuedMessage | null;
+    steerMessage: (item: QueuedMessage) => boolean;
+  } | null>(null);
+
+  // Steer plan F1: the optimistic bubble is the recovery source when an
+  // undelivered/rejected receipt arrives after the steering map lost the item
+  // (e.g. a session transition cleared the queue). Kept in a ref so the
+  // window callback reads the latest transcript without re-registering.
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
   // Ref indirection breaks a hook-ordering cycle: useSessionManagement wants the
   // message queue's clearQueue, but that hook sits further down the chain
   // (useMessageQueue needs executeMessage, which needs forceCreateNewSession
@@ -249,6 +274,9 @@ export const useAppChatController = ({
     setRestoredSessionTitle,
     setPermissionDialogTimeoutSeconds,
     clearQueuedMessages,
+    resetCapabilities: () => { resetCapabilitiesRef.current(); },
+    messageQueueSteerRef,
+    applyCapabilitiesRef,
   });
 
   // ── Message processing ──
@@ -269,6 +297,7 @@ export const useAppChatController = ({
     handleSubmit: hookHandleSubmit,
     executeMessage,
     interruptSession,
+    steerMessage,
   } = useMessageSender({
     t, addToast,
     currentProvider, selectedModel, permissionMode, reasoningEffort, selectedAgent, codexFastMode,
@@ -292,12 +321,39 @@ export const useAppChatController = ({
     dequeue: dequeueMessage,
     clearQueue,
     reorder: reorderMessageQueue,
+    markSteering,
+    restore,
+    requeueAtHead,
+    steeringItemsRef,
   } = useMessageQueue({ isLoading: loading, onExecute: executeMessage });
 
   // Point the session-transition indirection at the real clearQueue.
   useEffect(() => {
     clearMessageQueueRef.current = clearQueue;
   }, [clearQueue]);
+  useEffect(() => {
+    messageQueueSteerRef.current = {
+      markSteering,
+      restore,
+      requeueAtHead,
+      dequeue: dequeueMessage,
+      steeringItemsRef,
+      findSteeredBubble: (steerId: string): QueuedMessage | null => {
+        const bubble = messagesRef.current.find(
+          (message) => getSteerIdOf(message) === steerId,
+        );
+        if (!bubble) return null;
+        const raw = bubble.raw && typeof bubble.raw === 'object' ? bubble.raw : null;
+        const attachments = raw && Array.isArray(raw.steerAttachments)
+          ? (raw.steerAttachments as Attachment[])
+          : undefined;
+        const content = typeof bubble.content === 'string' ? bubble.content : '';
+        if (!content && !(attachments && attachments.length > 0)) return null;
+        return { id: steerId, content, attachments, queuedAt: Date.now(), status: 'queued' };
+      },
+      steerMessage,
+    };
+  }, [markSteering, restore, requeueAtHead, dequeueMessage, steeringItemsRef, steerMessage]);
 
   // handleSubmit with queue support (new session and local commands bypass loading check)
   const handleSubmit = useCallback((content: string, attachments?: Attachment[]) => {
@@ -336,6 +392,18 @@ export const useAppChatController = ({
     }
     hookHandleSubmit(content, attachments);
   }, [loading, enqueueMessage, hookHandleSubmit, forceCreateNewSession, currentProvider, handleModeSelect, setCurrentView, addToast, t]);
+
+  const canSteer = loading && capabilities.steer;
+  const handleSteerFromQueue = useCallback((id: string) => {
+    const item = messageQueue.find(entry => entry.id === id);
+    if (!item || item.status === 'steering') return;
+    // The steered bubble now lives in the transcript, so the queue row is
+    // hidden (it stays in the queue state, and in steeringItemsRef, so a
+    // rejected/undelivered receipt can put it back where it was).
+    if (steerMessage(item)) {
+      markSteering(id);
+    }
+  }, [messageQueue, steerMessage, markSteering]);
 
   // ── Chat-view computations (stage 5 of TASK-P1-01) ──
   const {
@@ -388,6 +456,7 @@ export const useAppChatController = ({
     // Message actions
     handleUndoFile, onDiscardAll, handleKeepAll,
     handleSubmit, interruptSession, messageQueue, dequeueMessage, reorderMessageQueue,
+    canSteer, handleSteerFromQueue,
     handleOpenRewindSelectDialog, handleNavigateToProviderSettings, wrappedHandleProviderSelect,
     // Session management
     createNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,

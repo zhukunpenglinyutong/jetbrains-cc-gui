@@ -19,6 +19,23 @@ import {
 } from '../services/claude/session-service.js';
 
 /**
+ * Parse an optional non-negative integer cursor.
+ * Null, undefined, empty/whitespace strings, and non-numeric values mean
+ * "latest page". Number(null) and Number('') are both 0, and beforeTurn 0 is
+ * the empty page before the first turn, so those values must not be coerced.
+ * @param {unknown} raw
+ * @returns {number|null}
+ */
+function parseHistoryCursor(raw) {
+  const parsed = typeof raw === 'number'
+    ? raw
+    : typeof raw === 'string' && raw.trim()
+      ? Number(raw)
+      : null;
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+/**
  * Execute a Claude specific command.
  * @param {string} command
  * @param {string[]} args
@@ -77,12 +94,7 @@ export async function handleClaudeCommand(command, args, stdinData) {
       const sessionId = stdinData?.sessionId || args[0];
       const cwd = stdinData?.cwd || args[1] || null;
       const beforeTurnRaw = stdinData?.beforeTurn ?? (args[2] !== '' && args[2] !== undefined ? args[2] : null);
-      const parsedBeforeTurn = typeof beforeTurnRaw === 'number'
-        ? beforeTurnRaw
-        : typeof beforeTurnRaw === 'string' && beforeTurnRaw.trim()
-          ? Number(beforeTurnRaw)
-          : null;
-      const beforeTurn = Number.isInteger(parsedBeforeTurn) && parsedBeforeTurn >= 0 ? parsedBeforeTurn : null;
+      const beforeTurn = parseHistoryCursor(beforeTurnRaw);
       const parsedLimit = Number(stdinData?.limit ?? args[3]);
       const limit = Number.isInteger(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 200) : 30;
       await claudeGetSessionMessagesPage(sessionId, cwd, beforeTurn, limit);

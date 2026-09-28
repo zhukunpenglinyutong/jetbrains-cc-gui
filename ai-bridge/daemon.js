@@ -40,8 +40,10 @@ import {
   resetRuntimePersistent,
   getContextUsagePersistent,
   getSnapshot as getClaudeRuntimeSnapshot,
-  setPermissionModePersistent
+  setPermissionModePersistent,
+  buildUserMessage
 } from './services/claude/persistent-query-service.js';
+import { steerMessagePersistent } from './services/claude/steer-service.js';
 import {
   sendMessagePersistent as grokSendPersistent,
   preconnectPersistent as grokPreconnectPersistent,
@@ -234,6 +236,14 @@ function writeRawLine(obj) {
 function sendDaemonEvent(event, data = {}) {
   writeRawLine({ type: 'daemon', event, ...data });
 }
+
+/**
+ * Provider-agnostic live-turn steer. Claude is the first STEER_HANDLERS entry;
+ * unknown providers reject with unsupported_provider and never join commandQueue.
+ */
+const STEER_HANDLERS = {
+  claude: (params) => steerMessagePersistent(params, { buildUserMessage }),
+};
 
 /**
  * Override process.stdout.write to tag output with request ID.
@@ -858,6 +868,42 @@ async function runDaemonMain() {
         .catch((e) => {
           _originalStderrWrite(`[daemon] zcode.setPermissionMode error: ${e.message}\n`, 'utf8');
           writeRawLine({ id: switchId, done: true, success: false, error: e.message || String(e) });
+        });
+      return;
+    }
+
+    // Live steer bypasses commandQueue: it must enqueue onto the in-flight turn
+    // rather than wait behind that turn's own processRequest.
+    if (typeof request.method === 'string' && request.method.endsWith('.steer')) {
+      const steerRequestId = request.id || '0';
+      if (!request.id) {
+        _originalStderrWrite(
+          '[daemon] steer arrived without request.id; done signal may be orphaned\n',
+          'utf8'
+        );
+      }
+      const provider = request.method.slice(0, -'.steer'.length);
+      const handler = STEER_HANDLERS[provider];
+      const replySteer = (payload) => {
+        writeRawLine({ id: steerRequestId, line: JSON.stringify(payload) });
+        writeRawLine({ id: steerRequestId, done: true, success: true });
+      };
+      if (typeof handler !== 'function') {
+        replySteer({ delivered: false, reason: 'unsupported_provider' });
+        return;
+      }
+      handler(request.params || {})
+        .then((result) => replySteer(result && typeof result === 'object'
+          ? result
+          : { delivered: false, reason: 'unsupported_provider' }))
+        .catch((e) => {
+          _originalStderrWrite(`[daemon] ${provider}.steer error: ${e.message}\n`, 'utf8');
+          writeRawLine({
+            id: steerRequestId,
+            done: true,
+            success: false,
+            error: e.message || String(e),
+          });
         });
       return;
     }

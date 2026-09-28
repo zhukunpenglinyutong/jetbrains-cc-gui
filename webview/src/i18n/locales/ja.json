@@ -27,6 +27,20 @@
   },
   "chat": {
     "sendMessage": "{{provider}}にメッセージを送信",
+    "queue": {
+      "steerNow": "今すぐ送信（現在のターンに挿入）",
+      "steering": "現在のターンに挿入しています..."
+    },
+    "steerRejected": {
+      "no_active_turn": "挿入できる進行中のターンがありません",
+      "session_mismatch": "セッションが一致しないため挿入できませんでした",
+      "unsupported_cli_version": "Claude CLI が古すぎて挿入できません（2.1.220 以上が必要）",
+      "runtime_closed": "ランタイムが閉じたため挿入できませんでした",
+      "unsupported_provider": "このプロバイダーは現在のターンへの挿入に対応していません",
+      "timeout": "現在のターンへの挿入がタイムアウトしました"
+    },
+    "steerUndelivered": "ステアしたメッセージが配信されず、キューの先頭に戻しました",
+    "steerUndeliveredLost": "ステアしたメッセージが配信されず、キューにも復元できませんでした",
     "createNewSession": "新規セッションを作成",
     "confirmNewSession": "現在のセッションにメッセージがあります。新規セッションを作成してもよろしいですか?",
     "confirmInterrupt": "会話が進行中です。新規セッションを作成すると中断されます。続行しますか?",

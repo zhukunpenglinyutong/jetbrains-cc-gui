@@ -54,6 +54,7 @@ public class ClaudeSession {
     private final ZcodeSDKBridge zcodeSDKBridge;
     private final SessionProviderRouter providerRouter;
     private final SessionSendService sendService;
+    private final SessionSteerService steerService;
     private final SessionMessageOrchestrator messageOrchestrator;
 
     // Callback facade
@@ -184,6 +185,33 @@ public class ClaudeSession {
          */
         default void onClaudeHistoryPageError(String sessionId, String message) {
         }
+
+        /**
+         * Steer command receipt: {@code accepted}, {@code rejected}, or {@code undelivered}.
+         *
+         * @param steerId frontend correlation id
+         * @param status  receipt status
+         * @param reason  reject/undelivered reason, or null
+         */
+        default void onSteerResult(String steerId, String status, String reason) {
+        }
+
+        /**
+         * The CLI folded a steer into the live turn. {@code message} is the inserted user row.
+         *
+         * @param steerId frontend correlation id
+         * @param message steered user message
+         */
+        default void onSteerFolded(String steerId, Message message) {
+        }
+
+        /**
+         * Provider capability flags for the live runtime (currently {@code steer}).
+         *
+         * @param steer whether the live CLI can inject a steer
+         */
+        default void onProviderCapabilities(boolean steer) {
+        }
     }
 
     public ClaudeSession(
@@ -241,6 +269,10 @@ public class ClaudeSession {
                 contextService,
                 this.grokSDKBridge,
                 this.zcodeSDKBridge);
+        this.steerService = new SessionSteerService();
+        if (claudeSDKBridge != null) {
+            this.steerService.register("claude", claudeSDKBridge);
+        }
         this.messageOrchestrator = new SessionMessageOrchestrator(
                 project,
                 state,
@@ -640,6 +672,54 @@ public class ClaudeSession {
             state.setBusy(false);
             state.setLoading(false);
             callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+            return null;
+        });
+    }
+
+    /**
+     * Inject a steer into the live turn. Does not toggle busy/loading and does not
+     * append a transcript row until the CLI folds the command.
+     *
+     * @param steerId                 frontend correlation id
+     * @param input                   user text
+     * @param attachments             optional attachments
+     * @param agentPrompt             optional agent prompt
+     * @param requestedReasoningEffort optional reasoning effort
+     * @return completion of the daemon steer command
+     */
+    public CompletableFuture<Void> steer(
+            String steerId,
+            String input,
+            List<Attachment> attachments,
+            String agentPrompt,
+            String requestedReasoningEffort
+    ) {
+        String normalizedInput = (input != null) ? input.trim() : "";
+        return steerService.steer(
+                state.getProvider(),
+                state.getSessionId(),
+                state.getRuntimeSessionEpoch(),
+                steerId,
+                normalizedInput,
+                attachments,
+                agentPrompt,
+                requestedReasoningEffort
+        ).thenAccept(result -> {
+            boolean delivered = result != null
+                    && result.has("delivered")
+                    && !result.get("delivered").isJsonNull()
+                    && result.get("delivered").getAsBoolean();
+            if (delivered) {
+                callbackFacade.notifySteerResult(steerId, "accepted", null);
+            } else {
+                String reason = "no_active_turn";
+                if (result != null && result.has("reason") && !result.get("reason").isJsonNull()) {
+                    reason = result.get("reason").getAsString();
+                }
+                callbackFacade.notifySteerResult(steerId, "rejected", reason);
+            }
+        }).exceptionally(error -> {
+            callbackFacade.notifySteerResult(steerId, "rejected", "runtime_closed");
             return null;
         });
     }

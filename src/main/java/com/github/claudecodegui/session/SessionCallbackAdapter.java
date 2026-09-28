@@ -3,6 +3,8 @@ package com.github.claudecodegui.session;
 import com.github.claudecodegui.handler.PermissionHandler;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.util.JsUtils;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.vfs.VirtualFileManager;
@@ -25,6 +27,7 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     /** Throttle interval targeting ~30fps to balance responsiveness with UI thread load. */
     private static final int DELTA_THROTTLE_MS = 33;
     private static final int STREAM_END_FALLBACK_DELAY_MS = 5_000;
+    private static final Gson GSON = new Gson();
 
     /**
      * Callback interface for JavaScript calls from session events.
@@ -425,6 +428,50 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
             );
             jsTarget.callJavaScript("claudeHistoryPageError", JsUtils.escapeJs(json));
         });
+    }
+
+    @Override
+    public void onSteerResult(String steerId, String status, String reason) {
+        if (isInactive()) {
+            return;
+        }
+        JsonObject payload = new JsonObject();
+        payload.addProperty("steerId", steerId != null ? steerId : "");
+        payload.addProperty("status", status != null ? status : "");
+        if (reason != null && !reason.isEmpty()) {
+            payload.addProperty("reason", reason);
+        }
+        jsTarget.callJavaScript("onSteerResult", JsUtils.escapeJs(GSON.toJson(payload)));
+    }
+
+    @Override
+    public void onSteerFolded(String steerId, ClaudeSession.Message message) {
+        if (isInactive()) {
+            return;
+        }
+        JsonObject payload = new JsonObject();
+        payload.addProperty("steerId", steerId != null ? steerId : "");
+        if (message != null) {
+            JsonObject msgObj = new JsonObject();
+            msgObj.addProperty("type", message.type != null ? message.type.toString().toLowerCase() : "user");
+            msgObj.addProperty("timestamp", message.timestamp);
+            msgObj.addProperty("content", message.content != null ? message.content : "");
+            if (message.raw != null) {
+                msgObj.add("raw", message.raw);
+            }
+            payload.add("message", msgObj);
+        }
+        jsTarget.callJavaScript("onSteerFolded", JsUtils.escapeJs(GSON.toJson(payload)));
+    }
+
+    @Override
+    public void onProviderCapabilities(boolean steer) {
+        if (isInactive()) {
+            return;
+        }
+        JsonObject payload = new JsonObject();
+        payload.addProperty("steer", steer);
+        jsTarget.callJavaScript("onProviderCapabilities", JsUtils.escapeJs(GSON.toJson(payload)));
     }
 
     /**

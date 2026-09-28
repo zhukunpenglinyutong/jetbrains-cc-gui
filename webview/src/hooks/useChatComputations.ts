@@ -23,6 +23,7 @@ import {
   finalizeSubagentsForSettledTurn,
   finalizeTodosForSettledTurn,
   isToolResultOnlyUserMessage,
+  isSteeredUserMessage,
   selectLatestSubagentTurn,
   sliceLatestConversationTurn,
 } from '../utils/turnScope';
@@ -334,6 +335,7 @@ export function useChatComputations({
       const current = mergedMessages[userMessageIndex];
       if (current.type !== 'user') return false;
       if ((current.content || '').trim() === '[tool_result]') return false;
+      if (isSteeredUserMessage(current)) return false;
       const raw = current.raw;
       if (raw && typeof raw !== 'string') {
         const content = raw.content ?? raw.message?.content;
@@ -343,7 +345,11 @@ export function useChatComputations({
       }
       for (let i = userMessageIndex + 1; i < mergedMessages.length; i += 1) {
         const msg = mergedMessages[i];
-        if (msg.type === 'user') break;
+        // Steered rows stay in the same CLI turn; keep scanning segment 2 tools.
+        if (msg.type === 'user') {
+          if (isSteeredUserMessage(msg)) continue;
+          break;
+        }
         const blocks = getContentBlocks(msg);
         for (const block of blocks) {
           if (block.type !== 'tool_use') continue;

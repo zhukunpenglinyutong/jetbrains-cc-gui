@@ -636,6 +636,23 @@ describe('preserveLastAssistantIdentity', () => {
     // Since timestamps match, preserveMessageIdentity returns next unchanged
     expect(result[0].timestamp).toBe(ts);
   });
+
+  it('does not copy segment 1 identity onto a post-fold segment 2', () => {
+    const prevTs = '2024-01-01T10:00:00.000Z';
+    const prev = [
+      makeUserMsg('refactor'),
+      makeAssistantMsg('segment 1', { timestamp: prevTs }),
+    ];
+    const next = [
+      makeUserMsg('refactor'),
+      makeAssistantMsg('segment 1', { timestamp: prevTs }),
+      makeUserMsg('do not touch B', { raw: { steered: true } }),
+      makeAssistantMsg('', { timestamp: '2024-01-01T10:00:02.000Z' }),
+    ];
+    const result = preserveLastAssistantIdentity(prev, next, findLastAssistantIndex);
+    expect(result).toBe(next);
+    expect(result[3].timestamp).not.toBe(prevTs);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -749,6 +766,26 @@ describe('preserveStreamingAssistantContent', () => {
       findLastAssistantIndex, patchAssistantForStreaming,
     );
     expect(result).toBe(next);
+  });
+
+  it('does not copy segment 1 content onto a post-fold segment 2', () => {
+    const longContent = 'long content from segment 1';
+    const prev = [
+      makeUserMsg('refactor'),
+      makeAssistantMsg(longContent),
+    ];
+    const next = [
+      makeUserMsg('refactor'),
+      makeAssistantMsg(longContent),
+      makeUserMsg('do not touch B', { raw: { steered: true } }),
+      makeAssistantMsg('short'),
+    ];
+    const result = preserveStreamingAssistantContent(
+      prev, next, ref(true), ref(longContent),
+      findLastAssistantIndex, patchAssistantForStreaming,
+    );
+    expect(result).toBe(next);
+    expect(result[3].content).toBe('short');
   });
 
   it('allows merge when both have same turn ID', () => {
@@ -1021,6 +1058,27 @@ describe('ensureStreamingAssistantInList', () => {
     const { list, streamingIndex } = ensureStreamingAssistantInList(prev, result, true, 1);
     expect(list).toHaveLength(2);
     expect(list[1]).toBe(streamingMsg);
+    expect(streamingIndex).toBe(1);
+  });
+
+  it('recovers before a trailing steered bubble instead of jumping over it', () => {
+    // Layout while a steer is pending: segment 1 streams below the user's turn
+    // opener and the steered bubble was inserted optimistically after it. The
+    // snapshot arrives without segment 1 but with the steered bubble
+    // (appendOptimisticMessageIfMissing re-appended it), so recovery must slot
+    // the segment back above its own steered message instead of below it.
+    const streamingMsg = makeAssistantMsg('segment 1', { __turnId: 1, isStreaming: true });
+    const steeredBubble = makeUserMsg('steer me', {
+      steered: true, steerId: 'steer-1', steerPending: true,
+    });
+    const prev = [makeUserMsg('q'), streamingMsg, steeredBubble];
+    const result = [makeUserMsg('q'), steeredBubble];
+
+    const { list, streamingIndex } = ensureStreamingAssistantInList(prev, result, true, 1);
+
+    expect(list.map((m) => m.type)).toEqual(['user', 'assistant', 'user']);
+    expect(list[1]).toBe(streamingMsg);
+    expect(list[2]).toBe(steeredBubble);
     expect(streamingIndex).toBe(1);
   });
 

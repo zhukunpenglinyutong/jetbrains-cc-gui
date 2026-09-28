@@ -84,6 +84,12 @@ export interface ClaudeMessage {
   timestamp?: string;
   isStreaming?: boolean;
   isOptimistic?: boolean;
+  /** User row injected into a live turn by a queue steer (see utils/steerMessages). */
+  steered?: boolean;
+  /** Frontend correlation id shared by the queue row, the steer command and the fold receipt. */
+  steerId?: string;
+  /** Runtime-only: the CLI has not folded this steer into the live turn yet. */
+  steerPending?: boolean;
   /**
    * Runtime-only: numeric turn identifier for streaming assistant isolation.
    * Set by frontend during streaming to distinguish messages from different

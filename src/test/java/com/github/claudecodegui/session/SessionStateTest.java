@@ -112,4 +112,18 @@ public class SessionStateTest {
         // The initial value must never be a retired id (#1678).
         Assert.assertEquals("claude-sonnet-5", state.getModel());
     }
+
+    @Test
+    public void capabilitiesDefaultFalseAndPersistUntilClearMessages() {
+        SessionState state = new SessionState();
+        Assert.assertFalse(state.isSteerCapable());
+        Assert.assertFalse(state.getCapabilitiesJson().get("steer").getAsBoolean());
+
+        state.setSteerCapable(true);
+        state.setSessionId("same-turn-session");
+        Assert.assertTrue(state.isSteerCapable());
+
+        state.clearMessages();
+        Assert.assertFalse(state.isSteerCapable());
+    }
 }

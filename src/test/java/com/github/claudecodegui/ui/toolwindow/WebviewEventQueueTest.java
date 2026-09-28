@@ -440,5 +440,11 @@ public class WebviewEventQueueTest {
                 WebviewEventQueue.EVENT_CLASSES.get("onBlockReset"));
         assertEquals(EnumSet.of(WebviewEventQueue.EventClass.LIFECYCLE),
                 WebviewEventQueue.EVENT_CLASSES.get("onTaskEvent"));
+        assertEquals(EnumSet.of(WebviewEventQueue.EventClass.LIFECYCLE),
+                WebviewEventQueue.EVENT_CLASSES.get("onSteerResult"));
+        assertEquals(EnumSet.of(WebviewEventQueue.EventClass.LIFECYCLE),
+                WebviewEventQueue.EVENT_CLASSES.get("onSteerFolded"));
+        assertEquals(EnumSet.of(WebviewEventQueue.EventClass.LATEST_ONLY),
+                WebviewEventQueue.EVENT_CLASSES.get("onProviderCapabilities"));
     }
 }

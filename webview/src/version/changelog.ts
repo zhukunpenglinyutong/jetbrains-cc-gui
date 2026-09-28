@@ -128,6 +128,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
     content: {
       en: `✨ Features
 - Add **ZCode CLI as a new AI provider**: a persistent \`zcode app-server\` JSON-RPC runtime with streaming thinking deltas, merged tool-call cards, mid-turn permission-mode switching, reasoning-effort mapping, session history readback/deletion, and automatic credential resolution from the ZCode desktop client — no API key entry needed in the plugin (by @zhukunpenglinyutong)
+- Add **queue steer for Claude** (CLI >= 2.1.220): a steered message appears in the conversation immediately and is injected into the live turn at the next tool boundary without stopping the in-flight tool; a pending badge marks it until then, and a rejected/undelivered steer drops back into the queue; unsupported providers keep today's send-after-this-turn queue
 - Add **MiniMax Code (mcode) as a new AI provider**: streaming chat via headless \`minimax exec\`, session resume, image attachments, full session-history readback and safe deletion, a model picker fed from \`~/.minimax/config.yaml\`, and MiniMax Coding Plan quota in Usage Statistics (by @whyz23901, @zhukunpenglinyutong)
 - Add a native **"Auto" permission mode for Claude and Codex**: the provider-side reviewer decides first and only escalations reach the approval dialog; Codex maps it to the guarded workspace-write sandbox with on-request approval (codex-sdk ≥ 0.146.0), while headless CLI providers safely downgrade it to Default (by @gadfly3173, @zhukunpenglinyutong)
 - Give **code-review results a dedicated findings card**: verdict, category, clickable file:line links that jump into the IDE, and collapsible details, localized across all 10 languages (by @gadfly3173)
@@ -155,6 +156,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
 - Keep a saved **Codex auto mode across provider switches** — a normalization-order bug silently demoted it to Default (found and fixed during release review)`,
       zh: `✨ 新功能
 - 新增 **ZCode CLI 作为 AI Provider**：持久化 \`zcode app-server\` JSON-RPC 运行时，支持流式 thinking 增量、合并的工具调用卡片、回合中途切换权限模式、推理强度映射、会话历史读取/删除，并自动复用 ZCode 桌面客户端的凭证——插件内无需填写 API Key（by @zhukunpenglinyutong）
+- 新增 **Claude 队列插入当前回合**（CLI >= 2.1.220）：点击插入后消息立即出现在对话中，并在下一次工具边界注入进行中的回合，不中断正在执行的工具；注入前气泡带待投递标记，被拒绝或未送达则退回队列；不支持的 Provider 仍按原来的“本回合结束后再发送”排队
 - 新增 **MiniMax Code（mcode）作为 AI Provider**：通过无头 \`minimax exec\` 流式对话，支持会话续接、图片附件、完整会话历史读取与安全删除、从 \`~/.minimax/config.yaml\` 读取的模型选择器，以及用量统计中的 MiniMax Coding Plan 额度查询（by @whyz23901、@zhukunpenglinyutong）
 - 新增 Claude 与 Codex 的原生 **「Auto」权限模式**：由 Provider 侧审查器先行裁决，只有升级请求才会弹出批准对话框；Codex 将其映射为受护栏约束的 workspace-write 沙箱 + 按需批准（要求 codex-sdk ≥ 0.146.0），无头 CLI Provider 会安全降级为 Default（by @gadfly3173、@zhukunpenglinyutong）
 - 代码审查结果新增 **专用 Findings 卡片**：结论、分类、可点击跳转到 IDE 的文件:行号链接、可折叠详情，全部 10 种语言本地化（by @gadfly3173）

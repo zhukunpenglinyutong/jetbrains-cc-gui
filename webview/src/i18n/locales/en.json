@@ -44,6 +44,20 @@
   },
   "chat": {
     "sendMessage": "Send message to {{provider}}",
+    "queue": {
+      "steerNow": "Send now (steer the current turn)",
+      "steering": "Steering the current turn..."
+    },
+    "steerRejected": {
+      "no_active_turn": "No live turn to steer",
+      "session_mismatch": "Session mismatch; steer was not applied",
+      "unsupported_cli_version": "Claude CLI is too old to steer (requires 2.1.220+)",
+      "runtime_closed": "The live runtime closed before the steer was applied",
+      "unsupported_provider": "This provider does not support steering",
+      "timeout": "Steer timed out"
+    },
+    "steerUndelivered": "A steered message was not delivered and has been moved back to the head of the queue.",
+    "steerUndeliveredLost": "A steered message was not delivered and could not be restored to the queue.",
     "createNewSession": "Create New Session",
     "confirmNewSession": "Current session has messages. Are you sure you want to create a new session?",
     "confirmInterrupt": "A conversation is in progress. Creating a new session will interrupt it. Continue?",

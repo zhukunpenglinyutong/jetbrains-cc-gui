@@ -117,6 +117,7 @@ public class ClaudeHistoryReader {
         public Boolean isSidechain;
         public String cwd;
         public String entrypoint;
+        public Boolean steered;
 
         public static class Message {
             public String role;

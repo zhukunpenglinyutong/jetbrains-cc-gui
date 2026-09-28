@@ -11,6 +11,32 @@ import { getExistingClaudeProjectSessionFilePath } from '../../utils/path-utils.
 import { selectConversationChain } from './conversation-chain.js';
 import { extractTaskNotificationXml } from './task-notification-parser.js';
 
+const STEER_QUEUED_COMMAND_MODES = new Set(['prompt', 'user-prompt']);
+
+/**
+ * Rewrite a prompt/user-prompt queued_command attachment into a steered user row.
+ * `prompt` may be a string or a content-block array; pass it through.
+ * @param {object} msg
+ * @returns {object|null}
+ */
+export function rewriteSteeredQueuedCommand(msg) {
+  if (!msg || msg.type !== 'attachment') {
+    return null;
+  }
+  const attachment = msg.attachment;
+  if (!attachment || attachment.type !== 'queued_command') {
+    return null;
+  }
+  if (!STEER_QUEUED_COMMAND_MODES.has(attachment.commandMode)) {
+    return null;
+  }
+  return {
+    type: 'user',
+    message: { role: 'user', content: attachment.prompt },
+    steered: true,
+  };
+}
+
 /**
  * Write a JSON payload as a single stdout line and await the flush.
  *
@@ -229,14 +255,19 @@ export function buildSessionMessagesPayload(sessionFile) {
     // stuck on the launch ack text. Re-shape it into a user message whose
     // content is the task-notification XML - the same shape the user-message
     // carrier already has - so MessageParser forwards it and the frontend's
-    // collectTaskEventsFromMessages recovers the report. User-message and
-    // non-task-notification attachments pass through unchanged.
+    // collectTaskEventsFromMessages recovers the report. Prompt / user-prompt
+    // queued_command attachments are steered user rows: rewrite them so history
+    // reload shows the inserted user message between assistant segments.
     .flatMap(msg => {
       if (msg.type === 'attachment' && extractTaskNotificationXml(msg) !== null) {
         return [{
           type: 'user',
           message: { role: 'user', content: extractTaskNotificationXml(msg) },
         }];
+      }
+      const steered = rewriteSteeredQueuedCommand(msg);
+      if (steered) {
+        return [steered];
       }
       return [msg];
     });

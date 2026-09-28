@@ -3,6 +3,7 @@ import {
   computeStatusScopeMessages,
   finalizeTodosForSettledTurn,
   selectLatestSubagentTurn,
+  sliceLatestConversationTurn,
 } from './turnScope';
 import type { ClaudeMessage, SubagentInfo, TodoItem } from '../types';
 
@@ -91,5 +92,20 @@ describe('selectLatestSubagentTurn', () => {
     const second = subagent({ id: 'second', messageIndex: 2 });
 
     expect(selectLatestSubagentTurn(messages, [first, second])).toEqual([first, second]);
+  });
+});
+
+describe('sliceLatestConversationTurn', () => {
+  it('does not treat a steered user row as a new turn start', () => {
+    const original = userMsg('refactor this module');
+    const segment1 = assistantMsg();
+    const steered: ClaudeMessage = {
+      type: 'user',
+      content: 'do not touch B',
+      raw: { steered: true },
+    };
+    const segment2 = assistantMsg();
+    const messages = [original, segment1, steered, segment2];
+    expect(sliceLatestConversationTurn(messages)).toEqual(messages);
   });
 });

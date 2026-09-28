@@ -27,6 +27,20 @@
   },
   "chat": {
     "sendMessage": "Envoyer un message à {{provider}}",
+    "queue": {
+      "steerNow": "Envoyer maintenant (inserer dans le tour en cours)",
+      "steering": "Insertion dans le tour en cours..."
+    },
+    "steerRejected": {
+      "no_active_turn": "Aucun tour en cours a inserer",
+      "session_mismatch": "Session incompatible ; insertion impossible",
+      "unsupported_cli_version": "Claude CLI trop ancien pour inserer (2.1.220+ requis)",
+      "runtime_closed": "Le runtime s'est ferme avant l'insertion",
+      "unsupported_provider": "Ce fournisseur ne prend pas en charge l'insertion dans le tour en cours",
+      "timeout": "Insertion dans le tour en cours expiree"
+    },
+    "steerUndelivered": "Un message inséré n'a pas été délivré et a été remis en tête de file d'attente",
+    "steerUndeliveredLost": "Un message inséré n'a pas été délivré et n'a pas pu être restauré dans la file d'attente",
     "createNewSession": "Créer une nouvelle session",
     "confirmNewSession": "La session actuelle contient des messages, êtes-vous sûr de vouloir créer une nouvelle session ?",
     "confirmInterrupt": "Une conversation est en cours, créer une nouvelle session l'interrompra, continuer ?",

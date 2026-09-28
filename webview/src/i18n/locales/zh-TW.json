@@ -27,6 +27,20 @@
   },
   "chat": {
     "sendMessage": "給 {{provider}} 發送訊息",
+    "queue": {
+      "steerNow": "立即發送（插入目前回合）",
+      "steering": "正在插入目前回合..."
+    },
+    "steerRejected": {
+      "no_active_turn": "目前沒有進行中的回合可插入",
+      "session_mismatch": "工作階段不符，未能插入",
+      "unsupported_cli_version": "Claude CLI 版本過低，無法插入目前回合（需要 2.1.220+）",
+      "runtime_closed": "執行階段已關閉，未能插入",
+      "unsupported_provider": "目前 Provider 不支援插入目前回合",
+      "timeout": "插入目前回合逾時"
+    },
+    "steerUndelivered": "一條插入當前回合的訊息未能送達，已移回佇列最前",
+    "steerUndeliveredLost": "一條插入當前回合的訊息未能送達，且無法恢復到佇列中",
     "createNewSession": "建立新會話",
     "confirmNewSession": "目前會話已有訊息，確定要建立新會話嗎？",
     "confirmInterrupt": "目前正在對話中，建立新會話將中斷目前對話，是否繼續？",

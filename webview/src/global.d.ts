@@ -175,6 +175,9 @@ interface Window {
    * StatusPanel uses to mark a background (run_in_background) Agent subagent as completed.
    */
   onTaskEvent?: (eventJson: string) => void;
+  onSteerResult?: (json: string) => void;
+  onSteerFolded?: (json: string) => void;
+  onProviderCapabilities?: (json: string) => void;
 
   /**
    * SDK-to-CLI session conversion result callback.

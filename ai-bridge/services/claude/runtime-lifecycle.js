@@ -296,7 +296,11 @@ async function createRuntime(requestContext, callbacks) {
     query: null,
     inputStream: new AsyncStream(),
     lastEmittedSessionId: null,
-    titleGenerationAttempted: false
+    titleGenerationAttempted: false,
+    // Live-steer bookkeeping: CLI version + pending/folded uuid maps.
+    claudeCodeVersion: null,
+    pendingSteers: new Map(),
+    foldedSteers: new Map(),
   };
 
   const options = {

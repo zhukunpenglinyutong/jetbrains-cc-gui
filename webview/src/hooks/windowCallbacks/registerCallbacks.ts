@@ -38,6 +38,7 @@ import { registerSessionAndSdkCallbacks } from './registerCallbacks/sessionCallb
 import { registerUsageModeCallbacks } from './registerCallbacks/usageModeCallbacks';
 import { registerPermissionCallbacks } from './registerCallbacks/permissionCallbacks';
 import { registerAgentAndSelectionCallbacks } from './registerCallbacks/agentCallbacks';
+import { registerSteerCallbacks } from './registerCallbacks/steerCallbacks';
 import {
   isCurrentSubagentResponse,
   mergeSubagentHistory,
@@ -90,6 +91,7 @@ export function registerWindowCallbacks(
     thinkingUpdateTimeoutRef: options.thinkingUpdateTimeoutRef,
     streamingTurnIdRef: options.streamingTurnIdRef,
     clearQueuedMessages: options.clearQueuedMessages,
+    resetCapabilities: options.resetCapabilities,
   });
 
   // Expose as single entry point for session transition cleanup.
@@ -107,6 +109,7 @@ export function registerWindowCallbacks(
   registerUsageModeCallbacks(options);
   registerPermissionCallbacks(options);
   registerAgentAndSelectionCallbacks(options);
+  registerSteerCallbacks(options, tRef);
 
   window.onSubagentHistoryChunk = appendSubagentHistoryChunk;
 

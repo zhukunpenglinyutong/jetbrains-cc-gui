@@ -2,6 +2,7 @@ package com.github.claudecodegui.session;
 
 
 import com.github.claudecodegui.util.PlatformUtils;
+import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -146,6 +147,10 @@ public class SessionState {
     private volatile String codexServiceTier = null;
     private volatile String dshPreset = "";
 
+    // Live-runtime capabilities. Default false until [CAPABILITIES] arrives.
+    // Reset on session switch (clearMessages), not on mid-turn [SESSION_ID].
+    private volatile boolean steerCapable = false;
+
     // Slash commands — volatile for cross-thread visibility (same reason as permissionMode/model/provider)
     private volatile List<String> slashCommands = new ArrayList<>();
 
@@ -257,6 +262,42 @@ public class SessionState {
 
     public String getDshPreset() {
         return dshPreset;
+    }
+
+    /**
+     * Whether the live runtime advertised steer support.
+     *
+     * @return true when CLI can inject a steer into the current turn
+     */
+    public boolean isSteerCapable() {
+        return steerCapable;
+    }
+
+    /**
+     * Persist the steer capability flag for the current session.
+     *
+     * @param steerCapable true when the live CLI supports steer
+     */
+    public void setSteerCapable(boolean steerCapable) {
+        this.steerCapable = steerCapable;
+    }
+
+    /**
+     * Reset provider capabilities to the session-switch default.
+     */
+    public void resetCapabilities() {
+        this.steerCapable = false;
+    }
+
+    /**
+     * Snapshot of provider capabilities for tests and transport.
+     *
+     * @return JSON object with {@code steer}
+     */
+    public JsonObject getCapabilitiesJson() {
+        JsonObject capabilities = new JsonObject();
+        capabilities.addProperty("steer", steerCapable);
+        return capabilities;
     }
 
     public String getRuntimeSessionEpoch() {
@@ -533,6 +574,7 @@ public class SessionState {
             messageMaterializer = () -> { };
             messages.clear();
         }
+        resetCapabilities();
     }
 
     /**

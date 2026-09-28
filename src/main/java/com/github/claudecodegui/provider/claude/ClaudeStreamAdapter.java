@@ -144,6 +144,22 @@ class ClaudeStreamAdapter {
 
         if (line.startsWith("[MESSAGE_END]")) {
             callback.onMessage("message_end", "");
+            return;
+        }
+
+        if (line.startsWith("[CAPABILITIES]")) {
+            callback.onMessage("capabilities", line.substring("[CAPABILITIES]".length()).trim());
+            return;
+        }
+
+        if (line.startsWith("[STEER_FOLDED]")) {
+            callback.onMessage("steer_folded", line.substring("[STEER_FOLDED]".length()).trim());
+            return;
+        }
+
+        if (line.startsWith("[STEER_UNDELIVERED]")) {
+            callback.onMessage("steer_undelivered", line.substring("[STEER_UNDELIVERED]".length()).trim());
+            return;
         }
     }
 

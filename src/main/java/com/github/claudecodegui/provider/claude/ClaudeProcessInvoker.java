@@ -273,7 +273,10 @@ class ClaudeProcessInvoker {
                 || line.startsWith("[USAGE]")
                 || line.startsWith("[MESSAGE_START]")
                 || line.startsWith("[BLOCK_RESET]")
-                || line.startsWith("[MESSAGE_END]");
+                || line.startsWith("[MESSAGE_END]")
+                || line.startsWith("[CAPABILITIES]")
+                || line.startsWith("[STEER_FOLDED]")
+                || line.startsWith("[STEER_UNDELIVERED]");
     }
 
     private String formatSendError(String line, String node, String nodeVersion, File workDir) {

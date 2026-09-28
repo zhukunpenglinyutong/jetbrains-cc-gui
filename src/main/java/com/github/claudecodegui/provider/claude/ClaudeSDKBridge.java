@@ -9,6 +9,7 @@ import com.github.claudecodegui.provider.common.BaseSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.provider.common.SteerCapableBridge;
 
 import java.io.File;
 import java.util.List;
@@ -22,7 +23,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * Claude Agent SDK bridge.
  * Handles Java to Node.js SDK communication, supports async and streaming responses.
  */
-public class ClaudeSDKBridge extends BaseSDKBridge {
+public class ClaudeSDKBridge extends BaseSDKBridge implements SteerCapableBridge {
 
     private final ClaudeStreamAdapter streamAdapter;
     private final ClaudeRequestParamsBuilder requestParamsBuilder;
@@ -693,6 +694,131 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             JsonObject err = new JsonObject();
             err.addProperty("success", false);
             err.addProperty("error", "setPermissionMode timed out after 10 seconds");
+            return err;
+        });
+    }
+
+    /**
+     * Inject a steer into the live daemon runtime (bypasses the send command queue).
+     *
+     * @param sessionId           session whose runtime should receive the steer
+     * @param runtimeSessionEpoch runtime epoch for session matching
+     * @param steerId             frontend correlation id
+     * @param message             user text
+     * @param attachments         optional attachments
+     * @param agentPrompt         optional agent prompt
+     * @param reasoningEffort     optional reasoning effort
+     * @return JSON with {@code delivered} and optional {@code reason}
+     */
+    @Override
+    public CompletableFuture<JsonObject> steerLive(
+            String sessionId,
+            String runtimeSessionEpoch,
+            String steerId,
+            String message,
+            List<ClaudeSession.Attachment> attachments,
+            String agentPrompt,
+            String reasoningEffort
+    ) {
+        DaemonBridge db = this.daemonCoordinator.getCurrentDaemonBridge();
+        if (db == null || !db.isAlive()) {
+            JsonObject skipped = new JsonObject();
+            skipped.addProperty("delivered", false);
+            skipped.addProperty("reason", "no_active_turn");
+            return CompletableFuture.completedFuture(skipped);
+        }
+
+        JsonObject params = requestParamsBuilder.buildSendParams(
+                message,
+                sessionId,
+                runtimeSessionEpoch,
+                null,
+                null,
+                null,
+                attachments,
+                null,
+                agentPrompt,
+                null,
+                null,
+                reasoningEffort
+        );
+        if (steerId != null && !steerId.isEmpty()) {
+            params.addProperty("steerId", steerId);
+        }
+
+        CompletableFuture<JsonObject> resultFuture = new CompletableFuture<>();
+        AtomicReference<JsonObject> lineRef = new AtomicReference<>();
+
+        DaemonBridge.DaemonOutputCallback callback = new DaemonBridge.DaemonOutputCallback() {
+            @Override
+            public void onLine(String line) {
+                try {
+                    JsonObject parsed = ClaudeSDKBridge.this.gson.fromJson(line, JsonObject.class);
+                    if (parsed != null) {
+                        lineRef.set(parsed);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+
+            @Override
+            public void onStderr(String text) {
+            }
+
+            @Override
+            public void onError(String error) {
+                if (!resultFuture.isDone()) {
+                    JsonObject err = new JsonObject();
+                    err.addProperty("delivered", false);
+                    err.addProperty("reason", "runtime_closed");
+                    err.addProperty("error", error);
+                    resultFuture.complete(err);
+                }
+            }
+
+            @Override
+            public void onComplete(boolean success) {
+                if (resultFuture.isDone()) {
+                    return;
+                }
+                JsonObject parsed = lineRef.get();
+                if (parsed != null) {
+                    resultFuture.complete(parsed);
+                    return;
+                }
+                JsonObject err = new JsonObject();
+                err.addProperty("delivered", false);
+                err.addProperty("reason", success ? "no_active_turn" : "runtime_closed");
+                resultFuture.complete(err);
+            }
+        };
+
+        try {
+            CompletableFuture<Boolean> commandFuture = db.sendCommand("claude.steer", params, callback);
+            commandFuture.exceptionally(ex -> {
+                if (!resultFuture.isDone()) {
+                    JsonObject err = new JsonObject();
+                    err.addProperty("delivered", false);
+                    err.addProperty("reason", "runtime_closed");
+                    err.addProperty("error", ex.getMessage());
+                    resultFuture.complete(err);
+                }
+                return false;
+            });
+        } catch (Exception e) {
+            LOG.error("[ClaudeSDKBridge] steerLive failed: " + e.getMessage(), e);
+            JsonObject err = new JsonObject();
+            err.addProperty("delivered", false);
+            err.addProperty("reason", "runtime_closed");
+            err.addProperty("error", e.getMessage());
+            return CompletableFuture.completedFuture(err);
+        }
+
+        return resultFuture.orTimeout(10, TimeUnit.SECONDS).exceptionally(ex -> {
+            JsonObject err = new JsonObject();
+            err.addProperty("delivered", false);
+            err.addProperty("reason", "timeout");
+            err.addProperty("error", "steer timed out after 10 seconds");
             return err;
         });
     }

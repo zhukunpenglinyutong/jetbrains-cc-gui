@@ -314,9 +314,7 @@ test('buildSessionMessagesPayload keeps a parent-linked queued command attachmen
   }
 });
 
-test('buildSessionMessagesPayload leaves a non-task-notification queued_command attachment untouched', () => {
-  // An enqueued user prompt is also a queued_command attachment but not a
-  // task-notification carrier; it must not be rewritten into a user message.
+test('buildSessionMessagesPayload rewrites a user-prompt queued_command attachment into a steered user message', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-claude-session-'));
   try {
     const file = path.join(tempDir, 'session.jsonl');
@@ -328,8 +326,64 @@ test('buildSessionMessagesPayload leaves a non-task-notification queued_command 
 
     const { messages } = buildSessionMessagesPayload(file);
     assert.equal(messages.length, 1);
-    assert.equal(messages[0].type, 'attachment');
-    assert.equal(messages[0].attachment.commandMode, 'user-prompt');
+    assert.deepEqual(messages[0], {
+      type: 'user',
+      message: { role: 'user', content: 'do something' },
+      steered: true,
+    });
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('buildSessionMessagesPayload rewrites a prompt-array queued_command attachment', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-claude-session-'));
+  try {
+    const file = path.join(tempDir, 'session.jsonl');
+    const prompt = [{ type: 'text', text: 'do not touch file B' }];
+    fs.writeFileSync(file, JSON.stringify({
+      type: 'attachment',
+      attachment: { type: 'queued_command', commandMode: 'prompt', prompt },
+    }) + '\n');
+
+    const { messages } = buildSessionMessagesPayload(file);
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0].type, 'user');
+    assert.equal(messages[0].steered, true);
+    assert.deepEqual(messages[0].message.content, prompt);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('buildSessionMessagesPayload keeps task-notification rewrite beside a steered user-prompt', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-claude-session-'));
+  try {
+    const file = path.join(tempDir, 'session.jsonl');
+    const xml = '<task-notification>\n<tool-use-id>toolu_att</tool-use-id>\n<status>completed</status>\n<result>the report</result>\n</task-notification>';
+    fs.writeFileSync(file, [
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'hi' } }),
+      JSON.stringify({
+        type: 'attachment',
+        attachment: { type: 'queued_command', commandMode: 'task-notification', prompt: xml },
+      }),
+      JSON.stringify({
+        type: 'attachment',
+        attachment: { type: 'queued_command', commandMode: 'user-prompt', prompt: 'steer me' },
+      }),
+      JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: 'ok' } }),
+    ].join('\n') + '\n');
+
+    const { messages } = buildSessionMessagesPayload(file);
+    assert.equal(messages.length, 4);
+    assert.equal(messages[1].type, 'user');
+    assert.equal(messages[1].message.content, xml);
+    assert.equal(messages[1].steered, undefined);
+    assert.deepEqual(messages[2], {
+      type: 'user',
+      message: { role: 'user', content: 'steer me' },
+      steered: true,
+    });
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

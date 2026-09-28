@@ -12,6 +12,7 @@ import com.github.claudecodegui.util.TokenUsageUtils;
 import com.github.claudecodegui.util.UsageCostCalculator;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -135,6 +136,12 @@ public class ClaudeMessageHandler implements MessageCallback {
             case "system":
                 handleSystemMessage(content);
                 return;
+            case "capabilities":
+                handleProviderCapabilities(content);
+                return;
+            case "steer_undelivered":
+                handleSteerUndelivered(content);
+                return;
             case "result":
                 // Besides the raw-tree mutation it shares with the locked
                 // handlers, this one reads ~/.claude/settings.json to resolve the
@@ -200,6 +207,9 @@ public class ClaudeMessageHandler implements MessageCallback {
                     break;
                 case "usage":
                     handleUsage(content);
+                    break;
+                case "steer_folded":
+                    handleSteerFolded(content);
                     break;
                 default:
                     LOG.debug("ClaudeMessageHandler: Unhandled message type: " + type);
@@ -533,6 +543,145 @@ public class ClaudeMessageHandler implements MessageCallback {
         state.setSessionId(content);
         callbackHandler.notifySessionIdReceived(content);
         LOG.info("Captured session ID: " + content);
+    }
+
+    /**
+     * Persist live provider capabilities from {@code [CAPABILITIES]}.
+     *
+     * @param content JSON payload with {@code steer}
+     */
+    private void handleProviderCapabilities(String content) {
+        boolean steer = false;
+        if (content != null && content.startsWith("{")) {
+            try {
+                JsonObject payload = gson.fromJson(content, JsonObject.class);
+                if (payload != null && payload.has("steer") && !payload.get("steer").isJsonNull()) {
+                    steer = payload.get("steer").getAsBoolean();
+                }
+            } catch (Exception e) {
+                LOG.warn("Failed to parse [CAPABILITIES]: " + e.getMessage());
+            }
+        }
+        state.setSteerCapable(steer);
+        callbackHandler.notifyProviderCapabilities(steer);
+    }
+
+    /**
+     * Fold a steer into the live transcript: append the user row, split the
+     * current assistant so later deltas become segment 2.
+     *
+     * @param content JSON payload with {@code steerId}, {@code uuid}, {@code prompt}
+     */
+    private void handleSteerFolded(String content) {
+        if (content == null || !content.startsWith("{")) {
+            return;
+        }
+        JsonObject payload;
+        try {
+            payload = gson.fromJson(content, JsonObject.class);
+        } catch (Exception e) {
+            LOG.warn("Failed to parse [STEER_FOLDED]: " + e.getMessage());
+            return;
+        }
+        if (payload == null) {
+            return;
+        }
+        String steerId = payload.has("steerId") && !payload.get("steerId").isJsonNull()
+                ? payload.get("steerId").getAsString()
+                : "";
+        JsonElement prompt = payload.has("prompt") ? payload.get("prompt") : null;
+        String displayText = displayTextFromPrompt(prompt);
+
+        JsonObject raw = new JsonObject();
+        raw.addProperty("type", "user");
+        raw.addProperty("steerId", steerId);
+        raw.addProperty("steered", true);
+        if (payload.has("uuid") && !payload.get("uuid").isJsonNull()) {
+            raw.add("uuid", payload.get("uuid"));
+        }
+        JsonObject messageObj = new JsonObject();
+        messageObj.addProperty("role", "user");
+        if (prompt != null && !prompt.isJsonNull()) {
+            messageObj.add("content", prompt);
+        } else {
+            messageObj.addProperty("content", displayText);
+        }
+        raw.add("message", messageObj);
+
+        Message userMessage = new Message(Message.Type.USER, displayText, raw);
+        state.addMessage(userMessage);
+
+        currentAssistantMessage = null;
+        assistantContent.setLength(0);
+        resetSegmentState();
+
+        callbackHandler.notifyMessageUpdate(state.getMessages());
+        callbackHandler.notifySteerFolded(steerId, userMessage);
+    }
+
+    /**
+     * Turn ended before the CLI folded the steer. Transcript has no row to remove.
+     *
+     * @param content JSON payload with {@code steerId}
+     */
+    private void handleSteerUndelivered(String content) {
+        String steerId = "";
+        if (content != null && content.startsWith("{")) {
+            try {
+                JsonObject payload = gson.fromJson(content, JsonObject.class);
+                if (payload != null && payload.has("steerId") && !payload.get("steerId").isJsonNull()) {
+                    steerId = payload.get("steerId").getAsString();
+                }
+            } catch (Exception e) {
+                LOG.warn("Failed to parse [STEER_UNDELIVERED]: " + e.getMessage());
+            }
+        }
+        // Steer plan F4: receipt arrival is the last hop of the
+        // daemon → Java → webview chain; log it so a lost requeue can be
+        // attributed to either this side or the webview.
+        LOG.info("[Steer] undelivered receipt received steerId=" + steerId);
+        callbackHandler.notifySteerResult(steerId, "undelivered", null);
+    }
+
+    /**
+     * Flatten a steer prompt (string or content-block array) to display text.
+     *
+     * @param prompt JSON string or array
+     * @return display text
+     */
+    private static String displayTextFromPrompt(JsonElement prompt) {
+        if (prompt == null || prompt.isJsonNull()) {
+            return "";
+        }
+        if (prompt.isJsonPrimitive()) {
+            return prompt.getAsString();
+        }
+        if (prompt.isJsonArray()) {
+            StringBuilder sb = new StringBuilder();
+            for (JsonElement el : prompt.getAsJsonArray()) {
+                if (el == null || el.isJsonNull()) {
+                    continue;
+                }
+                String piece = "";
+                if (el.isJsonPrimitive()) {
+                    piece = el.getAsString();
+                } else if (el.isJsonObject()) {
+                    JsonObject block = el.getAsJsonObject();
+                    if (block.has("text") && !block.get("text").isJsonNull()) {
+                        piece = block.get("text").getAsString();
+                    }
+                }
+                if (piece.isEmpty()) {
+                    continue;
+                }
+                if (sb.length() > 0) {
+                    sb.append('\n');
+                }
+                sb.append(piece);
+            }
+            return sb.toString();
+        }
+        return "";
     }
 
     /**

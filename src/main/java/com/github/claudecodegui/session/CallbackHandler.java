@@ -185,4 +185,40 @@ public class CallbackHandler {
             callback.onClaudeHistoryPageError(sessionId, message);
         }
     }
+
+    /**
+     * Notify a steer command receipt.
+     *
+     * @param steerId frontend correlation id
+     * @param status  accepted, rejected, or undelivered
+     * @param reason  optional reject reason
+     */
+    public void notifySteerResult(String steerId, String status, String reason) {
+        if (callback != null) {
+            callback.onSteerResult(steerId, status, reason);
+        }
+    }
+
+    /**
+     * Notify that a steer was folded into the live transcript.
+     *
+     * @param steerId frontend correlation id
+     * @param message inserted user message
+     */
+    public void notifySteerFolded(String steerId, ClaudeSession.Message message) {
+        if (callback != null) {
+            callback.onSteerFolded(steerId, message);
+        }
+    }
+
+    /**
+     * Notify live provider capabilities.
+     *
+     * @param steer whether steer is available
+     */
+    public void notifyProviderCapabilities(boolean steer) {
+        if (callback != null) {
+            callback.onProviderCapabilities(steer);
+        }
+    }
 }

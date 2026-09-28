@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -50,6 +51,14 @@ public class DaemonBridge {
     private static final int MAX_RESTART_ATTEMPTS = 3;
     private static final long RESTART_WINDOW_MS = 30_000; // Reset restart counter after this period of stability
     private static final int STDERR_RING_CAPACITY = 40;
+    /**
+     * How long a drained (aborted) request's handler is kept as a tombstone so
+     * late steer receipts tagged with its id can still be delivered. The
+     * daemon writes [STEER_UNDELIVERED] right after the abort command lands,
+     * so a generous seconds-scale window is plenty.
+     */
+    private static final long DRAINED_REQUEST_TOMBSTONE_TTL_MS = 30_000;
+    private static final int MAX_DRAINED_REQUEST_TOMBSTONES = 32;
 
     private final NodeDetector nodeDetector;
     private final BridgeDirectoryResolver directoryResolver;
@@ -785,6 +794,26 @@ public class DaemonBridge {
 
             RequestHandler handler = context.getRequestHandler(id);
             if (handler == null) {
+                // sendAbort() drains the registry before the daemon's abort-time
+                // steer receipt round-trips stdout, so [STEER_UNDELIVERED] tagged
+                // with the drained send request must still reach its session
+                // callback — otherwise the steered message is silently lost
+                // (steer plan B1/TC-07). Other late lines stay dropped: replaying
+                // stream/usage/loading events after the turn was finalized could
+                // resurrect stale UI state.
+                if (obj.has("line")) {
+                    String lateLine = obj.get("line").getAsString();
+                    if (lateLine.startsWith("[STEER_UNDELIVERED]")) {
+                        RequestHandler drained = context.getDrainedRequestHandler(id);
+                        if (drained != null) {
+                            LOG.info("[DaemonBridge] Delivering post-abort steer receipt for drained request " + id);
+                            drained.callback.onLine(lateLine);
+                            return;
+                        }
+                        LOG.warn("[DaemonBridge] Steer receipt for drained request " + id
+                                + " has no tombstoned handler (TTL elapsed?)");
+                    }
+                }
                 LOG.debug("[DaemonBridge] No handler for request " + id);
                 return;
             }
@@ -1392,6 +1421,8 @@ public class DaemonBridge {
         private final AtomicInteger activeRequestCount = new AtomicInteger(0);
         private final ConcurrentHashMap<String, PendingRequest> pendingRequests =
                 new ConcurrentHashMap<>();
+        /** Drained (aborted) handlers kept briefly so late steer receipts still route. */
+        private final Map<String, DrainedRequest> drainedRequestTombstones = new HashMap<>();
         private final Deque<String> recentStderrLines = new ArrayDeque<>();
         private final HeartbeatTimestamps heartbeatTimestamps;
         private volatile DaemonGenerationState state = DaemonGenerationState.ACTIVE;
@@ -1517,6 +1548,12 @@ public class DaemonBridge {
             return request != null ? request.handler : null;
         }
 
+        /** Handler tombstoned by {@link #drainRequests()} for {@code id}, or null. */
+        synchronized RequestHandler getDrainedRequestHandler(String id) {
+            DrainedRequest drained = drainedRequestTombstones.get(id);
+            return drained != null ? drained.handler : null;
+        }
+
         synchronized void removeRequest(String id) {
             PendingRequest removed = pendingRequests.remove(id);
             if (removed != null && removed.countsAsActiveRequest) {
@@ -1526,12 +1563,41 @@ public class DaemonBridge {
 
         synchronized List<RequestHandler> drainRequests() {
             List<RequestHandler> handlers = new ArrayList<>();
-            for (PendingRequest request : pendingRequests.values()) {
-                handlers.add(request.handler);
+            long now = System.currentTimeMillis();
+            for (Map.Entry<String, PendingRequest> entry : pendingRequests.entrySet()) {
+                handlers.add(entry.getValue().handler);
+                tombstoneDrainedRequest(entry.getKey(), entry.getValue().handler, now);
             }
             pendingRequests.clear();
             activeRequestCount.set(0);
             return handlers;
+        }
+
+        /**
+         * Abort-time receipts come back over stdout only after the daemon has
+         * processed the abort command, i.e. after drainRequests() removed the
+         * live handler. Tombstones keep the session callback reachable for a
+         * short window so a steered message can still be requeued instead of
+         * being silently dropped ("No handler for request").
+         */
+        private void tombstoneDrainedRequest(String id, RequestHandler handler, long now) {
+            drainedRequestTombstones.put(id, new DrainedRequest(handler, now));
+            drainedRequestTombstones.values().removeIf(
+                    drained -> now - drained.drainedAtMs > DRAINED_REQUEST_TOMBSTONE_TTL_MS);
+            while (drainedRequestTombstones.size() > MAX_DRAINED_REQUEST_TOMBSTONES) {
+                String oldestId = null;
+                long oldestAt = Long.MAX_VALUE;
+                for (Map.Entry<String, DrainedRequest> entry : drainedRequestTombstones.entrySet()) {
+                    if (entry.getValue().drainedAtMs < oldestAt) {
+                        oldestAt = entry.getValue().drainedAtMs;
+                        oldestId = entry.getKey();
+                    }
+                }
+                if (oldestId == null) {
+                    break;
+                }
+                drainedRequestTombstones.remove(oldestId);
+            }
         }
 
         synchronized boolean hasPendingRequests() {
@@ -1546,6 +1612,17 @@ public class DaemonBridge {
         private PendingRequest(RequestHandler handler, boolean countsAsActiveRequest) {
             this.handler = handler;
             this.countsAsActiveRequest = countsAsActiveRequest;
+        }
+    }
+
+    /** A handler drained by sendAbort(), kept briefly for late steer receipts. */
+    private static final class DrainedRequest {
+        private final RequestHandler handler;
+        private final long drainedAtMs;
+
+        private DrainedRequest(RequestHandler handler, long drainedAtMs) {
+            this.handler = handler;
+            this.drainedAtMs = drainedAtMs;
         }
     }
 

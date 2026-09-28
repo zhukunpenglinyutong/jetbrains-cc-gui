@@ -38,6 +38,8 @@ export interface ResetTransientUiStateOptions {
    * queued messages from firing into a freshly cleared/replaced session.
    */
   clearQueuedMessages?: () => void;
+  /** Reset live provider capabilities on session switch */
+  resetCapabilities?: () => void;
 }
 
 /**
@@ -57,6 +59,9 @@ export const buildResetTransientUiState = (opts: ResetTransientUiStateOptions) =
     // (idle && non-empty) from dispatching stale entries into the reset session.
     if (opts.clearQueuedMessages) {
       opts.clearQueuedMessages();
+    }
+    if (opts.resetCapabilities) {
+      opts.resetCapabilities();
     }
     opts.isStreamingRef.current = false;
     opts.useBackendStreamingRenderRef.current = false;

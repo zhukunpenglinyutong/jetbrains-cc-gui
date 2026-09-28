@@ -455,6 +455,9 @@ final class WebviewEventQueue<T> {
         classes.put("onStreamEnd", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE));
         classes.put("onBlockReset", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE));
         classes.put("onTaskEvent", EnumSet.of(EventClass.LIFECYCLE));
+        classes.put("onSteerResult", EnumSet.of(EventClass.LIFECYCLE));
+        classes.put("onSteerFolded", EnumSet.of(EventClass.LIFECYCLE));
+        classes.put("onProviderCapabilities", EnumSet.of(EventClass.LATEST_ONLY));
         return Collections.unmodifiableMap(classes);
     }
 
