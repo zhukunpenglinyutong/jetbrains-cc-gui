@@ -1,14 +1,10 @@
 import type { TFunction } from 'i18next';
 import type { HistorySessionSummary } from '../../types';
-import { formatFileSize } from './historyItemUtils';
+import { formatFileSize, CONVERTIBLE_ENTRYPOINTS } from './historyItemUtils';
 import { HistoryEntrypointBadge } from './HistoryEntrypointBadge';
 import { HistorySessionIdCopy } from './HistorySessionIdCopy';
 import { HistoryConvertButton } from './HistoryConvertButton';
 import { isKnownHistoryMessageCount } from '../../utils/historyMessageCount';
-
-// Entrypoints the backend conversion service actually knows how to rewrite
-// (SessionConversionService only matches sdk-cli / claude-vscode patterns).
-const CONVERTIBLE_ENTRYPOINTS = new Set(['sdk-cli', 'claude-vscode']);
 
 export interface HistoryItemMetaProps {
   session: HistorySessionSummary;

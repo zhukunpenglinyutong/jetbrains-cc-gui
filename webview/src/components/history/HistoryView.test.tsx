@@ -1,9 +1,9 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { HistoryData } from '../../types';
+import type { HistoryData, HistorySessionSummary } from '../../types';
 import { sendBridgeEvent } from '../../utils/bridge';
-import HistoryView from './HistoryView';
+import HistoryView, { BATCH_CONVERSION_TIMEOUT_MS } from './HistoryView';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -31,6 +31,12 @@ vi.mock('react-i18next', () => ({
         'history.convertButton': 'Convert',
         'history.confirmConvert': 'Convert to CLI?',
         'history.convertConfirmMessage': 'This changes the entrypoint.',
+        'history.convertAllToCliSessionsTooltip': `Convert ${options?.count} SDK sessions`,
+        'history.convertFailed': 'Conversion failed',
+        'history.convertAllSuccess': `${options?.count} session(s) converted`,
+        'history.convertAllPartial': `Converted ${options?.count} of ${options?.total}, ${options?.failed} failed`,
+        'history.convertAllAlreadyRunning': 'A conversion is already running',
+        'history.convertAllTimeout': 'The conversion took too long',
         'common.cancel': 'Cancel',
         'common.delete': 'Delete',
       };
@@ -376,8 +382,249 @@ describe('HistoryView conversion', () => {
   });
 });
 
-describe('HistoryView favorite visibility', () => {
-  it('marks favorited session actions for persistent display', () => {
+describe('HistoryView batch conversion', () => {
+  const ACTIVE_SESSION_ID = 'active-session';
+
+  const convertibleSession = (index: number): HistorySessionSummary => ({
+    sessionId: `sdk-session-${index}`,
+    title: `SDK session ${index}`,
+    messageCount: 1,
+    lastTimestamp: new Date().toISOString(),
+    provider: 'claude',
+    entrypoint: index % 2 === 0 ? 'sdk-cli' : 'claude-vscode',
+  });
+
+  // 50 convertible sessions plus the active one, which is never part of the batch.
+  const batchHistoryData: HistoryData = {
+    success: true,
+    total: 51,
+    sessions: [
+      ...Array.from({ length: 50 }, (_, index) => convertibleSession(index)),
+      {
+        sessionId: ACTIVE_SESSION_ID,
+        title: 'Active session',
+        messageCount: 1,
+        lastTimestamp: new Date().toISOString(),
+        provider: 'claude',
+        entrypoint: 'sdk-cli',
+      },
+    ],
+  };
+
+  const renderBatchView = (onConvertToCliSession = vi.fn(), currentProvider = 'claude') =>
+    render(
+      <HistoryView
+        historyData={batchHistoryData}
+        currentProvider={currentProvider}
+        currentSessionId={ACTIVE_SESSION_ID}
+        onLoadSession={vi.fn()}
+        onDeleteSession={vi.fn()}
+        onDeleteSessions={vi.fn()}
+        onExportSession={vi.fn()}
+        onToggleFavorite={vi.fn()}
+        onUpdateTitle={vi.fn()}
+        onConvertToCliSession={onConvertToCliSession}
+      />,
+    );
+
+  const convertAllButton = () =>
+    screen.getByRole('button', { name: /convert 50 sdk sessions/i }) as HTMLButtonElement;
+
+  const answerBatch = (payload: Record<string, unknown>) => {
+    act(() => {
+      window.onBatchConversionResult?.(JSON.stringify(payload));
+    });
+  };
+
+  const batchCalls = () =>
+    (sendBridgeEvent as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .filter(([event]) => event === 'convert_all_to_cli_sessions');
+
+  beforeEach(() => {
+    window.addToast = vi.fn();
+  });
+
+  afterEach(() => {
+    window.addToast = undefined;
+    window.onBatchConversionResult = undefined;
+  });
+
+  it('sends one batch command for the whole set instead of one message per session', () => {
+    const onConvertToCliSession = vi.fn();
+    renderBatchView(onConvertToCliSession);
+
+    fireEvent.click(convertAllButton());
+
+    expect(sendBridgeEvent).toHaveBeenCalledWith('convert_all_to_cli_sessions');
+    expect(batchCalls()).toHaveLength(1);
+    expect(onConvertToCliSession).not.toHaveBeenCalled();
+  });
+
+  it('disables the button and ignores repeat clicks while a batch is in flight', () => {
+    renderBatchView();
+
+    fireEvent.click(convertAllButton());
+    expect(convertAllButton()).toHaveProperty('disabled', true);
+
+    fireEvent.click(convertAllButton());
+    expect(batchCalls()).toHaveLength(1);
+
+    answerBatch({ status: 'completed', total: 50, converted: 50, skipped: 0, failed: 0 });
+
+    // The guard is released by the answer, otherwise the button would stay dead forever.
+    expect(convertAllButton()).toHaveProperty('disabled', false);
+
+    fireEvent.click(convertAllButton());
+    expect(batchCalls()).toHaveLength(2);
+  });
+
+  it('reports one success toast and reloads history when everything converts', () => {
+    renderBatchView();
+
+    fireEvent.click(convertAllButton());
+    answerBatch({ status: 'completed', total: 50, converted: 50, skipped: 0, failed: 0 });
+
+    expect(window.addToast).toHaveBeenCalledTimes(1);
+    expect(window.addToast).toHaveBeenCalledWith('50 session(s) converted', 'success');
+    expect(sendBridgeEvent).toHaveBeenCalledWith('deep_search_history', 'claude');
+  });
+
+  it('reports a single combined toast when some sessions fail', () => {
+    renderBatchView();
+
+    fireEvent.click(convertAllButton());
+    answerBatch({ status: 'completed', total: 50, converted: 48, skipped: 1, failed: 1 });
+
+    expect(window.addToast).toHaveBeenCalledTimes(1);
+    expect(window.addToast).toHaveBeenCalledWith('Converted 48 of 50, 1 failed', 'warning');
+  });
+
+  it('shows an informational toast when a batch is already running', () => {
+    renderBatchView();
+
+    fireEvent.click(convertAllButton());
+    answerBatch({ status: 'already_running', total: 0, converted: 0, skipped: 0, failed: 0 });
+
+    expect(window.addToast).toHaveBeenCalledTimes(1);
+    expect(window.addToast).toHaveBeenCalledWith('A conversion is already running', 'info');
+    expect(sendBridgeEvent).not.toHaveBeenCalledWith('deep_search_history', 'claude');
+  });
+
+  it('surfaces the backend error text when the batch cannot run', () => {
+    renderBatchView();
+
+    fireEvent.click(convertAllButton());
+    answerBatch({ status: 'failed', total: 0, converted: 0, skipped: 0, failed: 0, error: 'index unreadable' });
+
+    expect(window.addToast).toHaveBeenCalledTimes(1);
+    expect(window.addToast).toHaveBeenCalledWith('index unreadable', 'error');
+    expect(convertAllButton()).toHaveProperty('disabled', false);
+  });
+
+  it('falls back to the generic failure toast when the payload is unparseable', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderBatchView();
+
+    fireEvent.click(convertAllButton());
+    act(() => {
+      window.onBatchConversionResult?.('not json');
+    });
+
+    expect(window.addToast).toHaveBeenCalledTimes(1);
+    expect(window.addToast).toHaveBeenCalledWith('Conversion failed', 'error');
+    expect(convertAllButton()).toHaveProperty('disabled', false);
+    consoleError.mockRestore();
+  });
+
+  it('clears the callback on unmount so a late answer cannot touch a dead view', () => {
+    const { unmount } = renderBatchView();
+
+    expect(window.onBatchConversionResult).toBeTypeOf('function');
+    unmount();
+    expect(window.onBatchConversionResult).toBeUndefined();
+  });
+
+  it('keeps one answer callback across re-renders so a provider switch cannot strand the batch', () => {
+    const { rerender } = renderBatchView();
+    const registeredBeforeSwitch = window.onBatchConversionResult;
+
+    fireEvent.click(convertAllButton());
+
+    rerender(
+      <HistoryView
+        historyData={batchHistoryData}
+        currentProvider="codex"
+        currentSessionId={ACTIVE_SESSION_ID}
+        onLoadSession={vi.fn()}
+        onDeleteSession={vi.fn()}
+        onDeleteSessions={vi.fn()}
+        onExportSession={vi.fn()}
+        onToggleFavorite={vi.fn()}
+        onUpdateTitle={vi.fn()}
+        onConvertToCliSession={vi.fn()}
+      />,
+    );
+
+    // The handler must be the very same function, never unregistered and replaced:
+    // the old cleanup set window.onBatchConversionResult to undefined, so an answer
+    // arriving during a language or provider switch went nowhere and left the guard
+    // stuck at true — the button stayed disabled until the window was reloaded.
+    expect(window.onBatchConversionResult).toBe(registeredBeforeSwitch);
+
+    answerBatch({ status: 'completed', total: 50, converted: 50, skipped: 0, failed: 0 });
+
+    expect(window.addToast).toHaveBeenCalledTimes(1);
+    expect(convertAllButton()).toHaveProperty('disabled', false);
+    // The reload uses the provider that is current now, not the one captured at mount.
+    expect(sendBridgeEvent).toHaveBeenCalledWith('deep_search_history', 'codex');
+  });
+
+  it('releases the guard when the backend never answers', () => {
+    vi.useFakeTimers();
+    try {
+      renderBatchView();
+
+      fireEvent.click(convertAllButton());
+      expect(convertAllButton()).toHaveProperty('disabled', true);
+
+      act(() => {
+        vi.advanceTimersByTime(BATCH_CONVERSION_TIMEOUT_MS + 1);
+      });
+
+      // The answer is lost for good, so nothing but a watchdog can free the button.
+      expect(window.addToast).toHaveBeenCalledWith('The conversion took too long', 'error');
+      expect(convertAllButton()).toHaveProperty('disabled', false);
+      expect(sendBridgeEvent).toHaveBeenCalledWith('deep_search_history', 'claude');
+
+      fireEvent.click(convertAllButton());
+      expect(batchCalls()).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels the watchdog once the answer arrives', () => {
+    vi.useFakeTimers();
+    try {
+      renderBatchView();
+
+      fireEvent.click(convertAllButton());
+      answerBatch({ status: 'completed', total: 50, converted: 50, skipped: 0, failed: 0 });
+
+      act(() => {
+        vi.advanceTimersByTime(BATCH_CONVERSION_TIMEOUT_MS * 2);
+      });
+
+      // A late watchdog would report a timeout for a run that actually succeeded.
+      expect(window.addToast).toHaveBeenCalledTimes(1);
+      expect(window.addToast).toHaveBeenCalledWith('50 session(s) converted', 'success');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('HistoryView favorite visibility', () => {  it('marks favorited session actions for persistent display', () => {
     render(
       <HistoryView
         historyData={{

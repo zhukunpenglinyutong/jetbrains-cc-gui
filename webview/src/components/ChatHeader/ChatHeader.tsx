@@ -14,6 +14,16 @@ export interface ChatHeaderProps {
   onSettings: () => void;
   onTitleChange?: (newTitle: string) => void;
   titleEditable?: boolean;
+  /**
+   * Whether the current session is still the one being written to (SDK-created
+   * sessions are), and therefore cannot be converted to a CLI entry yet.
+   *
+   * The header has no convert button at all: conversion is refused for the
+   * active session (the SDK keeps appending to its jsonl, so replacing the file
+   * would strand those messages on the old inode). `true` renders an
+   * explanatory hint instead; `false`/`undefined` renders nothing.
+   */
+  convertHintVisible?: boolean;
 }
 
 export function ChatHeader({
@@ -27,6 +37,7 @@ export function ChatHeader({
   onSettings,
   onTitleChange,
   titleEditable = false,
+  convertHintVisible = false,
 }: ChatHeaderProps): React.ReactElement | null {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -123,6 +134,19 @@ export function ChatHeader({
               <button className="session-title-edit-btn" onClick={startEditing} aria-label="Edit session title">
                 <span className="codicon codicon-edit" />
               </button>
+            )}
+            {convertHintVisible && (
+              <span
+                className="session-convert-hint"
+                data-tooltip={t('history.convertActiveHintTooltip', {
+                  defaultValue: 'End or close this session first, then convert it from the history list',
+                })}
+              >
+                <span className="codicon codicon-info" />
+                {t('history.convertActiveHint', {
+                  defaultValue: 'Convert to CLI after ending the session',
+                })}
+              </span>
             )}
           </div>
         )}

@@ -1261,6 +1261,17 @@
     "confirmDirectoryTitle": "सत्र को दूसरी डायरेक्टरी में खोलें?",
     "confirmDirectoryMessage": "कमांड और फ़ाइल बदलाव नीचे दिखाई गई डायरेक्टरी में चलेंगे।",
     "executionDirectory": "यहाँ चलाएँ"
+    "convertActiveHint": "Convert to CLI after ending the session",
+    "convertActiveHintTooltip": "End or close this session first, then convert it from the history list",
+    "convertAllToCliSessions": "Convert all to CLI ({{count}})",
+    "convertAllToCliSessionsTooltip": "Convert {{count}} session(s) created through the SDK into CLI entries so they appear in the Claude Code CLI /resume list. The session currently in use is skipped.",
+    "convertAllToCliSessionsLabel": "Convert all to CLI",
+    "convertAllToCliSessionsEmptyTooltip": "No SDK or VS Code sessions to convert. Only sessions created by the SDK or the VS Code extension can be turned into CLI entries; sessions created directly by the Claude Code CLI are already resumable.",
+    "convertAllSuccess": "{{count}} session(s) converted, now visible in CLI /resume",
+    "convertAllPartial": "Converted {{count}} of {{total}} session(s), {{failed}} failed",
+    "convertAllAlreadyRunning": "A conversion is already running, please wait for it to finish",
+    "convertAllTimeout": "The conversion took too long. The list has been refreshed, please check it in a moment.",
+    "convertAllBridgeUnavailable": "The bridge to the IDE is unavailable, so the request was not sent"
   },
   "permission": {
     "dialogTitle": "अनुमति अनुरोध",

@@ -152,6 +152,14 @@
         white-space: nowrap;
     }
 
+    // Toolbar actions that stay visible but have nothing to act on (e.g. "convert all"
+    // with zero SDK sessions) must read as unavailable, not as a live control. The
+    // shared :disabled rule keeps the pointer hint; the stronger dim and the neutral
+    // border are here so a permanently-visible button does not look clickable.
+    &:disabled {
+        opacity: 0.4;
+    }
+
     &.history-toolbar-danger:hover:not(:disabled) {
         background-color: rgba(255, 59, 48, 0.15);
         border-color: #ff3b30;
