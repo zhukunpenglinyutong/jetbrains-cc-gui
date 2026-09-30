@@ -19,6 +19,10 @@ export interface UseSubmitHandlerOptions {
   setInternalAttachments: Dispatch<SetStateAction<Attachment[]>>;
   /** Clear attachments draft from localStorage */
   clearAttachmentsDraft?: () => void;
+  /** Pending image reads/comparisons must finish before the draft can be submitted. */
+  hasPendingImagePastes?: () => boolean;
+  /** Successful submission closes the previous draft's clipboard replay window. */
+  invalidateImagePastes?: () => void;
   fileCompletion: CompletionLike;
   commandCompletion: CompletionLike;
   agentCompletion: CompletionLike;
@@ -50,6 +54,8 @@ export function useSubmitHandler({
   externalAttachments,
   setInternalAttachments,
   clearAttachmentsDraft,
+  hasPendingImagePastes,
+  invalidateImagePastes,
   fileCompletion,
   commandCompletion,
   agentCompletion,
@@ -87,6 +93,12 @@ export function useSubmitHandler({
       return;
     }
 
+    // Preserve the whole draft instead of sending a partial attachment list and refilling it later.
+    if (hasPendingImagePastes?.()) {
+      addToast?.(t('common.loading'), 'info');
+      return;
+    }
+
     if (!cleanContent && attachments.length === 0) return;
 
     // Close completions
@@ -103,6 +115,7 @@ export function useSubmitHandler({
 
     // clearInput also drops any queued draft notification, so a stale debounced
     // value cannot refill the input after submit.
+    invalidateImagePastes?.();
     clearInput();
     if (externalAttachments === undefined) {
       setInternalAttachments([]);
@@ -125,6 +138,8 @@ export function useSubmitHandler({
     externalAttachments,
     setInternalAttachments,
     clearAttachmentsDraft,
+    hasPendingImagePastes,
+    invalidateImagePastes,
     fileCompletion,
     commandCompletion,
     agentCompletion,

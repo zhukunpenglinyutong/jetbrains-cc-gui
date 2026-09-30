@@ -15,6 +15,10 @@ package com.github.claudecodegui.ui.toolwindow;
  * teardown began acquires the gate, sees {@code disposed}, and returns immediately - it never waits
  * on the EDT.</p>
  *
+ * <p>Page activation publishes the owner's identity and delivery baselines under this same monitor.
+ * Old-page dispatch finishes before publication begins, and new-page dispatch cannot enter until
+ * publication completes, so deferred replies capture a consistent page identity.</p>
+ *
  * <p>The class is pure Java with no platform dependencies so its concurrency contract can be
  * exercised deterministically with latches/barriers.</p>
  *
@@ -65,9 +69,24 @@ public final class MessageDispatchGate {
      * @param pageGeneration generation assigned before the page is loaded.
      */
     public synchronized void activatePageGeneration(int pageGeneration) {
-        if (!this.disposed) {
-            this.activePageGeneration = pageGeneration;
+        activatePageGeneration(pageGeneration, () -> { });
+    }
+
+    /**
+     * Publish a page transition while both old and new dispatches are excluded.
+     * The publication must not wait on another thread or perform synchronous native browser work.
+     *
+     * @param pageGeneration generation assigned before the page is loaded.
+     * @param publication update the owner's page identity and delivery baselines under the gate.
+     * @return {@code true} if the page was activated; {@code false} after teardown.
+     */
+    public synchronized boolean activatePageGeneration(int pageGeneration, Runnable publication) {
+        if (this.disposed) {
+            return false;
         }
+        this.activePageGeneration = pageGeneration;
+        publication.run();
+        return true;
     }
 
     /**

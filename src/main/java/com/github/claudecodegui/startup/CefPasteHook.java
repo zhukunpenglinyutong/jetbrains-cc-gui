@@ -1,26 +1,15 @@
 package com.github.claudecodegui.startup;
 
 import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
-import com.google.gson.Gson;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.util.concurrency.AppExecutorUtil;
 
-import java.awt.Graphics2D;
-import java.awt.Image;
-import java.awt.Toolkit;
-import java.awt.datatransfer.Clipboard;
-import java.awt.datatransfer.DataFlavor;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Field;
-import java.util.Base64;
 import java.util.Collections;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.TimeUnit;
-import javax.imageio.ImageIO;
 
 import org.cef.CefClient;
 import org.cef.browser.CefBrowser;
@@ -46,12 +35,9 @@ import org.cef.misc.EventFlags;
 public class CefPasteHook extends CefKeyboardHandlerAdapter {
 
     private static final Logger LOG = Logger.getInstance(CefPasteHook.class);
-    private static final Gson GSON = new Gson();
     private static final int VK_V = 0x56;
     private static final long ORPHAN_WINDOW_MS = 800;
     private static final long PASTE_DEBOUNCE_MS = 500;
-    /** Same payload ceiling as ClipboardHandler; clipboard screenshots can be huge. */
-    private static final long MAX_PNG_BYTES = 20L * 1024 * 1024;
     private static final int MAX_INSTALL_ATTEMPTS = 8;
     private static final long INSTALL_RETRY_DELAY_MS = 3000;
 
@@ -104,6 +90,9 @@ public class CefPasteHook extends CefKeyboardHandlerAdapter {
         }
     }
 
+    /**
+     * Install one keyboard hook per client so all chat windows can recover intercepted pastes.
+     */
     public static void install(CefClient client, ClaudeChatWindow window) {
         try {
             if (client == null || window == null) {
@@ -134,6 +123,9 @@ public class CefPasteHook extends CefKeyboardHandlerAdapter {
         }
     }
 
+    /**
+     * Recover intercepted image pastes through the frontend's draft ownership protocol.
+     */
     @Override
     public boolean onPreKeyEvent(CefBrowser browser, CefKeyEvent event, BoolRef isKeyboardShortcut) {
         try {
@@ -142,8 +134,8 @@ public class CefPasteHook extends CefKeyboardHandlerAdapter {
             }
             long now = System.currentTimeMillis();
             if (event.type == EventType.KEYEVENT_RAWKEYDOWN) {
-                sawVRawKeyDown = true;
-                lastVRawKeyDown = now;
+                this.sawVRawKeyDown = true;
+                this.lastVRawKeyDown = now;
                 return false;
             }
             if (event.type != EventType.KEYEVENT_KEYUP) {
@@ -156,29 +148,20 @@ public class CefPasteHook extends CefKeyboardHandlerAdapter {
             // modifier check simply holding v past the window would paste whatever
             // image happens to be in the clipboard.
             boolean commandDown = (event.modifiers & EventFlags.EVENTFLAG_COMMAND_DOWN) != 0;
-            boolean orphan = !(sawVRawKeyDown && (now - lastVRawKeyDown) < ORPHAN_WINDOW_MS);
-            sawVRawKeyDown = false; // consume
+            boolean orphan = !(this.sawVRawKeyDown && (now - this.lastVRawKeyDown) < ORPHAN_WINDOW_MS);
+            this.sawVRawKeyDown = false; // consume
             if (!orphan || !commandDown) {
                 return false;
             }
 
-            if (now - lastPasteTrigger < PASTE_DEBOUNCE_MS) {
+            if (now - this.lastPasteTrigger < PASTE_DEBOUNCE_MS) {
                 return false;
             }
-            lastPasteTrigger = now;
+            this.lastPasteTrigger = now;
             LOG.info("[paste-fix][CEF] orphan Cmd+V detected, pasting image");
 
-            ClaudeChatWindow window = myWindow;
-            // Clipboard read on the EDT (fast; off-EDT AppKit clipboard access can
-            // deadlock), the PNG encode off it (multi-megapixel screenshots would
-            // otherwise freeze the UI for seconds).
-            ApplicationManager.getApplication().invokeLater(() -> {
-                BufferedImage image = readClipboardImage();
-                if (image == null) {
-                    return;
-                }
-                AppExecutorUtil.getAppExecutorService().execute(() -> encodeAndDispatch(window, image));
-            });
+            // Capture on the first EDT handoff so a JS round trip cannot substitute newer clipboard contents.
+            this.myWindow.captureClipboardPaste();
         } catch (Throwable t) {
             LOG.warn("[paste-fix][CEF] hook error", t);
         }
@@ -195,57 +178,4 @@ public class CefPasteHook extends CefKeyboardHandlerAdapter {
                 || event.unmodified_character == 'v' || event.unmodified_character == 'V';
     }
 
-    private static BufferedImage readClipboardImage() {
-        try {
-            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-            if (!clipboard.isDataFlavorAvailable(DataFlavor.imageFlavor)) {
-                return null;
-            }
-            Object imageData = clipboard.getData(DataFlavor.imageFlavor);
-            if (imageData == null) {
-                return null;
-            }
-            if (imageData instanceof BufferedImage) {
-                return (BufferedImage) imageData;
-            }
-            if (imageData instanceof Image) {
-                Image img = (Image) imageData;
-                int w = img.getWidth(null);
-                int h = img.getHeight(null);
-                if (w <= 0 || h <= 0) {
-                    return null;
-                }
-                BufferedImage buffered = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-                Graphics2D g = buffered.createGraphics();
-                g.drawImage(img, 0, 0, null);
-                g.dispose();
-                return buffered;
-            }
-        } catch (Throwable t) {
-            LOG.warn("[paste-fix][CEF] clipboard read error", t);
-        }
-        return null;
-    }
-
-    private void encodeAndDispatch(ClaudeChatWindow window, BufferedImage image) {
-        try {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            ImageIO.write(image, "png", baos);
-            byte[] bytes = baos.toByteArray();
-            baos.close();
-            if (bytes.length == 0) {
-                return;
-            }
-            if (bytes.length > MAX_PNG_BYTES) {
-                LOG.warn("[paste-fix][CEF] image too large (" + bytes.length + " bytes), skipped");
-                return;
-            }
-            String base64 = Base64.getEncoder().encodeToString(bytes);
-            String js = "(function(){  window.dispatchEvent(new CustomEvent('java-paste-image',{detail:{base64:" + GSON.toJson(base64) + ",mediaType:'image/png'}}));})()";
-            window.executeJavaScriptCode(js);
-            LOG.info("[paste-fix][CEF] dispatched java-paste-image, len=" + base64.length());
-        } catch (Throwable t) {
-            LOG.warn("[paste-fix][CEF] encode/dispatch error", t);
-        }
-    }
 }

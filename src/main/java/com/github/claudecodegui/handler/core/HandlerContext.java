@@ -10,6 +10,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.ui.jcef.JBCefBrowser;
 
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -47,6 +48,14 @@ public class HandlerContext {
         String escapeJs(String str);
 
         default void executeJavaScript(String jsCode) {
+        }
+
+        /**
+         * Capture a queued script sender bound to the originating browser and page.
+         * Implementations without lifecycle-aware delivery reject deferred replies.
+         */
+        default Consumer<String> captureJavaScriptExecutor() {
+            return ignored -> { };
         }
     }
 
@@ -226,8 +235,24 @@ public class HandlerContext {
     }
 
     /**
-     * Execute JavaScript through the window's ordered webview event queue
-     * (which marshals to the EDT and batches with callback events).
+     * Capture a lifecycle-bound queued reply before scheduling asynchronous handler work.
+     * The queue preserves the original browser/page rather than targeting whichever page is current later.
+     */
+    public Consumer<String> captureJavaScriptExecutor() {
+        if (this.disposed || this.jsCallback == null) {
+            return ignored -> { };
+        }
+        Consumer<String> reply = this.jsCallback.captureJavaScriptExecutor();
+        return jsCode -> {
+            if (!this.disposed) {
+                reply.accept(jsCode);
+            }
+        };
+    }
+
+    /**
+     * Execute JavaScript through the window's ordered webview event queue.
+     * The queue marshals to the EDT and batches with callback events.
      */
     public void executeJavaScriptQueued(String jsCode) {
         if (this.disposed || this.jsCallback == null) {

@@ -108,6 +108,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       handleMouseOver,
       handleMouseLeave,
       hasContent,
+      isPreparingImages,
       handleInput,
       handleKeyDown,
       handleKeyUp,
@@ -237,7 +238,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
 
         <ChatInputBoxFooter
           disabled={disabled}
-          hasInputContent={hasContent || attachments.length > 0}
+          hasInputContent={!isPreparingImages && (hasContent || attachments.length > 0)}
           isLoading={isLoading}
           isEnhancing={isEnhancing}
           selectedModel={selectedModel}

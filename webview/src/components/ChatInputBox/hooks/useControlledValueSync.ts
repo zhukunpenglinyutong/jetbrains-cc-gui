@@ -10,6 +10,8 @@ export interface UseControlledValueSyncOptions {
   adjustHeight: () => void;
   invalidateCache: () => void;
   cancelPendingInput: () => void;
+  /** External draft replacement retires the old clipboard work. */
+  invalidateImagePastes?: () => void;
 }
 
 /**
@@ -34,6 +36,7 @@ export function useControlledValueSync({
   adjustHeight,
   invalidateCache,
   cancelPendingInput,
+  invalidateImagePastes,
 }: UseControlledValueSyncOptions): void {
   useEffect(() => {
     if (value === undefined) return;
@@ -50,6 +53,7 @@ export function useControlledValueSync({
 
     if (currentText !== value) {
       // A queued draft must not overwrite the external replacement.
+      invalidateImagePastes?.();
       cancelPendingInput();
       editableRef.current.innerText = value;
       setHasContent(!!value.trim());
@@ -77,5 +81,6 @@ export function useControlledValueSync({
     adjustHeight,
     invalidateCache,
     cancelPendingInput,
+    invalidateImagePastes,
   ]);
 }

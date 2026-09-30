@@ -105,6 +105,17 @@ final class WebviewEventQueue<T> {
         return enqueue(new JsCall<T>(browser, pageGeneration(), null, new String[0], script));
     }
 
+    /** Capture the destination now so deferred work cannot attach to a replacement page. */
+    Consumer<String> captureRawSender() {
+        T browser = currentBrowser();
+        int generation = pageGeneration();
+        return script -> {
+            if (browser != null && script != null && !script.isEmpty()) {
+                enqueue(new JsCall<T>(browser, generation, null, new String[0], script));
+            }
+        };
+    }
+
     void browserChanged() {
         resetQueueTracking("browser was replaced");
     }

@@ -61,6 +61,7 @@ import javax.swing.*;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * Delegates for initialization setup and runtime operations:
@@ -97,6 +98,12 @@ public class ChatWindowDelegate {
         boolean isDisposed();
         void callJavaScript(String fn, String... args);
         void executeJavaScriptCode(String jsCode);
+
+        /**
+         * Capture an ordered script sender for the current browser page.
+         */
+        Consumer<String> captureJavaScriptExecutor();
+
         Content getParentContent();
         String getOriginalTabName();
         void setOriginalTabName(String name);
@@ -140,6 +147,7 @@ public class ChatWindowDelegate {
     private volatile MessageCallback pendingQuickFixCallback = null;
     // Reference to the SettingsHandler for clean theme-callback unregistration on dispose.
     private com.github.claudecodegui.handler.SettingsHandler settingsHandler;
+    private volatile ClipboardHandler clipboardHandler;
 
     public ChatWindowDelegate(DelegateHost host) {
         this.host = host;
@@ -323,6 +331,10 @@ public class ChatWindowDelegate {
                 host.executeJavaScriptCode(jsCode);
             }
             @Override
+            public Consumer<String> captureJavaScriptExecutor() {
+                return host.captureJavaScriptExecutor();
+            }
+            @Override
             public String escapeJs(String str) {
                 return JsUtils.escapeJs(str);
             }
@@ -378,7 +390,8 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new CliModelsHandler(handlerContext));
         messageDispatcher.registerHandler(new CliStatusHandler(handlerContext));
         messageDispatcher.registerHandler(new DshHostHandler(handlerContext));
-        messageDispatcher.registerHandler(new ClipboardHandler(handlerContext));
+        this.clipboardHandler = new ClipboardHandler(handlerContext);
+        messageDispatcher.registerHandler(this.clipboardHandler);
         messageDispatcher.registerHandler(new NodeProcessHandler(handlerContext));
 
         messageDispatcher.registerHandler(new WindowEventHandler(handlerContext, new WindowEventHandler.Callback() {
@@ -784,7 +797,29 @@ public class ChatWindowDelegate {
         }
     }
 
+    /** Preserve the action's gesture-time image through the shared clipboard handler. */
+    public void offerClipboardImage(java.awt.Image image) {
+        ClipboardHandler handler = this.clipboardHandler;
+        if (handler != null) {
+            handler.offerImagePaste(image);
+        }
+    }
+
+    /** Read an intercepted macOS paste before asking the webview to claim its draft. */
+    public void captureClipboardPaste() {
+        ClipboardHandler handler = this.clipboardHandler;
+        if (handler != null) {
+            handler.captureClipboardPaste();
+        }
+    }
+
+    /** Release clipboard snapshots and window-scoped callbacks during teardown. */
     public void dispose() {
+        ClipboardHandler handler = this.clipboardHandler;
+        this.clipboardHandler = null;
+        if (handler != null) {
+            handler.dispose();
+        }
         if (statusResetTask != null && !statusResetTask.isDone()) {
             statusResetTask.cancel(false);
             statusResetTask = null;
