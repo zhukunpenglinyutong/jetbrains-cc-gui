@@ -51,6 +51,7 @@ import {
   setPermissionModePersistent as grokSetPermissionModePersistent,
   getContextUsagePersistent as grokGetContextUsagePersistent,
   getUsagePersistent as grokGetUsagePersistent,
+  getPlanUsagePersistent as grokGetPlanUsagePersistent,
   getRuntimeSnapshot as getGrokRuntimeSnapshot
 } from './services/grok/persistent-acp-service.js';
 import {
@@ -517,6 +518,8 @@ async function processRequest(request) {
       await grokGetContextUsagePersistent(stdinData);
     } else if (provider === 'grok' && command === 'getUsage') {
       await grokGetUsagePersistent(stdinData);
+    } else if (provider === 'grok' && command === 'getPlanUsage') {
+      await grokGetPlanUsagePersistent(stdinData);
     } else if (provider === 'grok' && command === 'send') {
       await grokSendPersistent(stdinData);
     } else if (provider === 'grok' && command === 'preconnect') {

@@ -1094,40 +1094,19 @@ export function isAutoApproveMode(permissionMode) {
  * When the user only attaches images with empty text, inject
  * GROK_IMAGE_ONLY_FALLBACK_TEXT so the payload stays valid.
  */
-export function buildPromptBlocks({ message, agentPrompt, openedFiles, attachments }) {
+export function buildPromptBlocks({
+  message,
+  agentPrompt,
+  openedFiles,
+  attachments,
+  loadGlobalRules = true,
+}) {
   const blocks = [];
   let text = message || '';
 
   if (agentPrompt && String(agentPrompt).trim()) {
     text =
       `${text}\n\n## Agent Role and Instructions\n\n${String(agentPrompt).trim()}`;
-  }
-
-  // Load user-global rules for Grok from ~/.grok/grok-rules.md (if exists).
-  // This allows persistent, user-level instructions without hardcoding in the plugin.
-  try {
-    const rulesPath = path.join(homedir(), '.grok', 'grok-rules.md');
-    if (fs.existsSync(rulesPath)) {
-      const rulesContent = fs.readFileSync(rulesPath, 'utf8').trim();
-      if (rulesContent) {
-        console.log('[Grok] Loaded global rules from ~/.grok/grok-rules.md (' + rulesContent.length + ' chars)');
-        text += `\n\n## Global Grok Rules (~/.grok/grok-rules.md)\n\n${rulesContent}`;
-      }
-    }
-  } catch (err) {
-    // Non-fatal: don't break prompt building if the file is unreadable
-    console.error('[Grok] Failed to read ~/.grok/grok-rules.md:', err?.message || err);
-  }
-
-  if (openedFiles && typeof openedFiles === 'object') {
-    try {
-      const serialized = JSON.stringify(openedFiles, null, 2);
-      if (serialized && serialized !== '{}' && serialized !== 'null') {
-        text += `\n\n## IDE Context (opened files)\n\`\`\`json\n${serialized}\n\`\`\``;
-      }
-    } catch {
-      // ignore
-    }
   }
 
   const { blocks: imageBlocks, loaded, errors } = buildGrokImageBlocks(
@@ -1140,6 +1119,40 @@ export function buildPromptBlocks({ message, agentPrompt, openedFiles, attachmen
   }
   if (loaded > 0) {
     console.error(`[Grok] embedding ${loaded} image block(s) into ACP prompt`);
+  }
+  // Decide the image-only fallback before rules are appended. A rules file
+  // must not hide the request to look at the attached images.
+  if (!String(text).trim() && loaded > 0) {
+    text = GROK_IMAGE_ONLY_FALLBACK_TEXT;
+  }
+
+  // Load user-global rules for Grok from ~/.grok/grok-rules.md (if exists).
+  // This allows persistent, user-level instructions without hardcoding in the plugin.
+  if (loadGlobalRules) {
+    try {
+      const rulesPath = path.join(homedir(), '.grok', 'grok-rules.md');
+      if (fs.existsSync(rulesPath)) {
+        const rulesContent = fs.readFileSync(rulesPath, 'utf8').trim();
+        if (rulesContent) {
+          console.log('[Grok] Loaded global rules from ~/.grok/grok-rules.md (' + rulesContent.length + ' chars)');
+          text += `\n\n## Global Grok Rules (~/.grok/grok-rules.md)\n\n${rulesContent}`;
+        }
+      }
+    } catch (err) {
+      // Non-fatal: don't break prompt building if the file is unreadable
+      console.error('[Grok] Failed to read ~/.grok/grok-rules.md:', err?.message || err);
+    }
+  }
+
+  if (openedFiles && typeof openedFiles === 'object') {
+    try {
+      const serialized = JSON.stringify(openedFiles, null, 2);
+      if (serialized && serialized !== '{}' && serialized !== 'null') {
+        text += `\n\n## IDE Context (opened files)\n\`\`\`json\n${serialized}\n\`\`\``;
+      }
+    } catch {
+      // ignore
+    }
   }
 
   // Non-image attachments (or failed images): keep a text note so the agent
