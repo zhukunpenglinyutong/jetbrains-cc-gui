@@ -1681,9 +1681,6 @@
       "minutesAgo": "minutes ago",
       "secondsAgo": "seconds ago"
     },
-    "loadMore": "Load more",
-    "sessionInUse": "In-use sessions cannot be deleted.",
-    "deleteFailed": "Failed to delete the session. Please try again.",
     "convertActiveHint": "Convert to CLI after ending the session",
     "convertActiveHintTooltip": "End or close this session first, then convert it from the history list",
     "convertAllToCliSessions": "Convert all to CLI ({{count}})",
