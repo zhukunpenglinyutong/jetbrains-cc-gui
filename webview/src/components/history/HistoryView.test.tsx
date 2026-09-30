@@ -37,6 +37,9 @@ vi.mock('react-i18next', () => ({
         'history.convertAllPartial': `Converted ${options?.count} of ${options?.total}, ${options?.failed} failed`,
         'history.convertAllAlreadyRunning': 'A conversion is already running',
         'history.convertAllTimeout': 'The conversion took too long',
+        'history.convertAllBridgeUnavailable': 'The conversion could not be started: the plugin is not responding. Try again in a moment.',
+        'history.convertAllToCliSessionsLabel': 'Convert all to CLI',
+        'history.convertAllToCliSessionsEmptyTooltip': 'No SDK or VS Code sessions to convert.',
         'common.cancel': 'Cancel',
         'common.delete': 'Delete',
       };
@@ -50,7 +53,9 @@ vi.mock('../shared/ProviderModelIcon', () => ({
 }));
 
 vi.mock('../../utils/bridge', () => ({
-  sendBridgeEvent: vi.fn(),
+  // The real helper only returns false when window.sendToJava is missing, so the default
+  // has to model a live bridge; a test that wants a dead one opts in per call.
+  sendBridgeEvent: vi.fn(() => true),
 }));
 
 vi.mock('../../utils/copyUtils', () => ({
@@ -622,9 +627,116 @@ describe('HistoryView batch conversion', () => {
       vi.useRealTimers();
     }
   });
+
+  it('releases the guard at once and blames the bridge when the click is rejected', () => {
+    vi.useFakeTimers();
+    try {
+      // A dead bridge rejects the event synchronously: nothing is in flight, so the run
+      // must not wait out the watchdog or end up reported as a conversion timeout.
+      (sendBridgeEvent as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
+      renderBatchView();
+
+      fireEvent.click(convertAllButton());
+
+      expect(window.addToast).toHaveBeenCalledTimes(1);
+      expect(window.addToast).toHaveBeenCalledWith(
+        'The conversion could not be started: the plugin is not responding. Try again in a moment.',
+        'error',
+      );
+      expect(convertAllButton()).toHaveProperty('disabled', false);
+
+      act(() => {
+        vi.advanceTimersByTime(BATCH_CONVERSION_TIMEOUT_MS + 1);
+      });
+      expect(window.addToast).toHaveBeenCalledTimes(1);
+
+      // The guard really was released, not just re-disabled by the watchdog.
+      fireEvent.click(convertAllButton());
+      expect(batchCalls()).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('counts convertible sessions hidden by the search query', () => {
+    vi.useFakeTimers();
+    try {
+      renderBatchView();
+
+      fireEvent.change(screen.getByPlaceholderText('Search session titles...'), {
+        target: { value: 'SDK session 7' },
+      });
+      act(() => {
+        vi.advanceTimersByTime(400);
+      });
+
+      // Only one row is rendered, but the backend walks the whole project index, so the
+      // button must still advertise all 50 and stay clickable.
+      expect(screen.getByText('SDK session 7')).toBeTruthy();
+      expect(screen.queryByText('SDK session 8')).toBeNull();
+      expect(convertAllButton()).toHaveProperty('disabled', false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still reports convertible sessions when the search query hides all of them', () => {
+    vi.useFakeTimers();
+    try {
+      renderBatchView();
+
+      fireEvent.change(screen.getByPlaceholderText('Search session titles...'), {
+        target: { value: 'nothing matches this' },
+      });
+      act(() => {
+        vi.advanceTimersByTime(400);
+      });
+
+      // An empty list must not flip the button to the "nothing to convert" explanation.
+      expect(convertAllButton()).toHaveProperty('disabled', false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves the active session out of the count even when it is the only convertible one', () => {
+    render(
+      <HistoryView
+        historyData={{
+          success: true,
+          total: 1,
+          sessions: [
+            {
+              sessionId: ACTIVE_SESSION_ID,
+              title: 'Active session',
+              messageCount: 1,
+              lastTimestamp: new Date().toISOString(),
+              provider: 'claude',
+              entrypoint: 'sdk-cli',
+            },
+          ],
+        }}
+        currentProvider="claude"
+        currentSessionId={ACTIVE_SESSION_ID}
+        onLoadSession={vi.fn()}
+        onDeleteSession={vi.fn()}
+        onDeleteSessions={vi.fn()}
+        onExportSession={vi.fn()}
+        onToggleFavorite={vi.fn()}
+        onUpdateTitle={vi.fn()}
+        onConvertToCliSession={vi.fn()}
+      />,
+    );
+
+    // The active session is never a candidate, so with nothing else in the index the
+    // count is zero and the button falls back to its disabled, explained state.
+    const button = screen.getByRole('button', { name: 'No SDK or VS Code sessions to convert.' });
+    expect(button).toHaveProperty('disabled', true);
+  });
 });
 
-describe('HistoryView favorite visibility', () => {  it('marks favorited session actions for persistent display', () => {
+describe('HistoryView favorite visibility', () => {
+  it('marks favorited session actions for persistent display', () => {
     render(
       <HistoryView
         historyData={{

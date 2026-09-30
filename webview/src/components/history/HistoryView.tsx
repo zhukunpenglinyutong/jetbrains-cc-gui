@@ -92,7 +92,7 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null); // Track which session ID was copied
   const [copyFailedSessionId, setCopyFailedSessionId] = useState<string | null>(null); // Track which session ID copy failed
 
-  const { sessions: listedSessions, infoBar } = useHistorySessions(historyData, searchQuery, t);
+  const { sessions: listedSessions, allSessions, infoBar } = useHistorySessions(historyData, searchQuery, t);
   const sessions = useMemo(() => listedSessions.map(session => {
     if (currentProvider !== 'codex' || session.sessionId !== currentSessionId) return session;
     // This window tracks its own turn live; a listed snapshot can outlive it.
@@ -284,16 +284,19 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
     setInputValue(e.target.value);
   }, []);
 
-  // Sessions that the backend can rewrite to a CLI entry. The active session is
-  // excluded: the SDK still appends to its jsonl, so converting it would drop
-  // those messages onto the old inode.
+  // Sessions that the backend can rewrite to a CLI entry. Counted over `allSessions`,
+  // not over the filtered `sessions`: readProjectSessionCandidates walks the entire
+  // project index regardless of the search box, so a filter that hides every
+  // convertible row must not shrink the number on the button or flip it to the
+  // "nothing to convert" explanation. The active session is excluded: the SDK still
+  // appends to its jsonl, so converting it would drop those messages onto the old inode.
   const convertibleSessions = useMemo(
-    () => sessions.filter(
+    () => allSessions.filter(
       s => s.sessionId !== currentSessionId
         && s.entrypoint != null
         && CONVERTIBLE_ENTRYPOINTS.has(s.entrypoint)
     ),
-    [sessions, currentSessionId]
+    [allSessions, currentSessionId]
   );
 
   const clearBatchWatchdog = useCallback(() => {
@@ -312,7 +315,20 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
     }
     isBatchConvertingRef.current = true;
     setIsBatchConverting(true);
-    sendBridgeEvent('convert_all_to_cli_sessions');
+
+    // A rejected event is a synchronous failure, not a slow run: the command never
+    // reached Java, so no answer is coming. Waiting out the watchdog would leave the
+    // button disabled for 30s and then blame the conversion for a broken bridge, so this
+    // exit releases the whole guard here and reports the actual cause instead.
+    if (!sendBridgeEvent('convert_all_to_cli_sessions')) {
+      clearBatchWatchdog();
+      isBatchConvertingRef.current = false;
+      setIsBatchConverting(false);
+      window.addToast?.(tRef.current('history.convertAllBridgeUnavailable', {
+        defaultValue: 'The conversion could not be started: the plugin is not responding. Try again in a moment.',
+      }), 'error');
+      return;
+    }
 
     // Safety net for an answer that never arrives. Without it the only thing that can
     // release the guard is the answer itself, and its loss (unmounted view, dropped
@@ -336,11 +352,10 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
     }, BATCH_CONVERSION_TIMEOUT_MS);
   }, [clearBatchWatchdog]);
 
-  // One aggregated answer per command. Registered once and never re-registered, so a
-  // language or provider change cannot unregister it while a batch is in flight; the
-  // values it needs are read from refs instead of closing over them. Cleanup runs on
-  // unmount only, so a stale handler from a dead view still cannot react to a result.
-  useEffect(() => {
+  // Named rather than inlined in the effect below so the whole result-handling flow can
+  // be read as one unit; the effect is left with nothing but registration. Behaviour is
+  // unchanged: one aggregated answer per command, guard released first in every branch.
+  const handleBatchConversionResult = useCallback((json: string) => {
     const reloadHistory = () => {
       // The entrypoint badges are derived from the index on disk, so a reload (not a
       // local patch) is the only way to show the real post-conversion state.
@@ -350,67 +365,73 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
       }
     };
 
-    window.onBatchConversionResult = (json: string) => {
-      // Release the guard first and in every branch: a leaked guard would leave the
-      // toolbar button permanently disabled with no way to retry.
-      clearBatchWatchdog();
-      isBatchConvertingRef.current = false;
-      setIsBatchConverting(false);
+    // Release the guard first and in every branch: a leaked guard would leave the
+    // toolbar button permanently disabled with no way to retry.
+    clearBatchWatchdog();
+    isBatchConvertingRef.current = false;
+    setIsBatchConverting(false);
 
-      let result: BatchConversionResult;
-      try {
-        result = JSON.parse(json) as BatchConversionResult;
-      } catch (error) {
-        console.error('[Frontend] Failed to parse batch conversion result:', error);
-        window.addToast?.(tRef.current('history.convertFailed', { defaultValue: 'Conversion failed' }), 'error');
-        return;
-      }
+    let result: BatchConversionResult;
+    try {
+      result = JSON.parse(json) as BatchConversionResult;
+    } catch (error) {
+      console.error('[Frontend] Failed to parse batch conversion result:', error);
+      window.addToast?.(tRef.current('history.convertFailed', { defaultValue: 'Conversion failed' }), 'error');
+      return;
+    }
 
-      if (result.status === 'already_running') {
-        // The backend rejected the click because a batch is still in flight; nothing
-        // was touched, so this is information, not an error.
-        window.addToast?.(tRef.current('history.convertAllAlreadyRunning', {
-          defaultValue: 'A conversion is already running, please wait for it to finish',
-        }), 'info');
-        return;
-      }
+    if (result.status === 'already_running') {
+      // The backend rejected the click because a batch is still in flight; nothing
+      // was touched, so this is information, not an error.
+      window.addToast?.(tRef.current('history.convertAllAlreadyRunning', {
+        defaultValue: 'A conversion is already running, please wait for it to finish',
+      }), 'info');
+      return;
+    }
 
-      if (result.status === 'failed') {
-        window.addToast?.(
-          result.error || tRef.current('history.convertFailed', { defaultValue: 'Conversion failed' }),
-          'error',
-        );
-        return;
-      }
+    if (result.status === 'failed') {
+      window.addToast?.(
+        result.error || tRef.current('history.convertFailed', { defaultValue: 'Conversion failed' }),
+        'error',
+      );
+      return;
+    }
 
-      const converted = result.converted ?? 0;
-      const failed = result.failed ?? 0;
-      const total = result.total ?? 0;
+    const converted = result.converted ?? 0;
+    const failed = result.failed ?? 0;
+    const total = result.total ?? 0;
 
-      // Exactly one toast for the whole run — a per-session report would be unusable
-      // for a 50-session conversion.
-      if (failed > 0) {
-        window.addToast?.(tRef.current('history.convertAllPartial', {
-          count: converted,
-          total,
-          failed,
-          defaultValue: `Converted ${converted} of ${total} session(s), ${failed} failed`,
-        }), 'warning');
-      } else {
-        window.addToast?.(tRef.current('history.convertAllSuccess', {
-          count: converted,
-          defaultValue: `${converted} session(s) converted, now visible in CLI /resume`,
-        }), 'success');
-      }
+    // Exactly one toast for the whole run — a per-session report would be unusable
+    // for a 50-session conversion.
+    if (failed > 0) {
+      window.addToast?.(tRef.current('history.convertAllPartial', {
+        count: converted,
+        total,
+        failed,
+        defaultValue: `Converted ${converted} of ${total} session(s), ${failed} failed`,
+      }), 'warning');
+    } else {
+      window.addToast?.(tRef.current('history.convertAllSuccess', {
+        count: converted,
+        defaultValue: `${converted} session(s) converted, now visible in CLI /resume`,
+      }), 'success');
+    }
 
-      // Reload even on a partial result: some entrypoints did change on disk.
-      reloadHistory();
-    };
+    // Reload even on a partial result: some entrypoints did change on disk.
+    reloadHistory();
+  }, [clearBatchWatchdog]);
+
+  // One aggregated answer per command. Registered once and never re-registered, so a
+  // language or provider change cannot unregister it while a batch is in flight; the
+  // values it needs are read from refs instead of closing over them. Cleanup runs on
+  // unmount only, so a stale handler from a dead view still cannot react to a result.
+  useEffect(() => {
+    window.onBatchConversionResult = handleBatchConversionResult;
 
     return () => {
       window.onBatchConversionResult = undefined;
     };
-  }, [clearBatchWatchdog]);
+  }, [handleBatchConversionResult]);
 
   if (!historyData) {
     return <HistoryLoadingState t={t} />;
