@@ -120,12 +120,12 @@ public class HistoryAutoConvertService {
                     continue;
                 }
                 ProjectScanResult result = convertProjectDir(projectDir,
-                        MAX_FILES_PER_RUN - inspected, this.getMaxTotalBytesPerRun() - bytes);
+                        this.getMaxFilesPerRun() - inspected, this.getMaxTotalBytesPerRun() - bytes);
                 inspected += result.inspected;
                 converted += result.converted;
                 bytes += result.bytes;
-                if (inspected >= MAX_FILES_PER_RUN) {
-                    LOG.warn("[HistoryAutoConvert] Reached the per-run limit of " + MAX_FILES_PER_RUN
+                if (inspected >= this.getMaxFilesPerRun()) {
+                    LOG.warn("[HistoryAutoConvert] Reached the per-run limit of " + this.getMaxFilesPerRun()
                             + " session files; remaining sessions convert on a later run");
                     break;
                 }
@@ -159,6 +159,12 @@ public class HistoryAutoConvertService {
     // VisibleForTesting
     long getMaxTotalBytesPerRun() {
         return MAX_TOTAL_BYTES_PER_RUN;
+    }
+
+    /** Largest number of files one run inspects; overridable so tests can use a small cap. */
+    // VisibleForTesting
+    int getMaxFilesPerRun() {
+        return MAX_FILES_PER_RUN;
     }
 
     private ProjectScanResult convertProjectDir(Path projectDir, int fileBudget, long byteBudget) {
@@ -252,6 +258,8 @@ public class HistoryAutoConvertService {
             tempFile = SessionTempFiles.createPrivateTempFile(
                     sessionDir, sessionFile.getFileName() + ".convert.", ".tmp");
 
+            this.afterCompleteBackup(sessionFile);
+
             int modified = rewriteEntrypoint(sessionFile, tempFile);
             if (modified == 0) {
                 Files.deleteIfExists(tempFile);
@@ -276,6 +284,28 @@ public class HistoryAutoConvertService {
             deleteQuietly(tempFile);
             deleteQuietly(backupFile);
         }
+    }
+
+    /**
+     * No-op hook, invoked once the backup is known to hold every byte of the session
+     * and the scratch temp file exists, immediately before the rewrite runs.
+     *
+     * <p>This is the first point at which a failure is still recoverable: up to here the
+     * session file is byte-for-byte what it was, and from here on the restore in
+     * {@link #convertSessionFile} is the only thing that can put it back. It exists so
+     * tests can abort at exactly that point — and, just as importantly, change the file
+     * underneath the conversion the way a concurrent writer or a truncation would.
+     * Without that second half the grew/shrank guards in {@link #restoreBackup} are
+     * unreachable: with nothing moving the file its size always still equals the size
+     * the backup was taken at.
+     *
+     * <p>Empty in production; subclasses in tests override it to inject the failure.
+     *
+     * @param sessionFile the file being converted.
+     * @throws IOException to simulate a rewrite that died after the backup was taken.
+     */
+    // VisibleForTesting
+    void afterCompleteBackup(Path sessionFile) throws IOException {
     }
 
     /**

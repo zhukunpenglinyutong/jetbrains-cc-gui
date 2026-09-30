@@ -315,6 +315,8 @@ class SessionConversionService {
 
             tempFile = SessionTempFiles.createPrivateTempFile(sessionDir, sessionId + ".jsonl.convert.", ".tmp");
 
+            this.afterCompleteBackup(sessionFile);
+
             // Stream processing to handle large files efficiently
             AtomicInteger modifiedCount = new AtomicInteger(0);
             AtomicBoolean hasCliEntrypoint = new AtomicBoolean(false);
@@ -383,7 +385,15 @@ class SessionConversionService {
             return null;
 
         } catch (Exception e) {
-            LOG.error("[SessionConversionService] Failed to convert session: " + e.getMessage(), e);
+            // warn, not error: this branch recovers. The session is rolled back from its
+            // backup below and the caller gets CONVERSION_FAILED, so nothing is lost and
+            // the plugin has not malfunctioned — surfacing an IDE error report for a
+            // handled condition would be misleading. It would also be actively harmful
+            // here: a logger whose error() throws (DefaultLogger, used whenever no IDE
+            // application is installed, which includes the unit-test JVM) would abort
+            // this method before the restore below ever ran, turning a recoverable
+            // failure into exactly the data loss this branch exists to prevent.
+            LOG.warn("[SessionConversionService] Failed to convert session: " + e.getMessage(), e);
 
             // Release our own lock first so the restore move cannot fail on it (Windows).
             releaseFileLock(fileLock, fileChannel);
@@ -447,7 +457,25 @@ class SessionConversionService {
     }
 
     /**
-     * Copy the whole file to the backup path.
+     * No-op hook, invoked once the backup is known to hold every byte of the session
+     * and the scratch temp file exists, immediately before the rewrite runs.
+     *
+     * <p>This is the first point at which a failure is still recoverable, and the last
+     * point at which the file is still exactly as big as the backup — so it is where
+     * the restore in the {@code catch} block has to be exercised from. It exists so
+     * tests can abort there and, at the same time, move the file the way a concurrent
+     * writer (grew) or a truncation (shrank) would: with nothing touching the file its
+     * size always still equals the size the backup was taken at, and the two size
+     * guards in {@link #restoreBackup} could never be reached.
+     *
+     * <p>Empty in production; subclasses in tests override it to inject the failure.
+     *
+     * @param sessionFile the file being converted.
+     * @throws IOException to simulate a rewrite that died after the backup was taken.
+     */
+    // VisibleForTesting
+    void afterCompleteBackup(Path sessionFile) throws IOException {
+    }
      *
      * <p>Split out so tests can simulate a copy that dies part way through — ENOSPC,
      * EIO, a network share going away — without filling an actual disk.

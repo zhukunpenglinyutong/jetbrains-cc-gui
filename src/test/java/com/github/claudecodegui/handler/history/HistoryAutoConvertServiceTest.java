@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -313,7 +314,208 @@ public class HistoryAutoConvertServiceTest {
         assertEquals(1, service.convertAllProjects());
     }
 
+    // ── M-7: per-run file count ────────────────────────────────────────────
+
+    @Test
+    public void defaultFileLimitIsTheDocumentedCap() {
+        // Guards the constant against an edit that silently changes how much work a
+        // shutdown run is allowed to do.
+        assertEquals(2000, serviceFor(projectsDir).getMaxFilesPerRun());
+    }
+
+    @Test
+    public void runStopsOnceThePerRunFileCountIsSpent() throws IOException {
+        // One convertible session per project directory, so a cap of one has to stop
+        // the run after the first directory and leave the second for a later run.
+        writeSession("proj-one", "a.jsonl", "{\"entrypoint\":\"sdk-cli\"}\n");
+        writeSession("proj-two", "b.jsonl", "{\"entrypoint\":\"sdk-cli\"}\n");
+
+        HistoryAutoConvertService service = new FileLimitedService(projectsDir, 1);
+
+        assertEquals(1, service.convertAllProjects());
+    }
+
+    @Test
+    public void perRunFileCountLimitLeavesNoScratchFilesBehind() throws IOException {
+        Path projectDir = projectsDir.resolve("proj-one");
+        Files.createDirectories(projectDir);
+        writeSession("proj-one", "a.jsonl", "{\"entrypoint\":\"sdk-cli\"}\n");
+        writeSession("proj-two", "b.jsonl", "{\"entrypoint\":\"sdk-cli\"}\n");
+
+        new FileLimitedService(projectsDir, 1).convertAllProjects();
+
+        try (Stream<Path> entries = Files.list(projectDir)) {
+            List<String> names = entries.map(p -> p.getFileName().toString()).sorted().collect(Collectors.toList());
+            assertEquals(List.of("a.jsonl"), names);
+        }
+    }
+
+    // ── H-2: restore after a complete backup ───────────────────────────────
+
+    @Test
+    public void failureAfterACompleteBackupRestoresTheSnapshotWhenTheSizeIsUnchanged() throws IOException {
+        String original = "{\"entrypoint\":\"sdk-cli\"}\n{\"type\":\"assistant\"}\n";
+        Path file = writeSession("proj", "a.jsonl", original);
+
+        HistoryAutoConvertService service = new FailingAfterBackupService(projectsDir, Tamper.SAME_SIZE);
+
+        assertFalse("a failed rewrite must not report a conversion", service.convertSessionFile(file));
+
+        // Same byte count as the snapshot, so the size guard let the restore through.
+        // Only a restore that actually ran can put the original back.
+        assertEquals("the complete backup must have been moved back over the session",
+                original, Files.readString(file, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void failureAfterACompleteBackupRestoresTheSnapshotWhenTheFileShrank() throws IOException {
+        String original = "{\"entrypoint\":\"sdk-cli\"}\n{\"type\":\"assistant\"}\n{\"type\":\"user\"}\n";
+        Path file = writeSession("proj", "a.jsonl", original);
+
+        HistoryAutoConvertService service = new FailingAfterBackupService(projectsDir, Tamper.SHRANK);
+
+        assertFalse(service.convertSessionFile(file));
+
+        assertEquals("a shrunken file must be put back from the verified backup",
+                original, Files.readString(file, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void failureAfterACompleteBackupRefusesToRestoreOverAGrownFile() throws IOException {
+        String original = "{\"entrypoint\":\"sdk-cli\"}\n{\"type\":\"assistant\"}\n";
+        Path file = writeSession("proj", "a.jsonl", original);
+        String grown = new String(appendPad(original.getBytes(StandardCharsets.UTF_8)), StandardCharsets.UTF_8);
+
+        HistoryAutoConvertService service = new FailingAfterBackupService(projectsDir, Tamper.GREW);
+
+        assertFalse(service.convertSessionFile(file));
+
+        // A writer appended after the snapshot: restoring would throw those rows away,
+        // and rows newer than the backup are worth more than the older copy.
+        assertEquals("the older snapshot must not overwrite a file that grew",
+                grown, Files.readString(file, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void aRefusedRestoreStillCleansUpEveryScratchFile() throws IOException {
+        Path projectDir = projectsDir.resolve("proj");
+        Files.createDirectories(projectDir);
+        Path file = writeSession("proj", "a.jsonl", "{\"entrypoint\":\"sdk-cli\"}\n");
+
+        new FailingAfterBackupService(projectsDir, Tamper.GREW).convertSessionFile(file);
+
+        // The backup is the only scratch file here, and the finally block has to remove
+        // it even though the restore deliberately left it alone.
+        try (Stream<Path> entries = Files.list(projectDir)) {
+            List<String> names = entries.map(p -> p.getFileName().toString()).sorted().collect(Collectors.toList());
+            assertEquals(List.of("a.jsonl"), names);
+        }
+    }
+
+    @Test
+    public void anAcceptedRestoreAlsoLeavesNoScratchFilesBehind() throws IOException {
+        Path projectDir = projectsDir.resolve("proj");
+        Files.createDirectories(projectDir);
+        Path file = writeSession("proj", "a.jsonl", "{\"entrypoint\":\"sdk-cli\"}\n");
+
+        new FailingAfterBackupService(projectsDir, Tamper.SAME_SIZE).convertSessionFile(file);
+
+        try (Stream<Path> entries = Files.list(projectDir)) {
+            List<String> names = entries.map(p -> p.getFileName().toString()).sorted().collect(Collectors.toList());
+            assertEquals(List.of("a.jsonl"), names);
+        }
+    }
+
     // ── test doubles ───────────────────────────────────────────────────────
+
+    /** What the injected failure does to the session file between backup and restore. */
+    private enum Tamper {
+        /** Same byte count, different content: the size guard cannot see it. */
+        SAME_SIZE,
+        /** A concurrent writer appended, so the snapshot would lose those rows. */
+        GREW,
+        /** Something truncated the file, leaving the snapshot as the only good copy. */
+        SHRANK
+    }
+
+    /**
+     * Service that fails at the {@code afterCompleteBackup} seam: it first changes the
+     * session the way the named writer or truncation would, then aborts with the error a
+     * rewrite that ran out of room would raise. Everything the test observes afterwards —
+     * the restore, the guards, the cleanup — is the production code's own doing.
+     */
+    private static final class FailingAfterBackupService extends HistoryAutoConvertService {
+
+        private final Tamper tamper;
+
+        FailingAfterBackupService(Path projectsDir, Tamper tamper) {
+            super(() -> projectsDir);
+            this.tamper = tamper;
+        }
+
+        @Override
+        void afterCompleteBackup(Path sessionFile) throws IOException {
+            byte[] snapshot = Files.readAllBytes(sessionFile);
+            byte[] tampered = switch (this.tamper) {
+                case SAME_SIZE -> markTail(snapshot);
+                case GREW -> appendPad(snapshot);
+                case SHRANK -> cutTail(snapshot);
+            };
+            Files.write(sessionFile, tampered);
+            throw new IOException("No space left on device while writing the converted session");
+        }
+    }
+
+    /**
+     * Offset just past the first newline. Every tamper leaves the first row alone on
+     * purpose: {@code needsConversion} sniffs it to decide the file is convertible at
+     * all, and a clobbered head would make the service return before it ever took a
+     * backup — the very path under test would never be reached.
+     */
+    private static int endOfFirstLine(byte[] session) {
+        for (int i = 0; i < session.length; i++) {
+            if (session[i] == '\n') {
+                return i + 1;
+            }
+        }
+        return session.length;
+    }
+
+    /** Different bytes, identical length — the shape a size-based guard cannot reject. */
+    private static byte[] markTail(byte[] session) {
+        byte[] marked = Arrays.copyOf(session, session.length);
+        Arrays.fill(marked, endOfFirstLine(session), marked.length, (byte) '#');
+        return marked;
+    }
+
+    /** A concurrent writer appended past the snapshot. */
+    private static byte[] appendPad(byte[] session) {
+        byte[] grown = Arrays.copyOf(session, session.length + 24);
+        Arrays.fill(grown, session.length, grown.length, (byte) 'x');
+        return grown;
+    }
+
+    /** Something truncated the file after the snapshot was taken. */
+    private static byte[] cutTail(byte[] session) {
+        int head = endOfFirstLine(session);
+        return Arrays.copyOf(session, head + (session.length - head) / 2);
+    }
+
+    /** Service that converts at most {@code maxFilesPerRun} sessions per run. */
+    private static final class FileLimitedService extends HistoryAutoConvertService {
+
+        private final int maxFilesPerRun;
+
+        FileLimitedService(Path projectsDir, int maxFilesPerRun) {
+            super(() -> projectsDir);
+            this.maxFilesPerRun = maxFilesPerRun;
+        }
+
+        @Override
+        int getMaxFilesPerRun() {
+            return this.maxFilesPerRun;
+        }
+    }
 
     /**
      * Backup copy that writes {@code bytesBeforeFailure} bytes and then fails, which

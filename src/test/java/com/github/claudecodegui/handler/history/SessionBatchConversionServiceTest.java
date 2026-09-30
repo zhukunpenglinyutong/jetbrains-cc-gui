@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
@@ -298,6 +299,73 @@ public class SessionBatchConversionServiceTest {
         assertEquals(1, result.get("skipped").getAsInt());
         assertEquals(0, result.get("failed").getAsInt());
         assertEquals(0, result.get("converted").getAsInt());
+        assertEquals(0, this.converterCalls.get());
+    }
+
+    // ── executor rejection ─────────────────────────────────────────────────
+
+    @Test
+    public void anExecutorThatRejectsTheBatchReleasesTheRunningGuard() throws Exception {
+        String sessionId = "11111111-1111-1111-1111-111111111111";
+        Path file = writeSessionFile(sessionId, SDK_CLI);
+        byte[] before = Files.readAllBytes(file);
+
+        // Reject the first submission the way a shutting-down pooled-thread executor
+        // does, then behave normally. If the guard leaked, every later call would keep
+        // answering "already_running" and no batch would ever run again.
+        AtomicInteger submissions = new AtomicInteger();
+        Executor rejectsFirstSubmission = runnable -> {
+            if (submissions.getAndIncrement() == 0) {
+                throw new RejectedExecutionException("Application executor is shutting down");
+            }
+            runnable.run();
+        };
+
+        SessionBatchConversionService service = service(
+                candidates(sessionId, SDK_CLI),
+                null,
+                realConverter(),
+                rejectsFirstSubmission
+        );
+
+        service.convertAll();
+
+        // A rejected submission never ran the batch, so it has nothing to report — and
+        // must not invent a result, which would read as a completed conversion of zero.
+        assertEquals(0, this.results.size());
+        assertEquals(0, this.converterCalls.get());
+        assertArrayEquals("a batch that never ran must not touch any file", before, Files.readAllBytes(file));
+
+        service.convertAll();
+        awaitResults(1);
+
+        JsonObject result = this.results.get(0);
+        assertEquals("the guard must have been released, so the retry runs a real batch",
+                SessionBatchConversionService.STATUS_COMPLETED, result.get("status").getAsString());
+        assertEquals(1, result.get("converted").getAsInt());
+        assertTrue(Files.readString(file, StandardCharsets.UTF_8).contains("\"entrypoint\":\"cli\""));
+    }
+
+    @Test
+    public void repeatedRejectionNeverStallsTheGuard() {
+        Executor alwaysRejects = runnable -> {
+            throw new RejectedExecutionException("Application executor is shutting down");
+        };
+
+        SessionBatchConversionService service = service(
+                candidates("11111111-1111-1111-1111-111111111111", SDK_CLI),
+                null,
+                realConverter(),
+                alwaysRejects
+        );
+
+        service.convertAll();
+        service.convertAll();
+        service.convertAll();
+
+        // No result and no converter call either time: the guard was released after each
+        // rejection, so none of these was mistaken for an overlap with a running batch.
+        assertEquals(0, this.results.size());
         assertEquals(0, this.converterCalls.get());
     }
 
