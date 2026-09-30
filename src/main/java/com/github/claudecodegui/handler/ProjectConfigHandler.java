@@ -706,6 +706,21 @@ public class ProjectConfigHandler {
             "Failed to get task completion notification enabled");
     }
 
+    public void handleGetAutoConvertSessionsOnExit() {
+        respondWithJson("window.updateAutoConvertSessionsOnExit",
+            () -> jsonOf("autoConvertSessionsOnExit", settingsService.getAutoConvertSessionsOnExit()),
+            jsonOf("autoConvertSessionsOnExit", false),
+            "Failed to get auto convert sessions on exit");
+    }
+
+    public void handleSetAutoConvertSessionsOnExit(String content) {
+        // Default to disabled when payload is missing or the field is absent/null (opt-in feature).
+        handleBooleanToggle(content, "autoConvertSessionsOnExit", false, "auto convert sessions on exit",
+            settingsService::setAutoConvertSessionsOnExit,
+            "window.updateAutoConvertSessionsOnExit",
+            "Failed to save auto convert sessions on exit setting");
+    }
+
     public void handleSetTaskCompletionNotificationEnabled(String content) {
         // Default to disabled when payload is missing or the field is absent/null (opt-in feature).
         handleBooleanToggle(content, "taskCompletionNotificationEnabled", false, "task completion notification enabled",

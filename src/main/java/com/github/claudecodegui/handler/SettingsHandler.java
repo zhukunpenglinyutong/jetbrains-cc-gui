@@ -80,6 +80,8 @@ public class SettingsHandler extends BaseMessageHandler {
 
         "get_task_completion_notification_enabled",
         "set_task_completion_notification_enabled",
+        "get_auto_convert_sessions_on_exit",
+        "set_auto_convert_sessions_on_exit",
         "get_ask_user_question_notification_enabled",
         "set_ask_user_question_notification_enabled",
         "get_system_notification_only_when_unfocused",
@@ -291,6 +293,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_task_completion_notification_enabled":
                 projectConfigHandler.handleSetTaskCompletionNotificationEnabled(content);
+                return true;
+            case "get_auto_convert_sessions_on_exit":
+                projectConfigHandler.handleGetAutoConvertSessionsOnExit();
+                return true;
+            case "set_auto_convert_sessions_on_exit":
+                projectConfigHandler.handleSetAutoConvertSessionsOnExit(content);
                 return true;
             case "get_ask_user_question_notification_enabled":
                 projectConfigHandler.handleGetAskUserQuestionNotificationEnabled();

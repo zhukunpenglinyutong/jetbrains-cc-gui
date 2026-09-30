@@ -274,6 +274,12 @@
         "disabled": "已關閉",
         "hint": "開啟後，訊息底部會在可用時顯示本輪預估費用，並在輸入 Token 中標明快取命中。Token 消耗資訊始終保持顯示。"
       },
+      "autoConvertSessionsOnExit": {
+        "label": "結束時自動轉換會話為 CLI",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "插件透過 SDK 建立的會話不會出現在 Claude Code CLI 的 /resume 列表中，因為它們的 entrypoint 是 sdk-cli。開啟後，會在關閉 IDE 時自動轉換。"
+      },
       "askUserQuestionSoundNotification": {
         "label": "提問提示音",
         "enabled": "已開啟",
@@ -986,6 +992,17 @@
       "minutesAgo": "分鐘前",
       "secondsAgo": "秒前"
     },
+    "convertActiveHint": "結束會話後可轉換為 CLI",
+    "convertActiveHintTooltip": "請先結束或關閉此會話，然後從歷史記錄中轉換",
+    "convertAllToCliSessions": "全部轉換為 CLI（{{count}}）",
+    "convertAllToCliSessionsTooltip": "將 {{count}} 個透過 SDK 建立的會話轉換為 CLI 項目，以便它們出現在 Claude Code CLI 的 /resume 列表中。目前使用中的會話會被略過。",
+    "convertAllToCliSessionsLabel": "全部轉換為 CLI",
+    "convertAllToCliSessionsEmptyTooltip": "沒有可轉換的 SDK 或 VS Code 會話。只有透過 SDK 或 VS Code 擴充功能建立的會話才能轉換為 CLI 項目；由 Claude Code CLI 直接建立的會話已經可以繼續。",
+    "convertAllSuccess": "已轉換 {{count}} 個會話，現在可在 CLI 的 /resume 中顯示",
+    "convertAllPartial": "已轉換 {{total}} 個會話中的 {{count}} 個，{{failed}} 個失敗",
+    "convertAllAlreadyRunning": "已有轉換正在進行中，請等待完成",
+    "convertAllTimeout": "轉換耗時過長。清單已重新整理，請稍後查看。",
+    "convertAllBridgeUnavailable": "與 IDE 的連線不可用，請求未送出",
     "conversionErrors": {
       "INVALID_SESSION_ID": "無效的會話 ID",
       "SESSION_ACTIVE": "無法轉換當前活躍的會話，請先開啟新會話後再轉換",
@@ -1976,12 +1993,29 @@
   },
   "dshPresets": {
     "title": "選擇 DeepSeek Harness Agent 預設",
-    "none": { "label": "預設", "description": "dsh 預設 headless 組合（完整工具集）" },
-    "standard": { "label": "標準模式", "description": "功能完整的標準編碼工具集" },
-    "code": { "label": "PTC 模式", "description": "標準能力加 Code Mode" },
-    "minimal": { "label": "極簡模式", "description": "僅提供 bash 與 str_replace_editor" },
-    "cordis": { "label": "創造模式", "description": "標準能力加組合編排能力" },
-    "user": { "description": "安裝在 DSH 主目錄中的自訂預設" }
+    "none": {
+      "label": "預設",
+      "description": "dsh 預設 headless 組合（完整工具集）"
+    },
+    "standard": {
+      "label": "標準模式",
+      "description": "功能完整的標準編碼工具集"
+    },
+    "code": {
+      "label": "PTC 模式",
+      "description": "標準能力加 Code Mode"
+    },
+    "minimal": {
+      "label": "極簡模式",
+      "description": "僅提供 bash 與 str_replace_editor"
+    },
+    "cordis": {
+      "label": "創造模式",
+      "description": "標準能力加組合編排能力"
+    },
+    "user": {
+      "description": "安裝在 DSH 主目錄中的自訂預設"
+    }
   },
   "error": {
     "providerNotConfigured": "供應商未設定",

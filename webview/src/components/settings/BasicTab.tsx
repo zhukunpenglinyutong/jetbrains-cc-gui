@@ -98,6 +98,8 @@ const BasicTab = ({ themeSync, basicActions, addToast }: BasicTabProps) => {
       onAskUserQuestionNotificationEnabledChange={basicActions.handleAskUserQuestionNotificationEnabledChange}
       detailedOutputEnabled={basicActions.detailedOutputEnabled}
       onDetailedOutputEnabledChange={basicActions.handleDetailedOutputEnabledChange}
+      autoConvertSessionsOnExit={basicActions.autoConvertSessionsOnExit}
+      onAutoConvertSessionsOnExitChange={basicActions.handleAutoConvertSessionsOnExitChange}
       systemNotificationOnlyWhenUnfocused={basicActions.systemNotificationOnlyWhenUnfocused}
       onSystemNotificationOnlyWhenUnfocusedChange={basicActions.handleSystemNotificationOnlyWhenUnfocusedChange}
       askUserQuestionSoundNotificationEnabled={basicActions.askUserQuestionSoundNotificationEnabled}

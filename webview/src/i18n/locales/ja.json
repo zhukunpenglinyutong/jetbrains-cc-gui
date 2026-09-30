@@ -274,6 +274,12 @@
         "disabled": "無効",
         "hint": "有効にすると、利用可能な場合にメッセージ下部へターンの推定コストを表示し、入力 Token の概要内にキャッシュヒットを含めます。Token 消費量は常に表示されます。"
       },
+      "autoConvertSessionsOnExit": {
+        "label": "IDE 終了時にセッションを CLI へ自動変換",
+        "enabled": "有効",
+        "disabled": "無効",
+        "hint": "プラグインが SDK 経由で作成したセッションは entrypoint が sdk-cli のため、Claude Code CLI の /resume リストに表示されません。有効にすると、IDE を閉じる際に自動的に変換されます。"
+      },
       "askUserQuestionSoundNotification": {
         "label": "質問アラート音",
         "enabled": "有効",
@@ -950,6 +956,15 @@
     "copyFailed": "コピーに失敗しました",
     "convertToCliSession": "CLI認識セッションに変換",
     "convertButton": "CLIに変換",
+    "convertAllToCliSessions": "すべて CLI に変換 ({{count}})",
+    "convertAllToCliSessionsTooltip": "SDK で作成した {{count}} 件のセッションを CLI エントリに変換し、Claude Code CLI の /resume リストに表示させます。現在使用中のセッションはスキップされます。",
+    "convertAllToCliSessionsLabel": "すべて CLI に変換",
+    "convertAllToCliSessionsEmptyTooltip": "変換できる SDK / VS Code セッションがありません。SDK または VS Code 拡張機能で作成したセッションのみ CLI エントリに変換できます。Claude Code CLI で直接作成したセッションはすでに再開できます。",
+    "convertAllSuccess": "{{count}} 件のセッションを変換しました。CLI /resume に表示されます",
+    "convertAllPartial": "{{total}} 件中 {{count}} 件を変換しました。{{failed}} 件は失敗しました",
+    "convertAllAlreadyRunning": "別の変換を実行中です。完了までお待ちください",
+    "convertAllTimeout": "変換に時間がかかりすぎました。一覧を更新しました。しばらくしてからご確認ください。",
+    "convertAllBridgeUnavailable": "IDE への接続が利用できないため、リクエストは送信されませんでした",
     "convertSuccess": "セッションをCLI認識可能に変換しました",
     "convertFailed": "変換に失敗しました",
     "confirmConvert": "CLIセッションに変換しますか？",
@@ -981,7 +996,9 @@
       "sdk-cli": "このセッションはSDK経由でプラグインによって作成されており、CLIではデフォルトで表示されません。ターミナルCLIの/resumeリストに表示するには「CLIに変換」をクリックしてください",
       "claude-vscode": "このセッションはVS Code拡張機能によって作成されており、CLIではデフォルトで表示されません。ターミナルCLIの/resumeリストに表示するには「CLIに変換」をクリックしてください",
       "remote": "このセッションはリモートのClaude Codeインスタンスによって作成されました"
-    }
+    },
+    "convertActiveHint": "セッション終了後にCLIへ変換",
+    "convertActiveHintTooltip": "先にこのセッションを終了または閉じしてから、履歴から変換してください"
   },
   "permission": {
     "dialogTitle": "権限リクエスト",

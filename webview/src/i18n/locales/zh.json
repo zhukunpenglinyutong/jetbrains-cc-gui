@@ -529,6 +529,12 @@
         "disabled": "已关闭",
         "hint": "开启后，消息底部会在可用时显示本轮预估费用，并在输入 Token 中标明缓存命中。Token 消耗信息始终保持显示。"
       },
+      "autoConvertSessionsOnExit": {
+        "label": "退出时自动将会话转换为 CLI",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "插件通过 SDK 创建的会话不会出现在 Claude Code CLI 的 /resume 列表中，因为它们的 entrypoint 是 sdk-cli。开启后，会在关闭 IDE 时自动转换。"
+      },
       "askUserQuestionSoundNotification": {
         "label": "提问提示音",
         "enabled": "已开启",
@@ -1405,7 +1411,18 @@
       "hoursAgo": "小时前",
       "minutesAgo": "分钟前",
       "secondsAgo": "秒前"
-    }
+    },
+    "convertActiveHint": "结束会话后可转换为 CLI",
+    "convertActiveHintTooltip": "请先结束或关闭此会话，然后从历史记录中转换",
+    "convertAllToCliSessions": "全部转换为 CLI（{{count}}）",
+    "convertAllToCliSessionsTooltip": "将 {{count}} 个通过 SDK 创建的会话转换为 CLI 条目，以便它们出现在 Claude Code CLI 的 /resume 列表中。当前正在使用的会话会被跳过。",
+    "convertAllToCliSessionsLabel": "全部转换为 CLI",
+    "convertAllToCliSessionsEmptyTooltip": "没有可转换的 SDK 或 VS Code 会话。只有通过 SDK 或 VS Code 扩展创建的会话才能转换为 CLI 条目；由 Claude Code CLI 直接创建的会话已经可以恢复。",
+    "convertAllSuccess": "已转换 {{count}} 个会话，现在可在 CLI 的 /resume 中显示",
+    "convertAllPartial": "已转换 {{total}} 个会话中的 {{count}} 个，{{failed}} 个失败",
+    "convertAllAlreadyRunning": "已有转换正在进行，请等待完成",
+    "convertAllTimeout": "转换耗时过长。列表已刷新，请稍后查看。",
+    "convertAllBridgeUnavailable": "与 IDE 的连接不可用，请求未发送"
   },
   "permission": {
     "dialogTitle": "权限请求",
@@ -2464,12 +2481,29 @@
   },
   "dshPresets": {
     "title": "选择 DeepSeek Harness Agent 预设",
-    "none": { "label": "默认", "description": "dsh 默认 headless 组合（完整工具集）" },
-    "standard": { "label": "标准模式", "description": "功能完整的标准编码工具集" },
-    "code": { "label": "PTC 模式", "description": "标准能力加 Code Mode" },
-    "minimal": { "label": "极简模式", "description": "仅提供 bash 与 str_replace_editor" },
-    "cordis": { "label": "创造模式", "description": "标准能力加组合编排能力" },
-    "user": { "description": "安装在 DSH 主目录中的自定义预设" }
+    "none": {
+      "label": "默认",
+      "description": "dsh 默认 headless 组合（完整工具集）"
+    },
+    "standard": {
+      "label": "标准模式",
+      "description": "功能完整的标准编码工具集"
+    },
+    "code": {
+      "label": "PTC 模式",
+      "description": "标准能力加 Code Mode"
+    },
+    "minimal": {
+      "label": "极简模式",
+      "description": "仅提供 bash 与 str_replace_editor"
+    },
+    "cordis": {
+      "label": "创造模式",
+      "description": "标准能力加组合编排能力"
+    },
+    "user": {
+      "description": "安装在 DSH 主目录中的自定义预设"
+    }
   },
   "error": {
     "providerNotConfigured": "供应商未配置",

@@ -274,6 +274,12 @@
         "disabled": "बंद",
         "hint": "चालू होने पर, उपलब्ध होने पर संदेशों के नीचे अनुमानित टर्न लागत दिखेगी और इनपुट Token सारांश में कैश हिट शामिल होंगे। Token उपयोग हमेशा दिखाई देता रहेगा।"
       },
+      "autoConvertSessionsOnExit": {
+        "label": "IDE बंद होने पर सत्रों को CLI में बदलें",
+        "enabled": "सक्षम",
+        "disabled": "अक्षम",
+        "hint": "प्लगइन द्वारा SDK के माध्यम से बनाए गए सत्र Claude Code CLI की /resume सूची में नहीं दिखते, क्योंकि उनका entrypoint sdk-cli है। सक्षम होने पर, IDE बंद करने पर वे स्वतः बदल दिए जाते हैं।"
+      },
       "askUserQuestionSoundNotification": {
         "label": "प्रश्न चेतावनी ध्वनि",
         "enabled": "सक्षम",
@@ -945,6 +951,15 @@
     "copyFailed": "कॉपी विफल",
     "convertToCliSession": "CLI पहचान सेशन में बदलें",
     "convertButton": "CLI में बदलें",
+    "convertAllToCliSessions": "सभी को CLI में बदलें ({{count}})",
+    "convertAllToCliSessionsTooltip": "SDK द्वारा बनाए गए {{count}} सत्र(ों) को CLI प्रविष्टियों में बदलें ताकि वे Claude Code CLI की /resume सूची में दिखें। प्रयोग में मौजूद सत्र छोड़ दिया जाता है।",
+    "convertAllToCliSessionsLabel": "सभी को CLI में बदलें",
+    "convertAllToCliSessionsEmptyTooltip": "कन्वर्ट करने के लिए कोई SDK या VS Code सत्र नहीं है। केवल SDK या VS Code एक्सटेंशन द्वारा बनाए गए सत्र ही CLI प्रविष्टियों में बदले जा सकते हैं; Claude Code CLI द्वारा सीधे बनाए गए सत्र पहले से ही पुनः आरंभ करने योग्य हैं।",
+    "convertAllSuccess": "{{count}} सत्र कन्वर्ट किए गए, अब CLI /resume में दिखाई देते हैं",
+    "convertAllPartial": "{{total}} में से {{count}} सत्र कन्वर्ट हुए, {{failed}} विफल",
+    "convertAllAlreadyRunning": "एक रूपांतरण पहले से चल रहा है, कृपया उसके पूरा होने तक प्रतीक्षा करें",
+    "convertAllTimeout": "रूपांतरण में बहुत अधिक समय लग गया। सूची ताज़ा कर दी गई है, कृपया थोड़ी देर बाद देखें।",
+    "convertAllBridgeUnavailable": "IDE से कनेक्शन उपलब्ध नहीं है, अनुरोध नहीं भेजा गया",
     "convertSuccess": "सेशन CLI पहचान में बदल दिया गया",
     "convertFailed": "रूपांतरण विफल",
     "confirmConvert": "CLI सेशन में बदलें?",
@@ -976,7 +991,9 @@
       "sdk-cli": "यह सत्र प्लगइन द्वारा SDK के माध्यम से बनाया गया था और CLI में डिफ़ॉल्ट रूप से नहीं दिखाया गया है। टर्मिनल CLI की /resume सूची में इसे दिखाने के लिए 'CLI में कनवर्ट करें' पर क्लिक करें",
       "claude-vscode": "यह सत्र VS Code एक्सटेंशन द्वारा बनाया गया था और CLI में डिफ़ॉल्ट रूप से नहीं दिखाया गया है। टर्मिनल CLI की /resume सूची में इसे दिखाने के लिए 'CLI में कनवर्ट करें' पर क्लिक करें",
       "remote": "यह सत्र Claude Code के रिमोट इंस्टेंस द्वारा बनाया गया था"
-    }
+    },
+    "convertActiveHint": "सत्र समाप्त होने के बाद CLI में रूपांतरित करें",
+    "convertActiveHintTooltip": "पहले यह सत्र समाप्त या बंद करें, फिर इसे इतिहास से रूपांतरित करें"
   },
   "permission": {
     "dialogTitle": "अनुमति अनुरोध",

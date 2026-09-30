@@ -109,6 +109,12 @@
         <notificationGroup id="CC GUI Notifications" displayType="BALLOON"/>
     </extensions>
 
+    <applicationListeners>
+        <!-- Opt-in: convert SDK-created Claude sessions to CLI entries on IDE exit -->
+        <listener class="com.github.claudecodegui.startup.AutoConvertOnExitListener"
+                  topic="com.intellij.ide.AppLifecycleListener"/>
+    </applicationListeners>
+
     <actions>
         <!-- Action to send selected code to CC GUI -->
         <action id="ClaudeCodeGUI.SendSelectionToTerminalAction"

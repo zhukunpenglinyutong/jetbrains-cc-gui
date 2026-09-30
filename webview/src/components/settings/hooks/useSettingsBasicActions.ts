@@ -91,6 +91,7 @@ export interface UseSettingsBasicActionsReturn {
   aiTitleGenerationEnabled: boolean;
   statusBarWidgetEnabled: boolean;
   taskCompletionNotificationEnabled: boolean;
+  autoConvertSessionsOnExit: boolean;
   askUserQuestionNotificationEnabled: boolean;
   detailedOutputEnabled: boolean;
   systemNotificationOnlyWhenUnfocused: boolean;
@@ -127,6 +128,7 @@ export interface UseSettingsBasicActionsReturn {
   handleAiTitleGenerationEnabledChange: (enabled: boolean) => void;
   handleStatusBarWidgetEnabledChange: (enabled: boolean) => void;
   handleTaskCompletionNotificationEnabledChange: (enabled: boolean) => void;
+  handleAutoConvertSessionsOnExitChange: (enabled: boolean) => void;
   handleAskUserQuestionNotificationEnabledChange: (enabled: boolean) => void;
   handleDetailedOutputEnabledChange: (enabled: boolean) => void;
   handleSystemNotificationOnlyWhenUnfocusedChange: (enabled: boolean) => void;
@@ -182,6 +184,7 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setAiTitleGenerationEnabled: (enabled: boolean) => void;
   /** @internal */ setStatusBarWidgetEnabled: (enabled: boolean) => void;
   /** @internal */ setTaskCompletionNotificationEnabled: (enabled: boolean) => void;
+  /** @internal */ setAutoConvertSessionsOnExit: (enabled: boolean) => void;
   /** @internal */ setAskUserQuestionNotificationEnabled: (enabled: boolean) => void;
   /** @internal */ setSystemNotificationOnlyWhenUnfocused: (enabled: boolean) => void;
   /** @internal */ setAskUserQuestionSoundNotificationEnabled: (enabled: boolean) => void;
@@ -299,6 +302,7 @@ export function useSettingsBasicActions({
 
   // Task completion notification toggle (default: false, opt-in feature)
   const [taskCompletionNotificationEnabled, setTaskCompletionNotificationEnabled] = useState<boolean>(false);
+  const [autoConvertSessionsOnExit, setAutoConvertSessionsOnExit] = useState<boolean>(false);
 
   // AskUserQuestion reminder notification toggle (default: false, opt-in feature)
   const [askUserQuestionNotificationEnabled, setAskUserQuestionNotificationEnabled] = useState<boolean>(false);
@@ -528,6 +532,13 @@ export function useSettingsBasicActions({
     setTaskCompletionNotificationEnabled(enabled);
     const payload = { taskCompletionNotificationEnabled: enabled };
     sendToJava(`set_task_completion_notification_enabled:${JSON.stringify(payload)}`);
+  }, []);
+
+  // Auto-convert SDK sessions to CLI sessions on exit toggle change handler
+  const handleAutoConvertSessionsOnExitChange = useCallback((enabled: boolean) => {
+    setAutoConvertSessionsOnExit(enabled);
+    const payload = { autoConvertSessionsOnExit: enabled };
+    sendToJava(`set_auto_convert_sessions_on_exit:${JSON.stringify(payload)}`);
   }, []);
 
   // AskUserQuestion reminder notification toggle change handler
@@ -833,6 +844,9 @@ export function useSettingsBasicActions({
     taskCompletionNotificationEnabled,
     setTaskCompletionNotificationEnabled,
     handleTaskCompletionNotificationEnabledChange,
+    autoConvertSessionsOnExit,
+    setAutoConvertSessionsOnExit,
+    handleAutoConvertSessionsOnExitChange,
     askUserQuestionNotificationEnabled,
     setAskUserQuestionNotificationEnabled,
     handleAskUserQuestionNotificationEnabledChange,

@@ -10,6 +10,8 @@ export interface HistoryHeaderProps {
   allVisibleSelected: boolean;
   visibleCount: number;
   isDeepSearching: boolean;
+  isConvertingAll: boolean;
+  convertibleCount: number;
   inputValue: string;
   t: TFunction;
   onEnterSelectionMode: () => void;
@@ -17,6 +19,7 @@ export interface HistoryHeaderProps {
   onToggleSelectAllVisible: () => void;
   onStartDeleteSelected: () => void;
   onDeepSearch: () => void;
+  onConvertAllToCliSessions: () => void;
   onInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
@@ -27,6 +30,8 @@ export const HistoryHeader = memo(({
   allVisibleSelected,
   visibleCount,
   isDeepSearching,
+  isConvertingAll,
+  convertibleCount,
   inputValue,
   t,
   onEnterSelectionMode,
@@ -34,6 +39,7 @@ export const HistoryHeader = memo(({
   onToggleSelectAllVisible,
   onStartDeleteSelected,
   onDeepSearch,
+  onConvertAllToCliSessions,
   onInputChange,
 }: HistoryHeaderProps) => {
   return (
@@ -52,12 +58,15 @@ export const HistoryHeader = memo(({
           visibleCount={visibleCount}
           allVisibleSelected={allVisibleSelected}
           isDeepSearching={isDeepSearching}
+          isConvertingAll={isConvertingAll}
+          convertibleCount={convertibleCount}
           t={t}
           onEnterSelectionMode={onEnterSelectionMode}
           onExitSelectionMode={onExitSelectionMode}
           onToggleSelectAllVisible={onToggleSelectAllVisible}
           onStartDeleteSelected={onStartDeleteSelected}
           onDeepSearch={onDeepSearch}
+          onConvertAllToCliSessions={onConvertAllToCliSessions}
         />
       </div>
       {!isSelectionMode && (

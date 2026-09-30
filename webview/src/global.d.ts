@@ -186,6 +186,18 @@ interface Window {
   onConversionResult?: (json: string) => void;
 
   /**
+   * Batch SDK-to-CLI session conversion result callback.
+   * Called once per `convert_all_to_cli_sessions` message with the aggregated outcome,
+   * instead of one callback per session.
+   * Payload: { status: 'completed'|'already_running'|'failed', total, converted, skipped,
+   *   failed, skippedSessionIds: string[], failedSessionIds: string[],
+   *   errorCodes: Record<sessionId, code>, error?: string }.
+   * `already_running` means the click was rejected because a batch was still in flight —
+   * nothing was converted and no file was touched.
+   */
+  onBatchConversionResult?: (json: string) => void;
+
+  /**
    * Add user message to chat (used for external Quick Fix feature)
    * Immediately shows the user's message in the chat UI before AI response
    */
@@ -440,6 +452,11 @@ interface Window {
    * Update task completion notification enabled state
    */
   updateTaskCompletionNotificationEnabled?: (json: string) => void;
+
+  /**
+   * Update auto-convert sessions on exit enabled state
+   */
+  updateAutoConvertSessionsOnExit?: (json: string) => void;
 
   /**
    * Update AskUserQuestion reminder notification enabled state
