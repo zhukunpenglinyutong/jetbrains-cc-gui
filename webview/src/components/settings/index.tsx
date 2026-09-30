@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CodexProviderConfig } from '../../types/provider';
 import { ToastContainer } from '../Toast';
@@ -6,9 +6,22 @@ import { ToastContainer } from '../Toast';
 // Import split-out components
 import SettingsHeader from './SettingsHeader';
 import SettingsSidebar, { type SettingsTab } from './SettingsSidebar';
-import type { ProviderManageTab } from './ProviderTabSection';
-import SettingsContent from './SettingsContent';
-import SettingsDialogsHost from './SettingsDialogsHost';
+import BasicConfigSection from './BasicConfigSection';
+import ProviderTabSection, { type ProviderManageTab } from './ProviderTabSection';
+import DependencySection from './DependencySection';
+import UsageSection from './UsageSection';
+import PlaceholderSection from './PlaceholderSection';
+import PermissionsSection from './PermissionsSection';
+import CommunitySection from './CommunitySection';
+import AgentSection from './AgentSection';
+import PromptSection from './PromptSection';
+import CommitSection from './CommitSection';
+import PromptEnhancerSection from './PromptEnhancerSection';
+import OtherSettingsSection from './OtherSettingsSection';
+import PetSettingsSection from './PetSettingsSection';
+import { SkillsSettingsSection } from '../skills';
+import SettingsDialogs from './SettingsDialogs';
+import { setNewSessionConfirmEnabled as persistNewSessionConfirmEnabled } from '../../utils/skipNewSessionConfirm';
 
 // Import custom hooks
 import {
@@ -20,8 +33,6 @@ import {
   useSettingsThemeSync,
   useSettingsBasicActions,
 } from './hooks';
-import { useLazyTabData } from './hooks/useLazyTabData';
-import { useSaveProviderFromDialog } from './hooks/useSaveProviderFromDialog';
 
 import styles from './style.module.less';
 
@@ -69,13 +80,152 @@ const SettingsView = ({
   );
 
   // Page state: tabs, toasts, sidebar collapse, alert dialog
-  const pageState = useSettingsPageState({ initialTab, isCodexMode, disabledTabs });
+  const {
+    currentTab,
+    toasts,
+    alertDialog,
+    isCollapsed,
+    handleTabChange,
+    toggleManualCollapse,
+    showAlert,
+    closeAlert,
+    addToast,
+    dismissToast,
+  } = useSettingsPageState({ initialTab, isCodexMode, disabledTabs });
 
   // Theme sync: theme preference, IDE theme, font size, chat colors
-  const themeSync = useSettingsThemeSync();
+  const {
+    themePreference,
+    setThemePreference,
+    setIdeTheme,
+    fontSizeLevel,
+    setFontSizeLevel,
+    chatBgColor,
+    setChatBgColor,
+    userMsgColor,
+    setUserMsgColor,
+    chatBarColor,
+    setChatBarColor,
+    diffTheme,
+    setDiffTheme,
+  } = useSettingsThemeSync();
 
   // Basic settings actions: node path, working dir, streaming, shortcuts, sound, commit prompt, etc.
-  const basicActions = useSettingsBasicActions({
+  const {
+    nodePath,
+    setNodePath,
+    nodeVersion,
+    setNodeVersion,
+    minNodeVersion,
+    setMinNodeVersion,
+    savingNodePath,
+    setSavingNodePath,
+    claudeCliPath,
+    setClaudeCliPath,
+    savingClaudeCliPath,
+    setSavingClaudeCliPath,
+    codexCliPath,
+    setCodexCliPath,
+    savingCodexCliPath,
+    setSavingCodexCliPath,
+    workingDirectory,
+    setWorkingDirectory,
+    savingWorkingDirectory,
+    setSavingWorkingDirectory,
+    editorFontConfig,
+    setEditorFontConfig,
+    uiFontConfig,
+    setUiFontConfig,
+    codeFontConfig,
+    setCodeFontConfig,
+    setLocalStreamingEnabled,
+    streamingEnabled,
+    codexSandboxMode,
+    setCodexSandboxMode,
+    setLocalSendShortcut,
+    sendShortcut,
+    autoOpenFileEnabled,
+    promptEnhancerConfig,
+    setPromptEnhancerConfig,
+    commitPrompt,
+    setCommitPrompt,
+    savingCommitPrompt,
+    setSavingCommitPrompt,
+    soundNotificationEnabled,
+    setSoundNotificationEnabled,
+    soundOnlyWhenUnfocused,
+    setSoundOnlyWhenUnfocused,
+    selectedSound,
+    setSelectedSound,
+    customSoundPath,
+    setCustomSoundPath,
+    diffExpandedByDefault,
+    setDiffExpandedByDefault,
+    historyCompletionEnabled,
+    setHistoryCompletionEnabled,
+    skipNewSessionConfirm,
+    setSkipNewSessionConfirm,
+    handleSaveNodePath,
+    handleSaveClaudeCliPath,
+    handleSaveCodexCliPath,
+    handleSaveWorkingDirectory,
+    handleUiFontSelectionChange,
+    handleSaveUiFontCustomPath,
+    handleBrowseUiFontFile,
+    handleCodeFontSelectionChange,
+    handleSaveCodeFontCustomPath,
+    handleBrowseCodeFontFile,
+    handleStreamingEnabledChange,
+    handleCodexSandboxModeChange,
+    handleSendShortcutChange,
+    handleAutoOpenFileEnabledChange,
+    handleSoundNotificationEnabledChange,
+    handleSoundOnlyWhenUnfocusedChange,
+    handleSelectedSoundChange,
+    handleCustomSoundPathChange,
+    handleSaveCustomSoundPath,
+    handleTestSound,
+    handleBrowseSound,
+    handleSaveCommitPrompt,
+    projectCommitPrompt,
+    setProjectCommitPrompt,
+    savingProjectCommitPrompt,
+    setSavingProjectCommitPrompt,
+    handleSaveProjectCommitPrompt,
+    commitGenerationEnabled,
+    setCommitGenerationEnabled,
+    handleCommitGenerationEnabledChange,
+    aiTitleGenerationEnabled,
+    setAiTitleGenerationEnabled,
+    handleAiTitleGenerationEnabledChange,
+    statusBarWidgetEnabled,
+    setStatusBarWidgetEnabled,
+    handleStatusBarWidgetEnabledChange,
+    taskCompletionNotificationEnabled,
+    setTaskCompletionNotificationEnabled,
+    handleTaskCompletionNotificationEnabledChange,
+    askUserQuestionNotificationEnabled,
+    setAskUserQuestionNotificationEnabled,
+    handleAskUserQuestionNotificationEnabledChange,
+    detailedOutputEnabled,
+    handleDetailedOutputEnabledChange,
+    systemNotificationOnlyWhenUnfocused,
+    setSystemNotificationOnlyWhenUnfocused,
+    handleSystemNotificationOnlyWhenUnfocusedChange,
+    askUserQuestionSoundNotificationEnabled,
+    setAskUserQuestionSoundNotificationEnabled,
+    handleAskUserQuestionSoundNotificationEnabledChange,
+    permissionDialogTimeoutSeconds,
+    handlePermissionDialogTimeoutChange,
+    commitAiConfig,
+    setCommitAiConfig,
+    handleCommitAiProviderChange,
+    handleCommitAiModelChange,
+    handleCommitAiResetToDefault,
+    handlePromptEnhancerProviderChange,
+    handlePromptEnhancerModelChange,
+    handlePromptEnhancerResetToDefault,
+  } = useSettingsBasicActions({
     streamingEnabledProp,
     onStreamingEnabledChangeProp,
     sendShortcutProp,
@@ -88,60 +238,251 @@ const SettingsView = ({
   });
 
   // Use provider management hook
-  const providerManagement = useProviderManagement({
-    onError: (msg) => pageState.showAlert('error', t('common.error'), msg),
-    onSuccess: (msg) => pageState.addToast(msg, 'success'),
+  const {
+    providers,
+    loading,
+    providerDialog,
+    deleteConfirm,
+    loadProviders,
+    updateProviders,
+    updateActiveProvider,
+    handleEditProvider,
+    handleAddProvider,
+    handleCloseProviderDialog,
+    handleSwitchProvider,
+    handleDeleteProvider,
+    confirmDeleteProvider,
+    cancelDeleteProvider,
+    syncActiveProviderModelMapping,
+    setLoading,
+  } = useProviderManagement({
+    onError: (msg) => showAlert('error', t('common.error'), msg),
+    onSuccess: (msg) => addToast(msg, 'success'),
   });
 
   // Use Codex provider management hook
-  const codexProviderManagement = useCodexProviderManagement({
-    onSuccess: (msg) => pageState.addToast(msg, 'success'),
+  const {
+    codexProviders,
+    codexLoading,
+    codexProviderDialog,
+    deleteCodexConfirm,
+    loadCodexProviders,
+    updateCodexProviders,
+    updateActiveCodexProvider,
+    updateCurrentCodexConfig,
+    handleAddCodexProvider,
+    handleEditCodexProvider,
+    handleCloseCodexProviderDialog,
+    handleSaveCodexProvider,
+    handleSwitchCodexProvider,
+    handleRevokeCodexLocalConfigAuthorization,
+    handleDeleteCodexProvider,
+    confirmDeleteCodexProvider,
+    cancelDeleteCodexProvider,
+    setCodexLoading,
+    setCodexConfigLoading,
+  } = useCodexProviderManagement({
+    onSuccess: (msg) => addToast(msg, 'success'),
   });
 
   // Use agent management hook
-  const agentManagement = useAgentManagement({
-    onSuccess: (msg) => pageState.addToast(msg, 'success'),
+  const {
+    agents,
+    agentsLoading,
+    agentDialog,
+    deleteAgentConfirm,
+    importPreviewDialog: agentImportPreviewDialog,
+    exportDialog: agentExportDialog,
+    loadAgents,
+    updateAgents,
+    cleanupAgentsTimeout,
+    handleAddAgent,
+    handleEditAgent,
+    handleCloseAgentDialog,
+    handleDeleteAgent,
+    handleSaveAgent,
+    confirmDeleteAgent,
+    cancelDeleteAgent,
+    handleAgentOperationResult,
+    handleExportAgents,
+    handleCloseExportDialog: handleCloseAgentExportDialog,
+    handleConfirmExport: handleConfirmAgentExport,
+    handleImportAgentsFile,
+    handleAgentImportPreviewResult,
+    handleCloseImportPreview: handleCloseAgentImportPreview,
+    handleSaveImportedAgents,
+    handleAgentImportResult,
+  } = useAgentManagement({
+    onSuccess: (msg) => addToast(msg, 'success'),
   });
 
   // Note: Prompt management is now handled internally by PromptSection component
 
-  useLazyTabData(pageState.currentTab, {
-    loadProviders: providerManagement.loadProviders,
-    loadCodexProviders: codexProviderManagement.loadCodexProviders,
-    loadAgents: agentManagement.loadAgents,
-  });
+  // Load heavy list / AI-feature data only when the corresponding tab is first opened.
+  // Opening Settings previously stampeded providers + agents + CLI probes at once.
+  // Commit / prompt-enhancer config probes multiple CLIs and must stay off first paint.
+  const loadedListTabsRef = useRef(new Set<SettingsTab>());
+  useEffect(() => {
+    if (currentTab === 'providers' && !loadedListTabsRef.current.has('providers')) {
+      loadedListTabsRef.current.add('providers');
+      loadProviders();
+      loadCodexProviders();
+    }
+    if (currentTab === 'agents' && !loadedListTabsRef.current.has('agents')) {
+      loadedListTabsRef.current.add('agents');
+      loadAgents();
+    }
+    if (currentTab === 'commit' && !loadedListTabsRef.current.has('commit')) {
+      loadedListTabsRef.current.add('commit');
+      window.sendToJava?.('get_commit_prompt:');
+      window.sendToJava?.('get_commit_ai_config:');
+    }
+    if (currentTab === 'promptEnhancer' && !loadedListTabsRef.current.has('promptEnhancer')) {
+      loadedListTabsRef.current.add('promptEnhancer');
+      window.sendToJava?.('get_prompt_enhancer_config:');
+    }
+  }, [currentTab, loadProviders, loadCodexProviders, loadAgents]);
 
   // Register window callbacks for Java bridge communication
   useSettingsWindowCallbacks({
-    ...themeSync,
-    ...basicActions,
-    ...pageState,
-    ...providerManagement,
-    ...codexProviderManagement,
-    ...agentManagement,
+    setNodePath,
+    setNodeVersion,
+    setMinNodeVersion,
+    setSavingNodePath,
+    setClaudeCliPath,
+    setSavingClaudeCliPath,
+    setCodexCliPath,
+    setSavingCodexCliPath,
+    setWorkingDirectory,
+    setSavingWorkingDirectory,
+    setCommitPrompt,
+    setSavingCommitPrompt,
+    setCommitAiConfig,
+    setPromptEnhancerConfig,
+    setProjectCommitPrompt,
+    setSavingProjectCommitPrompt,
+    setEditorFontConfig,
+    setUiFontConfig,
+    setCodeFontConfig,
+    setIdeTheme,
+    setLocalStreamingEnabled,
+    setCodexSandboxMode,
+    setLocalSendShortcut,
+    setLoading,
+    setCodexLoading,
+    setCodexConfigLoading,
+    updateProviders,
+    updateActiveProvider,
+    loadProviders,
+    loadCodexProviders,
+    loadAgents,
+    updateAgents,
+    handleAgentOperationResult,
+    handleAgentImportPreviewResult,
+    handleAgentImportResult,
+    // Note: Prompt-related callbacks are now handled in PromptSection component
+    updateCodexProviders,
+    updateActiveCodexProvider,
+    updateCurrentCodexConfig,
+    cleanupAgentsTimeout,
+    showAlert,
+    addToast,
     onStreamingEnabledChangeProp,
     onSendShortcutChangeProp,
+    setSoundNotificationEnabled,
+    setSoundOnlyWhenUnfocused,
+    setSelectedSound,
+    setCustomSoundPath,
+    setCommitGenerationEnabled,
+    setAiTitleGenerationEnabled,
+    setStatusBarWidgetEnabled,
+    setTaskCompletionNotificationEnabled,
+    setAskUserQuestionNotificationEnabled,
+    setSystemNotificationOnlyWhenUnfocused,
+    setAskUserQuestionSoundNotificationEnabled,
   });
 
   // Save provider (wrapper function with validation logic)
-  const handleSaveProviderFromDialog = useSaveProviderFromDialog({
-    providerDialog: providerManagement.providerDialog,
-    providers: providerManagement.providers,
-    syncActiveProviderModelMapping: providerManagement.syncActiveProviderModelMapping,
-    handleCloseProviderDialog: providerManagement.handleCloseProviderDialog,
-    setLoading: providerManagement.setLoading,
-    showAlert: pageState.showAlert,
-    addToast: pageState.addToast,
-  });
+  const handleSaveProviderFromDialog = (data: {
+    providerName: string;
+    remark: string;
+    apiKey: string;
+    apiUrl: string;
+    jsonConfig: string;
+  }) => {
+    if (!data.providerName) {
+      showAlert('warning', t('common.warning'), t('toast.pleaseEnterProviderName'));
+      return;
+    }
+
+    // Parse JSON configuration
+    let parsedConfig;
+    try {
+      parsedConfig = JSON.parse(data.jsonConfig || '{}');
+    } catch (e) {
+      showAlert('error', t('common.error'), t('toast.invalidJsonConfig'));
+      return;
+    }
+
+    const updates: Record<string, any> = {
+      name: data.providerName,
+      remark: data.remark,
+      websiteUrl: null, // Clear potentially existing legacy field to avoid display confusion
+      settingsConfig: parsedConfig,
+    };
+
+    const isAdding = !providerDialog.provider;
+
+    if (isAdding) {
+      // Add new provider
+      const newProvider = {
+        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+        ...updates
+      };
+      window.sendToJava?.(`add_provider:${JSON.stringify(newProvider)}`);
+      addToast(t('toast.providerAdded'), 'success');
+    } else {
+      // Update existing provider
+      if (!providerDialog.provider) return;
+
+      const providerId = providerDialog.provider.id;
+      // Check if the currently edited provider is active
+      // Prefer the latest state from providers list; fall back to dialog state if not found
+      const currentProviderItem = providers.find(p => p.id === providerId) || providerDialog.provider;
+      const isActive = currentProviderItem.isActive;
+
+      const updateData = {
+        id: providerId,
+        updates,
+      };
+      window.sendToJava?.(`update_provider:${JSON.stringify(updateData)}`);
+      addToast(t('toast.providerUpdated'), 'success');
+
+      // If this is the currently active provider, immediately re-apply the configuration after update
+      if (isActive) {
+        syncActiveProviderModelMapping({
+          ...currentProviderItem,
+          settingsConfig: parsedConfig,
+        });
+        // Use setTimeout for a slight delay to ensure update_provider finishes first
+        setTimeout(() => {
+          window.sendToJava?.(`switch_provider:${JSON.stringify({ id: providerId })}`);
+        }, 100);
+      }
+    }
+
+    handleCloseProviderDialog();
+    setLoading(true);
+  };
 
   // Save Codex provider (wrapper function with validation logic)
   const handleSaveCodexProviderFromDialog = (providerData: CodexProviderConfig) => {
-    codexProviderManagement.handleSaveCodexProvider(providerData);
+    handleSaveCodexProvider(providerData);
   };
 
   // Save agent (wrapper function with validation logic)
   const handleSaveAgentFromDialog = (data: { name: string; prompt: string }) => {
-    agentManagement.handleSaveAgent(data);
+    handleSaveAgent(data);
   };
 
   return (
@@ -153,44 +494,264 @@ const SettingsView = ({
       <div className={styles.settingsMain}>
         {/* Sidebar */}
         <SettingsSidebar
-          currentTab={pageState.currentTab}
-          onTabChange={pageState.handleTabChange}
-          isCollapsed={pageState.isCollapsed}
-          onToggleCollapse={pageState.toggleManualCollapse}
+          currentTab={currentTab}
+          onTabChange={handleTabChange}
+          isCollapsed={isCollapsed}
+          onToggleCollapse={toggleManualCollapse}
           disabledTabs={disabledTabs}
           onDisabledTabClick={(tab) =>
-            pageState.addToast(
+            addToast(
               t(tab === 'pet' ? 'settings.pet.temporarilyUnavailable' : 'settings.codexFeatureUnavailable'),
               'warning'
             )
           }
         />
 
-        <SettingsContent
-          currentTab={pageState.currentTab}
-          currentProvider={currentProvider}
-          initialProviderSubTab={initialProviderSubTab}
-          addToast={pageState.addToast}
-          themeSync={themeSync}
-          basicActions={basicActions}
-          providerManagement={providerManagement}
-          codexProviderManagement={codexProviderManagement}
-          agentManagement={agentManagement}
-        />
+        {/* Content area — mount only the active tab.
+            Previously every tab stayed mounted under display:none, which made
+            Settings open cost ~all sections (MCP/Skills/TokenTracker/…) at once. */}
+        <div className={`${styles.settingsContent} ${currentTab === 'providers' ? styles.providerSettingsContent : ''}`}>
+          {currentTab === 'basic' && (
+            <BasicConfigSection
+              theme={themePreference}
+              onThemeChange={setThemePreference}
+              fontSizeLevel={fontSizeLevel}
+              onFontSizeLevelChange={setFontSizeLevel}
+              nodePath={nodePath}
+              onNodePathChange={setNodePath}
+              onSaveNodePath={handleSaveNodePath}
+              savingNodePath={savingNodePath}
+              nodeVersion={nodeVersion}
+              minNodeVersion={minNodeVersion}
+              claudeCliPath={claudeCliPath}
+              onClaudeCliPathChange={setClaudeCliPath}
+              onSaveClaudeCliPath={handleSaveClaudeCliPath}
+              savingClaudeCliPath={savingClaudeCliPath}
+              codexCliPath={codexCliPath}
+              onCodexCliPathChange={setCodexCliPath}
+              onSaveCodexCliPath={handleSaveCodexCliPath}
+              savingCodexCliPath={savingCodexCliPath}
+              workingDirectory={workingDirectory}
+              onWorkingDirectoryChange={setWorkingDirectory}
+              onSaveWorkingDirectory={handleSaveWorkingDirectory}
+              savingWorkingDirectory={savingWorkingDirectory}
+              editorFontConfig={editorFontConfig}
+              uiFontConfig={uiFontConfig}
+              codeFontConfig={codeFontConfig}
+              onUiFontSelectionChange={handleUiFontSelectionChange}
+              onSaveUiFontCustomPath={handleSaveUiFontCustomPath}
+              onBrowseUiFontFile={handleBrowseUiFontFile}
+              onCodeFontSelectionChange={handleCodeFontSelectionChange}
+              onSaveCodeFontCustomPath={handleSaveCodeFontCustomPath}
+              onBrowseCodeFontFile={handleBrowseCodeFontFile}
+              streamingEnabled={streamingEnabled}
+              onStreamingEnabledChange={handleStreamingEnabledChange}
+              sendShortcut={sendShortcut}
+              onSendShortcutChange={handleSendShortcutChange}
+              autoOpenFileEnabled={autoOpenFileEnabled}
+              onAutoOpenFileEnabledChange={handleAutoOpenFileEnabledChange}
+              chatBgColor={chatBgColor}
+              onChatBgColorChange={setChatBgColor}
+              userMsgColor={userMsgColor}
+              onUserMsgColorChange={setUserMsgColor}
+              chatBarColor={chatBarColor}
+              onChatBarColorChange={setChatBarColor}
+              diffTheme={diffTheme}
+              onDiffThemeChange={setDiffTheme}
+              diffExpandedByDefault={diffExpandedByDefault}
+              onDiffExpandedByDefaultChange={setDiffExpandedByDefault}
+              commitGenerationEnabled={commitGenerationEnabled}
+              onCommitGenerationEnabledChange={(enabled) => {
+                handleCommitGenerationEnabledChange(enabled);
+                addToast(t('toast.restartRequired'), 'warning');
+              }}
+              statusBarWidgetEnabled={statusBarWidgetEnabled}
+              onStatusBarWidgetEnabledChange={(enabled) => {
+                handleStatusBarWidgetEnabledChange(enabled);
+                addToast(t('toast.restartRequired'), 'warning');
+              }}
+              aiTitleGenerationEnabled={aiTitleGenerationEnabled}
+              onAiTitleGenerationEnabledChange={handleAiTitleGenerationEnabledChange}
+              newSessionConfirmEnabled={!skipNewSessionConfirm}
+              onNewSessionConfirmEnabledChange={(enabled) => {
+                // Optimistic local update so the toggle reflects instantly even if
+                // the CustomEvent loops back. persistNewSessionConfirmEnabled writes
+                // to localStorage and dispatches the sync event for other surfaces.
+                setSkipNewSessionConfirm(!enabled);
+                persistNewSessionConfirmEnabled(enabled);
+              }}
+              soundNotificationEnabled={soundNotificationEnabled}
+              onSoundNotificationEnabledChange={handleSoundNotificationEnabledChange}
+              soundOnlyWhenUnfocused={soundOnlyWhenUnfocused}
+              onSoundOnlyWhenUnfocusedChange={handleSoundOnlyWhenUnfocusedChange}
+              selectedSound={selectedSound}
+              onSelectedSoundChange={handleSelectedSoundChange}
+              customSoundPath={customSoundPath}
+              onCustomSoundPathChange={handleCustomSoundPathChange}
+              onSaveCustomSoundPath={handleSaveCustomSoundPath}
+              onTestSound={handleTestSound}
+              onBrowseSound={handleBrowseSound}
+              taskCompletionNotificationEnabled={taskCompletionNotificationEnabled}
+              onTaskCompletionNotificationEnabledChange={handleTaskCompletionNotificationEnabledChange}
+              askUserQuestionNotificationEnabled={askUserQuestionNotificationEnabled}
+              onAskUserQuestionNotificationEnabledChange={handleAskUserQuestionNotificationEnabledChange}
+              detailedOutputEnabled={detailedOutputEnabled}
+              onDetailedOutputEnabledChange={handleDetailedOutputEnabledChange}
+              systemNotificationOnlyWhenUnfocused={systemNotificationOnlyWhenUnfocused}
+              onSystemNotificationOnlyWhenUnfocusedChange={handleSystemNotificationOnlyWhenUnfocusedChange}
+              askUserQuestionSoundNotificationEnabled={askUserQuestionSoundNotificationEnabled}
+              onAskUserQuestionSoundNotificationEnabledChange={handleAskUserQuestionSoundNotificationEnabledChange}
+              permissionDialogTimeoutSeconds={permissionDialogTimeoutSeconds}
+              onPermissionDialogTimeoutChange={handlePermissionDialogTimeoutChange}
+            />
+          )}
+
+          {currentTab === 'providers' && (
+            <ProviderTabSection
+              currentProvider={currentProvider}
+              initialSubTab={initialProviderSubTab}
+              providers={providers}
+              loading={loading}
+              onAddProvider={handleAddProvider}
+              onEditProvider={handleEditProvider}
+              onDeleteProvider={handleDeleteProvider}
+              onSwitchProvider={handleSwitchProvider}
+              codexProviders={codexProviders}
+              codexLoading={codexLoading}
+              onAddCodexProvider={handleAddCodexProvider}
+              onEditCodexProvider={handleEditCodexProvider}
+              onDeleteCodexProvider={handleDeleteCodexProvider}
+              onSwitchCodexProvider={handleSwitchCodexProvider}
+              onRevokeCodexLocalConfigAuthorization={handleRevokeCodexLocalConfigAuthorization}
+              addToast={addToast}
+            />
+          )}
+
+          {currentTab === 'dependencies' && (
+            <DependencySection addToast={addToast} isActive />
+          )}
+
+          {currentTab === 'usage' && <UsageSection />}
+
+          {currentTab === 'mcp' && (
+            <PlaceholderSection type="mcp" currentProvider={currentProvider} />
+          )}
+
+          {currentTab === 'permissions' && (
+            currentProvider === 'codex' ? (
+              <PermissionsSection
+                codexSandboxMode={codexSandboxMode}
+                onCodexSandboxModeChange={handleCodexSandboxModeChange}
+              />
+            ) : (
+              <PlaceholderSection type="permissions" />
+            )
+          )}
+
+          {currentTab === 'promptEnhancer' && (
+            <PromptEnhancerSection
+              promptEnhancerConfig={promptEnhancerConfig}
+              onPromptEnhancerProviderChange={handlePromptEnhancerProviderChange}
+              onPromptEnhancerModelChange={handlePromptEnhancerModelChange}
+              onPromptEnhancerResetToDefault={handlePromptEnhancerResetToDefault}
+            />
+          )}
+
+          {currentTab === 'commit' && (
+            <CommitSection
+              commitAiConfig={commitAiConfig}
+              onCommitAiProviderChange={handleCommitAiProviderChange}
+              onCommitAiModelChange={handleCommitAiModelChange}
+              onCommitAiResetToDefault={handleCommitAiResetToDefault}
+              commitPrompt={commitPrompt}
+              projectCommitPrompt={projectCommitPrompt}
+              onCommitPromptChange={setCommitPrompt}
+              onProjectCommitPromptChange={setProjectCommitPrompt}
+              onSaveCommitPrompt={handleSaveCommitPrompt}
+              onSaveProjectCommitPrompt={handleSaveProjectCommitPrompt}
+              savingCommitPrompt={savingCommitPrompt}
+              savingProjectCommitPrompt={savingProjectCommitPrompt}
+            />
+          )}
+
+          {currentTab === 'agents' && (
+            <AgentSection
+              agents={agents}
+              loading={agentsLoading}
+              onAdd={handleAddAgent}
+              onEdit={handleEditAgent}
+              onDelete={handleDeleteAgent}
+              onExport={handleExportAgents}
+              onImport={handleImportAgentsFile}
+            />
+          )}
+
+          {currentTab === 'prompts' && (
+            <PromptSection
+              currentProvider={currentProvider}
+              onSuccess={(msg) => addToast(msg, 'success')}
+            />
+          )}
+
+          {currentTab === 'skills' && (
+            <SkillsSettingsSection currentProvider={currentProvider} />
+          )}
+
+          {currentTab === 'pet' && <PetSettingsSection addToast={addToast} />}
+
+          {currentTab === 'other' && (
+            <OtherSettingsSection
+              historyCompletionEnabled={historyCompletionEnabled}
+              onHistoryCompletionEnabledChange={(enabled) => {
+                setHistoryCompletionEnabled(enabled);
+                localStorage.setItem('historyCompletionEnabled', enabled.toString());
+                // Dispatch custom event for same-tab sync (localStorage 'storage' event only fires for cross-tab)
+                window.dispatchEvent(new CustomEvent('historyCompletionChanged', { detail: { enabled } }));
+              }}
+            />
+          )}
+
+          {currentTab === 'community' && (
+            <CommunitySection addToast={addToast} />
+          )}
+        </div>
       </div>
 
-      <SettingsDialogsHost
-        pageState={pageState}
-        providerManagement={providerManagement}
-        codexProviderManagement={codexProviderManagement}
-        agentManagement={agentManagement}
+      {/* All dialogs (alert, confirm, provider, agent, prompt, codex) */}
+      <SettingsDialogs
+        alertDialog={alertDialog}
+        onCloseAlert={closeAlert}
+        providerDialog={providerDialog}
+        deleteConfirm={deleteConfirm}
+        onCloseProviderDialog={handleCloseProviderDialog}
         onSaveProvider={handleSaveProviderFromDialog}
+        onDeleteProvider={handleDeleteProvider}
+        onConfirmDeleteProvider={confirmDeleteProvider}
+        onCancelDeleteProvider={cancelDeleteProvider}
+        codexProviderDialog={codexProviderDialog}
+        deleteCodexConfirm={deleteCodexConfirm}
+        onCloseCodexProviderDialog={handleCloseCodexProviderDialog}
         onSaveCodexProvider={handleSaveCodexProviderFromDialog}
+        onConfirmDeleteCodexProvider={confirmDeleteCodexProvider}
+        onCancelDeleteCodexProvider={cancelDeleteCodexProvider}
+        agentDialog={agentDialog}
+        deleteAgentConfirm={deleteAgentConfirm}
+        onCloseAgentDialog={handleCloseAgentDialog}
         onSaveAgent={handleSaveAgentFromDialog}
+        onConfirmDeleteAgent={confirmDeleteAgent}
+        onCancelDeleteAgent={cancelDeleteAgent}
+        agentExportDialog={agentExportDialog}
+        agentImportPreviewDialog={agentImportPreviewDialog}
+        agents={agents}
+        onCloseAgentExportDialog={handleCloseAgentExportDialog}
+        onConfirmAgentExport={handleConfirmAgentExport}
+        onCloseAgentImportPreview={handleCloseAgentImportPreview}
+        onSaveImportedAgents={handleSaveImportedAgents}
+        addToast={addToast}
       />
 
       {/* Toast notifications */}
-      <ToastContainer messages={pageState.toasts} onDismiss={pageState.dismissToast} />
+      <ToastContainer messages={toasts} onDismiss={dismissToast} />
     </div>
   );
 };
