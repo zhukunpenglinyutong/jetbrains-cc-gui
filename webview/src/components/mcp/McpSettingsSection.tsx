@@ -25,6 +25,7 @@ import { McpServerList } from './McpSettingsSection/McpServerList';
 import { McpDialogs } from './McpSettingsSection/McpDialogs';
 import { McpToolTooltip, type HoveredToolState } from './McpSettingsSection/McpToolTooltip';
 import { getMcpMessagePrefix, resolveInitialMcpProvider, type McpProvider } from './providerSelection';
+import { buildServerCardIndex } from './serverCardKey';
 
 /**
  * MCP Server Settings Component
@@ -119,6 +120,11 @@ function McpProviderPanel({ currentProvider }: { currentProvider: McpProvider })
     onLog: addLog,
   });
 
+  // Card lookup for the current server list. Two servers can share an id (a project-local
+  // .mcp.json entry colliding with a global one), so every card is addressed by its card
+  // key instead — see serverCardKey.ts.
+  const cardIndex = useMemo(() => buildServerCardIndex(servers), [servers]);
+
   // Use server management hook
   const {
     serverRefreshStates,
@@ -185,39 +191,48 @@ function McpProviderPanel({ currentProvider }: { currentProvider: McpProvider })
     handleSelectPreset,
     handleCopyUrl,
     handleCopyConfig,
+    handleApprove,
+    handleReject,
   } = useServerActions({
     messagePrefix,
     isCodexMode,
     addToast,
+    cacheKeys,
+    setServerTools,
     loadServers,
+    loadServerStatus,
     closeDropdown,
     t,
   });
 
   // Toggle server expand/collapse
-  const toggleExpand = useCallback((serverId: string) => {
-    const server = servers.find(s => s.id === serverId);
-    const isExpanding = !expandedServers.has(serverId);
+  //
+  // Addressed by card key, not by server id: a project-local server can share its id
+  // with a global one, and `servers.find(s => s.id === cardKey)`-style lookups would
+  // land on the wrong record. `expandedServers` and `serverTools` use the same key.
+  const toggleExpand = useCallback((cardKey: string) => {
+    const server = cardIndex.findServer(cardKey);
+    const isExpanding = !expandedServers.has(cardKey);
 
     if (isExpanding) {
-      setExpandedServers(new Set([serverId]));
-      // Save last expanded server ID to cache
+      setExpandedServers(new Set([cardKey]));
+      // Save last expanded server card key to cache
       try {
-        localStorage.setItem(cacheKeys.LAST_SERVER_ID, serverId);
+        localStorage.setItem(cacheKeys.LAST_SERVER_ID, cardKey);
       } catch (e) {
         // ignore
       }
 
       // Automatically load tool list when expanded.
-      if (server && !serverTools[serverId]) {
+      if (server && !serverTools[cardKey]) {
         loadServerTools(server, false);
       }
     } else {
       const newExpanded = new Set(expandedServers);
-      newExpanded.delete(serverId);
+      newExpanded.delete(cardKey);
       setExpandedServers(newExpanded);
     }
-  }, [servers, expandedServers, serverTools, cacheKeys, setExpandedServers, loadServerTools]);
+  }, [cardIndex, expandedServers, serverTools, cacheKeys, setExpandedServers, loadServerTools]);
 
   // Tool hover handler
   const handleToolHover = useCallback((tool: McpTool | null, position?: { x: number; y: number }, serverId?: string) => {
@@ -261,6 +276,8 @@ function McpProviderPanel({ currentProvider }: { currentProvider: McpProvider })
         onEdit={handleEdit}
         onDelete={handleDelete}
         onCopyConfig={handleCopyConfig}
+        onApprove={handleApprove}
+        onReject={handleReject}
         onRefreshServer={handleRefreshSingleServer}
         onLoadTools={loadServerTools}
         onCopyUrl={handleCopyUrl}

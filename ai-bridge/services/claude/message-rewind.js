@@ -79,7 +79,27 @@ export async function rewindFiles(sessionId, userMessageId, cwd = null) {
           ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride })
         };
 
-        console.log('[REWIND] Resuming session with options:', JSON.stringify(options));
+        // Never serialize `options` as a whole: `options.env` is the full process
+        // environment (buildCliEnv() copies process.env, including secrets merged
+        // in from a project .env file), and stdout is mirrored into the IDE's
+        // persistent idea.log by the Java bridge. Log names only, and only under
+        // CLAUDE_DEBUG — same policy as debugLog() in daemon.js / envLoader.js.
+        if (process.env.CLAUDE_DEBUG === '1') {
+          console.log(
+            '[REWIND] Resuming session, options:',
+            JSON.stringify({
+              ...options,
+              env: `<${Object.keys(options.env || {}).length} vars>`
+            })
+          );
+        } else {
+          console.log(
+            '[REWIND] Resuming session:',
+            sessionId,
+            '| env keys:',
+            Object.keys(options.env || {}).length
+          );
+        }
 
         // Dynamically load Claude SDK
         const sdk = await ensureClaudeSdk();

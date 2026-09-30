@@ -3,6 +3,7 @@ import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 import type { DiffThemeMode } from '../../../utils/diffTheme';
 import type { UiFontConfig, CodeFontConfig } from '../hooks/useSettingsBasicActions';
+import type { EnvFilePathIssue, EnvFileState } from '../../../types/envFile';
 import AppearanceTab from './AppearanceTab';
 import BehaviorTab from './BehaviorTab';
 import EnvironmentTab from './EnvironmentTab';
@@ -34,6 +35,13 @@ interface BasicConfigSectionProps {
   onWorkingDirectoryChange?: (dir: string) => void;
   onSaveWorkingDirectory?: () => void;
   savingWorkingDirectory?: boolean;
+  envFile?: string;
+  onEnvFileChange?: (path: string) => void;
+  onSaveEnvFile?: () => void;
+  savingEnvFile?: boolean;
+  envFileState?: EnvFileState;
+  onResetEnvFile?: () => void;
+  envFileError?: EnvFilePathIssue | null;
   editorFontConfig?: {
     fontFamily: string;
     fontSize: number;
@@ -223,6 +231,13 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onWorkingDirectoryChange={props.onWorkingDirectoryChange}
           onSaveWorkingDirectory={props.onSaveWorkingDirectory}
           savingWorkingDirectory={props.savingWorkingDirectory}
+          envFile={props.envFile}
+          onEnvFileChange={props.onEnvFileChange}
+          onSaveEnvFile={props.onSaveEnvFile}
+          savingEnvFile={props.savingEnvFile}
+          envFileState={props.envFileState}
+          onResetEnvFile={props.onResetEnvFile}
+          envFileError={props.envFileError}
         />
       )}
     </div>

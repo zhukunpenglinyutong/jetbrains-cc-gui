@@ -24,6 +24,9 @@ describe('useSettingsWindowCallbacks', () => {
     setSavingClaudeCliPath: vi.fn(),
     setWorkingDirectory: vi.fn(),
     setSavingWorkingDirectory: vi.fn(),
+    setEnvFile: vi.fn(),
+    setEnvFileState: vi.fn(),
+    setSavingEnvFile: vi.fn(),
     setCommitPrompt: vi.fn(),
     setSavingCommitPrompt: vi.fn(),
     setCommitAiConfig: vi.fn(),
@@ -278,6 +281,33 @@ describe('useSettingsWindowCallbacks', () => {
       fontBase64: 'AAECA',
       fontFormat: 'truetype',
     }));
+  });
+
+  it('maps the effective env file state from the backend payload', () => {
+    const deps = createDeps();
+
+    renderHook(() => useSettingsWindowCallbacks(deps));
+
+    window.updateEnvFile?.(JSON.stringify({
+      envFile: '',
+      envFileState: 'disabled',
+      envFileDisabled: true,
+    }));
+
+    expect(deps.setEnvFile).toHaveBeenCalledWith('');
+    expect(deps.setEnvFileState).toHaveBeenCalledWith('disabled');
+  });
+
+  it('falls back to the unknown env file state on a malformed payload', () => {
+    const deps = createDeps();
+
+    renderHook(() => useSettingsWindowCallbacks(deps));
+
+    window.updateEnvFile?.('{not json');
+
+    expect(deps.setEnvFile).toHaveBeenCalledWith('');
+    expect(deps.setEnvFileState).toHaveBeenCalledWith('unknown');
+    expect(deps.setSavingEnvFile).toHaveBeenCalledWith(false);
   });
 
   it('registers system notification focus gate callback and updates state from backend payload', () => {
