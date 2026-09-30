@@ -89,21 +89,29 @@ export const HistoryActions = memo(({
           had no way to learn the feature existed. A disabled button plus an explanatory
           tooltip keeps the affordance visible and states the reason in place.
           It is also disabled while a batch is running, so the user sees that the click
-          was accepted instead of being free to queue a second identical conversion. */}
-      <button
-        className="history-toolbar-btn"
-        onClick={onConvertAllToCliSessions}
-        disabled={convertibleCount === 0 || isConvertingAll}
-        title={convertAllTooltip}
-        aria-label={convertAllTooltip}
-      >
-        <span className="codicon codicon-arrow-swap"></span>
-        <span>{convertibleCount > 0
-          ? t('history.convertAllToCliSessions', { count: convertibleCount })
-          : t('history.convertAllToCliSessionsLabel', {
-              defaultValue: 'Convert all to CLI',
-            })}</span>
-      </button>
+          was accepted instead of being free to queue a second identical conversion.
+
+          The tooltip sits on a wrapper span as well as on the button: Chromium/JCEF does
+          not surface the native title of a disabled control, which is exactly the state the
+          "nothing to convert" explanation exists for. The wrapper stays hoverable, so the
+          explanation is actually reachable. The button keeps its aria-label, which is how
+          assistive tech gets the same text without depending on hover. */}
+      <span title={convertAllTooltip}>
+        <button
+          className="history-toolbar-btn"
+          onClick={onConvertAllToCliSessions}
+          disabled={convertibleCount === 0 || isConvertingAll}
+          title={convertAllTooltip}
+          aria-label={convertAllTooltip}
+        >
+          <span className="codicon codicon-arrow-swap"></span>
+          <span>{convertibleCount > 0
+            ? t('history.convertAllToCliSessions', { count: convertibleCount })
+            : t('history.convertAllToCliSessionsLabel', {
+                defaultValue: 'Convert all to CLI',
+              })}</span>
+        </button>
+      </span>
       <button
         className="history-toolbar-btn"
         onClick={onEnterSelectionMode}

@@ -3,6 +3,7 @@ import { ChatHeader } from './ChatHeader';
 import { sendBridgeEvent } from '../utils/bridge';
 import { useSession } from '../contexts/SessionContext';
 import { useUIState } from '../contexts/UIStateContext';
+import { useActiveSessionEntrypoint } from '../hooks/useActiveSessionEntrypoint';
 import { CONVERTIBLE_ENTRYPOINTS } from './history/historyItemUtils';
 
 interface AppHeaderProps {
@@ -23,6 +24,12 @@ export const AppHeader = ({ sessionTitle, onNewSession, onUpdateHistoryTitle }: 
     setSettingsInitialTab, setSettingsProviderSubTab,
   } = useUIState();
   const { currentSessionId, setCustomSessionTitle, historyData } = useSession();
+
+  // The snapshot the hint reads from is otherwise only filled by a manual visit to
+  // the history view, which would hide the hint from its primary audience: a session
+  // the SDK just created, in a window the user never browsed history in. The hook
+  // warms that snapshot once per live session and stops as soon as it answers.
+  useActiveSessionEntrypoint(currentView === 'chat');
 
   // The active session can never be converted while it is running (the SDK still
   // appends to its jsonl), so the header shows a hint rather than a button that

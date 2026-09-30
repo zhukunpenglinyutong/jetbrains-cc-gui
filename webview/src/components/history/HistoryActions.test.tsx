@@ -101,3 +101,37 @@ describe('HistoryActions convert-all button', () => {
     expect(screen.queryByRole('button', { name: /convert 3 sdk sessions/i })).toBeNull();
   });
 });
+
+describe('HistoryActions convert-all tooltip reachability', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('carries the explanation on a hoverable wrapper while the button is disabled', () => {
+    renderActions({ convertibleCount: 0 });
+
+    const button = disabledConvertButton();
+    // Chromium/JCEF does not surface the native title of a disabled control — exactly
+    // the state the explanation exists for — so it has to sit on an ancestor that still
+    // receives hover. Without this the reason was unreachable for sighted mouse users.
+    const wrapper = button.closest('span');
+    expect(wrapper).toBeTruthy();
+    expect(wrapper?.getAttribute('title')).toContain('No SDK or VS Code sessions to convert');
+  });
+
+  it('keeps the count tooltip on both the wrapper and the enabled button', () => {
+    renderActions({ convertibleCount: 3 });
+
+    const button = enabledConvertButton();
+    expect(button.getAttribute('title')).toContain('Convert 3 SDK sessions');
+    expect(button.closest('span')?.getAttribute('title')).toContain('Convert 3 SDK sessions');
+  });
+
+  it('keeps the button disabled while a batch is running, explanation still hoverable', () => {
+    renderActions({ convertibleCount: 3, isConvertingAll: true });
+
+    const button = enabledConvertButton();
+    expect(button.disabled).toBe(true);
+    expect(button.closest('span')?.getAttribute('title')).toContain('Convert 3 SDK sessions');
+  });
+});

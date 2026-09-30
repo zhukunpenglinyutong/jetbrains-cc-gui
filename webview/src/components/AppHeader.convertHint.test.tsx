@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,6 +23,8 @@ vi.mock('../utils/bridge', () => ({
   sendBridgeEvent: vi.fn(),
 }));
 
+const { sendBridgeEvent } = await import('../utils/bridge');
+
 /** Seeds SessionContext with the active session and the history snapshot. */
 const Harness = ({
   sessionId,
@@ -36,6 +38,12 @@ const Harness = ({
     setCurrentSessionId(sessionId);
     setHistoryData(historyData);
   }, [sessionId, historyData, setCurrentSessionId, setHistoryData]);
+  // Mirrors messageCallbacks: the backend pushes the loaded history here.
+  // Registered outside the seeding effect so it survives re-seeds.
+  React.useEffect(() => {
+    window.setHistoryData = data => setHistoryData(data);
+    return () => { delete window.setHistoryData; };
+  }, [setHistoryData]);
   return null;
 };
 
@@ -68,6 +76,9 @@ const historyWith = (entrypoint?: string): HistoryData => ({
 describe('AppHeader convert hint', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The bootstrap waits for the bridge before sending; without this it would
+    // poll a bridge that never appears.
+    window.sendToJava = vi.fn();
   });
 
   it('shows the hint when the active session is convertible', async () => {
@@ -122,5 +133,26 @@ describe('AppHeader convert hint', () => {
 
     await screen.findByText('Convert to CLI after ending the session');
     expect(screen.queryByRole('button', { name: /convert/i })).toBeNull();
+  });
+
+  // Acceptance for the bootstrap: a fresh tool window has no history snapshot at
+  // all, yet the hint — whose whole audience is the session the SDK just
+  // created — must still render.
+  it('renders the hint on a fresh window with no prior history visit', async () => {
+    renderHeader('active-session', null);
+
+    expect(screen.queryByText('Convert to CLI after ending the session')).toBeNull();
+
+    await waitFor(() => {
+      expect(sendBridgeEvent).toHaveBeenCalledWith('load_history_data', 'claude');
+    });
+
+    // The backend answers the bootstrap request through window.setHistoryData,
+    // the same channel the history view's own load uses.
+    act(() => {
+      window.setHistoryData?.(historyWith('sdk-cli'));
+    });
+
+    expect(await screen.findByText('Convert to CLI after ending the session')).toBeTruthy();
   });
 });
