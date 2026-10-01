@@ -1,4 +1,16 @@
 {
+  "startupHistory": {
+    "unloaded": "History for this restored session has not been loaded.",
+    "loading": "Loading session history...",
+    "loaded_one": "Loaded {{count}} history message.",
+    "loaded_other": "Loaded {{count}} history messages.",
+    "timeout": "Session history loading timed out. You can continue using this session.",
+    "cancelled": "Session history loading was cancelled.",
+    "failed": "Session history loading failed. You can continue using this session.",
+    "load": "Load history",
+    "retry": "Retry",
+    "cancel": "Cancel"
+  },
   "codexPet": {
     "title": "Codex pet",
     "close": "Hide pet",
@@ -466,6 +478,17 @@
         "enabled": "Enabled",
         "disabled": "Disabled",
         "hint": "When enabled, selecting a file in the project tree will automatically send its file path to AI (note: only the file path is sent, not the file content). When disabled, manual action is required."
+      },
+      "loadHistoryOnStartup": {
+        "label": "Load Session History on Startup",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, restored sessions load their message history automatically after the webview starts. Disable this if history loading slows down or blocks startup."
+      },
+      "historyLoadTimeout": {
+        "label": "Session History Load Timeout",
+        "unit": "seconds",
+        "hint": "Automatic restore and manual loading share this timeout (5-120 seconds). Timed-out loads can be retried in the conversation."
       },
       "promptEnhancer": {
         "label": "Prompt Enhancer",

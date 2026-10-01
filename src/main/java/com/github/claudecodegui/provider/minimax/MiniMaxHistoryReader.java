@@ -2,6 +2,7 @@ package com.github.claudecodegui.provider.minimax;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.provider.common.HistoryPathMatcher;
+import com.github.claudecodegui.provider.common.HistoryCancellation;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -22,6 +23,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 
 /**
  * Reads MiniMax Code (mcode) session history from its on-disk v2 layout.
@@ -254,7 +257,13 @@ public class MiniMaxHistoryReader {
      * Loads one session's messages as Claude-shaped JSON objects.
      */
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) throws IOException {
-        Path sessionDir = resolveSessionDir(sessionId, cwd);
+        return getSessionMessages(sessionId, cwd, () -> false);
+    }
+
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd,
+                                               BooleanSupplier cancellation) throws IOException {
+        HistoryCancellation.check(cancellation);
+        Path sessionDir = resolveSessionDir(sessionId, cwd, cancellation);
         if (sessionDir == null) {
             return new ArrayList<>();
         }
@@ -269,8 +278,10 @@ public class MiniMaxHistoryReader {
                 if (snapshot.has("displayMessages")
                         && snapshot.get("displayMessages").isJsonArray()
                         && snapshot.getAsJsonArray("displayMessages").size() > 0) {
-                    return buildMessages(snapshot.getAsJsonArray("displayMessages"));
+                    return buildMessages(snapshot.getAsJsonArray("displayMessages"), cancellation);
                 }
+            } catch (CancellationException e) {
+                throw e;
             } catch (Exception e) {
                 LOG.warn("[MiniMaxHistoryReader] Failed to parse snapshot.json, falling back to display.jsonl: "
                         + e.getMessage());
@@ -280,12 +291,18 @@ public class MiniMaxHistoryReader {
         // Fallback: replay display.jsonl events, deduplicating upserts by msg_id.
         Path displayPath = sessionDir.resolve("display.jsonl");
         if (Files.isRegularFile(displayPath)) {
-            return parseDisplayJsonl(displayPath);
+            return parseDisplayJsonl(displayPath, cancellation);
         }
         return new ArrayList<>();
     }
 
     private Path resolveSessionDir(String sessionId, String cwd) throws IOException {
+        return resolveSessionDir(sessionId, cwd, () -> false);
+    }
+
+    private Path resolveSessionDir(String sessionId, String cwd,
+                                   BooleanSupplier cancellation) throws IOException {
+        HistoryCancellation.check(cancellation);
         if (!isSafeSessionId(sessionId)) {
             return null;
         }
@@ -298,27 +315,31 @@ public class MiniMaxHistoryReader {
         // inside snapshot.json instead of guessing the dir naming scheme.
         try (DirectoryStream<Path> years = Files.newDirectoryStream(sessionsRoot)) {
             for (Path year : years) {
+                HistoryCancellation.check(cancellation);
                 if (!Files.isDirectory(year)) {
                     continue;
                 }
                 try (DirectoryStream<Path> months = Files.newDirectoryStream(year)) {
                     for (Path month : months) {
+                        HistoryCancellation.check(cancellation);
                         if (!Files.isDirectory(month)) {
                             continue;
                         }
                         try (DirectoryStream<Path> days = Files.newDirectoryStream(month)) {
                             for (Path day : days) {
+                                HistoryCancellation.check(cancellation);
                                 if (!Files.isDirectory(day)) {
                                     continue;
                                 }
                                 try (DirectoryStream<Path> sessionDirs = Files.newDirectoryStream(day)) {
                                     for (Path sessionDir : sessionDirs) {
+                                        HistoryCancellation.check(cancellation);
                                         if (!Files.isDirectory(sessionDir)) {
                                             continue;
                                         }
                                         // Read snapshot.json once per dir — the record
                                         // carries both the id and the workspace.
-                                        JsonObject record = readSessionRecord(sessionDir);
+                                        JsonObject record = readSessionRecord(sessionDir, cancellation);
                                         if (record == null || !wanted.equals(text(record, "sessionId"))) {
                                             continue;
                                         }
@@ -348,7 +369,15 @@ public class MiniMaxHistoryReader {
      * when the snapshot is missing or malformed.
      */
     private static JsonObject readSessionRecord(Path sessionDir) {
+        return readSessionRecord(sessionDir, () -> false);
+    }
+
+    private static JsonObject readSessionRecord(
+            Path sessionDir,
+            BooleanSupplier cancellation
+    ) {
         try {
+            HistoryCancellation.check(cancellation);
             Path snapshotPath = sessionDir.resolve("snapshot.json");
             if (!Files.isRegularFile(snapshotPath)) {
                 return null;
@@ -358,6 +387,8 @@ public class MiniMaxHistoryReader {
                     .getAsJsonObject();
             return snapshot.has("record") && snapshot.get("record").isJsonObject()
                     ? snapshot.getAsJsonObject("record") : null;
+        } catch (CancellationException e) {
+            throw e;
         } catch (Exception e) {
             return null;
         }
@@ -368,9 +399,17 @@ public class MiniMaxHistoryReader {
      * user text, assistant thinking / text, tool_use, and tool_result.
      */
     private static List<JsonObject> buildMessages(JsonArray displayMessages) {
+        return buildMessages(displayMessages, () -> false);
+    }
+
+    private static List<JsonObject> buildMessages(
+            JsonArray displayMessages,
+            BooleanSupplier cancellation
+    ) {
         List<JsonObject> messages = new ArrayList<>();
         int counter = 0;
         for (JsonElement el : displayMessages) {
+            HistoryCancellation.check(cancellation);
             if (!el.isJsonObject()) {
                 continue;
             }
@@ -432,37 +471,47 @@ public class MiniMaxHistoryReader {
      * event per msg_id (upserts may re-emit updated tool results).
      */
     private List<JsonObject> parseDisplayJsonl(Path displayPath) throws IOException {
+        return parseDisplayJsonl(displayPath, () -> false);
+    }
+
+    private List<JsonObject> parseDisplayJsonl(
+            Path displayPath,
+            BooleanSupplier cancellation
+    ) throws IOException {
         // LinkedHashMap: the stable timestamp sort below keeps first-seen
         // (file) order for messages sharing a timestamp.
         Map<String, JsonObject> latestById = new LinkedHashMap<>();
         Map<String, Long> seqById = new HashMap<>();
-        List<String> lines = Files.readAllLines(displayPath, StandardCharsets.UTF_8);
-        for (String line : lines) {
-            line = line.trim();
-            if (line.isEmpty()) {
-                continue;
-            }
-            JsonObject obj;
-            try {
-                obj = JsonParser.parseString(line).getAsJsonObject();
-            } catch (Exception e) {
-                continue;
-            }
-            if (!"message.display_upserted".equals(text(obj, "kind"))) {
-                continue;
-            }
-            String msgId = text(obj, "msgId");
-            if (msgId == null || msgId.isBlank()) {
-                continue;
-            }
-            long seq = longVal(obj, "seq", -1L);
-            Long prev = seqById.get(msgId);
-            if (prev == null || seq >= prev) {
-                seqById.put(msgId, seq);
-                JsonObject message = obj.has("message") && obj.get("message").isJsonObject()
-                        ? obj.getAsJsonObject("message") : null;
-                if (message != null) {
-                    latestById.put(msgId, message);
+        try (java.io.BufferedReader reader = Files.newBufferedReader(displayPath, StandardCharsets.UTF_8)) {
+            String rawLine;
+            while ((rawLine = reader.readLine()) != null) {
+                HistoryCancellation.check(cancellation);
+                String line = rawLine.trim();
+                if (line.isEmpty()) {
+                    continue;
+                }
+                JsonObject obj;
+                try {
+                    obj = JsonParser.parseString(line).getAsJsonObject();
+                } catch (Exception e) {
+                    continue;
+                }
+                if (!"message.display_upserted".equals(text(obj, "kind"))) {
+                    continue;
+                }
+                String msgId = text(obj, "msgId");
+                if (msgId == null || msgId.isBlank()) {
+                    continue;
+                }
+                long seq = longVal(obj, "seq", -1L);
+                Long prev = seqById.get(msgId);
+                if (prev == null || seq >= prev) {
+                    seqById.put(msgId, seq);
+                    JsonObject message = obj.has("message") && obj.get("message").isJsonObject()
+                            ? obj.getAsJsonObject("message") : null;
+                    if (message != null) {
+                        latestById.put(msgId, message);
+                    }
                 }
             }
         }
@@ -471,7 +520,7 @@ public class MiniMaxHistoryReader {
                 .sorted(Map.Entry.comparingByValue(
                         Comparator.comparingLong((JsonObject m) -> longVal(m, "timestamp", 0L))))
                 .forEach(entry -> ordered.add(entry.getValue()));
-        return buildMessages(ordered);
+        return buildMessages(ordered, cancellation);
     }
 
     public boolean deleteSession(String sessionId, String projectPath) throws IOException {

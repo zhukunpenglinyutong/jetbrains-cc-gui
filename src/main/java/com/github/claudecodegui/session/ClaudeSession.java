@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.function.BooleanSupplier;
 
 /**
  * Session management for Claude conversations.
@@ -253,6 +254,16 @@ public class ClaudeSession {
                     }
 
                     @Override
+                    public List<JsonObject> getProviderSessionMessages(
+                            String provider,
+                            String sessionId,
+                            String cwd,
+                            BooleanSupplier cancellation
+                    ) {
+                        return providerRouter.getSessionMessages(provider, sessionId, cwd, cancellation);
+                    }
+
+                    @Override
                     public JsonObject getLatestClaudeUserMessage(String sessionId, String cwd) {
                         return claudeSDKBridge.getLatestClaudeUserMessage(sessionId, cwd);
                     }
@@ -260,6 +271,18 @@ public class ClaudeSession {
                     @Override
                     public JsonObject getProviderSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit) {
                         return claudeSDKBridge.getSessionMessagesPage(sessionId, cwd, beforeTurn, limit);
+                    }
+
+                    @Override
+                    public JsonObject getProviderSessionMessagesPage(
+                            String sessionId,
+                            String cwd,
+                            Integer beforeTurn,
+                            int limit,
+                            BooleanSupplier cancellation
+                    ) {
+                        return claudeSDKBridge.getSessionMessagesPage(
+                                sessionId, cwd, beforeTurn, limit, cancellation);
                     }
                 }
         );
@@ -712,6 +735,12 @@ public class ClaudeSession {
      */
     public CompletableFuture<Void> loadFromServer() {
         return messageOrchestrator.loadFromServer();
+    }
+
+    /** Load history with cancellation support for automatic startup restoration. */
+    public CompletableFuture<Void> loadFromServer(
+            SessionMessageOrchestrator.HistoryLoadCancellation cancellation) {
+        return messageOrchestrator.loadFromServer(cancellation);
     }
 
     /**

@@ -11,6 +11,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
+import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileChooser.FileChooser;
@@ -49,8 +50,13 @@ public class ProjectConfigHandler {
 
     private void pushJson(String jsCallback, JsonElement payload) {
         String json = gson.toJson(payload);
-        ApplicationManager.getApplication().invokeLater(() ->
-            context.callJavaScript(jsCallback, context.escapeJs(json)));
+        Runnable callback = () -> context.callJavaScript(jsCallback, context.escapeJs(json));
+        Application application = ApplicationManager.getApplication();
+        if (application == null) {
+            callback.run();
+        } else {
+            application.invokeLater(callback);
+        }
     }
 
     private void showError(String message) {
@@ -250,6 +256,46 @@ public class ProjectConfigHandler {
             settingsService::setAutoOpenFileEnabled,
             "window.updateAutoOpenFileEnabled",
             "Failed to save auto open file config");
+    }
+
+    public void handleGetLoadHistoryOnStartup() {
+        respondWithJson("window.updateLoadHistoryOnStartup",
+            () -> jsonOf("loadHistoryOnStartup", settingsService.isLoadHistoryOnStartup()),
+            jsonOf("loadHistoryOnStartup", false),
+            "Failed to get load history on startup");
+    }
+
+    public void handleSetLoadHistoryOnStartup(String content) {
+        handleBooleanToggle(content, "loadHistoryOnStartup", false, "load history on startup",
+            settingsService::setLoadHistoryOnStartup,
+            "window.updateLoadHistoryOnStartup",
+            "Failed to save load history on startup config");
+    }
+
+    public void handleGetHistoryLoadTimeout() {
+        respondWithJson("window.updateHistoryLoadTimeout",
+            () -> jsonOf("historyLoadTimeoutSeconds", settingsService.getHistoryLoadTimeoutSeconds()),
+            jsonOf("historyLoadTimeoutSeconds", CodemossSettingsService.DEFAULT_HISTORY_LOAD_TIMEOUT_SECONDS),
+            "Failed to get history load timeout");
+    }
+
+    public void handleSetHistoryLoadTimeout(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            JsonElement element = json != null ? json.get("historyLoadTimeoutSeconds") : null;
+            if (element == null || !element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
+                LOG.warn("[ProjectConfigHandler] Ignoring invalid history load timeout payload");
+                pushJson("window.updateHistoryLoadTimeout",
+                        jsonOf("historyLoadTimeoutSeconds", settingsService.getHistoryLoadTimeoutSeconds()));
+                return;
+            }
+            settingsService.setHistoryLoadTimeoutSeconds(element.getAsInt());
+            pushJson("window.updateHistoryLoadTimeout",
+                    jsonOf("historyLoadTimeoutSeconds", settingsService.getHistoryLoadTimeoutSeconds()));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set history load timeout", e);
+            showError("Failed to save history load timeout. See IDE log for details.");
+        }
     }
 
     public void handleGetPermissionDialogTimeout() {

@@ -18,6 +18,7 @@ import {
   subscribeProviderList,
 } from '../../../utils/runtimeProviderCapabilities';
 import { scheduleBatchedBridgeRequests } from './scheduleBatchedBridgeRequests';
+import { clampHistoryLoadTimeoutSeconds } from '../../../utils/historyLoadTimeout';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -35,6 +36,8 @@ export const SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES = [
   'get_claude_cli_path:',
   'get_working_directory:',
   'get_streaming_enabled:',
+  'get_load_history_on_startup:',
+  'get_history_load_timeout:',
   'get_codex_sandbox_mode:',
   'get_permission_dialog_timeout:',
   // Appearance fonts
@@ -76,6 +79,8 @@ export interface SettingsWindowCallbacksDeps {
   setCodeFontConfig: (config: CodeFontConfig | undefined) => void;
   setIdeTheme: (theme: 'light' | 'dark' | null) => void;
   setLocalStreamingEnabled: (enabled: boolean) => void;
+  setLoadHistoryOnStartup?: (enabled: boolean) => void;
+  setHistoryLoadTimeoutSeconds?: (seconds: number) => void;
   setCodexSandboxMode?: (mode: 'workspace-write' | 'danger-full-access') => void;
   setLocalSendShortcut: (shortcut: 'enter' | 'cmdEnter') => void;
   setLoading: (loading: boolean) => void;
@@ -285,6 +290,28 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         }
       };
     }
+
+    const previousUpdateLoadHistoryOnStartup = window.updateLoadHistoryOnStartup;
+    window.updateLoadHistoryOnStartup = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setLoadHistoryOnStartup?.(data.loadHistoryOnStartup ?? false);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse load history on startup config:', error);
+      }
+    };
+
+    const previousUpdateHistoryLoadTimeout = window.updateHistoryLoadTimeout;
+    window.updateHistoryLoadTimeout = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        if (typeof data.historyLoadTimeoutSeconds === 'number') {
+          d().setHistoryLoadTimeoutSeconds?.(clampHistoryLoadTimeoutSeconds(data.historyLoadTimeoutSeconds));
+        }
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse history load timeout:', error);
+      }
+    };
 
     // Codex sandbox mode callback
     window.updateCodexSandboxMode = (jsonStr: string) => {
@@ -607,6 +634,8 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       if (!d().onStreamingEnabledChangeProp) {
         window.updateStreamingEnabled = previousUpdateStreamingEnabled;
       }
+      window.updateLoadHistoryOnStartup = previousUpdateLoadHistoryOnStartup;
+      window.updateHistoryLoadTimeout = previousUpdateHistoryLoadTimeout;
       window.updateCodexSandboxMode = undefined;
       if (!d().onSendShortcutChangeProp) {
         window.updateSendShortcut = previousUpdateSendShortcut;
