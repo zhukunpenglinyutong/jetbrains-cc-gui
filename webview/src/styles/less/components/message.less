@@ -605,7 +605,7 @@
 
 /* Message Content */
 .message-content {
-    font-size: var(--idea-editor-font-size, 13.5px);
+    font-size: var(--cc-gui-chat-font-size);
     line-height: 1.6;
     color: var(--text-primary);
     min-width: 0; /* Allow flex items to shrink below content size */
@@ -628,12 +628,16 @@
 
 /* Markdown Content */
 .markdown-content {
-    font-size: var(--idea-editor-font-size, 13.5px);
+    font-size: var(--cc-gui-chat-font-size);
     line-height: 1.6;
     color: var(--text-primary);
     word-wrap: break-word;
     word-break: break-word;
     overflow-wrap: break-word;
+    /* 宽内容（长行代码、宽表格、图片、KaTeX、mermaid）在这里横向滚动，而不是撑开
+     * 消息容器。消息容器是 flex 子项，默认 min-width: auto——被撑开后会一路撑宽
+     * #app，整个界面随之横向溢出并被裁切（档位越高越明显）。 */
+    overflow-x: auto;
     cursor: text;
 }
 
@@ -680,7 +684,7 @@
     overflow-x: auto;
     margin: calc(10px * var(--cc-gui-scale)) 0;
     font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
-    font-size: var(--idea-editor-font-size, 12.5px);
+    font-size: var(--cc-gui-chat-font-size);
     line-height: var(--idea-editor-line-spacing, 1.5);
     max-width: 100%; /* 防止超出容器 */
     box-sizing: border-box; /* 包含 padding 在宽度内 */
@@ -965,11 +969,14 @@
 /* 表格容器 - 处理溢出 */
 .markdown-content table {
     border-collapse: collapse;
-    width: 100%;
+    /* 保持标准 table 布局：display:block 会让 Chromium 把列宽均分，多列宽表格的
+     * 每一列被压成窄条（中文/emoji 竖排堆叠），而 overflow-x 又不会触发。
+     * 改为按内容宽度布局，窄表格仍用 min-width:100% 占满容器，宽表格交给
+     * .markdown-content 的 overflow-x 横向滚动。 */
+    width: auto;
+    min-width: 100%;
+    max-width: none;
     margin: calc(10px * var(--cc-gui-scale)) 0;
-    display: block; /* 使表格可以滚动 */
-    max-width: 100%;
-    overflow-x: auto; /* 表格内部滚动 */
 }
 
 .markdown-content thead,
@@ -1156,7 +1163,7 @@
 
 .tool-icon {
     color: var(--color-tool-icon);
-    font-size: var(--cc-gui-chat-font-size);
+    font-size: var(--cc-gui-chat-font-size-14);
     width: calc(16px * var(--cc-gui-scale));
     display: flex;
     justify-content: center;
