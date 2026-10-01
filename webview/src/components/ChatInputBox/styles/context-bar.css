@@ -40,7 +40,7 @@
   cursor: pointer;
   color: var(--text-secondary);
   transition: all 0.2s;
-  font-size: var(--cc-gui-chat-font-size);
+  font-size: var(--cc-gui-chat-font-size-14);
   /* Reset button styles */
   background: transparent;
   border: none;
@@ -216,7 +216,7 @@
 .context-close {
   cursor: pointer;
   opacity: 0.7;
-  font-size: var(--cc-gui-chat-font-size);
+  font-size: var(--cc-gui-chat-font-size-14);
   margin-left: calc(4px * var(--cc-gui-scale));
 }
 

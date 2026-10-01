@@ -53,7 +53,7 @@
   margin-left: calc(4px * var(--cc-gui-scale));
   cursor: pointer;
   opacity: 0.6;
-  font-size: var(--cc-gui-chat-font-size);
+  font-size: var(--cc-gui-chat-font-size-14);
   display: flex;
   align-items: center;
   transition: opacity 0.2s;
@@ -115,7 +115,7 @@
   min-height: calc(1.5em * 4);
   outline: none;
   color: var(--text-primary);
-  font-size: var(--cc-gui-chat-font-size);
+  font-size: var(--cc-gui-chat-font-size-14);
   font-family: inherit;
   line-height: 1.5;
   word-wrap: break-word;

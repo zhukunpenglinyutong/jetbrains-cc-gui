@@ -230,7 +230,7 @@
 }
 
 .prompt-section-header .codicon {
-  font-size: var(--cc-gui-chat-font-size);
+  font-size: var(--cc-gui-chat-font-size-14);
 }
 
 .prompt-text {
@@ -362,7 +362,7 @@
 }
 
 .prompt-enhancer-btn .codicon {
-  font-size: var(--cc-gui-chat-font-size);
+  font-size: var(--cc-gui-chat-font-size-14);
 }
 
 /* Light theme adaptation */

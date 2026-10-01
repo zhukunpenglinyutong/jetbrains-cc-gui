@@ -93,7 +93,7 @@
 }
 
 .selector-button .codicon {
-  font-size: var(--cc-gui-chat-font-size);
+  font-size: var(--cc-gui-chat-font-size-14);
 }
 
 /* Responsive text hiding for selector buttons */
@@ -219,7 +219,7 @@
 }
 
 .selector-option .codicon {
-  font-size: var(--cc-gui-chat-font-size);
+  font-size: var(--cc-gui-chat-font-size-14);
   width: calc(16px * var(--cc-gui-scale));
 }
 
@@ -514,7 +514,7 @@
 }
 
 .selector-add-icon {
-  font-size: var(--cc-gui-chat-font-size);
+  font-size: var(--cc-gui-chat-font-size-14);
   width: calc(16px * var(--cc-gui-scale));
 }
 
@@ -548,7 +548,7 @@
 }
 
 .node-process-icon-button .codicon {
-  font-size: var(--cc-gui-chat-font-size);
+  font-size: var(--cc-gui-chat-font-size-14);
 }
 
 .node-process-icon-button--danger {

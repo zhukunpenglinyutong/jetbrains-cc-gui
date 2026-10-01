@@ -40,31 +40,34 @@
      *   2. 绝对值 <= 1px 的间距——同上，且缩放它们没有可见收益；
      *   3. 混有 % 或已含 calc()/var() 的声明——无法安全改写，保持原样。 */
     --cc-gui-scale: var(--font-scale, 1);
-    /* 会话正文 / 代码块 / 输入框的字号 = IDE 编辑器基准字号 × 用户档位。 */
-    --cc-gui-chat-font-size: calc(var(--idea-editor-font-size, 14px) * var(--font-scale, 1));
-    /* 聊天区辅助文字（时间戳、工具卡片、标签等）的字号档位。
+    /* 会话正文 / 代码块 / 输入框的字号 = IDE 编辑器基准字号 × 用户档位。
+     * 上游这三处原本就写成 var(--idea-editor-font-size)，这里只是补上档位比例。 */
+    --cc-gui-chat-font-size: calc(var(--idea-editor-font-size, 13.5px) * var(--cc-gui-scale));
+    /* 聊天区辅助文字（时间戳、工具卡片、标签等）的档位缩放。
      *
-     * 这些元素原先写死 px，不随字号档位变化——正文调到 140% 时它们仍是 100% 的
-     * 大小，比例就散了。这里按「基准字号 × 原 px / 14」派生：100% 档位下与原先
-     * 写死的 px 完全一致（视觉不变），调档后才跟随正文等比缩放。
+     * 这些元素在上游是写死的 px，不跟随 IDE 编辑器字号——所以这里按「原 px ×
+     * 档位」派生，而不是按正文字号的比例：100% 档位下与原先写死的 px 完全一致
+     * （视觉不变），调档后才跟随缩放。
      *
      * 命名后缀即原 px 值，替换时一一对应：
      *   font-size: 12px  ->  var(--cc-gui-chat-font-size-12)
      */
-    --cc-gui-chat-font-size-8: calc(var(--cc-gui-chat-font-size, 14px) * 0.5714);
-    --cc-gui-chat-font-size-10: calc(var(--cc-gui-chat-font-size, 14px) * 0.7143);
-    --cc-gui-chat-font-size-11: calc(var(--cc-gui-chat-font-size, 14px) * 0.7857);
-    --cc-gui-chat-font-size-115: calc(var(--cc-gui-chat-font-size, 14px) * 0.8214);
-    --cc-gui-chat-font-size-12: calc(var(--cc-gui-chat-font-size, 14px) * 0.8571);
-    --cc-gui-chat-font-size-125: calc(var(--cc-gui-chat-font-size, 14px) * 0.8929);
-    --cc-gui-chat-font-size-13: calc(var(--cc-gui-chat-font-size, 14px) * 0.9286);
-    --cc-gui-chat-font-size-135: calc(var(--cc-gui-chat-font-size, 14px) * 0.9643);
-    /* 大于基准的档位：对话框标题等需要比正文更重的层级。 */
-    --cc-gui-chat-font-size-15: calc(var(--cc-gui-chat-font-size, 14px) * 1.0714);
-    --cc-gui-chat-font-size-16: calc(var(--cc-gui-chat-font-size, 14px) * 1.1429);
-    --cc-gui-chat-font-size-18: calc(var(--cc-gui-chat-font-size, 14px) * 1.2857);
-    --cc-gui-chat-font-size-20: calc(var(--cc-gui-chat-font-size, 14px) * 1.4286);
-    --cc-gui-chat-font-size-24: calc(var(--cc-gui-chat-font-size, 14px) * 1.7143);
+    --cc-gui-chat-font-size-8: calc(8px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-10: calc(10px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-11: calc(11px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-115: calc(11.5px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-12: calc(12px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-125: calc(12.5px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-13: calc(13px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-135: calc(13.5px * var(--cc-gui-scale));
+    /* 无后缀的 --cc-gui-chat-font-size 是正文字号（跟随编辑器字号），
+     * -14 是原先写死 14px 的元素，两者不可互换。 */
+    --cc-gui-chat-font-size-14: calc(14px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-15: calc(15px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-16: calc(16px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-18: calc(18px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-20: calc(20px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-24: calc(24px * var(--cc-gui-scale));
 }
 
 body {

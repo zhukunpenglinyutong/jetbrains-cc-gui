@@ -69,7 +69,7 @@
   justify-content: center;
   width: calc(16px * var(--cc-gui-scale));
   height: calc(16px * var(--cc-gui-scale));
-  font-size: var(--cc-gui-chat-font-size);
+  font-size: var(--cc-gui-chat-font-size-14);
 }
 
 .file-tag-icon svg {

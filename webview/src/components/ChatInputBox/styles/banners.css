@@ -15,7 +15,7 @@
 
 .sdk-warning-bar .codicon-warning {
   margin-right: calc(8px * var(--cc-gui-scale));
-  font-size: var(--cc-gui-chat-font-size);
+  font-size: var(--cc-gui-chat-font-size-14);
   color: #ffb74d;
 }
 
@@ -78,7 +78,7 @@
 
 .sdk-warning-bar.sdk-loading .codicon-loading {
   margin-right: calc(8px * var(--cc-gui-scale));
-  font-size: var(--cc-gui-chat-font-size);
+  font-size: var(--cc-gui-chat-font-size-14);
   color: #64b5f6;
 }
 
@@ -148,7 +148,7 @@
   border: none;
   color: #64b5f6;
   cursor: pointer;
-  font-size: var(--cc-gui-chat-font-size);
+  font-size: var(--cc-gui-chat-font-size-14);
   padding: 0 0 0 calc(10px * var(--cc-gui-scale));
   line-height: 1;
   opacity: 0.7;
