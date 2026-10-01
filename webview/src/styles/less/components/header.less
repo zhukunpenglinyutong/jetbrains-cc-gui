@@ -6,10 +6,10 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 8px 8px 16px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
     background: var(--color-chat-bars-bg, var(--bg-secondary));
     border-bottom: 1px solid var(--color-chat-bars-border, var(--border-primary));
-    min-height: 50px;
+    min-height: calc(50px * var(--cc-gui-scale));
     flex-shrink: 0;
 }
 
@@ -37,9 +37,9 @@
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
     color: var(--text-secondary);
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 13px;
+    padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+    border-radius: calc(6px * var(--cc-gui-scale));
+    font-size: calc(13px * var(--cc-gui-scale));
     cursor: pointer;
     transition: all 0.2s;
     font-weight: 500;
@@ -60,9 +60,9 @@
     border: none;
     color: var(--color-chat-bars-muted-text, var(--text-tertiary));
     cursor: pointer;
-    font-size: 13px;
-    padding: 4px 8px;
-    border-radius: 4px;
+    font-size: calc(13px * var(--cc-gui-scale));
+    padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
     position: relative;
@@ -79,9 +79,9 @@
     background: transparent;
     border: none;
     color: var(--color-chat-bars-muted-text, var(--text-tertiary));
-    width: 32px;
-    height: 32px;
-    border-radius: 4px;
+    width: calc(32px * var(--cc-gui-scale));
+    height: calc(32px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -97,27 +97,27 @@
 }
 
 .icon-button svg {
-    width: 18px;
-    height: 18px;
+    width: calc(18px * var(--cc-gui-scale));
+    height: calc(18px * var(--cc-gui-scale));
 }
 
 .icon-button .codicon {
-    font-size: 18px;
+    font-size: calc(18px * var(--cc-gui-scale));
 }
 
 /* Session title: editable on hover */
 .session-title-wrapper {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: calc(4px * var(--cc-gui-scale));
     min-width: 0;
     overflow: hidden;
 }
 
 .session-title {
     font-weight: 600;
-    font-size: 14px;
-    padding-left: 8px;
+    font-size: calc(14px * var(--cc-gui-scale));
+    padding-left: calc(8px * var(--cc-gui-scale));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -128,16 +128,16 @@
     border: none;
     color: var(--color-chat-bars-muted-text, var(--text-tertiary));
     cursor: pointer;
-    font-size: 13px;
-    padding: 4px;
-    border-radius: 4px;
+    font-size: calc(13px * var(--cc-gui-scale));
+    padding: calc(4px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     transition: all 0.2s;
     opacity: 0;
     line-height: 1;
     flex-shrink: 0;
 
     .codicon {
-        font-size: 13px;
+        font-size: calc(13px * var(--cc-gui-scale));
     }
 
     &:hover {
@@ -158,23 +158,23 @@
 .session-title-edit-mode {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
     flex: 1;
-    padding-left: 8px;
+    padding-left: calc(8px * var(--cc-gui-scale));
 }
 
 .session-title-input {
     flex: 1;
-    padding: 4px 8px;
-    font-size: 14px;
+    padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+    font-size: calc(14px * var(--cc-gui-scale));
     font-weight: 600;
     border: 1px solid var(--accent-primary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     background-color: var(--bg-tertiary);
     color: var(--text-secondary);
     outline: none;
     transition: border-color 0.2s;
-    max-width: 300px;
+    max-width: calc(300px * var(--cc-gui-scale));
 
     &:focus {
         border-color: var(--accent-primary);
@@ -187,9 +187,9 @@
     border: none;
     color: var(--color-success);
     cursor: pointer;
-    font-size: 16px;
-    padding: 4px;
-    border-radius: 4px;
+    font-size: calc(16px * var(--cc-gui-scale));
+    padding: calc(4px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     transition: all 0.2s;
     display: flex;
     align-items: center;
@@ -210,9 +210,9 @@
     border: none;
     color: var(--color-danger);
     cursor: pointer;
-    font-size: 16px;
-    padding: 4px;
-    border-radius: 4px;
+    font-size: calc(16px * var(--cc-gui-scale));
+    padding: calc(4px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     transition: all 0.2s;
     display: flex;
     align-items: center;

@@ -66,9 +66,9 @@
         transform: translateX(-50%);
         background: var(--bg-elevated);
         color: var(--text-secondary);
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 12px;
+        padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+        border-radius: calc(4px * var(--cc-gui-scale));
+        font-size: calc(12px * var(--cc-gui-scale));
         white-space: nowrap;
         opacity: 0;
         pointer-events: none;
@@ -85,7 +85,7 @@
     &::before {
         content: '';
         position: absolute;
-        bottom: -8px;
+        bottom: calc(-8px * var(--cc-gui-scale));
         left: 50%;
         transform: translateX(-50%);
         border-left: 5px solid transparent;

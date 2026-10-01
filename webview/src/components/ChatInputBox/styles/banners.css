@@ -5,17 +5,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 12px;
+  padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   background: rgba(255, 152, 0, 0.15); /* Orange tint */
   border-bottom: 1px solid rgba(255, 152, 0, 0.3);
   color: #ffb74d; /* Orange text */
-  font-size: 12px;
+  font-size: var(--cc-gui-chat-font-size-12);
   /* Border radius is controlled by .chat-input-box > :first-child, but may need explicit setting in some cases */
 }
 
 .sdk-warning-bar .codicon-warning {
-  margin-right: 8px;
-  font-size: 14px;
+  margin-right: calc(8px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size);
   color: #ffb74d;
 }
 
@@ -31,12 +31,12 @@
   background: rgba(255, 152, 0, 0.2);
   border: 1px solid rgba(255, 152, 0, 0.4);
   color: #ffb74d;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
+  padding: calc(2px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-11);
   cursor: pointer;
   transition: all 0.2s;
-  margin-left: 12px;
+  margin-left: calc(12px * var(--cc-gui-scale));
   white-space: nowrap;
   display: flex;
   align-items: center;
@@ -77,8 +77,8 @@
 }
 
 .sdk-warning-bar.sdk-loading .codicon-loading {
-  margin-right: 8px;
-  font-size: 14px;
+  margin-right: calc(8px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size);
   color: #64b5f6;
 }
 
@@ -99,11 +99,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 12px;
+  padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   background: rgba(33, 150, 243, 0.1);
   border-bottom: 1px solid rgba(33, 150, 243, 0.2);
   color: #64b5f6;
-  font-size: 12px;
+  font-size: var(--cc-gui-chat-font-size-12);
 }
 
 .open-source-banner .banner-text {
@@ -113,15 +113,15 @@
 .open-source-banner .banner-star {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--cc-gui-scale));
   flex-shrink: 0;
-  margin-left: 12px;
-  padding: 2px 8px;
+  margin-left: calc(12px * var(--cc-gui-scale));
+  padding: calc(2px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   background: rgba(33, 150, 243, 0.18);
   border: 1px solid rgba(33, 150, 243, 0.4);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: #64b5f6;
-  font-size: 11px;
+  font-size: var(--cc-gui-chat-font-size-11);
   line-height: 1.4;
   white-space: nowrap;
   cursor: pointer;
@@ -134,8 +134,8 @@
 }
 
 .open-source-banner .banner-star .star-icon {
-  width: 12px;
-  height: 12px;
+  width: calc(12px * var(--cc-gui-scale));
+  height: calc(12px * var(--cc-gui-scale));
   fill: currentColor;
 }
 
@@ -148,8 +148,8 @@
   border: none;
   color: #64b5f6;
   cursor: pointer;
-  font-size: 14px;
-  padding: 0 0 0 10px;
+  font-size: var(--cc-gui-chat-font-size);
+  padding: 0 0 0 calc(10px * var(--cc-gui-scale));
   line-height: 1;
   opacity: 0.7;
   transition: opacity 0.2s;
@@ -186,25 +186,25 @@
 .message-queue {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 12px;
+  gap: calc(4px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   border-bottom: 1px solid var(--input-border);
   background: var(--context-bar-bg);
-  max-height: 120px;
+  max-height: calc(120px * var(--cc-gui-scale));
   overflow-y: auto;
 }
 
 .message-queue-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   background: var(--dropdown-bg);
   border: 1px solid var(--input-border);
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: calc(4px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-12);
   color: var(--text-primary);
-  min-height: 28px;
+  min-height: calc(28px * var(--cc-gui-scale));
   /* Anchor for the insert-line pseudo-elements below */
   position: relative;
 }
@@ -216,18 +216,18 @@
   position: absolute;
   left: 0;
   right: 0;
-  height: 2px;
+  height: calc(2px * var(--cc-gui-scale));
   border-radius: 1px;
   background: var(--accent-primary);
   pointer-events: none;
 }
 
 .message-queue-item.insert-above::before {
-  top: -4px;
+  top: calc(-4px * var(--cc-gui-scale));
 }
 
 .message-queue-item.insert-below::after {
-  bottom: -4px;
+  bottom: calc(-4px * var(--cc-gui-scale));
 }
 
 /* Drag state: item currently being dragged */
@@ -250,11 +250,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 12px;
-  height: 18px;
+  width: calc(12px * var(--cc-gui-scale));
+  height: calc(18px * var(--cc-gui-scale));
   /* Pull the handle closer to the row edge and the number badge to keep the row compact */
-  margin: 0 -4px 0 -4px;
-  border-radius: 4px;
+  margin: 0 calc(-4px * var(--cc-gui-scale)) 0 calc(-4px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-muted);
   cursor: grab;
   user-select: none;
@@ -276,20 +276,20 @@
 }
 
 .message-queue-drag-handle .codicon {
-  font-size: 12px;
+  font-size: var(--cc-gui-chat-font-size-12);
 }
 
 .message-queue-number {
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
+  width: calc(18px * var(--cc-gui-scale));
+  height: calc(18px * var(--cc-gui-scale));
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--button-primary);
   color: white;
   border-radius: 50%;
-  font-size: 10px;
+  font-size: var(--cc-gui-chat-font-size-10);
   font-weight: 600;
 }
 
@@ -307,12 +307,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: calc(18px * var(--cc-gui-scale));
+  height: calc(18px * var(--cc-gui-scale));
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.15s;
@@ -324,7 +324,7 @@
 }
 
 .message-queue-remove .codicon {
-  font-size: 12px;
+  font-size: var(--cc-gui-chat-font-size-12);
 }
 
 /* Light theme adaptation */

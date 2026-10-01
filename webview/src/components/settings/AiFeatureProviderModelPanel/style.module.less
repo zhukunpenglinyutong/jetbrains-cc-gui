@@ -1,14 +1,14 @@
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: calc(14px * var(--cc-gui-scale));
 }
 
 .modeRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
   min-width: 0;
 }
 
@@ -16,7 +16,7 @@
   flex: 0 1 auto;
   min-width: 0;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
 }
 
@@ -25,23 +25,23 @@
   display: inline-grid;
   grid-template-columns: repeat(2, minmax(64px, 1fr));
   flex: 0 0 auto;
-  min-width: 148px;
+  min-width: calc(148px * var(--cc-gui-scale));
   max-width: 100%;
-  padding: 2px;
+  padding: calc(2px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   background: var(--bg-secondary);
 }
 
 .segment,
 .segmentActive {
-  height: 28px;
-  padding: 0 12px;
+  height: calc(28px * var(--cc-gui-scale));
+  padding: 0 calc(12px * var(--cc-gui-scale));
   border: 0;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
@@ -61,11 +61,11 @@
 .autoSummary {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: calc(10px * var(--cc-gui-scale));
   min-width: 0;
-  padding: 12px 14px;
+  padding: calc(12px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--cc-gui-scale));
   background: rgba(255, 255, 255, 0.03);
 }
 
@@ -81,46 +81,46 @@
   justify-content: center;
   margin-top: 1px;
   color: var(--text-tertiary);
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
 }
 
 .autoSummaryBody {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: calc(2px * var(--cc-gui-scale));
   min-width: 0;
 }
 
 .autoSummaryTitle {
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 600;
   line-height: 1.3;
 }
 
 .autoSummaryText {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   line-height: 1.45;
 }
 
 .selectGroup {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
   min-width: 0;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
   min-width: 0;
 }
 
 .fieldLabel {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   font-weight: 500;
   letter-spacing: 0.02em;
   line-height: 1.2;
@@ -137,7 +137,7 @@
 
 .iconWrap {
   position: absolute;
-  left: 12px;
+  left: calc(12px * var(--cc-gui-scale));
   top: 50%;
   z-index: 1;
   display: inline-flex;
@@ -151,22 +151,22 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   width: 100%;
-  height: 32px;
-  padding: 0 32px 0 12px;
+  height: calc(32px * var(--cc-gui-scale));
+  padding: 0 calc(32px * var(--cc-gui-scale)) 0 calc(12px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-family: inherit;
   text-align: left;
   cursor: pointer;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
   &.withIcon {
-    padding-left: 36px;
+    padding-left: calc(36px * var(--cc-gui-scale));
   }
 
   &:hover:not(:disabled) {
@@ -197,11 +197,11 @@
 .selectArrow {
   position: absolute;
   top: 50%;
-  right: 10px;
+  right: calc(10px * var(--cc-gui-scale));
   transform: translateY(-50%);
   pointer-events: none;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   transition: transform 0.15s ease, color 0.15s ease;
 
   .selectTrigger.open & {
@@ -212,16 +212,16 @@
 
 .dropdown {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 4px * var(--cc-gui-scale));
   left: 0;
   right: 0;
   z-index: 1000;
-  max-height: 220px;
+  max-height: calc(220px * var(--cc-gui-scale));
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 4px;
+  padding: calc(4px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
 }
@@ -230,15 +230,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   width: 100%;
-  min-height: 34px;
-  padding: 8px 10px;
+  min-height: calc(34px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
   border: none;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-family: inherit;
   text-align: left;
   cursor: pointer;
@@ -257,7 +257,7 @@
 
   .codicon {
     flex-shrink: 0;
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 }
 
@@ -271,19 +271,19 @@
 .statusHint {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   min-width: 0;
-  padding: 8px 12px;
-  border-radius: 8px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  border-radius: calc(8px * var(--cc-gui-scale));
   background: rgba(255, 255, 255, 0.03);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   line-height: 1.35;
 
   .codicon {
     flex: 0 0 auto;
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
   }
 }
 

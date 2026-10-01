@@ -1,12 +1,12 @@
 .envVarList {
-  margin-bottom: 8px;
+  margin-bottom: calc(8px * var(--cc-gui-scale));
 }
 
 .envVarItem {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 6px 0;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) 0;
   border-bottom: 1px solid var(--border-secondary);
 }
 
@@ -15,14 +15,14 @@
 }
 
 .keyInput {
-  width: 200px;
+  width: calc(200px * var(--cc-gui-scale));
   flex-shrink: 0;
-  padding: 6px 10px;
+  padding: calc(6px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-family: inherit;
   box-sizing: border-box;
 
@@ -45,12 +45,12 @@
 .valueInput {
   flex: 1;
   min-width: 0;
-  padding: 6px 10px;
+  padding: calc(6px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-family: inherit;
   box-sizing: border-box;
 
@@ -74,10 +74,10 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   flex-shrink: 0;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
 
   &:hover {
     color: var(--color-error, #f44336);
@@ -92,18 +92,18 @@
 
 .addBtn {
   width: 100%;
-  margin-top: 4px;
-  padding: 8px 12px;
+  margin-top: calc(4px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
   box-sizing: border-box;
 
   &:hover:not(:disabled) {
@@ -119,16 +119,16 @@
 
 .validationError {
   color: var(--error-color, #f44336);
-  font-size: 12px;
-  margin-top: 4px;
+  font-size: calc(12px * var(--cc-gui-scale));
+  margin-top: calc(4px * var(--cc-gui-scale));
 }
 
 .emptyState {
   text-align: center;
-  padding: 12px;
+  padding: calc(12px * var(--cc-gui-scale));
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   background: var(--bg-secondary);
-  border-radius: 4px;
-  margin-bottom: 8px;
+  border-radius: calc(4px * var(--cc-gui-scale));
+  margin-bottom: calc(8px * var(--cc-gui-scale));
 }

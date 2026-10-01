@@ -1,20 +1,20 @@
 /* 工具块标题样式 - 支持亮色/暗色主题 */
 .tool-title-icon {
     color: var(--text-primary);
-    font-size: 16px;
-    margin-right: 4px;
+    font-size: var(--cc-gui-chat-font-size-16);
+    margin-right: calc(4px * var(--cc-gui-scale));
 }
 
 .tool-title-text {
     font-weight: 500;
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
     color: var(--text-secondary);
     white-space: nowrap;
 }
 
 .tool-title-summary {
     color: var(--text-tertiary);
-    margin-left: 8px;
+    margin-left: calc(8px * var(--cc-gui-scale));
     white-space: nowrap;
 }
 
@@ -44,13 +44,13 @@
 
 .bash-tool-icon {
     color: var(--text-primary);
-    font-size: 16px;
-    margin-right: 6px;
+    font-size: var(--cc-gui-chat-font-size-16);
+    margin-right: calc(6px * var(--cc-gui-scale));
 }
 
 .bash-tool-title {
     font-weight: 500;
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
     color: var(--text-secondary);
     white-space: nowrap;
 }
@@ -58,15 +58,15 @@
 .bash-tool-description {
     color: var(--text-tertiary);
     font-style: normal;
-    margin-left: 12px;
+    margin-left: calc(12px * var(--cc-gui-scale));
     white-space: nowrap;
 }
 
 .bash-tool-status {
-    width: 8px;
-    height: 8px;
+    width: calc(8px * var(--cc-gui-scale));
+    height: calc(8px * var(--cc-gui-scale));
     border-radius: 50%;
-    margin-right: 4px;
+    margin-right: calc(4px * var(--cc-gui-scale));
 }
 
 .bash-tool-status.pending {
@@ -83,20 +83,20 @@
 
 /* 工具调用状态指示器 */
 .tool-status-indicator {
-    width: 8px;
-    height: 8px;
+    width: calc(8px * var(--cc-gui-scale));
+    height: calc(8px * var(--cc-gui-scale));
     border-radius: 50%;
     flex-shrink: 0;
     margin-left: auto;
-    margin-right: 8px;
+    margin-right: calc(8px * var(--cc-gui-scale));
 }
 
 /* Pending: render a rotating ring spinner instead of a solid pulsing dot,
    so users immediately recognize "the tool is executing" rather than
    misreading it as a static dot stuck at the bottom of the message list. */
 .tool-status-indicator.pending {
-    width: 12px;
-    height: 12px;
+    width: calc(12px * var(--cc-gui-scale));
+    height: calc(12px * var(--cc-gui-scale));
     background-color: transparent;
     border: 2px solid var(--color-warning);
     border-top-color: transparent;
@@ -179,7 +179,7 @@
 
 .bash-tool-line {
     position: absolute;
-    left: 21px;
+    left: calc(21px * var(--cc-gui-scale));
     top: 0;
     bottom: 0;
     width: 1px;
@@ -190,22 +190,22 @@
 .bash-command-block {
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
-    border-radius: 6px;
-    padding: 10px 12px;
+    border-radius: calc(6px * var(--cc-gui-scale));
+    padding: calc(10px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
     color: var(--text-primary);
     white-space: pre-wrap;
     word-break: break-all;
 }
 
 .bash-output-block {
-    margin-top: 8px;
+    margin-top: calc(8px * var(--cc-gui-scale));
     font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
     white-space: pre-wrap;
     display: flex;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
     min-width: 0;
 }
 
@@ -277,7 +277,7 @@
 
 /* ==================== Bash Group 时间线样式 ==================== */
 .bash-group-container {
-    margin: 8px 0;
+    margin: calc(8px * var(--cc-gui-scale)) 0;
 }
 
 .bash-group-header {
@@ -285,13 +285,13 @@
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
-    padding: 8px 12px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     border-bottom: none;
 }
 
 .bash-group-count {
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
 }
 
 .bash-group-summary {
@@ -300,7 +300,7 @@
 }
 
 .bash-group-progress {
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
     color: var(--text-tertiary);
     display: flex;
     align-items: center;
@@ -316,13 +316,13 @@
 
 /* 时间线列表容器 */
 .bash-group-timeline {
-    padding: 8px 12px 8px 16px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
     overflow-x: hidden;
 }
 
 /* 自定义滚动条 */
 .bash-group-timeline::-webkit-scrollbar {
-    width: 6px;
+    width: calc(6px * var(--cc-gui-scale));
 }
 
 .bash-group-timeline::-webkit-scrollbar-track {
@@ -331,7 +331,7 @@
 
 .bash-group-timeline::-webkit-scrollbar-thumb {
     background-color: rgba(128, 128, 128, 0.4);
-    border-radius: 3px;
+    border-radius: calc(3px * var(--cc-gui-scale));
 }
 
 .bash-group-timeline::-webkit-scrollbar-thumb:hover {
@@ -342,7 +342,7 @@
 .bash-timeline-item {
     display: flex;
     position: relative;
-    min-height: 32px;
+    min-height: calc(32px * var(--cc-gui-scale));
 }
 
 /* 时间线连接器 */
@@ -350,7 +350,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 20px;
+    width: calc(20px * var(--cc-gui-scale));
     flex-shrink: 0;
     position: relative;
 }
@@ -367,19 +367,19 @@
 }
 
 .bash-timeline-line.last {
-    height: 10px;
+    height: calc(10px * var(--cc-gui-scale));
 }
 
 /* 时间线节点 */
 .bash-timeline-node {
-    width: 5px;
-    height: 5px;
+    width: calc(5px * var(--cc-gui-scale));
+    height: calc(5px * var(--cc-gui-scale));
     border-radius: 50%;
     background-color: var(--text-tertiary);
     flex-shrink: 0;
     position: relative;
     z-index: 1;
-    margin-top: 12px;
+    margin-top: calc(12px * var(--cc-gui-scale));
 }
 
 .bash-timeline-node.pending {
@@ -399,9 +399,9 @@
 .bash-timeline-content {
     flex: 1;
     min-width: 0;
-    padding: 4px 8px;
-    margin-left: 4px;
-    border-radius: 4px;
+    padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+    margin-left: calc(4px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     cursor: pointer;
     transition: background-color 0.15s ease;
 }
@@ -418,13 +418,13 @@
 .bash-timeline-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
 }
 
 .bash-timeline-description {
     flex: 1;
     min-width: 0;
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
     color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -437,20 +437,20 @@
 
 /* 展开的详情 */
 .bash-timeline-detail {
-    margin-top: 8px;
-    padding-top: 8px;
+    margin-top: calc(8px * var(--cc-gui-scale));
+    padding-top: calc(8px * var(--cc-gui-scale));
     border-top: 1px solid var(--border-primary);
 }
 
 .bash-timeline-detail .bash-command-block {
-    font-size: 12px;
-    padding: 8px 10px;
+    font-size: var(--cc-gui-chat-font-size-12);
+    padding: calc(8px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
 }
 
 .bash-timeline-detail .bash-output-block {
-    margin-top: 6px;
-    font-size: 11px;
-    max-height: 150px;
+    margin-top: calc(6px * var(--cc-gui-scale));
+    font-size: var(--cc-gui-chat-font-size-11);
+    max-height: calc(150px * var(--cc-gui-scale));
     overflow-y: auto;
 }
 
@@ -489,15 +489,15 @@
 }
 
 .report-findings-count {
-    margin-left: 8px;
+    margin-left: calc(8px * var(--cc-gui-scale));
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
     white-space: nowrap;
 }
 
 .report-findings-chevron {
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
 }
 
 .report-findings-content {
@@ -508,22 +508,22 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 6px;
-    padding: 8px 12px;
+    gap: calc(6px * var(--cc-gui-scale));
+    padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     border-bottom: 1px solid var(--border-primary);
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
 }
 
 .report-findings-summary-item,
 .report-findings-level {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    min-height: 20px;
-    padding: 2px 6px;
+    gap: calc(4px * var(--cc-gui-scale));
+    min-height: calc(20px * var(--cc-gui-scale));
+    padding: calc(2px * var(--cc-gui-scale)) calc(6px * var(--cc-gui-scale));
     border: 1px solid var(--border-primary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
 }
 
 .report-findings-summary-item.confirmed {
@@ -540,20 +540,20 @@
 }
 
 .report-findings-empty {
-    padding: 8px 12px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     color: var(--color-success);
 }
 
 .report-findings-list {
-    max-height: 520px;
+    max-height: calc(520px * var(--cc-gui-scale));
     overflow-y: auto;
-    padding: 4px 8px 8px;
+    padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb, rgba(128, 128, 128, 0.4)) transparent;
 }
 
 .report-findings-list::-webkit-scrollbar {
-    width: 6px;
+    width: calc(6px * var(--cc-gui-scale));
 }
 
 .report-findings-list::-webkit-scrollbar-track {
@@ -562,14 +562,14 @@
 
 .report-findings-list::-webkit-scrollbar-thumb {
     background-color: var(--scrollbar-thumb, rgba(128, 128, 128, 0.4));
-    border-radius: 3px;
+    border-radius: calc(3px * var(--cc-gui-scale));
 }
 
 .report-finding-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 6px;
-    padding: 9px 4px;
+    gap: calc(6px * var(--cc-gui-scale));
+    padding: calc(9px * var(--cc-gui-scale)) calc(4px * var(--cc-gui-scale));
     border-bottom: 1px solid var(--border-primary);
 }
 
@@ -585,14 +585,14 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
     min-width: 0;
     line-height: 1.35;
 }
 
 .report-finding-verdict-icon {
     flex: 0 0 auto;
-    font-size: 14px;
+    font-size: var(--cc-gui-chat-font-size);
 }
 
 .report-finding-row.confirmed .report-finding-verdict-icon,
@@ -613,7 +613,7 @@
     min-width: 0;
     flex: 1 1 180px;
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
     font-weight: 500;
     overflow-wrap: anywhere;
 }
@@ -623,12 +623,12 @@
 .report-finding-outcome {
     display: inline-flex;
     align-items: center;
-    min-height: 18px;
-    padding: 1px 5px;
+    min-height: calc(18px * var(--cc-gui-scale));
+    padding: 1px calc(5px * var(--cc-gui-scale));
     border: 1px solid var(--border-primary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     color: var(--text-tertiary);
-    font-size: 11px;
+    font-size: var(--cc-gui-chat-font-size-11);
     line-height: 1.3;
     white-space: nowrap;
 }
@@ -654,16 +654,16 @@
 .report-finding-location {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: calc(4px * var(--cc-gui-scale));
     max-width: 100%;
-    margin-top: 5px;
-    padding: 2px 0 2px 20px;
+    margin-top: calc(5px * var(--cc-gui-scale));
+    padding: calc(2px * var(--cc-gui-scale)) 0 calc(2px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
     border: 0;
     background: transparent;
     color: var(--color-link);
     cursor: pointer;
     font: inherit;
-    font-size: 11px;
+    font-size: var(--cc-gui-chat-font-size-11);
     text-align: left;
 }
 
@@ -687,11 +687,11 @@
 
 .report-finding-toggle {
     align-self: start;
-    width: 24px;
-    height: 24px;
+    width: calc(24px * var(--cc-gui-scale));
+    height: calc(24px * var(--cc-gui-scale));
     padding: 0;
     border: 0;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     background: transparent;
     color: var(--text-tertiary);
     cursor: pointer;
@@ -704,24 +704,24 @@
 
 .report-finding-details {
     grid-column: 1 / -1;
-    margin: 2px 0 0 20px;
-    padding: 8px 0 0;
+    margin: calc(2px * var(--cc-gui-scale)) 0 0 calc(20px * var(--cc-gui-scale));
+    padding: calc(8px * var(--cc-gui-scale)) 0 0;
     border-top: 1px solid var(--border-primary);
 }
 
 .report-finding-detail + .report-finding-detail {
-    margin-top: 8px;
+    margin-top: calc(8px * var(--cc-gui-scale));
 }
 
 .report-finding-detail-label {
-    margin-bottom: 3px;
+    margin-bottom: calc(3px * var(--cc-gui-scale));
     color: var(--text-tertiary);
-    font-size: 11px;
+    font-size: var(--cc-gui-chat-font-size-11);
     font-weight: 600;
 }
 
 .report-finding-detail .markdown-content {
     color: var(--text-primary);
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
     line-height: 1.5;
 }

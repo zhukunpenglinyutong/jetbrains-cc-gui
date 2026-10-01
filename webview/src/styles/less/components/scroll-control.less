@@ -1,11 +1,11 @@
 /* ===== 滚动控制按钮样式 ===== */
 .scroll-control-button {
     position: fixed;
-    right: 24px;
-    bottom: 120px;
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
+    right: calc(24px * var(--cc-gui-scale));
+    bottom: calc(120px * var(--cc-gui-scale));
+    width: calc(40px * var(--cc-gui-scale));
+    height: calc(40px * var(--cc-gui-scale));
+    border-radius: calc(8px * var(--cc-gui-scale));
     background: var(--color-scroll-control-bg);
     border: 1px solid var(--color-scroll-control-border);
     color: var(--color-scroll-control-text);
@@ -29,8 +29,8 @@
 }
 
 .scroll-control-button svg {
-    width: 20px;
-    height: 20px;
+    width: calc(20px * var(--cc-gui-scale));
+    height: calc(20px * var(--cc-gui-scale));
     stroke: var(--color-scroll-control-icon);
     transition: transform 0.15s ease;
 }
@@ -48,13 +48,13 @@
 /* 响应式调整 */
 @media (max-width: 768px) {
     .scroll-control-button {
-        right: 16px;
-        width: 36px;
-        height: 36px;
+        right: calc(16px * var(--cc-gui-scale));
+        width: calc(36px * var(--cc-gui-scale));
+        height: calc(36px * var(--cc-gui-scale));
     }
 
     .scroll-control-button svg {
-        width: 18px;
-        height: 18px;
+        width: calc(18px * var(--cc-gui-scale));
+        height: calc(18px * var(--cc-gui-scale));
     }
 }

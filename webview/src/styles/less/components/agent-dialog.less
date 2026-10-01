@@ -2,10 +2,10 @@
 .agent-dialog {
     background: var(--bg-secondary);
     border: 1px solid var(--border-secondary);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--cc-gui-scale));
     box-shadow: var(--shadow-lg);
     width: 90%;
-    max-width: 800px; /* Optional: Keep a reasonable max-width if needed, or remove if strictly 90% always */
+    max-width: calc(800px * var(--cc-gui-scale)); /* Optional: Keep a reasonable max-width if needed, or remove if strictly 90% always */
     display: flex;
     flex-direction: column;
     animation: slideIn 0.2s ease-out;
@@ -29,12 +29,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 20px;
+    padding: calc(16px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
     border-bottom: 1px solid var(--border-secondary);
 
     h3 {
         margin: 0;
-        font-size: 16px;
+        font-size: calc(16px * var(--cc-gui-scale));
         font-weight: 600;
         color: var(--text-primary);
     }
@@ -44,8 +44,8 @@
         border: none;
         color: var(--text-secondary);
         cursor: pointer;
-        padding: 4px;
-        border-radius: 4px;
+        padding: calc(4px * var(--cc-gui-scale));
+        border-radius: calc(4px * var(--cc-gui-scale));
         display: flex;
         align-items: center;
         justify-content: center;
@@ -58,14 +58,14 @@
 }
 
 .dialog-body {
-    padding: 20px;
+    padding: calc(20px * var(--cc-gui-scale));
     flex: 1;
     overflow-y: auto;
     max-height: 70vh;
 }
 
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: calc(20px * var(--cc-gui-scale));
 
     &:last-child {
         margin-bottom: 0;
@@ -73,14 +73,14 @@
 
     label {
         display: block;
-        margin-bottom: 8px;
-        font-size: 13px;
+        margin-bottom: calc(8px * var(--cc-gui-scale));
+        font-size: calc(13px * var(--cc-gui-scale));
         font-weight: 500;
         color: var(--text-secondary);
 
         .required {
             color: var(--color-error);
-            margin-left: 4px;
+            margin-left: calc(4px * var(--cc-gui-scale));
         }
     }
 }
@@ -96,9 +96,9 @@
     width: 100%;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     font-family: inherit;
     transition: all 0.2s;
 
@@ -118,13 +118,13 @@
 }
 
 .form-input {
-    padding: 8px 60px 8px 12px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(60px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
 }
 
 .form-textarea {
-    padding: 12px;
-    padding-bottom: 28px; /* Make room for counter */
-    min-height: 120px;
+    padding: calc(12px * var(--cc-gui-scale));
+    padding-bottom: calc(28px * var(--cc-gui-scale)); /* Make room for counter */
+    min-height: calc(120px * var(--cc-gui-scale));
     resize: vertical;
     line-height: 1.5;
     display: block;
@@ -132,9 +132,9 @@
 
 .char-counter {
     position: absolute;
-    bottom: 8px;
-    right: 12px;
-    font-size: 12px;
+    bottom: calc(8px * var(--cc-gui-scale));
+    right: calc(12px * var(--cc-gui-scale));
+    font-size: calc(12px * var(--cc-gui-scale));
     color: var(--text-tertiary);
     background: transparent;
     pointer-events: none;
@@ -147,24 +147,24 @@
 }
 
 .form-error {
-    margin: 6px 0 0;
-    font-size: 12px;
+    margin: calc(6px * var(--cc-gui-scale)) 0 0;
+    font-size: calc(12px * var(--cc-gui-scale));
     color: var(--color-error);
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: calc(4px * var(--cc-gui-scale));
 }
 
 .form-hint {
     display: block;
-    margin-top: 8px;
-    font-size: 12px;
+    margin-top: calc(8px * var(--cc-gui-scale));
+    font-size: calc(12px * var(--cc-gui-scale));
     color: var(--text-tertiary);
     line-height: 1.4;
 }
 
 .dialog-footer {
-    padding: 16px 20px;
+    padding: calc(16px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
     border-top: 1px solid var(--border-secondary);
     display: flex;
     justify-content: flex-end;
@@ -172,16 +172,16 @@
 
 .footer-actions {
     display: flex;
-    gap: 12px;
+    gap: calc(12px * var(--cc-gui-scale));
 }
 
 .btn {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    border-radius: 4px;
-    font-size: 13px;
+    gap: calc(6px * var(--cc-gui-scale));
+    padding: calc(8px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
+    font-size: calc(13px * var(--cc-gui-scale));
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;

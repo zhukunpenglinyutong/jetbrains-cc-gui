@@ -5,11 +5,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: calc(28px * var(--cc-gui-scale));
+  height: calc(28px * var(--cc-gui-scale));
   background: var(--button-bg);
   border: none;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -26,7 +26,7 @@
 }
 
 .enhance-prompt-button .codicon {
-  font-size: 16px;
+  font-size: var(--cc-gui-chat-font-size-16);
 }
 
 /* ============================================================
@@ -54,10 +54,10 @@
 .prompt-enhancer-dialog {
   background: var(--dropdown-bg);
   border: 1px solid var(--dropdown-border);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   width: 90%;
-  max-width: 600px;
+  max-width: calc(600px * var(--cc-gui-scale));
   max-height: 80vh;
   display: flex;
   flex-direction: column;
@@ -79,25 +79,25 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: calc(16px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
   border-bottom: 1px solid var(--dropdown-border);
 }
 
 .prompt-enhancer-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   color: var(--text-primary);
 }
 
 .prompt-enhancer-title h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--cc-gui-chat-font-size-16);
   font-weight: 600;
 }
 
 .prompt-enhancer-title .codicon {
-  font-size: 18px;
+  font-size: var(--cc-gui-chat-font-size-18);
   color: var(--button-primary);
 }
 
@@ -105,11 +105,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: calc(28px * var(--cc-gui-scale));
+  height: calc(28px * var(--cc-gui-scale));
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -125,17 +125,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 20px;
+  gap: calc(12px * var(--cc-gui-scale));
+  padding: calc(10px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
   border-bottom: 1px solid var(--dropdown-border);
   background: rgba(255, 255, 255, 0.03);
-  min-height: 40px;
+  min-height: calc(40px * var(--cc-gui-scale));
 }
 
 .prompt-enhancer-meta-items {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
   flex-wrap: wrap;
   min-width: 0;
   flex: 1;
@@ -144,14 +144,14 @@
 .prompt-enhancer-meta-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12px;
+  gap: calc(5px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-12);
   color: var(--text-secondary);
   min-width: 0;
 }
 
 .prompt-enhancer-meta-chip .codicon {
-  font-size: 13px;
+  font-size: var(--cc-gui-chat-font-size-13);
   flex-shrink: 0;
 }
 
@@ -167,7 +167,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 180px;
+  max-width: calc(180px * var(--cc-gui-scale));
 }
 
 .prompt-enhancer-meta-separator {
@@ -180,14 +180,14 @@
 .prompt-enhancer-settings-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: calc(5px * var(--cc-gui-scale));
   flex-shrink: 0;
-  padding: 4px 10px;
+  padding: calc(4px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
   border: 1px solid var(--dropdown-border);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--cc-gui-chat-font-size-12);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -200,29 +200,29 @@
 }
 
 .prompt-enhancer-settings-btn .codicon {
-  font-size: 13px;
+  font-size: var(--cc-gui-chat-font-size-13);
 }
 
 .prompt-enhancer-content {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 20px;
+  padding: calc(16px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: calc(16px * var(--cc-gui-scale));
 }
 
 .prompt-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .prompt-section-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: calc(6px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-12);
   font-weight: 500;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -230,18 +230,18 @@
 }
 
 .prompt-section-header .codicon {
-  font-size: 14px;
+  font-size: var(--cc-gui-chat-font-size);
 }
 
 .prompt-text {
-  padding: 12px;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: calc(12px * var(--cc-gui-scale));
+  border-radius: calc(6px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-13);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  min-height: 80px;
-  max-height: 250px;
+  min-height: calc(80px * var(--cc-gui-scale));
+  max-height: calc(250px * var(--cc-gui-scale));
   overflow-y: auto;
   /* Custom scrollbar styles - always visible */
   scrollbar-width: thin;
@@ -251,17 +251,17 @@
 }
 
 .prompt-text::-webkit-scrollbar {
-  width: 8px;
+  width: calc(8px * var(--cc-gui-scale));
 }
 
 .prompt-text::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
 }
 
 .prompt-text::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   border: 2px solid transparent;
   background-clip: padding-box;
 }
@@ -283,13 +283,13 @@
   border: 1px solid var(--button-primary);
   color: var(--text-primary);
   /* Enhanced prompts may be longer, so give more space */
-  max-height: 350px;
+  max-height: calc(350px * var(--cc-gui-scale));
 }
 
 .prompt-loading {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   color: var(--text-secondary);
 }
 
@@ -300,13 +300,13 @@
 .prompt-streaming-cursor {
   display: inline-flex;
   align-items: center;
-  margin-left: 6px;
+  margin-left: calc(6px * var(--cc-gui-scale));
   color: var(--button-primary);
   vertical-align: middle;
 }
 
 .prompt-streaming-cursor .codicon-loading {
-  font-size: 12px;
+  font-size: var(--cc-gui-chat-font-size-12);
   animation: spin 1s linear infinite;
 }
 
@@ -318,19 +318,19 @@
 .prompt-enhancer-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  padding: 16px 20px;
+  gap: calc(10px * var(--cc-gui-scale));
+  padding: calc(16px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
   border-top: 1px solid var(--dropdown-border);
 }
 
 .prompt-enhancer-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   border: none;
-  border-radius: 4px;
-  font-size: 13px;
+  border-radius: calc(4px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-13);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
@@ -362,7 +362,7 @@
 }
 
 .prompt-enhancer-btn .codicon {
-  font-size: 14px;
+  font-size: var(--cc-gui-chat-font-size);
 }
 
 /* Light theme adaptation */

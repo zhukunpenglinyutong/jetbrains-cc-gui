@@ -1,0 +1,38 @@
+/* ============================================================
+   内联 SVG 图标的尺寸缩放
+   ============================================================
+
+   Icons.tsx、MessageActionButtons、ErrorDiagnosticCard 等把尺寸写在 SVG 的
+   width/height 属性上（<svg width="14" height="14">）。那是 presentation
+   attribute，优先级最低，但也意味着它不会被父元素的字号或 padding 带动——
+   档位缩放改了周围的盒子，图标本身仍然是 14px，于是高/低档位下相对过大或
+   过小（发送按钮最明显：140% 时按钮变大、里面的箭头不变）。
+
+   这里用 CSS 把它们拉回比例。选择器同时要求 width 与 height 相等且为该值，
+   这样宽高不等的异形 SVG（如仪表盘里 24x10 的图形）不会被牵连。
+   CSS 声明优先于 presentation attribute，100% 档位下与原值逐像素等值。 */
+
+svg[width='12'][height='12'] {
+    width: calc(12px * var(--cc-gui-scale));
+    height: calc(12px * var(--cc-gui-scale));
+}
+
+svg[width='14'][height='14'] {
+    width: calc(14px * var(--cc-gui-scale));
+    height: calc(14px * var(--cc-gui-scale));
+}
+
+svg[width='16'][height='16'] {
+    width: calc(16px * var(--cc-gui-scale));
+    height: calc(16px * var(--cc-gui-scale));
+}
+
+svg[width='18'][height='18'] {
+    width: calc(18px * var(--cc-gui-scale));
+    height: calc(18px * var(--cc-gui-scale));
+}
+
+svg[width='20'][height='20'] {
+    width: calc(20px * var(--cc-gui-scale));
+    height: calc(20px * var(--cc-gui-scale));
+}

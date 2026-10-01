@@ -1,40 +1,40 @@
 .providerTabSection {
-  min-width: 400px;
-  padding-bottom: 24px;
+  min-width: calc(400px * var(--cc-gui-scale));
+  padding-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .sectionTitle {
-  font-size: 20px;
+  font-size: calc(20px * var(--cc-gui-scale));
   font-weight: 600;
-  margin: 0 0 8px 0;
+  margin: 0 0 calc(8px * var(--cc-gui-scale)) 0;
   color: var(--text-primary);
 }
 
 .sectionDesc {
   color: var(--text-tertiary);
-  margin: 0 0 16px 0;
-  font-size: 13px;
+  margin: 0 0 calc(16px * var(--cc-gui-scale)) 0;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .tabSelector {
   display: flex;
   background: var(--bg-secondary);
-  padding: 4px;
-  border-radius: 6px;
+  padding: calc(4px * var(--cc-gui-scale));
+  border-radius: calc(6px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  margin-bottom: 20px;
+  margin-bottom: calc(20px * var(--cc-gui-scale));
 }
 
 .tabBtn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 16px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   border: none;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   cursor: pointer;
   transition: all 0.2s;
   flex: 1;
@@ -53,12 +53,12 @@
 .pluginModelsRow {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  margin-bottom: 12px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  margin-bottom: calc(12px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   cursor: pointer;
   transition: background 0.15s;
 
@@ -68,7 +68,7 @@
 }
 
 .pluginModelsLabel {
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -77,23 +77,23 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
+  min-width: calc(18px * var(--cc-gui-scale));
+  height: calc(18px * var(--cc-gui-scale));
+  padding: 0 calc(5px * var(--cc-gui-scale));
+  border-radius: calc(9px * var(--cc-gui-scale));
   background: var(--button-primary-background, #0078d4);
   color: #ffffff;
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   font-weight: 600;
 }
 
 .pluginModelsManageBtn {
-  padding: 3px 10px;
+  padding: calc(3px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
@@ -111,17 +111,17 @@
   }
 
   .sectionTitle {
-    font-size: 16px;
-    margin-bottom: 6px;
+    font-size: calc(16px * var(--cc-gui-scale));
+    margin-bottom: calc(6px * var(--cc-gui-scale));
   }
 
   .sectionDesc {
-    font-size: 12px;
-    margin-bottom: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
+    margin-bottom: calc(12px * var(--cc-gui-scale));
   }
 
   .tabBtn {
-    padding: 6px 12px;
-    font-size: 12px;
+    padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+    font-size: calc(12px * var(--cc-gui-scale));
   }
 }

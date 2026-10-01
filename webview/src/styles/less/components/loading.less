@@ -1,10 +1,10 @@
 /* 加载动画 */
 .loading {
     display: none;
-    padding: 12px;
+    padding: calc(12px * var(--cc-gui-scale));
     text-align: center;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
 }
 
 .loading.show {
@@ -33,9 +33,9 @@
     display: inline-flex;
     flex-direction: row;
     align-items: center;
-    gap: 12px;
+    gap: calc(12px * var(--cc-gui-scale));
     color: var(--vscode-foreground, #d4d4d4);
-    padding: 14px 24px;
+    padding: calc(14px * var(--cc-gui-scale)) calc(24px * var(--cc-gui-scale));
 }
 
 .waiting-spinner {
@@ -73,7 +73,7 @@
 }
 
 .waiting-text {
-    font-size: 14px;
+    font-size: var(--cc-gui-chat-font-size);
     color: var(--vscode-descriptionForeground, #858585);
     letter-spacing: 1px;
 }

@@ -9,8 +9,8 @@
 .header {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
+  gap: calc(6px * var(--cc-gui-scale));
+  margin-bottom: calc(12px * var(--cc-gui-scale));
 }
 
 /* Title + badge on left, refresh on right (same row) */
@@ -18,21 +18,21 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
   min-width: 0;
 }
 
 .headerTitleGroup {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   min-width: 0;
   flex-wrap: wrap;
 }
 
 .headerTitle {
   margin: 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -40,14 +40,14 @@
 .summaryBadge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-height: 20px;
-  padding: 0 8px;
-  border-radius: 10px;
+  gap: calc(4px * var(--cc-gui-scale));
+  min-height: calc(20px * var(--cc-gui-scale));
+  padding: 0 calc(8px * var(--cc-gui-scale));
+  border-radius: calc(10px * var(--cc-gui-scale));
   background: var(--bg-tertiary, var(--bg-primary));
   border: 1px solid var(--border-secondary);
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   font-weight: 500;
   white-space: nowrap;
 
@@ -66,7 +66,7 @@
 
 .headerHint {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   line-height: 1.5;
   color: var(--text-tertiary);
 }
@@ -75,16 +75,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   flex-shrink: 0;
-  min-height: 36px;
-  min-width: 128px;
-  padding: 8px 20px;
+  min-height: calc(36px * var(--cc-gui-scale));
+  min-width: calc(128px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
   border: 1px solid var(--border-primary, var(--border-secondary));
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   line-height: 1.2;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
@@ -100,7 +100,7 @@
   }
 
   :global(.codicon) {
-    font-size: 15px;
+    font-size: calc(15px * var(--cc-gui-scale));
   }
 }
 
@@ -109,9 +109,9 @@
 .cliList {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
   /* Room for action-button tooltips that open downward */
-  padding-bottom: 4px;
+  padding-bottom: calc(4px * var(--cc-gui-scale));
   overflow: visible;
 }
 
@@ -121,23 +121,23 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 48px 20px;
+  gap: calc(10px * var(--cc-gui-scale));
+  padding: calc(48px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px dashed var(--border-secondary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   text-align: center;
 
   :global(.codicon) {
-    font-size: 22px;
+    font-size: calc(22px * var(--cc-gui-scale));
     opacity: 0.55;
   }
 }
 
 .errorState {
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
 }
 
 /* ── Row: left identity / right actions ─────────────────── */
@@ -146,10 +146,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  min-height: 46px;
-  padding: 10px 14px;
-  border-radius: 8px;
+  gap: calc(16px * var(--cc-gui-scale));
+  min-height: calc(46px * var(--cc-gui-scale));
+  padding: calc(10px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale));
+  border-radius: calc(8px * var(--cc-gui-scale));
   border: 1px solid var(--border-primary, var(--border-secondary));
   background: var(--bg-secondary);
   transition: border-color 0.15s ease, background 0.15s ease;
@@ -170,7 +170,7 @@
 .cliMain {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   min-width: 0;
   flex: 1;
   overflow: hidden;
@@ -180,9 +180,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 5px;
+  width: calc(24px * var(--cc-gui-scale));
+  height: calc(24px * var(--cc-gui-scale));
+  border-radius: calc(5px * var(--cc-gui-scale));
   background: var(--bg-tertiary, var(--bg-primary));
   border: 1px solid var(--border-secondary);
   flex-shrink: 0;
@@ -194,7 +194,7 @@
 
 .cliName {
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -202,15 +202,15 @@
 
 .versionBadge {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   font-weight: 500;
-  padding: 0 6px;
-  min-height: 18px;
+  padding: 0 calc(6px * var(--cc-gui-scale));
+  min-height: calc(18px * var(--cc-gui-scale));
   display: inline-flex;
   align-items: center;
   background: var(--bg-tertiary, var(--bg-primary));
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   font-family: var(
     --idea-editor-font-family,
@@ -221,13 +221,13 @@
 
 .binaryChip {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   font-weight: 500;
-  padding: 0 6px;
-  min-height: 18px;
+  padding: 0 calc(6px * var(--cc-gui-scale));
+  min-height: calc(18px * var(--cc-gui-scale));
   display: inline-flex;
   align-items: center;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: transparent;
   border: 1px dashed var(--border-secondary);
   color: var(--text-tertiary);
@@ -242,8 +242,8 @@
 .cliMeta {
   flex: 1;
   min-width: 0;
-  margin-left: 2px;
-  font-size: 12px;
+  margin-left: calc(2px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   line-height: 1.3;
   color: var(--text-tertiary);
   overflow: hidden;
@@ -261,24 +261,24 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
   flex-shrink: 0;
   margin-left: auto;
-  padding-left: 8px;
+  padding-left: calc(8px * var(--cc-gui-scale));
 }
 
 .statusBadge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  min-width: 78px;
+  gap: calc(6px * var(--cc-gui-scale));
+  min-height: calc(30px * var(--cc-gui-scale));
+  min-width: calc(78px * var(--cc-gui-scale));
   justify-content: center;
-  padding: 4px 14px;
-  border-radius: 7px;
+  padding: calc(4px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale));
+  border-radius: calc(7px * var(--cc-gui-scale));
   background: var(--bg-tertiary, var(--bg-primary));
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
   letter-spacing: 0.01em;
   cursor: default;
@@ -297,13 +297,13 @@
   }
 
   :global(.codicon) {
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
   }
 }
 
 .divider {
   width: 1px;
-  height: 18px;
+  height: calc(18px * var(--cc-gui-scale));
   background: var(--border-primary, var(--border-secondary));
   flex-shrink: 0;
   opacity: 0.85;
@@ -312,7 +312,7 @@
 .actionButtons {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
 }
 /*
  * Hidden from the provider switcher: dim the whole row except the eye
@@ -336,10 +336,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: calc(32px * var(--cc-gui-scale));
+  height: calc(32px * var(--cc-gui-scale));
   padding: 0;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--cc-gui-scale));
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
@@ -353,7 +353,7 @@
   }
 
   :global(.codicon) {
-    font-size: 15px;
+    font-size: calc(15px * var(--cc-gui-scale));
   }
 
   /*
@@ -364,14 +364,14 @@
   &::after {
     content: attr(data-tooltip);
     position: absolute;
-    top: calc(100% + 8px);
+    top: calc(100% + 8px * var(--cc-gui-scale));
     left: 50%;
     transform: translateX(-50%);
-    padding: 4px 8px;
-    border-radius: 4px;
+    padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     background: var(--bg-elevated, var(--bg-primary));
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
     line-height: 1.3;
     white-space: nowrap;
     box-shadow: var(--shadow-md, 0 2px 8px rgba(0, 0, 0, 0.25));
@@ -385,7 +385,7 @@
   &::before {
     content: '';
     position: absolute;
-    top: calc(100% + 2px);
+    top: calc(100% + 2px * var(--cc-gui-scale));
     left: 50%;
     transform: translateX(-50%);
     border: 5px solid transparent;
@@ -412,7 +412,7 @@
 
   &:last-child::before {
     left: auto;
-    right: 8px;
+    right: calc(8px * var(--cc-gui-scale));
     transform: none;
   }
 }
@@ -420,14 +420,14 @@
 .primaryBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 6px 14px;
-  border-radius: 16px;
+  gap: calc(6px * var(--cc-gui-scale));
+  min-height: calc(32px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale));
+  border-radius: calc(16px * var(--cc-gui-scale));
   border: none;
   background: var(--button-primary-background, #0078d4);
   color: #fff;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -438,13 +438,13 @@
   }
 
   :global(.codicon) {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 }
 .moreComing {
-  margin: 10px 0 0;
-  padding: 0 4px;
-  font-size: 12px;
+  margin: calc(10px * var(--cc-gui-scale)) 0 0;
+  padding: 0 calc(4px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   line-height: 1.4;
   color: var(--text-tertiary);
   text-align: center;
@@ -463,17 +463,17 @@
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
-  padding: 16px;
+  padding: calc(16px * var(--cc-gui-scale));
 }
 
 .dialog {
-  width: min(520px, 100%);
+  width: ~"min(520px * var(--cc-gui-scale), 100%)";
   max-height: min(80vh, 640px);
   display: flex;
   flex-direction: column;
   background: var(--bg-primary);
   border: 1px solid var(--border-primary, var(--border-secondary));
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
   overflow: hidden;
 }
@@ -481,20 +481,20 @@
 .dialogHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 14px 16px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(14px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   border-bottom: 1px solid var(--border-primary, var(--border-secondary));
   flex-shrink: 0;
 
   :global(.codicon-terminal) {
     color: var(--text-secondary);
-    font-size: 16px;
+    font-size: calc(16px * var(--cc-gui-scale));
   }
 }
 
 .dialogTitle {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--cc-gui-scale));
   font-weight: 600;
   color: var(--text-primary);
   flex: 1;
@@ -505,10 +505,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: calc(28px * var(--cc-gui-scale));
+  height: calc(28px * var(--cc-gui-scale));
   border: none;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -521,46 +521,46 @@
 }
 
 .dialogBody {
-  padding: 16px;
+  padding: calc(16px * var(--cc-gui-scale));
   overflow-y: auto;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-secondary);
   line-height: 1.55;
   flex: 1;
 }
 
 .dialogLead {
-  margin: 0 0 14px 0;
+  margin: 0 0 calc(14px * var(--cc-gui-scale)) 0;
 }
 
 .stepList {
-  margin: 0 0 16px 0;
-  padding-left: 18px;
+  margin: 0 0 calc(16px * var(--cc-gui-scale)) 0;
+  padding-left: calc(18px * var(--cc-gui-scale));
 
   li {
-    margin-bottom: 8px;
+    margin-bottom: calc(8px * var(--cc-gui-scale));
   }
 }
 
 .commandLabel {
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--text-tertiary);
-  margin: 0 0 6px 0;
+  margin: 0 0 calc(6px * var(--cc-gui-scale)) 0;
 }
 
 .commandBlock {
   position: relative;
-  margin: 0 0 14px;
-  padding: 12px 40px 12px 12px;
+  margin: 0 0 calc(14px * var(--cc-gui-scale));
+  padding: calc(12px * var(--cc-gui-scale)) calc(40px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   font-family: var(
     --idea-editor-font-family,
     var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace)
   );
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-primary);
   word-break: break-all;
   line-height: 1.5;
@@ -569,15 +569,15 @@
 
 .copyBtn {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: calc(8px * var(--cc-gui-scale));
+  right: calc(8px * var(--cc-gui-scale));
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: calc(28px * var(--cc-gui-scale));
+  height: calc(28px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: var(--bg-primary);
   color: var(--text-secondary);
   cursor: pointer;
@@ -591,10 +591,10 @@
 .docsLink {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--cc-gui-scale));
   color: var(--button-primary-background, #0078d4);
   text-decoration: none;
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
 
   &:hover {
     text-decoration: underline;
@@ -604,8 +604,8 @@
 .dialogFooter {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(12px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   border-top: 1px solid var(--border-primary, var(--border-secondary));
   flex-shrink: 0;
 }
@@ -613,13 +613,13 @@
 .dialogPrimaryBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 16px;
-  border-radius: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
+  border-radius: calc(6px * var(--cc-gui-scale));
   border: none;
   background: var(--button-primary-background, #0078d4);
   color: #fff;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   cursor: pointer;
 
   &:hover {
@@ -641,7 +641,7 @@
   flex-direction: column;
   gap: 0;
   border: 1px solid var(--border-primary, var(--border-secondary));
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   overflow: visible;
   transition: border-color 0.15s ease;
@@ -654,24 +654,24 @@
 .dshGroupHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   min-width: 0;
-  padding: 10px 14px 6px;
+  padding: calc(10px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale)) calc(6px * var(--cc-gui-scale));
 }
 
 .dshGroupTitle {
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
 }
 
 .nestedCard {
-  margin: 0 8px 8px;
+  margin: 0 calc(8px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   background: var(--bg-primary, var(--bg-tertiary));
 
   &:last-child {
-    margin-bottom: 8px;
+    margin-bottom: calc(8px * var(--cc-gui-scale));
   }
 
   .cliName {
@@ -680,7 +680,7 @@
 }
 
 .dshGroup .nestedCard {
-  margin: 0 8px 8px;
+  margin: 0 calc(8px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
 }
 
 .dshCard {
@@ -696,10 +696,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: calc(32px * var(--cc-gui-scale));
+  height: calc(32px * var(--cc-gui-scale));
   padding: 0;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--cc-gui-scale));
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
@@ -714,20 +714,20 @@
   }
 
   :global(.codicon) {
-    font-size: 15px;
+    font-size: calc(15px * var(--cc-gui-scale));
   }
 }
 
 .dropdownMenu {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 4px * var(--cc-gui-scale));
   right: 0;
   z-index: 100;
-  min-width: 220px;
-  padding: 4px 0;
+  min-width: calc(220px * var(--cc-gui-scale));
+  padding: calc(4px * var(--cc-gui-scale)) 0;
   background: var(--bg-elevated, var(--bg-primary));
   border: 1px solid var(--border-secondary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.2));
   overflow: hidden;
 }
@@ -735,13 +735,13 @@
 .menuItem {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   width: 100%;
-  padding: 8px 12px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   line-height: 1.3;
   cursor: pointer;
   text-align: left;
@@ -767,13 +767,13 @@
   }
 
   :global(.codicon) {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 }
 
 .menuDivider {
   height: 1px;
-  margin: 4px 8px;
+  margin: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   background: var(--border-secondary);
   opacity: 0.85;
 }
@@ -781,12 +781,12 @@
 .menuCheckItem {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   width: 100%;
   box-sizing: border-box;
-  padding: 8px 12px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   line-height: 1.3;
   cursor: pointer;
   user-select: none;

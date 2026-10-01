@@ -1,40 +1,40 @@
 .container {
   display: flex;
   flex-direction: column;
-  padding: 0 24px;
+  padding: 0 calc(24px * var(--cc-gui-scale));
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: calc(12px * var(--cc-gui-scale));
 }
 
 .titleWrapper {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .title {
   margin: 0;
-  font-size: 18px;
+  font-size: calc(18px * var(--cc-gui-scale));
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .description {
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-tertiary);
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--cc-gui-scale));
   line-height: 1.5;
 }
 
 .headerActions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .exportButton,
@@ -42,16 +42,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 6px 12px;
-  height: 32px;
+  gap: calc(4px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  height: calc(32px * var(--cc-gui-scale));
   background: transparent;
   border: 1px solid var(--border-primary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   white-space: nowrap;
 
   &:hover {
@@ -60,21 +60,21 @@
   }
 
   .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 }
 
 .addButton {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: var(--button-primary-background, #0078d4);
   color: #ffffff;
   border: none;
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
   transition: all 0.2s;
 
@@ -84,18 +84,18 @@
 }
 
 .section {
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .sectionHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: calc(12px * var(--cc-gui-scale));
 }
 
 .sectionTitle {
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--text-secondary);
   margin: 0;
@@ -104,29 +104,29 @@
 .sectionActions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .loadingState {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 32px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(32px * var(--cc-gui-scale));
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .emptyState {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 16px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(16px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .createLink {
@@ -135,7 +135,7 @@
   padding: 0;
   color: var(--button-primary-background, #0078d4);
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   text-decoration: underline;
 
   &:hover {
@@ -146,17 +146,17 @@
 .promptList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .promptCard {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: calc(12px * var(--cc-gui-scale));
+  padding: calc(12px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   transition: all 0.2s;
 
   &:hover {
@@ -169,12 +169,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: calc(40px * var(--cc-gui-scale));
+  height: calc(40px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   color: var(--text-secondary);
-  font-size: 20px;
+  font-size: calc(20px * var(--cc-gui-scale));
 }
 
 .promptInfo {
@@ -183,7 +183,7 @@
 }
 
 .promptName {
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
@@ -192,9 +192,9 @@
 }
 
 .promptContent {
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-tertiary);
-  margin-top: 4px;
+  margin-top: calc(4px * var(--cc-gui-scale));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -208,11 +208,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: calc(32px * var(--cc-gui-scale));
+  height: calc(32px * var(--cc-gui-scale));
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
@@ -226,26 +226,26 @@
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 4px;
+  margin-top: calc(4px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   z-index: 100;
-  min-width: 120px;
+  min-width: calc(120px * var(--cc-gui-scale));
   overflow: hidden;
 }
 
 .menuItem {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   width: 100%;
-  padding: 8px 12px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   cursor: pointer;
   text-align: left;
   transition: background 0.2s;

@@ -4,13 +4,13 @@
 .selector-button {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 4px 6px;
+  gap: calc(3px * var(--cc-gui-scale));
+  padding: calc(4px * var(--cc-gui-scale)) calc(6px * var(--cc-gui-scale));
   background: var(--button-bg);
   border: none;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--cc-gui-chat-font-size-11);
   font-family: inherit;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -23,9 +23,9 @@
 
 /* Compact provider icon button */
 .selector-button.provider-compact {
-  padding: 4px 5px;
+  padding: calc(4px * var(--cc-gui-scale)) calc(5px * var(--cc-gui-scale));
   gap: 0;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
 }
 
 .selector-button.provider-compact:hover {
@@ -33,22 +33,22 @@
 }
 
 .runtime-provider-text {
-  max-width: 120px;
+  max-width: calc(120px * var(--cc-gui-scale));
 }
 
 .model-config-summary-text {
-  max-width: 180px;
+  max-width: calc(180px * var(--cc-gui-scale));
 }
 
 .model-config-option-value-text {
-  max-width: 120px;
+  max-width: calc(120px * var(--cc-gui-scale));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .model-config-dropdown {
-  min-width: 280px;
+  min-width: calc(280px * var(--cc-gui-scale));
   display: flex;
   flex-direction: column;
 }
@@ -67,7 +67,7 @@
 }
 
 .model-selector-list--inline {
-  max-height: 260px;
+  max-height: calc(260px * var(--cc-gui-scale));
 }
 
 .runtime-provider-name {
@@ -93,7 +93,7 @@
 }
 
 .selector-button .codicon {
-  font-size: 14px;
+  font-size: var(--cc-gui-chat-font-size);
 }
 
 /* Responsive text hiding for selector buttons */
@@ -119,9 +119,9 @@
 }
 
 .button-area--compact:not([data-measuring]) .selector-button {
-  gap: 2px;
-  padding: 4px 6px;
-  min-width: 28px;
+  gap: calc(2px * var(--cc-gui-scale));
+  padding: calc(4px * var(--cc-gui-scale)) calc(6px * var(--cc-gui-scale));
+  min-width: calc(28px * var(--cc-gui-scale));
 }
 
 .button-area--compact:not([data-measuring]) .selector-button > .codicon-chevron-up,
@@ -132,10 +132,10 @@
 .selector-dropdown {
   background: var(--dropdown-bg);
   border: 1px solid var(--dropdown-border);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  min-width: 140px;
-  padding: 4px 0;
+  min-width: calc(140px * var(--cc-gui-scale));
+  padding: calc(4px * var(--cc-gui-scale)) 0;
   white-space: nowrap;
   font-family: inherit;
   --selector-enter-x: 0px;
@@ -190,11 +190,11 @@
 .selector-option {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   cursor: pointer;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--cc-gui-chat-font-size-12);
   font-family: inherit;
   transition: background 0.1s;
 }
@@ -219,13 +219,13 @@
 }
 
 .selector-option .codicon {
-  font-size: 14px;
-  width: 16px;
+  font-size: var(--cc-gui-chat-font-size);
+  width: calc(16px * var(--cc-gui-scale));
 }
 
 .selector-option .check-mark {
   margin-left: auto;
-  font-size: 12px;
+  font-size: var(--cc-gui-chat-font-size-12);
   color: var(--success-color);
 }
 
@@ -234,7 +234,7 @@
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
   flex-shrink: 0;
 }
 
@@ -258,7 +258,7 @@
 /* Quota details must not displace the row currently under the pointer. */
 .provider-quota-panel {
   box-sizing: border-box;
-  width: 220px;
+  width: calc(220px * var(--cc-gui-scale));
   min-width: 0;
   overflow-y: auto;
   white-space: normal;
@@ -279,8 +279,8 @@
 
 /* Active provider indicator: compact dot instead of a check icon */
 .provider-active-dot {
-  width: 6px;
-  height: 6px;
+  width: calc(6px * var(--cc-gui-scale));
+  height: calc(6px * var(--cc-gui-scale));
   border-radius: 50%;
   background: var(--success-color);
   flex-shrink: 0;
@@ -288,22 +288,22 @@
 /* Footer entry: jump to CLI management (Settings → Providers → CLI) */
 .provider-cli-footer {
   border-top: 1px solid var(--dropdown-border);
-  margin-top: 4px;
-  padding: 6px 6px 2px;
+  margin-top: calc(4px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(6px * var(--cc-gui-scale)) calc(2px * var(--cc-gui-scale));
 }
 
 .provider-cli-footer-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
   width: 100%;
-  padding: 5px 12px;
+  padding: calc(5px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   border: 1px solid var(--dropdown-border);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--cc-gui-chat-font-size-12);
   font-family: inherit;
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
@@ -315,17 +315,17 @@
 }
 
 .provider-cli-footer-btn .codicon {
-  font-size: 13px;
+  font-size: var(--cc-gui-chat-font-size-13);
 }
 
 /* Beta tag for experimental CLI providers (Grok / Kimi / OpenCode / PI) */
 .provider-beta-badge {
-  font-size: 10px;
+  font-size: var(--cc-gui-chat-font-size-10);
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.2;
-  padding: 1px 5px;
-  border-radius: 4px;
+  padding: 1px calc(5px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: #c4b5fd;
   background: rgba(139, 92, 246, 0.18);
   border: 1px solid rgba(139, 92, 246, 0.4);
@@ -335,12 +335,12 @@
 
 /* "Retired" tag for a custom Claude model whose id the API no longer serves */
 .model-retired-badge {
-  font-size: 10px;
+  font-size: var(--cc-gui-chat-font-size-10);
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.2;
-  padding: 1px 5px;
-  border-radius: 4px;
+  padding: 1px calc(5px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: #fbbf24;
   background: rgba(245, 158, 11, 0.16);
   border: 1px solid rgba(245, 158, 11, 0.4);
@@ -349,17 +349,17 @@
 }
 
 .selector-option .model-description {
-  font-size: 11px;
+  font-size: var(--cc-gui-chat-font-size-11);
   color: var(--text-secondary);
   font-family: inherit;
-  margin-top: 2px;
+  margin-top: calc(2px * var(--cc-gui-scale));
 }
 
 .selector-search-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: calc(4px * var(--cc-gui-scale));
+  padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
 }
 
 .selector-search-row--sticky {
@@ -374,13 +374,13 @@
 .selector-search-input {
   box-sizing: border-box;
   flex: 1;
-  min-width: 180px;
-  padding: 5px 8px;
+  min-width: calc(180px * var(--cc-gui-scale));
+  padding: calc(5px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   border: 1px solid var(--dropdown-border);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: var(--input-bg);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--cc-gui-chat-font-size-12);
   font-family: inherit;
   outline: none;
 }
@@ -395,10 +395,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: calc(18px * var(--cc-gui-scale));
+  height: calc(18px * var(--cc-gui-scale));
   border: none;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -411,20 +411,20 @@
 }
 
 .selector-search-clear .codicon {
-  font-size: 11px;
+  font-size: var(--cc-gui-chat-font-size-11);
 }
 
 /* Model dropdown: group headers + pin controls (OpenCode long catalogs) */
 .model-selector-dropdown {
-  min-width: 220px;
+  min-width: calc(220px * var(--cc-gui-scale));
 }
 
 .model-selector-group-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px 2px;
-  font-size: 10px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale)) calc(2px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-10);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -434,8 +434,8 @@
 }
 
 .model-selector-group-icon {
-  font-size: 11px;
-  width: 12px;
+  font-size: var(--cc-gui-chat-font-size-11);
+  width: calc(12px * var(--cc-gui-scale));
   opacity: 0.85;
 }
 
@@ -444,12 +444,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: calc(22px * var(--cc-gui-scale));
+  height: calc(22px * var(--cc-gui-scale));
   margin-left: auto;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-secondary);
   opacity: 0;
@@ -473,8 +473,8 @@
 }
 
 .model-pin-button .codicon {
-  font-size: 12px;
-  width: 12px;
+  font-size: var(--cc-gui-chat-font-size-12);
+  width: calc(12px * var(--cc-gui-scale));
 }
 
 .model-selector-dropdown .selector-option .check-mark {
@@ -484,7 +484,7 @@
 .selector-option-status {
   cursor: default;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--cc-gui-chat-font-size-11);
 }
 
 .selector-option-status:hover {
@@ -492,10 +492,10 @@
 }
 
 .selector-option .mode-description {
-  font-size: 11px;
+  font-size: var(--cc-gui-chat-font-size-11);
   color: var(--text-secondary);
   font-family: inherit;
-  margin-top: 2px;
+  margin-top: calc(2px * var(--cc-gui-scale));
 }
 
 .selector-option.disabled {
@@ -506,7 +506,7 @@
 .selector-divider {
   height: 1px;
   background: var(--dropdown-border);
-  margin: 4px 0;
+  margin: calc(4px * var(--cc-gui-scale)) 0;
 }
 
 .selector-option-add {
@@ -514,8 +514,8 @@
 }
 
 .selector-add-icon {
-  font-size: 14px;
-  width: 16px;
+  font-size: var(--cc-gui-chat-font-size);
+  width: calc(16px * var(--cc-gui-scale));
 }
 
 /* Node process management panel */
@@ -526,9 +526,9 @@
 .node-process-icon-button {
   background: transparent;
   border: none;
-  border-radius: 4px;
-  width: 24px;
-  height: 24px;
+  border-radius: calc(4px * var(--cc-gui-scale));
+  width: calc(24px * var(--cc-gui-scale));
+  height: calc(24px * var(--cc-gui-scale));
   padding: 0;
   display: flex;
   align-items: center;
@@ -548,7 +548,7 @@
 }
 
 .node-process-icon-button .codicon {
-  font-size: 14px;
+  font-size: var(--cc-gui-chat-font-size);
 }
 
 .node-process-icon-button--danger {
@@ -562,14 +562,14 @@
 /* Selector toast notification */
 .selector-toast {
   position: fixed;
-  bottom: 80px;
+  bottom: calc(80px * var(--cc-gui-scale));
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.8);
   color: #fff;
-  padding: 8px 16px;
-  border-radius: 4px;
-  font-size: 12px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-12);
   z-index: 1001;
   animation: toast-fade 1.5s ease-in-out;
 }
@@ -587,9 +587,9 @@
 .token-indicator {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--cc-gui-scale));
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--cc-gui-chat-font-size-11);
 }
 .token-indicator-wrap {
   position: relative;
@@ -623,10 +623,10 @@
   background: var(--dropdown-bg);
   color: var(--text-primary);
   border: 1px solid var(--dropdown-border);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  padding: 6px 8px;
-  font-size: 11px;
+  padding: calc(6px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-11);
   white-space: nowrap;
   opacity: 0;
   visibility: hidden;

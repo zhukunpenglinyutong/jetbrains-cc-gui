@@ -5,11 +5,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: calc(28px * var(--cc-gui-scale));
+  height: calc(28px * var(--cc-gui-scale));
   background: var(--button-bg);
   border: none;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -21,7 +21,7 @@
 }
 
 .attach-button .codicon {
-  font-size: 16px;
+  font-size: var(--cc-gui-chat-font-size-16);
 }
 
 .attach-input {
@@ -35,11 +35,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: calc(28px * var(--cc-gui-scale));
+  height: calc(28px * var(--cc-gui-scale));
   background: var(--button-primary);
   border: none;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: white;
   cursor: pointer;
   transition: background 0.15s, opacity 0.15s;
@@ -56,7 +56,7 @@
 }
 
 .submit-button .codicon {
-  font-size: 14px;
+  font-size: var(--cc-gui-chat-font-size);
 }
 
 .stop-button {

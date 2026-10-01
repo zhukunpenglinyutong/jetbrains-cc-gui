@@ -1,48 +1,48 @@
 .configSection {
-  max-width: 800px;
-  padding-bottom: 24px;
+  max-width: calc(800px * var(--cc-gui-scale));
+  padding-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .sectionTitle {
-  font-size: 20px;
+  font-size: calc(20px * var(--cc-gui-scale));
   font-weight: 600;
-  margin: 0 0 8px 0;
+  margin: 0 0 calc(8px * var(--cc-gui-scale)) 0;
   color: var(--text-primary);
 }
 
 .sectionDesc {
   color: var(--text-tertiary);
-  margin: 0 0 16px 0;
-  font-size: 13px;
+  margin: 0 0 calc(16px * var(--cc-gui-scale)) 0;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 /* Basic config sub-tab selector */
 .basicTabSelector {
   display: flex;
   background: var(--bg-secondary);
-  padding: 4px;
-  border-radius: 6px;
+  padding: calc(4px * var(--cc-gui-scale));
+  border-radius: calc(6px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  margin-bottom: 20px;
+  margin-bottom: calc(20px * var(--cc-gui-scale));
 }
 
 .basicTabBtn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 16px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   border: none;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   cursor: pointer;
   transition: all 0.2s;
   flex: 1;
   justify-content: center;
 
   .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 
   &:hover {
@@ -64,41 +64,41 @@
 }
 
 .themeSection {
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .fieldHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: calc(8px * var(--cc-gui-scale));
+  margin-bottom: calc(12px * var(--cc-gui-scale));
 
   .codicon {
-    font-size: 16px;
+    font-size: calc(16px * var(--cc-gui-scale));
     color: var(--accent-primary);
   }
 }
 
 .fieldLabel {
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
   font-weight: 600;
   color: var(--text-secondary);
 }
 
 .themeSelector {
   display: flex;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   flex-wrap: wrap;
 }
 
 .themeOption {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 2px solid var(--border-secondary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   cursor: pointer;
   transition: all 0.2s;
 
@@ -114,7 +114,7 @@
 }
 
 .themeOptionLabel {
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -124,14 +124,14 @@
 .themeGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
 }
 
 .themeCard {
-  padding: 16px;
+  padding: calc(16px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 2px solid var(--border-secondary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
@@ -148,10 +148,10 @@
 
 .checkBadge {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 20px;
-  height: 20px;
+  top: calc(8px * var(--cc-gui-scale));
+  right: calc(8px * var(--cc-gui-scale));
+  width: calc(20px * var(--cc-gui-scale));
+  height: calc(20px * var(--cc-gui-scale));
   border-radius: 50%;
   background: var(--accent-primary);
   display: flex;
@@ -159,15 +159,15 @@
   justify-content: center;
 
   .codicon {
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
     color: #ffffff;
   }
 }
 
 .themeIconLight {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: calc(28px * var(--cc-gui-scale));
+  height: calc(28px * var(--cc-gui-scale));
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
   border: 1px solid #e0e0e0;
   display: flex;
@@ -176,17 +176,17 @@
   flex-shrink: 0;
 
   .codicon, svg {
-    font-size: 14px;
-    width: 14px;
-    height: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
+    width: calc(14px * var(--cc-gui-scale));
+    height: calc(14px * var(--cc-gui-scale));
     color: #333333;
   }
 }
 
 .themeIconDark {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: calc(28px * var(--cc-gui-scale));
+  height: calc(28px * var(--cc-gui-scale));
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: linear-gradient(135deg, #2d2d2d 0%, #1e1e1e 100%);
   border: 1px solid #404040;
   display: flex;
@@ -195,17 +195,17 @@
   flex-shrink: 0;
 
   .codicon, svg {
-    font-size: 14px;
-    width: 14px;
-    height: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
+    width: calc(14px * var(--cc-gui-scale));
+    height: calc(14px * var(--cc-gui-scale));
     color: #ffffff;
   }
 }
 
 .themeIconSystem {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: calc(28px * var(--cc-gui-scale));
+  height: calc(28px * var(--cc-gui-scale));
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   border: 1px solid #818cf8;
   display: flex;
@@ -214,30 +214,30 @@
   flex-shrink: 0;
 
   .codicon, svg {
-    font-size: 14px;
-    width: 14px;
-    height: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
+    width: calc(14px * var(--cc-gui-scale));
+    height: calc(14px * var(--cc-gui-scale));
     color: #ffffff;
   }
 }
 
 .themeCardTitle {
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: calc(4px * var(--cc-gui-scale));
   color: var(--text-primary);
 }
 
 .themeCardDesc {
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   line-height: 1.4;
 }
 
 .diffThemePreview {
-  width: 40px;
-  height: 28px;
-  border-radius: 6px;
+  width: calc(40px * var(--cc-gui-scale));
+  height: calc(28px * var(--cc-gui-scale));
+  border-radius: calc(6px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
   flex-shrink: 0;
   position: relative;
@@ -259,7 +259,7 @@
   &::after {
     top: 0;
     bottom: 0;
-    width: 12px;
+    width: calc(12px * var(--cc-gui-scale));
     border-right: 1px solid rgba(127, 138, 155, 0.35);
   }
 }
@@ -267,7 +267,7 @@
 .diffThemeMeta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: calc(2px * var(--cc-gui-scale));
   min-width: 0;
 }
 
@@ -320,35 +320,35 @@
 }
 
 .languageSection {
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .fontSizeSection {
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .editorFontSection {
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .fontInfoDisplay {
-  padding: 8px 12px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-family: var(--idea-editor-font-family, monospace);
-  max-width: 400px;
+  max-width: calc(400px * var(--cc-gui-scale));
 }
 
 .nodePathSection {
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .versionBadge {
-  margin-left: 8px;
-  font-size: 12px;
+  margin-left: calc(8px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 500;
 }
 
@@ -363,33 +363,33 @@
 .versionWarning {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--cc-gui-scale));
   color: var(--color-error, #f85149);
-  font-size: 13px;
-  margin-bottom: 8px;
+  font-size: calc(13px * var(--cc-gui-scale));
+  margin-bottom: calc(8px * var(--cc-gui-scale));
 
   .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 }
 
 .nodePathInputWrapper {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   align-items: stretch;
-  margin-bottom: 4px;
+  margin-bottom: calc(4px * var(--cc-gui-scale));
 }
 
 .nodePathInput {
   flex: 1 1 300px;
-  min-width: 200px;
-  padding: 8px 12px;
+  min-width: calc(200px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-family: inherit;
 
   &:focus {
@@ -405,18 +405,18 @@
 
 .saveBtn {
   flex: 0 0 auto;
-  min-width: 80px;
+  min-width: calc(80px * var(--cc-gui-scale));
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 16px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
   transition: all 0.2s;
 
@@ -435,47 +435,47 @@
   }
 
   .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 }
 
 .formHint {
   display: flex;
   align-items: flex-start;
-  gap: 4px;
-  font-size: 12px;
+  gap: calc(4px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-tertiary);
 
   .codicon {
-    font-size: 12px;
-    margin-top: 2px;
+    font-size: calc(12px * var(--cc-gui-scale));
+    margin-top: calc(2px * var(--cc-gui-scale));
   }
 
   code {
     background: var(--color-code-bg);
-    padding: 1px 4px;
-    border-radius: 3px;
+    padding: 1px calc(4px * var(--cc-gui-scale));
+    border-radius: calc(3px * var(--cc-gui-scale));
     font-family: var(--idea-editor-font-family, monospace);
-    font-size: 11px;
+    font-size: calc(11px * var(--cc-gui-scale));
   }
 }
 
 .workingDirSection {
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 /* 🔧 流式传输开关样式 */
 .streamingSection {
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .toggleWrapper {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
   cursor: pointer;
   user-select: none;
-  margin-bottom: 8px;
+  margin-bottom: calc(8px * var(--cc-gui-scale));
 }
 
 .toggleInput {
@@ -484,21 +484,21 @@
 
 .toggleSlider {
   position: relative;
-  width: 44px;
-  height: 24px;
+  width: calc(44px * var(--cc-gui-scale));
+  height: calc(24px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
-  border-radius: 12px;
+  border-radius: calc(12px * var(--cc-gui-scale));
   transition: all 0.2s ease;
   flex-shrink: 0;
 
   &::after {
     content: '';
     position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 18px;
-    height: 18px;
+    top: calc(2px * var(--cc-gui-scale));
+    left: calc(2px * var(--cc-gui-scale));
+    width: calc(18px * var(--cc-gui-scale));
+    height: calc(18px * var(--cc-gui-scale));
     background: var(--text-tertiary);
     border-radius: 50%;
     transition: all 0.2s ease;
@@ -510,7 +510,7 @@
   border-color: var(--accent-primary);
 
   &::after {
-    left: 22px;
+    left: calc(22px * var(--cc-gui-scale));
     background: #ffffff;
   }
 }
@@ -520,28 +520,28 @@
 }
 
 .toggleLabel {
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-secondary);
 }
 
 /* 聊天背景色设置 */
 .bgColorSection {
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .colorPresets {
   display: flex;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  margin-bottom: calc(12px * var(--cc-gui-scale));
 }
 
 .colorSwatch {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: calc(32px * var(--cc-gui-scale));
+  height: calc(32px * var(--cc-gui-scale));
+  border-radius: calc(8px * var(--cc-gui-scale));
   cursor: pointer;
-  padding: 2px;
+  padding: calc(2px * var(--cc-gui-scale));
   border: 2px solid var(--border-secondary);
   transition: all 0.2s;
 
@@ -559,29 +559,29 @@
 .colorSwatchInner {
   width: 100%;
   height: 100%;
-  border-radius: 5px;
+  border-radius: calc(5px * var(--cc-gui-scale));
   border: 1px solid rgba(128, 128, 128, 0.2);
 }
 
 .customColorRow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   flex-wrap: wrap;
-  margin-bottom: 8px;
+  margin-bottom: calc(8px * var(--cc-gui-scale));
 }
 
 .customColorLabel {
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   white-space: nowrap;
 }
 
 .colorPickerWrapper {
   position: relative;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: calc(32px * var(--cc-gui-scale));
+  height: calc(32px * var(--cc-gui-scale));
+  border-radius: calc(6px * var(--cc-gui-scale));
   overflow: hidden;
   cursor: pointer;
   border: 1px solid var(--border-secondary);
@@ -610,13 +610,13 @@
 }
 
 .hexInput {
-  width: 90px;
-  padding: 6px 8px;
+  width: calc(90px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-family: var(--idea-editor-font-family, monospace);
 
   &:focus {
@@ -633,19 +633,19 @@
 .resetBtn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 5px 10px;
+  gap: calc(4px * var(--cc-gui-scale));
+  padding: calc(5px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   transition: all 0.2s;
   white-space: nowrap;
 
   .codicon {
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
   }
 
   &:hover {
@@ -655,7 +655,7 @@
 }
 
 .sendShortcutSection {
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 /* Permission dialog timeout input: vertically centers unit text with the input field */
@@ -665,22 +665,22 @@
 
 /* 提示音选择区域 */
 .customSoundSection {
-  margin-top: 16px;
-  padding-top: 16px;
+  margin-top: calc(16px * var(--cc-gui-scale));
+  padding-top: calc(16px * var(--cc-gui-scale));
   border-top: 1px solid var(--border-secondary);
 }
 
 /* 仅在非聚焦时播放开关区域 */
 .soundOnlyWhenUnfocusedSection {
-  margin-bottom: 16px;
+  margin-bottom: calc(16px * var(--cc-gui-scale));
 }
 
 /* 提示音下拉 + 试听按钮行 */
 .soundSelectRow {
   display: flex;
   align-items: center;
-  gap: 8px;
-  max-width: 400px;
+  gap: calc(8px * var(--cc-gui-scale));
+  max-width: calc(400px * var(--cc-gui-scale));
 }
 
 /* 试听图标按钮（紧凑） */
@@ -689,11 +689,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: calc(34px * var(--cc-gui-scale));
+  height: calc(34px * var(--cc-gui-scale));
   padding: 0;
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -708,24 +708,24 @@
 
 /* 自定义音频文件路径区域 */
 .customSoundFileSection {
-  margin-top: 12px;
+  margin-top: calc(12px * var(--cc-gui-scale));
 }
 
 /* 向上弹出的自定义下拉选择器 */
 .upwardSelect {
   position: relative;
   flex: 1;
-  max-width: 400px;
+  max-width: calc(400px * var(--cc-gui-scale));
 }
 
 .upwardSelectTrigger {
   width: 100%;
-  padding: 8px 32px 8px 12px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(32px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-family: inherit;
   cursor: pointer;
   transition: all 0.2s;
@@ -746,7 +746,7 @@
   &::after {
     content: '';
     position: absolute;
-    right: 12px;
+    right: calc(12px * var(--cc-gui-scale));
     top: 50%;
     transform: translateY(-50%);
     width: 0;
@@ -765,21 +765,21 @@
 
 .upwardSelectDropdown {
   position: absolute;
-  bottom: calc(100% + 4px);
+  bottom: calc(100% + 4px * var(--cc-gui-scale));
   left: 0;
   right: 0;
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
   z-index: 100;
-  max-height: 200px;
+  max-height: calc(200px * var(--cc-gui-scale));
   overflow-y: auto;
 }
 
 .upwardSelectOption {
-  padding: 8px 12px;
-  font-size: 13px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-primary);
   cursor: pointer;
   transition: background 0.15s;
@@ -798,27 +798,27 @@
 /* 响应式适配 */
 @media (max-width: 480px) {
   .sectionTitle {
-    font-size: 16px;
-    margin-bottom: 6px;
+    font-size: calc(16px * var(--cc-gui-scale));
+    margin-bottom: calc(6px * var(--cc-gui-scale));
   }
 
   .sectionDesc {
-    font-size: 12px;
-    margin-bottom: 16px;
+    font-size: calc(12px * var(--cc-gui-scale));
+    margin-bottom: calc(16px * var(--cc-gui-scale));
   }
 
   .nodePathInput {
-    font-size: 12px;
-    padding: 7px 10px;
+    font-size: calc(12px * var(--cc-gui-scale));
+    padding: calc(7px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
   }
 
   .formHint {
-    font-size: 11px;
+    font-size: calc(11px * var(--cc-gui-scale));
   }
 
   .saveBtn {
     width: 100%;
-    padding: 8px 12px;
-    font-size: 12px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+    font-size: calc(12px * var(--cc-gui-scale));
   }
 }

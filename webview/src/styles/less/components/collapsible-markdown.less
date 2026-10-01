@@ -16,9 +16,9 @@
     .collapse-overlay {
         position: absolute;
         bottom: 0;
-        left: -14px; /* Negate padding from .message.user .message-content */
-        width: calc(100% + 28px);
-        height: 60px; /* Increased gradient height for smoother fade */
+        left: calc(-14px * var(--cc-gui-scale)); /* Negate padding from .message.user .message-content */
+        width: calc(100% + 28px * var(--cc-gui-scale));
+        height: calc(60px * var(--cc-gui-scale)); /* Increased gradient height for smoother fade */
         background: linear-gradient(to bottom, rgba(0, 95, 184, 0), var(--color-message-user-bg));
         pointer-events: none;
         z-index: 1;
@@ -28,30 +28,30 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 2px 0;
-        margin-left: -14px; /* Negate padding */
-        margin-right: -14px;
-        margin-bottom: -10px;
+        padding: calc(2px * var(--cc-gui-scale)) 0;
+        margin-left: calc(-14px * var(--cc-gui-scale)); /* Negate padding */
+        margin-right: calc(-14px * var(--cc-gui-scale));
+        margin-bottom: calc(-10px * var(--cc-gui-scale));
         margin-top: 0; 
-        width: calc(100% + 28px);
+        width: calc(100% + 28px * var(--cc-gui-scale));
         
         cursor: pointer;
         background: rgba(0, 0, 0, 0.1);
         
         /* Match bubble border radius */
-        border-bottom-right-radius: 2px;
-        border-bottom-left-radius: 12px;
+        border-bottom-right-radius: calc(2px * var(--cc-gui-scale));
+        border-bottom-left-radius: calc(12px * var(--cc-gui-scale));
         
         color: rgba(255, 255, 255, 0.8);
         transition: background 0.2s;
-        height: 20px; 
+        height: calc(20px * var(--cc-gui-scale)); 
         
         &:hover {
             background: rgba(0, 0, 0, 0.2);
         }
         
         .codicon {
-            font-size: 14px;
+            font-size: var(--cc-gui-chat-font-size);
         }
     }
 }

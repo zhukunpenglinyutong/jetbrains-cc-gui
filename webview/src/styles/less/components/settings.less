@@ -3,43 +3,43 @@
 .config-form {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: calc(20px * var(--cc-gui-scale));
 }
 
 .form-group {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
 }
 
 .form-group label {
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     font-weight: 500;
     color: var(--text-secondary);
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
 }
 
 .form-group label .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
     color: var(--text-tertiary);
 }
 
 .form-group .required {
     color: var(--color-settings-error);
-    margin-left: 2px;
+    margin-left: calc(2px * var(--cc-gui-scale));
 }
 
 .form-input,
 .form-select {
     width: 100%;
-    padding: 8px 12px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     font-family: inherit;
 }
 
@@ -55,7 +55,7 @@
 }
 
 .form-hint {
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
     color: var(--text-tertiary);
 }
 
@@ -71,7 +71,7 @@
 .model-mapping-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    gap: calc(12px * var(--cc-gui-scale));
 }
 
 .model-mapping-field {
@@ -84,35 +84,35 @@
 
 .form-actions {
     display: flex;
-    gap: 10px;
+    gap: calc(10px * var(--cc-gui-scale));
 }
 
 /* Config Info Display Styles - Modernized */
 .config-info-display {
     background: var(--bg-secondary);
     border: 1px solid var(--border-secondary);
-    border-radius: 8px;
-    margin-bottom: 24px;
+    border-radius: calc(8px * var(--cc-gui-scale));
+    margin-bottom: calc(24px * var(--cc-gui-scale));
     overflow: hidden;
     box-shadow: var(--shadow-sm);
 }
 
 .config-info-header {
-    padding: 12px 16px;
+    padding: calc(12px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
     background: var(--bg-tertiary);
     border-bottom: 1px solid var(--border-secondary);
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: calc(10px * var(--cc-gui-scale));
 }
 
 .config-info-header .codicon {
-    font-size: 16px;
+    font-size: calc(16px * var(--cc-gui-scale));
     color: var(--accent-primary);
 }
 
 .config-info-title {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
     font-weight: 600;
     color: var(--text-secondary);
 }
@@ -127,7 +127,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: calc(12px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
     border-bottom: 1px solid var(--border-secondary);
     transition: background 0.2s;
 }
@@ -143,32 +143,32 @@
 .config-info-label {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: calc(10px * var(--cc-gui-scale));
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     font-weight: 500;
 }
 
 .config-info-value {
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
 }
 
 .config-info-value-with-action {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
 }
 
 .config-info-code {
     background: var(--bg-primary);
-    padding: 4px 8px;
-    border-radius: 4px;
+    padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
     color: var(--text-primary);
     border: 1px solid var(--border-secondary);
 }
@@ -176,9 +176,9 @@
 .config-info-badge {
     background: var(--accent-primary);
     color: white;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 4px;
+    font-size: calc(10px * var(--cc-gui-scale));
+    padding: calc(2px * var(--cc-gui-scale)) calc(6px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     font-weight: 600;
     text-transform: uppercase;
 }
@@ -188,8 +188,8 @@
     border: 1px solid transparent;
     color: var(--text-tertiary);
     cursor: pointer;
-    padding: 4px;
-    border-radius: 4px;
+    padding: calc(4px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
     transition: all 0.2s;
@@ -202,17 +202,17 @@
 }
 
 .config-info-loading, .config-info-empty {
-    padding: 40px;
+    padding: calc(40px * var(--cc-gui-scale));
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
+    gap: calc(16px * var(--cc-gui-scale));
     color: var(--text-tertiary);
     background: var(--bg-secondary);
 }
 
 .config-info-loading .codicon, .config-info-empty .codicon {
-    font-size: 32px;
+    font-size: calc(32px * var(--cc-gui-scale));
     opacity: 0.5;
 }
 
@@ -223,17 +223,17 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
 }
 
 .link-btn,
 .visibility-toggle {
-    padding: 6px;
+    padding: calc(6px * var(--cc-gui-scale));
     border: none;
     background: transparent;
     color: var(--text-primary);
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -247,20 +247,20 @@
 
 /* Advanced Section */
 .advanced-section {
-    margin-top: 20px;
+    margin-top: calc(20px * var(--cc-gui-scale));
     border-top: 1px solid var(--color-settings-border);
-    padding-top: 16px;
+    padding-top: calc(16px * var(--cc-gui-scale));
 }
 
 .advanced-toggle {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 13px;
+    gap: calc(6px * var(--cc-gui-scale));
+    font-size: calc(13px * var(--cc-gui-scale));
     font-weight: 500;
     color: var(--text-secondary);
     cursor: pointer;
-    padding: 4px 0;
+    padding: calc(4px * var(--cc-gui-scale)) 0;
     list-style: none;
 }
 
@@ -278,27 +278,27 @@
 
 /* JSON Config */
 .json-config-section {
-    margin-top: 12px;
+    margin-top: calc(12px * var(--cc-gui-scale));
 }
 
 .json-toolbar {
     display: flex;
     justify-content: flex-start;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: calc(12px * var(--cc-gui-scale));
 }
 
 .format-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
+    gap: calc(6px * var(--cc-gui-scale));
+    padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     border: 1px solid var(--border-secondary);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--cc-gui-scale));
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     transition: all 0.2s;
 }
 
@@ -309,7 +309,7 @@
 }
 
 .format-btn .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
 }
 
 .json-editor-wrapper {
@@ -318,14 +318,14 @@
 
 .json-editor {
     width: 100%;
-    min-height: 200px;
-    max-height: 500px;
-    padding: 12px;
+    min-height: calc(200px * var(--cc-gui-scale));
+    max-height: calc(500px * var(--cc-gui-scale));
+    padding: calc(12px * var(--cc-gui-scale));
     border: 1px solid var(--border-secondary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     background: var(--bg-tertiary);
     color: var(--text-primary);
-    font-size: calc(13px * 0.9);
+    font-size: calc(13px * var(--cc-gui-scale) * 0.9);
     font-family: var(--idea-editor-font-family, monospace);
     overflow: auto;
     resize: vertical;
@@ -342,14 +342,14 @@
 .provider-dialog .json-editor {
     display: block;
     width: 100%;
-    min-height: 200px;
-    max-height: 500px;
-    padding: 12px;
+    min-height: calc(200px * var(--cc-gui-scale));
+    max-height: calc(500px * var(--cc-gui-scale));
+    padding: calc(12px * var(--cc-gui-scale));
     border: 1px solid var(--border-secondary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     background: var(--bg-tertiary);
     color: var(--text-primary);
-    font-size: calc(13px * 0.9);
+    font-size: calc(13px * var(--cc-gui-scale) * 0.9);
     font-family: var(--idea-editor-font-family, monospace);
     overflow: auto;
     resize: vertical;
@@ -366,32 +366,32 @@
 .custom-models-editor {
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
-    border-radius: 6px;
-    padding: 12px;
+    border-radius: calc(6px * var(--cc-gui-scale));
+    padding: calc(12px * var(--cc-gui-scale));
 }
 
 .custom-models-editor .models-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin-bottom: 12px;
+    gap: calc(8px * var(--cc-gui-scale));
+    margin-bottom: calc(12px * var(--cc-gui-scale));
 }
 
 .custom-models-editor .empty-models {
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     text-align: center;
-    padding: 16px;
+    padding: calc(16px * var(--cc-gui-scale));
 }
 
 .custom-models-editor .model-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     background: var(--bg-secondary);
     border: 1px solid var(--border-secondary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     transition: background 0.2s;
 }
 
@@ -402,46 +402,46 @@
 .custom-models-editor .model-info {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
     flex: 1;
     min-width: 0;
 }
 
 .custom-models-editor .model-id {
     font-family: var(--idea-editor-font-family, monospace);
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     color: var(--text-primary);
     font-weight: 500;
 }
 
 .custom-models-editor .model-label {
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
     color: var(--text-secondary);
 }
 
 .custom-models-editor .model-desc {
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
     color: var(--text-tertiary);
-    margin-left: 8px;
+    margin-left: calc(8px * var(--cc-gui-scale));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 200px;
+    max-width: calc(200px * var(--cc-gui-scale));
 }
 
 .custom-models-editor .model-actions {
     display: flex;
-    gap: 4px;
+    gap: calc(4px * var(--cc-gui-scale));
     flex-shrink: 0;
 }
 
 .custom-models-editor .btn-icon {
-    padding: 4px;
+    padding: calc(4px * var(--cc-gui-scale));
     background: transparent;
     border: none;
     color: var(--text-tertiary);
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -461,42 +461,42 @@
 .custom-models-editor .add-model-form {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 12px;
+    gap: calc(8px * var(--cc-gui-scale));
+    padding: calc(12px * var(--cc-gui-scale));
     background: var(--bg-secondary);
     border: 1px solid var(--border-secondary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
 }
 
 .custom-models-editor .form-row {
     display: flex;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
 }
 
 .custom-models-editor .form-row .form-input {
     flex: 1;
-    padding: 6px 10px;
-    font-size: 13px;
+    padding: calc(6px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
+    font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .custom-models-editor .form-row.form-actions {
     justify-content: flex-end;
-    margin-top: 4px;
+    margin-top: calc(4px * var(--cc-gui-scale));
 }
 
 .custom-models-editor .add-model-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
     width: 100%;
     justify-content: center;
-    padding: 8px 12px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     border: 1px dashed var(--border-secondary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     transition: all 0.2s;
 }
 
@@ -510,16 +510,16 @@
 .form-group label .optional {
     color: var(--text-tertiary);
     font-weight: 400;
-    font-size: 12px;
-    margin-left: 4px;
+    font-size: calc(12px * var(--cc-gui-scale));
+    margin-left: calc(4px * var(--cc-gui-scale));
 }
 
 /* Form error message */
 .custom-models-editor .form-error {
     color: var(--color-error, #ff4d4f);
-    font-size: 12px;
-    padding: 4px 0;
-    margin-top: -4px;
+    font-size: calc(12px * var(--cc-gui-scale));
+    padding: calc(4px * var(--cc-gui-scale)) 0;
+    margin-top: calc(-4px * var(--cc-gui-scale));
 }
 
 /* Input error state */
@@ -535,23 +535,23 @@
 .preset-buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 16px;
-    padding: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
+    margin-bottom: calc(16px * var(--cc-gui-scale));
+    padding: calc(8px * var(--cc-gui-scale));
     background: var(--bg-secondary);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--cc-gui-scale));
 }
 
 .preset-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
+    gap: calc(6px * var(--cc-gui-scale));
+    padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     border: 1px solid var(--border-secondary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     background: var(--bg-tertiary);
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
     cursor: pointer;
     transition: all 0.2s;
     white-space: nowrap;
@@ -562,8 +562,8 @@
     flex: 0 0 16px;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: calc(16px * var(--cc-gui-scale));
+    height: calc(16px * var(--cc-gui-scale));
 }
 
 .preset-btn:hover {

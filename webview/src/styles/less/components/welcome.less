@@ -7,7 +7,7 @@
     justify-content: center;
     height: 100%;
     color: var(--text-tertiary);
-    gap: 16px;
+    gap: calc(16px * var(--cc-gui-scale));
 }
 
 .welcome-logo-container {
@@ -18,15 +18,15 @@
 /* Version tag - positioned next to the logo */
 .version-tag {
     position: absolute;
-    top: -2px;
+    top: calc(-2px * var(--cc-gui-scale));
     left: 100%;
-    margin-left: 10px;
+    margin-left: calc(10px * var(--cc-gui-scale));
     background: rgba(139, 92, 246, 0.1);
     border: 1px solid rgba(139, 92, 246, 0.5);
     color: #ddd6fe;
-    font-size: 10px;
-    padding: 2px 8px;
-    border-radius: 4px;
+    font-size: calc(10px * var(--cc-gui-scale));
+    padding: calc(2px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     font-weight: 500;
     white-space: nowrap;
     box-shadow: 0 0 10px rgba(139, 92, 246, 0.15);

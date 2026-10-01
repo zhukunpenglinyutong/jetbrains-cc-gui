@@ -285,8 +285,8 @@
   scrollbar-gutter: stable both-edges;
 
   &::-webkit-scrollbar {
-    height: 8px;
-    width: 8px;
+    height: calc(8px * var(--cc-gui-scale));
+    width: calc(8px * var(--cc-gui-scale));
   }
 
   &::-webkit-scrollbar-track {
@@ -309,7 +309,7 @@
   scrollbar-color: transparent transparent;
 
   &::-webkit-scrollbar {
-    height: 4px;
+    height: calc(4px * var(--cc-gui-scale));
   }
 
   &::-webkit-scrollbar-track {
@@ -318,7 +318,7 @@
 
   &::-webkit-scrollbar-thumb {
     background: transparent;
-    border-radius: 2px;
+    border-radius: calc(2px * var(--cc-gui-scale));
   }
 
   &:hover,
@@ -437,14 +437,14 @@
 }
 /* Only round the outer edge of start/end */
 .rdp-range-start {
-  border-radius: 8px 0 0 8px !important;
+  border-radius: calc(8px * var(--cc-gui-scale)) 0 0 calc(8px * var(--cc-gui-scale)) !important;
 }
 .rdp-range-end {
-  border-radius: 0 8px 8px 0 !important;
+  border-radius: 0 calc(8px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale)) 0 !important;
 }
 /* Single day selected (start == end) */
 .rdp-range-start.rdp-range-end {
-  border-radius: 8px !important;
+  border-radius: calc(8px * var(--cc-gui-scale)) !important;
 }
 /* Range middle inherits from .rdp-selected above (every in-range day also
    carries the `selected` class, see DateRangePopover classNames) */

@@ -1,39 +1,39 @@
 .configSection {
-  min-width: 400px;
-  padding-bottom: 24px;
+  min-width: calc(400px * var(--cc-gui-scale));
+  padding-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .sectionTitle {
-  font-size: 20px;
+  font-size: calc(20px * var(--cc-gui-scale));
   font-weight: 600;
-  margin: 0 0 8px 0;
+  margin: 0 0 calc(8px * var(--cc-gui-scale)) 0;
   color: var(--text-primary);
 }
 
 .sectionDesc {
   color: var(--text-tertiary);
-  margin: 0 0 24px 0;
-  font-size: 13px;
+  margin: 0 0 calc(24px * var(--cc-gui-scale)) 0;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .tempNotice {
   text-align: center;
-  padding: 48px 24px;
+  padding: calc(48px * var(--cc-gui-scale)) calc(24px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
 
   .codicon {
-    font-size: 48px;
+    font-size: calc(48px * var(--cc-gui-scale));
     opacity: 0.5;
-    margin-bottom: 16px;
+    margin-bottom: calc(16px * var(--cc-gui-scale));
     display: block;
   }
 
   p {
     margin: 0;
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 }
 
@@ -44,24 +44,24 @@
   }
 
   .sectionTitle {
-    font-size: 16px;
-    margin-bottom: 6px;
+    font-size: calc(16px * var(--cc-gui-scale));
+    margin-bottom: calc(6px * var(--cc-gui-scale));
   }
 
   .sectionDesc {
-    font-size: 12px;
-    margin-bottom: 16px;
+    font-size: calc(12px * var(--cc-gui-scale));
+    margin-bottom: calc(16px * var(--cc-gui-scale));
   }
 
   .tempNotice {
-    padding: 32px 16px;
+    padding: calc(32px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
 
     .codicon {
-      font-size: 36px;
+      font-size: calc(36px * var(--cc-gui-scale));
     }
 
     p {
-      font-size: 12px;
+      font-size: calc(12px * var(--cc-gui-scale));
     }
   }
 }
