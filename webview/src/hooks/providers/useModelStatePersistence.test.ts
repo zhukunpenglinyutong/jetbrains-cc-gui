@@ -152,6 +152,16 @@ describe('useModelStatePersistence — boot sync does not clobber the persisted 
     expect(bridgeEventsFor('set_mode')).toHaveLength(0);
   });
 
+  it('cleans up a pending boot sync when the hook unmounts', () => {
+    delete (window as unknown as { sendToJava?: unknown }).sendToJava;
+    const { unmount } = renderHook(() => useModelStatePersistence(makeOptions()));
+
+    unmount();
+    vi.advanceTimersByTime(3_000);
+
+    expect(sendBridgeEventMock).not.toHaveBeenCalled();
+  });
+
   it('keeps frontend boot synchronization enabled for a pre-ready startup retry', () => {
     window.__CCGUI_PAGE_LOAD_KIND__ = 'startup_retry';
     window.__CCGUI_RECOVERY_RELOAD__ = false;

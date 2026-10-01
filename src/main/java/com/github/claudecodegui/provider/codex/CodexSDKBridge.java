@@ -587,8 +587,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                                     + "; stopping it before starting the new turn");
                             processManager.interruptChannel(channelId);
                         }
-                        process = pb.start();
-                        processManager.registerProcess(channelId, process);
+                        process = processManager.startManagedProcess(channelId, pb);
                     } finally {
                         channelLock.unlock();
                     }
@@ -615,7 +614,6 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     }, "ccgui-codex-watchdog-" + channelId);
                     watchdog.setDaemon(true);
                     watchdog.start();
-
                     // Write to stdin
                     try (java.io.OutputStream stdin = process.getOutputStream()) {
                         stdin.write(stdinJson.getBytes(StandardCharsets.UTF_8));
@@ -764,8 +762,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 // Inject custom "mcp" env vars from active provider
                 injectCustomEnvVars(pb.environment(), "mcp");
 
-                process = pb.start();
-                processManager.registerProcess(channelId, process);
+                process = processManager.startManagedProcess(channelId, pb);
                 final Process finalProcess = process;
 
                 try (java.io.OutputStream stdin = process.getOutputStream()) {
