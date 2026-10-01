@@ -9,41 +9,41 @@
 
 .extensions-usage-status {
   display: flex;
-  min-height: 240px;
+  min-height: calc(240px * var(--cc-gui-scale));
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
   color: var(--text-secondary);
 }
 
 .extensions-usage-status .codicon {
-  font-size: 20px;
+  font-size: calc(20px * var(--cc-gui-scale));
 }
 
 .extensions-usage-status p {
   margin: 0;
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--cc-gui-scale));
 }
 
 .extensions-usage-card {
   display: grid;
-  max-width: 640px;
-  gap: 14px;
+  max-width: calc(640px * var(--cc-gui-scale));
+  gap: calc(14px * var(--cc-gui-scale));
   justify-items: start;
-  padding: 24px;
+  padding: calc(24px * var(--cc-gui-scale));
   border: 1px solid var(--border-primary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   background: var(--bg-elevated);
 }
 
 .extensions-usage-card-icon {
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: calc(44px * var(--cc-gui-scale));
+  height: calc(44px * var(--cc-gui-scale));
   place-items: center;
   border: 1px solid var(--border-primary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   color: var(--text-secondary);
   box-shadow: var(--shadow-sm);
@@ -51,61 +51,61 @@
 
 .extensions-usage-card h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--cc-gui-scale));
   font-weight: 600;
 }
 
 .extensions-usage-card p {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--cc-gui-scale));
   line-height: 1.5;
 }
 
 .extensions-usage-card .extensions-usage-card-note {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
 }
 
 .extensions-usage-progress {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--cc-gui-scale));
   color: var(--text-primary);
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--cc-gui-scale));
 }
 
 .extensions-usage-progress .codicon {
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size: calc(16px * var(--cc-gui-scale));
 }
 
 .extensions-usage-install {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: calc(10px * var(--cc-gui-scale));
+  padding: calc(10px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   border: 1px solid var(--border-primary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: var(--bg-secondary);
 }
 
 .extensions-usage-install-label {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
 }
 
 .extensions-usage-install code {
   color: var(--text-primary);
   font-family: var(--cc-gui-code-font-family, monospace);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .extensions-usage-card-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: calc(10px * var(--cc-gui-scale));
 }
 
 .extensions-usage-error-detail {
@@ -113,7 +113,7 @@
   overflow-wrap: anywhere;
   color: var(--color-error);
   font-family: var(--cc-gui-code-font-family, monospace);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--cc-gui-scale));
 }
 
 .extensions-usage-dashboard {

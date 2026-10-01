@@ -1,38 +1,38 @@
 .modelList {
-  margin-bottom: 12px;
+  margin-bottom: calc(12px * var(--cc-gui-scale));
 }
 
 .configuredModelsSection {
-  margin-bottom: 16px;
+  margin-bottom: calc(16px * var(--cc-gui-scale));
 }
 
 .sectionHeader {
-  margin: 12px 0 6px;
-  font-size: 12px;
+  margin: calc(12px * var(--cc-gui-scale)) 0 calc(6px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 600;
   color: var(--text-secondary);
 }
 
 .sectionHint {
-  margin: 0 0 8px;
-  font-size: 11px;
+  margin: 0 0 calc(8px * var(--cc-gui-scale));
+  font-size: calc(11px * var(--cc-gui-scale));
   color: var(--text-tertiary);
 }
 
 .emptyState {
-  padding: 16px;
+  padding: calc(16px * var(--cc-gui-scale));
   text-align: center;
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .modelItem {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
-  border-radius: 4px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: var(--bg-secondary);
-  margin-bottom: 4px;
+  margin-bottom: calc(4px * var(--cc-gui-scale));
 }
 
 .modelItemContent {
@@ -41,40 +41,40 @@
 }
 
 .modelItemId {
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
 }
 
 .modelItemLabel {
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-secondary);
-  margin-left: 4px;
+  margin-left: calc(4px * var(--cc-gui-scale));
 }
 
 .modelItemDesc {
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   color: var(--text-tertiary);
-  margin-top: 2px;
+  margin-top: calc(2px * var(--cc-gui-scale));
 }
 
 .modelItemPricing,
 .modelItemMetadata {
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   color: var(--text-secondary);
-  margin-top: 4px;
+  margin-top: calc(4px * var(--cc-gui-scale));
 }
 
 .modelItemActions {
   display: flex;
-  gap: 4px;
-  margin-left: 8px;
+  gap: calc(4px * var(--cc-gui-scale));
+  margin-left: calc(8px * var(--cc-gui-scale));
 }
 
 .iconBtn {
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 4px;
+  padding: calc(4px * var(--cc-gui-scale));
   color: var(--text-tertiary);
 }
 
@@ -84,59 +84,59 @@
 }
 
 .addEditForm {
-  padding: 12px;
+  padding: calc(12px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: var(--bg-secondary);
 }
 
 .formRow {
   display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
+  margin-bottom: calc(8px * var(--cc-gui-scale));
 }
 
 .validationError {
   color: var(--error-color, #f44336);
-  font-size: 12px;
-  margin-bottom: 8px;
+  font-size: calc(12px * var(--cc-gui-scale));
+  margin-bottom: calc(8px * var(--cc-gui-scale));
 }
 
 .contextWindowField {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
+  gap: calc(4px * var(--cc-gui-scale));
+  margin-bottom: calc(12px * var(--cc-gui-scale));
 }
 
 .contextWindowField label {
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   color: var(--text-secondary);
 }
 
 .fieldHint {
   margin: 0;
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   color: var(--text-tertiary);
 }
 
 .pricingSection {
   border: 1px dashed var(--border-secondary);
-  border-radius: 4px;
-  margin: 0 0 12px;
+  border-radius: calc(4px * var(--cc-gui-scale));
+  margin: 0 0 calc(12px * var(--cc-gui-scale));
   overflow: hidden;
 }
 
 .pricingToggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
   width: 100%;
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 8px 10px;
-  font-size: 12px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   text-align: left;
 }
@@ -148,11 +148,11 @@
 .pricingToggle:focus-visible {
   outline: 1px solid var(--border-secondary);
   outline-offset: -2px;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
 }
 
 .pricingToggle .codicon {
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
 }
 
 .pricingToggleLabel {
@@ -160,46 +160,46 @@
 }
 
 .optionalBadge {
-  font-size: 10px;
+  font-size: calc(10px * var(--cc-gui-scale));
   font-weight: 400;
   line-height: 1.4;
   color: var(--text-tertiary);
-  padding: 1px 6px;
-  border-radius: 8px;
+  padding: 1px calc(6px * var(--cc-gui-scale));
+  border-radius: calc(8px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
 }
 
 .pricingContent {
-  padding: 0 10px 10px;
+  padding: 0 calc(10px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
 }
 
 .pricingHint {
-  margin: 0 0 8px;
-  font-size: 11px;
+  margin: 0 0 calc(8px * var(--cc-gui-scale));
+  font-size: calc(11px * var(--cc-gui-scale));
   color: var(--text-tertiary);
 }
 
 .pricingGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .pricingField {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--cc-gui-scale));
 }
 
 .pricingField label {
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   color: var(--text-secondary);
 }
 
 .formActions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .addBtn {

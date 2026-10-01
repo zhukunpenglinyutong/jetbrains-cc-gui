@@ -24,6 +24,50 @@
     --idea-editor-font-family: 'JetBrains Mono', 'Consolas', monospace;
     --idea-editor-font-size: 14px;
     --idea-editor-line-spacing: 1.5;
+    /* 用户字号档位（1 = 100%）；由 JS 写在 documentElement 上。 */
+    --font-scale: 1;
+    /* 间距 / 尺寸档位 —— 与字号档位同一个比例。
+     *
+     * 只放大字号时，正文变大了但卡片内边距、间隙、控件尺寸仍是写死的 px，高
+     * 档位下字会挤在框里。这里给出供间距类声明相乘的比例变量：
+     *   padding: 6px 12px
+     *   -> padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale))
+     * 100% 档位下乘数为 1，与原值完全等值；调档后才整体等比放大。
+     *
+     * 有意不缩放的边界：
+     *   1. border / outline / box-shadow 的细线——缩到 1px 以下时 JCEF 的 OSR
+     *      光栅化会把 1px 采样成模糊灰线甚至整条消失；
+     *   2. 绝对值 <= 1px 的间距——同上，且缩放它们没有可见收益；
+     *   3. 混有 % 或已含 calc()/var() 的声明——无法安全改写，保持原样。 */
+    --cc-gui-scale: var(--font-scale, 1);
+    /* 会话正文 / 代码块 / 输入框的字号 = IDE 编辑器基准字号 × 用户档位。
+     * 上游这三处原本就写成 var(--idea-editor-font-size)，这里只是补上档位比例。 */
+    --cc-gui-chat-font-size: calc(var(--idea-editor-font-size, 13.5px) * var(--cc-gui-scale));
+    /* 聊天区辅助文字（时间戳、工具卡片、标签等）的档位缩放。
+     *
+     * 这些元素在上游是写死的 px，不跟随 IDE 编辑器字号——所以这里按「原 px ×
+     * 档位」派生，而不是按正文字号的比例：100% 档位下与原先写死的 px 完全一致
+     * （视觉不变），调档后才跟随缩放。
+     *
+     * 命名后缀即原 px 值，替换时一一对应：
+     *   font-size: 12px  ->  var(--cc-gui-chat-font-size-12)
+     */
+    --cc-gui-chat-font-size-8: calc(8px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-10: calc(10px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-11: calc(11px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-115: calc(11.5px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-12: calc(12px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-125: calc(12.5px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-13: calc(13px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-135: calc(13.5px * var(--cc-gui-scale));
+    /* 无后缀的 --cc-gui-chat-font-size 是正文字号（跟随编辑器字号），
+     * -14 是原先写死 14px 的元素，两者不可互换。 */
+    --cc-gui-chat-font-size-14: calc(14px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-15: calc(15px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-16: calc(16px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-18: calc(18px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-20: calc(20px * var(--cc-gui-scale));
+    --cc-gui-chat-font-size-24: calc(24px * var(--cc-gui-scale));
 }
 
 body {
@@ -40,27 +84,24 @@ html {
 }
 
 #app {
-    /* 
-     * 当使用 zoom 缩放时，容器的渲染尺寸会变大。
-     * 为了适应视口，我们需要反向调整容器的 CSS 尺寸。
-     * 例如：zoom: 1.2 (120%) 时，高度设置为 100vh / 1.2，
-     * 这样渲染出来的高度刚好是 100vh。
-     */
-    height: calc(100vh / var(--font-scale, 1));
-    width: calc(100vw / var(--font-scale, 1));
-    
+    /* 字号缩放不再用 zoom 实现（见 :root 里 --cc-gui-chat-font-size 的说明），
+     * 所以这里不需要再按缩放倍数反向收缩容器尺寸——那个 calc(100vh / scale)
+     * 是配合 zoom 让渲染尺寸刚好等于视口用的，zoom 一走它就成了纯粹的分数尺寸。
+     * 注意：surfaceDamagePulse 的通用重绘补丁仍然会临时写 zoom，但它无条件还原，
+     * 不会把已被移除的缩放重新引入。 */
+    height: 100vh;
+    width: 100vw;
+
     display: flex;
     flex-direction: column;
     border-left: 1px solid var(--border-primary);
     overflow: hidden;
-    /* 应用字体缩放 - 使用 zoom 属性缩放整个应用，包括所有 px 单位 */
-    zoom: var(--font-scale, 1);
 }
 
 /* Global Scrollbar Styles - Force Override */
 @{tt-exclude}::-webkit-scrollbar {
-    width: 10px !important;
-    height: 10px !important;
+    width: calc(10px * var(--cc-gui-scale)) !important;
+    height: calc(10px * var(--cc-gui-scale)) !important;
 }
 
 @{tt-exclude}::-webkit-scrollbar-track {
@@ -69,7 +110,7 @@ html {
 
 @{tt-exclude}::-webkit-scrollbar-thumb {
     background-color: var(--scrollbar-thumb) !important;
-    border-radius: 5px !important;
+    border-radius: calc(5px * var(--cc-gui-scale)) !important;
     border: 2px solid transparent !important;
     background-clip: content-box !important;
 }
@@ -113,15 +154,15 @@ html {
 
 /* Notice Box - shared info/warning notice */
 .notice-box {
-    border-radius: 4px;
-    font-size: 12px;
+    border-radius: calc(4px * var(--cc-gui-scale));
+    font-size: calc(12px * var(--cc-gui-scale));
     line-height: 1.5;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
 
     .codicon {
-        font-size: 14px;
+        font-size: calc(14px * var(--cc-gui-scale));
         flex-shrink: 0;
     }
 }
@@ -130,16 +171,16 @@ html {
     background: var(--color-notice-info-bg, var(--vscode-inputValidation-infoBackground, rgba(0, 127, 212, 0.12)));
     border: 1px solid var(--color-notice-info-border, var(--vscode-inputValidation-infoBorder, rgba(0, 127, 212, 0.35)));
     color: var(--color-notice-info-text, var(--vscode-inputValidation-infoForeground, #2f6fab));
-    padding: 9px 12px;
-    margin-bottom: 12px;
+    padding: calc(9px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+    margin-bottom: calc(12px * var(--cc-gui-scale));
 }
 
 .notice-box--warning {
     background: var(--color-notice-warning-bg, var(--vscode-inputValidation-warningBackground, rgba(255, 193, 7, 0.12)));
     border: 1px solid var(--color-notice-warning-border, var(--vscode-inputValidation-warningBorder, rgba(255, 193, 7, 0.38)));
     color: var(--color-notice-warning-text, var(--vscode-inputValidation-warningForeground, #8a5200));
-    padding: 6px 10px;
-    margin-bottom: 10px;
+    padding: calc(6px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
+    margin-bottom: calc(10px * var(--cc-gui-scale));
 }
 
 /* vConsole 调试工具 - 初始位置由 main.tsx 设置，支持拖动 */

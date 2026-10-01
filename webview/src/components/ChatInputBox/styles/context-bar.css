@@ -5,23 +5,23 @@
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   background: var(--context-bar-bg);
-  min-height: 32px;
+  min-height: calc(32px * var(--cc-gui-scale));
 }
 
 /* Ensure the first visible child element (usually ContextBar or AttachmentList) has rounded corners */
 /* ResizeHandles are absolutely positioned :first-child, so select the next visible element after them */
 .chat-input-box > .resize-handle + * {
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
+  border-top-left-radius: calc(8px * var(--cc-gui-scale));
+  border-top-right-radius: calc(8px * var(--cc-gui-scale));
 }
 
 .context-tools {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--cc-gui-scale));
 }
 
 .context-token-indicator {
@@ -34,13 +34,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
+  width: calc(20px * var(--cc-gui-scale));
+  height: calc(20px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
   cursor: pointer;
   color: var(--text-secondary);
   transition: all 0.2s;
-  font-size: 14px;
+  font-size: var(--cc-gui-chat-font-size-14);
   /* Reset button styles */
   background: transparent;
   border: none;
@@ -61,16 +61,16 @@
 
 .context-tool-divider {
   width: 1px;
-  height: 16px;
+  height: calc(16px * var(--cc-gui-scale));
   background: var(--input-border);
-  margin: 0 4px;
+  margin: 0 calc(4px * var(--cc-gui-scale));
 }
 
 /* Right side tools container */
 .context-tools-right {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--cc-gui-scale));
   margin-left: auto;
 }
 
@@ -101,11 +101,11 @@
   align-items: center;
   background: var(--dropdown-bg);
   border: 1px solid var(--input-border);
-  border-radius: 4px;
-  padding: 1px 6px;
-  font-size: 12px;
+  border-radius: calc(4px * var(--cc-gui-scale));
+  padding: 1px calc(6px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-12);
   color: var(--text-primary);
-  max-width: 200px;
+  max-width: calc(200px * var(--cc-gui-scale));
 }
 
 /* Tooltip styles - for ContextBar item (CSS implementation) */
@@ -119,18 +119,18 @@
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-bottom: 4px;
+  margin-bottom: calc(4px * var(--cc-gui-scale));
 
   background: var(--dropdown-bg);
   color: var(--text-primary);
   border: 1px solid var(--dropdown-border);
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 12px;
+  border-radius: calc(6px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-12);
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-all;
-  max-width: 300px;
+  max-width: calc(300px * var(--cc-gui-scale));
   width: max-content;
 
   z-index: 1000;
@@ -146,7 +146,7 @@
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-bottom: -2px;
+  margin-bottom: calc(-2px * var(--cc-gui-scale));
   border: 6px solid transparent;
   border-top-color: var(--dropdown-border);
   z-index: 1000;
@@ -163,13 +163,13 @@
   background: var(--dropdown-bg);
   color: var(--text-primary);
   border: 1px solid var(--dropdown-border);
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 12px;
+  border-radius: calc(6px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-12);
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-all;
-  max-width: 300px;
+  max-width: calc(300px * var(--cc-gui-scale));
   width: max-content;
   
   /* Ensure z-index is high enough */
@@ -189,7 +189,7 @@
 
 .tooltip-bar {
   max-width: none;
-  border-radius: 6px 6px 0 0;
+  border-radius: calc(6px * var(--cc-gui-scale)) calc(6px * var(--cc-gui-scale)) 0 0;
   border-bottom: none;
   /* Slightly adjust background color to differentiate */
   background: var(--dropdown-bg);
@@ -205,7 +205,7 @@
 }
 
 .context-text {
-  margin: 0 4px;
+  margin: 0 calc(4px * var(--cc-gui-scale));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -216,8 +216,8 @@
 .context-close {
   cursor: pointer;
   opacity: 0.7;
-  font-size: 14px;
-  margin-left: 4px;
+  font-size: var(--cc-gui-chat-font-size-14);
+  margin-left: calc(4px * var(--cc-gui-scale));
 }
 
 .context-close:hover {
@@ -235,11 +235,11 @@
 button.context-file-placeholder {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 8px;
+  gap: calc(4px * var(--cc-gui-scale));
+  padding: 1px calc(8px * var(--cc-gui-scale));
   border: 1px dashed var(--input-border);
-  border-radius: 4px;
-  font-size: 11px;
+  border-radius: calc(4px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-11);
   font-family: inherit;
   color: var(--text-secondary);
   background: transparent;
@@ -262,7 +262,7 @@ button.context-file-placeholder:focus-visible {
 }
 
 .context-file-placeholder .codicon {
-  font-size: 12px;
+  font-size: var(--cc-gui-chat-font-size-12);
 }
 
 .context-file-placeholder .placeholder-text {
@@ -274,15 +274,15 @@ button.context-file-placeholder:focus-visible {
    ============================================================ */
 .file-context-confirm-popover {
   position: absolute;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 8px * var(--cc-gui-scale));
   left: 0;
   z-index: 1000;
-  min-width: 260px;
-  max-width: 320px;
+  min-width: calc(260px * var(--cc-gui-scale));
+  max-width: calc(320px * var(--cc-gui-scale));
   background: var(--dropdown-bg);
   border: 1px solid var(--dropdown-border);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: calc(8px * var(--cc-gui-scale));
+  padding: calc(12px * var(--cc-gui-scale));
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   animation: popover-fade-in 0.15s ease-out;
 }
@@ -291,7 +291,7 @@ button.context-file-placeholder:focus-visible {
   content: '';
   position: absolute;
   top: 100%;
-  left: 16px;
+  left: calc(16px * var(--cc-gui-scale));
   border: 6px solid transparent;
   border-top-color: var(--dropdown-border);
 }
@@ -300,35 +300,35 @@ button.context-file-placeholder:focus-visible {
   content: '';
   position: absolute;
   top: 100%;
-  left: 17px;
+  left: calc(17px * var(--cc-gui-scale));
   border: 5px solid transparent;
   border-top-color: var(--dropdown-bg);
 }
 
 .popover-title {
-  font-size: 13px;
+  font-size: var(--cc-gui-chat-font-size-13);
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 6px;
+  margin-bottom: calc(6px * var(--cc-gui-scale));
 }
 
 .popover-description {
-  font-size: 12px;
+  font-size: var(--cc-gui-chat-font-size-12);
   line-height: 1.5;
   color: var(--text-secondary);
-  margin-bottom: 12px;
+  margin-bottom: calc(12px * var(--cc-gui-scale));
 }
 
 .popover-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .popover-btn {
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 12px;
+  padding: calc(4px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-12);
   cursor: pointer;
   border: 1px solid var(--input-border);
   transition: all 0.15s;
@@ -369,13 +369,13 @@ button.context-file-placeholder:focus-visible {
 .plan-usage {
   display: flex;
   align-items: center;
-  gap: 5px;
-  max-width: 200px;
+  gap: calc(5px * var(--cc-gui-scale));
+  max-width: calc(200px * var(--cc-gui-scale));
   min-width: 0;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: calc(2px * var(--cc-gui-scale)) calc(6px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--cc-gui-chat-font-size-11);
   line-height: 1;
   flex-shrink: 1;
   white-space: nowrap;
@@ -384,8 +384,8 @@ button.context-file-placeholder:focus-visible {
 
 /* Leading dot = worst pace across all windows (not just selected). */
 .plan-usage-worst-dot {
-  width: 7px;
-  height: 7px;
+  width: calc(7px * var(--cc-gui-scale));
+  height: calc(7px * var(--cc-gui-scale));
   border-radius: 50%;
   flex-shrink: 0;
   background: var(--text-secondary);
@@ -409,9 +409,9 @@ button.context-file-placeholder:focus-visible {
 }
 
 .plan-usage-bar {
-  width: 36px;
-  height: 4px;
-  border-radius: 2px;
+  width: calc(36px * var(--cc-gui-scale));
+  height: calc(4px * var(--cc-gui-scale));
+  border-radius: calc(2px * var(--cc-gui-scale));
   background: var(--input-border);
   overflow: hidden;
   flex-shrink: 0;
@@ -419,7 +419,7 @@ button.context-file-placeholder:focus-visible {
 
 .plan-usage-fill {
   height: 100%;
-  border-radius: 2px;
+  border-radius: calc(2px * var(--cc-gui-scale));
   background: var(--text-secondary);
   transition: width 0.25s ease, background 0.2s ease;
 }
@@ -441,12 +441,12 @@ button.context-file-placeholder:focus-visible {
 .plan-usage-window {
   flex-shrink: 0;
   margin: 0;
-  padding: 1px 4px;
+  padding: 1px calc(4px * var(--cc-gui-scale));
   border: 1px solid var(--input-border);
-  border-radius: 3px;
+  border-radius: calc(3px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--cc-gui-chat-font-size-10);
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: 0.02em;
@@ -490,6 +490,6 @@ button.context-file-placeholder:focus-visible {
 }
 
 .plan-usage-label {
-  font-size: 11px;
+  font-size: var(--cc-gui-chat-font-size-11);
   color: var(--text-secondary);
 }

@@ -1,89 +1,89 @@
 .configSection {
-  max-width: 840px;
-  padding-bottom: 24px;
+  max-width: calc(840px * var(--cc-gui-scale));
+  padding-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .sectionTitle {
-  font-size: 20px;
+  font-size: calc(20px * var(--cc-gui-scale));
   font-weight: 600;
-  margin: 0 0 8px 0;
+  margin: 0 0 calc(8px * var(--cc-gui-scale)) 0;
   color: var(--text-primary);
 }
 
 .sectionDesc {
   color: var(--text-tertiary);
-  margin: 0 0 20px 0;
-  font-size: 13px;
+  margin: 0 0 calc(20px * var(--cc-gui-scale)) 0;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .panel {
   border: 1px solid var(--border-primary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   background: var(--bg-secondary);
-  padding: 16px;
+  padding: calc(16px * var(--cc-gui-scale));
 }
 
 .panelHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: calc(8px * var(--cc-gui-scale));
+  font-size: calc(14px * var(--cc-gui-scale));
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .panelDesc {
-  margin: 8px 0 14px 0;
+  margin: calc(8px * var(--cc-gui-scale)) 0 calc(14px * var(--cc-gui-scale)) 0;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .options {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--cc-gui-scale));
 }
 
 .option {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: calc(10px * var(--cc-gui-scale));
   border: 1px solid var(--border-primary);
-  border-radius: 6px;
-  padding: 10px 12px;
+  border-radius: calc(6px * var(--cc-gui-scale));
+  padding: calc(10px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   cursor: pointer;
   background: var(--bg-primary);
 }
 
 .optionTitle {
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 600;
 }
 
 .optionDesc {
   color: var(--text-tertiary);
-  font-size: 12px;
-  margin-top: 4px;
+  font-size: calc(12px * var(--cc-gui-scale));
+  margin-top: calc(4px * var(--cc-gui-scale));
 }
 
 .hint {
-  margin-top: 12px;
+  margin-top: calc(12px * var(--cc-gui-scale));
   display: flex;
-  gap: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
   align-items: flex-start;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
 }
 
 .notice {
-  margin-top: 14px;
-  padding: 10px 12px;
+  margin-top: calc(14px * var(--cc-gui-scale));
+  padding: calc(10px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   border: 1px dashed var(--border-primary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
 }

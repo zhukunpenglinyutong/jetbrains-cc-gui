@@ -2,19 +2,19 @@
 .todo-container {
     background: var(--bg-primary);
     border: 1px solid var(--border-primary);
-    border-radius: 8px;
-    padding: 10px;
-    margin-top: 4px;
+    border-radius: calc(8px * var(--cc-gui-scale));
+    padding: calc(10px * var(--cc-gui-scale));
+    margin-top: calc(4px * var(--cc-gui-scale));
 }
 
 .todo-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 13px;
+    gap: calc(8px * var(--cc-gui-scale));
+    font-size: var(--cc-gui-chat-font-size-13);
     font-weight: 600;
     color: var(--color-todo-header);
-    margin-bottom: 8px;
+    margin-bottom: calc(8px * var(--cc-gui-scale));
 }
 
 .todo-header-icon {
@@ -30,11 +30,11 @@
 .todo-item {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
-    font-size: 13px;
+    gap: calc(10px * var(--cc-gui-scale));
+    font-size: var(--cc-gui-chat-font-size-13);
     line-height: 1.4;
     color: var(--color-todo-text);
-    padding: 6px 0;
+    padding: calc(6px * var(--cc-gui-scale)) 0;
     border-bottom: 1px solid var(--color-todo-divider);
 }
 
@@ -49,12 +49,12 @@
 
 .todo-status-icon {
     flex-shrink: 0;
-    width: 16px;
-    height: 16px;
+    width: calc(16px * var(--cc-gui-scale));
+    height: calc(16px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-top: 2px;
+    margin-top: calc(2px * var(--cc-gui-scale));
 }
 
 /* Icons based on status */

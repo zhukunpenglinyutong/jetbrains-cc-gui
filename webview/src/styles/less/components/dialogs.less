@@ -12,7 +12,7 @@
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    padding: 16px;
+    padding: calc(16px * var(--cc-gui-scale));
     z-index: 20000;
     animation: fadeIn 0.2s ease-out;
 }
@@ -29,10 +29,12 @@
 .confirm-dialog {
     background: var(--bg-secondary);
     border: 1px solid var(--border-secondary);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--cc-gui-scale));
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-    min-width: min(400px, 100%);
-    max-width: min(500px, 100%);
+    /* 转义是给 Less 看的：min() 会被 Less 在编译期求值，遇到 var() 就报
+     * "Operation on an invalid type"，包 calc() 也挡不住。~"..." 原样输出，交给浏览器算。 */
+    min-width: ~"min(400px * var(--cc-gui-scale), 100%)";
+    max-width: ~"min(500px * var(--cc-gui-scale), 100%)";
     animation: slideIn 0.2s ease-out;
 }
 
@@ -48,24 +50,24 @@
 }
 
 .confirm-dialog-header {
-    padding: 16px 20px;
+    padding: calc(16px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
     border-bottom: 1px solid var(--color-dialog-border);
 }
 
 .confirm-dialog-title {
     margin: 0;
-    font-size: 15px;
+    font-size: calc(15px * var(--cc-gui-scale));
     font-weight: 600;
     color: var(--text-secondary);
 }
 
 .confirm-dialog-body {
-    padding: 20px;
+    padding: calc(20px * var(--cc-gui-scale));
 }
 
 .confirm-dialog-message {
     margin: 0;
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     line-height: 1.6;
     color: var(--text-primary);
 }
@@ -76,11 +78,11 @@
  * the new-session confirm dialog (see AppDialogs.tsx).
  */
 .confirm-dialog-dont-ask-again {
-    margin-top: 16px;
+    margin-top: calc(16px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 12px;
+    gap: calc(8px * var(--cc-gui-scale));
+    font-size: calc(12px * var(--cc-gui-scale));
     color: var(--text-secondary);
     cursor: pointer;
     user-select: none;
@@ -97,18 +99,18 @@
 }
 
 .confirm-dialog-footer {
-    padding: 12px 20px;
+    padding: calc(12px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
     border-top: 1px solid var(--color-dialog-border);
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
 }
 
 .confirm-dialog-button {
-    padding: 8px 16px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
     border: none;
-    border-radius: 4px;
-    font-size: 13px;
+    border-radius: calc(4px * var(--cc-gui-scale));
+    font-size: calc(13px * var(--cc-gui-scale));
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
@@ -156,23 +158,23 @@
 .modal-content {
     background: var(--bg-secondary);
     border: 1px solid var(--border-secondary);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--cc-gui-scale));
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-    min-width: 380px;
-    max-width: 500px;
-    padding: 24px;
+    min-width: calc(380px * var(--cc-gui-scale));
+    max-width: calc(500px * var(--cc-gui-scale));
+    padding: calc(24px * var(--cc-gui-scale));
     animation: slideIn 0.2s ease-out;
 
     h3 {
-        margin: 0 0 12px 0;
-        font-size: 16px;
+        margin: 0 0 calc(12px * var(--cc-gui-scale)) 0;
+        font-size: calc(16px * var(--cc-gui-scale));
         font-weight: 600;
         color: var(--text-secondary);
     }
 
     p {
-        margin: 0 0 20px 0;
-        font-size: 13px;
+        margin: 0 0 calc(20px * var(--cc-gui-scale)) 0;
+        font-size: calc(13px * var(--cc-gui-scale));
         line-height: 1.6;
         color: var(--text-primary);
     }
@@ -181,14 +183,14 @@
 .modal-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 10px;
+    gap: calc(10px * var(--cc-gui-scale));
 }
 
 .modal-btn {
-    padding: 8px 20px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
     border: none;
-    border-radius: 4px;
-    font-size: 13px;
+    border-radius: calc(4px * var(--cc-gui-scale));
+    font-size: calc(13px * var(--cc-gui-scale));
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;

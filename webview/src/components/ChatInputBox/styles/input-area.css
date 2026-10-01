@@ -3,9 +3,9 @@
    ============================================================ */
 .input-editable-wrapper {
   position: relative;
-  padding: 6px 8px;
-  min-height: 20px;
-  max-height: 240px;
+  padding: calc(6px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+  min-height: calc(20px * var(--cc-gui-scale));
+  max-height: calc(240px * var(--cc-gui-scale));
   overflow-y: auto;
 }
 
@@ -13,8 +13,8 @@
 .code-snippets-container {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: calc(6px * var(--cc-gui-scale));
+  margin-bottom: calc(8px * var(--cc-gui-scale));
 }
 
 /* Code snippet tag (reuses context-item styles) */
@@ -23,11 +23,11 @@
   align-items: center;
   background: var(--dropdown-bg);
   border: 1px solid var(--input-border);
-  border-radius: 4px;
-  padding: 1px 6px;
-  font-size: 12px;
+  border-radius: calc(4px * var(--cc-gui-scale));
+  padding: 1px calc(6px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-12);
   color: var(--text-primary);
-  max-width: 300px;
+  max-width: calc(300px * var(--cc-gui-scale));
   cursor: default;
   position: relative;
 }
@@ -35,9 +35,9 @@
 .code-snippet-icon {
   display: inline-flex;
   align-items: center;
-  margin-right: 4px;
-  width: 16px;
-  height: 16px;
+  margin-right: calc(4px * var(--cc-gui-scale));
+  width: calc(16px * var(--cc-gui-scale));
+  height: calc(16px * var(--cc-gui-scale));
 }
 
 .code-snippet-text {
@@ -50,10 +50,10 @@
 }
 
 .code-snippet-close {
-  margin-left: 4px;
+  margin-left: calc(4px * var(--cc-gui-scale));
   cursor: pointer;
   opacity: 0.6;
-  font-size: 14px;
+  font-size: var(--cc-gui-chat-font-size-14);
   display: flex;
   align-items: center;
   transition: opacity 0.2s;
@@ -70,18 +70,18 @@
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-bottom: 8px;
+  margin-bottom: calc(8px * var(--cc-gui-scale));
 
   background: var(--dropdown-bg);
   color: var(--text-primary);
   border: 1px solid var(--dropdown-border);
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 12px;
+  border-radius: calc(6px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  font-size: var(--cc-gui-chat-font-size-12);
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-all;
-  max-width: 400px;
+  max-width: calc(400px * var(--cc-gui-scale));
   width: max-content;
 
   z-index: 1000;
@@ -97,7 +97,7 @@
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-bottom: 2px;
+  margin-bottom: calc(2px * var(--cc-gui-scale));
   border: 6px solid transparent;
   border-top-color: var(--dropdown-border);
   z-index: 1000;
@@ -115,7 +115,7 @@
   min-height: calc(1.5em * 4);
   outline: none;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--cc-gui-chat-font-size-14);
   font-family: inherit;
   line-height: 1.5;
   word-wrap: break-word;

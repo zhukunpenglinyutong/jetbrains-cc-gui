@@ -9,31 +9,31 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: calc(16px * var(--cc-gui-scale));
 
   .title {
     margin: 0;
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
     color: var(--text-secondary);
   }
 
   .actions {
     display: flex;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
   }
 }
 
 .btnPrimary {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: var(--button-primary-background, #0078d4);
   color: #ffffff;
   border: none;
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
 
   &:hover {
     background: var(--button-primary-hover-background, #0063b1);
@@ -43,14 +43,14 @@
 .btnSecondary {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  border-radius: calc(6px * var(--cc-gui-scale));
   border: 1px solid var(--border-primary);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
 
   &:hover {
     background: var(--bg-hover);
@@ -65,24 +65,24 @@
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 4px;
+  margin-top: calc(4px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   z-index: 10;
-  min-width: 200px;
+  min-width: calc(200px * var(--cc-gui-scale));
   overflow: hidden;
 }
 
 .importMenuItem {
-  padding: 8px 12px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-secondary);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   transition: background 0.2s;
   white-space: nowrap;
 
@@ -113,8 +113,8 @@
 
 .dialog {
   background: var(--bg-primary);
-  border-radius: 8px;
-  width: 700px;
+  border-radius: calc(8px * var(--cc-gui-scale));
+  width: calc(700px * var(--cc-gui-scale));
   max-width: 90%;
   max-height: 80vh;
   display: flex;
@@ -124,7 +124,7 @@
 }
 
 .dialogHeader {
-  padding: 16px;
+  padding: calc(16px * var(--cc-gui-scale));
   border-bottom: 1px solid var(--border-primary);
   display: flex;
   justify-content: space-between;
@@ -132,7 +132,7 @@
 
   h3 {
     margin: 0;
-    font-size: 16px;
+    font-size: calc(16px * var(--cc-gui-scale));
     font-weight: 600;
   }
 
@@ -141,7 +141,7 @@
     border: none;
     cursor: pointer;
     color: var(--text-secondary);
-    padding: 4px;
+    padding: calc(4px * var(--cc-gui-scale));
     
     &:hover {
       color: var(--text-primary);
@@ -150,14 +150,14 @@
 }
 
 .dialogContent {
-  padding: 16px;
+  padding: calc(16px * var(--cc-gui-scale));
   overflow-y: auto;
   flex: 1;
 }
 
 .summary {
-  margin-bottom: 16px;
-  font-size: 13px;
+  margin-bottom: calc(16px * var(--cc-gui-scale));
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-secondary);
   line-height: 1.6;
 }
@@ -165,43 +165,43 @@
 .newBadge {
   color: var(--success-color, #4caf50);
   font-weight: 500;
-  margin: 0 4px;
+  margin: 0 calc(4px * var(--cc-gui-scale));
 }
 
 .updateBadge {
   color: var(--warning-color, #ff9800);
   font-weight: 500;
-  margin: 0 4px;
+  margin: 0 calc(4px * var(--cc-gui-scale));
 }
 
 .strategySection {
-  margin-bottom: 16px;
-  padding: 12px;
+  margin-bottom: calc(16px * var(--cc-gui-scale));
+  padding: calc(12px * var(--cc-gui-scale));
   background: var(--bg-secondary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   border: 1px solid var(--border-primary);
 }
 
 .strategyLabel {
   display: block;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 12px;
+  margin-bottom: calc(12px * var(--cc-gui-scale));
 }
 
 .strategyOptions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .strategyOption {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 8px;
-  border-radius: 4px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
   cursor: pointer;
   transition: background 0.2s;
 
@@ -210,7 +210,7 @@
   }
 
   input[type="radio"] {
-    margin-top: 2px;
+    margin-top: calc(2px * var(--cc-gui-scale));
     cursor: pointer;
   }
 }
@@ -218,17 +218,17 @@
 .strategyText {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: calc(2px * var(--cc-gui-scale));
   flex: 1;
 
   strong {
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     color: var(--text-primary);
   }
 }
 
 .strategyDesc {
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   line-height: 1.4;
 }
@@ -236,27 +236,27 @@
 .tableHeader {
   display: flex;
   align-items: center;
-  padding: 8px;
+  padding: calc(8px * var(--cc-gui-scale));
   background: var(--bg-secondary);
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: calc(4px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: calc(8px * var(--cc-gui-scale));
   border: 1px solid var(--border-primary);
 }
 
 .providerList {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--cc-gui-scale));
 }
 
 .providerRow {
   display: flex;
   align-items: center;
-  padding: 8px;
-  border-radius: 4px;
+  padding: calc(8px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
   cursor: pointer;
   border: 1px solid var(--border-primary);
   background: var(--bg-primary);
@@ -274,48 +274,48 @@
 }
 
 .colCheckbox {
-  width: 30px;
+  width: calc(30px * var(--cc-gui-scale));
   display: flex;
   justify-content: center;
 }
 
 .colName {
   flex: 1.2;
-  padding: 0 8px;
+  padding: 0 calc(8px * var(--cc-gui-scale));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-primary);
   font-weight: 500;
 }
 
 .colId {
   flex: 1.5;
-  padding: 0 8px;
+  padding: 0 calc(8px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .colStatus {
-  width: 100px;
+  width: calc(100px * var(--cc-gui-scale));
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
-  padding: 0 8px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: 0 calc(8px * var(--cc-gui-scale));
 }
 
 .tagNew {
   background: rgba(76, 175, 80, 0.1);
   color: #4caf50;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
+  padding: calc(2px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
+  font-size: calc(11px * var(--cc-gui-scale));
   font-weight: 500;
   white-space: nowrap;
 }
@@ -323,9 +323,9 @@
 .tagUpdate {
   background: rgba(255, 152, 0, 0.1);
   color: #ff9800;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
+  padding: calc(2px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
+  font-size: calc(11px * var(--cc-gui-scale));
   font-weight: 500;
   white-space: nowrap;
 }
@@ -334,7 +334,7 @@
   display: inline-flex;
   align-items: center;
   color: var(--warning-color, #ff9800);
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
 
   .codicon {
     animation: pulse 2s ease-in-out infinite;
@@ -351,7 +351,7 @@
 }
 
 .dialogFooter {
-  padding: 16px;
+  padding: calc(16px * var(--cc-gui-scale));
   border-top: 1px solid var(--border-primary);
   display: flex;
   justify-content: space-between;
@@ -359,21 +359,21 @@
 }
 
 .selectedCount {
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-secondary);
 }
 
 .dialogActions {
   display: flex;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .btnCancel {
-  padding: 6px 16px;
+  padding: calc(6px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   border: 1px solid var(--border-primary);
   background: transparent;
   color: var(--text-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   cursor: pointer;
   
   &:hover {
@@ -382,11 +382,11 @@
 }
 
 .btnConfirm {
-  padding: 6px 16px;
+  padding: calc(6px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   border: none;
   background: var(--button-primary-background, #0078d4);
   color: #ffffff;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   cursor: pointer;
   
   &:hover {
@@ -402,13 +402,13 @@
 .ccSwitchBadge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px;
+  padding: calc(2px * var(--cc-gui-scale)) calc(6px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
-  border-radius: 4px;
-  font-size: 10px;
+  border-radius: calc(4px * var(--cc-gui-scale));
+  font-size: calc(10px * var(--cc-gui-scale));
   color: var(--text-tertiary);
-  margin-top: 4px;
+  margin-top: calc(4px * var(--cc-gui-scale));
   width: fit-content;
 }
 
@@ -428,9 +428,9 @@
 
 .warningDialog {
   background: var(--bg-primary);
-  border-radius: 8px;
-  padding: 24px;
-  width: 400px;
+  border-radius: calc(8px * var(--cc-gui-scale));
+  padding: calc(24px * var(--cc-gui-scale));
+  width: calc(400px * var(--cc-gui-scale));
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
   border: 1px solid var(--warning-color, #ff9800);
 }
@@ -438,32 +438,32 @@
 .warningTitle {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 16px;
+  gap: calc(8px * var(--cc-gui-scale));
+  font-size: calc(16px * var(--cc-gui-scale));
   font-weight: 600;
   color: var(--warning-color, #ff9800);
-  margin-bottom: 16px;
+  margin-bottom: calc(16px * var(--cc-gui-scale));
 }
 
 .warningContent {
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   line-height: 1.5;
   color: var(--text-primary);
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .warningActions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .btnWarning {
-  padding: 6px 16px;
+  padding: calc(6px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   border: none;
   background: var(--warning-color, #ff9800);
   color: #ffffff;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   cursor: pointer;
   
   &:hover {
@@ -472,11 +472,11 @@
 }
 
 .btnDanger {
-  padding: 6px 16px;
+  padding: calc(6px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   border: none;
   background: #c2410c;
   color: #ffffff;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   cursor: pointer;
 
   &:hover {
@@ -487,15 +487,15 @@
 .list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
 }
 
 .card {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
-  border-radius: 8px;
+  padding: calc(12px * var(--cc-gui-scale));
+  border-radius: calc(8px * var(--cc-gui-scale));
   border: 1px solid var(--border-primary);
   background: var(--bg-secondary);
   transition: all 0.2s ease;
@@ -515,7 +515,7 @@
 .cardInfo {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--cc-gui-scale));
   flex: 1;
   min-width: 0;
 
@@ -523,7 +523,7 @@
     display: flex;
     align-items: center;
     min-width: 0;
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
     font-weight: 600;
     color: var(--text-secondary);
     white-space: nowrap;
@@ -537,9 +537,9 @@
   }
 
   .website {
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
     color: var(--text-tertiary);
-    margin-top: 2px;
+    margin-top: calc(2px * var(--cc-gui-scale));
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -550,21 +550,21 @@
 .cardActions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: calc(16px * var(--cc-gui-scale));
   flex-shrink: 0;
 }
 
 .useButton {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  border-radius: 20px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(4px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  border-radius: calc(20px * var(--cc-gui-scale));
   border: none;
   background: var(--button-primary-background, #0078d4);
   color: #ffffff;
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 500;
   transition: all 0.2s;
 
@@ -582,14 +582,14 @@
 .revokeButton {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  border-radius: 20px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(4px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  border-radius: calc(20px * var(--cc-gui-scale));
   border: 1px solid color-mix(in srgb, #c2410c 45%, transparent);
   background: color-mix(in srgb, #c2410c 14%, transparent);
   color: #f97316;
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 500;
   transition: all 0.2s;
 
@@ -606,12 +606,12 @@
 .activeBadge {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  border-radius: 8px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(4px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  border-radius: calc(8px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 500;
   cursor: default;
   user-select: none;
@@ -619,18 +619,18 @@
 
 .divider {
   width: 1px;
-  height: 24px;
+  height: calc(24px * var(--cc-gui-scale));
   background: var(--border-primary);
 }
 
 .actionButtons {
   display: flex;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .iconBtn {
-  padding: 6px;
-  border-radius: 6px;
+  padding: calc(6px * var(--cc-gui-scale));
+  border-radius: calc(6px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
   background: transparent;
   color: var(--text-secondary);
@@ -649,23 +649,23 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 64px 0;
+  padding: calc(64px * var(--cc-gui-scale)) 0;
   color: var(--text-tertiary);
   text-align: center;
   background: var(--bg-secondary);
   border: 2px dashed var(--border-secondary);
-  border-radius: 8px;
-  margin-top: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
+  margin-top: calc(8px * var(--cc-gui-scale));
 
   :global(.codicon) {
-    font-size: 48px;
-    margin-bottom: 16px;
+    font-size: calc(48px * var(--cc-gui-scale));
+    margin-bottom: calc(16px * var(--cc-gui-scale));
     opacity: 0.5;
   }
 
   p {
     margin: 0;
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
     font-weight: 500;
   }
 }
@@ -688,13 +688,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: 6px;
-  padding: 2px;
+  margin-left: calc(6px * var(--cc-gui-scale));
+  padding: calc(2px * var(--cc-gui-scale));
   border: none;
   background: transparent;
   color: inherit;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   transition: background 0.15s ease;
 
   &:hover {
@@ -723,12 +723,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: calc(16px * var(--cc-gui-scale));
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
 
   :global(.codicon) {
-    font-size: 32px;
+    font-size: calc(32px * var(--cc-gui-scale));
     color: var(--button-primary-background, #0078d4);
   }
 }

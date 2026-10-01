@@ -2,14 +2,14 @@
 .btn-primary {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
+    gap: calc(6px * var(--cc-gui-scale));
+    padding: calc(8px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
     border: none;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     background: var(--accent-primary);
     color: var(--color-button-text);
     cursor: pointer;
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     font-weight: 500;
     transition: background 0.2s;
 }
@@ -23,20 +23,20 @@
 }
 
 .btn-primary .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
 }
 
 .btn-secondary {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
+    gap: calc(6px * var(--cc-gui-scale));
+    padding: calc(8px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
     border: 1px solid var(--border-secondary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     background: transparent;
     color: var(--text-primary);
     cursor: pointer;
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     font-weight: 500;
     transition: all 0.2s;
 }
@@ -51,17 +51,17 @@
 }
 
 .btn-secondary .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
 }
 
 .btn-small {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    font-size: 12px;
+    gap: calc(6px * var(--cc-gui-scale));
+    padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+    font-size: calc(12px * var(--cc-gui-scale));
     border: 1px solid var(--border-secondary);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--cc-gui-scale));
     background: var(--bg-tertiary);
     color: var(--text-primary);
     cursor: pointer;
@@ -120,5 +120,5 @@
 }
 
 .btn-small .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
 }

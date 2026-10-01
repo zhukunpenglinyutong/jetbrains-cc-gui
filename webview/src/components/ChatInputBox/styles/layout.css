@@ -6,7 +6,7 @@
   flex-direction: column;
   background: var(--input-bg);
   border: 1px solid var(--input-border);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   overflow: visible;
   position: relative;
   margin: 0 auto;
@@ -42,10 +42,10 @@
 
 /* Top-center grip: vertical resize */
 .resize-handle--n {
-  top: -20px;
+  top: calc(-20px * var(--cc-gui-scale));
   left: 50%;
-  width: 112px;
-  height: 14px;
+  width: calc(112px * var(--cc-gui-scale));
+  height: calc(14px * var(--cc-gui-scale));
   transform: translateX(-50%);
   cursor: ns-resize;
 }
@@ -54,11 +54,11 @@
   content: '';
   position: absolute;
   left: 50%;
-  top: 7px;
-  width: 60px;
-  height: 4px;
+  top: calc(7px * var(--cc-gui-scale));
+  width: calc(60px * var(--cc-gui-scale));
+  height: calc(4px * var(--cc-gui-scale));
   transform: translateX(-50%);
-  border-radius: 999px;
+  border-radius: calc(999px * var(--cc-gui-scale));
   background: var(--text-muted);
   opacity: 0.55;
   transition: opacity 0.15s ease, background 0.15s ease;
@@ -74,8 +74,8 @@
 /* Right edge: horizontal resize */
 .resize-handle--e {
   top: 0;
-  right: -8px;
-  width: 14px;
+  right: calc(-8px * var(--cc-gui-scale));
+  width: calc(14px * var(--cc-gui-scale));
   height: 100%;
   cursor: ew-resize;
 }
@@ -83,11 +83,11 @@
 .resize-handle--e::before {
   content: '';
   position: absolute;
-  top: 10px;
-  bottom: 10px;
-  left: 6px;
-  width: 2px;
-  border-radius: 2px;
+  top: calc(10px * var(--cc-gui-scale));
+  bottom: calc(10px * var(--cc-gui-scale));
+  left: calc(6px * var(--cc-gui-scale));
+  width: calc(2px * var(--cc-gui-scale));
+  border-radius: calc(2px * var(--cc-gui-scale));
   background: var(--text-muted);
   opacity: 0.0;
   transition: opacity 0.15s ease;
@@ -101,20 +101,20 @@
 
 /* Top-right corner: resize both */
 .resize-handle--ne {
-  top: -8px;
-  right: -8px;
-  width: 22px;
-  height: 22px;
+  top: calc(-8px * var(--cc-gui-scale));
+  right: calc(-8px * var(--cc-gui-scale));
+  width: calc(22px * var(--cc-gui-scale));
+  height: calc(22px * var(--cc-gui-scale));
   cursor: nesw-resize;
 }
 
 .resize-handle--ne::before {
   content: '';
   position: absolute;
-  right: 7px;
-  top: 7px;
-  width: 8px;
-  height: 8px;
+  right: calc(7px * var(--cc-gui-scale));
+  top: calc(7px * var(--cc-gui-scale));
+  width: calc(8px * var(--cc-gui-scale));
+  height: calc(8px * var(--cc-gui-scale));
   border-right: 2px solid var(--text-muted);
   border-top: 2px solid var(--text-muted);
   opacity: 0.0;

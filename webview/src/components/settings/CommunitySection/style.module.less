@@ -1,61 +1,61 @@
 .configSection {
-  max-width: 600px;
-  padding-bottom: 24px;
+  max-width: calc(600px * var(--cc-gui-scale));
+  padding-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .sectionTitle {
-  font-size: 20px;
+  font-size: calc(20px * var(--cc-gui-scale));
   font-weight: 600;
-  margin: 0 0 8px 0;
+  margin: 0 0 calc(8px * var(--cc-gui-scale)) 0;
   color: var(--text-primary);
 }
 
 .sectionDesc {
   color: var(--text-tertiary);
-  margin: 0 0 24px 0;
-  font-size: 13px;
+  margin: 0 0 calc(24px * var(--cc-gui-scale)) 0;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .qrcodeContainer {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 20px 0;
-  margin-top: 12px;
+  padding: calc(20px * var(--cc-gui-scale)) 0;
+  margin-top: calc(12px * var(--cc-gui-scale));
 }
 
 .qrcodeWrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 16px;
+  gap: calc(10px * var(--cc-gui-scale));
+  padding: calc(16px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .qrcodeImage {
-  width: 200px;
-  height: 200px;
+  width: calc(200px * var(--cc-gui-scale));
+  height: calc(200px * var(--cc-gui-scale));
   object-fit: contain;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: #ffffff;
-  padding: 8px;
+  padding: calc(8px * var(--cc-gui-scale));
 }
 
 .qrcodeTip {
   margin: 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   text-align: center;
 }
 
 /* Social links + version history */
 .socialSection {
-  margin-top: 40px;
-  padding-top: 24px;
+  margin-top: calc(40px * var(--cc-gui-scale));
+  padding-top: calc(24px * var(--cc-gui-scale));
   border-top: 1px solid var(--border-primary);
 }
 
@@ -63,34 +63,34 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: calc(16px * var(--cc-gui-scale));
+  margin-bottom: calc(16px * var(--cc-gui-scale));
 
   .sectionTitle {
     margin: 0;
-    font-size: 15px;
+    font-size: calc(15px * var(--cc-gui-scale));
   }
 }
 
 .socialHeaderActions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--cc-gui-scale));
 }
 
 .socialRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--cc-gui-scale));
 }
 
 .socialChip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+  width: calc(36px * var(--cc-gui-scale));
+  height: calc(36px * var(--cc-gui-scale));
+  border-radius: calc(8px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
   color: var(--text-secondary);
@@ -114,7 +114,7 @@
   }
 
   .codicon {
-    font-size: 16px;
+    font-size: calc(16px * var(--cc-gui-scale));
   }
 }
 
@@ -142,14 +142,14 @@
 
 .douyinPopover {
   position: absolute;
-  bottom: calc(100% + 12px);
+  bottom: calc(100% + 12px * var(--cc-gui-scale));
   left: 50%;
   transform: translate(-50%, 6px);
-  width: 200px;
-  padding: 10px 10px 8px;
+  width: calc(200px * var(--cc-gui-scale));
+  padding: calc(10px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--cc-gui-scale));
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
   opacity: 0;
   visibility: hidden;
@@ -180,12 +180,12 @@
 .douyinPopoverImage {
   display: block;
   width: 100%;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
 }
 
 .douyinPopoverTip {
-  margin: 8px 0 2px;
-  font-size: 12px;
+  margin: calc(8px * var(--cc-gui-scale)) 0 calc(2px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   text-align: center;
 }
@@ -193,14 +193,14 @@
 .versionHistoryBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 14px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(5px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale));
   text-decoration: none;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
@@ -212,36 +212,36 @@
   }
 
   .codicon {
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
   }
 }
 
 /* 响应式适配 - 480px */
 @media (max-width: 480px) {
   .sectionTitle {
-    font-size: 16px;
-    margin-bottom: 6px;
+    font-size: calc(16px * var(--cc-gui-scale));
+    margin-bottom: calc(6px * var(--cc-gui-scale));
   }
 
   .sectionDesc {
-    font-size: 12px;
-    margin-bottom: 16px;
+    font-size: calc(12px * var(--cc-gui-scale));
+    margin-bottom: calc(16px * var(--cc-gui-scale));
   }
 
   .qrcodeContainer {
-    padding: 16px 0;
+    padding: calc(16px * var(--cc-gui-scale)) 0;
   }
 
   .qrcodeWrapper {
-    padding: 14px;
+    padding: calc(14px * var(--cc-gui-scale));
   }
 
   .qrcodeImage {
-    width: 176px;
-    height: 176px;
+    width: calc(176px * var(--cc-gui-scale));
+    height: calc(176px * var(--cc-gui-scale));
   }
 
   .qrcodeTip {
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
   }
 }
