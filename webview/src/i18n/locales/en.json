@@ -1241,7 +1241,51 @@
         "title": "Export Prompts",
         "selectHint": "Select prompts to export",
         "confirmExport": "Confirm Export"
-      }
+      },
+      "scopeGlobal": "Global",
+      "scopeLocal": "Local",
+      "scopeStore": "Plugin store",
+      "readOnly": "Read-only",
+      "readOnlyHint": "Discovered from a Claude Code agent file. The plugin never writes to it — copy it to make changes.",
+      "disabled": "Blocked",
+      "showDetails": "Details",
+      "hideDetails": "Hide details",
+      "notSpecified": "not specified",
+      "toolsSummaryNone": "no tools",
+      "permissionSummary": "{{mode}} permissions",
+      "backgroundSummary": "runs in background",
+      "fieldDescription": "Description",
+      "fieldModel": "Model",
+      "fieldPermissionMode": "Permissions",
+      "fieldTools": "Tools",
+      "fieldDisallowedTools": "Blocked tools",
+      "fieldMaxTurns": "Max turns",
+      "fieldSkills": "Skills",
+      "fieldMcpServers": "MCP servers",
+      "fieldHooks": "Hooks",
+      "fieldMemory": "Memory",
+      "fieldBackground": "Background",
+      "fieldEffort": "Effort",
+      "fieldIsolation": "Isolation",
+      "fieldColor": "Color",
+      "fieldInitialPrompt": "Initial prompt",
+      "fieldOmitClaudeMd": "Omit CLAUDE.md",
+      "fieldExperimental": "Experimental",
+      "fieldPrompt": "Prompt",
+      "fieldPath": "File",
+      "toolsSummaryNamed_one": "{{count}} tool",
+      "toolsSummaryNamed_other": "{{count}} tools",
+      "disallowedSummary_one": "{{count}} tool blocked",
+      "disallowedSummary_other": "{{count}} tools blocked",
+      "operationFailedReason": "Agent request failed: {{error}}",
+      "totalCount": "Total",
+      "searchPlaceholder": "Search prompts",
+      "searchClear": "Clear search",
+      "noSearchResults": "Nothing matches “{{query}}”",
+      "matchCount": "{{shown}} of {{total}}",
+      "refresh": "Refresh",
+      "openFile": "Open in editor",
+      "openAtLine": "Open {{path}} at line {{line}"
     },
     "prompts": "Prompt Library",
     "promptsDesc": "Manage common prompt templates for quick insertion during chat",
@@ -2458,12 +2502,29 @@
   },
   "dshPresets": {
     "title": "Select DeepSeek Harness agent preset",
-    "none": { "label": "Default", "description": "dsh default headless composition (full toolset)" },
-    "standard": { "label": "Standard", "description": "Full coding agent with the standard toolset" },
-    "code": { "label": "PTC", "description": "Standard capabilities with Code Mode" },
-    "minimal": { "label": "Minimal", "description": "Bash and str_replace_editor only" },
-    "cordis": { "label": "Creator", "description": "Standard capabilities plus composition authoring" },
-    "user": { "description": "Custom preset installed under the DSH home" }
+    "none": {
+      "label": "Default",
+      "description": "dsh default headless composition (full toolset)"
+    },
+    "standard": {
+      "label": "Standard",
+      "description": "Full coding agent with the standard toolset"
+    },
+    "code": {
+      "label": "PTC",
+      "description": "Standard capabilities with Code Mode"
+    },
+    "minimal": {
+      "label": "Minimal",
+      "description": "Bash and str_replace_editor only"
+    },
+    "cordis": {
+      "label": "Creator",
+      "description": "Standard capabilities plus composition authoring"
+    },
+    "user": {
+      "description": "Custom preset installed under the DSH home"
+    }
   },
   "error": {
     "providerNotConfigured": "Provider Not Configured",

@@ -689,6 +689,17 @@ interface Window {
   agentImportResult?: (json: string) => void;
 
   /**
+   * Fires when a file inside a Claude Code agent root changed on disk.
+   *
+   * Carries no payload: the tab re-requests `get_agents` rather than being
+   * handed a list, so every read still goes through the backend's resolution
+   * and containment path. Registered only while the settings view is mounted,
+   * so a save made with Settings closed costs one JS call that finds no
+   * listener.
+   */
+  agentFilesChanged?: (json: string) => void;
+
+  /**
    * Update prompts list
    */
   updatePrompts?: (json: string) => void;

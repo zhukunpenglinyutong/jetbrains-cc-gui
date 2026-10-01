@@ -105,6 +105,7 @@ export interface SettingsWindowCallbacksDeps {
   handleAgentOperationResult: (result: any) => void;
   handleAgentImportPreviewResult: (previewData: any) => void;
   handleAgentImportResult: (result: any) => void;
+  refreshAgentsQuietly: () => void;
   updateCodexProviders: (providers: CodexProviderConfig[]) => void;
   updateActiveCodexProvider: (provider: CodexProviderConfig) => void;
   updateCurrentCodexConfig: (config: any) => void;
@@ -490,6 +491,12 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    // An agent file was edited in the IDE. Re-read rather than being handed a
+    // list, so precedence and containment stay the backend's business.
+    window.agentFilesChanged = () => {
+      d().refreshAgentsQuietly();
+    };
+
     window.agentImportResult = (jsonStr: string) => {
       try {
         const result = JSON.parse(jsonStr);
@@ -627,6 +634,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.agentOperationResult = undefined;
       window.agentImportPreviewResult = undefined;
       window.agentImportResult = undefined;
+      window.agentFilesChanged = undefined;
       window.updatePrompts = previousUpdatePrompts;
       window.promptOperationResult = undefined;
       window.promptImportPreviewResult = undefined;

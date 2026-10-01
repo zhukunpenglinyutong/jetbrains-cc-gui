@@ -1246,7 +1246,49 @@
         "title": "导出提示词",
         "selectHint": "选择要导出的提示词",
         "confirmExport": "确认导出"
-      }
+      },
+      "scopeGlobal": "全局",
+      "scopeLocal": "本地",
+      "scopeStore": "插件存储",
+      "readOnly": "只读",
+      "readOnlyHint": "从 Claude Code 智能体文件发现。插件从不写入该文件——如需修改请先复制。",
+      "disabled": "已阻止",
+      "showDetails": "详情",
+      "hideDetails": "隐藏详情",
+      "notSpecified": "未指定",
+      "toolsSummaryNone": "无工具",
+      "permissionSummary": "权限：{{mode}}",
+      "backgroundSummary": "在后台运行",
+      "fieldDescription": "描述",
+      "fieldModel": "模型",
+      "fieldPermissionMode": "权限",
+      "fieldTools": "工具",
+      "fieldDisallowedTools": "已阻止的工具",
+      "fieldMaxTurns": "最大轮数",
+      "fieldSkills": "技能",
+      "fieldMcpServers": "MCP 服务器",
+      "fieldHooks": "钩子",
+      "fieldMemory": "记忆",
+      "fieldBackground": "后台",
+      "fieldEffort": "强度",
+      "fieldIsolation": "隔离",
+      "fieldColor": "颜色",
+      "fieldInitialPrompt": "初始提示词",
+      "fieldOmitClaudeMd": "省略 CLAUDE.md",
+      "fieldExperimental": "实验性",
+      "fieldPrompt": "提示词",
+      "fieldPath": "文件",
+      "toolsSummaryNamed_other": "{{count}} 个工具",
+      "disallowedSummary_other": "已阻止 {{count}} 个工具",
+      "operationFailedReason": "智能体请求失败：{{error}}",
+      "totalCount": "合计",
+      "searchPlaceholder": "搜索提示词",
+      "searchClear": "清除搜索",
+      "noSearchResults": "没有匹配“{{query}}”的结果",
+      "matchCount": "{{shown}} / {{total}}",
+      "refresh": "刷新",
+      "openFile": "在编辑器中打开",
+      "openAtLine": "打开 {{path}} 第 {{line}} 行"
     },
     "prompts": "提示词库",
     "promptsDesc": "管理常用提示词模板，可在聊天时快速插入",
@@ -2464,12 +2506,29 @@
   },
   "dshPresets": {
     "title": "选择 DeepSeek Harness Agent 预设",
-    "none": { "label": "默认", "description": "dsh 默认 headless 组合（完整工具集）" },
-    "standard": { "label": "标准模式", "description": "功能完整的标准编码工具集" },
-    "code": { "label": "PTC 模式", "description": "标准能力加 Code Mode" },
-    "minimal": { "label": "极简模式", "description": "仅提供 bash 与 str_replace_editor" },
-    "cordis": { "label": "创造模式", "description": "标准能力加组合编排能力" },
-    "user": { "description": "安装在 DSH 主目录中的自定义预设" }
+    "none": {
+      "label": "默认",
+      "description": "dsh 默认 headless 组合（完整工具集）"
+    },
+    "standard": {
+      "label": "标准模式",
+      "description": "功能完整的标准编码工具集"
+    },
+    "code": {
+      "label": "PTC 模式",
+      "description": "标准能力加 Code Mode"
+    },
+    "minimal": {
+      "label": "极简模式",
+      "description": "仅提供 bash 与 str_replace_editor"
+    },
+    "cordis": {
+      "label": "创造模式",
+      "description": "标准能力加组合编排能力"
+    },
+    "user": {
+      "description": "安装在 DSH 主目录中的自定义预设"
+    }
   },
   "error": {
     "providerNotConfigured": "供应商未配置",

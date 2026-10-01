@@ -120,6 +120,8 @@ export const AgentsPanel = ({ agentManagement }: SettingsTabPanelProps) => (
     onDelete={agentManagement.handleDeleteAgent}
     onExport={agentManagement.handleExportAgents}
     onImport={agentManagement.handleImportAgentsFile}
+    onRefresh={agentManagement.refreshAgents}
+    refreshing={agentManagement.refreshing}
   />
 );
 

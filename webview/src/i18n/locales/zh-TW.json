@@ -804,7 +804,49 @@
         "promptHint": "提示詞會在對話開始時作為系統指令傳送給AI",
         "confirmAdd": "建立",
         "saveChanges": "儲存"
-      }
+      },
+      "scopeGlobal": "全域",
+      "scopeLocal": "本機",
+      "scopeStore": "外掛儲存區",
+      "readOnly": "唯讀",
+      "readOnlyHint": "從 Claude Code 代理檔案探索而得。外掛不會寫入該檔案——如需編輯請先複製。",
+      "disabled": "已封鎖",
+      "showDetails": "詳細資料",
+      "hideDetails": "隱藏詳細資料",
+      "notSpecified": "未指定",
+      "toolsSummaryNone": "無工具",
+      "permissionSummary": "權限：{{mode}}",
+      "backgroundSummary": "在背景執行",
+      "fieldDescription": "描述",
+      "fieldModel": "模型",
+      "fieldPermissionMode": "權限",
+      "fieldTools": "工具",
+      "fieldDisallowedTools": "已封鎖的工具",
+      "fieldMaxTurns": "最大輪數",
+      "fieldSkills": "技能",
+      "fieldMcpServers": "MCP 伺服器",
+      "fieldHooks": "攔截器",
+      "fieldMemory": "記憶",
+      "fieldBackground": "背景",
+      "fieldEffort": "強度",
+      "fieldIsolation": "隔離",
+      "fieldColor": "顏色",
+      "fieldInitialPrompt": "初始提示詞",
+      "fieldOmitClaudeMd": "省略 CLAUDE.md",
+      "fieldExperimental": "實驗性",
+      "fieldPrompt": "提示詞",
+      "fieldPath": "檔案",
+      "toolsSummaryNamed_other": "{{count}} 個工具",
+      "disallowedSummary_other": "已封鎖 {{count}} 個工具",
+      "operationFailedReason": "代理請求失敗：{{error}}",
+      "totalCount": "合計",
+      "searchPlaceholder": "搜尋提示詞",
+      "searchClear": "清除搜尋",
+      "noSearchResults": "沒有符合「{{query}}」的結果",
+      "matchCount": "{{shown}} / {{total}}",
+      "refresh": "重新整理",
+      "openFile": "在編輯器中開啟",
+      "openAtLine": "開啟 {{path}} 第 {{line}} 行"
     },
     "prompts": "Prompt Library",
     "promptsDesc": "Manage common prompt templates for quick insertion during chat",
@@ -1976,12 +2018,29 @@
   },
   "dshPresets": {
     "title": "選擇 DeepSeek Harness Agent 預設",
-    "none": { "label": "預設", "description": "dsh 預設 headless 組合（完整工具集）" },
-    "standard": { "label": "標準模式", "description": "功能完整的標準編碼工具集" },
-    "code": { "label": "PTC 模式", "description": "標準能力加 Code Mode" },
-    "minimal": { "label": "極簡模式", "description": "僅提供 bash 與 str_replace_editor" },
-    "cordis": { "label": "創造模式", "description": "標準能力加組合編排能力" },
-    "user": { "description": "安裝在 DSH 主目錄中的自訂預設" }
+    "none": {
+      "label": "預設",
+      "description": "dsh 預設 headless 組合（完整工具集）"
+    },
+    "standard": {
+      "label": "標準模式",
+      "description": "功能完整的標準編碼工具集"
+    },
+    "code": {
+      "label": "PTC 模式",
+      "description": "標準能力加 Code Mode"
+    },
+    "minimal": {
+      "label": "極簡模式",
+      "description": "僅提供 bash 與 str_replace_editor"
+    },
+    "cordis": {
+      "label": "創造模式",
+      "description": "標準能力加組合編排能力"
+    },
+    "user": {
+      "description": "安裝在 DSH 主目錄中的自訂預設"
+    }
   },
   "error": {
     "providerNotConfigured": "供應商未設定",

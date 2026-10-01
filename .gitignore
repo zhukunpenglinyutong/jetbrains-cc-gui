@@ -84,3 +84,5 @@ logs/*.log
 
 # Playwright MCP local test artifacts
 .playwright-mcp/
+.taskmaster
+.mcp.json
