@@ -17,6 +17,43 @@ import {
   getSessionMessagesPage as claudeGetSessionMessagesPage,
   getLatestUserMessage as claudeGetLatestUserMessage
 } from '../services/claude/session-service.js';
+import { handleZcodeCommand } from './zcode-channel.js';
+import { getSessionMessages as zcodeGetSessionMessages } from '../services/zcode/history-service.js';
+import { resolveActiveProvider } from '../services/zcode/zcode-config.js';
+
+/**
+ * ZCode sessions carry a "sess_" id prefix the Claude transcript store never
+ * uses. When the history router falls through to the Claude bridge for one of
+ * them, answer from the ZCode store instead of reporting the session missing
+ * (a missing report makes the Java side clear the live session and reset the
+ * chat tab).
+ */
+function isZcodeSessionId(sessionId) {
+  return typeof sessionId === 'string' && sessionId.startsWith('sess_');
+}
+
+/**
+ * Route to the ZCode channel when the request targets it. The Java side can
+ * dispatch ZCode turns through the Claude bridge (its default route); such a
+ * payload carries either an explicit provider or a model of the active ZCode
+ * provider. The streaming marker vocabulary ([SESSION_ID]/[CONTENT_DELTA]/...)
+ * is shared by both channels, so the bridge parsing the response stays correct.
+ */
+function shouldRouteToZcode(stdinData) {
+  if (!stdinData) return false;
+  if (stdinData.provider === 'zcode') return true;
+  const modelId = String(stdinData.model || '').trim();
+  if (!modelId) return false;
+  const zcodeModels = Object.keys(resolveActiveProvider()?.models || {});
+  return zcodeModels.includes(modelId);
+}
+
+/** Match session-service.js writeJsonResponse: one JSON line on stdout. */
+function writeJson(payload) {
+  return new Promise((resolve) => {
+    process.stdout.write(JSON.stringify(payload) + '\n', 'utf8', resolve);
+  });
+}
 
 /**
  * Execute a Claude specific command.
@@ -27,6 +64,10 @@ import {
 export async function handleClaudeCommand(command, args, stdinData) {
   switch (command) {
     case 'send': {
+      if (shouldRouteToZcode(stdinData)) {
+        await handleZcodeCommand('send', args, stdinData);
+        break;
+      }
       if (stdinData && stdinData.message !== undefined) {
         // Include streaming and disableThinking when destructuring
         const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort } = stdinData;
@@ -49,6 +90,10 @@ export async function handleClaudeCommand(command, args, stdinData) {
     }
 
     case 'sendWithAttachments': {
+      if (shouldRouteToZcode(stdinData)) {
+        await handleZcodeCommand('send', args, stdinData);
+        break;
+      }
       if (stdinData && stdinData.message !== undefined) {
         // Include streaming when destructuring
         const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles, agentPrompt, streaming, reasoningEffort } = stdinData;
@@ -66,9 +111,17 @@ export async function handleClaudeCommand(command, args, stdinData) {
       break;
     }
 
-    case 'getSession':
+    case 'getSession': {
+      const routedSessionId = stdinData?.sessionId || args[0];
+      const routedCwd = stdinData?.cwd || args[1] || null;
+      if (isZcodeSessionId(routedSessionId)) {
+        const messages = await zcodeGetSessionMessages(routedSessionId, routedCwd);
+        await writeJson({ success: true, messages });
+        break;
+      }
       await claudeGetSessionMessages(args[0], args[1]);
       break;
+    }
 
     case 'getSessionPage': {
       // Paginated history load. Falls back to the full-history getSession
