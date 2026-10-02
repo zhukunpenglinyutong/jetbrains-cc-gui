@@ -70,9 +70,87 @@ export function resolveZcodeCliPath(platform = process.platform, env = process.e
   return nonBlank(explicit) ? explicit.trim() : null;
 }
 
-/** v2 config.json (provider registry + credentials). */
+/**
+ * Fallback: the desktop client's own personal provider registry
+ * (v2/provider_config.json, also exported via ZCODE_PERSONAL_PROVIDER_CONFIG_FILE).
+ * Recent ZCode builds keep credentials there and never create v2/config.json,
+ * so without this the plugin finds no provider and the app-server falls back
+ * to a stale OAuth chain. Converted into the same provider-map shape the
+ * legacy config.json uses.
+ */
+function readNativeProviderRegistry(zcodeHome) {
+  const envPath = process.env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE;
+  const candidates = [];
+  if (nonBlank(envPath)) candidates.push(envPath.trim());
+  candidates.push(join(zcodeHome, 'v2', 'provider_config.json'));
+  for (const path of candidates) {
+    const data = readJsonFile(path);
+    const rules = data?.config?.providerConfigRules?.providerRules;
+    if (Array.isArray(rules)) return rules;
+  }
+  return null;
+}
+
+/** Known builtin model ids per coding-plan template, used when the builtin
+ *  registry file is unavailable. Limited metadata is better than no provider. */
+const NATIVE_TEMPLATE_FALLBACK_MODELS = {
+  'zai-api': ['GLM-5.3', 'GLM-5.3-Flash'],
+  'bigmodel-api': ['GLM-5.3', 'GLM-5.3-Flash'],
+};
+
+function readBuiltinTemplateModels() {
+  const envPath = process.env.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE;
+  if (!nonBlank(envPath)) return {};
+  const data = readJsonFile(envPath.trim());
+  const templates = data?.config?.providerConfigRules?.templateRules;
+  const out = {};
+  if (Array.isArray(templates)) {
+    for (const t of templates) {
+      if (t?.templateId && Array.isArray(t.config?.builtinModelIds)) {
+        out[t.templateId] = t.config.builtinModelIds;
+      }
+    }
+  }
+  return out;
+}
+
+function convertNativeRegistry(rules) {
+  const templateModels = readBuiltinTemplateModels();
+  const providers = {};
+  for (const rule of rules) {
+    if (!rule || rule.enabled === false || typeof rule.providerId !== 'string') continue;
+    const access = rule.config?.access || {};
+    const api = rule.config?.api || {};
+    if (!nonBlank(access.apiKey)) continue;
+    const modelIds = templateModels[rule.templateId]
+      || NATIVE_TEMPLATE_FALLBACK_MODELS[rule.templateId]
+      || [];
+    const models = {};
+    for (const id of modelIds) models[id] = { name: id };
+    providers[rule.providerId] = {
+      enabled: true,
+      kind: String(api.type || '').startsWith('anthropic') ? 'anthropic' : 'openai',
+      name: nonBlank(rule.providerName) ? rule.providerName : rule.providerId,
+      options: {
+        baseURL: nonBlank(api.baseUrl) ? api.baseUrl.trim() : '',
+        apiKey: access.apiKey,
+      },
+      models,
+    };
+  }
+  return Object.keys(providers).length > 0 ? { provider: providers } : null;
+}
+
+/**
+ * v2 config.json (provider registry + credentials). Falls back to the desktop
+ * client's native provider_config.json registry for engines that no longer
+ * maintain the legacy file.
+ */
 export function readZcodeConfig(zcodeHome = resolveZcodeHome()) {
-  return readJsonFile(join(zcodeHome, 'v2', 'config.json'));
+  const legacy = readJsonFile(join(zcodeHome, 'v2', 'config.json'));
+  if (legacy) return legacy;
+  const rules = readNativeProviderRegistry(zcodeHome);
+  return rules ? convertNativeRegistry(rules) : null;
 }
 
 /** v2 setting.json (active channel selection). */

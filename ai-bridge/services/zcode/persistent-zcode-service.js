@@ -294,12 +294,44 @@ async function applyModel(cli, sessionId, model) {
   // (runtimeModel) or setModel fails with "Unsupported model".
   const runtimeModel = buildRuntimeModel(modelId);
   if (!runtimeModel) return;
-  await withResumeRetry(cli, sessionId, clientCwd, () =>
-    cli.request('session/setModel', {
+
+  // CLI engines disagree on the session/setModel wire shape. Older CLIs
+  // (0.16.x) require the full runtimeModel carrier; recent engines (3.14.x)
+  // reject it as an unrecognized key and resolve the model from their own
+  // provider registry instead, where a selection must also carry a reasoning
+  // level. Try the legacy shape first, then degrade stepwise.
+  const attempts = [
+    () => ({
       sessionId,
       model: { modelId, providerId: runtimeModel.model.providerId },
       runtimeModel,
-    }));
+    }),
+    () => ({
+      sessionId,
+      model: {
+        modelId,
+        providerId: runtimeModel.model.providerId,
+        options: { reasoningLevel: 'max' },
+      },
+    }),
+    () => ({
+      sessionId,
+      model: { modelId, providerId: runtimeModel.model.providerId },
+    }),
+  ];
+  let lastError;
+  for (const buildParams of attempts) {
+    try {
+      await withResumeRetry(cli, sessionId, clientCwd, () =>
+        cli.request('session/setModel', buildParams()));
+      lastError = null;
+      break;
+    } catch (err) {
+      lastError = err;
+      if (err?.code === -32004) throw err; // session not active: not a shape issue
+    }
+  }
+  if (lastError) throw lastError;
   sessionModels.set(sessionId, modelId);
   sessionRuntimeModels.set(sessionId, runtimeModel);
   thoughtLevelCache.delete(sessionId);
@@ -384,9 +416,20 @@ export async function sendMessagePersistent(params = {}) {
     if (err?.code === -32031 && runtimeModel) {
       console.error('[ZCODE] send hit -32031, retrying with runtimeModel');
       try {
+        // Engines that reject runtimeModel (-32602) have a registry-owned
+        // model already attached to the session, so a bare retry is the
+        // right second attempt for them.
         await cli.request('session/send', { ...sendParams, runtimeModel });
       } catch (retryErr) {
-        settleActiveTurn(false, retryErr.message);
+        if (retryErr?.code === -32602) {
+          try {
+            await cli.request('session/send', { ...sendParams });
+          } catch (bareRetryErr) {
+            settleActiveTurn(false, bareRetryErr.message);
+          }
+        } else {
+          settleActiveTurn(false, retryErr.message);
+        }
       }
     } else {
       settleActiveTurn(false, err.message);
