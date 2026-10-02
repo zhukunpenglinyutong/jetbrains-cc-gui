@@ -13,6 +13,7 @@ function mountKeyboard(options: {
   const handleSubmit = vi.fn();
   const handleSelect = vi.fn();
   let shared: UseKeyboardHandlerOptions;
+  const controls = { open: () => {} };
 
   function Fixture() {
     const editableRef = useRef<HTMLDivElement>(null);
@@ -48,6 +49,7 @@ function mountKeyboard(options: {
       handleEnhancePrompt: () => {},
       handleCompositionEnd: () => {},
     });
+    controls.open = () => setCompletionOpen(true);
     return createElement('div', { ref: editableRef, tabIndex: 0, onKeyDown, onKeyUp });
   }
 
@@ -56,6 +58,7 @@ function mountKeyboard(options: {
     el: view.container.firstElementChild as HTMLDivElement,
     handleSubmit,
     handleSelect,
+    open: () => controls.open(),
     get state() { return shared; },
   };
 }
@@ -164,6 +167,17 @@ describe('useNativeEventCapture', () => {
       expect(fixture.handleSubmit).toHaveBeenCalledTimes(1);
     },
   );
+
+  it('accepts the highlighted command when the menu opens after the first frame', () => {
+    const fixture = mountKeyboard();
+    act(() => { fixture.open(); });
+
+    dispatchEnter(fixture.el, 'keydown');
+    act(() => { fixture.el.dispatchEvent(createBeforeInputEvent('insertParagraph')); });
+
+    expect(fixture.handleSelect).toHaveBeenCalledTimes(1);
+    expect(fixture.handleSubmit).not.toHaveBeenCalled();
+  });
 
   it.each([
     { sendShortcut: 'enter' as const, completionOpen: false },
