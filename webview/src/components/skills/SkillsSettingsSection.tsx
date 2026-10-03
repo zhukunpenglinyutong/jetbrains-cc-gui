@@ -223,6 +223,10 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
 
   return (
     <div className="skills-settings-section">
+      <div className="skills-page-header">
+        <h3>{t('settings.skills')}</h3>
+        <p>{t('settings.skillsDesc')}</p>
+      </div>
       {/* Toolbar */}
       <SkillToolbar
         isCodex={isCodex}
