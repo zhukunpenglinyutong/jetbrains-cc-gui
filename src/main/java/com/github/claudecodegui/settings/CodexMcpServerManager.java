@@ -575,10 +575,9 @@ public class CodexMcpServerManager {
 
         String command = serverConfig.get("command").getAsString();
 
-        // Check if command exists on system PATH
-        boolean commandExists = checkCommandExists(command);
-        if (commandExists) {
-            return checkStdioStatus(serverConfig, serverName, command);
+        String resolvedCommand = resolveCommand(command);
+        if (resolvedCommand != null) {
+            return checkStdioStatus(serverConfig, serverName, resolvedCommand);
         }else {
             LOG.info("[CodexMcpServerManager] Command not found in PATH for " + serverName + ": " + command);
             return "failed";
@@ -590,13 +589,31 @@ public class CodexMcpServerManager {
      * Check STDIO server by starting the process and performing a handshake
      */
     private String checkStdioStatus(JsonObject serverConfig, String serverName, String command) {
-        List<String> cmd = new ArrayList<>();
-        cmd.add(command);
+        List<String> args = new ArrayList<>();
         if (serverConfig.has("args") && serverConfig.get("args").isJsonArray()) {
-            JsonArray args = serverConfig.getAsJsonArray("args");
-            for (JsonElement arg : args) {
-                cmd.add(arg.getAsString());
+            JsonArray jsonArgs = serverConfig.getAsJsonArray("args");
+            for (JsonElement arg : jsonArgs) {
+                args.add(arg.getAsString());
             }
+        }
+
+        List<String> cmd;
+        if (SystemInfo.isWindows && (isWindowsBatchFile(command) || isWindowsShellCommand(command))) {
+            if (containsUnsafeWindowsShellCharacters(command)
+                    || args.stream().anyMatch(this::containsUnsafeWindowsShellCharacters)) {
+                LOG.info("[CodexMcpServerManager] Refusing unsafe Windows shell command for " + serverName);
+                return "failed";
+            }
+            cmd = new ArrayList<>();
+            cmd.add(resolveWindowsShell());
+            cmd.add("/d");
+            cmd.add("/s");
+            cmd.add("/c");
+            cmd.add(buildWindowsShellCommand(command, args));
+        } else {
+            cmd = new ArrayList<>();
+            cmd.add(command);
+            cmd.addAll(args);
         }
 
         Process process = null;
@@ -710,64 +727,40 @@ public class CodexMcpServerManager {
      */
     private JsonObject readInitializeResponse(Process process) {
         try {
-            return readMcpStdioMessage(process.getInputStream());
+            JsonObject response;
+            while ((response = readMcpStdioMessage(process.getInputStream())) != null) {
+                if (response.has("id") && response.get("id").getAsInt() == 1) {
+                    return response;
+                }
+            }
         } catch (IOException e) {
             LOG.debug("[CodexMcpServerManager] IO error reading STDIO response: " + e.getMessage());
-            return null;
         }
+        return null;
     }
 
-    private void writeMcpStdioMessage(java.io.OutputStream outputStream, String jsonPayload) throws IOException {
-        byte[] payloadBytes = jsonPayload.getBytes(StandardCharsets.UTF_8);
-        String header = "Content-Length: " + payloadBytes.length + "\r\n\r\n";
-        outputStream.write(header.getBytes(StandardCharsets.US_ASCII));
-        outputStream.write(payloadBytes);
+    void writeMcpStdioMessage(java.io.OutputStream outputStream, String jsonPayload) throws IOException {
+        outputStream.write(jsonPayload.getBytes(StandardCharsets.UTF_8));
+        outputStream.write('\n');
         outputStream.flush();
     }
 
-    private JsonObject readMcpStdioMessage(InputStream inputStream) throws IOException {
-        Map<String, String> headers = new LinkedHashMap<>();
+    JsonObject readMcpStdioMessage(InputStream inputStream) throws IOException {
         String line;
-        while ((line = readAsciiLine(inputStream)) != null) {
-            if (line.isEmpty()) {
-                break;
-            }
-
-            int separatorIndex = line.indexOf(':');
-            if (separatorIndex <= 0) {
+        while ((line = readUtf8Line(inputStream)) != null) {
+            if (line.isBlank()) {
                 continue;
             }
-
-            String name = line.substring(0, separatorIndex).trim().toLowerCase(Locale.ROOT);
-            String value = line.substring(separatorIndex + 1).trim();
-            headers.put(name, value);
+            try {
+                return JsonParser.parseString(line).getAsJsonObject();
+            } catch (Exception e) {
+                LOG.debug("[CodexMcpServerManager] Ignoring invalid STDIO MCP message");
+            }
         }
-
-        String contentLengthValue = headers.get("content-length");
-        if (contentLengthValue == null || contentLengthValue.isEmpty()) {
-            return null;
-        }
-
-        int contentLength;
-        try {
-            contentLength = Integer.parseInt(contentLengthValue);
-        } catch (NumberFormatException e) {
-            return null;
-        }
-
-        byte[] payload = inputStream.readNBytes(contentLength);
-        if (payload.length != contentLength) {
-            return null;
-        }
-
-        try {
-            return JsonParser.parseString(new String(payload, StandardCharsets.UTF_8)).getAsJsonObject();
-        } catch (Exception e) {
-            return null;
-        }
+        return null;
     }
 
-    private String readAsciiLine(InputStream inputStream) throws IOException {
+    private String readUtf8Line(InputStream inputStream) throws IOException {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         int current;
         boolean sawAnyByte = false;
@@ -785,41 +778,132 @@ public class CodexMcpServerManager {
             return null;
         }
 
-        return buffer.toString(StandardCharsets.US_ASCII);
+        return buffer.toString(StandardCharsets.UTF_8);
     }
 
     /**
-     * Check if a command exists on the system PATH
+     * Resolve a configured command to a path that can be launched by ProcessBuilder.
+     * Windows npm-style commands need their .cmd/.bat shim instead of the bare name.
      */
-    private boolean checkCommandExists(String command) {
-        // Handle commands with arguments (e.g., "npx" - take only first part)
-        String commandName = command.split("\\s+")[0];
-
-        // Check for common commands that we know exist
-        if (isCommonCommand(commandName)) {
-            return true;
+    private String resolveCommand(String command) {
+        String commandName = extractCommandName(command);
+        if (commandName.isEmpty()) {
+            return null;
         }
 
-        // Try to find the command on PATH
-        ProcessBuilder pb = new ProcessBuilder();
         if (SystemInfo.isWindows) {
-            pb.command("where", commandName);
-        } else {
-            pb.command("which", commandName);
+            String explicitPath = resolveWindowsSibling(commandName);
+            if (explicitPath != null) {
+                return explicitPath;
+            }
         }
 
+        ProcessBuilder pb = new ProcessBuilder(
+                SystemInfo.isWindows ? "where.exe" : "which", commandName);
         try {
             Process process = pb.start();
-            boolean finished = process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            boolean finished = process.waitFor(5, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
                 LOG.warn("[CodexMcpServerManager] Command check timed out for: " + commandName);
-                return false;
+                return null;
             }
-            return process.exitValue() == 0;
+            if (process.exitValue() != 0) {
+                return isCommonCommand(commandName) ? commandName : null;
+            }
+
+            List<String> matches = output.lines()
+                    .map(String::trim)
+                    .filter(line -> !line.isEmpty())
+                    .toList();
+            if (SystemInfo.isWindows) {
+                for (String extension : List.of(".exe", ".cmd", ".bat")) {
+                    for (String match : matches) {
+                        if (match.toLowerCase(Locale.ROOT).endsWith(extension)) {
+                            return match;
+                        }
+                    }
+                }
+            }
+            return matches.isEmpty() ? commandName : matches.get(0);
         } catch (Exception e) {
+            return isCommonCommand(commandName) ? commandName : null;
+        }
+    }
+
+    private String extractCommandName(String command) {
+        if (command == null) {
+            return "";
+        }
+        String trimmed = command.trim();
+        if (trimmed.startsWith("\"") && trimmed.indexOf('"', 1) > 0) {
+            return trimmed.substring(1, trimmed.indexOf('"', 1));
+        }
+        String[] parts = trimmed.split("\\s+", 2);
+        return parts[0];
+    }
+
+    private String resolveWindowsSibling(String command) {
+        String lower = command.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".exe") || lower.endsWith(".cmd") || lower.endsWith(".bat")) {
+            return command;
+        }
+        boolean looksLikePath = command.contains("\\") || command.contains("/")
+                || (command.length() > 1 && command.charAt(1) == ':');
+        if (!looksLikePath) {
+            return null;
+        }
+        for (String extension : List.of(".exe", ".cmd", ".bat")) {
+            File candidate = new File(command + extension);
+            if (candidate.isFile()) {
+                return candidate.getAbsolutePath();
+            }
+        }
+        return new File(command).isFile() ? command : null;
+    }
+
+    private boolean isWindowsBatchFile(String command) {
+        String lower = command.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".cmd") || lower.endsWith(".bat");
+    }
+
+    private boolean isWindowsShellCommand(String command) {
+        String lower = command.toLowerCase(Locale.ROOT);
+        return "npx".equals(lower) || "npm".equals(lower)
+                || "pnpm".equals(lower) || "yarn".equals(lower);
+    }
+
+    private String resolveWindowsShell() {
+        String shell = System.getenv("ComSpec");
+        if (shell == null || shell.isBlank()) {
+            shell = System.getenv("COMSPEC");
+        }
+        return shell == null || shell.isBlank() ? "cmd.exe" : shell;
+    }
+
+    String buildWindowsShellCommand(String command, List<String> args) {
+        StringBuilder commandLine = new StringBuilder(quoteWindowsArgument(command));
+        for (String arg : args) {
+            commandLine.append(' ').append(quoteWindowsArgument(arg));
+        }
+        return commandLine.toString();
+    }
+
+    private String quoteWindowsArgument(String value) {
+        return value.chars().anyMatch(Character::isWhitespace) ? "\"" + value + "\"" : value;
+    }
+
+    private boolean containsUnsafeWindowsShellCharacters(String value) {
+        if (value == null) {
             return false;
         }
+        return value.indexOf('&') >= 0 || value.indexOf('|') >= 0
+                || value.indexOf(';') >= 0 || value.indexOf('<') >= 0
+                || value.indexOf('>') >= 0 || value.indexOf('`') >= 0
+                || value.indexOf('%') >= 0 || value.indexOf('!') >= 0
+                || value.indexOf('^') >= 0 || value.indexOf('"') >= 0
+                || value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0;
     }
 
     /**

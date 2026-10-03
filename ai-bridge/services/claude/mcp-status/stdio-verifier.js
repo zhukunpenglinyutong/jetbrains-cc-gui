@@ -8,6 +8,7 @@ import { MCP_STDIO_VERIFY_TIMEOUT, createSafeEnv } from './config.js';
 import { log } from './logger.js';
 import { validateCommand, hasUnsafeShellMetacharacters } from './command-validator.js';
 import { safeKillProcess, createProcessHandlers, sendInitializeRequest } from './process-manager.js';
+import { resolveWindowsCommand } from './process-launcher.js';
 
 /**
  * Verify the connection status of an STDIO-based MCP server
@@ -70,11 +71,8 @@ export async function verifyStdioServerStatus(serverName, serverConfig) {
 
     // Attempt to spawn the process
     try {
-      // Some commands on Windows require a shell
-      const useShell = process.platform === 'win32' &&
-                      (command.endsWith('.cmd') || command.endsWith('.bat') ||
-                       command === 'npx' || command === 'npm' ||
-                       command === 'pnpm' || command === 'yarn');
+      const launch = resolveWindowsCommand(command, env);
+      const useShell = launch.useShell;
 
       const spawnOptions = {
         env,
@@ -97,7 +95,7 @@ export async function verifyStdioServerStatus(serverName, serverConfig) {
         log('debug', '[MCP Verify] Using shell for command:', command);
       }
 
-      child = spawn(command, args, spawnOptions);
+      child = spawn(launch.command, args, spawnOptions);
     } catch (spawnError) {
       log('debug', `Failed to spawn process for ${serverName}:`, spawnError.message);
       clearTimeout(timeoutId);

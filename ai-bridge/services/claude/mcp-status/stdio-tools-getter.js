@@ -9,6 +9,7 @@ import { log } from './logger.js';
 import { validateCommand, hasUnsafeShellMetacharacters } from './command-validator.js';
 import { safeKillProcess } from './process-manager.js';
 import { MCP_PROTOCOL_VERSION, MCP_CLIENT_INFO } from './mcp-protocol.js';
+import { resolveWindowsCommand } from './process-launcher.js';
 
 /**
  * Retrieve the tool list from an STDIO-based server
@@ -78,11 +79,8 @@ export async function getStdioServerTools(serverName, serverConfig) {
     }, MCP_TOOLS_TIMEOUT);
 
     try {
-      // Some commands on Windows require a shell
-      const useShell = process.platform === 'win32' &&
-                      (command.endsWith('.cmd') || command.endsWith('.bat') ||
-                       command === 'npx' || command === 'npm' ||
-                       command === 'pnpm' || command === 'yarn');
+      const launch = resolveWindowsCommand(command, env);
+      const useShell = launch.useShell;
 
       const spawnOptions = {
         env,
@@ -106,7 +104,7 @@ export async function getStdioServerTools(serverName, serverConfig) {
         log('debug', '[MCP Tools] Using shell for command:', command);
       }
 
-      child = spawn(command, args, spawnOptions);
+      child = spawn(launch.command, args, spawnOptions);
       log('info', '[MCP Tools] Spawned process PID:', child.pid);
     } catch (spawnError) {
       finalize(null, 'Failed to spawn process: ' + spawnError.message);

@@ -62,7 +62,11 @@ export function createSessionReader() {
         metadata.birthtimeMs !== identity.birthtimeMs || metadata.size < reader.offset ||
         (metadata.size === reader.offset &&
           (metadata.mtimeMs !== identity.mtimeMs || metadata.ctimeMs !== identity.ctimeMs));
-      if (!replaced && metadata.size > reader.offset && tail.length > 0) {
+      // A file can be rewritten in place without changing its size or the
+      // filesystem timestamps observed by Node on Windows. Compare the cached
+      // tail for equal-size files as well as appended files so stale lines are
+      // discarded before the next scan.
+      if (!replaced && metadata.size >= reader.offset && tail.length > 0) {
         const overlap = Buffer.allocUnsafe(tail.length);
         let checkedBytes = 0;
         while (checkedBytes < overlap.length) {

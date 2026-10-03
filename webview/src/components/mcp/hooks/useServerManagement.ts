@@ -7,10 +7,12 @@ import { useState, useCallback } from 'react';
 import type { McpServer, ServerToolsState, ServerRefreshState, RefreshLog, CacheKeys } from '../types';
 import { sendToJava } from '../../../utils/bridge';
 import { clearToolsCache, clearAllToolsCache } from '../utils';
+import { isServerEnabled } from '../utils/serverUtils';
 import type { ToastMessage } from '../../Toast';
 
 export interface UseServerManagementOptions {
   isCodexMode: boolean;
+  servers: McpServer[];
   messagePrefix: string;
   cacheKeys: CacheKeys;
   setServerTools: React.Dispatch<React.SetStateAction<ServerToolsState>>;
@@ -34,6 +36,7 @@ export interface UseServerManagementReturn {
  */
 export function useServerManagement({
   isCodexMode,
+  servers,
   messagePrefix,
   cacheKeys,
   setServerTools,
@@ -64,7 +67,10 @@ export function useServerManagement({
     setServerTools({});
     loadServers();
     loadServerStatus();
-  }, [cacheKeys, setServerTools, loadServers, loadServerStatus, t, onLog]);
+    servers
+      .filter((server) => isServerEnabled(server, isCodexMode))
+      .forEach((server) => loadServerTools(server, true));
+  }, [cacheKeys, setServerTools, loadServers, loadServerStatus, loadServerTools, servers, isCodexMode, t, onLog]);
 
   // Refresh a single server
   const handleRefreshSingleServer = useCallback((server: McpServer, forceRefreshTools: boolean = false) => {
