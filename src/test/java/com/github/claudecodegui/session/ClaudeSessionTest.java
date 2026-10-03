@@ -56,6 +56,26 @@ public class ClaudeSessionTest {
         assertEquals("new-channel-state", session.getError());
     }
 
+    @Test
+    public void delayedInterruptDoesNotResetNextTurnOnSameChannel() throws Exception {
+        BlockingCodexBridge bridge = new BlockingCodexBridge(false);
+        ClaudeSession session = new ClaudeSession(null, null, bridge, null);
+        session.setProvider("codex");
+        session.getState().setChannelId("shared-channel");
+        session.getState().beginTurn();
+
+        java.util.concurrent.CompletableFuture<Void> interrupt = session.interrupt();
+        assertTrue(bridge.awaitInterrupt());
+        session.getState().beginTurn();
+        session.getState().setError("next-turn-state");
+        bridge.releaseInterrupt();
+        interrupt.join();
+
+        assertTrue(session.isBusy());
+        assertTrue(session.isLoading());
+        assertEquals("next-turn-state", session.getError());
+    }
+
     @Test(expected = CompletionException.class)
     public void interruptCompletesExceptionallyWhenProviderInterruptFails() {
         BlockingCodexBridge bridge = new BlockingCodexBridge(true);

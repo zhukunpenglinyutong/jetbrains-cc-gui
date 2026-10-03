@@ -26,6 +26,8 @@ public class CodexMessageHandler implements MessageCallback {
      * state.
      */
     private final SessionState state;
+    private final Object turnOwner;
+    private final String runtimeSessionEpoch;
     /**
      * callback handler.
      */
@@ -65,6 +67,8 @@ public class CodexMessageHandler implements MessageCallback {
      */
     public CodexMessageHandler(SessionState state, CallbackHandler callbackHandler) {
         this.state = state;
+        this.turnOwner = state.getTurnOwner();
+        this.runtimeSessionEpoch = state.getRuntimeSessionEpoch();
         this.callbackHandler = callbackHandler;
     }
 
@@ -78,6 +82,9 @@ public class CodexMessageHandler implements MessageCallback {
     @Override
     public void onMessage(String type, String content) {
         synchronized (state.getMessageStateLock()) {
+            if (!ownsCurrentTurn()) {
+                return;
+            }
             // [FIX] Handle multiple message types
             // Codex message-service.js sends:
             // - type='assistant': contains thinking, tool_use, text
@@ -130,6 +137,9 @@ public class CodexMessageHandler implements MessageCallback {
     @Override
     public void onError(String error) {
         synchronized (state.getMessageStateLock()) {
+            if (!ownsCurrentTurn()) {
+                return;
+            }
             boolean wasStreaming = isStreaming;
             isStreaming = false;
             streamEndedThisTurn = false;
@@ -171,6 +181,9 @@ public class CodexMessageHandler implements MessageCallback {
     @Override
     public void onComplete(SDKResult result) {
         synchronized (state.getMessageStateLock()) {
+            if (!ownsCurrentTurn()) {
+                return;
+            }
             boolean streamEndedBeforeComplete = streamEndedThisTurn;
             boolean wasStreaming = isStreaming;
 
@@ -192,6 +205,10 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     // ===== Private methods =====
+
+    private boolean ownsCurrentTurn() {
+        return state.isCurrentTurn(turnOwner) && runtimeSessionEpoch.equals(state.getRuntimeSessionEpoch());
+    }
 
     /**
      * Handle a complete assistant message in JSON format.

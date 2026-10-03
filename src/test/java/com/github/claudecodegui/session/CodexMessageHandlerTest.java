@@ -98,6 +98,69 @@ public class CodexMessageHandlerTest {
     }
 
     @Test
+    public void previousProcessCannotClearBusyStateAfterNextSendStarts() {
+        SessionState state = new SessionState();
+        CallbackHandler callbacks = new CallbackHandler();
+        RecordingCallback recorded = new RecordingCallback();
+        callbacks.setCallback(recorded);
+        state.beginTurn();
+        CodexMessageHandler previous = new CodexMessageHandler(state, callbacks);
+        previous.onMessage("stream_start", "");
+        previous.onMessage("stream_end", "");
+
+        // The UI permits a send at stream_end, before the old process exits.
+        state.beginTurn();
+        previous.onComplete(new SDKResult());
+        assertTrue(state.isBusy());
+        assertTrue(state.isLoading());
+        assertEquals(1, recorded.stateChangeCount);
+
+        CodexMessageHandler current = new CodexMessageHandler(state, callbacks);
+        current.onMessage("stream_start", "");
+        current.onMessage("content_delta", "current answer");
+        int updates = recorded.messageUpdateCount;
+        previous.onMessage("content_delta", "stale answer");
+        previous.onMessage("stream_end", "");
+        previous.onError("old process exited");
+        previous.onComplete(new SDKResult());
+
+        assertTrue(state.isBusy());
+        assertTrue(state.isLoading());
+        assertEquals(null, state.getError());
+        assertEquals(updates, recorded.messageUpdateCount);
+        assertEquals(List.of("current answer"), recorded.contentDeltas);
+        assertEquals(1, recorded.streamEndCount);
+        current.onMessage("stream_end", "");
+        current.onComplete(new SDKResult());
+        assertFalse(state.isBusy());
+        assertFalse(state.isLoading());
+        assertEquals(2, recorded.streamEndCount);
+    }
+
+    @Test
+    public void replacedSessionIgnoresOldProviderCallbacks() {
+        SessionState state = new SessionState();
+        state.beginTurn();
+        CallbackHandler callbacks = new CallbackHandler();
+        RecordingCallback recorded = new RecordingCallback();
+        callbacks.setCallback(recorded);
+        CodexMessageHandler previous = new CodexMessageHandler(state, callbacks);
+        state.rotateRuntimeSessionEpoch();
+
+        previous.onMessage("session_id", "old-session");
+        previous.onMessage("content_delta", "old answer");
+        previous.onError("old error");
+        previous.onComplete(new SDKResult());
+
+        assertEquals(null, state.getSessionId());
+        assertEquals(null, state.getError());
+        assertTrue(state.isBusy());
+        assertTrue(state.isLoading());
+        assertEquals(0, recorded.stateChangeCount);
+        assertEquals(0, recorded.messageUpdateCount);
+    }
+
+    @Test
     public void streamMarkersDriveStandardStreamingLifecycle() {
         SessionState state = new SessionState();
         state.setBusy(true);

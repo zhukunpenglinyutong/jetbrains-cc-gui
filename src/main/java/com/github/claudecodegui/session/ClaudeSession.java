@@ -609,7 +609,7 @@ public class ClaudeSession {
         manuallyInterrupted = false;
         String normalizedInput = (input != null) ? input.trim() : "";
         Message userMessage = contextService.buildUserMessage(normalizedInput, attachments);
-        sendService.updateSessionStateForSend(userMessage, normalizedInput);
+        Object turnOwner = sendService.updateSessionStateForSend(userMessage, normalizedInput);
 
         final String finalAgentPrompt = agentPrompt;
         final List<String> finalFileTagPaths = fileTagPaths;
@@ -636,10 +636,14 @@ public class ClaudeSession {
                     )
             ).thenCompose(v -> syncUserMessageUuidsAfterSend());
         }).exceptionally(ex -> {
-            state.setError(ex.getMessage());
-            state.setBusy(false);
-            state.setLoading(false);
-            callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+            synchronized (state.getMessageStateLock()) {
+                if (state.isCurrentTurn(turnOwner)) {
+                    state.setError(ex.getMessage());
+                    state.setBusy(false);
+                    state.setLoading(false);
+                    callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+                }
+            }
             return null;
         });
     }
@@ -658,6 +662,7 @@ public class ClaudeSession {
 
         String provider = state.getProvider();
         String channelId = state.getChannelId();
+        Object turnOwner = state.getTurnOwner();
         if (channelId == null) {
             return CompletableFuture.completedFuture(null);
         }
@@ -665,25 +670,25 @@ public class ClaudeSession {
         return CompletableFuture.runAsync(() -> {
             try {
                 providerRouter.interruptChannel(provider, channelId);
-                if (!isCurrentChannel(provider, channelId)) {
-                    return;
-                }
-                state.setError(null);  // Clear previous error state
-                state.setBusy(false);
-                state.setLoading(false);  // Also reset loading state
+                synchronized (state.getMessageStateLock()) {
+                    if (!isCurrentChannel(provider, channelId) || !state.isCurrentTurn(turnOwner)) {
+                        return;
+                    }
+                    state.setError(null);
+                    state.setBusy(false);
+                    state.setLoading(false);
 
-                // Note: We intentionally don't call notifyStreamEnd() here because:
-                // 1. The frontend's interruptSession() already cleans up streaming state directly
-                // 2. Calling notifyStreamEnd() would trigger flushStreamMessageUpdates(),
-                //    which might restore previous messages via lastMessagesSnapshot, interfering with clearMessages
-                // 3. State reset is notified via callbackFacade.notifyStateChange()
-
-                callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
-            } catch (Exception e) {
-                if (isCurrentChannel(provider, channelId)) {
-                    state.setError(e.getMessage());
-                    state.setLoading(false);  // Also reset loading on error
+                    // The frontend already ends the stream on interrupt. Replaying stream-end
+                    // here could restore a cached message snapshot after clearMessages.
                     callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+                }
+            } catch (Exception e) {
+                synchronized (state.getMessageStateLock()) {
+                    if (isCurrentChannel(provider, channelId) && state.isCurrentTurn(turnOwner)) {
+                        state.setError(e.getMessage());
+                        state.setLoading(false);
+                        callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+                    }
                 }
                 throw new CompletionException(e);
             }

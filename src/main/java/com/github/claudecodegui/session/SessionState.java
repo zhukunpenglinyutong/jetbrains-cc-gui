@@ -110,6 +110,7 @@ public class SessionState {
     private volatile String error = null;
     // Claims and releases share messageStateLock with history application.
     private volatile Object loadingOwner;
+    private volatile Object turnOwner = new Object();
 
     // Message history is also updated by daemon reader and history-loader threads.
     // Every message callback and history replacement takes this lock so a transport
@@ -163,6 +164,26 @@ public class SessionState {
 
     public boolean isBusy() {
         return busy;
+    }
+
+    /** Starts a send before any previous provider process has finished shutting down. */
+    public Object beginTurn() {
+        synchronized (messageStateLock) {
+            turnOwner = new Object();
+            busy = true;
+            loading = true;
+            loadingOwner = null;
+            error = null;
+            return turnOwner;
+        }
+    }
+
+    public Object getTurnOwner() {
+        return turnOwner;
+    }
+
+    public boolean isCurrentTurn(Object owner) {
+        return turnOwner == owner;
     }
 
     public boolean isLoading() {

@@ -107,12 +107,11 @@ public class SessionSendService {
         contextCollector.setAutoOpenFileEnabled(readAutoOpenFileEnabled());
     }
 
-    public void updateSessionStateForSend(ClaudeSession.Message userMessage, String normalizedInput) {
-        // The message lock covers only the list mutation and the transport copy it
-        // feeds: enqueue's structural-signature walk requires the caller to hold this
-        // lock. Summary and busy/loading state don't touch the message list, so they
-        // stay outside it on the handler thread.
+    public Object updateSessionStateForSend(ClaudeSession.Message userMessage, String normalizedInput) {
+        Object turnOwner;
+        // Fence previous callbacks before publishing the new question and busy state.
         synchronized (state.getMessageStateLock()) {
+            turnOwner = state.beginTurn();
             state.addMessage(userMessage);
             callbackFacade.notifyMessageUpdate(state.getMessages());
         }
@@ -127,11 +126,9 @@ public class SessionSendService {
         }
 
         state.updateLastModifiedTime();
-        state.setError(null);
-        state.setBusy(true);
-        state.setLoading(true);
         ClaudeNotifier.setWaiting(project);
         callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+        return turnOwner;
     }
 
     public CompletableFuture<Void> sendMessageToProvider(
