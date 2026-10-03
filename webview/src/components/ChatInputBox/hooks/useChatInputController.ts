@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import type {
   ChatInputBoxHandle,
@@ -292,9 +292,15 @@ export function useChatInputController({
     handleCompositionEnd,
   });
 
+  // Match native Enter handling: invoke the latest committed submit callback.
+  const ideaSubmitRef = useRef(handleSubmit);
+  useLayoutEffect(() => {
+    ideaSubmitRef.current = handleSubmit;
+  }, [handleSubmit]);
+
   const handleIdeaSend = useEffectEvent(() => {
     if (!isComposingRef.current) {
-      handleSubmit();
+      ideaSubmitRef.current();
     }
   });
 

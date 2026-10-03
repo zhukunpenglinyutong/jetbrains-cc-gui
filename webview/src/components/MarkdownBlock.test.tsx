@@ -80,6 +80,8 @@ describe('MarkdownBlock linkify integration', () => {
     await act(async () => {});
     expect(writeText).toHaveBeenLastCalledWith('first\n<latest>& "text"\n');
     view.rerender(<MarkdownBlock content={'```unknown\nfirst\n<latest>& "text"\nlast'} isStreaming />);
+    expect(button.isConnected).toBe(true);
+    expect(view.container.querySelector('.copy-code-btn')).toBe(button);
     fireEvent.keyDown(button, { key: 'Enter' });
     await act(async () => {});
     expect(writeText).toHaveBeenLastCalledWith('first\n<latest>& "text"\nlast\n');

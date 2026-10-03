@@ -763,7 +763,10 @@ const BlockSection = memo(function BlockSection({
     }
   };
 
-  return <div className="md-block" onClick={copyLatestCode} onKeyDown={copyLatestCode} dangerouslySetInnerHTML={{ __html: html }} />;
+  // Keep the HTML prop stable while only the pending source changes. Replacing
+  // this subtree would detach the focused copy button between stream updates.
+  const innerHtml = useMemo(() => ({ __html: html }), [html]);
+  return <div className="md-block" onClick={copyLatestCode} onKeyDown={copyLatestCode} dangerouslySetInnerHTML={innerHtml} />;
 });
 
 // Copy icon SVG (hoisted to module scope to avoid recreation on each render)
