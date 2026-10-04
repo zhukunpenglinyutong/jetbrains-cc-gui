@@ -19,6 +19,78 @@ async function* eventsFrom(items) {
   }
 }
 
+test('async questions from a resumed session open during idle polling without replaying historical questions', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codex-async-question-'));
+  const sessionPath = join(directory, 'session.jsonl');
+  const question = (callId) => ({
+    type: 'response_item',
+    payload: {
+      type: 'function_call', name: 'request_user_input_async', call_id: callId,
+      arguments: JSON.stringify({ questions: [{ title: 'Choose one', options: ['A', 'B', 'C'] }] }),
+    },
+  });
+  const state = createInitialEventState(() => {});
+  state.sessionFilePath = sessionPath;
+  const opened = [];
+  try {
+    await writeFile(sessionPath, JSON.stringify(question('historical')) + '\n');
+    await prepareSessionReplayBoundary(state, 'fixture');
+    async function* stream() {
+      await appendFile(sessionPath, JSON.stringify({ type: 'turn_context', payload: {} }) + '\n');
+      yield { type: 'turn.started' };
+      await appendFile(sessionPath, JSON.stringify(question('current')) + '\n');
+      yield { type: 'session.poll' };
+      assert.equal(opened.length, 0);
+      const accepted = { type: 'response_item', payload: {
+        type: 'function_call_output', call_id: 'current', output: '{"accepted":true}',
+      } };
+      await appendFile(sessionPath, JSON.stringify(accepted) + '\n');
+      yield { type: 'session.poll' };
+      yield question('current');
+      yield accepted;
+      assert.deepEqual(opened.map((entry) => entry.callId), ['current']);
+      yield { type: 'turn.completed' };
+    }
+    await captureStdout(() => processCodexEventStream(stream(), state, {
+      ...makeConfig(), threadId: 'fixture',
+      onAsyncUserInput: async (args, callId) => opened.push({ args, callId }),
+    }));
+    assert.deepEqual(opened[0].args.questions[0].options, ['A', 'B', 'C']);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('failed stream cleanup does not open a late async question', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codex-async-abort-'));
+  const sessionPath = join(directory, 'session.jsonl');
+  const state = createInitialEventState(() => {});
+  state.sessionFilePath = sessionPath;
+  try {
+    await writeFile(sessionPath, '');
+    await prepareSessionReplayBoundary(state, 'fixture');
+    async function* stream() {
+      await appendFile(sessionPath, JSON.stringify({ type: 'turn_context', payload: {} }) + '\n');
+      yield { type: 'turn.started' };
+      await appendFile(sessionPath, JSON.stringify({ type: 'response_item', payload: {
+        type: 'function_call', name: 'request_user_input_async', call_id: 'late',
+        arguments: '{"questions":[{"title":"Choose","options":["A","B"]}]}',
+      } }) + '\n');
+      await appendFile(sessionPath, JSON.stringify({ type: 'response_item', payload: {
+        type: 'function_call_output', call_id: 'late', output: '{"accepted":true}',
+      } }) + '\n');
+      throw new Error('connection closed');
+    }
+    await captureStdout(() => assert.rejects(processCodexEventStream(stream(), state, {
+      ...makeConfig(), threadId: 'fixture',
+      onAsyncUserInput: async () => assert.fail('must not open after failure'),
+    }), /connection closed/));
+    assert.equal(state.sessionReplayReader, null);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('session replay reads history once, skips 30 unchanged updates, and drains late results', async (context) => {
   const directory = await mkdtemp(join(tmpdir(), 'codex-incremental-baseline-'));
   const sessionPath = join(directory, 'session.jsonl');
@@ -860,6 +932,42 @@ test('Codex item.updated agent_message emits incremental content deltas before c
   assert.match(deltaLines[0], /"Hel"/);
   assert.match(deltaLines[1], /"lo"/);
   assert.equal(state.assistantText, 'Hello');
+  assert.equal(emittedMessages.length, 1);
+  assert.deepEqual(emittedMessages[0], {
+    type: 'assistant',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'Hello' }],
+    },
+  });
+});
+
+test('Codex app-server agent-message deltas merge with the completed item without duplication', async () => {
+  const emittedMessages = [];
+  const state = createInitialEventState((message) => emittedMessages.push(message));
+
+  const captured = await captureStdout(async () => {
+    await processCodexEventStream(
+      eventsFrom([
+        { type: 'item.agent_message_delta', item_id: 'msg-1', delta: 'Hel' },
+        { type: 'item.agent_message_delta', item_id: 'msg-1', delta: 'lo' },
+        {
+          type: 'item.completed',
+          item: { id: 'msg-1', type: 'agent_message', text: 'Hello' },
+        },
+      ]),
+      state,
+      makeConfig(),
+    );
+  });
+
+  const deltaLines = tagLines(captured, '[CONTENT_DELTA]');
+
+  assert.equal(deltaLines.length, 2);
+  assert.match(deltaLines[0], /"Hel"/);
+  assert.match(deltaLines[1], /"lo"/);
+  assert.equal(state.assistantText, 'Hello');
+  assert.equal(state.finalResponse, 'Hello');
   assert.equal(emittedMessages.length, 1);
   assert.deepEqual(emittedMessages[0], {
     type: 'assistant',
