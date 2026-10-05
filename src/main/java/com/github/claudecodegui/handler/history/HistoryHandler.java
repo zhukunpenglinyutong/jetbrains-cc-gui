@@ -28,7 +28,8 @@ public class HistoryHandler extends BaseMessageHandler {
             "deep_search_history", // Deep search (clear cache and reload)
             "load_subagent_session", // Load Claude Code sidechain Agent process log
             "load_subagent_statuses", // Load lightweight Codex subagent statuses
-            "convert_to_cli_session" // Convert sidechain session to CLI-recognizable session
+            "convert_to_cli_session", // Convert sidechain session to CLI-recognizable session
+            "convert_all_to_cli_sessions" // Batch convert every SDK session of this project
     };
 
     // Session load callback interface
@@ -49,6 +50,7 @@ public class HistoryHandler extends BaseMessageHandler {
     private final HistoryMetadataService historyMetadataService;
     private final SubagentHistoryService subagentHistoryService;
     private final SessionConversionService sessionConversionService;
+    private final SessionBatchConversionService sessionBatchConversionService;
 
     public HistoryHandler(HandlerContext context) {
         super(context);
@@ -60,6 +62,7 @@ public class HistoryHandler extends BaseMessageHandler {
         this.historyMetadataService = new HistoryMetadataService(context, nodeJsServiceCaller);
         this.subagentHistoryService = new SubagentHistoryService(context);
         this.sessionConversionService = new SessionConversionService(context);
+        this.sessionBatchConversionService = new SessionBatchConversionService(context);
     }
 
     public void setSessionLoadCallback(SessionLoadCallback callback) {
@@ -133,6 +136,10 @@ public class HistoryHandler extends BaseMessageHandler {
                 String conversionProjectPath = this.context.getProject() != null
                         ? this.context.getProject().getBasePath() : null;
                 this.sessionConversionService.convertSdkSession(content, conversionProjectPath);
+                return true;
+            case "convert_all_to_cli_sessions":
+                LOG.info("[HistoryHandler] 处理: convert_all_to_cli_sessions");
+                this.sessionBatchConversionService.convertAll();
                 return true;
             default:
                 return false;

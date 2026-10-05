@@ -24,6 +24,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /**
@@ -39,10 +40,26 @@ class SessionConversionService {
     private final HandlerContext context;
     private final Gson gson = new Gson();
 
+    /**
+     * Resolves the {@code ~/.claude/projects} base per call. Injected rather than hardcoded
+     * so the batch converter tests can point the file rewrite at a temporary directory
+     * instead of the developer's real session history.
+     */
+    private final Supplier<Path> projectsDirSupplier;
+
     private static final String ENTRYPOINT_CLI = SessionEntrypoint.CLI.getValue();
 
     SessionConversionService(HandlerContext context) {
+        this(context, () -> Paths.get(NodeDetector.resolveHomeForFileOps(), ".claude", "projects"));
+    }
+
+    /**
+     * @param context handler context, may be null in tests that only exercise pure logic.
+     * @param projectsDirSupplier resolves the projects root per call.
+     */
+    SessionConversionService(HandlerContext context, Supplier<Path> projectsDirSupplier) {
         this.context = context;
+        this.projectsDirSupplier = projectsDirSupplier;
     }
 
     /**
@@ -51,8 +68,8 @@ class SessionConversionService {
      * {@link NodeDetector#resolveHomeForFileOps()} returns the correct home for the active
      * node. Every other history service in this package was migrated the same way.
      */
-    private static Path projectsDir() {
-        return Paths.get(NodeDetector.resolveHomeForFileOps(), ".claude", "projects");
+    private Path projectsDir() {
+        return this.projectsDirSupplier.get();
     }
 
     /**
@@ -93,147 +110,267 @@ class SessionConversionService {
         }
 
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            Path sessionFile = null;
-            Path tempFile = null;
-            Path backupFile = null;
-            FileLock fileLock = null;
-            FileChannel fileChannel = null;
-
-            try {
-                sessionFile = this.findSessionFile(sessionId, projectPath);
-                if (sessionFile == null) {
-                    LOG.warn("[SessionConversionService] Session file not found: " + sessionId);
-                    this.sendConversionResult(false, ConversionResultCode.SESSION_NOT_FOUND);
-                    return;
-                }
-
-                // The finder only returns existing files; this catches a narrow TOCTOU
-                // window where another process deletes the file after discovery.
-                if (!Files.exists(sessionFile)) {
-                    LOG.warn("[SessionConversionService] Session file does not exist: " + sessionFile);
-                    this.sendConversionResult(false, ConversionResultCode.FILE_NOT_EXIST);
-                    return;
-                }
-
-                // Acquire file lock to prevent concurrent modification
-                try {
-                    fileChannel = FileChannel.open(sessionFile, StandardOpenOption.WRITE);
-                    fileLock = fileChannel.tryLock();
-                    if (fileLock == null) {
-                        LOG.warn("[SessionConversionService] Session file is locked by another process: " + sessionId);
-                        this.sendConversionResult(false, ConversionResultCode.FILE_LOCKED);
-                        return;
-                    }
-                } catch (OverlappingFileLockException e) {
-                    LOG.warn("[SessionConversionService] Session file is already locked: " + sessionId);
-                    this.sendConversionResult(false, ConversionResultCode.FILE_LOCKED);
-                    return;
-                }
-
-                // Create unique files in the same directory so the final move can stay atomic.
-                Path sessionDir = sessionFile.getParent();
-                backupFile = Files.createTempFile(sessionDir, sessionId + ".jsonl.backup.", ".tmp");
-                Files.copy(sessionFile, backupFile, StandardCopyOption.REPLACE_EXISTING);
-                LOG.debug("[SessionConversionService] Created backup: " + backupFile);
-
-                tempFile = Files.createTempFile(sessionDir, sessionId + ".jsonl.convert.", ".tmp");
-
-                // Stream processing to handle large files efficiently
-                AtomicInteger modifiedCount = new AtomicInteger(0);
-                AtomicBoolean hasCliEntrypoint = new AtomicBoolean(false);
-
-                try (Stream<String> lines = Files.lines(sessionFile, StandardCharsets.UTF_8);
-                     BufferedWriter writer = Files.newBufferedWriter(tempFile, StandardCharsets.UTF_8)) {
-
-                    lines.forEach(line -> {
-                        try {
-                            String newLine = this.convertEntrypointInLine(
-                                    line,
-                                    hasCliEntrypoint,
-                                    modifiedCount
-                            );
-                            writer.write(newLine);
-                            writer.newLine();
-                        } catch (IOException e) {
-                            throw new UncheckedIOException(e);
-                        }
-                    });
-                } catch (UncheckedIOException e) {
-                    // UncheckedIOException wraps the IOException thrown inside the lambda.
-                    // Unwrap and rethrow so the outer catch(Exception) handles it uniformly.
-                    throw e.getCause();
-                } catch (IOException e) {
-                    LOG.error("[SessionConversionService] IO error writing temp file: " + tempFile, e);
-                    throw e;
-                }
-
-                // Check if any modifications were made
-                if (modifiedCount.get() == 0) {
-                    if (hasCliEntrypoint.get()) {
-                        LOG.debug("[SessionConversionService] Session is already a CLI session: " + sessionId);
-                        this.sendConversionResult(true, ConversionResultCode.ALREADY_CLI_SESSION);
-                    } else {
-                        LOG.debug("[SessionConversionService] Session is not an SDK-created session: " + sessionId);
-                        this.sendConversionResult(false, ConversionResultCode.NOT_SDK_SESSION);
-                    }
-                    return;
-                }
-
-                // Our work through the locked handle is done; release it before the
-                // swap so the atomic move (and any backup restore) cannot trip over
-                // our own open handle on Windows.
-                releaseFileLock(fileLock, fileChannel);
-
-                // Atomic move: replace original file with modified temp file
-                Files.move(tempFile, sessionFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-                tempFile = null; // Mark as successfully moved
-
-                LOG.debug("[SessionConversionService] Successfully converted session: " + sessionId
-                        + " (" + modifiedCount.get() + " lines modified)");
-
-                // No explicit index invalidation needed: the rewrite bumped the file
-                // mtime so the incremental scan re-reads this session, and the
-                // frontend follows success with a deep_search_history reload anyway.
-                this.sendConversionResult(true, null);
-
-            } catch (Exception e) {
-                LOG.error("[SessionConversionService] Failed to convert session: " + e.getMessage(), e);
-
-                // Release our own lock first so the restore move cannot fail on it (Windows).
-                releaseFileLock(fileLock, fileChannel);
-
-                // Restore from backup if conversion failed
-                if (backupFile != null && Files.exists(backupFile)) {
-                    try {
-                        Files.move(backupFile, sessionFile, StandardCopyOption.REPLACE_EXISTING);
-                        LOG.info("[SessionConversionService] Restored session from backup after failure");
-                    } catch (Exception restoreError) {
-                        LOG.error("[SessionConversionService] Failed to restore backup: "
-                                + restoreError.getMessage(), restoreError);
-                    }
-                }
-
-                this.sendConversionResult(false, ConversionResultCode.CONVERSION_FAILED);
-            } finally {
-                // Idempotent: no-op if the success/failure paths already released it.
-                releaseFileLock(fileLock, fileChannel);
-
-                // Clean up temporary and backup files
-                try {
-                    if (tempFile != null && Files.exists(tempFile)) {
-                        Files.deleteIfExists(tempFile);
-                        LOG.debug("[SessionConversionService] Cleaned up temp file: " + tempFile);
-                    }
-                    if (backupFile != null && Files.exists(backupFile)) {
-                        Files.deleteIfExists(backupFile);
-                        LOG.debug("[SessionConversionService] Cleaned up backup file: " + backupFile);
-                    }
-                } catch (IOException cleanupError) {
-                    LOG.warn("[SessionConversionService] Failed to clean up temporary files: "
-                            + cleanupError.getMessage());
-                }
-            }
+            ConversionResultCode resultCode = this.convertSession(sessionId, projectPath);
+            this.sendConversionResult(resultCode == null, resultCode);
         });
+    }
+
+    /**
+     * Convert one session's jsonl on the calling thread and report the outcome as a code.
+     *
+     * <p>This is the shared core behind both the single-session bridge command and the
+     * batch command: it owns the lock/backup/atomic-move dance and returns instead of
+     * pushing to the webview, so a caller can aggregate many outcomes into one reply.
+     *
+     * @param sessionId Session ID to convert (assumed already validated and non-active).
+     * @param projectPath Project path hint, or null to scan every project directory.
+     * @return null when the session was rewritten, otherwise the failure/notice code.
+     */
+    ConversionResultCode convertSession(String sessionId, String projectPath) {
+        Path sessionFile = null;
+        Path tempFile = null;
+        Path backupFile = null;
+        FileLock fileLock = null;
+        FileChannel fileChannel = null;
+        // Flipped to true only once the backup provably holds every byte of the
+        // source. A temp file is created empty, so a copy that died half way leaves a
+        // fragment on disk; restoring that fragment would replace a complete session
+        // with its own first half, silently and with no error shown to the user.
+        boolean backupComplete = false;
+        long backupSourceSize = 0L;
+
+        try {
+            sessionFile = this.findSessionFile(sessionId, projectPath);
+            if (sessionFile == null) {
+                LOG.warn("[SessionConversionService] Session file not found: " + sessionId);
+                return ConversionResultCode.SESSION_NOT_FOUND;
+            }
+
+            // The finder only returns existing files; this catches a narrow TOCTOU
+            // window where another process deletes the file after discovery.
+            if (!Files.exists(sessionFile)) {
+                LOG.warn("[SessionConversionService] Session file does not exist: " + sessionFile);
+                return ConversionResultCode.FILE_NOT_EXIST;
+            }
+
+            // Acquire file lock to prevent concurrent modification
+            try {
+                fileChannel = FileChannel.open(sessionFile, StandardOpenOption.WRITE);
+                fileLock = fileChannel.tryLock();
+                if (fileLock == null) {
+                    LOG.warn("[SessionConversionService] Session file is locked by another process: " + sessionId);
+                    return ConversionResultCode.FILE_LOCKED;
+                }
+            } catch (OverlappingFileLockException e) {
+                LOG.warn("[SessionConversionService] Session file is already locked: " + sessionId);
+                return ConversionResultCode.FILE_LOCKED;
+            }
+
+            // Create unique files in the same directory so the final move can stay atomic.
+            // They are created owner-only: they hold a verbatim copy of the session.
+            Path sessionDir = sessionFile.getParent();
+            backupFile = SessionTempFiles.createPrivateTempFile(sessionDir, sessionId + ".jsonl.backup.", ".tmp");
+            backupSourceSize = Files.size(sessionFile);
+            this.copyBackup(sessionFile, backupFile);
+            long backupSize = Files.size(backupFile);
+            if (backupSize != backupSourceSize) {
+                // Returned without an error but wrote fewer bytes. Treat it exactly
+                // like a failed copy: no usable backup means no restore, and the
+                // session on disk is by definition still intact.
+                LOG.warn("[SessionConversionService] Backup of " + sessionId + " is short ("
+                        + backupSize + " of " + backupSourceSize + " bytes); leaving the session untouched");
+                return ConversionResultCode.CONVERSION_FAILED;
+            }
+            backupComplete = true;
+            LOG.debug("[SessionConversionService] Created backup: " + backupFile);
+
+            tempFile = SessionTempFiles.createPrivateTempFile(sessionDir, sessionId + ".jsonl.convert.", ".tmp");
+
+            this.afterCompleteBackup(sessionFile);
+
+            // Stream processing to handle large files efficiently
+            AtomicInteger modifiedCount = new AtomicInteger(0);
+            AtomicBoolean hasCliEntrypoint = new AtomicBoolean(false);
+
+            try (Stream<String> lines = Files.lines(sessionFile, StandardCharsets.UTF_8);
+                 BufferedWriter writer = Files.newBufferedWriter(tempFile, StandardCharsets.UTF_8)) {
+
+                lines.forEach(line -> {
+                    try {
+                        String newLine = this.convertEntrypointInLine(
+                                line,
+                                hasCliEntrypoint,
+                                modifiedCount
+                        );
+                        writer.write(newLine);
+                        writer.newLine();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                });
+            } catch (UncheckedIOException e) {
+                // UncheckedIOException wraps the IOException thrown inside the lambda.
+                // Unwrap and rethrow so the outer catch(Exception) handles it uniformly.
+                throw e.getCause();
+            } catch (IOException e) {
+                LOG.error("[SessionConversionService] IO error writing temp file: " + tempFile, e);
+                throw e;
+            }
+
+            // Check if any modifications were made
+            if (modifiedCount.get() == 0) {
+                if (hasCliEntrypoint.get()) {
+                    LOG.debug("[SessionConversionService] Session is already a CLI session: " + sessionId);
+                    return ConversionResultCode.ALREADY_CLI_SESSION;
+                }
+                LOG.debug("[SessionConversionService] Session is not an SDK-created session: " + sessionId);
+                return ConversionResultCode.NOT_SDK_SESSION;
+            }
+
+            // Our work through the locked handle is done; release it before the
+            // swap so the atomic move (and any backup restore) cannot trip over
+            // our own open handle on Windows.
+            releaseFileLock(fileLock, fileChannel);
+
+            // Re-read the active session here, on the pooled thread, immediately
+            // before the swap. The check in convertSdkSession ran on the calling
+            // thread, and everything above took time; in that window the user can
+            // open this very session in the chat, which puts the SDK back into
+            // append mode. Replacing the file underneath a live writer would strand
+            // every message appended from here on, so refuse instead.
+            if (this.isSessionActive(sessionId)) {
+                LOG.warn("[SessionConversionService] Conversion abandoned: session became active while converting");
+                return ConversionResultCode.SESSION_ACTIVE;
+            }
+
+            // Atomic move: replace original file with modified temp file
+            Files.move(tempFile, sessionFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            tempFile = null; // Mark as successfully moved
+
+            LOG.debug("[SessionConversionService] Successfully converted session: " + sessionId
+                    + " (" + modifiedCount.get() + " lines modified)");
+
+            // No explicit index invalidation needed: the rewrite bumped the file
+            // mtime so the incremental scan re-reads this session, and the
+            // frontend follows success with a deep_search_history reload anyway.
+            return null;
+
+        } catch (Exception e) {
+            // warn, not error: this branch recovers. The session is rolled back from its
+            // backup below and the caller gets CONVERSION_FAILED, so nothing is lost and
+            // the plugin has not malfunctioned — surfacing an IDE error report for a
+            // handled condition would be misleading. It would also be actively harmful
+            // here: a logger whose error() throws (DefaultLogger, used whenever no IDE
+            // application is installed, which includes the unit-test JVM) would abort
+            // this method before the restore below ever ran, turning a recoverable
+            // failure into exactly the data loss this branch exists to prevent.
+            LOG.warn("[SessionConversionService] Failed to convert session: " + e.getMessage(), e);
+
+            // Release our own lock first so the restore move cannot fail on it (Windows).
+            releaseFileLock(fileLock, fileChannel);
+
+            // Restore only from a backup that is known to hold every byte of the
+            // original. A temp file is created empty, so the copy that produced it
+            // may have written only a prefix; writing that back over the session
+            // would look like a successful rollback while actually truncating the
+            // user's history. Without a complete backup the session file was never
+            // modified, so the correct action is to leave it alone.
+            if (backupComplete) {
+                this.restoreBackup(backupFile, sessionFile, backupSourceSize);
+            } else {
+                LOG.warn("[SessionConversionService] No complete backup for " + sessionId
+                        + "; the session file was not touched and stays as it is on disk");
+            }
+
+            return ConversionResultCode.CONVERSION_FAILED;
+        } finally {
+            // Idempotent: no-op if the success/failure paths already released it.
+            releaseFileLock(fileLock, fileChannel);
+
+            // Clean up temporary and backup files
+            try {
+                if (tempFile != null && Files.exists(tempFile)) {
+                    Files.deleteIfExists(tempFile);
+                    LOG.debug("[SessionConversionService] Cleaned up temp file: " + tempFile);
+                }
+                if (backupFile != null && Files.exists(backupFile)) {
+                    Files.deleteIfExists(backupFile);
+                    LOG.debug("[SessionConversionService] Cleaned up backup file: " + backupFile);
+                }
+            } catch (IOException cleanupError) {
+                LOG.warn("[SessionConversionService] Failed to clean up temporary files: "
+                        + cleanupError.getMessage());
+            }
+        }
+    }
+
+    /**
+     * No-op hook, invoked once the backup is known to hold every byte of the session
+     * and the scratch temp file exists, immediately before the rewrite runs.
+     *
+     * <p>This is the first point at which a failure is still recoverable, and the last
+     * point at which the file is still exactly as big as the backup — so it is where
+     * the restore in the {@code catch} block has to be exercised from. It exists so
+     * tests can abort there and, at the same time, move the file the way a concurrent
+     * writer (grew) or a truncation (shrank) would: with nothing touching the file its
+     * size always still equals the size the backup was taken at, and the two size
+     * guards in {@link #restoreBackup} could never be reached.
+     *
+     * <p>Empty in production; subclasses in tests override it to inject the failure.
+     *
+     * @param sessionFile the file being converted.
+     * @throws IOException to simulate a rewrite that died after the backup was taken.
+     */
+    // VisibleForTesting
+    void afterCompleteBackup(Path sessionFile) throws IOException {
+    }
+
+    /**
+     * Copy the session file to the backup path.
+     *
+     * <p>Split out so tests can simulate a copy that dies part way through — ENOSPC,
+     * EIO, a network share going away — without filling an actual disk.
+     *
+     * @param source session file to copy.
+     * @param backup already-created, empty destination.
+     * @throws IOException if the copy fails, possibly after writing part of the file.
+     */
+    // VisibleForTesting
+    void copyBackup(Path source, Path backup) throws IOException {
+        Files.copy(source, backup, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    /**
+     * Put the original session file back after a failed rewrite.
+     *
+     * <p>Only reached for a complete backup. Even then the restore is skipped when the
+     * file has grown since the snapshot was taken: a writer that appended in between
+     * would lose those rows, and rows newer than T0 are worth more than the older
+     * snapshot. A file that shrank means something truncated it, and then the complete
+     * backup is the only good copy left, so that case is restored.
+     *
+     * @param backupFile the verified backup, may be null when it was already moved.
+     * @param sessionFile the session file to put the backup back in place of.
+     * @param expectedSize size the session file had when the backup was taken.
+     */
+    private void restoreBackup(Path backupFile, Path sessionFile, long expectedSize) {
+        if (backupFile == null || !Files.exists(backupFile)) {
+            return;
+        }
+        try {
+            long currentSize = Files.size(sessionFile);
+            if (currentSize > expectedSize) {
+                LOG.warn("[SessionConversionService] " + sessionFile.getFileName()
+                        + " grew after the backup was taken (" + currentSize + " > " + expectedSize
+                        + " bytes); not restoring the older snapshot over it");
+                return;
+            }
+            Files.move(backupFile, sessionFile, StandardCopyOption.REPLACE_EXISTING);
+            LOG.info("[SessionConversionService] Restored session from backup after failure");
+        } catch (Exception restoreError) {
+            LOG.error("[SessionConversionService] Failed to restore backup: "
+                    + restoreError.getMessage(), restoreError);
+        }
     }
 
     /**
@@ -286,12 +423,24 @@ class SessionConversionService {
      * @return true if the session is active and must not be converted.
      */
     private boolean isSessionActive(String sessionId) {
+        String activeSessionId = this.activeSessionId();
+        return activeSessionId != null && activeSessionId.equals(sessionId);
+    }
+
+    /**
+     * Id of the session this window is currently chatting in, or null when there is none.
+     * Read from the handler context at call time — the session changes as the user switches
+     * chats, so it must never be cached.
+     *
+     * @return active session id, or null.
+     */
+    String activeSessionId() {
         try {
             var session = this.context.getSession();
-            return session != null && sessionId.equals(session.getSessionId());
+            return session != null ? session.getSessionId() : null;
         } catch (Exception e) {
-            LOG.warn("[SessionConversionService] Failed to check active session: " + e.getMessage());
-            return false;
+            LOG.warn("[SessionConversionService] Failed to resolve active session: " + e.getMessage());
+            return null;
         }
     }
 
@@ -387,6 +536,10 @@ class SessionConversionService {
 
         Project project = this.context.getProject();
         if (project != null && !project.isDisposed()) {
+            // escapeJs() runs on the serialized JSON, which is the right order here:
+            // it escapes the payload for a JS string literal AFTER the JSON quotes are
+            // in place. Every character it rewrites is a valid JSON escape too, so the
+            // JS parser reverses it and the frontend still receives the exact JSON text.
             String escapedJson = this.context.escapeJs(this.gson.toJson(result));
             String jsCode = "if (window.onConversionResult) { window.onConversionResult('" + escapedJson + "'); }";
             this.context.executeJavaScriptQueued(jsCode);

@@ -47,6 +47,7 @@ export const SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES = [
   'get_ai_title_generation_enabled:',
   'get_status_bar_widget_enabled:',
   'get_task_completion_notification_enabled:',
+  'get_auto_convert_sessions_on_exit:',
   'get_ask_user_question_notification_enabled:',
   'get_system_notification_only_when_unfocused:',
   'get_ask_user_question_sound_notification_enabled:',
@@ -86,6 +87,7 @@ export interface SettingsWindowCallbacksDeps {
   setAiTitleGenerationEnabled?: (enabled: boolean) => void;
   setStatusBarWidgetEnabled?: (enabled: boolean) => void;
   setTaskCompletionNotificationEnabled?: (enabled: boolean) => void;
+  setAutoConvertSessionsOnExit?: (enabled: boolean) => void;
   setAskUserQuestionNotificationEnabled?: (enabled: boolean) => void;
   setSystemNotificationOnlyWhenUnfocused?: (enabled: boolean) => void;
   setAskUserQuestionSoundNotificationEnabled?: (enabled: boolean) => void;
@@ -405,6 +407,16 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    // Auto-convert sessions on exit config callback (opt-in feature, default false)
+    window.updateAutoConvertSessionsOnExit = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setAutoConvertSessionsOnExit?.(data.autoConvertSessionsOnExit ?? false);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse auto convert sessions on exit config:', error);
+      }
+    };
+
     // AskUserQuestion reminder notification config callback (opt-in feature, default false)
     window.updateAskUserQuestionNotificationEnabled = (jsonStr: string) => {
       try {
@@ -620,6 +632,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateAiTitleGenerationEnabled = undefined;
       window.updateStatusBarWidgetEnabled = undefined;
       window.updateTaskCompletionNotificationEnabled = undefined;
+      window.updateAutoConvertSessionsOnExit = undefined;
       window.updateAskUserQuestionNotificationEnabled = undefined;
       window.updateSystemNotificationOnlyWhenUnfocused = undefined;
       window.updateAskUserQuestionSoundNotificationEnabled = undefined;

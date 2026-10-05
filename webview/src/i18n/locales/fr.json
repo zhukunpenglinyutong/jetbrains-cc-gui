@@ -274,6 +274,12 @@
         "disabled": "Désactivé",
         "hint": "Lorsque cette option est activée, le pied des messages affiche le coût estimé du tour quand il est disponible et inclut les accès au cache dans le résumé des tokens d’entrée. La consommation de tokens reste toujours visible."
       },
+      "autoConvertSessionsOnExit": {
+        "label": "Convertir les sessions en CLI à la fermeture",
+        "enabled": "Activé",
+        "disabled": "Désactivé",
+        "hint": "Les sessions créées par le plugin via le SDK n'apparaissent pas dans la liste /resume de Claude Code CLI car leur entrypoint est sdk-cli. Si activé, elles sont converties automatiquement à la fermeture de l'IDE."
+      },
       "askUserQuestionSoundNotification": {
         "label": "Son d'alerte de question",
         "enabled": "Activé",
@@ -945,6 +951,15 @@
     "copyFailed": "Échec de la copie",
     "convertToCliSession": "Convertir en session reconnue par le CLI",
     "convertButton": "Convertir en CLI",
+    "convertAllToCliSessions": "Tout convertir en CLI ({{count}})",
+    "convertAllToCliSessionsTooltip": "Convertir {{count}} session(s) créée(s) via le SDK en entrées CLI afin qu'elles apparaissent dans la liste /resume de Claude Code CLI. La session en cours est ignorée.",
+    "convertAllToCliSessionsLabel": "Tout convertir en CLI",
+    "convertAllToCliSessionsEmptyTooltip": "Aucune session SDK ou VS Code à convertir. Seules les sessions créées via le SDK ou via l'extension VS Code peuvent être converties en entrées CLI ; celles créées directement par Claude Code CLI sont déjà reprenables.",
+    "convertAllSuccess": "{{count}} session(s) convertie(s), maintenant visible(s) dans CLI /resume",
+    "convertAllPartial": "{{count}} session(s) convertie(s) sur {{total}}, {{failed}} en échec",
+    "convertAllAlreadyRunning": "Une conversion est déjà en cours, veuillez attendre sa fin",
+    "convertAllTimeout": "La conversion a pris trop de temps. La liste a été actualisée, veuillez la vérifier dans un instant.",
+    "convertAllBridgeUnavailable": "Le pont vers l'IDE est indisponible, la requête n'a pas été envoyée",
     "convertSuccess": "Session convertie pour être reconnue par le CLI",
     "convertFailed": "Échec de la conversion",
     "confirmConvert": "Convertir en session CLI ?",
@@ -976,7 +991,9 @@
       "sdk-cli": "Cette session a été créée par le plugin via SDK et n'est pas affichée dans CLI par défaut. Cliquez sur 'Convertir en CLI' pour qu'elle apparaisse dans la liste /resume du CLI du terminal",
       "claude-vscode": "Cette session a été créée par l'extension VS Code et n'est pas affichée dans CLI par défaut. Cliquez sur 'Convertir en CLI' pour qu'elle apparaisse dans la liste /resume du CLI du terminal",
       "remote": "Cette session a été créée par une instance distante de Claude Code"
-    }
+    },
+    "convertActiveHint": "Convertir en CLI après la fin de la session",
+    "convertActiveHintTooltip": "Terminez ou fermez d'abord cette session, puis convertissez-la depuis l'historique"
   },
   "permission": {
     "dialogTitle": "Demande de permission",

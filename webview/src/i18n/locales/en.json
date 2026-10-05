@@ -529,6 +529,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, message footers show estimated turn cost when available and include cache hits inside the input token summary. Token usage remains visible either way."
       },
+      "autoConvertSessionsOnExit": {
+        "label": "Auto-convert sessions to CLI on exit",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "Sessions created by the plugin through the SDK don't appear in the Claude Code CLI /resume list because their entrypoint is sdk-cli. When enabled, they are converted automatically when the IDE closes."
+      },
       "askUserQuestionSoundNotification": {
         "label": "Question alert sound",
         "enabled": "Enabled",
@@ -1400,7 +1406,18 @@
       "hoursAgo": "hours ago",
       "minutesAgo": "minutes ago",
       "secondsAgo": "seconds ago"
-    }
+    },
+    "convertActiveHint": "Convert to CLI after ending the session",
+    "convertActiveHintTooltip": "End or close this session first, then convert it from the history list",
+    "convertAllToCliSessions": "Convert all to CLI ({{count}})",
+    "convertAllToCliSessionsTooltip": "Convert {{count}} session(s) created through the SDK into CLI entries so they appear in the Claude Code CLI /resume list. The session currently in use is skipped.",
+    "convertAllToCliSessionsLabel": "Convert all to CLI",
+    "convertAllToCliSessionsEmptyTooltip": "No SDK or VS Code sessions to convert. Only sessions created by the SDK or the VS Code extension can be turned into CLI entries; sessions created directly by the Claude Code CLI are already resumable.",
+    "convertAllSuccess": "{{count}} session(s) converted, now visible in CLI /resume",
+    "convertAllPartial": "Converted {{count}} of {{total}} session(s), {{failed}} failed",
+    "convertAllAlreadyRunning": "A conversion is already running, please wait for it to finish",
+    "convertAllTimeout": "The conversion took too long. The list has been refreshed, please check it in a moment.",
+    "convertAllBridgeUnavailable": "The bridge to the IDE is unavailable, so the request was not sent"
   },
   "permission": {
     "dialogTitle": "Permission Request",
@@ -2458,12 +2475,29 @@
   },
   "dshPresets": {
     "title": "Select DeepSeek Harness agent preset",
-    "none": { "label": "Default", "description": "dsh default headless composition (full toolset)" },
-    "standard": { "label": "Standard", "description": "Full coding agent with the standard toolset" },
-    "code": { "label": "PTC", "description": "Standard capabilities with Code Mode" },
-    "minimal": { "label": "Minimal", "description": "Bash and str_replace_editor only" },
-    "cordis": { "label": "Creator", "description": "Standard capabilities plus composition authoring" },
-    "user": { "description": "Custom preset installed under the DSH home" }
+    "none": {
+      "label": "Default",
+      "description": "dsh default headless composition (full toolset)"
+    },
+    "standard": {
+      "label": "Standard",
+      "description": "Full coding agent with the standard toolset"
+    },
+    "code": {
+      "label": "PTC",
+      "description": "Standard capabilities with Code Mode"
+    },
+    "minimal": {
+      "label": "Minimal",
+      "description": "Bash and str_replace_editor only"
+    },
+    "cordis": {
+      "label": "Creator",
+      "description": "Standard capabilities plus composition authoring"
+    },
+    "user": {
+      "description": "Custom preset installed under the DSH home"
+    }
   },
   "error": {
     "providerNotConfigured": "Provider Not Configured",

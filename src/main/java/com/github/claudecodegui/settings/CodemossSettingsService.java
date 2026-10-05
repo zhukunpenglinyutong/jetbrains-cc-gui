@@ -1773,6 +1773,47 @@ public class CodemossSettingsService {
     }
 
     /**
+     * Get whether SDK-created sessions are converted to CLI-recognizable ones on IDE exit.
+     *
+     * @return whether auto conversion on exit is enabled, default is false (opt-in)
+     */
+    public boolean getAutoConvertSessionsOnExit() throws IOException {
+        JsonObject config = readConfig();
+
+        if (!config.has("history") || config.get("history").isJsonNull()) {
+            return false;
+        }
+
+        JsonObject historyConfig = config.getAsJsonObject("history");
+        if (historyConfig.has("autoConvertSessionsOnExit") && !historyConfig.get("autoConvertSessionsOnExit").isJsonNull()) {
+            return historyConfig.get("autoConvertSessionsOnExit").getAsBoolean();
+        }
+
+        return false;
+    }
+
+    /**
+     * Set whether SDK-created sessions are converted to CLI-recognizable ones on IDE exit.
+     *
+     * @param enabled whether to enable
+     */
+    public void setAutoConvertSessionsOnExit(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+
+        JsonObject historyConfig;
+        if (config.has("history") && !config.get("history").isJsonNull()) {
+            historyConfig = config.getAsJsonObject("history");
+        } else {
+            historyConfig = new JsonObject();
+            config.add("history", historyConfig);
+        }
+
+        historyConfig.addProperty("autoConvertSessionsOnExit", enabled);
+        writeConfig(config);
+        LOG.info("[CodemossSettings] Set auto convert sessions on exit: " + enabled);
+    }
+
+    /**
      * Get custom sound file path.
      *
      * @return custom sound path, null means use default sound
