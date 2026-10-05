@@ -16,6 +16,7 @@ import type { RewindRequest } from '../components/RewindDialog';
 import type { RestoredSessionTitle } from '../contexts/SessionContext';
 import { registerWindowCallbacks } from './windowCallbacks/registerCallbacks';
 import { sendBridgeEvent } from '../utils/bridge';
+import type { StartupHistoryLoadState } from '../types/startupHistory';
 
 // Re-export from messageSync to avoid duplicate definition
 export { OPTIMISTIC_MESSAGE_TIME_WINDOW } from './windowCallbacks/messageSync';
@@ -61,6 +62,7 @@ export interface UseWindowCallbacksOptions {
   setSendShortcut: React.Dispatch<React.SetStateAction<'enter' | 'cmdEnter'>>;
   setAutoOpenFileEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setPermissionDialogTimeoutSeconds: React.Dispatch<React.SetStateAction<number>>;
+  setStartupHistoryLoadState: React.Dispatch<React.SetStateAction<StartupHistoryLoadState | null>>;
   setSdkStatus: React.Dispatch<React.SetStateAction<Record<string, { installed?: boolean; status?: string }>>>;
   setSdkStatusLoaded: React.Dispatch<React.SetStateAction<boolean>>;
   setSdkStatusError: React.Dispatch<React.SetStateAction<string | null>>;

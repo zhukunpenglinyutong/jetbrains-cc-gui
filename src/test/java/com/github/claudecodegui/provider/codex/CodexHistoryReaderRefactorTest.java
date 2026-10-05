@@ -18,6 +18,9 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -216,6 +219,37 @@ public class CodexHistoryReaderRefactorTest {
             assertEquals(2, messages.size());
             assertEquals("event_msg", messages.get(0).type);
             assertEquals("response_item", messages.get(1).type);
+        } finally {
+            deleteDirectory(sessionsDir);
+        }
+    }
+
+    @Test
+    public void sessionServiceStopsDeliveringMessagesAfterCancellation() throws IOException {
+        Path sessionsDir = Files.createTempDirectory("codex-history-cancel");
+        try {
+            writeSessionFile(
+                    sessionsDir,
+                    "session-cancel",
+                    line("2026-03-10T10:00:00Z", "event_msg",
+                            "{\"type\":\"user_message\",\"message\":\"first\"}"),
+                    line("2026-03-10T10:01:00Z", "response_item",
+                            "{\"type\":\"message\",\"role\":\"assistant\",\"content\":[]}"));
+            CodexHistorySessionService service = new CodexHistorySessionService(sessionsDir, gson);
+            AtomicBoolean cancelled = new AtomicBoolean();
+            AtomicInteger delivered = new AtomicInteger();
+
+            try {
+                service.forEachSessionMessage("session-cancel", cancelled::get, message -> {
+                    delivered.incrementAndGet();
+                    cancelled.set(true);
+                });
+                org.junit.Assert.fail("cancelled history read must stop before the next record");
+            } catch (CancellationException expected) {
+                // Expected: the second record is never delivered.
+            }
+
+            assertEquals(1, delivered.get());
         } finally {
             deleteDirectory(sessionsDir);
         }
