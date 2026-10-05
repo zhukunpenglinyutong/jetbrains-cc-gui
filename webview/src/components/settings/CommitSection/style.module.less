@@ -1,27 +1,27 @@
 .configSection {
-  max-width: 800px;
-  padding-bottom: 24px;
+  max-width: calc(800px * var(--cc-gui-scale));
+  padding-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .promptSection {
-  margin-bottom: 24px;
-  margin-top: 24px;
+  margin-bottom: calc(24px * var(--cc-gui-scale));
+  margin-top: calc(24px * var(--cc-gui-scale));
 }
 
 .fieldHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: calc(8px * var(--cc-gui-scale));
+  margin-bottom: calc(12px * var(--cc-gui-scale));
 
   .codicon {
-    font-size: 16px;
+    font-size: calc(16px * var(--cc-gui-scale));
     color: var(--accent-primary);
   }
 }
 
 .fieldLabel {
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -29,20 +29,20 @@
 .promptInputWrapper {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: calc(12px * var(--cc-gui-scale));
+  margin-bottom: calc(8px * var(--cc-gui-scale));
 }
 
 .promptTextarea {
   width: 100%;
   max-width: 100%;
-  min-height: 120px;
-  padding: 12px;
+  min-height: calc(120px * var(--cc-gui-scale));
+  padding: calc(12px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-family: inherit;
   line-height: 1.6;
   resize: vertical;
@@ -61,18 +61,18 @@
 
 .saveBtn {
   align-self: flex-start;
-  min-width: 100px;
+  min-width: calc(100px * var(--cc-gui-scale));
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 20px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
   border: none;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: var(--accent-primary);
   color: #ffffff;
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
   transition: all 0.2s;
 
@@ -90,21 +90,21 @@
   }
 
   .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 }
 
 .formHint {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  font-size: 12px;
+  gap: calc(6px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   line-height: 1.5;
 
   .codicon {
-    font-size: 12px;
-    margin-top: 2px;
+    font-size: calc(12px * var(--cc-gui-scale));
+    margin-top: calc(2px * var(--cc-gui-scale));
     flex-shrink: 0;
   }
 }
@@ -112,17 +112,17 @@
 /* 响应式适配 */
 @media (max-width: 480px) {
   .promptTextarea {
-    font-size: 12px;
-    padding: 10px;
-    min-height: 100px;
+    font-size: calc(12px * var(--cc-gui-scale));
+    padding: calc(10px * var(--cc-gui-scale));
+    min-height: calc(100px * var(--cc-gui-scale));
   }
 
   .saveBtn {
     width: 100%;
-    padding: 10px 16px;
+    padding: calc(10px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   }
 
   .formHint {
-    font-size: 11px;
+    font-size: calc(11px * var(--cc-gui-scale));
   }
 }

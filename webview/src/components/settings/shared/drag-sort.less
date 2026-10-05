@@ -19,13 +19,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
-  margin-right: 8px;
+  padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+  margin-right: calc(8px * var(--cc-gui-scale));
   cursor: grab;
   user-select: none;
   touch-action: none;
   color: var(--text-tertiary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   transition: all 0.2s;
 
   &:hover {
@@ -38,6 +38,6 @@
   }
 
   .codicon {
-    font-size: 16px;
+    font-size: calc(16px * var(--cc-gui-scale));
   }
 }

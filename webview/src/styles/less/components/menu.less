@@ -1,30 +1,30 @@
 /* Menu Dropdown */
 .menu-dropdown {
     position: absolute;
-    top: 45px;
-    right: 16px;
+    top: calc(45px * var(--cc-gui-scale));
+    right: calc(16px * var(--cc-gui-scale));
     background: var(--bg-secondary);
     border: 1px solid var(--border-secondary);
-    border-radius: 6px;
-    padding: 4px;
+    border-radius: calc(6px * var(--cc-gui-scale));
+    padding: calc(4px * var(--cc-gui-scale));
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     z-index: 100;
-    min-width: 140px;
+    min-width: calc(140px * var(--cc-gui-scale));
 }
 
 .menu-item {
     display: flex;
     width: 100%;
     text-align: left;
-    padding: 8px 12px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
 }
 
 .menu-item:hover {
@@ -42,14 +42,14 @@
 .menu-divider {
     height: 1px;
     background: var(--color-menu-bg-active);
-    margin: 4px 0;
+    margin: calc(4px * var(--cc-gui-scale)) 0;
 }
 
 .status-indicator {
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
     color: var(--text-muted);
-    margin-left: 8px;
-    max-width: 200px;
+    margin-left: calc(8px * var(--cc-gui-scale));
+    max-width: calc(200px * var(--cc-gui-scale));
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

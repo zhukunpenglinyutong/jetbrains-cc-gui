@@ -1,19 +1,19 @@
 .configSection {
-  max-width: 800px;
-  padding-bottom: 24px;
+  max-width: calc(800px * var(--cc-gui-scale));
+  padding-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .sectionTitle {
-  font-size: 20px;
+  font-size: calc(20px * var(--cc-gui-scale));
   font-weight: 600;
-  margin: 0 0 8px 0;
+  margin: 0 0 calc(8px * var(--cc-gui-scale)) 0;
   color: var(--text-primary);
 }
 
 .sectionDesc {
   color: var(--text-tertiary);
-  margin: 0 0 24px 0;
-  font-size: 13px;
+  margin: 0 0 calc(24px * var(--cc-gui-scale)) 0;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 /* 响应式适配 */
@@ -23,12 +23,12 @@
   }
 
   .sectionTitle {
-    font-size: 16px;
-    margin-bottom: 6px;
+    font-size: calc(16px * var(--cc-gui-scale));
+    margin-bottom: calc(6px * var(--cc-gui-scale));
   }
 
   .sectionDesc {
-    font-size: 12px;
-    margin-bottom: 16px;
+    font-size: calc(12px * var(--cc-gui-scale));
+    margin-bottom: calc(16px * var(--cc-gui-scale));
   }
 }

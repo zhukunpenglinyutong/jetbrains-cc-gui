@@ -1,58 +1,58 @@
 .configSection {
-  max-width: 800px;
-  padding-bottom: 24px;
+  max-width: calc(800px * var(--cc-gui-scale));
+  padding-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .sectionTitle {
-  font-size: 20px;
+  font-size: calc(20px * var(--cc-gui-scale));
   font-weight: 600;
-  margin: 0 0 8px 0;
+  margin: 0 0 calc(8px * var(--cc-gui-scale)) 0;
   color: var(--text-primary);
 }
 
 .sectionDesc {
   color: var(--text-tertiary);
-  margin: 0 0 24px 0;
-  font-size: 13px;
+  margin: 0 0 calc(24px * var(--cc-gui-scale)) 0;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .fieldHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: calc(8px * var(--cc-gui-scale));
+  margin-bottom: calc(12px * var(--cc-gui-scale));
 
   .codicon {
-    font-size: 16px;
+    font-size: calc(16px * var(--cc-gui-scale));
     color: var(--accent-primary);
   }
 }
 
 .fieldLabel {
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
   font-weight: 600;
   color: var(--text-secondary);
 }
 
 .historyCompletionSection {
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 /* 历史记录管理 */
 .historyManagement {
-  margin-top: 16px;
+  margin-top: calc(16px * var(--cc-gui-scale));
 }
 
 .expandButton {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   cursor: pointer;
-  padding: 4px 0;
+  padding: calc(4px * var(--cc-gui-scale)) 0;
   transition: color 0.2s ease;
 
   &:hover {
@@ -60,21 +60,21 @@
   }
 
   .codicon {
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
   }
 }
 
 .historyCount {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
 }
 
 .historyListContainer {
-  margin-top: 12px;
+  margin-top: calc(12px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: var(--bg-secondary);
-  max-height: 300px;
+  max-height: calc(300px * var(--cc-gui-scale));
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -83,8 +83,8 @@
 .historyActions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   border-bottom: 1px solid var(--border-secondary);
   background: var(--bg-tertiary);
 }
@@ -96,14 +96,14 @@
 .addButton {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--cc-gui-scale));
   background: transparent;
   border: 1px solid var(--accent-primary);
   color: var(--accent-primary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
   transition: all 0.2s ease;
 
   &:hover {
@@ -112,21 +112,21 @@
   }
 
   .codicon {
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
   }
 }
 
 .clearLowButton {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--cc-gui-scale));
   background: transparent;
   border: none;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
   transition: all 0.2s ease;
 
   &:hover {
@@ -135,21 +135,21 @@
   }
 
   .codicon {
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
   }
 }
 
 .clearAllButton {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--cc-gui-scale));
   background: transparent;
   border: none;
   color: var(--color-error);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
   transition: background 0.2s ease;
 
   &:hover {
@@ -157,7 +157,7 @@
   }
 
   .codicon {
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
   }
 }
 
@@ -172,8 +172,8 @@
 .historyItem {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   border-bottom: 1px solid var(--border-secondary);
   transition: background 0.15s ease;
 
@@ -192,17 +192,17 @@
 }
 
 .importanceBadge {
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   font-family: var(--idea-editor-font-family, monospace);
   color: var(--accent-primary);
-  min-width: 32px;
+  min-width: calc(32px * var(--cc-gui-scale));
   text-align: center;
   flex-shrink: 0;
 }
 
 .historyText {
   flex: 1;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -210,17 +210,17 @@
 }
 
 .historyTimestamp {
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   flex-shrink: 0;
   margin-left: auto;
-  padding-right: 8px;
+  padding-right: calc(8px * var(--cc-gui-scale));
 }
 
 .itemActions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--cc-gui-scale));
   flex-shrink: 0;
 }
 
@@ -228,13 +228,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: calc(24px * var(--cc-gui-scale));
+  height: calc(24px * var(--cc-gui-scale));
   background: transparent;
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   opacity: 0;
   transition: all 0.15s ease;
 
@@ -244,7 +244,7 @@
   }
 
   .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 }
 
@@ -252,13 +252,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: calc(24px * var(--cc-gui-scale));
+  height: calc(24px * var(--cc-gui-scale));
   background: transparent;
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   opacity: 0;
   transition: all 0.15s ease;
   flex-shrink: 0;
@@ -269,7 +269,7 @@
   }
 
   .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 }
 
@@ -278,27 +278,27 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px 16px;
+  padding: calc(32px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   color: var(--text-tertiary);
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 
   .codicon {
-    font-size: 24px;
+    font-size: calc(24px * var(--cc-gui-scale));
     opacity: 0.5;
   }
 
   span:last-child {
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
   }
 }
 
 .toggleWrapper {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
   cursor: pointer;
   user-select: none;
-  margin-bottom: 8px;
+  margin-bottom: calc(8px * var(--cc-gui-scale));
 }
 
 .toggleInput {
@@ -307,21 +307,21 @@
 
 .toggleSlider {
   position: relative;
-  width: 44px;
-  height: 24px;
+  width: calc(44px * var(--cc-gui-scale));
+  height: calc(24px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
-  border-radius: 12px;
+  border-radius: calc(12px * var(--cc-gui-scale));
   transition: all 0.2s ease;
   flex-shrink: 0;
 
   &::after {
     content: '';
     position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 18px;
-    height: 18px;
+    top: calc(2px * var(--cc-gui-scale));
+    left: calc(2px * var(--cc-gui-scale));
+    width: calc(18px * var(--cc-gui-scale));
+    height: calc(18px * var(--cc-gui-scale));
     background: var(--text-tertiary);
     border-radius: 50%;
     transition: all 0.2s ease;
@@ -333,7 +333,7 @@
   border-color: var(--accent-primary);
 
   &::after {
-    left: 22px;
+    left: calc(22px * var(--cc-gui-scale));
     background: #ffffff;
   }
 }
@@ -343,45 +343,45 @@
 }
 
 .toggleLabel {
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-secondary);
 }
 
 .formHint {
   display: flex;
   align-items: flex-start;
-  gap: 4px;
-  font-size: 12px;
+  gap: calc(4px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-tertiary);
 
   .codicon {
-    font-size: 12px;
-    margin-top: 2px;
+    font-size: calc(12px * var(--cc-gui-scale));
+    margin-top: calc(2px * var(--cc-gui-scale));
   }
 
   code {
     background: var(--color-code-bg);
-    padding: 1px 4px;
-    border-radius: 3px;
+    padding: 1px calc(4px * var(--cc-gui-scale));
+    border-radius: calc(3px * var(--cc-gui-scale));
     font-family: var(--idea-editor-font-family, monospace);
-    font-size: 11px;
+    font-size: calc(11px * var(--cc-gui-scale));
   }
 }
 
 /* 响应式适配 */
 @media (max-width: 480px) {
   .sectionTitle {
-    font-size: 16px;
-    margin-bottom: 6px;
+    font-size: calc(16px * var(--cc-gui-scale));
+    margin-bottom: calc(6px * var(--cc-gui-scale));
   }
 
   .sectionDesc {
-    font-size: 12px;
-    margin-bottom: 16px;
+    font-size: calc(12px * var(--cc-gui-scale));
+    margin-bottom: calc(16px * var(--cc-gui-scale));
   }
 
   .formHint {
-    font-size: 11px;
+    font-size: calc(11px * var(--cc-gui-scale));
   }
 }
 
@@ -389,16 +389,16 @@
 .errorFallback {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 16px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(16px * var(--cc-gui-scale));
   background: var(--color-warning-bg, rgba(255, 193, 7, 0.1));
   border: 1px solid var(--color-warning-border, rgba(255, 193, 7, 0.3));
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   color: var(--color-warning-text, #856404);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
 
   .codicon {
-    font-size: 16px;
+    font-size: calc(16px * var(--cc-gui-scale));
     color: var(--color-warning, #ffc107);
   }
 }
@@ -407,7 +407,7 @@
 .emptyActions {
   display: flex;
   justify-content: center;
-  padding: 12px;
+  padding: calc(12px * var(--cc-gui-scale));
   border-top: 1px solid var(--border-secondary);
 }
 
@@ -438,9 +438,9 @@
 .editorDialog {
   background: var(--bg-primary);
   border: 1px solid var(--border-secondary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   width: 90%;
-  max-width: 480px;
+  max-width: calc(480px * var(--cc-gui-scale));
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   animation: slideIn 0.2s ease;
 }
@@ -460,13 +460,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
+  padding: calc(16px * var(--cc-gui-scale));
   border-bottom: 1px solid var(--border-secondary);
 }
 
 .editorTitle {
   margin: 0;
-  font-size: 16px;
+  font-size: calc(16px * var(--cc-gui-scale));
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -475,13 +475,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: calc(28px * var(--cc-gui-scale));
+  height: calc(28px * var(--cc-gui-scale));
   background: transparent;
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   transition: all 0.15s ease;
 
   &:hover {
@@ -490,16 +490,16 @@
   }
 
   .codicon {
-    font-size: 16px;
+    font-size: calc(16px * var(--cc-gui-scale));
   }
 }
 
 .editorBody {
-  padding: 16px;
+  padding: calc(16px * var(--cc-gui-scale));
 }
 
 .editorField {
-  margin-bottom: 16px;
+  margin-bottom: calc(16px * var(--cc-gui-scale));
 
   &:last-child {
     margin-bottom: 0;
@@ -508,22 +508,22 @@
 
 .editorLabel {
   display: block;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: calc(8px * var(--cc-gui-scale));
 }
 
 .editorTextarea {
   width: 100%;
-  padding: 10px 12px;
+  padding: calc(10px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: calc(6px * var(--cc-gui-scale));
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-primary);
   resize: vertical;
-  min-height: 80px;
+  min-height: calc(80px * var(--cc-gui-scale));
   font-family: inherit;
   transition: border-color 0.15s ease;
 
@@ -540,18 +540,18 @@
 .importanceControl {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .importanceButton {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: calc(32px * var(--cc-gui-scale));
+  height: calc(32px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s ease;
@@ -568,17 +568,17 @@
   }
 
   .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 }
 
 .importanceInput {
-  width: 60px;
-  padding: 6px 8px;
+  width: calc(60px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: calc(6px * var(--cc-gui-scale));
+  font-size: calc(14px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--text-primary);
   text-align: center;
@@ -602,13 +602,13 @@
 .editorHint {
   display: flex;
   align-items: flex-start;
-  gap: 4px;
-  font-size: 12px;
+  gap: calc(4px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-tertiary);
-  margin-top: 8px;
+  margin-top: calc(8px * var(--cc-gui-scale));
 
   .codicon {
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
     margin-top: 1px;
   }
 }
@@ -616,19 +616,19 @@
 .editorFooter {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(12px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   border-top: 1px solid var(--border-secondary);
   background: var(--bg-secondary);
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 calc(8px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
 }
 
 .editorCancelButton {
-  padding: 8px 16px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   background: transparent;
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: calc(6px * var(--cc-gui-scale));
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s ease;
@@ -640,11 +640,11 @@
 }
 
 .editorSaveButton {
-  padding: 8px 16px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   background: var(--accent-primary);
   border: none;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: calc(6px * var(--cc-gui-scale));
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
   color: #ffffff;
   cursor: pointer;

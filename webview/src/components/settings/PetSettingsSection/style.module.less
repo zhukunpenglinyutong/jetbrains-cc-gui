@@ -1,13 +1,13 @@
 .section {
   width: 100%;
-  max-width: 1180px;
-  padding-bottom: 24px;
+  max-width: calc(1180px * var(--cc-gui-scale));
+  padding-bottom: calc(24px * var(--cc-gui-scale));
   color: var(--text-primary);
 }
 
 .title {
-  margin: 0 0 8px;
-  font-size: 20px;
+  margin: 0 0 calc(8px * var(--cc-gui-scale));
+  font-size: calc(20px * var(--cc-gui-scale));
   font-weight: 600;
   letter-spacing: 0;
 }
@@ -18,7 +18,7 @@
 .hatchHeader p {
   margin: 0;
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   line-height: 1.5;
 }
 
@@ -26,39 +26,39 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 24px;
-  margin-top: 16px;
-  padding: 0 0 16px;
+  gap: calc(24px * var(--cc-gui-scale));
+  margin-top: calc(16px * var(--cc-gui-scale));
+  padding: 0 0 calc(16px * var(--cc-gui-scale));
   border-bottom: 1px solid var(--border-primary);
 }
 
 .scopeTitle {
   display: block;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 600;
 }
 
 .segmentedControl {
   display: inline-grid;
   grid-template-columns: repeat(2, minmax(72px, 1fr));
-  width: 172px;
+  width: calc(172px * var(--cc-gui-scale));
   max-width: 100%;
-  min-width: 172px;
-  padding: 2px;
+  min-width: calc(172px * var(--cc-gui-scale));
+  padding: calc(2px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
 }
 
 .segment,
 .segmentActive {
-  height: 28px;
-  padding: 0 10px;
+  height: calc(28px * var(--cc-gui-scale));
+  padding: 0 calc(10px * var(--cc-gui-scale));
   color: var(--text-secondary);
   background: transparent;
   border: 0;
-  border-radius: 3px;
+  border-radius: calc(3px * var(--cc-gui-scale));
   cursor: pointer;
 }
 
@@ -69,7 +69,7 @@
 
 .scopeCopy {
   display: grid;
-  gap: 3px;
+  gap: calc(3px * var(--cc-gui-scale));
 }
 
 .scopeDescription {
@@ -79,12 +79,12 @@
 
 .scopeDescription {
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .tabbedGroup {
   min-width: 0;
-  margin-top: 24px;
+  margin-top: calc(24px * var(--cc-gui-scale));
 }
 
 .sectionTabs {
@@ -101,17 +101,17 @@
   flex: 1 1 0;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
   min-width: 0;
-  min-height: 38px;
+  min-height: calc(38px * var(--cc-gui-scale));
   margin-bottom: -1px;
-  padding: 0 8px;
+  padding: 0 calc(8px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   background: transparent;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   white-space: nowrap;
   cursor: pointer;
   transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease;
@@ -135,7 +135,7 @@
 
 .tabPanel {
   min-width: 0;
-  padding-top: 18px;
+  padding-top: calc(18px * var(--cc-gui-scale));
 }
 
 .tabPanel > .controlSection:first-child,
@@ -147,15 +147,15 @@
 
 .controlSection,
 .catalogSection {
-  margin-top: 24px;
-  padding-top: 20px;
+  margin-top: calc(24px * var(--cc-gui-scale));
+  padding-top: calc(20px * var(--cc-gui-scale));
   border-top: 1px solid var(--border-primary);
 }
 
 .basicLayout {
   display: grid;
   grid-template-columns: minmax(290px, 0.9fr) minmax(430px, 1.4fr);
-  gap: 18px;
+  gap: calc(18px * var(--cc-gui-scale));
   align-items: stretch;
 }
 
@@ -165,14 +165,14 @@
   min-width: 0;
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
 }
 
 .previewPanel {
   display: flex;
   flex-direction: column;
-  min-height: 396px;
-  padding: 14px;
+  min-height: calc(396px * var(--cc-gui-scale));
+  padding: calc(14px * var(--cc-gui-scale));
 }
 
 .previewPanelHeader,
@@ -185,13 +185,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
 }
 
 .previewPanelHeader,
 .previewPanelFooter {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
 }
 
 .previewStatus {
@@ -211,14 +211,14 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: calc(16px * var(--cc-gui-scale));
 }
 
 .sectionHeader h4,
 .catalogHeader h4,
 .hatchHeader h4 {
-  margin: 0 0 4px;
-  font-size: 14px;
+  margin: 0 0 calc(4px * var(--cc-gui-scale));
+  font-size: calc(14px * var(--cc-gui-scale));
   font-weight: 600;
   letter-spacing: 0;
 }
@@ -226,8 +226,8 @@
 .switchLabel {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 28px;
+  gap: calc(8px * var(--cc-gui-scale));
+  min-height: calc(28px * var(--cc-gui-scale));
   white-space: nowrap;
   cursor: pointer;
 }
@@ -240,8 +240,8 @@
   display: grid;
   flex: 1;
   place-items: center;
-  min-height: 330px;
-  margin: 14px 0;
+  min-height: calc(330px * var(--cc-gui-scale));
+  margin: calc(14px * var(--cc-gui-scale)) 0;
   overflow: hidden;
   background: var(--bg-primary);
   border: 1px dashed var(--border-secondary);
@@ -249,8 +249,8 @@
 
 .spritePreview {
   display: block;
-  width: 104px;
-  height: 113px;
+  width: calc(104px * var(--cc-gui-scale));
+  height: calc(113px * var(--cc-gui-scale));
   background-repeat: no-repeat;
   background-size: 800% 900%;
   image-rendering: pixelated;
@@ -262,15 +262,15 @@
 
 .staticPreview {
   display: block;
-  width: 112px;
-  height: 112px;
+  width: calc(112px * var(--cc-gui-scale));
+  height: calc(112px * var(--cc-gui-scale));
   object-fit: contain;
   image-rendering: pixelated;
 }
 
 .builtinPreview {
   color: var(--accent-primary);
-  font-size: 70px;
+  font-size: calc(70px * var(--cc-gui-scale));
 }
 
 .operationsPanel {
@@ -281,15 +281,15 @@
 }
 
 .operationsHeader {
-  min-height: 52px;
-  padding: 10px 0;
+  min-height: calc(52px * var(--cc-gui-scale));
+  padding: calc(10px * var(--cc-gui-scale)) 0;
   border-bottom: 1px solid var(--border-primary);
 }
 
 .operationsHeader h4,
 .actionPreviewHeader h4 {
   margin: 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
   font-weight: 600;
 }
 
@@ -299,7 +299,7 @@
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .operationsBody {
@@ -310,9 +310,9 @@
   display: grid;
   grid-template-columns: minmax(160px, 0.82fr) minmax(250px, 1.18fr);
   align-items: center;
-  gap: 18px;
-  min-height: 58px;
-  padding: 10px 0;
+  gap: calc(18px * var(--cc-gui-scale));
+  min-height: calc(58px * var(--cc-gui-scale));
+  padding: calc(10px * var(--cc-gui-scale)) 0;
   border-bottom: 1px solid var(--border-primary);
 }
 
@@ -324,16 +324,16 @@
 .actionPreviewHeader p,
 .hatchFooter > span,
 .hatchDirectoryRow p {
-  margin: 2px 0 0;
+  margin: calc(2px * var(--cc-gui-scale)) 0 0;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   line-height: 1.4;
 }
 
 .operationLabel {
   display: block;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 600;
 }
 
@@ -368,27 +368,27 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 48px;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--cc-gui-scale));
 }
 
 .rangeControl strong {
   color: var(--text-primary);
   font-family: var(--code-font-family, monospace);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   text-align: right;
 }
 
 .aliasEditor {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .actionWorkspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(230px, 0.42fr);
-  gap: 12px;
-  margin-top: 14px;
+  gap: calc(12px * var(--cc-gui-scale));
+  margin-top: calc(14px * var(--cc-gui-scale));
 }
 
 .actionEditor {
@@ -397,8 +397,8 @@
 }
 
 .actionConfigurationBar {
-  margin-top: 14px;
-  padding-bottom: 8px;
+  margin-top: calc(14px * var(--cc-gui-scale));
+  padding-bottom: calc(8px * var(--cc-gui-scale));
   border-bottom: 1px solid var(--border-primary);
 }
 
@@ -414,14 +414,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 30px;
-  gap: 5px;
-  padding: 0 8px;
+  min-height: calc(30px * var(--cc-gui-scale));
+  gap: calc(5px * var(--cc-gui-scale));
+  padding: 0 calc(8px * var(--cc-gui-scale));
   color: var(--text-primary);
   background: transparent;
   border: 0;
   border-bottom: 2px solid transparent;
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -439,7 +439,7 @@
 .actionStateTab em {
   color: var(--text-tertiary);
   font-family: var(--code-font-family, monospace);
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   font-style: normal;
 }
 
@@ -449,9 +449,9 @@
 
 .actionOption small,
 .actionEditorHeader p {
-  margin: 3px 0 0;
+  margin: calc(3px * var(--cc-gui-scale)) 0 0;
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: calc(10px * var(--cc-gui-scale));
   line-height: 1.4;
 }
 
@@ -459,7 +459,7 @@
   flex: 0 0 auto;
   color: var(--accent-primary);
   font-family: var(--code-font-family, monospace);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-style: normal;
 }
 
@@ -467,8 +467,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 10px 12px;
+  gap: calc(14px * var(--cc-gui-scale));
+  padding: calc(10px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   padding-right: 0;
   padding-left: 0;
   border-bottom: 1px solid var(--border-primary);
@@ -477,7 +477,7 @@
 .actionEditorHeader h5 {
   margin: 0;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 600;
 }
 
@@ -498,9 +498,9 @@
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
   align-items: flex-start;
-  min-height: 58px;
-  gap: 8px;
-  padding: 9px 10px;
+  min-height: calc(58px * var(--cc-gui-scale));
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(9px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
   color: var(--text-primary);
   text-align: left;
   background: var(--bg-secondary);
@@ -511,15 +511,15 @@
 .actionOption strong,
 .actionOptionSelected strong {
   display: block;
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 600;
 }
 
 .actionOption input,
 .actionOptionSelected input {
-  width: 14px;
-  height: 14px;
-  margin: 2px 0 0;
+  width: calc(14px * var(--cc-gui-scale));
+  height: calc(14px * var(--cc-gui-scale));
+  margin: calc(2px * var(--cc-gui-scale)) 0 0;
   accent-color: var(--accent-primary);
   cursor: inherit;
 }
@@ -535,9 +535,9 @@
 .actionPreview {
   display: grid;
   grid-template-rows: auto auto minmax(180px, 1fr) auto auto;
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
   min-height: 0;
-  padding: 0 0 0 14px;
+  padding: 0 0 0 calc(14px * var(--cc-gui-scale));
   background: transparent;
   border: 0;
   border-left: 1px solid var(--border-primary);
@@ -551,7 +551,7 @@
 .actionPreviewStage {
   display: grid;
   place-items: center;
-  min-height: 180px;
+  min-height: calc(180px * var(--cc-gui-scale));
   overflow: hidden;
   background: var(--bg-primary);
   border: 1px dashed var(--border-secondary);
@@ -561,9 +561,9 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) 48px;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
 }
 
 .previewTimeline input {
@@ -574,35 +574,35 @@
 .previewTimeline strong {
   color: var(--accent-primary);
   font-family: var(--code-font-family, monospace);
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   text-align: right;
 }
 
 .actionPreviewCaption {
   margin: 0;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   line-height: 1.4;
 }
 
 .actionMappingHint {
-  margin: 14px 0 0;
+  margin: calc(14px * var(--cc-gui-scale)) 0 0;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
 }
 
 .field {
   display: grid;
-  gap: 7px;
+  gap: calc(7px * var(--cc-gui-scale));
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
 }
 
 .field > span,
 .field > label > span {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
 }
 
 .field select,
@@ -613,23 +613,23 @@
   color: var(--text-primary);
   background: var(--bg-primary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   outline: none;
 }
 
 .field select {
-  height: 32px;
-  padding: 0 8px;
+  height: calc(32px * var(--cc-gui-scale));
+  padding: 0 calc(8px * var(--cc-gui-scale));
 }
 
 .field input[type='number'] {
-  height: 30px;
-  padding: 0 8px;
+  height: calc(30px * var(--cc-gui-scale));
+  padding: 0 calc(8px * var(--cc-gui-scale));
 }
 
 .field input[type='text'] {
-  height: 32px;
-  padding: 0 8px;
+  height: calc(32px * var(--cc-gui-scale));
+  padding: 0 calc(8px * var(--cc-gui-scale));
 }
 
 .field select:focus,
@@ -653,14 +653,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   width: 100%;
-  height: 32px;
-  padding: 0 8px;
+  height: calc(32px * var(--cc-gui-scale));
+  padding: 0 calc(8px * var(--cc-gui-scale));
   color: var(--text-primary);
   background: var(--bg-primary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   cursor: pointer;
 }
 
@@ -680,25 +680,25 @@
 .petSelectPopover {
   position: absolute;
   z-index: 30;
-  top: calc(100% + 4px);
+  top: calc(100% + 4px * var(--cc-gui-scale));
   left: 0;
   width: 100%;
-  padding: 6px;
+  padding: calc(6px * var(--cc-gui-scale));
   background: var(--bg-primary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   box-shadow: 0 6px 18px rgb(0 0 0 / 28%);
 }
 
 .petSelectSearch {
   display: flex;
   align-items: center;
-  gap: 7px;
-  height: 32px;
-  padding: 0 8px;
+  gap: calc(7px * var(--cc-gui-scale));
+  height: calc(32px * var(--cc-gui-scale));
+  padding: 0 calc(8px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
 }
 
 .petSelectSearch:focus-within {
@@ -708,7 +708,7 @@
 .petSelectSearch input {
   min-width: 0;
   flex: 1;
-  height: 28px;
+  height: calc(28px * var(--cc-gui-scale));
   padding: 0;
   color: var(--text-primary);
   background: transparent;
@@ -717,23 +717,23 @@
 }
 
 .petSelectOptions {
-  max-height: 224px;
-  margin-top: 6px;
+  max-height: calc(224px * var(--cc-gui-scale));
+  margin-top: calc(6px * var(--cc-gui-scale));
   overflow-y: auto;
 }
 
 .petSelectOption,
 .petSelectOptionActive {
   display: grid;
-  gap: 2px;
+  gap: calc(2px * var(--cc-gui-scale));
   width: 100%;
-  min-height: 42px;
-  padding: 6px 8px;
+  min-height: calc(42px * var(--cc-gui-scale));
+  padding: calc(6px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   color: var(--text-primary);
   text-align: left;
   background: transparent;
   border: 0;
-  border-radius: 3px;
+  border-radius: calc(3px * var(--cc-gui-scale));
   cursor: pointer;
 }
 
@@ -755,7 +755,7 @@
 }
 
 .petSelectEmpty {
-  padding: 18px 8px;
+  padding: calc(18px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   text-align: center;
 }
@@ -768,15 +768,15 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px 24px;
-  min-height: 32px;
-  margin-top: 12px;
+  gap: calc(10px * var(--cc-gui-scale)) calc(24px * var(--cc-gui-scale));
+  min-height: calc(32px * var(--cc-gui-scale));
+  margin-top: calc(12px * var(--cc-gui-scale));
 }
 
 .catalogActions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .secondaryButton,
@@ -787,13 +787,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 0 10px;
+  gap: calc(6px * var(--cc-gui-scale));
+  min-height: calc(30px * var(--cc-gui-scale));
+  padding: 0 calc(10px * var(--cc-gui-scale));
   color: var(--text-primary);
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   cursor: pointer;
 }
 
@@ -808,7 +808,7 @@
 }
 
 .iconButton {
-  width: 30px;
+  width: calc(30px * var(--cc-gui-scale));
   padding: 0;
 }
 
@@ -843,23 +843,23 @@
 .searchBox {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   width: 100%;
-  height: 34px;
-  margin: 20px 0 18px;
-  padding: 0 10px;
+  height: calc(34px * var(--cc-gui-scale));
+  margin: calc(20px * var(--cc-gui-scale)) 0 calc(18px * var(--cc-gui-scale));
+  padding: 0 calc(10px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   background: var(--bg-primary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
 }
 
 .repositorySettings {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 20px;
-  padding-bottom: 20px;
+  gap: calc(16px * var(--cc-gui-scale));
+  margin-top: calc(20px * var(--cc-gui-scale));
+  padding-bottom: calc(20px * var(--cc-gui-scale));
   border-bottom: 1px solid var(--border-primary);
 }
 
@@ -876,52 +876,52 @@
 }
 
 .hatchDescriptionField textarea {
-  min-height: 260px;
+  min-height: calc(260px * var(--cc-gui-scale));
   height: 100%;
-  padding: 8px;
+  padding: calc(8px * var(--cc-gui-scale));
   resize: vertical;
   color: var(--text-primary);
   background: var(--bg-primary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   outline: none;
 }
 
 .hatchWorkspace {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
-  gap: 18px;
+  gap: calc(18px * var(--cc-gui-scale));
   align-items: stretch;
-  margin-top: 18px;
+  margin-top: calc(18px * var(--cc-gui-scale));
 }
 
 .hatchFields {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 16px;
-  min-height: 318px;
+  gap: calc(16px * var(--cc-gui-scale));
+  min-height: calc(318px * var(--cc-gui-scale));
 }
 
 .hatchFieldGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: calc(16px * var(--cc-gui-scale));
 }
 
 .referenceWorkspace {
   display: grid;
   grid-template-rows: auto auto;
   align-content: start;
-  gap: 14px;
-  padding-left: 18px;
+  gap: calc(14px * var(--cc-gui-scale));
+  padding-left: calc(18px * var(--cc-gui-scale));
   border-left: 1px solid var(--border-primary);
 }
 
 .referencePicker {
   display: grid;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 600;
 }
 
@@ -933,9 +933,9 @@
   display: grid;
   align-content: center;
   justify-items: center;
-  min-height: 132px;
-  gap: 7px;
-  padding: 10px;
+  min-height: calc(132px * var(--cc-gui-scale));
+  gap: calc(7px * var(--cc-gui-scale));
+  padding: calc(10px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   text-align: center;
   border: 1px dashed var(--border-secondary);
@@ -943,7 +943,7 @@
 
 .referenceDropzone > .codicon {
   color: var(--text-tertiary);
-  font-size: 20px;
+  font-size: calc(20px * var(--cc-gui-scale));
 }
 
 .referenceDropzone p {
@@ -951,7 +951,7 @@
   margin: 0;
   overflow: hidden;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -960,7 +960,7 @@
 .hatchActions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .hatchActions {
@@ -972,22 +972,22 @@
 }
 
 .hatchDirectoryShortcut {
-  margin-top: 12px;
+  margin-top: calc(12px * var(--cc-gui-scale));
 }
 
 .hatchFooter {
   display: grid;
   align-items: start;
   justify-content: initial;
-  gap: 12px;
-  margin-top: 16px;
-  padding-top: 16px;
+  gap: calc(12px * var(--cc-gui-scale));
+  margin-top: calc(16px * var(--cc-gui-scale));
+  padding-top: calc(16px * var(--cc-gui-scale));
   border-top: 1px solid var(--border-primary);
 }
 
 .hatchDirectoryRow {
   align-items: flex-end;
-  padding-top: 12px;
+  padding-top: calc(12px * var(--cc-gui-scale));
   border-top: 1px solid var(--border-primary);
 }
 
@@ -998,7 +998,7 @@
 .hatchDirectoryRow > div > span {
   display: block;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 600;
 }
 
@@ -1008,16 +1008,16 @@
   overflow: hidden;
   color: var(--text-tertiary);
   font-family: var(--code-font-family, monospace);
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .skillStatus {
-  padding: 3px 7px;
+  padding: calc(3px * var(--cc-gui-scale)) calc(7px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
-  font-size: 11px;
+  border-radius: calc(4px * var(--cc-gui-scale));
+  font-size: calc(11px * var(--cc-gui-scale));
   white-space: nowrap;
 }
 
@@ -1029,19 +1029,19 @@
 .bubbleSettings {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
+  gap: calc(16px * var(--cc-gui-scale));
   width: 100%;
-  margin-top: 20px;
-  padding-bottom: 20px;
+  margin-top: calc(20px * var(--cc-gui-scale));
+  padding-bottom: calc(20px * var(--cc-gui-scale));
   border-bottom: 1px solid var(--border-primary);
 }
 
 .placeholderHint {
   display: grid;
-  gap: 10px;
-  margin-top: 18px;
+  gap: calc(10px * var(--cc-gui-scale));
+  margin-top: calc(18px * var(--cc-gui-scale));
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
 }
 
 .placeholderTitle {
@@ -1057,13 +1057,13 @@
   width: 100%;
   border-collapse: collapse;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   line-height: 1.5;
 }
 
 .placeholderTable th,
 .placeholderTable td {
-  padding: 8px 10px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
   text-align: left;
   vertical-align: top;
   border: 1px solid var(--border-primary);
@@ -1077,42 +1077,42 @@
 
 .placeholderTable th:first-child,
 .placeholderTable td:first-child {
-  width: 130px;
+  width: calc(130px * var(--cc-gui-scale));
   white-space: nowrap;
 }
 
 .placeholderTable code {
-  padding: 2px 6px;
+  padding: calc(2px * var(--cc-gui-scale)) calc(6px * var(--cc-gui-scale));
   color: var(--text-primary);
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
 }
 
 .templateGrid {
   display: inline-grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
+  gap: calc(16px * var(--cc-gui-scale));
   width: 100%;
-  margin-top: 16px;
+  margin-top: calc(16px * var(--cc-gui-scale));
 }
 
 .templateField {
   display: grid;
-  gap: 7px;
+  gap: calc(7px * var(--cc-gui-scale));
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
 }
 
 .templateField textarea {
   min-width: 0;
-  min-height: 74px;
-  padding: 8px;
+  min-height: calc(74px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale));
   resize: vertical;
   color: var(--text-primary);
   background: var(--bg-primary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   outline: none;
   line-height: 1.4;
 }
@@ -1123,33 +1123,33 @@
 
 .searchBox input {
   flex: 1;
-  height: 30px;
+  height: calc(30px * var(--cc-gui-scale));
   padding: 0;
   border: 0;
 }
 
 .catalogGrid {
   display: grid;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .petCard {
   display: grid;
   grid-template-rows: 96px minmax(40px, auto) 30px;
-  gap: 7px;
+  gap: calc(7px * var(--cc-gui-scale));
   min-width: 0;
-  padding: 6px;
+  padding: calc(6px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
 }
 
 .remotePreview {
   position: relative;
   display: grid;
   place-items: center;
-  width: min(88px, 100%);
-  max-height: 96px;
+  width: ~"min(88px * var(--cc-gui-scale), 100%)";
+  max-height: calc(96px * var(--cc-gui-scale));
   aspect-ratio: 11 / 12;
   margin: 0 auto;
   overflow: hidden;
@@ -1165,7 +1165,7 @@
 
 .previewError {
   color: var(--color-error);
-  font-size: 22px;
+  font-size: calc(22px * var(--cc-gui-scale));
 }
 
 .petInfo {
@@ -1182,19 +1182,19 @@
 }
 
 .petInfo strong {
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .petInfo span {
-  margin-top: 3px;
+  margin-top: calc(3px * var(--cc-gui-scale));
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
 }
 
 .installedLabel {
   align-self: center;
   color: var(--color-success);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   text-align: center;
 }
 
@@ -1203,9 +1203,9 @@
 .loadingState {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 64px;
-  margin-bottom: 12px;
+  gap: calc(8px * var(--cc-gui-scale));
+  min-height: calc(64px * var(--cc-gui-scale));
+  margin-bottom: calc(12px * var(--cc-gui-scale));
   color: var(--text-tertiary);
 }
 
@@ -1222,32 +1222,32 @@
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 10px;
-  min-height: 32px;
-  margin-top: 16px;
+  gap: calc(10px * var(--cc-gui-scale));
+  min-height: calc(32px * var(--cc-gui-scale));
+  margin-top: calc(16px * var(--cc-gui-scale));
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
 }
 
 .pageButton {
-  width: 30px;
+  width: calc(30px * var(--cc-gui-scale));
   padding: 0;
 }
 
 .pageJump {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
 }
 
 .pageJump input {
-  width: 58px;
-  height: 30px;
-  padding: 0 8px;
+  width: calc(58px * var(--cc-gui-scale));
+  height: calc(30px * var(--cc-gui-scale));
+  padding: 0 calc(8px * var(--cc-gui-scale));
   color: var(--text-primary);
   background: var(--bg-primary);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   outline: none;
 }
 
@@ -1284,7 +1284,7 @@
   }
 
   .previewPanel {
-    min-height: 370px;
+    min-height: calc(370px * var(--cc-gui-scale));
   }
 
   .previewStage {
@@ -1293,7 +1293,7 @@
 
   .actionPreview {
     min-height: 0;
-    padding: 14px 0 0;
+    padding: calc(14px * var(--cc-gui-scale)) 0 0;
     border-top: 1px solid var(--border-primary);
     border-left: 0;
   }
@@ -1303,11 +1303,11 @@
   }
 
   .hatchDescriptionField textarea {
-    min-height: 220px;
+    min-height: calc(220px * var(--cc-gui-scale));
   }
 
   .referenceWorkspace {
-    padding-top: 16px;
+    padding-top: calc(16px * var(--cc-gui-scale));
     padding-left: 0;
     border-top: 1px solid var(--border-primary);
     border-left: 0;
@@ -1325,11 +1325,11 @@
   }
 
   .scopeBar {
-    gap: 12px;
+    gap: calc(12px * var(--cc-gui-scale));
   }
 
   .segmentedControl {
-    width: 172px;
+    width: calc(172px * var(--cc-gui-scale));
   }
 
   .repositorySettings {
@@ -1338,12 +1338,12 @@
 
   .bubbleActions {
     flex-wrap: wrap;
-    gap: 10px 16px;
+    gap: calc(10px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   }
 
   .operationRow {
     grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
+    gap: calc(10px * var(--cc-gui-scale));
   }
 
   .operationsActions,
@@ -1361,7 +1361,7 @@
   }
 
   .referenceDropzone {
-    min-height: 132px;
+    min-height: calc(132px * var(--cc-gui-scale));
   }
 
   .previewPanel {
@@ -1369,11 +1369,11 @@
   }
 
   .previewStage {
-    min-height: 300px;
+    min-height: calc(300px * var(--cc-gui-scale));
   }
 
   .placeholderTable th:first-child,
   .placeholderTable td:first-child {
-    width: 108px;
+    width: calc(108px * var(--cc-gui-scale));
   }
 }

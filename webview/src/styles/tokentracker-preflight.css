@@ -177,11 +177,11 @@
   }
 
   .tt-dashboard :where(select:is([multiple], [size])) optgroup option {
-    padding-inline-start: 20px;
+    padding-inline-start: calc(20px * var(--cc-gui-scale));
   }
 
   .tt-dashboard ::file-selector-button {
-    margin-inline-end: 4px;
+    margin-inline-end: calc(4px * var(--cc-gui-scale));
   }
 
   .tt-dashboard ::placeholder {

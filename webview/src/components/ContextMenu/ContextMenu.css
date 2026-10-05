@@ -1,17 +1,17 @@
 .context-menu {
   position: fixed;
   z-index: 10000;
-  min-width: 140px;
+  min-width: calc(140px * var(--cc-gui-scale));
   background: var(--vscode-menu-background, #252526);
   border: 1px solid var(--vscode-menu-border, #454545);
-  border-radius: 4px;
-  padding: 4px 0;
+  border-radius: calc(4px * var(--cc-gui-scale));
+  padding: calc(4px * var(--cc-gui-scale)) 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .context-menu-item {
-  padding: 4px 16px;
-  font-size: 12px;
+  padding: calc(4px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--vscode-menu-foreground, #ccc);
   cursor: pointer;
   white-space: nowrap;
@@ -30,6 +30,6 @@
 .context-menu-separator {
   height: 1px;
   border: none;
-  margin: 4px 8px;
+  margin: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   background: var(--vscode-menu-separatorBackground, #454545);
 }

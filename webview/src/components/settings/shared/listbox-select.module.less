@@ -7,22 +7,22 @@
 .wrap {
   position: relative;
   width: 100%;
-  max-width: 400px;
+  max-width: calc(400px * var(--cc-gui-scale));
 }
 
 .trigger {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   width: 100%;
-  min-height: 34px;
-  padding: 8px 12px;
+  min-height: calc(34px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-family: inherit;
   text-align: left;
   cursor: pointer;
@@ -56,7 +56,7 @@
 .arrow {
   flex: 0 0 auto;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   transition: transform 0.15s ease, color 0.15s ease;
 
   .trigger.open & {
@@ -71,38 +71,38 @@
   z-index: 1000;
   box-sizing: border-box;
   min-width: 100%;
-  max-width: 420px;
-  max-height: 280px;
-  padding: 4px;
+  max-width: calc(420px * var(--cc-gui-scale));
+  max-height: calc(280px * var(--cc-gui-scale));
+  padding: calc(4px * var(--cc-gui-scale));
   overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
 }
 
 .menuDown {
-  top: calc(100% + 4px);
+  top: calc(100% + 4px * var(--cc-gui-scale));
 }
 
 .menuUp {
-  bottom: calc(100% + 4px);
+  bottom: calc(100% + 4px * var(--cc-gui-scale));
 }
 
 .option {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   width: 100%;
-  min-height: 34px;
-  padding: 8px 10px;
+  min-height: calc(34px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
   border: none;
-  border-radius: 3px;
+  border-radius: calc(3px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-family: inherit;
   text-align: left;
   cursor: pointer;
@@ -121,7 +121,7 @@
 
   .codicon {
     flex-shrink: 0;
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 }
 
@@ -133,12 +133,12 @@
 
 @media (max-width: 480px) {
   .trigger {
-    min-height: 30px;
-    padding: 7px 10px;
-    font-size: 12px;
+    min-height: calc(30px * var(--cc-gui-scale));
+    padding: calc(7px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
+    font-size: calc(12px * var(--cc-gui-scale));
   }
 
   .option {
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
   }
 }

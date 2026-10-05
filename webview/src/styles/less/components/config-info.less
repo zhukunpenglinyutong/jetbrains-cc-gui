@@ -6,13 +6,13 @@
 .config-info-switch-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
     color: var(--text-secondary);
-    font-size: 12px;
-    padding: 6px 12px;
-    border-radius: 6px;
+    font-size: calc(12px * var(--cc-gui-scale));
+    padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+    border-radius: calc(6px * var(--cc-gui-scale));
     cursor: pointer;
     transition: all 0.2s;
 }
@@ -24,17 +24,17 @@
 }
 
 .config-info-switch-btn .codicon {
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
 }
 
 .config-info-dropdown {
     position: absolute;
-    top: calc(100% + 4px);
+    top: calc(100% + 4px * var(--cc-gui-scale));
     right: 0;
-    min-width: 180px;
+    min-width: calc(180px * var(--cc-gui-scale));
     background: var(--bg-secondary);
     border: 1px solid var(--border-secondary);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--cc-gui-scale));
     box-shadow: var(--shadow-lg);
     z-index: 100;
     overflow: hidden;
@@ -43,13 +43,13 @@
 .config-info-dropdown-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
     width: 100%;
-    padding: 10px 14px;
+    padding: calc(10px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale));
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     text-align: left;
     cursor: pointer;
     transition: all 0.15s;
@@ -61,7 +61,7 @@
 }
 
 .config-info-dropdown-item .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
     color: var(--text-tertiary);
 }
 
@@ -69,57 +69,57 @@
 .config-info-empty {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 24px;
+    gap: calc(8px * var(--cc-gui-scale));
+    padding: calc(24px * var(--cc-gui-scale));
     justify-content: center;
     color: var(--text-tertiary);
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .config-info-body {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: calc(12px * var(--cc-gui-scale));
 }
 
 .config-info-item {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
 }
 
 .config-info-label {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
+    gap: calc(6px * var(--cc-gui-scale));
+    font-size: calc(12px * var(--cc-gui-scale));
     color: var(--text-tertiary);
     font-weight: 500;
 }
 
 .config-info-label .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
 }
 
 .config-info-value {
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     color: var(--text-secondary);
-    padding-left: 20px;
+    padding-left: calc(20px * var(--cc-gui-scale));
 }
 
 .config-info-value-with-action {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding-left: 20px;
+    gap: calc(8px * var(--cc-gui-scale));
+    padding-left: calc(20px * var(--cc-gui-scale));
 }
 
 .config-info-code {
     font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
     background: var(--color-code-bg);
-    padding: 4px 8px;
-    border-radius: 4px;
+    padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     color: var(--text-primary);
     word-break: break-all;
 }
@@ -129,8 +129,8 @@
     border: none;
     color: var(--text-tertiary);
     cursor: pointer;
-    padding: 4px;
-    border-radius: 4px;
+    padding: calc(4px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -143,18 +143,18 @@
 }
 
 .config-info-toggle .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
 }
 
 .config-info-badge {
     display: inline-block;
     background: var(--accent-primary);
     color: #ffffff;
-    font-size: 11px;
+    font-size: calc(11px * var(--cc-gui-scale));
     font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 10px;
-    margin-left: 8px;
+    padding: calc(2px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+    border-radius: calc(10px * var(--cc-gui-scale));
+    margin-left: calc(8px * var(--cc-gui-scale));
 }
 
 /* 响应式设计 */

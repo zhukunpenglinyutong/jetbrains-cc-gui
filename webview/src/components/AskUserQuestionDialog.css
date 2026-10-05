@@ -4,18 +4,18 @@
   position: relative;
   background: var(--bg-primary);
   border: 1px solid var(--border-secondary);
-  border-radius: 8px;
-  padding: 24px;
+  border-radius: calc(8px * var(--cc-gui-scale));
+  padding: calc(24px * var(--cc-gui-scale));
   /* Float as a card instead of hugging the tool-window edges: the full border
      and rounded corners must stay visible, otherwise the left border line is
      clipped by the plugin's display boundary. Stretch within the overlay minus
      these insets, including while collapsed mode aligns its children to the end. */
   align-self: stretch;
-  margin: 0 8px 8px;
+  margin: 0 calc(8px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: calc(20px * var(--cc-gui-scale));
   transition: all 0.3s ease;
 }
 
@@ -27,8 +27,8 @@
 
 /* Collapsed state - compact display */
 .ask-user-question-dialog.collapsed {
-  padding: 16px 24px;
-  gap: 12px;
+  padding: calc(16px * var(--cc-gui-scale)) calc(24px * var(--cc-gui-scale));
+  gap: calc(12px * var(--cc-gui-scale));
   overflow: hidden;
 }
 
@@ -37,7 +37,7 @@
   background: transparent;
   pointer-events: none;
   align-items: flex-end;
-  padding-bottom: 20px;
+  padding-bottom: calc(20px * var(--cc-gui-scale));
 }
 
 .permission-dialog-overlay.collapsed-mode .ask-user-question-dialog {
@@ -50,11 +50,11 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
 }
 
 .ask-user-question-dialog-title {
-  font-size: 18px;
+  font-size: calc(18px * var(--cc-gui-scale));
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -64,14 +64,14 @@
 /* Collapse/expand toggle button */
 .collapse-toggle-button {
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: calc(28px * var(--cc-gui-scale));
+  height: calc(28px * var(--cc-gui-scale));
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-elevated);
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   cursor: pointer;
   color: var(--text-primary);
   transition: all 0.2s;
@@ -86,23 +86,23 @@
 .countdown-timer {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: calc(6px * var(--cc-gui-scale));
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-muted);
-  padding: 4px 10px;
-  border-radius: 4px;
+  padding: calc(4px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: var(--bg-elevated);
   border: 1px solid var(--border-secondary);
   transition: all 0.3s ease;
 }
 
 .countdown-timer .codicon {
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
 }
 
 .countdown-time {
   font-variant-numeric: tabular-nums;
-  min-width: 40px;
+  min-width: calc(40px * var(--cc-gui-scale));
   text-align: center;
 }
 
@@ -123,19 +123,19 @@
 .timeout-warning-banner {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(10px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale));
   background: rgba(204, 167, 0, 0.15);
   border: 1px solid var(--text-warning);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   color: var(--text-warning);
-  font-size: 13px;
-  margin: -8px 0 0 0;
+  font-size: calc(13px * var(--cc-gui-scale));
+  margin: calc(-8px * var(--cc-gui-scale)) 0 0 0;
   animation: slideIn 0.3s ease-out;
 }
 
 .timeout-warning-banner .codicon {
-  font-size: 16px;
+  font-size: calc(16px * var(--cc-gui-scale));
   flex-shrink: 0;
 }
 
@@ -160,8 +160,8 @@
 .collapsed-timer {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 13px;
+  gap: calc(4px * var(--cc-gui-scale));
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -172,7 +172,7 @@
 }
 
 .collapsed-timer .codicon {
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
 }
 
 /* Hint area in collapsed state */
@@ -180,11 +180,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: calc(16px * var(--cc-gui-scale));
 }
 
 .collapsed-progress {
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-muted);
 }
 
@@ -197,37 +197,37 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: -8px 0 0 0;
+  margin: calc(-8px * var(--cc-gui-scale)) 0 0 0;
 }
 
 .ask-user-question-dialog-progress {
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-muted);
 }
 
 .ask-user-question-dialog-question {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: calc(16px * var(--cc-gui-scale));
 }
 
 .question-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .question-tag {
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--color-link);
   background: rgba(0, 120, 212, 0.12);
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: calc(2px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+  border-radius: calc(4px * var(--cc-gui-scale));
 }
 
 .question-text {
-  font-size: 15px;
+  font-size: calc(15px * var(--cc-gui-scale));
   color: var(--text-primary);
   margin: 0;
   line-height: 1.5;
@@ -236,16 +236,16 @@
 .question-options {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .question-option {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
+  padding: calc(12px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: var(--bg-elevated);
   cursor: pointer;
   transition: all 0.2s;
@@ -271,51 +271,51 @@
 
 .option-checkbox {
   flex-shrink: 0;
-  font-size: 16px;
+  font-size: calc(16px * var(--cc-gui-scale));
   color: var(--color-link);
-  margin-top: 2px;
+  margin-top: calc(2px * var(--cc-gui-scale));
 }
 
 .option-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--cc-gui-scale));
 }
 
 .option-label {
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .option-description {
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-muted);
   line-height: 1.4;
 }
 
 .question-hint {
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-muted);
-  margin: -8px 0 0 0;
+  margin: calc(-8px * var(--cc-gui-scale)) 0 0 0;
 }
 
 /* Supporting detail (a plan under review) shown above the options */
 .question-detail {
   max-height: 40vh;
   overflow: auto;
-  margin: 0 0 12px 0;
-  padding: 10px 12px;
+  margin: 0 0 calc(12px * var(--cc-gui-scale)) 0;
+  padding: calc(10px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   border: 1px solid var(--border-color, rgba(128, 128, 128, 0.35));
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: var(--bg-elevated);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .question-detail-label {
-  margin-bottom: 6px;
-  font-size: 12px;
+  margin-bottom: calc(6px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--text-muted);
 }
@@ -331,20 +331,20 @@
 
 /* Custom input container */
 .custom-input-container {
-  margin-top: 8px;
+  margin-top: calc(8px * var(--cc-gui-scale));
 }
 
 /* Custom input field */
 .custom-input {
   width: 100%;
-  min-height: 80px;
-  padding: 12px;
+  min-height: calc(80px * var(--cc-gui-scale));
+  padding: calc(12px * var(--cc-gui-scale));
   border: 1px solid var(--accent-primary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: var(--bg-elevated);
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
   line-height: 1.5;
   resize: vertical;
   box-sizing: border-box;
@@ -364,25 +364,25 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  margin-top: 8px;
+  gap: calc(12px * var(--cc-gui-scale));
+  margin-top: calc(8px * var(--cc-gui-scale));
 }
 
 .action-buttons-right {
   display: flex;
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
 }
 
 .action-button {
-  padding: 8px 20px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
   border: 1px solid transparent;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: calc(6px * var(--cc-gui-scale));
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
-  min-width: 80px;
+  min-width: calc(80px * var(--cc-gui-scale));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -416,18 +416,18 @@
 /* Responsive adjustments */
 @media (max-width: 600px) {
   .ask-user-question-dialog {
-    padding: 16px;
+    padding: calc(16px * var(--cc-gui-scale));
   }
 
   .ask-user-question-dialog-title {
-    font-size: 16px;
+    font-size: calc(16px * var(--cc-gui-scale));
   }
 
   .question-text {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 
   .question-option {
-    padding: 10px;
+    padding: calc(10px * var(--cc-gui-scale));
   }
 }

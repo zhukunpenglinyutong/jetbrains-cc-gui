@@ -34,10 +34,9 @@ export function forceWebviewRepaint(_reason?: string, onRepaint?: () => void): v
       pendingCallbacks = [];
       return;
     }
-    const expectedScale = getComputedStyle(document.documentElement)
-      .getPropertyValue('--font-scale')
-      .trim();
-    if (!performGenericSurfaceDamage(app, expectedScale)) {
+    // No scale is passed down: the nudge no longer restores a zoom value, it clears
+    // one (see performGenericSurfaceDamage).
+    if (!performGenericSurfaceDamage(app)) {
       runAfterSurfaceDamagePulse(repaint);
       return;
     }

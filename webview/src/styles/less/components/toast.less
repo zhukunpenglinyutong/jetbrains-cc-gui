@@ -1,12 +1,12 @@
 /* Toast Notification Styles */
 .toast-container {
     position: fixed;
-    top: 60px;
-    right: 16px;
+    top: calc(60px * var(--cc-gui-scale));
+    right: calc(16px * var(--cc-gui-scale));
     z-index: 9999;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
     pointer-events: none;
 }
 
@@ -14,10 +14,10 @@
     pointer-events: auto;
     background: var(--bg-elevated);
     border: 1px solid var(--border-secondary);
-    border-radius: 6px;
-    padding: 12px 16px;
-    min-width: 280px;
-    max-width: 400px;
+    border-radius: calc(6px * var(--cc-gui-scale));
+    padding: calc(12px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
+    min-width: calc(280px * var(--cc-gui-scale));
+    max-width: calc(400px * var(--cc-gui-scale));
     box-shadow: var(--shadow-md);
     animation: toast-slide-in 0.3s ease-out;
     transition: all 0.3s ease-out;
@@ -55,11 +55,11 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: calc(12px * var(--cc-gui-scale));
 }
 
 .toast-message {
-    font-size: 13px;
+    font-size: calc(13px * var(--cc-gui-scale));
     color: var(--text-secondary);
     flex: 1;
     line-height: 1.4;
@@ -72,11 +72,11 @@
     border: none;
     color: var(--text-tertiary);
     cursor: pointer;
-    padding: 4px;
+    padding: calc(4px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     transition: all 0.2s;
     flex-shrink: 0;
 }
@@ -87,16 +87,16 @@
 }
 
 .toast-close .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
 }
 
 .toast-action {
     background: transparent;
     border: 1px solid var(--color-toast-warning-border);
     color: var(--color-toast-warning-border);
-    border-radius: 4px;
-    padding: 3px 10px;
-    font-size: 12px;
+    border-radius: calc(4px * var(--cc-gui-scale));
+    padding: calc(3px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
+    font-size: calc(12px * var(--cc-gui-scale));
     cursor: pointer;
     flex-shrink: 0;
     transition: all 0.2s;

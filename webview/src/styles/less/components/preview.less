@@ -1,11 +1,11 @@
 
 .message-image-block img,
 .message .markdown-content img {
-    max-width: 480px;
-    max-height: 360px;
+    max-width: calc(480px * var(--cc-gui-scale));
+    max-height: calc(360px * var(--cc-gui-scale));
     width: auto;
     height: auto;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     display: inline-block;
     cursor: zoom-in;
 }
@@ -19,7 +19,7 @@
 /* 用户上传图片的样式 */
 .message-image-block.user-image {
     display: inline-block;
-    margin: 4px 4px 4px 0;
+    margin: calc(4px * var(--cc-gui-scale)) calc(4px * var(--cc-gui-scale)) calc(4px * var(--cc-gui-scale)) 0;
     max-width: 100%;
 }
 
@@ -63,21 +63,21 @@
     max-width: 90vw;
     max-height: 90vh;
     object-fit: contain;
-    border-radius: 8px;
+    border-radius: calc(8px * var(--cc-gui-scale));
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     cursor: default;
 }
 
 .image-preview-close {
     position: absolute;
-    top: 20px;
-    right: 20px;
-    width: 40px;
-    height: 40px;
+    top: calc(20px * var(--cc-gui-scale));
+    right: calc(20px * var(--cc-gui-scale));
+    width: calc(40px * var(--cc-gui-scale));
+    height: calc(40px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
+    font-size: var(--cc-gui-chat-font-size-24);
     color: #ffffff;
     background: rgba(255, 255, 255, 0.1);
     border-radius: 50%;
@@ -95,25 +95,25 @@
 .message-attachment-chip {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    border-radius: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
+    padding: calc(4px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
+    border-radius: calc(6px * var(--cc-gui-scale));
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.15);
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
     line-height: 1.4;
     max-width: 100%;
-    margin-bottom: 4px;
+    margin-bottom: calc(4px * var(--cc-gui-scale));
 }
 
 .message-attachment-chip-icon {
-    font-size: 14px;
+    font-size: var(--cc-gui-chat-font-size-14);
     opacity: 0.8;
     flex-shrink: 0;
 }
 
 .message-attachment-chip-ext {
-    font-size: 10px;
+    font-size: var(--cc-gui-chat-font-size-10);
     font-weight: 600;
     opacity: 0.7;
     text-transform: uppercase;

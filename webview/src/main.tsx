@@ -28,7 +28,6 @@ import {
   cancelSurfaceDamagePulse,
   finishSurfaceDamagePulse,
   replaceSurfaceDamagePulse,
-  runAfterSurfaceDamagePulse,
 } from './utils/surfaceDamagePulse';
 import { requestDependencyStatusUntilSettled, waitForBridge } from './utils/bridgeStartup';
 import type { UiFontConfig, CodeFontConfig } from './types/uiFontConfig';
@@ -130,14 +129,15 @@ if (enableVConsole) {
  * Apply IDEA editor font configuration to CSS variables
  */
 /**
- * JCEF (macOS) may occasionally render with an incorrect zoom/layout after the IDE
- * stays in background / screen-off for a while. The UI uses CSS `zoom` with an
- * inverse `vw/vh` container size to implement font scaling. If the zoom is not
- * applied correctly after resume, the container becomes smaller than the viewport,
- * leaving blank areas and causing "misalignment".
+ * JCEF (macOS) may come back with a stale surface after the IDE sits in the
+ * background or the screen is off.
  *
- * This recovery nudges Chromium/JCEF to re-apply the expected zoom and triggers
- * a resize recalculation for components relying on window size.
+ * Font scaling is now driven purely by the `--font-scale` variable — the chat text
+ * is sized from it (see base.less) — so there is no zoom to re-apply and no
+ * inversely-sized container that could drift and leave blank areas. What can still
+ * go stale is the OSR raster, so this re-asserts the variable and asks the shared
+ * coordinator for a full-viewport repaint, which also dispatches the resize event
+ * components rely on for window-size recalculation.
  */
 function setupScaleRecovery() {
   const getExpectedScale = (): string => {
@@ -154,39 +154,21 @@ function setupScaleRecovery() {
 
   const forceReapply = (reason: string) => {
     const expected = getExpectedScale();
-    const app = document.getElementById('app');
-    const computedZoom = app
-      ? (getComputedStyle(app) as CSSStyleDeclaration & { zoom?: string }).zoom
-      : '';
-    const expectedNumber = Number.parseFloat(expected);
-    const computedNumber = Number.parseFloat(computedZoom || '');
-    const needsZoomNudge = !!app
-      && Number.isFinite(expectedNumber)
-      && (!Number.isFinite(computedNumber) || Math.abs(computedNumber - expectedNumber) > 0.01);
-
-    // Re-set the CSS variable to ensure width/height calc(100vw/scale) is refreshed.
+    // Re-assert the variable: it is the single source of truth for the chat font
+    // size now, so a stale value would leave the whole conversation mis-sized.
     document.documentElement.style.setProperty('--font-scale', expected);
     const completeRecovery = () => {
-      debugLog('[ScaleRecovery] Applied scale recovery:', {
-        reason,
-        expected,
-        computedZoom,
-        needsZoomNudge,
-      });
+      debugLog('[ScaleRecovery] Applied scale recovery:', { reason, expected });
       lastRecoveryAt = Date.now();
     };
-    if (needsZoomNudge) {
-      // The shared coordinator is the sole inline-zoom writer. If an OSR pulse is
-      // active this request remains coalesced until that exact token settles.
-      forceWebviewRepaint(`scale-recovery:${reason}`, completeRecovery);
-      return;
-    }
-    const resizeOnly = () => {
-      if (runAfterSurfaceDamagePulse(resizeOnly)) return;
-      window.dispatchEvent(new Event('resize'));
-      completeRecovery();
-    };
-    requestAnimationFrame(resizeOnly);
+    // Comparing a computed zoom against --font-scale no longer means anything now
+    // that #app does not zoom: the comparison would report drift forever and keep
+    // firing repaints. Asking the coordinator for viewport damage is the part that
+    // actually repaints a stale surface.
+    //
+    // The shared coordinator is the sole inline-zoom writer, so an active OSR pulse
+    // defers this request until that exact token settles.
+    forceWebviewRepaint(`scale-recovery:${reason}`, completeRecovery);
   };
 
   const schedule = (reason: string) => {

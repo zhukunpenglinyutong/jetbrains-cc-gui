@@ -22,40 +22,40 @@
  * + nav + close in one row without crowding the input. */
 .cc-search-panel {
     position: absolute;
-    top: 12px;
-    right: 18px;
+    top: calc(12px * var(--cc-gui-scale));
+    right: calc(18px * var(--cc-gui-scale));
     z-index: 50;
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 6px 8px;
-    width: 460px;
-    max-width: calc(100% - 36px);
+    gap: calc(4px * var(--cc-gui-scale));
+    padding: calc(6px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+    width: calc(460px * var(--cc-gui-scale));
+    max-width: calc(100% - 36px * var(--cc-gui-scale));
     background: var(--bg-elevated);
     border: 1px solid var(--border-secondary);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--cc-gui-scale));
     box-shadow: var(--shadow-md);
     color: var(--text-primary);
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
     user-select: none;
 }
 
 .cc-search-icon {
     flex: 0 0 auto;
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
     color: var(--text-tertiary);
 }
 
 .cc-search-input {
     flex: 1 1 auto;
     min-width: 0;
-    height: 24px;
+    height: calc(24px * var(--cc-gui-scale));
     background: var(--bg-primary);
     border: 1px solid var(--border-primary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     color: var(--text-primary);
-    padding: 0 6px;
-    font-size: 12px;
+    padding: 0 calc(6px * var(--cc-gui-scale));
+    font-size: calc(12px * var(--cc-gui-scale));
     outline: none;
     transition: border-color 120ms ease;
 
@@ -70,11 +70,11 @@
 
 .cc-search-counter {
     flex: 0 0 auto;
-    min-width: 38px;
+    min-width: calc(38px * var(--cc-gui-scale));
     text-align: right;
     color: var(--text-tertiary);
     font-variant-numeric: tabular-nums;
-    font-size: 11px;
+    font-size: calc(11px * var(--cc-gui-scale));
 
     &.is-error {
         color: var(--color-error);
@@ -85,8 +85,8 @@
  * they read as a tight modifier cluster, not separate primary actions. */
 .cc-search-toggle {
     flex: 0 0 auto;
-    width: 22px;
-    height: 22px;
+    width: calc(22px * var(--cc-gui-scale));
+    height: calc(22px * var(--cc-gui-scale));
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -94,7 +94,7 @@
     border: 1px solid transparent;
     color: var(--text-tertiary);
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     padding: 0;
     transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
 
@@ -110,14 +110,14 @@
     }
 
     .codicon {
-        font-size: 14px;
+        font-size: calc(14px * var(--cc-gui-scale));
     }
 }
 
 .cc-search-btn {
     flex: 0 0 auto;
-    width: 22px;
-    height: 22px;
+    width: calc(22px * var(--cc-gui-scale));
+    height: calc(22px * var(--cc-gui-scale));
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -125,7 +125,7 @@
     border: none;
     color: var(--text-secondary);
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     padding: 0;
     transition: background-color 120ms ease, color 120ms ease;
 
@@ -144,20 +144,20 @@
     }
 
     .codicon {
-        font-size: 14px;
+        font-size: calc(14px * var(--cc-gui-scale));
     }
 }
 
 .cc-search-hint {
     position: absolute;
-    top: calc(100% + 4px);
+    top: calc(100% + 4px * var(--cc-gui-scale));
     right: 0;
-    padding: 4px 8px;
+    padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
     background: var(--bg-elevated);
     border: 1px solid var(--border-secondary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     color: var(--text-tertiary);
-    font-size: 11px;
+    font-size: calc(11px * var(--cc-gui-scale));
     white-space: nowrap;
     box-shadow: var(--shadow-sm);
     pointer-events: none;
@@ -172,7 +172,7 @@ mark.cc-search-match {
     background-color: var(--color-search-match-bg);
     color: inherit;
     padding: 0;
-    border-radius: 2px;
+    border-radius: calc(2px * var(--cc-gui-scale));
     /* Don't break inline layout in tight code paragraphs. */
     box-shadow: 0 0 0 1px transparent;
     transition: background-color 120ms ease, box-shadow 120ms ease;

@@ -2,8 +2,8 @@
 .task-container {
     background: var(--bg-primary);
     border: 1px solid var(--border-primary);
-    border-radius: 8px;
-    margin: 12px 0;
+    border-radius: calc(8px * var(--cc-gui-scale));
+    margin: calc(12px * var(--cc-gui-scale)) 0;
     overflow: hidden;
     overflow-anchor: none;
 }
@@ -12,7 +12,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     background: var(--bg-primary);
     cursor: pointer;
     user-select: none;
@@ -30,7 +30,7 @@
 .task-header-right {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
     flex-shrink: 0;
 }
 
@@ -44,34 +44,34 @@
 }
 
 .task-icon-wrapper {
-    width: 24px;
-    height: 24px;
+    width: calc(24px * var(--cc-gui-scale));
+    height: calc(24px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     background: var(--color-task-icon-bg);
     flex-shrink: 0;
 }
 
 .task-icon {
     color: var(--color-task-icon);
-    font-size: 14px;
+    font-size: var(--cc-gui-chat-font-size-14);
 }
 
 .task-type-badge {
-    font-size: 11px;
+    font-size: var(--cc-gui-chat-font-size-11);
     font-weight: 600;
     color: var(--color-task-badge-text);
     background: var(--color-task-badge-bg);
-    padding: 2px 6px;
-    border-radius: 4px;
+    padding: calc(2px * var(--cc-gui-scale)) calc(6px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     text-transform: uppercase;
     flex-shrink: 0;
 }
 
 .task-summary-text {
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
     color: var(--text-secondary);
     white-space: nowrap;
     /* overflow: hidden; */
@@ -107,11 +107,11 @@
 }
 
 .task-content-wrapper {
-    padding: 10px;
+    padding: calc(10px * var(--cc-gui-scale));
 }
 
 .task-field {
-    margin-bottom: 10px;
+    margin-bottom: calc(10px * var(--cc-gui-scale));
 }
 
 .task-field:last-child {
@@ -119,24 +119,24 @@
 }
 
 .task-field-label {
-    font-size: 11px;
+    font-size: var(--cc-gui-chat-font-size-11);
     text-transform: uppercase;
     color: var(--text-tertiary);
-    margin-bottom: 4px;
+    margin-bottom: calc(4px * var(--cc-gui-scale));
     font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: calc(4px * var(--cc-gui-scale));
 }
 
 .task-field-content {
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
     color: var(--text-primary);
     line-height: 1.5;
     white-space: pre-wrap;
     background: var(--bg-secondary);
-    padding: 8px;
-    border-radius: 6px;
+    padding: calc(8px * var(--cc-gui-scale));
+    border-radius: calc(6px * var(--cc-gui-scale));
     font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
     border: 1px solid var(--border-primary);
 }
@@ -169,7 +169,7 @@
 }
 
 .file-list-container::-webkit-scrollbar {
-    width: 6px;
+    width: calc(6px * var(--cc-gui-scale));
 }
 
 .file-list-container::-webkit-scrollbar-track {
@@ -178,7 +178,7 @@
 
 .file-list-container::-webkit-scrollbar-thumb {
     background-color: var(--scrollbar-thumb, rgba(128, 128, 128, 0.4));
-    border-radius: 3px;
+    border-radius: calc(3px * var(--cc-gui-scale));
 }
 
 .file-list-container::-webkit-scrollbar-thumb:hover {
@@ -190,11 +190,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: calc(24px * var(--cc-gui-scale));
+    height: calc(24px * var(--cc-gui-scale));
     padding: 0;
     border: none;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
@@ -216,21 +216,21 @@
 }
 
 .agent-group-content {
-    padding: 10px;
+    padding: calc(10px * var(--cc-gui-scale));
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
 
     .task-container {
         margin: 0;
     }
 
     > .content-block {
-        padding: 0 4px;
+        padding: 0 calc(4px * var(--cc-gui-scale));
     }
 }
 
 .agent-group-chevron {
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
     color: var(--text-tertiary);
 }

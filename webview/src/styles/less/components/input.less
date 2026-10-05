@@ -1,6 +1,6 @@
 /* Input Area Styles */
 .input-area {
-    padding: 9px 8px 8px;
+    padding: calc(9px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
     background: var(--bg-chat);
     border-top: 1px solid var(--bg-tertiary);
     flex-shrink: 0;
@@ -9,11 +9,11 @@
 .input-container {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
     background: var(--bg-tertiary);
     border: 1px solid var(--border-secondary);
-    border-radius: 8px;
-    padding: 12px 12px 8px 12px;
+    border-radius: calc(8px * var(--cc-gui-scale));
+    padding: calc(12px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     transition: all 0.2s ease;
     box-shadow: var(--shadow-sm);
 }
@@ -29,13 +29,13 @@
     background: transparent;
     border: none;
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
     line-height: 20px;
     resize: none;
     font-family: inherit;
     outline: none;
-    min-height: 24px;
-    max-height: 200px;
+    min-height: calc(24px * var(--cc-gui-scale));
+    max-height: calc(200px * var(--cc-gui-scale));
 }
 
 #messageInput::placeholder {
@@ -47,20 +47,20 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-top: 4px;
+    padding-top: calc(4px * var(--cc-gui-scale));
 }
 
 .input-tools-left {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
 }
 
 /* Placeholder for future tool buttons */
 .tool-button-placeholder {
-    width: 24px;
-    height: 24px;
-    border-radius: 4px;
+    width: calc(24px * var(--cc-gui-scale));
+    height: calc(24px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -78,16 +78,16 @@
 .input-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
 }
 
 .action-button {
-    width: 28px;
-    height: 28px;
+    width: calc(28px * var(--cc-gui-scale));
+    height: calc(28px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--cc-gui-scale));
     border: none;
     cursor: pointer;
     transition: all 0.2s;

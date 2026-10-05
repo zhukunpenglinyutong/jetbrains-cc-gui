@@ -16,10 +16,10 @@
 
 /* Collapsed messages indicator */
 .collapsed-messages-indicator {
-    padding: 8px 20px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
     text-align: center;
     color: var(--text-secondary, #888);
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
     cursor: pointer;
     opacity: 0.8;
     transition: opacity 0.15s;
@@ -47,10 +47,10 @@
  * rarely exceed 100 messages, and `contain: layout style` already isolates
  * each message from cross-recalculation during scroll. */
 .message {
-    padding: 16px 20px;
+    padding: calc(16px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
     border-bottom: 1px solid var(--color-message-divider);
     min-width: 0; /* 允许内容缩小 */
     max-width: 100%; /* 防止超出容器 */
@@ -66,16 +66,16 @@
     background-color: transparent;
     border-left: none;
     align-items: flex-end;
-    padding-top: 16px;
-    padding-bottom: 16px;
+    padding-top: calc(16px * var(--cc-gui-scale));
+    padding-bottom: calc(16px * var(--cc-gui-scale));
     position: relative; /* Enable absolute positioning for copy button */
 }
 
 .message.user .message-content {
     background-color: var(--color-message-user-bg);
     color: var(--color-message-user-text);
-    padding: 10px 14px;
-    border-radius: 12px 12px 2px 12px;
+    padding: calc(10px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale));
+    border-radius: calc(12px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale)) calc(2px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     max-width: 85%;
     border: 1px solid rgba(255,255,255,0.06);
     word-wrap: break-word;
@@ -91,7 +91,7 @@
     background-color: transparent;
     border-left: none;
     align-items: flex-start;
-    padding: 8px 20px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
 }
 
 .message.task_notification .message-content,
@@ -107,12 +107,12 @@
 .message-header-row {
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-bottom: 2px;
+    gap: calc(6px * var(--cc-gui-scale));
+    margin-bottom: calc(2px * var(--cc-gui-scale));
 }
 
 .message-timestamp-header {
-    font-size: 11px;
+    font-size: var(--cc-gui-chat-font-size-11);
     color: var(--text-tertiary);
     line-height: 1;
 }
@@ -121,8 +121,8 @@
 .message.assistant {
     background: transparent;
     flex-direction: column; /* Revert to column to avoid alignment issues without dot */
-    gap: 6px;
-    padding-left: 20px;
+    gap: calc(6px * var(--cc-gui-scale));
+    padding-left: calc(20px * var(--cc-gui-scale));
 }
 
 .message.assistant .message-content {
@@ -137,15 +137,15 @@
 /* Message Copy Button - appears on hover for assistant messages */
 .message-copy-btn {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 28px;
-    height: 28px;
+    top: calc(8px * var(--cc-gui-scale));
+    right: calc(8px * var(--cc-gui-scale));
+    width: calc(28px * var(--cc-gui-scale));
+    height: calc(28px * var(--cc-gui-scale));
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     cursor: pointer;
-    padding: 4px;
+    padding: calc(4px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -169,15 +169,15 @@
 
     .copy-tooltip {
         position: absolute;
-        top: -30px;
+        top: calc(-30px * var(--cc-gui-scale));
         right: 0;
         background: var(--bg-elevated);
         color: var(--text-primary);
         border: 1px solid var(--border-secondary);
         box-shadow: var(--shadow-sm);
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 12px;
+        padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+        border-radius: calc(4px * var(--cc-gui-scale));
+        font-size: var(--cc-gui-chat-font-size-12);
         opacity: 0;
         visibility: hidden;
         transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
@@ -188,8 +188,8 @@
         &::after {
             content: '';
             position: absolute;
-            bottom: -4px;
-            right: 10px;
+            bottom: calc(-4px * var(--cc-gui-scale));
+            right: calc(10px * var(--cc-gui-scale));
             border-width: 4px 4px 0;
             border-style: solid;
             border-color: var(--border-secondary) transparent transparent transparent;
@@ -205,27 +205,27 @@
 
 /* Quote button sits to the left of the absolute copy button on assistant messages */
 .message-quote-btn {
-    right: 44px;
+    right: calc(44px * var(--cc-gui-scale));
 }
 
 .message.assistant > .message-copy-btn {
-    top: -14px;
+    top: calc(-14px * var(--cc-gui-scale));
 }
 
 /* Inline copy button for user messages (in header row) */
 .message-copy-btn-inline {
     position: relative;
-    width: 20px;
-    height: 20px;
+    width: calc(20px * var(--cc-gui-scale));
+    height: calc(20px * var(--cc-gui-scale));
     opacity: 0;
     visibility: hidden;
     bottom: auto;
     right: auto;
-    padding: 2px;
+    padding: calc(2px * var(--cc-gui-scale));
 
     .copy-icon svg {
-        width: 12px;
-        height: 12px;
+        width: calc(12px * var(--cc-gui-scale));
+        height: calc(12px * var(--cc-gui-scale));
     }
 
     &:hover {
@@ -233,13 +233,13 @@
     }
 
     .copy-tooltip {
-        top: calc(100% + 4px);
-        right: -4px;
+        top: calc(100% + 4px * var(--cc-gui-scale));
+        right: calc(-4px * var(--cc-gui-scale));
 
         &::after {
-            top: -4px;
+            top: calc(-4px * var(--cc-gui-scale));
             bottom: auto;
-            right: 8px;
+            right: calc(8px * var(--cc-gui-scale));
             border-width: 0 4px 4px;
             border-color: transparent transparent var(--border-secondary) transparent;
         }
@@ -280,12 +280,12 @@
 @media (max-width: 768px) {
     .message-copy-btn {
         /* Smaller button size for mobile */
-        width: 24px;
-        height: 24px;
+        width: calc(24px * var(--cc-gui-scale));
+        height: calc(24px * var(--cc-gui-scale));
 
         .copy-icon svg {
-            width: 12px;
-            height: 12px;
+            width: calc(12px * var(--cc-gui-scale));
+            height: calc(12px * var(--cc-gui-scale));
         }
     }
 }
@@ -314,39 +314,39 @@
 .provider-not-configured-card {
     background: var(--color-provider-card-bg);
     border: 1px solid var(--color-provider-card-border);
-    border-radius: 8px;
-    padding: 16px;
+    border-radius: calc(8px * var(--cc-gui-scale));
+    padding: calc(16px * var(--cc-gui-scale));
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: calc(10px * var(--cc-gui-scale));
 }
 
 .provider-card-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
 }
 
 .provider-card-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+    width: calc(28px * var(--cc-gui-scale));
+    height: calc(28px * var(--cc-gui-scale));
+    border-radius: calc(6px * var(--cc-gui-scale));
     background: var(--color-provider-card-icon-bg);
     color: var(--color-provider-card-accent);
     flex-shrink: 0;
 }
 
 .provider-card-title {
-    font-size: 13.5px;
+    font-size: var(--cc-gui-chat-font-size-135);
     font-weight: 600;
     color: var(--color-provider-card-accent);
 }
 
 .provider-card-description {
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
     line-height: 1.5;
     color: var(--text-secondary);
     margin: 0;
@@ -355,14 +355,14 @@
 .provider-card-action {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
     align-self: flex-start;
-    padding: 6px 14px;
-    border-radius: 6px;
+    padding: calc(6px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale));
+    border-radius: calc(6px * var(--cc-gui-scale));
     border: 1px solid var(--color-provider-card-action-border);
     background: var(--color-provider-card-action-bg);
     color: var(--color-provider-card-accent);
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
     font-weight: 500;
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease;
@@ -380,42 +380,42 @@
 /* Error Diagnostic Card — overlay below the original error message
    for known errors that have well-defined user-side resolutions. */
 .error-diagnostic-card {
-    margin-top: 10px;
+    margin-top: calc(10px * var(--cc-gui-scale));
     background: var(--color-provider-card-bg);
     border: 1px solid var(--color-provider-card-border);
-    border-radius: 8px;
-    padding: 14px 16px;
+    border-radius: calc(8px * var(--cc-gui-scale));
+    padding: calc(14px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: calc(12px * var(--cc-gui-scale));
 }
 
 .error-diagnostic-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
 }
 
 .error-diagnostic-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+    width: calc(28px * var(--cc-gui-scale));
+    height: calc(28px * var(--cc-gui-scale));
+    border-radius: calc(6px * var(--cc-gui-scale));
     background: var(--color-provider-card-icon-bg);
     color: var(--color-provider-card-accent);
     flex-shrink: 0;
 }
 
 .error-diagnostic-title {
-    font-size: 13.5px;
+    font-size: var(--cc-gui-chat-font-size-135);
     font-weight: 600;
     color: var(--color-provider-card-accent);
 }
 
 .error-diagnostic-intro {
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
     line-height: 1.55;
     color: var(--text-secondary);
     margin: 0;
@@ -424,31 +424,31 @@
 .error-diagnostic-solution {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 12px;
+    gap: calc(8px * var(--cc-gui-scale));
+    padding: calc(12px * var(--cc-gui-scale));
     background: var(--color-provider-card-action-bg);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--cc-gui-scale));
     border: 1px solid var(--color-provider-card-action-border);
 }
 
 .error-diagnostic-solution-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--cc-gui-scale));
     flex-wrap: wrap;
 }
 
 .error-diagnostic-solution-title {
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
     font-weight: 600;
     color: var(--text-primary);
 }
 
 .error-diagnostic-recommended-badge {
-    font-size: 11px;
+    font-size: var(--cc-gui-chat-font-size-11);
     font-weight: 500;
-    padding: 2px 8px;
-    border-radius: 10px;
+    padding: calc(2px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+    border-radius: calc(10px * var(--cc-gui-scale));
     background: var(--color-provider-card-accent);
     color: rgba(0, 0, 0, 0.8);
     line-height: 1.4;
@@ -457,17 +457,17 @@
 .error-diagnostic-steps {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: calc(10px * var(--cc-gui-scale));
 }
 
 .error-diagnostic-step {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
 }
 
 .error-diagnostic-step-text {
-    font-size: 12.5px;
+    font-size: var(--cc-gui-chat-font-size-125);
     line-height: 1.55;
     color: var(--text-secondary);
     margin: 0;
@@ -479,16 +479,16 @@
     gap: 0;
     background: var(--bg-code, rgba(0, 0, 0, 0.25));
     border: 1px solid var(--color-provider-card-border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--cc-gui-scale));
     overflow: hidden;
     min-width: 0;
 }
 
 .error-diagnostic-command-text {
     flex: 1;
-    padding: 8px 12px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     font-family: var(--cc-gui-code-font-family, var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace));
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
     color: var(--text-primary);
     word-break: break-all;
     white-space: pre-wrap;
@@ -500,13 +500,13 @@
 .error-diagnostic-copy-btn {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
+    gap: calc(4px * var(--cc-gui-scale));
+    padding: calc(4px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
     background: var(--color-provider-card-action-bg);
     border: none;
     border-left: 1px solid var(--color-provider-card-border);
     color: var(--color-provider-card-accent);
-    font-size: 11.5px;
+    font-size: var(--cc-gui-chat-font-size-115);
     font-weight: 500;
     cursor: pointer;
     transition: background 0.15s ease;
@@ -532,14 +532,14 @@
 .error-diagnostic-nav-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
     align-self: flex-start;
-    padding: 5px 12px;
-    border-radius: 6px;
+    padding: calc(5px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+    border-radius: calc(6px * var(--cc-gui-scale));
     border: 1px solid var(--color-provider-card-action-border);
     background: var(--color-provider-card-action-bg);
     color: var(--color-provider-card-accent);
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
     font-weight: 500;
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease;
@@ -555,23 +555,23 @@
 }
 
 .error-diagnostic-reason {
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
     line-height: 1.5;
     color: var(--text-secondary);
     margin: 0;
-    padding: 8px 10px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
     background: var(--color-provider-card-icon-bg);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     border-left: 2px solid var(--color-provider-card-accent);
 }
 
 /* AI Indicator Dot */
 .ai-indicator-dot {
-    width: 6px;
-    height: 6px;
+    width: calc(6px * var(--cc-gui-scale));
+    height: calc(6px * var(--cc-gui-scale));
     background-color: var(--color-message-ai-indicator);
     border-radius: 50%;
-    margin-top: 2px; /* Slight optical adjustment */
+    margin-top: calc(2px * var(--cc-gui-scale)); /* Slight optical adjustment */
 }
 
 .message.assistant:hover .ai-indicator-dot {
@@ -579,15 +579,15 @@
 }
 
 .message-role-label {
-    font-size: 11px;
+    font-size: var(--cc-gui-chat-font-size-11);
     text-transform: uppercase;
     font-weight: 600;
     letter-spacing: 0.5px;
     color: var(--text-muted);
-    margin-bottom: 4px;
+    margin-bottom: calc(4px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
     user-select: none;
 }
 
@@ -605,7 +605,7 @@
 
 /* Message Content */
 .message-content {
-    font-size: var(--idea-editor-font-size, 13.5px);
+    font-size: var(--cc-gui-chat-font-size);
     line-height: 1.6;
     color: var(--text-primary);
     min-width: 0; /* Allow flex items to shrink below content size */
@@ -628,12 +628,16 @@
 
 /* Markdown Content */
 .markdown-content {
-    font-size: var(--idea-editor-font-size, 13.5px);
+    font-size: var(--cc-gui-chat-font-size);
     line-height: 1.6;
     color: var(--text-primary);
     word-wrap: break-word;
     word-break: break-word;
     overflow-wrap: break-word;
+    /* 宽内容（长行代码、宽表格、图片、KaTeX、mermaid）在这里横向滚动，而不是撑开
+     * 消息容器。消息容器是 flex 子项，默认 min-width: auto——被撑开后会一路撑宽
+     * #app，整个界面随之横向溢出并被裁切（档位越高越明显）。 */
+    overflow-x: auto;
     cursor: text;
 }
 
@@ -645,7 +649,7 @@
 }
 
 .markdown-content p {
-    margin-bottom: 10px;
+    margin-bottom: calc(10px * var(--cc-gui-scale));
     word-wrap: break-word;
     word-break: break-word;
     overflow-wrap: break-word;
@@ -661,7 +665,7 @@
    single-document render — only the message's final paragraph drops its
    bottom margin. */
 .markdown-content .md-block > p:last-child {
-    margin-bottom: 10px;
+    margin-bottom: calc(10px * var(--cc-gui-scale));
 }
 
 .markdown-content > .md-block:last-child > p:last-child {
@@ -675,12 +679,12 @@
 .markdown-content pre {
     background-color: var(--color-code-block-bg);
     border: 1px solid var(--color-code-block-border);
-    border-radius: 6px;
-    padding: 12px;
+    border-radius: calc(6px * var(--cc-gui-scale));
+    padding: calc(12px * var(--cc-gui-scale));
     overflow-x: auto;
-    margin: 10px 0;
+    margin: calc(10px * var(--cc-gui-scale)) 0;
     font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
-    font-size: var(--idea-editor-font-size, 12.5px);
+    font-size: var(--cc-gui-chat-font-size);
     line-height: var(--idea-editor-line-spacing, 1.5);
     max-width: 100%; /* 防止超出容器 */
     box-sizing: border-box; /* 包含 padding 在宽度内 */
@@ -693,20 +697,20 @@
 
 .code-block-wrapper {
     position: relative;
-    margin: 10px 0;
+    margin: calc(10px * var(--cc-gui-scale)) 0;
     cursor: default;
 
     pre {
         margin: 0;
-        padding-right: 40px;
+        padding-right: calc(40px * var(--cc-gui-scale));
     }
 }
 
 .code-block-wrapper.latex-code-block-wrapper {
     background-color: var(--color-code-block-bg);
     border: 1px solid var(--color-code-block-border);
-    border-radius: 6px;
-    padding: 12px;
+    border-radius: calc(6px * var(--cc-gui-scale));
+    padding: calc(12px * var(--cc-gui-scale));
     box-sizing: border-box;
 
     pre {
@@ -722,15 +726,15 @@
 
 .copy-code-btn {
     position: absolute;
-    top: 6px;
-    right: 6px;
-    width: 28px;
-    height: 28px;
+    top: calc(6px * var(--cc-gui-scale));
+    right: calc(6px * var(--cc-gui-scale));
+    width: calc(28px * var(--cc-gui-scale));
+    height: calc(28px * var(--cc-gui-scale));
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--cc-gui-scale));
     cursor: pointer;
-    padding: 4px;
+    padding: calc(4px * var(--cc-gui-scale));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -755,15 +759,15 @@
 
 .copy-tooltip {
     position: absolute;
-    top: -30px;
+    top: calc(-30px * var(--cc-gui-scale));
     right: 0;
     background: var(--bg-elevated);
     color: var(--text-primary);
     border: 1px solid var(--border-secondary);
     box-shadow: var(--shadow-sm);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
+    padding: calc(4px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
+    border-radius: calc(4px * var(--cc-gui-scale));
+    font-size: var(--cc-gui-chat-font-size-12);
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.2s ease, visibility 0.2s ease;
@@ -774,8 +778,8 @@
     &::after {
         content: '';
         position: absolute;
-        bottom: -4px;
-        right: 10px;
+        bottom: calc(-4px * var(--cc-gui-scale));
+        right: calc(10px * var(--cc-gui-scale));
         border-width: 4px 4px 0;
         border-style: solid;
         border-color: var(--border-secondary) transparent transparent transparent;
@@ -790,9 +794,9 @@
 
 /* Mermaid Diagram Styles */
 .mermaid-diagram {
-    padding: 16px;
+    padding: calc(16px * var(--cc-gui-scale));
     background: var(--color-code-block-bg);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--cc-gui-scale));
     overflow-x: auto;
     display: flex;
     justify-content: center;
@@ -812,8 +816,8 @@
 .markdown-content code {
     font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
     background-color: var(--color-code-inline-bg);
-    padding: 2px 4px;
-    border-radius: 3px;
+    padding: calc(2px * var(--cc-gui-scale)) calc(4px * var(--cc-gui-scale));
+    border-radius: calc(3px * var(--cc-gui-scale));
     font-size: inherit;
     word-wrap: break-word;
     overflow-wrap: break-word;
@@ -848,8 +852,8 @@
     max-width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 4px 0;
-    margin: 12px 0;
+    padding: calc(4px * var(--cc-gui-scale)) 0;
+    margin: calc(12px * var(--cc-gui-scale)) 0;
 }
 
 .markdown-content .katex-display > .katex {
@@ -877,20 +881,20 @@
 }
 
 .markdown-content ul, .markdown-content ol {
-    margin: 10px 0;
-    padding-left: 24px;
+    margin: calc(10px * var(--cc-gui-scale)) 0;
+    padding-left: calc(24px * var(--cc-gui-scale));
     max-width: 100%;
 }
 
 .markdown-content li {
-    margin-bottom: 4px;
+    margin-bottom: calc(4px * var(--cc-gui-scale));
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
 
 .markdown-content blockquote {
-    margin: 10px 0;
-    padding-left: 16px;
+    margin: calc(10px * var(--cc-gui-scale)) 0;
+    padding-left: calc(16px * var(--cc-gui-scale));
     border-left: 4px solid var(--color-message-blockquote);
     color: var(--text-tertiary);
     word-wrap: break-word;
@@ -901,8 +905,8 @@
 .markdown-content h1, .markdown-content h2, .markdown-content h3,
 .markdown-content h4, .markdown-content h5, .markdown-content h6 {
     font-weight: 600;
-    margin-top: 16px;
-    margin-bottom: 8px;
+    margin-top: calc(16px * var(--cc-gui-scale));
+    margin-bottom: calc(8px * var(--cc-gui-scale));
     color: var(--text-secondary);
     word-wrap: break-word;
     overflow-wrap: break-word;
@@ -965,11 +969,14 @@
 /* 表格容器 - 处理溢出 */
 .markdown-content table {
     border-collapse: collapse;
-    width: 100%;
-    margin: 10px 0;
-    display: block; /* 使表格可以滚动 */
-    max-width: 100%;
-    overflow-x: auto; /* 表格内部滚动 */
+    /* 保持标准 table 布局：display:block 会让 Chromium 把列宽均分，多列宽表格的
+     * 每一列被压成窄条（中文/emoji 竖排堆叠），而 overflow-x 又不会触发。
+     * 改为按内容宽度布局，窄表格仍用 min-width:100% 占满容器，宽表格交给
+     * .markdown-content 的 overflow-x 横向滚动。 */
+    width: auto;
+    min-width: 100%;
+    max-width: none;
+    margin: calc(10px * var(--cc-gui-scale)) 0;
 }
 
 .markdown-content thead,
@@ -982,7 +989,7 @@
 
 .markdown-content th, .markdown-content td {
     border: 1px solid var(--border-secondary);
-    padding: 8px 12px;
+    padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     text-align: left;
     word-wrap: break-word; /* 单元格内文字换行 */
     overflow-wrap: break-word;
@@ -995,21 +1002,21 @@
 
 /* Thinking Block - Minimalist */
 .thinking-block {
-    margin-bottom: 16px;
-    font-size: 12.5px;
+    margin-bottom: calc(16px * var(--cc-gui-scale));
+    font-size: var(--cc-gui-chat-font-size-125);
 }
 
 .thinking-header {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
     cursor: pointer;
     user-select: none;
     color: var(--text-tertiary); /* Matches screenshot gray */
     transition: opacity 0.2s;
     background: transparent;
     font-weight: 500;
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
 }
 
 .thinking-header:hover {
@@ -1017,17 +1024,17 @@
 }
 
 .thinking-icon {
-    font-size: 10px;
+    font-size: var(--cc-gui-chat-font-size-10);
     opacity: 0.8;
 }
 
 .thinking-content {
-    margin-top: 8px;
-    padding-left: 12px;
+    margin-top: calc(8px * var(--cc-gui-scale));
+    padding-left: calc(12px * var(--cc-gui-scale));
     border-left: 2px solid var(--color-thinking-border);
     color: var(--text-tertiary);
     font-family: inherit;
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
     line-height: 1.5;
     word-wrap: break-word;
     overflow-wrap: break-word;
@@ -1098,14 +1105,14 @@
 .thinking-status {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
+    gap: calc(8px * var(--cc-gui-scale));
+    padding: calc(12px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
 }
 
 .thinking-status-icon {
-    font-size: 16px;
+    font-size: var(--cc-gui-chat-font-size-16);
     animation: thinking-pulse 1.5s ease-in-out infinite;
 }
 
@@ -1116,10 +1123,10 @@
 .streaming-connect-status {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 0;
+    gap: calc(8px * var(--cc-gui-scale));
+    padding: calc(4px * var(--cc-gui-scale)) 0;
     color: var(--text-tertiary);
-    font-size: 12.5px;
+    font-size: var(--cc-gui-chat-font-size-125);
     line-height: 1.4;
 }
 
@@ -1136,8 +1143,8 @@
 
 /* Tool Block - Compact "Step" Style */
 .tool-block {
-    margin: 4px 0;
-    border-radius: 4px;
+    margin: calc(4px * var(--cc-gui-scale)) 0;
+    border-radius: calc(4px * var(--cc-gui-scale));
     background: var(--color-tool-bg);
     border: 1px solid var(--border-primary);
     overflow: hidden;
@@ -1148,16 +1155,16 @@
 .tool-main-line {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    font-size: 13px;
+    gap: calc(8px * var(--cc-gui-scale));
+    padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+    font-size: var(--cc-gui-chat-font-size-13);
     min-width: 0; /* 允许内容缩小 */
 }
 
 .tool-icon {
     color: var(--color-tool-icon);
-    font-size: 14px;
-    width: 16px;
+    font-size: var(--cc-gui-chat-font-size-14);
+    width: calc(16px * var(--cc-gui-scale));
     display: flex;
     justify-content: center;
 }
@@ -1174,7 +1181,7 @@
     text-overflow: ellipsis;
     flex: 1;
     font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
 }
 
 .tool-file-link {
@@ -1188,11 +1195,11 @@
 }
 
 .tool-params {
-    padding: 6px 12px;
+    padding: calc(6px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
     background: var(--color-tool-bg-secondary);
     border-top: 1px solid var(--border-primary);
     font-family: var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace);
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
     color: var(--color-tool-param-text);
     max-width: 100%;
     overflow-x: auto; /* 参数过长时内部滚动 */
@@ -1201,7 +1208,7 @@
 
 .tool-param-line {
     display: flex;
-    margin-bottom: 4px;
+    margin-bottom: calc(4px * var(--cc-gui-scale));
 }
 
 .tool-param-line:last-child {
@@ -1210,7 +1217,7 @@
 
 .param-key {
     color: var(--color-tool-param-key);
-    min-width: 80px;
+    min-width: calc(80px * var(--cc-gui-scale));
     flex-shrink: 0;
 }
 
@@ -1239,16 +1246,16 @@
 
 /* Only reserve left padding when the anchor rail is actually rendered */
 .messages-shell:has(.messages-anchor-rail) .messages-container {
-    padding-left: 26px;
+    padding-left: calc(26px * var(--cc-gui-scale));
 }
 
 /* Anchor Rail */
 .messages-anchor-rail {
     position: absolute;
-    left: 4px;
-    top: 48px;
-    bottom: 24px;
-    width: 20px;
+    left: calc(4px * var(--cc-gui-scale));
+    top: calc(48px * var(--cc-gui-scale));
+    bottom: calc(24px * var(--cc-gui-scale));
+    width: calc(20px * var(--cc-gui-scale));
     z-index: 10;
     pointer-events: none;
     display: flex;
@@ -1262,7 +1269,7 @@
     left: 50%;
     top: 0;
     bottom: 0;
-    width: 2px;
+    width: calc(2px * var(--cc-gui-scale));
     transform: translateX(-50%);
     background: var(--border-primary);
     border-radius: 1px;
@@ -1274,8 +1281,8 @@
     position: absolute;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 10px;
-    height: 10px;
+    width: calc(10px * var(--cc-gui-scale));
+    height: calc(10px * var(--cc-gui-scale));
     border-radius: 50%;
     background: var(--bg-secondary);
     border: 2px solid var(--border-secondary);
@@ -1288,10 +1295,10 @@
     &::before {
         content: '';
         position: absolute;
-        top: -8px;
-        left: -8px;
-        right: -8px;
-        bottom: -8px;
+        top: calc(-8px * var(--cc-gui-scale));
+        left: calc(-8px * var(--cc-gui-scale));
+        right: calc(-8px * var(--cc-gui-scale));
+        bottom: calc(-8px * var(--cc-gui-scale));
         border-radius: 50%;
     }
 
@@ -1316,18 +1323,18 @@
 /* Anchor tooltip */
 .anchor-tooltip {
     position: absolute;
-    left: calc(100% + 8px);
+    left: calc(100% + 8px * var(--cc-gui-scale));
     top: 50%;
     transform: translateY(-50%);
     background: var(--bg-elevated);
     color: var(--text-primary);
     border: 1px solid var(--border-secondary);
     box-shadow: var(--shadow-sm);
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-size: 10px;
+    padding: calc(6px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
+    border-radius: calc(6px * var(--cc-gui-scale));
+    font-size: var(--cc-gui-chat-font-size-10);
     line-height: 1.4;
-    max-width: 400px;
+    max-width: calc(400px * var(--cc-gui-scale));
     width: max-content;
     white-space: pre-wrap;
     word-break: break-word;
@@ -1368,11 +1375,11 @@
     color: var(--text-primary);
     border: 1px solid var(--border-secondary);
     box-shadow: var(--shadow-sm);
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-size: 12px;
+    padding: calc(6px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
+    border-radius: calc(6px * var(--cc-gui-scale));
+    font-size: var(--cc-gui-chat-font-size-12);
     line-height: 1.4;
-    max-width: 400px;
+    max-width: calc(400px * var(--cc-gui-scale));
     width: max-content;
     white-space: normal;
     word-break: break-all;
@@ -1383,7 +1390,7 @@
 }
 
 @keyframes file-link-tooltip-fade-in {
-    from { opacity: 0; margin-top: -4px; }
+    from { opacity: 0; margin-top: calc(-4px * var(--cc-gui-scale)); }
     to { opacity: 1; margin-top: 0; }
 }
 
@@ -1395,23 +1402,23 @@
 }
 
 .message-duration {
-    margin-top: 8px;
+    margin-top: calc(8px * var(--cc-gui-scale));
     display: flex;
     justify-content: center;
 
     .message-duration-inner {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        padding: 5px 14px;
+        gap: calc(6px * var(--cc-gui-scale));
+        padding: calc(5px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale));
         border: 1px solid var(--border-secondary);
-        border-radius: 6px;
-        font-size: 12px;
+        border-radius: calc(6px * var(--cc-gui-scale));
+        font-size: var(--cc-gui-chat-font-size-12);
         color: var(--text-tertiary);
     }
 
     .message-duration-flag {
-        font-size: 12px;
+        font-size: var(--cc-gui-chat-font-size-12);
         opacity: 0.7;
     }
 
@@ -1436,13 +1443,13 @@
 .task-notification-block {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 0;
-    font-size: 13px;
+    gap: calc(8px * var(--cc-gui-scale));
+    padding: calc(8px * var(--cc-gui-scale)) 0;
+    font-size: var(--cc-gui-chat-font-size-13);
 }
 
 .task-notification-icon {
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
 }
 
 .task-notification-summary {
@@ -1454,7 +1461,7 @@
 .task-notification-detail {
     display: block;
     color: var(--text-tertiary, rgba(128, 128, 128, 0.9));
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
     line-height: 1.4;
     white-space: pre-wrap;
     word-break: break-word;
@@ -1489,12 +1496,12 @@
 .compact-notification-block {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 4px 0;
+    gap: calc(4px * var(--cc-gui-scale));
+    padding: calc(4px * var(--cc-gui-scale)) 0;
 }
 
 .compact-notification-header {
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
     color: var(--text-primary);
     line-height: 1.5;
 }
@@ -1502,15 +1509,15 @@
 .compact-notification-items {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding-left: 8px;
+    gap: calc(2px * var(--cc-gui-scale));
+    padding-left: calc(8px * var(--cc-gui-scale));
 }
 
 .compact-notification-item {
     display: flex;
     align-items: baseline;
-    gap: 4px;
-    font-size: 12.5px;
+    gap: calc(4px * var(--cc-gui-scale));
+    font-size: var(--cc-gui-chat-font-size-125);
     line-height: 1.5;
 }
 
@@ -1528,20 +1535,20 @@
 .compact-summary-block {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 4px 0;
+    gap: calc(4px * var(--cc-gui-scale));
+    padding: calc(4px * var(--cc-gui-scale)) 0;
 }
 
 .compact-summary-title {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--cc-gui-scale));
     background: none;
     border: none;
     padding: 0;
     font-family: inherit;
     text-align: left;
-    font-size: 13px;
+    font-size: var(--cc-gui-chat-font-size-13);
     font-weight: 500;
     color: var(--text-tertiary);
     cursor: pointer;
@@ -1554,21 +1561,21 @@
 }
 
 .compact-summary-icon {
-    font-size: 12px;
+    font-size: var(--cc-gui-chat-font-size-12);
     opacity: 0.8;
 }
 
 .compact-summary-toggle {
-    font-size: 10px;
+    font-size: var(--cc-gui-chat-font-size-10);
     opacity: 0.8;
 }
 
 .compact-summary-metadata {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding-left: 16px;
-    font-size: 12px;
+    gap: calc(2px * var(--cc-gui-scale));
+    padding-left: calc(16px * var(--cc-gui-scale));
+    font-size: var(--cc-gui-chat-font-size-12);
     color: var(--text-tertiary);
 }
 
@@ -1581,9 +1588,9 @@
 }
 
 .compact-summary-content {
-    padding-left: 12px;
+    padding-left: calc(12px * var(--cc-gui-scale));
     border-left: 2px solid var(--border-primary);
-    font-size: 12.5px;
+    font-size: var(--cc-gui-chat-font-size-125);
     color: var(--text-secondary);
     line-height: 1.5;
     max-width: 100%;
@@ -1591,6 +1598,6 @@
 }
 
 .compact-summary-content .markdown-block {
-    font-size: 12.5px;
+    font-size: var(--cc-gui-chat-font-size-125);
     color: var(--text-secondary);
 }

@@ -3,29 +3,29 @@
 @media (max-width: 480px) {
     /* 表单适配 */
     .form-group label {
-        font-size: 12px;
+        font-size: calc(12px * var(--cc-gui-scale));
     }
 
     .form-input,
     .form-select {
-        font-size: 12px;
-        padding: 7px 10px;
+        font-size: calc(12px * var(--cc-gui-scale));
+        padding: calc(7px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
     }
 
     .form-hint {
-        font-size: 11px;
+        font-size: calc(11px * var(--cc-gui-scale));
     }
 
     .form-actions {
         flex-direction: column;
-        gap: 8px;
+        gap: calc(8px * var(--cc-gui-scale));
     }
 
     .btn-primary,
     .btn-secondary {
         width: 100%;
         justify-content: center;
-        padding: 8px 12px;
-        font-size: 12px;
+        padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+        font-size: calc(12px * var(--cc-gui-scale));
     }
 }

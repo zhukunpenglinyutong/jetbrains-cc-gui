@@ -5,17 +5,17 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 8px 12px;
+  padding: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
   background: rgba(255, 152, 0, 0.15); /* Orange tint */
   border: 1px solid rgba(255, 152, 0, 0.3);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   color: #ffb74d; /* Orange text */
-  font-size: 12px;
-  margin-bottom: 16px;
+  font-size: calc(12px * var(--cc-gui-scale));
+  margin-bottom: calc(16px * var(--cc-gui-scale));
 
   :global(.codicon) {
-    margin-right: 8px;
-    font-size: 14px;
+    margin-right: calc(8px * var(--cc-gui-scale));
+    font-size: calc(14px * var(--cc-gui-scale));
     color: #ffb74d;
     flex-shrink: 0;
   }
@@ -41,67 +41,67 @@
 }
 
 .dependencySection {
-  max-width: 800px;
-  padding-bottom: 24px;
+  max-width: calc(800px * var(--cc-gui-scale));
+  padding-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .sectionTitle {
-  font-size: 20px;
+  font-size: calc(20px * var(--cc-gui-scale));
   font-weight: 600;
-  margin: 0 0 8px 0;
+  margin: 0 0 calc(8px * var(--cc-gui-scale)) 0;
   color: var(--text-primary);
 }
 
 .sectionDesc {
   color: var(--text-tertiary);
-  margin: 0 0 24px 0;
-  font-size: 13px;
+  margin: 0 0 calc(24px * var(--cc-gui-scale)) 0;
+  font-size: calc(13px * var(--cc-gui-scale));
 }
 
 .warningBanner {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(12px * var(--cc-gui-scale)) calc(16px * var(--cc-gui-scale));
   background: rgba(255, 193, 7, 0.1);
   border: 1px solid rgba(255, 193, 7, 0.3);
-  border-radius: 8px;
-  margin-bottom: 24px;
+  border-radius: calc(8px * var(--cc-gui-scale));
+  margin-bottom: calc(24px * var(--cc-gui-scale));
   color: var(--text-secondary);
 
   .codicon {
     color: #ffc107;
-    font-size: 16px;
+    font-size: calc(16px * var(--cc-gui-scale));
   }
 }
 
 .sdkList {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: calc(16px * var(--cc-gui-scale));
+  margin-bottom: calc(24px * var(--cc-gui-scale));
 }
 
 .loadingState {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 40px 20px;
+  gap: calc(8px * var(--cc-gui-scale));
+  padding: calc(40px * var(--cc-gui-scale)) calc(20px * var(--cc-gui-scale));
   color: var(--text-tertiary);
 
   .codicon {
-    font-size: 16px;
+    font-size: calc(16px * var(--cc-gui-scale));
   }
 }
 
 .retryButton {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(5px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   color: var(--text-primary);
   cursor: pointer;
@@ -115,8 +115,8 @@
 .sdkCard {
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: calc(8px * var(--cc-gui-scale));
+  padding: calc(16px * var(--cc-gui-scale));
   transition: all 0.2s;
 
   &:hover {
@@ -136,14 +136,14 @@
 .sdkName {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 15px;
+  gap: calc(8px * var(--cc-gui-scale));
+  font-size: calc(15px * var(--cc-gui-scale));
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 6px;
+  margin-bottom: calc(6px * var(--cc-gui-scale));
 
   .codicon {
-    font-size: 16px;
+    font-size: calc(16px * var(--cc-gui-scale));
 
     &.codicon-check {
       color: #4caf50;
@@ -156,40 +156,40 @@
 }
 
 .versionBadge {
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 500;
-  padding: 2px 8px;
+  padding: calc(2px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: var(--text-secondary);
 }
 
 .updateBadge {
-  font-size: 11px;
+  font-size: calc(11px * var(--cc-gui-scale));
   font-weight: 500;
-  padding: 2px 8px;
+  padding: calc(2px * var(--cc-gui-scale)) calc(8px * var(--cc-gui-scale));
   background: rgba(33, 150, 243, 0.15);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   color: #2196f3;
 }
 
 .sdkDescription {
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   line-height: 1.5;
 }
 
 .versionControls {
-  margin-top: 14px;
+  margin-top: calc(14px * var(--cc-gui-scale));
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
 }
 
 .versionToolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--cc-gui-scale));
   flex-wrap: nowrap;
 
   @media (max-width: 720px) {
@@ -201,7 +201,7 @@
 .versionField {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--cc-gui-scale));
   flex: 1;
   min-width: 0;
 
@@ -212,7 +212,7 @@
 }
 
 .versionLabel {
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -220,8 +220,8 @@
 .versionLabelInline {
   display: flex;
   align-items: center;
-  min-height: 34px;
-  font-size: 12px;
+  min-height: calc(34px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--text-secondary);
   flex-shrink: 0;
@@ -235,7 +235,7 @@
 .versionSelect {
   position: relative;
   flex: 1;
-  min-width: 140px;
+  min-width: calc(140px * var(--cc-gui-scale));
 
   @media (max-width: 720px) {
     width: 100%;
@@ -246,15 +246,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   width: 100%;
-  min-height: 34px;
-  padding: 8px 10px;
-  border-radius: 6px;
+  min-height: calc(34px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
+  border-radius: calc(6px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   text-align: left;
   cursor: pointer;
   outline: none;
@@ -280,7 +280,7 @@
 
 .versionSelectIcon {
   flex-shrink: 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   transition: transform 0.15s, color 0.15s;
 
@@ -292,15 +292,15 @@
 
 .versionDropdown {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 4px * var(--cc-gui-scale));
   left: 0;
   right: 0;
   z-index: 1000;
-  max-height: 180px;
+  max-height: calc(180px * var(--cc-gui-scale));
   overflow-y: auto;
-  padding: 4px;
+  padding: calc(4px * var(--cc-gui-scale));
   border: 1px solid var(--border-secondary);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   background: var(--bg-secondary);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
 }
@@ -309,15 +309,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   width: 100%;
-  min-height: 34px;
-  padding: 8px 10px;
+  min-height: calc(34px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
   border: none;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   background: transparent;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   text-align: left;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -335,15 +335,15 @@
 
   .codicon {
     flex-shrink: 0;
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 }
 
 .versionMeta {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
-  font-size: 12px;
+  gap: calc(8px * var(--cc-gui-scale)) calc(12px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-tertiary);
 }
 
@@ -352,11 +352,11 @@
 .rollbackHint {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: calc(6px * var(--cc-gui-scale));
+  font-size: calc(12px * var(--cc-gui-scale));
   line-height: 1.5;
-  border-radius: 6px;
-  padding: 8px 10px;
+  border-radius: calc(6px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(10px * var(--cc-gui-scale));
 }
 
 .versionLoadingHint {
@@ -379,7 +379,7 @@
 
 .sdkActions {
   display: flex;
-  gap: 8px;
+  gap: calc(8px * var(--cc-gui-scale));
   flex-shrink: 0;
 
   @media (max-width: 720px) {
@@ -393,17 +393,17 @@
 .uninstallBtn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
+  gap: calc(6px * var(--cc-gui-scale));
+  padding: calc(8px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale));
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cc-gui-scale));
   border: none;
   cursor: pointer;
   transition: all 0.2s;
 
   .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
   }
 
   &:disabled {
@@ -447,17 +447,17 @@
 .installPath {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 12px;
-  padding-top: 12px;
+  gap: calc(6px * var(--cc-gui-scale));
+  margin-top: calc(12px * var(--cc-gui-scale));
+  padding-top: calc(12px * var(--cc-gui-scale));
   border-top: 1px solid var(--border-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cc-gui-scale));
   color: var(--text-tertiary);
   font-family: monospace;
   word-break: break-all;
 
   .codicon {
-    font-size: 14px;
+    font-size: calc(14px * var(--cc-gui-scale));
     flex-shrink: 0;
   }
 }
@@ -465,7 +465,7 @@
 .logsSection {
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cc-gui-scale));
   overflow: hidden;
 }
 
@@ -473,10 +473,10 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 14px;
+  padding: calc(10px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale));
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--cc-gui-scale));
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -485,13 +485,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: calc(24px * var(--cc-gui-scale));
+  height: calc(24px * var(--cc-gui-scale));
   border: none;
   background: transparent;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cc-gui-scale));
   transition: all 0.2s;
 
   &:hover {
@@ -501,14 +501,14 @@
 }
 
 .logsContainer {
-  max-height: 300px;
+  max-height: calc(300px * var(--cc-gui-scale));
   overflow-y: auto;
-  padding: 12px 14px;
+  padding: calc(12px * var(--cc-gui-scale)) calc(14px * var(--cc-gui-scale));
   background: #1e1e1e;
 
   pre {
     margin: 0;
-    font-size: 12px;
+    font-size: calc(12px * var(--cc-gui-scale));
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
     color: #d4d4d4;
     white-space: pre-wrap;
