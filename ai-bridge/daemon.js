@@ -66,24 +66,7 @@ import {
 } from './services/zcode/persistent-zcode-service.js';
 import { injectStartupEnvVars, isWebviewControlledEnvVar, isDangerousEnvVar } from './config/api-config.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
-import { resolveActiveProvider } from './services/zcode/zcode-config.js';
-
-/**
- * A zcode-targeted turn can arrive on the claude.send method when the Java
- * dispatcher falls through to the Claude bridge (the Claude template is the
- * default route there). Both runtimes stream the same marker vocabulary, so
- * routing such a payload to the ZCode runtime keeps the Java-side parser
- * correct. Detected by an explicit provider field or by membership in the
- * active ZCode provider's model list.
- */
-function targetsZcodeRuntime(stdinData) {
-  if (!stdinData) return false;
-  if (stdinData.provider === 'zcode') return true;
-  const modelId = String(stdinData.model || '').trim();
-  if (!modelId) return false;
-  const zcodeModels = Object.keys(resolveActiveProvider()?.models || {});
-  return zcodeModels.includes(modelId);
-}
+import { targetsZcodeRuntime } from './services/zcode/zcode-config.js';
 
 // =============================================================================
 // Startup Environment Setup (must run before any HTTPS connection)

@@ -9,6 +9,7 @@ import {
   buildZcodeCredentialEnv,
   buildRuntimeModel,
   readZcodeConfig,
+  targetsZcodeRuntime,
 } from './zcode-config.js';
 
 const CONFIG = {
@@ -170,4 +171,24 @@ test('readZcodeConfig still prefers the legacy v2/config.json', () => {
     if (savedEnvPath !== undefined) process.env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE = savedEnvPath;
     rmSync(home, { recursive: true, force: true });
   }
+});
+test('targetsZcodeRuntime always routes an explicit zcode provider', () => {
+  assert.equal(targetsZcodeRuntime({ provider: 'zcode' }, []), true);
+  assert.equal(targetsZcodeRuntime({ provider: 'zcode', model: 'anything' }, []), true);
+});
+
+test('targetsZcodeRuntime matches models of the active zcode provider', () => {
+  const models = ['GLM-5.3', 'GLM-5.3-Flash'];
+  assert.equal(targetsZcodeRuntime({ model: 'GLM-5.3' }, models), true);
+  // Fall-through payloads can still carry provider: 'claude'; the model
+  // membership check must not be vetoed by it.
+  assert.equal(targetsZcodeRuntime({ provider: 'claude', model: 'GLM-5.3' }, models), true);
+  assert.equal(targetsZcodeRuntime({ model: 'claude-sonnet-4-5' }, models), false);
+  assert.equal(targetsZcodeRuntime({ provider: 'claude', model: 'claude-sonnet-4-5' }, models), false);
+});
+
+test('targetsZcodeRuntime rejects empty input', () => {
+  assert.equal(targetsZcodeRuntime(null, ['GLM-5.3']), false);
+  assert.equal(targetsZcodeRuntime({}, ['GLM-5.3']), false);
+  assert.equal(targetsZcodeRuntime({ model: '   ' }, ['GLM-5.3']), false);
 });

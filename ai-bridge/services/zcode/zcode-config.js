@@ -199,6 +199,25 @@ export function resolveActiveProvider(config = readZcodeConfig(), settings = rea
   }
   return null;
 }
+/**
+ * Detect turns bound for the ZCode runtime that arrived on the Claude bridge
+ * (the Java dispatcher's default route). An explicit provider: 'zcode' always
+ * routes; otherwise the requested model is checked against the active ZCode
+ * provider's registry. A non-zcode provider field MUST NOT veto the model
+ * check: fall-through payloads can still carry provider: 'claude', which is
+ * precisely the misrouting this predicate exists to catch.
+ *
+ * Production callers pass no model list and resolve it per call; tests inject
+ * the list to stay hermetic.
+ */
+export function targetsZcodeRuntime(stdinData, zcodeModels) {
+  if (!stdinData) return false;
+  if (stdinData.provider === 'zcode') return true;
+  const modelId = String(stdinData.model || '').trim();
+  if (!modelId) return false;
+  const models = zcodeModels || Object.keys(resolveActiveProvider()?.models || {});
+  return models.includes(modelId);
+}
 
 function normalizeProviderEntry(entry) {
   const options = entry && typeof entry.options === 'object' ? entry.options : {};

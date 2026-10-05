@@ -19,7 +19,7 @@ import {
 } from '../services/claude/session-service.js';
 import { handleZcodeCommand } from './zcode-channel.js';
 import { getSessionMessages as zcodeGetSessionMessages } from '../services/zcode/history-service.js';
-import { resolveActiveProvider } from '../services/zcode/zcode-config.js';
+import { targetsZcodeRuntime } from '../services/zcode/zcode-config.js';
 
 /**
  * ZCode sessions carry a "sess_" id prefix the Claude transcript store never
@@ -30,22 +30,6 @@ import { resolveActiveProvider } from '../services/zcode/zcode-config.js';
  */
 function isZcodeSessionId(sessionId) {
   return typeof sessionId === 'string' && sessionId.startsWith('sess_');
-}
-
-/**
- * Route to the ZCode channel when the request targets it. The Java side can
- * dispatch ZCode turns through the Claude bridge (its default route); such a
- * payload carries either an explicit provider or a model of the active ZCode
- * provider. The streaming marker vocabulary ([SESSION_ID]/[CONTENT_DELTA]/...)
- * is shared by both channels, so the bridge parsing the response stays correct.
- */
-function shouldRouteToZcode(stdinData) {
-  if (!stdinData) return false;
-  if (stdinData.provider === 'zcode') return true;
-  const modelId = String(stdinData.model || '').trim();
-  if (!modelId) return false;
-  const zcodeModels = Object.keys(resolveActiveProvider()?.models || {});
-  return zcodeModels.includes(modelId);
 }
 
 /** Match session-service.js writeJsonResponse: one JSON line on stdout. */
@@ -64,7 +48,7 @@ function writeJson(payload) {
 export async function handleClaudeCommand(command, args, stdinData) {
   switch (command) {
     case 'send': {
-      if (shouldRouteToZcode(stdinData)) {
+      if (targetsZcodeRuntime(stdinData)) {
         await handleZcodeCommand('send', args, stdinData);
         break;
       }
@@ -90,7 +74,7 @@ export async function handleClaudeCommand(command, args, stdinData) {
     }
 
     case 'sendWithAttachments': {
-      if (shouldRouteToZcode(stdinData)) {
+      if (targetsZcodeRuntime(stdinData)) {
         await handleZcodeCommand('send', args, stdinData);
         break;
       }
@@ -113,10 +97,16 @@ export async function handleClaudeCommand(command, args, stdinData) {
 
     case 'getSession': {
       const routedSessionId = stdinData?.sessionId || args[0];
-      const routedCwd = stdinData?.cwd || args[1] || null;
+      const routedCwd = stdinData?.cwd || args[1] || process.cwd();
       if (isZcodeSessionId(routedSessionId)) {
-        const messages = await zcodeGetSessionMessages(routedSessionId, routedCwd);
-        await writeJson({ success: true, messages });
+        try {
+          const messages = await zcodeGetSessionMessages(routedSessionId, routedCwd);
+          await writeJson({ success: true, messages });
+        } catch (err) {
+          // Same failure envelope the Claude branch writes, so the Java side
+          // sees an in-band error instead of a process-level exit.
+          await writeJson({ success: false, error: err.message });
+        }
         break;
       }
       await claudeGetSessionMessages(args[0], args[1]);
