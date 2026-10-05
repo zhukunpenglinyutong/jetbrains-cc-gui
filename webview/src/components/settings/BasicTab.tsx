@@ -104,6 +104,13 @@ const BasicTab = ({ themeSync, basicActions, addToast }: BasicTabProps) => {
       onAskUserQuestionSoundNotificationEnabledChange={basicActions.handleAskUserQuestionSoundNotificationEnabledChange}
       permissionDialogTimeoutSeconds={basicActions.permissionDialogTimeoutSeconds}
       onPermissionDialogTimeoutChange={basicActions.handlePermissionDialogTimeoutChange}
+      envFile={basicActions.envFile}
+      onEnvFileChange={basicActions.handleEnvFileChange}
+      onSaveEnvFile={basicActions.handleSaveEnvFile}
+      savingEnvFile={basicActions.savingEnvFile}
+      envFileState={basicActions.envFileState}
+      onResetEnvFile={basicActions.handleResetEnvFile}
+      envFileError={basicActions.envFileError}
     />
   );
 };

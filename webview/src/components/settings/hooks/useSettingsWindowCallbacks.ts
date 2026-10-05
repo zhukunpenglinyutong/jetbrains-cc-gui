@@ -9,6 +9,8 @@ import { normalizeAiFeatureConfig, DEFAULT_COMMIT_AI_CONFIG } from '../../../typ
 import type { UiFontConfig, CodeFontConfig } from './useSettingsBasicActions';
 import type { PromptEnhancerConfig } from '../../../types/promptEnhancer';
 import { normalizePromptEnhancerConfig } from '../../../types/promptEnhancer';
+import type { EnvFileState } from '../../../types/envFile';
+import { parseEnvFileUpdate } from '../../../types/envFile';
 import type { AlertType } from '../../AlertDialog';
 import type { ToastMessage } from '../../Toast';
 import {
@@ -34,6 +36,7 @@ export const SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES = [
   'get_node_path:',
   'get_claude_cli_path:',
   'get_working_directory:',
+  'get_env_file:',
   'get_streaming_enabled:',
   'get_codex_sandbox_mode:',
   'get_permission_dialog_timeout:',
@@ -65,6 +68,10 @@ export interface SettingsWindowCallbacksDeps {
   setSavingClaudeCliPath: (saving: boolean) => void;
   setWorkingDirectory: (dir: string) => void;
   setSavingWorkingDirectory: (saving: boolean) => void;
+  setEnvFile: (path: string) => void;
+  /** Optional so hosts that don't track the effective state still type-check. */
+  setEnvFileState?: (state: EnvFileState) => void;
+  setSavingEnvFile: (saving: boolean) => void;
   setCommitPrompt: (prompt: string) => void;
   setSavingCommitPrompt: (saving: boolean) => void;
   setCommitAiConfig: (config: CommitAiConfig) => void;
@@ -173,6 +180,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       d().setSavingNodePath(false);
       d().setSavingClaudeCliPath(false);
       d().setSavingWorkingDirectory(false);
+      d().setSavingEnvFile(false);
       d().setSavingCommitPrompt(false);
       d().setSavingProjectCommitPrompt(false);
     };
@@ -219,11 +227,21 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    window.updateEnvFile = (jsonStr: string) => {
+      // parseEnvFileUpdate never throws: a malformed payload lands on the
+      // neutral 'unknown' state instead of a fake "configured" one.
+      const update = parseEnvFileUpdate(jsonStr);
+      d().setEnvFile(update.envFile);
+      d().setEnvFileState?.(update.state);
+      d().setSavingEnvFile(false);
+    };
+
     window.showSuccess = (message: string) => {
       d().showAlert('success', t('toast.operationSuccess'), message);
       d().setSavingNodePath(false);
       d().setSavingClaudeCliPath(false);
       d().setSavingWorkingDirectory(false);
+      d().setSavingEnvFile(false);
     };
 
     window.showSuccessI18n = (i18nKey: string) => {
@@ -598,6 +616,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateNodePath = undefined;
       window.updateClaudeCliPath = undefined;
       window.updateWorkingDirectory = undefined;
+      window.updateEnvFile = undefined;
       window.showSuccess = undefined;
       window.showSuccessI18n = undefined;
       window.onEditorFontConfigReceived = undefined;

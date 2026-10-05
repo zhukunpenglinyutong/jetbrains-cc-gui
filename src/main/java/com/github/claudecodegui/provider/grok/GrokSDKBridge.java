@@ -7,10 +7,12 @@ import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
 import com.github.claudecodegui.provider.common.DaemonBridge;
+import com.github.claudecodegui.provider.common.EnvFileResolver;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.util.PathUtils;
 import com.github.claudecodegui.util.PlatformUtils;
 
 import java.util.List;
@@ -892,27 +894,82 @@ public class GrokSDKBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         String normalizedCwd = normalizeCwdForNode(cwd);
+        String envFile = resolveEnvFile(cwd);
 
         DaemonBridge db = daemonCoordinator.getDaemonBridge();
         if (db != null) {
             return sendMessageViaDaemon(db, channelId, message, sessionId, runtimeSessionEpoch,
                     normalizedCwd, attachments, permissionMode, model, openedFiles,
-                    agentPrompt, streaming, disableThinking, reasoningEffort, callback);
+                    agentPrompt, streaming, disableThinking, reasoningEffort, envFile, callback);
         }
 
         LOG.info("[GrokSDKBridge] Using per-process (channel-manager) mode (daemon unavailable)");
         // Fallback to one-shot
         JsonObject stdinInput = buildStdinPayloadForDaemon(
                 message, sessionId, runtimeSessionEpoch, normalizedCwd, attachments,
-                permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort
+                permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, envFile
         );
         String stdinJson = gson.toJson(stdinInput);
+        if (stdinInput.has("envFile")) {
+            LOG.debug("[GrokSDKBridge (per-process)] envFile in stdin=" + stdinInput.get("envFile").getAsString());
+        } else {
+            LOG.debug("[GrokSDKBridge (per-process)] envFile NOT in stdin JSON");
+        }
         List<String> command = buildBaseCommand("send");
         LOG.info("[Grok] sendMessage (fallback) sessionId=" + (sessionId != null ? sessionId : "(new)")
                 + ", epoch=" + (runtimeSessionEpoch != null ? runtimeSessionEpoch : "(none)")
                 + ", model=" + (model != null ? model : "(default)"));
 
         return executeStreamingCommand(channelId, command, stdinJson, normalizedCwd, callback);
+    }
+
+    private String resolveEnvFile(String cwd) {
+        try {
+            String envFile = settingsService.getEnvFile(cwd);
+
+            // State 3: the user explicitly opted out — load nothing, and never
+            // fall back to the repository-controlled <project>/.env.
+            if (CodemossSettingsService.isEnvFileDisabled(envFile)) {
+                LOG.debug("[GrokSDKBridge.resolveEnvFile] env file explicitly disabled for cwd=" + cwd);
+                return null;
+            }
+
+            String projectDir = EnvFileResolver.resolveProjectDir(cwd);
+
+            // State 1: never configured — try the default ".env" in the project root.
+            if (envFile == null) {
+                if (projectDir != null) {
+                    java.io.File defaultEnvFile = new java.io.File(projectDir, ".env");
+                    if (defaultEnvFile.exists() && defaultEnvFile.isFile()) {
+                        String discovered = PathUtils.normalizeAbsolute(defaultEnvFile.getPath());
+                        LOG.debug("[GrokSDKBridge.resolveEnvFile] auto-discovered default .env at " + discovered);
+                        return discovered;
+                    }
+                    LOG.debug("[GrokSDKBridge.resolveEnvFile] no env file configured and no .env found in project dir");
+                } else {
+                    LOG.debug("[GrokSDKBridge.resolveEnvFile] envFile is null and no project dir for default discovery");
+                }
+                return null;
+            }
+
+            // State 2: explicitly configured. Relative paths always resolve against
+            // the project directory, never against the IDE process CWD.
+            java.io.File envFileObj = new java.io.File(envFile);
+            if (!envFileObj.isAbsolute()) {
+                if (projectDir == null) {
+                    LOG.debug("[GrokSDKBridge.resolveEnvFile] refusing to resolve relative env file without a project dir");
+                    return null;
+                }
+                envFileObj = new java.io.File(projectDir, envFile);
+            }
+            String resolved = PathUtils.normalizeAbsolute(envFileObj.getPath());
+            LOG.debug("[GrokSDKBridge.resolveEnvFile] envFile=" + resolved);
+            return resolved;
+
+        } catch (Exception e) {
+            LOG.warn("[GrokSDKBridge] Failed to read env file setting: " + e.getMessage());
+            return null;
+        }
     }
 
     private String normalizeCwdForNode(String cwd) {
@@ -939,12 +996,13 @@ public class GrokSDKBridge extends BaseSDKBridge {
             Boolean streaming,
             boolean disableThinking,
             String reasoningEffort,
+            String envFile,
             MessageCallback callback
     ) {
         return daemonRequestExecutor.sendMessageViaDaemon(
                 daemon, channelId, message, sessionId, runtimeSessionEpoch, cwd,
                 attachments, permissionMode, model, openedFiles, agentPrompt,
-                streaming, disableThinking, reasoningEffort, callback
+                streaming, disableThinking, reasoningEffort, envFile, callback
         );
     }
 
@@ -993,11 +1051,12 @@ public class GrokSDKBridge extends BaseSDKBridge {
             String agentPrompt,
             Boolean streaming,
             boolean disableThinking,
-            String reasoningEffort
+            String reasoningEffort,
+            String envFile
     ) {
         return buildStdinPayload(
                 message, sessionId, runtimeSessionEpoch, cwd, attachments,
-                permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort
+                permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, envFile
         );
     }
 
@@ -1013,7 +1072,8 @@ public class GrokSDKBridge extends BaseSDKBridge {
             String agentPrompt,
             Boolean streaming,
             boolean disableThinking,
-            String reasoningEffort
+            String reasoningEffort,
+            String envFile
     ) {
         JsonObject stdinInput = new JsonObject();
         stdinInput.addProperty("message", message != null ? message : "");
@@ -1042,6 +1102,11 @@ public class GrokSDKBridge extends BaseSDKBridge {
         stdinInput.addProperty("disableThinking", disableThinking);
         if (reasoningEffort != null && !reasoningEffort.isEmpty()) {
             stdinInput.addProperty("reasoningEffort", reasoningEffort);
+        }
+        if (envFile != null && !envFile.isEmpty()) {
+            stdinInput.addProperty("envFile", envFile);
+        } else {
+            LOG.debug("[GrokSDKBridge.buildStdinPayloadForDaemon] envFile is null/empty");
         }
         if (openedFiles != null) {
             stdinInput.add("openedFiles", openedFiles);

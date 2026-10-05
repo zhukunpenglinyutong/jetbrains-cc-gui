@@ -4,6 +4,7 @@ import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -14,6 +15,8 @@ import java.util.Map;
  * Builds the request payload shared by daemon and per-process Claude sends.
  */
 class ClaudeRequestParamsBuilder {
+
+    private static final Logger LOG = Logger.getInstance(ClaudeRequestParamsBuilder.class);
 
     private final Gson gson;
 
@@ -35,11 +38,40 @@ class ClaudeRequestParamsBuilder {
             Boolean disableThinking,
             String reasoningEffort
     ) {
+        return buildSendParams(message, sessionId, runtimeSessionEpoch, cwd, permissionMode, model,
+                attachments, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, null);
+    }
+
+    JsonObject buildSendParams(
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            String permissionMode,
+            String model,
+            List<ClaudeSession.Attachment> attachments,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            String envFile
+    ) {
         JsonObject params = new JsonObject();
         params.addProperty("message", message);
         params.addProperty("sessionId", sessionId != null ? sessionId : "");
         params.addProperty("runtimeSessionEpoch", runtimeSessionEpoch != null ? runtimeSessionEpoch : "");
-        params.addProperty("cwd", cwd != null ? cwd : "");
+        // Contract: "cwd" is either a real absolute project directory or absent.
+        // Writing "" instead made the Node side treat it as an unknown cwd, while
+        // buildDaemonEnv() rejected the very same value via isValidCwd() and dropped
+        // IDEA_PROJECT_PATH — so the bridge ended up with no base directory at all
+        // and every env file / relative path resolved against the bridge install dir.
+        String baseDir = ClaudeBridgeUtils.resolveBaseDir(cwd);
+        if (baseDir != null) {
+            params.addProperty("cwd", baseDir);
+        } else {
+            LOG.debug("[ClaudeRequestParamsBuilder] no valid cwd — omitting \"cwd\" so the bridge falls back to IDEA_PROJECT_PATH (value=" + cwd + ")");
+        }
         params.addProperty("permissionMode", permissionMode != null ? permissionMode : "");
         params.addProperty("model", model != null ? model : "");
 
@@ -62,6 +94,11 @@ class ClaudeRequestParamsBuilder {
         }
         if (reasoningEffort != null && !reasoningEffort.trim().isEmpty()) {
             params.addProperty("reasoningEffort", reasoningEffort);
+        }
+        if (envFile != null && !envFile.isEmpty() && !"null".equals(envFile) && !"undefined".equals(envFile)) {
+            params.addProperty("envFile", envFile);
+        } else {
+            LOG.debug("[ClaudeRequestParamsBuilder] envFile is null/empty/notValid (value=" + envFile + ")");
         }
 
         return params;

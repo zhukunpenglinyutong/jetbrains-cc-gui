@@ -218,6 +218,9 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   const maxThinkingTokens = resolveThinkingTokens(params, settings);
   const systemPromptAppend = buildSystemPromptAppend(params);
 
+  // envFile is loaded once in daemon.js before processRequest dispatches to
+  // sendMessagePersistent/preconnectPersistent, so process.env is already
+  // populated here. No per-message reload needed in daemon mode.
   const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
 
   const options = buildQueryOptions(

@@ -29,7 +29,8 @@ export async function handleClaudeCommand(command, args, stdinData) {
     case 'send': {
       if (stdinData && stdinData.message !== undefined) {
         // Include streaming and disableThinking when destructuring
-        const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort } = stdinData;
+        const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, envFile } = stdinData;
+        console.error('[DEBUG] claude-channel: envFile from stdinData=' + (envFile || '(empty/null)'));
         await claudeSendMessage(
           message,
           sessionId || '',
@@ -40,7 +41,8 @@ export async function handleClaudeCommand(command, args, stdinData) {
           agentPrompt || null,
           streaming,  // Pass streaming parameter
           disableThinking || false,  // Pass disableThinking parameter
-          reasoningEffort || null  // Pass reasoning effort level
+          reasoningEffort || null,  // Pass reasoning effort level
+          envFile || null  // Pass envFile path
         );
       } else {
         await claudeSendMessage(args[0], args[1], args[2], args[3], args[4]);
@@ -110,7 +112,9 @@ export async function handleClaudeCommand(command, args, stdinData) {
 
     case 'getMcpServerStatus': {
       const cwd = stdinData?.cwd || args[0] || null;
-      await claudeGetMcpServerStatus(cwd);
+      // Optional: check only the named servers instead of the whole config.
+      const serverNames = Array.isArray(stdinData?.serverNames) ? stdinData.serverNames : null;
+      await claudeGetMcpServerStatus(cwd, serverNames);
       break;
     }
 

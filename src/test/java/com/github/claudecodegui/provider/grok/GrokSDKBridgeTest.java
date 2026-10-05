@@ -30,6 +30,7 @@ public class GrokSDKBridgeTest {
                 "",
                 true,
                 false,
+                null,
                 null
         );
 
