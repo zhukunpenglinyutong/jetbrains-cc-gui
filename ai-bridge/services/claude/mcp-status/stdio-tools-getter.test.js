@@ -6,6 +6,31 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { getStdioServerTools } from './stdio-tools-getter.js';
+import { resolveWindowsCommand } from './process-launcher.js';
+
+test('resolves a bare Windows command to its executable shim', () => {
+  const result = resolveWindowsCommand(
+    'codegraph',
+    {},
+    'win32',
+    () => ['C:\\tools\\codegraph', 'C:\\tools\\codegraph.cmd']
+  );
+
+  assert.equal(result.command, 'C:\\tools\\codegraph.cmd');
+  assert.equal(result.useShell, true);
+});
+
+test('keeps an executable Windows command out of the shell', () => {
+  const result = resolveWindowsCommand(
+    'node',
+    {},
+    'win32',
+    () => ['C:\\Program Files\\nodejs\\node.exe']
+  );
+
+  assert.equal(result.command, 'C:\\Program Files\\nodejs\\node.exe');
+  assert.equal(result.useShell, false);
+});
 
 test('starts the MCP server in its configured working directory', async () => {
   const workingDirectory = await mkdtemp(path.join(os.tmpdir(), 'ccg-mcp-cwd-'));

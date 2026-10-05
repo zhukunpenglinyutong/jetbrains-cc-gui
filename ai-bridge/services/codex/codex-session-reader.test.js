@@ -121,6 +121,41 @@ test('incremental reader resets on truncation, replacement, same-size rewrite an
   }
 });
 
+test('same-size rewrites invalidate cached lines even when stat metadata is unchanged', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codex-reader-equal-stat-'));
+  const path = join(directory, 'session.jsonl');
+  const reader = createSessionReader();
+  const originalOpen = fsPromises.open;
+  try {
+    await writeFile(path, '[]\n');
+    const originalStat = await fsPromises.stat(path);
+    // Freeze metadata to reproduce timestamp collisions deterministically on
+    // every platform, without relying on the filesystem's clock resolution.
+    fsPromises.open = async (...args) => {
+      const handle = await originalOpen(...args);
+      handle.stat = async () => originalStat;
+      return handle;
+    };
+    syncBuiltinESMExports();
+    await reader.read(path);
+    const cachedLines = reader.lines;
+    await reader.read(path);
+    assert.equal(reader.lines, cachedLines);
+    assert.equal(reader.generation, 1);
+
+    await writeFile(path, '42\n');
+    assert.deepEqual((await reader.read(path)).lines, ['42']);
+    assert.equal(reader.generation, 2);
+    await reader.read(path);
+    assert.equal(reader.generation, 2);
+  } finally {
+    await reader.dispose();
+    fsPromises.open = originalOpen;
+    syncBuiltinESMExports();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('incremental reader decodes Chinese split across its fixed-size read buffers', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'codex-reader-chunks-'));
   const path = join(directory, 'session.jsonl');
