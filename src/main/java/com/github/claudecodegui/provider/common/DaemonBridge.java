@@ -1,5 +1,6 @@
 package com.github.claudecodegui.provider.common;
 
+import com.github.claudecodegui.bridge.AiDataProcessGate;
 import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
@@ -199,6 +200,7 @@ public class DaemonBridge {
     private boolean executeStartAttempt(StartAttempt attempt) {
         DaemonGenerationContext startedContext = null;
         Process startedProcess = null;
+        AiDataProcessGate.ProcessPermit processPermit = null;
         try {
             synchronized (startLock) {
                 if (!isStartAttemptCurrentLocked(attempt)) {
@@ -207,6 +209,7 @@ public class DaemonBridge {
                 }
             }
 
+            processPermit = AiDataProcessGate.getInstance().acquireProcessPermit();
             startedProcess = processLauncher.launch();
             BufferedWriter startedStdin = new BufferedWriter(
                     new OutputStreamWriter(startedProcess.getOutputStream(), StandardCharsets.UTF_8));
@@ -218,7 +221,9 @@ public class DaemonBridge {
                     startedStdin,
                     startedGeneration,
                     startedWallTime,
-                    startedNanos);
+                    startedNanos,
+                    processPermit);
+            processPermit = null;
 
             synchronized (startLock) {
                 if (!isStartAttemptCurrentLocked(attempt)) {
@@ -271,6 +276,9 @@ public class DaemonBridge {
         } catch (Exception e) {
             LOG.error("[DaemonBridge] Failed to start daemon", e);
             failStartAttempt(attempt, startedContext, startedProcess);
+            if (processPermit != null) {
+                processPermit.close();
+            }
             return false;
         }
     }
@@ -1394,6 +1402,7 @@ public class DaemonBridge {
                 new ConcurrentHashMap<>();
         private final Deque<String> recentStderrLines = new ArrayDeque<>();
         private final HeartbeatTimestamps heartbeatTimestamps;
+        private final AiDataProcessGate.ProcessPermit processPermit;
         private volatile DaemonGenerationState state = DaemonGenerationState.ACTIVE;
         private volatile boolean startupPublished;
         private volatile Thread readerThread;
@@ -1406,12 +1415,24 @@ public class DaemonBridge {
                 long startedWallTimeMs,
                 long startedAtNanos
         ) {
+            this(process, stdin, generation, startedWallTimeMs, startedAtNanos, null);
+        }
+
+        DaemonGenerationContext(
+                Process process,
+                BufferedWriter stdin,
+                long generation,
+                long startedWallTimeMs,
+                long startedAtNanos,
+                AiDataProcessGate.ProcessPermit processPermit
+        ) {
             this.process = process;
             this.stdin = stdin;
             this.generation = generation;
             this.startedAtWallTimeMs = startedWallTimeMs;
             this.heartbeatTimestamps = new HeartbeatTimestamps(
                     startedWallTimeMs, startedAtNanos);
+            this.processPermit = processPermit;
         }
 
         boolean isActive() {
@@ -1433,11 +1454,21 @@ public class DaemonBridge {
         synchronized void claimDeath() {
             if (state == DaemonGenerationState.ACTIVE) {
                 state = DaemonGenerationState.DEATH_CLAIMED;
+                closeProcessPermit();
             }
         }
 
         void stop() {
-            state = DaemonGenerationState.STOPPED;
+            if (state != DaemonGenerationState.STOPPED) {
+                state = DaemonGenerationState.STOPPED;
+                closeProcessPermit();
+            }
+        }
+
+        private void closeProcessPermit() {
+            if (processPermit != null) {
+                processPermit.close();
+            }
         }
 
         synchronized boolean signalReady(boolean preloaded) {
