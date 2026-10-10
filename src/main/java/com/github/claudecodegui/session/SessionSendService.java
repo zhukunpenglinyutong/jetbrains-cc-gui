@@ -614,6 +614,7 @@ public class SessionSendService {
         String effectiveMode = permissionMode != null && !permissionMode.isBlank()
                 ? permissionMode
                 : "default";
+        Boolean thinking = readThinkingEnabled();
         int attachmentCount = attachments != null ? attachments.size() : 0;
 
         LOG.info("[Lifecycle] sendToCli provider=" + provider
@@ -623,6 +624,7 @@ public class SessionSendService {
                 + ", modelCli=" + (modelForCli != null ? modelForCli : "(config-default)")
                 + ", effort=" + effort
                 + ", permissionMode=" + effectiveMode
+                + ", thinking=" + (thinking == null || thinking)
                 + ", attachments=" + attachmentCount);
 
         return bridge.sendMessage(
@@ -635,8 +637,28 @@ public class SessionSendService {
                 attachments,
                 effectiveMode,
                 "dsh".equals(provider) ? state.getDshPreset() : null,
+                thinking,
                 handler
         ).thenApply(result -> null);
+    }
+
+    /**
+     * Plugin "always thinking" toggle for CLI providers. Same source as the
+     * webview toggle: provider settingsConfig first, Claude settings.json as
+     * fallback; null lets the daemon apply its default (enabled).
+     */
+    private Boolean readThinkingEnabled() {
+        try {
+            CodemossSettingsService settingsService = new CodemossSettingsService();
+            Boolean providerLevel = settingsService.getAlwaysThinkingEnabledInActiveProvider();
+            if (providerLevel != null) {
+                return providerLevel;
+            }
+            return settingsService.getAlwaysThinkingEnabledFromClaudeSettings();
+        } catch (Exception e) {
+            LOG.warn("[Thinking] Failed to read thinking config: " + e.getMessage());
+        }
+        return null;
     }
 
     /**

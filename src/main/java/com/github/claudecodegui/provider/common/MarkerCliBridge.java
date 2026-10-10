@@ -154,7 +154,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
-                null, null, null, callback);
+                null, null, null, null, callback);
     }
 
     /**
@@ -175,15 +175,19 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
-                attachments, null, null, callback);
+                attachments, null, null, null, callback);
     }
 
     /**
-     * Send a message with optional attachments and permission mode.
+     * Send a message with optional attachments, permission mode and thinking toggle.
      *
      * <p>{@code permissionMode} is required for Grok ACP auto-approve
      * ({@code bypassPermissions} / full-auto). Without it the Node side
      * defaults to {@code default} and every tool/edit still pops the dialog.
+     *
+     * <p>{@code thinking} carries the plugin "always thinking" toggle for
+     * providers that gate reasoning on a CLI flag (OpenCode {@code --thinking});
+     * {@code null} means the daemon default (enabled).
      */
     public CompletableFuture<SDKResult> sendMessage(
             String channelId,
@@ -195,6 +199,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             List<ClaudeSession.Attachment> attachments,
             String permissionMode,
             String dshPreset,
+            Boolean thinking,
             MessageCallback callback
     ) {
         JsonObject stdinInput = new JsonObject();
@@ -207,6 +212,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
         // fall back to an implicit default that ignores the UI mode selection.
         String mode = permissionMode != null && !permissionMode.isBlank() ? permissionMode.trim() : "default";
         stdinInput.addProperty("permissionMode", mode);
+        stdinInput.addProperty("thinking", thinking == null || thinking);
         if (dshPreset != null) {
             stdinInput.addProperty("preset", dshPreset);
         }
@@ -229,6 +235,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
                 + (sessionId != null && !sessionId.isEmpty() ? sessionId : "(new)")
                 + " model=" + (model != null && !model.isEmpty() ? model : "(default)")
                 + " permissionMode=" + mode
+                + " thinking=" + (thinking == null || thinking)
                 + " attachments=" + attachmentCount);
 
         return executeStreamingCommand(channelId, command, stdinJson, cwd, callback);

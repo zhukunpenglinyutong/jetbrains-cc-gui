@@ -735,6 +735,15 @@ public class CodemossSettingsService {
         return providerManager.setAlwaysThinkingEnabledInActiveProvider(enabled);
     }
 
+    /**
+     * alwaysThinkingEnabled of the active provider profile, or {@code null} when unset.
+     * Mirrors the webview toggle's read order: provider settingsConfig first,
+     * Claude settings.json as fallback.
+     */
+    public Boolean getAlwaysThinkingEnabledInActiveProvider() {
+        return providerManager.getAlwaysThinkingEnabledInActiveProvider();
+    }
+
     public void applyProviderToClaudeSettings(JsonObject provider) throws IOException {
         claudeSettingsManager.applyProviderToClaudeSettings(provider);
     }
