@@ -100,6 +100,7 @@
              fallback listener plus a CEF-level keyboard hook that detects the
              orphaned Cmd+V KEYUP and forwards clipboard images to the webview. -->
         <postStartupActivity implementation="com.github.claudecodegui.startup.PasteKeyInitializer"/>
+        <postStartupActivity implementation="com.github.claudecodegui.startup.ClawBotGatewayStartupActivity"/>
 
         <!-- StatusBar widget for task notification -->
         <statusBarWidgetFactory id="ClaudeStatusBarWidget"

@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.project.Project;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Permission request class for managing tool invocation permission prompts.
@@ -15,7 +16,7 @@ public class PermissionRequest {
     private final JsonObject suggestions;
     private final CompletableFuture<PermissionResult> resultFuture;
     private final Project project;
-    private boolean resolved = false;
+    private final AtomicBoolean resolved = new AtomicBoolean();
 
     public PermissionRequest(String channelId, String toolName, Map<String, Object> inputs, JsonObject suggestions, Project project) {
         this.channelId = channelId;
@@ -40,8 +41,7 @@ public class PermissionRequest {
      * Approve the permission request.
      */
     public void accept(Map<String, Object> updatedInput, JsonObject updatedPermissions) {
-        if (!resolved) {
-            resolved = true;
+        if (resolved.compareAndSet(false, true)) {
             PermissionResult result = new PermissionResult(
                 PermissionResult.Behavior.ALLOW,
                 updatedInput != null ? updatedInput : inputs,
@@ -64,8 +64,7 @@ public class PermissionRequest {
      * Deny the permission request.
      */
     public void reject(String message, boolean interrupt) {
-        if (!resolved) {
-            resolved = true;
+        if (resolved.compareAndSet(false, true)) {
             PermissionResult result = new PermissionResult(
                 PermissionResult.Behavior.DENY,
                 null,
@@ -109,7 +108,7 @@ public class PermissionRequest {
     }
 
     public boolean isResolved() {
-        return resolved;
+        return resolved.get();
     }
 
     /**

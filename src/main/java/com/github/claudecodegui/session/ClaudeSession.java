@@ -1104,6 +1104,16 @@ public class ClaudeSession {
         permissionManager.handlePermissionDecision(channelId, allow, remember, rejectMessage);
     }
 
+    public void handlePermissionDecision(
+            PermissionRequest request, boolean allow, boolean remember, String rejectMessage) {
+        permissionManager.handlePermissionDecision(request, allow, remember, rejectMessage);
+    }
+
+    public boolean tryHandleRemotePermissionDecision(
+            PermissionRequest request, boolean allow, String rejectMessage) {
+        return permissionManager.tryHandleRemotePermissionDecision(request, allow, rejectMessage);
+    }
+
     /**
      * Handle an "always allow" permission decision.
      */

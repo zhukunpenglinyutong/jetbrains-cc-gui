@@ -1,6 +1,18 @@
 package com.github.claudecodegui.ui.toolwindow;
 
 import com.github.claudecodegui.action.SendShortcutSync;
+import com.github.claudecodegui.clawbot.ClawBotGatewayRuntimeService;
+import com.github.claudecodegui.clawbot.ClawBotConversationPreview;
+import com.github.claudecodegui.clawbot.ClawBotProgressTracker;
+import com.github.claudecodegui.clawbot.ClawBotInteractionExchange;
+import com.github.claudecodegui.clawbot.ClawBotDeliveryRetryPolicy;
+import com.github.claudecodegui.clawbot.ClawBotIdeClient;
+import com.github.claudecodegui.clawbot.ClawBotIdeExecutionJournal;
+import com.github.claudecodegui.clawbot.ClawBotInboundAction;
+import com.github.claudecodegui.clawbot.ClawBotInboundMessage;
+import com.github.claudecodegui.clawbot.ClawBotSessionRegistration;
+import com.github.claudecodegui.clawbot.ClawBotSessionStatus;
+import com.github.claudecodegui.clawbot.ClawBotProcessCoordinator;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.handler.history.HistoryHandler;
 import com.github.claudecodegui.handler.core.MessageDispatcher;
@@ -62,10 +74,20 @@ import java.awt.event.HierarchyEvent;
 import java.awt.event.HierarchyListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
 /**
@@ -91,7 +113,7 @@ public class ClaudeChatWindow {
     private final HtmlLoader htmlLoader;
 
     private Content parentContent;
-    private String originalTabName;
+    private volatile String originalTabName;
     private volatile String sessionId = null;
     // Stable PermissionService routing key, assigned once at construction.
     // Kept separate from sessionId, which is overwritten with AI session IDs
@@ -99,6 +121,26 @@ public class ClaudeChatWindow {
     // clearPermissionDecisionMemory(), both of which must reach the instance
     // the bridges actually route permission requests to.
     private String permissionServiceKey = null;
+    private final String clawBotInstanceId = UUID.randomUUID().toString();
+    private final Object clawBotClientLock = new Object();
+    private volatile ClawBotIdeClient clawBotClient;
+    private volatile ScheduledFuture<?> clawBotInboundPollTask;
+    private final AtomicBoolean clawBotTurnActive = new AtomicBoolean();
+    private final AtomicBoolean clawBotControlActive = new AtomicBoolean();
+    private volatile ScheduledFuture<?> clawBotRegistrationTask;
+    private final ClawBotIdeExecutionJournal clawBotExecutionJournal;
+    private volatile ClawBotPendingReply clawBotPendingReply;
+    private volatile ClawBotPendingControlReply clawBotPendingControlReply;
+    private volatile String clawBotInFlightControlMessageId;
+    private final Set<String> clawBotExecutionClaims = ConcurrentHashMap.newKeySet();
+    private ClaudeSession clawBotObservedSession;
+    private String clawBotObservedProvider;
+    private String clawBotObservedSessionId;
+    private String clawBotObservedRuntimeEpoch;
+    private String clawBotGeneration = UUID.randomUUID().toString();
+    private String clawBotActivityId = "";
+    private volatile ClaudeSession clawBotRunningSession;
+    private final AtomicReference<ClawBotActiveTurn> clawBotActiveTurn = new AtomicReference<>();
 
     private volatile JBCefBrowser browser;
     // volatile: read from the daemon reader thread by the session_updated listener
@@ -229,6 +271,14 @@ public class ClaudeChatWindow {
 
     public ClaudeChatWindow(Project project, boolean skipRegister) {
         this.project = project;
+        String projectHash = UUID.nameUUIDFromBytes(project.getLocationHash().getBytes(StandardCharsets.UTF_8)).toString();
+        this.clawBotExecutionJournal = new ClawBotIdeExecutionJournal(
+                ClawBotProcessCoordinator.defaultRuntimeDirectory().resolve("ide-executions").resolve(projectHash));
+        try {
+            this.clawBotExecutionJournal.load();
+        } catch (IOException error) {
+            LOG.warn("[ClawBot] IDE execution journal unavailable; inbound work will fail closed", error);
+        }
         this.claudeSDKBridge = new ClaudeSDKBridge();
         this.codexSDKBridge = new CodexSDKBridge();
         this.grokSDKBridge = new GrokSDKBridge();
@@ -466,6 +516,7 @@ public class ClaudeChatWindow {
 
         setupSessionCallbacks();
         initializeSessionInfo();
+        startClawBotSessionRegistration();
 
         // Delay JCEF browser creation to avoid service initialization conflicts
         // during JBCefApp$Holder class init (ProxyMigrationService dependency).
@@ -2329,6 +2380,7 @@ public class ClaudeChatWindow {
                 sessionId = newSessionId;
                 persistTabSessionState();
             }
+
         };
         session.setCallback(sessionCallbackAdapter);
 
@@ -2847,6 +2899,769 @@ public class ClaudeChatWindow {
 
     // ==================== Dispose ====================
 
+    public String getClawBotTabName() {
+        String name = originalTabName;
+        if ((name == null || name.isBlank()) && parentContent != null) {
+            name = parentContent.getDisplayName();
+        }
+        if (name == null || name.isBlank()) {
+            return "Chat";
+        }
+        String normalized = name.replaceAll("[\\p{Cntrl}]", "").trim();
+        return normalized.isEmpty() ? "Chat" : normalized.substring(0, Math.min(normalized.length(), 128));
+    }
+
+    private void startClawBotSessionRegistration() {
+        String sessionHandleId = permissionServiceKey;
+        if (sessionHandleId == null || sessionHandleId.isBlank()) {
+            return;
+        }
+        try {
+            ScheduledFuture<?> task = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(
+                    () -> registerClawBotSession(sessionHandleId), 0L, 5L, TimeUnit.SECONDS);
+            clawBotRegistrationTask = task;
+            if (disposed) {
+                task.cancel(false);
+                clawBotRegistrationTask = null;
+            }
+        } catch (RuntimeException error) {
+            LOG.debug("[ClawBot] Session registration task was not scheduled");
+        }
+    }
+
+    private void registerClawBotSession(String sessionHandleId) {
+        if (disposed || project.isDisposed()) {
+            return;
+        }
+        ClawBotIdeClient existingClient;
+        synchronized (clawBotClientLock) {
+            existingClient = clawBotClient;
+        }
+        if (existingClient != null) {
+            try {
+                refreshClawBotState(existingClient);
+            } catch (IOException | RuntimeException error) {
+                LOG.debug("[ClawBot] Session presentation update unavailable; retrying");
+            }
+            return;
+        }
+        ClawBotIdeClient client = null;
+        try {
+            ClawBotGatewayRuntimeService gateway = ClawBotGatewayRuntimeService.getInstance();
+            if (gateway == null) {
+                return;
+            }
+            gateway.start();
+            long connectionEpoch = System.currentTimeMillis();
+            client = gateway.createIdeClient(clawBotInstanceId, connectionEpoch);
+            client.setSessionRecoveryListener(this::invalidateClawBotRemoteState);
+            ClawBotSessionRegistration registration = new ClawBotSessionRegistration(
+                    sessionHandleId, clawBotInstanceId, project.getLocationHash(), project.getName(),
+                    getCurrentProvider(), Set.of("STATUS", "INBOUND", "OUTBOUND", "CONTROL", "ROUTING_V2"),
+                    ClawBotSessionStatus.ONLINE, connectionEpoch, getClawBotTabName(), clawBotGeneration(session));
+            if (!client.register(registration)) {
+                throw new IOException("CLAWBOT_SESSION_REGISTER_REJECTED");
+            }
+            synchronized (clawBotClientLock) {
+                if (!disposed && !project.isDisposed()) {
+                    startClawBotInboundPolling();
+                    clawBotClient = client;
+                    return;
+                }
+            }
+        } catch (IOException | RuntimeException error) {
+            LOG.debug("[ClawBot] Session registration unavailable; retrying");
+        }
+        if (client != null) {
+            client.close();
+        }
+    }
+
+    private void closeClawBotSession() {
+        ScheduledFuture<?> registrationTask = clawBotRegistrationTask;
+        clawBotRegistrationTask = null;
+        if (registrationTask != null) {
+            registrationTask.cancel(false);
+        }
+        ScheduledFuture<?> pollTask = clawBotInboundPollTask;
+        clawBotInboundPollTask = null;
+        if (pollTask != null) {
+            pollTask.cancel(false);
+        }
+        clawBotTurnActive.set(false);
+        clawBotControlActive.set(false);
+        clawBotPendingReply = null;
+        clawBotPendingControlReply = null;
+        clawBotInFlightControlMessageId = null;
+        clawBotRunningSession = null;
+        ClawBotActiveTurn closingTurn = clawBotActiveTurn.getAndSet(null);
+        if (closingTurn != null) {
+            closingTurn.progress().close();
+        }
+        ClawBotIdeClient client;
+        synchronized (clawBotClientLock) {
+            client = clawBotClient;
+            clawBotClient = null;
+        }
+        if (client != null) {
+            try {
+                client.close();
+            } catch (RuntimeException error) {
+                LOG.debug("[ClawBot] Session unregister failed during window disposal");
+            }
+        }
+    }
+
+    private void startClawBotInboundPolling() {
+        if (clawBotInboundPollTask == null && !disposed) {
+            clawBotInboundPollTask = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(
+                    this::pollClawBotInbound, 0L, 500L, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private void pollClawBotInbound() {
+        pollClawBotPreview();
+        pollClawBotControl();
+        pollClawBotProgress();
+        if (disposed || !clawBotTurnActive.compareAndSet(false, true)) {
+            return;
+        }
+        ClawBotIdeClient client;
+        synchronized (clawBotClientLock) {
+            client = clawBotClient;
+        }
+        if (client == null || permissionServiceKey == null) {
+            clawBotTurnActive.set(false);
+            return;
+        }
+        try {
+            ClawBotInboundMessage message = client.pollInbound(permissionServiceKey);
+            if (message == null) {
+                ClawBotPendingReply pendingReply = clawBotPendingReply;
+                if (pendingReply != null && ClawBotDeliveryRetryPolicy.isDue(
+                        System.nanoTime(), pendingReply.nextAttemptAtNanos())) {
+                    sendClawBotReply(client, pendingReply.message(), pendingReply.reply(),
+                            pendingReply.restoreOnline(), pendingReply.failureCount());
+                    return;
+                }
+                clawBotTurnActive.set(false);
+                return;
+            }
+            ClawBotPendingReply pendingReply = clawBotPendingReply;
+            if (pendingReply != null && pendingReply.message().messageId().equals(message.messageId())) {
+                if (ClawBotDeliveryRetryPolicy.isDue(System.nanoTime(), pendingReply.nextAttemptAtNanos())) {
+                    sendClawBotReply(client, message, pendingReply.reply(), pendingReply.restoreOnline(),
+                            pendingReply.failureCount());
+                } else {
+                    clawBotTurnActive.set(false);
+                }
+                return;
+            }
+            clawBotPendingReply = null;
+            handleClawBotInbound(client, message);
+        } catch (IOException | RuntimeException error) {
+            if (isClawBotSessionRecoveryError(error)) {
+                invalidateClawBotRemoteState();
+            }
+            clawBotTurnActive.set(false);
+        }
+    }
+
+    private void pollClawBotProgress() {
+        ClawBotActiveTurn turn = clawBotActiveTurn.get();
+        ClawBotIdeClient client = clawBotClient;
+        if (turn == null || client == null || disposed || permissionServiceKey == null || session != turn.session()) {
+            return;
+        }
+        long interactionVersion = permissionHandler == null ? 0 : permissionHandler.getClawBotInteractionRevision();
+        turn.interactions().update(permissionHandler == null ? List.of() : permissionHandler.getClawBotInteractions());
+        String token = turn.interactions().revision();
+        String phase = token.isEmpty() ? clawBotProgressPhase() : "WAITING:" + token;
+        String prompt = token.isEmpty() ? clawBotWaitingPrompt(phase)
+                : turn.interactions().prompt();
+        ClawBotProgressTracker.Notification notification = turn.progress().prepare(phase, prompt, System.nanoTime());
+        if (notification == null) {
+            return;
+        }
+        AppExecutorUtil.getAppExecutorService().execute(() -> turn.progress().dispatch(notification,
+                () -> !disposed && session == turn.session() && clawBotActiveTurn.get() == turn
+                        && (permissionHandler == null || permissionHandler.getClawBotInteractionRevision() == interactionVersion)
+                        && token.equals(turn.interactions().revision())
+                        && (token.isEmpty() ? phase.equals(clawBotProgressPhase()) : !permissionHandler.getClawBotInteractions().isEmpty()),
+                progress -> {
+                    try {
+                        if (!client.updateInteraction(permissionServiceKey, turn.message().messageId(), token)) {
+                            LOG.debug("[ClawBot] Interaction route was not updated before progress delivery");
+                        }
+                    } catch (IOException | RuntimeException error) {
+                        LOG.debug("[ClawBot] Interaction route refresh failed; sending progress anyway");
+                    }
+                    return client.sendProgress(permissionServiceKey, turn.message().messageId(),
+                            turn.message().messageId() + ":progress:" + progress.sequence(), progress.text(), progress.essential());
+                }));
+    }
+
+    private String clawBotProgressPhase() {
+        if (permissionServiceKey != null && PermissionService.getInstance(project, permissionServiceKey).hasPendingIdeReview()) {
+            return "WAITING_IDE_REVIEW";
+        }
+        ClaudeSession current = session;
+        if (current != null && !current.getPermissionManager().getPendingRequests().isEmpty()) {
+            return "WAITING_APPROVAL";
+        }
+        if (permissionHandler != null) {
+            String interactionPhase = permissionHandler.getClawBotPendingInteractionPhase();
+            if (!interactionPhase.isEmpty()) {
+                return interactionPhase;
+            }
+        }
+        return "RUNNING";
+    }
+
+    private String clawBotWaitingPrompt(String phase) {
+        String reason = switch (phase) {
+            case "WAITING_USER" -> "任务正在等待 IDE 用户回答问题，请在 IDE 中完成回答。";
+            case "WAITING_PLAN_APPROVAL" -> "任务正在等待 IDE 计划审批，请在 IDE 中完成处理。";
+            case "WAITING_APPROVAL" -> "任务正在等待 IDE 权限审批，请在 IDE 中完成处理。";
+            default -> "任务正在等待 IDE 中的审批或审查，请在 IDE 中处理。";
+        };
+        return reason + "普通进度推送已暂停。";
+    }
+
+    private void pollClawBotControl() {
+        if (disposed || !clawBotControlActive.compareAndSet(false, true)) {
+            return;
+        }
+        ClawBotIdeClient client = clawBotClient;
+        if (client == null || permissionServiceKey == null) {
+            clawBotControlActive.set(false);
+            return;
+        }
+        try {
+            ClawBotInboundMessage command = client.pollCommand(permissionServiceKey);
+            if (command == null) {
+                ClawBotPendingControlReply pendingReply = clawBotPendingControlReply;
+                if (pendingReply != null && ClawBotDeliveryRetryPolicy.isDue(
+                        System.nanoTime(), pendingReply.nextAttemptAtNanos())) {
+                    sendClawBotControlReply(client, pendingReply.message(), pendingReply.reply(),
+                            pendingReply.failureCount());
+                    return;
+                }
+                clawBotControlActive.set(false);
+                return;
+            }
+            String inFlightMessageId = clawBotInFlightControlMessageId;
+            if (inFlightMessageId != null && !inFlightMessageId.equals(command.messageId())) {
+                clawBotControlActive.set(false);
+                return;
+            }
+            ClawBotPendingControlReply pending = clawBotPendingControlReply;
+            if (pending != null && pending.message().messageId().equals(command.messageId())) {
+                if (ClawBotDeliveryRetryPolicy.isDue(System.nanoTime(), pending.nextAttemptAtNanos())) {
+                    sendClawBotControlReply(client, command, pending.reply(), pending.failureCount());
+                } else {
+                    clawBotControlActive.set(false);
+                }
+                return;
+            }
+            if (inFlightMessageId != null) {
+                clawBotControlActive.set(false);
+                return;
+            }
+            clawBotPendingControlReply = null;
+            handleClawBotControl(client, command);
+        } catch (IOException | RuntimeException error) {
+            if (isClawBotSessionRecoveryError(error)) {
+                invalidateClawBotRemoteState();
+            }
+            clawBotControlActive.set(false);
+        }
+    }
+
+    private void handleClawBotControl(ClawBotIdeClient client, ClawBotInboundMessage command) {
+        ClaudeSession currentSession = session;
+        if (currentSession == null || disposed) {
+            rejectClawBotControlMessage(client, command, "当前没有可用的 IDE 会话。");
+            return;
+        }
+        try {
+            if (!client.validateCommand(permissionServiceKey, command.messageId())) {
+                rejectClawBotControlMessage(client, command,
+                        "目标会话已变化，控制操作未执行。请重新发送 /sessions 后再选择目标会话。");
+                return;
+            }
+            if (!client.matchesTarget(
+                    permissionServiceKey, command, clawBotGeneration(currentSession), currentSession.getProvider())) {
+                sendClawBotControlReply(client, command,
+                        "目标会话已变化，控制操作未执行。请重新发送 /sessions 后再选择目标会话。");
+                return;
+            }
+        } catch (IOException | RuntimeException error) {
+            clawBotControlActive.set(false);
+            return;
+        }
+        if (!claimClawBotExecution(client, command, true)) {
+            return;
+        }
+        clawBotInFlightControlMessageId = command.messageId();
+        if (command.action() == ClawBotInboundAction.ANSWER) {
+            ClawBotActiveTurn turn = clawBotActiveTurn.get();
+            String reply = "当前任务没有可回答的问题，或该问题不属于你。";
+            if (turn != null && turn.session() == currentSession && permissionHandler != null
+                    && turn.message().fromUserId().equals(command.fromUserId())) {
+                turn.interactions().update(permissionHandler.getClawBotInteractions());
+                reply = turn.interactions().answer(command.interactionToken(), command.text(), permissionHandler::answerClawBotInteraction);
+                turn.interactions().update(permissionHandler.getClawBotInteractions());
+                syncClawBotInteraction(client, turn);
+            }
+            sendClawBotControlReply(client, command, reply);
+            return;
+        }
+        if (command.action() != ClawBotInboundAction.INTERRUPT && command.action() != ClawBotInboundAction.NEW_SESSION) {
+            sendClawBotControlReply(client, command, "该控制命令已停用，请根据当前问题直接回复编号或文字。");
+            return;
+        }
+        try {
+            client.heartbeat(permissionServiceKey, ClawBotSessionStatus.BUSY);
+        } catch (IOException | RuntimeException ignored) {
+        }
+        if (command.action() == ClawBotInboundAction.INTERRUPT) {
+            currentSession.interrupt().whenComplete((ignored, error) -> sendClawBotControlReply(
+                    client, command, error == null ? "当前会话已请求停止。" : "当前会话停止失败，请检查对应 IDE 会话。"));
+            return;
+        }
+        currentSession.interrupt().whenComplete((ignored, error) -> {
+            if (error != null) {
+                sendClawBotControlReply(client, command, "当前任务停止失败，暂未新建会话。");
+                return;
+            }
+            try {
+                sessionLifecycleManager.createNewSession();
+                sendClawBotControlReply(client, command, "已新建会话，当前页签已切换到新会话。");
+            } catch (RuntimeException createError) {
+                sendClawBotControlReply(client, command, "新建会话失败，请检查对应 IDE 会话。");
+            }
+        });
+    }
+
+    private void syncClawBotInteraction(ClawBotIdeClient client, ClawBotActiveTurn turn) {
+        try {
+            client.updateInteraction(permissionServiceKey, turn.message().messageId(), turn.interactions().revision());
+        } catch (IOException | RuntimeException error) {
+            LOG.debug("[ClawBot] Interaction route refresh unavailable; progress polling will retry");
+        }
+    }
+
+    private void sendClawBotControlReply(
+            ClawBotIdeClient client, ClawBotInboundMessage command, String reply) {
+        sendClawBotControlReply(client, command, reply, 0);
+    }
+
+    private void sendClawBotControlReply(
+            ClawBotIdeClient client, ClawBotInboundMessage command, String reply, int previousFailures) {
+        boolean accepted = false;
+        boolean stale = false;
+        try {
+            markClawBotExecutionCompleted(command.messageId());
+            accepted = client.replyToCommand(permissionServiceKey, command.messageId(), reply);
+            clawBotPendingControlReply = accepted ? null : pendingControlReply(command, reply, previousFailures);
+        } catch (IOException | RuntimeException error) {
+            stale = !isClawBotSessionRecoveryError(error) && isClawBotStaleDeliveryError(error);
+            clawBotPendingControlReply = stale ? null : pendingControlReply(command, reply, previousFailures);
+        } finally {
+            clawBotControlActive.set(false);
+            if (accepted || stale) {
+                clawBotInFlightControlMessageId = null;
+                acknowledgeClawBotExecution(command.messageId());
+            }
+        }
+    }
+
+    private void rejectClawBotControlMessage(
+            ClawBotIdeClient client, ClawBotInboundMessage command, String text) {
+        try {
+            boolean accepted = client.rejectCommand(permissionServiceKey, command.messageId(), text);
+            clawBotPendingControlReply = accepted ? null : pendingControlReply(command, text, 0);
+        } catch (IOException | RuntimeException error) {
+            clawBotPendingControlReply = isClawBotStaleDeliveryError(error)
+                    ? null : pendingControlReply(command, text, 0);
+        } finally {
+            clawBotControlActive.set(false);
+        }
+    }
+
+    private void pollClawBotPreview() {
+        if (disposed || project.isDisposed()) {
+            return;
+        }
+        ClawBotIdeClient client = clawBotClient;
+        if (client == null) {
+            return;
+        }
+        try {
+            ClawBotInboundMessage preview = client.pollPreview(permissionServiceKey);
+            ClaudeSession current = session;
+            if (preview == null || current == null
+                    || !client.matchesTarget(permissionServiceKey, preview, clawBotGeneration(current), current.getProvider())) {
+                return;
+            }
+            String text = ClawBotConversationPreview.capture(current);
+            if (session == current && client.matchesTarget(permissionServiceKey, preview, clawBotGeneration(current), current.getProvider())) {
+                client.replyToPreview(permissionServiceKey, preview.messageId(), text);
+            }
+        } catch (IOException | RuntimeException error) {
+            LOG.debug("[ClawBot] Preview unavailable");
+        }
+    }
+
+    private void handleClawBotInbound(ClawBotIdeClient client, ClawBotInboundMessage message) {
+        ClaudeSession currentSession = session;
+        if (disposed) {
+            clawBotTurnActive.set(false);
+            return;
+        }
+        if (currentSession == null) {
+            rejectClawBotInboundMessage(client, message, "CC GUI 当前没有可用的 IDE 会话。");
+            return;
+        }
+        try {
+            if (!client.validateInbound(permissionServiceKey, message.messageId())) {
+                rejectClawBotInboundMessage(
+                        client, message, "会话选择或授权已变更，消息尚未提交。请重新选择目标会话。");
+                return;
+            }
+        } catch (IOException | RuntimeException error) {
+            clawBotTurnActive.set(false);
+            return;
+        }
+        if (session != currentSession
+                || !client.matchesTarget(permissionServiceKey, message, clawBotGeneration(currentSession), currentSession.getProvider())) {
+            sendClawBotReply(client, message, "目标会话已变更，消息尚未提交。请发送 /sessions 后重新 /use。", false);
+            return;
+        }
+        if (!claimClawBotExecution(client, message, false)) {
+            return;
+        }
+        if (message.action() == ClawBotInboundAction.INTERRUPT) {
+            try {
+                client.heartbeat(permissionServiceKey, ClawBotSessionStatus.BUSY);
+            } catch (IOException | RuntimeException ignored) {
+            }
+            currentSession.interrupt().whenComplete((ignored, error) -> {
+                String reply = error == null ? "当前页签会话已停止。" : "当前页签会话停止失败，请检查对应 IDE 会话。";
+                sendClawBotReply(client, message, reply, true);
+            });
+            return;
+        }
+        if (message.action() == ClawBotInboundAction.NEW_SESSION) {
+            try {
+                client.heartbeat(permissionServiceKey, ClawBotSessionStatus.BUSY);
+                sessionLifecycleManager.createNewSession();
+                sendClawBotReply(client, message, "当前页签已请求新建会话，原会话将被覆盖。", true);
+            } catch (IOException | RuntimeException error) {
+                sendClawBotReply(client, message, "当前页签新建会话失败。", true);
+            }
+            return;
+        }
+        clawBotRunningSession = currentSession;
+        int firstTurnMessageIndex = currentSession.getMessages().size();
+        ClawBotActiveTurn activeTurn = new ClawBotActiveTurn(message, currentSession,
+                new ClawBotProgressTracker(currentSession, firstTurnMessageIndex, System.nanoTime(),
+                        ClawBotGatewayRuntimeService.getInstance()::progressSettings),
+                new ClawBotInteractionExchange());
+        clawBotActiveTurn.set(activeTurn);
+        refreshClawBotActivity(client);
+        CompletableFuture<Void> completion;
+        try {
+            completion = currentSession.send(message.text());
+            activeTurn.progress().bind();
+            sendClawBotProgress(client, message, "任务已开始处理，IDE 正在生成响应。", "start");
+        } catch (RuntimeException error) {
+            activeTurn.progress().close();
+            clawBotRunningSession = null;
+            clawBotActiveTurn.compareAndSet(activeTurn, null);
+            refreshClawBotActivity(client);
+            sendClawBotReply(client, message, "CC GUI 当前无法处理该消息。", true);
+            return;
+        }
+        completion.whenComplete((ignored, error) -> {
+            String reply = error == null && currentSession.getError() == null
+                    ? latestAssistantMessage(currentSession.getMessages(), firstTurnMessageIndex)
+                    : "CC GUI 处理消息失败，请检查对应 IDE 会话。";
+            activeTurn.progress().close();
+            clawBotRunningSession = null;
+            clawBotActiveTurn.compareAndSet(activeTurn, null);
+            refreshClawBotActivity(client);
+            sendClawBotReply(client, message, reply, true);
+        });
+    }
+
+    private void rejectClawBotInboundMessage(
+            ClawBotIdeClient client, ClawBotInboundMessage message, String text) {
+        try {
+            boolean accepted = client.rejectInbound(permissionServiceKey, message.messageId(), text);
+            clawBotPendingReply = accepted ? null : pendingReply(message, text, false, 0);
+        } catch (IOException | RuntimeException error) {
+            clawBotPendingReply = isClawBotStaleDeliveryError(error)
+                    ? null : pendingReply(message, text, false, 0);
+        } finally {
+            clawBotTurnActive.set(false);
+        }
+    }
+
+    private void sendClawBotProgress(
+            ClawBotIdeClient client, ClawBotInboundMessage message, String text, String phase) {
+        AppExecutorUtil.getAppExecutorService().execute(() -> {
+            ClawBotActiveTurn turn = clawBotActiveTurn.get();
+            if (disposed || turn == null || !turn.message().messageId().equals(message.messageId())
+                    || (!"start".equals(phase) && !"RUNNING".equals(clawBotProgressPhase()))) {
+                return;
+            }
+            sendClawBotProgressAttempt(client, message, text, phase, 0);
+        });
+    }
+
+    private void sendClawBotProgressAttempt(
+            ClawBotIdeClient client, ClawBotInboundMessage message, String text, String phase, int attempt) {
+        if (disposed || attempt > 3) {
+            return;
+        }
+        try {
+            client.sendProgress(permissionServiceKey, message.messageId(),
+                    message.messageId() + ":" + phase, text);
+        } catch (IOException | RuntimeException error) {
+            LOG.debug("[ClawBot] Progress notification unavailable", error);
+            if (!disposed) {
+                AppExecutorUtil.getAppScheduledExecutorService().schedule(
+                        () -> sendClawBotProgressAttempt(client, message, text, phase, attempt + 1),
+                        Math.min(30L, 1L << attempt), TimeUnit.SECONDS);
+            }
+        }
+    }
+
+    private String clawBotGeneration(ClaudeSession current) {
+        synchronized (clawBotClientLock) {
+            String provider = current == null ? "" : current.getProvider();
+            String sessionId = current == null ? null : current.getSessionId();
+            String runtimeEpoch = current == null ? null : current.getRuntimeSessionEpoch();
+            if (clawBotObservedSession != current || !Objects.equals(clawBotObservedProvider, provider)
+                    || !Objects.equals(clawBotObservedRuntimeEpoch, runtimeEpoch)
+                    || !Objects.equals(clawBotObservedSessionId, sessionId)) {
+                clawBotGeneration = UUID.randomUUID().toString();
+                clawBotActivityId = "";
+            }
+            clawBotObservedSession = current;
+            clawBotObservedProvider = provider;
+            clawBotObservedSessionId = sessionId;
+            clawBotObservedRuntimeEpoch = runtimeEpoch;
+            return clawBotGeneration;
+        }
+    }
+
+    private void refreshClawBotState(ClawBotIdeClient client) throws IOException {
+        synchronized (clawBotClientLock) {
+            ClaudeSession current = session;
+            if (disposed || project.isDisposed() || current == null) {
+                return;
+            }
+            String generation = clawBotGeneration(current);
+            boolean busy = current.isBusy() || current.isLoading() || clawBotRunningSession == current;
+            if (busy && clawBotActivityId.isEmpty()) {
+                clawBotActivityId = UUID.randomUUID().toString();
+            } else if (!busy) {
+                clawBotActivityId = "";
+            }
+            client.updateSession(permissionServiceKey, current.getProvider(), getClawBotTabName(), generation, clawBotActivityId);
+        }
+    }
+
+    private void refreshClawBotActivity(ClawBotIdeClient client) {
+        try {
+            refreshClawBotState(client);
+        } catch (IOException | RuntimeException error) {
+            LOG.debug("[ClawBot] Session activity update unavailable; retrying");
+        }
+    }
+
+    private boolean claimClawBotExecution(
+            ClawBotIdeClient client, ClawBotInboundMessage message, boolean control) {
+        ClawBotIdeExecutionJournal.State state;
+        try {
+            state = clawBotExecutionJournal.stateOf(message.messageId());
+        } catch (IOException error) {
+            sendClawBotExecutionGuardReply(client, message, control,
+                    "无法确认该消息是否已经执行，本次不会重复提交；请检查 IDE 后重新发送。 ");
+            return false;
+        }
+        if (state == ClawBotIdeExecutionJournal.State.STARTED) {
+            if (control) {
+                clawBotControlActive.set(false);
+            } else {
+                clawBotTurnActive.set(false);
+            }
+            return false;
+        }
+        if (state != ClawBotIdeExecutionJournal.State.NONE) {
+            sendClawBotExecutionGuardReply(client, message, control,
+                    "该消息已经被 IDE 接收过，但执行结果无法安全确认；本次不会自动重放，请核对 IDE 后重新发送。 ");
+            return false;
+        }
+        try {
+            if (!clawBotExecutionJournal.tryStart(message.messageId())) {
+                sendClawBotExecutionGuardReply(client, message, control,
+                        "该消息已经被 IDE 接收过，本次不会重复执行；请核对 IDE 当前会话。 ");
+                return false;
+            }
+            clawBotExecutionClaims.add(message.messageId());
+            return true;
+        } catch (IOException error) {
+            sendClawBotExecutionGuardReply(client, message, control,
+                    "无法记录该消息的执行状态，本次不会重复提交；请检查 IDE 后重新发送。 ");
+            return false;
+        }
+    }
+
+    private void sendClawBotExecutionGuardReply(
+            ClawBotIdeClient client, ClawBotInboundMessage message, boolean control, String text) {
+        if (control) {
+            sendClawBotControlReply(client, message, text);
+        } else {
+            sendClawBotReply(client, message, text, true);
+        }
+    }
+
+    private void markClawBotExecutionCompleted(String messageId) {
+        if (!clawBotExecutionClaims.contains(messageId)) {
+            return;
+        }
+        try {
+            clawBotExecutionJournal.markCompleted(messageId);
+        } catch (IOException error) {
+            LOG.warn("[ClawBot] IDE execution completion update failed", error);
+        }
+    }
+
+    private void acknowledgeClawBotExecution(String messageId) {
+        if (!clawBotExecutionClaims.remove(messageId)) {
+            return;
+        }
+        try {
+            clawBotExecutionJournal.acknowledge(messageId);
+        } catch (IOException error) {
+            LOG.warn("[ClawBot] IDE execution journal cleanup failed", error);
+        }
+    }
+
+    private void sendClawBotReply(
+            ClawBotIdeClient client, ClawBotInboundMessage message, String reply, boolean restoreOnline) {
+        sendClawBotReply(client, message, reply, restoreOnline, 0);
+    }
+
+    private void sendClawBotReply(
+            ClawBotIdeClient client,
+            ClawBotInboundMessage message,
+            String reply,
+            boolean restoreOnline,
+            int previousFailures) {
+        boolean accepted = false;
+        boolean stale = false;
+        try {
+            markClawBotExecutionCompleted(message.messageId());
+            accepted = client.replyToInbound(permissionServiceKey, message.messageId(), reply);
+            clawBotPendingReply = accepted ? null : pendingReply(message, reply, restoreOnline, previousFailures);
+        } catch (IOException | RuntimeException error) {
+            stale = !isClawBotSessionRecoveryError(error) && isClawBotStaleDeliveryError(error);
+            clawBotPendingReply = stale ? null : pendingReply(message, reply, restoreOnline, previousFailures);
+        } finally {
+            if (accepted || stale) {
+                if (stale) {
+                    LOG.warn("[ClawBot] Final reply was not delivered because the inbound request is no longer pending or owned");
+                }
+                acknowledgeClawBotExecution(message.messageId());
+            }
+            if (accepted && restoreOnline) {
+                try {
+                    client.heartbeat(permissionServiceKey, ClawBotSessionStatus.ONLINE);
+                } catch (IOException | RuntimeException ignored) {
+                }
+            }
+            clawBotTurnActive.set(false);
+        }
+    }
+
+    private static boolean isClawBotStaleDeliveryError(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            String message = current.getMessage();
+            if ("CLAWBOT_SESSION_MESSAGE_NOT_PENDING".equals(message)
+                    || "CLAWBOT_SESSION_CONTROL_NOT_PENDING".equals(message)
+                    || "CLAWBOT_SESSION_NOT_OWNER".equals(message)
+                    || "CLAWBOT_SESSION_CONTROL_NOT_OWNER".equals(message)
+                    || "CLAWBOT_IPC_OWNER_MISMATCH".equals(message)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private static boolean isClawBotSessionRecoveryError(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            if (ClawBotIdeClient.isSessionRecoveryError(current.getMessage())) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private void invalidateClawBotRemoteState() {
+        // Preserve an unsent final across owner recovery; the gateway validates its durable capability.
+        clawBotPendingControlReply = null;
+        clawBotInFlightControlMessageId = null;
+    }
+
+    private static ClawBotPendingReply pendingReply(
+            ClawBotInboundMessage message, String reply, boolean restoreOnline, int previousFailures) {
+        int failureCount = Math.min(previousFailures + 1, 31);
+        return new ClawBotPendingReply(message, reply, restoreOnline, failureCount,
+                System.nanoTime() + ClawBotDeliveryRetryPolicy.delayNanos(failureCount));
+    }
+
+    private static ClawBotPendingControlReply pendingControlReply(
+            ClawBotInboundMessage message, String reply, int previousFailures) {
+        int failureCount = Math.min(previousFailures + 1, 31);
+        return new ClawBotPendingControlReply(message, reply, failureCount,
+                System.nanoTime() + ClawBotDeliveryRetryPolicy.delayNanos(failureCount));
+    }
+
+    static String latestAssistantMessage(List<ClaudeSession.Message> messages, int firstTurnMessageIndex) {
+        for (int index = messages.size() - 1; index >= firstTurnMessageIndex; index--) {
+            ClaudeSession.Message message = messages.get(index);
+            if (message.type == ClaudeSession.Message.Type.ASSISTANT
+                    && message.content != null && !message.content.isBlank()) {
+                return message.content.substring(0, Math.min(message.content.length(), 60_000));
+            }
+        }
+        return "处理已完成，但当前会话没有可发送的文本回复。";
+    }
+
+    private record ClawBotPendingReply(
+            ClawBotInboundMessage message,
+            String reply,
+            boolean restoreOnline,
+            int failureCount,
+            long nextAttemptAtNanos) {
+    }
+
+    private record ClawBotPendingControlReply(
+            ClawBotInboundMessage message, String reply, int failureCount, long nextAttemptAtNanos) {
+    }
+
+    private record ClawBotActiveTurn(
+            ClawBotInboundMessage message, ClaudeSession session, ClawBotProgressTracker progress, ClawBotInteractionExchange interactions) { }
+
     public void dispose() {
         // Begin teardown under the dispatch gate: this waits for any in-flight dispatch to finish
         // (so no handler side effect - e.g. an async session.send - can start after this point) and
@@ -2857,6 +3672,11 @@ public class ClaudeChatWindow {
             return;
         }
         this.disposed = true;
+        try {
+            AppExecutorUtil.getAppExecutorService().execute(this::closeClawBotSession);
+        } catch (RuntimeException error) {
+            closeClawBotSession();
+        }
         this.webviewEventQueue.dispose();
         JBCefBrowser targetBrowser = this.browser;
         cancelScheduledOsrSurfaceRefresh();

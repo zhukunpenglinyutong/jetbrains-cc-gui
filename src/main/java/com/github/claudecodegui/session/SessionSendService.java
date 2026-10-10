@@ -436,8 +436,9 @@ public class SessionSendService {
             String clientMessageId,
             JsonObject nativeCodexSettings
     ) {
+        CompletableFuture<Void> turnCompletion = new CompletableFuture<>();
         CodexMessageHandler handler = new CodexMessageHandler(this.state,
-                this.callbackFacade.getCallbackHandler(), clientMessageId);
+                this.callbackFacade.getCallbackHandler(), clientMessageId, turnCompletion);
         String accessMode = CodemossSettingsService.CODEX_RUNTIME_ACCESS_INACTIVE;
         try {
             accessMode = new CodemossSettingsService().getCodexRuntimeAccessMode();
@@ -448,7 +449,7 @@ public class SessionSendService {
         String accessError = getCodexRuntimeAccessError(accessMode);
         if (accessError != null) {
             handler.onError(accessError);
-            return CompletableFuture.completedFuture(null);
+            return turnCompletion;
         }
 
         String contextAppend = this.contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
@@ -456,7 +457,7 @@ public class SessionSendService {
         String finalInput = (input != null ? input : "") + contextAppend;
         String configuredModel = new CodexSettingsManager(gson).resolveModelAlias(state.getModel());
 
-        return codexSDKBridge.sendMessage(
+        codexSDKBridge.sendMessage(
                 channelId,
                 finalInput,
                 state.getSessionId(),
@@ -470,7 +471,16 @@ public class SessionSendService {
                 handler,
                 clientMessageId,
                 nativeCodexSettings
-        ).thenApply(result -> null);
+        ).whenComplete((result, error) -> {
+            // Bridge completion remains a fallback for startup failures or missing terminal events.
+            // MESSAGE_END can finish the turn before the bridge future settles.
+            if (error != null) {
+                turnCompletion.completeExceptionally(error);
+            } else {
+                turnCompletion.complete(null);
+            }
+        });
+        return turnCompletion;
     }
 
     private CompletableFuture<Void> sendToGrok(

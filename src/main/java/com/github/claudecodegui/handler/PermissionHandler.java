@@ -3,6 +3,8 @@ package com.github.claudecodegui.handler;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
+import com.github.claudecodegui.clawbot.ClawBotInteraction;
+import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionManager;
 import com.github.claudecodegui.permission.PermissionService;
@@ -23,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
@@ -199,6 +203,12 @@ public class PermissionHandler extends BaseMessageHandler {
     // PlanApproval request map
     private final Map<String, PendingDialogShow<JsonObject>> pendingPlanApprovalRequests = new ConcurrentHashMap<>();
 
+    private final Map<String, RemoteDialog> remoteDialogs = new ConcurrentHashMap<>();
+    private final AtomicLong interactionRevision = new AtomicLong();
+
+    private record RemoteDialog(ClawBotInteraction snapshot, ClaudeSession session, Object turnOwner,
+                                String epoch, BooleanSupplier pending, Function<JsonObject, Boolean> complete) { }
+
     private final Object dialogLock = new Object();
     private final AtomicLong nextDialogSequence = new AtomicLong();
 
@@ -262,6 +272,65 @@ public class PermissionHandler extends BaseMessageHandler {
         this.edtDispatcher = edtDispatcher;
         this.askUserQuestionVisualNotifier = askUserQuestionVisualNotifier;
         this.askUserQuestionSoundNotifier = askUserQuestionSoundNotifier;
+    }
+
+    /** Returns the provider interaction currently waiting for a Webview response, if any. */
+    public String getClawBotPendingInteractionPhase() {
+        if (!pendingAskUserQuestionRequests.isEmpty()) {
+            return "WAITING_USER";
+        }
+        if (!pendingPlanApprovalRequests.isEmpty()) {
+            return "WAITING_PLAN_APPROVAL";
+        }
+        if (!pendingPermissionRequests.isEmpty() || !pendingLegacyPermissionRequests.isEmpty()) {
+            return "WAITING_APPROVAL";
+        }
+        return "";
+    }
+
+    public long getClawBotInteractionRevision() {
+        return interactionRevision.get();
+    }
+
+    /** Returns only dialogs belonging to this live session and turn. */
+    public List<ClawBotInteraction> getClawBotInteractions() {
+        synchronized (dialogLock) {
+            return remoteDialogs.values().stream().filter(this::isCurrentRemoteDialog)
+                    .map(RemoteDialog::snapshot).sorted(Comparator.comparingLong(ClawBotInteraction::sequence)).toList();
+        }
+    }
+
+    public boolean answerClawBotInteraction(String token, JsonObject answer) {
+        synchronized (dialogLock) {
+            RemoteDialog dialog = remoteDialogs.get(token);
+            if (dialog == null || !isCurrentRemoteDialog(dialog)) {
+                return false;
+            }
+            return dialog.complete().apply(answer.deepCopy());
+        }
+    }
+
+    private boolean isCurrentRemoteDialog(RemoteDialog dialog) {
+        ClaudeSession current = context.getSession();
+        return current == dialog.session() && (current == null
+                || current.getState().getTurnOwner() == dialog.turnOwner()
+                && Objects.equals(current.getRuntimeSessionEpoch(), dialog.epoch()))
+                && System.currentTimeMillis() < dialog.snapshot().deadlineMs() && dialog.pending().getAsBoolean();
+    }
+
+    private void trackRemoteDialog(JsonObject data, ClawBotInteraction.Kind kind, long sequence,
+                                   CompletableFuture<?> future, BooleanSupplier pending, Function<JsonObject, Boolean> complete) {
+        ClaudeSession owner = context.getSession();
+        String token = data.get("dialogToken").getAsString();
+        ClawBotInteraction snapshot = new ClawBotInteraction(token, kind, data, sequence, data.get("deadlineMs").getAsLong());
+        RemoteDialog dialog = new RemoteDialog(snapshot, owner, owner == null ? null : owner.getState().getTurnOwner(),
+                owner == null ? null : owner.getRuntimeSessionEpoch(), pending, complete);
+        remoteDialogs.put(token, dialog);
+        interactionRevision.incrementAndGet();
+        future.whenComplete((ignored, error) -> {
+            remoteDialogs.remove(token, dialog);
+            interactionRevision.incrementAndGet();
+        });
     }
 
     long getDialogTimeoutSeconds() {
@@ -550,6 +619,17 @@ public class PermissionHandler extends BaseMessageHandler {
             synchronized (dialogLock) {
                 pendingPermissionRequests.put(channelId, pending);
             }
+            trackRemoteDialog(requestData, ClawBotInteraction.Kind.PERMISSION, pending.sequence, future,
+                    () -> pendingPermissionRequests.get(channelId) == pending && !future.isDone(), answer -> {
+                        if (!pendingPermissionRequests.remove(channelId, pending)) {
+                            return false;
+                        }
+                        boolean accepted = future.complete(answer.get("allow").getAsBoolean()
+                                ? PermissionService.PermissionResponse.ALLOW.getValue() : PermissionService.PermissionResponse.DENY.getValue());
+                        safeForceCloseFrontendDialog("forceClosePermissionDialog", channelId, pending.dialogToken);
+                        return accepted;
+                    });
+
             LOG.info("[PERM_SHOW] Stored pending request, total pending: " + pendingPermissionRequests.size());
 
             scheduleSafetyNet(future, () -> {
@@ -611,6 +691,15 @@ public class PermissionHandler extends BaseMessageHandler {
             synchronized (dialogLock) {
                 pendingLegacyPermissionRequests.put(request.getChannelId(), pending);
             }
+            trackRemoteDialog(requestData, ClawBotInteraction.Kind.PERMISSION, pending.sequence, request.getResultFuture(),
+                    () -> pendingLegacyPermissionRequests.get(request.getChannelId()) == pending && !request.isResolved(), answer -> {
+                        if (pending.owner == null || !pending.owner.tryHandleRemotePermissionDecision(
+                                request, answer.get("allow").getAsBoolean(), "Denied from Claw Bot")) {
+                            return false;
+                        }
+                        return true;
+                    });
+
             request.getResultFuture().whenComplete((ignored, error) -> {
                 removePending(pendingLegacyPermissionRequests, request.getChannelId(), pending);
                 safeForceCloseFrontendDialog("forceClosePermissionDialog", request.getChannelId(), pending.dialogToken);
@@ -825,6 +914,16 @@ public class PermissionHandler extends BaseMessageHandler {
             synchronized (dialogLock) {
                 pendingAskUserQuestionRequests.put(requestId, pending);
             }
+            trackRemoteDialog(requestData, ClawBotInteraction.Kind.QUESTION, pending.sequence, future,
+                    () -> pendingAskUserQuestionRequests.get(requestId) == pending && !future.isDone(), answer -> {
+                        if (!pendingAskUserQuestionRequests.remove(requestId, pending)) {
+                            return false;
+                        }
+                        boolean accepted = future.complete(answer.getAsJsonObject("answers"));
+                        safeForceCloseFrontendDialog("forceCloseAskUserQuestionDialog", requestId, pending.dialogToken);
+                        return accepted;
+                    });
+
 
             // Remind the user (via the opt-in system toast and sound) that Claude is waiting for an
             // answer. Triggered here — before the JS dialog render — so the toast fires
@@ -936,6 +1035,16 @@ public class PermissionHandler extends BaseMessageHandler {
             synchronized (dialogLock) {
                 pendingPlanApprovalRequests.put(requestId, pending);
             }
+            trackRemoteDialog(requestData, ClawBotInteraction.Kind.PLAN, pending.sequence, future,
+                    () -> pendingPlanApprovalRequests.get(requestId) == pending && !future.isDone(), answer -> {
+                        if (!pendingPlanApprovalRequests.remove(requestId, pending)) {
+                            return false;
+                        }
+                        boolean accepted = future.complete(answer);
+                        safeForceCloseFrontendDialog("forceClosePlanApprovalDialog", requestId, pending.dialogToken);
+                        return accepted;
+                    });
+
 
             scheduleSafetyNet(future, () -> {
                 JsonObject timeoutResponse = new JsonObject();
