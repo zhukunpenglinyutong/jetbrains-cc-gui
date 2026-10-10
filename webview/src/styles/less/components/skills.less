@@ -3,6 +3,28 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+    max-width: 800px;
+    min-width: 0;
+    container-type: inline-size;
+}
+
+.skills-page-header {
+    margin-bottom: 8px;
+
+    h3 {
+        margin: 0 0 8px;
+        color: var(--text-primary);
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: 0;
+    }
+
+    p {
+        margin: 0;
+        color: var(--text-tertiary);
+        font-size: 13px;
+        line-height: 1.5;
+    }
 }
 
 /* Skills 头部 - 复用 MCP 头部样式 */
@@ -488,12 +510,68 @@
 /* Skills 工具栏 */
 .skills-toolbar {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     gap: 12px;
-    padding: 8px 0;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
+    min-width: 0;
+
+    .filter-tabs {
+        width: 100%;
+        box-sizing: border-box;
+        gap: 0;
+        align-items: center;
+        border-radius: 6px;
+    }
+
+    .filter-tabs .tab-item {
+        flex: 1;
+        justify-content: center;
+        min-height: 30px;
+        box-sizing: border-box;
+        border-radius: 4px;
+        white-space: nowrap;
+    }
+
+    .toolbar-right {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .search-box {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .search-box .search-input {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .icon-btn,
+    .add-dropdown {
+        flex-shrink: 0;
+    }
+}
+
+@container (max-width: 520px) {
+    .skills-toolbar .filter-tabs {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 4px;
+    }
+
+    .skills-toolbar .filter-tabs .tab-item {
+        grid-column: span 2;
+        padding-inline: 4px;
+    }
+
+    .skills-toolbar .filter-tabs .enabled-filter {
+        grid-column: span 3;
+    }
+
+    .skills-toolbar .filter-tabs .filter-separator {
+        display: none;
+    }
 }
 
 /* 筛选标签 */
