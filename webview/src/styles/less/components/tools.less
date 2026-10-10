@@ -318,6 +318,45 @@
     color: var(--color-error);
 }
 
+.bash-group-header:focus-visible,
+.edit-group-header:focus-visible {
+    outline: 1px solid var(--color-link);
+    outline-offset: -2px;
+}
+
+.edit-group-header {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+}
+
+.edit-group-header .task-title-section {
+    flex-basis: auto;
+}
+
+.edit-group-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.edit-group-progress {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+}
+
+.edit-group-progress.completed {
+    color: var(--color-success);
+}
+
+.edit-group-progress.error {
+    color: var(--color-error);
+}
+
 /* 时间线列表容器 */
 .bash-group-timeline {
     padding: 8px 12px 8px 16px;

@@ -108,6 +108,73 @@ describe('BehaviorTab detailed output toggle', () => {
   });
 });
 
+describe('BehaviorTab batch command collapse toggle', () => {
+  it('defaults to off and allows enabling collapsed groups', () => {
+    const onBashGroupCollapsedByDefaultChange = vi.fn();
+    renderBehaviorTab({ onBashGroupCollapsedByDefaultChange });
+
+    const checkbox = screen.getByRole('checkbox', {
+      name: 'settings.basic.bashGroupCollapsed.disabled',
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+
+    fireEvent.click(checkbox);
+    expect(onBashGroupCollapsedByDefaultChange).toHaveBeenCalledWith(true);
+  });
+
+  it('reflects the saved preference and allows restoring expanded groups', () => {
+    const onBashGroupCollapsedByDefaultChange = vi.fn();
+    renderBehaviorTab({
+      bashGroupCollapsedByDefault: true,
+      onBashGroupCollapsedByDefaultChange,
+    });
+
+    const checkbox = screen.getByRole('checkbox', {
+      name: 'settings.basic.bashGroupCollapsed.enabled',
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+
+    fireEvent.click(checkbox);
+    expect(onBashGroupCollapsedByDefaultChange).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('BehaviorTab batch edit collapse toggle', () => {
+  it('defaults to off and changes independently of command and diff settings', () => {
+    const onEditGroupCollapsedByDefaultChange = vi.fn();
+    const onBashGroupCollapsedByDefaultChange = vi.fn();
+    const onDiffExpandedByDefaultChange = vi.fn();
+    renderBehaviorTab({
+      onEditGroupCollapsedByDefaultChange,
+      onBashGroupCollapsedByDefaultChange,
+      onDiffExpandedByDefaultChange,
+    });
+
+    const checkbox = screen.getByRole('checkbox', {
+      name: 'settings.basic.editGroupCollapsed.disabled',
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+
+    fireEvent.click(checkbox);
+    expect(onEditGroupCollapsedByDefaultChange).toHaveBeenCalledWith(true);
+    expect(onBashGroupCollapsedByDefaultChange).not.toHaveBeenCalled();
+    expect(onDiffExpandedByDefaultChange).not.toHaveBeenCalled();
+  });
+
+  it('reflects the saved preference and allows restoring expanded file lists', () => {
+    const onEditGroupCollapsedByDefaultChange = vi.fn();
+    renderBehaviorTab({ editGroupCollapsedByDefault: true, onEditGroupCollapsedByDefaultChange });
+
+    const checkbox = screen.getByRole('checkbox', {
+      name: 'settings.basic.editGroupCollapsed.enabled',
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+
+    fireEvent.click(checkbox);
+    expect(onEditGroupCollapsedByDefaultChange).toHaveBeenCalledWith(false);
+  });
+});
+
 describe('BehaviorTab ask user question sound notification toggle', () => {
   it('fires the sound callback independently from the visual notification callback', () => {
     const onAskUserQuestionNotificationEnabledChange = vi.fn();

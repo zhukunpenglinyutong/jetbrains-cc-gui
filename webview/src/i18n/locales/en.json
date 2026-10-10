@@ -511,6 +511,18 @@
         "autoSummary": "Follows the current chat CLI · currently {{provider}}",
         "autoUnavailable": "No CLI is available right now. Switch to Manual to pick one."
       },
+      "bashGroupCollapsed": {
+        "label": "Collapse batch commands by default",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "Applies to batch command groups from all CLIs. When enabled, groups show only their title and execution status by default; click the title to expand the command list. When disabled, groups expand by default. Changes apply immediately; manually expanded or collapsed groups keep their state."
+      },
+      "editGroupCollapsed": {
+        "label": "Collapse batch file edits by default",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "Applies to batch file edit groups from all CLIs. When enabled, groups show their title, edit count, added/deleted line counts, and execution status by default; click the title to expand the file list. When disabled, groups expand by default. Multiple edits to the same file are counted separately. Changes apply immediately; manually expanded or collapsed groups keep their state. Expand diffs by default controls inline diffs for individual edits; it does not control whether batch groups expand."
+      },
       "diffExpanded": {
         "label": "Expand diffs by default",
         "enabled": "Enabled",
@@ -1836,6 +1848,9 @@
     "showDiffInIdea": "Show changes in IDEA",
     "diffButton": "Diff",
     "editBatchTitle": "Batch Edit Files",
+    "editGroupProgress": "{{completed}}/{{total}} finished",
+    "editGroupAllCompleted": "All Completed",
+    "editGroupFailed": "Failed: {{count}}",
     "searchBatchTitle": "Batch Search",
     "editPrefix": "Edit: {{fileName}}",
     "lineRange": "Lines {{start}}-{{end}}",

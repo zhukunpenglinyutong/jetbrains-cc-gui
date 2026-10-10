@@ -511,6 +511,18 @@
         "autoSummary": "自动跟随当前聊天 CLI · 现在解析为 {{provider}}",
         "autoUnavailable": "当前没有可用的 CLI，请切换到手动并选择。"
       },
+      "bashGroupCollapsed": {
+        "label": "默认收起批量运行命令",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "适用于所有 CLI 的批量运行命令分组。开启后默认仅显示标题和执行状态，点击标题可展开命令列表；关闭后默认展开。设置立即生效，已手动展开或收起的分组保持原状态。"
+      },
+      "editGroupCollapsed": {
+        "label": "默认收起批量编辑文件",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "适用于所有 CLI 的批量编辑文件分组。开启后默认显示标题、编辑次数、增删行数和执行状态，点击标题可展开文件列表；关闭后默认展开。同一文件的多次编辑会分别计数。设置立即生效，已手动展开或收起的分组保持原状态。“默认展开差异”仅控制单项编辑的内联差异，不影响批量分组的展开状态。"
+      },
       "diffExpanded": {
         "label": "默认展开差异",
         "enabled": "已开启",
@@ -1842,6 +1854,9 @@
     "showDiffInIdea": "在 IDEA 中显示变更",
     "diffButton": "Diff",
     "editBatchTitle": "批量编辑文件",
+    "editGroupProgress": "已结束 {{completed}}/{{total}}",
+    "editGroupAllCompleted": "全部完成",
+    "editGroupFailed": "{{count}} 项失败",
     "searchBatchTitle": "批量搜索",
     "editPrefix": "编辑: {{fileName}}",
     "lineRange": "第 {{start}}-{{end}} 行",

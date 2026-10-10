@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { openFile, showDiff, refreshFile } from '../../utils/bridge';
 import { getFileIcon } from '../../utils/fileIcons';
@@ -8,6 +8,10 @@ import { useResolvedFileLinkTooltip } from '../../hooks/useResolvedFileLinkToolt
 import { useIsToolDenied } from '../../hooks/useIsToolDenied';
 import { readPatchFiles, readPatchOutcome } from '../../utils/codexPatch';
 import { PATCH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
+import {
+  getEditGroupCollapsedByDefault,
+  subscribeEditGroupCollapsePreference,
+} from '../../utils/editGroupCollapsePreference';
 import EditDiffView, { type DiffResult } from './EditDiffView';
 import GenericToolBlock from './GenericToolBlock';
 import ToolDetailsAccordion from './ToolDetailsAccordion';
@@ -343,7 +347,16 @@ const EditFileItem = ({ item, onFileClick, onShowDiff, onRefresh, t, previewExpa
 };
 
 const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
-  const [expanded, setExpanded] = useState(true);
+  const collapsedByDefault = useSyncExternalStore(
+    subscribeEditGroupCollapsePreference,
+    getEditGroupCollapsedByDefault,
+  );
+  // Follow the preference until the user explicitly toggles this group.
+  const [expandedOverride, setExpandedOverride] = useState<boolean>();
+  const expanded = expandedOverride ?? !collapsedByDefault;
+  const toggleExpanded = () => {
+    setExpandedOverride(previous => !(previous ?? !collapsedByDefault));
+  };
   const [previewItem, setPreviewItem] = useState<EditItem | null>(null);
   const { t } = useTranslation();
   const listRef = useRef<HTMLDivElement>(null);
@@ -375,6 +388,10 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
   // Calculate totals
   const totalAdditions = editItems.reduce((sum, item) => sum + item.additions, 0);
   const totalDeletions = editItems.reduce((sum, item) => sum + item.deletions, 0);
+  const completedCount = editItems.filter(item => item.isCompleted).length;
+  const errorCount = editItems.filter(item => item.isError).length;
+  const allSucceeded = completedCount === editItems.length && errorCount === 0
+    && editItems.every(item => !item.isUnknown);
 
   // Calculate list height
   const needsScroll = editItems.length > MAX_VISIBLE_ITEMS || previewItem !== null;
@@ -422,8 +439,17 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
   const batch = editItems.length > 0 ? (
     <div className="task-container" style={CONTAINER_STYLE}>
       <div
-        className="task-header"
-        onClick={() => setExpanded((prev) => !prev)}
+        className="task-header edit-group-header"
+        role="button"
+        tabIndex={0}
+        onClick={toggleExpanded}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleExpanded();
+          }
+        }}
+        aria-expanded={expanded}
         style={headerStyle}
       >
         <div className="task-title-section" style={TITLE_SECTION_STYLE}>
@@ -440,6 +466,24 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
               {totalAdditions > 0 && <span style={ADDED_TEXT_STYLE}>+{totalAdditions}</span>}
               {totalAdditions > 0 && totalDeletions > 0 && <span style={STATS_SPACER_STYLE} />}
               {totalDeletions > 0 && <span style={DELETED_TEXT_STYLE}>-{totalDeletions}</span>}
+            </span>
+          )}
+        </div>
+        <div className="edit-group-summary" role="status">
+          {allSucceeded ? (
+            <span className="edit-group-progress completed">
+              <span className="codicon codicon-check" aria-hidden="true" />
+              {t('tools.editGroupAllCompleted')}
+            </span>
+          ) : (
+            <span className="edit-group-progress">
+              {t('tools.editGroupProgress', { completed: completedCount, total: editItems.length })}
+            </span>
+          )}
+          {errorCount > 0 && (
+            <span className="edit-group-progress error">
+              <span className="codicon codicon-warning" aria-hidden="true" />
+              {t('tools.editGroupFailed', { count: errorCount })}
             </span>
           )}
         </div>

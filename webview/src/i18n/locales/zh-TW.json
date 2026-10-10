@@ -268,6 +268,18 @@
         "autoSummary": "自動跟隨目前聊天 CLI · 現在解析為 {{provider}}",
         "autoUnavailable": "目前沒有可用的 CLI，請切換到手動並選擇。"
       },
+      "bashGroupCollapsed": {
+        "label": "預設收起批次執行命令",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "適用於所有 CLI 的批次執行命令群組。開啟後預設僅顯示標題和執行狀態，點擊標題可展開命令清單；關閉後預設展開。設定立即生效，已手動展開或收起的群組維持原狀態。"
+      },
+      "editGroupCollapsed": {
+        "label": "預設收起批次編輯檔案",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "適用於所有 CLI 的批次編輯檔案群組。開啟後預設顯示標題、編輯次數、增刪行數和執行狀態，點擊標題可展開檔案清單；關閉後預設展開。同一檔案的多次編輯會分別計數。設定立即生效，已手動展開或收起的群組維持原狀態。「預設展開差異」僅控制單項編輯的行內差異，不影響批次群組的展開狀態。"
+      },
       "diffExpanded": {
         "label": "預設展開差異",
         "enabled": "已開啟",
@@ -1449,6 +1461,9 @@
     "showDiffInIdea": "在 IDEA 中顯示變更",
     "diffButton": "Diff",
     "editBatchTitle": "批量編輯檔案",
+    "editGroupProgress": "已結束 {{completed}}/{{total}}",
+    "editGroupAllCompleted": "全部完成",
+    "editGroupFailed": "{{count}} 項失敗",
     "searchBatchTitle": "批量搜尋",
     "editPrefix": "編輯: {{fileName}}",
     "lineRange": "第 {{start}}-{{end}} 行",

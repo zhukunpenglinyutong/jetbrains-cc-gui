@@ -1,8 +1,12 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { stripAnsi } from '../../utils/stripAnsi';
 import { presentCommand } from '../../utils/commandPresentation';
+import {
+  getBashGroupCollapsedByDefault,
+  subscribeBashGroupCollapsePreference,
+} from '../../utils/bashGroupCollapsePreference';
 
 interface BashItem {
   command: string;
@@ -91,8 +95,16 @@ function truncateCommand(command: string, maxLength = 60): string {
 }
 
 const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) => {
-  // Default to expanded
-  const [expanded, setExpanded] = useState(true);
+  const collapsedByDefault = useSyncExternalStore(
+    subscribeBashGroupCollapsePreference,
+    getBashGroupCollapsedByDefault,
+  );
+  // Follow the preference until the user explicitly toggles this group.
+  const [expandedOverride, setExpandedOverride] = useState<boolean>();
+  const expanded = expandedOverride ?? !collapsedByDefault;
+  const toggleExpanded = () => {
+    setExpandedOverride(previous => !(previous ?? !collapsedByDefault));
+  };
   // Track which item detail is expanded
   const [expandedItemIndex, setExpandedItemIndex] = useState<number | null>(null);
   const { t } = useTranslation();
@@ -185,7 +197,16 @@ const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) =
       {/* Header - always visible */}
       <div
         className="task-header bash-group-header"
-        onClick={() => setExpanded((prev) => !prev)}
+        role="button"
+        tabIndex={0}
+        onClick={toggleExpanded}
+        onKeyDown={event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleExpanded();
+          }
+        }}
+        aria-expanded={expanded}
         style={headerStyle}
       >
         <div className="task-title-section">

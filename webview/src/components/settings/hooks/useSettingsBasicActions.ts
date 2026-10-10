@@ -1,5 +1,5 @@
 // hooks/useSettingsBasicActions.ts
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 export type { UiFontConfig, CodeFontConfig } from '../../../types/uiFontConfig';
 import type { UiFontConfig, CodeFontConfig } from '../../../types/uiFontConfig';
 import type { CommitAiConfig, CommitAiProvider } from '../../../types/aiFeatureConfig';
@@ -24,6 +24,16 @@ import {
   setDetailedOutputEnabled,
   type DetailedOutputEnabledChangedDetail,
 } from '../../../utils/detailedOutputPreference';
+import {
+  getBashGroupCollapsedByDefault,
+  setBashGroupCollapsedByDefault,
+  subscribeBashGroupCollapsePreference,
+} from '../../../utils/bashGroupCollapsePreference';
+import {
+  getEditGroupCollapsedByDefault,
+  setEditGroupCollapsedByDefault,
+  subscribeEditGroupCollapsePreference,
+} from '../../../utils/editGroupCollapsePreference';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -88,6 +98,10 @@ export interface UseSettingsBasicActionsReturn {
   selectedSound: string;
   customSoundPath: string;
   diffExpandedByDefault: boolean;
+  bashGroupCollapsedByDefault: boolean;
+  handleBashGroupCollapsedByDefaultChange: (collapsed: boolean) => void;
+  editGroupCollapsedByDefault: boolean;
+  handleEditGroupCollapsedByDefaultChange: (collapsed: boolean) => void;
   historyCompletionEnabled: boolean;
   /** Whether to skip the "create new session with existing messages" confirm dialog. */
   skipNewSessionConfirm: boolean;
@@ -280,6 +294,16 @@ export function useSettingsBasicActions({
       return false;
     }
   });
+
+  // Independent batch command and file edit display preferences (localStorage-only).
+  const bashGroupCollapsedByDefault = useSyncExternalStore(
+    subscribeBashGroupCollapsePreference,
+    getBashGroupCollapsedByDefault,
+  );
+  const editGroupCollapsedByDefault = useSyncExternalStore(
+    subscribeEditGroupCollapsePreference,
+    getEditGroupCollapsedByDefault,
+  );
 
   // History completion toggle configuration
   const [historyCompletionEnabled, setHistoryCompletionEnabled] = useState<boolean>(() => {
@@ -821,6 +845,10 @@ export function useSettingsBasicActions({
     setCustomSoundPath,
     diffExpandedByDefault,
     setDiffExpandedByDefault,
+    bashGroupCollapsedByDefault,
+    handleBashGroupCollapsedByDefaultChange: setBashGroupCollapsedByDefault,
+    editGroupCollapsedByDefault,
+    handleEditGroupCollapsedByDefaultChange: setEditGroupCollapsedByDefault,
     historyCompletionEnabled,
     setHistoryCompletionEnabled,
     skipNewSessionConfirm,
