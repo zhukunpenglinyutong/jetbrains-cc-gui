@@ -87,7 +87,7 @@ const QuestionSection = ({
       <div className="custom-input-container">
         <textarea
           ref={customInputRef}
-          className="custom-input"
+          className={`custom-input${question.isSecret ? ' secret-input' : ''}`}
           value={customInput}
           onChange={(e) => onCustomInputChange(e.target.value)}
           placeholder={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}

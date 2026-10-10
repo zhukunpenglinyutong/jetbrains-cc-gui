@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { SubagentHistoryResponse, SubagentInfo } from '../../types';
 import { sendBridgeEvent } from '../../utils/bridge';
-import { hasSubagentTranscript } from '../../utils/subagentResult';
+import { hasSubagentTranscript, isSubagentHistoryCurrent } from '../../utils/subagentResult';
 import { subagentStatusIconMap } from './types';
 import SubagentProcessDetails from './SubagentProcessDetails';
 
@@ -52,6 +52,7 @@ const SubagentRow = memo(({ subagent, isExpanded, history, canLoad, onToggle, t 
       {isExpanded && (
         <SubagentProcessDetails
           agentId={history?.agentId ?? subagent.agentId}
+          agentPath={history?.agentPath ?? subagent.agentPath}
           totalDurationMs={subagent.totalDurationMs}
           totalTokens={subagent.totalTokens}
           totalToolUseCount={subagent.totalToolUseCount}
@@ -88,6 +89,8 @@ const SubagentList = memo(({ subagents, histories = EMPTY_HISTORIES, currentSess
       provider: currentProvider,
       agentId: history?.agentId ?? subagent.agentId,
       agentPath: history?.agentPath ?? subagent.agentPath,
+      nativeTaskId: subagent.nativeTaskId,
+      nativeTaskPreviousTurnId: subagent.nativeTaskPreviousTurnId,
       description: subagent.description,
       toolUseId: subagent.id,
     }));
@@ -102,8 +105,9 @@ const SubagentList = memo(({ subagents, histories = EMPTY_HISTORIES, currentSess
     if (!expandedId) return;
     const subagent = subagentsRef.current.find((item) => item.id === expandedId);
     if (!subagent || !currentSessionId) return;
-    const history = historiesRef.current[expandedId]
+    const candidate = historiesRef.current[expandedId]
       ?? (subagent.agentId ? historiesRef.current[subagent.agentId] : undefined);
+    const history = isSubagentHistoryCurrent(candidate, subagent.nativeTaskId) ? candidate : undefined;
     if (!hasSubagentTranscript(history)) {
       requestHistory(subagent);
     }
@@ -131,7 +135,8 @@ const SubagentList = memo(({ subagents, histories = EMPTY_HISTORIES, currentSess
   return (
     <div className="subagent-list">
       {subagents.map((subagent, index) => {
-        const history = historyById[subagent.id] ?? (subagent.agentId ? historyById[subagent.agentId] : undefined);
+        const candidate = historyById[subagent.id] ?? (subagent.agentId ? historyById[subagent.agentId] : undefined);
+        const history = isSubagentHistoryCurrent(candidate, subagent.nativeTaskId) ? candidate : undefined;
         // Index fallback guards against rare cases where the bridge emits a
         // subagent without a stable id; without it React surfaces a duplicate-key
         // warning and may miscompare rows during streaming updates.

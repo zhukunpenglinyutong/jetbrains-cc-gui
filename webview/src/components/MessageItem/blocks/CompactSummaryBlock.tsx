@@ -14,9 +14,10 @@ function formatCompactTokens(count: number): string {
  * Build the compaction-stats subtitle from compact_boundary metadata:
  * "manual · 524.8K → 14.6K · 110s". Returns null when no stats are present.
  */
-function formatCompactionStats(meta: CompactSummaryMetadata): string | null {
+function formatCompactionStats(meta: CompactSummaryMetadata, t: TFunction): string | null {
   const parts: string[] = [];
-  if (meta.trigger) parts.push(meta.trigger);
+  if (meta.trigger) parts.push(meta.trigger === 'manual' || meta.trigger === 'auto'
+    ? t(`chat.compactSummary.${meta.trigger}`) : meta.trigger);
   if (typeof meta.preTokens === 'number') {
     const tokens = typeof meta.postTokens === 'number'
       ? `${formatCompactTokens(meta.preTokens)} → ${formatCompactTokens(meta.postTokens)}`
@@ -47,24 +48,35 @@ export const CompactSummaryBlock = memo(function CompactSummaryBlock({ block, t 
   const toggleExpanded = useCallback(() => setExpanded(e => !e), []);
   const meta = block.metadata;
   const hasCountMeta = meta && typeof meta.messagesSummarized === 'number';
-  const compactionStats = meta ? formatCompactionStats(meta) : null;
+  const compactionStats = meta ? formatCompactionStats(meta, t) : null;
   const hasMeta = hasCountMeta || compactionStats;
   const titleText = t(block.title);
   const toggleLabel = expanded ? t('chat.compactSummary.collapse') : t('chat.compactSummary.expand');
+  const hasSummary = Boolean(block.content.trim());
+  const date = meta?.timestamp != null ? new Date(meta.timestamp) : null;
+  const validDate = date && Number.isFinite(date.getTime()) && date.getTime() > 0 ? date : null;
 
   return (
-    <div className="compact-summary-block">
+    <div className={`compact-summary-block${meta?.native ? ' native-compaction-boundary' : ''}`}>
       <button
         type="button"
         className="compact-summary-title"
         aria-expanded={expanded}
         aria-label={`${titleText} — ${toggleLabel}`}
         onClick={toggleExpanded}
+        disabled={!hasSummary}
       >
         <span className="compact-summary-icon" aria-hidden="true">●</span>
         <span className="compact-summary-title-text">{titleText}</span>
-        <span className="compact-summary-toggle" aria-hidden="true">{expanded ? '▼' : '▶'}</span>
+        {hasSummary && <span className="compact-summary-toggle" aria-hidden="true">{expanded ? '▼' : '▶'}</span>}
       </button>
+      {meta?.native && <div className="compact-boundary-time">
+        {validDate ? <time dateTime={validDate.toISOString()} title={validDate.toLocaleString()}>
+          {validDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+          {meta.timestampSource === 'turn' ? ` · ${t('chat.compactSummary.turnTime')}` : ''}
+          {meta.timestampSource === 'received' ? ` · ${t('chat.compactSummary.receivedTime')}` : ''}
+        </time> : t('chat.compactSummary.timeUnknown')}
+      </div>}
       {hasMeta && (
         <div className="compact-summary-metadata">
           {hasCountMeta && (

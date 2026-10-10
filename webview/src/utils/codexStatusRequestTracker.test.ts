@@ -2,9 +2,17 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   isLatestCodexStatusRequest,
   trackCodexStatusRequest,
+  trackCodexSubagentTasks,
+  isCurrentCodexSubagentTask,
 } from './codexStatusRequestTracker';
 
 describe('codexStatusRequestTracker', () => {
+  it('rejects a late previous-task report after the same child accepts a followup', () => {
+    trackCodexSubagentTasks('task-session', [{ id: 'spawn', nativeTaskId: 'followup-current' }]);
+    expect(isCurrentCodexSubagentTask({ sessionId: 'task-session', toolUseId: 'spawn' })).toBe(false);
+    expect(isCurrentCodexSubagentTask({ sessionId: 'task-session', toolUseId: 'spawn', nativeTaskId: 'followup-old' })).toBe(false);
+    expect(isCurrentCodexSubagentTask({ sessionId: 'task-session', toolUseId: 'spawn', nativeTaskId: 'followup-current' })).toBe(true);
+  });
   beforeEach(() => {
     // Reset module state between tests by tracking a known baseline.
     trackCodexStatusRequest('baseline:0');

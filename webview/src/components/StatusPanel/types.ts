@@ -14,7 +14,7 @@ export interface StatusPanelProps {
   /** Whether the conversation is currently streaming (active) */
   isStreaming?: boolean;
   /** Callback when a file is successfully undone */
-  onUndoFile?: (filePath: string) => void;
+  onUndoFile?: (filePath: string, reviewedKeys?: string[], origin?: { sessionId: string | null; provider: string }) => void;
   /** Callback when all files are successfully discarded */
   onDiscardAll?: () => void;
   /** Callback when user clicks Keep All (accept changes as new baseline) */

@@ -173,6 +173,13 @@ export const CodexQuotaSubmenu = ({ id, anchorRef }: CodexQuotaSubmenuProps) => 
       tabIndex={-1}
       className="selector-dropdown provider-quota-panel"
       style={{ position: 'absolute', zIndex: 10001, ...position }}
+      onKeyDown={(event) => {
+        if (event.key === 'Home') {
+          event.currentTarget.scrollTop = 0;
+        } else if (event.key === 'End') {
+          event.currentTarget.scrollTop = event.currentTarget.scrollHeight;
+        }
+      }}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="selector-option disabled" style={{ cursor: 'default' }}>

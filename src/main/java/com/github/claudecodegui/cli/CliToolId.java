@@ -4,6 +4,7 @@ package com.github.claudecodegui.cli;
  * Supported headless CLI tools shown in Settings → Provider Management → CLI.
  */
 public enum CliToolId {
+    CODEX("codex", "Codex CLI", "codex", null),
     GROK("grok", "Grok CLI", "grok", null),
     KIMI("kimi", "Kimi CLI", "kimi", null),
     OPENCODE("opencode", "OpenCode", "opencode", null),

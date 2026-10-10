@@ -119,14 +119,32 @@
       "openTooltip": "Buscar en la conversación (Cmd/Ctrl+F)"
     },
     "compactSummary": {
+      "receivedTime": "Hora registrada",
       "summarizedConversation": "Conversación resumida",
       "compactSummary": "Resumen compacto",
       "messagesUpTo": "Se resumieron {{count}} mensajes hasta este punto",
       "messagesFrom": "Se resumieron {{count}} mensajes desde este punto",
       "userContext": "Contexto: \"{{context}}\"",
       "expand": "Expandir resumen",
-      "collapse": "Contraer resumen"
-    }
+      "collapse": "Contraer resumen",
+      "nativeCompleted": "Contexto compactado",
+      "nativeInProgress": "Compactando contexto",
+      "nativeFailed": "Error de compactación",
+      "nativeInterrupted": "Compactación interrumpida",
+      "writerOccupied": "El bloqueo nativo de escritura de esta conversación está ocupado. Puede estar retenido por el entorno de ejecución de este complemento u otro proceso de Codex. Comprueba si la conversación sigue cargada en otra ventana o en segundo plano.",
+      "manual": "Manual",
+      "auto": "Automática",
+      "timeUnknown": "Hora desconocida",
+      "turnTime": "Inicio del turno"
+    },
+    "codexCompactUsage": "Use /compact without arguments",
+    "codexCompactStarted": "Codex is compacting the conversation",
+    "codexReviewUsage": "Use /review without arguments",
+    "codexReviewStarted": "Codex is reviewing the workspace",
+    "codexDiffUsage": "Use /diff without arguments",
+    "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
+    "continueRefiningPlan": "Continuar refinando este plan:"
   },
   "settings": {
     "title": "Configuración",
@@ -393,8 +411,8 @@
       "installPolicyTip": "¿Problemas de instalación? Copia el error a un CLI AI de terminal para resolverlo",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Requerido para funciones de Claude AI. Incluye Claude Code SDK y dependencias relacionadas.",
-      "codexSdkName": "Codex SDK",
-      "codexSdkDescription": "Requerido para funciones de Codex AI. Incluye OpenAI Codex SDK.",
+      "codexSdkName": "Codex CLI",
+      "codexSdkDescription": "Necesario para las funciones de Codex AI. Detecta la CLI oficial de Codex (@openai/codex) instalada en la página CLI; el chat usa app-server.",
       "loading": "Cargando estado de dependencias...",
       "install": "Instalar",
       "installing": "Instalando...",
@@ -410,7 +428,8 @@
       "uninstallSuccess": "{{name}} ha sido desinstalado",
       "uninstallFailed": "Desinstalación fallida: {{error}}",
       "updating": "Actualizando...",
-      "updateSuccess": "{{name}} actualizado correctamente"
+      "updateSuccess": "{{name}} actualizado correctamente",
+      "cliTransportBadge": "CLI · {{transport}}"
     },
     "usage": "Estadísticas de uso",
     "usageDesc": "Ver consumo de Token, estadísticas de costos y análisis de tendencias de uso",
@@ -851,6 +870,10 @@
       "copied": "Copied to clipboard",
       "copyFailed": "Failed to copy",
       "tools": {
+        "codex": {
+          "name": "Codex CLI",
+          "description": "Detecta Codex CLI instalado. La consulta de versión no lee la configuración de la cuenta; el chat usa app-server."
+        },
         "minimax": {
           "name": "MiniMax Code",
           "description": "Agente de código en terminal de MiniMax. Requiere Node.js 22.19+ / 24+ (no 23); comandos: minimax / mcode"
@@ -900,6 +923,21 @@
         "hide": "Ocultar en el selector de proveedor",
         "show": "Mostrar en el selector de proveedor"
       }
+    },
+    "permissionsPanel": {
+      "codexSandboxTitle": "Codex Sandbox Mode",
+      "codexSandboxDesc": "Control system access boundaries when Codex executes commands. Defaults to the safer workspace-write (read/write within the workspace only). Switch to danger-full-access for system-level commands such as adb or docker.",
+      "workspaceWriteTitle": "workspace-write",
+      "workspaceWriteDesc": "Read/write is limited to the workspace. System-level operations are restricted for safety.",
+      "fullAccessTitle": "danger-full-access",
+      "fullAccessDesc": "Allows higher system access, suitable for commands like adb or docker that require extra permissions.",
+      "hint": "This setting only affects Codex process sandboxing and does not change Claude Code permission behavior.",
+      "desired": "Desired: {{mode}}",
+      "effective": "Effective: {{mode}}",
+      "conflict": "Native policy rejected the requested access range.",
+      "source": "Source: {{source}}",
+      "readOnlyTitle": "Read only",
+      "readOnlyDesc": "Inspect files without writing to the workspace."
     }
   },
   "history": {
@@ -976,7 +1014,8 @@
       "sdk-cli": "Esta sesión fue creada por el plugin via SDK y no se muestra en CLI por defecto. Haz clic en 'Convertir a CLI' para que aparezca en la lista /resume del CLI del terminal",
       "claude-vscode": "Esta sesión fue creada por la extensión de VS Code y no se muestra en CLI por defecto. Haz clic en 'Convertir a CLI' para que aparezca en la lista /resume del CLI del terminal",
       "remote": "Esta sesión fue creada por una instancia remota de Claude Code"
-    }
+    },
+    "loadMore": "Load more"
   },
   "permission": {
     "dialogTitle": "Solicitud de permiso",
@@ -998,7 +1037,12 @@
       "execute": "Ejecutar {{toolName}}",
       "readDirectory": "Leer directorio",
       "timeoutWarning": "Por favor responde pronto, el diálogo se cerrará en {{seconds}} segundos"
-    }
+    },
+    "userCancelled": "Permission request cancelled",
+    "previewUnavailable": "Native file preview is unavailable. You can deny or cancel this request.",
+    "requestedPermissions": "Requested native permissions",
+    "allowWithRule": "Allow with this command rule",
+    "allowWithNetworkRule": "Allow with this network rule"
   },
   "askUserQuestion": {
     "title": "Claude tiene algunas preguntas para ti",
@@ -1059,6 +1103,19 @@
       "loading": "Cargando proveedores...",
       "empty": "No hay proveedores disponibles",
       "switched": "Cambiado a {{provider}}"
+    },
+    "codexQuota": {
+      "title": "Cuota de Codex",
+      "loading": "Cargando cuota...",
+      "unavailable": "Cuota no disponible",
+      "lastUpdated": "Actualizado {{value}}",
+      "fiveHour": "Uso de 5 h",
+      "weekly": "Uso semanal",
+      "windowRemainingPercent": "{{percent}}% restante",
+      "windowRemainingPercentWithReset": "{{percent}}% restante · Se restablece {{value}}",
+      "windowUsedOnly": "{{used}} usado",
+      "windowUnavailable": "No disponible",
+      "apiKeyMode": "El modo de clave de API no tiene cuota de suscripción"
     },
     "nodeProcesses": {
       "title": "Gestor de procesos Node",
@@ -1316,11 +1373,26 @@
     "noParams": "No Parameters",
     "required": "Required",
     "optional": "Optional",
-    "refreshServer": "Refresh {{name}}"
+    "refreshServer": "Refresh {{name}}",
+    "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
     "toolCall": "Llamada de herramienta",
     "runCommand": "Ejecutar comando",
+    "commandRead": "Leer {{path}}",
+    "commandList": "Listar {{path}}",
+    "commandSearch": "Buscar {{query}} en {{path}}",
+    "commandApprovalReason": "Motivo de aprobación",
+    "patchToggleDiff": "Ver cambios",
+    "errorOutput": "Detalles del error",
+    "resultUnknown": "Resultado individual de la herramienta no disponible",
+    "patchNoDiff": "Diferencias no disponibles",
+    "patchKind": {
+      "add": "Añadido",
+      "delete": "Eliminado",
+      "update": "Actualizado",
+      "move": "Movido"
+    },
     "contextEngine": "Motor de contexto",
     "task": "Tarea",
     "promptLabel": "Prompt",
@@ -1705,6 +1777,21 @@
       "description": "Totalmente automatizado, omitiendo todas las comprobaciones de permisos [Usar con precaución]"
     }
   },
+  "workspaceDiff": {
+    "title": "Cambios del espacio de trabajo",
+    "staged": "Preparados",
+    "unstaged": "Sin preparar",
+    "untracked": "Sin seguimiento",
+    "noChanges": "No se detectaron cambios",
+    "binary": "Binario",
+    "truncated": "La instantánea del espacio de trabajo era demasiado grande y se truncó",
+    "notGit": "El directorio actual no es un árbol de trabajo Git",
+    "refresh": "Actualizar",
+    "fileCount": "{{count}} archivos",
+    "fileCount_one": "{{count}} archivo",
+    "fileCount_many": "{{count}} archivos",
+    "fileCount_other": "{{count}} archivos"
+  },
   "codexModes": {
     "default": {
       "label": "Suggest (approval)",
@@ -1713,8 +1800,8 @@
     },
     "plan": {
       "label": "Plan Mode",
-      "tooltip": "Plan mode - read-only analysis",
-      "description": "Uses only read-only tools, generates plan for user approval"
+      "tooltip": "Modo de plan de colaboración nativo",
+      "description": "Genera un plan nativo antes de la implementación; el sandbox y las aprobaciones permanecen independientes"
     },
     "acceptEdits": {
       "label": "Auto Edit",
@@ -1925,8 +2012,8 @@
     "recommended": "Recomendado",
     "codexWriterConflict": {
       "title": "Hilo de Codex ocupado",
-      "intro": "Cuando comenzó el nuevo turno, el proceso de Codex del turno anterior seguía escribiendo en este hilo. El complemento ahora detiene automáticamente el turno anterior antes de enviar.",
-      "reason": "Espere unos segundos y reenvíe el mensaje; no es necesario crear una nueva sesión."
+      "intro": "Otro turno o cliente de Codex está escribiendo en esta conversación. No se pudo iniciar este envío.",
+      "reason": "Detenga el turno en el cliente que usa esta conversación y vuelva a enviar cuando haya terminado."
     },
     "codexThreadResume": {
       "title": "El hilo de sesión ya no es válido",
@@ -1965,6 +2052,32 @@
           "step1": "2. Abre Gestión de dependencias y reinstala el último SDK:"
         }
       }
+    },
+    "codexCliUnavailable": {
+      "title": "No se pudo iniciar el Codex CLI",
+      "intro": "El runtime del Codex CLI terminó antes de poder responder. El error de arriba muestra la ruta del CLI que falló y su propia salida. Normalmente se debe a una instalación incompleta del Codex CLI, no a un fallo del plugin.",
+      "reason": "El plugin inicia \"codex app-server\" desde el Codex CLI detectado en tu equipo. Una copia a medio instalar -por ejemplo una instalación global de npm sin el binario de plataforma- termina con código 1 y hace fallar también ese turno.",
+      "solutions": {
+        "reinstallCodexCli": {
+          "title": "Opción 1: eliminar la instalación rota y reinstalar el CLI oficial",
+          "step0": "1. Elimina primero la instalación global obsoleta (tener dos copias es la causa más habitual):",
+          "step1": "2. Vuelve a instalar el CLI oficial, desde el registro oficial de npm y no desde un espejo:",
+          "step2": "3. Comprueba que el CLI responde antes de volver a enviar:"
+        },
+        "pointCodexBin": {
+          "title": "Opción 2: apuntar el plugin a un binario que funcione",
+          "step0": "Lista todos los codex de tu PATH (en Windows: where codex). Si el que funciona no es el primero, define la variable de entorno CODEX_BIN con su ruta completa y reinicia el IDE. El plugin también usa automáticamente las instalaciones posteriores."
+        }
+      }
+    }
+  },
+  "codex": {
+    "plan": {
+      "title": "Codex plan",
+      "ready": "Plan ready",
+      "execute": "Execute plan",
+      "executing": "Executing…",
+      "adjust": "Continue adjusting"
     }
   }
 }

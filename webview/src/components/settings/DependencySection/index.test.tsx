@@ -166,10 +166,11 @@ describe('DependencySection', () => {
     });
 
     expect(screen.queryByText('自定义版本')).toBeNull();
-    expect(screen.getAllByText('目标版本')).toHaveLength(2);
+    expect(screen.getAllByText('目标版本')).toHaveLength(1);
+    expect(screen.queryByText('Codex SDK')).toBeNull();
     expect(screen.queryByRole('combobox')).toBeNull();
     expect(screen.getByRole('button', { name: '目标版本 v0.2.89' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '目标版本 v0.118.0' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '目标版本 v0.118.0' })).toBeNull();
     expect(screen.getByRole('button', { name: '当前版本' })).toBeTruthy();
     expect(screen.getAllByRole('button', { name: '卸载' })).toHaveLength(1);
   });

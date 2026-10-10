@@ -15,11 +15,11 @@ import {
 } from './hooks';
 import type { UseWindowCallbacksOptions, UseMessageSenderOptions } from './hooks';
 import {
-  NEW_SESSION_COMMANDS,
-  RESUME_COMMANDS,
-  PLAN_COMMANDS,
   CONTEXT_COMMANDS,
 } from './hooks/useMessageSender';
+import { parseCodexCommand } from './hooks/codexCommandDispatcher';
+import { useCodexTurnActivity } from './hooks/useCodexTurnActivity';
+import { useCodexCompactionStatus } from './hooks/useCodexCompactionStatus';
 import type { Attachment, ChatInputBoxHandle, PermissionMode } from './components/ChatInputBox/types';
 import type { ChatScreenProps } from './components/ChatScreen';
 import { useSubagentContextValues, useSetTaskEvents } from './contexts/SubagentContext';
@@ -28,6 +28,7 @@ import { useSession } from './contexts/SessionContext';
 import { useUIState } from './contexts/UIStateContext';
 import { useDialogs } from './contexts/DialogContext';
 import type { ApplyHistoryModel } from './applyHistoryModel';
+import { useCodexPlanState } from './hooks/useCodexPlanState';
 
 /**
  * Subset of useModelProviderState's return consumed by this controller.
@@ -44,6 +45,9 @@ export interface ChatControllerModelSlice {
   codexNativeAutoReviewAvailable: UseMessageSenderOptions['codexNativeAutoReviewAvailable'];
   reasoningEffort: UseMessageSenderOptions['reasoningEffort'];
   codexFastMode: UseMessageSenderOptions['codexFastMode'];
+  codexCollaborationMode: UseMessageSenderOptions['codexCollaborationMode'];
+  codexApprovalPreset: UseMessageSenderOptions['codexApprovalPreset'];
+  codexSandboxSelection: UseMessageSenderOptions['codexSandboxSelection'];
   dshPreset: UseMessageSenderOptions['dshPreset'];
   longContextEnabled: UseMessageSenderOptions['longContextEnabled'];
   handleModeSelect: (mode: PermissionMode) => void;
@@ -146,7 +150,8 @@ export const useAppChatController = ({
     currentProvider, selectedModel, permissionMode,
     selectedAgent, sdkStatusLoading, currentSdkInstalled,
     codexNativeAutoReviewAvailable,
-    reasoningEffort, codexFastMode, dshPreset, longContextEnabled,
+    reasoningEffort, codexFastMode, codexCollaborationMode, codexApprovalPreset,
+    codexSandboxSelection, dshPreset, longContextEnabled,
     handleModeSelect, handleProviderSelect,
     currentProviderRef, syncActiveProviderModelMapping,
     setPermissionMode, setCurrentProvider,
@@ -159,6 +164,21 @@ export const useAppChatController = ({
     setSdkStatus, setSdkStatusLoaded, setSdkStatusError, setSelectedAgent,
     setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
   } = model;
+
+  const codexTurnActive = useCodexTurnActivity(currentProvider, currentSessionId);
+  const { pending: codexCompactionPending, startedAt: codexCompactionStartedAt,
+    startCompaction: startCodexCompaction } = useCodexCompactionStatus({
+    provider: currentProvider, threadId: currentSessionId, t, setMessages, setLoading, setLoadingStartTime,
+  });
+  const {
+    plan: codexPlan,
+    executionPending: codexPlanExecutionPending,
+    executePlan: executeCodexPlan,
+  } = useCodexPlanState({
+    provider: currentProvider,
+    threadId: currentSessionId,
+    turnActive: loading || codexTurnActive || codexCompactionPending,
+  });
 
   // ── Scroll behavior ──
   const {
@@ -267,11 +287,11 @@ export const useAppChatController = ({
 
   const {
     handleSubmit: hookHandleSubmit,
-    executeMessage,
     interruptSession,
   } = useMessageSender({
     t, addToast,
     currentProvider, selectedModel, permissionMode, reasoningEffort, selectedAgent, codexFastMode,
+    codexCollaborationMode, codexApprovalPreset, codexSandboxSelection,
     codexNativeAutoReviewAvailable, dshPreset,
     sdkStatusLoading, currentSdkInstalled,
     sentAttachmentsRef, chatInputRef, messagesContainerRef,
@@ -283,6 +303,8 @@ export const useAppChatController = ({
     longContextEnabled,
     openContextUsageDialog,
     closeContextUsageDialog,
+    startCodexCompaction,
+    codexCompactionPending,
   });
 
   // ── Message queue ──
@@ -292,7 +314,7 @@ export const useAppChatController = ({
     dequeue: dequeueMessage,
     clearQueue,
     reorder: reorderMessageQueue,
-  } = useMessageQueue({ isLoading: loading, onExecute: executeMessage });
+  } = useMessageQueue({ isLoading: loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending, onExecute: hookHandleSubmit });
 
   // Point the session-transition indirection at the real clearQueue.
   useEffect(() => {
@@ -306,42 +328,49 @@ export const useAppChatController = ({
     if (!text && !hasAttachments) return;
     // Local commands work even while loading
     if (text.startsWith('/')) {
-      const command = text.split(/\s+/)[0].toLowerCase();
+      const parsedCommand = parseCodexCommand(text);
       // New session commands
-      if (NEW_SESSION_COMMANDS.has(command)) {
+      if (parsedCommand?.kind === 'new') {
         forceCreateNewSession();
         return;
       }
       // /resume - open history view
-      if (RESUME_COMMANDS.has(command)) {
+      if (parsedCommand?.kind === 'resume') {
         setCurrentView('history');
         return;
       }
-      // /plan - switch to plan mode (Claude only; Codex sends as normal text)
-      if (PLAN_COMMANDS.has(command) && currentProvider === 'claude') {
+      // /plan - switch to plan mode (Claude only; Codex sends as normal text).
+      // Claude keeps the legacy behavior for `/plan <args>`: switch the mode
+      // instead of leaking the literal command text to the model.
+      if (parsedCommand?.kind === 'plan' && currentProvider === 'claude') {
         handleModeSelect('plan');
         addToast(t('chat.planModeEnabled', { defaultValue: 'Plan mode enabled' }), 'info');
         return;
       }
       // /context - handled locally even while loading
-      if (CONTEXT_COMMANDS.has(command)) {
+      if (text.split(/\s+/)[0].toLowerCase() === '/context' || CONTEXT_COMMANDS.has(text.split(/\s+/)[0].toLowerCase())) {
+        hookHandleSubmit(content, attachments);
+        return;
+      }
+      // Workspace/settings reads remain available while native work is waiting.
+      if (currentProvider === 'codex' && ['diff', 'approvals'].includes(parsedCommand?.kind ?? '')) {
         hookHandleSubmit(content, attachments);
         return;
       }
     }
     // If loading, add to queue
-    if (loading) {
+    if (loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending) {
       enqueueMessage(content, attachments);
       return;
     }
     hookHandleSubmit(content, attachments);
-  }, [loading, enqueueMessage, hookHandleSubmit, forceCreateNewSession, currentProvider, handleModeSelect, setCurrentView, addToast, t]);
+  }, [loading, codexTurnActive, codexPlanExecutionPending, codexCompactionPending, enqueueMessage, hookHandleSubmit, forceCreateNewSession, currentProvider, handleModeSelect, setCurrentView, addToast, t]);
 
   // ── Chat-view computations (stage 5 of TASK-P1-01) ──
   const {
     findToolResult, getToolResultRaw,
     fileChangeMgmt,
-    filteredFileChanges, subagents, globalTodos, rewindableMessages, sessionTitle,
+    filteredFileChanges, subagents, allSubagents, globalTodos, rewindableMessages, sessionTitle,
   } = useChatComputations({
     t, messages, mergedMessages, subagentHistories, customSessionTitle, restoredSessionTitle,
     streamingActive, currentProvider,
@@ -367,6 +396,13 @@ export const useAppChatController = ({
     setCurrentView('settings');
   }, [setSettingsInitialTab, setCurrentView]);
 
+  const handleContinueCodexPlan = useCallback(() => {
+    if (!codexPlan?.text || currentProvider !== 'codex') return;
+    chatInputRef.current?.setValue(
+      `${t('chat.continueRefiningPlan', { defaultValue: 'Continue refining this plan:' })}\n\n${codexPlan.text}`);
+    chatInputRef.current?.focus();
+  }, [codexPlan, currentProvider, t]);
+
   // ── Rewind handlers ──
   const {
     handleRewindConfirm, handleRewindCancel,
@@ -380,7 +416,7 @@ export const useAppChatController = ({
   return {
     // Computed message data
     sessionTitle, mergedMessages, getMessageText, getContentBlocks,
-    findToolResult, getToolResultRaw, subagents, globalTodos,
+    findToolResult, getToolResultRaw, subagents, allSubagents, globalTodos,
     filteredFileChanges, rewindableMessages,
     subagentHistoryCtxValue, sessionIdCtxValue,
     // Refs
@@ -389,6 +425,11 @@ export const useAppChatController = ({
     handleUndoFile, onDiscardAll, handleKeepAll,
     handleSubmit, interruptSession, messageQueue, dequeueMessage, reorderMessageQueue,
     handleOpenRewindSelectDialog, handleNavigateToProviderSettings, wrappedHandleProviderSelect,
+    codexPlan, codexPlanExecutionPending,
+    codexCompactionPending,
+    onExecuteCodexPlan: executeCodexPlan,
+    codexCompactionStartedAt,
+    onContinueCodexPlan: handleContinueCodexPlan,
     // Session management
     createNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
     exportHistorySession, toggleFavoriteSession, updateHistoryTitle, convertToCliSession,

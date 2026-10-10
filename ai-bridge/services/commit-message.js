@@ -3,7 +3,7 @@
  *
  * Routes to:
  *   - Claude: Anthropic SDK messages.stream (stateless)
- *   - Codex:  Codex SDK one-shot thread
+ *   - Codex:  ephemeral app-server thread
  *   - Grok / Kimi / OpenCode / PI: headless CLI ask (session-less)
  *
  * stdin JSON: { prompt, provider, model }
@@ -22,8 +22,6 @@ import { pathToFileURL } from 'node:url';
 import {
   loadClaudeSdk,
   isClaudeSdkAvailable,
-  loadCodexSdk,
-  isCodexSdkAvailable,
 } from '../utils/sdk-loader.js';
 import {
   setupApiKey,
@@ -36,14 +34,13 @@ import { resolveModelFromSettings, resolveSdkModelName } from '../utils/model-ut
 import { getRealHomeDir } from '../utils/path-utils.js';
 import { getClaudeCliPathOverride } from '../utils/claude-cli-path.js';
 import { ensureAnthropicSdk } from './claude/message-utils.js';
-import { buildCodexCliEnvironment } from './codex/codex-utils.js';
+import { generateCodexText } from './codex/codex-text-service.js';
 import { askCliProvider, isCliAskProvider } from './cli-ask.js';
 
 let claudeSdk = null;
-let codexSdk = null;
 
 /**
- * Lazy-load and cache the Claude Agent SDK (same pattern as ensureCodexSdk).
+ * Lazy-load and cache the Claude Agent SDK.
  */
 async function ensureClaudeSdk() {
   if (!claudeSdk) {
@@ -69,18 +66,6 @@ function canUseAnthropicAskPath(config) {
  */
 export function resolveClaudeCommitPath(config) {
   return canUseAnthropicAskPath(config) ? 'ask' : 'agent';
-}
-
-async function ensureCodexSdk() {
-  if (!codexSdk) {
-    if (!isCodexSdkAvailable()) {
-      const error = new Error('Codex SDK not installed. Please install via Settings > Dependencies.');
-      error.code = 'SDK_NOT_INSTALLED';
-      throw error;
-    }
-    codexSdk = await loadCodexSdk();
-  }
-  return codexSdk;
 }
 
 function readStdin() {
@@ -368,53 +353,11 @@ async function generateWithClaudeAgent(prompt, model, config) {
 }
 
 async function generateWithCodex(prompt, model) {
-  const sdk = await ensureCodexSdk();
-  const Codex = sdk.Codex || sdk.default || sdk;
-  const { cliEnv } = buildCodexCliEnvironment(process.env);
-  const codex = new Codex({ env: cliEnv });
-
-  const workingDirectory = getRealHomeDir();
-  const fullPrompt = [
-    prompt,
-    '',
-    'Remember: output only the commit message, wrapped in <commit></commit>, with no explanation.',
-  ].join('\n');
-
-  // Stateless one-shot thread.
-  const thread = codex.startThread({
-    skipGitRepoCheck: true,
-    maxTurns: 1,
-    workingDirectory,
-    model,
-    sandboxMode: 'read-only',
-    approvalPolicy: 'never',
+  console.log(`[CommitMessage] Calling Codex app-server with model: ${model}`);
+  return generateCodexText({
+    prompt, model, onDelta: emitContentDelta,
+    developerInstructions: 'Output only the commit message, wrapped in <commit></commit>, with no explanation.',
   });
-
-  console.log(`[CommitMessage] Calling Codex SDK with model: ${model}`);
-
-  const { events } = await thread.runStreamed(fullPrompt);
-  let responseText = '';
-  let lastAgentMessage = '';
-
-  for await (const event of events) {
-    console.log(`[CommitMessage] Codex event: ${event.type}`);
-    if (event.type === 'item.updated' || event.type === 'item.completed') {
-      const item = event.item;
-      if (item?.type === 'agent_message' && typeof item.text === 'string') {
-        const delta = extractAppendedDelta(lastAgentMessage, item.text);
-        if (delta) {
-          responseText += delta;
-        }
-        lastAgentMessage = item.text;
-      }
-    }
-  }
-
-  console.log(`[CommitMessage] Codex response text length: ${responseText.length}`);
-  if (responseText.trim()) {
-    return responseText.trim();
-  }
-  throw new Error('Codex commit response is empty');
 }
 
 function emitContentDelta(text) {

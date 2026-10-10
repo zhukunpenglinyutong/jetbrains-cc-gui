@@ -4,6 +4,7 @@ export interface SubagentProcessModel {
   notes: string[];
   readFiles: string[];
   toolCalls: Array<{ id: string; name: string; detail?: string }>;
+  resultText?: string;
 }
 
 export function formatSubagentDuration(
@@ -26,7 +27,8 @@ function getRawContent(message: unknown): unknown[] {
   const nestedMessage = record.message && typeof record.message === 'object'
     ? record.message as Record<string, unknown>
     : undefined;
-  const content = frontendRaw?.content ?? nestedMessage?.content ?? record.content;
+  const content = frontendRaw?.content ?? (frontendRaw?.message as Record<string, unknown> | undefined)?.content
+    ?? nestedMessage?.content ?? record.content;
   return Array.isArray(content) ? content : [];
 }
 
@@ -54,9 +56,23 @@ function pushUnique(list: string[], value: string) {
 export function buildSubagentProcessModel(history?: SubagentHistoryResponse): SubagentProcessModel {
   const model: SubagentProcessModel = { notes: [], readFiles: [], toolCalls: [] };
   if (!history?.success || !Array.isArray(history.messages)) return model;
+  let lastText: string | undefined;
+  let finalAnswer: string | undefined;
 
   history.messages.forEach((message, messageIndex) => {
     const raw = message && typeof message === 'object' ? message as Record<string, any> : {};
+    const nativeTurnId = raw.raw?.codexTurnId ?? raw.codexTurnId;
+    const isLatestTurn = !history.latestTurnId || typeof nativeTurnId !== 'string' || nativeTurnId === history.latestTurnId;
+    // A previous final_answer must not outrank the current turn's unphased report.
+    if (history.completed && raw.type === 'assistant' && isLatestTurn) {
+      const text = getRawContent(message).flatMap(block => block && typeof block === 'object'
+        && (block as Record<string, unknown>).type === 'text' && typeof (block as Record<string, unknown>).text === 'string'
+        ? [(block as { text: string }).text] : []).join('\n').trim();
+      if (text) {
+        lastText = text;
+        if ((raw.raw?.codexPhase ?? raw.codexPhase) === 'final_answer') finalAnswer = text;
+      }
+    }
     getRawContent(message).forEach((block, blockIndex) => {
       if (!block || typeof block !== 'object') return;
       const item = block as Record<string, any>;
@@ -87,6 +103,7 @@ export function buildSubagentProcessModel(history?: SubagentHistoryResponse): Su
       });
     });
   });
+  if (finalAnswer || lastText) model.resultText = finalAnswer ?? lastText;
 
   return model;
 }

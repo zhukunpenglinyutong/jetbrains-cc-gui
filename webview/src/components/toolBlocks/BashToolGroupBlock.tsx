@@ -2,10 +2,13 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { stripAnsi } from '../../utils/stripAnsi';
+import { presentCommand } from '../../utils/commandPresentation';
 
 interface BashItem {
   command: string;
+  rawCommand: string;
   description: string;
+  justification: string;
   output: string;
   isCompleted: boolean;
   isError: boolean;
@@ -43,13 +46,13 @@ function parseBashItem(
     result?: ToolResultBlock | null;
     toolId?: string;
   },
-  deniedToolIds?: Set<string>
+  deniedToolIds: Set<string> | undefined,
+  t: ReturnType<typeof useTranslation>['t'],
 ): BashItem | null {
   const { input, result, toolId } = item;
   if (!input) return null;
 
-  const command = typeof input.command === 'string' ? input.command : '';
-  const description = typeof input.description === 'string' ? input.description : '';
+  const { command, displayCommand, description, justification } = presentCommand(input, t);
   if (!command.trim() && !description.trim()) return null;
 
   let output = '';
@@ -68,8 +71,10 @@ function parseBashItem(
   const isError = isDenied || (isCompleted && result?.is_error === true);
 
   return {
-    command,
+    command: displayCommand,
+    rawCommand: command,
     description,
+    justification,
     output,
     isCompleted,
     isError,
@@ -97,9 +102,9 @@ const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) =
   // Parse all items
   const bashItems = useMemo(() => {
     return items
-      .map((item) => parseBashItem(item, deniedToolIds))
+      .map((item) => parseBashItem(item, deniedToolIds, t))
       .filter((item): item is BashItem => item !== null);
-  }, [items, deniedToolIds]);
+  }, [items, deniedToolIds, t]);
 
   // Auto-scroll to bottom when new items are added
   useEffect(() => {
@@ -229,7 +234,9 @@ const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) =
                   {/* Expanded detail */}
                   {isItemExpanded && (
                     <div className="bash-timeline-detail">
-                      <div className="bash-command-block">{item.command}</div>
+                      {item.description && item.description !== item.command && <div className="bash-command-summary">{item.description}</div>}
+                      {item.justification && <div className="bash-command-reason">{t('tools.commandApprovalReason')}: {item.justification}</div>}
+                      <div className="bash-command-block">{item.rawCommand}</div>
                       {item.output && (
                         <div className={`bash-output-block ${item.isError ? 'error' : 'normal'}`}>
                           {item.isError && (

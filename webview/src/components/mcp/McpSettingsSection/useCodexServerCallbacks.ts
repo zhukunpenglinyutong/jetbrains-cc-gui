@@ -12,6 +12,7 @@ export interface UseCodexServerCallbacksOptions {
   addToast: (message: string, type?: ToastMessage['type']) => void;
   loadServers: () => void;
   loadServerStatus: () => void;
+  reloadNative?: () => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }
 
@@ -20,6 +21,7 @@ export function useCodexServerCallbacks({
   addToast,
   loadServers,
   loadServerStatus,
+  reloadNative,
   t,
 }: UseCodexServerCallbacksOptions): void {
   useEffect(() => {
@@ -37,15 +39,18 @@ export function useCodexServerCallbacks({
       const server = readServer(json);
       addToast(`${t('mcp.added')} ${server?.name || server?.id || ''}`, 'success');
       loadServers();
+      reloadNative?.();
     };
     window.codexMcpServerUpdated = (json) => {
       const server = readServer(json);
       addToast(`${t('mcp.saved')} ${server?.name || server?.id || ''}`, 'success');
       loadServers();
+      reloadNative?.();
     };
     window.codexMcpServerDeleted = (serverId) => {
       addToast(`${t('mcp.deleted')} ${serverId}`, 'success');
       loadServers();
+      reloadNative?.();
     };
     window.codexMcpServerToggled = (json) => {
       const server = readServer(json);
@@ -53,6 +58,7 @@ export function useCodexServerCallbacks({
       addToast(`${enabled ? t('mcp.enabled') : t('mcp.disabled')} ${server?.name || server?.id || ''}`, 'success');
       loadServers();
       loadServerStatus();
+      reloadNative?.();
     };
     return () => {
       window.codexMcpServerAdded = undefined;
@@ -60,5 +66,5 @@ export function useCodexServerCallbacks({
       window.codexMcpServerDeleted = undefined;
       window.codexMcpServerToggled = undefined;
     };
-  }, [isCodexMode, addToast, loadServers, loadServerStatus, t]);
+  }, [isCodexMode, addToast, loadServers, loadServerStatus, reloadNative, t]);
 }

@@ -5,6 +5,7 @@ import { openFile } from '../../utils/bridge';
 import ToolDetailsAccordion from './ToolDetailsAccordion';
 import ToolSummarySection from './ToolSummarySection';
 import { useGenericToolState } from './useGenericToolState';
+import { isNonRenderedToolUse } from '../../utils/toolConstants';
 
 interface GenericToolBlockProps {
   name?: string;
@@ -21,7 +22,6 @@ const GenericToolBlock = memo(function GenericToolBlock({ name, input, result, t
   // useResolvedFileLinkTooltip): useGenericToolState wraps the latter two and
   // must stay above the early returns.
   const {
-    lowerName,
     target,
     isCompleted,
     isError,
@@ -39,8 +39,7 @@ const GenericToolBlock = memo(function GenericToolBlock({ name, input, result, t
     fileLinkTooltip,
   } = useGenericToolState({ t, name, input, result, toolId });
 
-  // Ignore write_stdin tool - it's waiting for previous command result
-  if (lowerName === 'write_stdin') {
+  if (isNonRenderedToolUse({ type: 'tool_use', name, input }, true)) {
     return null;
   }
 

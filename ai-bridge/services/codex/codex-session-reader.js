@@ -62,7 +62,10 @@ export function createSessionReader() {
         metadata.birthtimeMs !== identity.birthtimeMs || metadata.size < reader.offset ||
         (metadata.size === reader.offset &&
           (metadata.mtimeMs !== identity.mtimeMs || metadata.ctimeMs !== identity.ctimeMs));
-      if (!replaced && metadata.size > reader.offset && tail.length > 0) {
+      // Size-grown and same-size files both verify their tail bytes: Windows
+      // timestamps only advance in ~10ms ticks, so a same-size rewrite can
+      // carry identical mtime/ctime and only the content proves the change.
+      if (!replaced && metadata.size >= reader.offset && tail.length > 0) {
         const overlap = Buffer.allocUnsafe(tail.length);
         let checkedBytes = 0;
         while (checkedBytes < overlap.length) {

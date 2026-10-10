@@ -42,6 +42,9 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
     isCompleted,
     isError,
   } = derived;
+  const nativeTaskId = derived.states[0]?.nativeTaskId;
+  const nativeTaskPreviousTurnId = derived.states[0]?.nativeTaskPreviousTurnId;
+  const historyToolId = derived.states[0]?.id ?? toolId;
 
   const stateKey = `agent-group-${toolId ?? messageIndex}`;
   const [expanded, setExpandedRaw] = useState(() => getPersistedExpanded(stateKey));
@@ -67,10 +70,12 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
       provider: currentProvider,
       agentId: resolvedAgentId,
       agentPath: resolvedAgentPath,
+      nativeTaskId,
+      nativeTaskPreviousTurnId,
       description: typeof summary === 'string' ? summary : undefined,
-      toolUseId: toolId,
+      toolUseId: historyToolId,
     }));
-  }, [currentProvider, currentSessionId, summary, expanded, history, resolvedAgentId, resolvedAgentPath, toolId]);
+  }, [currentProvider, currentSessionId, summary, expanded, history, resolvedAgentId, resolvedAgentPath, toolId, historyToolId, nativeTaskId, nativeTaskPreviousTurnId]);
 
   useEffect(() => {
     // Clear existing timer when dependencies change or conditions no longer met
@@ -90,8 +95,10 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
           provider: currentProvider,
           agentId: resolvedAgentId,
           agentPath: resolvedAgentPath,
+          nativeTaskId,
+          nativeTaskPreviousTurnId,
           description: typeof summary === 'string' ? summary : undefined,
-          toolUseId: toolId,
+          toolUseId: historyToolId,
         }));
       }, SUBAGENT_POLL_INTERVAL_MS);
     }
@@ -102,12 +109,11 @@ const AgentGroupBlock = memo(function AgentGroupBlock({
         pollingTimerRef.current = null;
       }
     };
-  }, [currentProvider, currentSessionId, summary, expanded, isCompleted, isError, resolvedAgentId, resolvedAgentPath, toolId]);
+  }, [currentProvider, currentSessionId, summary, expanded, isCompleted, isError, resolvedAgentId, resolvedAgentPath, toolId, historyToolId, nativeTaskId, nativeTaskPreviousTurnId]);
 
   return (
     <div className="task-container agent-group-container">
       <AgentGroupHeader
-        toolName={derived.toolName}
         agentType={derived.agentType}
         summary={summary}
         expanded={expanded}

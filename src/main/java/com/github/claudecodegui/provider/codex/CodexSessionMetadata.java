@@ -13,11 +13,22 @@ final class CodexSessionMetadata {
     }
 
     static boolean isSubagent(JsonObject payload) {
-        if (payload == null || !payload.has("source")) {
+        if (payload == null) {
             return false;
         }
+        JsonElement threadSource = payload.get("thread_source");
+        if (threadSource != null && threadSource.isJsonPrimitive()
+                && "guardian_review".equals(threadSource.getAsString())) {
+            return true;
+        }
         JsonElement source = payload.get("source");
-        return source != null && source.isJsonObject() && source.getAsJsonObject().has("subagent");
+        if (source == null || !source.isJsonObject()) {
+            return false;
+        }
+        JsonObject sourceObject = source.getAsJsonObject();
+        JsonElement internal = sourceObject.get("internal");
+        return sourceObject.has("subagent") || (internal != null && internal.isJsonPrimitive()
+                && "guardian".equals(internal.getAsString()));
     }
 
     static JsonObject findSessionMetaPayload(String head) {

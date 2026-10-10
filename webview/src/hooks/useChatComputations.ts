@@ -31,6 +31,8 @@ import { extractSubagentsFromMessages, useSubagents } from './useSubagents';
 import { useCodexSubagentStatusPolling } from './useCodexSubagentStatusPolling';
 import { useFileChanges } from './useFileChanges';
 import { useFileChangesManagement } from './useFileChangesManagement';
+import { useCodexSessionEdits } from './useCodexSessionEdits';
+import type { FileChangeSummary } from '../types';
 import type { useMessageProcessing } from './useMessageProcessing';
 
 interface UseChatComputationsParams {
@@ -243,17 +245,21 @@ export function useChatComputations({
   );
 
   // File changes (depend on findToolResult which is now stable above).
+  const editMessages = useCodexSessionEdits(currentProvider, currentSessionId, messages, streamingActive);
+  const fileChangesRef = useRef<FileChangeSummary[]>([]);
   const fileChangeMgmt = useFileChangesManagement({
-    currentSessionId, currentSessionIdRef, messages,
+    currentSessionId, currentSessionIdRef, messages, currentProvider, fileChangesRef,
     getContentBlocks, findToolResult,
   });
   const fileChanges = useFileChanges({
-    messages, getContentBlocks, findToolResult,
+    messages: editMessages, getContentBlocks, findToolResult,
     startFromIndex: fileChangeMgmt.baseMessageIndex,
+    ignoredLedgerKeys: fileChangeMgmt.ignoredLedgerKeys,
     // Sidechain Edit/Write from Agent/Task tools must appear in the Edits tab too
     subagentHistories,
     currentSessionId,
   });
+  fileChangesRef.current = fileChanges;
 
   const filteredFileChanges = useMemo(() => {
     if (fileChangeMgmt.processedFiles.length === 0) return fileChanges;
@@ -384,6 +390,7 @@ export function useChatComputations({
     fileChangeMgmt,
     filteredFileChanges,
     subagents,
+    allSubagents: extractedSubagents,
     globalTodos,
     rewindableMessages,
     sessionTitle,

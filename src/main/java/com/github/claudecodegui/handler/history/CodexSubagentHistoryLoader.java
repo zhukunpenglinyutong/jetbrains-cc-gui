@@ -83,8 +83,16 @@ final class CodexSubagentHistoryLoader {
 
         JsonArray rollout = readInitialSubagentRollout(location.file());
         TurnSlice turn = extractInitialSubagentTurn(rollout);
+        com.github.claudecodegui.provider.codex.CodexHistoryPrivacy privacy =
+                new com.github.claudecodegui.provider.codex.CodexHistoryPrivacy(location.agentThreadId());
+        JsonArray protectedMessages = new JsonArray();
+        for (JsonElement record : turn.messages()) {
+            if (record.isJsonObject()) {
+                protectedMessages.add(privacy.protect(record.getAsJsonObject()));
+            }
+        }
         JsonArray frontendMessages = new JsonArray();
-        for (JsonObject message : HistoryMessageInjector.convertCodexMessagesToFrontendBatch(turn.messages())) {
+        for (JsonObject message : HistoryMessageInjector.convertCodexMessagesToFrontendBatch(protectedMessages)) {
             frontendMessages.add(message);
         }
         return new Result(

@@ -10,6 +10,7 @@ import SubagentProcessEmptyCard from './SubagentProcessEmptyCard';
 
 interface SubagentProcessDetailsProps {
   agentId?: string;
+  agentPath?: string;
   totalDurationMs?: number;
   totalTokens?: number;
   totalToolUseCount?: number;
@@ -29,6 +30,7 @@ function firstMeaningfulLine(text: string | undefined, t: TFunction): string | u
 
 const SubagentProcessDetails = memo(function SubagentProcessDetails({
   agentId,
+  agentPath,
   totalDurationMs,
   totalTokens,
   totalToolUseCount,
@@ -48,20 +50,21 @@ const SubagentProcessDetails = memo(function SubagentProcessDetails({
     totalTokens != null ? `${totalTokens.toLocaleString()} ${t('subagent.process.unitTokens')}` : null,
   ].filter(Boolean).join(' · ');
   const process = buildSubagentProcessModel(history);
-  const finalSummary = firstMeaningfulLine(resultText, t);
+  const finalResult = resultText ?? process.resultText;
+  const finalSummary = firstMeaningfulLine(finalResult, t);
   const hasPrompt = Boolean(prompt && prompt.trim());
   const hasContent = hasPrompt || process.notes.length > 0 || process.readFiles.length > 0 || process.toolCalls.length > 0 || Boolean(finalSummary);
 
   return (
     <div className="subagent-details subagent-process-card">
-      <SubagentProcessHeader agentId={agentId} stats={stats} />
+      <SubagentProcessHeader agentId={agentId} agentPath={agentPath} stats={stats} />
       <SubagentProcessError history={history} />
       {hasContent ? (
         <SubagentProcessSections
           prompt={hasPrompt ? prompt : undefined}
           process={process}
           finalSummary={finalSummary}
-          resultText={resultText}
+          resultText={finalResult}
         />
       ) : (
         <SubagentProcessEmptyCard canLoad={canLoad} />

@@ -119,14 +119,32 @@
       "openTooltip": "대화에서 검색 (Cmd/Ctrl+F)"
     },
     "compactSummary": {
+      "receivedTime": "기록 시간",
       "summarizedConversation": "요약된 대화",
       "compactSummary": "대화 요약",
       "messagesUpTo": "이 시점까지의 메시지 {{count}}개를 요약했습니다",
       "messagesFrom": "이 시점 이후의 메시지 {{count}}개를 요약했습니다",
       "userContext": "컨텍스트: \"{{context}}\"",
       "expand": "요약 펼치기",
-      "collapse": "요약 접기"
-    }
+      "collapse": "요약 접기",
+      "nativeCompleted": "컨텍스트 압축 완료",
+      "nativeInProgress": "컨텍스트 압축 중",
+      "nativeFailed": "압축 실패",
+      "nativeInterrupted": "압축 중단",
+      "writerOccupied": "이 대화의 네이티브 쓰기 잠금이 사용 중입니다. 이 플러그인의 런타임이나 다른 Codex 프로세스가 보유하고 있을 수 있습니다. 같은 대화가 다른 창이나 백그라운드에 계속 로드되어 있는지 확인하세요.",
+      "manual": "수동",
+      "auto": "자동",
+      "timeUnknown": "시간 알 수 없음",
+      "turnTime": "턴 시작 시간"
+    },
+    "codexCompactUsage": "Use /compact without arguments",
+    "codexCompactStarted": "Codex is compacting the conversation",
+    "codexReviewUsage": "Use /review without arguments",
+    "codexReviewStarted": "Codex is reviewing the workspace",
+    "codexDiffUsage": "Use /diff without arguments",
+    "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
+    "continueRefiningPlan": "이 계획 다듬기 계속하기:"
   },
   "settings": {
     "title": "설정",
@@ -393,8 +411,8 @@
       "installPolicyTip": "설치 문제가 있으시면 오류를 터미널 CLI AI에 복사하여 해결하세요",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Claude AI 기능에 필요합니다. Claude Code SDK 및 관련 의존성을 포함합니다.",
-      "codexSdkName": "Codex SDK",
-      "codexSdkDescription": "Codex AI 기능에 필요합니다. OpenAI Codex SDK를 포함합니다.",
+      "codexSdkName": "Codex CLI",
+      "codexSdkDescription": "Codex AI 기능에 필요합니다. CLI 페이지에서 설치된 공식 Codex CLI(@openai/codex)를 감지하며 채팅은 app-server를 통해 실행됩니다.",
       "loading": "의존성 상태 로딩 중...",
       "install": "설치",
       "installing": "설치 중...",
@@ -410,7 +428,8 @@
       "uninstallSuccess": "{{name}}이(가) 제거되었습니다",
       "uninstallFailed": "제거 실패: {{error}}",
       "updating": "업데이트 중...",
-      "updateSuccess": "{{name}} 업데이트 완료"
+      "updateSuccess": "{{name}} 업데이트 완료",
+      "cliTransportBadge": "CLI · {{transport}}"
     },
     "usage": "사용 통계",
     "usageDesc": "토큰 소비량, 비용 통계 및 사용 추이 분석 보기",
@@ -431,7 +450,13 @@
       "fullAccessTitle": "danger-full-access",
       "fullAccessDesc": "더 높은 시스템 접근을 허용하며, adb나 docker 같은 추가 권한이 필요한 명령에 적합합니다.",
       "hint": "이 설정은 Codex 프로세스 샌드박스에만 영향을 미치며 Claude Code 권한 동작은 변경하지 않습니다.",
-      "claudeTip": "Claude Code 승인 모드는 채팅 입력의 모드 선택기에서 설정합니다."
+      "claudeTip": "Claude Code 승인 모드는 채팅 입력의 모드 선택기에서 설정합니다.",
+      "desired": "Desired: {{mode}}",
+      "effective": "Effective: {{mode}}",
+      "conflict": "Native policy rejected the requested access range.",
+      "source": "Source: {{source}}",
+      "readOnlyTitle": "Read only",
+      "readOnlyDesc": "Inspect files without writing to the workspace."
     },
     "commit": {
       "title": "Commit AI",
@@ -945,6 +970,10 @@
       "copied": "Copied to clipboard",
       "copyFailed": "Failed to copy",
       "tools": {
+        "codex": {
+          "name": "Codex CLI",
+          "description": "설치된 Codex CLI를 감지합니다. 버전 확인은 계정 설정을 읽지 않으며 채팅은 app-server를 사용합니다."
+        },
         "minimax": {
           "name": "MiniMax Code",
           "description": "MiniMax 터미널 코딩 에이전트. Node.js 22.19+ / 24+ 필요(23 미지원); 명령: minimax / mcode"
@@ -1070,7 +1099,8 @@
       "sdk-cli": "이 세션은 SDK를 통해 플러그인에서 생성되었으며 CLI에 기본적으로 표시되지 않습니다. 터미널 CLI의 /resume 목록에 표시하려면 'CLI로 변환'을 클릭하세요",
       "claude-vscode": "이 세션은 VS Code 확장에서 생성되었으며 CLI에 기본적으로 표시되지 않습니다. 터미널 CLI의 /resume 목록에 표시하려면 'CLI로 변환'을 클릭하세요",
       "remote": "이 세션은 원격 Claude Code 인스턴스에서 생성되었습니다"
-    }
+    },
+    "loadMore": "Load more"
   },
   "permission": {
     "dialogTitle": "권한 요청",
@@ -1092,7 +1122,12 @@
       "execute": "{{toolName}} 실행",
       "readDirectory": "디렉토리 읽기",
       "timeoutWarning": "곧 답변해주세요, {{seconds}}초 후 대화상자가 닫힙니다"
-    }
+    },
+    "userCancelled": "Permission request cancelled",
+    "previewUnavailable": "Native file preview is unavailable. You can deny or cancel this request.",
+    "requestedPermissions": "Requested native permissions",
+    "allowWithRule": "Allow with this command rule",
+    "allowWithNetworkRule": "Allow with this network rule"
   },
   "askUserQuestion": {
     "title": "Claude가 질문이 있습니다",
@@ -1153,6 +1188,19 @@
       "loading": "제공자 로드 중...",
       "empty": "사용 가능한 제공자 없음",
       "switched": "{{provider}}(으)로 전환됨"
+    },
+    "codexQuota": {
+      "title": "Codex 쿼터",
+      "loading": "쿼터를 불러오는 중...",
+      "unavailable": "쿼터를 사용할 수 없습니다",
+      "lastUpdated": "{{value}}에 업데이트됨",
+      "fiveHour": "5시간 사용량",
+      "weekly": "주간 사용량",
+      "windowRemainingPercent": "{{percent}}% 남음",
+      "windowRemainingPercentWithReset": "{{percent}}% 남음 · {{value}}에 초기화",
+      "windowUsedOnly": "{{used}} 사용됨",
+      "windowUnavailable": "사용 불가",
+      "apiKeyMode": "API 키 모드에서는 구독 쿼터가 없습니다"
     },
     "nodeProcesses": {
       "title": "Node 프로세스 관리",
@@ -1410,11 +1458,26 @@
     "noParams": "매개변수 없음",
     "required": "필수",
     "optional": "선택사항",
-    "refreshServer": "{{name}} 새로고침"
+    "refreshServer": "{{name}} 새로고침",
+    "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
     "toolCall": "도구 호출",
     "runCommand": "명령 실행",
+    "commandRead": "{{path}} 읽기",
+    "commandList": "{{path}} 목록 보기",
+    "commandSearch": "{{path}}에서 {{query}} 검색",
+    "commandApprovalReason": "승인 사유",
+    "patchToggleDiff": "변경 보기",
+    "errorOutput": "오류 세부 정보",
+    "resultUnknown": "개별 도구 실행 결과를 확인할 수 없습니다",
+    "patchNoDiff": "차이 정보 없음",
+    "patchKind": {
+      "add": "추가",
+      "delete": "삭제",
+      "update": "수정",
+      "move": "이동"
+    },
     "contextEngine": "컨텍스트 엔진",
     "task": "작업",
     "promptLabel": "프롬프트",
@@ -1800,6 +1863,18 @@
       "description": "완전 자동화, 모든 권한 검사를 우회합니다 [주의하여 사용]"
     }
   },
+  "workspaceDiff": {
+    "title": "작업 공간 변경 사항",
+    "staged": "스테이징됨",
+    "unstaged": "스테이징되지 않음",
+    "untracked": "추적되지 않음",
+    "noChanges": "변경 사항이 없습니다",
+    "binary": "바이너리",
+    "truncated": "작업 공간 스냅샷이 너무 커서 잘렸습니다",
+    "notGit": "현재 디렉터리는 Git 작업 트리가 아닙니다",
+    "refresh": "새로 고침",
+    "fileCount": "{{count}}개 파일"
+  },
   "codexModes": {
     "default": {
       "label": "제안 (승인 필요)",
@@ -1808,8 +1883,8 @@
     },
     "plan": {
       "label": "계획 모드",
-      "tooltip": "계획 모드 - 읽기 전용 분석",
-      "description": "읽기 전용 도구만 사용하여 사용자 승인을 위한 계획을 생성합니다"
+      "tooltip": "네이티브 협업 계획 모드",
+      "description": "구현 전에 네이티브 계획을 생성합니다. 샌드박스와 승인 설정은 독립적으로 유지됩니다"
     },
     "acceptEdits": {
       "label": "자동 편집",
@@ -2020,8 +2095,8 @@
     "recommended": "권장",
     "codexWriterConflict": {
       "title": "Codex 스레드 사용 중",
-      "intro": "새 턴이 시작될 때 이전 턴의 Codex 프로세스가 아직 이 스레드에 기록 중이었습니다. 플러그인은 이제 전송 전에 이전 턴을 자동으로 중지합니다.",
-      "reason": "몇 초 후 메시지를 다시 보내세요. 새 세션을 만들 필요가 없습니다."
+      "intro": "다른 Codex 턴이나 클라이언트가 이 대화에 기록 중이어서 이번 전송을 시작할 수 없습니다.",
+      "reason": "이 대화를 사용하는 클라이언트에서 턴을 중지하고 종료를 확인한 뒤 다시 보내세요."
     },
     "codexThreadResume": {
       "title": "세션 스레드가 더 이상 유효하지 않습니다",
@@ -2060,6 +2135,32 @@
           "step1": "2. '종속성 관리'를 열고 최신 SDK를 재설치:"
         }
       }
+    },
+    "codexCliUnavailable": {
+      "title": "Codex CLI를 시작할 수 없습니다",
+      "intro": "Codex CLI 런타임이 응답하기 전에 종료되었습니다. 실패한 CLI 경로와 CLI가 출력한 내용은 위 오류에 표시됩니다. 대부분 Codex CLI 설치가 불완전한 것이 원인이며 플러그인 버그가 아닙니다.",
+      "reason": "플러그인은 컴퓨터에서 찾은 Codex CLI로 codex app-server를 시작합니다. 절반만 설치된 복사본(예: 플랫폼 바이너리가 없는 전역 npm 설치)은 종료 코드 1로 종료되며 해당 턴도 함께 실패합니다.",
+      "solutions": {
+        "reinstallCodexCli": {
+          "title": "방법 1: 손상된 설치를 제거하고 공식 CLI 재설치",
+          "step0": "1. 먼저 남아 있는 전역 설치를 제거하세요(복사본이 두 개인 경우가 가장 흔한 원인입니다):",
+          "step1": "2. 공식 CLI를 다시 설치하세요(미러가 아닌 공식 npm 레지스트리를 사용하세요):",
+          "step2": "3. CLI가 버전을 출력하는지 확인한 뒤 다시 보내세요:"
+        },
+        "pointCodexBin": {
+          "title": "방법 2: 동작하는 바이너리를 플러그인에 지정",
+          "step0": "PATH에 있는 모든 codex를 확인하세요(Windows: where codex). 동작하는 것이 첫 번째가 아니면 CODEX_BIN 환경 변수를 전체 경로로 설정하고 IDE를 다시 시작하세요. 플러그인은 뒤의 설치로도 자동 폴백합니다."
+        }
+      }
+    }
+  },
+  "codex": {
+    "plan": {
+      "title": "Codex plan",
+      "ready": "Plan ready",
+      "execute": "Execute plan",
+      "executing": "Executing…",
+      "adjust": "Continue adjusting"
     }
   }
 }

@@ -1,7 +1,8 @@
 import { useCallback, type RefObject } from 'react';
+import { selectedCodexSkillInputs } from '../components/ChatInputBox/providers/dollarCommandProvider';
 import type { TFunction } from 'i18next';
 import { sendBridgeEvent } from '../utils/bridge';
-import { markPendingStreamStart } from '../utils/streamLifecycle';
+import { clearPendingStreamStart, markPendingStreamStart } from '../utils/streamLifecycle';
 import type { ClaudeContentBlock, ClaudeMessage } from '../types';
 import {
   EFFORT_SUPPORTED_CLAUDE_MODELS,
@@ -10,6 +11,7 @@ import {
 import type { Attachment, ChatInputBoxHandle, PermissionMode, ReasoningEffort, SelectedAgent, CodexFastMode } from '../components/ChatInputBox/types';
 import { expandQuoteTokens } from '../components/ChatInputBox/utils/quoteRegistry';
 import type { ViewMode } from './useModelProviderState';
+import { parseCodexCommand } from './codexCommandDispatcher';
 
 /**
  * Command sets for local handling (shared with App.tsx to avoid duplication)
@@ -18,6 +20,8 @@ export const NEW_SESSION_COMMANDS = new Set(['/new', '/clear', '/reset']);
 export const RESUME_COMMANDS = new Set(['/resume', '/continue']);
 export const PLAN_COMMANDS = new Set(['/plan']);
 export const CONTEXT_COMMANDS = new Set(['/context']);
+export const CODEX_COMPACT_COMMANDS = new Set(['/compact']);
+export const CODEX_REVIEW_COMMANDS = new Set(['/review']);
 
 // Hoisted regex to avoid creating new RegExp on every call
 const WHITESPACE_REGEX = /\s+/;
@@ -44,6 +48,9 @@ export interface UseMessageSenderOptions {
   permissionMode: PermissionMode;
   reasoningEffort: ReasoningEffort;
   codexFastMode: CodexFastMode;
+  codexCollaborationMode?: 'default' | 'plan';
+  codexApprovalPreset?: 'request' | 'auto' | 'sandboxed-auto' | 'full-access';
+  codexSandboxSelection?: 'read-only' | 'workspace-write' | 'danger-full-access';
   codexNativeAutoReviewAvailable: boolean;
   dshPreset?: string;
   selectedAgent: SelectedAgent | null;
@@ -66,6 +73,8 @@ export interface UseMessageSenderOptions {
   longContextEnabled?: boolean;
   openContextUsageDialog: (requestId?: string | null, loading?: boolean) => void;
   closeContextUsageDialog: (requestId?: string | null) => boolean;
+  startCodexCompaction: () => void;
+  codexCompactionPending?: boolean;
 }
 
 /**
@@ -79,6 +88,9 @@ export function useMessageSender({
   permissionMode,
   reasoningEffort,
   codexFastMode,
+  codexCollaborationMode = 'default',
+  codexApprovalPreset = 'request',
+  codexSandboxSelection = 'workspace-write',
   codexNativeAutoReviewAvailable,
   dshPreset,
   selectedAgent,
@@ -101,14 +113,15 @@ export function useMessageSender({
   longContextEnabled,
   openContextUsageDialog,
   closeContextUsageDialog,
+  startCodexCompaction,
+  codexCompactionPending = false,
 }: UseMessageSenderOptions) {
   /**
    * Check if the input is a new session command
    */
   const checkNewSessionCommand = useCallback((text: string): boolean => {
-    if (!text.startsWith('/')) return false;
-    const command = text.split(/\s+/)[0].toLowerCase();
-    if (NEW_SESSION_COMMANDS.has(command)) {
+    const parsed = parseCodexCommand(text);
+    if (parsed && parsed.kind === 'new') {
       forceCreateNewSession();
       return true;
     }
@@ -121,17 +134,22 @@ export function useMessageSender({
    * Note: This is also checked in App.tsx handleSubmit to bypass loading queue
    */
   const checkLocalCommand = useCallback((text: string): boolean => {
-    if (!text.startsWith('/')) return false;
-    const command = text.split(/\s+/)[0].toLowerCase();
+    const parsed = parseCodexCommand(text);
+    if (!parsed) return false;
 
     // /resume - open history view
-    if (RESUME_COMMANDS.has(command)) {
+    if (parsed.kind === 'resume') {
       setCurrentView('history');
       return true;
     }
 
-    // /plan - switch to plan mode (Claude only; Codex sends as normal text)
-    if (PLAN_COMMANDS.has(command) && currentProvider === 'claude') {
+    // A bare /plan switches the native collaboration mode; a command with a
+    // body is handled by handleSubmit so the body is sent exactly once (Codex).
+    // Claude keeps the legacy behavior for `/plan <args>`: switch the mode
+    // instead of leaking the literal command text to the model.
+    if (parsed.kind === 'plan'
+      && (currentProvider === 'claude'
+        || (currentProvider === 'codex' && !parsed.hasArguments))) {
       if (handleModeSelect) {
         handleModeSelect('plan');
         addToast(t('chat.planModeEnabled', { defaultValue: 'Plan mode enabled' }), 'info');
@@ -141,6 +159,52 @@ export function useMessageSender({
 
     return false;
   }, [setCurrentView, handleModeSelect, currentProvider, addToast, t]);
+
+  const checkCodexControlCommand = useCallback((text: string): boolean => {
+    if (currentProvider !== 'codex') return false;
+    const parsed = parseCodexCommand(text);
+    if (!parsed) return false;
+    if (parsed.kind === 'compact') {
+      if (parsed.hasArguments) {
+        addToast(t('chat.codexCompactUsage', { defaultValue: 'Use /compact without arguments' }), 'info');
+        return true;
+      }
+      startCodexCompaction();
+      return true;
+    }
+    if (parsed.kind === 'review') {
+      if (parsed.hasArguments) {
+        addToast(t('chat.codexReviewUsage', { defaultValue: 'Use /review without arguments' }), 'info');
+        return true;
+      }
+      if (sendBridgeEvent('codex_review', JSON.stringify({}))) {
+        addToast(t('chat.codexReviewStarted', { defaultValue: 'Codex is reviewing the workspace' }), 'info');
+      } else {
+        addToast(t('chat.bridgeUnavailable', { defaultValue: 'Bridge is not available right now' }), 'error');
+      }
+      return true;
+    }
+    if (parsed.kind === 'diff') {
+      if (parsed.hasArguments) {
+        addToast(t('chat.codexDiffUsage', { defaultValue: 'Use /diff without arguments' }), 'info');
+        return true;
+      }
+      if (!sendBridgeEvent('codex_read_workspace_diff', JSON.stringify({}))) {
+        addToast(t('chat.bridgeUnavailable', { defaultValue: 'Bridge is not available right now' }), 'error');
+      }
+      return true;
+    }
+    if (parsed.kind === 'approvals') {
+      if (parsed.hasArguments) {
+        addToast(t('chat.codexApprovalsUsage', { defaultValue: 'Use /approvals without arguments' }), 'info');
+        return true;
+      }
+      setSettingsInitialTab('permissions');
+      setCurrentView('settings');
+      return true;
+    }
+    return false;
+  }, [currentProvider, addToast, t, setSettingsInitialTab, setCurrentView, startCodexCompaction]);
 
   /**
    * Check for context usage command (/context)
@@ -257,14 +321,11 @@ export function useMessageSender({
     attachments: Attachment[] | undefined,
     agentInfo: { id: string; name: string; prompt?: string } | null,
     fileTagsInfo: { displayPath: string; absolutePath: string }[] | null,
-    requestedPermissionMode: PermissionMode
+    requestedPermissionMode: PermissionMode,
+    clientMessageId: string
   ) => {
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-    const effectivePermissionMode: PermissionMode = currentProvider === 'codex'
-      && (requestedPermissionMode === 'plan'
-        || (requestedPermissionMode === 'auto' && !codexNativeAutoReviewAvailable))
-      ? 'default'
-      : requestedPermissionMode;
+    const effectivePermissionMode: PermissionMode = requestedPermissionMode;
     console.debug('[ModeSync][Frontend] send request mode', {
       provider: currentProvider,
       requestedMode: requestedPermissionMode,
@@ -275,59 +336,61 @@ export function useMessageSender({
       ? { reasoningEffort }
       : {};
 
-    if (hasAttachments) {
-      try {
-        const payload = JSON.stringify({
-          text,
-          attachments: (attachments || []).map(a => ({
-            fileName: a.fileName,
-            mediaType: a.mediaType,
-            data: a.data,
-          })),
-          agent: agentInfo,
-          fileTags: fileTagsInfo,
-          permissionMode: effectivePermissionMode,
-          ...reasoningEffortPayload,
-          ...(currentProvider === 'dsh' ? { dshPreset: dshPreset || '' } : {}),
-          codexFastMode,
-        });
-        sendBridgeEvent('send_message_with_attachments', payload);
-      } catch (error) {
-        console.error('[Frontend] Failed to serialize attachments payload', error);
-        const fallbackPayload = JSON.stringify({
-          text,
-          agent: agentInfo,
-          fileTags: fileTagsInfo,
-          permissionMode: effectivePermissionMode,
-          ...reasoningEffortPayload,
-          ...(currentProvider === 'dsh' ? { dshPreset: dshPreset || '' } : {}),
-          codexFastMode,
-        });
-        sendBridgeEvent('send_message', fallbackPayload);
-      }
-    } else {
+    try {
       const payload = JSON.stringify({
         text,
+        ...(hasAttachments ? { attachments: attachments!.map(attachment => ({
+          fileName: attachment.fileName, mediaType: attachment.mediaType, data: attachment.data,
+        })) } : {}),
         agent: agentInfo,
         fileTags: fileTagsInfo,
         permissionMode: effectivePermissionMode,
+        clientMessageId,
         ...reasoningEffortPayload,
         ...(currentProvider === 'dsh' ? { dshPreset: dshPreset || '' } : {}),
         codexFastMode,
+        ...(currentProvider === 'codex' ? {
+          codexSettings: {
+            collaborationMode: effectivePermissionMode === 'plan' ? 'plan' : codexCollaborationMode,
+            approvalPreset: codexApprovalPreset,
+            sandboxSelection: codexSandboxSelection,
+            skills: selectedCodexSkillInputs(text),
+          },
+        } : {}),
       });
-      sendBridgeEvent('send_message', payload);
+      return sendBridgeEvent(hasAttachments ? 'send_message_with_attachments' : 'send_message', payload);
+    } catch {
+      // Losing attachments changes the user's task; never retry it as text-only work.
+      return false;
     }
-  }, [codexFastMode, codexNativeAutoReviewAvailable, currentProvider, dshPreset, selectedModel, reasoningEffort]);
+  }, [codexApprovalPreset, codexCollaborationMode, codexFastMode, codexNativeAutoReviewAvailable,
+    codexSandboxSelection, currentProvider, dshPreset, selectedModel, reasoningEffort]);
 
   /**
    * Execute message sending (from queue or directly)
    */
-  const executeMessage = useCallback((content: string, attachments?: Attachment[]) => {
+  const executeMessage = useCallback((
+    content: string,
+    attachments?: Attachment[],
+    permissionModeOverride?: PermissionMode,
+  ) => {
     // Expand inline quote chips (tokens) into their full Markdown blockquotes.
     const text = expandQuoteTokens(content).replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
     if (!text && !hasAttachments) return;
+
+    // Native automatic review is bounded to a protected sandbox. Keep the
+    // user's desired full-access value visible for correction, but never send
+    // a contradictory combination to the app-server.
+    if (currentProvider === 'codex'
+      && codexApprovalPreset === 'auto'
+      && codexSandboxSelection === 'danger-full-access') {
+      addToast(t('chat.codexSandboxConflict', {
+        defaultValue: 'Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.',
+      }), 'warning');
+      return;
+    }
 
     // Same gate as the input box: a provider that is already installed must
     // not wait on the shared Claude/Codex SDK query.
@@ -373,7 +436,7 @@ export function useMessageSender({
       content: text || '',
       timestamp: new Date().toISOString(),
       isOptimistic: true,
-      raw: { message: { content: userContentBlocks } },
+      raw: { clientMessageId: createContextUsageRequestId(), message: { content: userContentBlocks } },
     };
     setMessages((prev) => [...prev, userMessage]);
 
@@ -383,7 +446,8 @@ export function useMessageSender({
     // Arm the pending-stream-start marker: until this turn's [STREAM_START]
     // (or an error snapshot) arrives, late backend cleanup echoes from a just
     // interrupted turn must not reset the loading state (see streamLifecycle.ts).
-    markPendingStreamStart();
+    markPendingStreamStart(currentProvider === 'codex'
+      ? (userMessage.raw as { clientMessageId: string }).clientMessageId : undefined);
 
     // Scroll to bottom
     userPausedRef.current = false;
@@ -395,7 +459,7 @@ export function useMessageSender({
     });
 
     // Sync provider setting
-    sendBridgeEvent('set_provider', currentProvider);
+    const providerSynced = sendBridgeEvent('set_provider', currentProvider);
 
     // Build agent info
     const agentInfo = selectedAgent ? {
@@ -412,7 +476,21 @@ export function useMessageSender({
     })) : null;
 
     // Send message to backend
-    sendMessageToBackend(text, attachments, agentInfo, fileTagsInfo, permissionMode);
+    const sent = providerSynced && sendMessageToBackend(
+      text,
+      attachments,
+      agentInfo,
+      fileTagsInfo,
+      permissionModeOverride ?? permissionMode,
+      (userMessage.raw as { clientMessageId: string }).clientMessageId,
+    );
+    if (!sent) {
+      clearPendingStreamStart();
+      setLoading(false);
+      setLoadingStartTime(null);
+      setStreamingActive(false);
+      addToast(t('chat.bridgeUnavailable', { defaultValue: 'Bridge is not available right now' }), 'error');
+    }
   }, [
     sdkStatusLoading,
     currentSdkInstalled,
@@ -441,6 +519,26 @@ export function useMessageSender({
     // Check local-handled commands (/resume, /plan)
     if (checkLocalCommand(text)) return;
 
+    // /plan with a body changes mode and submits only the body.
+    const parsedCommand = parseCodexCommand(text);
+    if (currentProvider === 'codex' && parsedCommand?.kind === 'plan') {
+      const body = parsedCommand.body;
+      if (body && handleModeSelect) {
+        handleModeSelect('plan');
+        executeMessage(body, attachments, 'plan');
+      }
+      return;
+    }
+
+    if (currentProvider === 'codex' && parsedCommand?.kind === 'init') {
+      const initPrompt = 'Inspect this repository and create or update AGENTS.md with concise instructions for working in it.'
+        + (parsedCommand.body ? `\n\nAdditional instructions: ${parsedCommand.body}` : '');
+      executeMessage(initPrompt, attachments);
+      return;
+    }
+
+    if (checkCodexControlCommand(text)) return;
+
     // Check context usage command (/context)
     if (checkContextCommand(text)) return;
 
@@ -449,19 +547,21 @@ export function useMessageSender({
 
     // Execute message
     executeMessage(content, attachments);
-  }, [checkNewSessionCommand, checkLocalCommand, checkContextCommand, checkUnimplementedCommand, executeMessage]);
+  }, [checkNewSessionCommand, checkLocalCommand, checkContextCommand, checkCodexControlCommand, checkUnimplementedCommand, executeMessage, currentProvider, handleModeSelect]);
 
   /**
    * Interrupt the current session
    */
   const interruptSession = useCallback(() => {
-    setLoading(false);
-    setLoadingStartTime(null);
-    setStreamingActive(false);
-    isStreamingRef.current = false;
+    if (!codexCompactionPending) {
+      setLoading(false);
+      setLoadingStartTime(null);
+      setStreamingActive(false);
+      isStreamingRef.current = false;
+    }
 
     sendBridgeEvent('interrupt_session');
-  }, []);
+  }, [codexCompactionPending, setLoading, setLoadingStartTime, setStreamingActive, isStreamingRef]);
 
   return {
     handleSubmit,

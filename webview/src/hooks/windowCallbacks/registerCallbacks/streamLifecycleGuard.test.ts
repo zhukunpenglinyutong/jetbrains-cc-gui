@@ -14,6 +14,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { registerMessageCallbacks } from './messageCallbacks';
 import { registerStreamingCallbacks } from './streamingCallbacks';
+import { releaseSessionTransition } from '../sessionTransition';
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import {
   markPendingStreamStart,
@@ -54,14 +55,19 @@ function createHarness(loadingValues: boolean[]) {
     updateContextUsageData: () => {},
     closeContextUsageDialog: () => {},
     currentSessionIdRef: ref(null),
+    currentProviderRef: ref('codex'),
   } as unknown as UseWindowCallbacksOptions;
 
   registerMessageCallbacks(options, () => {}, () => {});
+  return options;
 }
 
 describe('pending-stream-start immunity window', () => {
   beforeEach(() => {
     clearPendingStreamStart();
+    window.__sessionTransitioning = false;
+    window.__deferredTransitionUpdateMessages = null;
+    window.__minAcceptedUpdateSequence = 0;
   });
 
   it('marks, reports, and clears the pending stream start', () => {
@@ -72,13 +78,14 @@ describe('pending-stream-start immunity window', () => {
     expect(isPendingStreamStartActive()).toBe(false);
   });
 
-  it('expires the marker after the immunity window', () => {
-    markPendingStreamStart();
+  it('expires cleanup immunity while retaining the pending submission identity', () => {
+    markPendingStreamStart('slow-submission');
     // Simulate the window elapsing without waiting 8 real seconds.
     window.__pendingStreamStartAt = Date.now() - 8001;
     expect(isPendingStreamStartActive()).toBe(false);
-    // The expired marker is retired so it cannot resurrect.
-    expect(window.__pendingStreamStartAt).toBeUndefined();
+    // A delayed terminal snapshot still needs proof that it owns this submission.
+    expect(window.__pendingStreamStartAt).toBeDefined();
+    expect(window.__pendingStreamClientMessageId).toBe('slow-submission');
   });
 
   it('suppresses the interrupted turn\'s late showLoading(false) echo', () => {
@@ -113,6 +120,79 @@ describe('pending-stream-start immunity window', () => {
     expect(loadingValues).toContain(false);
   });
 
+  it('keeps an older error-only snapshot from ending a newly submitted Codex message', () => {
+    const loadingValues: boolean[] = [];
+    createHarness(loadingValues);
+    markPendingStreamStart('new-submission');
+    window.updateMessages!(JSON.stringify([
+      { type: 'USER', raw: { clientMessageId: 'old-submission' }, content: 'old task' },
+      { type: 'ERROR', content: 'previous writer exited' },
+    ]));
+    expect(isPendingStreamStartActive()).toBe(true);
+    expect(loadingValues).not.toContain(false);
+    window.updateMessages!(JSON.stringify([
+      { type: 'USER', raw: { clientMessageId: 'new-submission' }, content: 'new task' },
+      { type: 'ERROR', content: 'current startup failed' },
+    ]));
+    expect(isPendingStreamStartActive()).toBe(false);
+    expect(loadingValues).toContain(false);
+  });
+
+  it('ends waiting when a current startup error commits after a session transition', () => {
+    const loadingValues: boolean[] = [];
+    const options = createHarness(loadingValues);
+    registerStreamingCallbacks(options);
+    window.__sessionTransitioning = true;
+    markPendingStreamStart('current-submission');
+    window.showLoading!('true');
+
+    // Restored-session callbacks can finish before React releases the transition.
+    window.onStreamEnd!();
+    window.updateMessages!(JSON.stringify([
+      { type: 'user', content: 'new task', raw: { clientMessageId: 'current-submission' } },
+      { type: 'error', content: 'thread already has an active writer' },
+    ]), 3);
+    window.showLoading!('false');
+    expect(loadingValues.at(-1)).toBe(true);
+
+    releaseSessionTransition();
+    expect(isPendingStreamStartActive()).toBe(false);
+    expect(loadingValues.at(-1)).toBe(false);
+  });
+
+  it('keeps an older deferred startup error from ending a new submission', () => {
+    const loadingValues: boolean[] = [];
+    createHarness(loadingValues);
+    window.__sessionTransitioning = true;
+    markPendingStreamStart('current-submission');
+    window.showLoading!('true');
+    window.updateMessages!(JSON.stringify([
+      { type: 'user', content: 'old task', raw: { clientMessageId: 'previous-submission' } },
+      { type: 'error', content: 'previous startup failed' },
+    ]), 3);
+
+    releaseSessionTransition();
+    expect(isPendingStreamStartActive()).toBe(true);
+    expect(loadingValues.at(-1)).toBe(true);
+  });
+
+  it('rejects an obsolete deferred error before it can release the pending start', () => {
+    const loadingValues: boolean[] = [];
+    createHarness(loadingValues);
+    window.__sessionTransitioning = true;
+    markPendingStreamStart('current-submission');
+    window.showLoading!('true');
+    window.updateMessages!(JSON.stringify([
+      { type: 'user', content: 'new task', raw: { clientMessageId: 'current-submission' } },
+      { type: 'error', content: 'obsolete writer failure' },
+    ]), 3);
+
+    window.__minAcceptedUpdateSequence = 4;
+    releaseSessionTransition();
+    expect(isPendingStreamStartActive()).toBe(true);
+    expect(loadingValues.at(-1)).toBe(true);
+  });
+
   it('stops suppressing once the immunity window elapses', () => {
     const loadingValues: boolean[] = [];
     createHarness(loadingValues);
@@ -121,6 +201,48 @@ describe('pending-stream-start immunity window', () => {
     window.__pendingStreamStartAt = Date.now() - 8001; // window elapsed
 
     window.showLoading!('false');
+    expect(loadingValues).toContain(false);
+  });
+
+  it('releases startup failures even when stream-end precedes the error snapshot', () => {
+    const loadingValues: boolean[] = [];
+    const options = createHarness(loadingValues);
+    registerStreamingCallbacks(options);
+    markPendingStreamStart();
+    window.onStreamEnd!();
+    window.updateMessages!(JSON.stringify([
+      { type: 'USER', content: 'new task' },
+      { type: 'ERROR', content: 'thread already has an active writer' },
+    ]));
+    window.showLoading!('false');
+    expect(isPendingStreamStartActive()).toBe(false);
+    expect(loadingValues).toContain(false);
+  });
+
+  it('does not let an older error in history release a freshly dispatched turn', () => {
+    const loadingValues: boolean[] = [];
+    createHarness(loadingValues);
+    markPendingStreamStart();
+    window.updateMessages!(JSON.stringify([
+      { type: 'ERROR', content: 'an older failed turn' },
+      { type: 'USER', content: 'new task' },
+    ]));
+    window.showLoading!('false');
+    expect(isPendingStreamStartActive()).toBe(true);
+    expect(loadingValues).not.toContain(false);
+  });
+
+  it('ends waiting when the startup error snapshot arrives after the loading reset', () => {
+    const loadingValues: boolean[] = [];
+    createHarness(loadingValues);
+    markPendingStreamStart();
+    window.showLoading!('false');
+    expect(loadingValues).not.toContain(false);
+    window.updateMessages!(JSON.stringify([
+      { type: 'user', content: 'new task' },
+      { type: 'error', content: 'codex app-server exited (code=0, signal=null)' },
+    ]));
+    expect(isPendingStreamStartActive()).toBe(false);
     expect(loadingValues).toContain(false);
   });
 

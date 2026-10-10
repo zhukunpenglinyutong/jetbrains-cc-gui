@@ -25,6 +25,384 @@ import static org.junit.Assert.assertTrue;
  * Unit tests for provider-aware history loading, pagination, and frontend conversion.
  */
 public class HistoryMessageInjectorTest {
+    /** Native activity keeps path-only launch receipts tied to the real child thread. */
+    @Test
+    public void restoresNativeSubagentActivityWithoutOverwritingTheLaunch() {
+        JsonArray records = new JsonArray();
+        records.add(functionCall("2026-10-04T00:00:00Z", "spawn-one", "spawn_agent", "{\"task_name\":\"review_ui\"}"));
+        records.add(com.google.gson.JsonParser.parseString("""
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"root","turn_id":"turn",
+                "item":{"type":"SubAgentActivity","id":"spawn-one","kind":"started",
+                "agent_thread_id":"child-thread","agent_path":"/root/review_ui"}}}
+                """));
+        List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        assertEquals(2, messages.size());
+        assertEquals("spawn_agent", getOnlyRawContentBlock(messages.get(0)).get("name").getAsString());
+        JsonObject activity = messages.get(1).getAsJsonObject("raw");
+        assertEquals("subAgentActivity", activity.get("codexItemType").getAsString());
+        assertEquals("child-thread", getOnlyRawContentBlock(messages.get(1)).getAsJsonObject("input").get("agentThreadId").getAsString());
+        assertEquals("/root/review_ui", getOnlyRawContentBlock(messages.get(1)).getAsJsonObject("input").get("agentPath").getAsString());
+        assertFalse(messages.get(0).getAsJsonObject("raw").get("uuid").equals(activity.get("uuid")));
+    }
+
+    /** A completed image view has a paired result even when its item omits status. */
+    @Test
+    public void restoresCompletedImageViews() {
+        JsonArray records = new JsonArray();
+        JsonObject event = com.google.gson.JsonParser.parseString("""
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"thread","turn_id":"turn",
+                "completed_at_ms":1000,"item":{"type":"ImageView","id":"image","path":"file:///preview.png"}}}
+                """).getAsJsonObject();
+        records.add(event);
+        List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        assertEquals(2, messages.size());
+        assertEquals("imageView", getOnlyRawContentBlock(messages.get(0)).get("name").getAsString());
+        assertEquals("file:///preview.png", getOnlyRawContentBlock(messages.get(0)).getAsJsonObject("input").get("path").getAsString());
+        assertEquals("image", getOnlyRawContentBlock(messages.get(1)).get("tool_use_id").getAsString());
+        assertFalse(getOnlyRawContentBlock(messages.get(1)).get("is_error").getAsBoolean());
+    }
+    /** Uses recorded file changes when a wrapper computes its patch at runtime. */
+    @Test
+    public void restoresRecordedFileChangeForDynamicPatch() {
+        JsonArray records = new JsonArray();
+        records.add(customToolCall("2026-10-02T00:00:00Z", "dynamic-patch", "exec",
+                "const patch = buildPatch(); text(await tools.apply_patch(patch));"));
+        JsonObject event = com.google.gson.JsonParser.parseString("""
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"thread","turn_id":"turn",
+                "completed_at_ms":1000,"item":{"type":"FileChange","id":"native-patch","status":"completed",
+                "changes":{"a.ts":{"type":"update","unified_diff":"@@ -1 +1 @@\\n-old\\n+new\\n","move_path":"b.ts"},
+                "added.ts":{"type":"add","content":"created\\n"},"gone.ts":{"type":"delete","content":"removed\\n"}},
+                "stdout":"Patch applied","stderr":""}}}
+                """).getAsJsonObject();
+        String original = event.toString();
+        records.add(event);
+        records.add(event.deepCopy());
+        records.add(customToolCallOutput("2026-10-02T00:00:01Z", "dynamic-patch", "Script completed"));
+        List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        assertEquals(2, messages.size());
+        JsonObject nativeRaw = messages.get(0).getAsJsonObject("raw");
+        JsonObject tool = getOnlyRawContentBlock(messages.get(0));
+        assertEquals("file_change", tool.get("name").getAsString());
+        assertEquals("thread", nativeRaw.get("codexThreadId").getAsString());
+        assertEquals("turn", nativeRaw.get("codexTurnId").getAsString());
+        JsonArray changes = tool.getAsJsonObject("input").getAsJsonArray("changes");
+        assertEquals(3, changes.size());
+        assertEquals("b.ts", changes.get(0).getAsJsonObject().getAsJsonObject("kind").get("movePath").getAsString());
+        assertEquals("+created", changes.get(1).getAsJsonObject().get("diff").getAsString());
+        assertEquals("-removed", changes.get(2).getAsJsonObject().get("diff").getAsString());
+        assertEquals("completed", tool.getAsJsonObject("input").get("status").getAsString());
+        assertEquals("Patch applied", getOnlyRawContentBlock(messages.get(1)).get("content").getAsString());
+        assertEquals(original, event.toString());
+    }
+
+    /** Preserves native failure output without borrowing the outer script's outcome. */
+    @Test
+    public void restoresRecordedDynamicPatchFailure() {
+        JsonArray records = new JsonArray();
+        records.add(customToolCall("2026-10-02T00:00:00Z", "dynamic-failed", "exec", "await tools.apply_patch(result.output);"));
+        records.add(com.google.gson.JsonParser.parseString("""
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"thread","turn_id":"turn",
+                "item":{"type":"FileChange","id":"native-failed","status":"failed",
+                "changes":{"a.ts":{"type":"update","unified_diff":"-old\\n+new","move_path":null}},
+                "stdout":"","stderr":"apply_patch verification failed"}}}
+                """));
+        records.add(customToolCallOutput("2026-10-02T00:00:01Z", "dynamic-failed", "Script completed"));
+        List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        assertEquals(2, messages.size());
+        JsonObject output = getOnlyRawContentBlock(messages.get(1));
+        assertTrue(output.get("is_error").getAsBoolean());
+        assertEquals("apply_patch verification failed", output.get("content").getAsString());
+    }
+
+    /** Restores the literal patch-array loop used by the referenced session without guessing per-file outcomes. */
+    @Test
+    public void previewsPatchesFromImmutableArrayLoop() {
+        String first = "*** Begin Patch\n*** Add File: a.ts\n+first\n*** End Patch";
+        String second = "*** Begin Patch\n*** Add File: b.ts\n+second\n*** End Patch";
+        var gson = new com.google.gson.Gson();
+        JsonArray records = new JsonArray();
+        records.add(customToolCall("2026-10-02T00:00:00Z", "patch-array", "exec",
+                "const patches = [" + gson.toJson(first) + "," + gson.toJson(second)
+                        + "]; for (const p of patches) text(await tools.apply_patch(p));"));
+        records.add(customToolCallOutput("2026-10-02T00:00:01Z", "patch-array", "Script completed"));
+        List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        assertEquals(4, messages.size());
+        for (int index = 0; index < 2; index++) {
+            JsonObject tool = getOnlyRawContentBlock(messages.get(index));
+            assertEquals("apply_patch", tool.get("name").getAsString());
+            assertEquals(index == 0 ? first : second, tool.getAsJsonObject("input").get("patch").getAsString());
+            assertEquals("unknown", tool.getAsJsonObject("input").get("status").getAsString());
+        }
+        assertEquals("exec", getOnlyRawContentBlock(messages.get(2)).get("name").getAsString());
+        assertEquals("patch-array", getOnlyRawContentBlock(messages.get(3)).get("tool_use_id").getAsString());
+    }
+
+    /** Restores immutable literal patch bindings used by the referenced Codex session. */
+    @Test
+    public void restoresPatchPassedThroughConstBinding() {
+        String patch = "*** Begin Patch\n*** Update File: a.ts\n@@\n-old\n+new\n*** End Patch";
+        String literal = new com.google.gson.Gson().toJson(patch);
+        for (String script : List.of("const patch = " + literal + "; text(await tools.apply_patch(patch));",
+                "const patch = " + literal + "; text(await tools.apply_patch(patch)); text(await tools.exec_command({cmd:'pwd'}));")) {
+            JsonArray records = new JsonArray();
+            records.add(customToolCall("2026-10-02T00:00:00Z", "bound-patch", "exec", script));
+            records.add(customToolCallOutput("2026-10-02T00:00:01Z", "bound-patch", "Script completed"));
+            List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+            JsonObject tool = getOnlyRawContentBlock(messages.get(0));
+            assertEquals("apply_patch", tool.get("name").getAsString());
+            assertEquals(patch, tool.getAsJsonObject("input").get("patch").getAsString());
+            if (script.contains("exec_command")) {
+                assertEquals("unknown", tool.getAsJsonObject("input").get("status").getAsString());
+                assertEquals("exec", getOnlyRawContentBlock(messages.get(1)).get("name").getAsString());
+            } else {
+                assertEquals(tool.get("id"), getOnlyRawContentBlock(messages.get(1)).get("tool_use_id"));
+            }
+        }
+    }
+
+    /** Treats escaped template interpolation as literal source inside a patch. */
+    @Test
+    public void restoresPatchContainingEscapedTemplateExpression() {
+        JsonArray records = new JsonArray();
+        records.add(customToolCall("2026-10-02T00:00:00Z", "escaped-template", "exec",
+                "text(await tools.apply_patch(`*** Begin Patch\n*** Add File: a.ts\n+const value = \\${name};\n*** End Patch`));"));
+        JsonObject tool = getOnlyRawContentBlock(HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records).get(0));
+        assertEquals("apply_patch", tool.get("name").getAsString());
+        assertTrue(tool.getAsJsonObject("input").get("patch").getAsString().contains("${name}"));
+    }
+
+    /** Includes unmatched replay inputs in retained state after visible messages have been flushed. */
+    @Test
+    public void accountsForUnmatchedReplayInputsAfterFlushingCards() {
+        var accumulator = new HistoryMessageInjector.CodexFrontendMessageAccumulator(message -> { }, message -> { });
+        String patch = "*** Begin Patch\n*** Add File: large.txt\n+" + "x".repeat(20_000) + "\n*** End Patch";
+        accumulator.accept(customToolCall("2026-10-02T00:00:00Z", "held", "exec",
+                "text(await tools.apply_patch(" + new com.google.gson.Gson().toJson(patch) + "));"));
+        accumulator.accept(responseItemAssistantMessage("2026-10-02T00:00:01Z", "flushed previous card"));
+        assertTrue(accumulator.retainedBytes() >= patch.length());
+        accumulator.accept(customToolCallOutput("2026-10-02T00:00:02Z", "held", "success"));
+        accumulator.accept(responseItemAssistantMessage("2026-10-02T00:00:03Z", "flushed result"));
+        assertTrue(accumulator.retainedBytes() < patch.length());
+    }
+    /** Keeps dynamic scripts intact instead of losing calls or attributing a wrapper result to each tool. */
+    @Test
+    public void refusesPartialAndMixedExecReplay() {
+        for (String script : List.of(
+                "await tools.exec_command({cmd:'pwd'}); await tools.exec_command({cmd:dynamic});",
+                "await tools.exec_command({cmd:'pwd', ...overrides});",
+                "await tools.exec_command({cmd:'pwd', cmd:dynamic});",
+                "const unrelated = {cmd:'pwd'}; await tools.shell_command(dynamic);",
+                "const note = \"const cmds = [{command:'pwd'}]\"; const cmds = dynamic; await Promise.all(cmds.map(c => tools.shell_command(c)));",
+                "await tools.update_plan({plan:[]}); await tools.exec_command({cmd:'pwd'});",
+                "const patches = ['*** Begin Patch\\n*** Add File: a\\n+x\\n*** End Patch',,]; for (const p of patches) text(await tools.apply_patch(p));",
+                "const patches = ['*** Begin Patch\\n*** Add File: a\\n+x\\n*** End Patch']; patches.push(dynamic); for (const p of patches) text(await tools.apply_patch(p));")) {
+            JsonArray records = new JsonArray();
+            records.add(customToolCall("2026-10-02T00:00:00Z", "opaque", "exec", script));
+            records.add(customToolCallOutput("2026-10-02T00:00:01Z", "opaque", "combined output"));
+            List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+            assertEquals(script, 2, messages.size());
+            assertEquals(script, "exec", getOnlyRawContentBlock(messages.get(0)).get("name").getAsString());
+            assertTrue(messages.get(0).toString().contains("pwd") || messages.get(0).toString().contains("apply_patch"));
+            assertEquals("opaque", getOnlyRawContentBlock(messages.get(1)).get("tool_use_id").getAsString());
+        }
+    }
+
+    /** Previews every literal patch without assigning a shared wrapper outcome to any individual edit. */
+    @Test
+    public void previewsLiteralPatchesInsideMixedAndPartiallyDynamicWrappers() {
+        String patch = "*** Begin Patch\n*** Update File: a.txt\n@@\n-old\n+new\n*** End Patch";
+        String literal = new com.google.gson.Gson().toJson(patch);
+        for (String remainder : List.of("text(await tools.exec_command({cmd:'pwd'}));",
+                "text(await tools.apply_patch(" + literal + "));", "await tools.apply_patch(dynamic);",
+                "await tools.custom_lookup({value:1});")) {
+            String script = "text(await tools.apply_patch(" + literal + ")); " + remainder;
+            JsonArray records = new JsonArray();
+            records.add(customToolCall("2026-10-02T00:00:00Z", "mixed-patch", "exec", script));
+            records.add(customToolCallOutput("2026-10-02T00:00:01Z", "mixed-patch",
+                    "Script failed\nScript error: apply_patch verification failed: Failed to find expected lines"));
+            List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+            int previewCount = remainder.contains(literal) ? 2 : 1;
+            assertEquals(previewCount + 2, messages.size());
+            for (int index = 0; index < previewCount; index++) {
+                JsonObject preview = getOnlyRawContentBlock(messages.get(index));
+                assertEquals("apply_patch", preview.get("name").getAsString());
+                assertEquals(patch, preview.getAsJsonObject("input").get("patch").getAsString());
+                assertEquals("unknown", preview.getAsJsonObject("input").get("status").getAsString());
+            }
+            JsonObject wrapper = getOnlyRawContentBlock(messages.get(previewCount));
+            assertEquals("exec", wrapper.get("name").getAsString());
+            assertEquals(script, wrapper.getAsJsonObject("input").get("patch").getAsString());
+            JsonObject output = getOnlyRawContentBlock(messages.get(previewCount + 1));
+            assertEquals("mixed-patch", output.get("tool_use_id").getAsString());
+            assertTrue(output.get("is_error").getAsBoolean());
+        }
+    }
+
+    /** Accepts literal Windows line endings without evaluating a historical script. */
+    @Test
+    public void restoresCrLfPatchAndStructuredFailure() {
+        String patch = "*** Begin Patch\r\n*** Add File: a.txt\r\n+x\r\n*** End Patch";
+        JsonArray records = new JsonArray();
+        records.add(customToolCall("2026-10-02T00:00:00Z", "crlf", "exec",
+                "text(await tools.apply_patch(" + new com.google.gson.Gson().toJson(patch) + "));"));
+        records.add(customToolCallOutput("2026-10-02T00:00:01Z", "crlf",
+                outputTextBlocks("Script completed", "{\"isError\":true,\"content\":[{\"type\":\"text\",\"text\":\"patch rejected\"}]}")));
+        List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        assertEquals("apply_patch", getOnlyRawContentBlock(messages.get(0)).get("name").getAsString());
+        assertEquals(patch, getOnlyRawContentBlock(messages.get(0)).getAsJsonObject("input").get("patch").getAsString());
+        assertTrue(getOnlyRawContentBlock(messages.get(1)).get("is_error").getAsBoolean());
+    }
+
+    /** Ignores tool-looking source code inside a literal patch rather than treating it as an executed call. */
+    @Test
+    public void ignoresToolNamesInsidePatchText() {
+        String patch = "*** Begin Patch\n*** Add File: example.js\n+tools.future_tool();\n*** End Patch";
+        JsonArray records = new JsonArray();
+        records.add(customToolCall("2026-10-02T00:00:00Z", "quoted-tool", "exec",
+                "text(await tools.apply_patch(" + new com.google.gson.Gson().toJson(patch) + "));"));
+        JsonObject block = getOnlyRawContentBlock(HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records).get(0));
+        assertEquals("apply_patch", block.get("name").getAsString());
+        assertEquals(patch, block.getAsJsonObject("input").get("patch").getAsString());
+    }
+
+    /** Preserves distinct timed compactions even when legacy sources alternate without an intervening message. */
+    @Test
+    public void keepsDifferentTimedCompactions() {
+        JsonArray records = new JsonArray();
+        records.add(com.google.gson.JsonParser.parseString("{\"type\":\"event_msg\",\"timestamp\":\"2026-10-02T01:00:00Z\",\"payload\":{\"type\":\"context_compacted\"}}"));
+        records.add(com.google.gson.JsonParser.parseString("{\"type\":\"compacted\",\"timestamp\":\"2026-10-02T02:00:00Z\",\"payload\":{\"message\":\"later summary\"}}"));
+        List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        assertEquals(2, messages.size());
+        assertEquals("2026-10-02T01:00:00Z", messages.get(0).get("timestamp").getAsString());
+        assertEquals("2026-10-02T02:00:00Z", messages.get(1).get("timestamp").getAsString());
+    }
+
+    /** Keeps literal command explanations while refusing to treat JavaScript expressions as text. */
+    @Test
+    public void restoresCommandSummaryAndApprovalJustification() {
+        JsonArray records = new JsonArray();
+        records.add(customToolCall("2026-10-02T00:00:00Z", "command-meta", "exec",
+                "text(await tools.exec_command({cmd:'git status',summary:'Inspect current changes',justification:'Access the workspace'}));"));
+        JsonObject input = getOnlyRawContentBlock(HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records).get(0)).getAsJsonObject("input");
+        assertEquals("Inspect current changes", input.get("description").getAsString());
+        assertEquals("Access the workspace", input.get("justification").getAsString());
+        records = new JsonArray();
+        records.add(customToolCall("2026-10-02T00:00:00Z", "dynamic-cmd", "exec",
+                "text(await tools.exec_command({cmd:commandVariable}));"));
+        assertEquals("exec", getOnlyRawContentBlock(HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records).get(0)).get("name").getAsString());
+    }
+    /** Restores literal patches while preserving dynamic wrappers and failure outputs. */
+    @Test
+    public void restoresPatchFilesAndLeavesDynamicJavaScriptOpaque() {
+        String patch = "*** Begin Patch\n*** Update File: E:/project/a.txt\n@@\n-old\n+new\n"
+                + "*** Delete File: E:/project/old.txt\n*** End Patch";
+        JsonArray records = new JsonArray();
+        records.add(customToolCall("2026-10-02T00:00:00Z", "patch", "functions.exec",
+                "text(await tools.apply_patch(" + new com.google.gson.Gson().toJson(patch) + "));"));
+        records.add(customToolCallOutput("2026-10-02T00:00:01Z", "patch", "Error: fixture failed"));
+        List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        assertEquals(2, messages.size());
+        JsonObject tool = getOnlyRawContentBlock(messages.get(0));
+        assertEquals("apply_patch", tool.get("name").getAsString());
+        assertEquals(patch, tool.getAsJsonObject("input").get("patch").getAsString());
+        assertEquals(tool.get("id"), getOnlyRawContentBlock(messages.get(1)).get("tool_use_id"));
+        assertTrue(getOnlyRawContentBlock(messages.get(1)).get("is_error").getAsBoolean());
+        for (String script : List.of("await tools.apply_patch(patch);",
+                "const patch = buildPatch(); await tools.apply_patch(patch);",
+                "const patch = '*** Begin Patch\\n*** Add File: a\\n+x\\n*** End Patch' + suffix; await tools.apply_patch(patch);",
+                "const patch = '*** Begin Patch\\n*** Add File: a\\n+x\\n*** End Patch'; function run(patch) { tools.apply_patch(patch); }",
+                "await tools.apply_patch(`*** Begin Patch\n*** Add File: ${path}\n+x\n*** End Patch`);",
+                "await tools.apply_patch('*** Begin Patch\\n*** Add File: a\\n+x\\n*** End Patch' + suffix);")) {
+            JsonArray dynamic = new JsonArray();
+            dynamic.add(customToolCall("2026-10-02T00:00:02Z", "dynamic", "exec", script));
+            assertEquals("exec", getOnlyRawContentBlock(HistoryMessageInjector.convertCodexMessagesToFrontendBatch(dynamic).get(0)).get("name").getAsString());
+        }
+    }
+
+    /** Keeps each compact boundary once without replaying replacement model context. */
+    @Test
+    public void preservesCompactionTimesAndDeduplicatesOnlyLegacyCompanionEvents() {
+        JsonArray records = new JsonArray();
+        records.add(com.google.gson.JsonParser.parseString("""
+                {"type":"compacted","timestamp":"2026-10-02T01:00:00Z","payload":{"message":"saved summary","replacement_history":[{"text":"MODEL-ONLY"}]}}
+                """));
+        records.add(com.google.gson.JsonParser.parseString("{\"type\":\"event_msg\",\"payload\":{\"type\":\"context_compacted\"}}"));
+        records.add(com.google.gson.JsonParser.parseString("""
+                {"type":"compacted","timestamp":"2026-10-02T02:00:00Z","payload":{"message":""}}
+                """));
+        List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        assertEquals(2, messages.size());
+        assertEquals("2026-10-02T01:00:00Z", messages.get(0).get("timestamp").getAsString());
+        assertEquals("2026-10-02T02:00:00Z", messages.get(1).get("timestamp").getAsString());
+        assertTrue(messages.get(1).getAsJsonObject("raw").get("isCompactSummary").getAsBoolean());
+        assertFalse(messages.toString().contains("MODEL-ONLY"));
+        assertFalse(messages.toString().contains("\"trigger\""));
+        var nativePage = new HistoryMessageInjector.CodexHistoryPage();
+        var legacyPage = new HistoryMessageInjector.CodexHistoryPage();
+        legacyPage.messages = messages;
+        assertTrue(HistoryMessageInjector.requiresLegacyProjection(nativePage, legacyPage));
+        nativePage.messages = messages.stream().map(message -> {
+            JsonObject approximate = message.deepCopy();
+            approximate.getAsJsonObject("raw").getAsJsonObject("summarizeMetadata").addProperty("timestampSource", "turn");
+            return approximate;
+        }).toList();
+        assertTrue(HistoryMessageInjector.requiresLegacyProjection(nativePage, legacyPage));
+    }
+    @Test
+    public void nativeProjectionWithSomeToolsStillFallsBackWhenOtherStoredToolsAreMissing() {
+        var nativePage = new HistoryMessageInjector.CodexHistoryPage();
+        var legacyPage = new HistoryMessageInjector.CodexHistoryPage();
+        JsonObject one = com.google.gson.JsonParser.parseString("""
+                {"type":"assistant","raw":{"content":[{"type":"tool_use","id":"one"}]}}
+                """).getAsJsonObject();
+        JsonObject two = one.deepCopy();
+        two.getAsJsonObject("raw").getAsJsonArray("content").add(
+                com.google.gson.JsonParser.parseString("{\"type\":\"tool_use\",\"id\":\"two\"}"));
+        nativePage.messages.add(one);
+        legacyPage.messages.add(two);
+        assertTrue(HistoryMessageInjector.requiresLegacyProjection(nativePage, legacyPage));
+        legacyPage.messages = List.of(one);
+        assertFalse(HistoryMessageInjector.requiresLegacyProjection(nativePage, legacyPage));
+        nativePage.messages = List.of(one.deepCopy());
+        one.getAsJsonObject("raw").add("usage", new JsonObject());
+        assertTrue(HistoryMessageInjector.requiresLegacyProjection(nativePage, legacyPage));
+    }
+    /** Extra native exec cards must not beat an independently restored projection merely by increasing the count. */
+    @Test
+    public void prefersTheProjectionThatAlreadyRestoredThisExactWrapper() {
+        var nativePage = new HistoryMessageInjector.CodexHistoryPage();
+        var legacyPage = new HistoryMessageInjector.CodexHistoryPage();
+        JsonArray records = new JsonArray();
+        records.add(customToolCall("2026-10-03T00:00:00Z", "known", "exec",
+                "text(await tools.exec_command({cmd:'npm test'}));"));
+        records.add(customToolCallOutput("2026-10-03T00:00:01Z", "known", "{\"exit_code\":0,\"output\":\"passed\"}"));
+        legacyPage.messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        JsonObject extra = com.google.gson.JsonParser.parseString("""
+                {"type":"assistant","raw":{"message":{"content":[{"type":"tool_use","id":"known","name":"exec"}]}}}
+                """).getAsJsonObject();
+        nativePage.messages.addAll(legacyPage.messages);
+        nativePage.messages.add(extra);
+        assertTrue(HistoryMessageInjector.requiresLegacyProjection(nativePage, legacyPage));
+        extra.getAsJsonObject("raw").getAsJsonObject("message").getAsJsonArray("content")
+                .get(0).getAsJsonObject().addProperty("id", "unrelated");
+        assertFalse(HistoryMessageInjector.requiresLegacyProjection(nativePage, legacyPage));
+        records.remove(records.size() - 1);
+        legacyPage.messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        extra.getAsJsonObject("raw").getAsJsonObject("message").getAsJsonArray("content")
+                .get(0).getAsJsonObject().addProperty("id", "known");
+        assertFalse(HistoryMessageInjector.requiresLegacyProjection(nativePage, legacyPage));
+    }
+
+    @Test
+    public void mixedExecWrapperRetainsUnsupportedWorkAndItsOutput() {
+        JsonArray records = new JsonArray();
+        records.add(customToolCall("2026-10-02T00:00:00Z", "mixed", "functions.exec",
+                "await tools.exec_command({cmd:'pwd'}); await tools.custom_lookup({value:1});"));
+        List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        assertEquals(1, result.size());
+        assertTrue(result.toString().contains("custom_lookup"));
+        assertTrue(result.toString().contains("functions.exec"));
+    }
 
     @Test
     public void staleGenerationCannotPublishMessagesOrCompletion() {
@@ -343,7 +721,7 @@ public class HistoryMessageInjectorTest {
 
         List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
 
-        assertEquals(3, result.size());
+        assertEquals(5, result.size());
         JsonArray toolUses = result.get(0).getAsJsonObject("raw").getAsJsonArray("content");
         assertEquals(3, toolUses.size());
         assertEquals("tool_use", toolUses.get(0).getAsJsonObject().get("type").getAsString());
@@ -366,10 +744,9 @@ public class HistoryMessageInjectorTest {
                 toolUses.get(2).getAsJsonObject().get("id").getAsString(),
                 toolResults.get(2).getAsJsonObject().get("tool_use_id").getAsString()
         );
-        assertEquals("visible assistant reply", result.get(2).get("content").getAsString());
+        assertEquals("visible assistant reply", result.get(4).get("content").getAsString());
         assertFalse(result.toString().contains("const cmds"));
-        assertFalse(result.toString().contains("cell_id"));
-        assertFalse(result.toString().contains("max_tokens"));
+        assertEquals("wait", getOnlyRawContentBlock(result.get(2)).get("name").getAsString());
     }
 
     @Test
@@ -473,7 +850,7 @@ public class HistoryMessageInjectorTest {
 
         List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
 
-        assertTrue(result.isEmpty());
+        assertEquals("exec", getOnlyRawContentBlock(result.get(0)).get("name").getAsString());
     }
 
     @Test
@@ -495,7 +872,8 @@ public class HistoryMessageInjectorTest {
 
         List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
 
-        assertTrue(result.isEmpty());
+        assertEquals(2, result.size());
+        assertFalse(result.toString().contains("\"name\":\"todowrite\""));
     }
 
     @Test
@@ -512,7 +890,7 @@ public class HistoryMessageInjectorTest {
 
         List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
 
-        assertTrue(result.isEmpty());
+        assertEquals("exec", getOnlyRawContentBlock(result.get(0)).get("name").getAsString());
     }
 
     @Test
@@ -534,7 +912,7 @@ public class HistoryMessageInjectorTest {
     }
 
     @Test
-    public void convertCodexMessagesSkipsWaitAndNonShellExecProtocolCards() {
+    public void convertCodexMessagesKeepsUnprojectedExecAndWaitCards() {
         JsonArray messages = new JsonArray();
         messages.add(customToolCall(
                 "2026-07-23T02:00:00.000Z",
@@ -549,11 +927,10 @@ public class HistoryMessageInjectorTest {
 
         List<JsonObject> result = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(messages);
 
-        assertEquals(1, result.size());
-        assertEquals("done", result.get(0).get("content").getAsString());
-        assertFalse(result.toString().contains("exec"));
-        assertFalse(result.toString().contains("cell_id"));
-        assertFalse(result.toString().contains("max_tokens"));
+        assertEquals(4, result.size());
+        assertEquals("done", result.get(3).get("content").getAsString());
+        assertEquals("exec", getOnlyRawContentBlock(result.get(0)).get("name").getAsString());
+        assertEquals("wait", getOnlyRawContentBlock(result.get(2)).get("name").getAsString());
     }
 
     @Test

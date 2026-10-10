@@ -78,6 +78,10 @@ export const PermissionsPanel = ({ currentProvider, basicActions }: SettingsTabP
   currentProvider === 'codex' ? (
     <PermissionsSection
       codexSandboxMode={basicActions.codexSandboxMode}
+      codexSandboxSource={basicActions.codexSandboxSource}
+      codexSandboxDesired={basicActions.codexSandboxDesired}
+      codexSandboxEffective={basicActions.codexSandboxEffective}
+      codexSandboxConflict={basicActions.codexSandboxConflict}
       onCodexSandboxModeChange={basicActions.handleCodexSandboxModeChange}
     />
   ) : (

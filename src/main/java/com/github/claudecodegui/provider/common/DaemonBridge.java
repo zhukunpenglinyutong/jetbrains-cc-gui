@@ -509,6 +509,17 @@ public class DaemonBridge {
     }
 
     /**
+     * Process generation counter of the current daemon context, or -1 when no
+     * daemon is running. Increments on every process launch, including restarts
+     * on this same bridge object (auto-restart after death, idle-retire
+     * revival), so callers can tell which daemon process produced an event.
+     */
+    public long getCurrentDaemonGeneration() {
+        DaemonGenerationContext context = daemonContext;
+        return context != null ? context.generation : -1L;
+    }
+
+    /**
      * Returns the underlying daemon Process for inspection by NodeProcessRegistry.
      * May be null when no daemon is running. Callers must NOT destroy/kill through
      * this reference — always go through stop() to keep state consistent.
@@ -596,6 +607,11 @@ public class DaemonBridge {
                     context.stdin.flush();
                 }
                 LOG.info("[DaemonBridge] Sent request " + requestId + ": " + method);
+                if (method.startsWith("codex.") && params != null) {
+                    // Routing identities reveal duplicate runtimes without logging prompts or credentials.
+                    LOG.info("[CodexRoute] request=" + requestId + ", channel=" + params.get("channelId")
+                            + ", epoch=" + params.get("sessionEpoch") + ", thread=" + params.get("threadId"));
+                }
             } catch (IOException e) {
                 context.removeRequest(requestId);
                 future.completeExceptionally(e);
@@ -792,7 +808,12 @@ public class DaemonBridge {
             // Command completion
             if (obj.has("done")) {
                 boolean success = obj.has("success") && obj.get("success").getAsBoolean();
-                if (!success && obj.has("error")) {
+                handler.callback.onResult(obj);
+                if (obj.has("aborted") && obj.get("aborted").getAsBoolean()) {
+                    handler.onAbort();
+                    context.removeRequest(id);
+                    return;
+                } else if (!success && obj.has("error")) {
                     handler.onError(obj.get("error").getAsString());
                 }
                 handler.onComplete(success);
@@ -818,7 +839,20 @@ public class DaemonBridge {
 
     private void handleDaemonEvent(JsonObject obj, DaemonGenerationContext context) {
         String event = obj.has("event") ? obj.get("event").getAsString() : "unknown";
-        LOG.info("[DaemonBridge] Daemon event: " + event);
+        if ("codex_event".equals(event)) {
+            if (obj.has("kind") && obj.get("kind").isJsonPrimitive()
+                    && "runtimeStateChanged".equals(obj.get("kind").getAsString())
+                    && obj.has("payload") && obj.get("payload").isJsonObject()) {
+                JsonObject state = obj.getAsJsonObject("payload");
+                LOG.info("[CodexRuntime] channel=" + obj.get("channelId") + ", epoch=" + obj.get("sessionEpoch")
+                        + ", state=" + state.get("state") + ", generation=" + state.get("runtimeGeneration")
+                        + ", launcherPid=" + state.get("runtimePid"));
+            } else {
+                LOG.debug("[DaemonBridge] Codex notification received");
+            }
+        } else {
+            LOG.info("[DaemonBridge] Daemon event: " + event);
+        }
 
         switch (event) {
             case "ready":
@@ -927,6 +961,22 @@ public class DaemonBridge {
                         listener.onDaemonEvent(event, obj);
                     } catch (Exception ex) {
                         LOG.warn("[DaemonBridge] Listener threw while handling " + event, ex);
+                    }
+                }
+                break;
+            }
+
+            case "codex_event": {
+                // Structured Codex runtime event (task 6.4). Dispatched to
+                // listeners with the full payload so the session layer can
+                // route by thread/turn/item identity; the daemon guarantees
+                // these are process-level events never wrapped by a request id.
+                LOG.debug("[DaemonBridge] codex_event received");
+                for (DaemonEventListener listener : eventListeners) {
+                    try {
+                        listener.onDaemonEvent(event, obj);
+                    } catch (Exception ex) {
+                        LOG.warn("[DaemonBridge] Listener threw while handling codex_event", ex);
                     }
                 }
                 break;
@@ -1668,6 +1718,11 @@ public class DaemonBridge {
         void onStderr(String text);
         void onError(String error);
         void onComplete(boolean success);
+
+        /** Receives the complete daemon response before the completion callback. */
+        default void onResult(JsonObject response) {
+            // Most streaming callers only need line and completion callbacks.
+        }
 
         /**
          * Called when the user manually aborts the request.

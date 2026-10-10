@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
 interface AgentGroupHeaderProps {
-  toolName: string;
   agentType: string;
   summary: string;
   expanded: boolean;
@@ -11,7 +10,6 @@ interface AgentGroupHeaderProps {
 }
 
 function AgentGroupHeader({
-  toolName,
   agentType,
   summary,
   expanded,
@@ -38,7 +36,7 @@ function AgentGroupHeader({
       <div className="task-title-section">
         <span className="codicon codicon-type-hierarchy tool-title-icon" />
         <span className="tool-title-text">
-          {toolName === 'spawn_agent' ? 'spawn_agent' : t('tools.agent', 'Agent')}
+          {t('tools.agent', 'Agent')}
         </span>
         {agentType && (
           <span className="tool-title-summary">{agentType}</span>

@@ -9,6 +9,9 @@ import {
   normalizeToolName,
 } from '../utils/toolConstants';
 import { normalizeToolInput } from '../utils/toolInputNormalization';
+import { readPatchFiles, readPatchOutcome } from '../utils/codexPatch';
+import { collectPatchLedger } from '../utils/patchLedger';
+import { PATCH_TOOL_NAMES } from '../utils/toolConstants';
 import { getToolLineInfo } from '../utils/toolPresentation';
 import {
   buildSessionFileLedger,
@@ -188,6 +191,8 @@ function sameFileChangeSummaries(a: FileChangeSummary[], b: FileChangeSummary[])
         || p.replaceAll !== q.replaceAll
         || p.lineStart !== q.lineStart
         || p.lineEnd !== q.lineEnd
+        || p.toolUseId !== q.toolUseId || p.fileChangeKind !== q.fileChangeKind || p.moveFrom !== q.moveFrom
+        || p.patch !== q.patch || p.ledgerKey !== q.ledgerKey || p.oldStringKnown !== q.oldStringKnown
       ) {
         return false;
       }
@@ -209,6 +214,14 @@ interface FileToolInput {
 function collectLedgerOpsFromToolUse(params: FileToolInput, out: LedgerOp[]): void {
   const { sourceId, toolUseId, toolName, rawName, input, result, agentId } = params;
   if (!isToolName(toolName, FILE_MODIFY_TOOL_NAMES)) return;
+  if (isToolName(toolName, PATCH_TOOL_NAMES)) {
+    const outcome = readPatchOutcome(input, result);
+    if (!outcome.isCompleted || outcome.isError || outcome.isUnknown) return;
+    for (const file of readPatchFiles(input)) {
+      out.push(...collectPatchLedger(file, { sourceId, toolUseId, agentId }));
+    }
+    return;
+  }
   if (!isSuccessfulResult(result)) return;
 
   const normalized = normalizeToolInput(rawName ?? toolName, input) as Record<string, unknown>;
@@ -335,6 +348,7 @@ interface UseFileChangesParams {
   findToolResult: (toolUseId?: string, messageIndex?: number) => ToolResultBlock | null;
   /** Start processing messages from this index (for Keep All feature) */
   startFromIndex?: number;
+  ignoredLedgerKeys?: string[];
   /** Background agent sidechain transcripts — their Edit/Write tools must also count */
   subagentHistories?: Record<string, SubagentHistoryResponse>;
   /** Current chat tab session id — for cross-tab multi-agent marks */
@@ -390,6 +404,7 @@ export function useFileChanges({
   getContentBlocks,
   findToolResult,
   startFromIndex = 0,
+  ignoredLedgerKeys,
   subagentHistories,
   currentSessionId = null,
 }: UseFileChangesParams): FileChangeSummary[] {
@@ -467,11 +482,13 @@ export function useFileChanges({
   }, [messages, getContentBlocks, findToolResult, startFromIndex, subagentHistories, cache]);
 
   const ops = useMemo(() => {
-    const next: LedgerOp[] = [];
-    for (const input of inputs) collectLedgerOpsFromToolUse(input, next);
+    const collected: LedgerOp[] = [];
+    for (const input of inputs) collectLedgerOpsFromToolUse(input, collected);
+    const ignored = new Set(ignoredLedgerKeys);
+    const next = ignored.size ? collected.filter(op => !ignored.has(JSON.stringify([op.sourceId, op.toolUseId, op.filePath]))) : collected;
     if (!sameLedgerOps(cache.ops, next)) cache.ops = next;
     return cache.ops;
-  }, [inputs, cache]);
+  }, [inputs, cache, ignoredLedgerKeys]);
 
   const base = useMemo(() => {
     const entries = buildSessionFileLedger(ops);

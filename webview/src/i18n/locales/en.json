@@ -138,14 +138,32 @@
       "openTooltip": "Search in conversation (Cmd/Ctrl+F)"
     },
     "compactSummary": {
+      "receivedTime": "Recorded time",
       "summarizedConversation": "Summarized conversation",
       "compactSummary": "Compact summary",
       "messagesUpTo": "Summarized {{count}} messages up to this point",
       "messagesFrom": "Summarized {{count}} messages from this point",
       "userContext": "Context: \"{{context}}\"",
       "expand": "Expand summary",
-      "collapse": "Collapse summary"
-    }
+      "collapse": "Collapse summary",
+      "nativeCompleted": "Context compacted",
+      "nativeInProgress": "Compacting context",
+      "nativeFailed": "Compaction failed",
+      "nativeInterrupted": "Compaction interrupted",
+      "writerOccupied": "This conversation's native write lock is occupied. It may be held by this plugin's runtime or another Codex process. Check whether the conversation is still loaded in another window or in the background.",
+      "manual": "Manual",
+      "auto": "Automatic",
+      "timeUnknown": "Time unavailable",
+      "turnTime": "Turn start time"
+    },
+    "codexCompactUsage": "Use /compact without arguments",
+    "codexCompactStarted": "Codex is compacting the conversation",
+    "codexReviewUsage": "Use /review without arguments",
+    "codexReviewStarted": "Codex is reviewing the workspace",
+    "codexDiffUsage": "Use /diff without arguments",
+    "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
+    "continueRefiningPlan": "Continue refining this plan:"
   },
   "settings": {
     "title": "Settings",
@@ -638,6 +656,10 @@
       "copied": "Copied to clipboard",
       "copyFailed": "Failed to copy",
       "tools": {
+        "codex": {
+          "name": "Codex CLI",
+          "description": "Detect the installed Codex CLI. Version probing reads no account configuration; chat uses app-server."
+        },
         "minimax": {
           "name": "MiniMax Code",
           "description": "MiniMax terminal coding agent. Requires Node.js 22.19+ / 24+ (not 23); commands: minimax / mcode"
@@ -753,8 +775,8 @@
       "installPolicyTip": "Installation issues? Copy the error to a terminal CLI AI to resolve",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Required for Claude AI features. Includes Claude Code SDK and related dependencies.",
-      "codexSdkName": "Codex SDK",
-      "codexSdkDescription": "Required for Codex AI features. Includes OpenAI Codex SDK.",
+      "codexSdkName": "Codex CLI",
+      "codexSdkDescription": "Required for Codex AI features. Detect the installed official Codex CLI (@openai/codex) on the CLI page; chat runs through app-server.",
       "loading": "Loading dependency status...",
       "install": "Install",
       "installing": "Installing...",
@@ -781,7 +803,8 @@
       "uninstallSuccess": "{{name}} has been uninstalled",
       "uninstallFailed": "Uninstall failed: {{error}}",
       "updating": "Updating...",
-      "updateSuccess": "{{name}} updated successfully"
+      "updateSuccess": "{{name}} updated successfully",
+      "cliTransportBadge": "CLI · {{transport}}"
     },
     "usage": "Usage Statistics",
     "usageDesc": "View your Token consumption, cost statistics and usage trend analysis",
@@ -791,6 +814,9 @@
     "permissionsDesc": "Manage Claude Code file access and operation permissions",
     "codexPermissionsDesc": "Manage Codex permissions and sandbox policies",
     "permissionsPanel": {
+      "desired": "Desired: {{mode}}",
+      "effective": "Effective: {{mode}}",
+      "conflict": "Native policy rejected the requested access range.",
       "codexSandboxTitle": "Codex Sandbox Mode",
       "codexSandboxDesc": "Control system access boundaries when Codex executes commands. Defaults to the safer workspace-write (read/write within the workspace only). Switch to danger-full-access for system-level commands such as adb or docker.",
       "workspaceWriteTitle": "workspace-write",
@@ -798,7 +824,9 @@
       "fullAccessTitle": "danger-full-access",
       "fullAccessDesc": "Allows higher system access, suitable for commands like adb or docker that require extra permissions.",
       "hint": "This setting only affects Codex process sandboxing and does not change Claude Code permission behavior.",
-      "claudeTip": "Claude Code approval mode is configured from the chat input mode selector."
+      "source": "Source: {{source}}",
+      "readOnlyTitle": "Read only",
+      "readOnlyDesc": "Inspect files without writing to the workspace."
     },
     "commit": {
       "title": "Commit AI",
@@ -1400,7 +1428,8 @@
       "hoursAgo": "hours ago",
       "minutesAgo": "minutes ago",
       "secondsAgo": "seconds ago"
-    }
+    },
+    "loadMore": "Load more"
   },
   "permission": {
     "dialogTitle": "Permission Request",
@@ -1422,7 +1451,12 @@
       "execute": "Execute {{toolName}}",
       "readDirectory": "Read Directory",
       "timeoutWarning": "Please answer soon, dialog will close in {{seconds}} seconds"
-    }
+    },
+    "userCancelled": "Permission request cancelled",
+    "previewUnavailable": "Native file preview is unavailable. You can deny or cancel this request.",
+    "requestedPermissions": "Requested native permissions",
+    "allowWithRule": "Allow with this command rule",
+    "allowWithNetworkRule": "Allow with this network rule"
   },
   "askUserQuestion": {
     "title": "Claude has some questions for you",
@@ -1754,11 +1788,26 @@
     "noParams": "No Parameters",
     "required": "Required",
     "optional": "Optional",
-    "refreshServer": "Refresh {{name}}"
+    "refreshServer": "Refresh {{name}}",
+    "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
     "toolCall": "Tool Call",
     "runCommand": "Run Command",
+    "commandRead": "Read {{path}}",
+    "commandList": "List {{path}}",
+    "commandSearch": "Search {{query}} in {{path}}",
+    "commandApprovalReason": "Approval reason",
+    "patchToggleDiff": "Show changes",
+    "errorOutput": "Error output",
+    "resultUnknown": "Individual tool result unavailable",
+    "patchNoDiff": "Diff unavailable",
+    "patchKind": {
+      "add": "Added",
+      "delete": "Deleted",
+      "update": "Updated",
+      "move": "Moved"
+    },
     "contextEngine": "Context Engine",
     "task": "Task",
     "agent": "Agent",
@@ -2189,6 +2238,20 @@
       "description": "Fully automated, bypassing all permission checks [Use with caution]"
     }
   },
+  "workspaceDiff": {
+    "title": "Workspace changes",
+    "staged": "Staged",
+    "unstaged": "Unstaged",
+    "untracked": "Untracked",
+    "noChanges": "No changes detected",
+    "binary": "Binary",
+    "truncated": "The workspace snapshot was too large and has been truncated",
+    "notGit": "The current directory is not a Git working tree",
+    "refresh": "Refresh",
+    "fileCount": "{{count}} files",
+    "fileCount_one": "{{count}} file",
+    "fileCount_other": "{{count}} files"
+  },
   "codexModes": {
     "default": {
       "label": "Suggest (approval)",
@@ -2198,8 +2261,8 @@
     "plan": {
       "label": "Plan Mode",
       "shortLabel": "Plan",
-      "tooltip": "Plan mode - read-only analysis",
-      "description": "Uses only read-only tools, generates plan for user approval"
+      "tooltip": "Native collaboration plan mode",
+      "description": "Builds a native plan before implementation; sandbox and approvals stay independent"
     },
     "acceptEdits": {
       "label": "Auto Edit",
@@ -2458,12 +2521,29 @@
   },
   "dshPresets": {
     "title": "Select DeepSeek Harness agent preset",
-    "none": { "label": "Default", "description": "dsh default headless composition (full toolset)" },
-    "standard": { "label": "Standard", "description": "Full coding agent with the standard toolset" },
-    "code": { "label": "PTC", "description": "Standard capabilities with Code Mode" },
-    "minimal": { "label": "Minimal", "description": "Bash and str_replace_editor only" },
-    "cordis": { "label": "Creator", "description": "Standard capabilities plus composition authoring" },
-    "user": { "description": "Custom preset installed under the DSH home" }
+    "none": {
+      "label": "Default",
+      "description": "dsh default headless composition (full toolset)"
+    },
+    "standard": {
+      "label": "Standard",
+      "description": "Full coding agent with the standard toolset"
+    },
+    "code": {
+      "label": "PTC",
+      "description": "Standard capabilities with Code Mode"
+    },
+    "minimal": {
+      "label": "Minimal",
+      "description": "Bash and str_replace_editor only"
+    },
+    "cordis": {
+      "label": "Creator",
+      "description": "Standard capabilities plus composition authoring"
+    },
+    "user": {
+      "description": "Custom preset installed under the DSH home"
+    }
   },
   "error": {
     "providerNotConfigured": "Provider Not Configured",
@@ -2477,8 +2557,8 @@
     "recommended": "Recommended",
     "codexWriterConflict": {
       "title": "Codex thread is busy",
-      "intro": "When the new turn started, the previous turn's Codex process was still writing to this thread. The plugin now stops the previous turn automatically before sending.",
-      "reason": "Wait a few seconds and resend the message — there is no need to create a new session."
+      "intro": "Another Codex turn or client is writing to this conversation. This send could not start.",
+      "reason": "Stop the turn in the client using this conversation, then send again after it has ended."
     },
     "codexThreadResume": {
       "title": "Session thread is no longer valid",
@@ -2517,6 +2597,32 @@
           "step1": "2. Open Dependency Management and reinstall the latest SDK:"
         }
       }
+    },
+    "codexCliUnavailable": {
+      "title": "Codex CLI could not start",
+      "intro": "The Codex CLI runtime exited before it could answer. The failed CLI path and its own output are listed in the error above. This is usually an incomplete Codex CLI installation rather than a plugin bug.",
+      "reason": "The plugin starts \"codex app-server\" from the Codex CLI found on your machine. A half-installed copy - for example a global npm install whose platform binary is missing - exits with code 1 and takes the turn down with it.",
+      "solutions": {
+        "reinstallCodexCli": {
+          "title": "Option 1: Remove the broken install and reinstall the official CLI",
+          "step0": "1. Remove the stale global install (having two copies is the most common cause):",
+          "step1": "2. Install the official CLI again, from the official npm registry rather than a mirror:",
+          "step2": "3. Check that the CLI answers before sending again:"
+        },
+        "pointCodexBin": {
+          "title": "Option 2: Point the plugin at a working binary",
+          "step0": "List every codex on your PATH (on Windows: where codex). If the working one is not first, set the CODEX_BIN environment variable to its full path and restart the IDE. The plugin also falls back to later installs automatically."
+        }
+      }
+    }
+  },
+  "codex": {
+    "plan": {
+      "title": "Codex plan",
+      "ready": "Plan ready",
+      "execute": "Execute plan",
+      "executing": "Executing…",
+      "adjust": "Continue adjusting"
     }
   }
 }

@@ -127,6 +127,10 @@ interface Window {
     hasMore: boolean;
     loadedMessageCount: number;
     cursorReset?: boolean;
+    source?: 'native' | 'legacy';
+    cursor?: unknown;
+    requestCursor?: unknown;
+    partial?: boolean;
   };
 
   // Claude history pagination callbacks
@@ -175,6 +179,18 @@ interface Window {
    * StatusPanel uses to mark a background (run_in_background) Agent subagent as completed.
    */
   onTaskEvent?: (eventJson: string) => void;
+
+  /** Structured native Codex app-server event envelope. */
+  onCodexRuntimeEvent?: (eventJson: string) => void;
+  /** Native Codex catalog/history response envelope. */
+  onCodexNativeData?: (json: string) => void;
+  loadCodexHistoryPage?: (cursor: unknown) => void;
+  onCodexWorkspaceDiff?: (json: string) => void;
+  onCodexInteractionResponse?: (json: string) => void;
+  __pendingCodexWorkspaceDiff?: string;
+  __pendingCodexRuntimeEvents?: string[];
+  __pendingCodexNativeData?: string[];
+  __codexFrontendPageGeneration?: number;
 
   /**
    * SDK-to-CLI session conversion result callback.
@@ -913,7 +929,9 @@ interface Window {
   /** Backend index represented by the first non-prepended message; zero means its full prefix is present. */
   __messageBaseIndex?: number;
   /** Cancel the pending deferred updateMessages (set by messageCallbacks, called by stream lifecycle guards). */
-  __cancelPendingUpdateMessages?: () => void;
+    __cancelPendingUpdateMessages?: () => void;
+    /** Commit the pending complete transcript before native stream finalization. */
+    __flushPendingUpdateMessages?: () => void;
 
   /**
    * Rewind result callback - returns the result of a rewind operation
@@ -1175,7 +1193,7 @@ interface Window {
       | {
           success?: boolean;
           provider?: string;
-          models?: Array<{ id?: string; label?: string; description?: string }>;
+          models?: Array<{ id?: string; label?: string; description?: string; supportedReasoningEfforts?: string[] }>;
           /** Dynamic model roles (omp); description = resolved model selector. */
           roles?: Array<{ id?: string; label?: string; description?: string }>;
           error?: string;

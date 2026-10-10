@@ -10,6 +10,9 @@ describe('normalizeToolName', () => {
   it('lowercases standard names', () => {
     expect(normalizeToolName('Edit')).toBe('edit');
     expect(normalizeToolName('Write')).toBe('write');
+    expect(normalizeToolName('functions.apply_patch')).toBe('apply_patch');
+    expect(normalizeToolName('tools.apply_patch')).toBe('apply_patch');
+    expect(normalizeToolName('collaboration.spawn_agent')).toBe('spawn_agent');
   });
 
   it('maps "Search Replace" (Grok UI name) to search_replace', () => {

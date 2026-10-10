@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ToolResultBlock } from '../types';
 import {
   extractResultText,
+  extractAgentResultText,
   hasSubagentTranscript,
   isAsyncAgentInput,
   isSpawnAgentArgumentFailureNoise,
@@ -9,6 +10,20 @@ import {
   parseSpawnAgentMeta,
   readToolUseStatus,
 } from './subagentResult';
+
+describe('extractAgentResultText', () => {
+  it('keeps launch identity out of the final-report area', () => {
+    expect(extractAgentResultText({ type: 'tool_result', tool_use_id: 'launch',
+      content: '{"task_name":"/root/review_ui"}' }, 'spawn_agent')).toBeUndefined();
+  });
+
+  it('preserves structured reports and launch failures that include task metadata', () => {
+    for (const content of ['{"task_name":"/root/review_ui","summary":"Review finished"}',
+      '{"task_name":"/root/review_ui","error":"Launch failed"}']) {
+      expect(extractAgentResultText({ type: 'tool_result', tool_use_id: 'launch', content }, 'spawn_agent')).toBe(content);
+    }
+  });
+});
 
 describe('isAsyncAgentInput', () => {
   it('returns true for run_in_background: true (snake_case)', () => {

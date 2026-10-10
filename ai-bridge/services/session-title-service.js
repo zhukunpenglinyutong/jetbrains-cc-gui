@@ -23,7 +23,7 @@ function isValidSessionId(sessionId) {
   return typeof sessionId === 'string' && SESSION_ID_PATTERN.test(sessionId);
 }
 
-const SESSION_TITLE_PROMPT = `Generate a concise title (3-7 words) for this coding session. The title must be in the SAME LANGUAGE as the user's message.
+export const SESSION_TITLE_PROMPT = `Generate a concise title (3-7 words) for this coding session. The title must be in the SAME LANGUAGE as the user's message.
 
 Return JSON: {"title": "..."}
 
@@ -118,7 +118,7 @@ async function hasExistingAiTitle(sessionFile) {
  * field is not set, matching the Java CodemossSettingsService default.
  * @returns {Promise<boolean>}
  */
-async function isTitleGenerationEnabled() {
+export async function isTitleGenerationEnabled() {
   try {
     const configPath = join(getCodemossDir(), 'config.json');
     const text = await readFile(configPath, 'utf8');

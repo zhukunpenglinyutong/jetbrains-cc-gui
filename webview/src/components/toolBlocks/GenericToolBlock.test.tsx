@@ -25,9 +25,46 @@ vi.mock('../../hooks/useResolvedFileLinkTooltip', () => ({
 }));
 
 describe('GenericToolBlock', () => {
+  it.each(['functions.write_stdin', 'exec'])('hides polling even outside the main message renderer: %s', name => {
+    const { container } = render(<GenericToolBlock name={name}
+      input={{ patch: 'text(await tools.write_stdin({session_id:1,chars:""}));' }} />);
+    expect(container.querySelector('.task-container')).toBeNull();
+  });
   beforeEach(() => {
     hookMocks.useResolvedFileLinkTooltip.mockReset();
     hookMocks.useResolvedFileLinkTooltip.mockReturnValue({});
+  });
+
+  it('shows the wrapper error output when details are expanded', () => {
+    const error = 'Script failed\napply_patch verification failed: Failed to find expected lines';
+    const { container } = render(<GenericToolBlock name="exec" input={{ patch: 'Mixed script input' }}
+      result={{ type: 'tool_result', is_error: true, content: error }} />);
+    fireEvent.click(container.querySelector('.task-header')!);
+    expect(screen.getByText('subagent.process.result')).toBeTruthy();
+    expect(screen.getByText(/apply_patch verification failed/)).toBeTruthy();
+    expect(container.querySelector('.tool-status-indicator.error')).toBeTruthy();
+  });
+
+  it('shows text from typed native results without dumping image data as text', () => {
+    const { container } = render(<GenericToolBlock name="inspect" input={{}}
+      result={{ type: 'tool_result', content: [{ type: 'text', text: 'Native tool output' },
+        { type: 'image', source: { type: 'url', url: 'data:image/png;base64,fixture' } }] }} />);
+    fireEvent.click(container.querySelector('.task-header')!);
+    expect(screen.getByText('Native tool output')).toBeTruthy();
+    expect(container.querySelectorAll('img')).toHaveLength(1);
+    expect(container.querySelector('.task-field-content')?.textContent).not.toContain('base64');
+  });
+
+  it('keeps typed resource-only MCP results inspectable in expanded details', () => {
+    const content = [{ type: 'resource', resource: { uri: 'fixture://sample', text: 'Embedded receipt' } },
+      { type: 'resource_link', uri: 'fixture://linked', name: 'Linked receipt' }];
+    const { container } = render(<GenericToolBlock name="read_resource" input={{}}
+      result={{ type: 'tool_result', content }} />);
+    fireEvent.click(container.querySelector('.task-header')!);
+    expect(container.querySelector('.task-details-accordion')?.textContent).toContain('fixture://sample');
+    expect(container.querySelector('.task-details-accordion')?.textContent).toContain('Embedded receipt');
+    expect(container.querySelector('.task-details-accordion')?.textContent).toContain('fixture://linked');
+    expect(container.querySelector('.tool-status-indicator.completed')).toBeTruthy();
   });
 
   it('keeps search-style tools expandable without showing a chevron icon', () => {

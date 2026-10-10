@@ -10,6 +10,7 @@ import {
   type ToolTargetInfo,
 } from '../../utils/toolPresentation';
 import { extractToolResultImages } from '../../utils/toolResultImages';
+import { extractResultText } from '../../utils/subagentResult';
 import {
   extractPatchFiles,
   getOtherParams,
@@ -107,6 +108,12 @@ export function useGenericToolState({ t, name, input, result, toolId }: UseGener
   const codicon = getToolCodicon(name, input);
   const summary = input ? resolveToolSummary(input, target, commandStr) : null;
   const otherParams = input ? getOtherParams(input) : [];
+  // Typed resources have no text or image view; keep their receipt inspectable.
+  const otherResultBlocks = Array.isArray(result?.content)
+    ? result.content.filter(block => block && block.type !== 'image' && typeof block.text !== 'string') : [];
+  const resultText = [extractResultText(result), otherResultBlocks.length ? JSON.stringify(otherResultBlocks, null, 2) : undefined]
+    .filter(Boolean).join('\n');
+  if (resultText) otherParams.push([t('subagent.process.result'), resultText]);
   // Extract all file paths for apply_patch tool
   const patchFiles = input ? extractPatchFiles(lowerName, input) : [];
 

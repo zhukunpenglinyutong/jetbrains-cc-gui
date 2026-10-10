@@ -460,6 +460,52 @@ public class ProviderManager {
     }
 
     /**
+     * Get alwaysThinkingEnabled from the currently active provider's settingsConfig.
+     * Returns {@code null} when unset or on read failure — callers decide the default.
+     */
+    public Boolean getAlwaysThinkingEnabledInActiveProvider() {
+        try {
+            JsonObject config = configReader.apply(null);
+            if (config == null || !config.has("claude") || config.get("claude").isJsonNull()) {
+                return null;
+            }
+
+            JsonObject claude = config.getAsJsonObject("claude");
+            if (!claude.has("current") || claude.get("current").isJsonNull()) {
+                return null;
+            }
+
+            String currentId = claude.get("current").getAsString();
+            if (currentId == null || currentId.trim().isEmpty()) {
+                return null;
+            }
+
+            if (!claude.has("providers") || claude.get("providers").isJsonNull()) {
+                return null;
+            }
+
+            JsonObject providers = claude.getAsJsonObject("providers");
+            if (!providers.has(currentId) || providers.get(currentId).isJsonNull()) {
+                return null;
+            }
+
+            JsonObject provider = providers.getAsJsonObject(currentId);
+            if (!provider.has("settingsConfig") || provider.get("settingsConfig").isJsonNull()) {
+                return null;
+            }
+
+            JsonObject settingsConfig = provider.getAsJsonObject("settingsConfig");
+            if (settingsConfig.has("alwaysThinkingEnabled")
+                    && !settingsConfig.get("alwaysThinkingEnabled").isJsonNull()) {
+                return settingsConfig.get("alwaysThinkingEnabled").getAsBoolean();
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to read alwaysThinkingEnabled from active provider: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
      * Apply the active provider to Claude settings.json.
      * <p>
      * Uses {@link ClaudeSettingsSyncPlan} (same rules as vscode-cc-gui): skips

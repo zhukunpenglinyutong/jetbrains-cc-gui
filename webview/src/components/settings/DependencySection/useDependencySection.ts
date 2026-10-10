@@ -66,12 +66,6 @@ export const SDK_DEFINITIONS = [
     description: 'settings.dependency.claudeSdkDescription',
     relatedProviders: ['anthropic', 'bedrock'],
   },
-  {
-    id: 'codex-sdk' as SdkId,
-    nameKey: 'settings.dependency.codexSdkName',
-    description: 'settings.dependency.codexSdkDescription',
-    relatedProviders: ['openai'],
-  },
 ];
 
 export const useDependencySection = ({ addToast, isActive }: DependencySectionProps) => {
@@ -90,7 +84,6 @@ export const useDependencySection = ({ addToast, isActive }: DependencySectionPr
   const [selectedVersions, setSelectedVersions] = useState<Record<SdkId, string>>({} as Record<SdkId, string>);
   const [loadingVersions, setLoadingVersions] = useState<Record<SdkId, boolean>>({
     'claude-sdk': false,
-    'codex-sdk': false,
   });
   const isNodePathReadyRef = useRef(false);
   const sdkStatusRef = useRef<Record<SdkId, SdkStatus>>({} as Record<SdkId, SdkStatus>);
@@ -359,7 +352,6 @@ export const useDependencySection = ({ addToast, isActive }: DependencySectionPr
     }
     setLoadingVersions({
       'claude-sdk': true,
-      'codex-sdk': true,
     });
     setStatusError(false);
     setLoading(true);

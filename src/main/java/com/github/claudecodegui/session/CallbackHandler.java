@@ -169,6 +169,17 @@ public class CallbackHandler {
     }
 
     /**
+     * Notify the active session callback about a structured Codex runtime event.
+     *
+     * @param eventJson serialized Codex daemon event envelope
+     */
+    public void notifyCodexRuntimeEvent(String eventJson) {
+        if (callback != null) {
+            callback.onCodexRuntimeEvent(eventJson);
+        }
+    }
+
+    /**
      * Notify of Claude history page metadata (for pagination).
      */
     public void notifyClaudeHistoryPageInfo(String sessionId, int fromTurn, int totalTurns, boolean hasMore, boolean cursorReset, String sessionTitle) {

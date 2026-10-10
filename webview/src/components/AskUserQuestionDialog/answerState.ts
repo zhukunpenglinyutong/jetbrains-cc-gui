@@ -12,12 +12,11 @@ export const normalizeQuestions = (rawQuestions: unknown): Question[] =>
 export const buildInitialAnswerState = (request: AskUserQuestionRequest) => {
   const questions = normalizeQuestions(request.questions);
 
-  const initialAnswers: Record<string, Set<string>> = {};
-  const initialCustomInputs: Record<string, string> = {};
-  questions.forEach((q) => {
-    initialAnswers[q.question] = new Set<string>();
-    initialCustomInputs[q.question] = '';
-  });
+  // Native question IDs are data, including names inherited by ordinary objects.
+  const initialAnswers: Record<string, Set<string>> = Object.fromEntries(
+    questions.map(q => [q.id ?? q.question, new Set<string>()]));
+  const initialCustomInputs: Record<string, string> = Object.fromEntries(
+    questions.map(q => [q.id ?? q.question, '']));
   return { initialAnswers, initialCustomInputs };
 };
 
@@ -87,10 +86,11 @@ export const formatAnswers = (
   answers: Record<string, Set<string>>,
   customInputs: Record<string, string>,
 ): Record<string, string | string[]> => {
-  const formattedAnswers: Record<string, string | string[]> = {};
+  const formattedAnswers: Record<string, string | string[]> = Object.create(null);
   questions.forEach((q) => {
-    const selectedSet = answers[q.question] || new Set<string>();
-    const customText = (customInputs[q.question] || '').trim();
+    const key = q.id ?? q.question;
+    const selectedSet = answers[key] || new Set<string>();
+    const customText = (customInputs[key] || '').trim();
 
     // Filter out the "Other" marker, get actually selected options
     const selectedLabels = Array.from(selectedSet).filter(label => label !== OTHER_OPTION_MARKER);
@@ -101,12 +101,12 @@ export const formatAnswers = (
     // wins there — the same precedence the DSH answer encoding expects, where
     // `custom` overrides the selected choice.
     if (customText) {
-      formattedAnswers[q.question] = q.multiSelect ? [...selectedLabels, customText] : customText;
+      formattedAnswers[key] = q.multiSelect ? [...selectedLabels, customText] : customText;
       return;
     }
 
     if (selectedLabels.length > 0) {
-      formattedAnswers[q.question] = q.multiSelect ? selectedLabels : selectedLabels[0]!;
+      formattedAnswers[key] = q.multiSelect ? selectedLabels : selectedLabels[0]!;
     }
   });
   return formattedAnswers;

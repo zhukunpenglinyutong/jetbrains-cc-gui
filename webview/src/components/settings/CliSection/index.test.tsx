@@ -26,6 +26,8 @@ const translations: Record<string, string> = {
   'settings.cli.copied': 'Copied',
   'settings.cli.copyFailed': 'Copy failed',
   'settings.cli.tools.grok.name': 'Grok CLI',
+  'settings.cli.tools.codex.name': 'Codex CLI',
+  'settings.cli.tools.codex.description': 'Codex CLI detected locally',
   'settings.cli.tools.grok.description': 'Grok desc',
   'settings.cli.tools.kimi.name': 'Kimi CLI',
   'settings.cli.tools.kimi.description': 'Kimi desc',
@@ -244,7 +246,7 @@ describe('CliSection', () => {
     fireEvent.click(guideButtons[0]);
 
     expect(await screen.findByRole('dialog')).toBeTruthy();
-    expect(screen.getByText(/curl -fsSL https:\/\/x\.ai\/cli\/install\.sh \| bash/)).toBeTruthy();
+    expect(screen.getAllByText('npm install -g @openai/codex').length).toBeGreaterThan(0);
     // Never triggers install via Java bridge
     const calls = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls.map((c) => String(c[0]));
     expect(calls.every((c) => !c.includes('install'))).toBe(true);
@@ -263,6 +265,6 @@ describe('CliSection', () => {
     expect(await screen.findByRole('dialog')).toBeTruthy();
 
     fireEvent.click(screen.getByText('Docs'));
-    expect(window.sendToJava).toHaveBeenCalledWith('open_browser_external:https://x.ai/cli');
+    expect(window.sendToJava).toHaveBeenCalledWith('open_browser_external:https://developers.openai.com/codex/cli/');
   });
 });

@@ -1,13 +1,7 @@
 /**
  * Codex utility functions.
- * Logging, environment config, SDK initialization, reconnect helpers, and error handling.
+ * Logging, environment config, reconnect helpers, and error handling.
  */
-
-import { loadCodexSdk, isCodexSdkAvailable } from '../../utils/sdk-loader.js';
-import { CodexPermissionMapper } from '../../utils/permission-mapper.js';
-
-// SDK cache
-let codexSdk = null;
 
 // ========== Debug Logging Configuration ==========
 // Log levels: 0 = off, 1 = errors only, 2 = warnings, 3 = info, 4 = debug, 5 = verbose
@@ -128,10 +122,9 @@ export function buildCodexCliEnvironment(baseEnv) {
 }
 
 /**
- * Sets an explicit approval reviewer in Codex CLI configuration.
- * The TypeScript SDK serializes `config` entries as `--config key=value`, while
- * approval policy and sandbox mode remain thread options. Non-auto modes explicitly
- * select the `user` reviewer so resumed threads cannot inherit `auto_review`.
+ * Adds an explicit native approval reviewer to a settings object.
+ * The persistent app-server service sends this value through thread/turn
+ * settings; it is retained here for legacy probe compatibility.
  *
  * @param {object} codexOptions
  * @param {object} permissionConfig
@@ -147,7 +140,7 @@ export function applyCodexApprovalsReviewerConfig(codexOptions, permissionConfig
 }
 
 /**
- * Check whether an installed Codex SDK can honor approvals_reviewer.
+ * Check whether an installed Codex CLI can honor approvals_reviewer.
  * @param {string|null|undefined} version
  * @returns {boolean}
  */
@@ -205,22 +198,6 @@ export const emitStatusMessage = (emitMessage, message) => {
   if (!status) return;
   emitMessage({ type: 'status', message: status });
 };
-
-/**
- * Ensure Codex SDK is loaded.
- */
-export async function ensureCodexSdk() {
-  if (!codexSdk) {
-    if (!isCodexSdkAvailable()) {
-      const error = new Error('Codex SDK not installed. Please install via Settings > Dependencies.');
-      error.code = 'SDK_NOT_INSTALLED';
-      error.provider = 'codex';
-      throw error;
-    }
-    codexSdk = await loadCodexSdk();
-  }
-  return codexSdk;
-}
 
 export const MAX_TOOL_RESULT_CHARS = 20000;
 export const RAW_EVENT_LOG_MAX_CHARS = 12000;

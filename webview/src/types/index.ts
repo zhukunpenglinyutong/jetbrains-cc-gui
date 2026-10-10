@@ -26,6 +26,12 @@ export interface CompactSummaryMetadata {
   postTokens?: number;
   /** How long the compaction took, in milliseconds. */
   durationMs?: number;
+  /** Native compaction boundary, including items with no readable summary. */
+  native?: boolean;
+  status?: string;
+  timestamp?: string | number;
+  /** Turn time is approximate; only item time identifies the actual boundary. */
+  timestampSource?: 'item' | 'turn' | 'received';
 }
 
 /**
@@ -41,12 +47,16 @@ export function isCompactSummaryMetadata(obj: unknown): obj is CompactSummaryMet
   if (m.preTokens !== undefined && typeof m.preTokens !== 'number') return false;
   if (m.postTokens !== undefined && typeof m.postTokens !== 'number') return false;
   if (m.durationMs !== undefined && typeof m.durationMs !== 'number') return false;
+  if (m.native !== undefined && typeof m.native !== 'boolean') return false;
+  if (m.status !== undefined && typeof m.status !== 'string') return false;
+  if (m.timestamp !== undefined && typeof m.timestamp !== 'string' && typeof m.timestamp !== 'number') return false;
+  if (m.timestampSource !== undefined && !['item', 'turn', 'received'].includes(m.timestampSource as string)) return false;
   return true;
 }
 
 export type ClaudeContentBlock =
   | { type: 'text'; text?: string }
-  | { type: 'thinking'; thinking?: string; text?: string }
+  | { type: 'thinking'; thinking?: string; text?: string; native?: boolean; status?: string }
   | { type: 'tool_use'; id?: string; name?: string; input?: ToolInput }
   | { type: 'image'; src?: string; mediaType?: string; alt?: string }
   | { type: 'attachment'; fileName?: string; mediaType?: string }
@@ -57,7 +67,9 @@ export type ClaudeContentBlock =
 export interface ToolResultBlock {
   type: 'tool_result';
   tool_use_id?: string;
-  content?: string | Array<{ type?: string; text?: string }>;
+  content?: string | Array<{ type?: string; text?: string; source?: {
+    type?: string; url?: string; data?: string; media_type?: string;
+  } }>;
   is_error?: boolean;
   [key: string]: unknown;
 }
@@ -104,7 +116,11 @@ export interface CodexHistoryPageInfo {
   hasMore: boolean;
   loadedMessageCount: number;
   cursorReset?: boolean;
-  /** Claude only: CLI-derived session title carried with the page payload. */
+  source?: 'native' | 'legacy';
+  cursor?: unknown;
+  requestCursor?: unknown;
+  partial?: boolean;
+    /** CLI or native thread title carried with the page payload. */
   sessionTitle?: string | null;
 }
 
@@ -138,6 +154,10 @@ export interface HistoryData {
   sessions?: HistorySessionSummary[];
   total?: number;
   favorites?: Record<string, { favoritedAt: number }>;
+  /** Native Codex history source and opaque pagination state. */
+  source?: 'native' | 'legacy';
+  cursor?: unknown;
+  partial?: boolean;
 }
 
 // File changes types

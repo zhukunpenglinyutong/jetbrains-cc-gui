@@ -82,6 +82,43 @@
           ]
         }
       ]
+    },
+    {
+      "code": "codexCliUnavailable",
+      "match": {
+        "regex": "codex app-server exited \\(code=",
+        "keywordsAll": ["Codex CLI check"]
+      },
+      "solutions": [
+        {
+          "key": "reinstallCodexCli",
+          "recommended": true,
+          "steps": [
+            {
+              "kind": "command",
+              "command": "npm uninstall -g @openai/codex"
+            },
+            {
+              "kind": "command",
+              "command": "npm install -g @openai/codex@latest"
+            },
+            {
+              "kind": "command",
+              "command": "codex --version"
+            }
+          ]
+        },
+        {
+          "key": "pointCodexBin",
+          "recommended": false,
+          "steps": [
+            {
+              "kind": "command",
+              "command": "which -a codex"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

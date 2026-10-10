@@ -126,3 +126,49 @@
     white-space: nowrap;
     opacity: 0.9;
 }
+.message-image-block {
+    padding: 0;
+    border: none;
+    background: transparent;
+    line-height: 0;
+    max-width: 100%;
+    cursor: zoom-in;
+}
+
+.user-message-images {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    max-width: 85%;
+    min-width: 0;
+    white-space: normal;
+}
+
+.user-message-images .message-image-block.user-image {
+    margin: 0;
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid var(--border-primary);
+    background: var(--bg-secondary);
+}
+
+.user-message-images .message-image-block.user-image img {
+    display: block;
+    width: clamp(96px, 24vw, 160px);
+    height: 112px;
+    max-width: 100%;
+    object-fit: cover;
+    border: none;
+    border-radius: 0;
+}
+
+.message-image-block:focus-visible,
+.image-preview-close:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 3px;
+}
+
+.image-preview-close {
+    border: none;
+}

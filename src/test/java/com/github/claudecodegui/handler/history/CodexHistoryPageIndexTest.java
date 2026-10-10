@@ -17,6 +17,140 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.Assert.*;
 
 public class CodexHistoryPageIndexTest {
+    /** Keeps a pending known call visible without committing its preview into the page cache. */
+    @Test
+    public void pagedKnownCommandMatchesFullHistoryAfterItsTerminalOutputIsAppended() throws Exception {
+        Files.writeString(this.session, user("inspect") + com.google.gson.JsonParser.parseString("""
+                {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"known",
+                "input":"text(await tools.exec_command({cmd:'npm test'}));"}}
+                """) + "\n");
+        var pending = this.index.read(this.reader, "fixture", null, 30, () -> true);
+        assertTrue(pending.messages.toString(), pending.messages.toString().contains("bash"));
+        assertFalse(pending.messages.toString().contains("tool_result"));
+        assertEquals(HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class)), pending.messages);
+        Files.writeString(this.session, com.google.gson.JsonParser.parseString("""
+                {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"known",
+                "output":[{"type":"input_text","text":"{\\"exit_code\\":0,\\"output\\":\\"passed\\"}"}]}}
+                """) + "\n", StandardOpenOption.APPEND);
+        var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+        assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+        assertTrue(full.toString().contains("passed"));
+    }
+    /** Web extensions complete at EOF and indexed web strings survive appended history pages. */
+    @Test
+    public void pagedWebReceiptsMatchFullHistoryBeforeAndAfterOuterOutput() throws Exception {
+        String call = """
+                {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"web",
+                "input":"text(await tools.web__run({open:[{ref_id:'https://example.com'}]}));"}}
+                """;
+        String receipt = """
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"thread","turn_id":"turn",
+                "item":{"type":"Extension","kind":"web.search","id":"web-item","query":"fixture","results":[]}}}
+                """;
+        Files.writeString(this.session, user("browse") + com.google.gson.JsonParser.parseString(call) + "\n"
+                + com.google.gson.JsonParser.parseString(receipt) + "\n");
+        var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+        assertEquals(3, full.size());
+        assertTrue(full.toString().contains("tool_result"));
+        assertTrue(full.toString().contains("webSearch"));
+        assertFalse(full.toString().contains("\"name\":\"exec\""));
+        assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+        Files.writeString(this.session, com.google.gson.JsonParser.parseString("""
+                {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"web",
+                "output":"Script completed\\nOutput:\\ncomplete page body"}}
+                """) + "\n" + assistant("done"), StandardOpenOption.APPEND);
+        full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+        assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+        assertTrue(full.toString().contains("complete page body"));
+        try (var tiny = new CodexHistoryPageIndex(1, 1, 64)) {
+            assertEquals(full, tiny.read(this.reader, "fixture", null, 30, () -> true).messages);
+        }
+    }
+
+    /** Completed native receipts survive EOF and remain identical after append or cache-budget fallback. */
+    @Test
+    public void pagedNativeReceiptStaysCompletedBeforeTheOuterResultArrives() throws Exception {
+        Files.writeString(this.session, user("inspect") + com.google.gson.JsonParser.parseString("""
+                {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"known",
+                "input":"text(await tools.exec_command({cmd:'npm test'}));"}}
+                """) + "\n" + com.google.gson.JsonParser.parseString("""
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"thread","turn_id":"turn",
+                "item":{"type":"CommandExecution","id":"native-command","status":"completed","exit_code":0,
+                "command":["pwsh.exe","-Command","npm test"],"stdout":"passed"}}}
+                """) + "\n");
+        var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+        assertEquals(3, full.size());
+        assertTrue(full.toString().contains("tool_result"));
+        assertFalse(full.toString().contains("\"name\":\"exec\""));
+        assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+        try (var tiny = new CodexHistoryPageIndex(1, 1, 64)) {
+            assertEquals(full, tiny.read(this.reader, "fixture", null, 30, () -> true).messages);
+        }
+        Files.writeString(this.session,
+                "{\"type\":\"response_item\",\"payload\":{\"type\":\"custom_tool_call_output\",\"call_id\":\"known\",\"output\":\"Script completed\"}}\n"
+                        + assistant("done"), StandardOpenOption.APPEND);
+        full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+        assertEquals(4, full.size());
+        assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+    }
+
+    /** Keeps recorded dynamic patch cards identical in full reads and appended cached pages. */
+    @Test
+    public void pagedDynamicFileChangesMatchFullHistoryAfterAppend() throws Exception {
+        String call = """
+                {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"dynamic",
+                "input":"await tools.apply_patch(result.output);"}}
+                """;
+        String event = """
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"thread","turn_id":"turn",
+                "item":{"type":"FileChange","id":"stored-edit","status":"completed",
+                "changes":{"a.ts":{"type":"add","content":"actual content\\n"}},"stdout":"applied","stderr":""}}}
+                """;
+        Files.writeString(this.session, user("inspect") + com.google.gson.JsonParser.parseString(call) + "\n"
+                + com.google.gson.JsonParser.parseString(event) + "\n");
+        var initial = this.index.read(this.reader, "fixture", null, 30, () -> true);
+        assertTrue(initial.messages.toString().contains("file_change"));
+        Files.writeString(this.session, """
+                {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"dynamic","output":"Script completed"}}
+                """ + assistant("done"), StandardOpenOption.APPEND);
+        var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+        var page = this.index.read(this.reader, "fixture", null, 30, () -> true);
+        assertEquals(full, page.messages);
+        assertEquals(4, page.messages.size());
+        assertEquals(page.messages, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+    }
+
+    /** Uses the same patch and compaction projection for cached pages and full reads. */
+    @Test
+    public void pagedPatchesAndCompactionBoundariesMatchFullHistory() throws Exception {
+        String patch = "*** Begin Patch\n*** Add File: a.ts\n+const a = 1;\n*** End Patch";
+        var call = new com.google.gson.JsonObject();
+        call.addProperty("type", "response_item");
+        var payload = new com.google.gson.JsonObject();
+        payload.addProperty("type", "custom_tool_call");
+        payload.addProperty("call_id", "patch-wrapper");
+        payload.addProperty("name", "exec");
+        payload.addProperty("input", "text(await tools.apply_patch(" + new Gson().toJson(patch) + ")); ");
+        call.add("payload", payload);
+        Files.writeString(this.session, user("inspect") + call + "\n"
+                + "{\"type\":\"compacted\",\"timestamp\":\"2026-10-02T10:30:00Z\",\"payload\":{\"message\":\"\"}}\n"
+                + assistant("done"));
+        var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+        var page = this.index.read(this.reader, "fixture", null, 30, () -> true);
+        assertEquals(full, page.messages);
+        assertEquals(4, page.messages.size());
+        assertTrue(page.messages.get(1).toString().contains("apply_patch"));
+        assertTrue(page.messages.get(2).getAsJsonObject("raw").get("isCompactSummary").getAsBoolean());
+        assertEquals(page.messages, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+    }
     private Path directory;
     private Path session;
     private CodexHistoryReader reader;
@@ -145,6 +279,23 @@ public class CodexHistoryPageIndexTest {
         var page = index.read(reader, "fixture", null, 1, () -> true);
         assertEquals("new", page.messages.get(0).get("content").getAsString());
         assertEquals(1, page.rawRecordCount);
+    }
+
+    @Test
+    public void sameSizeTailRewriteWithRestoredMtimeRebuildsIndex() throws Exception {
+        String prefix = user("prefix".repeat(2000));
+        Files.writeString(session, prefix + user("old"));
+        index.read(reader, "fixture", null, 1, () -> true);
+        var modified = Files.getLastModifiedTime(session);
+        Files.writeString(session, prefix + user("new"));
+        Files.setLastModifiedTime(session, modified);
+
+        var page = index.read(reader, "fixture", null, 1, () -> true);
+        assertEquals("new", page.messages.get(0).get("content").getAsString());
+        assertEquals(2, page.rawRecordCount);
+        var repeated = index.read(reader, "fixture", null, 1, () -> true);
+        assertEquals("new", repeated.messages.get(0).get("content").getAsString());
+        assertEquals(0, repeated.rawRecordCount);
     }
 
     @Test
@@ -317,6 +468,53 @@ public class CodexHistoryPageIndexTest {
 
     static String user(String text) {
         return "{\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"" + text + "\"}}\n";
+    }
+
+    /** Verifies the disk-backed page path keeps the same tools and thinking as full history. */
+    @Test
+    public void pagedHistoryRestoresExecCommandsReasoningAndHidesPageMetadata() throws Exception {
+        String source = user("<external_codex_apps_open_page>{}</external_codex_apps_open_page>")
+                + user("inspect")
+                + "{\"type\":\"response_item\",\"payload\":{\"type\":\"reasoning\",\"id\":\"r1\","
+                + "\"summary\":[{\"type\":\"summary_text\",\"text\":\"Check the transport\"}],\"encrypted_content\":\"opaque\"}}\n"
+                + "{\"type\":\"response_item\",\"payload\":{\"type\":\"custom_tool_call\",\"name\":\"exec\","
+                + "\"call_id\":\"c1\",\"input\":\"text(await tools.exec_command({cmd:'git status',workdir:'D:/demo'}));\"}}\n"
+                + "{\"type\":\"response_item\",\"payload\":{\"type\":\"custom_tool_call_output\","
+                + "\"call_id\":\"c1\",\"output\":\"On branch main\"}}\n" + assistant("done");
+        Files.writeString(this.session, source);
+        var page = this.index.read(this.reader, "fixture", null, 30, () -> true);
+        assertEquals(1, page.totalTurns);
+        assertEquals(5, page.messages.size());
+        var thinking = page.messages.get(1).getAsJsonObject("raw").getAsJsonArray("content").get(0).getAsJsonObject();
+        assertEquals("thinking", thinking.get("type").getAsString());
+        assertEquals("Check the transport", thinking.get("thinking").getAsString());
+        var tool = page.messages.get(2).getAsJsonObject("raw").getAsJsonArray("content").get(0).getAsJsonObject();
+        assertEquals("git status", tool.getAsJsonObject("input").get("command").getAsString());
+        assertTrue(page.messages.get(3).toString().contains("On branch main"));
+        assertFalse(page.messages.toString().contains("open_page"));
+        assertFalse(page.messages.toString().contains("opaque"));
+        var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+        assertEquals(full, page.messages);
+    }
+
+    /** Retains unreadable reasoning as a status boundary without exposing ciphertext or invented text. */
+    @Test
+    public void encryptedOnlyReasoningDoesNotBecomeTranscriptText() throws Exception {
+        Files.writeString(this.session, user("inspect")
+                + "{\"type\":\"response_item\",\"payload\":{\"type\":\"reasoning\",\"encrypted_content\":\"cipher\"}}\n"
+                + assistant("done"));
+        var messages = this.index.read(this.reader, "fixture", null, 30, () -> true).messages;
+        assertEquals(3, messages.size());
+        var thinking = messages.get(1).getAsJsonObject("raw").getAsJsonArray("content").get(0).getAsJsonObject();
+        assertEquals("thinking", thinking.get("type").getAsString());
+        assertEquals("", thinking.get("thinking").getAsString());
+        assertTrue(thinking.get("native").getAsBoolean());
+        assertEquals("completed", thinking.get("status").getAsString());
+        assertFalse(messages.toString().contains("cipher"));
+        var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+        assertEquals(full, messages);
     }
 
     static String assistant(String text) {

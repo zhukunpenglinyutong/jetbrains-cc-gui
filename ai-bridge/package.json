@@ -1,9 +1,10 @@
 {
   "name": "ai-bridge",
   "version": "1.0.0",
-  "description": "Unified bridge for Claude and Codex SDKs from Java",
+  "description": "Java bridge for Claude SDK and native Codex app-server",
   "type": "module",
   "dependencies": {
+    "smol-toml": "1.9.0",
     "sql.js": "^1.12.0"
   },
   "scripts": {

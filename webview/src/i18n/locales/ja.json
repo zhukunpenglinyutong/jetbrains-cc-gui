@@ -119,14 +119,32 @@
       "openTooltip": "会話内を検索 (Cmd/Ctrl+F)"
     },
     "compactSummary": {
+      "receivedTime": "記録時刻",
       "summarizedConversation": "要約された会話",
       "compactSummary": "会話の要約",
       "messagesUpTo": "この時点までの{{count}}件のメッセージを要約しました",
       "messagesFrom": "この時点以降の{{count}}件のメッセージを要約しました",
       "userContext": "コンテキスト：「{{context}}」",
       "expand": "要約を展開",
-      "collapse": "要約を折りたたむ"
-    }
+      "collapse": "要約を折りたたむ",
+      "nativeCompleted": "コンテキストを圧縮しました",
+      "nativeInProgress": "コンテキストを圧縮中",
+      "nativeFailed": "圧縮に失敗しました",
+      "nativeInterrupted": "圧縮を中断しました",
+      "writerOccupied": "この会話のネイティブ書き込みロックは使用中です。このプラグインのランタイムまたは別の Codex プロセスが保持している可能性があります。同じ会話が別のウィンドウやバックグラウンドで読み込まれていないか確認してください。",
+      "manual": "手動",
+      "auto": "自動",
+      "timeUnknown": "時刻不明",
+      "turnTime": "ターン開始時刻"
+    },
+    "codexCompactUsage": "Use /compact without arguments",
+    "codexCompactStarted": "Codex is compacting the conversation",
+    "codexReviewUsage": "Use /review without arguments",
+    "codexReviewStarted": "Codex is reviewing the workspace",
+    "codexDiffUsage": "Use /diff without arguments",
+    "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
+    "continueRefiningPlan": "このプランの改善を続ける："
   },
   "settings": {
     "title": "設定",
@@ -393,8 +411,8 @@
       "installPolicyTip": "インストールに問題がある場合、エラーをターミナルCLI AIにコピーして解決できます",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Claude AI機能に必要です。Claude Code SDKと関連依存関係が含まれます。",
-      "codexSdkName": "Codex SDK",
-      "codexSdkDescription": "Codex AI機能に必要です。OpenAI Codex SDKが含まれます。",
+      "codexSdkName": "Codex CLI",
+      "codexSdkDescription": "Codex AI 機能に必要です。CLI ページでインストール済みの公式 Codex CLI（@openai/codex）を検出し、チャットは app-server 経由で実行します。",
       "loading": "依存関係の状態を読み込み中...",
       "install": "インストール",
       "installing": "インストール中...",
@@ -410,7 +428,8 @@
       "uninstallSuccess": "{{name}}がアンインストールされました",
       "uninstallFailed": "アンインストール失敗: {{error}}",
       "updating": "更新中...",
-      "updateSuccess": "{{name}}が正常に更新されました"
+      "updateSuccess": "{{name}}が正常に更新されました",
+      "cliTransportBadge": "CLI · {{transport}}"
     },
     "usage": "使用統計",
     "usageDesc": "トークン消費量、コスト統計、使用傾向分析を表示",
@@ -856,6 +875,10 @@
       "copied": "Copied to clipboard",
       "copyFailed": "Failed to copy",
       "tools": {
+        "codex": {
+          "name": "Codex CLI",
+          "description": "インストール済みの Codex CLI を検出します。バージョン確認はアカウント設定を読み取らず、チャットは app-server を使用します。"
+        },
         "minimax": {
           "name": "MiniMax Code",
           "description": "MiniMax ターミナルコーディングエージェント。Node.js 22.19+ / 24+（23 は不可）が必要。コマンド: minimax / mcode"
@@ -905,6 +928,21 @@
         "hide": "プロバイダー切り替えメニューに表示しない",
         "show": "プロバイダー切り替えメニューに表示する"
       }
+    },
+    "permissionsPanel": {
+      "codexSandboxTitle": "Codex Sandbox Mode",
+      "codexSandboxDesc": "Control system access boundaries when Codex executes commands. Defaults to the safer workspace-write (read/write within the workspace only). Switch to danger-full-access for system-level commands such as adb or docker.",
+      "workspaceWriteTitle": "workspace-write",
+      "workspaceWriteDesc": "Read/write is limited to the workspace. System-level operations are restricted for safety.",
+      "fullAccessTitle": "danger-full-access",
+      "fullAccessDesc": "Allows higher system access, suitable for commands like adb or docker that require extra permissions.",
+      "hint": "This setting only affects Codex process sandboxing and does not change Claude Code permission behavior.",
+      "desired": "Desired: {{mode}}",
+      "effective": "Effective: {{mode}}",
+      "conflict": "Native policy rejected the requested access range.",
+      "source": "Source: {{source}}",
+      "readOnlyTitle": "Read only",
+      "readOnlyDesc": "Inspect files without writing to the workspace."
     }
   },
   "history": {
@@ -981,7 +1019,8 @@
       "sdk-cli": "このセッションはSDK経由でプラグインによって作成されており、CLIではデフォルトで表示されません。ターミナルCLIの/resumeリストに表示するには「CLIに変換」をクリックしてください",
       "claude-vscode": "このセッションはVS Code拡張機能によって作成されており、CLIではデフォルトで表示されません。ターミナルCLIの/resumeリストに表示するには「CLIに変換」をクリックしてください",
       "remote": "このセッションはリモートのClaude Codeインスタンスによって作成されました"
-    }
+    },
+    "loadMore": "Load more"
   },
   "permission": {
     "dialogTitle": "権限リクエスト",
@@ -1003,7 +1042,12 @@
       "execute": "{{toolName}}を実行",
       "readDirectory": "ディレクトリを読み取る",
       "timeoutWarning": "お早めにご回答ください。ダイアログは {{seconds}} 秒後に自動的に閉じます"
-    }
+    },
+    "userCancelled": "Permission request cancelled",
+    "previewUnavailable": "Native file preview is unavailable. You can deny or cancel this request.",
+    "requestedPermissions": "Requested native permissions",
+    "allowWithRule": "Allow with this command rule",
+    "allowWithNetworkRule": "Allow with this network rule"
   },
   "askUserQuestion": {
     "title": "Claudeからの質問があります",
@@ -1064,6 +1108,19 @@
       "loading": "プロバイダーを読み込み中...",
       "empty": "利用可能なプロバイダーがありません",
       "switched": "{{provider}} に切り替えました"
+    },
+    "codexQuota": {
+      "title": "Codex クォータ",
+      "loading": "クォータを読み込み中...",
+      "unavailable": "クォータを利用できません",
+      "lastUpdated": "{{value}} に更新",
+      "fiveHour": "5時間の使用量",
+      "weekly": "週間使用量",
+      "windowRemainingPercent": "残り {{percent}}%",
+      "windowRemainingPercentWithReset": "残り {{percent}}% · {{value}} にリセット",
+      "windowUsedOnly": "使用済み {{used}}",
+      "windowUnavailable": "利用不可",
+      "apiKeyMode": "API キーモードではサブスクリプションのクォータはありません"
     },
     "nodeProcesses": {
       "title": "Node プロセス管理",
@@ -1321,11 +1378,26 @@
     "noParams": "No Parameters",
     "required": "Required",
     "optional": "Optional",
-    "refreshServer": "Refresh {{name}}"
+    "refreshServer": "Refresh {{name}}",
+    "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
     "toolCall": "ツール呼び出し",
     "runCommand": "コマンドを実行",
+    "commandRead": "{{path}} を読む",
+    "commandList": "{{path}} を一覧表示",
+    "commandSearch": "{{path}} で {{query}} を検索",
+    "commandApprovalReason": "承認の理由",
+    "patchToggleDiff": "変更を表示",
+    "errorOutput": "エラーの詳細",
+    "resultUnknown": "個別のツール実行結果は不明です",
+    "patchNoDiff": "差分なし",
+    "patchKind": {
+      "add": "追加",
+      "delete": "削除",
+      "update": "更新",
+      "move": "移動"
+    },
     "contextEngine": "コンテキストエンジン",
     "task": "タスク",
     "promptLabel": "プロンプト",
@@ -1710,6 +1782,18 @@
       "description": "完全自動、すべての権限チェックをバイパス[注意して使用]"
     }
   },
+  "workspaceDiff": {
+    "title": "ワークスペースの変更",
+    "staged": "ステージ済み",
+    "unstaged": "未ステージ",
+    "untracked": "未追跡",
+    "noChanges": "変更は検出されませんでした",
+    "binary": "バイナリ",
+    "truncated": "ワークスペースのスナップショットが大きすぎるため切り詰められました",
+    "notGit": "現在のディレクトリは Git ワークツリーではありません",
+    "refresh": "更新",
+    "fileCount": "{{count}} 件のファイル"
+  },
   "codexModes": {
     "default": {
       "label": "Suggest (approval)",
@@ -1718,8 +1802,8 @@
     },
     "plan": {
       "label": "Plan Mode",
-      "tooltip": "Plan mode - read-only analysis",
-      "description": "Uses only read-only tools, generates plan for user approval"
+      "tooltip": "ネイティブ協業プランモード",
+      "description": "実装前にネイティブなプランを生成します。サンドボックスと承認ポリシーは独立しています"
     },
     "acceptEdits": {
       "label": "Auto Edit",
@@ -1924,8 +2008,8 @@
     "recommended": "推奨",
     "codexWriterConflict": {
       "title": "Codex スレッドが使用中",
-      "intro": "新しいターンの開始時、前のターンの Codex プロセスがまだこのスレッドに書き込んでいました。プラグインは送信前に前のターンを自動停止するようになりました。",
-      "reason": "数秒待ってからメッセージを再送してください。新しいセッションを作る必要はありません。"
+      "intro": "別の Codex ターンまたはクライアントがこの会話に書き込んでいるため、今回の送信を開始できませんでした。",
+      "reason": "この会話を使用しているクライアントでターンを停止し、終了を確認してから再送してください。"
     },
     "codexThreadResume": {
       "title": "セッションスレッドが無効です",
@@ -1964,6 +2048,32 @@
           "step1": "2. 「依存関係管理」を開いて最新の SDK を再インストール："
         }
       }
+    },
+    "codexCliUnavailable": {
+      "title": "Codex CLI を起動できませんでした",
+      "intro": "Codex CLI ランタイムが応答する前に終了しました。失敗した CLI のパスとその出力は上のエラーに表示されています。多くは Codex CLI のインストールが不完全なことが原因で、プラグインの不具合ではありません。",
+      "reason": "プラグインはマシン上で検出した Codex CLI から codex app-server を起動します。インストールが中途半端なコピー（例：グローバル npm インストールでプラットフォーム用バイナリが欠落）は終了コード 1 で終了し、そのターンも失敗します。",
+      "solutions": {
+        "reinstallCodexCli": {
+          "title": "方法 1：壊れたインストールを削除して公式 CLI を再インストール",
+          "step0": "1. まず残留したグローバルインストールを削除します（コピーが 2 つあるのが最も一般的な原因です）：",
+          "step1": "2. 公式 CLI を再インストールします（ミラーではなく公式 npm レジストリを使用してください）：",
+          "step2": "3. CLI がバージョンを返すことを確認してから再送信してください："
+        },
+        "pointCodexBin": {
+          "title": "方法 2：動作するバイナリをプラグインに指定する",
+          "step0": "PATH 上のすべての codex を一覧表示します（Windows では where codex）。動作するものが先頭でない場合は、そのフルパスを環境変数 CODEX_BIN に設定して IDE を再起動してください。プラグインは後ろのインストールにも自動でフォールバックします。"
+        }
+      }
+    }
+  },
+  "codex": {
+    "plan": {
+      "title": "Codex plan",
+      "ready": "Plan ready",
+      "execute": "Execute plan",
+      "executing": "Executing…",
+      "adjust": "Continue adjusting"
     }
   }
 }

@@ -45,6 +45,7 @@ public class CodemossSettingsService {
     private static final Logger LOG = Logger.getInstance(CodemossSettingsService.class);
     private static final int CONFIG_VERSION = 2;
     private static final String CODEX_SANDBOX_MODE_WORKSPACE_WRITE = "workspace-write";
+    private static final String CODEX_SANDBOX_MODE_READ_ONLY = "read-only";
     private static final String CODEX_SANDBOX_MODE_DANGER_FULL_ACCESS = "danger-full-access";
     private static final String UI_FONT_CONFIG_KEY = "uiFont";
     private static final String CODE_FONT_CONFIG_KEY = "codeFont";
@@ -734,6 +735,15 @@ public class CodemossSettingsService {
         return providerManager.setAlwaysThinkingEnabledInActiveProvider(enabled);
     }
 
+    /**
+     * alwaysThinkingEnabled of the active provider profile, or {@code null} when unset.
+     * Mirrors the webview toggle's read order: provider settingsConfig first,
+     * Claude settings.json as fallback.
+     */
+    public Boolean getAlwaysThinkingEnabledInActiveProvider() {
+        return providerManager.getAlwaysThinkingEnabledInActiveProvider();
+    }
+
     public void applyProviderToClaudeSettings(JsonObject provider) throws IOException {
         claudeSettingsManager.applyProviderToClaudeSettings(provider);
     }
@@ -1193,7 +1203,8 @@ public class CodemossSettingsService {
     }
 
     private boolean isValidCodexSandboxMode(String mode) {
-        return CODEX_SANDBOX_MODE_WORKSPACE_WRITE.equals(mode)
+        return CODEX_SANDBOX_MODE_READ_ONLY.equals(mode)
+                || CODEX_SANDBOX_MODE_WORKSPACE_WRITE.equals(mode)
                 || CODEX_SANDBOX_MODE_DANGER_FULL_ACCESS.equals(mode);
     }
 
@@ -2332,7 +2343,8 @@ public class CodemossSettingsService {
                 return getActiveClaudeProvider() != null && dependencyManager.isInstalled("claude-sdk");
             }
             if (AI_FEATURE_PROVIDER_CODEX.equals(provider)) {
-                return getActiveCodexProvider() != null && dependencyManager.isInstalled("codex-sdk");
+                CliToolStatus status = cliStatuses != null ? cliStatuses.get(provider) : null;
+                return this.getActiveCodexProvider() != null && status != null && status.isInstalled();
             }
             CliToolStatus status = cliStatuses != null ? cliStatuses.get(provider) : null;
             return status != null && status.isInstalled();

@@ -1,0 +1,46 @@
+{
+  "source": "Anonymized persisted native item_completed reasoning from the observed completed turn; no plaintext or encrypted content included.",
+  "sourceRecordType": "event_msg",
+  "sourcePayloadType": "item_completed",
+  "sourceWindow": {
+    "fromUtc": "2026-10-04T14:20:15.808Z",
+    "throughUtc": "2026-10-04T14:21:15.679Z"
+  },
+  "counts": {
+    "turnReasoningItems": 54,
+    "turnPlaintextItems": 2,
+    "selectedItems": 3
+  },
+  "thread": {
+    "id": "empty-history-thread",
+    "turns": [
+      {
+        "id": "empty-history-turn",
+        "status": "completed",
+        "items": [
+          {
+            "type": "reasoning",
+            "id": "empty-history-reasoning-1",
+            "summary": [],
+            "content": [],
+            "status": "completed"
+          },
+          {
+            "type": "reasoning",
+            "id": "empty-history-reasoning-2",
+            "summary": [],
+            "content": [],
+            "status": "completed"
+          },
+          {
+            "type": "reasoning",
+            "id": "empty-history-reasoning-3",
+            "summary": [],
+            "content": [],
+            "status": "completed"
+          }
+        ]
+      }
+    ]
+  }
+}

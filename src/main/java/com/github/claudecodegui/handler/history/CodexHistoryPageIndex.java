@@ -51,6 +51,11 @@ final class CodexHistoryPageIndex implements AutoCloseable {
         Path source = reader.resolveSessionFile(sessionId);
         Snapshot snapshot = Snapshot.read(source);
         Entry entry = entries.get(source);
+        if (entry != null && entry.snapshot != null && entry.snapshot.equals(snapshot)
+                && !entry.matchesContent(source)) {
+            remove(source);
+            entry = null;
+        }
         if (entry != null && !entry.snapshot.equals(snapshot) && !entry.canAppend(source, snapshot)) {
             remove(source);
             entry = null;
@@ -68,9 +73,12 @@ final class CodexHistoryPageIndex implements AutoCloseable {
             long readBytes = snapshot.size - start;
             if (entry.snapshot == null || !entry.snapshot.equals(snapshot)) {
                 Entry target = entry;
-                parsed = reader.forEachSessionMessage(source, start, snapshot.size, active, raw -> {
+                parsed = reader.forEachSessionMessage(sessionId, source, start, snapshot.size, active, raw -> {
                     HistoryMessageInjector.extractSessionMeta(raw, target.metadata);
                     target.accumulator.accept(raw);
+                    if (target.accumulator.retainedBytes() > this.maxBytes) {
+                        throw new IndexLimitException();
+                    }
                 });
                 if (entry.accumulator.retainedBytes() > maxBytes) {
                     throw new IndexLimitException();
@@ -222,8 +230,8 @@ final class CodexHistoryPageIndex implements AutoCloseable {
         private HistoryMessageInjector.CodexHistoryPage page(Integer beforeTurn, int pageSize,
                                                             BooleanSupplier active) throws IOException {
             lastAccess = System.nanoTime();
-            JsonObject pending = accumulator.pendingMessage();
-            boolean pendingTurn = pending != null && HistoryMessageInjector.isHumanUserMessage(pending);
+            List<JsonObject> pending = this.accumulator.pendingMessages();
+            boolean pendingTurn = !pending.isEmpty() && HistoryMessageInjector.isHumanUserMessage(pending.get(0));
             int totalTurns = turns.size() + (pendingTurn ? 1 : 0);
             HistoryMessageInjector.CodexHistoryPage page = new HistoryMessageInjector.CodexHistoryPage();
             page.threadId = metadata.threadId;
@@ -238,8 +246,8 @@ final class CodexHistoryPageIndex implements AutoCloseable {
                 checkActive(active);
                 page.messages.add(readMessage(index));
             }
-            if (pending != null && page.toTurn == totalTurns && page.toTurn > page.fromTurn) {
-                page.messages.add(pending);
+            if (page.toTurn == totalTurns && page.toTurn > page.fromTurn) {
+                page.messages.addAll(pending);
             }
             checkActive(active);
             return page;
@@ -247,6 +255,22 @@ final class CodexHistoryPageIndex implements AutoCloseable {
 
         private boolean canAppend(Path source, Snapshot next) throws IOException {
             if (snapshot == null || !terminated || next.size <= snapshot.size || !snapshot.sameFile(next)) {
+                return false;
+            }
+            return matchesSamples(source);
+        }
+
+        // Windows file replacement can preserve metadata. Check bounded content
+        // samples even when the snapshot appears unchanged before reusing pages.
+        private boolean matchesSamples(Path source) throws IOException {
+            try (RandomAccessFile input = new RandomAccessFile(source.toFile(), "r")) {
+                return Arrays.equals(head, sample(input, 0, head.length))
+                        && Arrays.equals(tail, sample(input, snapshot.size - tail.length, tail.length));
+            }
+        }
+
+        private boolean matchesContent(Path source) throws IOException {
+            if (head == null || tail == null || snapshot == null) {
                 return false;
             }
             try (RandomAccessFile input = new RandomAccessFile(source.toFile(), "r")) {

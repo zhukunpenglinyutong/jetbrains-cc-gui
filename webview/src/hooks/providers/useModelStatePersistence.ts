@@ -21,6 +21,13 @@ import {
 } from '../../components/ChatInputBox/types';
 import type { CodexFastMode, PermissionMode, ReasoningEffort } from '../../components/ChatInputBox/types';
 import { isCliOnlyProvider, normalizeCliPermissionMode, OMP_ROLE_MODEL_IDS } from './cliProviders';
+import {
+  migrateCodexSettingsSnapshot,
+  type CodexApprovalPreset,
+  type CodexCollaborationMode,
+  type CodexSandboxSelection,
+  type CodexSandboxSource,
+} from '../modelProviderStateHelpers';
 
 const STORAGE_KEY = 'model-selection-state';
 const REASONING_VALUES = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
@@ -84,6 +91,10 @@ export interface UseModelStatePersistenceOptions {
   setReasoningEffort: (value: ReasoningEffort) => void;
   setCodexFastMode: (value: CodexFastMode) => void;
   setDshPreset: (value: string) => void;
+  setCodexCollaborationMode?: (value: CodexCollaborationMode) => void;
+  setCodexApprovalPreset?: (value: CodexApprovalPreset) => void;
+  setCodexSandboxSelection?: (value: CodexSandboxSelection) => void;
+  setCodexSandboxSource?: (value: CodexSandboxSource) => void;
   // Cross-slice save deps (re-saves on any change)
   currentProvider: string;
   selectedClaudeModel: string;
@@ -110,6 +121,10 @@ export interface UseModelStatePersistenceOptions {
   reasoningEffort: ReasoningEffort;
   codexFastMode: CodexFastMode;
   dshPreset: string;
+  codexCollaborationMode?: CodexCollaborationMode;
+  codexApprovalPreset?: CodexApprovalPreset;
+  codexSandboxSelection?: CodexSandboxSelection;
+  codexSandboxSource?: CodexSandboxSource;
 }
 
 /**
@@ -150,6 +165,10 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     setReasoningEffort,
     setCodexFastMode,
     setDshPreset,
+    setCodexCollaborationMode,
+    setCodexApprovalPreset,
+    setCodexSandboxSelection,
+    setCodexSandboxSource,
     currentProvider,
     selectedClaudeModel,
     selectedCodexModel,
@@ -175,6 +194,10 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     reasoningEffort,
     codexFastMode,
     dshPreset,
+    codexCollaborationMode = 'default',
+    codexApprovalPreset = 'request',
+    codexSandboxSelection = 'workspace-write',
+    codexSandboxSource = 'default',
   } = options;
 
   // Hydrate from localStorage and sync to backend (mount only).
@@ -228,6 +251,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
       let restoredLongContextEnabled = true;
       let restoredCodexFastMode: CodexFastMode = 'normal';
       let restoredDshPreset = DSH_PRESET_NONE;
+      let restoredCodexSettings = migrateCodexSettingsSnapshot({});
 
       // Model validation helpers — close over the restored* lets so both
       // branches (saved localStorage / fresh backend-only) share the same logic
@@ -299,6 +323,11 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
 
       if (saved) {
         const state = JSON.parse(saved);
+        restoredCodexSettings = migrateCodexSettingsSnapshot(state);
+        setCodexCollaborationMode?.(restoredCodexSettings.collaborationMode);
+        setCodexApprovalPreset?.(restoredCodexSettings.approvalPreset);
+        setCodexSandboxSelection?.(restoredCodexSettings.sandboxSelection);
+        setCodexSandboxSource?.(restoredCodexSettings.sandboxSource);
 
         // Backend-supplied provider wins. We still fall through the rest of the
         // hydration so non-provider preferences (permission mode, reasoning
@@ -315,9 +344,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         }
         const restoredCodexMode = normalizeRestoredPermissionMode(state.codexPermissionMode);
         if (restoredCodexMode) {
-          restoredCodexPermissionMode = restoredCodexMode === 'plan'
-            ? 'default'
-            : restoredCodexMode;
+          restoredCodexPermissionMode = restoredCodexMode;
         }
         const restoredGrokMode = normalizeRestoredPermissionMode(state.grokPermissionMode);
         if (restoredGrokMode) {
@@ -436,6 +463,10 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           else if (initialTabProvider === 'omp') applyOmpModel(initialTabModel);
           else if (initialTabProvider === 'dsh') applyDshModel(initialTabModel);
         }
+        setCodexCollaborationMode?.(restoredCodexSettings.collaborationMode);
+        setCodexApprovalPreset?.(restoredCodexSettings.approvalPreset);
+        setCodexSandboxSelection?.(restoredCodexSettings.sandboxSelection);
+        setCodexSandboxSource?.(restoredCodexSettings.sandboxSource);
       }
 
       // Reconcile omp mode⇔model pairs saved by builds before the two were
@@ -529,6 +560,12 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           // The mode is only sent to Java on an explicit user switch
           // (handleModeSelect → set_mode).
           sendBridgeEvent('set_codex_fast_mode', restoredCodexFastMode);
+          sendBridgeEvent('set_codex_collaboration_mode', restoredCodexSettings.collaborationMode);
+          sendBridgeEvent('set_codex_approval_preset', restoredCodexSettings.approvalPreset);
+          sendBridgeEvent('set_codex_sandbox_selection', JSON.stringify({
+            selection: restoredCodexSettings.sandboxSelection,
+            source: restoredCodexSettings.sandboxSource,
+          }));
           if (restoredProvider === 'dsh') {
             sendBridgeEvent('set_dsh_preset', restoredDshPreset);
           }
@@ -602,6 +639,10 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           reasoningEffort,
           codexFastMode,
           dshPreset,
+          codexCollaborationMode,
+          codexApprovalPreset,
+          codexSandboxSelection,
+          codexSandboxSource,
         }));
       } catch {
         // Failed to save model selection state — non-fatal.
@@ -640,5 +681,9 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     reasoningEffort,
     codexFastMode,
     dshPreset,
+    codexCollaborationMode,
+    codexApprovalPreset,
+    codexSandboxSelection,
+    codexSandboxSource,
   ]);
 }

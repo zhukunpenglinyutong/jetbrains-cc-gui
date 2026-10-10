@@ -1,5 +1,7 @@
 # SDK 懒加载架构设计文档
 
+> 历史设计说明：当前 SDK 管理只用于 Claude。Codex 已迁入与 OpenCode 共用的 CLI 识别页面，聊天与辅助文本请求均通过 app-server；旧 codex-sdk 目录只作既有 CLI 的只读兼容来源。当前合同见 [app-server 说明](../codex/app-server.md)。
+
 ## 一、架构概述
 
 ### 1.1 设计目标

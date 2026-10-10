@@ -94,6 +94,8 @@ export interface DropdownItemData {
   label: string;
   /** Description text */
   description?: string;
+  /** Native catalog effort metadata when the provider exposes it. */
+  supportedReasoningEfforts?: string[];
   /** Icon class name */
   icon?: string;
   /** Item type */
@@ -126,6 +128,8 @@ export interface FileItem {
  * Command item (returned from Java)
  */
 export interface CommandItem {
+  /** Original path from the native Codex skill catalog. */
+  nativeSkillPath?: string;
   /** Command identifier */
   id: string;
   /** Display name */
@@ -288,6 +292,8 @@ export interface ModelInfo {
   id: string;
   label: string;
   description?: string;
+  /** Native Codex reasoning efforts advertised by model/list. */
+  supportedReasoningEfforts?: string[];
   /** True for user-defined models (Settings → custom models). */
   isCustom?: boolean;
 }

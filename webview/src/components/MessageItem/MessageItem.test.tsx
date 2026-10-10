@@ -4,6 +4,7 @@ import type { ClaudeContentBlock, ClaudeMessage, ToolResultBlock } from '../../t
 import { extractMarkdownContent } from '../../utils/copyUtils';
 import { MessageItem } from './MessageItem';
 import { useChatComputations } from '../../hooks/useChatComputations';
+import { useMessageProcessing } from '../../hooks/useMessageProcessing';
 
 vi.mock('../MarkdownBlock', () => ({
   default: ({ content }: { content: string }) => <div data-testid="markdown-block">{content}</div>,
@@ -71,6 +72,14 @@ const getContentBlocks = (message: ClaudeMessage): ClaudeContentBlock[] => {
 
 const findToolResult = (_toolId: string | undefined, _messageIndex: number): ToolResultBlock | null => null;
 
+it('leaves no message surface or divider for terminal polling wrappers', () => {
+  const { container } = renderMessageItem({ type: 'assistant', content: 'Tool: exec', raw: { message: { content: [
+    { type: 'tool_use', id: 'poll', name: 'exec', input: { patch: 'text(await tools.write_stdin({session_id:1,chars:""}));' } },
+  ] } } });
+  expect(container.querySelector('.message')).toBeNull();
+  cleanup();
+});
+
 it('does not render a memoized historical item during 30 tail text updates', () => {
   const message: ClaudeMessage = { type: 'error', content: 'historical error' };
   const sessionRef = { current: 'performance-session' };
@@ -104,27 +113,102 @@ it('does not render a memoized historical item during 30 tail text updates', () 
   cleanup();
 });
 
-function renderMessageItem(message: ClaudeMessage, options: { detailedOutputEnabled?: boolean } = {}) {
+function renderMessageItem(message: ClaudeMessage, options: {
+  detailedOutputEnabled?: boolean; currentProvider?: string; streamingActive?: boolean; isLast?: boolean;
+  getContentBlocks?: (message: ClaudeMessage) => ClaudeContentBlock[];
+} = {}) {
   return render(
     <MessageItem
       message={message}
       messageIndex={0}
       messageKey="message-0"
-      isLast={false}
-      streamingActive={false}
+      isLast={options.isLast ?? false}
+      streamingActive={options.streamingActive ?? false}
       isThinking={false}
       t={t}
       getMessageText={getMessageText}
-      getContentBlocks={getContentBlocks}
+      getContentBlocks={options.getContentBlocks ?? getContentBlocks}
       findToolResult={findToolResult}
       extractMarkdownContent={extractMarkdownContent}
       detailedOutputEnabled={options.detailedOutputEnabled}
+      currentProvider={options.currentProvider}
     />
   );
 }
 
+describe('MessageItem native thinking visibility', () => {
+  it.each([
+    { status: 'inProgress', streamingActive: true, thinking: '' },
+    { status: 'completed', streamingActive: true, thinking: '' },
+    { status: 'completed', streamingActive: false, thinking: ' \n\t' },
+    { status: 'inProgress', streamingActive: false, thinking: '' },
+    { status: undefined, streamingActive: false, thinking: '' },
+  ])('leaves no surface or divider for empty $status native thinking', ({ status, streamingActive, thinking }) => {
+    const { container } = renderMessageItem({ type: 'assistant', raw: { message: { content: [
+      { type: 'thinking', thinking, native: true, status },
+    ] } } }, { currentProvider: 'codex', isLast: true, streamingActive });
+    expect(container.querySelector('.message')).toBeNull();
+    expect(container.querySelector('.content-block')).toBeNull();
+    expect(container.textContent).toBe('');
+  });
+
+  it('hides empty native thinking beside a visible reply without leaving a content row', () => {
+    const { container } = renderMessageItem({ type: 'assistant', raw: { message: { content: [
+      { type: 'thinking', thinking: '', native: true, status: 'completed' },
+      { type: 'text', text: 'The visible reply' },
+    ] } } }, { currentProvider: 'codex' });
+    expect(container.querySelector('.message')).not.toBeNull();
+    expect(screen.queryByTestId('content-block-thinking')).toBeNull();
+    expect(screen.getByTestId('content-block-text')).toBeTruthy();
+    expect(container.querySelectorAll('.content-block')).toHaveLength(1);
+  });
+
+  it('renders a top-level reply through the real content-block fallback beside an empty native item', () => {
+    const message: ClaudeMessage = { type: 'assistant', content: 'The visible fallback reply', raw: { message: { content: [
+      { type: 'thinking', thinking: '', native: true, status: 'completed' },
+    ] } } };
+    const { result } = renderHook(() => useMessageProcessing({ messages: [message], currentSessionId: 'thread', t }));
+    const { container } = renderMessageItem(message, { currentProvider: 'codex',
+      getContentBlocks: result.current.getContentBlocks });
+    expect(container.querySelector('.message')).not.toBeNull();
+    expect(screen.getByTestId('content-block-text')).toBeTruthy();
+    expect(screen.queryByTestId('content-block-thinking')).toBeNull();
+    expect(container.querySelectorAll('.content-block')).toHaveLength(1);
+  });
+
+  it('does not let empty native thinking split a command batch', () => {
+    const { container } = renderMessageItem({ type: 'assistant', raw: { message: { content: [
+      { type: 'tool_use', id: 'first', name: 'bash', input: { command: 'first' } },
+      { type: 'thinking', thinking: '', native: true, status: 'completed' },
+      { type: 'tool_use', id: 'second', name: 'bash', input: { command: 'second' } },
+    ] } } }, { currentProvider: 'codex' });
+    expect(screen.getByTestId('bash-tool-group-block')).toBeTruthy();
+    expect(screen.queryByTestId('content-block-thinking')).toBeNull();
+    expect(container.querySelectorAll('.content-block')).toHaveLength(1);
+  });
+
+  it('keeps a supplied native summary as a visible command-batch boundary', () => {
+    const { container } = renderMessageItem({ type: 'assistant', raw: { message: { content: [
+      { type: 'tool_use', id: 'first', name: 'bash', input: { command: 'first' } },
+      { type: 'thinking', thinking: 'A public native summary', native: true, status: 'completed' },
+      { type: 'tool_use', id: 'second', name: 'bash', input: { command: 'second' } },
+    ] } } }, { currentProvider: 'codex' });
+    expect(screen.getByTestId('content-block-thinking')).toBeTruthy();
+    expect(screen.getAllByTestId('bash-tool-block')).toHaveLength(2);
+    expect(container.querySelectorAll('.content-block')).toHaveLength(3);
+  });
+
+  it('keeps the existing Claude empty thinking block', () => {
+    const { container } = renderMessageItem({ type: 'assistant', raw: { message: { content: [
+      { type: 'thinking', thinking: '' },
+    ] } } }, { currentProvider: 'claude', isLast: true, streamingActive: true });
+    expect(container.querySelector('.message')).not.toBeNull();
+    expect(screen.getByTestId('content-block-thinking')).toBeTruthy();
+  });
+});
+
 describe('MessageItem user image layout', () => {
-  it('marks image-only user messages for compact bubble layout', () => {
+  it('shows image-only messages as attachments without an empty text bubble', () => {
     const message: ClaudeMessage = {
       type: 'user',
       raw: {
@@ -134,7 +218,8 @@ describe('MessageItem user image layout', () => {
 
     const { container } = renderMessageItem(message);
 
-    expect(container.querySelector('.message-content')?.classList.contains('image-only')).toBe(true);
+    expect(container.querySelector('.message-content')).toBeNull();
+    expect(container.querySelector('.user-message-images img')).toBeTruthy();
   });
 
   it('keeps the normal bubble layout when a user image has visible text', () => {
@@ -151,6 +236,8 @@ describe('MessageItem user image layout', () => {
     const { container } = renderMessageItem(message);
 
     expect(container.querySelector('.message-content')?.classList.contains('image-only')).toBe(false);
+    expect(container.querySelector('.user-message-images img')).toBeTruthy();
+    expect(container.querySelector('.message-content img')).toBeNull();
   });
 });
 

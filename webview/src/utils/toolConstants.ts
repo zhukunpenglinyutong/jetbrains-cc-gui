@@ -3,11 +3,16 @@
  * Centralizes tool name definitions to prevent inconsistencies.
  */
 
+import { isPollingOnlyScript } from './codexPollingTool';
+
 // Read/file viewing tools
 export const READ_TOOL_NAMES = new Set(['read', 'read_file', 'read_multiple_files']);
 
-// Edit/file modification tools (message-list grouping / EditToolBlock)
+export const PATCH_TOOL_NAMES = new Set(['apply_patch', 'file_change']);
+
+// Share grouping across replacement edits and supplied patch hunks.
 export const EDIT_TOOL_NAMES = new Set([
+  ...PATCH_TOOL_NAMES,
   'edit',
   'edit_file',
   'replace_string',
@@ -63,6 +68,7 @@ export const FILE_MODIFY_TOOL_NAMES = new Set([
   'str_replace',
   'strreplace',
   'apply_patch',
+  'file_change',
 ]);
 
 /**
@@ -73,7 +79,7 @@ export const FILE_MODIFY_TOOL_NAMES = new Set([
  * Does NOT split camelCase (TaskCreate stays "taskcreate") so existing sets keep working.
  */
 export function normalizeToolName(toolName: string): string {
-  const lower = toolName.toLowerCase().trim();
+  const lower = toolName.toLowerCase().trim().replace(/^(?:tools|functions|collaboration)\./, '');
   const mcpMatch = /^mcp__[^_]+__(.+)$/.exec(lower);
   const base = mcpMatch ? mcpMatch[1] : lower;
   return base.replace(/[\s-]+/g, '_');
@@ -102,11 +108,18 @@ export function isTransientInternalToolName(toolName: string | undefined): boole
  * flag so the transient-internal branch matches the renderer's behavior.
  */
 export function isNonRenderedToolUse(
-  block: { type?: string; name?: string },
+  block: { type?: string; name?: string; input?: unknown },
   isStreaming: boolean,
 ): boolean {
   if (block.type !== 'tool_use') return false;
   const toolName = normalizeToolName(block.name ?? '');
+  if (toolName === 'subagentactivity' || toolName === 'sub_agent_activity') return true;
+  if (toolName === 'write_stdin') return true;
+  if (toolName === 'exec' && block.input && typeof block.input === 'object') {
+    const input = block.input as Record<string, unknown>;
+    const script = input.code ?? input.patch ?? input.script;
+    if (typeof script === 'string' && isPollingOnlyScript(script)) return true;
+  }
   if (toolName === 'todowrite' || toolName === 'update_plan' || TASK_MANAGE_TOOL_NAMES.has(toolName)) {
     return true;
   }

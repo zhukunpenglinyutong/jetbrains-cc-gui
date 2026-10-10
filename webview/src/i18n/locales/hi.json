@@ -119,14 +119,32 @@
       "openTooltip": "बातचीत में खोजें (Cmd/Ctrl+F)"
     },
     "compactSummary": {
+      "receivedTime": "दर्ज समय",
       "summarizedConversation": "सारांशित वार्तालाप",
       "compactSummary": "संक्षिप्त सारांश",
       "messagesUpTo": "इस बिंदु तक के {{count}} संदेश सारांशित किए गए",
       "messagesFrom": "इस बिंदु से आगे के {{count}} संदेश सारांशित किए गए",
       "userContext": "संदर्भ: \"{{context}}\"",
       "expand": "सारांश विस्तृत करें",
-      "collapse": "सारांश संक्षिप्त करें"
-    }
+      "collapse": "सारांश संक्षिप्त करें",
+      "nativeCompleted": "संदर्भ संक्षिप्त किया गया",
+      "nativeInProgress": "संदर्भ संक्षिप्त हो रहा है",
+      "nativeFailed": "संक्षेपण विफल",
+      "nativeInterrupted": "संक्षेपण बाधित",
+      "writerOccupied": "इस बातचीत का मूल लेखन लॉक व्यस्त है। इसे इस प्लगइन के रनटाइम या किसी अन्य Codex प्रक्रिया ने पकड़ा हो सकता है। जाँचें कि बातचीत किसी अन्य विंडो या पृष्ठभूमि में अभी भी लोड है या नहीं।",
+      "manual": "मैन्युअल",
+      "auto": "स्वचालित",
+      "timeUnknown": "समय अज्ञात",
+      "turnTime": "टर्न का आरंभ समय"
+    },
+    "codexCompactUsage": "Use /compact without arguments",
+    "codexCompactStarted": "Codex is compacting the conversation",
+    "codexReviewUsage": "Use /review without arguments",
+    "codexReviewStarted": "Codex is reviewing the workspace",
+    "codexDiffUsage": "Use /diff without arguments",
+    "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
+    "continueRefiningPlan": "इस योजना को और बेहतर बनाना जारी रखें:"
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -393,8 +411,8 @@
       "installPolicyTip": "इंस्टॉलेशन में समस्या? त्रुटि को टर्मिनल CLI AI में कॉपी करके हल करें",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Claude AI सुविधाओं के लिए आवश्यक। Claude Code SDK और संबंधित निर्भरताएं शामिल हैं।",
-      "codexSdkName": "Codex SDK",
-      "codexSdkDescription": "Codex AI सुविधाओं के लिए आवश्यक। OpenAI Codex SDK शामिल है।",
+      "codexSdkName": "Codex CLI",
+      "codexSdkDescription": "Codex AI सुविधाओं के लिए आवश्यक। CLI पृष्ठ पर इंस्टॉल किए गए आधिकारिक Codex CLI (@openai/codex) का पता लगाता है; चैट app-server के माध्यम से चलती है।",
       "loading": "निर्भरता स्थिति लोड हो रही है...",
       "install": "इंस्टॉल करें",
       "installing": "इंस्टॉल हो रहा है...",
@@ -410,7 +428,8 @@
       "uninstallSuccess": "{{name}} अनइंस्टॉल हो गया",
       "uninstallFailed": "अनइंस्टॉल विफल: {{error}}",
       "updating": "अपडेट हो रहा है...",
-      "updateSuccess": "{{name}} सफलतापूर्वक अपडेट हो गया"
+      "updateSuccess": "{{name}} सफलतापूर्वक अपडेट हो गया",
+      "cliTransportBadge": "CLI · {{transport}}"
     },
     "usage": "उपयोग सांख्यिकी",
     "usageDesc": "अपनी Token खपत, लागत सांख्यिकी और उपयोग प्रवृत्ति विश्लेषण देखें",
@@ -851,6 +870,10 @@
       "copied": "Copied to clipboard",
       "copyFailed": "Failed to copy",
       "tools": {
+        "codex": {
+          "name": "Codex CLI",
+          "description": "स्थापित Codex CLI का पता लगाता है। संस्करण जाँच खाता कॉन्फ़िगरेशन नहीं पढ़ती; चैट app-server का उपयोग करती है।"
+        },
         "minimax": {
           "name": "MiniMax Code",
           "description": "MiniMax terminal coding agent. Node.js 22.19+ / 24+ (23 नहीं) आवश्यक; कमांड: minimax / mcode"
@@ -900,6 +923,21 @@
         "hide": "प्रदाता स्विचर में छिपाएँ",
         "show": "प्रदाता स्विचर में दिखाएँ"
       }
+    },
+    "permissionsPanel": {
+      "codexSandboxTitle": "Codex Sandbox Mode",
+      "codexSandboxDesc": "Control system access boundaries when Codex executes commands. Defaults to the safer workspace-write (read/write within the workspace only). Switch to danger-full-access for system-level commands such as adb or docker.",
+      "workspaceWriteTitle": "workspace-write",
+      "workspaceWriteDesc": "Read/write is limited to the workspace. System-level operations are restricted for safety.",
+      "fullAccessTitle": "danger-full-access",
+      "fullAccessDesc": "Allows higher system access, suitable for commands like adb or docker that require extra permissions.",
+      "hint": "This setting only affects Codex process sandboxing and does not change Claude Code permission behavior.",
+      "desired": "Desired: {{mode}}",
+      "effective": "Effective: {{mode}}",
+      "conflict": "Native policy rejected the requested access range.",
+      "source": "Source: {{source}}",
+      "readOnlyTitle": "Read only",
+      "readOnlyDesc": "Inspect files without writing to the workspace."
     }
   },
   "history": {
@@ -976,7 +1014,8 @@
       "sdk-cli": "यह सत्र प्लगइन द्वारा SDK के माध्यम से बनाया गया था और CLI में डिफ़ॉल्ट रूप से नहीं दिखाया गया है। टर्मिनल CLI की /resume सूची में इसे दिखाने के लिए 'CLI में कनवर्ट करें' पर क्लिक करें",
       "claude-vscode": "यह सत्र VS Code एक्सटेंशन द्वारा बनाया गया था और CLI में डिफ़ॉल्ट रूप से नहीं दिखाया गया है। टर्मिनल CLI की /resume सूची में इसे दिखाने के लिए 'CLI में कनवर्ट करें' पर क्लिक करें",
       "remote": "यह सत्र Claude Code के रिमोट इंस्टेंस द्वारा बनाया गया था"
-    }
+    },
+    "loadMore": "Load more"
   },
   "permission": {
     "dialogTitle": "अनुमति अनुरोध",
@@ -998,7 +1037,12 @@
       "execute": "{{toolName}} निष्पादित करें",
       "readDirectory": "निर्देशिका पढ़ें",
       "timeoutWarning": "कृपया जल्द उत्तर दें, डायलॉग {{seconds}} सेकंड में स्वचालित रूप से बंद हो जाएगा"
-    }
+    },
+    "userCancelled": "Permission request cancelled",
+    "previewUnavailable": "Native file preview is unavailable. You can deny or cancel this request.",
+    "requestedPermissions": "Requested native permissions",
+    "allowWithRule": "Allow with this command rule",
+    "allowWithNetworkRule": "Allow with this network rule"
   },
   "askUserQuestion": {
     "title": "Claude के पास आपके लिए कुछ प्रश्न हैं",
@@ -1059,6 +1103,19 @@
       "loading": "प्रदाता लोड हो रहे हैं...",
       "empty": "कोई प्रदाता उपलब्ध नहीं",
       "switched": "{{provider}} पर स्विच किया गया"
+    },
+    "codexQuota": {
+      "title": "Codex कोटा",
+      "loading": "कोटा लोड हो रहा है...",
+      "unavailable": "कोटा उपलब्ध नहीं है",
+      "lastUpdated": "{{value}} को अपडेट किया गया",
+      "fiveHour": "5 घंटे का उपयोग",
+      "weekly": "साप्ताहिक उपयोग",
+      "windowRemainingPercent": "{{percent}}% शेष",
+      "windowRemainingPercentWithReset": "{{percent}}% शेष · {{value}} को रीसेट",
+      "windowUsedOnly": "{{used}} उपयोग किया गया",
+      "windowUnavailable": "अनुपलब्ध",
+      "apiKeyMode": "API कुंजी मोड में सदस्यता कोटा नहीं है"
     },
     "nodeProcesses": {
       "title": "Node प्रक्रिया प्रबंधक",
@@ -1316,11 +1373,26 @@
     "noParams": "No Parameters",
     "required": "Required",
     "optional": "Optional",
-    "refreshServer": "Refresh {{name}}"
+    "refreshServer": "Refresh {{name}}",
+    "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
     "toolCall": "उपकरण कॉल",
     "runCommand": "कमांड चलाएं",
+    "commandRead": "{{path}} पढ़ें",
+    "commandList": "{{path}} की सूची",
+    "commandSearch": "{{path}} में {{query}} खोजें",
+    "commandApprovalReason": "स्वीकृति का कारण",
+    "patchToggleDiff": "बदलाव देखें",
+    "errorOutput": "त्रुटि का विवरण",
+    "resultUnknown": "इस टूल का अलग परिणाम उपलब्ध नहीं है",
+    "patchNoDiff": "अंतर उपलब्ध नहीं",
+    "patchKind": {
+      "add": "जोड़ा गया",
+      "delete": "हटाया गया",
+      "update": "बदला गया",
+      "move": "स्थानांतरित"
+    },
     "contextEngine": "संदर्भ इंजन",
     "task": "कार्य",
     "promptLabel": "प्रॉम्प्ट",
@@ -1704,6 +1776,20 @@
       "description": "पूरी तरह स्वचालित, सभी अनुमति जाँचों को बायपास करता है [सावधानी से उपयोग करें]"
     }
   },
+  "workspaceDiff": {
+    "title": "वर्कस्पेस परिवर्तन",
+    "staged": "स्टेज किए गए",
+    "unstaged": "अनस्टेज किए गए",
+    "untracked": "अनट्रैक किए गए",
+    "noChanges": "कोई परिवर्तन नहीं मिला",
+    "binary": "बाइनरी",
+    "truncated": "वर्कस्पेस स्नैपशॉट बहुत बड़ा था, काट दिया गया",
+    "notGit": "वर्तमान डायरेक्टरी Git वर्किंग ट्री नहीं है",
+    "refresh": "रिफ्रेश",
+    "fileCount": "{{count}} फ़ाइलें",
+    "fileCount_one": "{{count}} फ़ाइल",
+    "fileCount_other": "{{count}} फ़ाइलें"
+  },
   "codexModes": {
     "default": {
       "label": "Suggest (approval)",
@@ -1712,8 +1798,8 @@
     },
     "plan": {
       "label": "Plan Mode",
-      "tooltip": "Plan mode - read-only analysis",
-      "description": "Uses only read-only tools, generates plan for user approval"
+      "tooltip": "नेटिव सहयोग प्लान मोड",
+      "description": "कार्यान्वयन से पहले नेटिव प्लान बनाता है; सैंडबॉक्स और अनुमोदन स्वतंत्र रहते हैं"
     },
     "acceptEdits": {
       "label": "Auto Edit",
@@ -1918,8 +2004,8 @@
     "recommended": "अनुशंसित",
     "codexWriterConflict": {
       "title": "Codex थ्रेड व्यस्त है",
-      "intro": "जब नया टर्न शुरू हुआ, पिछले टर्न की Codex प्रक्रिया अभी इस थ्रेड में लिख रही थी। प्लगइन अब भेजने से पहले पिछले टर्न को स्वतः रोक देता है।",
-      "reason": "कुछ सेकंड प्रतीक्षा करें और संदेश दोबारा भेजें — नया सेशन बनाने की आवश्यकता नहीं है।"
+      "intro": "कोई अन्य Codex टर्न या क्लाइंट इस बातचीत में लिख रहा है। यह संदेश भेजना शुरू नहीं हो सका।",
+      "reason": "इस बातचीत का उपयोग कर रहे क्लाइंट में टर्न रोकें और उसके समाप्त होने के बाद फिर से भेजें।"
     },
     "codexThreadResume": {
       "title": "सत्र थ्रेड अब मान्य नहीं है",
@@ -1958,6 +2044,32 @@
           "step1": "2. निर्भरता प्रबंधन खोलें और नवीनतम SDK पुनः इंस्टॉल करें:"
         }
       }
+    },
+    "codexCliUnavailable": {
+      "title": "Codex CLI शुरू नहीं हो सका",
+      "intro": "Codex CLI रनटाइम जवाब देने से पहले ही बंद हो गया। ऊपर दिखाई गई त्रुटि में वह CLI पथ और उसका अपना आउटपुट दिया गया है। यह आम तौर पर Codex CLI की अधूरी इंस्टॉल का नतीजा होता है, प्लगइन की गलती नहीं।",
+      "reason": "प्लगइन आपके कंप्यूटर पर मिले Codex CLI से \"codex app-server\" शुरू करता है। आधी इंस्टॉल हुई कॉपी (जैसे प्लेटफ़ॉर्म बाइनरी के बिना ग्लोबल npm इंस्टॉल) exit code 1 के साथ बंद हो जाती है और वह पूरा टर्न भी विफल कर देती है।",
+      "solutions": {
+        "reinstallCodexCli": {
+          "title": "विकल्प 1: खराब इंस्टॉल हटाकर आधिकारिक CLI दोबारा इंस्टॉल करें",
+          "step0": "1. पहले बची हुई ग्लोबल इंस्टॉल हटाएँ (दो कॉपी होना सबसे आम वजह है):",
+          "step1": "2. आधिकारिक CLI फिर से इंस्टॉल करें — मिरर की जगह आधिकारिक npm रजिस्ट्री इस्तेमाल करें:",
+          "step2": "3. दोबारा भेजने से पहले जाँचें कि CLI वर्शन दे रहा है:"
+        },
+        "pointCodexBin": {
+          "title": "विकल्प 2: प्लगइन को काम करने वाली बाइनरी पर इंगित करें",
+          "step0": "अपने PATH में सभी codex देखें (Windows पर: where codex)। अगर काम करने वाला पहले नहीं है, तो CODEX_BIN एनवायरनमेंट वेरिएबल में उसका पूरा पथ डालें और IDE रीस्टार्ट करें। प्लगइन अब बाद वाली इंस्टॉल पर भी अपने आप स्विच कर लेता है।"
+        }
+      }
+    }
+  },
+  "codex": {
+    "plan": {
+      "title": "Codex plan",
+      "ready": "Plan ready",
+      "execute": "Execute plan",
+      "executing": "Executing…",
+      "adjust": "Continue adjusting"
     }
   }
 }

@@ -17,6 +17,7 @@ export function mergeSubagentHistory(
   existing: SubagentHistoryResponse | undefined,
   incoming: SubagentHistoryResponse,
 ): SubagentHistoryResponse {
+  if (incoming.nativeTaskId && incoming.nativeTaskId !== existing?.nativeTaskId) return incoming;
   const merged = { ...existing, ...incoming };
   if (!isTerminal(existing)) {
     return merged;

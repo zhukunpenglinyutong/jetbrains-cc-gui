@@ -1,0 +1,114 @@
+/* WorkspaceDiffDialog Styles — reuses the shared .confirm-dialog shell */
+
+.workspace-diff-dialog {
+  width: 90%;
+  max-width: 640px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-diff-dialog .confirm-dialog-header {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.workspace-diff-refresh {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.workspace-diff-body {
+  overflow-y: auto;
+}
+
+.workspace-diff-root {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.workspace-diff-section {
+  margin-bottom: 14px;
+}
+
+.workspace-diff-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+}
+
+.workspace-diff-count {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.workspace-diff-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+}
+
+.workspace-diff-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-family: var(--font-family-mono, monospace);
+}
+
+.workspace-diff-file + .workspace-diff-file {
+  border-top: 1px solid var(--border-secondary);
+}
+
+.workspace-diff-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-diff-badge {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-family: var(--font-family, sans-serif);
+  background: var(--bg-tertiary, rgba(128, 128, 128, 0.2));
+  color: var(--text-secondary);
+}
+
+.workspace-diff-error,
+.workspace-diff-warning {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.workspace-diff-error {
+  color: #f48771;
+}
+
+.workspace-diff-warning {
+  color: #cca700;
+}
+
+.workspace-diff-empty {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}

@@ -80,6 +80,17 @@ describe('PermissionDialog', () => {
     expect(screen.getByRole('link', { name: 'https://example.com/docs' })).toBeTruthy();
   });
 
+  it('reopens the submission guard after a refused bridge send and accepts a retry', () => {
+    const onApprove = vi.fn(() => false as boolean | void);
+    render(<PermissionDialog isOpen request={buildRequest({ provider: 'codex' })}
+      onApprove={onApprove} onSkip={() => {}} onApproveAlways={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'permission.allow 1' }));
+    onApprove.mockReturnValue(undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'permission.allow 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'permission.allow 1' }));
+    expect(onApprove).toHaveBeenCalledTimes(2);
+  });
+
   it('formats non-string command payloads before rendering markdown', () => {
     const request: PermissionRequest = {
       channelId: 'perm-2',
@@ -107,6 +118,121 @@ describe('PermissionDialog', () => {
     expect(screen.getByRole('link', { name: 'src/components/App.tsx' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'https://example.com/docs' })).toBeTruthy();
     expect(document.querySelector('.permission-dialog-v3-command-content')?.textContent).toContain('7');
+  });
+
+  it('only renders native decisions advertised by the server', () => {
+    render(
+      <PermissionDialog
+        isOpen
+        request={buildRequest({
+          provider: 'codex',
+          codexMethod: 'item/commandExecution/requestApproval',
+          suggestions: ['decline', 'cancel'],
+        })}
+        onApprove={() => {}}
+        onSkip={() => {}}
+        onApproveAlways={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'permission.allow 1' })).toBeNull();
+    expect(screen.getByRole('button', { name: /permission.deny/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Cancel/ })).toBeTruthy();
+  });
+
+  it('blocks approval when a native file change has no preview', () => {
+    render(
+      <PermissionDialog
+        isOpen
+        request={buildRequest({
+          provider: 'codex',
+          codexMethod: 'item/fileChange/requestApproval',
+          suggestions: ['accept', 'decline', 'cancel'],
+          inputs: { cwd: 'src', reason: 'edit' },
+        })}
+        onApprove={() => {}}
+        onSkip={() => {}}
+        onApproveAlways={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(screen.getByTestId('codex-file-preview').textContent).toContain('preview');
+    expect(screen.queryByRole('button', { name: /permission.allow/ })).toBeNull();
+  });
+
+  it('lists all native proposed file changes before approval', () => {
+    render(
+      <PermissionDialog
+        isOpen
+        request={buildRequest({
+          provider: 'codex',
+          codexMethod: 'item/fileChange/requestApproval',
+          inputs: {
+            changes: {
+              'src/new.ts': { kind: 'add' },
+              'src/old.ts': { kind: { type: 'update', movePath: 'src/renamed.ts' } },
+            },
+          },
+        })}
+        onApprove={() => {}}
+        onSkip={() => {}}
+        onApproveAlways={() => {}}
+      />,
+    );
+
+    expect(screen.getByTestId('codex-file-preview').textContent).toContain('src/new.ts');
+    expect(screen.getByTestId('codex-file-preview').textContent).toContain('src/old.ts');
+    expect(screen.getByTestId('codex-file-preview').textContent).toContain('src/renamed.ts');
+    expect(screen.getByTestId('codex-file-preview').textContent).not.toContain('[object Object]');
+  });
+
+  it('shows the native additional permission subset before granting it', () => {
+    render(
+      <PermissionDialog
+        isOpen
+        request={buildRequest({
+          provider: 'codex',
+          codexMethod: 'item/permissions/requestApproval',
+          inputs: {
+            permissions: {
+              filesystem: { roots: ['C:/repo'], access: ['read'] },
+              network: { hosts: ['example.com'] },
+            },
+          },
+        })}
+        onApprove={() => {}}
+        onSkip={() => {}}
+        onApproveAlways={() => {}}
+      />,
+    );
+
+    expect(screen.getByTestId('codex-permission-scope').textContent).toContain('example.com');
+    expect(screen.getByTestId('codex-permission-scope').textContent).toContain('C:/repo');
+  });
+
+  it('exposes native command rule amendments as typed decisions', () => {
+    const onDecision = vi.fn();
+    render(
+      <PermissionDialog
+        isOpen
+        request={buildRequest({
+          provider: 'codex',
+          codexMethod: 'item/commandExecution/requestApproval',
+          suggestions: [{ acceptWithExecpolicyAmendment: { execpolicy_amendment: ['allow echo'] } }],
+        })}
+        onApprove={() => {}}
+        onSkip={() => {}}
+        onApproveAlways={() => {}}
+        onDecision={onDecision}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Allow with this command rule/ }));
+    expect(onDecision).toHaveBeenCalledWith('perm-1', {
+      acceptWithExecpolicyAmendment: { execpolicy_amendment: ['allow echo'] },
+    });
   });
 
   it('auto-denies with the original channelId after timeoutSeconds elapses', () => {

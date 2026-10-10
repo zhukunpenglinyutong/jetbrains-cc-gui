@@ -6,6 +6,10 @@ interface SdkStatusBadgesProps {
   installedVersion?: string;
   latestVersion?: string;
   hasUpdate?: boolean;
+  /** Runtime kind behind the dependency: TypeScript SDK or native CLI */
+  runtimeKind?: 'sdk' | 'cli';
+  /** Transport used by a CLI runtime (e.g. "app-server") */
+  transport?: string;
 }
 
 const SdkStatusBadges = ({
@@ -13,11 +17,20 @@ const SdkStatusBadges = ({
   installedVersion,
   latestVersion,
   hasUpdate,
+  runtimeKind,
+  transport,
 }: SdkStatusBadgesProps) => {
   const { t } = useTranslation();
 
   return (
     <>
+      {installed && runtimeKind === 'cli' && (
+        <span className={styles.versionBadge}>
+          {t('settings.dependency.cliTransportBadge', {
+            transport: transport || 'app-server',
+          })}
+        </span>
+      )}
       {installed && installedVersion && (
         <span className={styles.versionBadge}>v{installedVersion}</span>
       )}

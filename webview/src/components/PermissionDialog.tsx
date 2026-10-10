@@ -15,14 +15,40 @@ export interface PermissionRequest {
   suggestions?: unknown;
   deadlineMs?: number;
   dialogToken?: string;
+  /** Opaque key for a native Codex server request. */
+  codexInteractionKey?: string;
+  /** Native method retained so the response adapter can preserve its union. */
+  codexMethod?: string;
+  provider?: 'claude' | 'codex' | string;
+}
+
+type NativeDecision = 'accept' | 'acceptForSession' | 'decline' | 'cancel'
+  | 'acceptWithExecpolicyAmendment' | 'applyNetworkPolicyAmendment';
+
+function readNativeDecisions(suggestions: unknown): NativeDecision[] | null {
+  if (!Array.isArray(suggestions)) return null;
+  const decisions = suggestions.flatMap((entry): NativeDecision[] => {
+    const value = typeof entry === 'string'
+      ? entry
+      : entry && typeof entry === 'object' && !Array.isArray(entry)
+        ? Object.keys(entry as Record<string, unknown>)[0]
+        : '';
+    return ['accept', 'acceptForSession', 'decline', 'cancel',
+      'acceptWithExecpolicyAmendment', 'applyNetworkPolicyAmendment'].includes(value)
+      ? [value as NativeDecision]
+      : [];
+  });
+  return decisions.length > 0 ? Array.from(new Set(decisions)) : [];
 }
 
 interface PermissionDialogProps {
   isOpen: boolean;
   request: PermissionRequest | null;
-  onApprove: (channelId: string) => void;
-  onSkip: (channelId: string) => void;
-  onApproveAlways: (channelId: string) => void;
+  onApprove: (channelId: string) => void | boolean;
+  onSkip: (channelId: string) => void | boolean;
+  onApproveAlways: (channelId: string) => void | boolean;
+  onCancel?: (channelId: string) => void | boolean;
+  onDecision?: (channelId: string, decision: Record<string, unknown>) => void | boolean;
   timeoutSeconds?: number;
 }
 
@@ -100,12 +126,40 @@ const getWorkingDirectory = (inputs: Record<string, unknown>): string => {
   return '~';
 };
 
+function getProposedChanges(inputs: Record<string, unknown>): Array<Record<string, unknown>> {
+  const value = inputs.proposedChanges ?? inputs.proposed_changes
+    ?? inputs.changes ?? inputs.fileChanges ?? inputs.files;
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is Record<string, unknown> =>
+      Boolean(entry && typeof entry === 'object' && !Array.isArray(entry)));
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).map(([path, change]) => ({
+      path,
+      ...(change && typeof change === 'object' && !Array.isArray(change)
+        ? change as Record<string, unknown>
+        : { value: change }),
+    }));
+  }
+  return [];
+}
+
+function getRequestedPermissions(inputs: Record<string, unknown>): Record<string, unknown> | null {
+  const value = inputs.permissions ?? inputs.additionalPermissions
+    ?? inputs.additional_permissions ?? inputs.requestedPermissions;
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
 const PermissionDialog = ({
   isOpen,
   request,
   onApprove,
   onSkip,
   onApproveAlways,
+  onCancel,
+  onDecision,
   timeoutSeconds = DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,
 }: PermissionDialogProps) => {
   const [showCommand, setShowCommand] = useState(true);
@@ -113,15 +167,79 @@ const PermissionDialog = ({
   const [hydratedRequestKey, setHydratedRequestKey] = useState<string | null>(null);
   const { t } = useTranslation();
   const { dialogRef, dialogHeight, setDialogHeight, handleResizeStart } = useDialogResize({ minHeight: 150 });
+  const nativeDecisions = useMemo(
+    () => (request?.provider === 'codex' ? readNativeDecisions(request.suggestions) : null),
+    [request],
+  );
+  const nativeDecisionPayloads = useMemo(() => {
+    if (!Array.isArray(request?.suggestions)) return [];
+    return request.suggestions.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+      const record = entry as Record<string, unknown>;
+      const kind = Object.keys(record)[0] as NativeDecision | undefined;
+      return kind && (kind === 'acceptWithExecpolicyAmendment' || kind === 'applyNetworkPolicyAmendment')
+        ? [{ kind, decision: { [kind]: record[kind] } }]
+        : [];
+    });
+  }, [request]);
+  const isFileApproval = request?.provider === 'codex'
+    && request.codexMethod === 'item/fileChange/requestApproval';
+  const proposedChanges = useMemo(
+    () => request ? getProposedChanges(request.inputs) : [],
+    [request],
+  );
+  const requestedPermissions = useMemo(
+    () => request?.codexMethod === 'item/permissions/requestApproval'
+      ? getRequestedPermissions(request.inputs)
+      : null,
+    [request],
+  );
+  const previewUnavailable = isFileApproval && proposedChanges.length === 0;
+  const permissionOptions = useMemo(() => {
+    const allowsApprove = !previewUnavailable
+      && (nativeDecisions === null || nativeDecisions.includes('accept'));
+    const allowsSession = !previewUnavailable
+      && (nativeDecisions === null || nativeDecisions.includes('acceptForSession'));
+    const options: Array<{
+      action: 'approve' | 'always' | 'skip' | 'cancel' | 'native';
+      label: string;
+      decision?: Record<string, unknown>;
+    }> = [
+      ...(allowsApprove ? [{ action: 'approve' as const, label: t('permission.allow') }] : []),
+    ];
+    if (allowsSession) options.push({ action: 'always', label: t('permission.allowAlways') });
+    const declineLabel = t('permission.deny');
+    // Keep a safe way out even when a native advertisement omits decline. The
+    // browser must not leave the user trapped in a request whose native list is
+    // incomplete or forward-versioned; the backend validates the typed result.
+    options.push({ action: 'skip', label: declineLabel });
+    if (nativeDecisions?.includes('cancel')) {
+      options.push({ action: 'cancel', label: t('common.cancel', 'Cancel') });
+    }
+    for (const suggestion of nativeDecisionPayloads) {
+      options.push({
+        action: 'native',
+        decision: suggestion.decision,
+        label: suggestion.kind === 'acceptWithExecpolicyAmendment'
+          ? t('permission.allowWithRule', 'Allow with this command rule')
+          : t('permission.allowWithNetworkRule', 'Allow with this network rule'),
+      });
+    }
+    return options;
+  }, [nativeDecisionPayloads, nativeDecisions, previewUnavailable, t]);
 
   const handleTimeout = useCallback(() => {
     if (request) {
       clearDialogDraft('permission', request.channelId, request.dialogToken);
-      onSkip(request.channelId);
+      if (nativeDecisions?.includes('cancel')) {
+        onCancel?.(request.channelId);
+      } else {
+        onSkip(request.channelId);
+      }
     }
-  }, [request, onSkip]);
+  }, [nativeDecisions, onCancel, onSkip, request]);
 
-  const { remainingSeconds, isTimeWarning, markSubmitted } = useDialogCountdownTimeout({
+  const { remainingSeconds, isTimeWarning, markSubmitted, restoreSubmission } = useDialogCountdownTimeout({
     isOpen,
     requestKey: request?.dialogToken ?? request?.channelId,
     timeoutSeconds,
@@ -131,21 +249,34 @@ const PermissionDialog = ({
 
   const handleApprove = useCallback(() => {
     if (!request || !markSubmitted()) return;
-    clearDialogDraft('permission', request.channelId, request.dialogToken);
-    onApprove(request.channelId);
-  }, [request, markSubmitted, onApprove]);
+    if (onApprove(request.channelId) === false) restoreSubmission();
+    else clearDialogDraft('permission', request.channelId, request.dialogToken);
+  }, [request, markSubmitted, restoreSubmission, onApprove]);
 
   const handleApproveAlways = useCallback(() => {
     if (!request || !markSubmitted()) return;
-    clearDialogDraft('permission', request.channelId, request.dialogToken);
-    onApproveAlways(request.channelId);
-  }, [request, markSubmitted, onApproveAlways]);
+    if (onApproveAlways(request.channelId) === false) restoreSubmission();
+    else clearDialogDraft('permission', request.channelId, request.dialogToken);
+  }, [request, markSubmitted, restoreSubmission, onApproveAlways]);
 
   const handleSkip = useCallback(() => {
     if (!request || !markSubmitted()) return;
-    clearDialogDraft('permission', request.channelId, request.dialogToken);
-    onSkip(request.channelId);
-  }, [request, markSubmitted, onSkip]);
+    if (onSkip(request.channelId) === false) restoreSubmission();
+    else clearDialogDraft('permission', request.channelId, request.dialogToken);
+  }, [request, markSubmitted, restoreSubmission, onSkip]);
+
+  const handleCancel = useCallback(() => {
+    if (!request || !markSubmitted()) return;
+    if ((onCancel ?? onSkip)(request.channelId) === false) restoreSubmission();
+    else clearDialogDraft('permission', request.channelId, request.dialogToken);
+  }, [markSubmitted, restoreSubmission, onCancel, onSkip, request]);
+
+  const handleNativeDecision = useCallback((decision: Record<string, unknown>) => {
+    if (!request || !markSubmitted()) return;
+    const sent = onDecision ? onDecision(request.channelId, decision) : onApprove(request.channelId);
+    if (sent === false) restoreSubmission();
+    else clearDialogDraft('permission', request.channelId, request.dialogToken);
+  }, [markSubmitted, restoreSubmission, onApprove, onDecision, request]);
 
   // Hydrate draft state exactly once per request via render-time adjustment:
   // the key is derived during render and the previous-key state tracks which
@@ -159,7 +290,7 @@ const PermissionDialog = ({
       setShowCommand(draft?.showCommand !== false);
       setSelectedIndex(
         typeof restoredIndex === 'number' && Number.isInteger(restoredIndex)
-          ? Math.max(0, Math.min(2, restoredIndex))
+          ? Math.max(0, Math.min(permissionOptions.length - 1, restoredIndex))
           : 0,
       );
       setDialogHeight(null);
@@ -189,23 +320,31 @@ const PermissionDialog = ({
         return;
       }
 
-      if (e.key === '1') {
-        handleApprove();
-      } else if (e.key === '2') {
-        handleApproveAlways();
-      } else if (e.key === '3') {
-        handleSkip();
+      if (/^[1-9]$/.test(e.key)) {
+        const option = permissionOptions[Number(e.key) - 1];
+        if (option?.action === 'approve') handleApprove();
+        else if (option?.action === 'always') handleApproveAlways();
+        else if (option?.action === 'skip') handleSkip();
+        else if (option?.action === 'cancel') handleCancel();
+        else if (option?.action === 'native' && option.decision) handleNativeDecision(option.decision);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setSelectedIndex(prev => Math.max(0, prev - 1));
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedIndex(prev => Math.min(2, prev + 1));
+        setSelectedIndex(prev => Math.min(permissionOptions.length - 1, prev + 1));
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        if (selectedIndex === 0) handleApprove();
-        else if (selectedIndex === 1) handleApproveAlways();
-        else if (selectedIndex === 2) handleSkip();
+        const option = permissionOptions[selectedIndex];
+        if (option?.action === 'approve') handleApprove();
+        else if (option?.action === 'always') handleApproveAlways();
+        else if (option?.action === 'skip') handleSkip();
+        else if (option?.action === 'cancel') {
+          handleCancel();
+        }
+        else if (option?.action === 'native' && option.decision) {
+          handleNativeDecision(option.decision);
+        }
       }
     };
   });
@@ -294,36 +433,57 @@ const PermissionDialog = ({
           )}
         </div>
 
+        {isFileApproval && (
+          <div className="permission-dialog-v3-preview" data-testid="codex-file-preview">
+            {previewUnavailable ? (
+              <p>{t('permission.previewUnavailable', 'Native file preview is unavailable. You can deny or cancel this request.')}</p>
+            ) : (
+              <ul>
+                {proposedChanges.map((change, index) => {
+                  const path = String(change.path ?? change.filePath ?? change.filename ?? `change-${index + 1}`);
+                  const nativeKind = change.kind && typeof change.kind === 'object'
+                    ? change.kind as Record<string, unknown> : null;
+                  const kind = String(nativeKind?.type ?? change.kind ?? change.status ?? change.action ?? 'change');
+                  const movePath = nativeKind?.movePath ?? change.newPath;
+                  return <li key={`${path}-${index}`}><strong>{kind}</strong> {path}
+                    {typeof movePath === 'string' && movePath ? ` → ${movePath}` : ''}</li>;
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {requestedPermissions && (
+          <div className="permission-dialog-v3-preview" data-testid="codex-permission-scope">
+            <strong>{t('permission.requestedPermissions', 'Requested native permissions')}</strong>
+            <pre>{JSON.stringify(requestedPermissions, null, 2)}</pre>
+          </div>
+        )}
+
         {/* Option buttons list */}
         <div className="permission-dialog-v3-options">
-          <button
-            className={`permission-dialog-v3-option ${selectedIndex === 0 ? 'selected' : ''}`}
-            onClick={handleApprove}
-            onMouseEnter={() => setSelectedIndex(0)}
-          >
-            <span className="option-text">{t('permission.allow')}</span>
-            <span className="option-key">1</span>
-          </button>
-          <button
-            className={`permission-dialog-v3-option ${selectedIndex === 1 ? 'selected' : ''}`}
-            onClick={handleApproveAlways}
-            onMouseEnter={() => setSelectedIndex(1)}
-          >
-            {/* "Always allow" is remembered at the TOOL level for the current conversation
-                (PermissionService.dispatchPermissionDialog -> rememberToolDecision), so for
-                Bash/Agent this approves every future command this session — the label must
-                say "Always allow", not "Always allow this command". */}
-            <span className="option-text">{t('permission.allowAlways')}</span>
-            <span className="option-key">2</span>
-          </button>
-          <button
-            className={`permission-dialog-v3-option ${selectedIndex === 2 ? 'selected' : ''}`}
-            onClick={handleSkip}
-            onMouseEnter={() => setSelectedIndex(2)}
-          >
-            <span className="option-text">{t('permission.deny')}</span>
-            <span className="option-key">3</span>
-          </button>
+          {permissionOptions.map((option, index) => {
+            const onClick = option.action === 'approve'
+              ? handleApprove
+              : option.action === 'always'
+                ? handleApproveAlways
+                : option.action === 'skip'
+                  ? handleSkip
+                  : option.action === 'cancel'
+                    ? handleCancel
+                    : () => option.decision && handleNativeDecision(option.decision);
+            return (
+              <button
+                key={`${option.action}-${index}`}
+                className={`permission-dialog-v3-option ${selectedIndex === index ? 'selected' : ''}`}
+                onClick={onClick}
+                onMouseEnter={() => setSelectedIndex(index)}
+              >
+                <span className="option-text">{option.label}</span>
+                <span className="option-key">{index + 1}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

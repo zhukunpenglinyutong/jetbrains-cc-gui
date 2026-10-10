@@ -1,6 +1,7 @@
 package com.github.claudecodegui.cli;
 
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.dependency.DependencyManager;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -8,6 +9,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -122,8 +124,19 @@ public final class CliStatusDetector {
         }
     }
 
+    /** Probes a CLI without loading its account configuration or starting a model turn. */
     public static CliToolStatus detect(CliToolId tool) {
         try {
+            if (tool == CliToolId.CODEX) {
+                for (String key : envKeysFor(tool)) {
+                    String override = firstNonBlank(System.getenv(key));
+                    if (override != null) {
+                        ProbeResult probe = probe(preferWindowsSpawnable(override));
+                        return probe.ok ? CliToolStatus.installed(tool, probe.version, probe.resolvedPath)
+                                : CliToolStatus.error(tool, "Configured Codex CLI cannot be executed: " + override);
+                    }
+                }
+            }
             if (tool == CliToolId.ZCODE) {
                 // No PATH binary: resolve the app-server entry inside the desktop app bundle.
                 return detectZcodeAppBundle(tool);
@@ -144,11 +157,49 @@ public final class CliStatusDetector {
                     return CliToolStatus.installed(tool, probe.version, probe.resolvedPath);
                 }
             }
+            if (tool == CliToolId.CODEX) {
+                for (Path candidate : codexLegacyCandidates(new DependencyManager().getSdkNodeModulesDir("codex-sdk"),
+                        PlatformUtils.isWindows() ? "win32" : PlatformUtils.isMac() ? "darwin" : "linux",
+                        System.getProperty("os.arch"))) {
+                    if (candidate.toFile().isFile()) {
+                        ProbeResult probe = probe(candidate.toString());
+                        if (probe.ok) {
+                            return CliToolStatus.installed(tool, probe.version, probe.resolvedPath);
+                        }
+                    }
+                }
+            }
             return CliToolStatus.notInstalled(tool);
         } catch (Exception e) {
             LOG.warn("[CliStatusDetector] Failed to detect " + tool.getId() + ": " + e.getMessage());
             return CliToolStatus.error(tool, e.getMessage());
         }
+    }
+
+    /** Lists existing native binaries; an SDK package or install marker alone proves nothing. */
+    static List<Path> codexLegacyCandidates(Path nodeModules, String platform, String arch) {
+        String cpu = "aarch64".equals(arch) || "arm64".equals(arch) ? "aarch64" : "x86_64";
+        String suffix = switch (platform) {
+            case "win32" -> "pc-windows-msvc";
+            case "darwin" -> "apple-darwin";
+            default -> "unknown-linux-musl";
+        };
+        String triple = cpu + "-" + suffix;
+        String packageName = "codex-" + platform + "-" + ("aarch64".equals(cpu) ? "arm64" : "x64");
+        String binary = "win32".equals(platform) ? "codex.exe" : "codex";
+        List<Path> result = new ArrayList<>();
+        for (Path packageDir : List.of(nodeModules.resolve("@openai/codex"),
+                nodeModules.resolve("@openai/codex-sdk/node_modules/@openai/codex"),
+                nodeModules.resolve("@openai/codex-sdk"))) {
+            for (Path vendor : List.of(packageDir.resolve("node_modules/@openai").resolve(packageName).resolve("vendor"),
+                    packageDir.getParent().getParent().resolve("@openai").resolve(packageName).resolve("vendor"),
+                    packageDir.resolve("vendor"))) {
+                result.add(vendor.resolve(triple).resolve("codex").resolve(binary));
+                result.add(vendor.resolve(triple).resolve(binary));
+                result.add(vendor.resolve(triple).resolve("bin").resolve(binary));
+            }
+        }
+        return result;
     }
 
     private static List<String> candidatesFor(CliToolId tool) {
@@ -171,6 +222,12 @@ public final class CliStatusDetector {
         }
 
         // 2. Common home / system install locations
+        if (tool == CliToolId.CODEX) {
+            String fromPath = resolveWhichLike(tool.getBinaryName());
+            if (fromPath != null) {
+                candidates.add(fromPath);
+            }
+        }
         String home = PlatformUtils.getHomeDirectory();
         List<String> homeDirs = homeBinDirs(tool, home);
         for (String binary : binaries) {
@@ -200,6 +257,11 @@ public final class CliStatusDetector {
             return dirs;
         }
         switch (tool) {
+            case CODEX:
+                dirs.add(join(home, ".local", "bin"));
+                dirs.add(join(home, ".cargo", "bin"));
+                dirs.add(join(home, ".codex", "bin"));
+                break;
             case GROK:
                 dirs.add(join(home, ".grok", "bin"));
                 dirs.add(join(home, ".local", "bin"));
@@ -342,6 +404,7 @@ public final class CliStatusDetector {
 
     private static String[] envKeysFor(CliToolId tool) {
         return switch (tool) {
+            case CODEX -> new String[]{"CODEX_BIN", "CODEX_PATH", "CODEX_CLI_PATH"};
             case GROK -> new String[]{"GROK_BIN", "GROK_PATH", "GROK_CLI_PATH"};
             case KIMI -> new String[]{"KIMI_BIN", "KIMI_PATH", "KIMI_CLI_PATH", "KIMI_CODE_BIN"};
             case OPENCODE -> new String[]{"OPENCODE_BIN", "OPENCODE_PATH", "OPENCODE_CLI_PATH"};

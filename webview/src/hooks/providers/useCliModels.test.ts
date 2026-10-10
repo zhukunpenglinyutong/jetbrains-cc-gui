@@ -31,7 +31,7 @@ describe('useCliModels', () => {
 
   it('fetches the codex catalog when the codex provider is active', () => {
     renderHook(() => useCliModels('codex'));
-    expect(sendBridgeEventMock).toHaveBeenCalledWith('get_cli_models', 'codex');
+    expect(sendBridgeEventMock).toHaveBeenCalledWith('codex_native_list_models', expect.stringContaining('"requestId"'));
   });
 
   it('fetches the grok catalog when the grok provider is active', () => {
@@ -66,6 +66,24 @@ describe('useCliModels', () => {
     expect(result.current.cliModelsError).toBeNull();
   });
 
+  it('accepts the authorized native model/list projection', () => {
+    const { result } = renderHook(() => useCliModels('codex'));
+    act(() => {
+      window.dispatchEvent(new CustomEvent('codex-native-data', {
+        detail: {
+          requestType: 'codex_native_list_models',
+          requestId: JSON.parse(sendBridgeEventMock.mock.calls.at(-1)![1]).requestId,
+          data: [{ id: 'internal-catalog-id', model: 'native-model', displayName: 'Native model', description: 'native' },
+            { id: 'hidden', model: 'hidden-model', hidden: true }],
+        },
+      }));
+    });
+    expect(result.current.cliModels).toEqual([
+      { id: 'native-model', label: 'Native model', description: 'native' },
+    ]);
+    expect(result.current.cliModelsError).toBeNull();
+  });
+
   it('falls back to CODEX_MODELS when the codex payload has no models (official provider)', () => {
     const { result } = renderHook(() => useCliModels('codex'));
     emitCliModels({
@@ -94,7 +112,7 @@ describe('useCliModels', () => {
     act(() => {
       result.current.refreshCliModels('codex');
     });
-    expect(sendBridgeEventMock).toHaveBeenCalledWith('get_cli_models', 'codex');
+    expect(sendBridgeEventMock).toHaveBeenCalledWith('codex_native_list_models', expect.stringContaining('"requestId"'));
   });
 
   it('refetches the codex catalog when the active codex provider changes', () => {
@@ -115,7 +133,7 @@ describe('useCliModels', () => {
       window.updateActiveCodexProvider?.(JSON.stringify({ id: 'other-provider' }));
     });
     // Cache cleared; effect refetches because the current provider is codex.
-    expect(sendBridgeEventMock).toHaveBeenCalledWith('get_cli_models', 'codex');
+    expect(sendBridgeEventMock).toHaveBeenCalledWith('codex_native_list_models', expect.stringContaining('"requestId"'));
     rerender({ provider: 'codex' });
     expect(result.current.modelsByProvider.codex).toBeUndefined();
   });

@@ -3,6 +3,7 @@ package com.github.claudecodegui.session;
 import com.github.claudecodegui.service.RunConfigMonitorService;
 import com.github.claudecodegui.terminal.TerminalMonitorService;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -74,7 +75,46 @@ public class SessionContextService {
         return userMessage;
     }
 
+    /** Builds the changing file and terminal references for a Codex user turn. */
     public String buildCodexContextAppend(JsonObject openedFilesJson, List<String> fileTagPaths) {
+        return this.buildMessageContext(openedFilesJson, fileTagPaths, false);
+    }
+
+    /** Preserves the existing module context for other CLI providers. */
+    public String buildLegacyContextAppend(JsonObject openedFilesJson, List<String> fileTagPaths) {
+        return this.buildMessageContext(openedFilesJson, fileTagPaths, true);
+    }
+
+    /** Combines role instructions and project modules for native thread initialization and cold resume. */
+    public String buildCodexSessionInstructions(String roleInstructions, JsonObject openedFilesJson) {
+        String modules = buildProjectModules(openedFilesJson);
+        if (modules.isEmpty()) {
+            return roleInstructions;
+        }
+        return (roleInstructions == null || roleInstructions.isBlank() ? "" : roleInstructions + "\n\n") + modules.stripLeading();
+    }
+
+    private static String buildProjectModules(JsonObject openedFilesJson) {
+        if (openedFilesJson == null || !openedFilesJson.has("modules") || !openedFilesJson.get("modules").isJsonArray()
+                || openedFilesJson.has("isWorkspace") && openedFilesJson.get("isWorkspace").getAsBoolean()) {
+            return "";
+        }
+        JsonArray modules = openedFilesJson.getAsJsonArray("modules");
+        if (modules.size() <= 1) {
+            return "";
+        }
+        StringBuilder context = new StringBuilder("\n\n## Project Modules\n\nThis project contains multiple modules:\n");
+        for (JsonElement element : modules) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject module = element.getAsJsonObject();
+            context.append("- `").append(module.has("name") ? module.get("name").getAsString() : "unknown").append("`\n");
+        }
+        return context.append('\n').toString();
+    }
+
+    private String buildMessageContext(JsonObject openedFilesJson, List<String> fileTagPaths, boolean includeModules) {
         StringBuilder sb = new StringBuilder();
         boolean hasContent = false;
 
@@ -122,21 +162,10 @@ public class SessionContextService {
             hasContent = true;
         }
 
-        // Also show module info for single projects with multiple modules
-        if (openedFilesJson != null && openedFilesJson.has("modules")) {
-            JsonArray modules = openedFilesJson.getAsJsonArray("modules");
-            if (modules.size() > 1 && (!openedFilesJson.has("isWorkspace")
-                    || !openedFilesJson.get("isWorkspace").getAsBoolean())) {
-                sb.append("\n\n## Project Modules\n\n");
-                sb.append("This project contains multiple modules:\n");
-                for (int i = 0; i < modules.size(); i++) {
-                    JsonObject mod = modules.get(i).getAsJsonObject();
-                    String name = mod.has("name") ? mod.get("name").getAsString() : "unknown";
-                    sb.append("- `").append(name).append("`\n");
-                }
-                sb.append("\n");
-                hasContent = true;
-            }
+        if (includeModules) {
+            String modules = buildProjectModules(openedFilesJson);
+            sb.append(modules);
+            hasContent |= !modules.isEmpty();
         }
 
         List<String> terminalPaths = new ArrayList<>();

@@ -189,6 +189,11 @@ const DANGEROUS_ENV_VAR_SET = new Set([
   'PYTHONSTARTUP',
   'GIT_SSH_COMMAND',
   'GIT_EXTERNAL_DIFF',
+  // Codex CLI binary path overrides would redirect the app-server child to an
+  // attacker-controlled executable launched with managed credentials (RCE).
+  'CODEX_BIN',
+  'CODEX_PATH',
+  'CODEX_CLI_PATH',
 ]);
 
 export function isDangerousEnvVar(varName) {
@@ -415,11 +420,13 @@ export function getCodexRuntimeState() {
   const hasExplicitCurrent = !!codex && Object.prototype.hasOwnProperty.call(codex, 'current') && codex.current !== null;
   const currentId = hasExplicitCurrent ? String(codex.current).trim() : '';
 
-  if (currentId === CODEX_CLI_LOGIN_PROVIDER_ID) {
+  if (currentId === CODEX_CLI_LOGIN_PROVIDER_ID && codex?.localConfigAuthorized === true) {
     return { access: 'cli_login', currentId };
   }
 
-  if (currentId && Object.prototype.hasOwnProperty.call(providers, currentId)) {
+  if (currentId && Object.prototype.hasOwnProperty.call(providers, currentId)
+      && providers[currentId] && typeof providers[currentId] === 'object'
+      && !Array.isArray(providers[currentId])) {
     return { access: 'managed', currentId };
   }
 

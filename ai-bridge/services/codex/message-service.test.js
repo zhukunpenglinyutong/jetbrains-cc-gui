@@ -9,10 +9,8 @@ describe('buildCodexRunInput', () => {
     ]);
 
     assert.deepEqual(input, [
-      { type: 'text', text: '\u2063' },
-      { type: 'local_image', path: 'C:\\temp\\second.png' },
+      { type: 'localImage', path: 'C:\\temp\\second.png' },
     ]);
-    assert.equal(input[0].text.includes('analyze'), false);
   });
 
   it('preserves user text when an image is attached', () => {
@@ -20,10 +18,15 @@ describe('buildCodexRunInput', () => {
       { type: 'local_image', path: '/tmp/image.png' },
     ]);
 
-    assert.equal(input[0].text, 'compare this');
+    assert.deepEqual(input, [
+      { type: 'text', text: 'compare this' },
+      { type: 'localImage', path: '/tmp/image.png' },
+    ]);
   });
 
-  it('uses string input when no valid image is attached', () => {
-    assert.equal(buildCodexRunInput('hello', [{ type: 'local_image', path: '' }]), 'hello');
+  it('uses a native text item when no valid image is attached', () => {
+    assert.deepEqual(buildCodexRunInput('hello', [{ type: 'local_image', path: '' }]), [
+      { type: 'text', text: 'hello' },
+    ]);
   });
 });

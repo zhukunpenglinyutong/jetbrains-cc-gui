@@ -74,8 +74,7 @@ function fallbackModels(providerId: string): ModelInfo[] {
 
 /**
  * Providers whose model list is discovered dynamically via `get_cli_models`.
- * Codex is included even though it is not a CLI-only provider: its list comes
- * from ~/.codex/config.toml + model_catalog_json, same as the codex CLI picker.
+ * Codex uses app-server model/list; the other providers use get_cli_models.
  */
 function supportsDynamicModels(providerId: string): boolean {
   if (providerId === 'codex') return true;
@@ -96,7 +95,15 @@ function normalizeModels(raw: unknown): ModelInfo[] {
       ? row.label.trim()
       : id;
     const description = typeof row.description === 'string' ? row.description : undefined;
-    out.push({ id, label, description });
+    const supportedReasoningEfforts = Array.isArray(row.supportedReasoningEfforts)
+      ? row.supportedReasoningEfforts.filter((effort): effort is string => typeof effort === 'string')
+      : undefined;
+    const model: ModelInfo = { id, label };
+    if (description !== undefined) model.description = description;
+    if (supportedReasoningEfforts && supportedReasoningEfforts.length > 0) {
+      model.supportedReasoningEfforts = supportedReasoningEfforts;
+    }
+    out.push(model);
   }
   return out;
 }
@@ -118,6 +125,7 @@ export function useCliModels(currentProvider: string) {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [errorByProvider, setErrorByProvider] = useState<Record<string, string>>({});
   const pendingLoadRef = useRef<{ provider: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const nativeRequestRef = useRef<{ id: string; rows: unknown[]; cursors: Set<unknown> } | null>(null);
 
   const clearPendingLoad = useCallback(() => {
     if (pendingLoadRef.current) {
@@ -135,7 +143,16 @@ export function useCliModels(currentProvider: string) {
       delete next[providerId];
       return next;
     });
-    sendBridgeEvent('get_cli_models', providerId);
+    // Codex model metadata comes from the authorized app-server runtime. The
+    // legacy channel-manager probe may read config/auth independently and is
+    // therefore kept for the other CLI providers only.
+    if (providerId === 'codex') {
+      const requestId = `models-${crypto.randomUUID()}`;
+      nativeRequestRef.current = { id: requestId, rows: [], cursors: new Set() };
+      sendBridgeEvent('codex_native_list_models', JSON.stringify({ requestId }));
+    } else {
+      sendBridgeEvent('get_cli_models', providerId);
+    }
     pendingLoadRef.current = {
       provider: providerId,
       timer: setTimeout(() => {
@@ -214,10 +231,55 @@ export function useCliModels(currentProvider: string) {
     };
 
     window.setCliModels = handler;
+    const nativeCatalogHandler = (event: Event) => {
+      const detail = (event as CustomEvent<Record<string, unknown>>).detail;
+      if (!detail || detail.requestType !== 'codex_native_list_models') return;
+      const pending = nativeRequestRef.current;
+      if (!pending || detail.requestId !== pending.id) return;
+      const rows = Array.isArray(detail.data) ? detail.data : [];
+      pending?.rows.push(...rows);
+      if (pending && !detail.error && detail.nextCursor != null && !pending.cursors.has(detail.nextCursor)) {
+        pending.cursors.add(detail.nextCursor);
+        sendBridgeEvent('codex_native_list_models', JSON.stringify({ requestId: pending.id,
+          params: { cursor: detail.nextCursor } }));
+        return;
+      }
+      const data = pending?.rows ?? rows;
+      nativeRequestRef.current = null;
+      window.setCliModels?.(JSON.stringify({
+        provider: 'codex',
+        success: !detail.error,
+        error: typeof detail.error === 'string' ? detail.error : undefined,
+        models: data.filter((item) => !(item && typeof item === 'object'
+          && ((item as Record<string, unknown>).hidden === true || (item as Record<string, unknown>).isHidden === true))).map((item) => {
+          const row = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+          const id = typeof row.model === 'string' ? row.model
+            : typeof row.id === 'string' ? row.id
+              : typeof row.slug === 'string' ? row.slug : '';
+          const model: ModelInfo = {
+            id,
+            label: typeof row.displayName === 'string' ? row.displayName
+              : typeof row.name === 'string' ? row.name : id,
+          };
+          if (typeof row.description === 'string') model.description = row.description;
+          if (Array.isArray(row.supportedReasoningEfforts)) {
+            const efforts = row.supportedReasoningEfforts.flatMap((effort) => {
+              if (typeof effort === 'string') return [effort];
+              const option = effort && typeof effort === 'object' ? effort as Record<string, unknown> : {};
+              return typeof option.reasoningEffort === 'string' ? [option.reasoningEffort] : [];
+            });
+            if (efforts.length > 0) model.supportedReasoningEfforts = efforts;
+          }
+          return model;
+        }),
+      }));
+    };
+    window.addEventListener('codex-native-data', nativeCatalogHandler);
     return () => {
       if (window.setCliModels === handler) {
         delete window.setCliModels;
       }
+      window.removeEventListener('codex-native-data', nativeCatalogHandler);
       clearPendingLoad();
     };
   }, [clearPendingLoad]);

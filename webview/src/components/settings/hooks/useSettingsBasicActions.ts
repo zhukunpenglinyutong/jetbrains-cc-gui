@@ -68,7 +68,11 @@ export interface UseSettingsBasicActionsReturn {
   /** Streaming enabled state (prefers prop over local state) */
   streamingEnabled: boolean;
   localStreamingEnabled: boolean;
-  codexSandboxMode: 'workspace-write' | 'danger-full-access';
+  codexSandboxMode: 'read-only' | 'workspace-write' | 'danger-full-access';
+  codexSandboxSource: string;
+  codexSandboxDesired: 'read-only' | 'workspace-write' | 'danger-full-access';
+  codexSandboxEffective: 'read-only' | 'workspace-write' | 'danger-full-access';
+  codexSandboxConflict: boolean;
   /** Send shortcut state (prefers prop over local state) */
   sendShortcut: 'enter' | 'cmdEnter';
   localSendShortcut: 'enter' | 'cmdEnter';
@@ -111,7 +115,7 @@ export interface UseSettingsBasicActionsReturn {
   handleSaveCodeFontCustomPath: (path: string) => void;
   handleBrowseCodeFontFile: () => void;
   handleStreamingEnabledChange: (enabled: boolean) => void;
-  handleCodexSandboxModeChange: (mode: 'workspace-write' | 'danger-full-access') => void;
+  handleCodexSandboxModeChange: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
   handleSendShortcutChange: (shortcut: 'enter' | 'cmdEnter') => void;
   handleAutoOpenFileEnabledChange: (enabled: boolean) => void;
   handleSoundNotificationEnabledChange: (enabled: boolean) => void;
@@ -164,7 +168,11 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setUiFontConfig: (config: UiFontConfig | undefined) => void;
   /** @internal */ setCodeFontConfig: (config: CodeFontConfig | undefined) => void;
   /** @internal */ setLocalStreamingEnabled: (enabled: boolean) => void;
-  /** @internal */ setCodexSandboxMode: (mode: 'workspace-write' | 'danger-full-access') => void;
+  /** @internal */ setCodexSandboxMode: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
+  /** @internal */ setCodexSandboxSource: (source: string) => void;
+  /** @internal */ setCodexSandboxDesired: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
+  /** @internal */ setCodexSandboxEffective: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
+  /** @internal */ setCodexSandboxConflict: (conflict: boolean) => void;
   /** @internal */ setLocalSendShortcut: (shortcut: 'enter' | 'cmdEnter') => void;
   /** @internal */ setLocalAutoOpenFileEnabled: (enabled: boolean) => void;
   /** @internal */ setCommitPrompt: (prompt: string) => void;
@@ -230,9 +238,17 @@ export function useSettingsBasicActions({
   const [localStreamingEnabled, setLocalStreamingEnabled] = useState<boolean>(false);
   const streamingEnabled = streamingEnabledProp ?? localStreamingEnabled;
 
-  const [codexSandboxMode, setCodexSandboxMode] = useState<'workspace-write' | 'danger-full-access'>(
-    'danger-full-access'
-  );
+  const [codexSandboxMode, setCodexSandboxMode] = useState<
+    'read-only' | 'workspace-write' | 'danger-full-access'
+  >('workspace-write');
+  const [codexSandboxSource, setCodexSandboxSource] = useState('default');
+  const [codexSandboxDesired, setCodexSandboxDesired] = useState<
+    'read-only' | 'workspace-write' | 'danger-full-access'
+  >('workspace-write');
+  const [codexSandboxEffective, setCodexSandboxEffective] = useState<
+    'read-only' | 'workspace-write' | 'danger-full-access'
+  >('workspace-write');
+  const [codexSandboxConflict, setCodexSandboxConflict] = useState(false);
 
   // Send shortcut configuration - prefer props, fallback to local state
   const [localSendShortcut, setLocalSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
@@ -427,10 +443,16 @@ export function useSettingsBasicActions({
     }
   }, [onStreamingEnabledChangeProp]);
 
-  const handleCodexSandboxModeChange = useCallback((mode: 'workspace-write' | 'danger-full-access') => {
+  const handleCodexSandboxModeChange = useCallback((mode: 'read-only' | 'workspace-write' | 'danger-full-access') => {
     setCodexSandboxMode(mode);
+    setCodexSandboxDesired(mode);
+    setCodexSandboxConflict(false);
+    setCodexSandboxSource('user');
     const payload = { sandboxMode: mode };
     sendToJava(`set_codex_sandbox_mode:${JSON.stringify(payload)}`);
+    // New Codex handlers receive provenance and validate the independent
+    // access range; the legacy message above remains for older hosts.
+    sendToJava(`set_codex_sandbox_selection:${JSON.stringify({ selection: mode, source: 'user' })}`);
   }, []);
 
   // Send shortcut change handler
@@ -771,6 +793,14 @@ export function useSettingsBasicActions({
     streamingEnabled,
     codexSandboxMode,
     setCodexSandboxMode,
+    codexSandboxSource,
+    setCodexSandboxSource,
+    codexSandboxDesired,
+    setCodexSandboxDesired,
+    codexSandboxEffective,
+    setCodexSandboxEffective,
+    codexSandboxConflict,
+    setCodexSandboxConflict,
     localSendShortcut,
     setLocalSendShortcut,
     sendShortcut,

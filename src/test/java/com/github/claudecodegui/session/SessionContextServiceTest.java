@@ -39,6 +39,52 @@ public class SessionContextServiceTest {
                 content.get(1).getAsJsonObject().get("text").getAsString());
     }
 
+    /** Module metadata belongs to native session instructions rather than every user turn. */
+    @Test
+    public void codexUserContextDoesNotRepeatProjectModules() {
+        JsonObject openedFiles = new JsonObject();
+        JsonArray modules = new JsonArray();
+        for (String name : List.of("project", "project.main", "project.test")) {
+            JsonObject module = new JsonObject();
+            module.addProperty("name", name);
+            modules.add(module);
+        }
+        openedFiles.add("modules", modules);
+        openedFiles.addProperty("active", "src/Active.java");
+        SessionContextService service = new SessionContextService(null);
+        String firstTurn = service.buildCodexContextAppend(openedFiles, List.of("src/Other.java"));
+        String nextTurn = service.buildCodexContextAppend(openedFiles, List.of("src/Next.java"));
+        assertFalse(firstTurn.contains("Project Modules"));
+        assertFalse(nextTurn.contains("project.main"));
+        assertTrue(firstTurn.contains("src/Active.java"));
+        assertTrue(firstTurn.contains("src/Other.java"));
+        assertTrue(nextTurn.contains("src/Next.java"));
+    }
+
+    /** Role and project context survive native initialization without contaminating subsequent user input. */
+    @Test
+    public void nativeSessionInstructionsKeepModulesAndTheSelectedRole() {
+        JsonObject openedFiles = com.google.gson.JsonParser.parseString("""
+                {"modules":[{"name":"project"},{"name":"project.main"},{}]}
+                """).getAsJsonObject();
+        SessionContextService service = new SessionContextService(null);
+        String instructions = service.buildCodexSessionInstructions("Review carefully.", openedFiles);
+        assertTrue(instructions.startsWith("Review carefully.\n\n## Project Modules"));
+        assertTrue(instructions.contains("`project.main`"));
+        assertTrue(instructions.contains("`unknown`"));
+        assertEquals(instructions, service.buildCodexSessionInstructions("Review carefully.", openedFiles));
+        assertTrue(service.buildLegacyContextAppend(openedFiles, null).contains("## Project Modules"));
+        assertEquals("## Project Modules", service.buildCodexSessionInstructions(null, openedFiles).lines().findFirst().orElseThrow());
+        assertTrue(service.buildCodexSessionInstructions(" ", openedFiles).startsWith("## Project Modules"));
+        for (JsonObject context : java.util.Arrays.asList(null, new JsonObject(),
+                com.google.gson.JsonParser.parseString("{\"modules\":[]}").getAsJsonObject(),
+                com.google.gson.JsonParser.parseString("{\"modules\":[{\"name\":\"one\"}]}").getAsJsonObject(),
+                com.google.gson.JsonParser.parseString("{\"modules\":\"unknown\"}").getAsJsonObject(),
+                com.google.gson.JsonParser.parseString("{\"isWorkspace\":true,\"modules\":[{},{}]}").getAsJsonObject())) {
+            assertEquals("Role", service.buildCodexSessionInstructions("Role", context));
+        }
+    }
+
     @Test
     public void buildCodexContextAppendReferencesPathsWithoutInliningContent() throws Exception {
         File referencedFile = temporaryFolder.newFile("ReferencedExample.java");

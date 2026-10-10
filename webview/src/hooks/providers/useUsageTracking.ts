@@ -10,8 +10,6 @@ const PROVIDER_TO_SDK: Record<string, string> = {
   claude: 'claude-sdk',
   anthropic: 'claude-sdk',
   bedrock: 'claude-sdk',
-  codex: 'codex-sdk',
-  openai: 'codex-sdk',
   // CLI providers have no npm SDK — markers are only for lookups.
   grok: 'grok-cli',
   kimi: 'kimi-cli',
@@ -58,8 +56,8 @@ export function useUsageTracking() {
 
   const isSdkInstalled = useCallback(
     (providerId: string): boolean => {
-      // Grok CLI is system-installed; do not gate on Claude/Codex SDK status.
-      if (CLI_ONLY_PROVIDERS.has(providerId)) return true;
+      // CLI resolution belongs to the backend; SDK status must not block Codex chat.
+      if (providerId === 'codex' || providerId === 'openai' || CLI_ONLY_PROVIDERS.has(providerId)) return true;
       const sdkId = PROVIDER_TO_SDK[providerId] || 'claude-sdk';
       const status = sdkStatus[sdkId];
       if (status?.status === 'installed' || status?.installed === true) return true;
@@ -74,7 +72,7 @@ export function useUsageTracking() {
   );
 
   const isSdkStatusKnown = useCallback((providerId: string): boolean => {
-    if (CLI_ONLY_PROVIDERS.has(providerId)) return true;
+    if (providerId === 'codex' || providerId === 'openai' || CLI_ONLY_PROVIDERS.has(providerId)) return true;
     const sdkId = PROVIDER_TO_SDK[providerId] || 'claude-sdk';
     const status = sdkStatus[sdkId];
     return status?.status === 'installed'

@@ -112,6 +112,10 @@
     background-color: var(--color-error);
 }
 
+.tool-status-indicator.unknown {
+    background-color: var(--text-tertiary);
+}
+
 @keyframes tool-status-spin {
     to { transform: rotate(360deg); }
 }
@@ -724,4 +728,28 @@
     color: var(--text-primary);
     font-size: 12px;
     line-height: 1.5;
+}
+.edit-file-card {
+    min-width: 0;
+}
+
+.edit-file-card .task-details {
+    max-height: 420px;
+    overflow: auto;
+}
+
+.edit-empty-diff {
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    overflow-wrap: anywhere;
+}
+
+.bash-command-summary,
+.bash-command-reason {
+    padding: 6px 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }

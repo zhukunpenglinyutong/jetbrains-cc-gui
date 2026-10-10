@@ -86,6 +86,7 @@ interface MessageListProps {
   isThinking: boolean;
   loading: boolean;
   loadingStartTime: number | null;
+  waitingLabel?: string;
   t: TFunction;
   getMessageText: (message: ClaudeMessage) => string;
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[];
@@ -109,6 +110,7 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
   isThinking,
   loading,
   loadingStartTime,
+  waitingLabel,
   t,
   getMessageText,
   getContentBlocks,
@@ -260,7 +262,9 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
     const eventName = currentProvider === 'codex' ? 'load_codex_history_page' : 'load_claude_history_page';
     const sent = sendBridgeEvent(eventName, JSON.stringify({
       sessionId: currentSessionId,
-      beforeTurn: historyPageInfo.fromTurn,
+      ...(historyPageInfo.source === 'native'
+        ? { cursor: historyPageInfo.cursor }
+        : { beforeTurn: historyPageInfo.fromTurn }),
     }));
     if (!sent) {
       loadingEarlierHistoryRef.current = false;
@@ -393,7 +397,7 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
       })}
 
       {/* Loading indicator */}
-      {loading && <WaitingIndicator startTime={loadingStartTime ?? undefined} />}
+      {loading && <WaitingIndicator startTime={loadingStartTime ?? undefined} label={waitingLabel} />}
       <div ref={messagesEndRef} />
     </div>
   );

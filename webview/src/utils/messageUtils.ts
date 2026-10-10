@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next';
+import { shouldRevealThinking } from './thinkingVisibility';
 import type { ClaudeContentBlock, ClaudeMessage, ClaudeRawMessage, CompactSummaryMetadata } from '../types';
 import { isCompactSummaryMetadata } from '../types';
 import {
@@ -20,6 +21,7 @@ import {
 import type { CompactNotificationItem } from '../types';
 import { MESSAGE_MERGE_CACHE_LIMIT } from './messageMergeCache';
 import { clearStaleStreamEndedMarker, hasRecentlyEndedTurnId } from './streamMarkers';
+import { stripDesktopAttachmentEnvelope } from './desktopAttachmentEnvelope';
 
 // ---------------------------------------------------------------------------
 // Re-exports — keep messageUtils.ts as the public barrel so existing imports
@@ -438,7 +440,7 @@ export function getMessageText(
     }
   }
 
-  return result;
+  return message.type === 'user' ? stripDesktopAttachmentEnvelope(result) : result;
 }
 
 /**
@@ -541,6 +543,11 @@ export function shouldShowMessage(
     return false;
   }
   if (message.type === 'assistant') {
+    const rawBlocks = normalizeBlocksFn(message.raw);
+    if (Array.isArray(rawBlocks) && rawBlocks.length > 0 && !rawBlocks.some(shouldRevealThinking)) {
+      // Retain native item state in the transcript without exposing placeholder-only rows.
+      return hasVisibleMessageText(message.content);
+    }
     return true;
   }
   if (message.type === 'user' || message.type === 'error') {
@@ -592,7 +599,7 @@ export function getContentBlocks(
       // Use type guard for safe metadata extraction. Real transcripts carry the
       // metadata as `compactMetadata` (attached from the compact_boundary system
       // line by attachCompactBoundaryMetadata); `summarizeMetadata` is a legacy shape.
-      const meta: CompactSummaryMetadata | undefined = isCompactSummaryMetadata(rawObj.compactMetadata)
+      let meta: CompactSummaryMetadata | undefined = isCompactSummaryMetadata(rawObj.compactMetadata)
         ? rawObj.compactMetadata
         : isCompactSummaryMetadata(rawObj.summarizeMetadata)
           ? rawObj.summarizeMetadata
@@ -622,7 +629,9 @@ export function getContentBlocks(
 
       // Pass i18n key as `title`; the renderer resolves it via t().
       // Keeps localization concerns out of this pure data helper.
-      const title = meta && typeof meta.messagesSummarized === 'number'
+      const title = meta?.native ? `chat.compactSummary.native${meta.status === 'inProgress' ? 'InProgress'
+        : meta.status === 'failed' ? 'Failed' : meta.status === 'interrupted' || meta.status === 'cancelled' ? 'Interrupted' : 'Completed'}`
+        : meta && typeof meta.messagesSummarized === 'number'
         ? 'chat.compactSummary.summarizedConversation'
         : 'chat.compactSummary.compactSummary';
       return [{ type: 'compact_summary', title, content: summaryText, metadata: meta }];
@@ -705,6 +714,18 @@ export function mergeConsecutiveAssistantMessages(
   };
 
   const shouldMergeAssistantMessage = (previous: ClaudeMessage, next: ClaudeMessage): boolean => {
+    const previousRaw = typeof previous.raw === 'object' ? previous.raw : null;
+    const nextRaw = typeof next.raw === 'object' ? next.raw : null;
+    const previousNativeTurn = previousRaw?.codexTurnId;
+    const nextNativeTurn = nextRaw?.codexTurnId;
+    if (typeof previousNativeTurn === 'string' || typeof nextNativeTurn === 'string') {
+      // Native identity survives item snapshots, reloads and stream-end markers.
+      // Runtime-only markers can be stamped on just the latest item in a turn.
+      return typeof previousNativeTurn === 'string' && previousNativeTurn.length > 0
+        && previousNativeTurn === nextNativeTurn
+        && typeof previousRaw?.codexThreadId === 'string' && previousRaw.codexThreadId.length > 0
+        && previousRaw.codexThreadId === nextRaw?.codexThreadId;
+    }
     // Distinct streaming turns must stay visually separated even when the
     // backend emits adjacent assistant fragments during synchronization.
     // Block merge when either side has a __turnId and they differ.
@@ -790,12 +811,25 @@ export function mergeConsecutiveAssistantMessages(
     };
 
     const mergedContent = contentParts.join('\n');
+    let turnId = first.__turnId;
+    if (typeof rawBase.codexTurnId === 'string') {
+      // Completion metadata lives on the last native item, while the first
+      // item's identity keeps the combined message stable as more items arrive.
+      for (const message of group) {
+        turnId = message.__turnId ?? turnId;
+        const raw = typeof message.raw === 'object' ? message.raw : null;
+        for (const field of ['turnUsage', 'turnCostUsd']) {
+          if (raw?.[field] !== undefined) nextRaw[field] = raw[field];
+        }
+      }
+    }
 
     return {
       ...first,
       content: mergedContent,
       raw: nextRaw,
-      __turnId: first.__turnId,
+      isStreaming: group.some(message => message.isStreaming),
+      __turnId: turnId,
     };
   };
 

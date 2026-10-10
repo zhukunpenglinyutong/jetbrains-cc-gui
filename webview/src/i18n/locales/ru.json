@@ -119,14 +119,32 @@
       "openTooltip": "Поиск в беседе (Cmd/Ctrl+F)"
     },
     "compactSummary": {
+      "receivedTime": "Время записи",
       "summarizedConversation": "Сводка беседы",
       "compactSummary": "Краткое резюме",
       "messagesUpTo": "Сведено {{count}} сообщений до этого момента",
       "messagesFrom": "Сведено {{count}} сообщений начиная с этого момента",
       "userContext": "Контекст: «{{context}}»",
       "expand": "Развернуть сводку",
-      "collapse": "Свернуть сводку"
-    }
+      "collapse": "Свернуть сводку",
+      "nativeCompleted": "Контекст сжат",
+      "nativeInProgress": "Сжатие контекста",
+      "nativeFailed": "Ошибка сжатия",
+      "nativeInterrupted": "Сжатие прервано",
+      "writerOccupied": "Блокировка записи этого разговора занята. Её может удерживать среда выполнения этого плагина или другой процесс Codex. Проверьте, не остаётся ли разговор загруженным в другом окне или в фоне.",
+      "manual": "Вручную",
+      "auto": "Автоматически",
+      "timeUnknown": "Время неизвестно",
+      "turnTime": "Начало хода"
+    },
+    "codexCompactUsage": "Use /compact without arguments",
+    "codexCompactStarted": "Codex is compacting the conversation",
+    "codexReviewUsage": "Use /review without arguments",
+    "codexReviewStarted": "Codex is reviewing the workspace",
+    "codexDiffUsage": "Use /diff without arguments",
+    "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
+    "continueRefiningPlan": "Продолжить доработку этого плана:"
   },
   "settings": {
     "title": "Настройки",
@@ -393,8 +411,8 @@
       "installPolicyTip": "Проблемы с установкой? Скопируйте ошибку в терминальный CLI AI для решения",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Необходим для функций Claude AI. Включает Claude Code SDK и связанные зависимости.",
-      "codexSdkName": "Codex SDK",
-      "codexSdkDescription": "Необходим для функций Codex AI. Включает OpenAI Codex SDK.",
+      "codexSdkName": "Codex CLI",
+      "codexSdkDescription": "Необходимо для функций Codex AI. Страница CLI определяет установленный официальный Codex CLI (@openai/codex); чат работает через app-server.",
       "loading": "Загрузка статуса зависимостей...",
       "install": "Установить",
       "installing": "Установка...",
@@ -410,7 +428,8 @@
       "uninstallSuccess": "{{name}} удалён",
       "uninstallFailed": "Ошибка удаления: {{error}}",
       "updating": "Обновление...",
-      "updateSuccess": "{{name}} успешно обновлён"
+      "updateSuccess": "{{name}} успешно обновлён",
+      "cliTransportBadge": "CLI · {{transport}}"
     },
     "usage": "Статистика использования",
     "usageDesc": "Просмотр потребления токенов, статистики затрат и анализа тенденций",
@@ -863,6 +882,10 @@
       "copied": "Copied to clipboard",
       "copyFailed": "Failed to copy",
       "tools": {
+        "codex": {
+          "name": "Codex CLI",
+          "description": "Обнаруживает установленный Codex CLI. Проверка версии не читает настройки аккаунта; чат использует app-server."
+        },
         "minimax": {
           "name": "MiniMax Code",
           "description": "Терминальный кодинг-агент MiniMax. Требуется Node.js 22.19+ / 24+ (не 23); команды: minimax / mcode"
@@ -912,6 +935,21 @@
         "hide": "Скрыть в меню выбора провайдера",
         "show": "Показать в меню выбора провайдера"
       }
+    },
+    "permissionsPanel": {
+      "codexSandboxTitle": "Codex Sandbox Mode",
+      "codexSandboxDesc": "Control system access boundaries when Codex executes commands. Defaults to the safer workspace-write (read/write within the workspace only). Switch to danger-full-access for system-level commands such as adb or docker.",
+      "workspaceWriteTitle": "workspace-write",
+      "workspaceWriteDesc": "Read/write is limited to the workspace. System-level operations are restricted for safety.",
+      "fullAccessTitle": "danger-full-access",
+      "fullAccessDesc": "Allows higher system access, suitable for commands like adb or docker that require extra permissions.",
+      "hint": "This setting only affects Codex process sandboxing and does not change Claude Code permission behavior.",
+      "desired": "Desired: {{mode}}",
+      "effective": "Effective: {{mode}}",
+      "conflict": "Native policy rejected the requested access range.",
+      "source": "Source: {{source}}",
+      "readOnlyTitle": "Read only",
+      "readOnlyDesc": "Inspect files without writing to the workspace."
     }
   },
   "history": {
@@ -1003,7 +1041,8 @@
       "sdk-cli": "Этот сеанс был создан плагином через SDK и по умолчанию не отображается в CLI. Нажмите 'Преобразовать в CLI', чтобы он появился в списке /resume терминала CLI",
       "claude-vscode": "Этот сеанс был создан расширением VS Code и по умолчанию не отображается в CLI. Нажмите 'Преобразовать в CLI', чтобы он появился в списке /resume терминала CLI",
       "remote": "Этот сеанс был создан удаленным экземпляром Claude Code"
-    }
+    },
+    "loadMore": "Load more"
   },
   "permission": {
     "dialogTitle": "Запрос разрешения",
@@ -1025,7 +1064,12 @@
       "execute": "Выполняю {{toolName}}",
       "readDirectory": "Читаю директорию",
       "timeoutWarning": "Ответьте в течение {{seconds}} сек, иначе диалог закроется"
-    }
+    },
+    "userCancelled": "Permission request cancelled",
+    "previewUnavailable": "Native file preview is unavailable. You can deny or cancel this request.",
+    "requestedPermissions": "Requested native permissions",
+    "allowWithRule": "Allow with this command rule",
+    "allowWithNetworkRule": "Allow with this network rule"
   },
   "askUserQuestion": {
     "title": "У Claude есть вопросы к вам",
@@ -1086,6 +1130,19 @@
       "loading": "Загрузка провайдеров...",
       "empty": "Нет доступных провайдеров",
       "switched": "Переключено на {{provider}}"
+    },
+    "codexQuota": {
+      "title": "Квота Codex",
+      "loading": "Загрузка квоты...",
+      "unavailable": "Квота недоступна",
+      "lastUpdated": "Обновлено {{value}}",
+      "fiveHour": "Использование за 5 ч",
+      "weekly": "Недельное использование",
+      "windowRemainingPercent": "Осталось {{percent}}%",
+      "windowRemainingPercentWithReset": "Осталось {{percent}}% · Сброс {{value}}",
+      "windowUsedOnly": "Использовано {{used}}",
+      "windowUnavailable": "Недоступно",
+      "apiKeyMode": "В режиме API-ключа квота подписки отсутствует"
     },
     "nodeProcesses": {
       "title": "Менеджер процессов Node",
@@ -1343,11 +1400,26 @@
     "noParams": "Без параметров",
     "required": "Обязательно",
     "optional": "Необязательно",
-    "refreshServer": "Обновить {{name}}"
+    "refreshServer": "Обновить {{name}}",
+    "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
     "toolCall": "Вызываю инструмент",
     "runCommand": "Выполняю команду",
+    "commandRead": "Прочитать {{path}}",
+    "commandList": "Список {{path}}",
+    "commandSearch": "Найти {{query}} в {{path}}",
+    "commandApprovalReason": "Причина одобрения",
+    "patchToggleDiff": "Показать изменения",
+    "errorOutput": "Подробности ошибки",
+    "resultUnknown": "Отдельный результат инструмента недоступен",
+    "patchNoDiff": "Разница недоступна",
+    "patchKind": {
+      "add": "Добавлен",
+      "delete": "Удалён",
+      "update": "Изменён",
+      "move": "Перемещён"
+    },
     "contextEngine": "Анализирую контекст",
     "task": "Выполняю задачу",
     "readFile": "Читаю файл",
@@ -1731,6 +1803,22 @@
       "description": "Полностью автоматический, пропускает все проверки разрешений [Используйте с осторожностью]"
     }
   },
+  "workspaceDiff": {
+    "title": "Изменения рабочей области",
+    "staged": "В индексе",
+    "unstaged": "Не в индексе",
+    "untracked": "Не отслеживаемые",
+    "noChanges": "Изменения не обнаружены",
+    "binary": "Бинарный",
+    "truncated": "Снимок рабочей области был слишком большим и был усечён",
+    "notGit": "Текущий каталог не является рабочим деревом Git",
+    "refresh": "Обновить",
+    "fileCount": "{{count}} файлов",
+    "fileCount_one": "{{count}} файл",
+    "fileCount_few": "{{count}} файла",
+    "fileCount_many": "{{count}} файлов",
+    "fileCount_other": "{{count}} файла"
+  },
   "codexModes": {
     "default": {
       "label": "Предложение (одобрение)",
@@ -1739,8 +1827,8 @@
     },
     "plan": {
       "label": "Режим планирования",
-      "tooltip": "Режим планирования — только чтение",
-      "description": "Использует только инструменты чтения, генерирует план для утверждения"
+      "tooltip": "Нативный режим совместного планирования",
+      "description": "Создаёт нативный план перед реализацией; песочница и подтверждения остаются независимыми"
     },
     "acceptEdits": {
       "label": "Авто-правки",
@@ -1945,8 +2033,8 @@
     "recommended": "Рекомендуется",
     "codexWriterConflict": {
       "title": "Поток Codex занят",
-      "intro": "Когда начался новый ход, процесс Codex предыдущего хода ещё записывал данные в этот поток. Плагин теперь автоматически останавливает предыдущий ход перед отправкой.",
-      "reason": "Подождите несколько секунд и отправьте сообщение повторно — создавать новую сессию не нужно."
+      "intro": "Другой ход или клиент Codex записывает данные в эту беседу. Не удалось начать отправку.",
+      "reason": "Остановите ход в клиенте, использующем эту беседу, и отправьте сообщение снова после его завершения."
     },
     "codexThreadResume": {
       "title": "Поток сеанса больше не действителен",
@@ -1985,6 +2073,32 @@
           "step1": "2. Откройте управление зависимостями и переустановите последний SDK:"
         }
       }
+    },
+    "codexCliUnavailable": {
+      "title": "Не удалось запустить Codex CLI",
+      "intro": "Среда Codex CLI завершилась, не успев ответить. В ошибке выше указан путь к сбойному CLI и его собственный вывод. Обычно причина - неполная установка Codex CLI, а не ошибка плагина.",
+      "reason": "Плагин запускает \"codex app-server\" из найденного на компьютере Codex CLI. Наполовину установленная копия (например, глобальная установка npm без бинарника для платформы) завершается с кодом 1 и утягивает за собой весь ход.",
+      "solutions": {
+        "reinstallCodexCli": {
+          "title": "Вариант 1: удалить повреждённую установку и поставить официальный CLI заново",
+          "step0": "1. Сначала удалите оставшуюся глобальную установку (чаще всего причина именно в двух копиях):",
+          "step1": "2. Установите официальный CLI заново, из официального реестра npm, а не из зеркала:",
+          "step2": "3. Убедитесь, что CLI отвечает, и только затем отправьте сообщение снова:"
+        },
+        "pointCodexBin": {
+          "title": "Вариант 2: указать плагину рабочий бинарник",
+          "step0": "Перечислите все codex в PATH (в Windows: where codex). Если рабочий не первый, задайте переменную окружения CODEX_BIN с полным путём к нему и перезапустите IDE. Плагин также автоматически переходит к более поздним установкам."
+        }
+      }
+    }
+  },
+  "codex": {
+    "plan": {
+      "title": "Codex plan",
+      "ready": "Plan ready",
+      "execute": "Execute plan",
+      "executing": "Executing…",
+      "adjust": "Continue adjusting"
     }
   }
 }

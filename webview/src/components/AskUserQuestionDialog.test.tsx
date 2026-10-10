@@ -29,6 +29,32 @@ const buildRequest = (overrides: Partial<AskUserQuestionRequest> = {}): AskUserQ
 });
 
 describe('AskUserQuestionDialog provider label', () => {
+  it.each([true, false])('keeps a native answer editable while respecting its secret presentation: %s', isSecret => {
+    const onSubmit = vi.fn();
+    const value = isSecret ? 'review-secret\nsecond line' : 'visible answer';
+    const request = buildRequest({ requestId: `native-secret-${isSecret}`, provider: 'codex', questions: [{
+      id: 'token', question: 'Enter the requested value', header: 'Token', options: [], multiSelect: false, isSecret,
+    }] });
+    render(<AskUserQuestionDialog isOpen request={request} onSubmit={onSubmit} onCancel={() => {}} />);
+    const input = screen.getByRole('textbox');
+    expect(input.classList.contains('secret-input')).toBe(isSecret);
+    fireEvent.change(input, { target: { value } });
+    expect((input as HTMLTextAreaElement).value).toBe(value);
+    if (isSecret) expect(Object.values(localStorage).join('')).not.toContain('review-secret');
+    fireEvent.click(screen.getByText('提交'));
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith(request.requestId, { token: value });
+  });
+
+  it('allows a failed submission to retry without recreating the question', () => {
+    const onSubmit = vi.fn().mockReturnValueOnce(false).mockReturnValue(undefined);
+    render(<AskUserQuestionDialog isOpen request={buildRequest({ provider: 'codex' })}
+      onSubmit={onSubmit} onCancel={() => {}} />);
+    fireEvent.click(screen.getByText('Red'));
+    fireEvent.click(screen.getByText('提交'));
+    fireEvent.click(screen.getByText('提交'));
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+  });
+
   it('identifies Codex request_user_input requests', () => {
     render(
       <AskUserQuestionDialog

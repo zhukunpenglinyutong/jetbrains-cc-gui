@@ -8,7 +8,8 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
-import { getRealHomeDir, getCodemossDir } from './path-utils.js';
+import { getCodemossDir } from './path-utils.js';
+import { resolveCodexCli } from '../services/codex/codex-cli-resolver.js';
 
 // Base path for dependencies directory - uses the shared path utility
 const DEPS_BASE = join(getCodemossDir(), 'dependencies');
@@ -18,24 +19,20 @@ const sdkCache = new Map();
 // Promise cache for in-flight loads to prevent concurrent loading of the same SDK
 const loadingPromises = new Map();
 
-// SDK definitions (kept in sync with DependencyManager.SdkDefinition)
+// SDK definitions (kept in sync with DependencyManager.SdkDefinition).
 const SDK_DEFINITIONS = {
     CLAUDE: {
         id: 'claude-sdk',
         npmPackage: '@anthropic-ai/claude-agent-sdk'
-    },
-    CODEX: {
-        id: 'codex-sdk',
-        npmPackage: '@openai/codex-sdk'
     }
 };
 
-function getSdkRootDir(sdkId) {
-    return join(DEPS_BASE, sdkId);
+function getSdkRootDir(sdkId, depsBaseOverride) {
+    return join(depsBaseOverride || DEPS_BASE, sdkId);
 }
 
 function getPackageDirFromRoot(sdkRootDir, pkgName) {
-    // pkgName like: "@anthropic-ai/claude-agent-sdk" or "@openai/codex-sdk"
+    // Resolve managed SDK packages without consulting the global Node resolver.
     // Logic kept consistent with DependencyManager.getPackageDir()
     const parts = pkgName.split('/');
     return join(sdkRootDir, 'node_modules', ...parts);
@@ -120,19 +117,42 @@ export function isClaudeSdkAvailable() {
 }
 
 /**
- * Check whether the Codex SDK is available
- * Logic kept consistent with DependencyManager.isInstalled("codex")
+ * Check whether the Codex runtime is available.
+ *
+ * The legacy export name is retained for system-status consumers. Availability
+ * requires a CLI resolution; an SDK package or install marker is insufficient.
+ * @param {string} [depsBaseOverride] test-only override of the dependencies root
  */
-export function isCodexSdkAvailable() {
-    const sdkId = 'codex-sdk';
-    const npmPackage = '@openai/codex-sdk';
-    const sdkPath = getPackageDirFromRoot(getSdkRootDir(sdkId), npmPackage);
-    const exists = existsSync(sdkPath);
-    console.error('[sdk-loader] isCodexSdkAvailable:', {
-        path: sdkPath,
-        exists: exists
+export function isCodexSdkAvailable(depsBaseOverride) {
+    return getCodexCliStatus(depsBaseOverride).status === 'resolved';
+}
+
+/** Resolution involves synchronous PATH probes and can shell out; cache briefly. */
+const CLI_STATUS_TTL_MS = 30_000;
+const cliStatusCache = new Map();
+
+/**
+ * Resolve the installed Codex CLI with read-only compatibility for old dependencies.
+ *
+ * Results are cached briefly per dependencies root: the resolution chain is
+ * synchronous daemon-loop work (PATH probes, and an interactive login shell
+ * when nothing is installed), while per-request callers only need recent
+ * truth.
+ * @param {string} [depsBaseOverride] test-only override of the dependencies root
+ * @returns {{status: string, source: string, kind?: string, command?: string[], version?: string|null, reason?: string}}
+ */
+export function getCodexCliStatus(depsBaseOverride) {
+    const cacheKey = depsBaseOverride ?? '';
+    const cached = cliStatusCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < CLI_STATUS_TTL_MS) {
+        return cached.status;
+    }
+    const status = resolveCodexCli({
+        depsRoot: join(getSdkRootDir('codex-sdk', depsBaseOverride), 'node_modules'),
+        ...(depsBaseOverride ? { discoverCli: () => null, env: {} } : {}),
     });
-    return exists;
+    cliStatusCache.set(cacheKey, { status, at: Date.now() });
+    return status;
 }
 
 /**
@@ -193,48 +213,6 @@ export async function loadClaudeSdk() {
     })();
 
     loadingPromises.set('claude', loadPromise);
-    return loadPromise;
-}
-
-/**
- * Dynamically load the Codex SDK
- * @returns {Promise<{Codex: Class, ...}>}
- * @throws {Error} If the SDK is not installed
- */
-export async function loadCodexSdk() {
-    // Return the cached SDK if available
-    if (sdkCache.has('codex')) {
-        return sdkCache.get('codex');
-    }
-
-    // If a load is already in progress, return the same promise to prevent duplicate loading
-    if (loadingPromises.has('codex')) {
-        return loadingPromises.get('codex');
-    }
-
-    const sdkRootDir = getSdkRootDir('codex-sdk');
-    const sdkPath = getPackageDirFromRoot(sdkRootDir, '@openai/codex-sdk');
-
-    if (!existsSync(sdkPath)) {
-        throw new Error('SDK_NOT_INSTALLED:codex');
-    }
-
-    // Create and cache the loading promise
-    const loadPromise = (async () => {
-        try {
-            const resolvedUrl = resolveExternalPackageUrl('@openai/codex-sdk', sdkRootDir);
-            const sdk = await import(resolvedUrl);
-
-            sdkCache.set('codex', sdk);
-            return sdk;
-        } catch (error) {
-            throw new Error(`Failed to load Codex SDK: ${error.message}`);
-        } finally {
-            loadingPromises.delete('codex');
-        }
-    })();
-
-    loadingPromises.set('codex', loadPromise);
     return loadPromise;
 }
 
@@ -326,22 +304,32 @@ export async function loadBedrockSdk() {
 export function getSdkStatus() {
     // Uses the same path resolution logic as DependencyManager
     const claudeInstalled = isClaudeSdkAvailable();
-    const codexInstalled = isCodexSdkAvailable();
+    const codexCli = getCodexCliStatus();
 
     return {
         claude: {
             installed: claudeInstalled,
+            runtimeKind: 'sdk',
             path: getPackageDirFromRoot(getSdkRootDir('claude-sdk'), '@anthropic-ai/claude-agent-sdk')
         },
         codex: {
-            installed: codexInstalled,
-            path: getPackageDirFromRoot(getSdkRootDir('codex-sdk'), '@openai/codex-sdk')
+            installed: codexCli.status === 'resolved',
+            runtimeKind: 'cli',
+            transport: 'app-server',
+            path: codexCli.command?.[0] ?? null,
+            cli: {
+                status: codexCli.status,
+                source: codexCli.source,
+                kind: codexCli.kind ?? null,
+                version: codexCli.version ?? null
+            }
         }
     };
 }
 
 /**
  * Read the installed version of an SDK package without importing it.
+ * Codex is discovered as a CLI and has no managed SDK version.
  * @param {string} sdkId
  * @returns {string|null}
  */
@@ -351,20 +339,36 @@ export function getInstalledSdkVersion(sdkId) {
         return null;
     }
 
-    const packageJsonPath = join(
-        getPackageDirFromRoot(getSdkRootDir(sdkId), definition.npmPackage),
-        'package.json'
-    );
-    if (!existsSync(packageJsonPath)) {
-        return null;
+    const packages = [definition.npmPackage, ...(definition.legacyNpmPackages || [])];
+    const sdkRootDir = getSdkRootDir(sdkId);
+    for (const npmPackage of packages) {
+        const packageDir = getPackageDirFromRoot(sdkRootDir, npmPackage);
+        const packageJsonPath = join(packageDir, 'package.json');
+        if (!existsSync(packageJsonPath)) {
+            continue;
+        }
+        try {
+            const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+            if (typeof packageJson.version === 'string') {
+                return packageJson.version;
+            }
+        } catch {
+            // fall through to the next candidate
+        }
+        // The legacy SDK package exists; its bundled CLI version is authoritative.
+        const nestedCliPath = join(packageDir, 'node_modules', definition.npmPackage, 'package.json');
+        if (npmPackage !== definition.npmPackage && existsSync(nestedCliPath)) {
+            try {
+                const nested = JSON.parse(readFileSync(nestedCliPath, 'utf8'));
+                if (typeof nested.version === 'string') {
+                    return nested.version;
+                }
+            } catch {
+                // fall through
+            }
+        }
     }
-
-    try {
-        const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-        return typeof packageJson.version === 'string' ? packageJson.version : null;
-    } catch {
-        return null;
-    }
+    return null;
 }
 
 /**
@@ -388,9 +392,9 @@ export function requireSdk(provider) {
         throw error;
     }
 
-    if (provider === 'codex' && !isCodexSdkAvailable()) {
-        const error = new Error('Codex SDK not installed. Please install via Settings > Dependencies.');
-        error.code = 'SDK_NOT_INSTALLED';
+    if (provider === 'codex' && getCodexCliStatus().status !== 'resolved') {
+        const error = new Error('Codex CLI not found. Check Provider Management > CLI and install the official CLI.');
+        error.code = 'CODEX_CLI_UNRESOLVED';
         error.provider = 'codex';
         throw error;
     }

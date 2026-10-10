@@ -110,6 +110,7 @@ public class SessionState {
     private volatile String error = null;
     // Claims and releases share messageStateLock with history application.
     private volatile Object loadingOwner;
+    private volatile Object turnOwner = new Object();
 
     // Message history is also updated by daemon reader and history-loader threads.
     // Every message callback and history replacement takes this lock so a transport
@@ -125,11 +126,23 @@ public class SessionState {
         }
     }
 
-    // Session metadata — cwd is written in handler thread before send(), read inside send();
-    // the happens-before from CompletableFuture.runAsync guarantees visibility, so volatile is not required.
+    // Session metadata — cwd is also written from the daemon event thread
+    // (thread/settings/updated) while send() reads it on another thread, so
+    // volatile is required; there is no happens-before between those threads.
     private String summary = null;
     private long lastModifiedTime = System.currentTimeMillis();
-    private String cwd = null;
+    private volatile String cwd = null;
+    private volatile boolean codexCwdExplicit;
+
+    /** Records a user directory change separately from a restored native directory. */
+    public void setCodexCwdExplicit(boolean explicit) {
+        this.codexCwdExplicit = explicit;
+    }
+
+    /** Returns whether the current Codex thread has an explicit directory override. */
+    public boolean isCodexCwdExplicit() {
+        return this.codexCwdExplicit;
+    }
 
     // Configuration fields below are volatile because set_mode / set_model / set_provider
     // and send_message may execute on different async handler threads with no other
@@ -163,6 +176,26 @@ public class SessionState {
 
     public boolean isBusy() {
         return busy;
+    }
+
+    /** Starts a send before any previous provider process has finished shutting down. */
+    public Object beginTurn() {
+        synchronized (messageStateLock) {
+            turnOwner = new Object();
+            busy = true;
+            loading = true;
+            loadingOwner = null;
+            error = null;
+            return turnOwner;
+        }
+    }
+
+    public Object getTurnOwner() {
+        return turnOwner;
+    }
+
+    public boolean isCurrentTurn(Object owner) {
+        return turnOwner == owner;
     }
 
     public boolean isLoading() {

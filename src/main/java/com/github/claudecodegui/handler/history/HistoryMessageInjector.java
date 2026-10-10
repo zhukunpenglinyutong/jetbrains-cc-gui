@@ -6,6 +6,8 @@ import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.handler.UsagePushService;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
+import com.github.claudecodegui.provider.codex.CodexNativeHistoryReader;
+import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.JsUtils;
@@ -54,6 +56,8 @@ public class HistoryMessageInjector {
     private final HandlerContext context;
     private final AtomicLong sessionLoadGeneration = new AtomicLong();
     private final CodexHistoryPageIndex codexPageIndex = new CodexHistoryPageIndex();
+    private volatile CodexNativeHistoryReader nativeHistoryReader;
+    private volatile JsonElement nativeHistoryCursor;
 
     HistoryMessageInjector(HandlerContext context) {
         this.context = context;
@@ -63,6 +67,8 @@ public class HistoryMessageInjector {
     }
 
     long invalidateCodexHistory() {
+        this.nativeHistoryReader = null;
+        this.nativeHistoryCursor = null;
         long generation;
         synchronized (sessionLoadGeneration) {
             generation = sessionLoadGeneration.incrementAndGet();
@@ -154,15 +160,28 @@ public class HistoryMessageInjector {
             LOG.info("[HistoryHandler] SessionId: " + sessionId);
 
             try {
+                ClaudeSession activeSession = this.context.getSession();
+                String oldThread = activeSession == null ? null : activeSession.getSessionId();
+                if (activeSession != null && "codex".equals(activeSession.getProvider())
+                        && oldThread != null && !oldThread.equals(sessionId) && this.context.getCodexSDKBridge() != null) {
+                    // Node bounds the release itself; keep a Java-side ceiling so
+                    // this history load can never block on the release forever.
+                    JsonObject release = this.context.getCodexSDKBridge().releaseCodexThread(activeSession.getChannelId(),
+                            activeSession.getCwd(), oldThread).get(30, java.util.concurrent.TimeUnit.SECONDS);
+                    if (release.has("error")) {
+                        throw new IllegalStateException(release.get("error").getAsString());
+                    }
+                }
                 CodexHistoryReader codexReader = new CodexHistoryReader();
-                CodexHistoryPage page = codexPageIndex.read(
-                        codexReader, sessionId, null, HISTORY_USER_TURN_LIMIT,
-                        () -> generation == sessionLoadGeneration.get());
+                CodexHistoryPage page = this.readInitialCodexHistory(codexReader, sessionId, generation);
                 publishIfCurrent(generation, () -> {
                     String threadIdToUse = page.threadId != null ? page.threadId : sessionId;
                     String cwd = page.cwd;
 
                     context.getSession().setSessionInfo(threadIdToUse, cwd);
+                    context.getSession().setProvider("codex");
+                    this.nativeHistoryReader = page.nativeReader;
+                    this.nativeHistoryCursor = page.cursor;
                     if (model != null && !model.isBlank()) {
                         context.getSession().setModel(model.trim());
                     }
@@ -193,7 +212,110 @@ public class HistoryMessageInjector {
                 }));
                 notifyHistoryLoadComplete(generation);
             }
-        });
+        }, CodexSDKBridge.codexControlExecutor());
+    }
+
+    private CodexHistoryPage readInitialCodexHistory(CodexHistoryReader legacyReader, String sessionId, long generation) throws Exception {
+        // The session may be absent in exactly the scenario loadCodexSession
+        // already anticipates; keep the reader usable without a channel id.
+        ClaudeSession session = this.context.getSession();
+        CodexNativeHistoryReader reader = new CodexNativeHistoryReader(this.context.getCodexSDKBridge(),
+                session == null ? null : session.getChannelId(),
+                this.context.resolveEffectiveWorkingDirectory(), sessionId);
+        if (this.context.getCodexSDKBridge() == null) {
+            return this.codexPageIndex.read(legacyReader, sessionId, null, HISTORY_USER_TURN_LIMIT,
+                    () -> generation == this.sessionLoadGeneration.get());
+        }
+        CodexHistoryPage nativePage;
+        try {
+            nativePage = this.nativeHistoryPage(reader, reader.readPage(null, HISTORY_USER_TURN_LIMIT), null);
+        } catch (Exception error) {
+            if (!CodexNativeHistoryReader.permitsOfflineFallback(error.getMessage())) {
+                throw error;
+            }
+            return this.codexPageIndex.read(legacyReader, sessionId, null, HISTORY_USER_TURN_LIMIT,
+                    () -> generation == this.sessionLoadGeneration.get());
+        }
+        // Select a complete legacy transcript only when the native projection
+        // omits stored tools, their resolved presentation or pre-compaction turns.
+        CodexHistoryPage legacyPage;
+        try {
+            legacyPage = this.codexPageIndex.read(legacyReader, sessionId, null, HISTORY_USER_TURN_LIMIT,
+                    () -> generation == this.sessionLoadGeneration.get());
+        } catch (IOException unavailable) {
+            return nativePage;
+        }
+        if (requiresLegacyProjection(nativePage, legacyPage)) {
+            return legacyPage;
+        }
+        return nativePage;
+    }
+
+    static boolean requiresLegacyProjection(CodexHistoryPage nativePage, CodexHistoryPage legacyPage) {
+        long nativeTools = CodexNativeHistoryReader.countBlocks(nativePage.messages, "tool_use");
+        long legacyTools = CodexNativeHistoryReader.countBlocks(legacyPage.messages, "tool_use");
+        long nativeUsers = nativePage.messages.stream().filter(HistoryMessageInjector::isHumanUserMessage).count();
+        boolean missingThinking = CodexNativeHistoryReader.countBlocks(nativePage.messages, "thinking")
+                < CodexNativeHistoryReader.countBlocks(legacyPage.messages, "thinking");
+        boolean missingUsage = !CodexNativeHistoryReader.hasUsage(nativePage.messages) && CodexNativeHistoryReader.hasUsage(legacyPage.messages);
+        boolean missingCompaction = CodexNativeHistoryReader.countCompactions(nativePage.messages)
+                < CodexNativeHistoryReader.countCompactions(legacyPage.messages);
+        boolean missingCompactionTime = CodexNativeHistoryReader.countTimedCompactions(nativePage.messages)
+                < CodexNativeHistoryReader.countTimedCompactions(legacyPage.messages);
+        return nativeTools < legacyTools || containsReplayedExec(nativePage, legacyPage)
+                || missingThinking || missingUsage || missingCompaction || missingCompactionTime
+                || (!nativePage.partial && legacyPage.totalTurns > nativeUsers);
+    }
+
+    private static boolean containsReplayedExec(CodexHistoryPage nativePage, CodexHistoryPage legacyPage) {
+        Set<String> replayed = new HashSet<>();
+        for (JsonObject message : legacyPage.messages) {
+            JsonObject raw = message.has("raw") && message.get("raw").isJsonObject() ? message.getAsJsonObject("raw") : null;
+            String callId = getStringProperty(raw, "codexReplayedCallId");
+            if (callId != null) {
+                replayed.add(callId);
+            }
+        }
+        if (replayed.isEmpty()) {
+            return false;
+        }
+        for (JsonObject message : nativePage.messages) {
+            JsonObject raw = message.has("raw") && message.get("raw").isJsonObject() ? message.getAsJsonObject("raw") : null;
+            if (raw == null) {
+                continue;
+            }
+            JsonObject payload = raw.has("message") && raw.get("message").isJsonObject() ? raw.getAsJsonObject("message") : raw;
+            if (!payload.has("content") || !payload.get("content").isJsonArray()) {
+                continue;
+            }
+            for (JsonElement element : payload.getAsJsonArray("content")) {
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject block = element.getAsJsonObject();
+                String name = getStringProperty(block, "name");
+                if ("tool_use".equals(getStringProperty(block, "type")) && ("exec".equals(name) || "functions.exec".equals(name))
+                        && replayed.contains(getStringProperty(block, "id"))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private CodexHistoryPage nativeHistoryPage(CodexNativeHistoryReader reader, CodexNativeHistoryReader.Page nativePage,
+                                               JsonElement requestedCursor) {
+        CodexHistoryPage page = new CodexHistoryPage();
+        page.messages = nativePage.messages();
+        page.threadId = getStringProperty(nativePage.thread(), "id");
+        page.cwd = getStringProperty(nativePage.thread(), "cwd");
+        page.sessionTitle = getStringProperty(nativePage.thread(), "name");
+        page.source = "native";
+        page.nativeReader = reader;
+        page.cursor = nativePage.cursor();
+        page.requestCursor = requestedCursor;
+        page.partial = nativePage.partial();
+        return page;
     }
 
     void loadEarlierCodexHistoryPage(String content) {
@@ -203,18 +325,31 @@ public class HistoryMessageInjector {
             Integer beforeTurn = null;
             try {
                 JsonObject request = new Gson().fromJson(content, JsonObject.class);
-                if (request == null || !request.has("sessionId") || !request.has("beforeTurn")) {
+                if (request == null || !request.has("sessionId")
+                        || (!request.has("beforeTurn") && !request.has("cursor"))) {
                     throw new IllegalArgumentException("Invalid Codex history page request");
                 }
                 sessionId = request.get("sessionId").getAsString();
-                beforeTurn = request.get("beforeTurn").getAsInt();
-                if (sessionId.isBlank() || sessionId.length() > 200 || beforeTurn < 0) {
+                beforeTurn = request.has("beforeTurn") ? request.get("beforeTurn").getAsInt() : null;
+                if (sessionId.isBlank() || sessionId.length() > 200 || (beforeTurn != null && beforeTurn < 0)) {
                     throw new IllegalArgumentException("Invalid Codex history page cursor");
                 }
 
-                CodexHistoryPage page = codexPageIndex.read(
-                        new CodexHistoryReader(), sessionId, beforeTurn, HISTORY_USER_TURN_LIMIT,
-                        () -> generation == sessionLoadGeneration.get());
+                CodexNativeHistoryReader nativeReader = this.nativeHistoryReader;
+                CodexHistoryPage page;
+                if (nativeReader != null) {
+                    JsonElement cursor = request.get("cursor");
+                    if (cursor == null || cursor.isJsonNull() || !cursor.equals(this.nativeHistoryCursor)) {
+                        throw new IllegalArgumentException("Stale native Codex history cursor");
+                    }
+                    page = this.nativeHistoryPage(nativeReader, nativeReader.readPage(cursor, HISTORY_USER_TURN_LIMIT), cursor);
+                } else {
+                    if (beforeTurn == null || request.has("cursor")) {
+                        throw new IllegalArgumentException("Legacy Codex history requires its original turn cursor");
+                    }
+                    page = this.codexPageIndex.read(new CodexHistoryReader(), sessionId, beforeTurn,
+                            HISTORY_USER_TURN_LIMIT, () -> generation == this.sessionLoadGeneration.get());
+                }
                 String requestedSessionId = sessionId;
                 publishIfCurrent(generation, () -> {
                     String activeSessionId = context.getSession() != null
@@ -229,7 +364,21 @@ public class HistoryMessageInjector {
                     if (replace) {
                         restoreCodexFrontendMessagesToSessionState(context.getSession().getState(), page.messages);
                         pushRestoredCodexUsage();
+                    } else {
+                        List<ClaudeSession.Message> earlier = new ArrayList<>();
+                        for (JsonObject message : page.messages) {
+                            ClaudeSession.Message parsed = toSessionMessage(message);
+                            if (parsed != null) {
+                                earlier.add(parsed);
+                            }
+                        }
+                        SessionState state = this.context.getSession().getState();
+                        synchronized (state.getMessageStateLock()) {
+                            state.replaceMessages(com.github.claudecodegui.session.CodexHistoryMerger.merge(
+                                    earlier, state.getMessages()));
+                        }
                     }
+                    this.nativeHistoryCursor = page.cursor;
                     injectCodexHistoryPage(requestedSessionId, page, replace);
                     notifyCodexHistoryPageRenderComplete();
                 });
@@ -242,7 +391,7 @@ public class HistoryMessageInjector {
                 Integer failedBeforeTurn = beforeTurn;
                 publishIfCurrent(generation, () -> notifyCodexHistoryPageError(failedSessionId, failedBeforeTurn, e.getMessage()));
             }
-        });
+        }, CodexSDKBridge.codexControlExecutor());
     }
 
     private void notifyCodexHistoryPageRenderComplete() {
@@ -356,7 +505,7 @@ public class HistoryMessageInjector {
         CodexHistoryPage page = new CodexHistoryPage();
         Path file = reader.resolveSessionFile(sessionId);
         long size = Files.size(file);
-        page.rawRecordCount = reader.forEachSessionMessage(file, 0, size, active, raw -> {
+        page.rawRecordCount = reader.forEachSessionMessage(sessionId, file, 0, size, active, raw -> {
             extractSessionMeta(raw, page);
             accumulator.accept(raw);
         });
@@ -390,6 +539,12 @@ public class HistoryMessageInjector {
         boolean cursorReset;
         String threadId;
         String cwd;
+        String sessionTitle;
+        String source = "legacy";
+        JsonElement cursor;
+        JsonElement requestCursor;
+        boolean partial;
+        CodexNativeHistoryReader nativeReader;
     }
 
     private static final class IndexedTurn {
@@ -502,89 +657,11 @@ public class HistoryMessageInjector {
      */
     public static List<JsonObject> convertCodexMessagesToFrontendBatch(JsonArray messages) {
         List<JsonObject> frontendMessages = new ArrayList<>();
-        Set<String> internalToolCallIds = new HashSet<>();
-        Map<String, CodexExecHistoryReplay.Output> outputsByCallId = new HashMap<>();
-
-        for (JsonElement element : messages) {
-            if (!element.isJsonObject()) {
-                continue;
-            }
-            JsonObject message = element.getAsJsonObject();
-            JsonObject payload = getResponseItemPayload(message);
-            if (isInternalHistoryToolCall(payload)) {
-                String callId = getStringProperty(payload, "call_id");
-                if (callId != null && !callId.isBlank()) {
-                    internalToolCallIds.add(callId);
-                }
-            } else if (isToolOutputPayload(payload)) {
-                String callId = getStringProperty(payload, "call_id");
-                if (callId != null && !callId.isBlank()) {
-                    outputsByCallId.put(
-                        callId,
-                        new CodexExecHistoryReplay.Output(
-                            payload,
-                            getStringProperty(message, "timestamp")
-                        )
-                    );
-                }
-            }
-        }
-
         CodexFrontendMessageAccumulator accumulator = new CodexFrontendMessageAccumulator(frontendMessages::add);
-        for (int i = 0; i < messages.size(); i++) {
-            JsonElement element = messages.get(i);
-            if (!element.isJsonObject()) {
-                continue;
+        for (JsonElement element : messages) {
+            if (element.isJsonObject()) {
+                accumulator.accept(element.getAsJsonObject());
             }
-            JsonObject msg = element.getAsJsonObject();
-            JsonObject payload = getResponseItemPayload(msg);
-
-            if (isInternalHistoryToolCall(payload)) {
-                if (CodexExecHistoryReplay.isExecCall(payload)) {
-                    String callId = getStringProperty(payload, "call_id");
-                    String timestamp = getStringProperty(msg, "timestamp");
-                    CodexExecHistoryReplay.Output output =
-                        callId != null ? outputsByCallId.get(callId) : null;
-                    JsonObject planInput = CodexExecHistoryReplay.extractUpdatePlanInput(payload);
-                    if (planInput != null) {
-                        accumulator.acceptConverted(
-                            CodexExecHistoryReplay.createPlanToolUseMessage(callId, planInput, timestamp)
-                        );
-                        if (output != null) {
-                            accumulator.acceptConverted(
-                                CodexExecHistoryReplay.createPlanToolResultMessage(
-                                    callId,
-                                    output,
-                                    timestamp
-                                )
-                            );
-                        }
-                    }
-                    List<CodexExecHistoryReplay.Command> commands =
-                        CodexExecHistoryReplay.extractCommands(payload);
-                    if (!commands.isEmpty()) {
-                        accumulator.acceptConverted(
-                            CodexExecHistoryReplay.createToolUseMessage(callId, commands, timestamp)
-                        );
-                        if (output != null) {
-                            accumulator.acceptConverted(
-                                CodexExecHistoryReplay.createToolResultMessage(
-                                    callId,
-                                    commands,
-                                    output,
-                                    timestamp
-                                )
-                            );
-                        }
-                    }
-                }
-                continue;
-            }
-            if (isOutputForInternalHistoryTool(payload, internalToolCallIds)) {
-                continue;
-            }
-
-            accumulator.accept(msg);
         }
         accumulator.finish();
         return frontendMessages;
@@ -683,10 +760,21 @@ public class HistoryMessageInjector {
     }
 
     static final class CodexFrontendMessageAccumulator {
+        private static final long MAX_REPLAY_BYTES = 8L * 1024 * 1024;
         private final Consumer<JsonObject> consumer;
         private final Consumer<JsonObject> usageUpdated;
         private JsonObject pending;
         private JsonObject latestAssistant;
+        private final Map<String, List<CodexExecHistoryReplay.Command>> shellCalls = new HashMap<>();
+        private final Set<String> planCalls = new HashSet<>();
+        private final Map<String, List<String>> patchCalls = new HashMap<>();
+        private long recordNumber;
+        private String recordedPatchCallId;
+        private final Set<String> recordedPatchItemIds = new HashSet<>();
+        private CodexKnownExecReplay knownExec;
+        private String rootThreadId;
+        private final Map<String, CodexKnownExecReplay.Process> processCalls = new java.util.LinkedHashMap<>();
+        private final CodexRecordedImageGeneration.Lifecycle generatedImages = new CodexRecordedImageGeneration.Lifecycle();
 
         private CodexFrontendMessageAccumulator(Consumer<JsonObject> consumer) {
             this(consumer, message -> { });
@@ -698,18 +786,252 @@ public class HistoryMessageInjector {
         }
 
         void accept(JsonObject rawMessage) {
+            this.recordNumber++;
+            if ("session_meta".equals(getStringProperty(rawMessage, "type"))
+                    && rawMessage.has("payload") && rawMessage.get("payload").isJsonObject()) {
+                this.rootThreadId = getStringProperty(rawMessage.getAsJsonObject("payload"), "id");
+            }
+            JsonObject payload = getResponseItemPayload(rawMessage);
+            String callId = getStringProperty(payload, "call_id");
+            String payloadType = getStringProperty(payload, "type");
+            if (this.knownExec != null) {
+                if (this.knownExec.rememberNative(rawMessage)) {
+                    if (this.retainedBytes() > MAX_REPLAY_BYTES) {
+                        this.flushKnownExec(null);
+                    }
+                    return;
+                }
+                if (isToolOutputPayload(payload) && this.knownExec.callId().equals(callId)) {
+                    this.flushKnownExec(rawMessage);
+                    return;
+                }
+                if ("custom_tool_call".equals(payloadType) || "function_call".equals(payloadType)
+                        || "message".equals(payloadType) || "reasoning".equals(payloadType)
+                        || "compacted".equals(getStringProperty(rawMessage, "type"))
+                        || getCodexUserRecordKind(rawMessage) != null) {
+                    this.flushKnownExec(null);
+                }
+            }
+            if ("custom_tool_call".equals(payloadType) || "function_call".equals(payloadType)) {
+                CodexKnownExecReplay candidate = CodexKnownExecReplay.begin(rawMessage, this.rootThreadId);
+                if (candidate != null && this.retainedBytes() + candidate.retainedBytes() <= MAX_REPLAY_BYTES) {
+                    this.emitPending();
+                    this.recordedPatchCallId = null;
+                    this.recordedPatchItemIds.clear();
+                    this.knownExec = candidate;
+                    return;
+                }
+            }
+            this.acceptLegacy(rawMessage);
+        }
+
+        private void flushKnownExec(JsonObject output) {
+            CodexKnownExecReplay replay = this.knownExec;
+            this.knownExec = null;
+            if (replay == null) {
+                return;
+            }
+            List<JsonObject> messages = null;
+            try {
+                messages = replay.project(output, this.processCalls);
+            } catch (RuntimeException ignored) {
+                // Malformed independent results cannot establish a complete replacement.
+            }
+            if (messages != null) {
+                messages.forEach(this::acceptConverted);
+                return;
+            }
+            if (replay.keepsOriginalWrapper()) {
+                // A rejected ownership/index mapping must not be retried by looser legacy heuristics.
+                this.acceptOpaqueExecRecord(replay.original(), replay.callId(), false);
+                for (JsonObject record : replay.nativeRecords()) {
+                    List<JsonObject> changes = CodexRecordedFileChange.readMessages(record);
+                    if (changes.isEmpty()) {
+                        this.acceptLegacy(record);
+                    } else {
+                        changes.forEach(this::acceptConverted);
+                    }
+                }
+                if (output != null) {
+                    this.acceptOpaqueExecRecord(output, replay.callId(), true);
+                }
+                return;
+            }
+            this.acceptLegacy(replay.original());
+            replay.nativeRecords().forEach(this::acceptLegacy);
+            if (output != null) {
+                this.acceptLegacy(output);
+            }
+        }
+
+        private void acceptOpaqueExecRecord(JsonObject record, String callId, boolean result) {
+            JsonObject message = convertCodexMessageToFrontend(record);
+            if (message != null) {
+                message.getAsJsonObject("raw").addProperty("uuid", "codex-legacy:" + callId + (result ? ":result" : ""));
+                this.acceptConverted(message);
+            }
+        }
+
+        private void acceptLegacy(JsonObject rawMessage) {
+            List<JsonObject> recordedCommands = CodexKnownExecReplay.readNativeCommand(rawMessage, this.processCalls);
+            if (!recordedCommands.isEmpty()) {
+                recordedCommands.forEach(this::acceptConverted);
+                return;
+            }
+            List<JsonObject> activities = CodexRecordedSubagentActivity.readMessages(rawMessage);
+            if (!activities.isEmpty()) {
+                activities.forEach(this::acceptConverted);
+                return;
+            }
+            List<JsonObject> web = CodexRecordedWebSearch.readMessages(rawMessage);
+            if (!web.isEmpty()) {
+                web.forEach(this::acceptConverted);
+                return;
+            }
+            List<JsonObject> images = CodexRecordedImageView.readMessages(rawMessage);
+            if (!images.isEmpty()) {
+                images.forEach(this::acceptConverted);
+                return;
+            }
+            List<JsonObject> generatedImages = this.generatedImages.accept(rawMessage, this.rootThreadId);
+            if (!generatedImages.isEmpty()) {
+                generatedImages.forEach(this::acceptConverted);
+                return;
+            }
+            List<JsonObject> mcp = CodexRecordedMcpToolCall.readMessages(rawMessage);
+            if (!mcp.isEmpty()) {
+                mcp.forEach(this::acceptConverted);
+                return;
+            }
             JsonObject usage = extractCodexTokenCountUsage(rawMessage);
             if (usage != null) {
                 attachUsageToLatestAssistant(usage);
                 return;
             }
 
+            JsonObject payload = getResponseItemPayload(rawMessage);
+            String callId = getStringProperty(payload, "call_id");
+            String timestamp = getStringProperty(rawMessage, "timestamp");
+            String payloadType = getStringProperty(payload, "type");
+            if ("custom_tool_call".equals(payloadType) || "function_call".equals(payloadType)) {
+                this.recordedPatchCallId = callId != null && CodexExecHistoryReplay.isExecCall(payload)
+                        && CodexExecHistoryReplay.needsRecordedPatch(payload) ? callId : null;
+                this.recordedPatchItemIds.clear();
+            }
+            if (this.recordedPatchCallId != null) {
+                List<JsonObject> recorded = CodexRecordedFileChange.readMessages(rawMessage);
+                if (!recorded.isEmpty()) {
+                    String itemId = getStringProperty(recorded.get(0).getAsJsonObject("raw"), "codexItemId");
+                    if (this.recordedPatchItemIds.add(itemId)) {
+                        // The transcript records the evaluated patch and its own outcome.
+                        // Neither needs to be inferred from the opaque outer script.
+                        recorded.forEach(this::acceptConverted);
+                    }
+                    return;
+                }
+                if (isToolOutputPayload(payload) && this.recordedPatchCallId.equals(callId)
+                        || getCodexUserRecordKind(rawMessage) != null) {
+                    this.recordedPatchCallId = null;
+                    this.recordedPatchItemIds.clear();
+                }
+            }
+            if (callId != null && CodexExecHistoryReplay.isExecCall(payload)
+                    && CodexExecHistoryReplay.containsUnsupportedToolCalls(payload)) {
+                List<String> patches = CodexExecHistoryReplay.extractPatches(payload);
+                long previewBytes = patches.stream().mapToLong(patch -> 3L * patch.length()).sum();
+                if (previewBytes <= MAX_REPLAY_BYTES) {
+                    // Literal inputs still describe reviewable edits. Keep the wrapper and its
+                    // shared result intact because neither proves an individual tool's outcome.
+                    for (int index = 0; index < patches.size(); index++) {
+                        JsonObject preview = CodexExecHistoryReplay.createPatchToolUseMessage(
+                                callId, patches.get(index), index, timestamp);
+                        preview.getAsJsonObject("raw").getAsJsonArray("content").get(0)
+                                .getAsJsonObject().getAsJsonObject("input").addProperty("status", "unknown");
+                        this.acceptConverted(preview);
+                    }
+                }
+            }
+            if (CodexExecHistoryReplay.isExecCall(payload) && !CodexExecHistoryReplay.containsUnsupportedToolCalls(payload)
+                    && !CodexKnownExecReplay.hasUnrepresentedArrayEntries(payload)) {
+                List<CodexExecHistoryReplay.Command> commands = CodexExecHistoryReplay.extractCommands(payload);
+                JsonObject planInput = CodexExecHistoryReplay.extractUpdatePlanInput(payload);
+                List<String> patches = CodexExecHistoryReplay.extractPatches(payload);
+                long replayBytes = commands.stream().mapToLong(CodexExecHistoryReplay.Command::retainedBytes).sum()
+                        + patches.stream().mapToLong(patch -> 3L * patch.length()).sum();
+                if (callId != null && this.shellCalls.size() + this.planCalls.size() + this.patchCalls.size() < 256
+                        && this.retainedReplayBytes() + replayBytes <= MAX_REPLAY_BYTES
+                        && (!commands.isEmpty() || planInput != null || !patches.isEmpty())) {
+                    if (planInput != null) {
+                        this.planCalls.add(callId);
+                        this.acceptConverted(CodexExecHistoryReplay.createPlanToolUseMessage(callId, planInput, timestamp));
+                    }
+                    if (!commands.isEmpty()) {
+                        this.shellCalls.put(callId, commands);
+                        this.acceptConverted(CodexExecHistoryReplay.createToolUseMessage(callId, commands, timestamp));
+                    }
+                    if (!patches.isEmpty()) {
+                        this.patchCalls.put(callId, patches);
+                        for (int index = 0; index < patches.size(); index++) {
+                            this.acceptConverted(CodexExecHistoryReplay.createPatchToolUseMessage(
+                                    callId, patches.get(index), index, timestamp));
+                        }
+                    }
+                    return;
+                }
+            }
+            if (isToolOutputPayload(payload) && callId != null) {
+                List<CodexExecHistoryReplay.Command> commands = this.shellCalls.remove(callId);
+                boolean plan = this.planCalls.remove(callId);
+                List<String> patches = this.patchCalls.remove(callId);
+                if (commands != null || plan || patches != null) {
+                    CodexExecHistoryReplay.Output output = new CodexExecHistoryReplay.Output(payload, timestamp);
+                    if (plan) {
+                        this.acceptConverted(CodexExecHistoryReplay.createPlanToolResultMessage(callId, output, timestamp));
+                    }
+                    if (commands != null) {
+                        this.acceptConverted(CodexExecHistoryReplay.createToolResultMessage(callId, commands, output, timestamp));
+                    }
+                    if (patches != null) {
+                        for (int index = 0; index < patches.size(); index++) {
+                            this.acceptConverted(CodexExecHistoryReplay.createPatchToolResultMessage(
+                                    callId, index, output, timestamp));
+                        }
+                    }
+                    return;
+                }
+            }
+
             JsonObject incoming = convertCodexMessageToFrontend(rawMessage);
             if (incoming == null) {
                 return;
             }
+            JsonObject raw = incoming.getAsJsonObject("raw");
+            if (raw != null) {
+                String nativeId = getStringProperty(payload, "id");
+                String identity = nativeId != null ? nativeId : callId != null ? callId
+                        : (timestamp == null ? "record" : timestamp) + ":" + this.recordNumber;
+                String suffix = isToolOutputPayload(payload) ? ":result" : "";
+                raw.addProperty("uuid", "codex-legacy:" + identity + suffix);
+            }
 
             String recordKind = getCodexUserRecordKind(rawMessage);
+            if (this.pending != null && isCompactionMessage(this.pending) && isCompactionMessage(incoming)) {
+                JsonObject previousRaw = this.pending.getAsJsonObject("raw");
+                JsonObject nextRaw = incoming.getAsJsonObject("raw");
+                String previousSource = getStringProperty(previousRaw, "compactSource");
+                String nextSource = getStringProperty(nextRaw, "compactSource");
+                String previousTime = getStringProperty(this.pending, "timestamp");
+                String nextTime = getStringProperty(incoming, "timestamp");
+                if (previousSource != null && nextSource != null && !previousSource.equals(nextSource)
+                        && (previousTime == null || nextTime == null || previousTime.equals(nextTime))
+                        && ("compacted".equals(previousSource) || "compacted".equals(nextSource))) {
+                    if ("compacted".equals(nextSource)) {
+                        this.pending = incoming;
+                        this.rememberLatestAssistant(incoming);
+                    }
+                    return;
+                }
+            }
             if (recordKind != null && isUserMessage(incoming)) {
                 incoming.addProperty(CODEX_RECORD_KIND, recordKind);
             }
@@ -731,6 +1053,15 @@ public class HistoryMessageInjector {
         private void acceptConverted(JsonObject incoming) {
             if (incoming == null) {
                 return;
+            }
+            JsonObject raw = incoming.getAsJsonObject("raw");
+            if (raw != null && !raw.has("uuid") && raw.has("content") && !raw.getAsJsonArray("content").isEmpty()) {
+                JsonObject block = raw.getAsJsonArray("content").get(0).getAsJsonObject();
+                String id = getStringProperty(block, "id");
+                if (id == null) {
+                    id = getStringProperty(block, "tool_use_id") + ":result";
+                }
+                raw.addProperty("uuid", "codex-legacy:" + id);
             }
             emitPending();
             pending = incoming;
@@ -767,15 +1098,58 @@ public class HistoryMessageInjector {
             return message;
         }
 
+        List<JsonObject> pendingMessages() {
+            if (this.knownExec != null) {
+                return this.knownExec.snapshot(this.processCalls);
+            }
+            JsonObject message = this.pendingMessage();
+            return message == null ? List.of() : List.of(message);
+        }
+
         long retainedBytes() {
-            long size = pending == null ? 0 : pending.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+            long size = this.retainedReplayBytes() + this.generatedImages.retainedBytes()
+                    + (pending == null ? 0 : pending.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
             if (latestAssistant != null && latestAssistant != pending) {
                 size += latestAssistant.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
             }
             return size;
         }
 
+        private long retainedReplayBytes() {
+            long bytes = this.shellCalls.values().stream().flatMap(List::stream)
+                    .mapToLong(CodexExecHistoryReplay.Command::retainedBytes).sum()
+                    + this.patchCalls.values().stream().flatMap(List::stream).mapToLong(patch -> 3L * patch.length()).sum();
+            if (this.knownExec != null) {
+                bytes += this.knownExec.retainedBytes();
+            }
+            for (var process : this.processCalls.entrySet()) {
+                bytes += 3L * (process.getKey().length() + process.getValue().toolId().length()
+                        + process.getValue().metadata().toString().length());
+            }
+            for (String callId : this.shellCalls.keySet()) {
+                bytes += 3L * callId.length();
+            }
+            for (String callId : this.patchCalls.keySet()) {
+                bytes += 3L * callId.length();
+            }
+            for (String callId : this.planCalls) {
+                bytes += 3L * callId.length();
+            }
+            if (this.recordedPatchCallId != null) {
+                bytes += 3L * this.recordedPatchCallId.length();
+            }
+            for (String itemId : this.recordedPatchItemIds) {
+                bytes += 3L * itemId.length();
+            }
+            return bytes;
+        }
+
         private void finish() {
+            if (this.knownExec != null) {
+                List<JsonObject> pendingKnown = this.knownExec.snapshot(this.processCalls);
+                this.knownExec = null;
+                pendingKnown.forEach(this::acceptConverted);
+            }
             emitPending();
         }
 
@@ -906,6 +1280,9 @@ public class HistoryMessageInjector {
         }
 
         JsonObject raw = message.getAsJsonObject("raw");
+        if (raw.has("message") && raw.get("message").isJsonObject()) {
+            raw = raw.getAsJsonObject("message");
+        }
         if (!raw.has("content") || !raw.get("content").isJsonArray()) {
             return !"[tool_result]".equals(getStringProperty(message, "content"));
         }
@@ -1006,6 +1383,13 @@ public class HistoryMessageInjector {
 
         String timestamp = msg.has("timestamp") ? msg.get("timestamp").getAsString() : null;
 
+        if ("compacted".equals(type)) {
+            return convertCompactionToFrontend(payload, timestamp, "compacted");
+        }
+        if ("event_msg".equals(type) && "context_compacted".equals(getStringProperty(payload, "type"))) {
+            return convertCompactionToFrontend(payload, timestamp, "context_compacted");
+        }
+
         // Handle event_msg containing user_message
         if ("event_msg".equals(type)) {
             return convertEventMsgToFrontend(payload, timestamp);
@@ -1020,6 +1404,9 @@ public class HistoryMessageInjector {
 
             if ("message".equals(payloadType)) {
                 return CodexMessageConverter.convertCodexMessageToFrontend(payload, timestamp);
+            }
+            if ("reasoning".equals(payloadType)) {
+                return CodexMessageConverter.convertReasoningToFrontend(payload, timestamp);
             }
             if ("function_call".equals(payloadType)) {
                 return CodexMessageConverter.convertFunctionCallToToolUse(payload, timestamp);
@@ -1036,6 +1423,50 @@ public class HistoryMessageInjector {
         }
 
         return null;
+    }
+
+    private static boolean isCompactionMessage(JsonObject message) {
+        JsonObject raw = message.getAsJsonObject("raw");
+        return raw != null && raw.has("isCompactSummary") && raw.get("isCompactSummary").getAsBoolean();
+    }
+
+    private static JsonObject convertCompactionToFrontend(JsonObject payload, String timestamp, String source) {
+        JsonObject raw = new JsonObject();
+        raw.addProperty("isCompactSummary", true);
+        raw.addProperty("compactSource", source);
+        JsonObject metadata = new JsonObject();
+        metadata.addProperty("native", true);
+        metadata.addProperty("status", "completed");
+        String trigger = getStringProperty(payload, "trigger");
+        if (trigger != null) {
+            metadata.addProperty("trigger", trigger);
+        }
+        if (timestamp != null) {
+            metadata.addProperty("timestamp", timestamp);
+            metadata.addProperty("timestampSource", "item");
+        }
+        raw.add("summarizeMetadata", metadata);
+        String summary = getStringProperty(payload, "message");
+        if (summary == null) {
+            summary = getStringProperty(payload, "summary");
+        }
+        JsonObject text = new JsonObject();
+        text.addProperty("type", "text");
+        text.addProperty("text", summary == null ? "" : summary);
+        JsonArray blocks = new JsonArray();
+        blocks.add(text);
+        JsonObject message = new JsonObject();
+        message.addProperty("role", "assistant");
+        message.add("content", blocks);
+        raw.add("message", message);
+        JsonObject frontend = new JsonObject();
+        frontend.addProperty("type", "assistant");
+        frontend.addProperty("content", summary == null ? "" : summary);
+        frontend.add("raw", raw);
+        if (timestamp != null) {
+            frontend.addProperty("timestamp", timestamp);
+        }
+        return frontend;
     }
 
     /**
@@ -1209,6 +1640,16 @@ public class HistoryMessageInjector {
         pageInfo.addProperty("toTurn", page.toTurn);
         pageInfo.addProperty("totalTurns", page.totalTurns);
         pageInfo.addProperty("hasMore", page.fromTurn > 0);
+        pageInfo.addProperty("source", page.source);
+        if (page.sessionTitle != null && !page.sessionTitle.isBlank()) {
+            pageInfo.addProperty("sessionTitle", page.sessionTitle);
+        }
+        pageInfo.addProperty("partial", page.partial);
+        if ("native".equals(page.source)) {
+            pageInfo.add("cursor", page.cursor);
+            pageInfo.add("requestCursor", page.requestCursor);
+            pageInfo.addProperty("hasMore", page.partial);
+        }
         pageInfo.addProperty("loadedMessageCount", page.messages.size());
         pageInfo.addProperty("cursorReset", page.cursorReset);
         context.callJavaScript("completeCodexHistoryPage", context.escapeJs(gson.toJson(pageInfo)));

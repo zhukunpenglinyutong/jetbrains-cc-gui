@@ -36,13 +36,15 @@ describe('useUsageTracking', () => {
 
     act(() => {
       result.current.setSdkStatus({
-        'codex-sdk': { status: 'not_installed', installed: false },
+        'claude-sdk': { status: 'not_installed', installed: false },
       });
       result.current.setSdkStatusLoaded(false);
       result.current.setSdkStatusError('status unavailable');
     });
 
+    expect(result.current.isSdkStatusKnown('claude')).toBe(true);
+    expect(result.current.isSdkInstalled('claude')).toBe(false);
     expect(result.current.isSdkStatusKnown('codex')).toBe(true);
-    expect(result.current.isSdkInstalled('codex')).toBe(false);
+    expect(result.current.isSdkInstalled('codex')).toBe(true);
   });
 });

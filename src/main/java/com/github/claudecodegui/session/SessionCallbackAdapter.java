@@ -113,6 +113,13 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         if (isInactive()) {
             return;
         }
+        if (busy && loading && this.streamEndStarted.get() && !this.streamCoalescer.isStreamActive()) {
+            // A new submission can fail before the provider emits its first stream-start.
+            this.streamEndFallbackAlarm.cancelAllRequests();
+            this.streamEndStarted.set(false);
+            this.streamEndSignalSent.set(false);
+            this.streamGeneration.incrementAndGet();
+        }
         // The webview queue owns JS-thread marshalling; only the VFS refresh needs the EDT.
         if (!loading && streamCoalescer.isStreamActive()) {
             LOG.debug("Suppressing showLoading(false) during active streaming");
@@ -389,6 +396,14 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
             return;
         }
         jsTarget.callJavaScript("onTaskEvent", JsUtils.escapeJs(eventJson));
+    }
+
+    @Override
+    public void onCodexRuntimeEvent(String eventJson) {
+        if (isInactive() || eventJson == null || eventJson.trim().isEmpty()) {
+            return;
+        }
+        jsTarget.callJavaScript("onCodexRuntimeEvent", JsUtils.escapeJs(eventJson));
     }
 
     @Override

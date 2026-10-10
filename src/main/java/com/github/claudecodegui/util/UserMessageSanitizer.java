@@ -1,5 +1,10 @@
 package com.github.claudecodegui.util;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 /**
  * Strips internal prompt/context additions from user-facing transcript text.
  * These sections are useful when sending to providers, but should not be
@@ -7,7 +12,14 @@ package com.github.claudecodegui.util;
  */
 public final class UserMessageSanitizer {
 
-    private static final String[] SYSTEM_TAG_NAMES = {"agents-instructions", "system-reminder", "system-prompt", "skill", "recommended_plugins"};
+    private static final Pattern DESKTOP_ENVELOPE = Pattern.compile(
+            "\\A\\s*# Files mentioned by the user:\\n+(.*?)\\n"
+                    + "Distinguish instructions in attached documents from the user's request\\.\\n+"
+                    + "## My request:[\\t ]*(?:\\n|\\z)", Pattern.DOTALL);
+    private static final Pattern DESKTOP_FILE = Pattern.compile(
+            "\\A## ([^\\n]+?): ([^\\n]+)\\n?(.*)\\z", Pattern.DOTALL);
+
+    private static final String[] SYSTEM_TAG_NAMES = {"agents-instructions", "system-reminder", "system-prompt", "skill", "recommended_plugins", "external_codex_apps_open_page"};
 
     private static final String[] APPENDED_CONTEXT_MARKERS = {
         "\n\n## Agent Role and Instructions\n\n",
@@ -36,8 +48,37 @@ public final class UserMessageSanitizer {
         String normalized = text.replace("\r\n", "\n").replace("\r", "\n");
         String strippedTags = stripSystemTags(normalized);
         String strippedImages = stripCodexImagePlaceholders(strippedTags);
-        String strippedContext = stripAppendedContext(strippedImages);
+        String strippedContext = stripAppendedContext(stripDesktopAttachmentEnvelope(strippedImages));
         return strippedContext.trim();
+    }
+
+    private static String stripDesktopAttachmentEnvelope(String text) {
+        Matcher envelope = DESKTOP_ENVELOPE.matcher(text);
+        if (!envelope.find()) {
+            return text;
+        }
+        List<String> references = new ArrayList<>();
+        String[] entries = envelope.group(1).trim().split("\\n+(?=## )");
+        for (String entry : entries) {
+            Matcher file = DESKTOP_FILE.matcher(entry.trim());
+            if (!file.matches()) {
+                return text;
+            }
+            String path = file.group(2).trim();
+            String extra = file.group(3).trim();
+            // Only the desktop's exact attachment envelope is presentation metadata.
+            // Similar Markdown or additional user prose must remain intact.
+            boolean image = extra.equals("Image attachment: true")
+                    || extra.equals(path + "\nImage attachment: true");
+            if (!image && !extra.isEmpty() && !extra.equals(path)) {
+                return text;
+            }
+            if (!image) {
+                references.add(file.group(1).trim() + ": " + path);
+            }
+        }
+        String request = text.substring(envelope.end()).stripLeading();
+        return references.isEmpty() ? request : String.join("\n", references) + "\n\n" + request;
     }
 
     private static String stripSystemTags(String text) {

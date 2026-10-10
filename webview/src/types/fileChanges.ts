@@ -2,11 +2,17 @@
  * File changes types for StatusPanel
  */
 
-/** File change status: A = Added (new file), M = Modified */
-export type FileChangeStatus = 'A' | 'M';
+/** Session changes include additions, modifications, deletions and renames. */
+export type FileChangeStatus = 'A' | 'M' | 'D' | 'R';
 
 /** Single edit operation record */
 export interface EditOperation {
+  toolUseId?: string;
+  ledgerKey?: string;
+  oldStringKnown?: boolean;
+  fileChangeKind?: 'add' | 'update' | 'delete';
+  moveFrom?: string;
+  patch?: string;
   toolName: string;
   oldString: string;
   newString: string;

@@ -17,6 +17,7 @@ public class DiffBrowserBridge {
     private final HandlerContext context;
     private final Gson gson;
 
+    /** Creates the browser bridge for a chat window. */
     public DiffBrowserBridge(HandlerContext context, Gson gson) {
         this.context = context;
         this.gson = gson;
@@ -70,14 +71,19 @@ public class DiffBrowserBridge {
      * Send diff result to the frontend.
      */
     public void sendDiffResult(String filePath, String action, String content, String error) {
+        this.sendDiffResult(filePath, action, content, error, null);
+    }
+
+    /** Sends a reviewed diff result with the chat and operation identities captured when it opened. */
+    public void sendDiffResult(String filePath, String action, String content, String error, JsonObject reviewOrigin) {
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
-                if (context.getBrowser() == null || context.isDisposed()) {
+                if (this.context.getBrowser() == null || this.context.isDisposed()) {
                     LOG.warn("Cannot send diff_result: browser is null or disposed");
                     return;
                 }
 
-                JsonObject payload = new JsonObject();
+                JsonObject payload = reviewOrigin == null ? new JsonObject() : reviewOrigin.deepCopy();
                 payload.addProperty("filePath", filePath);
                 payload.addProperty("action", action);
                 if (content != null) {
@@ -87,13 +93,14 @@ public class DiffBrowserBridge {
                     payload.addProperty("error", error);
                 }
 
-                String payloadJson = gson.toJson(payload);
+                // Explicitly unbound reviews must not acquire the newly selected chat's identity.
+                String payloadJson = payload.toString();
                 String js = "(function() {" +
                         "  if (typeof window.handleDiffResult === 'function') {" +
                         "    window.handleDiffResult('" + JsUtils.escapeJs(payloadJson) + "');" +
                         "  }" +
                         "})();";
-                context.getBrowser().getCefBrowser().executeJavaScript(js, context.getBrowser().getCefBrowser().getURL(), 0);
+                this.context.getBrowser().getCefBrowser().executeJavaScript(js, this.context.getBrowser().getCefBrowser().getURL(), 0);
                 LOG.info("Diff result sent to frontend: " + action + " for " + filePath);
             } catch (Exception e) {
                 LOG.error("Failed to send diff_result message: " + e.getMessage(), e);

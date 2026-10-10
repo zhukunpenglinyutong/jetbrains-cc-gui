@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { Attachment } from '../types.js';
 import type { Dispatch, SetStateAction } from 'react';
+import { parseCodexCommand } from '../../../hooks/codexCommandDispatcher';
 
 interface CompletionLike {
   close: () => void;
@@ -67,14 +68,19 @@ export function useSubmitHandler({
     const content = getTextContent();
     const cleanContent = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 
+    const command = currentProvider === 'codex' ? parseCodexCommand(cleanContent) : null;
+    // Native controls have their own backend capability/access gate. Waiting
+    // for SDK discovery here can swallow /compact during a provider switch.
+    const isCodexControl = ['compact', 'review', 'diff', 'approvals'].includes(command?.kind ?? '');
+
     // CLI providers are already known-installed. The global npm SDK query can
     // still be in flight; waiting on it only toasts "Checking SDK status...".
-    if (sdkStatusLoading && !sdkInstalled) {
+    if (!isCodexControl && sdkStatusLoading && !sdkInstalled) {
       addToast?.(t('chat.sdkStatusLoading'), 'info');
       return;
     }
 
-    if (!sdkInstalled) {
+    if (!isCodexControl && !sdkInstalled) {
       addToast?.(
         t('chat.sdkNotInstalled', {
           provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code',

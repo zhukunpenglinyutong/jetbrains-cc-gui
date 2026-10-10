@@ -236,6 +236,48 @@ describe('isSyntheticToolMessageContent', () => {
 // ---------------------------------------------------------------------------
 
 describe('mergeConsecutiveAssistantMessages', () => {
+  it('merges native Codex fragments despite a runtime turn marker on only the last item', () => {
+    const native = (item: string, turn = 'turn-1', thread = 'thread-1') => ({
+      codexThreadId: thread, codexTurnId: turn, uuid: item,
+      content: [{ type: 'tool_use' as const, id: item, name: 'bash', input: { command: item } }],
+    });
+    const messages = [makeMsg('assistant', 'Tool: bash', { raw: native('one') }),
+      makeMsg('user', '[tool_result]', { raw: { content: [{ type: 'tool_result', tool_use_id: 'one', content: 'ok' }] } }),
+      makeMsg('assistant', 'Tool: bash', { raw: { ...native('two'), turnUsage: { output_tokens: 50 }, turnCostUsd: 0.25 },
+        __turnId: 9, isStreaming: true })];
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+    expect(result).toHaveLength(1);
+    expect((result[0].raw as { content: unknown[] }).content).toHaveLength(2);
+    expect(result[0].isStreaming).toBe(true);
+    expect(result[0].__turnId).toBe(9);
+    expect((result[0].raw as Record<string, unknown>).turnUsage).toEqual({ output_tokens: 50 });
+    expect((result[0].raw as Record<string, unknown>).turnCostUsd).toBe(0.25);
+  });
+
+  it('keeps native Codex turns and child threads separate without runtime markers', () => {
+    const native = (turn: string, thread = 'thread-1') => ({ codexThreadId: thread, codexTurnId: turn,
+      content: [{ type: 'text' as const, text: 'content' }] });
+    const messages = [makeMsg('assistant', 'first', { raw: native('one') }),
+      makeMsg('assistant', 'second', { raw: native('two') }),
+      makeMsg('assistant', 'child', { raw: native('two', 'child-thread') })];
+    expect(mergeConsecutiveAssistantMessages(messages, normalizeBlocks)).toHaveLength(3);
+  });
+
+  it('keeps same native turn together after stream end, including commentary around tools', () => {
+    window.__lastStreamEndedTurnId = 9;
+    window.__lastStreamEndedAt = Date.now();
+    try {
+      const metadata = { codexThreadId: 'thread-1', codexTurnId: 'turn-1' };
+      const messages = [makeMsg('assistant', 'Investigating', { raw: { ...metadata, content: [{ type: 'text', text: 'Investigating' }] } }),
+        makeMsg('assistant', 'Tool: bash', { __turnId: 9, raw: { ...metadata, content: [{ type: 'tool_use', id: 'one', name: 'bash' }] } }),
+        makeMsg('assistant', 'Done', { __turnId: 9, raw: { ...metadata, content: [{ type: 'text', text: 'Done' }] } })];
+      expect(mergeConsecutiveAssistantMessages(messages, normalizeBlocks)).toHaveLength(1);
+    } finally {
+      window.__lastStreamEndedTurnId = undefined;
+      window.__lastStreamEndedAt = undefined;
+    }
+  });
+
   const normalizeBlocks = (raw: unknown): any[] => {
     if (!raw || typeof raw !== 'object') return [];
     const r = raw as any;

@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -34,16 +35,9 @@ public class CodexMessageConverter {
     private static final Pattern CODEX_IMAGE_PATH_PATTERN =
             Pattern.compile("<image\\b[^>]*\\bpath=\"([^\"]+)\"[^>]*>");
 
-    /**
-     * Client-side orchestration calls persisted in Codex JSONL but never exposed as
-     * ordinary tool cards by the live SDK event stream. Replaying them would leak
-     * implementation details such as exec JavaScript and wait cell identifiers.
-     */
-    private static final Set<String> HIDDEN_HISTORY_TOOL_NAMES = Set.of(
-        "exec",
-        "wait",
-        "write_stdin"
-    );
+    // A wrapper without a faithful static projection still carries user-visible
+    // work. Keep its generic card rather than silently discarding its result.
+    private static final Set<String> HIDDEN_HISTORY_TOOL_NAMES = Set.of();
 
     // Tracks file-writing sessions so later write_stdin events can display the target file.
     // Uses a bounded LRU map to prevent memory leaks over long IDE sessions.
@@ -88,6 +82,7 @@ public class CodexMessageConverter {
         SESSION_FILE_MAP.clear();
     }
 
+    /** Returns whether a legacy tool is intentionally omitted from history. */
     public static boolean isHiddenHistoryToolName(String toolName) {
         return toolName != null
             && HIDDEN_HISTORY_TOOL_NAMES.contains(toolName.toLowerCase(Locale.ROOT));
@@ -171,13 +166,39 @@ public class CodexMessageConverter {
                             if (itemObj.has("text")) {
                                 claudeBlock.addProperty("text", itemObj.get("text").getAsString());
                             }
+                            for (String field : List.of("native", "status")) {
+                                if (itemObj.has(field)) {
+                                    claudeBlock.add(field, itemObj.get(field).deepCopy());
+                                }
+                            }
                             claudeBlocks.add(claudeBlock);
                         }
                         // Handle image
-                        else if ("image".equals(type)) {
+                        else if ("image".equals(type) || "input_image".equals(type)) {
                             claudeBlock.addProperty("type", "image");
-                            if (itemObj.has("src")) {
-                                claudeBlock.addProperty("src", itemObj.get("src").getAsString());
+                            for (String field : List.of("src", "url", "image_url")) {
+                                String source = safeGetAsString(itemObj.get(field), "");
+                                if (!source.isBlank()) {
+                                    claudeBlock.addProperty("src", source);
+                                    break;
+                                }
+                            }
+                            if (!claudeBlock.has("src") && itemObj.has("source") && itemObj.get("source").isJsonObject()) {
+                                JsonObject source = itemObj.getAsJsonObject("source");
+                                String sourceType = safeGetAsString(source.get("type"), "");
+                                if ("base64".equals(sourceType)) {
+                                    String mediaType = safeGetAsString(source.get("media_type"), "image/png");
+                                    String data = safeGetAsString(source.get("data"), "");
+                                    if (!data.isBlank()) {
+                                        claudeBlock.addProperty("src", "data:" + mediaType + ";base64," + data);
+                                        claudeBlock.addProperty("mediaType", mediaType);
+                                    }
+                                } else if ("url".equals(sourceType)) {
+                                    String url = safeGetAsString(source.get("url"), "");
+                                    if (!url.isBlank()) {
+                                        claudeBlock.addProperty("src", url);
+                                    }
+                                }
                             }
                             if (itemObj.has("mediaType")) {
                                 claudeBlock.addProperty("mediaType", itemObj.get("mediaType").getAsString());
@@ -186,6 +207,12 @@ public class CodexMessageConverter {
                                 claudeBlock.addProperty("alt", itemObj.get("alt").getAsString());
                             }
                             claudeBlocks.add(claudeBlock);
+                        }
+                        else if ("localImage".equals(type) || "local_image".equals(type)) {
+                            JsonObject image = createLocalImageBlock(safeGetAsString(itemObj.get("path"), null));
+                            if (image != null) {
+                                claudeBlocks.add(image);
+                            }
                         }
                         // Other unknown types, try to keep as-is
                         else {
@@ -286,10 +313,25 @@ public class CodexMessageConverter {
         boolean userMessage = "user".equals(role);
         boolean strippedSystemTags = false;
         JsonArray restoredUserImages = new JsonArray();
+        JsonArray convertedContent = convertToClaudeContentBlocks(payload.get("content"));
 
         if (userMessage) {
             String originalContent = contentStr;
             restoredUserImages = restoreCodexImagePlaceholderBlocks(originalContent);
+            // Text cleanup must retain the actual attachments even when an
+            // envelope changed the text or the message has no text at all.
+            Set<String> imageSources = new java.util.HashSet<>();
+            for (JsonElement image : restoredUserImages) {
+                imageSources.add(safeGetAsString(image.getAsJsonObject().get("src"), ""));
+            }
+            for (JsonElement block : convertedContent) {
+                if (block.isJsonObject() && "image".equals(safeGetAsString(block.getAsJsonObject().get("type"), ""))) {
+                    String source = safeGetAsString(block.getAsJsonObject().get("src"), "");
+                    if (!source.isBlank() && imageSources.add(source)) {
+                        restoredUserImages.add(block);
+                    }
+                }
+            }
             contentStr = stripSystemTags(originalContent);
             strippedSystemTags = originalContent != null && !originalContent.equals(contentStr);
             if ((contentStr == null || contentStr.isBlank()) && restoredUserImages.size() == 0) {
@@ -312,7 +354,7 @@ public class CodexMessageConverter {
 
             JsonArray claudeContentBlocks = userMessage && (strippedSystemTags || restoredUserImages.size() > 0)
                     ? userContentBlocks(restoredUserImages, contentStr)
-                    : convertToClaudeContentBlocks(payload.get("content"));
+                    : convertedContent;
             JsonObject rawObj = new JsonObject();
             rawObj.add("content", claudeContentBlocks);
             rawObj.addProperty("role", role);
@@ -324,6 +366,52 @@ public class CodexMessageConverter {
         }
 
         return frontendMsg;
+    }
+
+    /** Preserves persisted reasoning boundaries even when no plaintext summary is available. */
+    public static JsonObject convertReasoningToFrontend(JsonObject payload, String timestamp) {
+        JsonArray blocks = new JsonArray();
+        for (String key : new String[]{"summary", "content"}) {
+            JsonElement value = payload.get(key);
+            if (value == null || !value.isJsonArray()) {
+                continue;
+            }
+            for (JsonElement entry : value.getAsJsonArray()) {
+                String text = entry.isJsonPrimitive() ? safeGetAsString(entry, "")
+                        : entry.isJsonObject() ? safeGetAsString(entry.getAsJsonObject().get("text"), "") : "";
+                if (text.isBlank()) {
+                    continue;
+                }
+                JsonObject block = new JsonObject();
+                block.addProperty("type", "thinking");
+                block.addProperty("thinking", text);
+                block.addProperty("text", text);
+                blocks.add(block);
+            }
+        }
+        if (blocks.isEmpty()) {
+            JsonObject block = new JsonObject();
+            block.addProperty("type", "thinking");
+            block.addProperty("thinking", "");
+            block.addProperty("text", "");
+            blocks.add(block);
+        }
+        for (JsonElement entry : blocks) {
+            JsonObject block = entry.getAsJsonObject();
+            block.addProperty("native", true);
+            block.addProperty("status", "completed");
+        }
+        JsonObject raw = new JsonObject();
+        raw.addProperty("role", "assistant");
+        raw.add("content", blocks);
+        JsonObject message = new JsonObject();
+        message.addProperty("type", "assistant");
+        message.addProperty("content", "");
+        message.add("raw", raw);
+        if (timestamp != null) {
+            message.addProperty("timestamp", timestamp);
+        }
+        return message;
     }
 
     /**
@@ -487,13 +575,18 @@ public class CodexMessageConverter {
      * Parse tool call arguments.
      */
     public static JsonElement parseToolArguments(JsonObject payload) {
-        if (!payload.has("arguments")) {
+        if (!payload.has("arguments") || payload.get("arguments").isJsonNull()) {
             return null;
+        }
+        if (!payload.get("arguments").isJsonPrimitive()) {
+            return payload.get("arguments").deepCopy();
         }
         try {
             return JsonParser.parseString(payload.get("arguments").getAsString());
         } catch (Exception e) {
-            return new JsonObject();
+            JsonObject input = new JsonObject();
+            input.add("input", payload.get("arguments").deepCopy());
+            return input;
         }
     }
 
@@ -659,10 +752,14 @@ public class CodexMessageConverter {
         return frontendMsg;
     }
 
+    /** Checks explicit failure metadata in a tool output and its transport envelopes. */
+    public static boolean isFailedToolOutput(JsonObject payload) {
+        JsonElement output = payload == null ? null : payload.get("output");
+        return payload != null && isExplicitToolError(payload, output, extractContentAsString(output));
+    }
+
     private static boolean isExplicitToolError(JsonObject payload, JsonElement outputElement, String output) {
-        if (hasErrorStatus(payload)
-                || (outputElement != null && outputElement.isJsonObject()
-                && hasErrorStatus(outputElement.getAsJsonObject()))) {
+        if (hasErrorStatus(payload) || hasStructuredToolError(outputElement, 0)) {
             return true;
         }
         if (output == null) {
@@ -670,6 +767,10 @@ public class CodexMessageConverter {
         }
         String normalized = output.stripLeading().toLowerCase(Locale.ROOT);
         return normalized.startsWith("error:")
+                || normalized.equals("script failed")
+                || normalized.startsWith("script failed\n")
+                || normalized.startsWith("script failed\r\n")
+                || normalized.startsWith("script error:")
                 || normalized.startsWith("failed to parse")
                 || normalized.startsWith("failed-to-parse")
                 || normalized.startsWith("permission denied")
@@ -679,7 +780,60 @@ public class CodexMessageConverter {
     }
 
     private static boolean hasErrorStatus(JsonObject object) {
-        return "error".equalsIgnoreCase(safeGetAsString(object.get("status"), ""));
+        String status = safeGetAsString(object.get("status"), "");
+        if (List.of("error", "failed", "declined", "rejected").contains(status.toLowerCase(Locale.ROOT))) {
+            return true;
+        }
+        for (String field : List.of("is_error", "isError")) {
+            JsonElement value = object.get(field);
+            if (value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean()
+                    && value.getAsBoolean()) {
+                return true;
+            }
+        }
+        for (String field : List.of("exit_code", "exitCode")) {
+            JsonElement value = object.get(field);
+            if (value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber()
+                    && value.getAsNumber().doubleValue() != 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasStructuredToolError(JsonElement value, int depth) {
+        if (value == null || value.isJsonNull() || depth > 12) {
+            return false;
+        }
+        if (value.isJsonArray()) {
+            for (JsonElement item : value.getAsJsonArray()) {
+                if (hasStructuredToolError(item, depth + 1)) {
+                    return true;
+                }
+            }
+        } else if (value.isJsonObject()) {
+            JsonObject object = value.getAsJsonObject();
+            if (hasErrorStatus(object)) {
+                return true;
+            }
+            // Only transport envelopes and content blocks carry result state.
+            // Command stdout may contain arbitrary JSON and is not a status.
+            for (String field : List.of("content", "text", "value", "result")) {
+                if (hasStructuredToolError(object.get(field), depth + 1)) {
+                    return true;
+                }
+            }
+        } else if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
+            String text = value.getAsString().trim();
+            if (text.startsWith("{") || text.startsWith("[")) {
+                try {
+                    return hasStructuredToolError(JsonParser.parseString(text), depth + 1);
+                } catch (RuntimeException ignored) {
+                    // Plain output remains text when it is not a whole JSON envelope.
+                }
+            }
+        }
+        return false;
     }
 
     /**

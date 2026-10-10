@@ -14,8 +14,7 @@ import { pathToFileURL } from 'node:url';
 import {
   loadClaudeSdk,
   isClaudeSdkAvailable,
-  loadCodexSdk,
-  isCodexSdkAvailable,
+  getCodexCliStatus,
 } from '../utils/sdk-loader.js';
 import {
   setupApiKey,
@@ -28,11 +27,10 @@ import { resolveModelFromSettings, resolveSdkModelName } from '../utils/model-ut
 import { getRealHomeDir } from '../utils/path-utils.js';
 import { getClaudeCliPathOverride } from '../utils/claude-cli-path.js';
 import { ensureAnthropicSdk } from './claude/message-utils.js';
-import { buildCodexCliEnvironment } from './codex/codex-utils.js';
+import { generateCodexText } from './codex/codex-text-service.js';
 import { askCliProvider, isCliAskProvider } from './cli-ask.js';
 
 let claudeSdk = null;
-let codexSdk = null;
 
 // stdout protocol markers (line-oriented; keep payloads JSON-encoded for deltas)
 //   [CONTENT_DELTA] <json-string>  — progressive token chunk
@@ -84,18 +82,6 @@ async function ensureClaudeSdk() {
     claudeSdk = await loadClaudeSdk();
   }
   return claudeSdk;
-}
-
-async function ensureCodexSdk() {
-  if (!codexSdk) {
-    if (!isCodexSdkAvailable()) {
-      const error = new Error('Codex SDK not installed. Please install via Settings > Dependencies.');
-      error.code = 'SDK_NOT_INSTALLED';
-      throw error;
-    }
-    codexSdk = await loadCodexSdk();
-  }
-  return codexSdk;
 }
 
 // Context length limits (in characters) to avoid exceeding model token limits
@@ -336,7 +322,7 @@ export function resolvePromptEnhancerRuntimeConfig({
 
   const config = normalizePromptEnhancerConfig(promptEnhancerConfig);
   const claudeSdkInstalled = isClaudeSdkAvailable();
-  const codexSdkInstalled = isCodexSdkAvailable();
+  const codexCliInstalled = getCodexCliStatus().status === 'resolved';
 
   // Prefer Java-resolved effectiveProvider (includes CLI providers when available).
   if (isAiFeatureProvider(config.effectiveProvider)) {
@@ -356,8 +342,8 @@ export function resolvePromptEnhancerRuntimeConfig({
   }
 
   if (config.provider === 'codex') {
-    if (!codexSdkInstalled) {
-      throw new Error('Codex prompt enhancer is unavailable because the Codex SDK is not installed. Please install it in Settings > Dependencies.');
+    if (!codexCliInstalled) {
+      throw new Error('Codex prompt enhancer is unavailable because the Codex CLI is not detected. Install it and re-check Provider Management > CLI.');
     }
     throw new Error('Codex prompt enhancer is unavailable because no active Codex provider is configured.');
   }
@@ -375,8 +361,8 @@ export function resolvePromptEnhancerRuntimeConfig({
     );
   }
 
-  if (!codexSdkInstalled && !claudeSdkInstalled) {
-    throw new Error('No available prompt enhancer provider is configured because both Claude Code and Codex SDKs are not installed.');
+  if (!codexCliInstalled && !claudeSdkInstalled) {
+    throw new Error('No available prompt enhancer provider is configured. Install the Claude Code SDK or the Codex CLI.');
   }
 
   throw new Error('No available prompt enhancer provider is configured. Please configure a provider in Settings → Prompt Enhancer.');
@@ -621,68 +607,12 @@ async function enhancePromptWithClaude(originalPrompt, systemPrompt, model, cont
 }
 
 async function enhancePromptWithCodex(originalPrompt, systemPrompt, model, context) {
-  const sdk = await ensureCodexSdk();
-  const Codex = sdk.Codex || sdk.default || sdk;
-  const { cliEnv } = buildCodexCliEnvironment(process.env);
-  const codex = new Codex({ env: cliEnv });
-
-  const workingDirectory = getRealHomeDir();
-  const systemPromptText = (systemPrompt || '').trim();
-  const fullPrompt = [
-    systemPromptText,
-    '',
-    buildFullPrompt(originalPrompt, context),
-    '',
-    'Remember: output only the optimized prompt text with no explanation.',
-  ].join('\n');
-  console.log(`[PromptEnhancer] Full prompt length: ${fullPrompt.length}`);
-
-  const thread = codex.startThread({
-    skipGitRepoCheck: true,
-    maxTurns: 1,
-    workingDirectory,
-    model,
-    sandboxMode: 'read-only',
-    approvalPolicy: 'never',
+  console.log(`[PromptEnhancer] Calling Codex app-server with model: ${model}`);
+  return generateCodexText({
+    prompt: buildFullPrompt(originalPrompt, context), model, onDelta: emitContentDelta,
+    developerInstructions: [(systemPrompt || '').trim(), 'Output only the optimized prompt text with no explanation.']
+      .filter(Boolean).join('\n\n'),
   });
-
-  console.log(`[PromptEnhancer] Calling Codex SDK with model: ${model}`);
-
-  const { events } = await thread.runStreamed(fullPrompt);
-  let responseText = '';
-  let lastAgentMessage = '';
-
-  for await (const event of events) {
-    console.log(`[PromptEnhancer] Codex event: ${event.type}`);
-    if (event.type === 'item.updated' || event.type === 'item.completed') {
-      const item = event.item;
-      if (item?.type === 'agent_message' && typeof item.text === 'string') {
-        const delta = extractAppendedDelta(lastAgentMessage, item.text);
-        if (delta) {
-          emitContentDelta(delta);
-          responseText += delta;
-        }
-        lastAgentMessage = item.text;
-      }
-      continue;
-    }
-
-    if (event.type === 'turn.failed') {
-      throw new Error(event.error?.message || 'Codex enhancement turn failed');
-    }
-
-    if (event.type === 'error') {
-      throw new Error(event.message || 'Codex enhancement failed');
-    }
-  }
-
-  const finalText = responseText.trim() || lastAgentMessage.trim();
-  console.log(`[PromptEnhancer] Codex response text length: ${finalText.length}`);
-  if (finalText) {
-    return finalText;
-  }
-
-  throw new Error('Codex enhancement response is empty');
 }
 
 /**

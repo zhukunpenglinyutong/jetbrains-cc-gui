@@ -17,6 +17,10 @@ import { normalizeToolName } from './toolConstants';
 const WRITE_TOOL_NAMES = new Set(['write', 'write_file', 'create_file', 'write_to_file']);
 
 export interface LedgerOp {
+  fileChangeKind?: 'add' | 'update' | 'delete';
+  moveFrom?: string;
+  patch?: string;
+  oldStringKnown?: boolean;
   sourceId?: string;
   toolUseId?: string;
   filePath: string;
@@ -42,7 +46,11 @@ export function sameLedgerOps(previous: LedgerOp[], next: LedgerOp[]): boolean {
       && op.replaceAll === other.replaceAll
       && op.agentId === other.agentId
       && op.lineStart === other.lineStart
-      && op.lineEnd === other.lineEnd;
+      && op.lineEnd === other.lineEnd
+      && op.fileChangeKind === other.fileChangeKind
+      && op.moveFrom === other.moveFrom
+      && op.patch === other.patch
+      && op.oldStringKnown === other.oldStringKnown;
   }));
 }
 
@@ -114,6 +122,7 @@ export function reconstructBaselineAndCurrent(ops: LedgerOp[]): ReconstructResul
   let fullyApplied = true;
 
   for (const op of ops) {
+    if (op.moveFrom && !op.oldString && !op.newString) continue;
     if (isWriteTool(op.toolName)) {
       content = op.newString;
       continue;
@@ -142,6 +151,7 @@ export function reconstructBaselineAndCurrent(ops: LedgerOp[]): ReconstructResul
   if (fullyApplied) {
     for (let i = ops.length - 1; i >= 0; i -= 1) {
       const op = ops[i];
+      if (op.moveFrom && !op.oldString && !op.newString) continue;
       if (isWriteTool(op.toolName)) {
         baseline = op.oldString;
         continue;
@@ -225,9 +235,11 @@ function lcsDiff(oldLines: string[], newLines: string[]): DiffLineStats {
   return { additions, deletions };
 }
 
-export function diffLineStats(oldString: string, newString: string): DiffLineStats {
+export function diffLineStats(oldString: string, newString: string, fullFile = false): DiffLineStats {
   const oldLines = oldString ? oldString.split('\n') : [];
   const newLines = newString ? newString.split('\n') : [];
+  if (fullFile && oldString.endsWith('\n')) oldLines.pop();
+  if (fullFile && newString.endsWith('\n')) newLines.pop();
   if (oldLines.length === 0 && newLines.length === 0) {
     return { additions: 0, deletions: 0 };
   }
@@ -248,6 +260,12 @@ function determineStatus(ops: LedgerOp[], baseline: string): FileChangeStatus {
     return 'M';
   }
   const first = ops[0];
+  if (ops.some(op => op.fileChangeKind)) {
+    if (ops[ops.length - 1].fileChangeKind === 'delete') return 'D';
+    if (first.fileChangeKind === 'add') return 'A';
+    if (ops.some(op => op.moveFrom)) return 'R';
+    return 'M';
+  }
   if (isWriteTool(first.toolName)) {
     return 'A';
   }
@@ -265,7 +283,14 @@ export function buildSessionFileLedger(ops: LedgerOp[]): SessionFileLedgerEntry[
 
   for (const op of ops) {
     if (!op.filePath) continue;
-    if (op.oldString === '' && op.newString === '') continue;
+    if (op.oldString === '' && op.newString === '' && !op.fileChangeKind) continue;
+    if (op.moveFrom && op.moveFrom !== op.filePath) {
+      const previous = byPath.get(op.moveFrom);
+      if (previous) {
+        byPath.delete(op.moveFrom);
+        byPath.set(op.filePath, [...previous, ...(byPath.get(op.filePath) ?? [])]);
+      }
+    }
     const list = byPath.get(op.filePath) ?? [];
     list.push(op);
     byPath.set(op.filePath, list);
@@ -274,8 +299,12 @@ export function buildSessionFileLedger(ops: LedgerOp[]): SessionFileLedgerEntry[
   const entries: SessionFileLedgerEntry[] = [];
 
   byPath.forEach((fileOps, filePath) => {
+    if (fileOps[0].fileChangeKind === 'add' && fileOps[fileOps.length - 1].fileChangeKind === 'delete') return;
     const operations: EditOperation[] = fileOps.map((o) => {
-      const perOp = diffLineStats(o.oldString, o.newString);
+      const fullFile = o.fileChangeKind === 'add' || o.fileChangeKind === 'delete';
+      const patchLines = o.patch?.split('\n');
+      const perOp = patchLines ? { additions: patchLines.filter(line => line.startsWith('+')).length,
+        deletions: patchLines.filter(line => line.startsWith('-')).length } : diffLineStats(o.oldString, o.newString, fullFile);
       return {
         toolName: o.toolName,
         oldString: o.oldString,
@@ -285,6 +314,11 @@ export function buildSessionFileLedger(ops: LedgerOp[]): SessionFileLedgerEntry[
         replaceAll: o.replaceAll,
         lineStart: o.lineStart,
         lineEnd: o.lineEnd,
+        ledgerKey: JSON.stringify([o.sourceId, o.toolUseId, o.filePath]),
+        ...(o.fileChangeKind ? { fileChangeKind: o.fileChangeKind, toolUseId: o.toolUseId } : {}),
+        ...(o.moveFrom ? { moveFrom: o.moveFrom } : {}),
+        ...(o.patch ? { patch: o.patch } : {}),
+        ...(o.oldStringKnown !== undefined ? { oldStringKnown: o.oldStringKnown } : {}),
       };
     });
 
@@ -294,8 +328,11 @@ export function buildSessionFileLedger(ops: LedgerOp[]): SessionFileLedgerEntry[
     let baseline = reconstructed.baseline;
     let current = reconstructed.current;
 
-    if (reconstructed.fullyApplied) {
-      const net = diffLineStats(baseline, current);
+    const blankLineOnly = fileOps.some((op, index) => op.patch && op.oldString === op.newString
+      && operations[index].additions !== operations[index].deletions);
+    if (reconstructed.fullyApplied && !blankLineOnly) {
+      const fullFile = fileOps.some(op => op.fileChangeKind === 'add' || op.fileChangeKind === 'delete');
+      const net = diffLineStats(baseline, current, fullFile);
       additions = net.additions;
       deletions = net.deletions;
     } else {
@@ -331,7 +368,7 @@ export function buildSessionFileLedger(ops: LedgerOp[]): SessionFileLedgerEntry[
   });
 
   entries.sort((a, b) => {
-    if (a.status !== b.status) {
+    if ((a.status === 'A') !== (b.status === 'A')) {
       return a.status === 'A' ? -1 : 1;
     }
     return a.filePath.localeCompare(b.filePath);

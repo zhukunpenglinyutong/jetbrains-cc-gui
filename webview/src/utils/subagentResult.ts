@@ -1,4 +1,4 @@
-import type { SubagentHistoryResponse, ToolResultBlock } from '../types';
+import type { SubagentHistoryResponse, SubagentInfo, ToolResultBlock } from '../types';
 import type { GetToolResultRawFn } from '../contexts/SubagentContext';
 
 /**
@@ -18,6 +18,35 @@ export function extractResultText(result?: ToolResultBlock | null): string | und
     return text || undefined;
   }
   return undefined;
+}
+
+/** A spawn receipt names the child; only its later report belongs in the result panel. */
+export function extractAgentResultText(result?: ToolResultBlock | null, toolName?: string): string | undefined {
+  const text = extractResultText(result);
+  if (toolName?.split('.').at(-1) !== 'spawn_agent' || !text) return text;
+  try {
+    const value = JSON.parse(text) as Record<string, unknown>;
+    const identityKeys = ['task_name', 'taskName', 'agent_id', 'agentId', 'agent_path', 'agentPath'];
+    const metadataKeys = [...identityKeys, 'nickname', 'name', 'model', 'reasoning_effort', 'reasoningEffort', 'description'];
+    if (value && !Array.isArray(value) && typeof value === 'object'
+      && identityKeys.some(key => typeof value[key] === 'string')
+      && Object.keys(value).every(key => metadataKeys.includes(key))) return undefined;
+  } catch {
+    // Plain text and structured reports remain available unchanged.
+  }
+  return text;
+}
+
+/** Inline cards and the StatusPanel share the same observed child lifecycle. */
+export function resolveSubagentGroupOutcome(states: SubagentInfo[]): { isCompleted: boolean; isError: boolean } | undefined {
+  if (states.length === 0) return undefined;
+  return { isCompleted: states.every(agent => agent.status === 'completed'),
+    isError: states.every(agent => agent.status !== 'running') && states.some(agent => agent.status === 'error') };
+}
+
+/** A resumed child owns a new report; its previous completed transcript is not current. */
+export function isSubagentHistoryCurrent(history: SubagentHistoryResponse | undefined, nativeTaskId?: string): boolean {
+  return !nativeTaskId || history?.nativeTaskId === nativeTaskId;
 }
 
 // Claude Code's async-launch ack is a fixed, hard-coded tool_result text. It is
@@ -96,6 +125,7 @@ export interface SpawnAgentMeta {
   agentId?: string;
   agentPath?: string;
   description?: string;
+  prompt?: string;
   identityLabel?: string;
   nickname?: string;
   model?: string;
@@ -151,6 +181,9 @@ export function parseSpawnAgentMeta(
     parsed?.description,
     inputDescription !== inputMessage ? inputDescription : undefined,
   );
+  // Native collab items supply readable task text; wrapper messages may be opaque transport data.
+  const prompt = input.native === true && typeof input.prompt === 'string' && input.prompt.trim()
+    ? input.prompt : undefined;
   const nickname = getString(parsed?.nickname, parsed?.name, input.nickname);
   const identityLabel = nickname ?? getAgentPathName(agentPath);
   const model = getString(parsed?.model, input.model) ?? modelMatch?.[1];
@@ -164,6 +197,7 @@ export function parseSpawnAgentMeta(
     ...(agentId && { agentId }),
     ...(agentPath && { agentPath }),
     ...(description && { description }),
+    ...(prompt && { prompt }),
     ...(identityLabel && { identityLabel }),
     ...(nickname && { nickname }),
     ...(model && { model }),

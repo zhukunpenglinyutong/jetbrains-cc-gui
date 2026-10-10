@@ -1,0 +1,57 @@
+{
+  "source": "Real local app-server binary and loopback-only SSE fixture; no remote model request.",
+  "realAccountRequests": 0,
+  "request": {
+    "method": "POST",
+    "path": "/v1/responses",
+    "model": "gpt-6.1-sol",
+    "reasoning": {
+      "effort": "high",
+      "summary": "detailed",
+      "context": "all_turns"
+    }
+  },
+  "native": [
+    {
+      "method": "item/started",
+      "threadId": "01a10732-f8a1-7031-b4e6-7b60af24b48d",
+      "turnId": "01a10732-f8bf-7a83-8b2d-cbd5f3ac781c",
+      "itemId": "offline-reasoning-1",
+      "summary": [],
+      "content": []
+    },
+    {
+      "method": "item/reasoning/summaryPartAdded",
+      "threadId": "01a10732-f8a1-7031-b4e6-7b60af24b48d",
+      "turnId": "01a10732-f8bf-7a83-8b2d-cbd5f3ac781c",
+      "itemId": "offline-reasoning-1"
+    },
+    {
+      "method": "item/reasoning/summaryTextDelta",
+      "threadId": "01a10732-f8a1-7031-b4e6-7b60af24b48d",
+      "turnId": "01a10732-f8bf-7a83-8b2d-cbd5f3ac781c",
+      "itemId": "offline-reasoning-1",
+      "delta": "Native summary 1."
+    },
+    {
+      "method": "item/completed",
+      "threadId": "01a10732-f8a1-7031-b4e6-7b60af24b48d",
+      "turnId": "01a10732-f8bf-7a83-8b2d-cbd5f3ac781c",
+      "itemId": "offline-reasoning-1",
+      "summary": [],
+      "content": []
+    }
+  ],
+  "markers": [
+    "[THREAD_ID] 01a10732-f8a1-7031-b4e6-7b60af24b48d",
+    "[STREAM_START]",
+    "[MESSAGE] {\"type\":\"user\",\"clientMessageId\":null,\"codexItemId\":\"01a10732-f8fd-75a1-85f5-4f8acbc5bdf2\",\"codexThreadId\":\"01a10732-f8a1-7031-b4e6-7b60af24b48d\",\"codexTurnId\":\"01a10732-f8bf-7a83-8b2d-cbd5f3ac781c\",\"uuid\":\"codex:01a10732-f8a1-7031-b4e6-7b60af24b48d:01a10732-f8bf-7a83-8b2d-cbd5f3ac781c:01a10732-f8fd-75a1-85f5-4f8acbc5bdf2\",\"codexItemType\":\"userMessage\",\"codexAuthoritative\":true,\"codexSnapshot\":true,\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Return the offline fixture.\",\"text_elements\":[]}]}}",
+    "[MESSAGE] {\"type\":\"assistant\",\"codexItemId\":\"offline-reasoning-1\",\"codexThreadId\":\"01a10732-f8a1-7031-b4e6-7b60af24b48d\",\"codexTurnId\":\"01a10732-f8bf-7a83-8b2d-cbd5f3ac781c\",\"uuid\":\"codex:01a10732-f8a1-7031-b4e6-7b60af24b48d:01a10732-f8bf-7a83-8b2d-cbd5f3ac781c:offline-reasoning-1\",\"codexItemType\":\"reasoning\",\"codexAuthoritative\":false,\"codexSnapshot\":true,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"text\":\"\",\"native\":true,\"status\":\"inProgress\"}]}}",
+    "[MESSAGE] {\"type\":\"assistant\",\"codexItemId\":\"offline-reasoning-1\",\"codexThreadId\":\"01a10732-f8a1-7031-b4e6-7b60af24b48d\",\"codexTurnId\":\"01a10732-f8bf-7a83-8b2d-cbd5f3ac781c\",\"uuid\":\"codex:01a10732-f8a1-7031-b4e6-7b60af24b48d:01a10732-f8bf-7a83-8b2d-cbd5f3ac781c:offline-reasoning-1\",\"codexItemType\":\"reasoning\",\"codexAuthoritative\":false,\"codexSnapshot\":true,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"Native summary 1.\",\"text\":\"Native summary 1.\",\"native\":true,\"status\":\"inProgress\"}]}}",
+    "[MESSAGE] {\"type\":\"assistant\",\"codexItemId\":\"offline-reasoning-1\",\"codexThreadId\":\"01a10732-f8a1-7031-b4e6-7b60af24b48d\",\"codexTurnId\":\"01a10732-f8bf-7a83-8b2d-cbd5f3ac781c\",\"uuid\":\"codex:01a10732-f8a1-7031-b4e6-7b60af24b48d:01a10732-f8bf-7a83-8b2d-cbd5f3ac781c:offline-reasoning-1\",\"codexItemType\":\"reasoning\",\"codexAuthoritative\":true,\"codexSnapshot\":true,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"Native summary 1.\",\"text\":\"Native summary 1.\",\"native\":true,\"status\":\"completed\"}]}}",
+    "[MESSAGE] {\"type\":\"assistant\",\"codexItemId\":\"offline-answer-1\",\"codexThreadId\":\"01a10732-f8a1-7031-b4e6-7b60af24b48d\",\"codexTurnId\":\"01a10732-f8bf-7a83-8b2d-cbd5f3ac781c\",\"uuid\":\"codex:01a10732-f8a1-7031-b4e6-7b60af24b48d:01a10732-f8bf-7a83-8b2d-cbd5f3ac781c:offline-answer-1\",\"codexItemType\":\"agentMessage\",\"codexAuthoritative\":true,\"codexSnapshot\":true,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Offline fixture completed.\"}]}}",
+    "[MESSAGE] {\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"last_token_usage\":{\"input_tokens\":5,\"output_tokens\":5,\"cached_input_tokens\":0,\"cache_read_input_tokens\":0},\"model_context_window\":258400}}}",
+    "[MESSAGE] {\"type\":\"result\",\"usage\":{\"input_tokens\":5,\"output_tokens\":5,\"cached_input_tokens\":0,\"cache_read_input_tokens\":0},\"session_id\":\"01a10732-f8a1-7031-b4e6-7b60af24b48d\"}",
+    "[STREAM_END]"
+  ]
+}

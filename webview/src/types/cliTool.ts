@@ -3,7 +3,7 @@
  * Detection only — the plugin never auto-installs these binaries.
  */
 
-export type CliToolId = 'grok' | 'kimi' | 'opencode' | 'pi' | 'dsh' | 'omp' | 'minimax' | 'zcode';
+export type CliToolId = 'codex' | 'grok' | 'kimi' | 'opencode' | 'pi' | 'dsh' | 'omp' | 'minimax' | 'zcode';
 
 export interface CliToolStatus {
   id: CliToolId;
@@ -40,6 +40,16 @@ export interface CliToolDefinition {
  * and are shown in a dialog — never executed by the plugin.
  */
 export const CLI_TOOL_DEFINITIONS: CliToolDefinition[] = [
+  {
+    id: 'codex',
+    nameKey: 'settings.cli.tools.codex.name',
+    descriptionKey: 'settings.cli.tools.codex.description',
+    binaryName: 'codex',
+    docsUrl: 'https://developers.openai.com/codex/cli/',
+    installCommand: 'npm install -g @openai/codex',
+    installCommandWindows: 'npm install -g @openai/codex',
+    altInstallCommand: 'brew install --cask codex',
+  },
   {
     id: 'grok',
     nameKey: 'settings.cli.tools.grok.name',

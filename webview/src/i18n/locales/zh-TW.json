@@ -119,14 +119,32 @@
       "openTooltip": "在對話中搜尋 (Cmd/Ctrl+F)"
     },
     "compactSummary": {
+      "receivedTime": "記錄時間",
       "summarizedConversation": "已總結的對話",
       "compactSummary": "對話摘要",
       "messagesUpTo": "已總結此節點之前的 {{count}} 則訊息",
       "messagesFrom": "已總結此節點之後的 {{count}} 則訊息",
       "userContext": "補充說明：「{{context}}」",
       "expand": "展開摘要",
-      "collapse": "摺疊摘要"
-    }
+      "collapse": "摺疊摘要",
+      "nativeCompleted": "上下文已壓縮",
+      "nativeInProgress": "正在壓縮上下文",
+      "nativeFailed": "上下文壓縮失敗",
+      "nativeInterrupted": "上下文壓縮已中斷",
+      "writerOccupied": "此對話的原生寫入鎖正在被占用。可能由本外掛的執行階段或其他 Codex 程序持有；請檢查同一對話是否仍在其他視窗或背景載入。",
+      "manual": "手動",
+      "auto": "自動",
+      "timeUnknown": "時間未知",
+      "turnTime": "回合開始時間"
+    },
+    "codexCompactUsage": "請直接使用 /compact，無需參數",
+    "codexCompactStarted": "Codex 正在壓縮會話上下文",
+    "codexReviewUsage": "請直接使用 /review，無需參數",
+    "codexReviewStarted": "Codex 正在審查工作區變更",
+    "codexDiffUsage": "請直接使用 /diff，無需參數",
+    "codexApprovalsUsage": "請直接使用 /approvals，無需參數",
+    "codexSandboxConflict": "Codex 自動審查不能使用 danger-full-access 沙箱，請改用 workspace-write 或請求批准模式。",
+    "continueRefiningPlan": "繼續完善此計畫："
   },
   "settings": {
     "title": "設定",
@@ -393,8 +411,8 @@
       "installPolicyTip": "安裝遇到問題？可將報錯複製給終端CLI AI 解決",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Claude AI 功能所需。包含 Claude Code SDK 及相關依賴。",
-      "codexSdkName": "Codex SDK",
-      "codexSdkDescription": "Codex AI 功能所需。包含 OpenAI Codex SDK。",
+      "codexSdkName": "Codex CLI",
+      "codexSdkDescription": "Codex AI 功能所需。在 CLI 頁面偵測已安裝的官方 Codex CLI（@openai/codex），聊天透過 app-server 執行。",
       "loading": "正在載入依賴狀態...",
       "install": "安裝",
       "installing": "安裝中...",
@@ -410,7 +428,8 @@
       "uninstallSuccess": "{{name}} 已解除安裝",
       "uninstallFailed": "解除安裝失敗: {{error}}",
       "updating": "更新中...",
-      "updateSuccess": "{{name}} 更新成功"
+      "updateSuccess": "{{name}} 更新成功",
+      "cliTransportBadge": "CLI · {{transport}}"
     },
     "usage": "使用統計",
     "usageDesc": "檢視您的 Token 消耗、費用統計和使用趨勢分析",
@@ -856,6 +875,10 @@
       "copied": "Copied to clipboard",
       "copyFailed": "Failed to copy",
       "tools": {
+        "codex": {
+          "name": "Codex CLI",
+          "description": "識別本機已安裝的 Codex CLI。版本偵測不讀取帳號設定；聊天透過 app-server 執行。"
+        },
         "minimax": {
           "name": "MiniMax Code",
           "description": "MiniMax 終端編碼智能體。需 Node.js 22.19+ / 24+（不支援 23）；命令：minimax / mcode"
@@ -929,6 +952,21 @@
         "autoStart": "需要時自動啟動",
         "moreActions": "更多"
       }
+    },
+    "permissionsPanel": {
+      "desired": "期望值：{{mode}}",
+      "effective": "實際值：{{mode}}",
+      "conflict": "原生策略拒絕了所請求的存取範圍。",
+      "codexSandboxTitle": "Codex Sandbox Mode",
+      "codexSandboxDesc": "Control system access boundaries when Codex executes commands. Defaults to the safer workspace-write (read/write within the workspace only). Switch to danger-full-access for system-level commands such as adb or docker.",
+      "workspaceWriteTitle": "workspace-write",
+      "workspaceWriteDesc": "Read/write is limited to the workspace. System-level operations are restricted for safety.",
+      "fullAccessTitle": "danger-full-access",
+      "fullAccessDesc": "Allows higher system access, suitable for commands like adb or docker that require extra permissions.",
+      "hint": "This setting only affects Codex process sandboxing and does not change Claude Code permission behavior.",
+      "source": "Source: {{source}}",
+      "readOnlyTitle": "Read only",
+      "readOnlyDesc": "Inspect files without writing to the workspace."
     }
   },
   "history": {
@@ -1005,7 +1043,8 @@
       "sdk-cli": "此會話由插件通過 SDK 創建，CLI 默認不顯示。點擊「轉為CLI」可使其出現在終端 CLI 的 /resume 列表中",
       "claude-vscode": "此會話由 VS Code 插件創建，CLI 默認不顯示。點擊「轉為CLI」可使其出現在終端 CLI 的 /resume 列表中",
       "remote": "此會話由遠程 Claude Code 實例創建"
-    }
+    },
+    "loadMore": "載入更多"
   },
   "permission": {
     "dialogTitle": "權限請求",
@@ -1027,7 +1066,12 @@
       "execute": "執行 {{toolName}}",
       "readDirectory": "讀取目錄",
       "timeoutWarning": "請儘快回答，對話框將在 {{seconds}} 秒後自動關閉"
-    }
+    },
+    "userCancelled": "權限請求已取消",
+    "previewUnavailable": "原生檔案預覽不可用。你可以拒絕或取消該請求。",
+    "requestedPermissions": "請求的原生權限",
+    "allowWithRule": "允許並加入此命令規則",
+    "allowWithNetworkRule": "允許並加入此網路規則"
   },
   "askUserQuestion": {
     "title": "Claude 有一些問題想問你",
@@ -1088,6 +1132,19 @@
       "loading": "正在載入供應商...",
       "empty": "暫無可用供應商",
       "switched": "已切換到 {{provider}}"
+    },
+    "codexQuota": {
+      "title": "Codex 配額",
+      "loading": "正在載入配額...",
+      "unavailable": "配額不可用",
+      "lastUpdated": "更新於 {{value}}",
+      "fiveHour": "5 小時用量",
+      "weekly": "每週用量",
+      "windowRemainingPercent": "剩餘 {{percent}}%",
+      "windowRemainingPercentWithReset": "剩餘 {{percent}}% · 重置於 {{value}}",
+      "windowUsedOnly": "已用 {{used}}",
+      "windowUnavailable": "不可用",
+      "apiKeyMode": "API 金鑰模式無訂閱配額"
     },
     "nodeProcesses": {
       "title": "Node 進程管理",
@@ -1345,11 +1402,26 @@
     "noParams": "No Parameters",
     "required": "Required",
     "optional": "Optional",
-    "refreshServer": "Refresh {{name}}"
+    "refreshServer": "Refresh {{name}}",
+    "nativeStatus": "原生 Codex MCP 狀態"
   },
   "tools": {
     "toolCall": "工具調用",
     "runCommand": "運行命令",
+    "commandRead": "讀取 {{path}}",
+    "commandList": "列出 {{path}}",
+    "commandSearch": "在 {{path}} 中搜尋 {{query}}",
+    "commandApprovalReason": "批准理由",
+    "patchToggleDiff": "查看修改",
+    "errorOutput": "錯誤詳情",
+    "resultUnknown": "無法確定此工具的個別執行結果",
+    "patchNoDiff": "無可用差異",
+    "patchKind": {
+      "add": "新增",
+      "delete": "刪除",
+      "update": "修改",
+      "move": "移動"
+    },
     "contextEngine": "上下文引擎",
     "task": "任務",
     "promptLabel": "提示詞",
@@ -1746,6 +1818,18 @@
       "description": "完全自動化，略過所有權限檢查【請謹慎使用】"
     }
   },
+  "workspaceDiff": {
+    "title": "工作區變更",
+    "staged": "已暫存",
+    "unstaged": "未暫存",
+    "untracked": "未追蹤",
+    "noChanges": "沒有偵測到變更",
+    "binary": "二進位",
+    "truncated": "工作區快照過大，內容已被截斷",
+    "notGit": "目前目錄不是 Git 工作區",
+    "refresh": "重新整理",
+    "fileCount": "{{count}} 個檔案"
+  },
   "codexModes": {
     "default": {
       "label": "Suggest (approval)",
@@ -1754,8 +1838,8 @@
     },
     "plan": {
       "label": "Plan Mode",
-      "tooltip": "Plan mode - read-only analysis",
-      "description": "Uses only read-only tools, generates plan for user approval"
+      "tooltip": "原生協作規劃模式",
+      "description": "先生成原生計畫再實施；沙箱範圍和審批策略保持獨立"
     },
     "acceptEdits": {
       "label": "Auto Edit",
@@ -1976,12 +2060,29 @@
   },
   "dshPresets": {
     "title": "選擇 DeepSeek Harness Agent 預設",
-    "none": { "label": "預設", "description": "dsh 預設 headless 組合（完整工具集）" },
-    "standard": { "label": "標準模式", "description": "功能完整的標準編碼工具集" },
-    "code": { "label": "PTC 模式", "description": "標準能力加 Code Mode" },
-    "minimal": { "label": "極簡模式", "description": "僅提供 bash 與 str_replace_editor" },
-    "cordis": { "label": "創造模式", "description": "標準能力加組合編排能力" },
-    "user": { "description": "安裝在 DSH 主目錄中的自訂預設" }
+    "none": {
+      "label": "預設",
+      "description": "dsh 預設 headless 組合（完整工具集）"
+    },
+    "standard": {
+      "label": "標準模式",
+      "description": "功能完整的標準編碼工具集"
+    },
+    "code": {
+      "label": "PTC 模式",
+      "description": "標準能力加 Code Mode"
+    },
+    "minimal": {
+      "label": "極簡模式",
+      "description": "僅提供 bash 與 str_replace_editor"
+    },
+    "cordis": {
+      "label": "創造模式",
+      "description": "標準能力加組合編排能力"
+    },
+    "user": {
+      "description": "安裝在 DSH 主目錄中的自訂預設"
+    }
   },
   "error": {
     "providerNotConfigured": "供應商未設定",
@@ -1995,8 +2096,8 @@
     "recommended": "推薦",
     "codexWriterConflict": {
       "title": "Codex 執行緒被佔用",
-      "intro": "新回合啟動時，上一個回合的 Codex 程序仍在寫入該執行緒。外掛現在會在傳送前自動停止上一回合的程序。",
-      "reason": "請稍等幾秒後重新傳送該訊息，無需新建會話。"
+      "intro": "此會話正由另一個 Codex 回合或用戶端寫入，本次傳送未能啟動。",
+      "reason": "請在正在使用此會話的用戶端停止回合，確認結束後再傳送。"
     },
     "codexThreadResume": {
       "title": "工作階段執行緒已失效",
@@ -2035,6 +2136,32 @@
           "step1": "2. 開啟「相依性管理」重新安裝最新版 SDK："
         }
       }
+    },
+    "codexCliUnavailable": {
+      "title": "Codex CLI 無法啟動",
+      "intro": "外掛啟動的 Codex CLI 執行環境還沒回應就結束了。上方錯誤中列出了失敗的 CLI 路徑與它自己輸出的內容。這通常是 Codex CLI 安裝不完整，而不是外掛的問題。",
+      "reason": "外掛會使用本機辨識到的 Codex CLI 啟動 codex app-server。安裝到一半的副本（例如全域 npm 安裝缺少平台二進位檔）會以退出碼 1 直接結束，並讓這一輪對話一起失敗。",
+      "solutions": {
+        "reinstallCodexCli": {
+          "title": "方案一：移除損壞的安裝並重新安裝官方 CLI",
+          "step0": "1. 先卸載殘留的全域安裝（最常見的原因是電腦上存在兩份副本）：",
+          "step1": "2. 重新安裝官方 CLI，請使用 npm 官方來源而不是鏡像站：",
+          "step2": "3. 確認 CLI 能正常輸出版本後再重新送出："
+        },
+        "pointCodexBin": {
+          "title": "方案二：讓外掛指向可用的執行檔",
+          "step0": "列出 PATH 上所有的 codex（Windows 使用 where codex）。如果可用的那個不在最前面，請把 CODEX_BIN 環境變數設為它的完整路徑，然後重新啟動 IDE。外掛現在也會自動回退到後面可用的安裝。"
+        }
+      }
+    }
+  },
+  "codex": {
+    "plan": {
+      "title": "Codex 計畫",
+      "ready": "計畫已就緒",
+      "execute": "執行計畫",
+      "executing": "執行中…",
+      "adjust": "繼續調整"
     }
   }
 }

@@ -237,11 +237,12 @@ public class SessionMessageOrchestrator {
                     // than what came back. Align the page to the live tail and keep
                     // the older live prefix instead of rejecting the reload — see
                     // mergeLoadedPageWithLivePrefix.
-                    List<ClaudeSession.Message> mergedMessages = pagedClaudeLoad
+                    List<ClaudeSession.Message> mergedMessages = "codex".equals(requestedProvider)
+                            ? CodexHistoryMerger.reconcile(loadedMessages, currentMessages) : pagedClaudeLoad
                             ? mergeLoadedPageWithLivePrefix(loadedMessages, currentMessages)
                             : null;
                     if (mergedMessages != null) {
-                        if (!MessageStructure.structuralBlockKeys(mergedMessages)
+                        if (!"codex".equals(requestedProvider) && !MessageStructure.structuralBlockKeys(mergedMessages)
                                 .containsAll(MessageStructure.structuralBlockKeys(currentMessages))) {
                             LOG.warn("Ignoring history page that would remove live structural blocks");
                             return;
@@ -269,7 +270,7 @@ public class SessionMessageOrchestrator {
                     callbackMessages = state.getMessagesSnapshot();
                     restoreTokenUsage(serverMessages);
                     callbackFacade.notifyMessageUpdate(callbackMessages);
-                    if (keptOlderLivePrefix) {
+                    if (keptOlderLivePrefix && pagedClaudeLoad) {
                         // The merge kept turns the page no longer carries, so the
                         // window still starts where it started before this load. The
                         // load already announced the page's own start; announce the

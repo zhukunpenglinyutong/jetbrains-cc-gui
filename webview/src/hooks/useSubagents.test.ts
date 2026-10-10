@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ClaudeContentBlock, ClaudeMessage, ToolResultBlock } from '../types';
+import type { ClaudeContentBlock, ClaudeMessage, SubagentHistoryResponse, SubagentInfo, ToolResultBlock } from '../types';
 import { applySubagentHistoryCompletion, extractSubagentsFromMessages } from './useSubagents';
 
 const assistantWithAgent = (toolUseId: string): ClaudeMessage => ({
@@ -78,6 +78,129 @@ const getToolResultRaw = (messages: ClaudeMessage[]) => (toolUseId: string) => {
 };
 
 describe('extractSubagentsFromMessages', () => {
+  it('preserves the native spawn prompt for the shared child process view', () => {
+    const messages: ClaudeMessage[] = [{ type: 'assistant', raw: {
+      codexItemType: 'collabAgentToolCall', message: { content: [{ type: 'tool_use', id: 'native-spawn-prompt',
+        name: 'spawn_agent', input: { native: true, receiverThreadIds: ['child'],
+          prompt: 'Inspect the compact request and report its terminal result.' } }] },
+    } }];
+    const agents = extractSubagentsFromMessages(messages, getContentBlocks, findToolResult(messages), getToolResultRaw(messages));
+    expect(agents).toMatchObject([{ agentId: 'child', prompt: 'Inspect the compact request and report its terminal result.' }]);
+  });
+
+  it('carries only a proven completed native turn into the new followup read and retains it until a different turn arrives', () => {
+    const agent: SubagentInfo = { id: 'launch', agentId: 'child', type: 'review', description: '',
+      status: 'running', isAsync: true, messageIndex: 0, nativeTaskId: 'followup' };
+    const previous: SubagentHistoryResponse = { success: true, completed: true, status: 'completed',
+      latestTurnId: 'previous-turn', latestTurnStatus: 'completed' };
+    expect(applySubagentHistoryCompletion([agent], { launch: previous })[0])
+      .toMatchObject({ status: 'running', nativeTaskPreviousTurnId: 'previous-turn' });
+    const pending: SubagentHistoryResponse = { success: true, completed: false, status: 'running', nativeTaskId: 'followup',
+      latestTurnId: 'previous-turn', latestTurnStatus: 'completed', nativeTaskPreviousTurnId: 'previous-turn' };
+    expect(applySubagentHistoryCompletion([agent], { launch: pending })[0])
+      .toMatchObject({ status: 'running', nativeTaskPreviousTurnId: 'previous-turn' });
+    const fresh: SubagentHistoryResponse = { ...pending, latestTurnId: 'new-turn', latestTurnStatus: 'completed',
+      nativeTaskPreviousTurnId: null, completed: true, status: 'completed' };
+    expect(applySubagentHistoryCompletion([agent], { launch: fresh })[0].status).toBe('completed');
+    expect(applySubagentHistoryCompletion([agent], { launch: fresh })[0].nativeTaskPreviousTurnId).toBeUndefined();
+    expect(applySubagentHistoryCompletion([agent], { launch: { ...previous, status: 'running', completed: false } })[0]
+      .nativeTaskPreviousTurnId).toBeUndefined();
+    expect(applySubagentHistoryCompletion([agent], { launch: { ...previous, status: 'error', completed: false } })[0]
+      .nativeTaskPreviousTurnId).toBe('previous-turn');
+    expect(applySubagentHistoryCompletion([agent], { launch: { ...previous, success: false, status: 'error', completed: false } })[0]
+      .nativeTaskPreviousTurnId).toBeUndefined();
+  });
+  it('counts every native receiver and preserves its own terminal report', () => {
+    const messages: ClaudeMessage[] = [{ type: 'assistant', content: '', raw: {
+      codexItemType: 'collabAgentToolCall', message: { content: [{ type: 'tool_use', id: 'native-spawn',
+        name: 'spawn_agent', input: { agent_id: 'child-a', receiverThreadIds: ['child-a', 'child-b'],
+          native: true, status: 'completed', agentsStates: {
+            'child-a': { status: 'running' }, 'child-b': { status: 'completed', message: 'Second review finished' },
+          } } }] },
+    } }];
+    const subagents = extractSubagentsFromMessages(messages, getContentBlocks, findToolResult(messages), getToolResultRaw(messages));
+    expect(subagents).toHaveLength(2);
+    expect(subagents.find(agent => agent.agentId === 'child-a')).toMatchObject({ status: 'running' });
+    expect(subagents.find(agent => agent.agentId === 'child-b')).toMatchObject({ status: 'completed', resultText: 'Second review finished' });
+  });
+
+  it('joins a path-only launch to native activity without adding a duplicate agent', () => {
+    const messages: ClaudeMessage[] = [{ type: 'assistant', content: '', raw: { message: { content: [
+      { type: 'tool_use', id: 'path-spawn', name: 'collaboration.spawn_agent', input: { task_name: 'review_ui' } },
+    ] } } }, { type: 'user', content: '', raw: { message: { content: [
+      { type: 'tool_result', tool_use_id: 'path-spawn', content: '{"task_name":"/root/review_ui"}' },
+    ] } } }, { type: 'assistant', content: '', raw: { codexItemType: 'subAgentActivity', message: { content: [
+      { type: 'tool_use', id: 'activity-done', name: 'subAgentActivity', input: {
+        agentThreadId: 'native-child', agentPath: '/root/review_ui', kind: 'completed',
+      } },
+    ] } } }];
+    const subagents = extractSubagentsFromMessages(messages, getContentBlocks, findToolResult(messages), getToolResultRaw(messages));
+    expect(subagents).toHaveLength(1);
+    expect(subagents[0]).toMatchObject({ id: 'path-spawn', type: 'review_ui', agentId: 'native-child', status: 'completed' });
+    expect(subagents[0].resultText).toBeUndefined();
+  });
+
+  it('restores native activity even when a paged history omits its launch', () => {
+    const messages: ClaudeMessage[] = [{ type: 'assistant', content: '', raw: { codexItemType: 'subAgentActivity',
+      message: { content: [{ type: 'tool_use', id: 'activity-start', name: 'subAgentActivity', input: {
+        agentThreadId: 'child-only', agentPath: '/root/review_ui', kind: 'started',
+      } }] } } }];
+    const subagents = extractSubagentsFromMessages(messages, getContentBlocks, findToolResult(messages), getToolResultRaw(messages));
+    expect(subagents).toHaveLength(1);
+    expect(subagents[0]).toMatchObject({ agentId: 'child-only', agentPath: '/root/review_ui', status: 'running', isAsync: true });
+  });
+
+  it('does not turn a completed child back into running merely because a message was delivered', () => {
+    const messages: ClaudeMessage[] = [{ type: 'assistant', content: '', raw: { message: { content: [
+      { type: 'tool_use', id: 'completed-spawn', name: 'spawn_agent', input: { task_name: '/root/review_ui' } },
+    ] } } }, ...['completed', 'interacted'].map(kind => ({ type: 'assistant', content: '', raw: {
+      codexItemType: 'subAgentActivity', message: { content: [{ type: 'tool_use', id: `activity-${kind}`, name: 'subAgentActivity',
+        input: { kind, agentThreadId: 'completed-child', agentPath: '/root/review_ui' } }] },
+    } } as ClaudeMessage))];
+    const subagents = extractSubagentsFromMessages(messages, getContentBlocks, findToolResult(messages), getToolResultRaw(messages));
+    expect(subagents).toHaveLength(1);
+    expect(subagents[0].status).toBe('completed');
+  });
+
+  it('opens a new native task for a verified followup and refuses the previous task cache', () => {
+    const messages: ClaudeMessage[] = [{ type: 'assistant', content: '', raw: { message: { content: [
+      { type: 'tool_use', id: 'restarted-spawn', name: 'spawn_agent', input: { task_name: '/root/review_ui' } },
+    ] } } }, { type: 'assistant', content: '', raw: { codexItemType: 'subAgentActivity', message: { content: [
+      { type: 'tool_use', id: 'old-done', name: 'subAgentActivity', input: {
+        kind: 'completed', agentThreadId: 'restarted-child', agentPath: '/root/review_ui',
+      } },
+    ] } } }, { type: 'assistant', content: '', raw: { message: { content: [
+      { type: 'tool_use', id: 'followup-one', name: 'followup_task', input: { target: '/root/review_ui' } },
+    ] } } }, { type: 'assistant', content: '', raw: { codexItemType: 'subAgentActivity', message: { content: [
+      { type: 'tool_use', id: 'followup-one-activity', name: 'subAgentActivity', input: {
+        toolUseId: 'followup-one', kind: 'interacted', agentThreadId: 'restarted-child', agentPath: '/root/review_ui',
+      } },
+    ] } } }];
+    const agents = extractSubagentsFromMessages(messages, getContentBlocks, findToolResult(messages), getToolResultRaw(messages));
+    expect(agents[0]).toMatchObject({ status: 'running', nativeTaskId: 'followup-one' });
+    expect(applySubagentHistoryCompletion(agents, { 'restarted-spawn': {
+      success: true, completed: true, status: 'completed', messages: [{ type: 'assistant', content: 'Old report' }],
+    } })[0].status).toBe('running');
+    expect(applySubagentHistoryCompletion(agents, { 'restarted-spawn': {
+      success: true, completed: true, status: 'completed', nativeTaskId: 'followup-one',
+    } })[0].status).toBe('completed');
+  });
+
+  it('keeps a native launch running and learns completion from the real child state', () => {
+    const nativeRow = (id: string, name: string, input: Record<string, unknown>): ClaudeMessage => ({
+      type: 'assistant', content: '', raw: { codexItemType: 'collabAgentToolCall',
+        message: { content: [{ type: 'tool_use', id, name, input }] } },
+    });
+    const spawn = nativeRow('spawn', 'spawn_agent', { agent_id: 'child', run_in_background: true,
+      agentsStates: { child: { status: 'running' } }, status: 'completed' });
+    const messages = [spawn];
+    const extract = () => extractSubagentsFromMessages(messages, getContentBlocks, findToolResult(messages), getToolResultRaw(messages));
+    expect(extract()[0]).toMatchObject({ agentId: 'child', status: 'running', isAsync: true });
+    messages.push(nativeRow('wait', 'collabAgentToolCall', { agentsStates: { child: { status: 'completed' } } }));
+    expect(extract()[0].status).toBe('completed');
+    messages.push(nativeRow('resume', 'collabAgentToolCall', { agentsStates: { child: { status: 'pendingInit' } } }));
+    expect(extract()[0].status).toBe('running');
+  });
   it('retains Codex spawn_agent path metadata for history requests', () => {
     const message: ClaudeMessage = {
       type: 'assistant',

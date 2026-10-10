@@ -21,6 +21,67 @@ import static org.junit.Assert.assertTrue;
  * Unit tests for translating Codex bridge events into provider-neutral session state.
  */
 public class CodexMessageHandlerTest {
+    /** Errors belong to the submitted client identity even when a later user is already present. */
+    @Test
+    public void startupErrorKeepsTheSubmittingClientIdentity() {
+        SessionState state = new SessionState();
+        CodexMessageHandler handler = new CodexMessageHandler(state, new CallbackHandler(), "submitted-client");
+        JsonObject laterUser = new JsonObject();
+        laterUser.addProperty("clientMessageId", "later-client");
+        state.addMessage(new Message(Message.Type.USER, "Later visible input", laterUser));
+
+        handler.onError("thread has an active writer");
+
+        Message error = state.getMessages().get(state.getMessages().size() - 1);
+        assertEquals(Message.Type.ERROR, error.type);
+        assertTrue("startup error must carry its own submission identity", error.raw != null);
+        assertEquals("submitted-client", error.raw.get("clientMessageId").getAsString());
+        assertEquals("thread has an active writer", error.content);
+    }
+
+    /** Normalizes native and legacy image sources before replacing the visible user content. */
+    @Test
+    public void keepsNativeImageOnlyUserSnapshots() {
+        for (String image : List.of("{\"type\":\"image\",\"url\":\"data:image/png;base64,fixture\"}",
+                "{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,fixture\"}",
+                "{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/png\",\"data\":\"fixture\"}}")) {
+            SessionState state = new SessionState();
+            CodexMessageHandler handler = new CodexMessageHandler(state, new CallbackHandler());
+            handler.onMessage("user", "{\"codexItemId\":\"picture\",\"codexSnapshot\":true,\"message\":{\"content\":[" + image + "]}}");
+            assertEquals(1, state.getMessages().size());
+            var block = state.getMessages().get(0).raw.getAsJsonObject("message").getAsJsonArray("content").get(0).getAsJsonObject();
+            assertEquals("image", block.get("type").getAsString());
+            assertEquals("data:image/png;base64,fixture", block.get("src").getAsString());
+        }
+    }
+    /** Updates the original compaction boundary when its turn identity arrives late. */
+    @Test
+    public void promotesCompactionTurnIdentityWithoutDuplicatingTheBoundary() {
+        SessionState state = new SessionState();
+        CodexMessageHandler handler = new CodexMessageHandler(state, new CallbackHandler());
+        handler.onMessage("assistant", """
+                {"codexItemId":"cmp","codexThreadId":"t","codexTurnId":null,"uuid":"stable-cmp","codexSnapshot":true,"isCompactSummary":true,"message":{"content":[{"type":"text","text":""}]}}
+                """);
+        handler.onMessage("assistant", """
+                {"codexItemId":"cmp","codexThreadId":"t","codexTurnId":"turn","uuid":"stable-cmp","codexSnapshot":true,"isCompactSummary":true,"summarizeMetadata":{"native":true,"status":"completed"},"message":{"content":[{"type":"text","text":""}]}}
+                """);
+        assertEquals(1, state.getMessages().size());
+        assertEquals("turn", state.getMessages().get(0).raw.get("codexTurnId").getAsString());
+        assertTrue(state.getMessages().get(0).raw.get("isCompactSummary").getAsBoolean());
+    }
+
+    @Test
+    public void nativeStreamingSnapshotsReplaceEachItemInPlace() {
+        SessionState state = new SessionState();
+        CodexMessageHandler handler = new CodexMessageHandler(state, new CallbackHandler());
+        handler.onMessage("stream_start", "");
+        handler.onMessage("assistant", "{\"codexItemId\":\"one\",\"codexSnapshot\":true,\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"a\"}]}}");
+        handler.onMessage("assistant", "{\"codexItemId\":\"two\",\"codexSnapshot\":true,\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"b\"}]}}");
+        handler.onMessage("assistant", "{\"codexItemId\":\"one\",\"codexSnapshot\":true,\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"ab\"}]}}");
+        assertEquals(2, state.getMessages().size());
+        assertEquals("ab", state.getMessages().get(0).content);
+        assertEquals("b", state.getMessages().get(1).content);
+    }
 
     private static final class RecordingCallback implements ClaudeSession.SessionCallback {
         int streamStartCount = 0;
@@ -29,6 +90,7 @@ public class CodexMessageHandlerTest {
         int messageUpdateCount = 0;
         boolean lastLoading = false;
         boolean lastBusy = false;
+        String lastStateError;
         final List<String> contentDeltas = new ArrayList<>();
         final List<String> thinkingDeltas = new ArrayList<>();
         final List<Message> lastMessages = new ArrayList<>();
@@ -49,6 +111,7 @@ public class CodexMessageHandlerTest {
             stateChangeCount++;
             lastBusy = busy;
             lastLoading = loading;
+            this.lastStateError = error;
         }
 
         @Override
@@ -95,6 +158,69 @@ public class CodexMessageHandlerTest {
         public void onThinkingDelta(String delta) {
             thinkingDeltas.add(delta);
         }
+    }
+
+    @Test
+    public void previousProcessCannotClearBusyStateAfterNextSendStarts() {
+        SessionState state = new SessionState();
+        CallbackHandler callbacks = new CallbackHandler();
+        RecordingCallback recorded = new RecordingCallback();
+        callbacks.setCallback(recorded);
+        state.beginTurn();
+        CodexMessageHandler previous = new CodexMessageHandler(state, callbacks);
+        previous.onMessage("stream_start", "");
+        previous.onMessage("stream_end", "");
+
+        // The UI permits a send at stream_end, before the old process exits.
+        state.beginTurn();
+        previous.onComplete(new SDKResult());
+        assertTrue(state.isBusy());
+        assertTrue(state.isLoading());
+        assertEquals(1, recorded.stateChangeCount);
+
+        CodexMessageHandler current = new CodexMessageHandler(state, callbacks);
+        current.onMessage("stream_start", "");
+        current.onMessage("content_delta", "current answer");
+        int updates = recorded.messageUpdateCount;
+        previous.onMessage("content_delta", "stale answer");
+        previous.onMessage("stream_end", "");
+        previous.onError("old process exited");
+        previous.onComplete(new SDKResult());
+
+        assertTrue(state.isBusy());
+        assertTrue(state.isLoading());
+        assertEquals(null, state.getError());
+        assertEquals(updates, recorded.messageUpdateCount);
+        assertEquals(List.of("current answer"), recorded.contentDeltas);
+        assertEquals(1, recorded.streamEndCount);
+        current.onMessage("stream_end", "");
+        current.onComplete(new SDKResult());
+        assertFalse(state.isBusy());
+        assertFalse(state.isLoading());
+        assertEquals(2, recorded.streamEndCount);
+    }
+
+    @Test
+    public void replacedSessionIgnoresOldProviderCallbacks() {
+        SessionState state = new SessionState();
+        state.beginTurn();
+        CallbackHandler callbacks = new CallbackHandler();
+        RecordingCallback recorded = new RecordingCallback();
+        callbacks.setCallback(recorded);
+        CodexMessageHandler previous = new CodexMessageHandler(state, callbacks);
+        state.rotateRuntimeSessionEpoch();
+
+        previous.onMessage("session_id", "old-session");
+        previous.onMessage("content_delta", "old answer");
+        previous.onError("old error");
+        previous.onComplete(new SDKResult());
+
+        assertEquals(null, state.getSessionId());
+        assertEquals(null, state.getError());
+        assertTrue(state.isBusy());
+        assertTrue(state.isLoading());
+        assertEquals(0, recorded.stateChangeCount);
+        assertEquals(0, recorded.messageUpdateCount);
     }
 
     @Test
@@ -204,6 +330,85 @@ public class CodexMessageHandlerTest {
                 .getAsJsonObject()
                 .get("text")
                 .getAsString());
+    }
+
+    @Test
+    public void nativeUserMessageClientIdReplacesOptimisticMessage() {
+        SessionState state = new SessionState();
+        Message optimistic = new Message(Message.Type.USER, "same prompt");
+        JsonObject optimisticRaw = new JsonObject();
+        optimisticRaw.addProperty("clientMessageId", "cm-1");
+        optimistic.raw = optimisticRaw;
+        state.addMessage(optimistic);
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        callbackHandler.setCallback(new RecordingCallback());
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("user", "{\"clientMessageId\":\"cm-1\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"same prompt\"}]}}");
+
+        assertEquals(1, state.getMessages().size());
+        assertEquals("cm-1", state.getMessages().get(0).raw.get("clientMessageId").getAsString());
+        assertEquals("same prompt", state.getMessages().get(0).content);
+    }
+
+    @Test
+    public void repeatedNativeItemSnapshotsUpsertOneMessage() {
+        SessionState state = new SessionState();
+        CallbackHandler callbackHandler = new CallbackHandler();
+        callbackHandler.setCallback(new RecordingCallback());
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("assistant", "{\"codexItemId\":\"item-1\","
+                + "\"codexAuthoritative\":false,\"message\":{\"content\":["
+                + "{\"type\":\"text\",\"text\":\"partial\"}]}}");
+        handler.onMessage("assistant", "{\"codexItemId\":\"item-1\","
+                + "\"codexAuthoritative\":true,\"message\":{\"content\":["
+                + "{\"type\":\"text\",\"text\":\"complete\"}]}}");
+        handler.onMessage("assistant", "{\"codexItemId\":\"item-1\","
+                + "\"codexAuthoritative\":true,\"message\":{\"content\":["
+                + "{\"type\":\"text\",\"text\":\"complete\"}]}}");
+
+        assertEquals(1, state.getMessages().size());
+        assertEquals("complete", state.getMessages().get(0).content);
+        assertEquals("item-1", state.getMessages().get(0).raw.get("codexItemId").getAsString());
+    }
+
+    @Test
+    public void nativeUserConfirmationKeepsTheSubmittedImageForDisplay() {
+        SessionState state = new SessionState();
+        Message optimistic = new Message(Message.Type.USER, "inspect");
+        optimistic.raw = com.google.gson.JsonParser.parseString("""
+                {"clientMessageId":"image-client","message":{"content":[
+                {"type":"image","source":{"type":"base64","data":"fixture-image"}},
+                {"type":"text","text":"inspect"}]}}
+                """).getAsJsonObject();
+        state.addMessage(optimistic);
+        CodexMessageHandler handler = new CodexMessageHandler(state, new CallbackHandler());
+        handler.onMessage("user", """
+                {"clientMessageId":"image-client","codexItemId":"native-image",
+                "message":{"content":[{"type":"localImage","path":"image.png"},
+                {"type":"text","text":"inspect"}]}}
+                """);
+        assertEquals(1, state.getMessages().size());
+        assertTrue(state.getMessages().get(0).raw.toString().contains("fixture-image"));
+        assertEquals(2, state.getMessages().get(0).raw.getAsJsonObject("message").getAsJsonArray("content").size());
+    }
+
+    @Test
+    public void equalPromptsWithDifferentClientIdsRemainSeparate() {
+        SessionState state = new SessionState();
+        CallbackHandler callbackHandler = new CallbackHandler();
+        callbackHandler.setCallback(new RecordingCallback());
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("user", "{\"clientMessageId\":\"cm-1\",\"codexItemId\":\"u-1\","
+                + "\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"same\"}]}}");
+        handler.onMessage("user", "{\"clientMessageId\":\"cm-2\",\"codexItemId\":\"u-2\","
+                + "\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"same\"}]}}");
+
+        assertEquals(2, state.getMessages().size());
+        assertEquals("cm-1", state.getMessages().get(0).raw.get("clientMessageId").getAsString());
+        assertEquals("cm-2", state.getMessages().get(1).raw.get("clientMessageId").getAsString());
     }
 
     @Test
@@ -576,11 +781,8 @@ public class CodexMessageHandlerTest {
     }
 
     @Test
-    public void onErrorWithoutActiveStreamPushesErrorWithoutStreamEnd() {
-        // A non-streaming Codex turn maps to the webview's 'minimal' stream-end mode,
-        // which would only cancel pending updates without buying any dangling-tool
-        // cleanup — so onError intentionally does NOT emit stream-end here. The error
-        // snapshot is pushed directly and renders on its own.
+    public void startupFailureEndsTheOptimisticFrontendStreamBeforeItsErrorSnapshot() {
+        // The frontend starts waiting before thread/start or thread/resume can fail.
         SessionState state = new SessionState();
         state.setBusy(true);
         state.setLoading(true);
@@ -590,12 +792,37 @@ public class CodexMessageHandlerTest {
         callbackHandler.setCallback(callback);
 
         CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
-        handler.onError("API request failed");
+        handler.onError("thread fixture already has an active writer");
 
-        assertEquals(0, callback.streamEndCount);
+        assertEquals(1, callback.streamEndCount);
+        assertTrue(callback.callOrder.indexOf("streamEnd") < callback.callOrder.lastIndexOf("messageUpdate"));
         assertEquals(Message.Type.ERROR,
                 callback.lastMessages.get(callback.lastMessages.size() - 1).type);
         assertFalse(state.isBusy());
         assertFalse(state.isLoading());
+    }
+
+    /** Native controls keep the failure in the transcript without requesting a second status toast. */
+    @Test
+    public void controlFailureKeepsItsErrorMessageButOmitsTheStatusError() {
+        for (boolean control : List.of(false, true)) {
+            SessionState state = new SessionState();
+            state.setBusy(true);
+            state.setLoading(true);
+            CallbackHandler callbacks = new CallbackHandler();
+            RecordingCallback callback = new RecordingCallback();
+            callbacks.setCallback(callback);
+            CodexMessageHandler handler = control ? new CodexMessageHandler(state, callbacks, false)
+                    : new CodexMessageHandler(state, callbacks);
+            String error = "thread fixture already has an active writer";
+            handler.onError(error);
+            assertEquals(error, state.getError());
+            assertEquals(error, callback.lastMessages.get(0).content);
+            assertEquals(1, callback.streamEndCount);
+            assertEquals(1, callback.stateChangeCount);
+            assertEquals(control ? null : error, callback.lastStateError);
+            assertFalse(callback.lastBusy);
+            assertFalse(callback.lastLoading);
+        }
     }
 }

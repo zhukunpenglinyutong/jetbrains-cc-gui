@@ -18,13 +18,13 @@ Expose the native automatic approval modes added by Claude Code and Codex while 
 ### Codex
 
 - CLI convenience option observed in some Codex releases: `--approve-for-me` (alias `--not-so-yolo`).
-- The plugin does not invoke that alias; it uses the SDK's generic `CodexOptions.config` path below, so the SDK floor is based on `approvals_reviewer` config support rather than the presence of a CLI flag.
+- The plugin uses native app-server thread/turn settings. Codex is detected as a CLI alongside OpenCode; it is no longer installed or checked as an SDK.
 - Equivalent configuration:
   - `approvals_reviewer = "auto_review"`
   - `approval_policy = "on-request"`
   - `sandbox_mode = "workspace-write"`
-- The TypeScript SDK accepts `approvals_reviewer` through `CodexOptions.config`; thread options continue to carry `approvalPolicy` and `sandboxMode`.
-- The verified SDK floor for the plugin's config-based path is `@openai/codex-sdk` / Codex CLI `0.146.0+`.
+- Native settings carry `approvalsReviewer`, `approvalPolicy`, and the sandbox policy, subject to native managed constraints.
+- CLI availability comes from the actual executable. Historical TypeScript SDK version metadata does not gate Auto.
 - The CLI alias is version-specific and is not the mechanism used by this plugin.
 - Reference: <https://github.com/openai/codex/blob/main/codex-rs/protocol/src/config_types.rs>
 
@@ -64,65 +64,29 @@ selected while a turn is already running, the current subprocess remains bounded
 by its original launch flag; the selected mode is persisted and takes effect when
 the next send rebuilds the runtime.
 
-### Codex TypeScript SDK
+### Codex app-server
 
-The reviewer must be placed in `CodexOptions.config` before constructing `Codex`;
-`ThreadOptions` has no reviewer field. The effective native Auto call is:
+Codex runs through the persistent stdio app-server. The initial thread uses
+`approvalPolicy: 'on-request'`, `approvalsReviewer: 'auto_review'`, and a guarded
+sandbox; each `turn/start` carries the frozen settings revision. Read-only stays
+read-only. An incompatible request for unrestricted access is rejected rather
+than silently widening access or changing reviewer.
 
-```js
-const codex = new Codex({
-  config: {
-    model_supports_reasoning_summaries: true,
-    approvals_reviewer: 'auto_review',
-  },
-  env: sanitizedCliEnvironment,
-});
+Non-auto presets explicitly select the user reviewer. Approval strategy and
+collaboration mode are independent: Plan does not change the current policy.
+Native effective-settings notifications confirm what was applied; an RPC ack
+does not imply a rejected desired setting became effective.
 
-const thread = codex.startThread({
-  skipGitRepoCheck: true,
-  approvalPolicy: 'on-request',
-  sandboxMode: 'workspace-write',
-  workingDirectory: cwd,
-});
+Native reverse requests are answered before execution, with distinct decline,
+cancel, session allowance, and policy amendment results. File-change previews
+come from native items; the plugin no longer infers approvals from completed
+tools or rolls edits back after decline. Stop keeps the send gate until a native
+terminal or confirmed process exit. The sanitized child environment removes
+inherited policy overrides; settings travel through RPC.
 
-const { events } = await thread.runStreamed(input, { signal });
-```
-
-`@openai/codex-sdk` serializes these values into the child CLI invocation as:
-
-```text
---config approvals_reviewer="auto_review"
---sandbox workspace-write
---cd <cwd>
---skip-git-repo-check
---config approval_policy="on-request"
-```
-
-Codex resolves `approval_policy` and `approvals_reviewer` before it emits the
-`item.started` event for a command, and `file_change` can represent a patch that
-has already been applied. Consequently, the event handler does not call the
-Java approval bridge for native Auto and does not attempt a post-application
-rollback; the Codex-native reviewer owns those approval decisions in the
-non-interactive SDK stream.
-
-The same thread options are passed to `resumeThread(threadId, options)` for every
-turn. For resumed threads the plugin intentionally omits `workingDirectory` so
-Codex can locate the persisted session; `approvalPolicy`, `sandboxMode`,
-`skipGitRepoCheck`, and the `CodexOptions.config` reviewer override are still
-applied. Non-auto modes explicitly set `approvals_reviewer="user"` to clear any
-reviewer persisted in the resumed thread. Full Auto also uses the user reviewer
-value, but its `approvalPolicy: 'never'` means no approval request is routed.
-This keeps Full Auto separate from native Auto without relying on omission to
-reset historical configuration.
-
-Java also writes `CODEX_SANDBOX_MODE`, `CODEX_SANDBOX`, and
-`CODEX_APPROVAL_POLICY` into the Node process environment to override inherited
-Codex settings; the Node service removes those variables from the child environment,
-reads them as controlled overrides, and re-enforces the exact
-`workspace-write`/`on-request` pair for native Auto. It also rejects
-`auto` before constructing `Codex` when the installed `@openai/codex-sdk` is below
-`0.146.0`, while the Webview hides the option when dependency status explicitly
-reports the same incompatibility.
+Codex installation is managed by the CLI detection page. Prompt enhancement and
+commit generation also use ephemeral app-server threads, with read-only access
+and declined background interactions. See [the runtime contract](../codex/app-server.md).
 
 ## Mode model
 
@@ -200,7 +164,7 @@ every mode. Users opening untrusted repositories should stay in `default` mode.
 ## Verification
 
 - `node --check` on all modified AI Bridge JavaScript files.
-- `node --test ai-bridge/services/codex/codex-event-handler.test.js ai-bridge/services/codex/codex-utils.test.js ai-bridge/utils/permission-mapper.test.js ai-bridge/services/claude/permission-mode.test.js ai-bridge/services/claude/runtime-lifecycle.test.js ai-bridge/services/claude/setPermissionModePersistent.test.mjs ai-bridge/services/claude/setPermissionModePersistent.bypass.test.js`
+- `node --test ai-bridge/services/codex/codex-utils.test.js ai-bridge/utils/permission-mapper.test.js ai-bridge/services/claude/permission-mode.test.js ai-bridge/services/claude/runtime-lifecycle.test.js ai-bridge/services/claude/setPermissionModePersistent.test.mjs ai-bridge/services/claude/setPermissionModePersistent.bypass.test.js`
 - `cd webview && npm run test`
 - `cd webview && npx vitest run src/components/PlanApprovalDialog.test.tsx src/components/ChatInputBox/selectors/ModeSelect.test.tsx src/hooks/providers/cliProviders.test.ts`
 - `cd webview && npx tsc -p tsconfig.test.json --noEmit`

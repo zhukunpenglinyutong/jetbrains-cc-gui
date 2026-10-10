@@ -87,7 +87,6 @@ export const ModeSelect = ({
     if (provider === 'codex') {
       return AVAILABLE_MODES.filter((mode) =>
         (mode.id !== 'auto' || codexNativeAutoReviewAvailable)
-        && mode.id !== 'plan'
         && mode.id !== 'smol'
         && mode.id !== 'slow'
       );

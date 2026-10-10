@@ -138,14 +138,32 @@
       "openTooltip": "在对话中搜索 (Cmd/Ctrl+F)"
     },
     "compactSummary": {
+      "receivedTime": "记录时间",
       "summarizedConversation": "已总结的对话",
       "compactSummary": "对话摘要",
       "messagesUpTo": "已总结此节点之前的 {{count}} 条消息",
       "messagesFrom": "已总结此节点之后的 {{count}} 条消息",
       "userContext": "补充说明：「{{context}}」",
       "expand": "展开摘要",
-      "collapse": "折叠摘要"
-    }
+      "collapse": "折叠摘要",
+      "nativeCompleted": "上下文已压缩",
+      "nativeInProgress": "正在压缩上下文",
+      "nativeFailed": "上下文压缩失败",
+      "nativeInterrupted": "上下文压缩已中断",
+      "writerOccupied": "此会话的原生写入锁正在被占用。可能由本插件的运行时或其他 Codex 进程持有；请检查同一会话是否仍在其他窗口或后台加载。",
+      "manual": "手动",
+      "auto": "自动",
+      "timeUnknown": "时间未知",
+      "turnTime": "回合开始时间"
+    },
+    "codexCompactUsage": "请直接使用 /compact，无需参数",
+    "codexCompactStarted": "Codex 正在压缩会话上下文",
+    "codexReviewUsage": "请直接使用 /review，无需参数",
+    "codexReviewStarted": "Codex 正在审查工作区改动",
+    "codexDiffUsage": "请直接使用 /diff，无需参数",
+    "codexApprovalsUsage": "请直接使用 /approvals，无需参数",
+    "codexSandboxConflict": "Codex 自动审查不能使用 danger-full-access 沙箱，请改用 workspace-write 或请求批准模式。",
+    "continueRefiningPlan": "继续完善此计划："
   },
   "settings": {
     "title": "设置",
@@ -638,6 +656,10 @@
       "copied": "已复制到剪贴板",
       "copyFailed": "复制失败",
       "tools": {
+        "codex": {
+          "name": "Codex CLI",
+          "description": "识别本机已安装的 Codex CLI。版本检测不读取账号配置；聊天通过 app-server 运行。"
+        },
         "minimax": {
           "name": "MiniMax Code",
           "description": "MiniMax 终端编码智能体。需 Node.js 22.19+ / 24+（不支持 23）；命令：minimax / mcode"
@@ -753,8 +775,8 @@
       "installPolicyTip": "安装遇到问题？可将报错复制给终端CLI AI 解决",
       "claudeSdkName": "Claude Code SDK",
       "claudeSdkDescription": "Claude AI 功能所需。包含 Claude Code SDK 及相关依赖。",
-      "codexSdkName": "Codex SDK",
-      "codexSdkDescription": "Codex AI 功能所需。包含 OpenAI Codex SDK。",
+      "codexSdkName": "Codex CLI",
+      "codexSdkDescription": "Codex AI 功能所需。在 CLI 页面检测已安装的官方 Codex CLI（@openai/codex），聊天通过 app-server 运行。",
       "loading": "正在加载依赖状态...",
       "install": "安装",
       "installing": "安装中...",
@@ -781,7 +803,8 @@
       "uninstallSuccess": "{{name}} 已卸载",
       "uninstallFailed": "卸载失败: {{error}}",
       "updating": "更新中...",
-      "updateSuccess": "{{name}} 更新成功"
+      "updateSuccess": "{{name}} 更新成功",
+      "cliTransportBadge": "CLI · {{transport}}"
     },
     "usage": "使用统计",
     "usageDesc": "查看您的 Token 消耗、费用统计和使用趋势分析",
@@ -791,14 +814,19 @@
     "permissionsDesc": "管理 Claude Code 的文件访问和操作权限",
     "codexPermissionsDesc": "管理 Codex 的权限和沙箱策略",
     "permissionsPanel": {
+      "desired": "期望值：{{mode}}",
+      "effective": "实际值：{{mode}}",
+      "conflict": "原生策略拒绝了所请求的访问范围。",
       "codexSandboxTitle": "Codex 沙箱模式",
-      "codexSandboxDesc": "控制 Codex 执行命令时的系统权限边界。默认使用更安全的 workspace-write（仅在工作区内读写），如需执行 adb、docker 等系统级命令可切换为 danger-full-access。",
+      "codexSandboxDesc": "控制 Codex 执行命令时的系统权限边界。默认使用 workspace-write（仅在工作区内读写），需要更高系统权限时可选择 danger-full-access。",
       "workspaceWriteTitle": "workspace-write",
-      "workspaceWriteDesc": "只允许在工作区内读写，系统级操作会被限制，更安全。",
+      "workspaceWriteDesc": "只允许在工作区内读写，系统级操作会被限制。",
       "fullAccessTitle": "danger-full-access",
-      "fullAccessDesc": "允许更高系统权限，可执行如 adb、docker 等需要额外权限的命令。",
+      "fullAccessDesc": "允许更高系统权限，适用于 adb、docker 等需要额外权限的命令。",
       "hint": "该设置仅影响 Codex 进程沙箱，不会改变 Claude Code 的权限策略。",
-      "claudeTip": "Claude Code 的交互审批模式请在聊天输入框的模式选择器中设置。"
+      "source": "来源：{{source}}",
+      "readOnlyTitle": "只读",
+      "readOnlyDesc": "允许查看文件，不写入工作区。"
     },
     "commit": {
       "title": "Commit AI",
@@ -1405,7 +1433,8 @@
       "hoursAgo": "小时前",
       "minutesAgo": "分钟前",
       "secondsAgo": "秒前"
-    }
+    },
+    "loadMore": "加载更多"
   },
   "permission": {
     "dialogTitle": "权限请求",
@@ -1427,7 +1456,12 @@
       "execute": "执行 {{toolName}}",
       "readDirectory": "读取目录",
       "timeoutWarning": "请尽快回答，对话框将在 {{seconds}} 秒后自动关闭"
-    }
+    },
+    "userCancelled": "权限请求已取消",
+    "previewUnavailable": "原生文件预览不可用。你可以拒绝或取消该请求。",
+    "requestedPermissions": "请求的原生权限",
+    "allowWithRule": "允许并添加此命令规则",
+    "allowWithNetworkRule": "允许并添加此网络规则"
   },
   "askUserQuestion": {
     "title": "Claude 有一些问题想问你",
@@ -1759,11 +1793,26 @@
     "noParams": "无参数",
     "required": "必填",
     "optional": "可选",
-    "refreshServer": "刷新 {{name}}"
+    "refreshServer": "刷新 {{name}}",
+    "nativeStatus": "原生 Codex MCP 状态"
   },
   "tools": {
     "toolCall": "工具调用",
     "runCommand": "运行命令",
+    "commandRead": "读取 {{path}}",
+    "commandList": "列出 {{path}}",
+    "commandSearch": "在 {{path}} 中搜索 {{query}}",
+    "commandApprovalReason": "批准理由",
+    "patchToggleDiff": "查看修改",
+    "errorOutput": "错误详情",
+    "resultUnknown": "无法确定此工具的单独执行结果",
+    "patchNoDiff": "无可用差异",
+    "patchKind": {
+      "add": "新增",
+      "delete": "删除",
+      "update": "修改",
+      "move": "移动"
+    },
     "contextEngine": "上下文引擎",
     "task": "任务",
     "agent": "智能体",
@@ -2194,6 +2243,18 @@
       "description": "完全自动化，绕过所有权限检查【谨慎使用】"
     }
   },
+  "workspaceDiff": {
+    "title": "工作区变更",
+    "staged": "已暂存",
+    "unstaged": "未暂存",
+    "untracked": "未跟踪",
+    "noChanges": "没有检测到变更",
+    "binary": "二进制",
+    "truncated": "工作区快照过大，内容已被截断",
+    "notGit": "当前目录不是 Git 工作区",
+    "refresh": "刷新",
+    "fileCount": "{{count}} 个文件"
+  },
   "codexModes": {
     "default": {
       "label": "建议模式",
@@ -2204,8 +2265,8 @@
     "plan": {
       "label": "规划模式",
       "shortLabel": "规划",
-      "tooltip": "规划模式——只读分析",
-      "description": "仅使用只读工具，生成计划供用户审批后执行"
+      "tooltip": "原生协作规划模式",
+      "description": "先生成原生计划再实施；沙箱范围和审批策略保持独立"
     },
     "acceptEdits": {
       "label": "自动编辑",
@@ -2464,12 +2525,29 @@
   },
   "dshPresets": {
     "title": "选择 DeepSeek Harness Agent 预设",
-    "none": { "label": "默认", "description": "dsh 默认 headless 组合（完整工具集）" },
-    "standard": { "label": "标准模式", "description": "功能完整的标准编码工具集" },
-    "code": { "label": "PTC 模式", "description": "标准能力加 Code Mode" },
-    "minimal": { "label": "极简模式", "description": "仅提供 bash 与 str_replace_editor" },
-    "cordis": { "label": "创造模式", "description": "标准能力加组合编排能力" },
-    "user": { "description": "安装在 DSH 主目录中的自定义预设" }
+    "none": {
+      "label": "默认",
+      "description": "dsh 默认 headless 组合（完整工具集）"
+    },
+    "standard": {
+      "label": "标准模式",
+      "description": "功能完整的标准编码工具集"
+    },
+    "code": {
+      "label": "PTC 模式",
+      "description": "标准能力加 Code Mode"
+    },
+    "minimal": {
+      "label": "极简模式",
+      "description": "仅提供 bash 与 str_replace_editor"
+    },
+    "cordis": {
+      "label": "创造模式",
+      "description": "标准能力加组合编排能力"
+    },
+    "user": {
+      "description": "安装在 DSH 主目录中的自定义预设"
+    }
   },
   "error": {
     "providerNotConfigured": "供应商未配置",
@@ -2483,8 +2561,8 @@
     "recommended": "推荐",
     "codexWriterConflict": {
       "title": "Codex 线程被占用",
-      "intro": "新回合启动时，上一个回合的 Codex 进程仍在写入该线程。插件现在会在发送前自动停止上一回合的进程。",
-      "reason": "请稍等几秒后重新发送该消息，无需新建会话。"
+      "intro": "该会话正由另一个 Codex 回合或客户端写入，本次发送未能启动。",
+      "reason": "请在正在使用该会话的客户端停止回合，确认结束后再发送。"
     },
     "codexThreadResume": {
       "title": "会话线程已失效",
@@ -2523,6 +2601,32 @@
           "step1": "2. 打开「依赖管理」重装最新版 SDK："
         }
       }
+    },
+    "codexCliUnavailable": {
+      "title": "Codex CLI 无法启动",
+      "intro": "插件启动的 Codex CLI 运行时还没来得及响应就退出了。上方错误里列出了失败的 CLI 路径和它自己输出的内容。这通常是 Codex CLI 安装不完整，而不是插件的问题。",
+      "reason": "插件使用本机识别到的 Codex CLI 启动 codex app-server。安装了一半的副本（例如全局 npm 安装缺少平台二进制）会以退出码 1 直接退出，并让这一轮对话一起失败。",
+      "solutions": {
+        "reinstallCodexCli": {
+          "title": "方案一：删除损坏的安装并重装官方 CLI",
+          "step0": "1. 先卸载残留的全局安装（最常见的原因是机器上存在两份副本）：",
+          "step1": "2. 重新安装官方 CLI，请使用 npm 官方源而不是镜像源：",
+          "step2": "3. 确认 CLI 能正常输出版本后再重新发送："
+        },
+        "pointCodexBin": {
+          "title": "方案二：让插件指向可用的二进制",
+          "step0": "列出 PATH 上所有的 codex（Windows 使用 where codex）。如果可用的那个不在最前面，把 CODEX_BIN 环境变量设置为它的完整路径，然后重启 IDE。插件现在也会自动回退到后面可用的安装。"
+        }
+      }
+    }
+  },
+  "codex": {
+    "plan": {
+      "title": "Codex 计划",
+      "ready": "计划已就绪",
+      "execute": "执行计划",
+      "executing": "执行中…",
+      "adjust": "继续调整"
     }
   }
 }

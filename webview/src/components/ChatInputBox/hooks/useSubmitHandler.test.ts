@@ -2,6 +2,27 @@ import { renderHook } from '@testing-library/react';
 import type { Attachment } from '../types.js';
 import { useSubmitHandler } from './useSubmitHandler.js';
 
+it.each(['/compact', '/review', '/diff', '/approvals'])('dispatches Codex control %s while CLI discovery is pending', (command) => {
+  vi.useFakeTimers();
+  try {
+    const onSubmit = vi.fn();
+    const addToast = vi.fn();
+    const close = vi.fn();
+    const { result } = renderHook(() => useSubmitHandler({
+      getTextContent: () => command, invalidateCache: vi.fn(), attachments: [],
+      sdkStatusLoading: true, sdkInstalled: false, currentProvider: 'codex', clearInput: vi.fn(),
+      externalAttachments: undefined, setInternalAttachments: vi.fn(),
+      fileCompletion: { close }, commandCompletion: { close }, agentCompletion: { close },
+      promptCompletion: { close }, dollarCommandCompletion: { close }, recordInputHistory: vi.fn(),
+      onSubmit, addToast, t: (key) => key,
+    }));
+    result.current();
+    vi.runAllTimers();
+    expect(onSubmit).toHaveBeenCalledWith(command, undefined);
+    expect(addToast).not.toHaveBeenCalled();
+  } finally { vi.useRealTimers(); }
+});
+
 function createAttachment(id: string): Attachment {
   return { id, fileName: `${id}.txt`, mediaType: 'text/plain', data: 'ZGF0YQ==' };
 }

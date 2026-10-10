@@ -5,6 +5,18 @@ import type { ClaudeContentBlock } from '../../types';
 const tool = (id: string, name: string): ClaudeContentBlock => ({ type: 'tool_use', id, name, input: {} });
 const text = (value: string): ClaudeContentBlock => ({ type: 'text', text: value });
 
+describe('groupBlocks - Codex edits', () => {
+  it('batches native changes and namespaced patches with Claude edits', () => {
+    const blocks = [tool('p1', 'functions.apply_patch'), tool('p2', 'file_change'), tool('e1', 'Edit')];
+    expect(groupBlocks(blocks)).toEqual([{ type: 'edit_group', blocks, startIndex: 0 }]);
+  });
+
+  it('keeps visible commentary and commands as edit batch boundaries', () => {
+    const blocks = [tool('p1', 'apply_patch'), text('Check the changes'), tool('p2', 'apply_patch'), tool('c1', 'bash')];
+    expect(groupBlocks(blocks).map(group => group.type)).toEqual(['edit_group', 'single', 'edit_group', 'bash_group']);
+  });
+});
+
 describe('groupBlocks - restored Codex command batches', () => {
   it('renders replayed shell commands as one existing Bash command group', () => {
     const blocks: ClaudeContentBlock[] = [

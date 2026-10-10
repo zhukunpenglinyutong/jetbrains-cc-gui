@@ -93,8 +93,7 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
       ? canonicalMode
       : normalizeCliPermissionMode(modeForProvider ?? 'default', activeProvider);
     if (isValidPermissionMode(normalizedMode)) {
-      const nextMode: PermissionMode =
-        activeProvider === 'codex' && normalizedMode === 'plan' ? 'default' : normalizedMode;
+      const nextMode: PermissionMode = normalizedMode;
       setPermissionMode((prev) => (prev === nextMode ? prev : nextMode));
       if (activeProvider === 'codex') {
         setCodexPermissionMode((prev) => (prev === nextMode ? prev : nextMode));

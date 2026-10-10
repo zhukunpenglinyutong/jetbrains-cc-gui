@@ -10,6 +10,11 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+
 /**
  * Codex message callback handler.
  * Processes messages returned by Codex AI.
@@ -26,14 +31,21 @@ public class CodexMessageHandler implements MessageCallback {
      * state.
      */
     private final SessionState state;
+    private final Object turnOwner;
+    private final String runtimeSessionEpoch;
     /**
      * callback handler.
      */
     private final CallbackHandler callbackHandler;
+    private final boolean reportStateErrors;
+    private final String clientMessageId;
     /**
      * message merger.
      */
     private final MessageMerger messageMerger = new MessageMerger();
+
+    /** Stable native item id to the message already materialized in the session. */
+    private final Map<String, Message> nativeItemMessages = new HashMap<>();
 
     /**
      * assistant content.
@@ -64,8 +76,28 @@ public class CodexMessageHandler implements MessageCallback {
      * @since 1.0.0
      */
     public CodexMessageHandler(SessionState state, CallbackHandler callbackHandler) {
+        this(state, callbackHandler, true, null, state.getTurnOwner());
+    }
+
+    /**
+     * Control receivers omit duplicate error toasts while retaining turn fencing.
+     */
+    CodexMessageHandler(SessionState state, CallbackHandler callbackHandler, boolean reportStateErrors) {
+        this(state, callbackHandler, reportStateErrors, null, state.getTurnOwner());
+    }
+
+    CodexMessageHandler(SessionState state, CallbackHandler callbackHandler, String clientMessageId) {
+        this(state, callbackHandler, true, clientMessageId, state.getTurnOwner());
+    }
+
+    private CodexMessageHandler(SessionState state, CallbackHandler callbackHandler,
+                                boolean reportStateErrors, String clientMessageId, Object turnOwner) {
         this.state = state;
+        this.turnOwner = turnOwner;
+        this.runtimeSessionEpoch = state.getRuntimeSessionEpoch();
         this.callbackHandler = callbackHandler;
+        this.reportStateErrors = reportStateErrors;
+        this.clientMessageId = clientMessageId;
     }
 
     /**
@@ -78,6 +110,9 @@ public class CodexMessageHandler implements MessageCallback {
     @Override
     public void onMessage(String type, String content) {
         synchronized (state.getMessageStateLock()) {
+            if (!ownsCurrentTurn()) {
+                return;
+            }
             // [FIX] Handle multiple message types
             // Codex message-service.js sends:
             // - type='assistant': contains thinking, tool_use, text
@@ -115,6 +150,18 @@ public class CodexMessageHandler implements MessageCallback {
                 }
             } else if ("message_end".equals(type)) {
                 handleMessageEnd();
+            } else if ("codex_runtime_event".equals(type)) {
+                JsonObject event = new com.google.gson.Gson().fromJson(content, JsonObject.class);
+                if (event != null && event.has("kind") && "thread/settings/updated".equals(event.get("kind").getAsString())
+                        && event.has("threadId") && !event.get("threadId").isJsonNull()
+                        && event.get("threadId").getAsString().equals(this.state.getSessionId())
+                        && event.has("payload") && event.get("payload").isJsonObject()) {
+                    JsonObject settings = event.getAsJsonObject("payload");
+                    if (!this.state.isCodexCwdExplicit() && settings.has("cwd") && settings.get("cwd").isJsonPrimitive()) {
+                        this.state.setCwd(settings.get("cwd").getAsString());
+                    }
+                }
+                callbackHandler.notifyCodexRuntimeEvent(content);
             } else {
                 LOG.debug("CodexMessageHandler: Unhandled message type: " + type);
             }
@@ -130,7 +177,9 @@ public class CodexMessageHandler implements MessageCallback {
     @Override
     public void onError(String error) {
         synchronized (state.getMessageStateLock()) {
-            boolean wasStreaming = isStreaming;
+            if (!ownsCurrentTurn()) {
+                return;
+            }
             isStreaming = false;
             streamEndedThisTurn = false;
             state.setError(error);
@@ -138,6 +187,11 @@ public class CodexMessageHandler implements MessageCallback {
             state.setLoading(false);
 
             Message errorMessage = new Message(Message.Type.ERROR, error);
+            if (this.clientMessageId != null) {
+                // A failed startup may reach the page without its user-message prefix.
+                errorMessage.raw = new JsonObject();
+                errorMessage.raw.addProperty("clientMessageId", this.clientMessageId);
+            }
             state.addMessage(errorMessage);
 
             // Signal stream-end BEFORE pushing the error snapshot (mirrors the PR #1421
@@ -146,19 +200,14 @@ public class CodexMessageHandler implements MessageCallback {
             // cancellation drop it, so the "API request failed" bubble never renders.
             // Ending the stream first lets the subsequent snapshot land normally.
             //
-            // Kept conditional on wasStreaming — deliberately NOT unconditional like the
-            // Claude handler. A non-streaming Codex turn maps to the webview's 'minimal'
-            // stream-end mode (getStreamEndHandlingMode: provider === 'codex'), which only
-            // cancels pending updates and does NOT run the dangling-tool cleanup the Claude
-            // 'skip' mode does. So an unconditional call would buy no tool cleanup here
-            // while adding a redundant minimal-mode pass. The dangling-tool-on-non-
-            // streaming-error case needs a separate webview-side fix, not this ordering one.
-            if (wasStreaming) {
-                callbackHandler.notifyStreamEnd();
-            }
+            // The page starts waiting optimistically before the native stream exists.
+            // Startup and writer errors must end that wait too.
+            this.callbackHandler.notifyStreamEnd();
             callbackHandler.notifyMessageUpdate(state.getMessages());
             resetStreamingAccumulator();
-            callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+            // Controls already report the error in the transcript; a state error would also trigger a toast.
+            this.callbackHandler.notifyStateChange(this.state.isBusy(), this.state.isLoading(),
+                    this.reportStateErrors ? this.state.getError() : null);
         }
     }
 
@@ -171,6 +220,9 @@ public class CodexMessageHandler implements MessageCallback {
     @Override
     public void onComplete(SDKResult result) {
         synchronized (state.getMessageStateLock()) {
+            if (!ownsCurrentTurn()) {
+                return;
+            }
             boolean streamEndedBeforeComplete = streamEndedThisTurn;
             boolean wasStreaming = isStreaming;
 
@@ -193,6 +245,11 @@ public class CodexMessageHandler implements MessageCallback {
 
     // ===== Private methods =====
 
+    private boolean ownsCurrentTurn() {
+        return this.state.isCurrentTurn(this.turnOwner)
+                && this.runtimeSessionEpoch.equals(this.state.getRuntimeSessionEpoch());
+    }
+
     /**
      * Handle a complete assistant message in JSON format.
      * Contains thinking, tool_use, text, and other content types.
@@ -212,14 +269,43 @@ public class CodexMessageHandler implements MessageCallback {
                 return;
             }
 
-            if (currentAssistantMessage != null) {
+            String nativeItemId = nativeItemId(parsed.raw);
+            Message existingNativeMessage = nativeItemId == null
+                    ? null : nativeItemMessages.get(nativeItemId);
+            if (existingNativeMessage != null) {
+                if (isAuthoritativeSnapshot(parsed.raw)) {
+                    existingNativeMessage.content = parsed.content;
+                    existingNativeMessage.raw = parsed.raw;
+                } else {
+                    existingNativeMessage.content = parsed.content;
+                    existingNativeMessage.raw = messageMerger.mergeAssistantMessage(
+                            existingNativeMessage.raw, parsed.raw);
+                }
+                currentAssistantMessage = existingNativeMessage;
+                assistantContent.setLength(0);
+                assistantContent.append(existingNativeMessage.content != null
+                        ? existingNativeMessage.content : "");
+            } else if (currentAssistantMessage != null
+                    && (nativeItemId == null || nativeItemId(currentAssistantMessage.raw) == null)) {
+                // A legacy delta placeholder has no native id. Adopt it when
+                // the first authoritative item snapshot arrives so the UI
+                // does not grow a second assistant bubble.
                 com.google.gson.JsonObject mergedRaw = messageMerger.mergeAssistantMessage(currentAssistantMessage.raw, parsed.raw);
                 currentAssistantMessage.content = parsed.content;
                 currentAssistantMessage.raw = mergedRaw;
+                if (nativeItemId != null) {
+                    rememberNativeItem(nativeItemId, currentAssistantMessage);
+                }
                 assistantContent.setLength(0);
                 assistantContent.append(parsed.content != null ? parsed.content : "");
             } else {
                 state.addMessage(parsed);
+                if (nativeItemId != null) {
+                    rememberNativeItem(nativeItemId, parsed);
+                }
+                currentAssistantMessage = parsed;
+                assistantContent.setLength(0);
+                assistantContent.append(parsed.content != null ? parsed.content : "");
             }
             callbackHandler.notifyMessageUpdate(state.getMessages());
 
@@ -247,13 +333,125 @@ public class CodexMessageHandler implements MessageCallback {
                 return;
             }
 
-            state.addMessage(parsed);
+            if (!replaceOptimisticUserMessage(parsed) && !upsertNativeMessage(parsed)) {
+                state.addMessage(parsed);
+            }
             callbackHandler.notifyMessageUpdate(state.getMessages());
 
             LOG.debug("Codex user message (tool_result) added");
         } catch (Exception e) {
             LOG.warn("Failed to parse user message: " + e.getMessage());
         }
+    }
+
+    private boolean replaceOptimisticUserMessage(Message nativeMessage) {
+        if (nativeMessage == null || nativeMessage.raw == null
+                || !nativeMessage.raw.has("clientMessageId")
+                || nativeMessage.raw.get("clientMessageId").isJsonNull()) {
+            return false;
+        }
+        String clientMessageId = nativeMessage.raw.get("clientMessageId").getAsString();
+        for (Message existing : state.getMessagesReference()) {
+            if (existing.raw == null || !existing.raw.has("clientMessageId")
+                    || existing.raw.get("clientMessageId").isJsonNull()) {
+                continue;
+            }
+            if (clientMessageId.equals(existing.raw.get("clientMessageId").getAsString())) {
+                this.preserveUserImages(existing.raw, nativeMessage.raw);
+                existing.content = nativeMessage.content;
+                existing.raw = nativeMessage.raw;
+                String nativeItemId = nativeItemId(nativeMessage.raw);
+                if (nativeItemId != null) {
+                    rememberNativeItem(nativeItemId, existing);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void preserveUserImages(JsonObject previous, JsonObject current) {
+        if (!previous.has("message") || !previous.get("message").isJsonObject()
+                || !current.has("message") || !current.get("message").isJsonObject()) {
+            return;
+        }
+        JsonObject oldMessage = previous.getAsJsonObject("message");
+        JsonObject newMessage = current.getAsJsonObject("message");
+        if (!oldMessage.has("content") || !oldMessage.get("content").isJsonArray()) {
+            return;
+        }
+        JsonArray content = newMessage.has("content") && newMessage.get("content").isJsonArray()
+                ? newMessage.getAsJsonArray("content") : new JsonArray();
+        JsonArray combined = new JsonArray();
+        for (JsonElement block : oldMessage.getAsJsonArray("content")) {
+            if (block.isJsonObject() && block.getAsJsonObject().has("type")
+                    && "image".equals(block.getAsJsonObject().get("type").getAsString())) {
+                combined.add(block.deepCopy());
+            }
+        }
+        if (combined.isEmpty()) {
+            return;
+        }
+        for (JsonElement block : content) {
+            if (!block.isJsonObject() || !block.getAsJsonObject().has("type")
+                    || !Set.of("image", "localImage", "local_image").contains(
+                            block.getAsJsonObject().get("type").getAsString())) {
+                combined.add(block.deepCopy());
+            }
+        }
+        newMessage.add("content", combined);
+    }
+
+    /** Upsert a native item that arrived without a matching optimistic bubble. */
+    private boolean upsertNativeMessage(Message nativeMessage) {
+        String nativeItemId = nativeItemId(nativeMessage.raw);
+        if (nativeItemId == null) {
+            return false;
+        }
+        Message existing = nativeItemMessages.get(nativeItemId);
+        if (existing == null) {
+            rememberNativeItem(nativeItemId, nativeMessage);
+            return false;
+        }
+        existing.content = nativeMessage.content;
+        existing.raw = isAuthoritativeSnapshot(nativeMessage.raw)
+                ? nativeMessage.raw : messageMerger.mergeAssistantMessage(existing.raw, nativeMessage.raw);
+        return true;
+    }
+
+    private void rememberNativeItem(String nativeItemId, Message message) {
+        nativeItemMessages.put(nativeItemId, message);
+        if (nativeItemMessages.size() <= 2048) {
+            return;
+        }
+        Iterator<String> iterator = nativeItemMessages.keySet().iterator();
+        if (iterator.hasNext()) {
+            iterator.next();
+            iterator.remove();
+        }
+    }
+
+    private String nativeItemId(JsonObject raw) {
+        if (raw == null || !raw.has("codexItemId") || raw.get("codexItemId").isJsonNull()) {
+            return null;
+        }
+        String value = raw.get("codexItemId").getAsString();
+        if (value.isBlank()) {
+            return null;
+        }
+        // The bridge keeps this identity stable when a start item precedes
+        // native turn discovery, so completion updates the original boundary.
+        if (raw.has("uuid") && raw.get("uuid").isJsonPrimitive()) {
+            return raw.get("codexThreadId") + ":" + raw.get("uuid").getAsString();
+        }
+        return raw.has("codexThreadId") && raw.has("codexTurnId")
+                ? raw.get("codexThreadId") + ":" + raw.get("codexTurnId") + ":" + value : value;
+    }
+
+    private boolean isAuthoritativeSnapshot(JsonObject raw) {
+        return raw != null && ((raw.has("codexAuthoritative")
+                && raw.get("codexAuthoritative").getAsBoolean())
+                || (raw.has("codexSnapshot") && raw.get("codexSnapshot").getAsBoolean()));
     }
 
     /**
@@ -692,17 +890,13 @@ public class CodexMessageHandler implements MessageCallback {
 
     private JsonArray collectUserImageBlocks(com.google.gson.JsonObject msg, String originalContent) {
         JsonArray imageBlocks = new JsonArray();
-        JsonElement contentElement = getMessageContentElement(msg);
-        if (contentElement != null && contentElement.isJsonArray()) {
-            JsonArray contentArray = contentElement.getAsJsonArray();
-            for (int i = 0; i < contentArray.size(); i++) {
-                JsonElement element = contentArray.get(i);
-                if (!element.isJsonObject()) {
-                    continue;
-                }
+        JsonArray contentArray = CodexMessageConverter.convertToClaudeContentBlocks(this.getMessageContentElement(msg));
+        for (JsonElement element : contentArray) {
+            if (element.isJsonObject()) {
                 JsonObject block = element.getAsJsonObject();
-                if (block.has("type") && "image".equals(block.get("type").getAsString())) {
-                    imageBlocks.add(block.deepCopy());
+                if (block.has("type") && "image".equals(block.get("type").getAsString())
+                        && block.has("src") && !block.get("src").getAsString().isBlank()) {
+                    imageBlocks.add(block);
                 }
             }
         }

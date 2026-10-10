@@ -44,6 +44,74 @@ export interface ProviderPermissionModes {
   dsh: PermissionMode;
 }
 
+/** Native Codex settings persisted independently from the legacy mode field. */
+export type CodexCollaborationMode = 'default' | 'plan';
+export type CodexApprovalPreset = 'request' | 'auto' | 'sandboxed-auto' | 'full-access';
+export type CodexSandboxSelection = 'read-only' | 'workspace-write' | 'danger-full-access';
+export type CodexSandboxSource = 'native' | 'migrated' | 'user' | 'default';
+
+export interface CodexSettingsSnapshot {
+  collaborationMode: CodexCollaborationMode;
+  approvalPreset: CodexApprovalPreset;
+  sandboxSelection: CodexSandboxSelection;
+  sandboxSource: CodexSandboxSource;
+  migrationVersion: number;
+}
+
+const CODEX_APPROVAL_PRESETS: readonly CodexApprovalPreset[] = [
+  'request', 'auto', 'sandboxed-auto', 'full-access',
+];
+const CODEX_SANDBOX_SELECTIONS: readonly CodexSandboxSelection[] = [
+  'read-only', 'workspace-write', 'danger-full-access',
+];
+
+/**
+ * Migrate one persisted Codex snapshot without widening access implicitly.
+ * Legacy bypass/yolo values only become full-access when an explicit marker
+ * proves the user selected that scope; otherwise they remain sandboxed-auto.
+ */
+export function migrateCodexSettingsSnapshot(raw: Record<string, unknown> | null | undefined): CodexSettingsSnapshot {
+  const value = raw ?? {};
+  const legacyMode = value.codexPermissionMode;
+  const collaborationMode: CodexCollaborationMode = value.codexCollaborationMode === 'plan'
+    || legacyMode === 'plan' ? 'plan' : 'default';
+
+  const approvalPreset = CODEX_APPROVAL_PRESETS.includes(value.codexApprovalPreset as CodexApprovalPreset)
+    ? value.codexApprovalPreset as CodexApprovalPreset
+    : legacyMode === 'auto'
+      ? 'auto'
+      : legacyMode === 'bypassPermissions' || legacyMode === 'yolo'
+        ? (value.codexFullAccessExplicit === true ? 'full-access' : 'sandboxed-auto')
+        : 'request';
+
+  const sandboxSelection = CODEX_SANDBOX_SELECTIONS.includes(
+    value.codexSandboxSelection as CodexSandboxSelection,
+  )
+    ? value.codexSandboxSelection as CodexSandboxSelection
+    : legacyMode === 'readOnly'
+      ? 'read-only'
+      : approvalPreset === 'full-access' && value.codexFullAccessExplicit === true
+        ? 'danger-full-access'
+        : 'workspace-write';
+
+  const source: CodexSandboxSource = value.codexSandboxSource === 'native'
+    || value.codexSandboxSource === 'migrated'
+    || value.codexSandboxSource === 'user'
+    || value.codexSandboxSource === 'default'
+    ? value.codexSandboxSource
+    : value.codexSandboxSelection ? 'migrated' : 'default';
+
+  return {
+    collaborationMode,
+    approvalPreset,
+    sandboxSelection,
+    sandboxSource: source,
+    migrationVersion: typeof value.codexSettingsMigrationVersion === 'number'
+      && Number.isFinite(value.codexSettingsMigrationVersion)
+      ? Math.max(1, Math.floor(value.codexSettingsMigrationVersion)) : 1,
+  };
+}
+
 /** Model shown for the active provider; unknown ids fall back to Claude. */
 export function selectedModelForProvider(providerId: string, models: ProviderModelSelection): string {
   switch (providerId) {
@@ -62,22 +130,20 @@ export function selectedModelForProvider(providerId: string, models: ProviderMod
 
 /**
  * Mode to activate when switching to `providerId`: the provider's saved mode,
- * normalized through the CLI rules. Codex additionally demotes a saved 'auto'
- * mode when the installed SDK is known to be too old for the native reviewer.
+ * normalized through the CLI rules. Codex 'auto' is a native-runtime decision
+ * and no longer depends on a TypeScript SDK version floor.
  */
 export function resolveProviderPermissionMode(
   providerId: string,
   modes: ProviderPermissionModes,
-  codexSdkMeetsMinimum: boolean | undefined,
 ): PermissionMode {
   switch (providerId) {
     case 'codex': {
       // Check for 'auto' BEFORE normalizeCliPermissionMode, which coerces
-      // 'auto' → 'default' for every CLI provider — after normalization the
-      // SDK-floor check below would be dead code and a saved 'auto' would be
-      // silently demoted on every provider switch.
+      // 'auto' → 'default' for every CLI provider — a saved 'auto' would be
+      // silently demoted on every provider switch otherwise.
       if (modes.codex === 'auto') {
-        return codexSdkMeetsMinimum === false ? 'default' : 'auto';
+        return 'auto';
       }
       return normalizeCliPermissionMode(modes.codex, providerId);
     }
@@ -235,19 +301,6 @@ export function applyModelSelect(
     setSelectedModel(modelId);
     sendBridgeEvent('set_model', modelId);
   }
-}
-
-/**
- * Applies a mode selection for Codex: 'plan' is unsupported and a saved 'auto'
- * mode is demoted when the SDK floor is known to be unmet.
- */
-export function resolveCodexModeSelection(
-  mode: PermissionMode,
-  codexSdkMeetsMinimum: boolean | undefined,
-): PermissionMode {
-  return mode === 'plan' || (mode === 'auto' && codexSdkMeetsMinimum === false)
-    ? 'default'
-    : mode;
 }
 
 /** State-updater for toggling always-thinking on the active provider config. */

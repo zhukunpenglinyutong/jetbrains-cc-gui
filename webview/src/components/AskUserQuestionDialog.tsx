@@ -25,10 +25,14 @@ export interface QuestionIntent {
 }
 
 export interface Question {
+  id?: string;
   question: string;
   header: string;
   options: QuestionOption[];
   multiSelect: boolean;
+  /** Optional MCP form fields may be left blank. */
+  required?: boolean;
+  isSecret?: boolean;
   /**
    * Supporting detail rendered with the question but kept out of the option
    * labels — DSH carries the plan under review here, so dropping it left the
@@ -43,15 +47,29 @@ export interface AskUserQuestionRequest {
   toolName: string;
   questions: Question[];
   provider?: 'claude' | 'codex' | 'dsh';
+  /** Native Codex request may be visible without blocking the active turn. */
+  isBlocking?: boolean;
   deadlineMs?: number;
   dialogToken?: string;
+  /** Opaque key for a native Codex server request. */
+  codexInteractionKey?: string;
+  /** Native method retained for typed response routing. */
+  codexMethod?: string;
+  /** Native MCP elicitation metadata used to build the typed response union. */
+  codexElicitation?: {
+    mode: 'form' | 'url' | 'userVerification' | 'unsupported';
+    serverName?: string;
+    url?: string;
+    requestedSchema?: Record<string, unknown>;
+    meta?: unknown;
+  };
 }
 
 interface AskUserQuestionDialogProps {
   isOpen: boolean;
   request: AskUserQuestionRequest | null;
-  onSubmit: (requestId: string, answers: Record<string, string | string[]>) => void;
-  onCancel: (requestId: string) => void;
+  onSubmit: (requestId: string, answers: Record<string, string | string[]>) => void | boolean;
+  onCancel: (requestId: string) => void | boolean;
   timeoutSeconds?: number;
 }
 
@@ -72,7 +90,7 @@ const AskUserQuestionDialog = ({
     }
   }, [request, onCancel]);
 
-  const { remainingSeconds, isTimeWarning, markSubmitted } = useDialogCountdownTimeout({
+  const { remainingSeconds, isTimeWarning, markSubmitted, restoreSubmission } = useDialogCountdownTimeout({
     isOpen,
     requestKey: request?.dialogToken ?? request?.requestId,
     timeoutSeconds,
@@ -91,10 +109,10 @@ const AskUserQuestionDialog = ({
 
   const handleCancel = useCallback(() => {
     if (request && markSubmitted()) {
-      clearDialogDraft('askUserQuestion', request.requestId, request.dialogToken);
-      onCancel(request.requestId);
+      if (onCancel(request.requestId) === false) restoreSubmission();
+      else clearDialogDraft('askUserQuestion', request.requestId, request.dialogToken);
     }
-  }, [request, markSubmitted, onCancel]);
+  }, [request, markSubmitted, restoreSubmission, onCancel]);
 
   const {
     isCollapsed,
@@ -114,6 +132,7 @@ const AskUserQuestionDialog = ({
     normalizedQuestions,
     customInputRef,
     markSubmitted,
+    restoreSubmission,
     onSubmit,
     onCancel: handleCancel,
   });
@@ -145,7 +164,7 @@ const AskUserQuestionDialog = ({
   }
 
   return (
-    <div className={`permission-dialog-overlay ${isCollapsed ? 'collapsed-mode' : ''}`}>
+    <div className={`permission-dialog-overlay ${isCollapsed ? 'collapsed-mode' : ''} ${request.isBlocking === false ? 'non-blocking-question' : ''}`}>
       <div className={`ask-user-question-dialog ${isCollapsed ? 'collapsed' : 'expanded'} ${isTimeWarning ? 'time-warning' : ''}`}>
         {/* Header area - with collapse/expand button */}
         <DialogHeader
