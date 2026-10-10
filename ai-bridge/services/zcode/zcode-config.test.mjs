@@ -1,10 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   resolveActiveProvider,
   providerModels,
   buildZcodeCredentialEnv,
   buildRuntimeModel,
+  readZcodeConfig,
+  targetsZcodeRuntime,
 } from './zcode-config.js';
 
 const CONFIG = {
@@ -104,4 +109,86 @@ test('runtimeModel is null without provider or model', () => {
   const active = resolveActiveProvider(CONFIG, SETTINGS);
   assert.equal(buildRuntimeModel('', active), null);
   assert.equal(buildRuntimeModel('GLM-5.3', { ...active, models: {} }), null);
+});
+
+test('readZcodeConfig falls back to the native provider_config.json registry', () => {
+  const home = mkdtempSync(join(tmpdir(), 'zcode-home-'));
+  const savedEnvPath = process.env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE;
+  delete process.env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE;
+  try {
+    mkdirSync(join(home, 'v2'), { recursive: true });
+    writeFileSync(join(home, 'v2', 'provider_config.json'), JSON.stringify({
+      schemaVersion: 1,
+      config: {
+        providerConfigRules: {
+          providerRules: [
+            {
+              providerId: 'zai-coding-plan',
+              templateId: 'zai-api',
+              enabled: true,
+              config: {
+                access: { type: 'zhipu-coding-plan-api-key', apiKey: 'k-native' },
+                api: { type: 'anthropic-messages', baseUrl: 'https://api.z.ai/api/anthropic' },
+              },
+            },
+          ],
+        },
+      },
+    }));
+    const config = readZcodeConfig(home);
+    assert.ok(config?.provider, 'native registry converted to provider map');
+    const entry = config.provider['zai-coding-plan'];
+    assert.equal(entry.kind, 'anthropic');
+    assert.equal(entry.options.apiKey, 'k-native');
+    assert.equal(entry.options.baseURL, 'https://api.z.ai/api/anthropic');
+    assert.deepEqual(Object.keys(entry.models), ['GLM-5.3', 'GLM-5.3-Flash']);
+
+    // and resolveActiveProvider works over the converted map
+    const active = resolveActiveProvider(config, {});
+    assert.equal(active.apiKey, 'k-native');
+  } finally {
+    if (savedEnvPath !== undefined) process.env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE = savedEnvPath;
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('readZcodeConfig still prefers the legacy v2/config.json', () => {
+  const savedEnvPath = process.env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE;
+  delete process.env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE;
+  const home = mkdtempSync(join(tmpdir(), 'zcode-home-'));
+  try {
+    mkdirSync(join(home, 'v2'), { recursive: true });
+    writeFileSync(join(home, 'v2', 'config.json'), JSON.stringify({
+      provider: { legacy: { kind: 'anthropic', enabled: true, options: { baseURL: 'https://legacy', apiKey: 'k-legacy' }, models: {} } },
+    }));
+    writeFileSync(join(home, 'v2', 'provider_config.json'), JSON.stringify({
+      config: { providerConfigRules: { providerRules: [{ providerId: 'native', enabled: true, config: { access: { apiKey: 'k-native' }, api: { type: 'anthropic-messages', baseUrl: 'https://native' } } }] } },
+    }));
+    const config = readZcodeConfig(home);
+    assert.ok(config.provider.legacy, 'legacy file wins');
+    assert.equal(config.provider.native, undefined);
+  } finally {
+    if (savedEnvPath !== undefined) process.env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE = savedEnvPath;
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+test('targetsZcodeRuntime always routes an explicit zcode provider', () => {
+  assert.equal(targetsZcodeRuntime({ provider: 'zcode' }, []), true);
+  assert.equal(targetsZcodeRuntime({ provider: 'zcode', model: 'anything' }, []), true);
+});
+
+test('targetsZcodeRuntime matches models of the active zcode provider', () => {
+  const models = ['GLM-5.3', 'GLM-5.3-Flash'];
+  assert.equal(targetsZcodeRuntime({ model: 'GLM-5.3' }, models), true);
+  // Fall-through payloads can still carry provider: 'claude'; the model
+  // membership check must not be vetoed by it.
+  assert.equal(targetsZcodeRuntime({ provider: 'claude', model: 'GLM-5.3' }, models), true);
+  assert.equal(targetsZcodeRuntime({ model: 'claude-sonnet-4-5' }, models), false);
+  assert.equal(targetsZcodeRuntime({ provider: 'claude', model: 'claude-sonnet-4-5' }, models), false);
+});
+
+test('targetsZcodeRuntime rejects empty input', () => {
+  assert.equal(targetsZcodeRuntime(null, ['GLM-5.3']), false);
+  assert.equal(targetsZcodeRuntime({}, ['GLM-5.3']), false);
+  assert.equal(targetsZcodeRuntime({ model: '   ' }, ['GLM-5.3']), false);
 });

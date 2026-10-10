@@ -17,6 +17,27 @@ import {
   getSessionMessagesPage as claudeGetSessionMessagesPage,
   getLatestUserMessage as claudeGetLatestUserMessage
 } from '../services/claude/session-service.js';
+import { handleZcodeCommand } from './zcode-channel.js';
+import { getSessionMessages as zcodeGetSessionMessages } from '../services/zcode/history-service.js';
+import { targetsZcodeRuntime } from '../services/zcode/zcode-config.js';
+
+/**
+ * ZCode sessions carry a "sess_" id prefix the Claude transcript store never
+ * uses. When the history router falls through to the Claude bridge for one of
+ * them, answer from the ZCode store instead of reporting the session missing
+ * (a missing report makes the Java side clear the live session and reset the
+ * chat tab).
+ */
+function isZcodeSessionId(sessionId) {
+  return typeof sessionId === 'string' && sessionId.startsWith('sess_');
+}
+
+/** Match session-service.js writeJsonResponse: one JSON line on stdout. */
+function writeJson(payload) {
+  return new Promise((resolve) => {
+    process.stdout.write(JSON.stringify(payload) + '\n', 'utf8', resolve);
+  });
+}
 
 /**
  * Execute a Claude specific command.
@@ -27,6 +48,10 @@ import {
 export async function handleClaudeCommand(command, args, stdinData) {
   switch (command) {
     case 'send': {
+      if (targetsZcodeRuntime(stdinData)) {
+        await handleZcodeCommand('send', args, stdinData);
+        break;
+      }
       if (stdinData && stdinData.message !== undefined) {
         // Include streaming and disableThinking when destructuring
         const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort } = stdinData;
@@ -49,6 +74,10 @@ export async function handleClaudeCommand(command, args, stdinData) {
     }
 
     case 'sendWithAttachments': {
+      if (targetsZcodeRuntime(stdinData)) {
+        await handleZcodeCommand('send', args, stdinData);
+        break;
+      }
       if (stdinData && stdinData.message !== undefined) {
         // Include streaming when destructuring
         const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles, agentPrompt, streaming, reasoningEffort } = stdinData;
@@ -66,9 +95,23 @@ export async function handleClaudeCommand(command, args, stdinData) {
       break;
     }
 
-    case 'getSession':
+    case 'getSession': {
+      const routedSessionId = stdinData?.sessionId || args[0];
+      const routedCwd = stdinData?.cwd || args[1] || process.cwd();
+      if (isZcodeSessionId(routedSessionId)) {
+        try {
+          const messages = await zcodeGetSessionMessages(routedSessionId, routedCwd);
+          await writeJson({ success: true, messages });
+        } catch (err) {
+          // Same failure envelope the Claude branch writes, so the Java side
+          // sees an in-band error instead of a process-level exit.
+          await writeJson({ success: false, error: err.message });
+        }
+        break;
+      }
       await claudeGetSessionMessages(args[0], args[1]);
       break;
+    }
 
     case 'getSessionPage': {
       // Paginated history load. Falls back to the full-history getSession

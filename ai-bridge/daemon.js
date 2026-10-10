@@ -90,6 +90,7 @@ import {
 } from './services/codex/persistent-codex-service.js';
 import { injectStartupEnvVars, isWebviewControlledEnvVar, isDangerousEnvVar } from './config/api-config.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
+import { targetsZcodeRuntime } from './services/zcode/zcode-config.js';
 
 // =============================================================================
 // Startup Environment Setup (must run before any HTTPS connection)
@@ -537,7 +538,11 @@ async function processRequest(request) {
     const stdinData = { ...params };
     delete stdinData.env; // env is handled separately
 
-    if (provider === 'claude' && command === 'send') {
+    if (provider === 'claude' && command === 'send' && targetsZcodeRuntime(stdinData)) {
+      await zcodeSendPersistent(stdinData);
+    } else if (provider === 'claude' && command === 'sendWithAttachments' && targetsZcodeRuntime(stdinData)) {
+      await zcodeSendPersistent(stdinData);
+    } else if (provider === 'claude' && command === 'send') {
       await sendMessagePersistent(stdinData);
     } else if (provider === 'claude' && command === 'sendWithAttachments') {
       await sendMessageWithAttachmentsPersistent(stdinData);
