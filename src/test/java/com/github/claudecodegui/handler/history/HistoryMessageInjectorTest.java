@@ -25,6 +25,53 @@ import static org.junit.Assert.assertTrue;
  * Unit tests for provider-aware history loading, pagination, and frontend conversion.
  */
 public class HistoryMessageInjectorTest {
+    /** The browser fixture must match the actual full and paged legacy projection. */
+    @Test
+    public void keepsReloadedBatchFixtureAlignedWithTheHistoryReader() throws Exception {
+        for (String name : List.of("codex-reloaded-tool-batch", "codex-interrupted-command-history")) {
+            JsonObject fixture = com.google.gson.JsonParser.parseString(Files.readString(
+                    Path.of("webview/e2e/fixtures/" + name + ".json"))).getAsJsonObject();
+            JsonArray records = fixture.getAsJsonArray("records");
+            List<JsonObject> complete = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+            assertEquals(name, fixture.get("messages"), new com.google.gson.Gson().toJsonTree(complete));
+            var page = HistoryMessageInjector.paginateCodexMessages(records, null, 30);
+            assertEquals(1, page.totalTurns);
+            assertEquals(complete, page.messages);
+        }
+    }
+
+    /** Reloaded commentary and hidden reasoning share the tools' recorded turn identity. */
+    @Test
+    public void preservesRecordedScopeAroundNativeToolBatches() {
+        JsonArray records = new JsonArray();
+        records.add(com.google.gson.JsonParser.parseString("{\"type\":\"session_meta\",\"payload\":{\"id\":\"root\"}}"));
+        JsonObject commentary = responseItemAssistantMessage("2026-10-09T03:31:00Z", "Checking the local changes");
+        commentary.getAsJsonObject("payload").add("internal_chat_message_metadata_passthrough",
+                com.google.gson.JsonParser.parseString("{\"turn_id\":\"own\"}"));
+        records.add(commentary);
+        records.add(com.google.gson.JsonParser.parseString("""
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"root","turn_id":"own",
+                "item":{"type":"CommandExecution","id":"first","status":"completed","command":"git diff","exit_code":0}}}
+                """));
+        records.add(com.google.gson.JsonParser.parseString("""
+                {"type":"response_item","payload":{"type":"reasoning","id":"hidden-reasoning","summary":[],
+                "internal_chat_message_metadata_passthrough":{"turn_id":"own"}}}
+                """));
+        records.add(com.google.gson.JsonParser.parseString("""
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"root","turn_id":"own",
+                "item":{"type":"CommandExecution","id":"second","status":"completed","command":"git status","exit_code":0}}}
+                """));
+        List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        assertEquals(6, messages.size());
+        for (JsonObject message : messages) {
+            JsonObject raw = message.getAsJsonObject("raw");
+            assertEquals("root", HistoryMessageInjector.getStringProperty(raw, "codexThreadId"));
+            assertEquals("own", HistoryMessageInjector.getStringProperty(raw, "codexTurnId"));
+        }
+        assertEquals("hidden-reasoning", messages.get(3).getAsJsonObject("raw").get("uuid").getAsString().substring("codex-legacy:".length()));
+        assertEquals("", getOnlyRawContentBlock(messages.get(3)).get("thinking").getAsString());
+    }
+
     /** Native activity keeps path-only launch receipts tied to the real child thread. */
     @Test
     public void restoresNativeSubagentActivityWithoutOverwritingTheLaunch() {

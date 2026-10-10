@@ -984,7 +984,9 @@ public class CodexSDKBridge extends BaseSDKBridge {
         if (requestParams != null) {
             params.add("params", requestParams.deepCopy());
         }
-        long timeoutMs = "codex.readHistoryPage".equals(method) || "codex.readSubagent".equals(method) ? 120_000L : 30_000L;
+        boolean transcriptRead = "codex.readHistoryPage".equals(method) || "codex.readSubagent".equals(method)
+                || "codex.countThreadMessages".equals(method);
+        long timeoutMs = transcriptRead ? 120_000L : 30_000L;
         return CompletableFuture.supplyAsync(() -> this.appServerRequestExecutor
                 .sendReadOnlyCommand(daemon, method, params, timeoutMs),
                 CodexAppServerRequestExecutor.turnWaitExecutor());
@@ -1609,6 +1611,21 @@ public class CodexSDKBridge extends BaseSDKBridge {
     private static String resolveOwnerScope() {
         String codexHome = System.getenv("CODEX_HOME");
         return codexHome == null || codexHome.trim().isEmpty() ? "default" : codexHome.trim();
+    }
+
+    /**
+     * Returns the existing daemon bridge without starting a process.
+     * Process inspection must recognize live Codex daemons before scanning for orphans.
+     *
+     * @return retained daemon bridge, or null if none has been created
+     */
+    public DaemonBridge getCurrentDaemonBridgeForInspection() {
+        return this.daemonCoordinator.getCurrentDaemonBridge();
+    }
+
+    /** Stop only the app-server daemon, keeping session registries intact. */
+    public void shutdownDaemon() {
+        this.daemonCoordinator.shutdownDaemon();
     }
 
     /**

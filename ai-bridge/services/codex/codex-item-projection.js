@@ -53,9 +53,13 @@ export function projectCodexItemMessages(item, { threadId = null, turnId = null,
       return messages;
     }
     if (type === 'agentMessage' || type === 'agent_message') {
+      // Some persisted turns carry the body as a plain `content` string while
+      // others use `text`; both must render, an unrecognised shape collapses
+      // into an empty authoritative message and erases the reply on reload.
       const content = Array.isArray(item.content)
         ? item.content
-        : typeof item.text === 'string' ? [{ type: 'text', text: item.text }] : [];
+        : typeof item.text === 'string' ? [{ type: 'text', text: item.text }]
+          : typeof item.content === 'string' ? [{ type: 'text', text: item.content }] : [];
       // An authoritative empty item replaces an earlier streamed body too.
       emitAssistant(content.length === 0 && authoritative ? [{ type: 'text', text: '' }] : content);
       return messages;

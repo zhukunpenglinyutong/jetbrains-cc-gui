@@ -33,6 +33,7 @@ const {
   filterCodexProjectThreads,
   projectThreadFileChanges,
   codexReadThreadPersistent,
+  codexCountThreadMessagesPersistent,
   setCodexPristineBaseEnv,
 } = await import('./persistent-codex-service.js');
 
@@ -94,7 +95,7 @@ test('the persistent channel clears Fast with explicit standard input and keeps 
   }
 });
 
-test('first successful conversation names its native thread asynchronously and survives a cold metadata read', async () => {
+test('the opening conversation names its native thread asynchronously and survives a cold metadata read', async () => {
   const data = { channelId: 'title-session', cwd: testCwd, codexCommandPrefix: peerCommandPrefix('session-title'),
     message: '修复命令卡片', clientMessageId: 'title-message' };
   const result = await codexSendPersistent(data, { titleDependencies: { enabled: async () => true, readCustomTitle: async () => null } });
@@ -107,6 +108,100 @@ test('first successful conversation names its native thread asynchronously and s
   assert.equal(event?.payload?.threadName, '修复命令卡片');
   const saved = await codexReadThreadPersistent({ ...data, threadId: event.threadId, params: { includeTurns: false } });
   assert.equal(saved.thread.name, '修复命令卡片');
+});
+
+test('the first thread is named while its opening turn is still running', async () => {
+  const data = { channelId: 'early-title', cwd: testCwd, codexCommandPrefix: peerCommandPrefix('early-title'),
+    message: '先行命名', clientMessageId: 'early-title-message' };
+  const sendPromise = codexSendPersistent(data, { titleDependencies: { enabled: async () => true, readCustomTitle: async () => null } });
+  const events = () => codexEvents().filter(event => event.channelId === 'early-title');
+  let named = false;
+  const deadline = Date.now() + 4000;
+  while (Date.now() < deadline) {
+    named = events().some(event => event.kind === 'threadNameUpdated');
+    if (named) {
+      break;
+    }
+    await new Promise(done => setTimeout(done, 10));
+  }
+  assert.ok(named, 'name set while the send is still pending');
+  assert.equal(events().some(event => event.kind === 'turnCompleted'), false,
+    'main turn has not reached its terminal yet');
+  const interaction = events().find(event => event.kind === 'interactionRequested');
+  assert.ok(interaction, 'approval still holding the turn open');
+  await codexRespondInteractionPersistent({ channelId: 'early-title', rpcId: interaction.payload.rpcId,
+    result: { decision: 'accept' } });
+  const result = await sendPromise;
+  assert.equal(result.outcome, 'completed');
+});
+
+test('an immediate retry after failed bootstrap still names the opening thread', async (context) => {
+  const data = { channelId: 'title-bootstrap-retry', cwd: testCwd,
+    codexCommandPrefix: peerCommandPrefix('title-bootstrap-retry'), message: '修复命令卡片' };
+  let attempts = 0;
+  const dependencies = { titleDependencies: {
+    enabled: async () => { attempts += 1; return true; }, readCustomTitle: async () => null,
+  } };
+  await codexPreconnectPersistent(data);
+  // Freeze the old polling timer so retrying before it wakes is deterministic.
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    assert.equal((await codexSendPersistent(data, dependencies)).outcome, 'failed');
+    assert.equal((await codexSendPersistent(data, dependencies)).outcome, 'completed');
+    context.mock.timers.tick(25);
+  } finally {
+    context.mock.timers.reset();
+  }
+  const deadline = Date.now() + 2000;
+  while (!codexEvents().some(event => event.kind === 'threadNameUpdated') && Date.now() < deadline) {
+    await new Promise(done => setTimeout(done, 10));
+  }
+  const names = codexEvents().filter(event => event.kind === 'threadNameUpdated');
+  assert.equal(attempts, 1, 'the successful retry must get one title attempt');
+  assert.ok(names.length > 0, 'the generated title must be saved');
+  assert.equal(names[0].payload.threadName, '修复命令卡片');
+});
+
+test('a queued opening send can claim the title after the preceding bootstrap fails', async () => {
+  const data = { channelId: 'queued-title-retry', cwd: testCwd,
+    codexCommandPrefix: peerCommandPrefix('title-bootstrap-retry'), message: '修复命令卡片' };
+  let attempts = 0;
+  const dependencies = { titleDependencies: {
+    enabled: async () => { attempts += 1; return true; }, readCustomTitle: async () => null,
+  } };
+  const first = codexSendPersistent(data, dependencies);
+  const second = codexSendPersistent(data, dependencies);
+  assert.equal((await first).outcome, 'failed');
+  assert.equal((await second).outcome, 'completed');
+  const deadline = Date.now() + 2000;
+  while (!codexEvents().some(event => event.kind === 'threadNameUpdated') && Date.now() < deadline) {
+    await new Promise(done => setTimeout(done, 10));
+  }
+  assert.equal(attempts, 1);
+  assert.equal(codexEvents().find(event => event.kind === 'threadNameUpdated')?.payload.threadName, '修复命令卡片');
+});
+
+test('a delayed title check cannot revive a crashed conversation runtime', async () => {
+  const data = { channelId: 'title-after-crash', cwd: testCwd,
+    codexCommandPrefix: peerCommandPrefix('disconnect-mid-turn'), message: 'inspect the failure' };
+  let releaseCheck;
+  let checked = false;
+  const enabled = new Promise(resolveCheck => { releaseCheck = resolveCheck; });
+  try {
+    const result = await codexSendPersistent(data, { titleDependencies: {
+      enabled: () => { checked = true; return enabled; }, readCustomTitle: async () => null,
+    } });
+    assert.equal(result.outcome, 'failed');
+    assert.ok(checked, 'the title check began before the native child failed');
+    assert.equal(getCodexRuntimeSnapshot().sessions[0].state, 'failed');
+    releaseCheck(true);
+    await new Promise(done => setImmediate(done));
+    const snapshot = getCodexRuntimeSnapshot().sessions[0];
+    assert.equal(snapshot.state, 'failed', 'optional naming must leave recovery to the next user operation');
+    assert.equal(snapshot.runtimeGeneration, 1);
+  } finally {
+    releaseCheck(false);
+  }
 });
 
 test('an authoritative completed plan remains executable and rejects substituted text', async () => {
@@ -162,6 +257,16 @@ test('project history hides guardian review sources without hiding user reviews 
   ];
   assert.deepEqual(filterCodexProjectThreads(threads, testCwd).map(thread => thread.id), ['user', 'review']);
   assert.deepEqual(filterCodexProjectThreads(threads, null).map(thread => thread.id), ['user', 'review']);
+});
+
+test('native message counts use the read-only host without claiming a thread writer', async () => {
+  const data = { channelId: 'history-count', cwd: testCwd, threadId: 'th-test-root-0001',
+    codexCommandPrefix: peerCommandPrefix('early-notification'), params: { updatedAt: 1 } };
+  assert.deepEqual(await codexCountThreadMessagesPersistent(data), { threadId: data.threadId, messageCount: 5 });
+  assert.deepEqual(await codexCountThreadMessagesPersistent(data), { threadId: data.threadId, messageCount: 5 });
+  assert.equal(getCodexRuntimeSnapshot().sessions[0].rootThreadId, null);
+  assert.equal(getCodexRuntimeSnapshot().sessions[0].busy, false);
+  assert.equal(codexEvents().some(event => event.kind === 'turnStarted'), false);
 });
 
 function peerCommandPrefix(scenario) {

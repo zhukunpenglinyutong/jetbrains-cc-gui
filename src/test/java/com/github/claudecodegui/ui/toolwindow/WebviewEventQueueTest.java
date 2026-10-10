@@ -5,9 +5,16 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -123,6 +130,154 @@ public class WebviewEventQueueTest {
         assertEquals(1, scripts.size());
         assertTrue(scripts.get(0).contains("newPage()"));
         org.junit.Assert.assertFalse(scripts.get(0).contains("oldPage()"));
+    }
+
+    /** Deferred image replies must share FIFO ordering with ordinary window callbacks. */
+    @Test
+    public void capturedRawSenderUsesOrderedQueue() {
+        AtomicReference<Object> browser = new AtomicReference<>(new Object());
+        AtomicBoolean disposed = new AtomicBoolean();
+        List<Runnable> scheduled = new ArrayList<>();
+        List<String> scripts = new ArrayList<>();
+        WebviewEventQueue<Object> queue = newQueue(browser, disposed, scheduled, scripts);
+        Consumer<String> reply = queue.captureRawSender();
+
+        queue.enqueue("beforePaste");
+        reply.accept("pasteImage()");
+        queue.enqueue("afterPaste");
+        assertTrue("captured replies must not execute outside the queue", scripts.isEmpty());
+        scheduled.remove(0).run();
+
+        assertEquals(1, scripts.size());
+        String script = scripts.get(0);
+        assertTrue(script.indexOf("window.beforePaste()") < script.indexOf("pasteImage()"));
+        assertTrue(script.indexOf("pasteImage()") < script.indexOf("window.afterPaste()"));
+    }
+
+    /** A new-page reply must capture the new queue baseline only after its atomic publication. */
+    @Test(timeout = 5000)
+    public void pagePublicationKeepsCapturedRepliesOnTheirOwningPages() throws Exception {
+        Object browser = new Object();
+        AtomicInteger pageGeneration = new AtomicInteger(1);
+        List<Runnable> scheduled = new ArrayList<>();
+        List<String> scripts = new ArrayList<>();
+        WebviewEventQueue<Object> queue = new WebviewEventQueue<>(
+                () -> browser, () -> false, pageGeneration::get, scheduled::add,
+                (ignoredBrowser, ignoredPage, script) -> scripts.add(script), () -> true);
+        MessageDispatchGate gate = new MessageDispatchGate();
+        gate.activatePageGeneration(1);
+        AtomicReference<Consumer<String>> oldReply = new AtomicReference<>();
+        assertTrue(gate.runInDispatch(1, () -> oldReply.set(queue.captureRawSender())));
+        AtomicBoolean baselinesReset = new AtomicBoolean();
+        CountDownLatch publicationEntered = new CountDownLatch(1);
+        CountDownLatch releasePublication = new CountDownLatch(1);
+        CountDownLatch newDispatchStarted = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Boolean> activation = executor.submit(() -> gate.activatePageGeneration(2, () -> {
+                publicationEntered.countDown();
+                try {
+                    assertTrue(releasePublication.await(2, TimeUnit.SECONDS));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError(e);
+                }
+                pageGeneration.set(2);
+                queue.pageChanged();
+                baselinesReset.set(true);
+            }));
+            assertTrue(publicationEntered.await(2, TimeUnit.SECONDS));
+            Future<Boolean> newDispatch = executor.submit(() -> {
+                newDispatchStarted.countDown();
+                return gate.runInDispatch(2, () -> {
+                    assertTrue(baselinesReset.get());
+                    queue.captureRawSender().accept("newPageImage()");
+                });
+            });
+            assertTrue(newDispatchStarted.await(2, TimeUnit.SECONDS));
+            try {
+                newDispatch.get(150, TimeUnit.MILLISECONDS);
+                org.junit.Assert.fail("new-page reply must not capture the old delivery baseline");
+            } catch (TimeoutException expected) {
+                assertEquals(1, pageGeneration.get());
+                assertTrue(scheduled.isEmpty());
+            }
+
+            releasePublication.countDown();
+            assertTrue(activation.get(2, TimeUnit.SECONDS));
+            assertTrue(newDispatch.get(2, TimeUnit.SECONDS));
+            oldReply.get().accept("staleImage()");
+            scheduled.remove(0).run();
+            assertEquals(1, scripts.size());
+            assertTrue(scripts.get(0).contains("newPageImage()"));
+            assertFalse(scripts.get(0).contains("staleImage()"));
+        } finally {
+            releasePublication.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(2, TimeUnit.SECONDS);
+            queue.dispose();
+        }
+    }
+
+    /** Finishing old-page work must not deliver to or erase events for the new page. */
+    @Test
+    public void capturedRawSenderRejectsReplacementPageWithoutErasingNewEvents() {
+        Object browser = new Object();
+        AtomicInteger pageGeneration = new AtomicInteger(1);
+        List<Runnable> scheduled = new ArrayList<>();
+        List<String> scripts = new ArrayList<>();
+        WebviewEventQueue<Object> queue = new WebviewEventQueue<>(
+                () -> browser, () -> false, pageGeneration::get, scheduled::add,
+                (ignoredBrowser, ignoredPage, script) -> scripts.add(script), () -> true);
+        Consumer<String> oldReply = queue.captureRawSender();
+
+        pageGeneration.set(2);
+        queue.pageChanged();
+        queue.enqueueRaw("newPage()");
+        oldReply.accept("staleImage()");
+        scheduled.remove(0).run();
+
+        assertEquals(1, scripts.size());
+        assertTrue(scripts.get(0).contains("newPage()"));
+        assertFalse(scripts.get(0).contains("staleImage()"));
+    }
+
+    /** Browser identity must be retained even when the replacement has the same page generation. */
+    @Test
+    public void capturedRawSenderRejectsReplacementBrowser() {
+        AtomicReference<Object> browser = new AtomicReference<>(new Object());
+        AtomicBoolean disposed = new AtomicBoolean();
+        List<Runnable> scheduled = new ArrayList<>();
+        List<String> scripts = new ArrayList<>();
+        WebviewEventQueue<Object> queue = newQueue(browser, disposed, scheduled, scripts);
+        Consumer<String> oldReply = queue.captureRawSender();
+
+        browser.set(new Object());
+        queue.browserChanged();
+        queue.enqueueRaw("newBrowser()");
+        oldReply.accept("staleImage()");
+        scheduled.remove(0).run();
+
+        assertEquals(1, scripts.size());
+        assertTrue(scripts.get(0).contains("newBrowser()"));
+        assertFalse(scripts.get(0).contains("staleImage()"));
+    }
+
+    /** Disposed windows reject asynchronous completion rather than touching a dead browser. */
+    @Test
+    public void capturedRawSenderRejectsDisposedWindow() {
+        AtomicReference<Object> browser = new AtomicReference<>(new Object());
+        AtomicBoolean disposed = new AtomicBoolean();
+        List<Runnable> scheduled = new ArrayList<>();
+        List<String> scripts = new ArrayList<>();
+        WebviewEventQueue<Object> queue = newQueue(browser, disposed, scheduled, scripts);
+        Consumer<String> reply = queue.captureRawSender();
+        disposed.set(true);
+
+        reply.accept("staleImage()");
+        assertTrue(scheduled.isEmpty());
+        assertTrue(scripts.isEmpty());
+        queue.dispose();
     }
 
     @Test
@@ -390,6 +545,80 @@ public class WebviewEventQueueTest {
         );
     }
 
+    /** Long history transfers must keep every slice while respecting script batch limits. */
+    @Test
+    public void deliversEveryHistorySlicePastTheRecoveryOverflowCeiling() {
+        List<Runnable> scheduled = new ArrayList<>();
+        List<String> scripts = new ArrayList<>();
+        WebviewEventQueue<Object> queue = newQueue(new AtomicReference<>(new Object()), new AtomicBoolean(), scheduled, scripts);
+        assertTrue(queue.enqueue("beginCodexHistoryPage", "page-start"));
+        for (int i = 0; i < 600; i++) {
+            String function = i % 2 == 0 ? "appendCodexHistoryPageBatch" : "appendCodexHistoryPageChunk";
+            assertTrue("history slice " + i, queue.enqueue(function, "page", "slice-" + i + ":" + "x".repeat(1000)));
+        }
+        assertTrue(queue.enqueue("completeCodexHistoryPage", "page-complete"));
+        assertTrue(queue.enqueue("onStreamEnd"));
+        while (!scheduled.isEmpty()) {
+            scheduled.remove(0).run();
+        }
+        String delivered = String.join("\n", scripts);
+        int previous = delivered.indexOf("window.beginCodexHistoryPage(");
+        for (int i = 0; i < 600; i++) {
+            int position = delivered.indexOf("'slice-" + i + ":");
+            assertTrue("ordered history slice " + i, position > previous);
+            previous = position;
+        }
+        assertTrue(previous < delivered.indexOf("window.completeCodexHistoryPage("));
+        assertTrue(delivered.indexOf("window.completeCodexHistoryPage(") < delivered.indexOf("window.onStreamEnd("));
+        assertTrue("large pages must still drain in several scripts", scripts.size() > 1);
+        assertTrue("history grouping must not make an oversized script", scripts.stream().allMatch(script -> script.length() < 300_000));
+        queue.dispose();
+    }
+
+    /** A failed history script must keep its grouped capacity and precede later callbacks. */
+    @Test
+    public void requeuesGroupedHistoryWithoutCrowdingOutLaterEvents() {
+        List<Runnable> scheduled = new ArrayList<>();
+        List<String> scripts = new ArrayList<>();
+        AtomicBoolean failFirstAttempt = new AtomicBoolean(true);
+        AtomicReference<WebviewEventQueue<Object>> queueReference = new AtomicReference<>();
+        Object browser = new Object();
+        WebviewEventQueue<Object> queue = new WebviewEventQueue<>(
+                () -> browser, () -> false, () -> 0, scheduled::add,
+                (ignoredBrowser, ignoredGeneration, script) -> {
+                    if (failFirstAttempt.getAndSet(false)) {
+                        for (int i = 0; i < 252; i++) {
+                            assertTrue(queueReference.get().enqueue("onTaskEvent", "task-" + i));
+                        }
+                        return false;
+                    }
+                    scripts.add(script);
+                    return true;
+                }, () -> true);
+        queueReference.set(queue);
+        queue.enqueue("beginCodexHistoryPage", "start");
+        for (int i = 0; i < 600; i++) {
+            assertTrue(queue.enqueue("appendCodexHistoryPageChunk", "page", "slice-" + i));
+        }
+        queue.enqueue("completeCodexHistoryPage", "complete");
+        scheduled.remove(0).run();
+        assertTrue("the retried page still occupies three entries", queue.enqueue("afterRetry"));
+        while (!scheduled.isEmpty()) {
+            scheduled.remove(0).run();
+        }
+        String delivered = String.join("\n", scripts);
+        int previous = delivered.indexOf("window.beginCodexHistoryPage(");
+        for (int i = 0; i < 600; i++) {
+            int position = delivered.indexOf("'slice-" + i + "'");
+            assertTrue("retried slice " + i, position > previous);
+            previous = position;
+        }
+        assertTrue(previous < delivered.indexOf("window.completeCodexHistoryPage("));
+        assertTrue(delivered.indexOf("window.completeCodexHistoryPage(") < delivered.indexOf("'task-0'"));
+        assertTrue(delivered.indexOf("'task-251'") < delivered.indexOf("window.afterRetry("));
+        queue.dispose();
+    }
+
     /**
      * The classification table decides how a call is merged and which of it may be
      * dropped, and every rule reads it through {@code hasClass}. A function that
@@ -440,5 +669,20 @@ public class WebviewEventQueueTest {
                 WebviewEventQueue.EVENT_CLASSES.get("onBlockReset"));
         assertEquals(EnumSet.of(WebviewEventQueue.EventClass.LIFECYCLE),
                 WebviewEventQueue.EVENT_CLASSES.get("onTaskEvent"));
+
+        // Boundaries protect the page; consecutive slices share a pending entry.
+        for (String codexPage : List.of("beginCodexHistoryPage", "completeCodexHistoryPage", "codexHistoryPageError")) {
+            assertEquals("codex history page call " + codexPage,
+                    EnumSet.of(WebviewEventQueue.EventClass.CRITICAL,
+                            WebviewEventQueue.EventClass.LIFECYCLE),
+                    WebviewEventQueue.EVENT_CLASSES.get(codexPage));
+        }
+        for (String codexAppend : List.of("appendCodexHistoryPageBatch", "appendCodexHistoryPageChunk")) {
+            assertEquals("codex history append " + codexAppend,
+                    EnumSet.of(WebviewEventQueue.EventClass.CRITICAL,
+                            WebviewEventQueue.EventClass.LIFECYCLE,
+                            WebviewEventQueue.EventClass.HISTORY_APPEND),
+                    WebviewEventQueue.EVENT_CLASSES.get(codexAppend));
+        }
     }
 }

@@ -19,6 +19,7 @@ public class CodexNativeDataHandler extends BaseMessageHandler {
     private static final Map<String, String> METHODS = Map.of(
             "codex_native_list_threads", "codex.listThreads",
             "codex_native_list_threads_page", "codex.listThreads",
+            "codex_native_count_thread_messages", "codex.countThreadMessages",
             "codex_native_read_thread", "codex.readThread",
             "codex_native_list_models", "codex.listModels",
             "codex_native_list_skills", "codex.listSkills",

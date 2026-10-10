@@ -264,6 +264,40 @@ describe('useSessionManagement', () => {
     expect(mocks.addToast).toHaveBeenCalledWith('history.sessionDeleted', 'success');
   });
 
+  it('preserves unknown native totals after deletion and sums the remaining known rows', () => {
+    let historyData: HistoryData = { success: true, source: 'native', sessions: [
+      { sessionId: 'unknown', title: 'Unknown' },
+      { sessionId: 'known', title: 'Known', messageCount: 5 },
+      { sessionId: 'deleted', title: 'Deleted', messageCount: 3 },
+    ] };
+    const mocks = { ...createMocks(), setHistoryData: vi.fn((update: HistoryData | null | ((current: HistoryData | null) => HistoryData | null)) => {
+      historyData = (typeof update === 'function' ? update(historyData) : update) as HistoryData;
+    }) };
+    const { result } = renderHook(() => useSessionManagement({ messages: [], loading: false,
+      historyData, currentSessionId: null, ...mocks, t }));
+    act(() => { result.current.deleteHistorySession('deleted'); });
+    expect(historyData.total).toBeUndefined();
+    act(() => { result.current.deleteHistorySessions(['unknown']); });
+    expect(historyData.total).toBe(5);
+    expect(historyData.sessions?.map(session => session.sessionId)).toEqual(['known']);
+  });
+
+  it('preserves freshly counted messages when editing through callbacks from the preceding render', () => {
+    let historyData: HistoryData = { success: true, source: 'native', sessions: [{ sessionId: 'saved', title: 'Original' }] };
+    const mocks = { ...createMocks(), setHistoryData: vi.fn((update: HistoryData | null | ((current: HistoryData | null) => HistoryData | null)) => {
+      historyData = (typeof update === 'function' ? update(historyData) : update) as HistoryData;
+    }) };
+    const { result } = renderHook(() => useSessionManagement({ messages: [], loading: false,
+      historyData, currentSessionId: null, ...mocks, t }));
+    historyData = { ...historyData, total: 7, sessions: [{ ...historyData.sessions![0], messageCount: 7 }] };
+    act(() => { result.current.toggleFavoriteSession('saved'); });
+    expect(historyData).toMatchObject({ total: 7, sessions: [{ messageCount: 7, isFavorited: true }] });
+    act(() => { result.current.updateHistoryTitle('saved', 'Renamed'); });
+    expect(historyData).toMatchObject({ total: 7, sessions: [{ messageCount: 7, isFavorited: true, title: 'Renamed' }] });
+    act(() => { result.current.applyHistoryTitleLocal('saved', 'Generated'); });
+    expect(historyData).toMatchObject({ total: 7, sessions: [{ messageCount: 7, isFavorited: true, title: 'Generated' }] });
+  });
+
   it('defers the deleted toast until transition completion when batch delete removes current session', () => {
     let historyData = {
       success: true,

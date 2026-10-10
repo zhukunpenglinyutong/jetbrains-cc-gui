@@ -212,6 +212,44 @@ export const SCENARIOS = {
       ctx.notify(turnCompleted(TURN_ID));
     },
   },
+  'title-bootstrap-retry': {
+    async onThreadStart(params, ctx) {
+      if (!params.ephemeral && !ctx.rejectedBootstrap) {
+        ctx.rejectedBootstrap = true;
+        ctx.replyError(ctx.currentId, { code: -32600, message: 'Retry the opening request' });
+        return;
+      }
+      await SCENARIOS['session-title'].onThreadStart(params, ctx);
+    },
+    async onTurnStart(params, ctx) {
+      await SCENARIOS['session-title'].onTurnStart(params, ctx);
+    },
+  },
+  'early-title': {
+    async onThreadStart(params, ctx) {
+      ctx.titleOnly = params.ephemeral === true;
+      ctx.reply(ctx.currentId, makeThreadStartResponse(params));
+    },
+    async onTurnStart(_params, ctx) {
+      ctx.reply(ctx.currentId, { turn: { id: TURN_ID } });
+      ctx.notify({ method: 'turn/started', params: { threadId: THREAD_ID, turn: { id: TURN_ID, status: 'inProgress' } } });
+      if (ctx.titleOnly) {
+        ctx.notify({ method: 'item/completed', params: { threadId: THREAD_ID, turnId: TURN_ID,
+          item: { id: 'answer', type: 'agentMessage', phase: 'final_answer', text: '{"title":"先行标题"}' } } });
+        ctx.notify(turnCompleted(TURN_ID));
+        return;
+      }
+      // Hold the main turn open until the test responds to the approval, so the
+      // name arriving meanwhile proves titles no longer wait for the terminal.
+      const requestId = ctx.nextServerId();
+      ctx.serverRequest(requestId, 'item/commandExecution/requestApproval', {
+        threadId: THREAD_ID, turnId: TURN_ID, itemId: 'hold', command: 'fixture', reason: 'hold turn' });
+      await ctx.waitServerResponse(requestId);
+      ctx.notify({ method: 'item/completed', params: { threadId: THREAD_ID, turnId: TURN_ID,
+        item: { id: 'answer', type: 'agentMessage', phase: 'final_answer', text: 'Main task complete' } } });
+      ctx.notify(turnCompleted(TURN_ID));
+    },
+  },
   'whole-session-edits': {
     async onThreadRead(params, ctx) {
       if (params.fileChangesOnly !== undefined) {

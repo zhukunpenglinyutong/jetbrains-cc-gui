@@ -85,7 +85,7 @@ export async function readNativeHistoryPage(read, { threadId, cursor = null, lim
   const orderedTurns = readMode === 'full' ? turns : [...turns].reverse();
   const messages = [];
   for (const turn of orderedTurns) {
-    let entries = (turn.items ?? []).map((item) => ({ turnId: turn.id, item }));
+    let entries;
     if (turn.itemsView && turn.itemsView !== 'full') {
       const pages = [];
       let itemCursor = null;
@@ -96,12 +96,20 @@ export async function readNativeHistoryPage(read, { threadId, cursor = null, lim
         });
         if (!Array.isArray(itemPage?.data ?? itemPage?.items)) throw new Error('Native item history returned no items array');
         const response = normalizeNativeHistoryPage(itemPage);
+        // A missing continuation cannot turn an incomplete item list into an empty or final transcript.
+        if (!response.complete && response.cursor == null) {
+          throw new Error('Native item history received incomplete items without a cursor');
+        }
         pages.push(response);
         itemCursor = response.cursor;
         if (itemCursor != null && seen.has(itemCursor)) throw new Error('Native item history repeated its cursor');
         seen.add(itemCursor);
       } while (itemCursor != null);
       entries = mergeNativeHistoryPages(pages);
+    } else {
+      // Missing hydrated items are not evidence of an empty turn.
+      if (!Array.isArray(turn.items)) throw new Error('Native turn history returned no items array');
+      entries = turn.items.map((item) => ({ turnId: turn.id, item }));
     }
     for (const entry of entries) {
       const item = entry.item ?? entry;

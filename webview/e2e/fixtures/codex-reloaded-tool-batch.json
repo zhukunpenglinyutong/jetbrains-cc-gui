@@ -1,0 +1,457 @@
+{
+  "source": "Anonymized record shapes from the reported reload: index-named receipts, a late native completion, and empty reasoning between wrappers.",
+  "expectedToolCount": 5,
+  "records": [
+    {
+      "type": "session_meta",
+      "payload": {
+        "id": "tool-history-thread"
+      }
+    },
+    {
+      "type": "response_item",
+      "payload": {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "Review the local changes."
+          }
+        ],
+        "internal_chat_message_metadata_passthrough": {
+          "turn_id": "tool-history-turn"
+        }
+      }
+    },
+    {
+      "type": "response_item",
+      "payload": {
+        "type": "custom_tool_call",
+        "call_id": "review-batch",
+        "name": "exec",
+        "input": "const results=await Promise.allSettled([tools.exec_command({cmd:'git diff -- bridge'}),tools.exec_command({cmd:'git diff -- java'}),tools.exec_command({cmd:'node --test'})]);for(let i=0;i<results.length;i++)text({index:i,...results[i]});",
+        "internal_chat_message_metadata_passthrough": {
+          "turn_id": "tool-history-turn"
+        }
+      }
+    },
+    {
+      "type": "event_msg",
+      "payload": {
+        "type": "item_completed",
+        "thread_id": "tool-history-thread",
+        "turn_id": "tool-history-turn",
+        "item": {
+          "type": "CommandExecution",
+          "id": "native-bridge-diff",
+          "command": [
+            "/bin/bash",
+            "-lc",
+            "git diff -- bridge"
+          ],
+          "status": "completed",
+          "exit_code": 0,
+          "aggregated_output": "bridge diff"
+        }
+      }
+    },
+    {
+      "type": "event_msg",
+      "payload": {
+        "type": "item_completed",
+        "thread_id": "tool-history-thread",
+        "turn_id": "tool-history-turn",
+        "item": {
+          "type": "CommandExecution",
+          "id": "native-java-diff",
+          "command": [
+            "/bin/bash",
+            "-lc",
+            "git diff -- java"
+          ],
+          "status": "completed",
+          "exit_code": 0,
+          "aggregated_output": "java diff"
+        }
+      }
+    },
+    {
+      "type": "response_item",
+      "payload": {
+        "type": "custom_tool_call_output",
+        "call_id": "review-batch",
+        "output": [
+          {
+            "type": "input_text",
+            "text": "{\"index\":0,\"status\":\"fulfilled\",\"value\":{\"exit_code\":0,\"output\":\"bridge diff\"}}"
+          },
+          {
+            "type": "input_text",
+            "text": "{\"index\":1,\"status\":\"fulfilled\",\"value\":{\"exit_code\":0,\"output\":\"java diff\"}}"
+          },
+          {
+            "type": "input_text",
+            "text": "{\"index\":2,\"status\":\"fulfilled\",\"value\":{\"session_id\":91831,\"output\":\"tests running\"}}"
+          }
+        ],
+        "internal_chat_message_metadata_passthrough": {
+          "turn_id": "tool-history-turn"
+        }
+      }
+    },
+    {
+      "type": "event_msg",
+      "payload": {
+        "type": "item_completed",
+        "thread_id": "tool-history-thread",
+        "turn_id": "tool-history-turn",
+        "item": {
+          "type": "CommandExecution",
+          "id": "native-tests",
+          "command": [
+            "/bin/bash",
+            "-lc",
+            "node --test"
+          ],
+          "status": "completed",
+          "exit_code": 0,
+          "aggregated_output": "tests passed"
+        }
+      }
+    },
+    {
+      "type": "response_item",
+      "payload": {
+        "type": "reasoning",
+        "id": "hidden-reasoning",
+        "summary": [],
+        "encrypted_content": "fixture-encrypted-placeholder",
+        "internal_chat_message_metadata_passthrough": {
+          "turn_id": "tool-history-turn"
+        }
+      }
+    },
+    {
+      "type": "response_item",
+      "payload": {
+        "type": "custom_tool_call",
+        "call_id": "followup-batch",
+        "name": "exec",
+        "input": "const r=await Promise.allSettled([tools.exec_command({cmd:'rg --files'}),tools.exec_command({cmd:'git status --short'})]);r.forEach((v,i)=>text({i,...v}));",
+        "internal_chat_message_metadata_passthrough": {
+          "turn_id": "tool-history-turn"
+        }
+      }
+    },
+    {
+      "type": "response_item",
+      "payload": {
+        "type": "custom_tool_call_output",
+        "call_id": "followup-batch",
+        "output": [
+          {
+            "type": "input_text",
+            "text": "{\"i\":0,\"status\":\"fulfilled\",\"value\":{\"exit_code\":0,\"output\":\"file list\"}}"
+          },
+          {
+            "type": "input_text",
+            "text": "{\"i\":1,\"status\":\"fulfilled\",\"value\":{\"exit_code\":0,\"output\":\"working tree status\"}}"
+          }
+        ],
+        "internal_chat_message_metadata_passthrough": {
+          "turn_id": "tool-history-turn"
+        }
+      }
+    },
+    {
+      "type": "response_item",
+      "payload": {
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "text": "Verified history grouping."
+          }
+        ],
+        "internal_chat_message_metadata_passthrough": {
+          "turn_id": "tool-history-turn"
+        }
+      }
+    }
+  ],
+  "messages": [
+    {
+      "type": "user",
+      "content": "Review the local changes.",
+      "raw": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Review the local changes."
+          }
+        ],
+        "role": "user",
+        "codexTurnId": "tool-history-turn",
+        "codexThreadId": "tool-history-thread",
+        "uuid": "codex-legacy:record:2"
+      }
+    },
+    {
+      "type": "assistant",
+      "content": "",
+      "raw": {
+        "codexThreadId": "tool-history-thread",
+        "codexTurnId": "tool-history-turn",
+        "codexReplayedCallId": "review-batch",
+        "uuid": "codex:tool-history-thread:tool-history-turn:native-bridge-diff",
+        "codexItemId": "native-bridge-diff",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "native-bridge-diff",
+            "name": "bash",
+            "input": {
+              "cmd": "git diff -- bridge",
+              "command": "git diff -- bridge",
+              "description": "Show git diff"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "user",
+      "content": "[tool_result]",
+      "raw": {
+        "codexThreadId": "tool-history-thread",
+        "codexTurnId": "tool-history-turn",
+        "codexReplayedCallId": "review-batch",
+        "uuid": "codex:tool-history-thread:tool-history-turn:native-bridge-diff:result",
+        "codexItemId": "native-bridge-diff:result",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "native-bridge-diff",
+            "content": "bridge diff",
+            "is_error": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "assistant",
+      "content": "",
+      "raw": {
+        "codexThreadId": "tool-history-thread",
+        "codexTurnId": "tool-history-turn",
+        "codexReplayedCallId": "review-batch",
+        "uuid": "codex:tool-history-thread:tool-history-turn:native-java-diff",
+        "codexItemId": "native-java-diff",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "native-java-diff",
+            "name": "bash",
+            "input": {
+              "cmd": "git diff -- java",
+              "command": "git diff -- java",
+              "description": "Show git diff"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "user",
+      "content": "[tool_result]",
+      "raw": {
+        "codexThreadId": "tool-history-thread",
+        "codexTurnId": "tool-history-turn",
+        "codexReplayedCallId": "review-batch",
+        "uuid": "codex:tool-history-thread:tool-history-turn:native-java-diff:result",
+        "codexItemId": "native-java-diff:result",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "native-java-diff",
+            "content": "java diff",
+            "is_error": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "assistant",
+      "content": "",
+      "raw": {
+        "codexThreadId": "tool-history-thread",
+        "codexTurnId": "tool-history-turn",
+        "codexReplayedCallId": "review-batch",
+        "uuid": "codex:tool-history-thread:tool-history-turn:review-batch:command:2",
+        "codexItemId": "review-batch:command:2",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "review-batch:command:2",
+            "name": "bash",
+            "input": {
+              "cmd": "node --test",
+              "command": "node --test",
+              "description": "node --test"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "user",
+      "content": "[tool_result]",
+      "raw": {
+        "codexThreadId": "tool-history-thread",
+        "codexTurnId": "tool-history-turn",
+        "codexReplayedCallId": "review-batch",
+        "uuid": "codex:tool-history-thread:tool-history-turn:review-batch:command:2:result",
+        "codexItemId": "review-batch:command:2:result",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "review-batch:command:2",
+            "content": "tests passed",
+            "is_error": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "assistant",
+      "content": "",
+      "raw": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "text": "",
+            "native": true,
+            "status": "completed"
+          }
+        ],
+        "codexTurnId": "tool-history-turn",
+        "codexThreadId": "tool-history-thread",
+        "uuid": "codex-legacy:hidden-reasoning"
+      }
+    },
+    {
+      "type": "assistant",
+      "content": "",
+      "raw": {
+        "codexThreadId": "tool-history-thread",
+        "codexTurnId": "tool-history-turn",
+        "codexReplayedCallId": "followup-batch",
+        "uuid": "codex:tool-history-thread:tool-history-turn:followup-batch:command:0",
+        "codexItemId": "followup-batch:command:0",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "followup-batch:command:0",
+            "name": "bash",
+            "input": {
+              "cmd": "rg --files",
+              "command": "rg --files",
+              "description": "Search in files"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "user",
+      "content": "[tool_result]",
+      "raw": {
+        "codexThreadId": "tool-history-thread",
+        "codexTurnId": "tool-history-turn",
+        "codexReplayedCallId": "followup-batch",
+        "uuid": "codex:tool-history-thread:tool-history-turn:followup-batch:command:0:result",
+        "codexItemId": "followup-batch:command:0:result",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "followup-batch:command:0",
+            "content": "file list",
+            "is_error": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "assistant",
+      "content": "",
+      "raw": {
+        "codexThreadId": "tool-history-thread",
+        "codexTurnId": "tool-history-turn",
+        "codexReplayedCallId": "followup-batch",
+        "uuid": "codex:tool-history-thread:tool-history-turn:followup-batch:command:1",
+        "codexItemId": "followup-batch:command:1",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "followup-batch:command:1",
+            "name": "bash",
+            "input": {
+              "cmd": "git status --short",
+              "command": "git status --short",
+              "description": "Check git status"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "user",
+      "content": "[tool_result]",
+      "raw": {
+        "codexThreadId": "tool-history-thread",
+        "codexTurnId": "tool-history-turn",
+        "codexReplayedCallId": "followup-batch",
+        "uuid": "codex:tool-history-thread:tool-history-turn:followup-batch:command:1:result",
+        "codexItemId": "followup-batch:command:1:result",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "followup-batch:command:1",
+            "content": "working tree status",
+            "is_error": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "assistant",
+      "content": "Verified history grouping.",
+      "raw": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Verified history grouping."
+          }
+        ],
+        "role": "assistant",
+        "codexTurnId": "tool-history-turn",
+        "codexThreadId": "tool-history-thread",
+        "uuid": "codex-legacy:record:11"
+      }
+    }
+  ]
+}

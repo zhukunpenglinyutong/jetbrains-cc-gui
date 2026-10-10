@@ -24,7 +24,7 @@
 | `codex.respondInteraction` / `codex.respondInteractionError` | 控制（绕过队列） | 对指定 rpcId 回 typed result/error |
 | `codex.abortTurn` | 控制（绕过队列） | 停止活动 operation（派发阶段语义见下文） |
 | `codex.releaseThread` / `codex.resetRuntime` | 生命周期 | 排空 relation set / 关闭 child 并确认退出 |
-| `codex.listThreads` / `codex.readThread` / `codex.readHistoryPage` / `codex.readSubagent` | 独立只读通道 | 通过 app-server history projection 查询；child 先验证 parentThreadId 关系，不占发送 FIFO、不 resume writer |
+| `codex.listThreads` / `codex.countThreadMessages` / `codex.readThread` / `codex.readHistoryPage` / `codex.readSubagent` | 独立只读通道 | 通过 app-server history projection 查询；child 先验证 parentThreadId 关系，不占发送 FIFO、不 resume writer |
 | `codex.listModels` / `codex.listSkills` / `codex.getMcpStatus` / `codex.reloadMcp` | 独立只读通道 | 目录与 MCP 状态查询；reload 仍受 native runtime access 门控 |
 
 事件（进程级 NDJSON，经 `_originalStdoutWrite` 直写，**不带** activeRequestId 包装）：
@@ -131,7 +131,9 @@ GUI 的 env_key 查找使用实际 CODEX_HOME/config.toml，只读 TOML provider
 
 授权运行时优先通过 `thread/read` 元信息、`thread/turns/list` 和 `thread/items/list` 读取显示记录，保存 opaque cursor，并以 thread/turn/item/clientId 对账重叠页和本地未确认提交。仅原生明确不支持分页时固定选择 includeTurns 整读；读取过程不 resume、不抢执行 owner。鉴权、writer 或策略错误不触发离线 fallback。
 
-在 inactive、CLI/传输不可用，或原生投影遗漏工具、明文思考及 compact 前记录时，选择整个 legacy 只读 transcript；一次加载不会拼接两个来源。旧分页/整读共用 wrapper 回放器，静态 shell_command/exec_command 可显示 Bash 卡片，未知或混合 wrapper 保留通用卡片和输出。明文 reasoning summary/content 显示为可展开思考；仅加密记录也保留已知思考边界和状态，展开显示无可读内容提示，不显示密文。内部 `external_codex_apps_open_page` 标签被去除，实际用户文字与图片保留。这些显示记录不会回注模型。
+历史页的 begin、batch/chunk、complete/error 都由窗口 FIFO 队列传输。同一页的连续 batch/chunk 共用一个待发送项，避免大页触及 512 项恢复溢出上限时丢失中间记录；发送脚本仍按参数大小分段，执行失败后保留批次顺序并按既有重试预算处理。
+
+在 inactive、CLI/传输不可用，或原生投影遗漏工具、明文思考及 compact 前记录时，选择整个 legacy 只读 transcript；一次加载不会拼接两个来源。旧分页/整读共用 wrapper 回放器，静态 shell_command/exec_command 可显示 Bash 卡片，未知或混合 wrapper 保留通用卡片和输出。明文 reasoning summary/content 显示为可展开思考；仅加密记录保留已知思考状态，界面隐藏空占位，不显示密文，也不拆开连续工具批次。response_item 保留记录中的轮次标识，并使用 session_meta 的线程标识，让正文、思考与原生工具按同一轮合并。内部 `external_codex_apps_open_page` 标签被去除，实际用户文字与图片保留。这些显示记录不会回注模型。
 
 原生子代理卡片使用实际 child thread ID；历史/status 先验证 parentThreadId 祖先链，active 子线程不因父终态或旧的 completed turn 被显示为完成。跨 Tab 的显示查询只读；切换根会话后旧请求不能更新新页面。节点状态未知时继续查询，不猜测完成。
 
@@ -171,6 +173,10 @@ MCP form elicitation 会把 `requestedSchema.properties` 映射成带稳定字�
 
 历史列表优先走 `thread/list`，页面保留 `source=native`、`nextCursor` 和 `partial`。cursor 原样传回，重叠 turn/item 页按 native id upsert；metadata-only 空页不会清除现有记录。只有 runtime access inactive 时才请求已有只读 legacy 列表，鉴权/writer 错误保持可见。
 
+`thread/list` 不提供 `messageCount`，返回的空 `turns` 也不代表会话为空。列表先显示元信息，再通过独立只读 `codex.countThreadMessages` 请求后台统计，前端最多同时派发 4 个计数请求，相同元信息的重叠页复用待完成的请求。计数遍历原生历史页，沿用显示消息的 item 投影（含思考、工具调用及结果），按消息身份消除重叠页，不 resume 线程或启动模型回合。不完整的 turn/item 页缺少续页游标时保留未知计数。每次计数总时限为 110 秒，超时后停止请求后续页并允许重试。仅保存计数的宿主级缓存最多 128 条，有效期 60 秒；前端同样限制已知计数的复用时间，元信息变更及活跃线程重新读取。旧 CLI 不支持原生分页时采用完整原生读取，失败不记作 0，也不切换 JSONL 来源。
+
+未知计数显示“消息数未统计”，已确认空会话才显示 0。顶部只在当前已加载列表的计数全部已知时显示消息总和，会话数量单独计算；增量页和异步计数回执不会重复累加。回执按列表请求及元信息版本校验，页面切换、行更新或删除之后的旧计数不能覆盖当前记录。分页及改名、收藏都合并到最新状态，保留本地删除和编辑；进入 legacy 回退后忽略尚未返回的 native 页。较新 native 记录的未知或归零计数不会从较旧记录补齐。
+
 设置页的 Codex 访问范围统一为 `read-only`、`workspace-write`、`danger-full-access`，旧 `set_codex_sandbox_mode` 仍兼容但同时发出带 `source=user` 的 `set_codex_sandbox_selection`。计划/批准选择不会改写 sandbox，页面显示迁移来源。
 
 旧 JSONL history adapter 只在 inactive、离线或原生投影明确缺失时提供只读回退；它不会重新执行任务，也不自动与 native history 拼接。旧 adapter 在未加载新 privacy index 的版本中不提供本版本的 secret 遮蔽保证，回退文案必须明确这一边界。
@@ -179,10 +185,12 @@ MCP form elicitation 会把 `requestedSchema.properties` 映射成带稳定字�
 
 ## 边界行为补充
 
-会话展示行为：编辑账本独立读取全部原生 fileChange，checkpoint 以操作身份保存，删除/移动/EOF 与冲突撤销依据实际 patch；ImageView 的空终态可完成。Codex 文本使用完整 item 快照，结束时提交整个待处理列表；Guardian 目录按来源过滤并重建旧缓存。用户气泡共用 Claude 主题，单条/批次命令共用外层 shell 显示清理，纯轮询不创建卡片或分隔线。首次成功新会话在现有开关和授权下异步生成标题，用原生 thread/name/set 保存，手动名称优先，释放时取消辅助请求。
+会话展示行为：编辑账本独立读取全部原生 fileChange，checkpoint 以操作身份保存，删除/移动/EOF 与冲突撤销依据实际 patch；ImageView 的空终态可完成。Codex 文本使用完整 item 快照，agentMessage 的 text、content 数组或 content 字符串共用投影，结束时提交整个待处理列表；Guardian 目录按来源过滤并重建旧缓存。用户气泡共用 Claude 主题，单条/批次命令共用外层 shell 显示清理，纯轮询不创建卡片或分隔线。
+
+新会话在首轮原生 threadStarted 事件到达时，遵守现有开关和授权异步生成标题，不等待回合结束。辅助请求使用独立 app-server child，标题通过原生 thread/name/set 保存，手动名称优先。只有创建了线程才占用一次标题机会；bootstrap 失败后的立即重试或排队发送仍可生成标题。每次元信息读取与写入都校验主运行时仍为 ready 且 child 存活，辅助任务不会重启已崩溃或退役的 writer。释放、重置、回合中断或启动配置变化会取消辅助请求；释放与重置等待所有待命名任务收尾。进程管理面板将 Codex daemon 登记为 DAEMON，孤儿清理保留其原生子进程；面板重启仅停止 daemon，Java 会话路由在下一次请求时继续使用。
 
 输出片段不表示命令完成；明确终态及空的 MCP 结果仍会收尾。失败/中断只更新当前操作尚未结束的工具，已结束回合的运行时输出缓存会释放。异步批准预览以请求实例校验租约，原生 resolved 使旧回调失效，同一 RPC ID 后续使用不受旧回调影响。
 
-旧 wrapper 仅在操作完整可确认且结果可关联时被替换。具有独立 FileChange/CommandExecution/ImageView 或结构化结果的已知混合调用恢复为共用卡片；Promise 数组按实际槽位配对，空输入轮询更新原命令。历史来源选择按已恢复的具体调用身份判断，额外 exec 数量不能覆盖完整投影。缺少独立结果的混合类型、多补丁、动态输入或不确定对象保留完整通用卡片和输出，其中静态补丁可另行灰色预览，不把共同结果归给各补丁。CRLF、顶层 Script failed 错误封套、结构化失败及未配对输入缓存预算均纳入处理。不同明确时间的 compact 记录继续独立显示。实时/历史图片共用原生 URL、legacy image_url、base64/source 和 localImage 转换，清理正文时保留附件；不完整文件变化整体回退通用卡片并保留状态。
+旧 wrapper 仅在操作完整可确认且结果可关联时被替换。具有独立 FileChange/CommandExecution/ImageView 或结构化结果的已知混合调用恢复为共用卡片；Promise 数组接受 `i` 或 `index` 结果封套并按实际槽位配对，两者冲突时保留通用卡片。运行中命令的延迟原生完成记录和空输入轮询均更新原命令，不生成第二张卡片。`write_stdin` 的字面量输入（包括 Ctrl+C）关联已知进程，或通过原生 `process_id` 恢复对应命令；中断回执只结束原命令，后续命令保留各自结果。原生回执带进程标识时优先按该标识匹配，避免相同命令文本误关联；同批次的同名命令以结果中的 `session_id` 和回执的 `process_id` 配对，即使完成顺序相反也不交换目录、输出或状态，缺少唯一关联时保留 wrapper；旧回执缺少标识时，仅接受命令文本与线程/回合归属唯一的目标，存在同名进程或同名后续命令时保留 wrapper。输入的目标或结果无法确认时仍保留完整 wrapper。历史来源选择按已恢复的具体调用身份判断，额外 exec 数量不能覆盖完整投影。缺少独立结果的混合类型、多补丁、动态输入或不确定对象保留完整通用卡片和输出，其中静态补丁可另行灰色预览，不把共同结果归给各补丁。CRLF、顶层 Script failed 错误封套、结构化失败及未配对输入缓存预算均纳入处理。不同明确时间的 compact 记录继续独立显示。实时/历史图片共用原生 URL、legacy image_url、base64/source 和 localImage 转换，清理正文时保留附件；不完整文件变化整体回退通用卡片并保留状态。
 
 原生控制指令不依赖共享 SDK 安装查询；/compact、/review、/diff 桥接无法派发时显示错误，不提示“已开始”或生成模型消息。目录重复 cursor/页数限制/桥接派发失败会结束 loading 并显示错误。/diff 同时排空 Git stdout/stderr，输出各自受限，结果按会话对象、sessionId 和 cwd 校验。dynamic/collab started 和失败/中断收尾进入同一工具显示路径；receiver 存在不能替代启动调用的 completed 状态，父回合的收尾也不改变仍活动的 child。

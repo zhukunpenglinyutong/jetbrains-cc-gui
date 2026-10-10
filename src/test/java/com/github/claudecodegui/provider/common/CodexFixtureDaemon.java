@@ -3,6 +3,8 @@ package com.github.claudecodegui.provider.common;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -14,7 +16,7 @@ public final class CodexFixtureDaemon extends DaemonBridge {
 
     /** Creates a real daemon process while keeping account paths isolated. */
     public CodexFixtureDaemon(Path repository, Path home, String scenario, Path trace,
-                              AtomicReference<Process> process) {
+                              AtomicReference<Process> process) throws IOException {
         super(null, null, null, TimeSource.system(), () -> {
             ProcessBuilder builder = new ProcessBuilder("node", repository.resolve("ai-bridge/daemon.js").toString());
             builder.directory(repository.resolve("ai-bridge").toFile());
@@ -26,6 +28,13 @@ public final class CodexFixtureDaemon extends DaemonBridge {
             process.set(child);
             return child;
         }, null);
+        // Transport tests isolate HOME, but the isolated home has no config yet and
+        // title generation then defaults on: its auxiliary RPCs and app-server child
+        // race the transport assertions (e.g. "abort confirms process exit").
+        Path codemoss = Files.createDirectories(home.resolve(".codemoss"));
+        JsonObject isolatedConfig = new JsonObject();
+        isolatedConfig.addProperty("aiTitleGenerationEnabled", false);
+        Files.writeString(codemoss.resolve("config.json"), isolatedConfig.toString());
         this.peerCommand = new JsonArray();
         for (String argument : List.of("node", repository.resolve("ai-bridge/services/codex/testing/codex-stdio-peer.js").toString(),
                 "--scenario", scenario, "--trace", trace.toString())) {

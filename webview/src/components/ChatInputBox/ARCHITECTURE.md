@@ -220,17 +220,37 @@ const {
 
 **Supported Operations:**
 - **Image paste/drop** - Converts to Base64 attachments
+- **Clipboard echoes** - Compares bytes or rendered pixels without merging deliberate A/B/A pastes; caches each producer's encoding separately
+- **Draft ownership** - Publishes an opaque draft id with `paste_image_scope` on mount and every invalidation; an empty id retires the input on unmount. IDE actions retain the image at the gesture; the macOS hook binds the draft before its first EDT handoff. Native offers carry `{ snapshotId, scopeId }`, and claims carry `{ requestId, snapshotId, scopeId }`, without rereading the clipboard. Both sides reject retired scopes, including a snapshot's first offer after session change, clear, replacement, or remount. Scope changes release unclaimed snapshots immediately; remaining snapshots and frontend requests expire after 30 seconds
+- **Submission readiness** - Disables send while native requests, reads, comparisons, or attachment publication are pending; keyboard/IDE submit also preserves the draft and reports loading. Accepted attachments and their publication version share a React update batch, and a layout effect acknowledges the committed version before reopening submission. Empty/error native replies settle the request; a lost reply expires after 30 seconds. Retry after processing and publication finish
+- **Paste ordering** - Starts reads concurrently but commits attachments in gesture order using the original arrival times. Tracks the global accepted gesture sequence and each producer's last observed sequence, so B invalidates an older replay claim even if only the other producer delivered B. A first-time delayed echo can collapse only while that producer has not accepted a newer gesture; a producer returning to A after B retains A even when the initial A had no echo
+- **Native resource bounds** - Each handler admits at most two pending reads, unclaimed snapshots, or encodes combined. Excess owned requests receive an empty reply; expired snapshots never fall back to reading a newer clipboard image. Request metadata is capped at 1 KiB. Encoding rejects images above 16 × 1024 × 1024 pixels before allocating a converted raster and limits Base64 output to 20 MiB. Window teardown releases all unclaimed snapshots
 - **Text paste** - Inserts at cursor position
 - **File path drop** - Auto-creates file references
 
 ```typescript
-const { handlePaste, handleDragOver, handleDrop } = usePasteAndDrop({
+const {
+  handlePaste,
+  handleDragOver,
+  handleDrop,
+  isPreparingImages,
+  hasPendingImagePastes,
+  invalidateImagePastes,
+} = usePasteAndDrop({
+  currentSessionId,
   editableRef,
   pathMappingRef,
   getTextContent,
   // ... more options
 });
 ```
+
+`useSubmitHandler` checks `hasPendingImagePastes` before clearing the draft and calls
+`invalidateImagePastes` only on successful submission. Drops share draft ownership
+and readiness protection but bypass clipboard replay suppression.
+
+If React mounts before JCEF injects `sendToJava`, the bridge startup ready event
+republishes the current draft id. Retired ids are never replayed during startup.
 
 ### usePromptEnhancer
 

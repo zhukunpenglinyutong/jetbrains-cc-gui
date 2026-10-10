@@ -2,10 +2,17 @@ package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.provider.common.SessionHistoryNotFoundException;
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.application.Application;
+import com.intellij.openapi.application.ApplicationManager;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -21,6 +28,28 @@ import static org.junit.Assert.assertTrue;
  * Unit tests for loading provider history and restoring session-side derived state.
  */
 public class SessionMessageOrchestratorTest {
+
+    private Application previousApplication;
+
+    /** Keep streamed status changes independent of a running IDE. */
+    @Before
+    public void stubNotificationDispatch() {
+        previousApplication = ApplicationManager.getApplication();
+        Application application = (Application) Proxy.newProxyInstance(Application.class.getClassLoader(),
+                new Class<?>[]{Application.class}, (proxy, method, arguments) -> {
+                    if (method.getReturnType() == boolean.class) {
+                        return false;
+                    }
+                    return null;
+                });
+        ApplicationManager.setApplication(application);
+    }
+
+    /** Leave subsequent tests with the application they started with. */
+    @After
+    public void restoreApplication() {
+        ApplicationManager.setApplication(previousApplication);
+    }
 
     @Test
     public void updateUserMessageUuidsBackfillsMatchingLatestClaudeUserMessage() {
@@ -431,6 +460,618 @@ public class SessionMessageOrchestratorTest {
         JsonObject raw = new JsonObject();
         raw.addProperty("uuid", "uuid-" + turn + "-" + (type == ClaudeSession.Message.Type.USER ? "user" : "assistant"));
         return new ClaudeSession.Message(type, content, raw);
+    }
+
+    /**
+     * The live [TOOL_RESULT] bubble ClaudeMessageHandler.handleToolResult builds:
+     * a synthesized raw without the uuid the JSONL row carries.
+     */
+    private static ClaudeSession.Message liveSynthesizedToolResult(String toolUseId) {
+        JsonObject block = new JsonObject();
+        block.addProperty("type", "tool_result");
+        block.addProperty("tool_use_id", toolUseId);
+        block.addProperty("content", "background output");
+
+        JsonArray content = new JsonArray();
+        content.add(block);
+        JsonObject message = new JsonObject();
+        message.add("content", content);
+        JsonObject raw = new JsonObject();
+        raw.addProperty("type", "user");
+        raw.add("message", message);
+        return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "[tool_result]", raw);
+    }
+
+    /**
+     * The live assistant row a streaming text-only turn synthesizes from deltas:
+     * no [MESSAGE] ever carried it, so the raw has no uuid.
+     */
+    private static ClaudeSession.Message liveSynthesizedAssistant(String text) {
+        JsonObject block = new JsonObject();
+        block.addProperty("type", "text");
+        block.addProperty("text", text);
+
+        JsonArray content = new JsonArray();
+        content.add(block);
+        JsonObject message = new JsonObject();
+        message.add("content", content);
+        JsonObject raw = new JsonObject();
+        raw.addProperty("type", "assistant");
+        raw.add("message", message);
+        return new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, text, raw);
+    }
+
+    /**
+     * The JSONL user row carrying a tool_result, the shape the history page
+     * returns for what the live side also renders as the [TOOL_RESULT] bubble.
+     */
+    private static JsonObject providerToolResultMessage(String uuid, String toolUseId) {
+        JsonObject block = new JsonObject();
+        block.addProperty("type", "tool_result");
+        block.addProperty("tool_use_id", toolUseId);
+        block.addProperty("content", "background output");
+
+        JsonArray content = new JsonArray();
+        content.add(block);
+        JsonObject message = new JsonObject();
+        message.add("content", content);
+        JsonObject serverMessage = new JsonObject();
+        serverMessage.addProperty("type", "user");
+        serverMessage.addProperty("uuid", uuid);
+        serverMessage.add("message", message);
+        return serverMessage;
+    }
+
+    /** Reconcile uuid-less duplicates only once their persisted counterparts are available. */
+    @Test
+    public void loadFromServerAnchorsTheMergePastUuidlessLiveSyntheticRows() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-synthetic-tail");
+        state.setCwd("/workspace");
+
+        // Live tail of a background-command turn: the [TOOL_RESULT] bubble is
+        // added twice (once by the [MESSAGE] path with the SDK uuid, once by the
+        // [TOOL_RESULT] path without one) and a streaming text-only turn ends
+        // with an assistant row synthesized from deltas, also without a uuid.
+        // Anchoring on the tail must skip the uuid-less rows and align on the
+        // newest uuid-carrying one instead, or every paginated reload of a long
+        // session is rejected by the staleness guards.
+        state.addMessage(liveMessage(ClaudeSession.Message.Type.USER, "prompt 1", 1));
+        state.addMessage(liveMessage(ClaudeSession.Message.Type.ASSISTANT, "answer 1", 1));
+        state.addMessage(liveMessage(ClaudeSession.Message.Type.USER, "prompt 2", 2));
+        state.addMessage(liveUuidBackedToolResult("uuid-2-tr", "tool-2"));
+        state.addMessage(liveSynthesizedToolResult("tool-2"));
+        state.addMessage(liveSynthesizedAssistant("answer 2"));
+
+        // The page carries the same turns with the uuids the JSONL rows hold,
+        // including the final assistant text the live side never saw a uuid for.
+        List<JsonObject> latestPage = new ArrayList<>();
+        latestPage.add(createProviderMessage("user", "prompt 1", "uuid-1-user"));
+        latestPage.add(createProviderMessage("assistant", "answer 1", "uuid-1-assistant"));
+        latestPage.add(createProviderMessage("user", "prompt 2", "uuid-2-user"));
+        latestPage.add(providerToolResultMessage("uuid-2-tr", "tool-2"));
+        latestPage.add(createProviderMessage("assistant", "answer 2", "uuid-2-assistant"));
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        historyAccess.messagesPage = createHistoryPage(latestPage, 0, 5, 5, false, false);
+
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+        callbackFacade.setCallback(callback);
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.loadFromServer().join();
+
+        List<ClaudeSession.Message> messages = state.getMessages();
+        assertTrue(
+                "the background turn's final text must reach the transcript",
+                messages.stream().anyMatch(m -> "answer 2".equals(m.content))
+        );
+        assertTrue(
+                "turns the page no longer carries must stay in the transcript",
+                messages.stream().anyMatch(m -> "prompt 1".equals(m.content))
+        );
+        // Live prefix through the uuid-anchored tool_result row, then the page
+        // from the anchor onwards. The duplicate synthetic bubble is replaced by
+        // the page's uuid-carrying row.
+        assertEquals(5, messages.size());
+        assertEquals(2, callback.claudeHistoryPageInfos.size());
+        assertEquals("session-synthetic-tail|0|5|false|false|null", callback.claudeHistoryPageInfos.get(0));
+        assertEquals("session-synthetic-tail|0|5|false|false|null", callback.claudeHistoryPageInfos.get(1));
+    }
+
+    /**
+     * Reject lagging pages even when an earlier uuid anchor is present.
+     */
+    @Test
+    public void loadFromServerProtectsUuidlessLiveTextFromLaggingPages() {
+        for (String persistedTail : List.of("", "latest")) {
+            SessionState state = new SessionState();
+            state.setProvider("claude");
+            state.setSessionId("session-unwritten-tail");
+            state.setCwd("/workspace");
+            state.addMessage(liveMessage(ClaudeSession.Message.Type.USER, "prompt", 1));
+            state.addMessage(liveMessage(ClaudeSession.Message.Type.ASSISTANT, "anchor", 1));
+            state.addMessage(liveSynthesizedAssistant("latest complete answer"));
+
+            List<JsonObject> stalePage = new ArrayList<>();
+            stalePage.add(createProviderMessage("user", "older prompt", "older-user"));
+            stalePage.add(createProviderMessage("assistant", "older answer", "older-assistant"));
+            stalePage.add(createProviderMessage("user", "prompt", "uuid-1-user"));
+            stalePage.add(createProviderMessage("assistant", "anchor", "uuid-1-assistant"));
+            if (!persistedTail.isEmpty()) {
+                stalePage.add(createProviderMessage("assistant", persistedTail, "persisted-tail"));
+            }
+            RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+            historyAccess.messagesPage = createHistoryPage(stalePage, 0, 2, 2, false, false);
+            SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                    state, new MessageParser(), new SessionCallbackFacade(null), historyAccess,
+                    (used, max) -> { }, 0, 0);
+
+            orchestrator.loadFromServer().join();
+
+            assertEquals(3, state.getMessages().size());
+            assertEquals("latest complete answer", state.getMessages().get(2).content);
+        }
+    }
+
+    /** Accept complete streamed blocks despite the history display's added separators. */
+    @Test
+    public void loadFromServerAcceptsCompleteMultiBlockStreamsAndNewReports() {
+        for (String firstBlock : List.of("First paragraph.", "First line.\nSecond line.")) {
+            for (boolean flatHistoryContent : List.of(false, true)) {
+                SessionState state = new SessionState();
+                state.setProvider("claude");
+                state.setSessionId("session-multi-block");
+                state.setCwd("/workspace");
+                MessageParser parser = new MessageParser();
+                JsonObject user = createProviderMessage("user", "prompt", "user-uuid");
+                state.addMessage(parser.parseServerMessage(user));
+                ClaudeSession.Message live = streamAssistantText(state, firstBlock, "Final paragraph.");
+                assertEquals(firstBlock + "Final paragraph.", live.content);
+                assertFalse(live.raw.has("uuid"));
+
+                JsonObject persisted = live.raw.deepCopy();
+                persisted.addProperty("uuid", "assistant-uuid");
+                if (flatHistoryContent) {
+                    persisted.add("content", persisted.remove("message").getAsJsonObject().get("content"));
+                }
+                assertEquals(firstBlock + "\nFinal paragraph.", parser.parseServerMessage(persisted).content);
+                RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+                historyAccess.messagesPage = createHistoryPage(List.of(user, persisted,
+                        createProviderMessage("assistant", "New background report.", "report-uuid")), 0, 1, 1, false, false);
+                RecordingCallback callback = new RecordingCallback();
+                SessionCallbackFacade facade = new SessionCallbackFacade(null);
+                facade.setCallback(callback);
+                SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                        state, parser, facade, historyAccess, (used, max) -> { }, 0, 0);
+
+                orchestrator.loadFromServer().join();
+
+                assertEquals(3, state.getMessages().size());
+                assertEquals(firstBlock + "\nFinal paragraph.", state.getMessages().get(1).content);
+                assertEquals("assistant-uuid", state.getMessages().get(1).raw.get("uuid").getAsString());
+                assertEquals("New background report.", state.getMessages().get(2).content);
+                assertEquals(1, callback.messageUpdates.size());
+                assertFalse(state.isLoading());
+            }
+        }
+    }
+
+    /** Keep every live block while the writer catches up, then allow a complete retry. */
+    @Test
+    public void loadFromServerProtectsMultiBlockStreamsUntilAllTextIsPersisted() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-partial-blocks");
+        state.setCwd("/workspace");
+        MessageParser parser = new MessageParser();
+        JsonObject user = createProviderMessage("user", "prompt", "user-uuid");
+        state.addMessage(parser.parseServerMessage(user));
+        ClaudeSession.Message live = streamAssistantText(state, "First paragraph.", "Final paragraph.");
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade facade = new SessionCallbackFacade(null);
+        facade.setCallback(callback);
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state, parser, facade, historyAccess, (used, max) -> { }, 0, 0);
+        JsonObject persisted = live.raw.deepCopy();
+        persisted.addProperty("uuid", "assistant-uuid");
+        JsonObject missingBlock = persisted.deepCopy();
+        missingBlock.getAsJsonObject("message").getAsJsonArray("content").remove(1);
+        JsonObject truncatedBlock = persisted.deepCopy();
+        truncatedBlock.getAsJsonObject("message").getAsJsonArray("content").get(1).getAsJsonObject()
+                .addProperty("text", "Final");
+
+        for (List<JsonObject> partialPage : List.of(List.of(user), List.of(user, missingBlock), List.of(user, truncatedBlock))) {
+            historyAccess.messagesPage = createHistoryPage(partialPage, 0, 1, 1, false, false);
+            orchestrator.loadFromServer().join();
+
+            assertEquals(2, state.getMessages().size());
+            assertEquals("First paragraph.Final paragraph.", state.getMessages().get(1).content);
+            assertFalse(state.getMessages().get(1).raw.has("uuid"));
+            assertTrue(callback.messageUpdates.isEmpty());
+            assertFalse(state.isLoading());
+        }
+
+        historyAccess.messagesPage = createHistoryPage(List.of(user, persisted), 0, 1, 1, false, false);
+        orchestrator.loadFromServer().join();
+
+        assertEquals("First paragraph.\nFinal paragraph.", state.getMessages().get(1).content);
+        assertEquals("assistant-uuid", state.getMessages().get(1).raw.get("uuid").getAsString());
+        assertEquals(1, callback.messageUpdates.size());
+    }
+
+    /** A newline inside a block is real content and must survive history reconciliation. */
+    @Test
+    public void loadFromServerProtectsEmbeddedNewlinesInMultiBlockStreams() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-multi-line-blocks");
+        state.setCwd("/workspace");
+        MessageParser parser = new MessageParser();
+        JsonObject user = createProviderMessage("user", "prompt", "user-uuid");
+        state.addMessage(parser.parseServerMessage(user));
+        ClaudeSession.Message live = streamAssistantText(state, "First line.\nSecond line.", "Final paragraph.");
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade facade = new SessionCallbackFacade(null);
+        facade.setCallback(callback);
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state, parser, facade, historyAccess, (used, max) -> { }, 0, 0);
+
+        for (String changedText : List.of("First line.Second line.", "First line. Second line.")) {
+            JsonObject persisted = live.raw.deepCopy();
+            persisted.addProperty("uuid", "assistant-uuid");
+            persisted.getAsJsonObject("message").getAsJsonArray("content").get(0).getAsJsonObject()
+                    .addProperty("text", changedText);
+            historyAccess.messagesPage = createHistoryPage(List.of(user, persisted), 0, 1, 1, false, false);
+
+            orchestrator.loadFromServer().join();
+
+            assertEquals(2, state.getMessages().size());
+            assertEquals("First line.\nSecond line.Final paragraph.", state.getMessages().get(1).content);
+            assertFalse(state.getMessages().get(1).raw.has("uuid"));
+            assertTrue(callback.messageUpdates.isEmpty());
+            assertFalse(state.isLoading());
+        }
+    }
+
+    /** CLI transcripts give each completed block its own UUID, even within one reply. */
+    @Test
+    public void loadFromServerWelcomesCliReplyBlocksPersistedAsSeparateRows() {
+        for (String thinking : List.of("", "Consider both paragraphs.\nKeep their order.")) {
+            SessionState state = new SessionState();
+            state.setProvider("claude");
+            state.setSessionId("session-cli-blocks");
+            state.setCwd("/workspace");
+            MessageParser parser = new MessageParser();
+            JsonObject user = createProviderMessage("user", "prompt", "user-uuid");
+            state.addMessage(parser.parseServerMessage(user));
+            ClaudeSession.Message live = streamAssistantReply(state, thinking, "First line.\nSecond line.", "Final paragraph.");
+            assertFalse(live.raw.has("uuid"));
+            List<JsonObject> persisted = persistCliReplyBlocks(live, "msg-reply");
+            List<JsonObject> page = new ArrayList<>(List.of(user));
+            page.addAll(persisted);
+            page.add(createProviderMessage("assistant", "New background report.", "report-uuid"));
+            RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+            historyAccess.messagesPage = createHistoryPage(page, 0, 1, 1, false, false);
+            RecordingCallback callback = new RecordingCallback();
+            SessionCallbackFacade facade = new SessionCallbackFacade(null);
+            facade.setCallback(callback);
+            SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                    state, parser, facade, historyAccess, (used, max) -> { }, 0, 0);
+
+            orchestrator.loadFromServer().join();
+
+            assertEquals(page.size(), state.getMessages().size());
+            for (int i = 0; i < persisted.size(); i++) {
+                assertEquals(persisted.get(i), state.getMessages().get(i + 1).raw);
+            }
+            assertEquals("New background report.", state.getMessages().get(page.size() - 1).content);
+            assertEquals(1, callback.messageUpdates.size());
+            assertFalse(state.isLoading());
+        }
+    }
+
+    /** A split reply is complete only after its thinking and every text row reach history. */
+    @Test
+    public void loadFromServerKeepsLiveReplyUntilEveryCliRowIsWritten() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-cli-partial-blocks");
+        state.setCwd("/workspace");
+        MessageParser parser = new MessageParser();
+        JsonObject user = createProviderMessage("user", "prompt", "user-uuid");
+        state.addMessage(parser.parseServerMessage(user));
+        ClaudeSession.Message live = streamAssistantReply(state, "Complete thought.", "First paragraph.", "Final paragraph.");
+        List<JsonObject> persisted = persistCliReplyBlocks(live, "msg-reply");
+        JsonObject truncatedTail = persisted.get(2).deepCopy();
+        truncatedTail.getAsJsonObject("message").getAsJsonArray("content").get(0).getAsJsonObject()
+                .addProperty("text", "Final");
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade facade = new SessionCallbackFacade(null);
+        facade.setCallback(callback);
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state, parser, facade, historyAccess, (used, max) -> { }, 0, 0);
+
+        for (List<JsonObject> partialReply : List.of(persisted.subList(0, 1), persisted.subList(0, 2),
+                persisted.subList(1, 3), List.of(persisted.get(0), persisted.get(2)),
+                List.of(persisted.get(0), persisted.get(1), truncatedTail))) {
+            List<JsonObject> page = new ArrayList<>(List.of(user));
+            page.addAll(partialReply);
+            historyAccess.messagesPage = createHistoryPage(page, 0, 1, 1, false, false);
+
+            orchestrator.loadFromServer().join();
+
+            assertEquals(2, state.getMessages().size());
+            assertEquals("First paragraph.Final paragraph.", state.getMessages().get(1).content);
+            assertFalse(state.getMessages().get(1).raw.has("uuid"));
+            assertEquals("Complete thought.", state.getMessages().get(1).raw.getAsJsonObject("message")
+                    .getAsJsonArray("content").get(0).getAsJsonObject().get("thinking").getAsString());
+            assertTrue(callback.messageUpdates.isEmpty());
+            assertFalse(state.isLoading());
+        }
+
+        List<JsonObject> completePage = new ArrayList<>(List.of(user));
+        completePage.addAll(persisted);
+        historyAccess.messagesPage = createHistoryPage(completePage, 0, 1, 1, false, false);
+        orchestrator.loadFromServer().join();
+
+        assertEquals(4, state.getMessages().size());
+        assertEquals(persisted.get(2), state.getMessages().get(3).raw);
+        assertEquals(1, callback.messageUpdates.size());
+    }
+
+    /** Automatic continuation changes reply IDs without starting another live streaming row. */
+    @Test
+    public void loadFromServerWelcomesCliContinuationWithinOneUserRequest() {
+        for (boolean includesMetaPrompt : List.of(false, true)) {
+            SessionState state = new SessionState();
+            state.setProvider("claude");
+            state.setSessionId("session-cli-continuation");
+            state.setCwd("/workspace");
+            MessageParser parser = new MessageParser();
+            JsonObject user = createProviderMessage("user", "prompt", "user-uuid");
+            state.addMessage(parser.parseServerMessage(user));
+            ClaudeSession.Message live = streamAssistantReply(state, "Complete thought.", "First paragraph.", "Final paragraph.");
+            List<JsonObject> persisted = persistCliReplyBlocks(live, "msg-reply");
+            persisted.get(2).getAsJsonObject("message").addProperty("id", "msg-continuation");
+            JsonObject truncatedTail = persisted.get(2).deepCopy();
+            truncatedTail.getAsJsonObject("message").getAsJsonArray("content").get(0).getAsJsonObject()
+                    .addProperty("text", "Final");
+            List<JsonObject> prefix = new ArrayList<>(List.of(user,
+                    createProviderMessage("assistant", "Earlier background report.", "earlier-report-uuid"),
+                    persisted.get(0), persisted.get(1)));
+            if (includesMetaPrompt) {
+                JsonObject metaPrompt = createProviderMessage("user", "Output token limit hit. Resume directly.", "meta-uuid");
+                metaPrompt.addProperty("isMeta", true);
+                prefix.add(metaPrompt);
+            }
+            RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+            RecordingCallback callback = new RecordingCallback();
+            SessionCallbackFacade facade = new SessionCallbackFacade(null);
+            facade.setCallback(callback);
+            SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                    state, parser, facade, historyAccess, (used, max) -> { }, 0, 0);
+
+            for (List<JsonObject> tail : List.of(List.<JsonObject>of(), List.of(truncatedTail))) {
+                List<JsonObject> page = new ArrayList<>(prefix);
+                page.addAll(tail);
+                historyAccess.messagesPage = createHistoryPage(page, 0, 2, 2, false, false);
+                orchestrator.loadFromServer().join();
+
+                assertEquals(List.of("prompt", "First paragraph.Final paragraph."),
+                        state.getMessages().stream().map(message -> message.content).toList());
+                assertFalse(state.getMessages().get(1).raw.has("uuid"));
+                assertTrue(callback.messageUpdates.isEmpty());
+                assertFalse(state.isLoading());
+            }
+
+            List<JsonObject> completePage = new ArrayList<>(prefix);
+            completePage.add(persisted.get(2));
+            completePage.add(createProviderMessage("assistant", "New background report.", "report-uuid"));
+            historyAccess.messagesPage = createHistoryPage(completePage, 0, 2, 2, false, false);
+            orchestrator.loadFromServer().join();
+
+            assertEquals(6, state.getMessages().size());
+            assertEquals("Earlier background report.", state.getMessages().get(1).content);
+            for (int i = 0; i < persisted.size(); i++) {
+                assertEquals(persisted.get(i), state.getMessages().get(i + 2).raw);
+            }
+            assertEquals("New background report.", state.getMessages().get(5).content);
+            assertEquals(1, callback.messageUpdates.size());
+            assertFalse(state.isLoading());
+        }
+    }
+
+    /** A user prompt starts another live request, even when reply IDs happen to agree. */
+    @Test
+    public void loadFromServerRefusesToBorrowCliTextAcrossUserRequests() {
+        for (boolean sameReplyId : List.of(false, true)) {
+            SessionState state = new SessionState();
+            state.setProvider("claude");
+            state.setSessionId("session-cli-unrelated-replies");
+            state.setCwd("/workspace");
+            MessageParser parser = new MessageParser();
+            JsonObject user = createProviderMessage("user", "prompt", "user-uuid");
+            state.addMessage(parser.parseServerMessage(user));
+            ClaudeSession.Message live = streamAssistantText(state, "First paragraph.", "Final paragraph.");
+            List<JsonObject> persisted = persistCliReplyBlocks(live, "msg-reply");
+            List<JsonObject> page = new ArrayList<>(List.of(user, persisted.get(0)));
+            page.add(createProviderMessage("user", "Next prompt.", "next-user-uuid"));
+            if (!sameReplyId) {
+                persisted.get(1).getAsJsonObject("message").addProperty("id", "msg-other-reply");
+            }
+            // Repeated wording in a later request must not stand in for the missing live reply.
+            JsonObject repeatedOpening = persisted.get(0).deepCopy();
+            repeatedOpening.addProperty("uuid", "next-reply-opening");
+            repeatedOpening.getAsJsonObject("message").addProperty("id",
+                    persisted.get(1).getAsJsonObject("message").get("id").getAsString());
+            page.add(repeatedOpening);
+            page.add(persisted.get(1));
+            RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+            historyAccess.messagesPage = createHistoryPage(page, 0, 1, 1, false, false);
+            RecordingCallback callback = new RecordingCallback();
+            SessionCallbackFacade facade = new SessionCallbackFacade(null);
+            facade.setCallback(callback);
+            SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                    state, parser, facade, historyAccess, (used, max) -> { }, 0, 0);
+
+            orchestrator.loadFromServer().join();
+
+            assertEquals(2, state.getMessages().size());
+            assertEquals("First paragraph.Final paragraph.", state.getMessages().get(1).content);
+            assertFalse(state.getMessages().get(1).raw.has("uuid"));
+            assertTrue(callback.messageUpdates.isEmpty());
+            assertFalse(state.isLoading());
+        }
+    }
+
+    private static List<JsonObject> persistCliReplyBlocks(ClaudeSession.Message live, String replyId) {
+        List<JsonObject> rows = new ArrayList<>();
+        for (JsonElement block : live.raw.getAsJsonObject("message").getAsJsonArray("content")) {
+            JsonObject row = live.raw.deepCopy();
+            row.addProperty("uuid", replyId + "-block-" + rows.size());
+            JsonObject message = row.getAsJsonObject("message");
+            message.addProperty("id", replyId);
+            JsonArray content = new JsonArray();
+            content.add(block.deepCopy());
+            message.add("content", content);
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private static ClaudeSession.Message streamAssistantText(SessionState state, String... blocks) {
+        return streamAssistantReply(state, "", blocks);
+    }
+
+    private static ClaudeSession.Message streamAssistantReply(SessionState state, String thinking, String... blocks) {
+        ClaudeMessageHandler handler = new ClaudeMessageHandler(null, state, new CallbackHandler(),
+                new MessageParser(), new MessageMerger(), new Gson());
+        handler.onMessage("stream_start", "");
+        if (!thinking.isEmpty()) {
+            handler.onMessage("block_reset", "");
+            handler.onMessage("thinking_delta", thinking);
+        }
+        for (String block : blocks) {
+            handler.onMessage("block_reset", "");
+            handler.onMessage("content_delta", block);
+        }
+        handler.onMessage("stream_end", "");
+        List<ClaudeSession.Message> messages = state.getMessages();
+        return messages.get(messages.size() - 1);
+    }
+
+    /**
+     * A first-row anchor can replace duplicate synthetic bubbles too.
+     */
+    @Test
+    public void loadFromServerReconcilesSyntheticRowsAfterTheFirstLiveAnchor() {
+        for (boolean includesOlderHistory : List.of(false, true)) {
+            SessionState state = new SessionState();
+            state.setProvider("claude");
+            state.setSessionId("session-first-anchor");
+            state.setCwd("/workspace");
+            state.addMessage(liveUuidBackedToolResult("uuid-tr", "tool"));
+            state.addMessage(liveSynthesizedToolResult("tool"));
+            state.addMessage(liveSynthesizedAssistant("answer"));
+            RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+            List<JsonObject> pageMessages = new ArrayList<>();
+            if (includesOlderHistory) {
+                pageMessages.add(createProviderMessage("user", "older prompt", "uuid-older"));
+            }
+            pageMessages.addAll(List.of(
+                    providerToolResultMessage("uuid-tr", "tool"),
+                    createProviderMessage("assistant", "answer", "uuid-answer")));
+            historyAccess.messagesPage = createHistoryPage(pageMessages, 2, 3, 3, true, false);
+            RecordingCallback callback = new RecordingCallback();
+            SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+            callbackFacade.setCallback(callback);
+            SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                    state, new MessageParser(), callbackFacade, historyAccess,
+                    (used, max) -> { }, 0, 0);
+
+            orchestrator.loadFromServer().join();
+
+            assertEquals(includesOlderHistory ? 3 : 2, state.getMessages().size());
+            if (includesOlderHistory) {
+                assertEquals("older prompt", state.getMessages().get(0).content);
+            }
+            assertEquals("answer", state.getMessages().get(state.getMessages().size() - 1).content);
+            assertEquals(List.of("session-first-anchor|2|3|true|false|null"), callback.claudeHistoryPageInfos);
+        }
+    }
+
+    /** Protect thinking that has not reached history without blocking a complete persisted reply. */
+    @Test
+    public void loadFromServerProtectsUuidlessThinkingUntilTheWriterCatchesUp() {
+        for (String persistedThinking : List.of("", "latest", "latest complete thought")) {
+            SessionState state = new SessionState();
+            state.setProvider("claude");
+            state.setSessionId("session-unwritten-thinking");
+            state.setCwd("/workspace");
+            state.addMessage(liveMessage(ClaudeSession.Message.Type.USER, "prompt", 1));
+            state.addMessage(liveMessage(ClaudeSession.Message.Type.ASSISTANT, "anchor", 1));
+            ClaudeSession.Message liveThinking = liveSynthesizedAssistant("");
+            JsonObject thinking = new JsonObject();
+            thinking.addProperty("type", "thinking");
+            thinking.addProperty("thinking", "latest complete thought");
+            liveThinking.raw.getAsJsonObject("message").getAsJsonArray("content").add(thinking);
+            state.addMessage(liveThinking);
+
+            JsonObject persisted = createProviderMessage("assistant", "", "persisted-thinking");
+            JsonObject persistedBlock = thinking.deepCopy();
+            persistedBlock.addProperty("thinking", persistedThinking);
+            persisted.getAsJsonObject("message").getAsJsonArray("content").add(persistedBlock);
+            RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+            historyAccess.messagesPage = createHistoryPage(List.of(
+                    createProviderMessage("user", "prompt", "uuid-1-user"),
+                    createProviderMessage("assistant", "anchor", "uuid-1-assistant"), persisted), 0, 1, 1, false, false);
+            SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                    state, new MessageParser(), new SessionCallbackFacade(null), historyAccess,
+                    (used, max) -> { }, 0, 0);
+
+            orchestrator.loadFromServer().join();
+
+            assertEquals(3, state.getMessages().size());
+            ClaudeSession.Message tail = state.getMessages().get(2);
+            assertEquals("latest complete thought", tail.raw.getAsJsonObject("message").getAsJsonArray("content")
+                    .get(1).getAsJsonObject().get("thinking").getAsString());
+            assertEquals(persistedThinking.equals("latest complete thought"), tail.raw.has("uuid"));
+        }
+    }
+
+    /**
+     * The [MESSAGE]-path tool_result bubble: SDK-echoed, so the raw carries the
+     * uuid the JSONL row holds.
+     */
+    private static ClaudeSession.Message liveUuidBackedToolResult(String uuid, String toolUseId) {
+        JsonObject block = new JsonObject();
+        block.addProperty("type", "tool_result");
+        block.addProperty("tool_use_id", toolUseId);
+        block.addProperty("content", "background output");
+
+        JsonArray content = new JsonArray();
+        content.add(block);
+        JsonObject message = new JsonObject();
+        message.add("content", content);
+        JsonObject raw = new JsonObject();
+        raw.addProperty("type", "user");
+        raw.addProperty("uuid", uuid);
+        raw.add("message", message);
+        return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "[tool_result]", raw);
     }
 
     @Test

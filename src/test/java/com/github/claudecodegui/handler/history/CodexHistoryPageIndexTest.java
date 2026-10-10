@@ -281,6 +281,32 @@ public class CodexHistoryPageIndexTest {
         assertEquals(1, page.rawRecordCount);
     }
 
+    /** Rotating validation must eventually visit a rewrite outside both fixed samples. */
+    @Test
+    public void equalMetadataMiddleRewriteCannotStayCachedForever() throws Exception {
+        String before = user("H".repeat(9000)) + user("OLD") + assistant("T".repeat(9000));
+        Files.writeString(this.session, before);
+        this.index.read(this.reader, "fixture", null, 30, () -> true);
+        Files.writeString(this.session, before.replace("OLD", "NEW"));
+        // Force a metadata collision on every OS, including Unix filesystems exposing nanosecond ctime.
+        var entriesField = CodexHistoryPageIndex.class.getDeclaredField("entries");
+        entriesField.setAccessible(true);
+        var entries = (java.util.Map<?, ?>) entriesField.get(this.index);
+        Object entry = entries.get(this.session);
+        var snapshotField = entry.getClass().getDeclaredField("snapshot");
+        snapshotField.setAccessible(true);
+        var readSnapshot = snapshotField.getType().getDeclaredMethod("read", Path.class);
+        readSnapshot.setAccessible(true);
+        snapshotField.set(entry, readSnapshot.invoke(null, this.session));
+        HistoryMessageInjector.CodexHistoryPage page = null;
+        for (int attempt = 0; attempt < (Files.size(this.session) + 4095) / 4096; attempt++) {
+            page = this.index.read(this.reader, "fixture", null, 30, () -> true);
+            if ("NEW".equals(page.messages.get(1).get("content").getAsString())) break;
+        }
+        assertNotNull(page);
+        assertEquals("NEW", page.messages.get(1).get("content").getAsString());
+    }
+
     @Test
     public void sameSizeTailRewriteWithRestoredMtimeRebuildsIndex() throws Exception {
         String prefix = user("prefix".repeat(2000));
@@ -420,9 +446,9 @@ public class CodexHistoryPageIndexTest {
         }
     }
 
+    /** Equal-size overwrites must invalidate the cache on systems without a reliable change timestamp. */
     @Test
-    public void sameInodeRewriteWithPreservedMtimeInvalidatesOnUnix() throws Exception {
-        org.junit.Assume.assumeTrue(session.getFileSystem().supportedFileAttributeViews().contains("unix"));
+    public void sameInodeRewriteWithPreservedMtimeRebuildsIndex() throws Exception {
         Files.writeString(session, user("old"));
         index.read(reader, "fixture", null, 1, () -> true);
         var modified = Files.getLastModifiedTime(session);

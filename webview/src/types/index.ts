@@ -135,7 +135,10 @@ export interface TodoItem {
 export interface HistorySessionSummary {
   sessionId: string;
   title: string;
-  messageCount: number;
+  /** Native thread metadata does not contain a count until history has been read. */
+  messageCount?: number;
+  /** Scopes asynchronous counts to the metadata revision displayed by this list. */
+  nativeRevision?: string;
   lastTimestamp?: string;
   isFavorited?: boolean;
   favoritedAt?: number;
@@ -152,10 +155,13 @@ export interface HistoryData {
   success: boolean;
   error?: string;
   sessions?: HistorySessionSummary[];
+  /** Message total; omitted while any listed session has an unknown count. */
   total?: number;
   favorites?: Record<string, { favoritedAt: number }>;
   /** Native Codex history source and opaque pagination state. */
   source?: 'native' | 'legacy';
+  /** Prevents responses from an earlier list from changing the current history. */
+  nativeRequestId?: string;
   cursor?: unknown;
   partial?: boolean;
 }

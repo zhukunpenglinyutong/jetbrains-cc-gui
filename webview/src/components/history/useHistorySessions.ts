@@ -10,7 +10,7 @@ const getComparableTimestamp = (timestamp: string | undefined) => {
   return Number.isNaN(value) ? 0 : value;
 };
 
-const deduplicateHistorySessions = (sessions: HistorySessionSummary[]) => {
+const deduplicateHistorySessions = (sessions: HistorySessionSummary[], nativeHistory: boolean) => {
   const deduplicated = new Map<string, HistorySessionSummary>();
 
   for (const session of sessions) {
@@ -32,7 +32,9 @@ const deduplicateHistorySessions = (sessions: HistorySessionSummary[]) => {
     deduplicated.set(session.sessionId, {
       ...preferred,
       title: preferred.title || fallback.title,
-      messageCount: Math.max(preferred.messageCount || 0, fallback.messageCount || 0),
+      // A newer native revision may be unknown or shorter after a rollback; older counts cannot fill it.
+      messageCount: nativeHistory ? preferred.messageCount : preferred.messageCount === undefined ? fallback.messageCount
+        : fallback.messageCount === undefined ? preferred.messageCount : Math.max(preferred.messageCount, fallback.messageCount),
       isFavorited: preferred.isFavorited || fallback.isFavorited,
       favoritedAt: Math.max(preferred.favoritedAt || 0, fallback.favoritedAt || 0) || undefined,
       provider: preferred.provider || fallback.provider,
@@ -48,7 +50,7 @@ const deduplicateHistorySessions = (sessions: HistorySessionSummary[]) => {
 export const useHistorySessions = (historyData: HistoryData | null, searchQuery: string, t: TFunction) => {
   // Sort and filter sessions: favorited on top (by favorite time descending), unfavorited below (original order)
   const sessions = useMemo(() => {
-    const rawSessions = deduplicateHistorySessions(historyData?.sessions ?? []);
+    const rawSessions = deduplicateHistorySessions(historyData?.sessions ?? [], historyData?.source === 'native');
 
     // Search filter (case-insensitive)
     const filteredSessions = searchQuery.trim()
@@ -66,11 +68,11 @@ export const useHistorySessions = (historyData: HistoryData | null, searchQuery:
 
     // Merge: favorited first, unfavorited after
     return [...favorited, ...unfavorited];
-  }, [historyData?.sessions, searchQuery]);
+  }, [historyData?.sessions, historyData?.source, searchQuery]);
 
   const infoBar = !historyData
     ? ''
-    : t('history.totalSessions', {
+    : t(historyData.total === undefined ? 'history.totalSessionsOnly' : 'history.totalSessions', {
         count: sessions.length,
         total: historyData.total ?? 0,
       });

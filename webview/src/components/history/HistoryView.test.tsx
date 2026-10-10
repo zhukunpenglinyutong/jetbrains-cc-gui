@@ -10,7 +10,9 @@ vi.mock('react-i18next', () => ({
     t: (key: string, options?: Record<string, unknown>) => {
       const translations: Record<string, string> = {
         'history.totalSessions': `${options?.count} sessions · ${options?.total} messages`,
+        'history.totalSessionsOnly': `${options?.count} sessions`,
         'history.messageCount': `${options?.count} messages`,
+        'history.messageCountUnknown': 'Message count unavailable',
         'history.selectMode': 'Select',
         'history.exitSelectMode': 'Exit selection',
         'history.selectedSessions': `${options?.count} selected`,
@@ -72,6 +74,45 @@ const historyData: HistoryData = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe('HistoryView native message counts', () => {
+  const actions = { currentProvider: 'codex', onLoadSession: vi.fn(), onDeleteSession: vi.fn(),
+    onDeleteSessions: vi.fn(), onExportSession: vi.fn(), onToggleFavorite: vi.fn(), onUpdateTitle: vi.fn(), onConvertToCliSession: vi.fn() };
+
+  it('distinguishes unknown counts from zero and shows a message total only when known', () => {
+    const data: HistoryData = { ...historyData, source: 'native', total: undefined,
+      sessions: [{ ...historyData.sessions![0], messageCount: undefined }, { ...historyData.sessions![1], messageCount: 0 }] };
+    const { rerender } = render(<HistoryView {...actions} historyData={data} />);
+    expect(screen.getByText('Message count unavailable')).toBeTruthy();
+    expect(screen.getByText('0 messages')).toBeTruthy();
+    expect(screen.getByText('2 sessions')).toBeTruthy();
+    expect(screen.queryByText('2 sessions · 2 messages')).toBeNull();
+    rerender(<HistoryView {...actions} historyData={{ ...data, total: 7,
+      sessions: [{ ...data.sessions![0], messageCount: 7 }, data.sessions![1]] }} />);
+    expect(screen.getByText('7 messages')).toBeTruthy();
+    expect(screen.getByText('2 sessions · 7 messages')).toBeTruthy();
+    expect(screen.queryByText('Message count unavailable')).toBeNull();
+  });
+
+  it('does not turn overlapping metadata-only rows into a counted zero', () => {
+    const session = { ...historyData.sessions![0], messageCount: undefined };
+    render(<HistoryView {...actions} historyData={{ success: true, source: 'native', sessions: [session, { ...session }] }} />);
+    expect(screen.getByText('Message count unavailable')).toBeTruthy();
+    expect(screen.getByText('1 sessions')).toBeTruthy();
+    expect(screen.queryByText('0 messages')).toBeNull();
+  });
+
+  it('does not borrow an older count when the latest native revision is unknown or empty', () => {
+    const older = { ...historyData.sessions![0], lastTimestamp: '2026-10-01T00:00:00Z', nativeRevision: 'old', messageCount: 7 };
+    const newer = { ...older, lastTimestamp: '2026-10-02T00:00:00Z', nativeRevision: 'new', messageCount: undefined };
+    const { rerender } = render(<HistoryView {...actions} historyData={{ success: true, source: 'native', sessions: [older, newer] }} />);
+    expect(screen.getByText('Message count unavailable')).toBeTruthy();
+    expect(screen.queryByText('7 messages')).toBeNull();
+    rerender(<HistoryView {...actions} historyData={{ success: true, source: 'native', sessions: [older, { ...newer, messageCount: 0 }] }} />);
+    expect(screen.getByText('0 messages')).toBeTruthy();
+    expect(screen.queryByText('7 messages')).toBeNull();
+  });
 });
 
 describe('HistoryView multi-select', () => {

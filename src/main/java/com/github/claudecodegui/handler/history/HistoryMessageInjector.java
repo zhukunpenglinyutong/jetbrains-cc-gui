@@ -868,7 +868,7 @@ public class HistoryMessageInjector {
             JsonObject message = convertCodexMessageToFrontend(record);
             if (message != null) {
                 message.getAsJsonObject("raw").addProperty("uuid", "codex-legacy:" + callId + (result ? ":result" : ""));
-                this.acceptConverted(message);
+                this.acceptConverted(message, record);
             }
         }
 
@@ -947,7 +947,7 @@ public class HistoryMessageInjector {
                                 callId, patches.get(index), index, timestamp);
                         preview.getAsJsonObject("raw").getAsJsonArray("content").get(0)
                                 .getAsJsonObject().getAsJsonObject("input").addProperty("status", "unknown");
-                        this.acceptConverted(preview);
+                        this.acceptConverted(preview, rawMessage);
                     }
                 }
             }
@@ -963,17 +963,17 @@ public class HistoryMessageInjector {
                         && (!commands.isEmpty() || planInput != null || !patches.isEmpty())) {
                     if (planInput != null) {
                         this.planCalls.add(callId);
-                        this.acceptConverted(CodexExecHistoryReplay.createPlanToolUseMessage(callId, planInput, timestamp));
+                        this.acceptConverted(CodexExecHistoryReplay.createPlanToolUseMessage(callId, planInput, timestamp), rawMessage);
                     }
                     if (!commands.isEmpty()) {
                         this.shellCalls.put(callId, commands);
-                        this.acceptConverted(CodexExecHistoryReplay.createToolUseMessage(callId, commands, timestamp));
+                        this.acceptConverted(CodexExecHistoryReplay.createToolUseMessage(callId, commands, timestamp), rawMessage);
                     }
                     if (!patches.isEmpty()) {
                         this.patchCalls.put(callId, patches);
                         for (int index = 0; index < patches.size(); index++) {
                             this.acceptConverted(CodexExecHistoryReplay.createPatchToolUseMessage(
-                                    callId, patches.get(index), index, timestamp));
+                                    callId, patches.get(index), index, timestamp), rawMessage);
                         }
                     }
                     return;
@@ -986,15 +986,15 @@ public class HistoryMessageInjector {
                 if (commands != null || plan || patches != null) {
                     CodexExecHistoryReplay.Output output = new CodexExecHistoryReplay.Output(payload, timestamp);
                     if (plan) {
-                        this.acceptConverted(CodexExecHistoryReplay.createPlanToolResultMessage(callId, output, timestamp));
+                        this.acceptConverted(CodexExecHistoryReplay.createPlanToolResultMessage(callId, output, timestamp), rawMessage);
                     }
                     if (commands != null) {
-                        this.acceptConverted(CodexExecHistoryReplay.createToolResultMessage(callId, commands, output, timestamp));
+                        this.acceptConverted(CodexExecHistoryReplay.createToolResultMessage(callId, commands, output, timestamp), rawMessage);
                     }
                     if (patches != null) {
                         for (int index = 0; index < patches.size(); index++) {
                             this.acceptConverted(CodexExecHistoryReplay.createPatchToolResultMessage(
-                                    callId, index, output, timestamp));
+                                    callId, index, output, timestamp), rawMessage);
                         }
                     }
                     return;
@@ -1007,6 +1007,7 @@ public class HistoryMessageInjector {
             }
             JsonObject raw = incoming.getAsJsonObject("raw");
             if (raw != null) {
+                this.carryRecordedScope(incoming, rawMessage);
                 String nativeId = getStringProperty(payload, "id");
                 String identity = nativeId != null ? nativeId : callId != null ? callId
                         : (timestamp == null ? "record" : timestamp) + ":" + this.recordNumber;
@@ -1066,6 +1067,41 @@ public class HistoryMessageInjector {
             emitPending();
             pending = incoming;
             rememberLatestAssistant(incoming);
+        }
+
+        private void acceptConverted(JsonObject incoming, JsonObject record) {
+            this.carryRecordedScope(incoming, record);
+            this.acceptConverted(incoming);
+        }
+
+        private void carryRecordedScope(JsonObject incoming, JsonObject record) {
+            if (incoming == null || !incoming.has("raw") || !incoming.get("raw").isJsonObject()) {
+                return;
+            }
+            JsonObject raw = incoming.getAsJsonObject("raw");
+            JsonObject payload = getResponseItemPayload(record);
+            if (payload == null) {
+                return;
+            }
+            JsonObject metadata = payload.has("internal_chat_message_metadata_passthrough")
+                    && payload.get("internal_chat_message_metadata_passthrough").isJsonObject()
+                    ? payload.getAsJsonObject("internal_chat_message_metadata_passthrough") : null;
+            String turnId = getStringProperty(payload, "turn_id");
+            if (turnId == null) {
+                turnId = getStringProperty(metadata, "turn_id");
+            }
+            String threadId = getStringProperty(payload, "thread_id");
+            if (threadId == null) {
+                threadId = this.rootThreadId;
+            }
+            // Native tools and response items must share their recorded ownership on reload.
+            // Hidden reasoning without that scope would divide an otherwise continuous tool batch.
+            if (getStringProperty(raw, "codexTurnId") == null && turnId != null) {
+                raw.addProperty("codexTurnId", turnId);
+            }
+            if (getStringProperty(raw, "codexThreadId") == null && threadId != null) {
+                raw.addProperty("codexThreadId", threadId);
+            }
         }
 
         private void rememberLatestAssistant(JsonObject incoming) {

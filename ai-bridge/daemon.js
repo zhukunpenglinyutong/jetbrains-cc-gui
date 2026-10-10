@@ -77,6 +77,7 @@ import {
   codexReleaseThreadPersistent,
   codexResetRuntimePersistent,
   codexListThreadsPersistent,
+  codexCountThreadMessagesPersistent,
   codexReadThreadPersistent,
   codexReadHistoryPagePersistent,
   codexReadSubagentPersistent,
@@ -978,6 +979,7 @@ async function runDaemonMain() {
     // active request identity.
     const readOnlyCodexMethods = new Map([
       ['codex.listThreads', codexListThreadsPersistent],
+      ['codex.countThreadMessages', codexCountThreadMessagesPersistent],
       ['codex.readThread', codexReadThreadPersistent],
       ['codex.readHistoryPage', codexReadHistoryPagePersistent],
       ['codex.readSubagent', codexReadSubagentPersistent],

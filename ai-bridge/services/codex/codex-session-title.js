@@ -35,6 +35,6 @@ export async function settleCodexSessionTitle({
     if (await customTitle(threadId) || !await unnamed()) return;
     if (canApply()) await service.setThreadName(threadId, title.trim());
   } catch {
-    // Naming is optional; the original conversation already reached its terminal state.
+    // Optional naming must never interrupt the user's conversation.
   }
 }

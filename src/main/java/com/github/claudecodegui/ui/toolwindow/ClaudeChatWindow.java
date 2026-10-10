@@ -67,6 +67,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 /**
  * Chat window instance. Coordinates UI components, session management,
@@ -2192,6 +2193,16 @@ public class ClaudeChatWindow {
         webviewEventQueue.enqueueRaw(jsCode);
     }
 
+    /** Keep an IDE action's captured clipboard image while its draft claims ownership. */
+    public void offerClipboardImage(Image image) {
+        this.chatWindowDelegate.offerClipboardImage(image);
+    }
+
+    /** Capture the macOS hook's image on the EDT before making the frontend round trip. */
+    public void captureClipboardPaste() {
+        this.chatWindowDelegate.captureClipboardPaste();
+    }
+
     private boolean executeQueuedWebviewScript(
             JBCefBrowser targetBrowser,
             int expectedPageGeneration,
@@ -3062,17 +3073,18 @@ public class ClaudeChatWindow {
             @Override
             public void activatePageGeneration(int pageGeneration) {
                 boolean generationChanged = activePageGeneration != pageGeneration;
-                if (generationChanged) {
-                    surfaceRefreshCoordinator.invalidate();
-                    cancelScheduledOsrSurfaceRefresh();
-                    activePageGeneration = pageGeneration;
-                    webviewEventQueue.pageChanged();
-                    streamCoalescer.resetDeliveryBaseline();
-                }
-                dispatchGate.activatePageGeneration(pageGeneration);
-                if (generationChanged) {
-                    // After the dispatch gate: a replay failure must not leave the
-                    // new page's dispatch path closed.
+                // Keep both pages out of dispatch until the identity and delivery baselines agree.
+                boolean activated = dispatchGate.activatePageGeneration(pageGeneration, () -> {
+                    if (generationChanged) {
+                        surfaceRefreshCoordinator.invalidate();
+                        cancelScheduledOsrSurfaceRefresh();
+                        activePageGeneration = pageGeneration;
+                        webviewEventQueue.pageChanged();
+                        streamCoalescer.resetDeliveryBaseline();
+                    }
+                });
+                if (activated && generationChanged) {
+                    // Replay stays outside the gate: a replay failure must not close the new page's dispatch path.
                     replayCurrentSessionSnapshot("page_generation_changed");
                 }
             }
@@ -3319,6 +3331,11 @@ public class ClaudeChatWindow {
             @Override
             public void executeJavaScriptCode(String jsCode) {
                 ClaudeChatWindow.this.executeJavaScriptCode(jsCode);
+            }
+
+            @Override
+            public Consumer<String> captureJavaScriptExecutor() {
+                return webviewEventQueue.captureRawSender();
             }
 
             @Override

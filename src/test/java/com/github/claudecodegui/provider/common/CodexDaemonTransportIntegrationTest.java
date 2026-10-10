@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThrows;
 
@@ -87,6 +88,11 @@ public class CodexDaemonTransportIntegrationTest {
                 assertTrue(display.contains("tool_use"));
                 assertTrue(display.contains("tool_result"));
                 assertTrue(display.contains("thinking"));
+                Sink messageCount = new Sink();
+                assertTrue(daemon.sendCommand("codex.countThreadMessages", params, messageCount).get(15, TimeUnit.SECONDS));
+                JsonObject countSnapshot = messageCount.result.get().getAsJsonObject("result");
+                assertEquals("th-test-root-0001", countSnapshot.get("threadId").getAsString());
+                assertEquals(5, countSnapshot.get("messageCount").getAsInt());
                 JsonObject childParams = new JsonObject();
                 childParams.addProperty("agentId", "th-test-child-0002");
                 params.add("params", childParams);

@@ -26,14 +26,9 @@ final class WebviewEventQueue<T> {
     private static final Logger LOG = Logger.getInstance(WebviewEventQueue.class);
     private static final int MAX_PENDING_EVENTS = 256;
     /**
-     * Hard ceiling for the recovery-event overflow below. Snapshot and boundary
-     * calls are the only state from which the frontend can rebuild a transcript, so
-     * they are allowed past {@link #MAX_PENDING_EVENTS} rather than dropped. That
-     * exemption rests on every exempt type being low-frequency (latest-only or a
-     * one-shot edge), which is true of the current callers but is not enforced by
-     * the queue. This bound keeps a future caller that violates that assumption
-     * from growing the queue without limit; past it the event is dropped exactly as
-     * a non-recovery one would be.
+     * Recovery events may exceed the soft bound, but the number of pending
+     * entries still has a ceiling. Consecutive slices of one history page share
+     * an entry so the ceiling cannot cut a large page's transfer in half.
      */
     private static final int MAX_RECOVERY_OVERFLOW_EVENTS = MAX_PENDING_EVENTS * 2;
     /**
@@ -58,7 +53,7 @@ final class WebviewEventQueue<T> {
     private final ScriptExecutor<T> scriptExecutor;
     private final BooleanSupplier readySupplier;
     private final Object lock = new Object();
-    private final Deque<JsCall<T>> pending = new ArrayDeque<>();
+    private final Deque<PendingCalls<T>> pending = new ArrayDeque<>();
     private T queuedBrowser;
     private int queuedPageGeneration;
     private volatile long lastUnavailableWarnNanos;
@@ -103,6 +98,17 @@ final class WebviewEventQueue<T> {
             return false;
         }
         return enqueue(new JsCall<T>(browser, pageGeneration(), null, new String[0], script));
+    }
+
+    /** Capture the destination now so deferred work cannot attach to a replacement page. */
+    Consumer<String> captureRawSender() {
+        T browser = currentBrowser();
+        int generation = pageGeneration();
+        return script -> {
+            if (browser != null && script != null && !script.isEmpty()) {
+                enqueue(new JsCall<T>(browser, generation, null, new String[0], script));
+            }
+        };
     }
 
     void browserChanged() {
@@ -226,6 +232,9 @@ final class WebviewEventQueue<T> {
             if (isLatestOnly(call) && mergeWithTailLatest(call)) {
                 return true;
             }
+            if (isHistoryAppend(call) && mergeWithTailHistory(call)) {
+                return true;
+            }
             if (pending.size() >= MAX_PENDING_EVENTS
                     && !dropOneDisposableEvent()
                     && !dropOneDelta()
@@ -235,11 +244,8 @@ final class WebviewEventQueue<T> {
                             + (call.functionName != null ? call.functionName : "raw"));
                     return false;
                 }
-                // Snapshot and boundary calls are the recovery points for the whole
-                // transcript. Let one such call exceed the soft bound rather than
-                // losing the only state from which the frontend can rebuild. These
-                // types are all low-frequency and every one of them is latest-only or
-                // a one-shot edge, so the overflow this admits is bounded in practice.
+                // Recovery points must survive ordinary backpressure. History
+                // slices share entries; other recovery calls are one-shot edges.
                 if (pending.size() >= MAX_RECOVERY_OVERFLOW_EVENTS) {
                     LOG.warn("Dropping recovery event past the overflow ceiling: "
                             + (call.functionName != null ? call.functionName : "raw"));
@@ -248,7 +254,7 @@ final class WebviewEventQueue<T> {
                 LOG.warn("Temporarily exceeding the bounded webview queue for recovery event: "
                         + (call.functionName != null ? call.functionName : "raw"));
             }
-            pending.addLast(call);
+            pending.addLast(new PendingCalls<>(call));
             if (!drainScheduled && !draining) {
                 drainScheduled = true;
                 scheduleDrain = true;
@@ -362,7 +368,12 @@ final class WebviewEventQueue<T> {
                 continue;
             }
             call.executionAttempts++;
-            pending.addFirst(call);
+            PendingCalls<T> first = pending.peekFirst();
+            if (first != null && belongsToSameHistoryPage(call, first.calls.peekFirst())) {
+                first.calls.addFirst(call);
+            } else {
+                pending.addFirst(new PendingCalls<>(call));
+            }
         }
         if (dropped > 0) {
             LOG.warn("Dropping " + dropped + " webview event(s) after "
@@ -379,27 +390,25 @@ final class WebviewEventQueue<T> {
     private List<JsCall<T>> takeBatch() {
         List<JsCall<T>> batch = new ArrayList<>();
         int estimatedChars = 0;
-        Iterator<JsCall<T>> iterator = pending.iterator();
+        boolean containsSnapshot = false;
+        Iterator<PendingCalls<T>> iterator = pending.iterator();
         while (iterator.hasNext()) {
-            JsCall<T> call = iterator.next();
-            int callChars = call.estimatedChars();
-            if (!batch.isEmpty()
-                    && containsMessageSnapshot(batch)
-                    && isSnapshotResetBoundary(call)) {
-                break;
-            }
-            if (!batch.isEmpty() && estimatedChars + callChars > MAX_BATCH_ARGUMENT_CHARS) {
-                break;
+            PendingCalls<T> entry = iterator.next();
+            while (!entry.calls.isEmpty()) {
+                JsCall<T> call = entry.calls.peekFirst();
+                int callChars = call.estimatedChars();
+                if (!batch.isEmpty() && (containsSnapshot && isSnapshotResetBoundary(call)
+                        || estimatedChars + callChars > MAX_BATCH_ARGUMENT_CHARS)) {
+                    return batch;
+                }
+                entry.calls.removeFirst();
+                batch.add(call);
+                estimatedChars += callChars;
+                containsSnapshot |= isMessageSnapshot(call);
             }
             iterator.remove();
-            batch.add(call);
-            estimatedChars += callChars;
         }
         return batch;
-    }
-
-    private static boolean containsMessageSnapshot(List<? extends JsCall<?>> calls) {
-        return calls.stream().anyMatch(WebviewEventQueue::isMessageSnapshot);
     }
 
     /**
@@ -428,6 +437,8 @@ final class WebviewEventQueue<T> {
         CRITICAL,
         /** Never dropped to make room for a non-lifecycle event. */
         LIFECYCLE,
+        /** Consecutive slices of one history page occupy one pending entry. */
+        HISTORY_APPEND,
     }
 
     /** Package-private so the classification is pinned by a test, like a schema. */
@@ -455,6 +466,13 @@ final class WebviewEventQueue<T> {
         classes.put("onStreamEnd", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE));
         classes.put("onBlockReset", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE));
         classes.put("onTaskEvent", EnumSet.of(EventClass.LIFECYCLE));
+        // A page is meaningful only when every slice arrives. Keep its slices
+        // together under backpressure, then drain them within the script limit.
+        classes.put("beginCodexHistoryPage", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE));
+        classes.put("appendCodexHistoryPageBatch", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE, EventClass.HISTORY_APPEND));
+        classes.put("appendCodexHistoryPageChunk", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE, EventClass.HISTORY_APPEND));
+        classes.put("completeCodexHistoryPage", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE));
+        classes.put("codexHistoryPageError", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE));
         return Collections.unmodifiableMap(classes);
     }
 
@@ -478,7 +496,8 @@ final class WebviewEventQueue<T> {
     }
 
     private boolean mergeWithTailDelta(JsCall<T> call) {
-        JsCall<T> tail = pending.peekLast();
+        PendingCalls<T> entry = pending.peekLast();
+        JsCall<T> tail = entry == null ? null : entry.calls.peekLast();
         if (tail == null || !isDelta(tail) || tail.browser != call.browser
                 || !tail.functionName.equals(call.functionName)) {
             return false;
@@ -490,7 +509,8 @@ final class WebviewEventQueue<T> {
     }
 
     private boolean mergeWithTailLatest(JsCall<T> call) {
-        JsCall<T> tail = pending.peekLast();
+        PendingCalls<T> entry = pending.peekLast();
+        JsCall<T> tail = entry == null ? null : entry.calls.peekLast();
         if (tail == null || !isLatestOnly(tail) || tail.browser != call.browser
                 || !tail.functionName.equals(call.functionName)) {
             return false;
@@ -499,10 +519,29 @@ final class WebviewEventQueue<T> {
         return true;
     }
 
+    private boolean mergeWithTailHistory(JsCall<T> call) {
+        PendingCalls<T> tail = pending.peekLast();
+        if (tail == null || !belongsToSameHistoryPage(call, tail.calls.peekLast())) {
+            return false;
+        }
+        tail.calls.addLast(call);
+        return true;
+    }
+
+    private static boolean belongsToSameHistoryPage(JsCall<?> incoming, JsCall<?> existing) {
+        return existing != null && isHistoryAppend(incoming) && isHistoryAppend(existing)
+                && incoming.args.length > 0 && existing.args.length > 0
+                && incoming.args[0] != null && incoming.args[0].equals(existing.args[0]);
+    }
+
+    private static boolean isHistoryAppend(JsCall<?> call) {
+        return hasClass(call, EventClass.HISTORY_APPEND);
+    }
+
     private boolean dropOneDisposableEvent() {
-        Iterator<JsCall<T>> iterator = pending.iterator();
+        Iterator<PendingCalls<T>> iterator = pending.iterator();
         while (iterator.hasNext()) {
-            if (isDisposable(iterator.next())) {
+            if (isDisposable(iterator.next().calls.peekFirst())) {
                 iterator.remove();
                 return true;
             }
@@ -511,9 +550,9 @@ final class WebviewEventQueue<T> {
     }
 
     private boolean dropOneDelta() {
-        Iterator<JsCall<T>> iterator = pending.iterator();
+        Iterator<PendingCalls<T>> iterator = pending.iterator();
         while (iterator.hasNext()) {
-            if (isDelta(iterator.next())) {
+            if (isDelta(iterator.next().calls.peekFirst())) {
                 iterator.remove();
                 return true;
             }
@@ -523,9 +562,9 @@ final class WebviewEventQueue<T> {
 
     private void removeSupersededMessageSnapshots(JsCall<T> incoming) {
         boolean incomingTail = isTailMessageSnapshot(incoming);
-        Iterator<JsCall<T>> iterator = pending.descendingIterator();
+        Iterator<PendingCalls<T>> iterator = pending.descendingIterator();
         while (iterator.hasNext()) {
-            JsCall<T> candidate = iterator.next();
+            JsCall<T> candidate = iterator.next().calls.peekFirst();
             // A lifecycle edge must still observe the snapshot queued before it.
             if (isLifecycle(candidate) && !isMessageSnapshot(candidate)) {
                 break;
@@ -557,9 +596,9 @@ final class WebviewEventQueue<T> {
      * eviction rules above.
      */
     private boolean dropOneNonLifecycle() {
-        Iterator<JsCall<T>> iterator = pending.iterator();
+        Iterator<PendingCalls<T>> iterator = pending.iterator();
         while (iterator.hasNext()) {
-            if (!isLifecycle(iterator.next())) {
+            if (!isLifecycle(iterator.next().calls.peekFirst())) {
                 iterator.remove();
                 return true;
             }
@@ -585,6 +624,14 @@ final class WebviewEventQueue<T> {
 
     private static String[] copyArgs(String[] args) {
         return args == null ? new String[0] : args.clone();
+    }
+
+    private static final class PendingCalls<T> {
+        private final Deque<JsCall<T>> calls = new ArrayDeque<>();
+
+        private PendingCalls(JsCall<T> call) {
+            this.calls.addLast(call);
+        }
     }
 
     static final class JsCall<T> {

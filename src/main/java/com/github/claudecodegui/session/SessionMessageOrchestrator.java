@@ -232,6 +232,10 @@ public class SessionMessageOrchestrator {
                     if (!currentMessages.equals(messagesBeforeLoad)) {
                         return;
                     }
+                    if (pagedClaudeLoad && !historyRetainsUnidentifiedTail(loadedMessages, currentMessages)) {
+                        LOG.warn("Ignoring history page that has not persisted the unidentified live tail");
+                        return;
+                    }
                     // A page load only carries the newest turns, so a transcript that
                     // already holds more turns than one page is legitimately longer
                     // than what came back. Align the page to the live tail and keep
@@ -247,7 +251,7 @@ public class SessionMessageOrchestrator {
                             LOG.warn("Ignoring history page that would remove live structural blocks");
                             return;
                         }
-                        keptOlderLivePrefix = true;
+                        keptOlderLivePrefix = pagedClaudeLoad && lastHistoryBackedIndex(currentMessages) > 0;
                         loadedMessages = mergedMessages;
                     } else {
                         int liveHistoryBacked = countHistoryBackedMessages(currentMessages);
@@ -476,12 +480,10 @@ public class SessionMessageOrchestrator {
      * session with an empty live list) shows the content.</p>
      *
      * <p>Anchor the page to the live tail by uuid. Only when the newest
-     * history-reproducible live message is found inside the page is the page
-     * known to be at least as new as the live list; the live messages above that
-     * anchor are older turns the page no longer carries, and they are kept
-     * verbatim. A page that does not carry the live tail is lagging (the writer
-     * may still be mid-append) and returns null so the caller's guards reject it
-     * as before.</p>
+     * uuid-carrying history-reproducible live message is found inside the page
+     * can its older live prefix be kept verbatim. The caller also verifies that
+     * any unidentified text or thinking after this anchor has been persisted;
+     * the anchor alone cannot prove that the page covers the live tail.</p>
      *
      * @param loadedMessages  the freshly loaded page
      * @param currentMessages the live transcript
@@ -492,8 +494,7 @@ public class SessionMessageOrchestrator {
             List<ClaudeSession.Message> currentMessages
     ) {
         int anchorIndex = lastHistoryBackedIndex(currentMessages);
-        if (anchorIndex <= 0) {
-            // Nothing older to keep, or no live row to align the page against.
+        if (anchorIndex < 0) {
             return null;
         }
         String anchorUuid = historyMessageUuid(currentMessages.get(anchorIndex));
@@ -504,6 +505,10 @@ public class SessionMessageOrchestrator {
         if (loadedAnchorIndex < 0) {
             return null;
         }
+        if (anchorIndex == 0) {
+            // No older live prefix exists, so retain the entire page and its original cursor.
+            return loadedMessages;
+        }
 
         List<ClaudeSession.Message> merged = new ArrayList<>(
                 anchorIndex + loadedMessages.size() - loadedAnchorIndex);
@@ -513,14 +518,142 @@ public class SessionMessageOrchestrator {
     }
 
     /**
-     * Index of the newest live message a history read can reproduce, or -1.
+     * Require unidentified live text and thinking to survive an anchored page replacement.
+     * Structural blocks have a separate identity guard; their synthetic display labels
+     * cannot establish whether the writer has persisted the newest narrative.
+     */
+    private static boolean historyRetainsUnidentifiedTail(
+            List<ClaudeSession.Message> loadedMessages,
+            List<ClaudeSession.Message> currentMessages
+    ) {
+        int anchorIndex = lastHistoryBackedIndex(currentMessages);
+        if (anchorIndex < 0) {
+            return true;
+        }
+        int loadedAnchorIndex = indexOfHistoryUuid(loadedMessages, historyMessageUuid(currentMessages.get(anchorIndex)));
+        if (loadedAnchorIndex < 0) {
+            return true;
+        }
+        int nextLoadedIndex = loadedAnchorIndex + 1;
+        for (int i = anchorIndex + 1; i < currentMessages.size(); i++) {
+            ClaudeSession.Message live = currentMessages.get(i);
+            if (!MessageParser.isHistoryReproducible(live)) {
+                continue;
+            }
+            boolean syntheticResult = live.type == ClaudeSession.Message.Type.USER && "[tool_result]".equals(live.content)
+                    && MessageStructure.structuralBlockKeys(List.of(live)).stream().anyMatch(key -> key.startsWith("tool_result:"));
+            String text = historyTextContent(live);
+            boolean carriesText = !text.isBlank() && !syntheticResult;
+            String thinking = historyThinkingContent(live);
+            if (!carriesText && thinking.isEmpty()) {
+                continue;
+            }
+            boolean matched = false;
+            while (nextLoadedIndex < loadedMessages.size()) {
+                ClaudeSession.Message loaded = loadedMessages.get(nextLoadedIndex++);
+                if (loaded.type != live.type) {
+                    // Repeated wording in a later request cannot prove this reply was persisted.
+                    if (live.type == ClaudeSession.Message.Type.ASSISTANT
+                            && loaded.type == ClaudeSession.Message.Type.USER) {
+                        break;
+                    }
+                    continue;
+                }
+                StringBuilder loadedText = new StringBuilder(historyTextContent(loaded));
+                StringBuilder loadedThinking = new StringBuilder(historyThinkingContent(loaded));
+                // Automatic continuation changes API reply IDs within one live streaming row.
+                // Stop once this row is covered so later live rows retain their own history.
+                while (loaded.type == ClaudeSession.Message.Type.ASSISTANT && nextLoadedIndex < loadedMessages.size()
+                        && loadedMessages.get(nextLoadedIndex).type == ClaudeSession.Message.Type.ASSISTANT
+                        && (carriesText && !loadedText.toString().startsWith(text)
+                        || !loadedThinking.toString().startsWith(thinking))) {
+                    // An unrelated row must not consume the rows that could cover the live reply.
+                    String candidateText = loadedText.toString();
+                    String candidateThinking = loadedThinking.toString();
+                    if (carriesText && !text.startsWith(candidateText) && !candidateText.startsWith(text)
+                            || !thinking.startsWith(candidateThinking) && !candidateThinking.startsWith(thinking)) {
+                        break;
+                    }
+                    ClaudeSession.Message sibling = loadedMessages.get(nextLoadedIndex++);
+                    loadedText.append(historyTextContent(sibling));
+                    loadedThinking.append(historyThinkingContent(sibling));
+                }
+                if ((!carriesText || loadedText.toString().startsWith(text))
+                        && loadedThinking.toString().startsWith(thinking)) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Compare raw text without display-only block separators, preserving embedded newlines. */
+    private static String historyTextContent(ClaudeSession.Message message) {
+        JsonArray blocks = MessageStructure.findContentArray(message.raw);
+        StringBuilder text = new StringBuilder();
+        if (blocks != null) {
+            for (JsonElement element : blocks) {
+                if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isString()) {
+                    text.append(element.getAsString());
+                } else if (element.isJsonObject()) {
+                    JsonObject block = element.getAsJsonObject();
+                    if (block.has("type") && block.get("type").isJsonPrimitive()
+                            && "text".equals(block.get("type").getAsString())) {
+                        JsonElement body = block.get("text");
+                        if (body != null && body.isJsonPrimitive() && body.getAsJsonPrimitive().isString()) {
+                            text.append(body.getAsString());
+                        }
+                    }
+                }
+            }
+        }
+        if (text.length() > 0) {
+            return text.toString();
+        }
+        // Locally created rows and legacy payloads may carry only display text.
+        return message.content != null ? message.content : "";
+    }
+
+    /** Preserve streamed thinking too, since the display content contains only ordinary text. */
+    private static String historyThinkingContent(ClaudeSession.Message message) {
+        JsonArray blocks = MessageStructure.findContentArray(message.raw);
+        StringBuilder thinking = new StringBuilder();
+        if (blocks != null) {
+            for (JsonElement element : blocks) {
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject block = element.getAsJsonObject();
+                if (block.has("type") && block.get("type").isJsonPrimitive()
+                        && "thinking".equals(block.get("type").getAsString())) {
+                    JsonElement body = block.has("thinking") ? block.get("thinking") : block.get("text");
+                    if (body != null && body.isJsonPrimitive() && body.getAsJsonPrimitive().isString()) {
+                        thinking.append(body.getAsString());
+                    }
+                }
+            }
+        }
+        return thinking.toString();
+    }
+
+    /**
+     * Index of the newest live message a history read can align a page against.
+     *
+     * <p>Synthesized tool results and streamed assistant rows may lack a uuid.
+     * Skip those as anchors, then verify their bodies and structural identities
+     * separately before replacing them with persisted counterparts.</p>
      *
      * @param messages live transcript
-     * @return the index of the newest history-reproducible message
+     * @return the index of the newest history-reproducible message with a uuid
      */
     private static int lastHistoryBackedIndex(List<ClaudeSession.Message> messages) {
         for (int i = messages.size() - 1; i >= 0; i--) {
-            if (MessageParser.isHistoryReproducible(messages.get(i))) {
+            if (MessageParser.isHistoryReproducible(messages.get(i))
+                    && historyMessageUuid(messages.get(i)) != null) {
                 return i;
             }
         }

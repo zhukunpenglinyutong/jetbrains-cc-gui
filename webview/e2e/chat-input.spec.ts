@@ -6,6 +6,9 @@ import { projectCodexItemMessages } from '../../ai-bridge/services/codex/codex-i
 type InputTestWindow = Window & typeof globalThis & {
   __sentMessages: string[];
   __bridgeMessages: string[];
+  __nativePasteRequests: string[];
+  __nativePasteScope: string;
+  __sentAttachments: Array<Array<{ data: string }>>;
   sendToJava?: (message: string) => void;
   onCodexNativeData?: (json: string) => void;
   onCodexRuntimeEvent?: (eventJson: string) => void;
@@ -28,11 +31,27 @@ test.beforeEach(async ({ page }) => {
     const bridge = window as InputTestWindow;
     bridge.__sentMessages = [];
     bridge.__bridgeMessages = [];
+    bridge.__nativePasteRequests = [];
+    bridge.__nativePasteScope = '';
+    bridge.__sentAttachments = [];
     bridge.sendToJava = (message) => {
       bridge.__bridgeMessages.push(message);
       if (message.startsWith('send_message:')) {
         const payload = JSON.parse(message.slice('send_message:'.length)) as { text: string };
         bridge.__sentMessages.push(payload.text);
+      }
+      if (message.startsWith('paste_image:')) {
+        bridge.__nativePasteRequests.push(message.slice('paste_image:'.length));
+      }
+      if (message.startsWith('paste_image_scope:')) {
+        bridge.__nativePasteScope = message.slice('paste_image_scope:'.length);
+      }
+      if (message.startsWith('send_message_with_attachments:')) {
+        const payload = JSON.parse(message.slice('send_message_with_attachments:'.length)) as {
+          text: string; attachments: Array<{ data: string }>;
+        };
+        bridge.__sentMessages.push(payload.text);
+        bridge.__sentAttachments.push(payload.attachments);
       }
       if (message.startsWith('get_dependency_status:')) {
         setTimeout(() => {
@@ -980,6 +999,61 @@ test('Codex reported empty reasoning leaves no cards or batch gaps in full and p
   await page.screenshot({ path: `../.workflow/thinking-empty-followup-history-${testInfo.project.name}.png` });
 });
 
+for (const fixtureName of ['codex-reloaded-tool-batch', 'codex-interrupted-command-history']) {
+  test(`Codex legacy tool batches keep one card per command across reload and history prepend: ${fixtureName}`, async ({ page }, testInfo) => {
+    const fixture = JSON.parse(readFileSync(new URL(`./fixtures/${fixtureName}.json`, import.meta.url), 'utf8')) as {
+      expectedToolCount: number;
+      expectedFailedCount?: number;
+      finalText?: string;
+      messages: Array<{ type: string; content: string; raw: { codexThreadId: string } }>;
+    };
+    const { messages, expectedToolCount } = fixture;
+    const sessionId = messages[0].raw.codexThreadId;
+    await switchToCodex(page);
+    await page.evaluate(({ sessionId, messages }) => {
+      window.setSessionId?.(sessionId);
+      window.updateMessages?.(JSON.stringify(messages));
+    }, { sessionId, messages });
+    const assertContinuousBatch = async () => {
+      await expect(page.locator('.message.assistant')).toHaveCount(1);
+      await expect(page.locator('.thinking-block')).toHaveCount(0);
+      await expect(page.getByText(`Batch Run Commands (${expectedToolCount})`, { exact: true })).toBeVisible();
+      await expect(page.locator('.bash-timeline-item')).toHaveCount(expectedToolCount);
+      await expect(page.locator('.tool-status-indicator.pending')).toHaveCount(0);
+      await expect(page.locator('.tool-status-indicator.error')).toHaveCount(fixture.expectedFailedCount ?? 0);
+      await expect(page.getByText('exec', { exact: true })).toHaveCount(0);
+      await expect(page.getByText(fixture.finalText ?? 'Verified history grouping.', { exact: true })).toBeVisible();
+    };
+    await assertContinuousBatch();
+    await page.reload();
+    await switchToCodex(page);
+    await page.evaluate(({ sessionId, messages }) => {
+      window.setSessionId?.(sessionId);
+      window.beginCodexHistoryPage?.(JSON.stringify({ pageId: 'legacy-batch-reload', sessionId, mode: 'replace' }));
+      window.appendCodexHistoryPageBatch?.('legacy-batch-reload', JSON.stringify(messages));
+      window.completeCodexHistoryPage?.(JSON.stringify({ pageId: 'legacy-batch-reload', sessionId, mode: 'replace',
+        source: 'legacy', fromTurn: 0, toTurn: 1, totalTurns: 1, hasMore: false, loadedMessageCount: messages.length }));
+    }, { sessionId, messages });
+    await assertContinuousBatch();
+    await page.evaluate(({ sessionId, messages }) => {
+      window.beginCodexHistoryPage?.(JSON.stringify({ pageId: 'legacy-batch-tail', sessionId, mode: 'replace' }));
+      window.appendCodexHistoryPageBatch?.('legacy-batch-tail', JSON.stringify(messages.slice(-1)));
+      window.completeCodexHistoryPage?.(JSON.stringify({ pageId: 'legacy-batch-tail', sessionId, mode: 'replace',
+        source: 'legacy', fromTurn: 1, toTurn: 1, totalTurns: 1, hasMore: true, loadedMessageCount: 1 }));
+    }, { sessionId, messages });
+    await expect(page.locator('.bash-timeline-item')).toHaveCount(0);
+    await page.evaluate(({ sessionId, messages }) => {
+      window.beginCodexHistoryPage?.(JSON.stringify({ pageId: 'legacy-batch-older', sessionId, mode: 'prepend' }));
+      window.appendCodexHistoryPageBatch?.('legacy-batch-older', JSON.stringify(messages));
+      window.completeCodexHistoryPage?.(JSON.stringify({ pageId: 'legacy-batch-older', sessionId, mode: 'prepend',
+        source: 'legacy', fromTurn: 0, toTurn: 1, totalTurns: 1, hasMore: false, loadedMessageCount: messages.length }));
+    }, { sessionId, messages });
+    await assertContinuousBatch();
+    expect(await sentMessages(page)).toEqual([]);
+    await page.screenshot({ path: `../.workflow/${fixtureName}-${testInfo.project.name}.png` });
+  });
+}
+
 test('Codex streamed reasoning survives an empty native completion from the real service trace', async ({ page }, testInfo) => {
   type NativeRawMessage = {
     type: string; uuid?: string; codexItemType?: string;
@@ -1750,4 +1824,165 @@ test('Codex history renders file edits, command reasons, image attachments and c
   expect(refreshedPaths).toEqual(expect.arrayContaining(['src/added.ts', 'src/moved.ts', 'src/gone.ts']));
   expect(refreshedPaths).not.toContain('src/failed.ts');
   expect(refreshedPaths).not.toContain('src/mixed.ts');
+});
+
+test('native image preparation preserves the draft until the owned reply arrives', async ({ page }) => {
+  const editable = page.locator('.input-editable');
+  await editable.fill('prompt with screenshot');
+  const requestId = await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('java-request-paste-image'));
+    return (window as InputTestWindow).__nativePasteRequests[0];
+  });
+  expect(requestId).toBeTruthy();
+  await editable.press('Enter');
+  await expect(editable).toHaveText('prompt with screenshot');
+  expect(await sentMessages(page)).toEqual([]);
+
+  await page.evaluate((requestId) => window.dispatchEvent(new CustomEvent('java-paste-image', {
+    detail: { requestId, mediaType: 'image/png', base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==' },
+  })), requestId);
+  await expect(page.locator('.attachment-item')).toHaveCount(1);
+  await editable.press('Enter');
+  await expect.poll(() => sentMessages(page)).toEqual(['prompt with screenshot']);
+  expect(await page.evaluate(() => (window as InputTestWindow).__sentAttachments[0])).toHaveLength(1);
+  await expect(editable).toBeEmpty();
+  await expect(page.locator('.chat-input-box .attachment-item')).toHaveCount(0);
+});
+
+test('leaving and returning to chat discards the previous native image request', async ({ page }) => {
+  const requestId = await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('java-request-paste-image'));
+    return (window as InputTestWindow).__nativePasteRequests[0];
+  });
+  await page.locator('.header .codicon-settings-gear').locator('..').click();
+  await expect(page.locator('.input-editable')).toHaveCount(0);
+  await page.locator('button:has(.codicon-arrow-left)').click();
+  await expect(page.locator('.input-editable')).toBeVisible();
+  await page.evaluate((requestId) => window.dispatchEvent(new CustomEvent('java-paste-image', {
+    detail: { requestId, mediaType: 'image/png', base64: 'STALE' },
+  })), requestId);
+  await expect(page.locator('.attachment-item')).toHaveCount(0);
+  await page.locator('.input-editable').fill('fresh draft');
+  await page.locator('.input-editable').press('Enter');
+  await expect.poll(() => sentMessages(page)).toEqual(['fresh draft']);
+});
+
+test('alternating DOM and native pastes preserves the final deliberate A/B/A image', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-01T00:00:00Z'));
+  const imageA = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    canvas.getContext('2d')!.fillStyle = '#ff0000';
+    canvas.getContext('2d')!.fillRect(0, 0, 1, 1);
+    return canvas.toDataURL('image/png').split(',')[1];
+  });
+  const pasteDom = () => page.locator('.input-editable').evaluate((editable, base64) => {
+    const data = new DataTransfer();
+    data.items.add(new File([Uint8Array.from(atob(base64), byte => byte.charCodeAt(0))], 'a.png', { type: 'image/png' }));
+    editable.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  }, imageA);
+  await pasteDom();
+  await expect(page.locator('.attachment-item')).toHaveCount(1);
+  await page.evaluate((base64) => window.dispatchEvent(new CustomEvent('java-paste-image', {
+    detail: { base64, mediaType: 'image/png' },
+  })), imageA);
+  await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    canvas.getContext('2d')!.fillStyle = '#0000ff';
+    canvas.getContext('2d')!.fillRect(0, 0, 1, 1);
+    window.dispatchEvent(new CustomEvent('java-paste-image', {
+      detail: { base64: canvas.toDataURL('image/png').split(',')[1], mediaType: 'image/png' },
+    }));
+  });
+  await expect(page.locator('.attachment-item')).toHaveCount(2);
+  await pasteDom();
+  await expect(page.locator('.attachment-item')).toHaveCount(3);
+  await page.locator('.input-editable').fill('three images');
+  await page.locator('.input-editable').press('Enter');
+  await expect.poll(() => sentMessages(page)).toEqual(['three images']);
+  const attachments = await page.evaluate(() => (window as InputTestWindow).__sentAttachments[0]);
+  expect(attachments.map(({ data }) => data)).toEqual([imageA, attachments[1].data, imageA]);
+  expect(attachments[1].data).not.toBe(imageA);
+});
+
+test('native Enter preserves the draft until prepared attachments commit', async ({ page }) => {
+  const editable = page.locator('.input-editable');
+  await editable.fill('prompt with screenshot');
+  await page.evaluate(async () => {
+    const bridge = window as InputTestWindow;
+    window.dispatchEvent(new CustomEvent('java-request-paste-image', {
+      detail: { snapshotId: 'current-snapshot', scopeId: bridge.__nativePasteScope },
+    }));
+    const { requestId } = JSON.parse(bridge.__nativePasteRequests[0]);
+    window.dispatchEvent(new CustomEvent('java-paste-image', { detail: {
+      requestId, mediaType: 'image/png',
+      base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
+    } }));
+    for (let turn = 0; turn < 20; turn++) await Promise.resolve();
+    const input = document.querySelector('.input-editable')!;
+    for (const type of ['keydown', 'keyup']) input.dispatchEvent(new KeyboardEvent(type, {
+      key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true,
+    }));
+  });
+  expect(await sentMessages(page)).toEqual([]);
+  await expect(editable).toHaveText('prompt with screenshot');
+  await expect(page.locator('.attachment-item')).toHaveCount(1);
+  await editable.press('Enter');
+  await expect.poll(() => sentMessages(page)).toEqual(['prompt with screenshot']);
+  expect(await page.evaluate(() => (window as InputTestWindow).__sentAttachments[0])).toHaveLength(1);
+});
+
+test('an old native offer cannot claim a remounted chat draft', async ({ page }) => {
+  const oldScope = await page.evaluate(() => (window as InputTestWindow).__nativePasteScope);
+  expect(oldScope).toBeTruthy();
+  await page.locator('.header .codicon-settings-gear').locator('..').click();
+  await expect(page.locator('.input-editable')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as InputTestWindow).__nativePasteScope)).toBe('');
+  await page.locator('button:has(.codicon-arrow-left)').click();
+  await expect(page.locator('.input-editable')).toBeVisible();
+  const newScope = await page.evaluate(() => (window as InputTestWindow).__nativePasteScope);
+  expect(newScope).not.toBe(oldScope);
+  await page.evaluate((scopeId) => window.dispatchEvent(new CustomEvent('java-request-paste-image', {
+    detail: { snapshotId: 'captured-before-settings', scopeId },
+  })), oldScope);
+  expect(await page.evaluate(() => (window as InputTestWindow).__nativePasteRequests)).toEqual([]);
+  await page.locator('.input-editable').fill('new draft');
+  await page.locator('.input-editable').press('Enter');
+  await expect.poll(() => sentMessages(page)).toEqual(['new draft']);
+});
+
+test('DOM A then native B/A keeps all images without an initial A echo', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-01T00:00:00Z'));
+  const imageA = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    canvas.getContext('2d')!.fillStyle = '#ff0000';
+    canvas.getContext('2d')!.fillRect(0, 0, 1, 1);
+    return canvas.toDataURL('image/png').split(',')[1];
+  });
+  await page.locator('.input-editable').evaluate((editable, base64) => {
+    const data = new DataTransfer();
+    data.items.add(new File([Uint8Array.from(atob(base64), byte => byte.charCodeAt(0))], 'a.png', { type: 'image/png' }));
+    editable.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  }, imageA);
+  await expect(page.locator('.attachment-item')).toHaveCount(1);
+  await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    canvas.getContext('2d')!.fillStyle = '#0000ff';
+    canvas.getContext('2d')!.fillRect(0, 0, 1, 1);
+    window.dispatchEvent(new CustomEvent('java-paste-image', {
+      detail: { base64: canvas.toDataURL('image/png').split(',')[1], mediaType: 'image/png' },
+    }));
+  });
+  await expect(page.locator('.attachment-item')).toHaveCount(2);
+  await page.evaluate((base64) => window.dispatchEvent(new CustomEvent('java-paste-image', {
+    detail: { base64, mediaType: 'image/png' },
+  })), imageA);
+  await expect(page.locator('.attachment-item')).toHaveCount(3);
+  await page.locator('.input-editable').fill('three images');
+  await page.locator('.input-editable').press('Enter');
+  await expect.poll(() => sentMessages(page)).toEqual(['three images']);
+  expect(await page.evaluate(() => (window as InputTestWindow).__sentAttachments[0])).toHaveLength(3);
 });

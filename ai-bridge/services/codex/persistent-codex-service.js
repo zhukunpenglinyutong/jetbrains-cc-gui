@@ -32,6 +32,7 @@ import { getCodemossDir } from '../../utils/path-utils.js';
 import { join } from 'node:path';
 import { CodexPrivacyIndex } from './codex-privacy-index.js';
 import { readNativeHistoryPage } from './codex-native-history.js';
+import { createNativeHistoryCounter } from './codex-history-message-count.js';
 import { readNativeSubagent } from './codex-native-subagents.js';
 import { projectCodexItemMessages } from './codex-item-projection.js';
 import { isGuardianReviewThread } from './codex-thread-visibility.js';
@@ -45,6 +46,7 @@ import { prepareCodexRuntimeEnvironment } from './codex-native-runtime-env.js';
 
 /** sessionKey → {service, launchOptions, fingerprint, createdAt} */
 const sessionServices = new Map();
+const nativeHistoryCounters = new WeakMap();
 
 /**
  * Pristine base environment for codex runtime construction, captured once
@@ -420,6 +422,32 @@ function buildNativeInput(stdinData) {
 // Daemon command surface
 // =============================================================================
 
+/**
+ * Bootstrap announces the thread before the opening turn completes. Listening
+ * avoids a polling claim that can outlive a failed send and block its retry.
+ */
+function waitForOperationThreadId(service, operation, signal) {
+  return new Promise(resolve => {
+    let finished = false;
+    const finish = threadId => {
+      if (finished) return;
+      finished = true;
+      service.off('codex_event', onEvent);
+      signal.removeEventListener('abort', onAbort);
+      resolve(signal.aborted ? null : threadId ?? null);
+    };
+    const onEvent = event => {
+      if (event.kind === 'threadStarted' && service.activeOperationId === operation.clientOperationId
+          && !operation.settled) finish(event.threadId);
+    };
+    const onAbort = () => finish(null);
+    service.on('codex_event', onEvent);
+    signal.addEventListener('abort', onAbort, { once: true });
+    operation.promise.then(() => finish(operation.threadId), () => finish(null));
+    if (signal.aborted || operation.settled || operation.threadId) finish(operation.threadId);
+  });
+}
+
 /** Long operation: runs inside the daemon commandQueue until terminal. */
 export async function codexSendPersistent(stdinData, { titleDependencies = {}, nativeEnvironmentDependencies = {} } = {}) {
   const { service, sessionKey } = ensureSessionService(stdinData, { nativeEnvironmentDependencies });
@@ -439,27 +467,40 @@ export async function codexSendPersistent(stdinData, { titleDependencies = {}, n
   // identity even while background events flow through the process channel.
   captureOperationMarkers(operation);
   markerLine('[MESSAGE_START]');
-  const result = await operation.promise;
-  if (firstNewThread && result.outcome === 'completed' && !entry.titleAttempted) {
-    entry.titleAttempted = true;
-    const threadId = operation.threadId;
-    const generation = service.runtimeGeneration;
-    const fingerprint = entry.fingerprint;
-    entry.titleAbort = new AbortController();
-    const canApply = () => sessionServices.get(sessionKey) === entry && !entry.titleAbort.signal.aborted
-      && entry.fingerprint === fingerprint && service.runtimeGeneration === generation && service.rootThreadId === threadId;
-    entry.titleTask = settleCodexSessionTitle({ service, threadId, userMessage: stdinData.message, canApply,
-      generateText: input => generateCodexText({ ...input, model: stdinData.model }, {
-        runtimeState: () => ({ access: entry.launchOptions.authMode }),
-        resolveCli: () => ({ status: 'resolved', command: entry.currentCliCommand?.() ?? entry.commandPrefix }),
-        nativeRuntime: { ...entry.nativeRuntime, env: { ...entry.nativeRuntime.env,
-          ...(entry.launchOptions.codexHome ? { CODEX_HOME: entry.launchOptions.codexHome } : {}) } },
-        baseEnv: pristineBaseEnv ?? process.env, nativeEnvironmentDependencies,
-        cwd: stdinData.cwd, timeoutMs: 15_000, signal: entry.titleAbort.signal,
-      }),
-    }, titleDependencies);
+  // Name the thread while the turn runs: the title request uses its own
+  // app-server child and thread/name/set is a direct RPC, so neither competes
+  // with the live operation. Waiting for the turn to settle delayed the title
+  // by the whole run — minutes on long tasks.
+  if (firstNewThread && !entry.titleAttempted) {
+    if (!entry.titleAbort || entry.titleAbort.signal.aborted) entry.titleAbort = new AbortController();
+    const { signal } = entry.titleAbort;
+    const titleTask = (async () => {
+      const threadId = await waitForOperationThreadId(service, operation, signal);
+      if (!threadId || signal.aborted || entry.titleAttempted) return;
+      // Claim only a created thread, so failed bootstraps leave queued retries eligible.
+      entry.titleAttempted = true;
+      const generation = service.runtimeGeneration;
+      const fingerprint = entry.fingerprint;
+      // Optional metadata reads must not restart a failed or retiring writer.
+      const canApply = () => sessionServices.get(sessionKey) === entry && !signal.aborted
+        && service.state === 'ready' && service.client?.alive
+        && entry.fingerprint === fingerprint && service.runtimeGeneration === generation && service.rootThreadId === threadId;
+      await settleCodexSessionTitle({ service, threadId, userMessage: stdinData.message, canApply,
+        generateText: input => generateCodexText({ ...input, model: stdinData.model }, {
+          runtimeState: () => ({ access: entry.launchOptions.authMode }),
+          resolveCli: () => ({ status: 'resolved', command: entry.currentCliCommand?.() ?? entry.commandPrefix }),
+          nativeRuntime: { ...entry.nativeRuntime, env: { ...entry.nativeRuntime.env,
+            ...(entry.launchOptions.codexHome ? { CODEX_HOME: entry.launchOptions.codexHome } : {}) } },
+          baseEnv: pristineBaseEnv ?? process.env, nativeEnvironmentDependencies,
+          cwd: stdinData.cwd, timeoutMs: 15_000, signal,
+        }),
+      }, titleDependencies);
+    })();
+    // Several sends can queue before bootstrap; teardown must cancel and await
+    // all their listeners even though only the first created thread gets named.
+    entry.titleTask = Promise.all([entry.titleTask, titleTask]).then(() => {});
   }
-  return result;
+  return await operation.promise;
 }
 
 /** Execute one current native plan item as a fresh default-mode turn. */
@@ -590,6 +631,18 @@ export async function codexListThreadsPersistent(stdinData) {
   return { ...result, data: filterCodexProjectThreads(result.data, projectPath) };
 }
 
+/** Counts history independently so listing metadata never waits for full transcripts. */
+export async function codexCountThreadMessagesPersistent(stdinData) {
+  const { service } = ensureSessionService(stdinData);
+  let count = nativeHistoryCounters.get(service);
+  if (!count) {
+    count = createNativeHistoryCounter((method, params) => service.readOnly(method, params));
+    nativeHistoryCounters.set(service, count);
+  }
+  const threadId = stdinData.threadId;
+  return { threadId, messageCount: await count({ ...stdinData.params, id: threadId }) };
+}
+
 /** Keeps descendant directories while honoring Windows case and project boundaries. */
 export function filterCodexProjectThreads(threads, projectPath) {
   const normalize = (path) => String(path ?? '').replaceAll('\\', '/').replace(/\/$/, '')
@@ -689,6 +742,9 @@ export async function codexAbortTurnPersistent(stdinData) {
   if (!service) {
     return { stopped: false, reason: 'no-runtime' };
   }
+  // The user asked this turn to stop, so its auxiliary naming work stops too;
+  // a lingering title child would otherwise keep an app-server process alive.
+  sessionServices.get(sessionKeyOf(stdinData))?.titleAbort?.abort();
   const activeId = service.activeOperationId;
   if (!activeId) {
     const queued = service.queue[0];

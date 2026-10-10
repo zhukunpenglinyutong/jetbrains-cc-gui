@@ -23,6 +23,24 @@ test('an authoritative empty agent content array clears an earlier body without 
   assert.equal(messages[0].codexAuthoritative, true);
 });
 
+test('persisted string replies retain their body and native identity in live and history projections', () => {
+  for (const type of ['agentMessage', 'agent_message']) {
+    for (const authoritative of [false, true]) {
+      const item = { id: 'answer', type, content: 'Persisted reply', phase: 'final_answer' };
+      const [message] = projectCodexItemMessages(item, { threadId: 'thread', turnId: 'turn', authoritative });
+      assert.deepEqual(message.message.content, [{ type: 'text', text: 'Persisted reply' }]);
+      assert.equal(message.uuid, 'codex:thread:turn:answer');
+      assert.equal(message.codexPhase, 'final_answer');
+      assert.equal(message.codexAuthoritative, authoritative);
+    }
+  }
+  for (const text of ['', 'Authoritative text']) {
+    const [message] = projectCodexItemMessages({ id: 'answer', type: 'agentMessage', text, content: 'Old body' },
+      { authoritative: true });
+    assert.deepEqual(message.message.content, [{ type: 'text', text }]);
+  }
+});
+
 test('image views pair completed snapshots with results even without a status field', () => {
   const item = { id: 'image', type: 'imageView', path: '/workspace/preview.png' };
   assert.equal(projectCodexItemMessages(item, { authoritative: false }).length, 1);

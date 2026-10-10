@@ -17,11 +17,14 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.CancellationException;
 import java.util.function.BooleanSupplier;
 
 final class CodexHistoryPageIndex implements AutoCloseable {
     private static final long MAX_IDLE_NANOS = java.util.concurrent.TimeUnit.MINUTES.toNanos(5);
+    private static final int VALIDATION_BLOCK_BYTES = 4096;
     private final int maxSessions;
     private final int maxMessages;
     private final long maxBytes;
@@ -50,13 +53,10 @@ final class CodexHistoryPageIndex implements AutoCloseable {
         expire();
         Path source = reader.resolveSessionFile(sessionId);
         Snapshot snapshot = Snapshot.read(source);
-        Entry entry = entries.get(source);
-        if (entry != null && entry.snapshot != null && entry.snapshot.equals(snapshot)
-                && !entry.matchesContent(source)) {
-            remove(source);
-            entry = null;
-        }
-        if (entry != null && !entry.snapshot.equals(snapshot) && !entry.canAppend(source, snapshot)) {
+        Entry entry = this.entries.get(source);
+        // Windows replacement can preserve all exposed metadata, so a cache hit still needs content validation.
+        if (entry != null && (entry.snapshot.equals(snapshot)
+                ? !entry.stillRecognizesSource(source) : !entry.canAppend(source, snapshot))) {
             remove(source);
             entry = null;
         }
@@ -174,6 +174,8 @@ final class CodexHistoryPageIndex implements AutoCloseable {
         private Snapshot snapshot;
         private byte[] head;
         private byte[] tail;
+        private final List<byte[]> blockHashes = new ArrayList<>();
+        private int nextValidationBlock = 1;
         private boolean terminated;
         private JsonObject lastAssistant;
         private int lastAssistantIndex = -1;
@@ -254,39 +256,56 @@ final class CodexHistoryPageIndex implements AutoCloseable {
         }
 
         private boolean canAppend(Path source, Snapshot next) throws IOException {
-            if (snapshot == null || !terminated || next.size <= snapshot.size || !snapshot.sameFile(next)) {
+            if (this.snapshot == null || !this.terminated || next.size <= this.snapshot.size || !this.snapshot.sameFile(next)) {
                 return false;
             }
-            return matchesSamples(source);
+            return this.stillRecognizesSource(source);
         }
 
-        // Windows file replacement can preserve metadata. Check bounded content
-        // samples even when the snapshot appears unchanged before reusing pages.
-        private boolean matchesSamples(Path source) throws IOException {
+        private boolean stillRecognizesSource(Path source) throws IOException {
             try (RandomAccessFile input = new RandomAccessFile(source.toFile(), "r")) {
-                return Arrays.equals(head, sample(input, 0, head.length))
-                        && Arrays.equals(tail, sample(input, snapshot.size - tail.length, tail.length));
-            }
-        }
-
-        private boolean matchesContent(Path source) throws IOException {
-            if (head == null || tail == null || snapshot == null) {
-                return false;
-            }
-            try (RandomAccessFile input = new RandomAccessFile(source.toFile(), "r")) {
-                return Arrays.equals(head, sample(input, 0, head.length))
-                        && Arrays.equals(tail, sample(input, snapshot.size - tail.length, tail.length));
+                if (!Arrays.equals(this.head, this.sample(input, 0, this.head.length))
+                        || !Arrays.equals(this.tail, this.sample(input, this.snapshot.size - this.tail.length, this.tail.length))) {
+                    return false;
+                }
+                // At most 12 KiB per check; rotating blocks eventually find equal-metadata interior rewrites.
+                int endBlock = this.blockHashes.size() - 1;
+                if (endBlock > 1) {
+                    if (this.nextValidationBlock >= endBlock) {
+                        this.nextValidationBlock = 1;
+                    }
+                    int block = this.nextValidationBlock;
+                    this.nextValidationBlock = block + 1 >= endBlock ? 1 : block + 1;
+                    byte[] bytes = this.sample(input, (long) block * VALIDATION_BLOCK_BYTES, VALIDATION_BLOCK_BYTES);
+                    return Arrays.equals(this.blockHashes.get(block), this.checksum(bytes));
+                }
+                return true;
             }
         }
 
         private void capture(Path source, Snapshot next) throws IOException {
             try (RandomAccessFile input = new RandomAccessFile(source.toFile(), "r")) {
-                int length = (int) Math.min(4096, next.size);
-                head = sample(input, 0, length);
-                tail = sample(input, next.size - length, length);
-                terminated = next.size == 0 || tail[tail.length - 1] == '\n';
+                int length = (int) Math.min(VALIDATION_BLOCK_BYTES, next.size);
+                this.head = this.sample(input, 0, length);
+                this.tail = this.sample(input, next.size - length, length);
+                this.terminated = next.size == 0 || this.tail[this.tail.length - 1] == '\n';
+                // Preserve established checksums on append; only the previous partial block and new bytes need hashing.
+                int startBlock = this.snapshot == null ? 0 : Math.toIntExact(this.snapshot.size / VALIDATION_BLOCK_BYTES);
+                this.blockHashes.subList(startBlock, this.blockHashes.size()).clear();
+                for (long offset = (long) startBlock * VALIDATION_BLOCK_BYTES; offset < next.size; offset += VALIDATION_BLOCK_BYTES) {
+                    byte[] bytes = this.sample(input, offset, (int) Math.min(VALIDATION_BLOCK_BYTES, next.size - offset));
+                    this.blockHashes.add(this.checksum(bytes));
+                }
             }
-            snapshot = next;
+            this.snapshot = next;
+        }
+
+        private byte[] checksum(byte[] bytes) {
+            try {
+                return MessageDigest.getInstance("SHA-256").digest(bytes);
+            } catch (NoSuchAlgorithmException exception) {
+                throw new IllegalStateException("SHA-256 is required by the Java runtime", exception);
+            }
         }
 
         private byte[] sample(RandomAccessFile input, long offset, int length) throws IOException {

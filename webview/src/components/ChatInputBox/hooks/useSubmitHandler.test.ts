@@ -164,6 +164,35 @@ describe('useSubmitHandler', () => {
     expect(onInstallSdk).toHaveBeenCalled();
   });
 
+  it.each(['prompt', ''])('preserves the %s draft while image attachments are pending', (content) => {
+    const clearInput = vi.fn();
+    const setInternalAttachments = vi.fn();
+    const invalidateImagePastes = vi.fn();
+    const addToast = vi.fn();
+    const close = vi.fn();
+    const onSubmit = vi.fn();
+    const recordInputHistory = vi.fn();
+    const { result } = renderHook(() => useSubmitHandler({
+      getTextContent: () => content,
+      invalidateCache: vi.fn(), attachments: [], sdkStatusLoading: false, sdkInstalled: true,
+      currentProvider: 'claude', clearInput, externalAttachments: undefined,
+      setInternalAttachments, hasPendingImagePastes: () => true, invalidateImagePastes,
+      fileCompletion: { close }, commandCompletion: { close }, agentCompletion: { close },
+      promptCompletion: { close }, dollarCommandCompletion: { close },
+      recordInputHistory, onSubmit, addToast, t: (key) => key,
+    }));
+
+    result.current();
+
+    expect(addToast).toHaveBeenCalledWith('common.loading', 'info');
+    expect(clearInput).not.toHaveBeenCalled();
+    expect(setInternalAttachments).not.toHaveBeenCalled();
+    expect(invalidateImagePastes).not.toHaveBeenCalled();
+    expect(recordInputHistory).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it('submits content, closes completions, records history, and clears input', () => {
     vi.useFakeTimers();
     const clearInput = vi.fn();
@@ -171,12 +200,15 @@ describe('useSubmitHandler', () => {
     const close = vi.fn();
     const onSubmit = vi.fn();
     const invalidateCache = vi.fn();
+    const invalidateImagePastes = vi.fn();
 
     const { result } = renderHook(() =>
       useSubmitHandler({
         getTextContent: () => 'hello',
         invalidateCache,
         attachments: [createAttachment('a1')],
+        hasPendingImagePastes: () => false,
+        invalidateImagePastes,
         sdkStatusLoading: false,
         sdkInstalled: true,
         currentProvider: 'claude',
@@ -196,6 +228,7 @@ describe('useSubmitHandler', () => {
 
     result.current();
     expect(invalidateCache).toHaveBeenCalled();
+    expect(invalidateImagePastes).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalledTimes(5);
     expect(recordInputHistory).toHaveBeenCalledWith('hello');
     expect(clearInput).toHaveBeenCalled();
