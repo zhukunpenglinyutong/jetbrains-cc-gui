@@ -40,6 +40,10 @@ import {
 } from './grok-utils.js';
 import { requestPermissionFromJava } from '../../permission-ipc.js';
 import { AcpTerminalHost } from './acp-terminal-host.js';
+import {
+  isAskUserQuestionRequestMethod,
+  handleAskUserQuestionServerRequest,
+} from './grok-question-bridge.js';
 
 export { buildGrokContextUsagePayload, extractUsedTokens };
 
@@ -254,6 +258,14 @@ async function createRuntime(params, { log } = {}) {
         acp.respond(id, decision.response);
         return true;
       }
+      if (isAskUserQuestionRequestMethod(method, paramsReq)) {
+        return await handleAskUserQuestionServerRequest({
+          method,
+          params: paramsReq,
+          id,
+          acp,
+        });
+      }
       return false;
     },
   });
@@ -421,6 +433,15 @@ async function executeTurn(runtime, params, normalizer) {
         });
         acp.respond(id, decision.response);
         return true;
+      }
+      if (isAskUserQuestionRequestMethod(method, paramsReq)) {
+        return await handleAskUserQuestionServerRequest({
+          method,
+          params: paramsReq,
+          id,
+          acp,
+          emit,
+        });
       }
       if (typeof originalOnServerRequest === 'function') {
         return originalOnServerRequest(method, paramsReq, id, acp);

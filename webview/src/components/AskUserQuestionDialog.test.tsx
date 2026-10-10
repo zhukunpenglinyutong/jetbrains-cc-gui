@@ -67,6 +67,43 @@ describe('AskUserQuestionDialog provider label', () => {
 
     expect(screen.getByText('Codex 有一些问题想问你')).toBeTruthy();
   });
+
+  it('identifies Grok requests without rendering Claude title', () => {
+    render(
+      <AskUserQuestionDialog
+        isOpen
+        request={buildRequest({ provider: 'grok' })}
+        onSubmit={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('Grok has some questions for you')).toBeTruthy();
+    expect(screen.queryByText(/Claude/)).toBeNull();
+  });
+
+  it('omits the question chip when the header is empty', () => {
+    const { container } = render(
+      <AskUserQuestionDialog
+        isOpen
+        request={buildRequest({
+          questions: [
+            {
+              question: 'Pick a color',
+              header: '',
+              multiSelect: false,
+              options: [{ label: 'Red', description: '' }],
+            },
+          ],
+        })}
+        onSubmit={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(container.querySelector('.question-tag')).toBeNull();
+    expect(screen.getByText('Pick a color')).toBeTruthy();
+  });
 });
 
 describe('AskUserQuestionDialog countdown', () => {

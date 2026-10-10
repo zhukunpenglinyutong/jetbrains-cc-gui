@@ -72,6 +72,31 @@ function rememberClosedDialog(tokens: Set<string>, token?: string): void {
   }
 }
 
+function declineAskUserQuestion(
+  closedTokens: Set<string>,
+  request: { requestId: string; dialogToken?: string },
+): void {
+  rememberClosedDialog(closedTokens, request.dialogToken);
+  sendBridgeEvent('ask_user_question_response', JSON.stringify({
+    requestId: request.requestId,
+    dialogToken: request.dialogToken,
+    answers: {},
+  }));
+}
+
+function dropQueuedGrokQuestions(
+  pending: AskUserQuestionRequest[],
+  closedTokens: Set<string>,
+  keep: AskUserQuestionRequest,
+): AskUserQuestionRequest[] {
+  return pending.filter((item) => {
+    if (item.provider !== 'grok') return true;
+    if (item.requestId === keep.requestId && item.dialogToken === keep.dialogToken) return true;
+    declineAskUserQuestion(closedTokens, item);
+    return false;
+  });
+}
+
 interface ForceCloseableRequest {
   dialogToken?: string;
 }
@@ -226,10 +251,34 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
     if (request.dialogToken && closedAskUserQuestionTokensRef.current.has(request.dialogToken)) {
       return;
     }
+    // A newer Grok question retires every earlier Grok question. The bridge has
+    // already declined those ACP ids, so their dialogs must answer IPC and must
+    // not surface later. Claude, Codex, and DSH questions stay queued.
+    if (request.provider === 'grok') {
+      pendingAskUserQuestionRequestsRef.current = dropQueuedGrokQuestions(
+        pendingAskUserQuestionRequestsRef.current,
+        closedAskUserQuestionTokensRef.current,
+        request,
+      );
+    }
     // If an ask user question dialog is currently open, enqueue the new request instead of overriding.
     // This avoids losing follow-up requests when multiple questions arrive in quick succession.
+    // Grok replaces the open question: the previous ACP id is already declined, so the
+    // visible dialog must close and answer its IPC before the new one is shown.
     if (currentAskUserQuestionRequestRef.current) {
-      const currentId = currentAskUserQuestionRequestRef.current?.requestId;
+      const current = currentAskUserQuestionRequestRef.current;
+      const currentId = current.requestId;
+      if (
+        request.provider === 'grok'
+        && current.provider === 'grok'
+        && (request.requestId !== currentId || request.dialogToken !== current.dialogToken)
+      ) {
+        declineAskUserQuestion(closedAskUserQuestionTokensRef.current, current);
+        currentAskUserQuestionRequestRef.current = request;
+        setCurrentAskUserQuestionRequest(request);
+        setAskUserQuestionDialogOpen(true);
+        return;
+      }
       const alreadyQueued = pendingAskUserQuestionRequestsRef.current.some(
         (item) => item.requestId === request.requestId && item.dialogToken === request.dialogToken
       );

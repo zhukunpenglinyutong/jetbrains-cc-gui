@@ -46,7 +46,7 @@ export interface AskUserQuestionRequest {
   requestId: string;
   toolName: string;
   questions: Question[];
-  provider?: 'claude' | 'codex' | 'dsh';
+  provider?: 'claude' | 'codex' | 'dsh' | 'grok';
   /** Native Codex request may be visible without blocking the active turn. */
   isBlocking?: boolean;
   deadlineMs?: number;
@@ -101,11 +101,14 @@ const AskUserQuestionDialog = ({
   const normalizedQuestions = normalizeQuestions(request?.questions);
   const isCodexRequest = request?.provider === 'codex' || request?.toolName === 'request_user_input';
   const isDshRequest = request?.provider === 'dsh';
-  const dialogTitle = isDshRequest
-    ? t('askUserQuestion.dshTitle', 'DeepSeek Harness 有一些问题想问你')
-    : isCodexRequest
-      ? t('askUserQuestion.codexTitle', 'Codex 有一些问题想问你')
-      : t('askUserQuestion.title', 'Claude 有一些问题想问你');
+  const isGrokRequest = request?.provider === 'grok';
+  const dialogTitle = isGrokRequest
+    ? t('askUserQuestion.grokTitle', 'Grok has some questions for you')
+    : isDshRequest
+      ? t('askUserQuestion.dshTitle', 'DeepSeek Harness 有一些问题想问你')
+      : isCodexRequest
+        ? t('askUserQuestion.codexTitle', 'Codex 有一些问题想问你')
+        : t('askUserQuestion.title', 'Claude 有一些问题想问你');
 
   const handleCancel = useCallback(() => {
     if (request && markSubmitted()) {

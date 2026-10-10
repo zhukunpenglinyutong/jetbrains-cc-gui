@@ -29,6 +29,25 @@ export function resolveGrokBinary() {
 }
 
 /**
+ * argv for `grok agent stdio`.
+ * Windows CreateProcess cannot execute a node script (EFTYPE). A GROK_CLI_PATH
+ * that points at one has to be launched through node.exe.
+ * @param {string} bin
+ * @param {NodeJS.Platform} [platform]
+ */
+export function resolveGrokAgentLaunch(bin, platform = process.platform) {
+  const agentArgs = ['agent', 'stdio'];
+  if (platform === 'win32' && /\.(?:mjs|cjs|js)$/i.test(String(bin || ''))) {
+    return {
+      file: process.execPath,
+      args: [bin, ...agentArgs],
+      windowsHide: true,
+    };
+  }
+  return { file: bin, args: agentArgs, windowsHide: false };
+}
+
+/**
  * Normalize model identifier for Grok.
  * Sentinel or fallback values ("grok", "", "auto", "default", "(default)",
  * "__config_default__", "config-default", ...) map to "grok-4.6".

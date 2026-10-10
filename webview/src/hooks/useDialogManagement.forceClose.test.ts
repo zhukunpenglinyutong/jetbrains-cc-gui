@@ -1,5 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
+import { vi } from 'vitest';
+import { sendBridgeEvent } from '../utils/bridge';
 import { useDialogManagement } from './useDialogManagement';
+
+vi.mock('../utils/bridge', () => ({ sendBridgeEvent: vi.fn() }));
 
 const t = ((key: string) => key) as any;
 
@@ -58,6 +62,84 @@ describe('useDialogManagement - forceClose queue draining (issue #1360)', () => 
     act(() => { result.current.forceCloseAskUserQuestionDialog('A'); });
     expect(result.current.askUserQuestionDialogOpen).toBe(false);
     expect(result.current.currentAskUserQuestionRequest).toBeNull();
+  });
+
+  it('replaces an open Grok question instead of queueing it behind the old dialog', () => {
+    const { result } = renderHook(() => useDialogManagement({ t }));
+    const ask = (requestId: string) => ({
+      requestId,
+      provider: 'grok' as const,
+      toolName: 'AskUserQuestion',
+      questions: [],
+      dialogToken: `token-${requestId}`,
+    });
+
+    act(() => { result.current.openAskUserQuestionDialog(ask('A')); });
+    act(() => { result.current.openAskUserQuestionDialog(ask('B')); });
+
+    expect(result.current.currentAskUserQuestionRequest?.requestId).toBe('B');
+    expect(sendBridgeEvent).toHaveBeenCalledWith(
+      'ask_user_question_response',
+      JSON.stringify({ requestId: 'A', dialogToken: 'token-A', answers: {} }),
+    );
+  });
+
+  it('ignores a replay of the Grok question that was just replaced', () => {
+    vi.mocked(sendBridgeEvent).mockClear();
+    const { result } = renderHook(() => useDialogManagement({ t }));
+    const ask = (requestId: string) => ({
+      requestId,
+      provider: 'grok' as const,
+      toolName: 'AskUserQuestion',
+      questions: [],
+      dialogToken: `token-${requestId}`,
+    });
+
+    act(() => { result.current.openAskUserQuestionDialog(ask('A')); });
+    act(() => { result.current.openAskUserQuestionDialog(ask('B')); });
+    act(() => { result.current.openAskUserQuestionDialog(ask('A')); });
+
+    expect(result.current.currentAskUserQuestionRequest?.requestId).toBe('B');
+    expect(sendBridgeEvent).toHaveBeenCalledTimes(1);
+    expect(sendBridgeEvent).toHaveBeenCalledWith(
+      'ask_user_question_response',
+      JSON.stringify({ requestId: 'A', dialogToken: 'token-A', answers: {} }),
+    );
+  });
+
+  it('answers a queued Grok question when a newer one arrives behind another provider', () => {
+    vi.mocked(sendBridgeEvent).mockClear();
+    const { result } = renderHook(() => useDialogManagement({ t }));
+    const ask = (requestId: string, provider: 'claude' | 'codex' | 'grok') => ({
+      requestId,
+      provider,
+      toolName: 'AskUserQuestion',
+      questions: [],
+      dialogToken: `token-${requestId}`,
+    });
+
+    act(() => { result.current.openAskUserQuestionDialog(ask('C', 'claude')); });
+    act(() => { result.current.openAskUserQuestionDialog(ask('D', 'codex')); });
+    act(() => { result.current.openAskUserQuestionDialog(ask('A', 'grok')); });
+    act(() => { result.current.openAskUserQuestionDialog(ask('B', 'grok')); });
+
+    expect(result.current.currentAskUserQuestionRequest?.requestId).toBe('C');
+    expect(sendBridgeEvent).toHaveBeenCalledWith(
+      'ask_user_question_response',
+      JSON.stringify({ requestId: 'A', dialogToken: 'token-A', answers: {} }),
+    );
+    expect(sendBridgeEvent).not.toHaveBeenCalledWith(
+      'ask_user_question_response',
+      JSON.stringify({ requestId: 'B', dialogToken: 'token-B', answers: {} }),
+    );
+    expect(sendBridgeEvent).not.toHaveBeenCalledWith(
+      'ask_user_question_response',
+      JSON.stringify({ requestId: 'D', dialogToken: 'token-D', answers: {} }),
+    );
+
+    act(() => { result.current.forceCloseAskUserQuestionDialog('C', 'token-C'); });
+
+    expect(result.current.currentAskUserQuestionRequest?.requestId).toBe('D');
   });
 
   it('forceClosePermissionDialog(null) drains the whole permission queue', () => {

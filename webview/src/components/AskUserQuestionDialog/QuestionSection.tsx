@@ -36,9 +36,11 @@ const QuestionSection = ({
 
   return (
     <div className="ask-user-question-dialog-question">
-      <div className="question-header">
-        <span className="question-tag">{question.header}</span>
-      </div>
+      {question.header?.trim() ? (
+        <div className="question-header">
+          <span className="question-tag">{question.header}</span>
+        </div>
+      ) : null}
       <p className="question-text">{question.question}</p>
 
       {/* Supporting detail (DSH's plan under review). It is the thing being

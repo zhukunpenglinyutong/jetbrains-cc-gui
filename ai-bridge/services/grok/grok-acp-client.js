@@ -13,6 +13,7 @@ import path from 'node:path';
 import { homedir } from 'node:os';
 import {
   resolveGrokBinary,
+  resolveGrokAgentLaunch,
   selectGrokAuthMethodId,
   normalizeAuthMethod,
   applyGrokBaseUrlEnv,
@@ -25,6 +26,10 @@ import {
   buildGrokImageBlocks,
   GROK_IMAGE_ONLY_FALLBACK_TEXT,
 } from '../../utils/cli-image-input.js';
+import {
+  isAskUserQuestionRequestMethod,
+  handleAskUserQuestionServerRequest,
+} from './grok-question-bridge.js';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 
@@ -270,10 +275,12 @@ export class GrokAcpClient {
     if (this.proc) return;
 
     const bin = resolveGrokBinary();
-    this.proc = spawn(bin, ['agent', 'stdio'], {
+    const launch = resolveGrokAgentLaunch(bin);
+    this.proc = spawn(launch.file, launch.args, {
       cwd: this.cwd,
       env: this.env,
       stdio: ['pipe', 'pipe', 'pipe'],
+      ...(launch.windowsHide ? { windowsHide: true } : {}),
     });
 
     this.activeSessionId = null;
@@ -747,6 +754,16 @@ export async function runAcpTurn({
         });
         acp.respond(id, decision.response);
         return true;
+      }
+
+      if (isAskUserQuestionRequestMethod(method, params)) {
+        return await handleAskUserQuestionServerRequest({
+          method,
+          params,
+          id,
+          acp,
+          emit,
+        });
       }
 
       return false;

@@ -184,6 +184,12 @@ public class ChatWindowDelegate {
                 }
             }
         }
+        // Grok is not a MarkerCliBridge. Its daemon reads CLAUDE_SESSION_ID once at
+        // launch; PermissionService only sees files under this same id.
+        com.github.claudecodegui.provider.grok.GrokSDKBridge grokSDKBridge = host.getGrokSDKBridge();
+        if (grokSDKBridge != null) {
+            grokSDKBridge.setSessionId(sessionId);
+        }
     }
 
     public void loadNodePathFromSettings() {
