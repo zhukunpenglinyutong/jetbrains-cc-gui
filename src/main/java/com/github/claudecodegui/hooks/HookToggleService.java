@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.DosFileAttributes;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.UUID;
@@ -263,7 +264,7 @@ public final class HookToggleService {
                 if (!("disabled:" + entry.get("revision").getAsString()).equals(expectedRevision)) {
                     return failure(request, "HOOK_REVISION_CONFLICT");
                 }
-                if (!entry.get("revision").getAsString().equals(revision(quarantine))) {
+                if (!HookSourceRevision.matchesStored(quarantine, entry.get("revision").getAsString())) {
                     return failure(request, "HOOK_QUARANTINE_MODIFIED");
                 }
                 Files.createDirectories(script.original.getParent());
@@ -544,11 +545,13 @@ public final class HookToggleService {
     }
 
     private static void moveAtomically(Path source, Path target) throws IOException {
+        DosFileAttributes attributes = HookMutationService.readDosAttributes(source);
         try {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (java.nio.file.AtomicMoveNotSupportedException e) {
             Files.move(source, target);
         }
+        HookMutationService.copyDosAttributes(attributes, target);
     }
 
     private static JsonObject withLock(
@@ -629,7 +632,7 @@ public final class HookToggleService {
     }
 
     private static String revision(Path path) throws IOException {
-        return Files.size(path) + ":" + Files.getLastModifiedTime(path).toMillis();
+        return HookSourceRevision.read(path);
     }
 
     private static JsonObject success() {

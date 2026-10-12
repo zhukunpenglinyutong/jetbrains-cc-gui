@@ -201,6 +201,7 @@ public final class HookMutationService {
 
     private static void replaceAtomically(Path target, String content) throws IOException {
         Path parent = target.getParent();
+        DosFileAttributes dosAttributes = readDosAttributes(target);
         Path temporary = Files.createTempFile(parent, ".ccgui-hook-", ".tmp");
         try {
             Files.writeString(temporary, content, StandardCharsets.UTF_8, StandardOpenOption.TRUNCATE_EXISTING);
@@ -210,6 +211,7 @@ public final class HookMutationService {
             } catch (AtomicMoveNotSupportedException e) {
                 Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
             }
+            copyDosAttributes(dosAttributes, target);
         } finally {
             Files.deleteIfExists(temporary);
         }
@@ -274,24 +276,39 @@ public final class HookMutationService {
     }
 
     private static void copyDosAttributes(Path source, Path target) {
+        copyDosAttributes(readDosAttributes(source), target);
+    }
+
+    static DosFileAttributes readDosAttributes(Path source) {
         try {
             DosFileAttributeView sourceView = Files.getFileAttributeView(source, DosFileAttributeView.class);
+            return sourceView == null ? null : sourceView.readAttributes();
+        } catch (UnsupportedOperationException | IOException | IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    static void copyDosAttributes(DosFileAttributes attributes, Path target) {
+        if (attributes == null) {
+            return;
+        }
+        try {
             DosFileAttributeView targetView = Files.getFileAttributeView(target, DosFileAttributeView.class);
-            if (sourceView == null || targetView == null) {
+            if (targetView == null) {
                 return;
             }
-            DosFileAttributes attributes = sourceView.readAttributes();
-            targetView.setArchive(attributes.isArchive());
             targetView.setHidden(attributes.isHidden());
             targetView.setSystem(attributes.isSystem());
             targetView.setReadOnly(attributes.isReadOnly());
+            // Windows attribute updates and renames can set Archive; restore it last.
+            targetView.setArchive(attributes.isArchive());
         } catch (UnsupportedOperationException | IOException | IllegalArgumentException ignored) {
             // Attribute views differ by filesystem; unsupported views are best effort.
         }
     }
 
     private static String revision(Path path) throws IOException {
-        return Files.size(path) + ":" + Files.getLastModifiedTime(path).toMillis();
+        return HookSourceRevision.read(path);
     }
 
     private static JsonObject success() {

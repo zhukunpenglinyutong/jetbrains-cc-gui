@@ -199,7 +199,8 @@ public final class HookCatalogService {
         if (!object.has("type")) {
             issues.add("TYPE_MISSING");
         }
-        JsonObject item = baseItem("claude", scope, event, settingsPath, command, matcher);
+        JsonObject item = baseItem("claude", scope, event, settingsPath, command, matcher,
+                source.get("revision").getAsString());
         item.addProperty("sourceId", item.get("sourceId").getAsString() + "-" + shortHash(managedKey));
         item.addProperty("managedKey", managedKey);
         // Claude Code has no per-hook enabled field; CCGUI manages individual state separately.
@@ -251,7 +252,7 @@ public final class HookCatalogService {
         String relative = root.relativize(file).toString();
         String event = relative;
         String command = file.toAbsolutePath().normalize().toString();
-        JsonObject item = baseItem(provider, scope, event, file, command, null);
+        JsonObject item = baseItem(provider, scope, event, file, command, null, revision(file));
         item.addProperty("enabled", true);
         item.addProperty("toggleSupported", false);
         item.addProperty("managedToggleSupported", true);
@@ -303,7 +304,7 @@ public final class HookCatalogService {
             return;
         }
         String location = settingsPath.toAbsolutePath().normalize().toString();
-        String revision = revision(settingsPath);
+        String revision = source.get("revision").getAsString();
         for (JsonElement element : entries) {
             if (!element.isJsonObject()) {
                 continue;
@@ -318,7 +319,7 @@ public final class HookCatalogService {
             }
             String command = primitiveString(hook, "command");
             JsonObject item = baseItem("claude", scope, stringValue(entry, "event"), settingsPath, command,
-                    stringValue(entry, "matcher"));
+                    stringValue(entry, "matcher"), revision);
             item.addProperty("sourceId", stringValue(entry, "sourceId"));
             if (entry.has("managedKey")) {
                 item.addProperty("managedKey", stringValue(entry, "managedKey"));
@@ -373,7 +374,7 @@ public final class HookCatalogService {
                 continue;
             }
             JsonObject item = baseItem(provider, scope, stringValue(entry, "event"), original,
-                    original.toString(), null);
+                    original.toString(), null, "disabled:" + stringValue(entry, "revision"));
             item.addProperty("sourceId", stringValue(entry, "sourceId"));
             item.addProperty("enabled", false);
             item.addProperty("toggleSupported", false);
@@ -414,7 +415,7 @@ public final class HookCatalogService {
             }
             for (CodexHookToml.Entry entry : parsed.entries()) {
                 JsonObject item = baseItem("codex", scope, entry.event(), configPath,
-                        entry.command(), entry.matcher());
+                        entry.command(), entry.matcher(), source.get("revision").getAsString());
                 item.addProperty("sourceId", item.get("sourceId").getAsString()
                         + "-" + shortHash(entry.managedKey()));
                 item.addProperty("managedKey", entry.managedKey());
@@ -488,7 +489,7 @@ public final class HookCatalogService {
     }
 
     private JsonObject baseItem(String provider, String scope, String event, Path location,
-                                String command, String matcher) {
+                                String command, String matcher, String sourceRevision) {
         JsonObject item = new JsonObject();
         item.addProperty("sourceId", provider + "-" + scope.toLowerCase() + "-" + shortHash(
                 location.toAbsolutePath().normalize() + "|" + event + "|" + (command == null ? "" : command)));
@@ -501,7 +502,7 @@ public final class HookCatalogService {
         item.addProperty("command", command == null ? "" : sanitizePreview(command));
         item.addProperty("rawLocation", location.toAbsolutePath().normalize().toString());
         item.addProperty("schemaVersion", 1);
-        item.addProperty("revision", revision(location));
+        item.addProperty("revision", sourceRevision);
         addLastModified(item, location);
         item.addProperty("editSupported", true);
         item.add("extensions", new JsonObject());
@@ -577,7 +578,7 @@ public final class HookCatalogService {
     private static String revision(Path path) {
         try {
             if (Files.isRegularFile(path)) {
-                return Files.size(path) + ":" + Files.getLastModifiedTime(path).toMillis();
+                return HookSourceRevision.read(path);
             }
             if (Files.exists(path)) {
                 return "directory:" + Files.getLastModifiedTime(path).toMillis();
