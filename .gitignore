@@ -87,3 +87,6 @@ logs/*.log
 
 # Playwright MCP local test artifacts
 .playwright-mcp/
+
+# Local agent planning and review documents
+/doc-agent/

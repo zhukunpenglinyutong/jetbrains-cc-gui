@@ -1,7 +1,7 @@
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 
-export type SettingsTab = 'basic' | 'providers' | 'dependencies' | 'usage' | 'permissions' | 'promptEnhancer' | 'commit' | 'mcp' | 'agents' | 'prompts' | 'skills' | 'pet' | 'other' | 'community';
+export type SettingsTab = 'basic' | 'providers' | 'dependencies' | 'usage' | 'permissions' | 'promptEnhancer' | 'commit' | 'mcp' | 'agents' | 'prompts' | 'skills' | 'pet' | 'clawBot' | 'other' | 'community';
 
 interface SidebarItem {
   key: SettingsTab;
@@ -22,6 +22,7 @@ const sidebarItems: SidebarItem[] = [
   { key: 'prompts', icon: 'codicon-notebook', labelKey: 'settings.prompts' },
   { key: 'skills', icon: 'codicon-book', labelKey: 'settings.skills' },
   { key: 'pet', icon: 'codicon-hubot', labelKey: 'settings.pet.title' },
+  { key: 'clawBot', icon: 'codicon-comment-discussion', labelKey: 'settings.clawBot.title' },
   { key: 'other', icon: 'codicon-ellipsis', labelKey: 'settings.other.title' },
   { key: 'community', icon: 'codicon-comment-discussion', labelKey: 'settings.community' },
 ];

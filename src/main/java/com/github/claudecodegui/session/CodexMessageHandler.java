@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Codex message callback handler.
@@ -33,6 +34,7 @@ public class CodexMessageHandler implements MessageCallback {
     private final SessionState state;
     private final Object turnOwner;
     private final String runtimeSessionEpoch;
+    private final CompletableFuture<Void> turnCompletion;
     /**
      * callback handler.
      */
@@ -76,26 +78,35 @@ public class CodexMessageHandler implements MessageCallback {
      * @since 1.0.0
      */
     public CodexMessageHandler(SessionState state, CallbackHandler callbackHandler) {
-        this(state, callbackHandler, true, null, state.getTurnOwner());
+        this(state, callbackHandler, true, null, state.getTurnOwner(), null);
     }
 
     /**
      * Control receivers omit duplicate error toasts while retaining turn fencing.
      */
     CodexMessageHandler(SessionState state, CallbackHandler callbackHandler, boolean reportStateErrors) {
-        this(state, callbackHandler, reportStateErrors, null, state.getTurnOwner());
+        this(state, callbackHandler, reportStateErrors, null, state.getTurnOwner(), null);
     }
 
     CodexMessageHandler(SessionState state, CallbackHandler callbackHandler, String clientMessageId) {
-        this(state, callbackHandler, true, clientMessageId, state.getTurnOwner());
+        this(state, callbackHandler, true, clientMessageId, state.getTurnOwner(), null);
+    }
+
+    CodexMessageHandler(SessionState state, CallbackHandler callbackHandler, CompletableFuture<Void> turnCompletion) {
+        this(state, callbackHandler, true, null, state.getTurnOwner(), turnCompletion);
+    }
+
+    CodexMessageHandler(SessionState state, CallbackHandler callbackHandler, String clientMessageId, CompletableFuture<Void> turnCompletion) {
+        this(state, callbackHandler, true, clientMessageId, state.getTurnOwner(), turnCompletion);
     }
 
     private CodexMessageHandler(SessionState state, CallbackHandler callbackHandler,
-                                boolean reportStateErrors, String clientMessageId, Object turnOwner) {
+                                boolean reportStateErrors, String clientMessageId, Object turnOwner, CompletableFuture<Void> turnCompletion) {
         this.state = state;
         this.turnOwner = turnOwner;
         this.runtimeSessionEpoch = state.getRuntimeSessionEpoch();
         this.callbackHandler = callbackHandler;
+        this.turnCompletion = turnCompletion;
         this.reportStateErrors = reportStateErrors;
         this.clientMessageId = clientMessageId;
     }
@@ -166,6 +177,11 @@ public class CodexMessageHandler implements MessageCallback {
                 LOG.debug("CodexMessageHandler: Unhandled message type: " + type);
             }
         }
+        // Complete outside the session lock: consumers may perform IPC or start another turn.
+        // MESSAGE_END follows the final text (including the no-response fallback), unlike STREAM_END.
+        if ("message_end".equals(type) && turnCompletion != null) {
+            turnCompletion.complete(null);
+        }
     }
 
     /**
@@ -209,6 +225,9 @@ public class CodexMessageHandler implements MessageCallback {
             this.callbackHandler.notifyStateChange(this.state.isBusy(), this.state.isLoading(),
                     this.reportStateErrors ? this.state.getError() : null);
         }
+        if (turnCompletion != null) {
+            turnCompletion.completeExceptionally(new IllegalStateException(error));
+        }
     }
 
     /**
@@ -241,13 +260,17 @@ public class CodexMessageHandler implements MessageCallback {
             resetStreamingAccumulator();
             callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
         }
+        if (turnCompletion != null) {
+            turnCompletion.complete(null);
+        }
     }
 
     // ===== Private methods =====
 
     private boolean ownsCurrentTurn() {
         return this.state.isCurrentTurn(this.turnOwner)
-                && this.runtimeSessionEpoch.equals(this.state.getRuntimeSessionEpoch());
+                && this.runtimeSessionEpoch.equals(this.state.getRuntimeSessionEpoch())
+                && (this.turnCompletion == null || !this.turnCompletion.isDone());
     }
 
     /**
@@ -1081,7 +1104,10 @@ public class CodexMessageHandler implements MessageCallback {
      * @since 1.0.0
      */
     private void handleMessageEnd() {
-        LOG.debug("Codex message_end received, deferring stream cleanup to stream_end/onComplete");
+        if (turnCompletion != null && !streamEndedThisTurn) {
+            handleStreamEnd();
+        }
+        LOG.debug("Codex message_end received");
     }
 
     /**

@@ -1,0 +1,657 @@
+.section {
+  max-width: 800px;
+  padding-bottom: 24px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: var(--text-primary);
+}
+
+.description {
+  color: var(--text-tertiary);
+  margin: 0 0 20px;
+  font-size: 13px;
+}
+
+.notice {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  font-size: 13px;
+}
+
+.notice .codicon {
+  color: var(--accent-primary);
+  flex: 0 0 auto;
+}
+
+.noticeDetail {
+  display: block;
+  margin-top: 6px;
+}
+
+.pairingPanel {
+  margin-top: 16px;
+  padding: 20px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+}
+
+.pairingContent {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+}
+
+.pairingNotice {
+  margin: 0 0 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.qrCode {
+  display: block;
+  width: min(224px, 100%);
+  height: auto;
+  margin: 0 auto;
+  padding: 8px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
+}
+
+.pairingActions {
+  width: min(280px, 100%);
+  min-width: 0;
+}
+
+.pairingActions .actionRow {
+  justify-content: center;
+  margin-top: 0;
+}
+
+.pairingActions button {
+  flex: 1 1 104px;
+  min-height: 36px;
+}
+
+.verifyField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.verifyField input {
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton,
+.refreshButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.primaryButton {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+}
+
+.secondaryButton,
+.dangerButton {
+  border-color: var(--border-secondary);
+  background: var(--bg-secondary);
+}
+
+.dangerButton {
+  color: var(--error-color, #f14c4c);
+}
+
+.primaryButton:hover,
+.secondaryButton:hover,
+.dangerButton:hover,
+.refreshButton:hover {
+  filter: brightness(1.08);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.dangerButton:disabled,
+.refreshButton:disabled {
+  cursor: default;
+  opacity: 0.55;
+  filter: none;
+}
+
+.error {
+  margin: 12px 0 0;
+  color: var(--error-color, #f14c4c);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.row .error {
+  min-width: 0;
+  margin: 8px 0;
+  text-align: right;
+  line-height: 1.5;
+}
+
+.row .label {
+  flex-shrink: 0;
+}
+
+.card {
+  border: 1px solid var(--border-secondary);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  gap: 12px;
+  border: 0;
+  color: var(--text-primary);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.cardHeader:hover {
+  background: var(--bg-tertiary);
+}
+
+.cardHeader:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: -1px;
+}
+
+.cardHeaderTitle {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cardHeaderSummary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+.cardBody {
+  border-top: 1px solid var(--border-secondary);
+}
+
+.cardBody.collapsed {
+  display: none;
+}
+
+.cardBody.expanded {
+  display: block;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 42px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border-secondary);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.label {
+  color: var(--text-tertiary);
+}
+
+.badge {
+  padding: 3px 8px;
+  border-radius: 10px;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.leader {
+  color: var(--success-color, #4caf50);
+}
+
+.warning {
+  color: var(--warning-color, #d7ba7d);
+}
+
+.follower {
+  color: var(--accent-primary);
+}
+
+.bound {
+  color: var(--success-color, #4caf50);
+}
+
+.unbound {
+  color: var(--text-tertiary);
+}
+
+.stopped,
+.unknown {
+  color: var(--text-tertiary);
+}
+
+.refreshButton {
+  border-color: var(--border-secondary);
+  background: var(--bg-secondary);
+}
+
+.footerActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.progressSettings {
+  margin-top: 16px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.progressSettings h4 {
+  margin: 0 0 6px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.progressSettings .cardBody {
+  padding: 0;
+}
+
+.progressSettings p {
+  margin: 0 0 14px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.progressFields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  align-items: start;
+  gap: 16px 12px;
+}
+
+.progressField {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.progressField input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.progressSettings .primaryButton {
+  margin: 16px 0 0;
+}
+
+.senderAccess {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+}
+
+.senderAccess h4 {
+  margin: 0 0 6px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.senderAccess p {
+  margin: 0 0 12px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.senderAccessControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.senderAccessControls input {
+  flex: 1 1 180px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.senderAccessControls button {
+  flex: 0 1 auto;
+  white-space: nowrap;
+}
+
+.senderList {
+  margin-top: 12px;
+  border-top: 1px solid var(--border-secondary);
+}
+
+.senderListHeader,
+.senderListRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.senderListHeader {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.senderListPages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.senderListRow {
+  border-top: 1px solid var(--border-secondary);
+}
+
+.senderListRow code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+}
+
+.senderDetails {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.senderLastUsed {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.senderListEmpty {
+  margin: 0;
+  padding: 8px 0;
+  color: var(--text-tertiary);
+}
+
+.refreshButton:hover {
+  background: var(--bg-tertiary);
+}
+
+.progressSettings .row {
+  padding: 8px 0;
+  min-height: 24px;
+  align-items: flex-start;
+  overflow-wrap: anywhere;
+}
+
+.progressSettings .row + .progressFields {
+  margin-top: 16px;
+}
+
+.progressSettings .formHints {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: var(--bg-primary);
+}
+
+.progressSettings .formHints p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.progressSettings .formHints p + p {
+  margin-top: 6px;
+}
+
+.progressField input:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: -1px;
+}
+
+.progressSubsection {
+  margin: 0;
+  border-top: 1px solid var(--border-secondary);
+}
+
+.progressSubsection:first-child {
+  border-top: 0;
+}
+
+.subsectionHeader {
+  padding: 16px 20px 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.subsectionBody {
+  padding: 0 20px 12px;
+}
+
+.subsectionBody > p:first-child {
+  margin-top: 0;
+  padding-top: 2px;
+}
+
+.subsectionBody .progressFields {
+  margin-top: 16px;
+}
+
+.subsectionBody .formHints {
+  margin-top: 16px;
+}
+
+.subsectionBody .row {
+  padding: 11px 0;
+}
+
+.settingsActions {
+  display: flex;
+  justify-content: flex-start;
+  padding: 8px 0 10px;
+}
+
+.settingsActions .primaryButton {
+  margin: 0;
+}
+
+.recoveryCard {
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.recoveryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+}
+
+.recoveryHeader h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.recoveryCard .secondaryButton {
+  font-size: 12px;
+}
+
+.recoveryCard .secondaryButton:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.recoveryDescription {
+  margin: 10px 0 0;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.recoveryEmpty {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  color: var(--text-tertiary);
+  background: var(--bg-primary);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.recoveryEmpty > :global(.codicon) {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.recoveryUnavailable {
+  color: var(--warning-color, #d7ba7d);
+}
+
+.recoveryItem {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-secondary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.recoveryItemHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--text-primary);
+}
+
+.recoveryEventId,
+.recoveryMeta {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.recoveryEventId {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-primary);
+}
+
+.recoveryMeta {
+  margin-top: 4px;
+}
+
+.recoveryMeta .error {
+  margin: 0;
+  font-size: inherit;
+}
+
+.recoveryReason {
+  margin: 8px 0;
+}
+
+.recoveryItem > .secondaryButton {
+  margin-top: 10px;
+}

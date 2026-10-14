@@ -12,6 +12,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -25,7 +27,8 @@ public class CodexMessageHandlerTest {
     @Test
     public void startupErrorKeepsTheSubmittingClientIdentity() {
         SessionState state = new SessionState();
-        CodexMessageHandler handler = new CodexMessageHandler(state, new CallbackHandler(), "submitted-client");
+        CompletableFuture<Void> completion = new CompletableFuture<>();
+        CodexMessageHandler handler = new CodexMessageHandler(state, new CallbackHandler(), "submitted-client", completion);
         JsonObject laterUser = new JsonObject();
         laterUser.addProperty("clientMessageId", "later-client");
         state.addMessage(new Message(Message.Type.USER, "Later visible input", laterUser));
@@ -37,6 +40,7 @@ public class CodexMessageHandlerTest {
         assertTrue("startup error must carry its own submission identity", error.raw != null);
         assertEquals("submitted-client", error.raw.get("clientMessageId").getAsString());
         assertEquals("thread has an active writer", error.content);
+        assertTrue("startup errors must also release the remote turn", completion.isCompletedExceptionally());
     }
 
     /** Normalizes native and legacy image sources before replacing the visible user content. */
@@ -81,6 +85,88 @@ public class CodexMessageHandlerTest {
         assertEquals(2, state.getMessages().size());
         assertEquals("ab", state.getMessages().get(0).content);
         assertEquals("b", state.getMessages().get(1).content);
+    }
+
+    @Test
+    public void finalMessageCompletesTurnBeforeProcessExitAndOutsideSessionLock() {
+        SessionState state = new SessionState();
+        state.beginTurn();
+        CompletableFuture<Void> completion = new CompletableFuture<>();
+        CodexMessageHandler handler = new CodexMessageHandler(state, new CallbackHandler(), "submitted-client", completion);
+        AtomicInteger replies = new AtomicInteger();
+        CompletableFuture<Void> reply = completion.thenRun(() -> {
+            assertFalse(Thread.holdsLock(state.getMessageStateLock()));
+            assertFalse(state.isBusy());
+            assertFalse(state.isLoading());
+            assertEquals("Context compacted", state.getMessages().get(state.getMessages().size() - 1).content);
+            replies.incrementAndGet();
+        });
+
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "Context compacted");
+        handler.onMessage("stream_end", "");
+        assertFalse(completion.isDone());
+        handler.onMessage("message_end", "");
+        reply.join();
+        assertEquals(1, replies.get());
+
+        // Cleanup can finish much later; it must not change the successful result or reply twice.
+        handler.onError("Process cleanup timed out");
+        handler.onComplete(new SDKResult());
+        handler.onMessage("message_end", "");
+        assertEquals(1, replies.get());
+        assertEquals(null, state.getError());
+    }
+
+    @Test
+    public void streamEndWaitsForFallbackTextOrErrorInsteadOfReportingSuccessEarly() {
+        SessionState state = new SessionState();
+        state.beginTurn();
+        CompletableFuture<Void> completion = new CompletableFuture<>();
+        CodexMessageHandler handler = new CodexMessageHandler(state, new CallbackHandler(), completion);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("stream_end", "");
+        assertFalse(completion.isDone());
+        handler.onMessage("assistant", "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\","
+                + "\"content\":[{\"type\":\"text\",\"text\":\"No text response\"}]}}");
+        handler.onMessage("message_end", "");
+        assertTrue(completion.isDone());
+        assertFalse(completion.isCompletedExceptionally());
+        assertEquals("No text response", state.getMessages().get(0).content);
+
+        state.beginTurn();
+        CompletableFuture<Void> failed = new CompletableFuture<>();
+        CodexMessageHandler failingHandler = new CodexMessageHandler(state, new CallbackHandler(), failed);
+        failingHandler.onMessage("stream_start", "");
+        failingHandler.onMessage("stream_end", "");
+        failingHandler.onError("Turn failed");
+        assertTrue(failed.isCompletedExceptionally());
+        assertEquals("Turn failed", state.getError());
+    }
+
+    @Test
+    public void successfulMessageEndWithoutStreamEndClearsBusyState() {
+        SessionState state = new SessionState();
+        state.beginTurn();
+        CompletableFuture<Void> completion = new CompletableFuture<>();
+        CodexMessageHandler handler = new CodexMessageHandler(state, new CallbackHandler(), completion);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("message_end", "");
+        assertTrue(completion.isDone());
+        assertFalse(state.isBusy());
+        assertFalse(state.isLoading());
+    }
+
+    @Test
+    public void processCompletionStillFinishesTurnsWithoutMessageEnd() {
+        SessionState state = new SessionState();
+        state.beginTurn();
+        CompletableFuture<Void> completion = new CompletableFuture<>();
+        CodexMessageHandler handler = new CodexMessageHandler(state, new CallbackHandler(), completion);
+        handler.onMessage("stream_start", "");
+        handler.onComplete(new SDKResult());
+        assertTrue(completion.isDone());
+        assertFalse(state.isBusy());
     }
 
     private static final class RecordingCallback implements ClaudeSession.SessionCallback {

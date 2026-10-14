@@ -129,8 +129,8 @@ export async function requestAskUserQuestionAnswers(input) {
 
     const requestData = {
       requestId,
-      toolName: 'AskUserQuestion',
-      questions: input.questions || [],
+      toolName: typeof input?.toolName === 'string' && input.toolName.trim() ? input.toolName.trim() : 'AskUserQuestion',
+      questions: input?.questions || [],
       timestamp: new Date().toISOString(),
       cwd: process.cwd()
     };
