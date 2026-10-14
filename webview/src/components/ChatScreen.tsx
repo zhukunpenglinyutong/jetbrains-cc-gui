@@ -28,6 +28,8 @@ import { CodexPetStatusBridge } from './codexPet/CodexPetStatusBridge';
 import { shouldToggleCodexPet } from './codexPet/petState';
 import { useCodexPetPreference } from './codexPet/useCodexPetPreference';
 import { reconcileMessageKeys, type MessageKeySnapshot } from '../utils/messageUtils';
+import { StartupHistoryLoadBanner } from './StartupHistoryLoadBanner';
+import type { StartupHistoryLoadState } from '../types/startupHistory';
 import { CodexPlanActions } from './CodexPlanActions';
 import type { CodexPlanItem } from '../hooks/useCodexPlanState';
 
@@ -53,6 +55,7 @@ export interface ChatScreenProps {
   filteredFileChanges: FileChangeList;
   subagentHistoryCtxValue: SubagentHistoryMap;
   sessionIdCtxValue: { currentSessionId: string | null; currentProvider: string };
+  startupHistoryLoadState: StartupHistoryLoadState | null;
 
   // Refs
   chatInputRef: RefObject<ChatInputBoxHandle | null>;
@@ -146,7 +149,7 @@ export interface ChatScreenProps {
 export const ChatScreen = ({
   mergedMessages, sessionTitle, getMessageText, getContentBlocks, findToolResult, getToolResultRaw,
   subagents, globalTodos, filteredFileChanges,
-  subagentHistoryCtxValue, sessionIdCtxValue,
+  subagentHistoryCtxValue, sessionIdCtxValue, startupHistoryLoadState,
   chatInputRef, messagesContainerRef, messagesEndRef, inputAreaRef,
   messageNodeMapRef, userCollapsedRef, messageListRef, isAutoScrollingRef,
   anchorCollapsedCount, setAnchorCollapsedCount, onMessageNodeRef,
@@ -282,6 +285,7 @@ export const ChatScreen = ({
           isAutoScrollingRef={isAutoScrollingRef}
         />
         <div className="messages-container" ref={messagesContainerRef}>
+          <StartupHistoryLoadBanner state={startupHistoryLoadState} currentSessionId={currentSessionId} />
           {messages.length === 0 && (
             <WelcomeScreen
               currentProvider={currentProvider}

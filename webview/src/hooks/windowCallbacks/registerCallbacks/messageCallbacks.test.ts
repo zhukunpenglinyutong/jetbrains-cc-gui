@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { registerMessageCallbacks } from './messageCallbacks';
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
+import type { StartupHistoryLoadState } from '../../../types/startupHistory';
 import type { ClaudeMessage } from '../../../types';
 
 const ref = <T,>(value: T) => ({ current: value });
@@ -22,6 +23,7 @@ interface StoredTitle {
 
 function createHarness(currentSessionId: string | null) {
   const storedTitles: Array<StoredTitle | null> = [];
+  const startupHistoryUpdates: unknown[] = [];
   let messages: ClaudeMessage[] = [];
 
   const options = {
@@ -49,6 +51,7 @@ function createHarness(currentSessionId: string | null) {
     updateContextUsageData: () => {},
     closeContextUsageDialog: () => {},
     currentSessionIdRef: ref(currentSessionId),
+    setStartupHistoryLoadState: (updater: unknown) => startupHistoryUpdates.push(updater),
     // Mirrors React's functional-update contract so the no-op identity branch
     // can be asserted through reference equality.
     setRestoredSessionTitle: (updater: unknown) => {
@@ -63,7 +66,7 @@ function createHarness(currentSessionId: string | null) {
   registerMessageCallbacks(options, () => {}, () => {});
   const dispatch = window.claudeHistoryPageInfo;
   if (!dispatch) throw new Error('claudeHistoryPageInfo was not registered');
-  return { storedTitles, dispatch, getMessages: () => messages };
+  return { storedTitles, startupHistoryUpdates, dispatch, getMessages: () => messages };
 }
 
 const pageInfo = (overrides: Record<string, unknown> = {}) => JSON.stringify({
@@ -79,6 +82,29 @@ const pageInfo = (overrides: Record<string, unknown> = {}) => JSON.stringify({
 describe('claudeHistoryPageInfo', () => {
   beforeEach(() => {
     delete (window as unknown as Record<string, unknown>).__claudeHistoryPageInfo;
+    delete (window as unknown as Record<string, unknown>).__pendingStartupHistoryLoadState;
+    delete (window as unknown as Record<string, unknown>).updateStartupHistoryLoadState;
+  });
+
+  it('drains a startup history state received before callbacks are registered', () => {
+    const pending: StartupHistoryLoadState = {
+      status: 'unloaded',
+      sessionId: 's1',
+      requestId: '',
+      generation: 1,
+      messageCount: 0,
+      retryable: true,
+    };
+    window.__pendingStartupHistoryLoadState = JSON.stringify(pending);
+
+    const harness = createHarness('s1');
+
+    expect(window.__pendingStartupHistoryLoadState).toBeUndefined();
+    expect(harness.startupHistoryUpdates).toHaveLength(1);
+    const update = harness.startupHistoryUpdates[0] as (
+      previous: StartupHistoryLoadState | null
+    ) => StartupHistoryLoadState | null;
+    expect(update(null)).toEqual(pending);
   });
 
   it('stores the CLI title even when the session id is not synced yet', () => {

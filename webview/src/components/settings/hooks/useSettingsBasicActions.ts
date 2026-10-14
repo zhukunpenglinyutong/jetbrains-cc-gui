@@ -14,6 +14,10 @@ import {
   clampPermissionDialogTimeoutSeconds,
 } from '../../../utils/permissionDialogTimeout';
 import {
+  DEFAULT_HISTORY_LOAD_TIMEOUT_SECONDS,
+  clampHistoryLoadTimeoutSeconds,
+} from '../../../utils/historyLoadTimeout';
+import {
   getSkipNewSessionConfirm,
   SKIP_NEW_SESSION_CONFIRM_EVENT,
   type SkipNewSessionConfirmChangedDetail,
@@ -79,6 +83,9 @@ export interface UseSettingsBasicActionsReturn {
   /** Auto open file state (prefers prop over local state) */
   autoOpenFileEnabled: boolean;
   localAutoOpenFileEnabled: boolean;
+  /** Application-level startup history loading preference. */
+  loadHistoryOnStartup: boolean;
+  historyLoadTimeoutSeconds: number;
   commitPrompt: string;
   savingCommitPrompt: boolean;
   projectCommitPrompt: string;
@@ -118,6 +125,8 @@ export interface UseSettingsBasicActionsReturn {
   handleCodexSandboxModeChange: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
   handleSendShortcutChange: (shortcut: 'enter' | 'cmdEnter') => void;
   handleAutoOpenFileEnabledChange: (enabled: boolean) => void;
+  handleLoadHistoryOnStartupChange: (enabled: boolean) => void;
+  handleHistoryLoadTimeoutChange: (seconds: number) => void;
   handleSoundNotificationEnabledChange: (enabled: boolean) => void;
   handleSoundOnlyWhenUnfocusedChange: (enabled: boolean) => void;
   handleSelectedSoundChange: (soundId: string) => void;
@@ -175,6 +184,8 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setCodexSandboxConflict: (conflict: boolean) => void;
   /** @internal */ setLocalSendShortcut: (shortcut: 'enter' | 'cmdEnter') => void;
   /** @internal */ setLocalAutoOpenFileEnabled: (enabled: boolean) => void;
+  /** @internal */ setLoadHistoryOnStartup: (enabled: boolean) => void;
+  /** @internal */ setHistoryLoadTimeoutSeconds: (seconds: number) => void;
   /** @internal */ setCommitPrompt: (prompt: string) => void;
   /** @internal */ setSavingCommitPrompt: (saving: boolean) => void;
   /** @internal */ setProjectCommitPrompt: (prompt: string) => void;
@@ -257,6 +268,12 @@ export function useSettingsBasicActions({
   // Auto open file configuration - prefer props, fallback to local state
   const [localAutoOpenFileEnabled, setLocalAutoOpenFileEnabled] = useState<boolean>(false);
   const autoOpenFileEnabled = autoOpenFileEnabledProp ?? localAutoOpenFileEnabled;
+
+  // Application-level startup history loading configuration.
+  const [loadHistoryOnStartup, setLoadHistoryOnStartup] = useState<boolean>(false);
+  const [historyLoadTimeoutSeconds, setHistoryLoadTimeoutSeconds] = useState(
+    DEFAULT_HISTORY_LOAD_TIMEOUT_SECONDS,
+  );
 
   // Commit AI prompt configuration
   const [commitPrompt, setCommitPrompt] = useState('');
@@ -480,6 +497,17 @@ export function useSettingsBasicActions({
       sendToJava(`set_auto_open_file_enabled:${JSON.stringify(payload)}`);
     }
   }, [onAutoOpenFileEnabledChangeProp]);
+
+  const handleLoadHistoryOnStartupChange = useCallback((enabled: boolean) => {
+    setLoadHistoryOnStartup(enabled);
+    sendToJava(`set_load_history_on_startup:${JSON.stringify({ loadHistoryOnStartup: enabled })}`);
+  }, []);
+
+  const handleHistoryLoadTimeoutChange = useCallback((seconds: number) => {
+    const bounded = clampHistoryLoadTimeoutSeconds(seconds);
+    setHistoryLoadTimeoutSeconds(bounded);
+    sendToJava(`set_history_load_timeout:${JSON.stringify({ historyLoadTimeoutSeconds: bounded })}`);
+  }, []);
 
   // Sound notification toggle change handler
   const handleSoundNotificationEnabledChange = useCallback((enabled: boolean) => {
@@ -807,6 +835,10 @@ export function useSettingsBasicActions({
     localAutoOpenFileEnabled,
     setLocalAutoOpenFileEnabled,
     autoOpenFileEnabled,
+    loadHistoryOnStartup,
+    setLoadHistoryOnStartup,
+    historyLoadTimeoutSeconds,
+    setHistoryLoadTimeoutSeconds,
     commitPrompt,
     setCommitPrompt,
     savingCommitPrompt,
@@ -838,6 +870,8 @@ export function useSettingsBasicActions({
     handleCodexSandboxModeChange,
     handleSendShortcutChange,
     handleAutoOpenFileEnabledChange,
+    handleLoadHistoryOnStartupChange,
+    handleHistoryLoadTimeoutChange,
     handleSoundNotificationEnabledChange,
     handleSoundOnlyWhenUnfocusedChange,
     handleSelectedSoundChange,

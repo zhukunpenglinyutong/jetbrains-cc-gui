@@ -653,6 +653,15 @@ if (typeof window !== 'undefined' && !window.applyBackendTabState) {
   };
 }
 
+// Restored-history state can be pushed immediately after frontend_ready. Buffer
+// the latest generation until the React callback is mounted so manual loading
+// remains available when automatic startup loading is disabled.
+if (typeof window !== 'undefined' && !window.updateStartupHistoryLoadState) {
+  window.updateStartupHistoryLoadState = (json: string) => {
+    window.__pendingStartupHistoryLoadState = json;
+  };
+}
+
 // Show and close share a FIFO so bootstrap replay preserves the original request order.
 if (typeof window !== 'undefined' && !window.showPermissionDialog) {
   window.showPermissionDialog = (payload) => {

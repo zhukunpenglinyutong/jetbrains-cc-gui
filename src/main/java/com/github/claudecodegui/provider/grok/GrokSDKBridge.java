@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
+import com.github.claudecodegui.provider.common.HistoryCancellation;
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
@@ -16,10 +17,12 @@ import com.github.claudecodegui.util.PlatformUtils;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -1070,6 +1073,20 @@ public class GrokSDKBridge extends BaseSDKBridge {
         } catch (Exception e) {
             LOG.warn("[GrokSDKBridge] Failed to load session messages: " + e.getMessage());
             return java.util.Collections.emptyList();
+        }
+    }
+
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd,
+                                               BooleanSupplier cancellation) {
+        try {
+            HistoryCancellation.check(cancellation);
+            List<JsonObject> messages = new GrokHistoryReader().getSessionMessages(sessionId, cwd, cancellation);
+            HistoryCancellation.check(cancellation);
+            return messages;
+        } catch (CancellationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to load Grok session history", e);
         }
     }
 }

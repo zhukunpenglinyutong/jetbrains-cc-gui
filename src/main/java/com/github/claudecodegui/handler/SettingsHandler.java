@@ -71,6 +71,10 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_send_shortcut",
         "get_auto_open_file_enabled",
         "set_auto_open_file_enabled",
+        "get_load_history_on_startup",
+        "set_load_history_on_startup",
+        "get_history_load_timeout",
+        "set_history_load_timeout",
         "get_permission_dialog_timeout",
         "set_permission_dialog_timeout",
         "get_commit_generation_enabled",
@@ -266,6 +270,18 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_auto_open_file_enabled":
                 projectConfigHandler.handleSetAutoOpenFileEnabled(content);
+                return true;
+            case "get_load_history_on_startup":
+                projectConfigHandler.handleGetLoadHistoryOnStartup();
+                return true;
+            case "set_load_history_on_startup":
+                projectConfigHandler.handleSetLoadHistoryOnStartup(content);
+                return true;
+            case "get_history_load_timeout":
+                projectConfigHandler.handleGetHistoryLoadTimeout();
+                return true;
+            case "set_history_load_timeout":
+                projectConfigHandler.handleSetHistoryLoadTimeout(content);
                 return true;
             case "get_permission_dialog_timeout":
                 projectConfigHandler.handleGetPermissionDialogTimeout();
