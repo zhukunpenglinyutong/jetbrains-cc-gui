@@ -766,6 +766,105 @@ public class GrokSDKBridge extends BaseSDKBridge {
         );
     }
 
+    /**
+     * Account credit window for the ContextBar.
+     * Starts the node daemon when needed. The daemon calls {@code _x.ai/billing}
+     * on the warm {@code grok agent stdio}, or a short-lived one when no chat runtime exists.
+     */
+    public CompletableFuture<JsonObject> getPlanUsage(String cwd) {
+        DaemonBridge db = daemonCoordinator.getDaemonBridge();
+        if (db == null || !db.isAlive()) {
+            return CompletableFuture.completedFuture(planUsageUnavailable("Grok daemon is not running"));
+        }
+
+        JsonObject params = new JsonObject();
+        if (cwd != null && !cwd.isEmpty()) {
+            params.addProperty("cwd", cwd);
+        }
+        params.addProperty("ephemeral", true);
+        GrokLocalAuthResolver.ResolvedAuth resolvedUsage = resolveEffectiveAuth();
+        String authMethod = resolvedUsage.authMethod;
+        params.addProperty("authMethod", authMethod != null ? authMethod : "");
+        String effectiveKey = resolvedUsage.apiKey;
+        if (effectiveKey == null || effectiveKey.isEmpty()) {
+            effectiveKey = resolveApiKeyForAuth(authMethod);
+        }
+        params.addProperty("apiKey", effectiveKey != null ? effectiveKey : "");
+        String effectiveBase = resolvedUsage.baseUrl;
+        if (effectiveBase == null || effectiveBase.isEmpty()) {
+            effectiveBase = resolveEffectiveBaseUrl(authMethod);
+        }
+        params.addProperty("baseUrl", effectiveBase != null ? effectiveBase : "");
+
+        AtomicReference<JsonObject> resultRef = new AtomicReference<>();
+        CompletableFuture<JsonObject> resultFuture = new CompletableFuture<>();
+
+        DaemonBridge.DaemonOutputCallback callback = new DaemonBridge.DaemonOutputCallback() {
+            @Override
+            public void onLine(String line) {
+                try {
+                    JsonObject parsed = gson.fromJson(line, JsonObject.class);
+                    if (parsed != null && parsed.has("present")) {
+                        resultRef.set(parsed);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+
+            @Override
+            public void onStderr(String text) { }
+
+            @Override
+            public void onError(String error) {
+                if (!resultFuture.isDone()) {
+                    resultFuture.complete(planUsageUnavailable(
+                            error != null ? error : "getPlanUsage failed"));
+                }
+            }
+
+            @Override
+            public void onComplete(boolean success) {
+                if (resultFuture.isDone()) {
+                    return;
+                }
+                JsonObject result = resultRef.get();
+                if (result != null) {
+                    resultFuture.complete(result);
+                } else {
+                    resultFuture.complete(planUsageUnavailable(
+                            success ? "No plan-usage payload from Grok" : "getPlanUsage command failed"));
+                }
+            }
+        };
+
+        try {
+            db.sendCommand("grok.getPlanUsage", params, callback).exceptionally(ex -> {
+                if (!resultFuture.isDone()) {
+                    resultFuture.complete(planUsageUnavailable(
+                            ex.getMessage() != null ? ex.getMessage() : "sendCommand failed"));
+                }
+                return false;
+            });
+        } catch (Exception e) {
+            return CompletableFuture.completedFuture(planUsageUnavailable(e.getMessage()));
+        }
+
+        return resultFuture.orTimeout(45, TimeUnit.SECONDS).exceptionally(ex ->
+                planUsageUnavailable("getPlanUsage timed out: " + (ex.getMessage() != null ? ex.getMessage() : "timeout"))
+        );
+    }
+
+    /** Top-level capacity payload. A missing {@code present} flag hides the bar. */
+    static JsonObject planUsageUnavailable(String message) {
+        JsonObject out = new JsonObject();
+        out.addProperty("present", false);
+        out.addProperty("unavailable", true);
+        out.addProperty("provider", "grok");
+        out.addProperty("source", "x.ai/billing");
+        out.addProperty("message", message != null ? message : "Grok usage unavailable");
+        return out;
+    }
+
     /** Payload shape that {@code useUsageStatistics} accepts without hanging the spinner. */
     static JsonObject buildUsageUnavailable(String message) {
         JsonObject root = new JsonObject();

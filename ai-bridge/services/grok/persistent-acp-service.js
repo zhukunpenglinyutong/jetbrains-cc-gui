@@ -9,6 +9,7 @@
  *   grok.send
  *   grok.preconnect
  *   grok.resetRuntime
+ *   grok.getPlanUsage
  *   (abort handled at daemon level)
  */
 
@@ -40,6 +41,7 @@ import {
 } from './grok-utils.js';
 import { requestPermissionFromJava } from '../../permission-ipc.js';
 import { AcpTerminalHost } from './acp-terminal-host.js';
+import { billingToCapacity } from './grok-billing.js';
 
 export { buildGrokContextUsagePayload, extractUsedTokens };
 
@@ -739,6 +741,126 @@ export async function getUsagePersistent(params = {}) {
   };
   console.log(JSON.stringify(payload));
   return payload;
+}
+
+const BILLING_RPC_TIMEOUT_MS = 20_000;
+
+/** Live ACP client, preferring the active turn. Skips closed or unhealthy agents. */
+function pickBillingClient() {
+  const ordered = [];
+  if (activeTurnRuntime && !activeTurnRuntime.closed) {
+    ordered.push(activeTurnRuntime);
+  }
+  for (const rt of getAllRuntimes()) {
+    if (rt && !rt.closed && !ordered.includes(rt)) {
+      ordered.push(rt);
+    }
+  }
+  for (const rt of ordered) {
+    const client = rt.client;
+    if (!client || typeof client.request !== 'function') continue;
+    if (client.closed || client.unhealthy) continue;
+    if (typeof client.isUnhealthy === 'function' && client.isUnhealthy()) continue;
+    return client;
+  }
+  return null;
+}
+
+/**
+ * One-shot `grok agent stdio` used only when no chat runtime is warm.
+ * initialize + authenticate + `_x.ai/billing`, then the process exits.
+ * Does not open a chat session.
+ */
+async function fetchBillingEphemeral(params = {}) {
+  const resolvedAuth = resolveEffectiveGrokAuth({
+    preferredAuth: params.authMethod || process.env.GROK_AUTH_METHOD || '',
+    apiKey: params.apiKey || '',
+    baseUrl: params.baseUrl || '',
+  });
+  const env = buildGrokEnv(
+    process.env,
+    resolvedAuth.apiKey,
+    resolvedAuth.baseUrl,
+    resolvedAuth.authMethod,
+    false
+  );
+  env.GROK_NO_AUTO_UPDATE = '1';
+  env.CI = env.CI || '1';
+  const cwd = (params.cwd || process.cwd()).trim() || process.cwd();
+  const client = new GrokAcpClient({
+    env,
+    cwd,
+    onServerRequest: async () => false,
+  });
+  client.start();
+  try {
+    const preferredAuth = String(resolvedAuth.authMethod || 'oauth').toLowerCase();
+    const hasApiKeyFromEnv = preferredAuth === 'oauth'
+      ? false
+      : !!(resolvedAuth.apiKey || env.XAI_API_KEY || env.GROK_API_KEY);
+    await initializeAndAuthenticate(client, {
+      apiKey: resolvedAuth.apiKey,
+      baseUrl: resolvedAuth.baseUrl,
+      hasApiKeyFromEnv,
+      authMethod: preferredAuth,
+    });
+    return await client.request('_x.ai/billing', {}, BILLING_RPC_TIMEOUT_MS, {
+      recycleOnTimeout: false,
+    });
+  } finally {
+    await client.close();
+  }
+}
+
+let planUsageInflight = null;
+
+/**
+ * Account credit usage for the ContextBar.
+ * Prefers the already-running `grok agent stdio` (`_x.ai/billing`).
+ * A slow reply must not recycle that chat process (`recycleOnTimeout: false`).
+ * With `ephemeral: true` and no warm runtime, starts a short-lived stdio agent.
+ */
+export async function getPlanUsagePersistent(params = {}) {
+  if (!planUsageInflight) {
+    planUsageInflight = resolvePlanUsage(params).finally(() => {
+      planUsageInflight = null;
+    });
+  }
+  const payload = await planUsageInflight;
+  console.log(JSON.stringify(payload));
+  return payload;
+}
+
+async function resolvePlanUsage(params = {}) {
+  const live = pickBillingClient();
+  try {
+    const raw = live
+      ? await live.request('_x.ai/billing', {}, BILLING_RPC_TIMEOUT_MS, {
+        recycleOnTimeout: false,
+      })
+      : params.ephemeral === true
+        ? await fetchBillingEphemeral(params)
+        : null;
+    if (raw == null) {
+      return {
+        present: false,
+        unavailable: true,
+        provider: 'grok',
+        source: 'x.ai/billing',
+        message: 'Grok agent is not running',
+      };
+    }
+    return billingToCapacity(raw);
+  } catch (e) {
+    console.error('[GROK-DAEMON] getPlanUsage failed:', e?.message || e);
+    return {
+      present: false,
+      unavailable: true,
+      provider: 'grok',
+      source: 'x.ai/billing',
+      message: e?.message ? String(e.message) : 'Grok usage unavailable',
+    };
+  }
 }
 
 // For daemon introspection / tests
