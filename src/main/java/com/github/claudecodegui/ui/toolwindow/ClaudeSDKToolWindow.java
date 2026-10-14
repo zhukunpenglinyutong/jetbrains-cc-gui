@@ -61,6 +61,29 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         return instances.get(project);
     }
 
+    public static List<ClaudeChatWindow> getChatWindows(Project project) {
+        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID);
+        if (toolWindow == null) {
+            return Collections.emptyList();
+        }
+        List<ClaudeChatWindow> result = new java.util.ArrayList<>();
+        for (Content content : toolWindow.getContentManager().getContents()) {
+            ClaudeChatWindow window = contentToWindowMap.get(content);
+            if (window != null && !window.isDisposed()) {
+                result.add(window);
+            }
+        }
+        return result;
+    }
+
+    public static ClaudeChatWindow getSelectedChatWindow(Project project) {
+        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID);
+        if (toolWindow == null) {
+            return null;
+        }
+        return contentToWindowMap.get(toolWindow.getContentManager().getSelectedContent());
+    }
+
     public static String getNextTabName(ToolWindow toolWindow) {
         if (toolWindow == null) {
             return TAB_NAME_PREFIX + "1";

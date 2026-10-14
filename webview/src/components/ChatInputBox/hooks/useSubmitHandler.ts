@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { expandQuoteTokens } from '../utils/quoteRegistry';
 import type { Attachment, ReasoningEffort } from '../types.js';
 import type { Dispatch, SetStateAction } from 'react';
 import { isCodexEffortIndependentCommand, parseCodexCommand } from '../../../hooks/codexCommandDispatcher';
@@ -11,6 +12,7 @@ interface CompletionLike {
 
 export interface UseSubmitHandlerOptions {
   getTextContent: () => string;
+  captureReviewSubmission?: () => { text: string; onSubmitted: () => void; isCurrent?: () => boolean };
   attachments: Attachment[];
   sdkStatusLoading: boolean;
   sdkInstalled: boolean;
@@ -50,6 +52,7 @@ export interface UseSubmitHandlerOptions {
  */
 export function useSubmitHandler({
   getTextContent,
+  captureReviewSubmission,
   attachments,
   sdkStatusLoading,
   sdkInstalled,
@@ -77,7 +80,10 @@ export function useSubmitHandler({
   return useCallback(() => {
     // Force fresh DOM read to avoid stale cache (e.g., after paste)
     invalidateCache();
-    const content = getTextContent();
+    const input = expandQuoteTokens(getTextContent());
+    const reviewSubmission = captureReviewSubmission?.();
+    const reviews = reviewSubmission?.text ?? '';
+    const content = reviews ? [reviews, input.trim() ? input : ''].filter(Boolean).join('\n\n') : input;
     const cleanContent = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 
     const command = currentProvider === 'codex' ? parseCodexCommand(cleanContent) : null;
@@ -116,6 +122,12 @@ export function useSubmitHandler({
     // session. Keep the draft intact during that decision.
     if (getSessionTransitionPending()) return;
 
+    if (!onSubmit) return;
+    if (reviews && content.length > 256_000) {
+      addToast?.(t('markdownReview.tooLarge'), 'warning');
+      return;
+    }
+
     if (currentProvider === 'codex' && !isCodexEffortIndependentCommand(command)
         && isCodexUltraCapabilityUnconfirmed(selectedModel, reasoningEffort)) {
       addToast?.(t(getCodexReasoningCapabilities().status === 'unavailable'
@@ -135,7 +147,7 @@ export function useSubmitHandler({
     dollarCommandCompletion.close();
 
     // Record input history
-    recordInputHistory(content);
+    if (!reviews || input.trim()) recordInputHistory(reviews ? input : content);
 
     const attachmentsToSend = attachments.length > 0 ? [...attachments] : undefined;
 
@@ -151,10 +163,13 @@ export function useSubmitHandler({
 
     // Call onSubmit even when loading - let parent handle queueing
     setTimeout(() => {
-      onSubmit?.(content, attachmentsToSend);
+      if (reviews && reviewSubmission?.isCurrent && !reviewSubmission.isCurrent()) return;
+      onSubmit(content, attachmentsToSend);
+      reviewSubmission?.onSubmitted();
     }, 10);
   }, [
     getTextContent,
+    captureReviewSubmission,
     invalidateCache,
     attachments,
     sdkStatusLoading,

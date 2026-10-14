@@ -72,6 +72,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "get_send_shortcut",
         "set_send_shortcut",
         "get_auto_open_file_enabled",
+        "get_markdown_review_config",
+        "set_markdown_review_config",
         "set_auto_open_file_enabled",
         "get_load_history_on_startup",
         "set_load_history_on_startup",
@@ -278,6 +280,12 @@ public class SettingsHandler extends BaseMessageHandler {
             case "get_auto_open_file_enabled":
                 projectConfigHandler.handleGetAutoOpenFileEnabled();
                 return true;
+            case "get_markdown_review_config":
+                projectConfigHandler.handleGetMarkdownReviewConfig();
+                return true;
+            case "set_markdown_review_config":
+                projectConfigHandler.handleSetMarkdownReviewConfig(content);
+                return true;
             case "set_auto_open_file_enabled":
                 projectConfigHandler.handleSetAutoOpenFileEnabled(content);
                 return true;
@@ -430,6 +438,12 @@ public class SettingsHandler extends BaseMessageHandler {
      * On failure, push the authoritative config back so the webview can roll
      * back its optimistic UI update.
      */
+    private void refreshMarkdownPreviewLanguage() {
+        if (context.getProject() != null) {
+            com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(context.getProject()).refreshPreviewSettings();
+        }
+    }
+
     private void handleSetUserLanguage(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
@@ -441,6 +455,7 @@ public class SettingsHandler extends BaseMessageHandler {
                 return;
             }
             LanguageConfigService.setUserLanguage(context.getSettingsService(), language);
+            refreshMarkdownPreviewLanguage();
             LOG.info("[SettingsHandler] Saved user language preference: " + language);
             pushLanguageConfig();
         } catch (Exception e) {
@@ -457,6 +472,7 @@ public class SettingsHandler extends BaseMessageHandler {
     private void handleClearUserLanguage() {
         try {
             LanguageConfigService.clearUserLanguage(context.getSettingsService());
+            refreshMarkdownPreviewLanguage();
             LOG.info("[SettingsHandler] Cleared user language preference");
         } catch (Exception e) {
             LOG.error("[SettingsHandler] Failed to clear user language: " + e.getMessage(), e);

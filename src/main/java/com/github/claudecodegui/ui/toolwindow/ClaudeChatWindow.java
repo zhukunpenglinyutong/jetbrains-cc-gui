@@ -102,6 +102,8 @@ public class ClaudeChatWindow {
     private final HtmlLoader htmlLoader;
 
     private Content parentContent;
+    private String reviewTargetId = java.util.UUID.randomUUID().toString();
+    private boolean allowReviewRecovery;
     private String originalTabName;
     private volatile String sessionId = null;
     // Stable PermissionService routing key, assigned once at construction.
@@ -466,7 +468,15 @@ public class ClaudeChatWindow {
 
             @Override
             public void setSession(ClaudeSession s) {
+                if (session != s) {
+                    // Persist the conversation identity, not only the tab.
+                    // Two fresh conversations can both have a null provider
+                    // session ID; a later IDE restart must not merge them.
+                    reviewTargetId = java.util.UUID.randomUUID().toString();
+                }
                 session = s;
+                allowReviewRecovery = false;
+                syncArtifactReviewTarget();
                 persistTabSessionState();
             }
 
@@ -1744,7 +1754,6 @@ public class ClaudeChatWindow {
         if (savedState == null || session == null) {
             return;
         }
-
         if (savedState.claudeSupplierId != null) {
             session.getState().setSupplierId("claude", savedState.claudeSupplierId);
         }
@@ -1789,6 +1798,10 @@ public class ClaudeChatWindow {
                 savedState,
                 project != null ? project.getBasePath() : null,
                 session.getCwd());
+        if (sameProject && isNonEmpty(savedState.reviewTargetId)) {
+            reviewTargetId = savedState.reviewTargetId;
+            allowReviewRecovery = true;
+        }
         String restoredSessionId = sameProject && isNonEmpty(savedState.sessionId)
                 ? savedState.sessionId : null;
         String restoredCwd = sameProject && isNonEmpty(savedState.cwd)
@@ -1897,6 +1910,7 @@ public class ClaudeChatWindow {
         flushPendingSelectionContext();
         flushPendingCodeSnippet();
         flushPendingFileReferences();
+        restoreArtifactReviews();
         // No transcript replay here: the only caller that passes true is
         // handleFrontendReady, which replays immediately afterwards through
         // replayCurrentSessionStateToFrontend — a superset that also restores the
@@ -2554,6 +2568,28 @@ public class ClaudeChatWindow {
         String type = parts[0];
         String content = parts.length > 1 ? parts[1] : "";
 
+        if ("artifact_review_ready".equals(type)) {
+            restoreArtifactReviews();
+            return;
+        }
+        if ("artifact_review_ack".equals(type)) {
+            try {
+                JsonObject ack = GSON.fromJson(content, JsonObject.class);
+                String status = ack.get("status").getAsString();
+                if (!java.util.Set.of("received", "queued", "removed").contains(status)) {
+                    return;
+                }
+                if (session != null && session.getRuntimeSessionEpoch().equals(ack.get("targetEpoch").getAsString())) {
+                    com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project)
+                            .acknowledge(reviewTargetId, session.getRuntimeSessionEpoch(), ack.get("id").getAsString(), status,
+                                    GSON.fromJson(ack.get("annotationIds"), new com.google.gson.reflect.TypeToken<List<String>>() {}.getType()));
+                }
+            } catch (RuntimeException error) {
+                LOG.warn("Invalid Markdown review acknowledgement", error);
+            }
+            return;
+        }
+
         MessageDispatcher dispatcher = this.messageDispatcher;
         if (dispatcher == null) {
             return;
@@ -2620,6 +2656,8 @@ public class ClaudeChatWindow {
                     return;
                 }
                 super.onSessionIdReceived(newSessionId, transitionToken);
+                com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project)
+                        .bindSession(reviewTargetId, callbackSession.getRuntimeSessionEpoch(), newSessionId);
                 String exposedSessionId = resolveExposedSessionId(newSessionId, ClaudeChatWindow.this.permissionServiceKey);
                 if (exposedSessionId.equals(ClaudeChatWindow.this.sessionId)) {
                     return;
@@ -3205,6 +3243,7 @@ public class ClaudeChatWindow {
         snapshot.ompApprovalMode = session.getState().getOmpApprovalMode();
         snapshot.unread = chatWindowDelegate.hasUnread();
         snapshot.claudeUltracode = session.isClaudeUltracode();
+        snapshot.reviewTargetId = reviewTargetId;
 
         TabStateService.getInstance(project).saveTabSessionState(tabIndex, snapshot);
     }
@@ -3242,6 +3281,46 @@ public class ClaudeChatWindow {
     }
 
     // ==================== Code Snippets ====================
+
+    public String getReviewTargetId() {
+        return reviewTargetId;
+    }
+
+    public void addArtifactReview(com.github.claudecodegui.markdown.ReviewBatch batch) {
+        if (disposed || session == null || !reviewTargetId.equals(batch.targetId)
+                || !session.getRuntimeSessionEpoch().equals(batch.targetEpoch)) {
+            throw new IllegalStateException("Target chat changed. Add the review again to the intended chat.");
+        }
+        if (frontendReady) {
+            callJavaScript("showArtifactReviewChat");
+            syncArtifactReviewTarget();
+            callJavaScript("addArtifactReview", JsUtils.escapeJs(GSON.toJson(batch)));
+        }
+        persistTabSessionState();
+    }
+
+    private void restoreArtifactReviews() {
+        if (disposed || session == null || !frontendReady) {
+            return;
+        }
+        syncArtifactReviewTarget();
+        for (com.github.claudecodegui.markdown.ReviewBatch batch
+                : com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project)
+                .pending(reviewTargetId, session.getRuntimeSessionEpoch(), session.getSessionId(), allowReviewRecovery)) {
+            // Recovery must not navigate away from Settings during page init.
+            callJavaScript("addArtifactReview", JsUtils.escapeJs(GSON.toJson(batch)));
+        }
+        allowReviewRecovery = false;
+    }
+
+    private void syncArtifactReviewTarget() {
+        if (!disposed && session != null && frontendReady) {
+            JsonObject target = new JsonObject();
+            target.addProperty("targetId", reviewTargetId);
+            target.addProperty("targetEpoch", session.getRuntimeSessionEpoch());
+            callJavaScript("setArtifactReviewTarget", JsUtils.escapeJs(GSON.toJson(target)));
+        }
+    }
 
     private void addCodeSnippet(String selectionInfo) {
         if (selectionInfo != null && !selectionInfo.isEmpty()) {

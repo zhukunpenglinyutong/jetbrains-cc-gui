@@ -1,0 +1,25 @@
+.artifact-review-drafts { padding: 10px 12px; border-bottom: 1px solid var(--input-border); background: var(--input-bg); font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+.artifact-review-drafts summary { display: flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; border-radius: 4px; color: var(--text-primary); }
+.artifact-review-drafts summary::-webkit-details-marker { display: none; }
+.artifact-review-drafts summary .codicon { font-size: 14px; color: var(--input-focus-border); }
+.artifact-review-drafts summary .artifact-review-chevron { color: var(--text-secondary); transition: transform .15s; }
+.artifact-review-drafts[open] summary .artifact-review-chevron { transform: rotate(90deg); }
+.artifact-review-drafts summary:focus-visible { outline: 2px solid var(--input-focus-border); outline-offset: 3px; }
+.artifact-review-drafts[open] { max-height: 280px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+.artifact-review-drafts section { padding-top: 12px; }
+.artifact-review-file { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--text-primary); }
+.artifact-review-file strong { display: flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+.artifact-review-file .codicon { flex-shrink: 0; color: var(--text-secondary); }
+.artifact-review-drafts article { padding: 10px 12px; margin: 8px 0; border: 1px solid var(--attachment-border); border-radius: 6px; background: var(--attachment-bg); }
+.artifact-review-drafts blockquote { margin: 0; padding: 6px 10px; border-left: 2px solid var(--input-focus-border); background: var(--input-bg); border-radius: 4px; color: var(--text-secondary); }
+.artifact-review-drafts p, .artifact-review-drafts blockquote { white-space: pre-wrap; overflow-wrap: anywhere; }
+.artifact-review-drafts p { margin: 8px 0; color: var(--text-primary); }
+.artifact-review-drafts small { font-size: 11px; line-height: 1.5; }
+.artifact-review-reference { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 20px; margin: -5px -5px 4px 0; color: var(--text-secondary); }
+.artifact-review-reference small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artifact-review-reference button { flex-shrink: 0; width: 20px; height: 20px; padding: 0; }
+.artifact-review-drafts button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 4px 8px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text-secondary); font: inherit; cursor: pointer; transition: background .15s, color .15s; }
+.artifact-review-drafts button:hover { background: var(--button-hover); color: var(--error-color); }
+.artifact-review-file button { flex-shrink: 0; width: 24px; height: 24px; padding: 0; }
+.artifact-review-drafts button:focus-visible { outline: 2px solid var(--input-focus-border); outline-offset: 2px; }
+.artifact-review-snapshot { display: block; color: var(--text-secondary); }

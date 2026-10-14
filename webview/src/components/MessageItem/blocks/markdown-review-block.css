@@ -1,0 +1,17 @@
+
+.message.user.markdown-review-message .message-content { background: transparent; border: 0; padding: 0; color: var(--text-primary); white-space: normal; }
+.markdown-review-context { margin: 0; min-width: 0; max-width: 100%; padding: 10px 12px; border: 1px solid var(--border-secondary); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 13px; line-height: 1.55; text-align: left; }
+.markdown-review-context > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; }
+.markdown-review-context > summary::-webkit-details-marker { display: none; }
+.markdown-review-context .codicon { color: var(--accent-primary); }
+.markdown-review-context:not([open]) > summary .codicon-chevron-down { transform: rotate(-90deg); }
+.markdown-review-paths { margin: 6px 0 0; color: var(--text-tertiary); font-size: 11px; overflow-wrap: anywhere; }
+.markdown-review-items { margin-top: 8px; }
+.markdown-review-items section { min-width: 0; }
+.markdown-review-items article { display: block; border-top: 1px solid var(--border-primary); padding: 10px 0; }
+.markdown-review-items article:last-child { padding-bottom: 0; }
+.markdown-review-item-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; color: var(--text-tertiary); font-size: 11px; }
+.markdown-review-context small { font-size: inherit; overflow-wrap: anywhere; }
+.markdown-review-context blockquote { display: block; margin: 8px 0; border: 0; border-left: 2px solid var(--accent-primary); padding: 4px 0 4px 10px; color: var(--text-secondary); font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
+.markdown-review-context p { display: block; margin: 8px 0 0; padding: 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
+.markdown-review-user-text { margin-top: 8px; padding: 10px 14px; border-radius: 12px 12px 2px 12px; background: var(--color-message-user-bg); color: var(--color-message-user-text); }
