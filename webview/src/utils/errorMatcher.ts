@@ -12,7 +12,15 @@ interface DiagnosticNavigationStep {
   action: DiagnosticNavigationAction;
 }
 
-export type DiagnosticStep = DiagnosticCommandStep | DiagnosticNavigationStep;
+/** Actions the card performs in place, without leaving the chat. */
+export type DiagnosticInlineAction = 'updateClaudeSdk';
+
+interface DiagnosticActionStep {
+  kind: 'action';
+  action: DiagnosticInlineAction;
+}
+
+export type DiagnosticStep = DiagnosticCommandStep | DiagnosticNavigationStep | DiagnosticActionStep;
 
 export interface DiagnosticSolution {
   key: string;
