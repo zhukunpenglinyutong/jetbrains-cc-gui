@@ -2009,6 +2009,10 @@
     "copied": "コピー済み",
     "openDependencySettings": "依存関係管理を開く",
     "recommended": "推奨",
+    "updateClaudeSdk": "SDK を更新",
+    "updatingClaudeSdk": "更新中...",
+    "updateClaudeSdkSuccess": "{{version}} に更新しました。メッセージをもう一度送信してください。",
+    "updateClaudeSdkFailed": "更新に失敗しました：{{error}}",
     "codexWriterConflict": {
       "title": "Codex スレッドが使用中",
       "intro": "別の Codex ターンまたはクライアントがこの会話に書き込んでいるため、今回の送信を開始できませんでした。",
@@ -2033,6 +2037,21 @@
         "downgrade": {
           "title": "方法 2：バージョンをロールバック",
           "step0": "「依存関係管理」で SDK バージョンを v0.2.112 以前に切り替えてください。切り替え後は IDEA の再起動が必要です。"
+        }
+      }
+    },
+    "claudeCodeVersionTooOld": {
+      "title": "Claude Code SDK がこのモデルには古すぎます",
+      "intro": "プラグインはターミナルの claude コマンドではなく、独自の SDK に同梱された Claude Code を実行します。その同梱バージョンが、このモデルに必要なバージョンより古くなっています。",
+      "reason": "SDK はプラグインとは別にインストールされるため、プラグインやターミナルの claude コマンドを更新しても SDK は更新されません。",
+      "solutions": {
+        "updateSdk": {
+          "title": "方法 1：Claude Code SDK を更新する",
+          "step0": "サポートされている最新の SDK をインストールします。その後プラグインが Claude プロセスを再起動するので、すぐにメッセージを再送信できます。"
+        },
+        "updateCustomCli": {
+          "title": "方法 2：独自に指定した Claude CLI を更新する",
+          "step0": "「Claude CLI パス（オーバーライド）」を設定している場合、プラグインは SDK の代わりにそのバイナリを実行します。ターミナルで更新してください："
         }
       }
     },
