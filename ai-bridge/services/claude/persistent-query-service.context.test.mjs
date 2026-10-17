@@ -104,14 +104,22 @@ test('buildRequestContext preserves resolved model mapping for context usage run
     assert.equal(requestContext.resolvedModelId, 'custom-sonnet-model');
     assert.equal(requestContext.options.env.ANTHROPIC_MODEL, 'custom-sonnet-model');
     assert.equal(requestContext.options.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'custom-sonnet-model');
+    // The inline settings override must MIRROR the per-request model routing
+    // values written to process.env by setModelEnvironmentVariables() just
+    // before buildQueryOptions(), not blank them: the override has HIGHER
+    // precedence than the child env, so blanking regressed third-party relays
+    // where the CLI could no longer resolve the SDK alias ('sonnet') to the
+    // relay's custom model name (issue #1741). Model routing vars without a
+    // per-request value stay neutralized ('') so stale settings.json values
+    // cannot leak through (issue #1509 semantics preserved).
     assert.deepEqual(requestContext.options.settings, {
       env: {
         CLAUDE_CODE_EFFORT_LEVEL: '',
         MAX_THINKING_TOKENS: '',
-        ANTHROPIC_MODEL: '',
+        ANTHROPIC_MODEL: 'custom-sonnet-model',
         ANTHROPIC_DEFAULT_FABLE_MODEL: '',
         ANTHROPIC_DEFAULT_OPUS_MODEL: '',
-        ANTHROPIC_DEFAULT_SONNET_MODEL: '',
+        ANTHROPIC_DEFAULT_SONNET_MODEL: 'custom-sonnet-model',
         ANTHROPIC_DEFAULT_HAIKU_MODEL: '',
         ANTHROPIC_SMALL_FAST_MODEL: '',
         CLAUDE_CODE_SUBAGENT_MODEL: '',
