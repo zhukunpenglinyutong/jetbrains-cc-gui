@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   mapModelIdToSdkName,
+  readConfiguredModelTiers,
   resolveModelFromSettings,
   resolveSdkModelName,
   setModelEnvironmentVariables,
@@ -215,6 +216,142 @@ test('setModelEnvironmentVariables sets sonnet env for sonnet-family base model'
 
     assert.equal(process.env.ANTHROPIC_MODEL, 'glm-4.7[1m]');
     assert.equal(process.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'glm-4.7[1m]');
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+// --- readConfiguredModelTiers -------------------------------------------
+
+test('readConfiguredModelTiers returns only the tiers the user configured', () => {
+  assert.deepEqual(readConfiguredModelTiers(null), {});
+  assert.deepEqual(readConfiguredModelTiers(undefined), {});
+  assert.deepEqual(readConfiguredModelTiers('not-an-object'), {});
+  assert.deepEqual(
+    readConfiguredModelTiers({
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5.3-flash',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'doubao-seed-2.1-lite',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: '   ',
+      ANTHROPIC_MODEL: 'deepseek-v4.1-flash',
+      UNRELATED_KEY: 'x',
+    }),
+    {
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5.3-flash',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'doubao-seed-2.1-lite',
+    },
+    'blank values are dropped so callers never blank a tier the user did not configure; ANTHROPIC_MODEL is not a tier'
+  );
+});
+
+// --- subagent tier sync --------------------------------------------------
+//
+// Defect: only the tier the current request belongs to was written to process.env. A subagent
+// declaring `model: opus` could not find ANTHROPIC_DEFAULT_OPUS_MODEL and fell back to the
+// CLI's built-in Anthropic model name; third-party endpoints do not recognize that name and
+// silently route to some default model. The sonnet tier looked "fine" only by coincidence:
+// the fallback branch always writes ANTHROPIC_DEFAULT_SONNET_MODEL.
+
+test('setModelEnvironmentVariables backfills every configured tier from settings.json', () => {
+  const tracked = [
+    'ANTHROPIC_MODEL',
+    'ANTHROPIC_DEFAULT_SONNET_MODEL',
+    'ANTHROPIC_DEFAULT_OPUS_MODEL',
+    'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+    'ANTHROPIC_SMALL_FAST_MODEL',
+  ];
+  const previous = Object.fromEntries(tracked.map((key) => [key, process.env[key]]));
+  try {
+    for (const key of tracked) delete process.env[key];
+
+    setModelEnvironmentVariables('DeepSeek-V4.1-Flash', 'deepseek-v4.1-flash', {
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5.3-flash',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'doubao-seed-2.1-lite',
+      ANTHROPIC_SMALL_FAST_MODEL: 'deepseek-v3.2',
+      ANTHROPIC_MODEL: 'stale-value-must-be-ignored',
+    });
+
+    // The current request owns ANTHROPIC_MODEL and the tier it belongs to.
+    assert.equal(process.env.ANTHROPIC_MODEL, 'DeepSeek-V4.1-Flash');
+    assert.equal(process.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'DeepSeek-V4.1-Flash');
+    // Every other configured tier survives, so subagents can resolve their own tiers.
+    assert.equal(process.env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'glm-5.3-flash');
+    assert.equal(process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'doubao-seed-2.1-lite');
+    assert.equal(process.env.ANTHROPIC_SMALL_FAST_MODEL, 'deepseek-v3.2');
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test('setModelEnvironmentVariables keeps the request model for the tier it owns', () => {
+  const tracked = ['ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL'];
+  const previous = Object.fromEntries(tracked.map((key) => [key, process.env[key]]));
+  try {
+    for (const key of tracked) delete process.env[key];
+
+    // The request picks the opus tier and its mapping differs from settings.json:
+    // the request value must win for that tier.
+    setModelEnvironmentVariables('mimo-v2.5-pro', 'claude-opus-4-8', {
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'stale-opus-mapping',
+    });
+
+    assert.equal(process.env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'mimo-v2.5-pro');
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test('setModelEnvironmentVariables without settingsEnv leaves other tiers untouched', () => {
+  const tracked = ['ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL'];
+  const previous = Object.fromEntries(tracked.map((key) => [key, process.env[key]]));
+  try {
+    process.env.ANTHROPIC_DEFAULT_OPUS_MODEL = 'preserved';
+    delete process.env.ANTHROPIC_MODEL;
+
+    setModelEnvironmentVariables('glm-4.7', 'claude-sonnet-4-6');
+
+    assert.equal(
+      process.env.ANTHROPIC_DEFAULT_OPUS_MODEL,
+      'preserved',
+      'without settingsEnv, tiers published by other paths must not be cleared'
+    );
+    assert.equal(process.env.ANTHROPIC_MODEL, 'glm-4.7');
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test('setModelEnvironmentVariables clears tiers the settings no longer configure', () => {
+  const tracked = ['ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL'];
+  const previous = Object.fromEntries(tracked.map((key) => [key, process.env[key]]));
+  try {
+    // A previous Claude provider left its opus tier behind in the long-lived daemon.
+    process.env.ANTHROPIC_DEFAULT_OPUS_MODEL = 'stale-opus-from-previous-provider';
+    delete process.env.ANTHROPIC_MODEL;
+    delete process.env.ANTHROPIC_DEFAULT_SONNET_MODEL;
+
+    // The provider now in use configures the sonnet tier only.
+    setModelEnvironmentVariables('DeepSeek-V4.1-Flash', 'deepseek-v4.1-flash', {
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'DeepSeek-V4.1-Flash',
+    });
+
+    assert.equal(
+      process.env.ANTHROPIC_DEFAULT_OPUS_MODEL,
+      undefined,
+      'a tier the current settings no longer configure must be cleared, otherwise subagents resolve to the previous provider model name'
+    );
+    assert.equal(process.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'DeepSeek-V4.1-Flash');
   } finally {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[key];

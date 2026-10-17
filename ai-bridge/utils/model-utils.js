@@ -122,6 +122,47 @@ export function resolveModelFromSettings(modelId, userEnv) {
 }
 
 /**
+ * Model tier env vars: a subagent can declare its model with a tier alias in its own
+ * definition (e.g. `model: opus`), and Claude Code resolves that alias to a concrete
+ * model name through these keys. This lists every key that takes part in resolution.
+ *
+ * ANTHROPIC_MODEL is deliberately excluded: it means "global default model" and belongs
+ * to the current request rather than settings.json, so setModelEnvironmentVariables()
+ * owns it exclusively on every turn (keeping stale values from issue #1509 at bay).
+ */
+export const MODEL_TIER_ENV_KEYS = Object.freeze([
+  'ANTHROPIC_DEFAULT_FABLE_MODEL',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'ANTHROPIC_SMALL_FAST_MODEL',
+  'CLAUDE_CODE_SUBAGENT_MODEL',
+]);
+
+/**
+ * Read every tier mapping the user configured from the settings.json env block.
+ * Only non-blank tiers are returned, so callers can assign the result directly
+ * without blanking a tier the user never configured.
+ *
+ * @param {Object} settingsEnv - the env object of ~/.claude/settings.json
+ * @returns {Object.<string, string>} configured tier key/value pairs
+ */
+export function readConfiguredModelTiers(settingsEnv) {
+  if (!settingsEnv || typeof settingsEnv !== 'object') {
+    return {};
+  }
+
+  const tiers = {};
+  for (const key of MODEL_TIER_ENV_KEYS) {
+    const value = settingsEnv[key];
+    if (value !== undefined && value !== null && String(value).trim()) {
+      tiers[key] = String(value).trim();
+    }
+  }
+  return tiers;
+}
+
+/**
  * Set SDK environment variables based on the model name.
  * The Claude SDK uses short names (opus/sonnet/haiku) as model selectors,
  * while the specific version is determined by ANTHROPIC_DEFAULT_*_MODEL environment variables.
@@ -134,10 +175,45 @@ export function resolveModelFromSettings(modelId, userEnv) {
  * @param {string} [baseModelId] - The original internal model ID used to determine which env var to set.
  *                                  Required when modelId is a custom name that doesn't contain 'opus'/'haiku'/'sonnet'.
  *                                  Falls back to modelId if not provided.
+ * @param {Object} [settingsEnv] - the env block of ~/.claude/settings.json. When present it is the
+ *                                  single source of truth for tiers (configured ones are written,
+ *                                  unconfigured ones are cleared); when absent only the current tier
+ *                                  is written and other tiers are left untouched.
  */
-export function setModelEnvironmentVariables(modelId, baseModelId) {
+export function setModelEnvironmentVariables(modelId, baseModelId, settingsEnv) {
   if (!modelId || typeof modelId !== 'string') {
     return;
+  }
+
+  // Sync every tier against settings.json: configured tiers go into process.env,
+  // unconfigured ones are cleared.
+  //
+  // Why writing them all matters: setting only the tier the current request belongs to
+  // means a subagent declaring `model: opus` cannot find ANTHROPIC_DEFAULT_OPUS_MODEL and
+  // falls back to the CLI's built-in Anthropic model name. Third-party endpoints do not
+  // recognize that name and tend to silently route to some default model without erroring.
+  // This is the only path that actually takes effect: measurements show the inline
+  // `--settings` env block is not adopted by the CLI (see buildWebviewControlledSettingsOverride),
+  // so tiers have to travel through process env.
+  //
+  // Why clearing matters just as much: the daemon is long-lived, and daemon.js's savedEnv
+  // restore skips these webview-controlled vars (isWebviewControlledEnvVar), so stale values
+  // never disappear on their own. Switching between Claude providers does not restart the
+  // daemon either (only Claude -> non-Claude does), so when the new provider configures fewer
+  // tiers, values left behind by the previous one make subagents resolve to a retired model.
+  //
+  // Without settingsEnv (non-daemon paths) other tiers are left alone; only the current
+  // tier is written by the logic below.
+  if (settingsEnv && typeof settingsEnv === 'object') {
+    const configuredTiers = readConfiguredModelTiers(settingsEnv);
+    for (const key of MODEL_TIER_ENV_KEYS) {
+      const value = configuredTiers[key];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   }
 
   // Use baseModelId to determine model category (which env var to set).

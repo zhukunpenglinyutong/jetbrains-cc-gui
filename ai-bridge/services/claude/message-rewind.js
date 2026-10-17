@@ -59,6 +59,8 @@ export async function rewindFiles(sessionId, userMessageId, cwd = null) {
           env: buildCliEnv(),
           // Rewind is a maxTurns:1 file-checkpointing call — no inference output,
           // so 1M context state is irrelevant; only neutralize effort/thinking.
+          // settingsEnv is deliberately omitted as well: no subagent can run here,
+          // so tier resolution cannot apply.
           settings: buildWebviewControlledSettingsOverride(),
           tools: { type: 'preset', preset: 'claude_code' },
           settingSources: ['user', 'project', 'local'],

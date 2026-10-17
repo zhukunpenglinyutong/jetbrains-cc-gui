@@ -6,6 +6,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getClaudeDir, getCodemossDir, getManagedSettingsPath } from '../utils/path-utils.js';
+import { MODEL_TIER_ENV_KEYS, readConfiguredModelTiers } from '../utils/model-utils.js';
 
 // Conditional debug logging: set CLAUDE_DEBUG=1 to enable verbose diagnostics
 const DEBUG = process.env.CLAUDE_DEBUG === '1' || process.env.CLAUDE_DEBUG === 'true';
@@ -200,7 +201,14 @@ export function isDangerousEnvVar(varName) {
   return DANGEROUS_ENV_VAR_SET.has(String(varName ?? '').toUpperCase());
 }
 
-export function buildWebviewControlledSettingsOverride(modelId) {
+/**
+ * Build the inline settings override handed to the Claude CLI (the `--settings` argument).
+ *
+ * @param {string} [modelId] - the raw model ID selected in the webview
+ * @param {Object} [settingsEnv] - the env block of ~/.claude/settings.json, supplying the user's tier mappings
+ * @returns {{env: Object}} the settings object
+ */
+export function buildWebviewControlledSettingsOverride(modelId, settingsEnv) {
   const env = {
     // Empty strings intentionally override settings.json env values while
     // evaluating as "not set" in Claude Code's env-precedence checks.
@@ -208,13 +216,31 @@ export function buildWebviewControlledSettingsOverride(modelId) {
     MAX_THINKING_TOKENS: '',
   };
 
-  // Clear model routing vars from settings.json so the per-request values
-  // set by setModelEnvironmentVariables() (via process.env) are the single
-  // source of truth. Without this, a stale ANTHROPIC_MODEL in settings.json
-  // overrides the webview-selected model, causing all model families to
-  // resolve to the same value (issue #1509).
-  for (const varName of MODEL_ROUTING_ENV_VARS) {
-    env[varName] = '';
+  // ANTHROPIC_MODEL stays blank: it belongs to the current request, written exclusively
+  // through process.env by setModelEnvironmentVariables(). A stale copy in settings.json
+  // must be blocked, otherwise it overrides the webview-selected model and every model
+  // family resolves to the same value (issue #1509).
+  env.ANTHROPIC_MODEL = '';
+
+  // The remaining tier vars echo the real model names the user configured in settings.json
+  // instead of being blanked across the board.
+  //
+  // Measured conclusion (Claude Agent SDK 0.3.290 / bundled CLI 2.1.290): the `--settings`
+  // env block does not become environment variables of the CLI child process. Pointing
+  // ANTHROPIC_BASE_URL at another port inside the inline settings still sends requests to
+  // the address given by process.env; assigning the opus tier only inside the inline settings
+  // still leaves an agent declaring `model: opus` falling back to the CLI's built-in model
+  // name. So this layer has no practical effect on tier resolution.
+  //
+  // The real guarantee for subagent tiers is setModelEnvironmentVariables() spreading every
+  // tier into process.env. The pass-through is kept because it truthfully expresses the intent
+  // that configured tiers reach the CLI, and it would start taking effect by itself should the
+  // CLI begin honoring settings.env. Note its values are settings.json verbatim, so for the tier
+  // owned by the current request they can differ from the request-resolved value written to
+  // process.env (see the tier sync in model-utils.js). Tiers the user never configured stay blank.
+  const configuredTiers = readConfiguredModelTiers(settingsEnv);
+  for (const key of MODEL_TIER_ENV_KEYS) {
+    env[key] = configuredTiers[key] ?? '';
   }
 
   const normalizedModel = typeof modelId === 'string' ? modelId.trim() : '';

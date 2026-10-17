@@ -249,6 +249,8 @@ export function buildClaudeAgentCommitOptions({
     model: sdkModelName,
     maxTurns: 1,
     env: buildCliEnv(),
+    // settingsEnv is deliberately omitted: this call runs maxTurns: 1 with a deny-all
+    // canUseTool, so it never spawns a subagent and tier resolution cannot apply here.
     settings: buildWebviewControlledSettingsOverride(model),
     settingSources: ['user'],
     // Only MCP servers passed via the `mcpServers` option are used, and we pass

@@ -130,7 +130,7 @@ function resolveRequestModelState(modelId, settingsEnv) {
   };
 }
 
-function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers, modelId) {
+function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers, modelId, settingsEnv) {
   const claudeCliOverride = getClaudeCliPathOverride();
   return {
     cwd: workingDirectory,
@@ -139,7 +139,7 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
     maxTurns: 1000,
     enableFileCheckpointing: true,
     env: buildCliEnv(),
-    settings: buildWebviewControlledSettingsOverride(modelId),
+    settings: buildWebviewControlledSettingsOverride(modelId, settingsEnv),
     ...(reasoningEffort && { effort: reasoningEffort }),
     ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
     ...(streamingEnabled && { includePartialMessages: true }),
@@ -211,7 +211,7 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   const settings = overrides.settings ?? loadClaudeSettings();
   const modelId = params.model || null;
   const { sdkModelName, resolvedModelId } = resolveRequestModelState(modelId, settings?.env);
-  setModelEnvironmentVariables(resolvedModelId, modelId);
+  setModelEnvironmentVariables(resolvedModelId, modelId, settings?.env);
 
   const permissionMode = normalizePermissionMode(params.permissionMode);
   const streamingEnabled = resolveStreamingEnabled(params, settings);
@@ -224,7 +224,7 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   const options = buildQueryOptions(
     workingDirectory, sdkModelName, permissionMode,
     maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId,
-    mcpServers, modelId
+    mcpServers, modelId, settings?.env
   );
 
   const userMessage = await buildUserMessage(params, withAttachments, requestedSessionId);
@@ -835,7 +835,11 @@ export async function getContextUsagePersistent(params = {}) {
       // Fast path: reuse existing runtime with minimal model sync.
       // Only map the model ID and call setModel if needed - skip full buildRequestContext
       // which would unnecessarily load MCP config, settings, etc.
-      setModelEnvironmentVariables(targetModel, modelId);
+      // Pass settings.env here as well: process.env is daemon-wide shared state, so writing
+      // only the current tier would leave tiers spread by an earlier turn in place, out of sync
+      // with this turn's settings.json. setModelEnvironmentVariables() also clears tiers the
+      // current settings no longer configure, which is what keeps this path in agreement.
+      setModelEnvironmentVariables(targetModel, modelId, settings?.env);
     }
 
     if (typeof runtime.query?.setModel === 'function') {

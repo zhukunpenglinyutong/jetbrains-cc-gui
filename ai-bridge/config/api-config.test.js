@@ -325,6 +325,55 @@ test('buildWebviewControlledSettingsOverride neutralizes Claude CLI settings env
   });
 });
 
+test('buildWebviewControlledSettingsOverride forwards configured tiers instead of blanking them', () => {
+  // This test only pins the shape of the function's output: configured tiers are echoed
+  // back verbatim, unconfigured ones stay blank.
+  //
+  // Note: measurements (SDK 0.3.290 / CLI 2.1.290) show the inline `--settings` env block is
+  // not adopted by the CLI, so this layer has no practical effect on tier resolution. The real
+  // guarantee for subagent tiers is setModelEnvironmentVariables() spreading every tier into
+  // process.env (see utils/model-utils.js). The pass-through is kept because it expresses the
+  // intent faithfully and stays compatible should the CLI adopt settings.env.
+  const settingsEnv = {
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5.3-flash',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'doubao-seed-2.1-lite',
+    ANTHROPIC_DEFAULT_FABLE_MODEL: 'DeepSeek-V4.1-Flash',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'DeepSeek-V4.1-Flash',
+    ANTHROPIC_SMALL_FAST_MODEL: 'deepseek-v3.2',
+    ANTHROPIC_MODEL: 'stale-global-model',
+  };
+
+  assert.deepEqual(buildWebviewControlledSettingsOverride('claude-sonnet-4-6', settingsEnv), {
+    env: {
+      CLAUDE_CODE_EFFORT_LEVEL: '',
+      MAX_THINKING_TOKENS: '',
+      ANTHROPIC_MODEL: '',
+      ANTHROPIC_DEFAULT_FABLE_MODEL: 'DeepSeek-V4.1-Flash',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5.3-flash',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'DeepSeek-V4.1-Flash',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'doubao-seed-2.1-lite',
+      ANTHROPIC_SMALL_FAST_MODEL: 'deepseek-v3.2',
+      CLAUDE_CODE_SUBAGENT_MODEL: '',
+      CLAUDE_CODE_DISABLE_1M_CONTEXT: '1',
+    },
+  });
+});
+
+test('buildWebviewControlledSettingsOverride leaves unconfigured tiers blank', () => {
+  const result = buildWebviewControlledSettingsOverride('claude-opus-5', {
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5.3-flash',
+  });
+
+  assert.equal(result.env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'glm-5.3-flash');
+  assert.equal(result.env.ANTHROPIC_DEFAULT_HAIKU_MODEL, '');
+  assert.equal(result.env.CLAUDE_CODE_SUBAGENT_MODEL, '');
+  assert.equal(
+    result.env.ANTHROPIC_MODEL,
+    '',
+    'ANTHROPIC_MODEL must stay blank: blocking the stale settings.json copy is exactly the issue #1509 fix'
+  );
+});
+
 test('buildCliEnv leaves CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST unset for cloud providers', () => {
   // Bedrock/Vertex/Foundry: the user's settings.json owns the provider switch.
   // The host-managed flag would make Claude Code strip it → 403, so it must be
