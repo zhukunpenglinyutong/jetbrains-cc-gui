@@ -56,6 +56,7 @@ webview/test-results/
 webview/playwright-report/
 
 src/main/resources/html/*
+src/main/resources/webview/assets/
 
 .specify
 .claude

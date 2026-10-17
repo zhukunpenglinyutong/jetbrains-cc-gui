@@ -8,7 +8,8 @@
     "prebuild": "node scripts/extract-version.mjs",
     "build": "tsc && vite build",
     "postbuild": "node scripts/copy-dist.mjs",
-    "test": "vitest run && tsc -p tsconfig.test.json --noEmit",
+    "test": "node --test scripts/copy-dist.test.mjs && vitest run && tsc -p tsconfig.test.json --noEmit",
+    "pretest:e2e": "npm run build",
     "test:e2e": "playwright test",
     "preview": "vite preview"
   },
@@ -21,13 +22,13 @@
     "@types/react": "^19.2.6",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.2.2",
+    "es-module-lexer": "^1.7.0",
     "happy-dom": "^20.8.9",
     "jsdom": "^28.0.0",
     "less": "^4.4.2",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.9.3",
     "vite": "^7.2.4",
-    "vite-plugin-singlefile": "^2.3.0",
     "vitest": "^3.2.4"
   },
   "dependencies": {

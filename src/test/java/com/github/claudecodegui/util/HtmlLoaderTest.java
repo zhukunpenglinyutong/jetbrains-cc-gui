@@ -49,7 +49,7 @@ public class HtmlLoaderTest {
         assertFalse(injected.contains("\\n    <script>"));
     }
 
-    /** Verifies that the bundled single-file page receives styles on its real document roots. */
+    /** Verifies that the bundled page keeps its theme bootstrap and lightweight asset entry. */
     @Test
     public void loadsBundledHtmlWithRootThemeInjection() {
         String html = new HtmlLoader(HtmlLoaderTest.class).loadChatHtml();
@@ -69,5 +69,8 @@ public class HtmlLoaderTest {
         assertTrue(bodyStart >= 0);
         assertTrue(bodyEnd > bodyStart);
         assertTrue(html.substring(bodyStart, bodyEnd).contains("style=\"background-color:"));
+        assertTrue("per-tab HTML must not inline the frontend bundle", html.length() < 32_768);
+        assertTrue(html.contains("https://cc-gui-webview.local/assets/"));
+        assertTrue(html.contains("DecompressionStream('gzip')"));
     }
 }

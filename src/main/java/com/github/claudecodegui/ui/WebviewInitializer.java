@@ -424,6 +424,10 @@ public class WebviewInitializer {
                     new UiFontResourceRequestHandler(),
                     createdBrowser.getCefBrowser()
             );
+            createdBrowser.getJBCefClient().addRequestHandler(
+                    new WebviewAssetRequestHandler(),
+                    createdBrowser.getCefBrowser()
+            );
 
             // JCEF JS bridges must be created and registered before loadHTML,
             // because the window.sendToJava / shortcut / clipboard handlers

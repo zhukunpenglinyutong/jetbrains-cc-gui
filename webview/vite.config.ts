@@ -1,13 +1,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import tailwindcss from '@tailwindcss/vite';
-import { viteSingleFile } from 'vite-plugin-singlefile';
 
 export default defineConfig({
+  // A stable asset origin lets Remote JCEF reuse chunks across chat browsers.
+  base: 'https://cc-gui-webview.local/',
   plugins: [
     react(),
     tailwindcss(),
-    viteSingleFile(),
   ],
   esbuild: {
     drop: ['debugger'],
@@ -15,8 +15,8 @@ export default defineConfig({
   },
   build: {
     minify: 'esbuild',
-    assetsInlineLimit: 1024 * 1024,
-    cssCodeSplit: false,
+    assetsInlineLimit: 0,
+    cssCodeSplit: true,
     sourcemap: false,
     rollupOptions: {
       output: {
@@ -38,4 +38,3 @@ export default defineConfig({
     },
   },
 });
-

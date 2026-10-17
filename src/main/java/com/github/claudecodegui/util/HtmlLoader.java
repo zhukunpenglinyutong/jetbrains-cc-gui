@@ -40,7 +40,7 @@ public class HtmlLoader {
             return cachedHtml;
         }
 
-        // Several tabs can initialize concurrently. Serialize the one-time 10 MB resource
+        // Several tabs can initialize concurrently. Serialize the one-time resource
         // transformation so a burst of tabs does not duplicate the same allocation and I/O.
         synchronized (CHAT_HTML_CACHE_LOCK) {
             cachedHtml = CHAT_HTML_CACHE.get(cacheKey);
