@@ -80,6 +80,8 @@ const SdkCard = ({
               installedVersion={info?.installedVersion}
               latestVersion={info?.latestVersion}
               hasUpdate={info?.hasUpdate}
+              runtimeKind={info?.runtimeKind}
+              transport={info?.transport}
             />
           </div>
           <div className={styles.sdkDescription}>{t(sdk.description)}</div>

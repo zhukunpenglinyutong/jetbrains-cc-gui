@@ -15,6 +15,10 @@ export interface BehaviorTabProps {
   onAutoOpenFileEnabledChange?: (enabled: boolean) => void;
   diffExpandedByDefault?: boolean;
   onDiffExpandedByDefaultChange?: (enabled: boolean) => void;
+  bashGroupCollapsedByDefault?: boolean;
+  onBashGroupCollapsedByDefaultChange?: (collapsed: boolean) => void;
+  editGroupCollapsedByDefault?: boolean;
+  onEditGroupCollapsedByDefaultChange?: (collapsed: boolean) => void;
   commitGenerationEnabled?: boolean;
   onCommitGenerationEnabledChange?: (enabled: boolean) => void;
   statusBarWidgetEnabled?: boolean;
@@ -63,6 +67,10 @@ const BehaviorTab = ({
   onAutoOpenFileEnabledChange = () => {},
   diffExpandedByDefault = false,
   onDiffExpandedByDefaultChange = () => {},
+  bashGroupCollapsedByDefault = false,
+  onBashGroupCollapsedByDefaultChange = () => {},
+  editGroupCollapsedByDefault = false,
+  onEditGroupCollapsedByDefaultChange = () => {},
   commitGenerationEnabled = true,
   onCommitGenerationEnabledChange = () => {},
   statusBarWidgetEnabled = true,
@@ -141,6 +149,26 @@ const BehaviorTab = ({
         enabledLabel={t('settings.basic.diffExpanded.enabled')}
         disabledLabel={t('settings.basic.diffExpanded.disabled')}
         hint={t('settings.basic.diffExpanded.hint')}
+      />
+
+      <ToggleSettingSection
+        icon="codicon-terminal"
+        label={t('settings.basic.bashGroupCollapsed.label')}
+        checked={bashGroupCollapsedByDefault}
+        onChange={onBashGroupCollapsedByDefaultChange}
+        enabledLabel={t('settings.basic.bashGroupCollapsed.enabled')}
+        disabledLabel={t('settings.basic.bashGroupCollapsed.disabled')}
+        hint={t('settings.basic.bashGroupCollapsed.hint')}
+      />
+
+      <ToggleSettingSection
+        icon="codicon-edit"
+        label={t('settings.basic.editGroupCollapsed.label')}
+        checked={editGroupCollapsedByDefault}
+        onChange={onEditGroupCollapsedByDefaultChange}
+        enabledLabel={t('settings.basic.editGroupCollapsed.enabled')}
+        disabledLabel={t('settings.basic.editGroupCollapsed.disabled')}
+        hint={t('settings.basic.editGroupCollapsed.hint')}
       />
 
       {/* AI commit generation toggle */}

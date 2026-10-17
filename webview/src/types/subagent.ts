@@ -43,6 +43,12 @@ export interface SubagentHistoryResponse {
   /** True only when the sidechain transcript ends with an assistant end_turn. */
   completed?: boolean;
   toolUseId?: string;
+  /** Followup call that owns this read, so a previous task cannot supply its report. */
+  nativeTaskId?: string;
+  /** Proven prior terminal turn; null clears it after the next native turn is observed. */
+  nativeTaskPreviousTurnId?: string | null;
+  latestTurnId?: string;
+  latestTurnStatus?: string;
   agentId?: string;
   agentPath?: string;
   sessionId?: string;
@@ -57,6 +63,10 @@ export interface SubagentStatusSnapshot {
   success: boolean;
   completed?: boolean;
   toolUseId?: string;
+  nativeTaskId?: string;
+  nativeTaskPreviousTurnId?: string | null;
+  latestTurnId?: string;
+  latestTurnStatus?: string;
   agentId?: string;
   agentPath?: string;
   status?: SubagentStatus;
@@ -77,6 +87,12 @@ export interface SubagentStatusesResponse {
 export interface SubagentInfo {
   /** Unique identifier (tool_use block id) */
   id: string;
+  /** Original launch tool id when one native call opens several child threads. */
+  toolUseId?: string;
+  /** Accepted native followup call whose child state is currently being read. */
+  nativeTaskId?: string;
+  /** Prior terminal native turn excluded while an idle followup is still queued. */
+  nativeTaskPreviousTurnId?: string;
   /** Subagent type (e.g., 'Explore', 'Plan', 'Bash') */
   type: string;
   /** Short description of the task */

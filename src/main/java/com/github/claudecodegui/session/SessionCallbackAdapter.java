@@ -3,6 +3,7 @@ package com.github.claudecodegui.session;
 import com.github.claudecodegui.handler.PermissionHandler;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.util.JsUtils;
+import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.vfs.VirtualFileManager;
@@ -113,6 +114,13 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         if (isInactive()) {
             return;
         }
+        if (busy && loading && this.streamEndStarted.get() && !this.streamCoalescer.isStreamActive()) {
+            // A new submission can fail before the provider emits its first stream-start.
+            this.streamEndFallbackAlarm.cancelAllRequests();
+            this.streamEndStarted.set(false);
+            this.streamEndSignalSent.set(false);
+            this.streamGeneration.incrementAndGet();
+        }
         // The webview queue owns JS-thread marshalling; only the VFS refresh needs the EDT.
         if (!loading && streamCoalescer.isStreamActive()) {
             LOG.debug("Suppressing showLoading(false) during active streaming");
@@ -140,11 +148,13 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         jsTarget.callJavaScript("updateStatus", JsUtils.escapeJs(message));
     }
 
+    /** Publishes a session identity or an empty ID after transcript expiry. */
     @Override
     public void onSessionIdReceived(String sessionId) {
-        if (isInactive() || sessionId == null || sessionId.trim().isEmpty()) {
+        if (this.isInactive() || sessionId == null) {
             return;
         }
+        sessionId = sessionId.trim();
         // Atomic check-and-record: concurrent emissions of the same id are
         // forwarded exactly once.
         if (sessionId.equals(lastSessionId.getAndSet(sessionId))) {
@@ -392,6 +402,14 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     }
 
     @Override
+    public void onCodexRuntimeEvent(String eventJson) {
+        if (isInactive() || eventJson == null || eventJson.trim().isEmpty()) {
+            return;
+        }
+        jsTarget.callJavaScript("onCodexRuntimeEvent", JsUtils.escapeJs(eventJson));
+    }
+
+    @Override
     public void onClaudeHistoryPageInfo(String sessionId, int fromTurn, int totalTurns, boolean hasMore, boolean cursorReset, String sessionTitle) {
         if (isInactive()) {
             return;
@@ -409,22 +427,16 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         });
     }
 
+    /** Queues page failures before later identity changes can make them obsolete. */
     @Override
     public void onClaudeHistoryPageError(String sessionId, String message) {
-        if (isInactive()) {
+        if (this.isInactive()) {
             return;
         }
-        ApplicationManager.getApplication().invokeLater(() -> {
-            if (isInactive()) {
-                return;
-            }
-            String json = String.format(
-                "{\"sessionId\":\"%s\",\"message\":\"%s\"}",
-                sessionId != null ? JsUtils.escapeJs(sessionId) : "",
-                JsUtils.escapeJs(message != null ? message : "Unknown error")
-            );
-            jsTarget.callJavaScript("claudeHistoryPageError", JsUtils.escapeJs(json));
-        });
+        JsonObject payload = new JsonObject();
+        payload.addProperty("sessionId", sessionId != null ? sessionId : "");
+        payload.addProperty("message", message != null ? message : "Unknown error");
+        this.jsTarget.callJavaScript("claudeHistoryPageError", JsUtils.escapeJs(payload.toString()));
     }
 
     /**

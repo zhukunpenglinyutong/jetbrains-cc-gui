@@ -462,19 +462,21 @@ export function extractSessionTitle(rows) {
  * cursor); the client should discard its cached history and reload from
  * scratch.
  *
+ * A missing transcript is reported as `{success: false, missing: true}` —
+ * the same contract as buildSessionMessagesPayload — so Java clears the
+ * stale session ID instead of falling back to the full-history read.
+ *
  * On any unexpected error the caller falls back to buildSessionMessagesPayload
  * (full history) so the user never sees an empty chat.
  */
 export function buildSessionMessagesPagePayload(sessionFile, beforeTurn = null, limit = 30) {
   if (!existsSync(sessionFile)) {
+    // Match the full-history contract so a pruned transcript retires its ID.
     return {
-      success: true,
+      success: false,
+      missing: true,
+      error: 'Session history file not found',
       messages: [],
-      fromTurn: 0,
-      toTurn: 0,
-      totalTurns: 0,
-      hasMore: false,
-      cursorReset: false,
     };
   }
 

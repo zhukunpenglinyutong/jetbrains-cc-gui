@@ -8,7 +8,7 @@ import FileIcon from './FileIcon';
 
 interface FileChangesListProps {
   fileChanges: FileChangeSummary[];
-  undoingFile: string | null;
+  undoingFiles: Set<string>;
   isDiscardingAll: boolean;
   onUndoClick: (fileChange: FileChangeSummary) => void;
   onDiscardAllClick: () => void;
@@ -121,7 +121,7 @@ FileChangeRow.displayName = 'FileChangeRow';
 
 const FileChangesList = memo(({
   fileChanges,
-  undoingFile,
+  undoingFiles,
   isDiscardingAll,
   onUndoClick,
   onDiscardAllClick,
@@ -134,14 +134,8 @@ const FileChangesList = memo(({
   }, []);
 
   const handleShowDiff = useCallback((fileChange: FileChangeSummary) => {
-    const operations = fileChange.operations.map((op) => ({
-      oldString: op.oldString,
-      newString: op.newString,
-      replaceAll: op.replaceAll,
-    }));
     // Use editable diff view for selective accept/reject of changes
-    const status = fileChange.status === 'A' ? 'A' : 'M';
-    showEditableDiff(fileChange.filePath, operations, status);
+    showEditableDiff(fileChange.filePath, fileChange.operations, fileChange.status);
   }, []);
 
   if (fileChanges.length === 0) {
@@ -155,7 +149,7 @@ const FileChangesList = memo(({
         <button
           className="file-changes-action-btn discard-all-btn"
           onClick={onDiscardAllClick}
-          disabled={isDiscardingAll}
+          disabled={isDiscardingAll || undoingFiles.size > 0}
           title={t('statusPanel.discardAll')}
         >
           {isDiscardingAll ? (
@@ -181,7 +175,7 @@ const FileChangesList = memo(({
           <FileChangeRow
             key={fileChange.filePath}
             fileChange={fileChange}
-            isUndoing={undoingFile === fileChange.filePath}
+            isUndoing={isDiscardingAll || undoingFiles.has(fileChange.filePath)}
             onOpen={handleOpenFile}
             onShowDiff={handleShowDiff}
             onUndo={onUndoClick}

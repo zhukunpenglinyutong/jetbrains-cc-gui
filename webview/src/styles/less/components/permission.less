@@ -15,6 +15,19 @@
     animation: slideFromBottom 0.2s ease-out;
 }
 
+.permission-dialog-overlay.non-blocking-question {
+    top: 8px;
+    right: 8px;
+    left: auto;
+    bottom: auto;
+    width: min(420px, calc(100vw - 16px));
+    pointer-events: none;
+
+    > * {
+        pointer-events: auto;
+    }
+}
+
 @keyframes slideFromBottom {
     from {
         transform: translateY(100%);
@@ -521,6 +534,69 @@
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-all;
+}
+
+.codex-file-approval-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.codex-file-approval-preview > p {
+    margin: 0;
+    color: var(--text-muted);
+}
+
+.codex-file-approval-card {
+    overflow: hidden;
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+}
+
+.codex-file-approval-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 9px;
+    border-bottom: 1px solid var(--border-primary);
+    font-family: var(--idea-editor-font-family, monospace);
+    font-size: 12px;
+}
+
+.codex-file-approval-kind {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.codex-file-approval-path {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    color: var(--text-primary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.codex-file-approval-stats {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 6px;
+}
+
+.codex-file-approval-stats .additions {
+    color: var(--diff-added-accent);
+}
+
+.codex-file-approval-stats .deletions {
+    color: var(--diff-deleted-accent);
+}
+
+.codex-file-approval-empty {
+    margin: 0;
+    padding: 10px;
+    color: var(--text-muted);
 }
 
 .permission-dialog-v3-options {

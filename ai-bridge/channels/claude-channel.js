@@ -17,6 +17,7 @@ import {
   getSessionMessagesPage as claudeGetSessionMessagesPage,
   getLatestUserMessage as claudeGetLatestUserMessage
 } from '../services/claude/session-service.js';
+import { listModels } from '../services/claude/models-service.js';
 
 /**
  * Execute a Claude specific command.
@@ -26,6 +27,10 @@ import {
  */
 export async function handleClaudeCommand(command, args, stdinData) {
   switch (command) {
+    case 'listModels':
+      listModels();
+      break;
+
     case 'send': {
       if (stdinData && stdinData.message !== undefined) {
         // Include streaming and disableThinking when destructuring
@@ -142,5 +147,5 @@ export async function handleClaudeCommand(command, args, stdinData) {
 }
 
 export function getClaudeCommandList() {
-  return ['send', 'sendWithAttachments', 'getSession', 'getLatestUserMessage', 'rewindFiles', 'getMcpServerStatus', 'getMcpServerTools', 'resetRuntime', 'getContextUsage'];
+  return ['send', 'sendWithAttachments', 'listModels', 'getSession', 'getLatestUserMessage', 'rewindFiles', 'getMcpServerStatus', 'getMcpServerTools', 'resetRuntime', 'getContextUsage'];
 }

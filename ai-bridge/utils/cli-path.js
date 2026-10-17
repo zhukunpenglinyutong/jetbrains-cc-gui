@@ -13,7 +13,7 @@
  * and launch `.cmd`/`.bat` via `cmd.exe /d /s /c` (see `resolveCliSpawn`).
  */
 
-import { existsSync, readdirSync } from 'fs';
+import { existsSync, readdirSync, realpathSync } from 'fs';
 import { homedir } from 'os';
 import { join, dirname, isAbsolute, win32 as pathWin32 } from 'path';
 import { execFileSync, execSync } from 'child_process';
@@ -23,7 +23,8 @@ const WINDOWS_SPAWNABLE_EXT = /\.(cmd|bat|exe)$/i;
 /** Prefer real PE binaries, then cmd shims, over extensionless npm wrappers. */
 const WINDOWS_SPAWNABLE_PRIORITY = ['.exe', '.cmd', '.bat'];
 
-function stripOuterQuotes(value) {
+/** Strip one layer of surrounding quotes from a user-configured path. */
+export function stripOuterQuotes(value) {
   const s = String(value ?? '').trim();
   if (s.length >= 2 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))) {
     return s.slice(1, -1);
@@ -228,7 +229,7 @@ function pathExists(candidate) {
  * Shells allowed for login-env probing: `$SHELL` is attacker-influenced, so only
  * standard system/Homebrew shell binaries may be invoked.
  */
-const ALLOWED_LOGIN_SHELLS = new Set([
+export const ALLOWED_LOGIN_SHELLS = new Set([
   '/bin/zsh', '/bin/bash', '/bin/sh',
   '/usr/bin/zsh', '/usr/bin/bash', '/usr/bin/sh',
   '/usr/local/bin/zsh', '/usr/local/bin/bash',
@@ -319,6 +320,140 @@ function whichOnPath(binaryName) {
 }
 
 /**
+ * npm global installs on Windows ship `.cmd` shims, not `.exe`.
+ * @param {string} binaryName
+ * @returns {string[]}
+ */
+function candidateExeNames(binaryName) {
+  return process.platform === 'win32'
+    ? [`${binaryName}.cmd`, `${binaryName}.bat`, `${binaryName}.exe`, binaryName]
+    : [binaryName];
+}
+
+/**
+ * Every PATH match for `binaryName` in discovery order. Unlike
+ * {@link whichOnPath}, the whole list survives: an earlier, broken install must
+ * not hide a later, working one (`which -a` / `where` list both).
+ *
+ * @param {string} binaryName
+ * @returns {string[]}
+ */
+function whichAllOnPath(binaryName) {
+  try {
+    if (process.platform === 'win32') {
+      let output;
+      try {
+        output = execFileSync('where.exe', [binaryName], {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+          env: process.env,
+          windowsHide: true,
+        });
+      } catch {
+        output = execSync(`where ${binaryName}`, {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+          env: process.env,
+          windowsHide: true,
+        });
+      }
+      const lines = String(output || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      // Keep the filesystem order stable while rating real executables first:
+      // the extensionless bash shim cannot be CreateProcess'd by Node.
+      const ranked = [...lines].sort((a, b) => windowsShimRank(a) - windowsShimRank(b));
+      return ranked.map((line) => resolveWindowsSpawnableBin(line));
+    }
+
+    const output = execFileSync('which', ['-a', binaryName], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      env: process.env,
+    });
+    return String(output || '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/** Lower rank = more spawnable on Windows; preserves relative order within a rank. */
+function windowsShimRank(candidate) {
+  const index = WINDOWS_SPAWNABLE_PRIORITY.findIndex((ext) => candidate.toLowerCase().endsWith(ext));
+  return index === -1 ? WINDOWS_SPAWNABLE_PRIORITY.length : index;
+}
+
+/** Stable identity for a candidate: the symlink target when it resolves. */
+function candidateIdentity(candidate) {
+  try {
+    return realpathSync(candidate);
+  } catch {
+    return candidate;
+  }
+}
+
+/**
+ * Ordered, deduplicated CLI candidates: env override, every PATH match, home
+ * candidates, well-known bin dirs, then the login shell.
+ *
+ * Resolution must stay free of child-process probes (the CLI page owns version
+ * detection), so only existing files are returned.
+ *
+ * @param {object} options
+ * @param {string} options.binaryName
+ * @param {string[]} [options.envKeys]
+ * @param {string[]} [options.homeCandidates]
+ * @returns {string[]}
+ */
+export function listCliCandidates({ binaryName, envKeys = [], homeCandidates = [] }) {
+  const exeNames = candidateExeNames(binaryName);
+  const seen = new Set();
+  const candidates = [];
+  const push = (candidate) => {
+    if (typeof candidate !== 'string' || !candidate.trim()) return;
+    const value = candidate.trim();
+    const identity = candidateIdentity(value);
+    if (seen.has(identity)) return;
+    seen.add(identity);
+    candidates.push(value);
+  };
+
+  const envOverride = firstNonEmpty(...envKeys.map((key) => process.env[key]));
+  if (envOverride) {
+    push(resolveWindowsSpawnableBin(envOverride));
+  }
+
+  for (const fromPath of whichAllOnPath(binaryName)) {
+    if (pathExists(fromPath)) push(fromPath);
+  }
+
+  const home = homedir();
+  for (const template of homeCandidates) {
+    for (const exeName of exeNames) {
+      const resolved = template
+        .replace('{home}', home)
+        .replace('{localAppData}', process.env.LOCALAPPDATA || join(home, 'AppData', 'Local'))
+        .replace('{bin}', exeName)
+        .replace('{name}', binaryName);
+      if (pathExists(resolved)) push(resolveWindowsSpawnableBin(resolved));
+    }
+  }
+
+  for (const dir of commonCliBinDirs(home)) {
+    for (const exeName of exeNames) {
+      const resolved = join(dir, exeName);
+      if (pathExists(resolved)) push(resolveWindowsSpawnableBin(resolved));
+    }
+  }
+
+  const fromShell = whichViaLoginShell(binaryName);
+  if (fromShell) push(resolveWindowsSpawnableBin(fromShell));
+
+  return candidates;
+}
+
+/**
  * @param {object} options
  * @param {string} options.binaryName - e.g. "grok" | "kimi" | "opencode"
  * @param {string[]} [options.envKeys] - env var names for path override
@@ -327,11 +462,7 @@ function whichOnPath(binaryName) {
  * @returns {string}
  */
 export function resolveCliPath({ binaryName, envKeys = [], homeCandidates = [] }) {
-  const win = process.platform === 'win32';
-  // npm global installs on Windows ship `.cmd` shims, not `.exe`.
-  const exeNames = win
-    ? [`${binaryName}.cmd`, `${binaryName}.bat`, `${binaryName}.exe`, binaryName]
-    : [binaryName];
+  const exeNames = candidateExeNames(binaryName);
 
   const envOverride = firstNonEmpty(...envKeys.map((key) => process.env[key]));
   if (envOverride) {

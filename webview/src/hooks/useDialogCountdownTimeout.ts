@@ -15,6 +15,7 @@ interface UseDialogCountdownTimeoutReturn {
   isTimeWarning: boolean;
   isTimedOut: boolean;
   markSubmitted: () => boolean;
+  restoreSubmission: () => void;
 }
 
 export function useDialogCountdownTimeout({
@@ -49,6 +50,11 @@ export function useDialogCountdownTimeout({
     return true;
   }, [triggerTimeout]);
 
+  // A refused bridge write may retry, but it never earns a new deadline.
+  const restoreSubmission = useCallback(() => {
+    if (Date.now() < deadlineMsRef.current) submittedRef.current = false;
+  }, []);
+
   useEffect(() => {
     if (!isOpen || !requestKey) return;
 
@@ -81,5 +87,6 @@ export function useDialogCountdownTimeout({
     isTimeWarning: remainingSeconds <= WARNING_THRESHOLD_SECONDS && remainingSeconds > 0,
     isTimedOut: remainingSeconds <= 0,
     markSubmitted,
+    restoreSubmission,
   };
 }

@@ -24,6 +24,7 @@ vi.mock('../../contexts/SubagentContext', () => ({
   useSessionProvider: () => mockUseSessionProvider(),
   useGetToolResultRaw: () => mockGetToolResultRaw,
   useTaskEvent: (toolUseId: string | undefined) => mockUseTaskEvent(toolUseId),
+  useSubagentStates: () => [],
 }));
 
 describe('TaskExecutionBlock polling', () => {
@@ -436,6 +437,17 @@ describe('TaskExecutionBlock polling', () => {
     expect(container.querySelector('.task-header')?.textContent).toContain('reviewer');
     fireEvent.click(container.querySelector('.task-header') as HTMLElement);
     expect(container.textContent).not.toContain(opaqueMessage);
+  });
+
+  it('shows a native spawn prompt in the shared Claude process detail card', () => {
+    mockUseSessionProvider.mockReturnValue('codex');
+    const prompt = 'Inspect the compact request and report its terminal result.';
+    const { container } = render(<TaskExecutionBlock name="spawn_agent" toolId="native-spawn"
+      input={{ native: true, agent_id: 'child', prompt }} />);
+    fireEvent.click(container.querySelector('.task-header') as HTMLElement);
+    expect(container.querySelector('.subagent-prompt-card')?.textContent).toBe(prompt);
+    expect(container.querySelectorAll('.subagent-prompt-card')).toHaveLength(1);
+    expect(container.querySelector('.tool-status-indicator')?.className).toContain('pending');
   });
 
   it('loads full details when only a lightweight status snapshot exists', () => {

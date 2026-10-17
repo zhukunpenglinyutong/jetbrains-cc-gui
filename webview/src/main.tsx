@@ -687,6 +687,23 @@ if (typeof window !== 'undefined' && !window.forceClosePlanApprovalDialog) {
   };
 }
 
+// Buffer native Codex interactions until React installs its typed router.
+if (typeof window !== 'undefined' && !window.onCodexRuntimeEvent) {
+  window.onCodexRuntimeEvent = (eventJson) => {
+    (window.__pendingCodexRuntimeEvents ??= []).push(eventJson);
+  };
+}
+if (typeof window !== 'undefined' && !window.onCodexWorkspaceDiff) {
+  window.onCodexWorkspaceDiff = (json) => {
+    window.__pendingCodexWorkspaceDiff = json;
+  };
+}
+if (typeof window !== 'undefined' && !window.onCodexInteractionResponse) {
+  window.onCodexInteractionResponse = (json) => {
+    window.dispatchEvent(new CustomEvent('codex-interaction-response', { detail: json }));
+  };
+}
+
 if (typeof window !== 'undefined') {
   window.__ccguiSurfaceDamagePhaseA = beginSurfaceDamagePulse;
   window.__ccguiSurfaceDamagePhaseB = advanceSurfaceDamagePulse;

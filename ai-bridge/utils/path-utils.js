@@ -5,7 +5,7 @@
 
 import fs from 'fs';
 import { resolve, join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { homedir, tmpdir, platform } from 'os';
 
 // Cache the resolved home directory path to avoid redundant computation
@@ -35,6 +35,34 @@ export function getRealHomeDir() {
   }
 
   return cachedRealHomeDir;
+}
+
+/**
+ * Whether the module identified by selfUrl is the process entry script.
+ *
+ * The naive `import.meta.url === pathToFileURL(process.argv[1]).href` breaks
+ * when the entry path crosses a Windows junction/symlink: Node resolves the
+ * entry module's URL through realpath, while process.argv[1] keeps the path
+ * as given by the launcher (e.g. JetBrains configs migrated to another drive
+ * via an AppData\Roaming junction - the launcher passes C:\...\Roaming\...,
+ * import.meta.url reports D:\RoamingData\...). The mismatch made service
+ * scripts exit silently and their Java callers fail with broken pipes.
+ * Realpath both sides (falling back to the raw values) before comparing.
+ * @param {string} selfUrl - The caller's own import.meta.url
+ * @returns {boolean} True when the caller module is the entry script
+ */
+export function isMainEntryModule(selfUrl) {
+  if (!process.argv[1] || !selfUrl) {
+    return false;
+  }
+  try {
+    const entryHref = pathToFileURL(fs.realpathSync(process.argv[1])).href;
+    const selfHref = pathToFileURL(fs.realpathSync(fileURLToPath(selfUrl))).href;
+    return normalizePathForComparison(entryHref) === normalizePathForComparison(selfHref);
+  } catch {
+    // Unresolvable paths cannot be proven equal; stay on the safe (non-entry) side
+    return false;
+  }
 }
 
 /**

@@ -389,3 +389,93 @@ test('acquireRuntime discards a closed runtime still registered from an abort', 
     fs.rmSync(tempHome, { recursive: true, force: true });
   }
 });
+
+// ============================================================================
+// session_resume_expired notification
+// ============================================================================
+
+/** Capture process-level daemon events written via _originalStdoutWrite. */
+function captureDaemonEvents() {
+  const list = [];
+  const original = process.stdout._originalStdoutWrite;
+  process.stdout._originalStdoutWrite = (str) => {
+    try {
+      const parsed = JSON.parse(str);
+      if (parsed?.type === 'daemon') list.push(parsed);
+    } catch (_) { /* ignore non-JSON */ }
+    return true;
+  };
+  return {
+    list,
+    restore() {
+      if (original === undefined) delete process.stdout._originalStdoutWrite;
+      else process.stdout._originalStdoutWrite = original;
+    },
+  };
+}
+
+test('notifyExpiredResume emits session_resume_expired for a pruned resume target', () => {
+  const capture = captureDaemonEvents();
+  try {
+    __testing.notifyExpiredResume(
+      { requestedSessionId: 'pruned-session', runtimeSessionEpoch: 'expired-epoch' },
+      new Error('No conversation found with session ID: pruned-session')
+    );
+    assert.equal(capture.list.length, 1);
+    assert.equal(capture.list[0].event, 'session_resume_expired');
+    assert.equal(capture.list[0].sessionId, 'pruned-session');
+    assert.equal(capture.list[0].runtimeSessionEpoch, 'expired-epoch');
+  } finally {
+    capture.restore();
+  }
+});
+
+test('notifyExpiredResume stays silent for fresh sessions and unrelated errors', () => {
+  const capture = captureDaemonEvents();
+  try {
+    // Fresh session (no resume target): nothing to expire.
+    __testing.notifyExpiredResume(
+      { requestedSessionId: null },
+      new Error('No conversation found with session ID: whatever')
+    );
+    // Ordinary failure while resuming: not a missing-transcript signal.
+    __testing.notifyExpiredResume(
+      { requestedSessionId: 'live-session' },
+      new Error('API request failed: 500')
+    );
+    assert.equal(capture.list.length, 0);
+  } finally {
+    capture.restore();
+  }
+});
+
+test('notifyExpiredResume recognizes CLI stderr on process exit and emits once per runtime', () => {
+  const capture = captureDaemonEvents();
+  const runtime = {
+    stderrLines: ['No conversation found with session ID: pruned-session'],
+  };
+  const context = { requestedSessionId: 'pruned-session', runtimeSessionEpoch: 'expired-epoch' };
+  const error = Object.assign(new Error('Claude Code process exited with code 1'), { runtimeTerminated: true });
+  try {
+    assert.equal(__testing.notifyExpiredResume(context, error, runtime), true);
+    assert.equal(__testing.notifyExpiredResume(context, error, runtime), true);
+    assert.equal(capture.list.length, 1);
+    assert.equal(capture.list[0].event, 'session_resume_expired');
+  } finally {
+    capture.restore();
+  }
+});
+
+test('notifyExpiredResume ignores old stderr when the current failure is unrelated', () => {
+  const capture = captureDaemonEvents();
+  try {
+    assert.equal(__testing.notifyExpiredResume(
+      { requestedSessionId: 'live-session', runtimeSessionEpoch: 'live-epoch' },
+      new Error('API request failed: 500'),
+      { stderrLines: ['No conversation found with session ID: some-other-session'] },
+    ), false);
+    assert.equal(capture.list.length, 0);
+  } finally {
+    capture.restore();
+  }
+});

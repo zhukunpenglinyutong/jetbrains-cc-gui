@@ -1,9 +1,9 @@
 /**
  * Codex channel command handler – keeps Codex specific logic separated.
  */
-import { sendMessage as codexSendMessage } from '../services/codex/message-service.js';
 import { getMcpServerTools as codexGetMcpServerTools } from '../services/codex/message-service.js';
 import { listModels as codexListModels } from '../services/codex/models-service.js';
+import { codexSendPersistent, codexShutdownPersistentRuntimes } from '../services/codex/persistent-codex-service.js';
 
 /**
  * Execute a Codex command.
@@ -14,33 +14,19 @@ import { listModels as codexListModels } from '../services/codex/models-service.
 export async function handleCodexCommand(command, args, stdinData) {
   switch (command) {
     case 'send': {
-      if (stdinData && stdinData.message !== undefined) {
-        const {
-          message,
-          threadId,
-          cwd,
-          permissionMode,
-          model,
-          baseUrl,
-          apiKey,
-          reasoningEffort,
-          serviceTier,
-          attachments  // Image attachments (local_image format)
-        } = stdinData;
-        await codexSendMessage(
-          message,
-          threadId || '',
-          cwd || '',
-          permissionMode || '',
-          model || '',
-          baseUrl || '',
-          apiKey || '',
-          (reasoningEffort || 'medium'),
-          serviceTier || '',
-          attachments || []  // Pass attachments to message service
-        );
-      } else {
-        await codexSendMessage(args[0], args[1], args[2], args[3], args[4]);
+      try {
+        const result = await codexSendPersistent(stdinData && stdinData.message !== undefined ? stdinData : {
+          message: args[0] || '',
+          threadId: args[1] || null,
+          cwd: args[2] || null,
+          permissionMode: args[3] || null,
+          model: args[4] || null,
+        });
+        if (result.outcome !== 'completed') throw new Error(result.error || `Codex turn ${result.outcome}`);
+      } finally {
+        // channel-manager owns one command; its native child must not keep
+        // the probe alive after completion. Daemon sends use a separate route.
+        await codexShutdownPersistentRuntimes();
       }
       break;
     }

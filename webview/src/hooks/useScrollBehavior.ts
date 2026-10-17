@@ -25,12 +25,8 @@ interface UseScrollBehaviorReturn {
 }
 
 /**
- * Hook for managing scroll behavior in the chat view
- * - Tracks if user is at bottom
- * - Auto-scrolls to bottom when user is at bottom and new content arrives
- * - User can scroll up to pause auto-scroll (wheel event detection)
- * - Auto-scroll resumes only when user scrolls back to bottom
- * - Handles view switching scroll behavior
+ * Keeps chat following new content and viewport resizing until the user scrolls away.
+ * Wheel-up pauses following until the user wheels back to the bottom.
  */
 export function useScrollBehavior({
   currentView,
@@ -44,12 +40,11 @@ export function useScrollBehavior({
   const inputAreaRef = useRef<HTMLDivElement | null>(null);
   const isUserAtBottomRef = useRef(true);
   const isAutoScrollingRef = useRef(false);
+  const scrollRafRef = useRef<number | null>(null);
+  const layoutRafRef = useRef<number | null>(null);
 
-  // Explicit scroll-pause flag. Set by wheel-up, cleared only when user
-  // manually scrolls back to the very bottom. The scroll event handler
-  // cannot override this — it prevents the race condition where handleScroll
-  // fires right after handleWheel and resets isUserAtBottomRef to true
-  // because the viewport is still within the 100px threshold.
+  // Keep wheel-up intent until a downward wheel reaches the bottom threshold.
+  // Scroll callbacks must not undo a pause while the viewport is still nearby.
   const userPausedRef = useRef(false);
 
   const syncScrollAnchoring = useCallback(() => {
@@ -118,6 +113,37 @@ export function useScrollBehavior({
     });
   }, []);
 
+  // Streaming updates and resize notifications share one layout pass per frame.
+  const followLayoutChanges = useCallback(() => {
+    if (layoutRafRef.current !== null) return;
+    layoutRafRef.current = requestAnimationFrame(() => {
+      layoutRafRef.current = null;
+      const container = messagesContainerRef.current;
+      // Let a pending user scroll establish intent before following layout changes.
+      if (!container || scrollRafRef.current !== null) return;
+      if (userPausedRef.current) {
+        syncScrollAnchoring();
+        return;
+      }
+      // Preserve follow intent before a large resize can change the bottom distance.
+      if (isUserAtBottomRef.current) {
+        scrollToBottom();
+        return;
+      }
+      syncUserAtBottomState(container);
+    });
+  }, [scrollToBottom, syncScrollAnchoring, syncUserAtBottomState]);
+
+  // Cancel old-view work before layout effects can schedule work for the new view.
+  useLayoutEffect(() => {
+    return () => {
+      if (layoutRafRef.current !== null) {
+        cancelAnimationFrame(layoutRafRef.current);
+        layoutRafRef.current = null;
+      }
+    };
+  }, [currentView]);
+
   // Warm up layout after window regains focus (macOS JCEF drops GPU layers
   // when the window is in the background, causing a scroll stutter on return)
   useEffect(() => {
@@ -137,17 +163,19 @@ export function useScrollBehavior({
 
   // Listen to scroll and wheel events to detect user scroll intent
   useEffect(() => {
+    if (currentView !== 'chat') return;
     const container = messagesContainerRef.current;
     if (!container) return;
 
     syncScrollAnchoring();
 
     // Throttle scroll handler via rAF — fires at most once per frame
-    let scrollRafId: number | null = null;
     const handleScroll = () => {
-      if (scrollRafId !== null) return; // already scheduled
-      scrollRafId = requestAnimationFrame(() => {
-        scrollRafId = null;
+      // Capture automatic scrolling now; its flag may clear before the next frame.
+      if (isAutoScrollingRef.current) return;
+      if (scrollRafRef.current !== null) return; // already scheduled
+      scrollRafRef.current = requestAnimationFrame(() => {
+        scrollRafRef.current = null;
         // Skip check during auto-scrolling to prevent false detection during fast streaming
         if (isAutoScrollingRef.current) return;
         // If user explicitly paused via wheel-up, don't let scroll handler override
@@ -162,6 +190,12 @@ export function useScrollBehavior({
     // user intent to pause or resume auto-scroll.
     let wheelRafId: number | null = null;
     const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY === 0) return;
+      // A newer wheel direction must supersede a queued resume check.
+      if (wheelRafId !== null) {
+        cancelAnimationFrame(wheelRafId);
+        wheelRafId = null;
+      }
       if (e.deltaY < 0) {
         // User is scrolling UP → pause auto-scroll immediately
         userPausedRef.current = true;
@@ -169,7 +203,6 @@ export function useScrollBehavior({
         syncScrollAnchoring();
       } else if (e.deltaY > 0) {
         // User is scrolling DOWN → check if they reached the bottom to unpause
-        if (wheelRafId !== null) cancelAnimationFrame(wheelRafId);
         wheelRafId = requestAnimationFrame(() => {
           wheelRafId = null;
           const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
@@ -188,89 +221,48 @@ export function useScrollBehavior({
       container.removeEventListener('scroll', handleScroll);
       container.removeEventListener('wheel', handleWheel);
       container.classList.remove(SCROLL_ANCHOR_ENABLED_CLASS);
-      if (scrollRafId !== null) cancelAnimationFrame(scrollRafId);
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
       if (wheelRafId !== null) cancelAnimationFrame(wheelRafId);
     };
   }, [currentView, syncScrollAnchoring, syncUserAtBottomState]);
 
-  // Follow content height changes that don't replace the message array, such as
-  // subagent/task detail updates inside the currently streaming assistant block.
-  // The observer should be stable across streaming ticks; only recreate on view change.
+  // Content growth and input/panel resizing can move the bottom without scroll
+  // events or message updates. Observe both boxes without resubscribing per tick.
   useEffect(() => {
     if (currentView !== 'chat') return;
     const container = messagesContainerRef.current;
     if (!container) return;
     if (typeof ResizeObserver === 'undefined') return;
 
+    const observer = new ResizeObserver(followLayoutChanges);
+
+    observer.observe(container);
     const observedElement = messagesEndRef.current?.parentElement ?? container.firstElementChild;
-    if (!(observedElement instanceof HTMLElement)) return;
-
-    let resizeRafId: number | null = null;
-    const observer = new ResizeObserver(() => {
-      if (resizeRafId !== null) {
-        cancelAnimationFrame(resizeRafId);
-      }
-      resizeRafId = requestAnimationFrame(() => {
-        resizeRafId = null;
-        // Read current state from refs — these are updated by other effects/handlers
-        const shouldStickToBottom = !userPausedRef.current && isUserAtBottomRef.current;
-        if (userPausedRef.current) {
-          syncScrollAnchoring();
-          return;
-        }
-        if (shouldStickToBottom) {
-          scrollToBottom();
-          return;
-        }
-        syncUserAtBottomState(container);
-      });
-    });
-
-    observer.observe(observedElement);
-    return () => {
-      observer.disconnect();
-      if (resizeRafId !== null) {
-        cancelAnimationFrame(resizeRafId);
-      }
-    };
-  }, [currentView, scrollToBottom, syncScrollAnchoring, syncUserAtBottomState]);
+    if (observedElement instanceof HTMLElement) {
+      observer.observe(observedElement);
+    }
+    return () => observer.disconnect();
+  }, [currentView, followLayoutChanges]);
 
   // Auto-scroll: follow latest content when user is at bottom
   // Includes streaming, expanded thinking blocks, loading indicator, etc.
-  // During streaming, debounce with rAF to coalesce rapid state changes
-  // from multiple update channels (onContentDelta + updateMessages) into
-  // a single scroll-to-bottom per frame, preventing visual jitter.
-  const scrollDebounceRef = useRef<number | null>(null);
-
+  // Streaming shares the resize frame so overlapping updates cannot scroll twice.
   useLayoutEffect(() => {
     if (currentView !== 'chat') return;
     syncScrollAnchoring();
     if (userPausedRef.current) return;
     if (!isUserAtBottomRef.current) return;
+    if (scrollRafRef.current !== null) return;
 
     if (streamingActive) {
-      if (scrollDebounceRef.current !== null) {
-        cancelAnimationFrame(scrollDebounceRef.current);
-      }
-      scrollDebounceRef.current = requestAnimationFrame(() => {
-        scrollDebounceRef.current = null;
-        if (!userPausedRef.current && isUserAtBottomRef.current) {
-          scrollToBottom();
-        }
-      });
+      followLayoutChanges();
     } else {
       scrollToBottom();
     }
-  }, [currentView, messages, expandedThinking, loading, streamingActive, scrollToBottom, syncScrollAnchoring]);
-
-  // Cleanup scroll debounce on unmount
-  useEffect(() => {
-    return () => {
-      if (scrollDebounceRef.current !== null) {
-        cancelAnimationFrame(scrollDebounceRef.current);
-      }
-    };
-  }, []);
+  }, [currentView, messages, expandedThinking, loading, streamingActive, scrollToBottom, syncScrollAnchoring, followLayoutChanges]);
 
   // Scroll to bottom when switching back to chat view
   useEffect(() => {

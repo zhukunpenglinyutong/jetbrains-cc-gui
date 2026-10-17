@@ -75,7 +75,7 @@ export const ButtonArea = ({
 }: ButtonAreaProps) => {
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
-  const { cliModels, cliModelsLoading, cliModelsError, cliDefaultModel, cliCatalogHasEntries, refreshCliModels } = useCliModels(currentProvider);
+  const { cliModels, cliModelsLoading, cliModelsError, cliDefaultModel, cliCatalogHasEntries, cliModelsReplaceBuiltIns, cliModelsLoaded, refreshCliModels } = useCliModels(currentProvider);
   // Dynamic omp roles (static smol/slow/plan fallback until loaded).
   const ompRoles = useOmpRoles();
 
@@ -124,14 +124,24 @@ export const ButtonArea = ({
       claudeCustomModels: readCustomClaudeModels(),
       codexCustomModels: getCustomCodexModels(),
       claudeMapping,
+      claudeReplaceBuiltInOptions: cliModelsReplaceBuiltIns,
     });
     // customModelsVersion intentionally forces re-read of localStorage customs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentProvider, customModelsVersion, cliModels, cliCatalogHasEntries]);
+  }, [currentProvider, customModelsVersion, cliModels, cliCatalogHasEntries, cliModelsReplaceBuiltIns]);
 
   // When a dynamic model catalog arrives, ensure selection is a real entry.
   useEffect(() => {
-    const isDynamicProvider = currentProvider === 'kimi' || currentProvider === 'minimax'
+    if (currentProvider === 'claude' && cliModelsLoaded && !cliModelsLoading && !cliModelsError
+      && selectedModel.startsWith('ccs-claude-')
+      && !availableModels.some(model => model.id === selectedModel)) {
+      // A member was removed, or cc-switch left aggregation mode. Wait for the
+      // real picker before replacing the saved route with a valid default.
+      onModelSelect?.(cliDefaultModel ?? DEFAULT_CLAUDE_MODEL_ID);
+      return;
+    }
+    const isDynamicProvider = (currentProvider === 'claude' && cliModelsReplaceBuiltIns)
+      || currentProvider === 'kimi' || currentProvider === 'minimax'
       || currentProvider === 'zcode'
       || currentProvider === 'opencode'
       || currentProvider === 'pi' || currentProvider === 'codex'
@@ -162,6 +172,9 @@ export const ButtonArea = ({
     selectedModel,
     cliDefaultModel,
     cliCatalogHasEntries,
+    cliModelsReplaceBuiltIns,
+    cliModelsLoaded,
+    cliModelsError,
     cliModelsLoading,
     ompRoles,
   ]);

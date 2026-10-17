@@ -65,6 +65,19 @@ describe('useCodexSubagentStatusPolling', () => {
     expect(sendBridgeEventMock).not.toHaveBeenCalled();
   });
 
+  it('forwards the completed-turn baseline on every poll of the current native task', () => {
+    renderHook(() => useCodexSubagentStatusPolling({
+      subagents: [{ ...runningAgent('launch'), nativeTaskId: 'followup', nativeTaskPreviousTurnId: 'previous-turn' }],
+      currentSessionId: 'session-1', currentProvider: 'codex',
+    }));
+    act(() => vi.advanceTimersByTime(2_000));
+    for (const [, payload] of sendBridgeEventMock.mock.calls) {
+      expect(JSON.parse(String(payload)).agents[0]).toMatchObject({
+        nativeTaskId: 'followup', nativeTaskPreviousTurnId: 'previous-turn',
+      });
+    }
+  });
+
   it('bounds the number of agents in a batch', () => {
     const subagents = Array.from(
       { length: MAX_CODEX_SUBAGENT_STATUS_TARGETS + 3 },

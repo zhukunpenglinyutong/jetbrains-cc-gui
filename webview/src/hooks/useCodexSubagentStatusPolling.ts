@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { SubagentInfo } from '../types';
 import { sendBridgeEvent } from '../utils/bridge';
-import { trackCodexStatusRequest } from '../utils/codexStatusRequestTracker';
+import { trackCodexStatusRequest, trackCodexSubagentTasks } from '../utils/codexStatusRequestTracker';
 
 const STATUS_POLL_INTERVAL_MS = 2_000;
 export const MAX_CODEX_SUBAGENT_STATUS_TARGETS = 64;
@@ -26,16 +26,22 @@ export function useCodexSubagentStatusPolling({
         toolUseId: subagent.id,
         agentId: subagent.agentId,
         agentPath: subagent.agentPath,
+        nativeTaskId: subagent.nativeTaskId,
+        nativeTaskPreviousTurnId: subagent.nativeTaskPreviousTurnId,
       })),
   ), [subagents]);
+  const tasksJson = useMemo(() => JSON.stringify(subagents.map(agent => ({ id: agent.id, nativeTaskId: agent.nativeTaskId }))), [subagents]);
 
   useEffect(() => {
     if (currentProvider !== 'codex' || !currentSessionId) return;
+    trackCodexSubagentTasks(currentSessionId, JSON.parse(tasksJson) as Array<{ id: string; nativeTaskId?: string }>);
 
     const agents = JSON.parse(agentsJson) as Array<{
       toolUseId: string;
       agentId?: string;
       agentPath?: string;
+      nativeTaskId?: string;
+      nativeTaskPreviousTurnId?: string;
     }>;
     if (agents.length === 0) return;
 
@@ -54,5 +60,5 @@ export function useCodexSubagentStatusPolling({
     requestStatuses();
     const timer = window.setInterval(requestStatuses, STATUS_POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [agentsJson, currentProvider, currentSessionId]);
+  }, [agentsJson, tasksJson, currentProvider, currentSessionId]);
 }

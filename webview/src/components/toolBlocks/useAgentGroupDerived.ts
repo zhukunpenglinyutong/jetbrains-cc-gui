@@ -1,14 +1,16 @@
-import type { ClaudeContentBlock, ToolResultBlock, TaskEvent, SubagentHistoryResponse } from '../../types';
+import type { ClaudeContentBlock, ToolResultBlock, TaskEvent, SubagentHistoryResponse, SubagentInfo } from '../../types';
 import { normalizeToolName } from '../../utils/toolConstants';
 import {
   isAsyncAgentInput,
   parseAgentToolMeta,
   readToolUseStatus,
+  resolveSubagentGroupOutcome,
 } from '../../utils/subagentResult';
 import {
   useSubagentHistories,
   useGetToolResultRaw,
   useTaskEvent,
+  useSubagentStates,
 } from '../../contexts/SubagentContext';
 import {
   resolveAgentHistory,
@@ -31,6 +33,7 @@ export interface AgentGroupDerived {
   resolvedAgentPath: string | undefined;
   isCompleted: boolean;
   isError: boolean;
+  states: SubagentInfo[];
 }
 
 export function useAgentGroupDerived(
@@ -56,21 +59,28 @@ export function useAgentGroupDerived(
   // run_in_background is still recognized as async.
   const isAsync = isAsyncAgentInput(input, toolName, result, readToolUseStatus(toolId ? getToolResultRaw(toolId) : null));
   const taskEvent = useTaskEvent(toolId);
+  const states = useSubagentStates(toolId);
   const agentToolMeta = parseAgentToolMeta(getToolResultRaw, toolId);
-  const { agentType, summary, agentId, agentPath } = resolveAgentIdentity({
+  const identity = resolveAgentIdentity({
     toolName,
     input,
     result,
     agentBlock,
     agentToolMeta,
   });
+  const primary = states[0];
+  const agentType = identity.agentType || primary?.type || '';
+  const summary = identity.summary || primary?.description || '';
+  const agentId = identity.agentId ?? primary?.agentId;
+  const agentPath = identity.agentPath ?? primary?.agentPath;
   const { history, resolvedAgentId, resolvedAgentPath } = resolveAgentHistory(
     histories,
-    toolId,
+    primary?.id ?? toolId,
     agentId,
     agentPath,
+    primary?.nativeTaskId,
   );
-  const { isCompleted, isError } = resolveAgentTerminalState({
+  const { isCompleted, isError } = resolveSubagentGroupOutcome(states) ?? resolveAgentTerminalState({
     isAsync,
     taskEvent,
     history,
@@ -93,5 +103,6 @@ export function useAgentGroupDerived(
     resolvedAgentPath,
     isCompleted,
     isError,
+    states,
   };
 }

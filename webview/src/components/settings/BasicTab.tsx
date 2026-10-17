@@ -61,6 +61,10 @@ const BasicTab = ({ themeSync, basicActions, addToast }: BasicTabProps) => {
       onDiffThemeChange={themeSync.setDiffTheme}
       diffExpandedByDefault={basicActions.diffExpandedByDefault}
       onDiffExpandedByDefaultChange={basicActions.setDiffExpandedByDefault}
+      bashGroupCollapsedByDefault={basicActions.bashGroupCollapsedByDefault}
+      onBashGroupCollapsedByDefaultChange={basicActions.handleBashGroupCollapsedByDefaultChange}
+      editGroupCollapsedByDefault={basicActions.editGroupCollapsedByDefault}
+      onEditGroupCollapsedByDefaultChange={basicActions.handleEditGroupCollapsedByDefaultChange}
       commitGenerationEnabled={basicActions.commitGenerationEnabled}
       onCommitGenerationEnabledChange={(enabled) => {
         basicActions.handleCommitGenerationEnabledChange(enabled);

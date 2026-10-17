@@ -9,6 +9,7 @@
 
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import type { ClaudeMessage, CodexHistoryPageInfo } from '../../../types';
+import { mergeCodexHistory } from '../../codexHistoryMerge';
 import type { ContextUsageData } from '../../../components/ContextUsageDialog';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import { debugError } from '../../../utils/debug';
@@ -17,6 +18,7 @@ import {
   appendOptimisticMessageIfMissing,
   ensureStreamingAssistantInList,
   getRawUuid,
+  isCodexMessageSnapshot,
   preserveLastAssistantIdentity,
   preserveLatestMessagesOnShrink,
   preserveStreamingAssistantContent,
@@ -137,6 +139,30 @@ export function registerMessageCallbacks(
     return ensureStreamingAssistantPreserved(prevList, withoutDuplicateToolTail);
   };
 
+  const acceptNativeSnapshots = (
+    prev: ClaudeMessage[], parsed: ClaudeMessage[], streaming: boolean, turnId: number,
+  ): ClaudeMessage[] => {
+    const lastAssistant = findLastAssistantIndex(parsed);
+    const previousById = new Map(prev.map(message => [getRawUuid(message), message]));
+    const next = parsed.map((message, index) => {
+      if (message.type !== 'assistant') return message;
+      const id = getRawUuid(message);
+      const previous = id ? previousById.get(id) : undefined;
+      return {
+        ...message,
+        ...(previous?.durationMs != null ? { durationMs: previous.durationMs } : {}),
+        ...(streaming && index === lastAssistant ? { __turnId: turnId } : {}),
+        isStreaming: streaming && index === lastAssistant,
+      };
+    });
+    // These refs describe this item only; commentary and final items can share a turn.
+    if (streaming && isStreamingRef.current && lastAssistant >= 0) {
+      streamingMessageIndexRef.current = lastAssistant;
+      streamingContentRef.current = next[lastAssistant].content ?? '';
+    }
+    return finalizeMessageList(prev, appendOptimisticMessageIfMissing(prev, next));
+  };
+
   // During streaming, buffer updateMessages calls and process only the latest
   // one per short (~16ms) timer. Structural snapshots are sparse, but a single
   // snapshot can still be large enough to block the browser while parsing.
@@ -230,6 +256,25 @@ export function registerMessageCallbacks(
   window.__stashDeferredTransitionUpdateMessages = stashDeferredTransitionUpdate;
   window.__flushDeferredTransitionUpdateMessages = flushDeferredTransitionUpdateMessages;
 
+  const releaseFailedStreamStart = (backendMessages: ClaudeMessage[]) => {
+    const lastMessage = backendMessages.at(-1);
+    if (window.__pendingStreamStartAt == null
+        || (lastMessage?.type !== 'ERROR' && lastMessage?.type !== 'error')) return;
+    const pendingId = window.__pendingStreamClientMessageId;
+    const errorId = lastMessage.clientMessageId
+      ?? (typeof lastMessage.raw === 'object' ? lastMessage.raw?.clientMessageId : undefined);
+    // The producer tags terminal errors, so tails do not need a copied user prefix.
+    // Legacy snapshots still correlate through their user; a tagged older error never does.
+    const ownsSubmission = !pendingId || (errorId
+      ? errorId === pendingId
+      : backendMessages.some(message => message?.clientMessageId === pendingId
+        || typeof message?.raw === 'object' && message.raw?.clientMessageId === pendingId));
+    if (!ownsSubmission) return;
+    clearPendingStreamStart();
+    // The only loading reset may have arrived before this delayed error snapshot.
+    window.showLoading?.('false');
+  };
+
   const processUpdateMessages = (json: string, sequence: number | null = null) => {
     // Re-check the session-transition guard inside processUpdateMessages so the
     // timer-deferred path (window.updateMessages → setTimeout → processUpdateMessages)
@@ -264,6 +309,11 @@ export function registerMessageCallbacks(
       }
       window.__messageBaseIndex = 0;
 
+      releaseFailedStreamStart(backendMessages);
+
+      const streamingAtDispatch = isStreamingRef.current;
+      const turnAtDispatch = streamingTurnIdRef.current;
+
       setMessages((prev) => {
         const prependedCount = getPrependedHistoryMessageCount(prev.length);
         const parsed = reconstructTurnMetadata(
@@ -272,6 +322,10 @@ export function registerMessageCallbacks(
             : backendMessages,
           { skipTrailingTurn: isStreamingRef.current },
         );
+        if (options.currentProviderRef.current === 'codex'
+            && isCodexMessageSnapshot(parsed[findLastAssistantIndex(parsed)])) {
+          return acceptNativeSnapshots(prev, parsed, streamingAtDispatch, turnAtDispatch);
+        }
         // If streaming is active, delegate to the streaming logic
         if (isStreamingRef.current) {
           if (useBackendStreamingRenderRef.current) {
@@ -509,6 +563,10 @@ export function registerMessageCallbacks(
       if (sequence != null) {
         window.__minAcceptedUpdateSequence = Math.max(minAcceptedSequence, sequence);
       }
+      releaseFailedStreamStart(tail);
+
+      const streamingAtDispatch = isStreamingRef.current;
+      const turnAtDispatch = streamingTurnIdRef.current;
 
       setMessages((prev) => {
         const prependedCount = getPrependedHistoryMessageCount(prev.length);
@@ -532,6 +590,11 @@ export function registerMessageCallbacks(
           ? [...prev.slice(0, prependedCount + baseIndex), ...tail]
           : [...prependedHistory, ...tail];
         window.__messageBaseIndex = hasFullPrefix ? 0 : baseIndex;
+
+        if (options.currentProviderRef.current === 'codex'
+            && isCodexMessageSnapshot(merged[findLastAssistantIndex(merged)])) {
+          return acceptNativeSnapshots(prev, merged, streamingAtDispatch, turnAtDispatch);
+        }
 
         merged = appendOptimisticMessageIfMissing(prev, merged);
         merged = preserveLastAssistantIdentity(prev, merged, findLastAssistantIndex);
@@ -569,6 +632,13 @@ export function registerMessageCallbacks(
     }
   };
 
+  window.__flushPendingUpdateMessages = () => {
+    const json = pendingUpdateJson;
+    const sequence = pendingUpdateSequence;
+    cancelPendingUpdateMessages();
+    if (json) processUpdateMessages(json, sequence);
+  };
+
   window.updateMessages = (json, sequenceArg) => {
     const sequence = parseSequence(sequenceArg);
     // During session transition, stash (do not apply) the latest snapshot so
@@ -589,16 +659,6 @@ export function registerMessageCallbacks(
     // during tool execution phases where no text is produced).
     if (isStreamingRef.current && window.__lastStreamActivityAt !== undefined) {
       window.__lastStreamActivityAt = Date.now();
-    }
-
-    // A snapshot carrying an ERROR message is a genuine turn failure. Its
-    // follow-up showLoading(false) must reset the loading state, so retire the
-    // pending-stream-start marker here — Java pushes the error snapshot BEFORE
-    // the state-change notification, so the guard is released in time. Late
-    // interrupt-echo snapshots never contain ERROR messages, keeping the
-    // suppression intact for them.
-    if (json.includes('"type":"ERROR"') || json.includes('"type":"error"')) {
-      clearPendingStreamStart();
     }
 
     // During streaming, coalesce rapid updateMessages calls into one per ~16ms
@@ -682,6 +742,7 @@ export function registerMessageCallbacks(
     if (!isLoading && isPendingStreamStartActive()) {
       return;
     }
+    if (!isLoading) clearPendingStreamStart();
 
     // Notify backend about loading state change for tab indicator
     sendBridgeEvent('tab_loading_changed', JSON.stringify({ loading: isLoading }));
@@ -949,7 +1010,9 @@ export function registerMessageCallbacks(
       if (pending.mode === 'prepend'
         && (!currentPageInfo
           || currentPageInfo.sessionId !== info.sessionId
-          || info.toTurn !== currentPageInfo.fromTurn)) {
+          || (info.source === 'native'
+            ? currentPageInfo.source !== 'native' || JSON.stringify(info.requestCursor) !== JSON.stringify(currentPageInfo.cursor)
+            : info.toTurn !== currentPageInfo.fromTurn))) {
         failCodexHistoryPage(info.pageId, 'Codex history changed while loading; please retry');
         return;
       }
@@ -966,19 +1029,19 @@ export function registerMessageCallbacks(
         && storedPrependedCount >= 0
         ? storedPrependedCount
         : 0;
-      window.__prependedHistoryMessageCount = pending.mode === 'replace'
-        ? 0
-        : prependedCount + pageMessages.length;
-      if (pending.mode === 'prepend'
-          && isStreamingRef.current
-          && streamingMessageIndexRef.current >= 0) {
-        streamingMessageIndexRef.current += pageMessages.length;
-      }
-      setMessages((prev) => pending.mode === 'replace'
-        ? pageMessages
-        : [...pageMessages, ...prev]);
+      const streamingIndexBeforePage = streamingMessageIndexRef.current;
+      setMessages((prev) => {
+        const next = pending.mode === 'replace' ? pageMessages : mergeCodexHistory(pageMessages, prev);
+        const added = pending.mode === 'prepend' ? next.length - prev.length : 0;
+        window.__prependedHistoryMessageCount = pending.mode === 'replace' ? 0 : prependedCount + added;
+        if (pending.mode === 'prepend' && isStreamingRef.current && streamingMessageIndexRef.current >= 0) {
+          streamingMessageIndexRef.current = streamingIndexBeforePage + added;
+        }
+        return next;
+      });
 
       window.__codexHistoryPageInfo = info;
+      if (info.sessionTitle) setRestoredSessionTitle({ sessionId: info.sessionId, title: info.sessionTitle });
       window.dispatchEvent(new CustomEvent<CodexHistoryPageInfo>('codex-history-page-info', {
         detail: info,
       }));

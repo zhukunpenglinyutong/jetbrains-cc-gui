@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { sendBridgeEvent } from '../../utils/bridge';
+import { updateClaudeModelCapabilities } from '../../utils/claudeModelCapabilities';
 import type { ModelInfo } from '../../components/ChatInputBox/types';
 import {
   CODEX_MODELS,
@@ -14,7 +15,8 @@ import {
   ZCODE_MODELS,
 } from '../../components/ChatInputBox/types';
 import { isCliOnlyProvider } from './cliProviders';
-import { subscribeActiveCodexProvider } from '../../utils/runtimeProviderCapabilities';
+import { subscribeActiveCodexProvider, subscribeActiveProvider } from '../../utils/runtimeProviderCapabilities';
+import { type ClaudeModelMapping, writeClaudeModelMapping } from '../../utils/claudeModelMapping';
 
 type CliModelsByProvider = Record<string, ModelInfo[]>;
 
@@ -29,6 +31,7 @@ const CLI_MODELS_TIMEOUT_MS = 15_000;
 const modelsCache: CliModelsByProvider = {};
 const defaultModelCache: Record<string, string> = {};
 const catalogHasEntriesCache: Record<string, boolean> = {};
+const replaceBuiltInsCache: Record<string, boolean> = {};
 
 /**
  * Dynamic model roles from the listModels payload (`roles: [{id,label,description}]`,
@@ -53,9 +56,11 @@ function subscribeRoles(listener: () => void): () => void {
 
 /** Test-only: clear module caches between cases. */
 export function __resetCliModelsCacheForTests() {
+  updateClaudeModelCapabilities([]);
   for (const key of Object.keys(modelsCache)) delete modelsCache[key];
   for (const key of Object.keys(defaultModelCache)) delete defaultModelCache[key];
   for (const key of Object.keys(catalogHasEntriesCache)) delete catalogHasEntriesCache[key];
+  for (const key of Object.keys(replaceBuiltInsCache)) delete replaceBuiltInsCache[key];
   for (const key of Object.keys(rolesCache)) delete rolesCache[key];
 }
 
@@ -74,11 +79,11 @@ function fallbackModels(providerId: string): ModelInfo[] {
 
 /**
  * Providers whose model list is discovered dynamically via `get_cli_models`.
- * Codex is included even though it is not a CLI-only provider: its list comes
- * from ~/.codex/config.toml + model_catalog_json, same as the codex CLI picker.
+ * Claude reads settings.json modelPicker options, as published by cc-switch.
+ * Codex uses app-server model/list; the other providers use get_cli_models.
  */
 function supportsDynamicModels(providerId: string): boolean {
-  if (providerId === 'codex') return true;
+  if (providerId === 'codex' || providerId === 'claude') return true;
   return isCliOnlyProvider(providerId);
 }
 
@@ -96,7 +101,16 @@ function normalizeModels(raw: unknown): ModelInfo[] {
       ? row.label.trim()
       : id;
     const description = typeof row.description === 'string' ? row.description : undefined;
-    out.push({ id, label, description });
+    const supportedReasoningEfforts = Array.isArray(row.supportedReasoningEfforts)
+      ? row.supportedReasoningEfforts.filter((effort): effort is string => typeof effort === 'string')
+      : undefined;
+    const model: ModelInfo = { id, label };
+    if (typeof row.supports1MContext === 'boolean') model.supports1MContext = row.supports1MContext;
+    if (description !== undefined) model.description = description;
+    if (supportedReasoningEfforts && supportedReasoningEfforts.length > 0) {
+      model.supportedReasoningEfforts = supportedReasoningEfforts;
+    }
+    out.push(model);
   }
   return out;
 }
@@ -116,8 +130,12 @@ export function useCliModels(currentProvider: string) {
     () => ({ ...catalogHasEntriesCache }),
   );
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
+  const [replaceBuiltInsByProvider, setReplaceBuiltInsByProvider] = useState<Record<string, boolean>>(
+    () => ({ ...replaceBuiltInsCache }),
+  );
   const [errorByProvider, setErrorByProvider] = useState<Record<string, string>>({});
   const pendingLoadRef = useRef<{ provider: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const nativeRequestRef = useRef<{ id: string; rows: unknown[]; cursors: Set<unknown> } | null>(null);
 
   const clearPendingLoad = useCallback(() => {
     if (pendingLoadRef.current) {
@@ -135,7 +153,16 @@ export function useCliModels(currentProvider: string) {
       delete next[providerId];
       return next;
     });
-    sendBridgeEvent('get_cli_models', providerId);
+    // Codex model metadata comes from the authorized app-server runtime. The
+    // legacy channel-manager probe may read config/auth independently and is
+    // therefore kept for the other CLI providers only.
+    if (providerId === 'codex') {
+      const requestId = `models-${crypto.randomUUID()}`;
+      nativeRequestRef.current = { id: requestId, rows: [], cursors: new Set() };
+      sendBridgeEvent('codex_native_list_models', JSON.stringify({ requestId }));
+    } else {
+      sendBridgeEvent('get_cli_models', providerId);
+    }
     pendingLoadRef.current = {
       provider: providerId,
       timer: setTimeout(() => {
@@ -149,8 +176,8 @@ export function useCliModels(currentProvider: string) {
   }, [clearPendingLoad]);
 
   useEffect(() => {
-    const handler = (dataOrStr: string | { provider?: string; models?: unknown; roles?: unknown; success?: boolean; error?: string; defaultModel?: unknown }) => {
-      let payload: { provider?: string; models?: unknown; roles?: unknown; success?: boolean; error?: string; defaultModel?: unknown } | null = null;
+    const handler = (dataOrStr: string | { provider?: string; models?: unknown; roles?: unknown; success?: boolean; error?: string; defaultModel?: unknown; replaceBuiltInOptions?: unknown; modelMapping?: unknown }) => {
+      let payload: { provider?: string; models?: unknown; roles?: unknown; success?: boolean; error?: string; defaultModel?: unknown; replaceBuiltInOptions?: unknown; modelMapping?: unknown } | null = null;
       if (typeof dataOrStr === 'string') {
         try {
           payload = JSON.parse(dataOrStr);
@@ -162,7 +189,24 @@ export function useCliModels(currentProvider: string) {
       }
       if (!payload?.provider) return;
       const provider = payload.provider;
+      if (provider === 'claude' && payload.success !== false
+        && payload.modelMapping && typeof payload.modelMapping === 'object' && !Array.isArray(payload.modelMapping)) {
+        const mapping: ClaudeModelMapping = {};
+        const rawMapping = payload.modelMapping as Record<string, unknown>;
+        for (const key of ['main', 'fable', 'haiku', 'sonnet', 'opus', 'fableName', 'haikuName', 'sonnetName', 'opusName']) {
+          if (typeof rawMapping[key] === 'string' && (rawMapping[key] as string).trim()) {
+            mapping[key] = (rawMapping[key] as string).trim();
+          }
+        }
+        // Refresh even without modelPicker: route/direct mode changes update
+        // settings.env and must replace the previous aggregation mapping.
+        writeClaudeModelMapping(mapping);
+      }
       const models = normalizeModels(payload.models);
+      if (provider === 'claude') updateClaudeModelCapabilities(payload.success === false ? [] : models);
+      const replaceBuiltIns = provider === 'claude' && payload.success !== false && payload.replaceBuiltInOptions === true;
+      replaceBuiltInsCache[provider] = replaceBuiltIns;
+      setReplaceBuiltInsByProvider((prev) => ({ ...prev, [provider]: replaceBuiltIns }));
       const resolvedModels = models.length > 0 ? models : fallbackModels(provider);
       modelsCache[provider] = resolvedModels;
       catalogHasEntriesCache[provider] = models.length > 0;
@@ -214,20 +258,96 @@ export function useCliModels(currentProvider: string) {
     };
 
     window.setCliModels = handler;
+    const nativeCatalogHandler = (event: Event) => {
+      const detail = (event as CustomEvent<Record<string, unknown>>).detail;
+      if (!detail || detail.requestType !== 'codex_native_list_models') return;
+      const pending = nativeRequestRef.current;
+      if (!pending || detail.requestId !== pending.id) return;
+      const rows = Array.isArray(detail.data) ? detail.data : [];
+      pending?.rows.push(...rows);
+      if (pending && !detail.error && detail.nextCursor != null && !pending.cursors.has(detail.nextCursor)) {
+        pending.cursors.add(detail.nextCursor);
+        sendBridgeEvent('codex_native_list_models', JSON.stringify({ requestId: pending.id,
+          params: { cursor: detail.nextCursor } }));
+        return;
+      }
+      const data = pending?.rows ?? rows;
+      nativeRequestRef.current = null;
+      window.setCliModels?.(JSON.stringify({
+        provider: 'codex',
+        success: !detail.error,
+        error: typeof detail.error === 'string' ? detail.error : undefined,
+        models: data.filter((item) => !(item && typeof item === 'object'
+          && ((item as Record<string, unknown>).hidden === true || (item as Record<string, unknown>).isHidden === true))).map((item) => {
+          const row = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+          const id = typeof row.model === 'string' ? row.model
+            : typeof row.id === 'string' ? row.id
+              : typeof row.slug === 'string' ? row.slug : '';
+          const model: ModelInfo = {
+            id,
+            label: typeof row.displayName === 'string' ? row.displayName
+              : typeof row.name === 'string' ? row.name : id,
+          };
+          if (typeof row.description === 'string') model.description = row.description;
+          if (Array.isArray(row.supportedReasoningEfforts)) {
+            const efforts = row.supportedReasoningEfforts.flatMap((effort) => {
+              if (typeof effort === 'string') return [effort];
+              const option = effort && typeof effort === 'object' ? effort as Record<string, unknown> : {};
+              return typeof option.reasoningEffort === 'string' ? [option.reasoningEffort] : [];
+            });
+            if (efforts.length > 0) model.supportedReasoningEfforts = efforts;
+          }
+          return model;
+        }),
+      }));
+    };
+    window.addEventListener('codex-native-data', nativeCatalogHandler);
     return () => {
       if (window.setCliModels === handler) {
         delete window.setCliModels;
       }
+      window.removeEventListener('codex-native-data', nativeCatalogHandler);
       clearPendingLoad();
     };
   }, [clearPendingLoad]);
 
   useEffect(() => {
     if (!supportsDynamicModels(currentProvider)) return;
-    if (modelsByProvider[currentProvider]?.length) return;
+    if (currentProvider in modelsByProvider) return;
+    if (pendingLoadRef.current?.provider === currentProvider) return;
 
     beginLoad(currentProvider);
   }, [currentProvider, modelsByProvider, beginLoad]);
+
+  // Switching Claude providers changes settings.json, including cc-switch's
+  // modelPicker. Invalidate even an empty catalog so routes cannot linger.
+  useEffect(() => subscribeActiveProvider(() => {
+    // Revoke old route capabilities before loading the new provider's catalog.
+    updateClaudeModelCapabilities([]);
+    delete modelsCache.claude;
+    delete defaultModelCache.claude;
+    delete catalogHasEntriesCache.claude;
+    delete replaceBuiltInsCache.claude;
+    setModelsByProvider((prev) => {
+      const next = { ...prev };
+      delete next.claude;
+      return next;
+    });
+    setDefaultModelByProvider((prev) => ({ ...prev, claude: '' }));
+    setCatalogHasEntriesByProvider((prev) => ({ ...prev, claude: false }));
+    setReplaceBuiltInsByProvider((prev) => ({ ...prev, claude: false }));
+    if (currentProvider === 'claude') beginLoad('claude');
+  }), [currentProvider, beginLoad]);
+
+  // cc-switch can rewrite the local picker while the IDE is in the background.
+  useEffect(() => {
+    if (currentProvider !== 'claude') return;
+    const refresh = () => {
+      if (pendingLoadRef.current?.provider !== 'claude') beginLoad('claude');
+    };
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, [currentProvider, beginLoad]);
 
   // Switching the active Codex provider rewrites ~/.codex/config.toml, so the
   // cached catalog no longer reflects what the CLI would serve. Drop the cache
@@ -276,6 +396,8 @@ export function useCliModels(currentProvider: string) {
     cliModelsError: errorByProvider[currentProvider] ?? null,
     cliDefaultModel: defaultModelByProvider[currentProvider] ?? null,
     cliCatalogHasEntries: catalogHasEntriesByProvider[currentProvider] ?? false,
+    cliModelsReplaceBuiltIns: replaceBuiltInsByProvider[currentProvider] ?? false,
+    cliModelsLoaded: currentProvider in modelsByProvider,
     refreshCliModels,
     modelsByProvider,
   };

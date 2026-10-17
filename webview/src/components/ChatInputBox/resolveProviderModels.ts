@@ -24,6 +24,7 @@ export interface ResolveProviderModelsInput {
   claudeCustomModels?: ModelInfo[];
   codexCustomModels?: ModelInfo[];
   claudeMapping?: ClaudeModelMapping | null;
+  claudeReplaceBuiltInOptions?: boolean;
 }
 
 /**
@@ -41,6 +42,7 @@ export function resolveProviderModels({
   claudeCustomModels = [],
   codexCustomModels = [],
   claudeMapping = null,
+  claudeReplaceBuiltInOptions = false,
 }: ResolveProviderModelsInput): ModelInfo[] {
   if (provider === 'codex') {
     const catalogModels = cliCatalogHasEntries ? cliModels : [];
@@ -77,6 +79,11 @@ export function resolveProviderModels({
   }
 
   // Claude (default)
+  if (claudeReplaceBuiltInOptions) {
+    // cc-switch publishes explicit routes, labels and descriptions. Replacing
+    // these with family slots would send every choice to the default provider.
+    return cliModels;
+  }
   let builtIns: ModelInfo[] = CLAUDE_MODELS;
   if (claudeMapping && Object.keys(claudeMapping).length > 0) {
     try {
@@ -86,13 +93,13 @@ export function resolveProviderModels({
     }
   }
 
-  if (claudeCustomModels.length === 0) {
+  if (claudeCustomModels.length === 0 && !cliCatalogHasEntries) {
     return builtIns;
   }
 
-  // Customs first; collapse duplicate *labels* (several built-in slots mapped
+  // Picker options and customs first; collapse duplicate *labels* (built-in slots mapped
   // to the same real model name) the same way the settings panel used to.
-  const merged = [...claudeCustomModels, ...builtIns];
+  const merged = [...(cliCatalogHasEntries ? cliModels : []), ...claudeCustomModels, ...builtIns];
   const seenLabels = new Set<string>();
   const seenIds = new Set<string>();
   return merged.filter((m) => {

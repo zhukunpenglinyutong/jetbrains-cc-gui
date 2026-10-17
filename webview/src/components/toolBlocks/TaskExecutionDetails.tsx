@@ -68,11 +68,12 @@ export default function TaskExecutionDetails({
         {isAgentTool && (
           <SubagentProcessDetails
             agentId={detailAgentId}
+            agentPath={spawnMeta.agentPath}
             totalDurationMs={detailDurationMs}
             totalTokens={detailTokens}
             totalToolUseCount={detailToolUseCount}
             resultText={detailResultText}
-            prompt={!isSpawnAgent ? promptText : undefined}
+            prompt={promptText}
             history={history}
             canLoad={canLoad}
           />

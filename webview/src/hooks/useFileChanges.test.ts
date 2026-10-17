@@ -21,6 +21,33 @@ describe('file ledger work budget', () => {
     findToolResult: makeFindToolResult(messages),
   });
 
+  it('collects every completed native patch file without requiring a separate result', () => {
+    const messages = [assistantWithTools([{ id: 'native', name: 'file_change', input: { status: 'completed', changes: [
+      { path: '/added.ts', kind: 'add', diff: '+created\n' },
+      { path: '/old.ts', kind: { type: 'update', movePath: '/moved.ts' }, diff: '@@ -1 +1 @@\n-before\n+after\n' },
+      { path: '/gone.ts', kind: 'delete', diff: '-removed\n' },
+    ] } }])];
+    const { result } = renderHook(useFileChanges, { initialProps: snapshot(messages) });
+    expect(result.current.map(file => file.filePath).sort()).toEqual(['/added.ts', '/gone.ts', '/moved.ts']);
+    expect(result.current.find(file => file.filePath === '/added.ts')).toMatchObject({ status: 'A', additions: 1 });
+    expect(result.current.find(file => file.filePath === '/gone.ts')).toMatchObject({ status: 'D', deletions: 1 });
+    expect(result.current.find(file => file.filePath === '/moved.ts')).toMatchObject({ status: 'R', additions: 1, deletions: 1 });
+    expect(result.current.find(file => file.filePath === '/moved.ts')?.operations[0]).toMatchObject({ moveFrom: '/old.ts', toolUseId: 'native' });
+  });
+
+  it('keeps completed apply_patch edits across turns and ignores proposed or failed patches', () => {
+    const patch = '*** Begin Patch\n*** Update File: /session.ts\n@@\n-before\n+after\n*** End Patch';
+    const messages = [assistantWithTools([{ id: 'first', name: 'functions.apply_patch', input: { patch } }]),
+      userWithResults([{ toolUseId: 'first' }]), { type: 'user', content: 'next turn' } as ClaudeMessage,
+      assistantWithTools([{ id: 'failed', name: 'file_change', input: { changes: [{ path: '/failed.ts', kind: 'add', diff: '+failed' }], status: 'failed' } },
+        { id: 'unknown', name: 'apply_patch', input: { patch, status: 'unknown' } }])];
+    const { result, rerender } = renderHook(useFileChanges, { initialProps: snapshot(messages) });
+    expect(result.current.map(file => file.filePath)).toEqual(['/session.ts']);
+    expect(result.current[0].operations).toHaveLength(1);
+    rerender(snapshot(JSON.parse(JSON.stringify(messages))));
+    expect(result.current[0].operations).toHaveLength(1);
+  });
+
   beforeEach(() => {
     store.clear();
     reads.mockClear();

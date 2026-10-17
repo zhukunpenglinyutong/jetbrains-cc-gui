@@ -32,9 +32,11 @@ import java.util.regex.Pattern;
  *
  * <p>Three data sources are unified:
  * <ol>
- *   <li><b>Daemon processes</b>: Claude and Grok each own a long-lived {@code daemon.js}
+ *   <li><b>Daemon processes</b>: Claude, Grok, ZCode and Codex each own a long-lived {@code daemon.js}
  *       via {@link ClaudeSDKBridge#getCurrentDaemonBridgeForInspection()} /
- *       {@link GrokSDKBridge#getCurrentDaemonBridgeForInspection()}.</li>
+ *       {@link GrokSDKBridge#getCurrentDaemonBridgeForInspection()} /
+ *       {@link ZcodeSDKBridge#getCurrentDaemonBridgeForInspection()} /
+ *       {@link CodexSDKBridge#getCurrentDaemonBridgeForInspection()}.</li>
  *   <li><b>Per-channel processes</b>: tracked in each bridge's {@code ProcessManager}.</li>
  *   <li><b>Orphan processes</b>: discovered by scanning {@link ProcessHandle#allProcesses()}
  *       for {@code daemon.js} / {@code channel-manager.js} command lines that don't match
@@ -180,9 +182,21 @@ public final class NodeProcessRegistry implements Disposable {
                 );
             }
 
-            // -- CHANNEL entries from codex (per-message processes) --
+            // -- CHANNEL + DAEMON entries from codex (persistent app-server daemon) --
             CodexSDKBridge codexBridge = safeCodexBridge(window);
             if (codexBridge != null) {
+                // The app-server migration gave Codex a long-lived daemon.js owning
+                // multi-turn native state. Without a DAEMON entry the orphan scan
+                // labels it ORPHAN and "Kill all orphans" destroys live sessions.
+                collectDaemonEntry(
+                        result,
+                        knownPids,
+                        codexBridge.getCurrentDaemonBridgeForInspection(),
+                        tabProvider,
+                        sessionId,
+                        tabName,
+                        now
+                );
                 collectChannelEntries(
                         result,
                         knownPids,
@@ -363,6 +377,11 @@ public final class NodeProcessRegistry implements Disposable {
                     zcodeBridge != null ? zcodeBridge::shutdownDaemon : null, pid)) {
                 return true;
             }
+            CodexSDKBridge codexBridge = safeCodexBridge(window);
+            if (tryRestartDaemon(codexBridge != null ? codexBridge.getCurrentDaemonBridgeForInspection() : null,
+                    codexBridge != null ? codexBridge::shutdownDaemon : null, pid)) {
+                return true;
+            }
         }
         // PID didn't match any tracked daemon — fall back to plain kill
         return killByPid(pid);
@@ -514,8 +533,8 @@ public final class NodeProcessRegistry implements Disposable {
                 .tabName(tabName)
                 .build());
 
-        // Include daemon children (Claude CLI / grok agent stdio) so they are not
-        // listed as orphans and "Kill all orphans" does not tear down live ACP turns.
+        // Native children share the daemon's ownership, so orphan cleanup must
+        // preserve their active turns and auxiliary title requests too.
         try {
             daemonProcess.toHandle().descendants().forEach(child -> knownPids.add(child.pid()));
         } catch (Exception ignored) {

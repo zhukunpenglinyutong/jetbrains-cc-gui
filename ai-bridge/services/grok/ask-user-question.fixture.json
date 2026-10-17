@@ -1,0 +1,34 @@
+{
+  "jsonrpc": "2.0",
+  "id": 101,
+  "method": "_x.ai/ask_user_question",
+  "params": {
+    "sessionId": "019483ab-1234-7000-8000-abcdef123456",
+    "toolCallId": "tool_call_ask_user_question_01",
+    "questions": [
+      {
+        "id": "package_manager",
+        "question": "Which package manager would you like to use for this project?",
+        "options": [
+          {
+            "label": "pnpm",
+            "description": "Fast, disk space efficient package manager",
+            "preview": null
+          },
+          {
+            "label": "npm",
+            "description": "Standard Node.js package manager",
+            "preview": null
+          },
+          {
+            "label": "yarn",
+            "description": "Yarn package manager",
+            "preview": null
+          }
+        ],
+        "multiSelect": false
+      }
+    ],
+    "mode": "default"
+  }
+}

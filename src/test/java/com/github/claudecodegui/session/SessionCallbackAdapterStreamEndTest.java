@@ -1,7 +1,10 @@
 package com.github.claudecodegui.session;
 
+import com.intellij.openapi.application.Application;
+import com.intellij.openapi.application.ApplicationManager;
 import org.junit.Test;
 
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -167,6 +170,57 @@ public class SessionCallbackAdapterStreamEndTest {
         assertEquals("setSessionId:session-1", jsTarget.calls.get(0));
         assertEquals("setSessionId:session-2", jsTarget.calls.get(1));
         adapter.deactivate();
+    }
+
+    /** Retires the frontend ID once and permits a later fresh identity. */
+    @Test
+    public void expiredSessionIdentityReachesTheFrontendAndCanBeReplaced() {
+        RecordingJsTarget jsTarget = new RecordingJsTarget();
+        SessionCallbackAdapter adapter = new SessionCallbackAdapter(
+                null, jsTarget, null, () -> true, null);
+        try {
+            adapter.onSessionIdReceived("expired-session");
+            adapter.onSessionIdReceived("");
+            adapter.onSessionIdReceived("");
+            adapter.onSessionIdReceived("fresh-session");
+            assertEquals(List.of("setSessionId:expired-session", "setSessionId:", "setSessionId:fresh-session"), jsTarget.calls);
+
+            adapter.deactivate();
+            adapter.onSessionIdReceived("");
+            assertEquals(3, jsTarget.calls.size());
+        } finally {
+            adapter.dispose();
+        }
+    }
+
+    /** Keeps the page failure ahead of the ID reset that makes it obsolete in the frontend. */
+    @Test
+    public void missingHistoryPageErrorPrecedesIdentityRetirement() {
+        Application previousApplication = ApplicationManager.getApplication();
+        List<Runnable> delayedCalls = new ArrayList<>();
+        Application application = (Application) Proxy.newProxyInstance(Application.class.getClassLoader(),
+                new Class<?>[]{Application.class}, (proxy, method, arguments) -> {
+                    if ("invokeLater".equals(method.getName())) {
+                        delayedCalls.add((Runnable) arguments[0]);
+                    }
+                    return method.getReturnType() == boolean.class ? false : null;
+                });
+        ApplicationManager.setApplication(application);
+        List<String> callbacks = new ArrayList<>();
+        SessionCallbackAdapter adapter = new SessionCallbackAdapter(
+                null, (name, args) -> callbacks.add(name), null, () -> true, null);
+        try {
+            adapter.onClaudeHistoryPageError("expired-session", "Session history file not found");
+            adapter.onSessionIdReceived("");
+            for (Runnable delayed : delayedCalls) {
+                delayed.run();
+            }
+
+            assertEquals(List.of("claudeHistoryPageError", "setSessionId"), callbacks);
+        } finally {
+            adapter.dispose();
+            ApplicationManager.setApplication(previousApplication);
+        }
     }
 
     /**

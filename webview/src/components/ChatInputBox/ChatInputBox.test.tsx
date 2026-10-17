@@ -38,8 +38,41 @@ describe('ChatInputBox event wiring', () => {
 
   afterEach(() => {
     cleanup();
+    delete window.sendToJava;
     vi.useRealTimers();
   });
+
+  it.each(['imperative', 'controlled', 'clear'] as const)(
+    'cancels native image ownership when the draft is replaced through %s',
+    async (mode) => {
+      const sendToJava = vi.fn();
+      window.sendToJava = sendToJava;
+      const ref = createRef<ChatInputBoxHandle>();
+      const onSubmit = vi.fn();
+      const { rerender } = render(<ChatInputBox ref={ref} onSubmit={onSubmit} />);
+      const editable = screen.getByRole('textbox');
+      typeText(editable, 'old draft');
+      act(() => window.dispatchEvent(new CustomEvent('java-request-paste-image')));
+      const request = sendToJava.mock.calls.find(([message]) => message.startsWith('paste_image:'))?.[0] as string;
+      expect(request).toMatch(/^paste_image:.+/);
+      if (mode === 'imperative') {
+        act(() => ref.current?.setValue('replacement'));
+      } else if (mode === 'clear') {
+        act(() => ref.current?.clear());
+        typeText(editable, 'replacement');
+      } else {
+        act(() => editable.blur());
+        rerender(<ChatInputBox ref={ref} onSubmit={onSubmit} value="replacement" />);
+      }
+      await act(async () => window.dispatchEvent(new CustomEvent('java-paste-image', {
+        detail: { requestId: request.slice('paste_image:'.length), base64: 'STALE', mediaType: 'image/png' },
+      })));
+      fireEvent.keyDown(editable, { key: 'Enter', code: 'Enter' });
+      fireEvent.keyUp(editable, { key: 'Enter', code: 'Enter' });
+      await act(() => vi.advanceTimersByTimeAsync(20));
+      expect(onSubmit).toHaveBeenCalledExactlyOnceWith('replacement', undefined);
+    },
+  );
 
   it('preserves a pending draft when navigating away and back before debounce', async () => {
     const { rerender } = render(<ControlledInput />);

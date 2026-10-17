@@ -17,6 +17,71 @@ const makeMessage = (
 });
 
 describe('useMessageProcessing', () => {
+  it('keeps native reasoning lifecycle metadata beside the same-turn answer', () => {
+    const nativeRaw = { codexThreadId: 'native-thread', codexTurnId: 'native-turn', codexSnapshot: true };
+    const messages: ClaudeMessage[] = [
+      makeMessage('assistant', '', { raw: { ...nativeRaw, uuid: 'native-reasoning', codexItemType: 'reasoning',
+        message: { content: [{ type: 'thinking', thinking: '', native: true, status: 'completed' }] } } }),
+      makeMessage('assistant', 'Native answer', { raw: { ...nativeRaw, uuid: 'native-answer', codexItemType: 'agentMessage',
+        message: { content: [{ type: 'text', text: 'Native answer' }] } } }),
+    ];
+    const { result } = renderHook(() => useMessageProcessing({ messages, currentSessionId: 'native-thread', t }));
+
+    expect(result.current.mergedMessages).toHaveLength(1);
+    expect(result.current.getContentBlocks(result.current.mergedMessages[0])).toEqual([
+      { type: 'thinking', thinking: '', text: '', native: true, status: 'completed' },
+      { type: 'text', text: 'Native answer' },
+    ]);
+  });
+
+  it('hides empty native items without changing their raw lifecycle or identity', () => {
+    const makeReasoning = (thinking: string, status: string): ClaudeMessage => makeMessage('assistant', '', {
+      raw: { uuid: 'same-reasoning-item', codexThreadId: 'thread', codexTurnId: 'turn', codexItemType: 'reasoning',
+        codexSnapshot: true, message: { content: [{ type: 'thinking', thinking, native: true, status }] } },
+    });
+    const started = makeReasoning('', 'inProgress');
+    const { result, rerender } = renderHook(({ messages }) =>
+      useMessageProcessing({ messages, currentSessionId: 'thread', t }), { initialProps: { messages: [started] } });
+    expect(result.current.mergedMessages).toEqual([]);
+    expect(started.raw).toMatchObject({ uuid: 'same-reasoning-item', message: {
+      content: [{ type: 'thinking', thinking: '', native: true, status: 'inProgress' }],
+    } });
+
+    const streaming = makeReasoning('A public native summary', 'inProgress');
+    rerender({ messages: [streaming] });
+    expect(result.current.mergedMessages).toEqual([streaming]);
+
+    const completed = makeReasoning('A public native summary', 'completed');
+    rerender({ messages: [completed] });
+    expect(result.current.mergedMessages).toEqual([completed]);
+
+    rerender({ messages: [makeReasoning(' \n\t', 'completed')] });
+    expect(result.current.mergedMessages).toEqual([]);
+  });
+
+  it('keeps visible reply text supplied beside an empty native item', () => {
+    const message = makeMessage('assistant', 'The visible reply', { raw: {
+      uuid: 'empty-native-with-reply', codexThreadId: 'thread', codexTurnId: 'turn',
+      message: { content: [{ type: 'thinking', thinking: '', native: true, status: 'completed' }] },
+    } });
+    const { result } = renderHook(() => useMessageProcessing({ messages: [message], currentSessionId: 'thread', t }));
+    expect(result.current.mergedMessages).toEqual([message]);
+    expect(result.current.getContentBlocks(message).at(-1)).toEqual({ type: 'text', text: 'The visible reply' });
+  });
+
+  it('keeps summary-less native compaction boundaries between assistant fragments', () => {
+    const messages = [makeMessage('assistant', 'before'),
+      makeMessage('assistant', '', { raw: { uuid: 'cmp', isCompactSummary: true,
+        summarizeMetadata: { native: true, status: 'completed', timestamp: 1_000, timestampSource: 'item' },
+        message: { content: [{ type: 'text', text: '' }] } } }),
+      makeMessage('assistant', 'after')];
+    const { result } = renderHook(() => useMessageProcessing({ messages, currentSessionId: 't', t }));
+    expect(result.current.mergedMessages.map((m) => m.type)).toEqual(['assistant', 'notification', 'assistant']);
+    expect(result.current.getContentBlocks(result.current.mergedMessages[1])).toEqual([
+      { type: 'compact_summary', title: 'chat.compactSummary.nativeCompleted', content: '',
+        metadata: { native: true, status: 'completed', timestamp: 1_000, timestampSource: 'item' } },
+    ]);
+  });
   it('keeps assistant turns separate when a hidden message sits between them', () => {
     const messages: ClaudeMessage[] = [
       makeMessage('assistant', 'First assistant reply', {

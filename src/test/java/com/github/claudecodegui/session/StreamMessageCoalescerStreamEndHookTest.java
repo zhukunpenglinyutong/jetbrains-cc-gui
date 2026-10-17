@@ -27,6 +27,43 @@ import static org.junit.Assert.assertTrue;
  */
 public class StreamMessageCoalescerStreamEndHookTest {
 
+    /** Codex snapshots keep growing before the native turn reaches its terminal. */
+    @Test
+    public void codexTextAndThinkingSnapshotsAreCapturedDuringTheTurn() throws Exception {
+        HandlerContext context = new HandlerContext(null, null, null, null, null);
+        context.setCurrentProvider("codex");
+        StreamMessageCoalescer coalescer = new StreamMessageCoalescer(new StreamMessageCoalescer.JsCallbackTarget() {
+            @Override public boolean callJavaScript(String name, String... args) { return true; }
+            @Override public boolean isDisposed() { return false; }
+            @Override public HandlerContext getHandlerContext() { return context; }
+        });
+        try {
+            coalescer.onStreamStart();
+            for (String type : List.of("text", "thinking")) {
+                ClaudeSession.Message message = new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, "first");
+                JsonObject block = new JsonObject();
+                block.addProperty("type", type);
+                block.addProperty(type, "first");
+                JsonArray content = new JsonArray();
+                content.add(block);
+                message.raw = new JsonObject();
+                message.raw.addProperty("codexSnapshot", true);
+                message.raw.add("content", content);
+                List<ClaudeSession.Message> live = List.of(message);
+                coalescer.enqueue(live);
+                message.content = "first and second";
+                block.addProperty(type, message.content);
+                coalescer.enqueue(live);
+                assertEquals("the live snapshot must not wait for stream end", message.content,
+                        capturedMessages(coalescer).get(0).raw.getAsJsonArray("content").get(0)
+                                .getAsJsonObject().get(type).getAsString());
+                assertTrue(coalescer.isStreamActive());
+            }
+        } finally {
+            coalescer.dispose();
+        }
+    }
+
     @Test
     public void stableHistoryIsCapturedOnceAcrossThirtyToolResults() throws Exception {
         StreamMessageCoalescer coalescer = new StreamMessageCoalescer(new CountingTarget());

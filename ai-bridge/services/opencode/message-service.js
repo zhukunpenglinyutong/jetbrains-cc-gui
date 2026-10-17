@@ -129,7 +129,61 @@ function nextSyntheticToolId() {
   return `opencode-tool-${syntheticToolCounter}`;
 }
 
-function parseOpenCodeEvent(line) {
+/**
+ * Parse a 1.x structured tool part ({type:"tool", tool, callID,
+ * state:{status,input,output,...}}). OpenCode pushes the tool part ONCE with
+ * terminal state, so the dispatcher must synthesize the tool_use/tool_result
+ * pair from this single event.
+ */
+function parseToolPart(part, sessionId) {
+  const state = part.state && typeof part.state === 'object' ? part.state : null;
+  const status = firstNonEmptyStr([
+    state?.status,
+    part?.status,
+  ])?.toLowerCase() || 'started';
+
+  // callID is the model-side tool-call id; part.id is the storage part id.
+  // Prefer callID so tool_use/tool_result always pair on one id.
+  const toolId = firstNonEmptyStr([
+    part?.callID,
+    part?.callId,
+    part?.call_id,
+    part?.toolCallID,
+    part?.id,
+  ]) || nextSyntheticToolId();
+
+  const toolName = firstNonEmptyStr([
+    part?.tool,
+    part?.name,
+    part?.tool_name,
+    state?.name,
+  ]) || 'tool';
+
+  const input = state?.input ?? part?.input ?? {};
+  const rawOutput = state?.output ?? part?.output;
+  const error = firstNonEmptyStr([
+    typeof state?.error === 'string' ? state.error : null,
+    state?.error?.message,
+    typeof part?.error === 'string' ? part.error : null,
+    part?.error?.message,
+  ]);
+
+  const content = error
+    || (typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput ?? ''));
+
+  return {
+    kind: 'tool',
+    id: toolId,
+    name: toolName,
+    input: parseToolArguments(input),
+    status,
+    content,
+    isError: status === 'error' || status === 'failed' || Boolean(error),
+    sessionId,
+  };
+}
+
+export function parseOpenCodeEvent(line) {
   if (!line || !line.trim()) return { kind: 'other' };
   let event;
   try {
@@ -146,6 +200,24 @@ function parseOpenCodeEvent(line) {
   if (lower === 'error' || lower.endsWith('.error')) {
     const message = extractErrorMessage(event);
     return message ? { kind: 'error', message, sessionId } : { kind: 'other', sessionId };
+  }
+
+  // OpenCode 1.x wraps content in event.part and types it there (text /
+  // reasoning / tool). part.type is authoritative when present; the legacy
+  // top-level matching further down stays as a fallback for older shapes.
+  const part = event.part && typeof event.part === 'object' ? event.part : null;
+  const partType = typeof part?.type === 'string' ? part.type.toLowerCase() : '';
+
+  if (partType === 'text') {
+    const text = typeof part.text === 'string' ? part.text : '';
+    return text ? { kind: 'text', data: text, partId: part.id, sessionId } : { kind: 'other', sessionId };
+  }
+  if (partType === 'reasoning') {
+    const text = typeof part.text === 'string' ? part.text : '';
+    return text ? { kind: 'thought', data: text, partId: part.id, sessionId } : { kind: 'other', sessionId };
+  }
+  if (partType === 'tool') {
+    return parseToolPart(part, sessionId);
   }
 
   if (
@@ -170,40 +242,40 @@ function parseOpenCodeEvent(line) {
   }
 
   if (lower === 'tool_use' || lower === 'tool_call' || lower.includes('tool')) {
-    const part = event.part && typeof event.part === 'object' ? event.part : null;
-    const state = part?.state && typeof part.state === 'object' ? part.state : null;
+    const legacyPart = part;
+    const state = legacyPart?.state && typeof legacyPart.state === 'object' ? legacyPart.state : null;
     const status = firstNonEmptyStr([
       event.status,
       state?.status,
-      part?.status,
+      legacyPart?.status,
     ])?.toLowerCase() || 'started';
 
     const toolId = firstNonEmptyStr([
       event.tool_id,
+      legacyPart?.callID,
+      legacyPart?.callId,
+      legacyPart?.call_id,
+      legacyPart?.toolCallID,
       event.id,
-      part?.id,
-      part?.callID,
-      part?.callId,
-      part?.call_id,
-      part?.toolCallID,
+      legacyPart?.id,
       state?.id,
     ]) || nextSyntheticToolId();
 
     const toolName = firstNonEmptyStr([
       event.name,
       event.tool_name,
-      part?.name,
-      part?.tool_name,
-      part?.tool,
+      legacyPart?.name,
+      legacyPart?.tool_name,
+      legacyPart?.tool,
       state?.name,
     ]) || 'tool';
 
-    const input = event.input ?? part?.input ?? state?.input ?? {};
-    const rawOutput = event.output ?? event.result ?? part?.output ?? state?.output;
+    const input = event.input ?? legacyPart?.input ?? state?.input ?? {};
+    const rawOutput = event.output ?? event.result ?? legacyPart?.output ?? state?.output;
     const error = firstNonEmptyStr([
       typeof event.error === 'string' ? event.error : null,
       event.error?.message,
-      typeof part?.error === 'string' ? part.error : null,
+      typeof legacyPart?.error === 'string' ? legacyPart.error : null,
       typeof state?.error === 'string' ? state.error : null,
     ]);
 
@@ -226,6 +298,80 @@ function parseOpenCodeEvent(line) {
     return { kind: 'session', sessionId };
   }
   return { kind: 'other' };
+}
+
+// OpenCode 1.x pushes each text/reasoning part exactly once, but future
+// versions may re-push a part with cumulative text. Emit only the novel
+// suffix so text never doubles in the UI. Also tolerates true incremental
+// deltas: a follow-up that is not a prefix extension is emitted as-is.
+function novelDelta(stateMap, partId, fullText) {
+  if (!partId) return fullText;
+  const prev = stateMap.get(partId);
+  const novel = typeof prev === 'string' && fullText.startsWith(prev)
+    ? fullText.slice(prev.length)
+    : fullText;
+  stateMap.set(partId, fullText);
+  return novel;
+}
+
+/**
+ * Map parsed OpenCode events onto marker emissions.
+ *
+ * The 1.x "tool" kind carries terminal state in a single event: emit the
+ * tool_use card first, then pair the tool_result on the same callID. Legacy
+ * two-phase kinds (tool_use / tool_result) keep their old behavior; the
+ * started-dedup makes both shapes converge on one tool_use per id.
+ *
+ * @param {object} sink marker emitters: contentDelta/thinkingDelta/toolUse/toolResult/sendError
+ * @returns {(event: object) => void} dispatcher over parseOpenCodeEvent output
+ */
+export function createOpenCodeEventDispatcher(sink) {
+  const seenToolStarts = new Set();
+  const seenToolResults = new Set();
+  const partTextState = new Map();
+
+  return function dispatch(event) {
+    switch (event.kind) {
+      case 'text': {
+        const novel = novelDelta(partTextState, event.partId, event.data);
+        if (novel) sink.contentDelta(novel);
+        break;
+      }
+      case 'thought': {
+        const novel = novelDelta(partTextState, event.partId, event.data);
+        if (novel) sink.thinkingDelta(novel);
+        break;
+      }
+      case 'tool': {
+        if (!seenToolStarts.has(event.id)) {
+          seenToolStarts.add(event.id);
+          sink.toolUse({ id: event.id, name: event.name, input: event.input });
+        }
+        if (
+          (event.status === 'completed' || event.status === 'error')
+          && !seenToolResults.has(event.id)
+        ) {
+          seenToolResults.add(event.id);
+          sink.toolResult({ toolUseId: event.id, content: event.content, isError: event.isError });
+        }
+        break;
+      }
+      case 'tool_use':
+        if (!seenToolStarts.has(event.id)) {
+          seenToolStarts.add(event.id);
+          sink.toolUse(event);
+        }
+        break;
+      case 'tool_result':
+        sink.toolResult({ toolUseId: event.toolCallId, content: event.content, isError: event.isError });
+        break;
+      case 'error':
+        sink.sendError(event.message);
+        break;
+      default:
+        break;
+    }
+  };
 }
 
 function resolveModelFlag(model) {
@@ -256,11 +402,23 @@ function resolveModelFlag(model) {
  * greedily consumed as extra file paths → `File not found: <prompt>`.
  * Avoid `run -- <msg>` (broken on some OpenCode versions).
  *
- * @param {{ message?: string, sessionId?: string, model?: string, imagePaths?: string[] }} opts
+ * `thinking` maps the plugin's "always thinking" toggle to OpenCode's
+ * `--thinking` flag — without it non-interactive `run` suppresses reasoning
+ * parts entirely (upstream default: false).
+ *
+ * @param {{ message?: string, sessionId?: string, model?: string, imagePaths?: string[], thinking?: boolean, autoApprove?: boolean }} opts
  * @returns {string[]}
  */
-export function buildOpenCodeArgs({ message, sessionId, model, imagePaths = [] }) {
+export function buildOpenCodeArgs({ message, sessionId, model, imagePaths = [], thinking = true, autoApprove = false }) {
   const args = ['run', '--format', 'json'];
+  if (thinking) {
+    args.push('--thinking');
+  }
+  if (autoApprove) {
+    // Auto-approve permissions that are not explicitly denied; without it a
+    // headless run can stall on permission prompts.
+    args.push('--auto');
+  }
   const modelFlag = resolveModelFlag(model);
   if (modelFlag) {
     args.push('--model', modelFlag);
@@ -286,6 +444,8 @@ export function buildOpenCodeArgs({ message, sessionId, model, imagePaths = [] }
  * @param {string} model
  * @param {string} [_reasoningEffort]
  * @param {Array} [attachments] image attachments (fileName/mediaType/data)
+ * @param {boolean} [thinking] plugin "always thinking" toggle; adds --thinking (default true)
+ * @param {string} [permissionMode] 'bypassPermissions' maps to OpenCode's --auto
  */
 export async function sendMessage(
   message,
@@ -293,7 +453,9 @@ export async function sendMessage(
   cwd = '',
   model = '',
   _reasoningEffort = '',
-  attachments = []
+  attachments = [],
+  thinking = true,
+  permissionMode = ''
 ) {
   beginStream();
 
@@ -310,8 +472,16 @@ export async function sendMessage(
     promptText = GROK_IMAGE_ONLY_FALLBACK_TEXT;
   }
 
+  const autoApprove = String(permissionMode || '').trim().toLowerCase() === 'bypasspermissions';
   const bin = resolveOpenCodeCliPath();
-  const args = buildOpenCodeArgs({ message: promptText, sessionId, model, imagePaths });
+  const args = buildOpenCodeArgs({
+    message: promptText,
+    sessionId,
+    model,
+    imagePaths,
+    thinking: thinking !== false,
+    autoApprove,
+  });
   let resolvedSessionId = isNonEmptySessionId(sessionId) ? sessionId.trim() : null;
   if (resolvedSessionId) {
     emitSessionId(resolvedSessionId);
@@ -330,7 +500,14 @@ export async function sendMessage(
   enrichPathWithBinDirs(env, commonCliBinDirs(home));
 
   const workCwd = cwd && cwd !== 'undefined' && cwd !== 'null' ? cwd : process.cwd();
-  const seenToolStarts = new Set();
+  const dispatch = createOpenCodeEventDispatcher({
+    contentDelta: (text) => emitJsonStringMarker('[CONTENT_DELTA]', text),
+    thinkingDelta: (text) => emitJsonStringMarker('[THINKING_DELTA]', text),
+    toolUse: emitToolUseMessage,
+    toolResult: emitToolResultMessage,
+    sendError: (errorMessage) =>
+      console.log(`[SEND_ERROR] ${JSON.stringify({ error: errorMessage })}`),
+  });
 
   try {
   await runCliStreaming({
@@ -345,29 +522,7 @@ export async function sendMessage(
         resolvedSessionId = event.sessionId;
         emitSessionId(event.sessionId);
       }
-      switch (event.kind) {
-        case 'text':
-          emitJsonStringMarker('[CONTENT_DELTA]', event.data);
-          break;
-        case 'thought':
-          emitJsonStringMarker('[THINKING_DELTA]', event.data);
-          break;
-        case 'tool_use':
-          if (!seenToolStarts.has(event.id)) {
-            seenToolStarts.add(event.id);
-            emitToolUseMessage(event);
-          }
-          break;
-        case 'tool_result':
-          emitToolResultMessage({ toolUseId: event.toolCallId, content: event.content, isError: event.isError });
-          break;
-        case 'error':
-          // runCliStreaming also reports non-zero exits; surface structured error early.
-          console.log(`[SEND_ERROR] ${JSON.stringify({ error: event.message })}`);
-          break;
-        default:
-          break;
-      }
+      dispatch(event);
     },
   });
   } finally {

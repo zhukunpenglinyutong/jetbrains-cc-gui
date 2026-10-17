@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { Attachment } from '../types.js';
 import type { Dispatch, SetStateAction } from 'react';
+import { parseCodexCommand } from '../../../hooks/codexCommandDispatcher';
 
 interface CompletionLike {
   close: () => void;
@@ -19,6 +20,10 @@ export interface UseSubmitHandlerOptions {
   setInternalAttachments: Dispatch<SetStateAction<Attachment[]>>;
   /** Clear attachments draft from localStorage */
   clearAttachmentsDraft?: () => void;
+  /** Pending image reads/comparisons must finish before the draft can be submitted. */
+  hasPendingImagePastes?: () => boolean;
+  /** Successful submission closes the previous draft's clipboard replay window. */
+  invalidateImagePastes?: () => void;
   fileCompletion: CompletionLike;
   commandCompletion: CompletionLike;
   agentCompletion: CompletionLike;
@@ -50,6 +55,8 @@ export function useSubmitHandler({
   externalAttachments,
   setInternalAttachments,
   clearAttachmentsDraft,
+  hasPendingImagePastes,
+  invalidateImagePastes,
   fileCompletion,
   commandCompletion,
   agentCompletion,
@@ -67,14 +74,19 @@ export function useSubmitHandler({
     const content = getTextContent();
     const cleanContent = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 
+    const command = currentProvider === 'codex' ? parseCodexCommand(cleanContent) : null;
+    // Native controls have their own backend capability/access gate. Waiting
+    // for SDK discovery here can swallow /compact during a provider switch.
+    const isCodexControl = ['compact', 'review', 'diff', 'approvals'].includes(command?.kind ?? '');
+
     // CLI providers are already known-installed. The global npm SDK query can
     // still be in flight; waiting on it only toasts "Checking SDK status...".
-    if (sdkStatusLoading && !sdkInstalled) {
+    if (!isCodexControl && sdkStatusLoading && !sdkInstalled) {
       addToast?.(t('chat.sdkStatusLoading'), 'info');
       return;
     }
 
-    if (!sdkInstalled) {
+    if (!isCodexControl && !sdkInstalled) {
       addToast?.(
         t('chat.sdkNotInstalled', {
           provider: currentProvider === 'codex' ? 'Codex' : 'Claude Code',
@@ -84,6 +96,12 @@ export function useSubmitHandler({
         'warning'
       );
       onInstallSdk?.();
+      return;
+    }
+
+    // Preserve the whole draft instead of sending a partial attachment list and refilling it later.
+    if (hasPendingImagePastes?.()) {
+      addToast?.(t('chat.pasteImagePreparing'), 'info');
       return;
     }
 
@@ -103,6 +121,7 @@ export function useSubmitHandler({
 
     // clearInput also drops any queued draft notification, so a stale debounced
     // value cannot refill the input after submit.
+    invalidateImagePastes?.();
     clearInput();
     if (externalAttachments === undefined) {
       setInternalAttachments([]);
@@ -125,6 +144,8 @@ export function useSubmitHandler({
     externalAttachments,
     setInternalAttachments,
     clearAttachmentsDraft,
+    hasPendingImagePastes,
+    invalidateImagePastes,
     fileCompletion,
     commandCompletion,
     agentCompletion,

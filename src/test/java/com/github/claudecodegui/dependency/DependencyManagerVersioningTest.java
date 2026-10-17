@@ -23,11 +23,11 @@ public class DependencyManagerVersioningTest {
     @Test
     public void shouldFallbackToSdkDefaultVersionWhenRequestedVersionIsBlank() {
         List<String> packages = DependencyManager.buildPackageSpecs(
-                SdkDefinition.CODEX_SDK,
+                SdkDefinition.CLAUDE_SDK,
                 " "
         );
 
-        assertEquals("@openai/codex-sdk@latest", packages.get(0));
+        assertEquals("@anthropic-ai/claude-agent-sdk@^0.3.182", packages.get(0));
     }
 
     @Test
@@ -68,8 +68,10 @@ public class DependencyManagerVersioningTest {
     }
 
     @Test
-    public void codexSdkShouldRequireNativeAutoReviewMinimumVersion() {
-        // The plugin uses CodexOptions.config.approvals_reviewer, which is present in the verified 0.146.0 SDK.
-        assertEquals("0.146.0", SdkDefinition.CODEX_SDK.getMinRequiredVersion());
+    public void codexRuntimeNoLongerGatesOnASdkVersion() {
+        // Native auto capability is decided by the CLI runtime itself, not by a
+        // TypeScript SDK version floor (see design D5 of the app-server migration).
+        assertNull(SdkDefinition.fromId("codex-sdk"));
+        assertNull(SdkDefinition.fromProvider("codex"));
     }
 }

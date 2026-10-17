@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next';
 import type { ClaudeContentBlock, ClaudeRawMessage } from '../types';
+import { stripDesktopAttachmentEnvelope } from './desktopAttachmentEnvelope';
 
 // ---------------------------------------------------------------------------
 // Constants - avoid magic strings throughout the codebase
@@ -293,7 +294,8 @@ export function normalizeBlocks(
       const candidate = entry as Record<string, unknown>;
       const type = candidate.type as string | undefined;
       if (type === 'text') {
-        const rawText = typeof candidate.text === 'string' ? candidate.text : '';
+        const originalText = typeof candidate.text === 'string' ? candidate.text : '';
+        const rawText = isUserMessage ? stripDesktopAttachmentEnvelope(originalText) : originalText;
         if (!hasVisibleMessageText(rawText) || rawText.trim() === '(no content)') {
           return;
         }
@@ -341,6 +343,9 @@ export function normalizeBlocks(
           type: 'thinking',
           thinking,
           text: thinking,
+          // Native reasoning may have no plaintext summary; its lifecycle must survive fragment merges.
+          ...(candidate.native === true ? { native: true,
+            ...(typeof candidate.status === 'string' ? { status: candidate.status } : {}) } : {}),
         });
       } else if (type === 'tool_use') {
         blocks.push({
@@ -349,7 +354,7 @@ export function normalizeBlocks(
           name: typeof candidate.name === 'string' ? (candidate.name as string) : t('tools.unknownTool'),
           input: (candidate.input as Record<string, unknown>) ?? {},
         });
-      } else if (type === 'image') {
+      } else if (type === 'image' || type === 'input_image') {
         const source = (candidate as any).source;
         let src: string | undefined;
         let mediaType: string | undefined;
@@ -371,10 +376,14 @@ export function normalizeBlocks(
           // Frontend direct format
           src = candidate.src as string;
           mediaType = candidate.mediaType as string | undefined;
+        } else if (typeof candidate.url === 'string' || typeof candidate.image_url === 'string') {
+          src = (candidate.url ?? candidate.image_url) as string;
+          mediaType = typeof candidate.mediaType === 'string' ? candidate.mediaType : undefined;
         }
 
         if (src) {
-          blocks.push({ type: 'image', src, mediaType });
+          blocks.push({ type: 'image', src, mediaType,
+            ...(typeof candidate.alt === 'string' ? { alt: candidate.alt } : {}) });
         }
       } else if (type === 'attachment') {
         blocks.push({
@@ -392,31 +401,32 @@ export function normalizeBlocks(
       return null;
     }
     if (typeof content === 'string') {
+      const text = isUserMessage ? stripDesktopAttachmentEnvelope(content) : content;
       // Handle <task-notification> messages - create special block type
-      if (hasTaskNotificationTag(content)) {
-        const block = createTaskNotificationBlock(content);
+      if (hasTaskNotificationTag(text)) {
+        const block = createTaskNotificationBlock(text);
         if (block) return [block];
         return null;
       }
 
       // Only format <command-message> for user messages
       // Assistant messages may contain these tags in code examples
-      if (isUserMessage && hasCommandMessageTag(content)) {
-        const displayContent = formatCommandForDisplay(content);
+      if (isUserMessage && hasCommandMessageTag(text)) {
+        const displayContent = formatCommandForDisplay(text);
         if (displayContent) {
           return [{ type: 'text' as const, text: localizeMessage(displayContent) }];
         }
         // Fallback to old extraction if formatCommandForDisplay returned null
-        const processedContent = extractCommandMessageContent(content);
+        const processedContent = extractCommandMessageContent(text);
         return [{ type: 'text' as const, text: localizeMessage(processedContent) }];
       }
 
       // Filter empty strings and command tags (without <command-message>)
       // But only for user messages - assistant messages with these tags should pass through
-      if (!hasVisibleMessageText(content) || (isUserMessage && containsAnyTag(content, FILTERED_NORMALIZE_TAGS))) {
+      if (!hasVisibleMessageText(text) || (isUserMessage && containsAnyTag(text, FILTERED_NORMALIZE_TAGS))) {
         return null;
       }
-      return [{ type: 'text' as const, text: localizeMessage(content) }];
+      return [{ type: 'text' as const, text: localizeMessage(text) }];
     }
     if (Array.isArray(content)) {
       const result = buildBlocksFromArray(content);

@@ -69,6 +69,9 @@ webview/src/version/version.ts
 AGENTS.md
 openspec/
 
+# Local protocol snapshots regenerated from the installed Codex CLI
+docs/codex/app-server-protocol/generated/
+
 # 自定义沙箱目录（如果启用）
 .sandbox/
 logs/*.log

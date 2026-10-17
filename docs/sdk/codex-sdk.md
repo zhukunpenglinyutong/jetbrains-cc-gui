@@ -1,5 +1,7 @@
 # Codex SDK
 
+> This is historical upstream SDK reference material. This plugin now detects the Codex CLI and uses app-server for chat, prompt enhancement, and commit generation. Follow [the current integration contract](../codex/app-server.md) for plugin setup.
+
 Aside from using Codex through the different interfaces like the Codex CLI, IDE extension or Codex Web, you can also programmatically control Codex.
 
 This can be useful if you want to:

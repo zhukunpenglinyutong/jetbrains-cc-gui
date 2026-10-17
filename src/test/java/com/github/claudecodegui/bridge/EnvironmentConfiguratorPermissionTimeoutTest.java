@@ -10,11 +10,52 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class EnvironmentConfiguratorPermissionTimeoutTest {
+
+    @Test
+    public void setSessionIdIsTheSessionIdPublishedToTheDaemon() {
+        EnvironmentConfigurator configurator = new EnvironmentConfigurator(new FakeSettingsService(60));
+        String routingKey = "4059a713-e5b9-4c83-858e-aadacc8cd6ca";
+
+        configurator.setSessionId(routingKey);
+        Map<String, String> env = new HashMap<>();
+        configurator.configurePermissionEnv(env);
+
+        assertEquals(routingKey, env.get("CLAUDE_SESSION_ID"));
+    }
+
+    @Test
+    public void setSessionIdReplacesAnAlreadyGeneratedDaemonId() {
+        EnvironmentConfigurator configurator = new EnvironmentConfigurator(new FakeSettingsService(60));
+        String generated = configurator.getSessionId();
+        String routingKey = "4d7709cb-0b9e-4abe-a9fa-6c78347d4cba";
+
+        configurator.setSessionId(routingKey);
+        Map<String, String> env = new HashMap<>();
+        configurator.configurePermissionEnv(env);
+
+        assertNotEquals(routingKey, generated);
+        assertEquals(routingKey, env.get("CLAUDE_SESSION_ID"));
+    }
+
+    @Test
+    public void blankSessionIdLeavesTheAlignedRoutingKey() {
+        EnvironmentConfigurator configurator = new EnvironmentConfigurator(new FakeSettingsService(60));
+        String routingKey = "4059a713-e5b9-4c83-858e-aadacc8cd6ca";
+        configurator.setSessionId(routingKey);
+
+        configurator.setSessionId(null);
+        configurator.setSessionId("   ");
+        Map<String, String> env = new HashMap<>();
+        configurator.configurePermissionEnv(env);
+
+        assertEquals(routingKey, env.get("CLAUDE_SESSION_ID"));
+    }
 
     @Test
     public void configurePermissionEnvPassesEffectiveSafetyNetTimeoutToNode() {

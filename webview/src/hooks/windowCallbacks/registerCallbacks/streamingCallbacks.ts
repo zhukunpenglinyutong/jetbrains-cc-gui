@@ -14,7 +14,7 @@ import { sendBridgeEvent } from '../../../utils/bridge';
 import { clearPendingStreamStart, isPendingStreamStartActive } from '../../../utils/streamLifecycle';
 import { THROTTLE_INTERVAL } from '../../useStreamingMessages';
 import { parseSequence } from '../parseSequence';
-import { getStreamEndHandlingMode, getRawUuid, mergeRawBlocksForFinalization } from '../messageSync';
+import { getStreamEndHandlingMode, getRawUuid, isCodexMessageSnapshot, mergeRawBlocksForFinalization } from '../messageSync';
 
 /**
  * Pour every tool_use_id carried by tool_result blocks inside one message's raw
@@ -506,6 +506,9 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     const suppressLoadingReset = isPendingStreamStartActive();
 
     clearStallWatchdog();
+    const nativeProvider = options.currentProviderRef.current === 'codex';
+    // Commit the whole native transcript before clearing refs, including separate final items.
+    if (nativeProvider) window.__flushPendingUpdateMessages?.();
     const parsedSequence = parseSequence(sequence);
     // Only update minAcceptedUpdateSequence for valid positive sequences.
     // The fallback path sends sequence=-1 which means "no sequence info" —
@@ -679,6 +682,9 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // captured in a closure variable after setMessages() would be empty.
     setMessages((prev) => {
       let newMessages = prev;
+      const nativeAssistantIndex = nativeProvider ? findLastAssistantIndex(prev) : -1;
+      const nativeTarget = nativeAssistantIndex >= 0 && isCodexMessageSnapshot(prev[nativeAssistantIndex])
+        && prev[nativeAssistantIndex].__turnId === endedStreamingTurnId;
       // FIX (Issue #1315 investigation, residual risk A): Prefer the snapshot
       // index, but fall back to a __turnId scan when an interleaved
       // updateMessages reordered/shrank the list so prev[idx] is no longer the
@@ -703,7 +709,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
         return !backendSnapshotAssistant
           || compareMessageIdentity(message, backendSnapshotAssistant) !== 'conflict';
       };
-      let idx = endedStreamingMessageIndex;
+      let idx = nativeTarget ? nativeAssistantIndex : endedStreamingMessageIndex;
       if (!belongsToEndedTurn(prev[idx])
           && endedStreamingTurnId > 0) {
         for (let i = prev.length - 1; i >= 0; i--) {
@@ -758,12 +764,13 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
         // FIX: Keep __turnId on the message for a short period to prevent
         // incorrect merging with history messages. The __turnId will be
         // removed later when history is loaded or a new turn starts.
-        const finalContent = endedStreamingContent || newMessages[idx].content || '';
+        const finalContent = nativeTarget ? newMessages[idx].content ?? ''
+          : endedStreamingContent || newMessages[idx].content || '';
         // Merge backend structure into the latest frontend raw instead of choosing by
         // text length. A tool-only assistant can contain more structural information
         // while having fewer text characters than the locally accumulated snapshot.
         let finalRaw = newMessages[idx].raw;
-        if (endedBackendRaw != null) {
+        if (!nativeTarget && endedBackendRaw != null) {
           finalRaw = mergeRawBlocksForFinalization(finalRaw, endedBackendRaw) as ClaudeMessage['raw'];
         }
         newMessages[idx] = {

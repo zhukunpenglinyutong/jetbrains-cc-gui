@@ -7,8 +7,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -142,35 +145,105 @@ public class MessageDispatchGateTest {
         assertFalse(gate.isDisposed());
     }
 
+    /** Page publication must wait until every old-page handler has finished capturing its reply. */
     @Test(timeout = 5000)
     public void pageActivationWaitsForOldDispatchAndRejectsStaleMessages() throws Exception {
         MessageDispatchGate gate = new MessageDispatchGate();
         gate.activatePageGeneration(1);
         CountDownLatch dispatchEntered = new CountDownLatch(1);
         CountDownLatch releaseDispatch = new CountDownLatch(1);
+        AtomicBoolean oldDispatchFinished = new AtomicBoolean();
+        AtomicBoolean published = new AtomicBoolean();
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
             Future<Boolean> dispatchFuture = executor.submit(() ->
                     gate.runInDispatch(1, () -> {
                         dispatchEntered.countDown();
                         awaitUninterrupted(releaseDispatch);
+                        assertFalse("page identity must stay old during the old dispatch", published.get());
+                        oldDispatchFinished.set(true);
                     }));
             assertTrue(dispatchEntered.await(2, TimeUnit.SECONDS));
 
-            Future<?> activationFuture = executor.submit(() -> gate.activatePageGeneration(2));
+            Future<Boolean> activationFuture = executor.submit(() -> gate.activatePageGeneration(2, () -> {
+                assertTrue("old dispatch must finish before publication starts", oldDispatchFinished.get());
+                published.set(true);
+            }));
             Thread.sleep(150);
             assertFalse("page activation must wait for old dispatch", activationFuture.isDone());
+            assertFalse(published.get());
 
             releaseDispatch.countDown();
             assertTrue(dispatchFuture.get(2, TimeUnit.SECONDS));
-            activationFuture.get(2, TimeUnit.SECONDS);
+            assertTrue(activationFuture.get(2, TimeUnit.SECONDS));
+            assertTrue(published.get());
 
             assertFalse(gate.runInDispatch(1, () -> { }));
             assertTrue(gate.runInDispatch(2, () -> { }));
         } finally {
+            releaseDispatch.countDown();
             executor.shutdownNow();
             executor.awaitTermination(2, TimeUnit.SECONDS);
         }
+    }
+
+    /** New-page handlers must not capture a page identity while publication is incomplete. */
+    @Test(timeout = 5000)
+    public void newPageDispatchWaitsForPublicationToFinish() throws Exception {
+        MessageDispatchGate gate = new MessageDispatchGate();
+        gate.activatePageGeneration(1);
+        AtomicInteger publishedPage = new AtomicInteger(1);
+        AtomicBoolean baselinesReset = new AtomicBoolean();
+        AtomicBoolean dispatched = new AtomicBoolean();
+        CountDownLatch publicationEntered = new CountDownLatch(1);
+        CountDownLatch releasePublication = new CountDownLatch(1);
+        CountDownLatch newDispatchStarted = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Boolean> activation = executor.submit(() -> gate.activatePageGeneration(2, () -> {
+                publicationEntered.countDown();
+                awaitUninterrupted(releasePublication);
+                publishedPage.set(2);
+                baselinesReset.set(true);
+            }));
+            assertTrue(publicationEntered.await(2, TimeUnit.SECONDS));
+            Future<Boolean> newDispatch = executor.submit(() -> {
+                newDispatchStarted.countDown();
+                return gate.runInDispatch(2, () -> {
+                    assertEquals(2, publishedPage.get());
+                    assertTrue("delivery baselines must be reset before dispatch", baselinesReset.get());
+                    dispatched.set(true);
+                });
+            });
+            assertTrue(newDispatchStarted.await(2, TimeUnit.SECONDS));
+            try {
+                newDispatch.get(150, TimeUnit.MILLISECONDS);
+                org.junit.Assert.fail("new-page dispatch must wait for the complete publication");
+            } catch (TimeoutException expected) {
+                assertFalse(dispatched.get());
+                assertEquals(1, publishedPage.get());
+            }
+
+            releasePublication.countDown();
+            assertTrue(activation.get(2, TimeUnit.SECONDS));
+            assertTrue(newDispatch.get(2, TimeUnit.SECONDS));
+            assertTrue(dispatched.get());
+        } finally {
+            releasePublication.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(2, TimeUnit.SECONDS);
+        }
+    }
+
+    /** Teardown must prevent both generation activation and its owner's publication callback. */
+    @Test
+    public void disposedGateRejectsPagePublication() {
+        MessageDispatchGate gate = new MessageDispatchGate();
+        AtomicBoolean published = new AtomicBoolean();
+        gate.beginTeardown();
+
+        assertFalse(gate.activatePageGeneration(2, () -> published.set(true)));
+        assertFalse(published.get());
     }
 
     private static void awaitUninterrupted(CountDownLatch latch) {

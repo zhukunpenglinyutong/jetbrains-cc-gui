@@ -1,5 +1,6 @@
 package com.github.claudecodegui.provider.codex;
 
+import com.github.claudecodegui.provider.common.SessionHistoryNotFoundException;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.MessageParser;
 import com.github.claudecodegui.util.MessageJsonConverter;
@@ -17,6 +18,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class CodexSDKBridgeHistoryTest {
@@ -88,6 +90,21 @@ public class CodexSDKBridgeHistoryTest {
             assertEquals("Restore Codex tab", messages.get(0).get("content").getAsString());
             assertEquals("assistant", messages.get(1).get("type").getAsString());
             assertEquals("Restored from Codex history", messages.get(1).get("content").getAsString());
+        } finally {
+            deleteDirectory(sessionsDir);
+        }
+    }
+
+    @Test
+    public void getSessionMessagesReportsMissingRolloutInsteadOfEmptyTranscript() throws IOException {
+        Path sessionsDir = Files.createTempDirectory("codex-sdk-bridge-history-pruned");
+        try {
+            CodexSDKBridge bridge = new CodexSDKBridge(sessionsDir);
+
+            SessionHistoryNotFoundException exception = assertThrows(SessionHistoryNotFoundException.class,
+                    () -> bridge.getSessionMessages("session-pruned-by-cli", sessionsDir.toString()));
+
+            assertTrue(exception.getMessage().contains("session-pruned-by-cli"));
         } finally {
             deleteDirectory(sessionsDir);
         }

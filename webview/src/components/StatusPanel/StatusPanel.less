@@ -121,11 +121,16 @@
 
 /* Popover - Floating content panel */
 .status-panel-popover {
+  display: flex;
+  flex-direction: column;
+  max-height: var(--status-panel-available-height, 240px);
   position: absolute;
-  bottom: 100%;
+  bottom: var(--status-panel-popover-bottom, 100%);
+  top: var(--status-panel-popover-top, auto);
   left: 0;
   right: 0;
   margin-bottom: 4px;
+  margin-top: var(--status-panel-popover-margin-top, 0);
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: 8px;
@@ -148,6 +153,7 @@
 
 /* File Changes Content */
 .file-changes-list {
+  min-height: 0;
   padding: 4px 8px;
   max-height: 200px;
   overflow-y: auto;
@@ -926,12 +932,14 @@
 
 /* File Changes Container (with batch actions) */
 .file-changes-container {
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
 /* Batch Actions Bar */
 .file-changes-actions-bar {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;

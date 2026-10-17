@@ -1,6 +1,7 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import BashToolBlock from './BashToolBlock';
+import BashToolGroupBlock from './BashToolGroupBlock';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -13,6 +14,16 @@ vi.mock('../../hooks/useIsToolDenied', () => ({
 }));
 
 describe('BashToolBlock', () => {
+  it('keeps command summaries and approval reasons in expanded batch entries', () => {
+    const { container } = render(<BashToolGroupBlock items={[
+      { toolId: 'one', input: { cmd: 'pwd', summary: 'Inspect workspace', justification: 'Read protected directory' } },
+      { toolId: 'two', input: { command: 'git status', title: 'Check pending changes' } },
+    ]} />);
+    expect(container.querySelectorAll('.bash-timeline-content')).toHaveLength(2);
+    fireEvent.click(container.querySelector('.bash-timeline-content')!);
+    expect(container.querySelector('.bash-command-summary')?.textContent).toBe('Inspect workspace');
+    expect(container.querySelector('.bash-command-reason')?.textContent).toContain('Read protected directory');
+  });
   it('hides empty placeholders until command details arrive', () => {
     const { container, rerender } = render(<BashToolBlock input={{}} />);
 

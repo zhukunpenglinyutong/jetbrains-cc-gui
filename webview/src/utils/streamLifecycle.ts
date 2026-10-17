@@ -12,8 +12,9 @@
  *
  * Marked by the send path (executeMessage), cleared when the dispatched
  * turn's stream actually starts or when a genuine error snapshot lands.
- * Time-boxed so a turn that dies without any event cannot wedge the
- * loading state permanently.
+ * Only cleanup immunity is time-boxed. Keep the submission identity until a
+ * terminal event retires it: a large error snapshot can arrive after immunity
+ * expires, following the only loading reset that was suppressed during boot.
  */
 
 const PENDING_STREAM_IMMUNITY_MS = 8000;
@@ -21,15 +22,18 @@ const PENDING_STREAM_IMMUNITY_MS = 8000;
 declare global {
   interface Window {
     __pendingStreamStartAt?: number;
+    __pendingStreamClientMessageId?: string;
   }
 }
 
-export function markPendingStreamStart(): void {
+export function markPendingStreamStart(clientMessageId?: string): void {
   window.__pendingStreamStartAt = Date.now();
+  window.__pendingStreamClientMessageId = clientMessageId;
 }
 
 export function clearPendingStreamStart(): void {
   window.__pendingStreamStartAt = undefined;
+  window.__pendingStreamClientMessageId = undefined;
 }
 
 /**
@@ -41,9 +45,5 @@ export function isPendingStreamStartActive(): boolean {
   if (since == null) {
     return false;
   }
-  if (Date.now() - since >= PENDING_STREAM_IMMUNITY_MS) {
-    window.__pendingStreamStartAt = undefined;
-    return false;
-  }
-  return true;
+  return Date.now() - since < PENDING_STREAM_IMMUNITY_MS;
 }

@@ -3,6 +3,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useDialogCountdownTimeout } from './useDialogCountdownTimeout.js';
 
 describe('useDialogCountdownTimeout', () => {
+  it('retries a refused submission within the original deadline', () => {
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    const { result } = renderHook(() => useDialogCountdownTimeout({ isOpen: true,
+      requestKey: 'retry', timeoutSeconds: 3, onTimeout }));
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(result.current.markSubmitted()).toBe(true);
+    result.current.restoreSubmission();
+    expect(result.current.markSubmitted()).toBe(true);
+    result.current.restoreSubmission();
+    act(() => vi.advanceTimersByTime(2_000));
+    expect(result.current.remainingSeconds).toBe(0);
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+    result.current.restoreSubmission();
+    expect(result.current.markSubmitted()).toBe(false);
+  });
   afterEach(() => {
     vi.clearAllTimers();
     vi.useRealTimers();

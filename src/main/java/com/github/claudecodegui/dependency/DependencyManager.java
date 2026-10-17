@@ -108,9 +108,9 @@ public class DependencyManager {
             return false;
         }
 
-        // Check if the main package exists in node_modules
-        Path packageDir = getPackageDir(sdkId, sdk.getNpmPackage());
-        if (!Files.exists(packageDir)) {
+        // Check if the main package (or a reusable legacy package) exists in node_modules
+        Path packageDir = findInstalledPackageDir(getSdkNodeModulesDir(sdkId), sdk);
+        if (packageDir == null) {
             return false;
         }
 
@@ -120,7 +120,7 @@ public class DependencyManager {
         Path markerFile = sdkDir.resolve(INSTALLED_MARKER);
         if (!Files.exists(markerFile)) {
             try {
-                String version = getInstalledVersionFromPackage(sdkId, sdk.getNpmPackage());
+                String version = readPackageVersion(packageDir);
                 Files.writeString(markerFile, version != null ? version : "unknown");
                 LOG.info("[DependencyManager] Created missing marker file for manually installed SDK: " + sdkId);
             } catch (Exception e) {
@@ -132,10 +132,10 @@ public class DependencyManager {
     }
 
     /**
-     * Reads the version from package.json (internal use, does not depend on isInstalled).
+     * Reads the version from an already-resolved package directory.
      */
-    private String getInstalledVersionFromPackage(String sdkId, String npmPackage) {
-        Path packageJson = getPackageDir(sdkId, npmPackage).resolve("package.json");
+    private String readPackageVersion(Path packageDir) {
+        Path packageJson = packageDir.resolve("package.json");
         if (!Files.exists(packageJson)) {
             return null;
         }
@@ -167,15 +167,39 @@ public class DependencyManager {
     }
 
     /**
+     * Resolves the directory that satisfies an SDK dependency inside the given
+     * node_modules root. Returns null when none exists.
+     */
+    static Path findInstalledPackageDir(Path sdkNodeModulesDir, SdkDefinition sdk) {
+        if (sdkNodeModulesDir == null || sdk == null) {
+            return null;
+        }
+        Path mainDir = resolvePackagePath(sdkNodeModulesDir, sdk.getNpmPackage());
+        return Files.exists(mainDir) ? mainDir : null;
+    }
+
+    private static Path resolvePackagePath(Path nodeModulesDir, String npmPackage) {
+        String[] parts = npmPackage.split("/");
+        Path packagePath = nodeModulesDir;
+        for (String part : parts) {
+            packagePath = packagePath.resolve(part);
+        }
+        return packagePath;
+    }
+
+    /**
      * Returns the installed version.
      */
     public String getInstalledVersion(String sdkId) {
         SdkDefinition sdk = SdkDefinition.fromId(sdkId);
-        if (sdk == null || !isInstalled(sdkId)) {
+        if (sdk == null) {
             return null;
         }
-
-        return getInstalledVersionFromPackage(sdkId, sdk.getNpmPackage());
+        Path packageDir = findInstalledPackageDir(getSdkNodeModulesDir(sdkId), sdk);
+        if (packageDir == null) {
+            return null;
+        }
+        return readPackageVersion(packageDir);
     }
 
     /**
@@ -573,6 +597,7 @@ public class DependencyManager {
             status.addProperty("installed", installed);
             // Add the status field for frontend consumption
             status.addProperty("status", installed ? "installed" : "not_installed");
+            status.addProperty("runtimeKind", "sdk");
 
             if (installed) {
                 String version = getInstalledVersion(sdk.getId());

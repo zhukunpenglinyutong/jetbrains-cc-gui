@@ -76,7 +76,11 @@ export interface SettingsWindowCallbacksDeps {
   setCodeFontConfig: (config: CodeFontConfig | undefined) => void;
   setIdeTheme: (theme: 'light' | 'dark' | null) => void;
   setLocalStreamingEnabled: (enabled: boolean) => void;
-  setCodexSandboxMode?: (mode: 'workspace-write' | 'danger-full-access') => void;
+  setCodexSandboxMode?: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
+  setCodexSandboxSource?: (source: string) => void;
+  setCodexSandboxDesired?: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
+  setCodexSandboxEffective?: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
+  setCodexSandboxConflict?: (conflict: boolean) => void;
   setLocalSendShortcut: (shortcut: 'enter' | 'cmdEnter') => void;
   setLoading: (loading: boolean) => void;
   setCodexLoading: (loading: boolean) => void;
@@ -213,6 +217,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         const data = JSON.parse(jsonStr);
         d().setWorkingDirectory(data.customWorkingDir || '');
         d().setSavingWorkingDirectory(false);
+        window.dispatchEvent(new Event('codex-working-directory-changed'));
       } catch (error) {
         console.error('[SettingsView] Failed to parse working directory:', error);
         d().setSavingWorkingDirectory(false);
@@ -291,8 +296,22 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       try {
         const data = JSON.parse(jsonStr);
         const mode = data?.sandboxMode;
-        if (mode === 'workspace-write' || mode === 'danger-full-access') {
+        if (mode === 'read-only' || mode === 'workspace-write' || mode === 'danger-full-access') {
           d().setCodexSandboxMode?.(mode);
+        }
+        const desired = data?.sandboxDesired;
+        if (desired === 'read-only' || desired === 'workspace-write' || desired === 'danger-full-access') {
+          d().setCodexSandboxDesired?.(desired);
+        }
+        const effective = data?.sandboxEffective;
+        if (effective === 'read-only' || effective === 'workspace-write' || effective === 'danger-full-access') {
+          d().setCodexSandboxEffective?.(effective);
+        }
+        if (typeof data?.sandboxConflict === 'boolean') {
+          d().setCodexSandboxConflict?.(data.sandboxConflict);
+        }
+        if (typeof data?.sandboxSource === 'string') {
+          d().setCodexSandboxSource?.(data.sandboxSource);
         }
       } catch (error) {
         console.error('[SettingsView] Failed to parse Codex sandbox mode config:', error);

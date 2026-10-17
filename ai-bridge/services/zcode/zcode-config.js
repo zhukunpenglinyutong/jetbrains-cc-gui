@@ -2,12 +2,12 @@
  * ZCode environment resolution: zcode.cjs location, data directory, and
  * provider credentials sourced from the ZCode desktop client's own config.
  *
- * The ZCode app-server is a Node entry point bundled inside the desktop
- * client (resources/glm/zcode.cjs), not a PATH binary, so discovery is by
- * well-known install locations with ZCODE_CLI_PATH as an explicit override.
+ * The zcode executable on PATH may launch the desktop app rather than run under
+ * Node. Locate the bundled resources/glm/zcode.cjs, with ZCODE_CLI_PATH and
+ * ZCODE_PATH as overrides.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -23,6 +23,14 @@ function readJsonFile(path) {
 
 function nonBlank(v) {
   return typeof v === 'string' && v.trim().length > 0;
+}
+
+function isFile(path) {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -42,15 +50,14 @@ export function resolveZcodeHome(baseHome = homedir()) {
 }
 
 /**
- * Locate the app-server entry (zcode.cjs) bundled with the desktop client.
+ * Locate an existing app-server entry, using the same override order as Java.
+ * Return an absolute path because the child process runs in the user's workspace.
  */
-export function resolveZcodeCliPath(platform = process.platform, env = process.env) {
-  const explicit = env.ZCODE_CLI_PATH;
-  if (nonBlank(explicit) && existsSync(explicit.trim())) {
-    return explicit.trim();
-  }
-
+export function resolveZcodeCliPath(platform = process.platform, env = process.env, fileExists = isFile) {
   const candidates = [];
+  for (const key of ['ZCODE_CLI_PATH', 'ZCODE_PATH']) {
+    if (nonBlank(env[key])) candidates.push(env[key].trim());
+  }
   if (platform === 'darwin') {
     candidates.push('/Applications/ZCode.app/Contents/Resources/glm/zcode.cjs');
   } else if (platform === 'win32') {
@@ -61,13 +68,15 @@ export function resolveZcodeCliPath(platform = process.platform, env = process.e
     if (nonBlank(pf)) candidates.push(join(pf, 'ZCode', 'resources', 'glm', 'zcode.cjs'));
     if (nonBlank(pf86)) candidates.push(join(pf86, 'ZCode', 'resources', 'glm', 'zcode.cjs'));
   } else {
+    // Match Java CliStatusDetector: prefer the Linux package layout, retaining the legacy app subdirectory.
+    candidates.push('/opt/ZCode/resources/glm/zcode.cjs');
     candidates.push('/opt/ZCode/app/resources/glm/zcode.cjs');
   }
 
   for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
+    if (fileExists(candidate)) return resolve(candidate);
   }
-  return nonBlank(explicit) ? explicit.trim() : null;
+  return null;
 }
 
 /** v2 config.json (provider registry + credentials). */

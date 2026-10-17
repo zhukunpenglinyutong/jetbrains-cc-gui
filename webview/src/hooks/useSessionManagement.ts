@@ -5,6 +5,7 @@ import { sendBridgeEvent } from '../utils/bridge';
 import { getSkipNewSessionConfirm } from '../utils/skipNewSessionConfirm';
 import { clearAllPersistedExpanded } from '../utils/expandedState';
 import { normalizeClaudeModelForBridge } from '../utils/customClaudeModels';
+import { sumKnownHistoryMessages } from '../utils/historyMessageCount';
 
 type ViewMode = 'chat' | 'history' | 'settings';
 
@@ -348,10 +349,12 @@ export function useSessionManagement({
         }
 
         const deletedSession = prevHistoryData.sessions.find(s => s.sessionId === sessionId);
+        const sessions = prevHistoryData.sessions.filter(s => s.sessionId !== sessionId);
         return {
           ...prevHistoryData,
-          sessions: prevHistoryData.sessions.filter(s => s.sessionId !== sessionId),
-          total: Math.max(0, (prevHistoryData.total || 0) - (deletedSession?.messageCount || 0))
+          sessions,
+          total: prevHistoryData.source === 'native' ? sumKnownHistoryMessages(sessions)
+            : Math.max(0, (prevHistoryData.total || 0) - (deletedSession?.messageCount || 0))
         };
       });
 
@@ -392,11 +395,13 @@ export function useSessionManagement({
         const deletedMessageCount = prevHistoryData.sessions.reduce((sum, session) => (
           deletedSessionIds.has(session.sessionId) ? sum + (session.messageCount || 0) : sum
         ), 0);
+        const sessions = prevHistoryData.sessions.filter(session => !deletedSessionIds.has(session.sessionId));
 
         return {
           ...prevHistoryData,
-          sessions: prevHistoryData.sessions.filter(session => !deletedSessionIds.has(session.sessionId)),
-          total: Math.max(0, (prevHistoryData.total || 0) - deletedMessageCount)
+          sessions,
+          total: prevHistoryData.source === 'native' ? sumKnownHistoryMessages(sessions)
+            : Math.max(0, (prevHistoryData.total || 0) - deletedMessageCount)
         };
       });
 
@@ -432,21 +437,15 @@ export function useSessionManagement({
 
     // Immediately update frontend state
     if (historyData && historyData.sessions) {
-      const updatedSessions = historyData.sessions.map(session => {
-        if (session.sessionId === sessionId) {
+      // Counts may arrive before React commits another render, so edit the latest rows.
+      setHistoryData(previous => {
+        if (!previous?.sessions) return previous;
+        const sessions = previous.sessions.map(session => {
+          if (session.sessionId !== sessionId) return session;
           const isFavorited = !session.isFavorited;
-          return {
-            ...session,
-            isFavorited,
-            favoritedAt: isFavorited ? Date.now() : undefined
-          };
-        }
-        return session;
-      });
-
-      setHistoryData({
-        ...historyData,
-        sessions: updatedSessions
+          return { ...session, isFavorited, favoritedAt: isFavorited ? Date.now() : undefined };
+        });
+        return { ...previous, sessions };
       });
 
       // Show toast
@@ -467,20 +466,10 @@ export function useSessionManagement({
 
     // Immediately update frontend state
     if (historyData && historyData.sessions) {
-      const updatedSessions = historyData.sessions.map(session => {
-        if (session.sessionId === sessionId) {
-          return {
-            ...session,
-            title: newTitle
-          };
-        }
-        return session;
-      });
-
-      setHistoryData({
-        ...historyData,
-        sessions: updatedSessions
-      });
+      setHistoryData(previous => previous?.sessions ? {
+        ...previous,
+        sessions: previous.sessions.map(session => session.sessionId === sessionId ? { ...session, title: newTitle } : session),
+      } : previous);
 
       // Show success toast
       addToast(t('history.titleUpdated'), 'success');
@@ -491,16 +480,11 @@ export function useSessionManagement({
   // session file. This skips the round-trip through the customTitle endpoint,
   // which would otherwise reject titles over its length limit.
   const applyHistoryTitleLocal = useCallback((sessionId: string, newTitle: string) => {
-    if (historyData && historyData.sessions) {
-      const updatedSessions = historyData.sessions.map(session =>
-        session.sessionId === sessionId ? { ...session, title: newTitle } : session
-      );
-      setHistoryData({
-        ...historyData,
-        sessions: updatedSessions
-      });
-    }
-  }, [historyData, setHistoryData]);
+    setHistoryData(previous => previous?.sessions ? {
+      ...previous,
+      sessions: previous.sessions.map(session => session.sessionId === sessionId ? { ...session, title: newTitle } : session),
+    } : previous);
+  }, [setHistoryData]);
 
   // Convert SDK-created session to CLI-recognizable session.
   // The backend sends an onConversionResult callback with success/failure;

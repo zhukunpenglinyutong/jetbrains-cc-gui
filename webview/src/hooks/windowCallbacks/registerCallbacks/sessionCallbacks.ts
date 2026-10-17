@@ -43,8 +43,11 @@ export function registerSessionAndSdkCallbacks(
   window.setSessionId = (sessionId: string) => {
     const oldId = currentSessionIdRef.current;
     releaseSessionTransition();
-    currentSessionIdRef.current = sessionId;
-    setCurrentSessionId(sessionId);
+    // Java sends an empty ID when a restored transcript expires. Keep the
+    // canonical no-session state and wait for a real ID before migrating titles.
+    currentSessionIdRef.current = sessionId || null;
+    setCurrentSessionId(sessionId || null);
+    if (!sessionId) return;
 
     // B-011 + B-014: Persist custom title under the real SDK session ID.
     // NOTE: We intentionally do NOT delete the old ID's title to prevent
@@ -62,6 +65,13 @@ export function registerSessionAndSdkCallbacks(
       }
     }
   };
+
+  // The ready replay can precede this effect; controls need that identity before their first dispatch.
+  if (typeof window.__pendingSessionId === 'string') {
+    const sessionId = window.__pendingSessionId;
+    delete window.__pendingSessionId;
+    window.setSessionId(sessionId);
+  }
 
   window.addToast = (message, type) => {
     addToast(message, type as 'info' | 'success' | 'warning' | 'error' | undefined);
@@ -162,6 +172,11 @@ export function registerSessionAndSdkCallbacks(
     // Only apply the title if it matches the current session to prevent
     // stale events from overwriting the wrong session's title.
     if (currentSessionIdRef.current !== sessionId) return;
+    if (options.currentProviderRef.current === 'codex') {
+      options.setRestoredSessionTitle({ sessionId, title: title.trim() });
+      if (!customSessionTitleRef.current) applyHistoryTitleLocal(sessionId, title.trim());
+      return;
+    }
     setCustomSessionTitle(title.trim());
     applyHistoryTitleLocal(sessionId, title.trim());
   };

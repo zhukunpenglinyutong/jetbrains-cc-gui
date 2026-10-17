@@ -74,6 +74,10 @@ export function resolveSdkModelName(modelId, resolvedModelId) {
 export function resolveModelFromSettings(modelId, userEnv) {
   if (!modelId || !userEnv) return modelId;
 
+  // cc-switch ids already select a provider and model. The upstream model (or
+  // provider key) can contain a Claude family name; never remap that route.
+  if (modelId.startsWith('ccs-claude-')) return modelId;
+
   const lowerModel = modelId.toLowerCase();
   const requestHas1M = /\[1m\]$/i.test(modelId);
   // The request owns 1M state. Settings mappings may provide the provider's base

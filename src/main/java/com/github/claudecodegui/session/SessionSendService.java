@@ -107,12 +107,11 @@ public class SessionSendService {
         contextCollector.setAutoOpenFileEnabled(readAutoOpenFileEnabled());
     }
 
-    public void updateSessionStateForSend(ClaudeSession.Message userMessage, String normalizedInput) {
-        // The message lock covers only the list mutation and the transport copy it
-        // feeds: enqueue's structural-signature walk requires the caller to hold this
-        // lock. Summary and busy/loading state don't touch the message list, so they
-        // stay outside it on the handler thread.
+    public Object updateSessionStateForSend(ClaudeSession.Message userMessage, String normalizedInput) {
+        Object turnOwner;
+        // Fence previous callbacks before publishing the new question and busy state.
         synchronized (state.getMessageStateLock()) {
+            turnOwner = state.beginTurn();
             state.addMessage(userMessage);
             callbackFacade.notifyMessageUpdate(state.getMessages());
         }
@@ -127,11 +126,9 @@ public class SessionSendService {
         }
 
         state.updateLastModifiedTime();
-        state.setError(null);
-        state.setBusy(true);
-        state.setLoading(true);
         ClaudeNotifier.setWaiting(project);
         callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+        return turnOwner;
     }
 
     public CompletableFuture<Void> sendMessageToProvider(
@@ -145,6 +142,78 @@ public class SessionSendService {
             String requestedReasoningEffort,
             String requestedCodexFastMode,
             String requestedDshPreset
+    ) {
+        return sendMessageToProvider(
+                channelId, input, attachments, openedFilesJson, externalAgentPrompt,
+                fileTagPaths, requestedPermissionMode, requestedReasoningEffort,
+                requestedCodexFastMode, requestedDshPreset, null, null);
+    }
+
+    /**
+     * Send a message while preserving the frontend's native client identity.
+     *
+     * @param channelId chat host identifier
+     * @param input normalized user input
+     * @param attachments user attachments
+     * @param openedFilesJson editor context
+     * @param externalAgentPrompt selected role instructions
+     * @param fileTagPaths selected file references
+     * @param requestedPermissionMode requested permission mode
+     * @param requestedReasoningEffort requested reasoning effort
+     * @param requestedCodexFastMode requested Codex service tier
+     * @param requestedDshPreset requested DSH preset
+     * @param clientMessageId stable optimistic-message identity
+     * @return future completed after the provider turn has finished
+     */
+    public CompletableFuture<Void> sendMessageToProvider(
+            String channelId,
+            String input,
+            List<ClaudeSession.Attachment> attachments,
+            JsonObject openedFilesJson,
+            String externalAgentPrompt,
+            List<String> fileTagPaths,
+            String requestedPermissionMode,
+            String requestedReasoningEffort,
+            String requestedCodexFastMode,
+            String requestedDshPreset,
+            String clientMessageId
+    ) {
+        return sendMessageToProvider(
+                channelId, input, attachments, openedFilesJson, externalAgentPrompt,
+                fileTagPaths, requestedPermissionMode, requestedReasoningEffort,
+                requestedCodexFastMode, requestedDshPreset, clientMessageId, null);
+    }
+
+    /**
+     * Send a message with stable identity and native Codex settings.
+     *
+     * @param channelId chat host identifier
+     * @param input normalized user input
+     * @param attachments user attachments
+     * @param openedFilesJson editor context
+     * @param externalAgentPrompt selected role instructions
+     * @param fileTagPaths selected file references
+     * @param requestedPermissionMode requested permission mode
+     * @param requestedReasoningEffort requested reasoning effort
+     * @param requestedCodexFastMode requested Codex service tier
+     * @param requestedDshPreset requested DSH preset
+     * @param clientMessageId stable optimistic-message identity
+     * @param nativeCodexSettings filtered native Codex settings
+     * @return future completed after the provider turn has finished
+     */
+    public CompletableFuture<Void> sendMessageToProvider(
+            String channelId,
+            String input,
+            List<ClaudeSession.Attachment> attachments,
+            JsonObject openedFilesJson,
+            String externalAgentPrompt,
+            List<String> fileTagPaths,
+            String requestedPermissionMode,
+            String requestedReasoningEffort,
+            String requestedCodexFastMode,
+            String requestedDshPreset,
+            String clientMessageId,
+            JsonObject nativeCodexSettings
     ) {
         String agentPrompt = externalAgentPrompt;
         if (agentPrompt == null) {
@@ -186,7 +255,9 @@ public class SessionSendService {
                     fileTagPaths,
                     effectivePermissionMode,
                     normalizedRequestedEffort,
-                    effectiveCodexServiceTier
+                    effectiveCodexServiceTier,
+                    clientMessageId,
+                    nativeCodexSettings
             );
         }
 
@@ -278,16 +349,16 @@ public class SessionSendService {
             resolvedMode = "default";
         }
 
-        boolean isProviderWithoutPlanMode = "codex".equals(provider)
-                || "grok".equals(provider)
+        boolean isProviderWithoutPlanMode = "grok".equals(provider)
                 || "zcode".equals(provider)
                 || (SessionProviderRouter.isCliProvider(provider) && !"omp".equals(provider));
         boolean isCliProviderWithoutNativeAuto = SessionProviderRouter.isCliProvider(provider);
-        // Codex, Grok and ZCode run as full SDK bridges (not MarkerCli providers, so they
+        // Grok and ZCode run as full SDK bridges (not MarkerCli providers, so they
         // are absent from CLI_PROVIDER_IDS), but like the headless CLI providers
         // they have no plan-mode equivalent — so plan still downgrades to default.
         // EXCEPT omp, where "plan" is a model role (`omp --model plan`), not Claude
-        // plan mode. Native auto review is limited to Claude/Codex; Grok retains its
+        // plan mode. Codex owns its native collaboration mode in app-server;
+        // native auto review is limited to Claude/Codex; Grok retains its
         // existing internal auto-approve alias, while the Webview still hides auto there.
         if (isProviderWithoutPlanMode
                 && "plan".equals(resolvedMode)) {
@@ -361,9 +432,12 @@ public class SessionSendService {
             List<String> fileTagPaths,
             String effectivePermissionMode,
             String requestedReasoningEffort,
-            String effectiveCodexServiceTier
+            String effectiveCodexServiceTier,
+            String clientMessageId,
+            JsonObject nativeCodexSettings
     ) {
-        CodexMessageHandler handler = new CodexMessageHandler(state, callbackFacade.getCallbackHandler());
+        CodexMessageHandler handler = new CodexMessageHandler(this.state,
+                this.callbackFacade.getCallbackHandler(), clientMessageId);
         String accessMode = CodemossSettingsService.CODEX_RUNTIME_ACCESS_INACTIVE;
         try {
             accessMode = new CodemossSettingsService().getCodexRuntimeAccessMode();
@@ -377,7 +451,8 @@ public class SessionSendService {
             return CompletableFuture.completedFuture(null);
         }
 
-        String contextAppend = contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
+        String contextAppend = this.contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
+        String sessionInstructions = this.contextService.buildCodexSessionInstructions(agentPrompt, openedFilesJson);
         String finalInput = (input != null ? input : "") + contextAppend;
         String configuredModel = new CodexSettingsManager(gson).resolveModelAlias(state.getModel());
 
@@ -389,10 +464,12 @@ public class SessionSendService {
                 attachments,
                 effectivePermissionMode,
                 configuredModel,
-                agentPrompt,
+                sessionInstructions,
                 requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort(),
                 effectiveCodexServiceTier,
-                handler
+                handler,
+                clientMessageId,
+                nativeCodexSettings
         ).thenApply(result -> null);
     }
 
@@ -522,7 +599,7 @@ public class SessionSendService {
         // dupes). Other CLI providers reuse Codex streaming marker handling.
         MessageCallback handler = createCliMessageHandler(provider);
 
-        String contextAppend = contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
+        String contextAppend = this.contextService.buildLegacyContextAppend(openedFilesJson, fileTagPaths);
         String finalInput = (input != null ? input : "") + contextAppend;
         if (agentPrompt != null && !agentPrompt.isEmpty()) {
             finalInput = finalInput + "\n\n## Agent Role and Instructions\n\n" + agentPrompt;
@@ -537,6 +614,7 @@ public class SessionSendService {
         String effectiveMode = permissionMode != null && !permissionMode.isBlank()
                 ? permissionMode
                 : "default";
+        Boolean thinking = readThinkingEnabled();
         int attachmentCount = attachments != null ? attachments.size() : 0;
 
         LOG.info("[Lifecycle] sendToCli provider=" + provider
@@ -546,6 +624,7 @@ public class SessionSendService {
                 + ", modelCli=" + (modelForCli != null ? modelForCli : "(config-default)")
                 + ", effort=" + effort
                 + ", permissionMode=" + effectiveMode
+                + ", thinking=" + (thinking == null || thinking)
                 + ", attachments=" + attachmentCount);
 
         return bridge.sendMessage(
@@ -558,8 +637,28 @@ public class SessionSendService {
                 attachments,
                 effectiveMode,
                 "dsh".equals(provider) ? state.getDshPreset() : null,
+                thinking,
                 handler
         ).thenApply(result -> null);
+    }
+
+    /**
+     * Plugin "always thinking" toggle for CLI providers. Same source as the
+     * webview toggle: provider settingsConfig first, Claude settings.json as
+     * fallback; null lets the daemon apply its default (enabled).
+     */
+    private Boolean readThinkingEnabled() {
+        try {
+            CodemossSettingsService settingsService = new CodemossSettingsService();
+            Boolean providerLevel = settingsService.getAlwaysThinkingEnabledInActiveProvider();
+            if (providerLevel != null) {
+                return providerLevel;
+            }
+            return settingsService.getAlwaysThinkingEnabledFromClaudeSettings();
+        } catch (Exception e) {
+            LOG.warn("[Thinking] Failed to read thinking config: " + e.getMessage());
+        }
+        return null;
     }
 
     /**

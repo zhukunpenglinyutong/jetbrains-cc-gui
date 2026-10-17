@@ -186,6 +186,14 @@ public class MessageJsonConverter {
         JsonObject transport = new JsonObject();
         copyFieldIfPresent(raw, transport, "uuid");
         copyFieldIfPresent(raw, transport, "type");
+        copyFieldIfPresent(raw, transport, "clientMessageId");
+        copyFieldIfPresent(raw, transport, "codexItemId");
+        copyFieldIfPresent(raw, transport, "codexThreadId");
+        copyFieldIfPresent(raw, transport, "codexTurnId");
+        copyFieldIfPresent(raw, transport, "codexSnapshot");
+        copyFieldIfPresent(raw, transport, "historySource");
+        copyFieldIfPresent(raw, transport, "codexItemType");
+        copyFieldIfPresent(raw, transport, "codexAuthoritative");
         copyFieldIfPresent(raw, transport, "isMeta");
         copyFieldIfPresent(raw, transport, "text");
         // Compact-related fields for filtering compact summary messages

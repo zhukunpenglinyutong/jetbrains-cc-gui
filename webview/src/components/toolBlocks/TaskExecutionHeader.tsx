@@ -41,7 +41,7 @@ export default function TaskExecutionHeader({
         <span className="codicon codicon-tools tool-title-icon" />
 
         <span className="tool-title-text">
-          {name ?? t('tools.task')}
+          {isSpawnAgent ? t('tools.agent', 'Agent') : name ?? t('tools.task')}
         </span>
         {identityLabel && (
           <span className="tool-title-summary">{identityLabel}</span>

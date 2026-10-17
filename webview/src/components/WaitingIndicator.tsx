@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface WaitingIndicatorProps {
+  label?: string;
   size?: number;
   /** Loading start timestamp (ms), used to maintain continuous timing across view switches */
   startTime?: number;
 }
 
-export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps) => {
+export const WaitingIndicator = ({ size = 18, startTime, label }: WaitingIndicatorProps) => {
   const { t } = useTranslation();
   const [dotCount, setDotCount] = useState(1);
   const [elapsedSeconds, setElapsedSeconds] = useState(() => {
@@ -60,7 +61,7 @@ export const WaitingIndicator = ({ size = 18, startTime }: WaitingIndicatorProps
     <div className="waiting-indicator">
       <span className="waiting-spinner" style={spinnerStyle} />
       <span className="waiting-text">
-	        {t('chat.generatingResponse')}<span className="waiting-dots">{dots}</span>
+	        {label ?? t('chat.generatingResponse')}<span className="waiting-dots">{dots}</span>
 	        <span className="waiting-seconds">（{t('chat.elapsedTime', { time: formatElapsedTime(elapsedSeconds) })}）</span>
       </span>
     </div>

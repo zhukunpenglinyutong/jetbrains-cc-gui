@@ -44,6 +44,8 @@ interface EditFileHeaderProps {
   deletions: number;
   isError: boolean;
   isCompleted: boolean;
+  isUnknown?: boolean;
+  expanded?: boolean;
   onToggle: () => void;
 }
 
@@ -57,6 +59,8 @@ const EditFileHeader = function EditFileHeader({
   deletions,
   isError,
   isCompleted,
+  isUnknown,
+  expanded,
   onToggle,
 }: EditFileHeaderProps) {
   const { t } = useTranslation();
@@ -76,7 +80,14 @@ const EditFileHeader = function EditFileHeader({
   };
 
   return (
-    <div className="task-header" onClick={onToggle}>
+    <div className="task-header" role="button" tabIndex={0} aria-expanded={expanded}
+      aria-label={`${t('tools.editFileTitle')}: ${displayPath ?? filePath ?? ''}`} onClick={onToggle}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          onToggle();
+        }
+      }}>
       <div className="task-title-section">
         <span className="codicon codicon-edit tool-title-icon" />
 
@@ -118,7 +129,8 @@ const EditFileHeader = function EditFileHeader({
         )}
       </div>
 
-      <div className={`tool-status-indicator ${isError ? 'error' : isCompleted ? 'completed' : 'pending'}`} />
+      <div className={`tool-status-indicator ${isError ? 'error' : isUnknown ? 'unknown' : isCompleted ? 'completed' : 'pending'}`}
+        title={isUnknown ? t('tools.resultUnknown') : undefined} />
     </div>
   );
 };

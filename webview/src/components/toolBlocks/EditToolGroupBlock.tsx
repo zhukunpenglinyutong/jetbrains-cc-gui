@@ -1,11 +1,19 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ToolInput, ToolResultBlock } from '../../types';
 import { openFile, showDiff, refreshFile } from '../../utils/bridge';
 import { getFileIcon } from '../../utils/fileIcons';
 import { resolveToolTarget, getToolLineInfo } from '../../utils/toolPresentation';
 import { normalizeToolInput } from '../../utils/toolInputNormalization';
 import { useResolvedFileLinkTooltip } from '../../hooks/useResolvedFileLinkTooltip';
+import { useIsToolDenied } from '../../hooks/useIsToolDenied';
+import { readPatchFiles, readPatchOutcome } from '../../utils/codexPatch';
+import { PATCH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
+import { editGroupCollapsePreference } from '../../utils/editGroupCollapsePreference';
+import { usePreferredExpanded } from '../../hooks/usePreferredExpanded';
+import EditDiffView, { type DiffResult } from './EditDiffView';
+import GenericToolBlock from './GenericToolBlock';
+import ToolDetailsAccordion from './ToolDetailsAccordion';
+import type { EditToolItem } from './EditToolBlock';
 
 interface EditItem {
   filePath: string;
@@ -20,14 +28,16 @@ interface EditItem {
   lineEnd?: number;
   isCompleted: boolean;
   isError: boolean;
+  isUnknown?: boolean;
+  toolId?: string;
+  diff?: DiffResult;
+  errorOutput?: unknown;
+  patchKind?: 'add' | 'delete' | 'update' | 'move';
+  sourcePath?: string;
 }
 
 interface EditToolGroupBlockProps {
-  items: Array<{
-    name?: string;
-    input?: ToolInput;
-    result?: ToolResultBlock | null;
-  }>;
+  items: EditToolItem[];
 }
 
 /** Max visible items before scroll */
@@ -169,7 +179,7 @@ function computeDiffStats(oldString: string, newString: string): { additions: nu
 /**
  * Parse item to EditItem
  */
-function parseEditItem(item: { name?: string; input?: ToolInput; result?: ToolResultBlock | null }): EditItem | null {
+function parseEditItem(item: EditToolItem): EditItem | null {
   const result = item.result;
   const input = item.input ? normalizeToolInput(item.name, item.input) : item.input;
   if (!input) return null;
@@ -211,7 +221,40 @@ function parseEditItem(item: { name?: string; input?: ToolInput; result?: ToolRe
     lineEnd: lineInfo.end,
     isCompleted,
     isError,
+    toolId: item.toolId,
   };
+}
+
+function collectEditItems(items: EditToolItem[]) {
+  const editItems: EditItem[] = [];
+  const opaqueItems: EditToolItem[] = [];
+  for (const item of items) {
+    if (!isToolName(item.name, PATCH_TOOL_NAMES)) {
+      const edit = parseEditItem(item);
+      if (edit) editItems.push(edit);
+      continue;
+    }
+    const files = readPatchFiles(item.input);
+    const outcome = readPatchOutcome(item.input, item.result);
+    if (!files.length) {
+      opaqueItems.push({ ...item, result: item.result ?? (outcome.isCompleted ? {
+        type: 'tool_result', tool_use_id: item.toolId, content: '', is_error: outcome.isError,
+      } : null) });
+      continue;
+    }
+    for (const file of files) {
+      const target = resolveToolTarget({ file_path: file.movePath ?? file.path }, 'edit');
+      if (!target) continue;
+      // Supplied hunks are previews, so their counts must not come from an LCS
+      // over invented full-file strings or an IDE replacement diff.
+      editItems.push({ filePath: target.rawPath, openPath: target.openPath,
+        displayPath: target.displayPath, fileName: target.cleanFileName,
+        oldString: '', newString: '', additions: file.diff.additions, deletions: file.diff.deletions,
+        diff: file.diff, toolId: item.toolId, errorOutput: item.result?.content,
+        patchKind: file.movePath ? 'move' : file.kind, sourcePath: file.path, ...outcome });
+    }
+  }
+  return { editItems, opaqueItems };
 }
 
 /**
@@ -228,13 +271,20 @@ interface EditFileItemProps {
   onShowDiff: (item: EditItem, e: React.MouseEvent) => void;
   onRefresh: (filePath: string, e: React.MouseEvent) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
+  previewExpanded: boolean;
 }
 
-const EditFileItem = ({ item, onFileClick, onShowDiff, onRefresh, t }: EditFileItemProps) => {
+const EditFileItem = ({ item, onFileClick, onShowDiff, onRefresh, t, previewExpanded }: EditFileItemProps) => {
   const fileLinkTooltip = useResolvedFileLinkTooltip(item.filePath, item.displayPath);
+  const denied = useIsToolDenied(item.toolId);
+  const isError = item.isError || denied;
+  const description = item.patchKind
+    ? `${t(`tools.patchKind.${item.patchKind}`)}: ${item.sourcePath}${item.patchKind === 'move' ? ` → ${item.openPath}` : ''}`
+    : undefined;
 
   return (
-    <div className="file-list-item" style={FILE_LIST_ITEM_STYLE}>
+    <div data-tool-id={item.toolId}>
+    <div className="file-list-item" style={FILE_LIST_ITEM_STYLE} title={description}>
       <span
         style={FILE_ICON_STYLE}
         dangerouslySetInnerHTML={{ __html: getFileIconSvg(item.fileName) }}
@@ -281,31 +331,35 @@ const EditFileItem = ({ item, onFileClick, onShowDiff, onRefresh, t }: EditFileI
       </div>
 
       <div
-        className={`tool-status-indicator ${item.isError ? 'error' : item.isCompleted ? 'completed' : 'pending'}`}
+        className={`tool-status-indicator ${isError ? 'error' : item.isUnknown ? 'unknown' : item.isCompleted ? 'completed' : 'pending'}`}
+        title={item.isUnknown && !isError ? t('tools.resultUnknown') : undefined}
         style={STATUS_INDICATOR_STYLE}
       />
+    </div>
+    {previewExpanded && item.diff && (item.diff.lines.length ? <EditDiffView diff={item.diff} />
+      : <div className="edit-empty-diff">{t('tools.patchNoDiff')}</div>)}
+    {previewExpanded && isError && item.errorOutput != null && <ToolDetailsAccordion expanded
+      otherParams={[[t('tools.errorOutput'), item.errorOutput]]} resultImages={[]} />}
     </div>
   );
 };
 
 const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
-  const [expanded, setExpanded] = useState(true);
+  const { expanded, toggleExpanded } = usePreferredExpanded(editGroupCollapsePreference);
+  const [previewItem, setPreviewItem] = useState<EditItem | null>(null);
   const { t } = useTranslation();
   const listRef = useRef<HTMLDivElement>(null);
   const prevItemCountRef = useRef(0);
   const refreshedFilesRef = useRef<Set<string>>(new Set());
 
   // Parse all items
-  const editItems = useMemo(() => {
-    return items
-      .map(item => parseEditItem(item))
-      .filter((item): item is EditItem => item !== null);
-  }, [items]);
+  const { editItems, opaqueItems } = useMemo(() => collectEditItems(items), [items]);
 
   // Auto-refresh completed files in IDEA
   useEffect(() => {
     editItems.forEach(item => {
-      if (item.isCompleted && !item.isError && !refreshedFilesRef.current.has(item.filePath)) {
+      if (item.isCompleted && !item.isError && !item.isUnknown && !window.__deniedToolIds?.has(item.toolId ?? '')
+          && !refreshedFilesRef.current.has(item.filePath)) {
         refreshedFilesRef.current.add(item.filePath);
         refreshFile(item.openPath);
       }
@@ -320,16 +374,18 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
     prevItemCountRef.current = editItems.length;
   }, [editItems.length]);
 
-  if (editItems.length === 0) {
-    return null;
-  }
-
   // Calculate totals
   const totalAdditions = editItems.reduce((sum, item) => sum + item.additions, 0);
   const totalDeletions = editItems.reduce((sum, item) => sum + item.deletions, 0);
+  const completedCount = editItems.filter(item => item.isCompleted).length;
+  // Match EditFileItem's error semantics: a denied tool counts as failed.
+  const errorCount = editItems.filter(item => item.isError
+    || (item.toolId ? window.__deniedToolIds?.has(item.toolId) ?? false : false)).length;
+  const allSucceeded = completedCount === editItems.length && errorCount === 0
+    && editItems.every(item => !item.isUnknown);
 
   // Calculate list height
-  const needsScroll = editItems.length > MAX_VISIBLE_ITEMS;
+  const needsScroll = editItems.length > MAX_VISIBLE_ITEMS || previewItem !== null;
   const listHeight = needsScroll
     ? MAX_VISIBLE_ITEMS * ITEM_HEIGHT
     : editItems.length * ITEM_HEIGHT;
@@ -356,6 +412,12 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
 
   const handleShowDiff = (item: EditItem, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (item.diff) {
+      // Track the item itself: an index drifts when native snapshots insert
+      // or reorder rows while a preview is open.
+      setPreviewItem(previous => previous === item ? null : item);
+      return;
+    }
     showDiff(item.openPath, item.oldString, item.newString, t('tools.editPrefix', { fileName: item.fileName }));
   };
 
@@ -365,11 +427,20 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
     window.addToast?.(t('tools.refreshFileInIdeaSuccess'), 'success');
   };
 
-  return (
+  const batch = editItems.length > 0 ? (
     <div className="task-container" style={CONTAINER_STYLE}>
       <div
-        className="task-header"
-        onClick={() => setExpanded((prev) => !prev)}
+        className="task-header edit-group-header"
+        role="button"
+        tabIndex={0}
+        onClick={toggleExpanded}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleExpanded();
+          }
+        }}
+        aria-expanded={expanded}
         style={headerStyle}
       >
         <div className="task-title-section" style={TITLE_SECTION_STYLE}>
@@ -389,6 +460,24 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
             </span>
           )}
         </div>
+        <div className="edit-group-summary" role="status">
+          {allSucceeded ? (
+            <span className="edit-group-progress completed">
+              <span className="codicon codicon-check" aria-hidden="true" />
+              {t('tools.editGroupAllCompleted')}
+            </span>
+          ) : (
+            <span className="edit-group-progress">
+              {t('tools.editGroupProgress', { completed: completedCount, total: editItems.length })}
+            </span>
+          )}
+          {errorCount > 0 && (
+            <span className="edit-group-progress error">
+              <span className="codicon codicon-warning" aria-hidden="true" />
+              {t('tools.editGroupFailed', { count: errorCount })}
+            </span>
+          )}
+        </div>
       </div>
 
       {expanded && (
@@ -405,12 +494,16 @@ const EditToolGroupBlock = ({ items }: EditToolGroupBlockProps) => {
               onShowDiff={handleShowDiff}
               onRefresh={handleRefresh}
               t={t}
+              previewExpanded={previewItem === item}
             />
           ))}
         </div>
       )}
     </div>
-  );
+  ) : null;
+
+  return <>{batch}{opaqueItems.map((item, index) => <GenericToolBlock key={item.toolId ?? index} name={item.name}
+    input={item.input} result={item.result} toolId={item.toolId} />)}</>;
 };
 
 export default EditToolGroupBlock;

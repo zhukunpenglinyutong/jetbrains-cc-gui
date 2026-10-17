@@ -1,5 +1,7 @@
+import { writeClaudeModelMapping } from '../../../utils/claudeModelMapping';
+import { STORAGE_KEYS } from '../../../types/provider';
 import { readFileSync } from 'node:fs';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import AiFeatureProviderModelPanel from './index';
 import type { CommitAiConfig } from '../../../types/aiFeatureConfig';
@@ -74,6 +76,31 @@ describe('AiFeatureProviderModelPanel', () => {
       zcode: false,
     },
   };
+
+  it.each(['local', 'storage'])('refreshes mapping labels on %s events without changing the model catalog', channel => {
+    localStorage.clear();
+    writeClaudeModelMapping({ sonnet: 'glm-flash', sonnetName: 'Old alias' });
+    const view = render(<AiFeatureProviderModelPanel
+      config={{ ...config, provider: 'claude', effectiveProvider: 'claude', models: { ...DEFAULT_AI_FEATURE_MODELS, claude: 'claude-sonnet-5' } }}
+      settingsKeyPrefix="settings.commit.providerModel" providerKeyPrefix="providers"
+    />);
+    const selector = screen.getByTestId('ai-feature-model-select');
+    expect(selector.textContent).toContain('Old alias');
+    act(() => {
+      const mapping = { sonnet: 'glm-flash', sonnetName: 'New alias' };
+      if (channel === 'local') writeClaudeModelMapping(mapping);
+      else {
+        localStorage.setItem(STORAGE_KEYS.CLAUDE_MODEL_MAPPING, JSON.stringify(mapping));
+        window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEYS.CLAUDE_MODEL_MAPPING }));
+      }
+    });
+    expect(selector.textContent).toContain('New alias');
+    expect(selector.textContent).not.toContain('Old alias');
+    act(() => writeClaudeModelMapping({}));
+    expect(selector.textContent).not.toContain('New alias');
+    view.unmount();
+    localStorage.clear();
+  });
 
   it('renders auto mode summary without provider/model selects', () => {
     render(

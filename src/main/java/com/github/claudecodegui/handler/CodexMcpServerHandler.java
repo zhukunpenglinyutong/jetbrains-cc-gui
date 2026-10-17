@@ -37,6 +37,7 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
 
     private final CodexMcpServerManager codexMcpServerManager;
 
+    /** Creates the configuration handler and native runtime catalog adapter. */
     public CodexMcpServerHandler(HandlerContext context, CodexMcpServerManager codexMcpServerManager) {
         super(context);
         this.codexMcpServerManager = codexMcpServerManager;
@@ -130,7 +131,13 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
                     return;
                 }
 
-                List<JsonObject> statusList = codexMcpServerManager.getMcpServerStatus();
+                var session = this.context.getSession();
+                // The bridge already bounds each page at 35s; bound the whole
+                // paginated read so the status request can never hang forever.
+                JsonObject nativeStatus = this.context.getCodexSDKBridge().readCodexMcpStatus(
+                        session == null ? null : session.getChannelId(), this.context.resolveEffectiveWorkingDirectory(),
+                        session == null ? null : session.getSessionId()).get(120, java.util.concurrent.TimeUnit.SECONDS);
+                List<JsonObject> statusList = projectNativeStatus(nativeStatus);
                 Gson gson = new Gson();
                 String statusJson = gson.toJson(statusList);
 
@@ -177,27 +184,12 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
             }
             String serverId = json.get("serverId").getAsString();
 
-            JsonObject targetServer = null;
-            List<JsonObject> servers = codexMcpServerManager.getMcpServers();
-            for (JsonObject server : servers) {
-                if (server.has("id") && serverId.equals(server.get("id").getAsString())) {
-                    targetServer = server;
-                    break;
-                }
-            }
-
-            if (targetServer == null || !targetServer.has("server") || !targetServer.get("server").isJsonObject()) {
-                sendToolsError(serverId, "Server not found or invalid config: " + serverId, gson);
-                return;
-            }
-
-            String sessionCwd = context.getSession() != null ? context.getSession().getCwd() : null;
-            String projectBasePath = context.getProject() != null ? context.getProject().getBasePath() : null;
-            JsonObject serverConfig = prepareServerConfig(
-                    targetServer.getAsJsonObject("server"), sessionCwd, projectBasePath);
+            var session = this.context.getSession();
             LOG.info("[CodexMcpServerHandler] Getting tools for Codex MCP server: " + serverId);
 
-            context.getCodexSDKBridge().getMcpServerTools(serverId, serverConfig)
+            CompletableFuture.supplyAsync(() -> this.context.getCodexSDKBridge().getMcpServerTools(serverId,
+                    session == null ? null : session.getChannelId(), this.context.resolveEffectiveWorkingDirectory(),
+                    session == null ? null : session.getSessionId())).thenCompose(request -> request)
                 .thenAccept(result -> {
                     String resultJson = gson.toJson(result);
                     ApplicationManager.getApplication().invokeLater(() ->
@@ -214,6 +206,36 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
             Gson gson = new Gson();
             sendToolsError("", e.getMessage(), gson);
         }
+    }
+
+    static List<JsonObject> projectNativeStatus(JsonObject catalog) {
+        if (catalog.has("error")) {
+            throw new IllegalStateException(catalog.get("error").getAsString());
+        }
+        List<JsonObject> statuses = new java.util.ArrayList<>();
+        if (!catalog.has("data") || !catalog.get("data").isJsonArray()) {
+            return statuses;
+        }
+        for (var element : catalog.getAsJsonArray("data")) {
+            JsonObject server = element.getAsJsonObject();
+            JsonObject status = new JsonObject();
+            status.add("name", server.get("name"));
+            String runtime = server.has("runtimeStatus") && server.get("runtimeStatus").isJsonPrimitive()
+                    ? server.get("runtimeStatus").getAsString() : "unknown";
+            String value = switch (runtime) {
+                case "connected" -> "connected";
+                case "authenticationRequired" -> "needs-auth";
+                case "failed", "cancelled" -> "failed";
+                case "disabled" -> "disabled";
+                default -> "pending";
+            };
+            status.addProperty("status", value);
+            if (server.has("authStatus")) {
+                status.add("authStatus", server.get("authStatus").deepCopy());
+            }
+            statuses.add(status);
+        }
+        return statuses;
     }
 
     private void sendToolsError(String serverId, String errorMessage, Gson gson) {

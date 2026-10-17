@@ -2,6 +2,7 @@ import { memo, useState, useCallback } from 'react';
 import type { TFunction } from 'i18next';
 import type { DiagnosticPattern, DiagnosticStep } from '../../utils/errorMatcher';
 import { copyToClipboard } from '../../utils/copyUtils';
+import { openBrowserExternal } from '../../utils/bridge';
 
 interface ErrorDiagnosticCardProps {
   t: TFunction;
@@ -83,6 +84,28 @@ function StepRenderer({ step, description, t, onNavigateToDependencySettings }: 
       <div className="error-diagnostic-step">
         <p className="error-diagnostic-step-text">{description}</p>
         <CommandBlock command={step.command} t={t} />
+      </div>
+    );
+  }
+
+  if (step.kind === 'link') {
+    return (
+      <div className="error-diagnostic-step">
+        <p className="error-diagnostic-step-text">{description}</p>
+        <a
+          className="error-diagnostic-nav-btn"
+          href={step.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          onClick={(event) => {
+            // JCEF won't route target=_blank to the system browser — go through the bridge.
+            event.preventDefault();
+            openBrowserExternal(step.url);
+          }}
+        >
+          {t('settings.cli.installDialog.openDocs')}
+          <ArrowRightIcon />
+        </a>
       </div>
     );
   }

@@ -8,6 +8,8 @@ export interface UseChatInputImperativeHandleOptions {
   getTextContent: () => string;
   invalidateCache: () => void;
   cancelPendingInput: () => void;
+  /** Replacing or clearing a draft also cancels its unfinished clipboard work. */
+  invalidateImagePastes?: () => void;
   setHasContent: (hasContent: boolean) => void;
   adjustHeight: () => void;
   focusInput: () => void;
@@ -27,6 +29,7 @@ export function useChatInputImperativeHandle({
   getTextContent,
   invalidateCache,
   cancelPendingInput,
+  invalidateImagePastes,
   setHasContent,
   adjustHeight,
   focusInput,
@@ -43,6 +46,7 @@ export function useChatInputImperativeHandle({
       },
       setValue: (newValue: string) => {
         if (!editableRef.current) return;
+        invalidateImagePastes?.();
         cancelPendingInput();
         editableRef.current.innerText = newValue;
         setHasContent(!!newValue.trim());
@@ -61,7 +65,10 @@ export function useChatInputImperativeHandle({
         }
       },
       focus: focusInput,
-      clear: clearInput,
+      clear: () => {
+        invalidateImagePastes?.();
+        clearInput();
+      },
       hasContent: () => hasContent,
       getFileTags: extractFileTags,
     }),
@@ -69,6 +76,7 @@ export function useChatInputImperativeHandle({
       getTextContent,
       invalidateCache,
       cancelPendingInput,
+      invalidateImagePastes,
       editableRef,
       setHasContent,
       adjustHeight,

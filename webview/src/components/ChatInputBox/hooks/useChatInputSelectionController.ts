@@ -20,6 +20,7 @@ interface UseChatInputSelectionControllerOptions {
   getTextContent: () => string;
   invalidateCache: () => void;
   cancelPendingInput: () => void;
+  invalidateImagePastes?: () => void;
   setHasContent: (hasContent: boolean) => void;
   adjustHeight: () => void;
   clearInput: () => void;
@@ -38,6 +39,7 @@ export function useChatInputSelectionController({
   getTextContent,
   invalidateCache,
   cancelPendingInput,
+  invalidateImagePastes,
   setHasContent,
   adjustHeight,
   clearInput,
@@ -98,6 +100,7 @@ export function useChatInputSelectionController({
     getTextContent,
     invalidateCache,
     cancelPendingInput,
+    invalidateImagePastes,
     setHasContent,
     adjustHeight,
     focusInput,

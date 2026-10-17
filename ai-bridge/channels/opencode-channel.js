@@ -22,6 +22,8 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
           model,
           reasoningEffort,
           attachments,
+          thinking,
+          permissionMode,
         } = stdinData;
         await openCodeSendMessage(
           message,
@@ -29,7 +31,11 @@ export async function handleOpenCodeCommand(command, args, stdinData) {
           cwd || '',
           model || '',
           reasoningEffort || '',
-          attachments || []
+          attachments || [],
+          // Plugin "always thinking" toggle; absent = true (matches the
+          // Claude daemon's resolveThinkingTokens default).
+          thinking !== false,
+          permissionMode || ''
         );
       } else {
         await openCodeSendMessage(args[0], args[1], args[2], args[3], args[4], []);

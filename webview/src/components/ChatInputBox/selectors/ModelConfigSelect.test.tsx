@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelConfigSelect, SUBMENU_HOVER_DELAY_MS, SUBMENU_TRIGGER_DELAY_MS } from './ModelConfigSelect';
+import { STORAGE_KEYS } from '../../../types/provider';
 
 vi.mock('antd/es/switch', () => ({
   default: ({
@@ -40,6 +41,43 @@ const codexModels = [
 ];
 
 describe('ModelConfigSelect', () => {
+  beforeEach(() => localStorage.clear());
+  it('keeps the effort row visible for an aggregated model', () => {
+    render(<ModelConfigSelect selectedModel="ccs-claude-provider-a--glm-pro" onModelSelect={vi.fn()}
+      models={[{ id: 'ccs-claude-provider-a--glm-pro', label: 'GLM Pro（供应商 A）' }]}
+      currentProvider="claude" reasoningEffort="high" onReasoningChange={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('model-config-trigger'));
+    expect(screen.getByTestId('model-config-option-effort').textContent).toContain('High');
+    fireEvent.click(screen.getByTestId('model-config-option-effort'));
+    expect(screen.getByTestId('reasoning-selector-dropdown')).toBeTruthy();
+  });
+  it('shows cc-switch names in the trigger and list and selects another provider route', () => {
+    const onModelSelect = vi.fn();
+    localStorage.setItem(STORAGE_KEYS.CLAUDE_MODEL_MAPPING, JSON.stringify({
+      sonnet: 'ccs-claude-provider-b--glm-5.3[1M]', opus: 'ccs-claude-provider-b--glm-5.3[1M]',
+    }));
+    const models = [
+      { id: 'ccs-claude-provider-a--grok-4.7', label: 'grok-4.7（供应商 A）', description: 'grok-4.7 · 1M' },
+      { id: 'ccs-claude-provider-b--glm-5.3', label: 'glm-5.3（供应商 B）', description: 'glm-5.3 · 1M' },
+      { id: 'ccs-claude-provider-b--glm-5.3-flash', label: 'glm-5.3-flash（供应商 B）', description: 'glm-5.3-flash · 1M' },
+    ];
+    const { unmount } = render(<ModelConfigSelect
+      selectedModel="ccs-claude-provider-b--glm-5.3[1m]" onModelSelect={onModelSelect}
+      models={models} currentProvider="claude" longContextEnabled
+    />);
+    expect(screen.getByTestId('model-config-trigger').textContent).toContain(models[1].label);
+    fireEvent.click(screen.getByTestId('model-config-trigger'));
+    for (const model of models) {
+      const row = screen.getByTestId(`model-option-${model.id}`);
+      expect(row.textContent).toContain(model.label);
+      expect(row.textContent).toContain(model.description);
+    }
+    expect(screen.queryByTestId('model-option-claude-sonnet-5')).toBeNull();
+    fireEvent.click(screen.getByTestId('model-option-ccs-claude-provider-a--grok-4.7'));
+    expect(onModelSelect).toHaveBeenCalledWith('ccs-claude-provider-a--grok-4.7');
+    unmount();
+    localStorage.clear();
+  });
   it('collapses model and effort into one summary trigger', () => {
     render(
       <ModelConfigSelect

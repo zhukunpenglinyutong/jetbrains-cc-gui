@@ -18,7 +18,7 @@ import type {
 } from '../../types';
 import { parseTaskNotification } from '../../utils/taskEventParser';
 import { deepEqual } from '../../utils/deepEqual';
-import { isLatestCodexStatusRequest } from '../../utils/codexStatusRequestTracker';
+import { isLatestCodexStatusRequest, isCurrentCodexSubagentTask } from '../../utils/codexStatusRequestTracker';
 import {
   setupSlashCommandsCallback,
   resetSlashCommandsState,
@@ -38,6 +38,7 @@ import { registerSessionAndSdkCallbacks } from './registerCallbacks/sessionCallb
 import { registerUsageModeCallbacks } from './registerCallbacks/usageModeCallbacks';
 import { registerPermissionCallbacks } from './registerCallbacks/permissionCallbacks';
 import { registerAgentAndSelectionCallbacks } from './registerCallbacks/agentCallbacks';
+import { sendBridgeEvent } from '../../utils/bridge';
 import {
   isCurrentSubagentResponse,
   mergeSubagentHistory,
@@ -106,14 +107,46 @@ export function registerWindowCallbacks(
   registerSessionAndSdkCallbacks(options, tRef);
   registerUsageModeCallbacks(options);
   registerPermissionCallbacks(options);
+  const pageGeneration = (window.__codexFrontendPageGeneration ?? 0) + 1;
+  window.__codexFrontendPageGeneration = pageGeneration;
+  sendBridgeEvent('codex_runtime_frontend_ready', JSON.stringify({ pageGeneration }));
   registerAgentAndSelectionCallbacks(options);
 
   window.onSubagentHistoryChunk = appendSubagentHistoryChunk;
+
+  window.onCodexWorkspaceDiff = (json: string) => {
+    try {
+      window.dispatchEvent(new CustomEvent('codex-workspace-diff', { detail: JSON.parse(json) }));
+    } catch {
+      // Ignore malformed diff snapshots; a later /diff can refresh the view.
+    }
+  };
+  if (typeof window.__pendingCodexWorkspaceDiff === 'string') {
+    const pending = window.__pendingCodexWorkspaceDiff;
+    delete window.__pendingCodexWorkspaceDiff;
+    window.onCodexWorkspaceDiff(pending);
+  }
+
+  window.onCodexNativeData = (json: string) => {
+    try {
+      const payload = JSON.parse(json);
+      window.dispatchEvent(new CustomEvent('codex-native-data', { detail: payload }));
+    } catch {
+      // Ignore malformed native catalog/history responses; callers can retry.
+    }
+  };
+  if (Array.isArray(window.__pendingCodexNativeData)) {
+    const pending = window.__pendingCodexNativeData.splice(0);
+    for (const payload of pending) {
+      window.onCodexNativeData(payload);
+    }
+  }
 
   window.onSubagentHistoryLoaded = (json: string) => {
     try {
       if (!options.setSubagentHistories) return;
       const result = JSON.parse(json) as SubagentHistoryResponse;
+      if (result.provider === 'codex' && !isCurrentCodexSubagentTask(result)) return;
       if (!isCurrentSubagentResponse(
         result,
         options.currentSessionIdRef.current,
@@ -153,6 +186,7 @@ export function registerWindowCallbacks(
       options.setSubagentHistories((prev) => {
         let next = prev;
         for (const snapshot of result.statuses ?? []) {
+          if (!isCurrentCodexSubagentTask({ ...snapshot, sessionId: result.sessionId })) continue;
           const key = snapshot.toolUseId || snapshot.agentId;
           if (!key) continue;
           const existing = next[key];
@@ -217,6 +251,9 @@ export function registerWindowCallbacks(
       // the entry, so the subagent list is not permanently stuck.
     }
   };
+
+  // Codex native approvals, plan updates, and runtime state use a separate
+  // typed event channel so they never enter the legacy permission IPC.
 
   // =========================================================================
   // Slash Commands Setup

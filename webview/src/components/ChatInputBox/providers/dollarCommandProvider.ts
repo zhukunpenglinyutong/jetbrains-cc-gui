@@ -24,6 +24,8 @@ type LoadingState = 'idle' | 'loading' | 'success' | 'failed';
 let cachedCommands: CommandItem[] = [];
 let loadingState: LoadingState = 'idle';
 let callbackRegistered = false;
+let nativeCatalogActive = false;
+const selectedNativeSkills = new Map<string, { name: string; path: string }>();
 let pendingWaiters: Array<() => void> = [];
 // Match slash-command wait: Codex skill scan is local but can hitch on large trees,
 // and the merged picker would otherwise return commands while skills are still in flight.
@@ -46,6 +48,8 @@ export function resetDollarCommandsState() {
   cachedCommands = [];
   loadingState = 'idle';
   callbackRegistered = false;
+  nativeCatalogActive = false;
+  selectedNativeSkills.clear();
   notifyDollarWaiters();
   // Clear the window callback to prevent handler chain growth on repeated provider switches
   if (typeof window !== 'undefined') {
@@ -61,9 +65,10 @@ export function setupDollarCommandsCallback() {
   if (typeof window === 'undefined') return;
   if (callbackRegistered && window.updateDollarCommands) return;
 
-  loadingState = 'loading';
+  if (!nativeCatalogActive) loadingState = 'loading';
 
   const handler = (json: string) => {
+    if (nativeCatalogActive) return;
     debugLog('[DollarCommand] Received data from backend, length=' + (typeof json === 'string' ? json.length : 0));
     try {
       if (typeof json !== 'string') {
@@ -234,3 +239,36 @@ export function dollarCommandToDropdownItem(cmd: CommandItem): DropdownItemData 
 }
 
 export default dollarCommandProvider;
+
+/** Replaces file-scan candidates with the effective native skill inventory. */
+export function publishNativeCodexSkills(skills: Record<string, unknown>[]): void {
+  nativeCatalogActive = true;
+  cachedCommands = skills.flatMap((skill) => {
+    if (typeof skill.name !== 'string' || typeof skill.path !== 'string'
+      || skill.enabled === false) return [];
+    return [{ id: `${skill.name}:${skill.path}`, label: `$${skill.name}`,
+      description: typeof skill.description === 'string' ? skill.description : '',
+      contentType: 'skill' as const, category: 'skill', nativeSkillPath: skill.path }];
+  });
+  for (const [name, selected] of selectedNativeSkills) {
+    if (!skills.some((skill) => skill.name === name && skill.path === selected.path
+      && skill.enabled !== false)) selectedNativeSkills.delete(name);
+  }
+  loadingState = 'success';
+  notifyDollarWaiters();
+}
+
+/** Remembers the chosen path when several native skills share a display name. */
+export function rememberNativeCodexSkill(command: CommandItem): void {
+  if (!command.nativeSkillPath) return;
+  const name = command.label.replace(/^\$/, '');
+  selectedNativeSkills.set(name, { name, path: command.nativeSkillPath });
+}
+
+/** Passes selected skill identities as metadata without expanding file contents. */
+export function selectedCodexSkillInputs(text: string): Array<{ name: string; path: string }> {
+  return Array.from(selectedNativeSkills.values()).filter((skill) => {
+    const escaped = skill.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\$${escaped}(?=$|\\s|[.,;:!?])`, 'u').test(text);
+  });
+}

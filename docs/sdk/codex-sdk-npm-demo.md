@@ -1,3 +1,7 @@
+# Historical SDK example
+
+> This example is reference material. The plugin uses Codex CLI app-server and does not require this SDK package; see [the current integration contract](../codex/app-server.md).
+
 Codex SDK
 Embed the Codex agent in your workflows and apps.
 

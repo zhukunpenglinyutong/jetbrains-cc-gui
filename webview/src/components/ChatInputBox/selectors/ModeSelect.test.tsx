@@ -127,7 +127,7 @@ describe('ModeSelect', () => {
   });
 
   it('shows Codex native auto review alongside Full Auto', () => {
-    expect(openAndGetOptionIds('codex')).toEqual(['default', 'acceptEdits', 'auto', 'bypassPermissions']);
+    expect(openAndGetOptionIds('codex')).toEqual(['default', 'plan', 'acceptEdits', 'auto', 'bypassPermissions']);
     cleanup();
 
     render(<ModeSelect value="auto" onChange={vi.fn()} provider="codex" />);

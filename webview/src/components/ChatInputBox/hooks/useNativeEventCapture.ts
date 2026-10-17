@@ -54,8 +54,15 @@ export function useNativeEventCapture(options: UseNativeEventCaptureOptions): vo
   // still see the initial Claude frame, where SDK status is loading and the
   // provider is not installed, and toast instead of sending.
   const handleSubmitRef = useRef(handleSubmit);
+  // Same JCEF limit as handleSubmit: the effect-event callback can stay on the
+  // first committed frame, where every menu is closed. Enter would then send
+  // the draft ("/cle") instead of letting the open menu take the highlighted
+  // command. The ref follows committed renders only, so a suspended render
+  // cannot flip the menu open before that render commits.
+  const completionOpenRef = useRef(false);
   useLayoutEffect(() => {
     handleSubmitRef.current = handleSubmit;
+    completionOpenRef.current = isAnyCompletionOpen(options);
   });
 
   // Effect Events only swap their implementation on commit, so the listeners
@@ -87,7 +94,9 @@ export function useNativeEventCapture(options: UseNativeEventCaptureOptions): vo
     }
     if (verdict === 'swallowed') return;
     // Open completion menus read Enter through the React handler.
-    if (isAnyCompletionOpen(options) || !isSendKey(sendShortcut, ev)) return;
+    // completionOpenRef, not the effect-event options: JCEF can keep this
+    // callback on the first frame, where every menu is still closed.
+    if (completionOpenRef.current || !isSendKey(sendShortcut, ev)) return;
 
     claimEnterPress(ev, options);
     handleSubmitRef.current();
@@ -100,7 +109,7 @@ export function useNativeEventCapture(options: UseNativeEventCaptureOptions): vo
   });
 
   const onNativeBeforeInput = useEffectEvent((ev: InputEvent) => {
-    catchStrayEnter(ev, sendShortcut, options, isAnyCompletionOpen(options), () => {
+    catchStrayEnter(ev, sendShortcut, options, completionOpenRef.current, () => {
       handleSubmitRef.current();
     });
     if (

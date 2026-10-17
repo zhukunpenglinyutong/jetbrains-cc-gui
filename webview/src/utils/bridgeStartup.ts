@@ -8,6 +8,7 @@ const DEPENDENCY_STATUS_FAST_RETRY_INTERVAL_MS = 2000;
 const DEPENDENCY_STATUS_SLOW_RETRY_INTERVAL_MS = 5000;
 
 export const DEPENDENCY_STATUS_REQUEST_STARTED_EVENT = 'ccg:dependency-status-request-started';
+export const BRIDGE_READY_EVENT = 'ccg:bridge-ready';
 
 let cancelActiveDependencyStatusRequest: (() => void) | undefined;
 let dependencyStatusRefreshQueued = false;
@@ -40,6 +41,8 @@ export function waitForBridge(callback: () => void): () => void {
       }
       delete window.__ccgOnBridgeReady;
       window.removeEventListener('pagehide', cancel);
+      // Mounted consumers may have state to publish that predates JCEF's bridge injection.
+      window.dispatchEvent(new Event(BRIDGE_READY_EVENT));
       callback();
       return;
     }

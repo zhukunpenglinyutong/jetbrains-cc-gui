@@ -4,6 +4,7 @@ import { formatFileSize } from './historyItemUtils';
 import { HistoryEntrypointBadge } from './HistoryEntrypointBadge';
 import { HistorySessionIdCopy } from './HistorySessionIdCopy';
 import { HistoryConvertButton } from './HistoryConvertButton';
+import { isKnownHistoryMessageCount } from '../../utils/historyMessageCount';
 
 // Entrypoints the backend conversion service actually knows how to rewrite
 // (SessionConversionService only matches sdk-cli / claude-vscode patterns).
@@ -40,7 +41,8 @@ export const HistoryItemMeta = ({
 
   return (
     <div className="history-item-meta">
-      <span>{t('history.messageCount', { count: session.messageCount })}</span>
+      <span>{isKnownHistoryMessageCount(session.messageCount)
+        ? t('history.messageCount', { count: session.messageCount }) : t('history.messageCountUnknown')}</span>
       {fileSize ? (
         <>
           <span className="history-meta-dot">•</span>

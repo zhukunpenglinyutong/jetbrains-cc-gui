@@ -1,10 +1,10 @@
 import { memo } from 'react';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import EditToolGroupBlock from './EditToolGroupBlock';
-import EditDiffTopBar from './EditDiffTopBar';
-import EditFileHeader from './EditFileHeader';
-import EditDiffView from './EditDiffView';
+import EditFileCard from './EditFileCard';
 import GenericToolBlock from './GenericToolBlock';
+import FileChangesToolBlock from './FileChangesToolBlock';
+import { PATCH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
 import { useEditToolState } from './useEditToolState';
 
 /** A single edit tool call within a (possibly batched) edit group. */
@@ -23,10 +23,6 @@ interface EditToolBlockProps {
       stream in 1 -> 2 -> ..., so the transition no longer unmounts the block. */
   items: EditToolItem[];
 }
-
-const ROOT_STYLE: React.CSSProperties = { margin: '12px 0' };
-
-const TASK_CONTAINER_STYLE: React.CSSProperties = { margin: 0 };
 
 const EditToolBlock = memo(function EditToolBlock({ items }: EditToolBlockProps) {
   // All hooks live in useEditToolState (called unconditionally for any item
@@ -58,6 +54,10 @@ const EditToolBlock = memo(function EditToolBlock({ items }: EditToolBlockProps)
     return <EditToolGroupBlock items={items} />;
   }
 
+  if (isToolName(name, PATCH_TOOL_NAMES)) {
+    return <FileChangesToolBlock name={name} input={normalizedInput} result={result} toolId={toolId} />;
+  }
+
   if (!normalizedInput) {
     return null;
   }
@@ -66,34 +66,9 @@ const EditToolBlock = memo(function EditToolBlock({ items }: EditToolBlockProps)
     return <GenericToolBlock name={name} input={normalizedInput} result={result} toolId={toolId} />;
   }
 
-  return (
-    <div style={ROOT_STYLE}>
-      {/* Top Row: Buttons (Right aligned) */}
-      <EditDiffTopBar
-        filePath={filePath}
-        oldString={oldString}
-        newString={newString}
-        fileName={target?.cleanFileName ?? filePath}
-      />
-
-      <div className="task-container" style={TASK_CONTAINER_STYLE}>
-        <EditFileHeader
-          filePath={filePath}
-          displayPath={target?.displayPath || filePath}
-          target={target}
-          lineInfo={lineInfo}
-          extraEditCount={extraEditCount}
-          additions={diff.additions}
-          deletions={diff.deletions}
-          isError={isError}
-          isCompleted={isCompleted}
-          onToggle={() => setExpanded((prev) => !prev)}
-        />
-
-        {expanded && <EditDiffView diff={diff} />}
-      </div>
-    </div>
-  );
+  return <EditFileCard filePath={filePath} target={target} oldString={oldString} newString={newString}
+    diff={diff} lineInfo={lineInfo} extraEditCount={extraEditCount} isError={isError} isCompleted={isCompleted}
+    expanded={expanded} onToggle={() => setExpanded((prev) => !prev)} errorOutput={result?.content} />;
 });
 
 export default EditToolBlock;

@@ -368,7 +368,7 @@ for (const fontSizeLevel of [3, 6]) {
   });
 }
 
-test('Codex auto review appears only after the SDK confirms support', async ({ page }) => {
+test('Codex native auto review is independent of the legacy SDK status', async ({ page }) => {
   await page.addInitScript(() => {
     // JCEF sets this before user changes can be persisted across tabs.
     window.__CCGUI_PAGE_CONTEXT_READY__ = true;
@@ -379,26 +379,23 @@ test('Codex auto review appears only after the SDK confirms support', async ({ p
   await expect(page.locator('.button-area').first()).toHaveAttribute('data-provider', 'codex');
   await page.locator('.button-area-left .selector-button').nth(2).click();
   await expect(page.getByTestId('mode-option-default')).toBeVisible();
-  await expect(page.getByTestId('mode-option-auto')).toHaveCount(0);
-
-  await page.evaluate(() => window.updateDependencyStatus?.(JSON.stringify({
-    'codex-sdk': { installed: true, meetsMinimumVersion: true },
-  })));
   await expect(page.getByTestId('mode-option-auto')).toBeVisible();
   await page.getByTestId('mode-option-auto').click();
   await expect.poll(() => page.evaluate(() => JSON.parse(
     localStorage.getItem('model-selection-state') || '{}',
   ).codexPermissionMode)).toBe('auto');
 
+  // The legacy dependency callback may still report package metadata, but it
+  // must not revoke the app-server native capability.
   await page.evaluate(() => window.updateDependencyStatus?.(JSON.stringify({
     'codex-sdk': { installed: true, meetsMinimumVersion: false },
   })));
   await expect.poll(() => page.evaluate(() => JSON.parse(
     localStorage.getItem('model-selection-state') || '{}',
-  ).codexPermissionMode)).toBe('default');
+  ).codexPermissionMode)).toBe('auto');
   await page.locator('.button-area-left .selector-button').nth(2).click();
   await expect(page.getByTestId('mode-option-default')).toBeVisible();
-  await expect(page.getByTestId('mode-option-auto')).toHaveCount(0);
+  await expect(page.getByTestId('mode-option-auto')).toBeVisible();
 });
 
 test('config submenus stay visible across constrained viewports', async ({ page }) => {

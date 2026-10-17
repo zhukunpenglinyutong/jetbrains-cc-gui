@@ -35,6 +35,12 @@ export const getRawUuid = (msg: ClaudeMessage | undefined): string | undefined =
   return typeof raw?.uuid === 'string' ? raw.uuid : undefined;
 };
 
+/** Native items carry full snapshots, including shorter terminal corrections. */
+export const isCodexMessageSnapshot = (message: ClaudeMessage | undefined): boolean => {
+  const raw = parseRawMessage(message?.raw);
+  return message?.type === 'assistant' && (raw?.codexSnapshot === true || raw?.codexAuthoritative === true);
+};
+
 export const stripUuidFromRaw = (raw: unknown): unknown => {
   if (!raw || typeof raw !== 'object') return raw;
   const rawObj = raw as any;
@@ -647,6 +653,7 @@ export const preserveStreamingAssistantContent = (
   if (prevAssistant.type !== 'assistant' || nextAssistant.type !== 'assistant') {
     return nextList;
   }
+  if (isCodexMessageSnapshot(nextAssistant)) return nextList;
 
   // Guard: do not merge content across different streaming turns
   // Block when either side has __turnId and they differ

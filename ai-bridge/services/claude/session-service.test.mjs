@@ -218,26 +218,32 @@ test('getLatestUserMessage reports incomplete when a torn tail follows interior 
 test('loadSessionHistory keeps whatever complete lines exist instead of blocking on a torn tail', () => {
   const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-claude-project-'));
   const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-claude-home-'));
-  const originalHome = process.env.HOME;
   try {
-    process.env.HOME = tempHome;
-    const file = getClaudeProjectSessionFilePath('session-1', projectDir);
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, [
-      JSON.stringify({ type: 'user', uuid: 'u1', message: { role: 'user', content: 'first' } }),
-      JSON.stringify({ type: 'assistant', uuid: 'a1', parentUuid: 'u1', message: { role: 'assistant', content: 'answer' } }),
-      '{"type":"user","uuid":"u2","message":{"role":"user","content":[{"type":"tool_result"',
-    ].join('\n') + '\n');
-
-    // The daemon's main thread must never wait for the writer, so the torn tail
-    // is simply dropped rather than retried or raised.
-    assert.deepEqual(loadSessionHistory('session-1', projectDir), [
-      { role: 'user', content: 'first' },
-      { role: 'assistant', content: 'answer' },
-    ]);
+    // Home resolution is cached, and Windows reads USERPROFILE. Isolate both
+    // before importing the modules so this regression never writes real history.
+    const script = `
+      import assert from 'node:assert/strict';
+      import fs from 'node:fs';
+      import path from 'node:path';
+      const { getClaudeProjectSessionFilePath } = await import(${JSON.stringify(new URL('../../utils/path-utils.js', import.meta.url).href)});
+      const { loadSessionHistory } = await import(${JSON.stringify(new URL('./session-service.js', import.meta.url).href)});
+      const projectDir = ${JSON.stringify(projectDir)};
+      const file = getClaudeProjectSessionFilePath('session-1', projectDir);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      const lines = [
+        JSON.stringify({ type: 'user', uuid: 'u1', message: { role: 'user', content: 'first' } }),
+        JSON.stringify({ type: 'assistant', uuid: 'a1', parentUuid: 'u1', message: { role: 'assistant', content: 'answer' } }),
+        '{"type":"user","uuid":"u2","message":{"role":"user","content":[{"type":"tool_result"',
+      ];
+      fs.writeFileSync(file, lines.join(String.fromCharCode(10)) + String.fromCharCode(10));
+      assert.deepEqual(loadSessionHistory('session-1', projectDir), [
+        { role: 'user', content: 'first' }, { role: 'assistant', content: 'answer' },
+      ]);
+    `;
+    execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+      env: { ...process.env, HOME: tempHome, USERPROFILE: tempHome }, stdio: 'pipe',
+    });
   } finally {
-    if (originalHome === undefined) delete process.env.HOME;
-    else process.env.HOME = originalHome;
     fs.rmSync(tempHome, { recursive: true, force: true });
     fs.rmSync(projectDir, { recursive: true, force: true });
   }
@@ -648,14 +654,15 @@ test('buildSessionMessagesPagePayload carries the CLI session title', () => {
   }
 });
 
-test('buildSessionMessagesPagePayload returns empty page for missing file', () => {
+test('buildSessionMessagesPagePayload reports missing instead of an empty page for a pruned session', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-claude-page-'));
   try {
+    // A pruned transcript must surface as missing so Java clears the stale
+    // session ID; an "empty page" success would keep resuming a dead session.
     const page = buildSessionMessagesPagePayload(path.join(tempDir, 'nope.jsonl'), null, 30);
-    assert.equal(page.success, true);
+    assert.equal(page.success, false);
+    assert.equal(page.missing, true);
     assert.equal(page.messages.length, 0);
-    assert.equal(page.totalTurns, 0);
-    assert.equal(page.hasMore, false);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

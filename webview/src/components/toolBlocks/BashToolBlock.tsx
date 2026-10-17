@@ -14,7 +14,7 @@ interface BashToolBlockProps {
 
 const BashToolBlock = memo(function BashToolBlock({ input, result, toolId }: BashToolBlockProps) {
   const [expanded, setExpanded] = useState(false);
-  const { command, description, isCompleted, isError, output } = useBashToolState({ input, result, toolId });
+  const { command, description, justification, isCompleted, isError, output } = useBashToolState({ input, result, toolId });
 
   if (!input) {
     return null;
@@ -33,7 +33,7 @@ const BashToolBlock = memo(function BashToolBlock({ input, result, toolId }: Bas
       />
 
       {expanded && (
-        <BashToolDetails command={command} output={output} isError={isError} />
+        <BashToolDetails command={command} description={description} justification={justification} output={output} isError={isError} />
       )}
     </div>
   );

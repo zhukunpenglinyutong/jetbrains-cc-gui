@@ -1,5 +1,17 @@
 # Multi-Provider Architecture
 
+> Codex 运行时更新：本文中的旧 `codex/message-service.js` SDK、`skipGitRepoCheck` 和布尔权限示例仅用于历史架构对照。生产 Codex turn 使用持久 app-server service；交互、plan、compact、review 和 diff 的当前合同见 [app-server 迁移基准](app-server.md)。
+
+## Current Codex path
+
+The supported Codex path is `Java CodexSDKBridge → Node daemon → persistent
+CodexAppServerService → codex app-server --listen stdio://`. A chat host reuses
+one initialized child and native thread; `codex.send`, `thread/compact/start`,
+and `review/start` share the FIFO, while interaction replies and abort bypass it.
+Approval decisions use the native response union and sandbox policy. The legacy
+mapping diagrams below do not describe the production send path and must not be
+copied into new code.
+
 > **"Simplicity is the ultimate sophistication."** — Leonardo da Vinci
 >
 > **"Design is not just what it looks like and feels like. Design is how it works."** — Steve Jobs

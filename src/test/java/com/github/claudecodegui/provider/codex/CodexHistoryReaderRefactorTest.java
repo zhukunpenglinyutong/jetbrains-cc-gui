@@ -19,10 +19,13 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class CodexHistoryReaderRefactorTest {
@@ -326,6 +329,97 @@ public class CodexHistoryReaderRefactorTest {
             assertEquals("read", messages.get(0).payload.get("name").getAsString());
         } finally {
             deleteDirectory(sessionsDir);
+        }
+    }
+
+    /** Source observers see exactly the bounded UTF-8 bytes without mutating or bypassing protected records. */
+    @Test
+    public void sourceObserverPreservesByteRangesAndPrivacyFiltering() throws Exception {
+        Path sessionsDir = Files.createTempDirectory("codex-history-source-bytes");
+        try {
+            String prefix = "outside this read\n";
+            String body = line("2026-10-12T00:00:00Z", "event_msg",
+                    "{\"type\":\"user_message\",\"message\":\"" + "中文😀".repeat(3000) + "\"}") + "\n"
+                    + line("2026-10-12T00:00:01Z", "response_item",
+                    "{\"type\":\"function_call_output\",\"call_id\":\"source-observer-call\","
+                            + "\"output\":{\"answers\":{\"unknown\":\"synthetic-secret\"}}}") + "\n";
+            Path source = sessionsDir.resolve("source-observer.jsonl");
+            Files.writeString(source, prefix + body + "outside the bounded end\n");
+            byte[] expected = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            int offset = prefix.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+            var observed = new java.io.ByteArrayOutputStream();
+            var records = new java.util.ArrayList<com.google.gson.JsonObject>();
+            CodexHistoryReader reader = new CodexHistoryReader(sessionsDir, this.gson);
+            int count = reader.forEachSessionMessage("source-observer", source, offset, offset + expected.length,
+                    () -> true, records::add, bytes -> {
+                        assertTrue(bytes.isReadOnly());
+                        assertThrows(java.nio.ReadOnlyBufferException.class, () -> bytes.put(0, (byte) 'X'));
+                        byte[] chunk = new byte[bytes.remaining()];
+                        bytes.get(chunk);
+                        observed.writeBytes(chunk);
+                    });
+            assertEquals(2, count);
+            assertArrayEquals(expected, observed.toByteArray());
+            assertEquals("中文😀".repeat(3000), records.get(0).getAsJsonObject("payload").get("message").getAsString());
+            assertFalse(records.get(1).toString().contains("synthetic-secret"));
+        } finally {
+            this.deleteDirectory(sessionsDir);
+        }
+    }
+
+    /** Nested consumers must not merge another session's bytes into the enclosing source fingerprint. */
+    @Test
+    public void nestedReadsKeepTheirSourceObserversSeparate() throws Exception {
+        Path sessionsDir = Files.createTempDirectory("codex-history-nested-source");
+        try {
+            Path outer = this.writeSessionFile(sessionsDir, "outer-source",
+                    this.line("2026-10-12T00:00:00Z", "event_msg", "{\"type\":\"user_message\",\"message\":\"outer\"}"));
+            Path inner = this.writeSessionFile(sessionsDir, "inner-source",
+                    this.line("2026-10-12T00:00:01Z", "event_msg", "{\"type\":\"user_message\",\"message\":\"inner\"}"));
+            var outerBytes = new java.io.ByteArrayOutputStream();
+            var innerBytes = new java.io.ByteArrayOutputStream();
+            CodexHistoryReader reader = new CodexHistoryReader(sessionsDir, this.gson);
+            assertEquals(1, reader.forEachSessionMessage("outer-source", outer, 0, Files.size(outer), () -> true, record -> {
+                try {
+                    assertEquals(1, reader.forEachSessionMessage("inner-source", inner, 0, Files.size(inner), () -> true,
+                            nested -> assertEquals("inner", nested.getAsJsonObject("payload").get("message").getAsString())));
+                    assertEquals(1, reader.forEachSessionMessage("inner-source", inner, 0, Files.size(inner), () -> true,
+                            nested -> { }, bytes -> {
+                                byte[] chunk = new byte[bytes.remaining()];
+                                bytes.get(chunk);
+                                innerBytes.writeBytes(chunk);
+                            }));
+                } catch (IOException exception) {
+                    throw new java.io.UncheckedIOException(exception);
+                }
+            }, bytes -> {
+                byte[] chunk = new byte[bytes.remaining()];
+                bytes.get(chunk);
+                outerBytes.writeBytes(chunk);
+            }));
+            assertArrayEquals(Files.readAllBytes(outer), outerBytes.toByteArray());
+            assertArrayEquals(Files.readAllBytes(inner), innerBytes.toByteArray());
+        } finally {
+            this.deleteDirectory(sessionsDir);
+        }
+    }
+
+    /** A failing source observer must not remain installed on a later ordinary read. */
+    @Test
+    public void failedSourceObserverCannotPoisonTheNextRead() throws Exception {
+        Path sessionsDir = Files.createTempDirectory("codex-history-failed-observer");
+        try {
+            Path source = this.writeSessionFile(sessionsDir, "failed-observer",
+                    this.line("2026-10-12T00:00:00Z", "event_msg", "{\"type\":\"user_message\",\"message\":\"safe\"}"));
+            CodexHistoryReader reader = new CodexHistoryReader(sessionsDir, this.gson);
+            IllegalStateException failure = new IllegalStateException("observer failed");
+            assertSame(failure, assertThrows(IllegalStateException.class,
+                    () -> reader.forEachSessionMessage("failed-observer", source, 0, Files.size(source), () -> true,
+                            record -> { }, bytes -> { throw failure; })));
+            assertEquals(1, reader.forEachSessionMessage("failed-observer", source, 0, Files.size(source), () -> true,
+                    record -> assertEquals("safe", record.getAsJsonObject("payload").get("message").getAsString())));
+        } finally {
+            this.deleteDirectory(sessionsDir);
         }
     }
 

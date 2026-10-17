@@ -6,6 +6,20 @@ import {
 } from '../subagentHistoryMerge';
 
 describe('subagentHistoryMerge', () => {
+  it('keeps the prior-turn exclusion through repeated pending reads and clears it on a new turn', () => {
+    const pending = { success: true, completed: false, status: 'running' as const, nativeTaskId: 'followup',
+      latestTurnId: 'previous-turn', nativeTaskPreviousTurnId: 'previous-turn', messages: [] };
+    const second = mergeSubagentHistory(pending, { ...pending });
+    expect(second.nativeTaskPreviousTurnId).toBe('previous-turn');
+    expect(mergeSubagentHistory(second, { ...pending, latestTurnId: 'new-turn', nativeTaskPreviousTurnId: null,
+      completed: true, status: 'completed', messages: [{ content: 'New report' }] }))
+      .toMatchObject({ nativeTaskPreviousTurnId: null, completed: true, messages: [{ content: 'New report' }] });
+  });
+  it('drops the previous report when a verified native task supplies its new snapshot', () => {
+    expect(mergeSubagentHistory({ success: true, completed: true, status: 'completed', messages: [{ content: 'Old report' }] },
+      { success: true, completed: false, status: 'running', nativeTaskId: 'followup-one' }))
+      .toEqual({ success: true, completed: false, status: 'running', nativeTaskId: 'followup-one' });
+  });
   it('does not let a late running response overwrite a completed status', () => {
     expect(mergeSubagentHistory(
       { success: true, completed: true, status: 'completed' },

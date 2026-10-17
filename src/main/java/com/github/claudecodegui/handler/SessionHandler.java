@@ -10,6 +10,7 @@ import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.session.SessionState;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -125,6 +126,8 @@ public class SessionHandler extends BaseMessageHandler {
         String requestedReasoningEffort = null;
         String requestedCodexFastMode = null;
         String requestedDshPreset = null;
+        String clientMessageId = null;
+        JsonObject nativeCodexSettings = null;
         try {
             Gson gson = new Gson();
             JsonObject payload = gson.fromJson(content, JsonObject.class);
@@ -173,6 +176,11 @@ public class SessionHandler extends BaseMessageHandler {
                 requestedCodexFastMode = payload.get("codexFastMode").getAsString();
             }
             requestedDshPreset = extractDshPreset(payload);
+            nativeCodexSettings = extractNativeCodexSettings(payload);
+            if (payload != null && payload.has("clientMessageId")
+                    && !payload.get("clientMessageId").isJsonNull()) {
+                clientMessageId = payload.get("clientMessageId").getAsString();
+            }
         } catch (Exception e) {
             // If parsing fails, treat content as plain text (backward compatibility)
             LOG.debug("[SessionHandler] Message is plain text, not JSON: " + e.getMessage());
@@ -186,6 +194,8 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalRequestedReasoningEffort = requestedReasoningEffort;
         final String finalRequestedCodexFastMode = requestedCodexFastMode;
         final String finalRequestedDshPreset = requestedDshPreset;
+        final String finalClientMessageId = clientMessageId;
+        final JsonObject finalNativeCodexSettings = nativeCodexSettings;
 
         CompletableFuture.runAsync(() -> {
             String currentWorkingDir = determineWorkingDirectory();
@@ -205,7 +215,8 @@ public class SessionHandler extends BaseMessageHandler {
             // [FIX] Pass agent prompt and file tags directly to session
             context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths,
                             finalRequestedPermissionMode, finalRequestedReasoningEffort,
-                            finalRequestedCodexFastMode, finalRequestedDshPreset)
+                            finalRequestedCodexFastMode, finalRequestedDshPreset, finalClientMessageId,
+                            finalNativeCodexSettings)
                 .thenRun(() -> {
                     // Claude now triggers success on actual stream_end callback.
                     // Codex has no stream_end event, keep success trigger at completion.
@@ -268,6 +279,8 @@ public class SessionHandler extends BaseMessageHandler {
             String requestedReasoningEffort = null;
             String requestedCodexFastMode = null;
             String requestedDshPreset = null;
+            String clientMessageId = null;
+            JsonObject nativeCodexSettings = null;
             if (payload != null && payload.has("agent") && !payload.get("agent").isJsonNull()) {
                 JsonObject agent = payload.getAsJsonObject("agent");
                 if (agent.has("prompt") && !agent.get("prompt").isJsonNull()) {
@@ -308,9 +321,15 @@ public class SessionHandler extends BaseMessageHandler {
                 requestedCodexFastMode = payload.get("codexFastMode").getAsString();
             }
             requestedDshPreset = extractDshPreset(payload);
+            nativeCodexSettings = extractNativeCodexSettings(payload);
+            if (payload != null && payload.has("clientMessageId")
+                    && !payload.get("clientMessageId").isJsonNull()) {
+                clientMessageId = payload.get("clientMessageId").getAsString();
+            }
 
             sendMessageWithAttachments(text, atts, agentPrompt, fileTagPaths, requestedPermissionMode,
-                    requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset);
+                    requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset, clientMessageId,
+                    nativeCodexSettings);
         } catch (Exception e) {
             LOG.error("[SessionHandler] 解析附件负载失败: " + e.getMessage(), e);
             handleSendMessage(content);
@@ -329,7 +348,9 @@ public class SessionHandler extends BaseMessageHandler {
         String requestedPermissionMode,
         String requestedReasoningEffort,
         String requestedCodexFastMode,
-        String requestedDshPreset
+        String requestedDshPreset,
+        String clientMessageId,
+        JsonObject nativeCodexSettings
     ) {
         // Version check (consistent with handleSendMessage)
         String nodeVersion = this.resolveNodeVersion();
@@ -354,6 +375,8 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalRequestedReasoningEffort = requestedReasoningEffort;
         final String finalRequestedCodexFastMode = requestedCodexFastMode;
         final String finalRequestedDshPreset = requestedDshPreset;
+        final String finalClientMessageId = clientMessageId;
+        final JsonObject finalNativeCodexSettings = nativeCodexSettings;
 
         CompletableFuture.runAsync(() -> {
             String currentWorkingDir = determineWorkingDirectory();
@@ -372,7 +395,8 @@ public class SessionHandler extends BaseMessageHandler {
             // [FIX] Pass agent prompt and file tags directly to session
             context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths,
                             finalRequestedPermissionMode, finalRequestedReasoningEffort,
-                            finalRequestedCodexFastMode, finalRequestedDshPreset)
+                            finalRequestedCodexFastMode, finalRequestedDshPreset, finalClientMessageId,
+                            finalNativeCodexSettings)
                 .thenRun(() -> {
                     // Claude now triggers success on actual stream_end callback.
                     // Codex has no stream_end event, keep success trigger at completion.
@@ -426,6 +450,11 @@ public class SessionHandler extends BaseMessageHandler {
      * Determine the appropriate working directory.
      */
     private String determineWorkingDirectory() {
+        ClaudeSession session = this.context.getSession();
+        if (session != null && "codex".equals(session.getProvider())
+                && session.getSessionId() != null && session.getCwd() != null && !session.getCwd().isBlank()) {
+            return session.getCwd();
+        }
         String projectPath = context.getProject().getBasePath();
 
         // Prefer the user-configured working directory first, normalized so that
@@ -475,6 +504,43 @@ public class SessionHandler extends BaseMessageHandler {
         }
         String preset = payload.get("dshPreset").getAsString();
         return SessionState.isValidDshPreset(preset) ? preset.trim() : null;
+    }
+
+    private JsonObject extractNativeCodexSettings(JsonObject payload) {
+        JsonObject result = new JsonObject();
+        result.addProperty("cwdExplicit", this.context.getSession() != null
+                && this.context.getSession().getState().isCodexCwdExplicit());
+        if (payload == null || !payload.has("codexSettings")
+                || !payload.get("codexSettings").isJsonObject()) {
+            return result;
+        }
+        JsonObject source = payload.getAsJsonObject("codexSettings");
+        for (String key : new String[] {"collaborationMode", "approvalPreset", "sandboxSelection"}) {
+            if (source.has(key) && source.get(key).isJsonPrimitive()) {
+                String value = source.get(key).getAsString();
+                if (value != null && !value.trim().isEmpty()) {
+                    result.addProperty(key, value.trim());
+                }
+            }
+        }
+        if (source.has("skills") && source.get("skills").isJsonArray()) {
+            JsonArray skills = new JsonArray();
+            for (JsonElement entry : source.getAsJsonArray("skills")) {
+                if (!entry.isJsonObject()) {
+                    continue;
+                }
+                JsonObject skill = entry.getAsJsonObject();
+                if (skill.has("name") && skill.get("name").isJsonPrimitive()
+                        && skill.has("path") && skill.get("path").isJsonPrimitive()) {
+                    JsonObject identity = new JsonObject();
+                    identity.add("name", skill.get("name").deepCopy());
+                    identity.add("path", skill.get("path").deepCopy());
+                    skills.add(identity);
+                }
+            }
+            result.add("skills", skills);
+        }
+        return result;
     }
 
     /**

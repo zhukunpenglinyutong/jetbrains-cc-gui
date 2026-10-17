@@ -36,9 +36,11 @@ const QuestionSection = ({
 
   return (
     <div className="ask-user-question-dialog-question">
-      <div className="question-header">
-        <span className="question-tag">{question.header}</span>
-      </div>
+      {question.header?.trim() ? (
+        <div className="question-header">
+          <span className="question-tag">{question.header}</span>
+        </div>
+      ) : null}
       <p className="question-text">{question.question}</p>
 
       {/* Supporting detail (DSH's plan under review). It is the thing being
@@ -87,7 +89,7 @@ const QuestionSection = ({
       <div className="custom-input-container">
         <textarea
           ref={customInputRef}
-          className="custom-input"
+          className={`custom-input${question.isSecret ? ' secret-input' : ''}`}
           value={customInput}
           onChange={(e) => onCustomInputChange(e.target.value)}
           placeholder={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}

@@ -1,4 +1,5 @@
 import type { ClaudeMessage, ClaudeContentBlock, ClaudeRawMessage } from '../types';
+import { stripDesktopAttachmentEnvelope } from './desktopAttachmentEnvelope';
 import {
   hasCommandMessageTag,
   formatCommandForDisplay,
@@ -51,7 +52,7 @@ function normalizeBlocks(raw: ClaudeRawMessage | string | undefined): ClaudeCont
 /**
  * Format text content for copy/export, converting XML tags to readable format
  */
-function formatTextForCopy(text: string): string {
+function formatTextForCopy(text: string, isUserMessage: boolean): string {
   if (!text) return text;
 
   // Format command messages: use formatCommandForResubmit for copy (uses <command-name>)
@@ -76,7 +77,7 @@ function formatTextForCopy(text: string): string {
     }
   }
 
-  return text;
+  return isUserMessage ? stripDesktopAttachmentEnvelope(text) : text;
 }
 
 /**
@@ -93,7 +94,7 @@ export function extractMarkdownContent(message: ClaudeMessage, includeThinking =
     for (const block of rawBlocks) {
       if (block.type === 'text' && block.text) {
         // Format command/notification messages for copy
-        parts.push(formatTextForCopy(block.text));
+        parts.push(formatTextForCopy(block.text, message.type === 'user'));
       } else if (includeThinking && block.type === 'thinking') {
         const thinkingText = (block as { thinking?: string; text?: string }).thinking ||
                             (block as { thinking?: string; text?: string }).text;
@@ -118,7 +119,7 @@ export function extractMarkdownContent(message: ClaudeMessage, includeThinking =
     message.content.trim() &&
     !isSyntheticToolMessageContent(message.content, rawBlocks)
   ) {
-    parts.push(formatTextForCopy(message.content));
+    parts.push(formatTextForCopy(message.content, message.type === 'user'));
   }
 
   return parts.join('\n\n');

@@ -1,6 +1,7 @@
 import type { TFunction } from 'i18next';
 import MarkdownBlock from '../../MarkdownBlock';
 import type { ClaudeContentBlock } from '../../../types';
+import { shouldRevealThinking } from '../../../utils/thinkingVisibility';
 
 interface ThinkingBlockProps {
   block: Extract<ClaudeContentBlock, { type: 'thinking' }>;
@@ -23,6 +24,15 @@ export function ThinkingBlock({
   t,
   onToggleThinking,
 }: ThinkingBlockProps) {
+  if (!shouldRevealThinking(block)) return null;
+  const nativeThinking = block.native === true;
+  const thinkingText = block.thinking ?? block.text;
+  const thinkingContent = thinkingText ?? t('chat.noThinkingContent');
+  // Native completion can arrive before the surrounding assistant turn ends.
+  const isThinkingInProgress = nativeThinking
+    ? block.status === 'inProgress' && isActivelyStreaming
+    : isThinking && isLastMessage && isLastBlock;
+
   return (
     <div className="thinking-block">
       <div
@@ -38,7 +48,7 @@ export function ThinkingBlock({
         }}
       >
         <span className="thinking-title">
-          {isThinking && isLastMessage && isLastBlock
+          {isThinkingInProgress
             ? t('common.thinkingProcess')
             : t('common.thinking')}
         </span>
@@ -49,8 +59,8 @@ export function ThinkingBlock({
       <div className={`thinking-content ${isThinkingExpanded ? 'expanded' : ''}`}>
         <div className="thinking-content-inner">
           <MarkdownBlock
-            content={block.thinking ?? block.text ?? t('chat.noThinkingContent')}
-            isStreaming={isActivelyStreaming}
+            content={thinkingContent}
+            isStreaming={nativeThinking ? isThinkingInProgress : isActivelyStreaming}
           />
         </div>
       </div>

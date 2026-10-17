@@ -1,5 +1,6 @@
 import { AsyncStream } from '../../utils/async-stream.js';
 import { loadClaudeSdk } from '../../utils/sdk-loader.js';
+import { extractResultError, isNoConversationFoundError } from './message-utils.js';
 import { createPreToolUseHook, normalizePermissionMode } from './permission-mode.js';
 import { parseTaskNotificationXml, buildTaskNotificationEvent, extractTaskNotificationXml } from './task-notification-parser.js';
 import {
@@ -43,6 +44,37 @@ function emitDaemonEvent(event, sessionId, payload = {}) {
   } catch (err) {
     console.error(`[PERPETUAL_READER] Failed to emit ${event} event:`, err);
   }
+}
+
+/**
+ * Retire a missing resume target on both startup and active-turn failures.
+ * The epoch keeps a delayed event from invalidating another tab or a reopened
+ * instance of the same transcript. Terminal SDK errors may keep the CLI's
+ * actual load error only in stderr.
+ *
+ * @param {object|null} requestContext - Carries the requested session id/epoch.
+ * @param {Error} error - The failure that ended the turn or the stream.
+ * @param {object|null} runtime - Owning runtime, used for stderr fallback and dedup.
+ * @returns {boolean} True when this runtime's resume target is gone — whether
+ *   this call emitted the event or a previous one already did — so callers can
+ *   retire the runtime and stop treating it as reusable.
+ */
+export function notifyExpiredResume(requestContext, error, runtime = null) {
+  const expiredSessionId = requestContext?.requestedSessionId;
+  if (!expiredSessionId) return false;
+  if (runtime?.resumeExpired || error?.resumeExpiredNotified) return true;
+  const missingInStderr = error?.runtimeTerminated
+    && runtime?.stderrLines?.some(line => isNoConversationFoundError(line));
+  if (!isNoConversationFoundError(error) && !missingInStderr) return false;
+
+  if (runtime) runtime.resumeExpired = true;
+  if (error && typeof error === 'object') error.resumeExpiredNotified = true;
+  console.log('[LIFECYCLE] resume target transcript is gone, notifying Java to clear stale sessionId='
+    + expiredSessionId);
+  emitDaemonEvent('session_resume_expired', expiredSessionId, {
+    runtimeSessionEpoch: requestContext.runtimeSessionEpoch || null,
+  });
+  return true;
 }
 
 function emitInterTurnEvent(sessionId) {
@@ -296,7 +328,14 @@ async function createRuntime(requestContext, callbacks) {
     query: null,
     inputStream: new AsyncStream(),
     lastEmittedSessionId: null,
-    titleGenerationAttempted: false
+    titleGenerationAttempted: false,
+    // Why the runtime's stream died (reader error, EOF, or a missing resume
+    // target). executeTurn / waitForReaderQuiescent / assertRuntimeOwnership
+    // surface it instead of a generic "Runtime is closed", so the user sees
+    // the CLI's real failure. resumeExpired dedups the
+    // session_resume_expired event once per runtime — see notifyExpiredResume.
+    terminalError: null,
+    resumeExpired: false
   };
 
   const options = {
@@ -366,18 +405,16 @@ async function createRuntime(requestContext, callbacks) {
  */
 export async function waitForReaderQuiescent(runtime) {
   if (!runtime || runtime.closed) {
-    throw new Error(runtime?.abortRequested
-      ? 'Turn aborted'
-      : 'Runtime closed while waiting for the CLI to become quiet');
+    throw runtime?.abortRequested ? new Error('Turn aborted')
+      : runtime?.terminalError || new Error('Runtime closed while waiting for the CLI to become quiet');
   }
   const deadline = Date.now() + 120_000;
   let lastProgress = runtime.readerProgress || 0;
   for (;;) {
     await new Promise((resolve) => setTimeout(resolve, 0));
     if (runtime.closed) {
-      throw new Error(runtime.abortRequested
-        ? 'Turn aborted'
-        : 'Runtime closed while waiting for the CLI to become quiet');
+      throw runtime.abortRequested ? new Error('Turn aborted')
+        : runtime.terminalError || new Error('Runtime closed while waiting for the CLI to become quiet');
     }
     // Normalize: readerProgress is undefined until the reader processes its
     // first message, and undefined !== 0 would otherwise read as perpetual
@@ -449,6 +486,11 @@ export function startPerpetualReader(runtime, callbacks) {
   // scope above so executeTurn can share the in-turn task-event emission path.
   // See those definitions for the bypass-activeRequestId rationale.
 
+  const resumeContext = {
+    requestedSessionId: runtime.sessionId,
+    runtimeSessionEpoch: runtime.runtimeSessionEpoch,
+  };
+
   // Start the perpetual reader loop; return the promise so callers (and tests)
   // can await its completion.
   return (async () => {
@@ -462,9 +504,14 @@ export function startPerpetualReader(runtime, callbacks) {
           next = await runtime.query.next();
         } catch (error) {
           console.error('[PERPETUAL_READER] query.next() error:', error?.message || error);
+          const terminalError = runtime.terminalError || (error instanceof Error ? error : new Error(String(error)));
+          terminalError.runtimeTerminated = true;
+          runtime.terminalError = terminalError;
           // Forward error to turnSink if active turn exists
           if (runtime.turnSink) {
-            runtime.turnSink.fail(error);
+            runtime.turnSink.fail(terminalError);
+          } else if (!runtime.abortRequested) {
+            notifyExpiredResume(resumeContext, terminalError, runtime);
           }
           break; // Exit loop on error
         }
@@ -472,13 +519,26 @@ export function startPerpetualReader(runtime, callbacks) {
         // Check for iterator completion
         if (next.done) {
           console.log('[PERPETUAL_READER] Iterator completed (done: true)');
+          const terminalError = runtime.terminalError || Object.assign(new Error('stream ended'), { runtimeTerminated: true });
+          runtime.terminalError = terminalError;
           if (runtime.turnSink) {
-            runtime.turnSink.fail(new Error('stream ended'));
+            runtime.turnSink.fail(terminalError);
+          } else if (!runtime.abortRequested) {
+            notifyExpiredResume(resumeContext, terminalError, runtime);
           }
           break; // Exit loop
         }
 
         const msg = next.value;
+
+        // The CLI can exit before executeTurn consumes its queued error result.
+        // Save the resume failure before routing so EOF cannot replace its cause.
+        if (msg?.type === 'result' && msg.is_error && !msg.parent_tool_use_id && msg.origin?.kind !== 'task-notification') {
+          const resultError = new Error(extractResultError(msg));
+          if (isNoConversationFoundError(resultError)) {
+            runtime.terminalError = Object.assign(resultError, { runtimeTerminated: true });
+          }
+        }
 
         // Keep the runtime's idle timer fresh while it actively produces output.
         // Refresh the idle clock for every in-turn and inter-turn message. The reaper
@@ -514,6 +574,11 @@ export function startPerpetualReader(runtime, callbacks) {
           // For phase 1: only emit event when we see a 'result' message
           // This indicates a complete turn has been generated by CLI
           if (msg?.type === 'result') {
+            // Resume validation can finish before executeTurn opens its sink.
+            // Preserve that failure instead of disguising it as a history update.
+            if (runtime.terminalError && notifyExpiredResume(resumeContext, runtime.terminalError, runtime)) {
+              break;
+            }
             // Validate sessionId: only emit events for registered runtimes
             if (runtime.sessionId) {
               console.log('[PERPETUAL_READER] Inter-turn result detected, emitting session_updated for sessionId=' + runtime.sessionId);
@@ -650,7 +715,7 @@ async function applyDynamicControls(runtime, requestContext) {
 
 function assertRuntimeOwnership(runtime, requestContext) {
   if (!runtime || runtime.closed) {
-    const err = new Error('Runtime is closed');
+    const err = runtime?.terminalError || new Error('Runtime is closed');
     err.runtimeTerminated = true;
     throw err;
   }

@@ -1,6 +1,9 @@
 import {
   dollarCommandProvider,
   resetDollarCommandsState,
+  publishNativeCodexSkills,
+  rememberNativeCodexSkill,
+  selectedCodexSkillInputs,
 } from './dollarCommandProvider.js';
 
 describe('dollarCommandProvider', () => {
@@ -8,6 +11,17 @@ describe('dollarCommandProvider', () => {
     resetDollarCommandsState();
     delete window.updateDollarCommands;
     delete window.__pendingDollarCommands;
+  });
+
+  it('sends the chosen native path and invalidates it after cwd/catalog changes', async () => {
+    publishNativeCodexSkills([{ name: 'review', path: '/user/SKILL.md' }, { name: 'review', path: '/repo/SKILL.md' }]);
+    const commands = await dollarCommandProvider('', new AbortController().signal);
+    rememberNativeCodexSkill(commands[1]);
+    expect(selectedCodexSkillInputs('$review this change')).toEqual([{ name: 'review', path: '/repo/SKILL.md' }]);
+    window.updateDollarCommands?.(JSON.stringify([{ name: '$stale', source: 'codex-skill' }]));
+    expect((await dollarCommandProvider('', new AbortController().signal)).map((row) => row.label)).toEqual(['$review', '$review']);
+    publishNativeCodexSkills([{ name: 'review', path: '/user/SKILL.md' }]);
+    expect(selectedCodexSkillInputs('$review this change')).toEqual([]);
   });
 
   it('waits for the backend payload instead of returning a loading row', async () => {

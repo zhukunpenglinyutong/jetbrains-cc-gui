@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
-import type { ClaudeRawMessage, SubagentHistoryResponse, TaskEvent, TaskEventMap } from '../types';
+import type { ClaudeRawMessage, SubagentHistoryResponse, SubagentInfo, TaskEvent, TaskEventMap } from '../types';
 
 // SubagentHistoryContext holds the full history map so consumers
 // (AgentGroupBlock / TaskExecutionBlock) re-render when an entry arrives.
@@ -10,6 +10,13 @@ import type { ClaudeRawMessage, SubagentHistoryResponse, TaskEvent, TaskEventMap
 // only for expanded cards), so re-rendering all inline cards on a change is
 // bounded and matches the TaskEventContext pattern below.
 const SubagentHistoryContext = createContext<Record<string, SubagentHistoryResponse>>({});
+export const SubagentStateContext = createContext<SubagentInfo[]>([]);
+
+/** Read the same child snapshots used by the StatusPanel, including native lifecycle updates. */
+export function useSubagentStates(toolUseId: string | undefined): SubagentInfo[] {
+  const states = useContext(SubagentStateContext);
+  return toolUseId ? states.filter(agent => (agent.toolUseId ?? agent.id) === toolUseId) : [];
+}
 
 interface SessionIdContextValue {
   currentSessionId: string | null;

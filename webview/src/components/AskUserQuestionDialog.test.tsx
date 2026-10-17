@@ -29,6 +29,32 @@ const buildRequest = (overrides: Partial<AskUserQuestionRequest> = {}): AskUserQ
 });
 
 describe('AskUserQuestionDialog provider label', () => {
+  it.each([true, false])('keeps a native answer editable while respecting its secret presentation: %s', isSecret => {
+    const onSubmit = vi.fn();
+    const value = isSecret ? 'review-secret\nsecond line' : 'visible answer';
+    const request = buildRequest({ requestId: `native-secret-${isSecret}`, provider: 'codex', questions: [{
+      id: 'token', question: 'Enter the requested value', header: 'Token', options: [], multiSelect: false, isSecret,
+    }] });
+    render(<AskUserQuestionDialog isOpen request={request} onSubmit={onSubmit} onCancel={() => {}} />);
+    const input = screen.getByRole('textbox');
+    expect(input.classList.contains('secret-input')).toBe(isSecret);
+    fireEvent.change(input, { target: { value } });
+    expect((input as HTMLTextAreaElement).value).toBe(value);
+    if (isSecret) expect(Object.values(localStorage).join('')).not.toContain('review-secret');
+    fireEvent.click(screen.getByText('提交'));
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith(request.requestId, { token: value });
+  });
+
+  it('allows a failed submission to retry without recreating the question', () => {
+    const onSubmit = vi.fn().mockReturnValueOnce(false).mockReturnValue(undefined);
+    render(<AskUserQuestionDialog isOpen request={buildRequest({ provider: 'codex' })}
+      onSubmit={onSubmit} onCancel={() => {}} />);
+    fireEvent.click(screen.getByText('Red'));
+    fireEvent.click(screen.getByText('提交'));
+    fireEvent.click(screen.getByText('提交'));
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+  });
+
   it('identifies Codex request_user_input requests', () => {
     render(
       <AskUserQuestionDialog
@@ -40,6 +66,43 @@ describe('AskUserQuestionDialog provider label', () => {
     );
 
     expect(screen.getByText('Codex 有一些问题想问你')).toBeTruthy();
+  });
+
+  it('identifies Grok requests without rendering Claude title', () => {
+    render(
+      <AskUserQuestionDialog
+        isOpen
+        request={buildRequest({ provider: 'grok' })}
+        onSubmit={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('Grok has some questions for you')).toBeTruthy();
+    expect(screen.queryByText(/Claude/)).toBeNull();
+  });
+
+  it('omits the question chip when the header is empty', () => {
+    const { container } = render(
+      <AskUserQuestionDialog
+        isOpen
+        request={buildRequest({
+          questions: [
+            {
+              question: 'Pick a color',
+              header: '',
+              multiSelect: false,
+              options: [{ label: 'Red', description: '' }],
+            },
+          ],
+        })}
+        onSubmit={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(container.querySelector('.question-tag')).toBeNull();
+    expect(screen.getByText('Pick a color')).toBeTruthy();
   });
 });
 

@@ -71,6 +71,10 @@ interface BasicConfigSectionProps {
   // Diff expanded by default configuration
   diffExpandedByDefault?: boolean;
   onDiffExpandedByDefaultChange?: (enabled: boolean) => void;
+  bashGroupCollapsedByDefault?: boolean;
+  onBashGroupCollapsedByDefaultChange?: (collapsed: boolean) => void;
+  editGroupCollapsedByDefault?: boolean;
+  onEditGroupCollapsedByDefaultChange?: (collapsed: boolean) => void;
   // AI commit generation configuration
   commitGenerationEnabled?: boolean;
   onCommitGenerationEnabledChange?: (enabled: boolean) => void;
@@ -173,6 +177,10 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onAutoOpenFileEnabledChange={props.onAutoOpenFileEnabledChange}
           diffExpandedByDefault={props.diffExpandedByDefault}
           onDiffExpandedByDefaultChange={props.onDiffExpandedByDefaultChange}
+          bashGroupCollapsedByDefault={props.bashGroupCollapsedByDefault}
+          onBashGroupCollapsedByDefaultChange={props.onBashGroupCollapsedByDefaultChange}
+          editGroupCollapsedByDefault={props.editGroupCollapsedByDefault}
+          onEditGroupCollapsedByDefaultChange={props.onEditGroupCollapsedByDefaultChange}
           commitGenerationEnabled={props.commitGenerationEnabled}
           onCommitGenerationEnabledChange={props.onCommitGenerationEnabledChange}
           statusBarWidgetEnabled={props.statusBarWidgetEnabled}

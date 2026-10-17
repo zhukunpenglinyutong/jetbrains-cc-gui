@@ -1,10 +1,12 @@
 # Codex Integration Quickstart
 
+> 迁移说明：本文只保留历史 SDK 接入背景。当前正常 Codex 发送使用 Java → Node daemon → `codex app-server --listen stdio://`；Codex 在 CLI 识别页面管理，旧 `codex-sdk` 目录只作既有 CLI 的只读兼容查找，不应重新引入每轮 SDK 实例化。旧示例中的 `skipGitRepoCheck`、`maxTurns`、布尔权限 IPC 和执行后回滚不属于当前运行时。请以 [app-server 迁移基准](app-server.md) 为运行时合同。
+
 > **✨ Done with Geek Spirit** — Following Steve Jobs' pursuit of simplicity and elegance
 
 ## 🎉 What's New
 
-Codex SDK (@openai/codex-sdk) has been integrated with the same elegant architecture as Claude.
+Codex app-server has been integrated with the same provider-neutral session facade as Claude.
 
 ## 🏗️ Architecture Highlights
 
@@ -12,15 +14,15 @@ Codex SDK (@openai/codex-sdk) has been integrated with the same elegant architec
 
 ```
 Claude:  Java → ClaudeSDKBridge → ai-bridge → @anthropic-ai/claude-agent-sdk
-Codex:   Java → CodexSDKBridge  → ai-bridge → @openai/codex-sdk
+Codex:   Java → CodexSDKBridge  → ai-bridge → codex app-server (stdio)
 Gemini:  Java → GeminiSDKBridge → ai-bridge → (future)
          ↑ Perfect symmetry - easy to maintain
 ```
 
 ### Key Features
 
-- ✅ **Unified Permission System**: `DEFAULT`, `SANDBOX`, `YOLO` work across all providers
-- ✅ **Automatic Mapping**: sessionId ↔ threadId translation happens automatically
+- ✅ **Native approval policy**: Codex asks when its policy requires escalation
+- ✅ **Automatic Mapping**: sessionId ↔ native threadId translation happens automatically
 - ✅ **Streaming Support**: Real-time responses for both Claude and Codex
 - ✅ **Modular Design**: Adding Gemini will take < 1 hour
 
@@ -30,10 +32,10 @@ Gemini:  Java → GeminiSDKBridge → ai-bridge → (future)
 
 ```
 ai-bridge/
-├── utils/permission-mapper.js           [NEW] Permission translation layer
-├── services/codex/message-service.js    [UPDATED] Codex SDK integration
+├── services/codex/persistent-codex-service.js [NEW] App-server session FIFO
+├── services/codex/codex-appserver-client.js   [NEW] Stdio JSON-RPC transport
 ├── channel-manager.js                   [UPDATED] Enabled Codex routing
-└── package.json                         [UPDATED] Added @openai/codex-sdk
+└── package.json                         [UPDATED] No Codex SDK dependency
 
 src/main/java/.../CodexSDKBridge.java   [UPDATED] Unified parameter mapping
 
@@ -42,12 +44,14 @@ docs/
 └── CODEX-INTEGRATION-QUICKSTART.md     [NEW] This file
 ```
 
-### Dependencies Added
+### Runtime dependency
 
-```json
-{
-  "@openai/codex-sdk": "^0.77.0"  // ~40MB (worth it for complete functionality)
-}
+```text
+The SDK manager no longer manages Codex; the CLI detection page shows the
+installed CLI. The old `codex-sdk` directory remains a read-only fallback.
+The runtime resolves the external/legacy Codex
+CLI and starts `codex app-server --listen stdio://`; it does not instantiate
+the TypeScript SDK for normal turns.
 ```
 
 ## 🚀 How It Works
@@ -55,14 +59,14 @@ docs/
 ### Permission Mapping Example
 
 ```javascript
-// User selects "YOLO" mode in IDEA
-Java: permissionMode = "yolo"
+// User selects a native approval preset in IDEA
+Java: permissionMode = "auto"
   ↓
-ai-bridge/utils/permission-mapper.js:
-  - Claude: "yolo" → permissionMode: 'yolo'
-  - Codex:  "yolo" → {skipGitRepoCheck: true, sandbox: 'danger-full-access'}
+Codex app-server settings:
+  - approvalPolicy: "on-request"
+  - sandboxPolicy: { type: "workspaceWrite" }
   ↓
-SDK: Operates with provider-specific configuration
+Native policy decides whether a reverse approval request is needed.
 ```
 
 ### Session Management Example
@@ -99,9 +103,9 @@ bridge.setBaseUrl("https://custom-endpoint.com"); // Optional
 
 | Mode | Behavior | Use Case |
 |------|----------|----------|
-| `DEFAULT` | Ask before dangerous operations | Normal development |
-| `SANDBOX` | Read-only, no modifications | Code review, exploration |
-| `YOLO` | Auto-approve everything | Automation, trusted environments |
+| `request` | Ask when native policy requires escalation | Normal development |
+| `sandboxed-auto` | Native reviewer may approve within workspace limits | Repetitive workspace tasks |
+| `full-access` | Explicit danger-full-access scope | Trusted environments |
 
 ## 🧪 Testing
 
@@ -110,44 +114,19 @@ bridge.setBaseUrl("https://custom-endpoint.com"); // Optional
 ```bash
 cd ai-bridge
 
-# Test permission mapper
-node -e "
-import {PermissionMapperFactory} from './utils/permission-mapper.js';
-console.log(PermissionMapperFactory.toProvider('codex', 'yolo'));
-// → {skipGitRepoCheck: true, sandbox: 'danger-full-access'}
-"
-
-# Test Codex service (requires API key)
-echo '{"message":"Hello","threadId":"","cwd":"","permissionMode":"default"}' | \
-  CODEX_USE_STDIN=true node channel-manager.js codex send
+# Test the native app-server service with the repository peer (no account).
+node --test services/codex/*.test.js services/codex/testing/*.test.js
 ```
 
 ### Integration Test (Java + Node.js)
 
 ```java
 CodexSDKBridge bridge = new CodexSDKBridge();
-bridge.setApiKey("sk-...");
-
+// The bridge delegates to the per-chat persistent app-server service.
 CompletableFuture<SDKResult> future = bridge.sendMessage(
-    "channel-1",
-    "Explain this codebase structure",
-    null, // threadId (new conversation)
-    "/path/to/project",
-    null, // attachments (Codex doesn't support)
-    "default", // permission mode
-    "gpt-5.1", // model
-    new MessageCallback() {
-        public void onMessage(String type, String content) {
-            System.out.println(type + ": " + content);
-        }
-        public void onError(String error) {
-            System.err.println("Error: " + error);
-        }
-        public void onComplete(SDKResult result) {
-            System.out.println("Done: " + result.finalResult);
-        }
-    }
-);
+    "channel-1", "Explain this codebase structure", null,
+    "/path/to/project", null, "request", "gpt-5.6-sol",
+    null, "medium", "default", callback, "client-message-id");
 ```
 
 ## 📊 Capability Comparison
@@ -156,8 +135,8 @@ CompletableFuture<SDKResult> future = bridge.sendMessage(
 |---------|--------|-------|-------|
 | Streaming | ✅ | ✅ | Real-time responses |
 | Session Resume | ✅ | ✅ | Continue conversations |
-| Attachments | ✅ | ❌ | Images, files (Claude only) |
-| Permission Control | ✅ | ✅ | Unified 3-mode system |
+| Attachments | ✅ | ✅ | Codex sends native localImage items |
+| Permission Control | ✅ | ✅ | Codex uses native approval/sandbox settings |
 | Custom Models | ✅ | ✅ | Model selection supported |
 | IDE Context | ✅ | ⚠️ | openedFiles (Claude only) |
 
@@ -166,17 +145,16 @@ CompletableFuture<SDKResult> future = bridge.sendMessage(
 1. **Configure API Key**: Set your OpenAI API key in plugin settings
 2. **Select Provider**: Choose "Codex" from provider dropdown in UI
 3. **Start Chatting**: Send a message - streaming should work immediately
-4. **Try Permissions**: Test DEFAULT, SANDBOX, YOLO modes
+4. **Try Permissions**: Test request, sandboxed-auto, and explicit full-access scopes
 
 ## 🐛 Troubleshooting
 
 ### "Codex support is temporarily disabled"
 
-**Cause**: `@openai/codex-sdk` not installed
+**Cause**: The managed Codex CLI or configured external CLI is not available
 **Fix**:
 ```bash
-cd ai-bridge
-npm install @openai/codex-sdk
+Install the official Codex CLI externally, then re-check Settings → Provider Management → CLI.
 ```
 
 ### "API key not found"
@@ -186,8 +164,8 @@ npm install @openai/codex-sdk
 
 ### "Permission denied"
 
-**Cause**: Permission mode mismatch
-**Fix**: Check `permission-mapper.js` configuration for your use case
+**Cause**: Native approval policy or sandbox constraints rejected the request
+**Fix**: Inspect the native approval dialog and effective sandbox source in Settings.
 
 ### Thread ID not captured
 
@@ -207,17 +185,11 @@ String threadId = extractThreadId(result1); // From session_id callback
 SDKResult result2 = bridge.sendMessage(..., threadId, ...).get();
 ```
 
-### Custom Sandbox Mode
+### Native sandbox mode
 
-```javascript
-// In permission-mapper.js, create custom mapping
-case 'CUSTOM_MODE':
-  return {
-    skipGitRepoCheck: true,
-    sandbox: 'workspace-write',
-    additionalRestrictions: {...}
-  };
-```
+Choose `read-only`, `workspace-write`, or `danger-full-access` through the
+Codex access-scope setting. The app-server receives the corresponding native
+`sandboxPolicy`; no `skipGitRepoCheck` or hand-written prompt wrapper is used.
 
 ## 🎨 Code Patterns
 
@@ -244,8 +216,7 @@ bridge.interruptChannel(channelId);
 
 ## 📈 Performance Notes
 
-- **Package Size**: `@openai/codex-sdk` adds ~40MB to plugin
-- **Startup Time**: Node.js process spawns in ~100-200ms
+- **Startup Time**: the Node daemon keeps one app-server child per chat host
 - **Streaming**: First token typically arrives in ~500-1000ms
 - **Memory**: Each active channel uses ~50-100MB of RAM
 
@@ -260,7 +231,7 @@ bridge.interruptChannel(channelId);
 
 This integration follows these principles:
 
-1. **"Simple is better than complex"** - Permission mapper is single-responsibility
+1. **"Simple is better than complex"** - The app-server transport owns native policy
 2. **"Explicit is better than implicit"** - threadId vs sessionId is clearly documented
 3. **"Practicality beats purity"** - We map different models to common interface
 4. **"Readability counts"** - Code structure mirrors mental model

@@ -70,6 +70,13 @@ describe('selectLatestSubagentTurn', () => {
   const user = (content: string): ClaudeMessage => ({ type: 'user', content });
   const assistant = (): ClaudeMessage => ({ type: 'assistant' });
 
+  it('keeps an earlier background agent visible while the next turn starts another agent', () => {
+    const messages = [user('first'), assistant(), user('second'), assistant()];
+    const first = subagent({ id: 'first', messageIndex: 1, isAsync: true });
+    const second = subagent({ id: 'second', messageIndex: 3, isAsync: true });
+    expect(selectLatestSubagentTurn(messages, [first, second])).toEqual([first, second]);
+  });
+
   it('keeps only the most recent turn containing valid extracted subagents', () => {
     const messages = [user('first'), assistant(), user('second'), assistant()];
     const first = subagent({ id: 'first', messageIndex: 1 });

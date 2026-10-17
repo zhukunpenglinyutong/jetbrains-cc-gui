@@ -115,8 +115,11 @@ export function useMessageProcessing({ messages, currentSessionId, t }: UseMessa
   const mergedMessages = useMemo(() => {
     // Pair compact_boundary system lines with their compact-summary user line
     // (attaches compactMetadata, drops the metadata-only boundary line).
+    const withBoundaries = attachCompactBoundaryMetadata(messages).map((message) =>
+      typeof message.raw === 'object' && message.raw?.isCompactSummary
+        ? { ...message, type: MESSAGE_TYPES.NOTIFICATION } : message);
     const merged = mergeConsecutiveAssistantMessages(
-      attachCompactBoundaryMetadata(messages),
+      withBoundaries,
       normalizeBlocks,
       mergedAssistantMessageCache.current
     );
@@ -124,6 +127,10 @@ export function useMessageProcessing({ messages, currentSessionId, t }: UseMessa
     const visible: ClaudeMessage[] = [];
 
     for (const message of merged) {
+      if (typeof message.raw === 'object' && message.raw?.isCompactSummary) {
+        visible.push(message);
+        continue;
+      }
       // ── Compact summary → notification ─────────────────────────────────
       // Must happen before shouldShowMessage because isCompactSummary
       // messages are filtered out there. Show as left-aligned collapsible

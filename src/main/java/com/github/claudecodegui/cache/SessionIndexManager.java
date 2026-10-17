@@ -37,6 +37,10 @@ public class SessionIndexManager {
             Pattern.CASE_INSENSITIVE
     );
 
+    // v10 (2026-10): Rebuild cached lists so internal guardian reviews disappear
+    // even when their rollout file timestamps have not changed.
+    // v9 (2026-10): Desktop attachment envelopes are display metadata. Rebuild
+    // cached titles that previously started with their file-list heading.
     // v8 (2026-09): Codex CLI injects a <recommended_plugins> context block as the first
     // user message of a session. It was not stripped, so extractFirstUserMessageTitle()
     // picked it as the session title (every session showed "<recommended_plugins> Here
@@ -52,7 +56,7 @@ public class SessionIndexManager {
     // Restore paths trust index entries while the file mtime is unchanged, so those
     // nulls would never self-heal. Bumping once more forces a clean rebuild that
     // populates entrypoint for every session.
-    private static final int INDEX_VERSION = 8;
+    private static final int INDEX_VERSION = 10;
 
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
     private final Path codemossCacheDir;

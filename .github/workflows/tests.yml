@@ -33,6 +33,12 @@ jobs:
         with:
           node-version: '22.12.0'
 
+      # The Codex runtime environment parses native config.toml via smol-toml,
+      # so the test import chain needs ai-bridge node_modules on a fresh checkout.
+      - name: Install ai-bridge dependencies
+        working-directory: ai-bridge
+        run: npm ci
+
       - name: Run ai-bridge tests
         run: node --test "ai-bridge/**/*.test.js" "ai-bridge/**/*.test.mjs"
 

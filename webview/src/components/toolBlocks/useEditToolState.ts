@@ -9,6 +9,7 @@ import {
 import { normalizeToolInput } from '../../utils/toolInputNormalization';
 import { computeDiff } from './EditDiffView';
 import type { EditToolItem } from './EditToolBlock';
+import { PATCH_TOOL_NAMES, isToolName } from '../../utils/toolConstants';
 
 /** First string value among the candidates, or undefined. */
 function firstString(...values: unknown[]): string | undefined {
@@ -58,6 +59,7 @@ export function useEditToolState(items: EditToolItem[]) {
   const input = firstItem?.input;
   const result = firstItem?.result;
   const toolId = firstItem?.toolId;
+  const isPatch = isToolName(name, PATCH_TOOL_NAMES);
 
   const isDenied = useIsToolDenied(toolId);
 
@@ -80,25 +82,25 @@ export function useEditToolState(items: EditToolItem[]) {
     // rendered, so skip the O(m*n) LCS pass for the first item - the early
     // return in the component hands off to EditToolGroupBlock before this
     // result is used.
-    if (items.length !== 1) {
+    if (items.length !== 1 || isPatch) {
       return { lines: [], additions: 0, deletions: 0 };
     }
     const oldLines = oldString ? oldString.split('\n') : [];
     const newLines = newString ? newString.split('\n') : [];
     return computeDiff(oldLines, newLines);
-  }, [items.length, oldString, newString]);
+  }, [items.length, isPatch, oldString, newString]);
 
   // Auto-refresh file in IDEA when the tool call completes successfully
   const hasRefreshed = useRef(false);
   useEffect(() => {
     // Only the single-item view refreshes here; the grouped view runs its own
     // refresh effect, so skip when delegating to avoid duplicate refreshes.
-    if (items.length !== 1) return;
+    if (items.length !== 1 || isPatch) return;
     if (filePath && isCompleted && !isError && !hasRefreshed.current) {
       hasRefreshed.current = true;
       refreshFile(filePath);
     }
-  }, [items.length, filePath, isCompleted, isError]);
+  }, [items.length, isPatch, filePath, isCompleted, isError]);
 
   const lineInfo = normalizedInput && target ? getToolLineInfo(normalizedInput, target, result) : {};
   const editCount = normalizedInput ? getToolEditCount(normalizedInput) : 0;

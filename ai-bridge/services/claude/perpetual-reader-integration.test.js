@@ -85,9 +85,121 @@ function captureInterTurnEvents() {
 /** Yield long enough for the reader to drain a delivered message. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
 
+test('Integration: startup resume failure expires the owning session before a turn sink exists', async () => {
+  const ctl = createControlledQuery();
+  const runtime = {
+    closed: false,
+    sessionId: 'pruned-session',
+    runtimeSessionEpoch: 'expired-epoch',
+    turnSink: null,
+    query: ctl.query,
+    inputStream: { done() {} },
+  };
+  const capture = captureInterTurnEvents();
+  const reader = startPerpetualReader(runtime);
+  try {
+    ctl.deliver({
+      type: 'result',
+      subtype: 'error_during_execution',
+      is_error: true,
+      errors: ['No conversation found with session ID: pruned-session'],
+    });
+    await settle();
+    ctl.end();
+    await reader;
+    assert.deepEqual(capture.list, [{
+      type: 'daemon',
+      event: 'session_resume_expired',
+      sessionId: 'pruned-session',
+      runtimeSessionEpoch: 'expired-epoch',
+    }]);
+    assert.equal(runtime.closed, true);
+    assert.match(runtime.terminalError.message, /No conversation found/);
+  } finally {
+    ctl.end();
+    await reader;
+    capture.restore();
+  }
+});
+
+test('Integration: startup process exit recognizes a missing transcript reported on stderr', async () => {
+  const ctl = createControlledQuery();
+  const runtime = {
+    closed: false,
+    sessionId: 'pruned-session',
+    runtimeSessionEpoch: 'expired-epoch',
+    stderrLines: ['No conversation found with session ID: pruned-session'],
+    turnSink: null,
+    query: ctl.query,
+    inputStream: { done() {} },
+  };
+  const capture = captureInterTurnEvents();
+  const reader = startPerpetualReader(runtime);
+  try {
+    ctl.deliverError(new Error('Claude Code process exited with code 1'));
+    await reader;
+    assert.equal(capture.list.length, 1);
+    assert.equal(capture.list[0].event, 'session_resume_expired');
+    assert.equal(capture.list[0].runtimeSessionEpoch, 'expired-epoch');
+  } finally {
+    ctl.end();
+    await reader;
+    capture.restore();
+  }
+});
+
+for (const provenance of [{ parent_tool_use_id: 'agent-tool' }, { origin: { kind: 'task-notification' } }]) {
+  test(`Integration: a background resume failure cannot expire the foreground session (${JSON.stringify(provenance)})`, async () => {
+    const ctl = createControlledQuery();
+    const runtime = {
+      closed: false, sessionId: 'live-session', runtimeSessionEpoch: 'live-epoch',
+      turnSink: null, query: ctl.query, inputStream: { done() {} },
+    };
+    const capture = captureInterTurnEvents();
+    const reader = startPerpetualReader(runtime);
+    try {
+      ctl.deliver({
+        type: 'result', subtype: 'error_during_execution', is_error: true,
+        errors: ['No conversation found with session ID: subagent-session'],
+        ...provenance,
+      });
+      await settle();
+      assert.equal(capture.list.some(event => event.event === 'session_resume_expired'), false);
+      assert.equal(runtime.closed, false);
+    } finally {
+      ctl.end();
+      await reader;
+      capture.restore();
+    }
+  });
+}
+
 // ============================================================================
 // In-Turn Routing
 // ============================================================================
+
+for (const ending of ['eof', 'process-exit']) {
+  test(`Integration: a queued resume error survives an immediate ${ending}`, async () => {
+    const ctl = createControlledQuery();
+    const sink = createTurnSink();
+    const runtime = {
+      closed: false, sessionId: 'pruned-session', runtimeSessionEpoch: 'expired-epoch',
+      turnSink: sink, query: ctl.query, inputStream: { done() {} },
+    };
+    const reader = startPerpetualReader(runtime);
+    ctl.deliver({
+      type: 'result', subtype: 'error_during_execution', is_error: true,
+      errors: ['No conversation found with session ID: pruned-session'],
+    });
+    if (ending === 'eof') ctl.end();
+    else ctl.deliverError(new Error('Claude Code process exited with code 1'));
+
+    await reader;
+
+    await assert.rejects(sink.take(), /No conversation found with session ID: pruned-session/);
+    assert.equal(runtime.closed, true);
+  });
+}
 
 test('Integration: perpetual reader routes in-turn messages to turnSink', async () => {
   const ctl = createControlledQuery();

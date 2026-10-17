@@ -12,7 +12,12 @@ interface DiagnosticNavigationStep {
   action: DiagnosticNavigationAction;
 }
 
-export type DiagnosticStep = DiagnosticCommandStep | DiagnosticNavigationStep;
+interface DiagnosticLinkStep {
+  kind: 'link';
+  url: string;
+}
+
+export type DiagnosticStep = DiagnosticCommandStep | DiagnosticNavigationStep | DiagnosticLinkStep;
 
 export interface DiagnosticSolution {
   key: string;

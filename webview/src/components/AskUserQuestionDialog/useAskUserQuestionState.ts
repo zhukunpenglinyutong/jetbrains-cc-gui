@@ -20,7 +20,8 @@ interface UseAskUserQuestionStateParams {
   normalizedQuestions: Question[];
   customInputRef: RefObject<HTMLTextAreaElement | null>;
   markSubmitted: () => boolean;
-  onSubmit: (requestId: string, answers: Record<string, string | string[]>) => void;
+  restoreSubmission?: () => void;
+  onSubmit: (requestId: string, answers: Record<string, string | string[]>) => void | boolean;
   onCancel: () => void;
 }
 
@@ -30,6 +31,7 @@ export const useAskUserQuestionState = ({
   normalizedQuestions,
   customInputRef,
   markSubmitted,
+  restoreSubmission,
   onSubmit,
   onCancel,
 }: UseAskUserQuestionStateParams) => {
@@ -50,14 +52,18 @@ export const useAskUserQuestionState = ({
       const draft = readDialogDraft<AskUserQuestionDraft>('askUserQuestion', request.requestId, request.deadlineMs, request.dialogToken);
       if (draft?.answers) {
         for (const [question, labels] of Object.entries(draft.answers)) {
-          if (Array.isArray(labels)) {
+          const secretQuestion = normalizedQuestions
+            .some((item) => (item.id ?? item.question) === question && item.isSecret);
+          if (!secretQuestion && Array.isArray(labels)) {
             initialAnswers[question] = new Set(labels.filter((label): label is string => typeof label === 'string'));
           }
         }
       }
       if (draft?.customInputs && typeof draft.customInputs === 'object') {
         for (const [question, value] of Object.entries(draft.customInputs)) {
-          if (typeof value === 'string') {
+          const secretQuestion = normalizedQuestions
+            .some((item) => (item.id ?? item.question) === question && item.isSecret);
+          if (!secretQuestion && typeof value === 'string') {
             initialCustomInputs[question] = value.slice(0, MAX_CUSTOM_INPUT_LENGTH);
           }
         }
@@ -70,6 +76,12 @@ export const useAskUserQuestionState = ({
           : 0,
       );
       setIsCollapsed(draft?.isCollapsed === true);
+    } else {
+      // Closing a request must also forget secret drafts held in React state.
+      setAnswers({});
+      setCustomInputs({});
+      setCurrentQuestionIndex(0);
+      setIsCollapsed(false);
     }
   }
 
@@ -79,15 +91,21 @@ export const useAskUserQuestionState = ({
     if (!isOpen || requestId === undefined) {
       return;
     }
-    const serializedAnswers: Record<string, string[]> = {};
+    const serializedAnswers: Record<string, string[]> = Object.create(null);
+    const secretKeys = new Set(normalizedQuestions
+      .filter((question) => question.isSecret)
+      .map((question) => question.id ?? question.question));
     for (const [question, labels] of Object.entries(answers)) {
-      serializedAnswers[question] = Array.from(labels);
+      if (!secretKeys.has(question)) serializedAnswers[question] = Array.from(labels);
     }
+    const safeCustomInputs = Object.fromEntries(
+      Object.entries(customInputs).filter(([question]) => !secretKeys.has(question)),
+    );
     writeDialogDraft('askUserQuestion', requestId, {
       deadlineMs,
       dialogToken: request?.dialogToken,
       answers: serializedAnswers,
-      customInputs,
+      customInputs: safeCustomInputs,
       currentQuestionIndex,
       isCollapsed,
     });
@@ -100,6 +118,7 @@ export const useAskUserQuestionState = ({
     request?.requestId,
     request?.dialogToken,
     request?.deadlineMs,
+    normalizedQuestions,
   ]);
 
   // Keyboard event handling - separate effect to avoid frequent listener registration/removal
@@ -125,20 +144,24 @@ export const useAskUserQuestionState = ({
   const safeQuestionIndex = Math.max(0, Math.min(currentQuestionIndex, normalizedQuestions.length - 1));
   const currentQuestion = normalizedQuestions[safeQuestionIndex];
   const isLastQuestion = safeQuestionIndex === normalizedQuestions.length - 1;
-  const currentAnswerSet = (currentQuestion && answers[currentQuestion.question]) || new Set<string>();
-  const currentCustomInput = (currentQuestion && customInputs[currentQuestion.question]) || '';
+  const currentQuestionKey = currentQuestion?.id ?? currentQuestion?.question;
+  const currentAnswerSet = (currentQuestionKey && answers[currentQuestionKey]) || new Set<string>();
+  const currentCustomInput = (currentQuestionKey && customInputs[currentQuestionKey]) || '';
 
   const handleSubmitFinal = () => {
     if (!markSubmitted() || !request) return;
 
-    onSubmit(request.requestId, formatAnswers(normalizedQuestions, answers, customInputs));
-    clearDialogDraft('askUserQuestion', request.requestId, request.dialogToken);
+    if (onSubmit(request.requestId, formatAnswers(normalizedQuestions, answers, customInputs)) === false) {
+      restoreSubmission?.();
+    } else {
+      clearDialogDraft('askUserQuestion', request.requestId, request.dialogToken);
+    }
   };
 
   const handleOptionToggle = (label: string) => {
     if (!currentQuestion) return;
 
-    const questionKey = currentQuestion.question;
+    const questionKey = currentQuestion.id ?? currentQuestion.question;
     setAnswers((prev) => toggleAnswerSelection(prev, questionKey, currentQuestion.multiSelect, label));
 
     // Single-select questions carry one value: picking a predefined option
@@ -160,7 +183,7 @@ export const useAskUserQuestionState = ({
 
     // Limit input length to prevent excessively long input
     const sanitizedValue = value.slice(0, MAX_CUSTOM_INPUT_LENGTH);
-    const questionKey = currentQuestion.question;
+    const questionKey = currentQuestion.id ?? currentQuestion.question;
     setCustomInputs((prev) => ({
       ...prev,
       [questionKey]: sanitizedValue,
@@ -191,7 +214,7 @@ export const useAskUserQuestionState = ({
   //    even for a question that offers options)
   const hasRegularSelection = Array.from(currentAnswerSet).some(label => label !== OTHER_OPTION_MARKER);
   const hasCustomText = currentCustomInput.trim().length > 0;
-  const canProceed = hasRegularSelection || hasCustomText;
+  const canProceed = currentQuestion?.required !== true || hasRegularSelection || hasCustomText;
 
   return {
     isCollapsed,

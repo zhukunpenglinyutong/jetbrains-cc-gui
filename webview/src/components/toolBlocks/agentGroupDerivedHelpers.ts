@@ -1,5 +1,5 @@
 import type { ClaudeContentBlock, ToolResultBlock, TaskEvent, SubagentHistoryResponse } from '../../types';
-import { parseSpawnAgentMeta } from '../../utils/subagentResult';
+import { isSubagentHistoryCurrent, parseSpawnAgentMeta } from '../../utils/subagentResult';
 
 // Constants extracted from magic numbers
 const MAX_SUMMARY_LENGTH = 120;
@@ -58,12 +58,14 @@ export function resolveAgentHistory(
   toolId: string | undefined,
   agentId: string | undefined,
   agentPath: string | undefined,
+  nativeTaskId?: string,
 ): {
   history: SubagentHistoryResponse | undefined;
   resolvedAgentId: string | undefined;
   resolvedAgentPath: string | undefined;
 } {
-  const history = (toolId ? histories[toolId] : undefined) ?? (agentId ? histories[agentId] : undefined);
+  const candidate = (toolId ? histories[toolId] : undefined) ?? (agentId ? histories[agentId] : undefined);
+  const history = isSubagentHistoryCurrent(candidate, nativeTaskId) ? candidate : undefined;
   return {
     history,
     resolvedAgentId: history?.agentId ?? agentId,
@@ -94,7 +96,7 @@ export function resolveAgentTerminalState(args: {
   if (taskEvent) {
     return { isCompleted: !taskFailed, isError: taskFailed };
   }
-  const historyFailed = history?.status === 'error';
+  const historyFailed = history?.success === true && history.status === 'error';
   return {
     isCompleted: history?.completed === true,
     isError: historyFailed || result?.is_error === true,

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { writeClaudeModelMapping } from '../../../utils/claudeModelMapping';
 import { ReasoningSelect } from './ReasoningSelect';
 
 vi.mock('react-i18next', () => ({
@@ -9,6 +10,28 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('ReasoningSelect', () => {
+  beforeEach(() => localStorage.clear());
+  it('shows and selects effort for a cc-switch aggregate route', () => {
+    const onChange = vi.fn();
+    render(<ReasoningSelect value="high" onChange={onChange} currentProvider="claude" selectedModel="ccs-claude-provider-a--glm-pro[1M]" />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(screen.getByText('Max')).toBeTruthy();
+    expect(screen.getByText('XHigh')).toBeTruthy();
+    fireEvent.click(screen.getByText('Low'));
+    expect(onChange).toHaveBeenCalledWith('low');
+  });
+
+  it.each(['glm-pro', 'claude-sonnet-5'])('shows and selects xhigh/max for direct/route mapping %s', (model) => {
+    writeClaudeModelMapping({ sonnet: model });
+    const onChange = vi.fn();
+    render(<ReasoningSelect value="high" onChange={onChange} currentProvider="claude" selectedModel="claude-sonnet-5" />);
+    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByText('XHigh'));
+    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByText('Max'));
+    expect(onChange).toHaveBeenCalledWith('xhigh');
+    expect(onChange).toHaveBeenCalledWith('max');
+  });
   it('shows and selects max for Codex', () => {
     const onChange = vi.fn();
 

@@ -3,7 +3,7 @@ import './testing/cli-login-home.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { __testing } from './persistent-query-service.js';
+import { __testing, sendMessagePersistent } from './persistent-query-service.js';
 
 /**
  * Create a Promise that can be manually resolved.
@@ -123,6 +123,75 @@ test.after(async () => {
   await __testing.resetState();
 });
 
+test('startup resume failure reports its original error, emits once, and retires the query', async () => {
+  const factory = createSequencedQueryFactory([() => ({
+    done: false,
+    value: {
+      type: 'result', subtype: 'error_during_execution', is_error: true,
+      errors: ['No conversation found with session ID: pruned-session'],
+    },
+  })]);
+  __testing.setQueryFn(factory.queryFn);
+  const events = [];
+  const output = [];
+  const originalWrite = process.stdout._originalStdoutWrite;
+  const originalLog = console.log;
+  process.stdout._originalStdoutWrite = (line) => {
+    events.push(JSON.parse(line));
+    return true;
+  };
+  console.log = (...args) => { output.push(args); };
+  try {
+    await sendMessagePersistent({
+      sessionId: 'pruned-session', runtimeSessionEpoch: 'expired-epoch',
+      cwd: process.cwd(), message: 'retry this input',
+    });
+    assert.deepEqual(events, [{
+      type: 'daemon', event: 'session_resume_expired',
+      sessionId: 'pruned-session', runtimeSessionEpoch: 'expired-epoch',
+    }]);
+    const sendError = output.find(args => args[0] === '[SEND_ERROR]');
+    assert.ok(sendError, 'the failed request must still report its error');
+    assert.match(JSON.parse(sendError[1]).error, /No conversation found with session ID: pruned-session/);
+    assert.equal(factory.runtimes[0].closed, true);
+    assert.equal(__testing.getRuntimeForSession('pruned-session'), null);
+  } finally {
+    console.log = originalLog;
+    if (originalWrite === undefined) delete process.stdout._originalStdoutWrite;
+    else process.stdout._originalStdoutWrite = originalWrite;
+  }
+});
+
+test('active resume error retires a query whose iterator stays open', async () => {
+  const factory = createSequencedQueryFactory([{
+    done: false,
+    value: {
+      type: 'result', subtype: 'error_during_execution', is_error: true,
+      errors: ['No conversation found with session ID: pruned-session'],
+    },
+  }]);
+  __testing.setQueryFn(factory.queryFn);
+  const events = [];
+  const originalWrite = process.stdout._originalStdoutWrite;
+  process.stdout._originalStdoutWrite = (line) => {
+    events.push(JSON.parse(line));
+    return true;
+  };
+  try {
+    await sendMessagePersistent({
+      sessionId: 'pruned-session', runtimeSessionEpoch: 'expired-epoch',
+      cwd: process.cwd(), message: 'retry this input',
+    });
+    assert.equal(events.length, 1);
+    assert.equal(events[0].event, 'session_resume_expired');
+    assert.equal(factory.runtimes[0].closed, true);
+    assert.equal(__testing.getRuntimeForSession('pruned-session'), null);
+  } finally {
+    if (originalWrite === undefined) delete process.stdout._originalStdoutWrite;
+    else process.stdout._originalStdoutWrite = originalWrite;
+  }
+});
+
 test('reasoningEffort is passed as SDK effort and disables fixed thinking tokens', async () => {
   const context = await __testing.buildRequestContext({
     sessionId: '',
@@ -137,6 +206,28 @@ test('reasoningEffort is passed as SDK effort and disables fixed thinking tokens
   assert.equal(context.maxThinkingTokens, undefined);
   assert.match(context.runtimeSignature, /"effort":"xhigh"/);
 });
+
+test('aggregated routes keep the exact model id and forward the selected effort to the SDK', async () => {
+  const model = 'ccs-claude-provider-a--glm-pro[1m]';
+  const context = await __testing.buildRequestContext({
+    sessionId: '', runtimeSessionEpoch: 'epoch-aggregate-effort', cwd: process.cwd(),
+    message: 'gateway effort', model, reasoningEffort: 'low',
+  }, false);
+  assert.equal(context.options.model, model);
+  assert.equal(context.options.effort, 'low');
+  assert.equal(Object.hasOwn(context.options, 'maxThinkingTokens'), false);
+});
+
+for (const effort of ['xhigh', 'max']) {
+  test(`aggregated routes forward ${effort} to SDK options`, async () => {
+    const context = await __testing.buildRequestContext({
+      sessionId: '', runtimeSessionEpoch: `epoch-aggregate-${effort}`, cwd: process.cwd(),
+      message: 'gateway effort', model: 'ccs-claude-provider-a--glm-pro[1m]', reasoningEffort: effort,
+    }, false);
+    assert.equal(context.options.effort, effort);
+    assert.equal(context.options.model, 'ccs-claude-provider-a--glm-pro[1m]');
+  });
+}
 
 test('fixed thinking tokens remain configured when no reasoningEffort is provided', async () => {
   const context = await __testing.buildRequestContext({

@@ -1,13 +1,14 @@
 import { useEffect } from 'react';
 import type { SubagentHistoryResponse, ToolInput, ToolResultBlock } from '../../types';
 import { sendBridgeEvent } from '../../utils/bridge';
-import { hasSubagentTranscript, type SpawnAgentMeta } from '../../utils/subagentResult';
+import { hasSubagentTranscript, resolveSubagentGroupOutcome, type SpawnAgentMeta } from '../../utils/subagentResult';
 import {
   useSubagentHistories,
   useSessionId,
   useSessionProvider,
   useGetToolResultRaw,
   useTaskEvent,
+  useSubagentStates,
 } from '../../contexts/SubagentContext';
 import { resolveTaskDetails, resolveTaskInputMeta, resolveTaskStatus } from './taskExecutionMeta';
 
@@ -46,6 +47,9 @@ export function useTaskExecutionState({ name, input, result, toolId, expanded }:
   const currentProvider = useSessionProvider();
   const getToolResultRaw = useGetToolResultRaw();
   const taskEvent = useTaskEvent(toolId);
+  const states = useSubagentStates(toolId);
+  const nativeTaskId = states[0]?.nativeTaskId;
+  const nativeTaskPreviousTurnId = states[0]?.nativeTaskPreviousTurnId;
 
   // Compute derived values up front, guarding input, so both useEffects below
   // run before the !input early return (React rules-of-hooks). input is always
@@ -61,16 +65,19 @@ export function useTaskExecutionState({ name, input, result, toolId, expanded }:
     getToolResultRaw,
     taskEvent,
     histories,
-    agentId: meta.agentId,
-    agentPath: meta.agentPath,
+    agentId: meta.agentId ?? states[0]?.agentId,
+    agentPath: meta.agentPath ?? states[0]?.agentPath,
+    nativeTaskId,
   });
-  const { history, resolvedAgentId, resolvedAgentPath, isCompleted, isError } = status;
+  const { history, resolvedAgentId, resolvedAgentPath } = status;
+  const { isCompleted, isError } = resolveSubagentGroupOutcome(states) ?? status;
   const details = resolveTaskDetails({
     isAsync: status.isAsync,
     taskEvent,
     resolvedAgentId,
     agentToolMeta: meta.agentToolMeta,
     result,
+    normalizedName: meta.normalizedName,
   });
 
   useEffect(() => {
@@ -80,10 +87,12 @@ export function useTaskExecutionState({ name, input, result, toolId, expanded }:
       provider: currentProvider,
       agentId: resolvedAgentId,
       agentPath: resolvedAgentPath,
+      nativeTaskId,
+      nativeTaskPreviousTurnId,
       description: historyDescription,
       toolUseId: toolId,
     }));
-  }, [input, currentProvider, currentSessionId, expanded, history, historyDescription, isAgentTool, resolvedAgentId, resolvedAgentPath, toolId]);
+  }, [input, currentProvider, currentSessionId, expanded, history, historyDescription, isAgentTool, resolvedAgentId, resolvedAgentPath, toolId, nativeTaskId, nativeTaskPreviousTurnId]);
 
   // Poll while an expanded async Agent is unresolved, including after a main
   // turn settles. This lets a reloaded session observe the sidechain's terminal
@@ -105,12 +114,14 @@ export function useTaskExecutionState({ name, input, result, toolId, expanded }:
         provider: currentProvider,
         agentId: resolvedAgentId,
         agentPath: resolvedAgentPath,
+        nativeTaskId,
+        nativeTaskPreviousTurnId,
         description: historyDescription,
         toolUseId: toolId,
       }));
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [input, currentProvider, currentSessionId, historyDescription, resolvedAgentId, resolvedAgentPath, shouldPollHistory, toolId]);
+  }, [input, currentProvider, currentSessionId, historyDescription, resolvedAgentId, resolvedAgentPath, shouldPollHistory, toolId, nativeTaskId, nativeTaskPreviousTurnId]);
 
   return {
     isSpawnAgent,
@@ -129,7 +140,7 @@ export function useTaskExecutionState({ name, input, result, toolId, expanded }:
     detailDurationMs: details.detailDurationMs,
     detailTokens: details.detailTokens,
     detailToolUseCount: details.detailToolUseCount,
-    detailResultText: details.detailResultText,
+    detailResultText: states[0]?.resultText ?? details.detailResultText,
     canLoad: Boolean(currentSessionId),
   };
 }

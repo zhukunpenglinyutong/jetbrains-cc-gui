@@ -41,17 +41,20 @@ const REFRESH_BUTTON_ICON_STYLE: React.CSSProperties = {
 
 interface EditDiffTopBarProps {
   filePath: string | undefined;
-  oldString: string;
-  newString: string;
+  oldString?: string;
+  newString?: string;
   fileName: string | undefined;
+  onPreviewDiff?: () => void;
 }
 
-const EditDiffTopBar = function EditDiffTopBar({ filePath, oldString, newString, fileName }: EditDiffTopBarProps) {
+const EditDiffTopBar = function EditDiffTopBar({ filePath, oldString, newString, fileName, onPreviewDiff }: EditDiffTopBarProps) {
   const { t } = useTranslation();
 
   const handleShowDiff = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (filePath) {
+    if (onPreviewDiff) {
+      onPreviewDiff();
+    } else if (filePath && oldString !== undefined && newString !== undefined) {
       showDiff(filePath, oldString, newString, t('tools.editPrefix', { fileName }));
     }
   };
@@ -72,7 +75,7 @@ const EditDiffTopBar = function EditDiffTopBar({ filePath, oldString, newString,
             e.stopPropagation();
             handleShowDiff(e);
           }}
-          title={t('tools.showDiffInIdea')}
+          title={t(onPreviewDiff ? 'tools.diffButton' : 'tools.showDiffInIdea')}
           style={ACTION_BUTTON_STYLE}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = 'var(--bg-hover)';

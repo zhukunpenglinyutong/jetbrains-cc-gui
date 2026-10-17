@@ -45,6 +45,7 @@ public class ClaudeSettingsManager {
     static final Set<String> PROVIDER_MANAGED_FIELDS = Set.of(
             "env",                      // Environment variables (key-level merge; see ClaudeSettingsSyncPlan)
             "model",                    // Model selection
+            "modelPicker",              // Provider model catalog
             "alwaysThinkingEnabled",    // Thinking mode
             "codemossProviderId",       // Codemoss provider identifier
             "ccSwitchProviderId",       // CC-Switch provider identifier

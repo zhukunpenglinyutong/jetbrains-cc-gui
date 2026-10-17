@@ -1,6 +1,8 @@
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { useIsToolDenied } from '../../hooks/useIsToolDenied';
 import { stripAnsi } from '../../utils/stripAnsi';
+import { useTranslation } from 'react-i18next';
+import { presentCommand } from '../../utils/commandPresentation';
 
 interface UseBashToolStateArgs {
   input?: ToolInput;
@@ -10,9 +12,8 @@ interface UseBashToolStateArgs {
 
 export function useBashToolState({ input, result, toolId }: UseBashToolStateArgs) {
   const isDenied = useIsToolDenied(toolId);
-
-  const command = typeof input?.command === 'string' ? input.command : '';
-  const description = typeof input?.description === 'string' ? input.description : '';
+  const { t } = useTranslation();
+  const { command, description, justification } = presentCommand(input, t);
 
   // Determine tool call status based on result
   // If denied, treat as completed (show error state)
@@ -32,5 +33,5 @@ export function useBashToolState({ input, result, toolId }: UseBashToolStateArgs
     output = stripAnsi(output);
   }
 
-  return { command, description, isCompleted, isError, output };
+  return { command, description, justification, isCompleted, isError, output };
 }

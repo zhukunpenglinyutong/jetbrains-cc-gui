@@ -171,6 +171,29 @@ export function useChatInputController({
   // Context menu hook
   const ctxMenu = useContextMenu();
 
+  // Paste ownership and readiness must be available to every submit entry point.
+  const {
+    handlePaste,
+    handleDragOver,
+    handleDrop,
+    isPreparingImages,
+    hasPendingImagePastes,
+    invalidateImagePastes,
+  } = usePasteAndDrop({
+    editableRef,
+    pathMappingRef,
+    getTextContent,
+    adjustHeight,
+    renderFileTags: renderTagsNowIfSafe,
+    setHasContent,
+    setInternalAttachments,
+    currentSessionId: sessionCtx?.currentSessionId ?? null,
+    onInput: notifyInput,
+    closeAllCompletions,
+    handleInput,
+    flushInput: flushPendingInput,
+  });
+
   const handleSubmit = useSubmitHandler({
     getTextContent,
     invalidateCache,
@@ -182,6 +205,8 @@ export function useChatInputController({
     externalAttachments,
     setInternalAttachments,
     clearAttachmentsDraft,
+    hasPendingImagePastes,
+    invalidateImagePastes,
     fileCompletion,
     commandCompletion,
     agentCompletion,
@@ -232,6 +257,7 @@ export function useChatInputController({
     getTextContent,
     invalidateCache,
     cancelPendingInput,
+    invalidateImagePastes,
     setHasContent,
     adjustHeight,
     clearInput,
@@ -273,6 +299,7 @@ export function useChatInputController({
     adjustHeight,
     invalidateCache,
     cancelPendingInput,
+    invalidateImagePastes,
   });
 
   useNativeEventCapture({
@@ -303,21 +330,6 @@ export function useChatInputController({
     document.addEventListener('ideaSend', handler);
     return () => document.removeEventListener('ideaSend', handler);
   }, []);
-
-  // Paste and drop hook
-  const { handlePaste, handleDragOver, handleDrop } = usePasteAndDrop({
-    editableRef,
-    pathMappingRef,
-    getTextContent,
-    adjustHeight,
-    renderFileTags: renderTagsNowIfSafe,
-    setHasContent,
-    setInternalAttachments,
-    onInput: notifyInput,
-    closeAllCompletions,
-    handleInput,
-    flushInput: flushPendingInput,
-  });
 
   /**
    * Handle mode select
@@ -394,6 +406,7 @@ export function useChatInputController({
     handleMouseOver,
     handleMouseLeave,
     hasContent,
+    isPreparingImages,
     handleInput,
     handleKeyDown,
     handleKeyUp,

@@ -30,6 +30,9 @@ final class CodexExecHistoryReplay {
     private static final int MAX_REPLAYED_SHELL_COMMANDS = 100;
     private static final int MAX_REPLAYED_PLAN_ITEMS = 100;
     private static final String UPDATE_PLAN_TOKEN = "tools.update_plan";
+    private static final List<String> PATCH_TOKENS = List.of("tools.apply_patch", "functions.apply_patch");
+    private static final List<String> SHELL_TOKENS = List.of("tools.shell_command", "tools.exec_command");
+    private static final Pattern TOOL_CALL_TOKEN = Pattern.compile("(?:tools|functions)\\.[A-Za-z_][A-Za-z0-9_]*");
     private static final Pattern JAVASCRIPT_NUMBER_PATTERN = Pattern.compile(
         "-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?"
     );
@@ -54,7 +57,265 @@ final class CodexExecHistoryReplay {
     }
 
     static boolean isExecCall(JsonObject payload) {
-        return "exec".equalsIgnoreCase(getStringProperty(payload, "name"));
+        String name = getStringProperty(payload, "name");
+        return "exec".equalsIgnoreCase(name) || "functions.exec".equalsIgnoreCase(name);
+    }
+
+    static boolean containsUnsupportedToolCalls(JsonObject payload) {
+        String script = getStringProperty(payload, "input");
+        if (script == null) {
+            script = getStringProperty(payload, "arguments");
+        }
+        if (script == null) {
+            return false;
+        }
+        Matcher matcher = TOOL_CALL_TOKEN.matcher(script);
+        while (matcher.find()) {
+            String token = matcher.group();
+            if (!List.of("tools.shell_command", "tools.exec_command", UPDATE_PLAN_TOKEN,
+                            "tools.apply_patch", "functions.apply_patch").contains(token)
+                    && findJavaScriptToken(script, token, 0) >= 0) {
+                return true;
+            }
+        }
+        int patchCount = countCalls(script, PATCH_TOKENS);
+        int shellCount = countCalls(script, SHELL_TOKENS);
+        int planCount = countCalls(script, List.of(UPDATE_PLAN_TOKEN));
+        // A combined wrapper result cannot prove which kind of tool succeeded.
+        // Preserve it intact when replay would lose calls or invent attribution.
+        if (patchCount > 1 || planCount > 1
+                || (patchCount > 0 ? 1 : 0) + (shellCount > 0 ? 1 : 0) + (planCount > 0 ? 1 : 0) > 1) {
+            return true;
+        }
+        if (patchCount != extractPatches(payload).size()
+                || planCount > 0 && extractUpdatePlanInput(payload) == null) {
+            return true;
+        }
+        return shellCount > 0 && !canReplayEveryShellCall(script, payload);
+    }
+
+    private static int countCalls(String script, List<String> tokens) {
+        int count = 0;
+        for (String token : tokens) {
+            int cursor = 0;
+            while ((cursor = findJavaScriptToken(script, token, cursor)) >= 0) {
+                count++;
+                cursor += token.length();
+            }
+        }
+        return count;
+    }
+
+    private static boolean canReplayEveryShellCall(String script, JsonObject payload) {
+        if (!findLiteralShellBatchSpans(script).isEmpty()) {
+            return true;
+        }
+        int count = 0;
+        for (String token : SHELL_TOKENS) {
+            int cursor = 0;
+            while ((cursor = findJavaScriptToken(script, token, cursor)) >= 0) {
+                int paren = skipTrivia(script, cursor + token.length(), script.length());
+                int start = skipTrivia(script, paren + 1, script.length());
+                if (paren >= script.length() || script.charAt(paren) != '('
+                        || start >= script.length() || script.charAt(start) != '{') {
+                    return false;
+                }
+                int end = findMatchingObjectEnd(script, start);
+                int next = skipTrivia(script, end + 1, script.length());
+                if (end < start || next >= script.length() || script.charAt(next) != ')'
+                        || parseJavaScriptObjectProperties(script, start, end).isEmpty()) {
+                    return false;
+                }
+                count++;
+                cursor += token.length();
+            }
+        }
+        return count == extractCommands(payload).size();
+    }
+
+    static List<String> extractPatches(JsonObject payload) {
+        String script = getStringProperty(payload, "input");
+        if (script == null) {
+            script = getStringProperty(payload, "arguments");
+        }
+        List<int[]> calls = new ArrayList<>();
+        if (script == null) {
+            return List.of();
+        }
+        for (String token : PATCH_TOKENS) {
+            int cursor = 0;
+            while ((cursor = findJavaScriptToken(script, token, cursor)) >= 0) {
+                int paren = skipTrivia(script, cursor + token.length(), script.length());
+                calls.add(new int[]{cursor, paren});
+                cursor += token.length();
+            }
+        }
+        calls.sort((left, right) -> Integer.compare(left[0], right[0]));
+        List<String> patches = new ArrayList<>();
+        for (int[] call : calls) {
+            int paren = call[1];
+            if (paren >= script.length() || script.charAt(paren) != '(') {
+                continue;
+            }
+            int start = skipTrivia(script, paren + 1, script.length());
+            if (start >= script.length()) {
+                continue;
+            }
+            ParsedString literal;
+            int argumentEnd;
+            if (isQuote(script.charAt(start))) {
+                literal = readLiteralString(script, start);
+                argumentEnd = literal == null ? start : literal.nextIndex;
+            } else {
+                argumentEnd = start;
+                while (argumentEnd < script.length() && isJavaScriptIdentifierPart(script.charAt(argumentEnd))) {
+                    argumentEnd++;
+                }
+                literal = readLeadingLiteralBinding(script, script.substring(start, argumentEnd), start);
+            }
+            int end = skipTrivia(script, argumentEnd, script.length());
+            if (end >= script.length() || script.charAt(end) != ')') {
+                continue;
+            }
+            if (literal == null) {
+                patches.addAll(readLiteralPatchBatch(script, script.substring(start, argumentEnd), call[0]));
+                if (patches.size() >= MAX_REPLAYED_SHELL_COMMANDS) {
+                    break;
+                }
+                continue;
+            }
+            String patch = literal.value.replace("\r\n", "\n").replace('\r', '\n').strip();
+            if (patch.startsWith("*** Begin Patch\n") && patch.endsWith("*** End Patch")
+                    && Pattern.compile("(?m)^\\*\\*\\* (?:Add|Update|Delete) File: .+").matcher(patch).find()) {
+                patches.add(literal.value);
+            }
+            if (patches.size() >= MAX_REPLAYED_SHELL_COMMANDS) {
+                break;
+            }
+        }
+        return patches;
+    }
+
+    static boolean needsRecordedPatch(JsonObject payload) {
+        String script = getStringProperty(payload, "input");
+        if (script == null) {
+            script = getStringProperty(payload, "arguments");
+        }
+        return script != null && countCalls(script, PATCH_TOKENS) > 0 && extractPatches(payload).isEmpty();
+    }
+
+    private static ParsedString readLiteralString(String script, int start) {
+        ParsedString literal = readJavaScriptString(script, start);
+        if (literal.nextIndex <= start + 1 || script.charAt(literal.nextIndex - 1) != script.charAt(start)
+                || script.charAt(start) == '`' && containsTemplateInterpolation(script, start, literal.nextIndex)) {
+            return null;
+        }
+        return literal;
+    }
+
+    private static ParsedString readLeadingLiteralBinding(String script, String name, int argumentStart) {
+        if (name.isEmpty()) {
+            return null;
+        }
+        int cursor = skipTrivia(script, 0, argumentStart);
+        while (cursor < argumentStart && script.startsWith("const", cursor)) {
+            int identifierStart = skipTrivia(script, cursor + "const".length(), argumentStart);
+            int identifierEnd = identifierStart;
+            while (identifierEnd < argumentStart && isJavaScriptIdentifierPart(script.charAt(identifierEnd))) {
+                identifierEnd++;
+            }
+            int assignment = skipTrivia(script, identifierEnd, argumentStart);
+            if (identifierEnd == identifierStart || assignment >= argumentStart || script.charAt(assignment) != '=') {
+                return null;
+            }
+            int valueStart = skipTrivia(script, assignment + 1, argumentStart);
+            if (valueStart >= argumentStart || !isQuote(script.charAt(valueStart))) {
+                return null;
+            }
+            ParsedString literal = readLiteralString(script, valueStart);
+            if (literal == null) {
+                return null;
+            }
+            int end = skipTrivia(script, literal.nextIndex, argumentStart);
+            if (end >= argumentStart || script.charAt(end) != ';') {
+                return null;
+            }
+            if (name.equals(script.substring(identifierStart, identifierEnd))) {
+                // An immutable leading literal is known without executing history.
+                // Earlier references could shadow the binding or evaluate another value.
+                return findJavaScriptToken(script, name, end + 1) == argumentStart ? literal : null;
+            }
+            cursor = skipTrivia(script, end + 1, argumentStart);
+        }
+        return null;
+    }
+
+    private static List<String> readLiteralPatchBatch(String script, String parameter, int callStart) {
+        Matcher loop = Pattern.compile("\\bfor\\s*\\(\\s*const\\s+([A-Za-z_$][A-Za-z0-9_$]*)"
+                + "\\s+of\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*\\)\\s*(?:text\\(\\s*)?await\\s*$")
+                .matcher(script.substring(0, callStart));
+        if (!loop.find() || !parameter.equals(loop.group(1))) {
+            return List.of();
+        }
+        int declarationStart = skipTrivia(script, 0, loop.start());
+        Matcher declaration = Pattern.compile("const\\s+" + Pattern.quote(loop.group(2)) + "\\s*=\\s*").matcher(script);
+        declaration.region(declarationStart, loop.start());
+        if (!declaration.lookingAt() || declaration.end() >= script.length() || script.charAt(declaration.end()) != '[') {
+            return List.of();
+        }
+        int start = declaration.end();
+        int end = findMatchingEnd(script, start, '[', ']');
+        int terminator = skipTrivia(script, end + 1, loop.start());
+        if (end < start || terminator >= loop.start() || script.charAt(terminator) != ';'
+                || skipTrivia(script, terminator + 1, loop.start()) != loop.start()) {
+            return List.of();
+        }
+        // The array reaches the loop unchanged; mutations and computed entries
+        // cannot establish the patch inputs without evaluating historical code.
+        String normalized = normalizeJavaScriptLiteralToJson(script.substring(start, end + 1));
+        if (normalized == null) {
+            return List.of();
+        }
+        JsonElement value;
+        try {
+            value = JsonParser.parseString(normalized);
+        } catch (RuntimeException ignored) {
+            return List.of();
+        }
+        if (!value.isJsonArray() || value.getAsJsonArray().size() > MAX_REPLAYED_SHELL_COMMANDS) {
+            return List.of();
+        }
+        List<String> patches = new ArrayList<>();
+        for (JsonElement entry : value.getAsJsonArray()) {
+            if (!entry.isJsonPrimitive() || !entry.getAsJsonPrimitive().isString()) {
+                return List.of();
+            }
+            String patch = entry.getAsString().replace("\r\n", "\n").replace('\r', '\n').strip();
+            if (!patch.startsWith("*** Begin Patch\n") || !patch.endsWith("*** End Patch")
+                    || !Pattern.compile("(?m)^\\*\\*\\* (?:Add|Update|Delete) File: .+").matcher(patch).find()) {
+                return List.of();
+            }
+            patches.add(entry.getAsString());
+        }
+        return patches;
+    }
+
+    static JsonObject createPatchToolUseMessage(String callId, String patch, int index, String timestamp) {
+        JsonObject call = new JsonObject();
+        call.addProperty("name", "apply_patch");
+        call.addProperty("call_id", callId + ":patch:" + index);
+        call.addProperty("input", patch);
+        return CodexMessageConverter.convertCustomToolCallToToolUse(call, timestamp);
+    }
+
+    static JsonObject createPatchToolResultMessage(String callId, int index, Output output, String timestamp) {
+        JsonObject result = output.payload.deepCopy();
+        result.addProperty("call_id", callId + ":patch:" + index);
+        if (isFailedOutputPayload(result) || FAILED_OUTPUT_PATTERN.matcher(result.toString()).find()) {
+            result.addProperty("status", "error");
+        }
+        return CodexMessageConverter.convertCustomToolCallOutputToToolResult(result,
+                output.timestamp == null ? timestamp : output.timestamp);
     }
 
     static List<Command> extractCommands(JsonObject payload) {
@@ -64,31 +325,69 @@ final class CodexExecHistoryReplay {
         }
 
         List<Command> commands = new ArrayList<>();
-        if (script == null || script.isBlank() || !script.contains("tools.shell_command")) {
+        if (script == null || script.isBlank()) {
             return commands;
         }
 
-        List<int[]> objectSpans = findJavaScriptObjectSpans(script);
+        List<int[]> objectSpans = new ArrayList<>();
+        for (String token : SHELL_TOKENS) {
+            int cursor = 0;
+            while (cursor < script.length()) {
+                int call = findJavaScriptToken(script, token, cursor);
+                if (call < 0) {
+                    break;
+                }
+                cursor = call + token.length();
+                int paren = skipTrivia(script, cursor, script.length());
+                if (paren >= script.length() || script.charAt(paren) != '(') {
+                    continue;
+                }
+                int start = skipTrivia(script, paren + 1, script.length());
+                if (start >= script.length() || script.charAt(start) != '{') {
+                    continue;
+                }
+                int end = findMatchingObjectEnd(script, start);
+                if (end >= start) {
+                    objectSpans.add(new int[]{start, end});
+                }
+            }
+        }
+        // Older wrappers store a literal command batch and map it into the
+        // shell tool. Preserve that established read-only projection too.
+        if (objectSpans.isEmpty() && findJavaScriptToken(script, "tools.shell_command", 0) >= 0) {
+            objectSpans.addAll(findLiteralShellBatchSpans(script));
+        }
         objectSpans.sort((left, right) -> Integer.compare(left[0], right[0]));
         for (int[] span : objectSpans) {
             Map<String, String> properties =
                 parseJavaScriptObjectProperties(script, span[0], span[1]);
-            String command = properties.get("command");
+            String command = properties.getOrDefault("command", properties.get("cmd"));
             if (command == null || command.isBlank()) {
                 continue;
             }
 
             commands.add(new Command(
                 command,
-                properties.get("description"),
+                firstExplanation(properties),
                 properties.get("workdir"),
-                parseLongOrNull(properties.get("timeout_ms"))
+                parseLongOrNull(properties.get("timeout_ms")),
+                properties.get("justification")
             ));
             if (commands.size() >= MAX_REPLAYED_SHELL_COMMANDS) {
                 break;
             }
         }
         return commands;
+    }
+
+    private static String firstExplanation(Map<String, String> properties) {
+        for (String key : List.of("description", "summary", "title")) {
+            String value = properties.get(key);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     static JsonObject extractUpdatePlanInput(JsonObject payload) {
@@ -171,6 +470,9 @@ final class CodexExecHistoryReplay {
             if (command.timeoutMs != null) {
                 input.addProperty("timeout_ms", command.timeoutMs);
             }
+            if (command.justification != null && !command.justification.isBlank()) {
+                input.addProperty("justification", command.justification);
+            }
 
             JsonObject toolUse = new JsonObject();
             toolUse.addProperty("type", "tool_use");
@@ -214,9 +516,11 @@ final class CodexExecHistoryReplay {
             JsonObject toolResult = new JsonObject();
             toolResult.addProperty("type", "tool_result");
             toolResult.addProperty("tool_use_id", shellToolUseId(callId, i));
+            JsonObject commandPayload = new JsonObject();
+            commandPayload.addProperty("output", commandOutput);
             toolResult.addProperty(
                 "is_error",
-                FAILED_OUTPUT_PATTERN.matcher(commandOutput).find()
+                isFailedOutputPayload(commandPayload) || FAILED_OUTPUT_PATTERN.matcher(commandOutput).find()
                     || (globalFailure && commands.size() == 1)
             );
             toolResult.addProperty("content", commandOutput);
@@ -266,6 +570,73 @@ final class CodexExecHistoryReplay {
                 spans.add(new int[]{start, cursor});
             }
             cursor++;
+        }
+        return spans;
+    }
+
+    private static List<int[]> findLiteralShellBatchSpans(String script) {
+        if (countCalls(script, SHELL_TOKENS) != 1 || findJavaScriptToken(script, "tools.exec_command", 0) >= 0) {
+            return List.of();
+        }
+        int call = findJavaScriptToken(script, "tools.shell_command", 0);
+        if (call < 0) {
+            return List.of();
+        }
+        Matcher mapping = Pattern.compile("([A-Za-z_$][A-Za-z0-9_$]*)\\.map\\(\\s*([A-Za-z_$][A-Za-z0-9_$]*)\\s*=>\\s*$")
+                .matcher(script.substring(0, call));
+        if (!mapping.find()) {
+            return List.of();
+        }
+        String batchName = mapping.group(1);
+        String parameter = mapping.group(2);
+        String tail = script.substring(call + "tools.shell_command".length());
+        if (!Pattern.compile("^\\(\\s*" + Pattern.quote(parameter) + "\\s*\\)\\s*\\)").matcher(tail).find()) {
+            return List.of();
+        }
+        Matcher declaration = Pattern.compile("\\bconst\\s+" + Pattern.quote(batchName) + "\\s*=\\s*(\\[)").matcher(script);
+        if (!declaration.find()) {
+            return List.of();
+        }
+        int start = declaration.start(1);
+        if (findJavaScriptToken(script, script.substring(declaration.start(), start), 0) != declaration.start()) {
+            return List.of();
+        }
+        int end = findMatchingEnd(script, start, '[', ']');
+        if (end < start || end >= mapping.start()) {
+            return List.of();
+        }
+        // Only a literal array passed unchanged to the mapped parameter is
+        // known. Mutations and unrelated command-looking objects stay opaque.
+        String between = script.substring(end + 1, mapping.start());
+        if (Pattern.compile("\\b" + Pattern.quote(batchName) + "\\b").matcher(between).find()) {
+            return List.of();
+        }
+        String normalized = normalizeJavaScriptLiteralToJson(script.substring(start, end + 1));
+        if (normalized == null) {
+            return List.of();
+        }
+        JsonElement literal;
+        try {
+            literal = JsonParser.parseString(normalized);
+        } catch (RuntimeException ignored) {
+            return List.of();
+        }
+        if (!literal.isJsonArray() || literal.getAsJsonArray().isEmpty()
+                || literal.getAsJsonArray().size() > MAX_REPLAYED_SHELL_COMMANDS) {
+            return List.of();
+        }
+        List<int[]> spans = findJavaScriptObjectSpans(script.substring(start, end + 1));
+        if (spans.size() != literal.getAsJsonArray().size()) {
+            return List.of();
+        }
+        for (int[] span : spans) {
+            span[0] += start;
+            span[1] += start;
+            Map<String, String> properties = parseJavaScriptObjectProperties(script, span[0], span[1]);
+            String command = properties.getOrDefault("command", properties.get("cmd"));
+            if (command == null || command.isBlank()) {
+                return List.of();
+            }
         }
         return spans;
     }
@@ -335,7 +706,7 @@ final class CodexExecHistoryReplay {
         return input;
     }
 
-    private static String normalizeJavaScriptLiteralToJson(String literal) {
+    static String normalizeJavaScriptLiteralToJson(String literal) {
         StringBuilder normalized = new StringBuilder(literal.length());
         int cursor = 0;
         while (cursor < literal.length()) {
@@ -433,7 +804,11 @@ final class CodexExecHistoryReplay {
         return false;
     }
 
-    private static int findMatchingObjectEnd(String script, int objectStart) {
+    static int findMatchingObjectEnd(String script, int objectStart) {
+        return findMatchingEnd(script, objectStart, '{', '}');
+    }
+
+    private static int findMatchingEnd(String script, int objectStart, char opening, char closing) {
         int depth = 0;
         int cursor = objectStart;
         while (cursor < script.length()) {
@@ -453,9 +828,9 @@ final class CodexExecHistoryReplay {
                     continue;
                 }
             }
-            if (current == '{') {
+            if (current == opening) {
                 depth++;
-            } else if (current == '}') {
+            } else if (current == closing) {
                 depth--;
                 if (depth == 0) {
                     return cursor;
@@ -466,7 +841,7 @@ final class CodexExecHistoryReplay {
         return -1;
     }
 
-    private static int findJavaScriptToken(String script, String token, int start) {
+    static int findJavaScriptToken(String script, String token, int start) {
         int cursor = Math.max(0, start);
         while (cursor < script.length()) {
             char current = script.charAt(cursor);
@@ -554,8 +929,11 @@ final class CodexExecHistoryReplay {
                 }
                 key = new ParsedString(script.substring(cursor, keyEnd), keyEnd);
             } else {
-                cursor++;
-                continue;
+                return Map.of();
+            }
+
+            if (properties.containsKey(key.value)) {
+                return Map.of();
             }
 
             cursor = skipWhitespace(script, key.nextIndex, objectEnd);
@@ -572,13 +950,24 @@ final class CodexExecHistoryReplay {
             String propertyValue;
             current = script.charAt(cursor);
             if (isQuote(current)) {
+                int literalStart = cursor;
                 ParsedString parsedValue = readJavaScriptString(script, cursor);
                 propertyValue = parsedValue.value;
                 cursor = parsedValue.nextIndex;
+                int next = skipTrivia(script, cursor, objectEnd);
+                if ((current == '`' && script.substring(literalStart, cursor).contains("${"))
+                        || (next < objectEnd && script.charAt(next) != ',')) {
+                    cursor = advancePastComma(findNextTopLevelComma(script, next, objectEnd), objectEnd);
+                    continue;
+                }
             } else {
                 int valueEnd = findNextTopLevelComma(script, cursor, objectEnd);
                 propertyValue = script.substring(cursor, valueEnd).trim();
                 cursor = valueEnd;
+                if (!JAVASCRIPT_NUMBER_PATTERN.matcher(propertyValue).matches()) {
+                    cursor = advancePastComma(cursor, objectEnd);
+                    continue;
+                }
             }
             properties.put(key.value, propertyValue);
             cursor = advancePastComma(cursor, objectEnd);
@@ -633,7 +1022,7 @@ final class CodexExecHistoryReplay {
         return cursor < limit ? cursor + 1 : cursor;
     }
 
-    private static int skipJavaScriptString(String script, int start) {
+    static int skipJavaScriptString(String script, int start) {
         char quote = script.charAt(start);
         int cursor = start + 1;
         while (cursor < script.length()) {
@@ -738,7 +1127,7 @@ final class CodexExecHistoryReplay {
         return end >= 0 ? end + 2 : script.length();
     }
 
-    private static int skipTrivia(String script, int start, int limit) {
+    static int skipTrivia(String script, int start, int limit) {
         int cursor = start;
         while (cursor < limit) {
             char current = script.charAt(cursor);
@@ -866,7 +1255,7 @@ final class CodexExecHistoryReplay {
         return outputs;
     }
 
-    private static void collectOutputTexts(JsonElement value, List<String> texts) {
+    static void collectOutputTexts(JsonElement value, List<String> texts) {
         if (value == null || value.isJsonNull()) {
             return;
         }
@@ -935,16 +1324,7 @@ final class CodexExecHistoryReplay {
     }
 
     private static boolean isFailedOutputPayload(JsonObject output) {
-        if (output == null) {
-            return false;
-        }
-        if (output.has("is_error") && output.get("is_error").isJsonPrimitive()
-                && output.get("is_error").getAsBoolean()) {
-            return true;
-        }
-        String status = getStringProperty(output, "status");
-        return status != null
-            && ("failed".equalsIgnoreCase(status) || "error".equalsIgnoreCase(status));
+        return CodexMessageConverter.isFailedToolOutput(output);
     }
 
     private static String shellToolUseId(String callId, int commandIndex) {
@@ -972,7 +1352,7 @@ final class CodexExecHistoryReplay {
         return "bash";
     }
 
-    private static String smartCommandDescription(String command) {
+    static String smartCommandDescription(String command) {
         if (command == null || command.isBlank()) {
             return "Execute command";
         }
@@ -1062,7 +1442,8 @@ final class CodexExecHistoryReplay {
         if (cdPrefix.matches()) {
             actualCommand = cdPrefix.group(1);
         }
-        return actualCommand.trim();
+        // PowerShell's call operator is an invocation marker, not the executable name.
+        return actualCommand.trim().replaceFirst("^&\\s+", "");
     }
 
     private static String getStringProperty(JsonObject object, String propertyName) {
@@ -1090,12 +1471,20 @@ final class CodexExecHistoryReplay {
         private final String description;
         private final String workdir;
         private final Long timeoutMs;
+        private final String justification;
 
-        Command(String command, String description, String workdir, Long timeoutMs) {
+        Command(String command, String description, String workdir, Long timeoutMs, String justification) {
             this.command = command;
             this.description = description;
             this.workdir = workdir;
             this.timeoutMs = timeoutMs;
+            this.justification = justification;
+        }
+
+        long retainedBytes() {
+            return 3L * (this.command.length() + (this.description == null ? 0 : this.description.length())
+                    + (this.workdir == null ? 0 : this.workdir.length())
+                    + (this.justification == null ? 0 : this.justification.length()));
         }
     }
 

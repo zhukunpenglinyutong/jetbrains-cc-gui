@@ -9,6 +9,8 @@ import { SkillList } from './SkillList';
 import { useSkillToggle } from './useSkillToggle';
 import { useFilteredSkills } from './useFilteredSkills';
 import { ToastContainer, type ToastMessage } from '../Toast';
+import { useCodexNativeCatalog } from '../../hooks/useCodexNativeCatalog';
+import { projectNativeSkills } from './nativeSkillCatalog';
 
 interface SkillsSettingsSectionProps {
   currentProvider?: string;
@@ -53,11 +55,19 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
   };
 
   const isCodex = currentProvider === 'codex';
+  const nativeCatalog = useCodexNativeCatalog(currentProvider, '', isCodex, 'skills');
 
   const loadSkills = useCallback(() => {
     setLoading(true);
-    sendToJava('get_all_skills', {});
-  }, []);
+    if (isCodex) nativeCatalog.refresh();
+    else sendToJava('get_all_skills', {});
+  }, [isCodex, nativeCatalog.refresh]);
+
+  useEffect(() => {
+    if (!isCodex) return;
+    setSkills(projectNativeSkills(nativeCatalog.skills));
+    setLoading(nativeCatalog.loading);
+  }, [isCodex, nativeCatalog.skills, nativeCatalog.loading]);
 
   // Enable/disable toggle state machine
   const { togglingSkills, handleToggle, handleToggleResult } = useSkillToggle(currentProvider, loadSkills, addToast);
@@ -76,6 +86,7 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
   useEffect(() => {
     // Register callback: Java side returns Skills list
     window.updateSkills = (jsonStr: string) => {
+      if (isCodex) return;
       try {
         const data: SkillsConfig = JSON.parse(jsonStr);
         setSkills(data);
@@ -130,7 +141,7 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
     window.skillToggleResult = handleToggleResult;
 
     // Load Skills
-    loadSkills();
+    if (!isCodex) loadSkills();
 
     // Close dropdown when clicking outside
     const handleClickOutside = (event: MouseEvent) => {
@@ -147,7 +158,7 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
       window.skillToggleResult = undefined;
       document.removeEventListener('click', handleClickOutside);
     };
-  }, [loadSkills, addToast, handleToggleResult]);
+  }, [isCodex, loadSkills, addToast, handleToggleResult]);
 
   // Auto-refresh when provider changes (skip initial mount — handled by init useEffect above)
   const isInitialMount = useRef(true);
@@ -259,6 +270,7 @@ export function SkillsSettingsSection({ currentProvider = 'claude' }: SkillsSett
         onOpen={handleOpen}
         onDelete={handleDelete}
       />
+      {isCodex && nativeCatalog.error && <div role="alert">{nativeCatalog.error}</div>}
 
       {/* Dialogs */}
       {showHelpDialog && (

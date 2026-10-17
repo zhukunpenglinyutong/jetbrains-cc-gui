@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AVAILABLE_PROVIDERS } from '../../ChatInputBox/types';
 import type { ModelInfo } from '../../ChatInputBox/types';
@@ -54,19 +54,30 @@ const AiFeatureProviderModelPanel = ({
   ) as AiFeatureConfig['availability'];
 
   // Same catalog source as main chat ModelSelect (useCliModels + resolveProviderModels).
-  const { cliModels, cliCatalogHasEntries } = useCliModels(selectedProvider);
+  const { cliModels, cliCatalogHasEntries, cliModelsReplaceBuiltIns } = useCliModels(selectedProvider);
 
   // Shared resolver with chat toolbar — Prompt Enhancer and Commit AI both mount
   // this panel so they stay identical by construction.
   const claudeCustomModels = usePluginModels(STORAGE_KEYS.CLAUDE_CUSTOM_MODELS).models;
   const codexCustomModels = usePluginModels(STORAGE_KEYS.CODEX_CUSTOM_MODELS).models;
+  const [claudeMapping, setClaudeMapping] = useState(readClaudeModelMapping);
+  useEffect(() => {
+    const refresh = () => setClaudeMapping(readClaudeModelMapping());
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEYS.CLAUDE_MODEL_MAPPING || event.key === null) refresh();
+    };
+    const onLocalChange = (event: Event) => {
+      if ((event as CustomEvent<{ key?: string }>).detail?.key === STORAGE_KEYS.CLAUDE_MODEL_MAPPING) refresh();
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('localStorageChange', onLocalChange);
+    refresh();
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('localStorageChange', onLocalChange);
+    };
+  }, []);
   const availableModels = useMemo<ModelInfo[]>(() => {
-    let claudeMapping = null;
-    try {
-      claudeMapping = readClaudeModelMapping();
-    } catch {
-      claudeMapping = null;
-    }
     const toModelInfo = (m: { id: string; label?: string; description?: string }): ModelInfo => ({
       id: m.id,
       label: m.label || m.id,
@@ -79,8 +90,9 @@ const AiFeatureProviderModelPanel = ({
       claudeCustomModels: claudeCustomModels.map(toModelInfo),
       codexCustomModels: codexCustomModels.map(toModelInfo),
       claudeMapping,
+      claudeReplaceBuiltInOptions: cliModelsReplaceBuiltIns,
     });
-  }, [selectedProvider, claudeCustomModels, codexCustomModels, cliModels, cliCatalogHasEntries]);
+  }, [claudeMapping, selectedProvider, claudeCustomModels, codexCustomModels, cliModels, cliCatalogHasEntries, cliModelsReplaceBuiltIns]);
 
   const currentModel = config.models?.[selectedProvider] ?? '';
   const currentModelInList = availableModels.some((m) => m.id === currentModel);

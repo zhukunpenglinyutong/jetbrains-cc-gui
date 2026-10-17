@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig } from '../../../types/provider';
 import { SPECIAL_PROVIDER_IDS } from '../../../types/provider';
-import { writeClaudeModelMapping } from '../../../utils/claudeModelMapping';
+import { parseClaudeModelMappingEnv, writeClaudeModelMapping } from '../../../utils/claudeModelMapping';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -52,15 +52,7 @@ export function useProviderManagement(options: UseProviderManagementOptions = {}
       writeClaudeModelMapping({});
       return;
     }
-    const env = provider.settingsConfig.env as Record<string, any>;
-    const mapping = {
-      main: env.ANTHROPIC_MODEL ?? '',
-      fable: env.ANTHROPIC_DEFAULT_FABLE_MODEL ?? '',
-      haiku: env.ANTHROPIC_DEFAULT_HAIKU_MODEL ?? '',
-      sonnet: env.ANTHROPIC_DEFAULT_SONNET_MODEL ?? '',
-      opus: env.ANTHROPIC_DEFAULT_OPUS_MODEL ?? '',
-    };
-    writeClaudeModelMapping(mapping);
+    writeClaudeModelMapping(parseClaudeModelMappingEnv(provider.settingsConfig.env));
   }, []);
 
   // Load provider list

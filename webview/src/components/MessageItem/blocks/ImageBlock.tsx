@@ -1,16 +1,7 @@
 import type { TFunction } from 'i18next';
 import type { ClaudeContentBlock } from '../../../types';
-
-const IMAGE_BLOCK_STYLE: React.CSSProperties = { cursor: 'pointer' };
-
-function getImageStyle(isUser: boolean): React.CSSProperties {
-  return {
-    maxWidth: isUser ? '200px' : '100%',
-    maxHeight: isUser ? '150px' : 'auto',
-    borderRadius: '8px',
-    objectFit: 'contain',
-  };
-}
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ImageBlockProps {
   block: Extract<ClaudeContentBlock, { type: 'image' }>;
@@ -19,59 +10,45 @@ interface ImageBlockProps {
 }
 
 export function ImageBlock({ block, messageType, t }: ImageBlockProps) {
-  const handleImagePreview = () => {
-    const previewRoot = document.getElementById('image-preview-root');
-    if (!previewRoot || !block.src) return;
-
-    // Clear previous content safely
-    previewRoot.innerHTML = '';
-
-    // Create overlay container
-    const overlay = document.createElement('div');
-    overlay.className = 'image-preview-overlay';
-    overlay.onclick = () => overlay.remove();
-
-    // Create image element safely (prevents XSS)
-    const img = document.createElement('img');
-    img.src = block.src;
-    img.alt = t('chat.imagePreview');
-    img.className = 'image-preview-content';
-    img.onclick = (e) => e.stopPropagation();
-
-    // Create close button
-    const closeBtn = document.createElement('div');
-    closeBtn.className = 'image-preview-close';
-    closeBtn.textContent = '×';
-    closeBtn.onclick = (e) => {
-      e.stopPropagation();
-      overlay.remove();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const close = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!previewOpen) return;
+    if (!block.src?.trim()) { setPreviewOpen(false); return; }
+    close.current?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPreviewOpen(false);
+      if (event.key === 'Tab') { event.preventDefault(); close.current?.focus(); }
     };
+    document.addEventListener('keydown', handleKey);
+    return () => { document.removeEventListener('keydown', handleKey); button.current?.focus(); };
+  }, [previewOpen, block.src]);
 
-    overlay.appendChild(img);
-    overlay.appendChild(closeBtn);
-    previewRoot.appendChild(overlay);
-  };
+  if (!block.src?.trim()) return null;
 
   return (
-    <div
+    <>
+    <button
+      ref={button}
+      type="button"
       className={`message-image-block ${messageType === 'user' ? 'user-image' : ''}`}
-      onClick={handleImagePreview}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          handleImagePreview();
-        }
-      }}
-      style={IMAGE_BLOCK_STYLE}
+      onClick={() => setPreviewOpen(true)}
+      aria-label={t('chat.clickToPreview')}
       title={t('chat.clickToPreview')}
     >
       <img
         src={block.src}
-        alt={t('chat.userUploadedImage')}
-        style={getImageStyle(messageType === 'user')}
+        alt={block.alt || t('chat.userUploadedImage')}
+        loading="lazy"
       />
-    </div>
+    </button>
+    {previewOpen && createPortal(<div className="image-preview-overlay" role="dialog" aria-modal="true"
+      aria-label={t('chat.imagePreview')} onClick={() => setPreviewOpen(false)}>
+      <img src={block.src} alt={block.alt || t('chat.imagePreview')} className="image-preview-content" onClick={(event) => event.stopPropagation()} />
+      <button ref={close} type="button" className="image-preview-close" aria-label={t('common.close')}
+        onClick={() => setPreviewOpen(false)}>×</button>
+    </div>, document.getElementById('image-preview-root') ?? document.body)}
+    </>
   );
 }

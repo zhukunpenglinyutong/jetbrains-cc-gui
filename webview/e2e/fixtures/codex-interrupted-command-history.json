@@ -1,0 +1,339 @@
+{
+  "source": "Anonymized shapes from the reported Ctrl+C wrapper: original running command, native interruption, and two commands completed after the wrapper returns.",
+  "expectedToolCount": 3,
+  "records": [
+    {
+      "type": "session_meta",
+      "payload": {
+        "id": "stdin-history-thread"
+      }
+    },
+    {
+      "type": "response_item",
+      "payload": {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "Stop the download and run both checks."
+          }
+        ],
+        "internal_chat_message_metadata_passthrough": {
+          "turn_id": "stdin-history-turn"
+        }
+      }
+    },
+    {
+      "type": "response_item",
+      "payload": {
+        "type": "custom_tool_call",
+        "call_id": "download",
+        "name": "exec",
+        "input": "text(await tools.exec_command({cmd:'npx playwright install chromium'}));",
+        "internal_chat_message_metadata_passthrough": {
+          "turn_id": "stdin-history-turn"
+        }
+      }
+    },
+    {
+      "type": "response_item",
+      "payload": {
+        "type": "custom_tool_call_output",
+        "call_id": "download",
+        "output": [
+          {
+            "type": "input_text",
+            "text": "{\"session_id\":69446,\"output\":\"downloading\"}"
+          }
+        ],
+        "internal_chat_message_metadata_passthrough": {
+          "turn_id": "stdin-history-turn"
+        }
+      }
+    },
+    {
+      "type": "response_item",
+      "payload": {
+        "type": "custom_tool_call",
+        "call_id": "interrupt-and-check",
+        "name": "exec",
+        "input": "text(await tools.write_stdin({session_id:69446,chars:\"\\u0003\"}));\ntext(await tools.exec_command({cmd:\"cat > /tmp/review-playwright.config.ts <<'TS'\\nexport default { use: { headless: true } };\\nTS\\nnpx playwright test --config=/tmp/review-playwright.config.ts\"}));\ntext(await tools.exec_command({cmd:'java JUnitCore'}));",
+        "internal_chat_message_metadata_passthrough": {
+          "turn_id": "stdin-history-turn"
+        }
+      }
+    },
+    {
+      "type": "event_msg",
+      "payload": {
+        "type": "item_completed",
+        "thread_id": "stdin-history-thread",
+        "turn_id": "stdin-history-turn",
+        "item": {
+          "type": "CommandExecution",
+          "id": "native-download",
+          "process_id": "69446",
+          "command": [
+            "/bin/bash",
+            "-lc",
+            "npx playwright install chromium"
+          ],
+          "status": "failed",
+          "exit_code": 130,
+          "aggregated_output": "download interrupted"
+        }
+      }
+    },
+    {
+      "type": "response_item",
+      "payload": {
+        "type": "custom_tool_call_output",
+        "call_id": "interrupt-and-check",
+        "output": [
+          {
+            "type": "input_text",
+            "text": "{\"exit_code\":130,\"output\":\"interrupted\"}"
+          },
+          {
+            "type": "input_text",
+            "text": "{\"session_id\":49616,\"output\":\"browser checks running\"}"
+          },
+          {
+            "type": "input_text",
+            "text": "{\"session_id\":30408,\"output\":\"java checks running\"}"
+          }
+        ],
+        "internal_chat_message_metadata_passthrough": {
+          "turn_id": "stdin-history-turn"
+        }
+      }
+    },
+    {
+      "type": "event_msg",
+      "payload": {
+        "type": "item_completed",
+        "thread_id": "stdin-history-thread",
+        "turn_id": "stdin-history-turn",
+        "item": {
+          "type": "CommandExecution",
+          "id": "native-browser",
+          "process_id": "49616",
+          "command": [
+            "/bin/bash",
+            "-lc",
+            "cat > /tmp/review-playwright.config.ts <<'TS'\nexport default { use: { headless: true } };\nTS\nnpx playwright test --config=/tmp/review-playwright.config.ts"
+          ],
+          "status": "completed",
+          "exit_code": 0,
+          "aggregated_output": "browser checks passed"
+        }
+      }
+    },
+    {
+      "type": "event_msg",
+      "payload": {
+        "type": "item_completed",
+        "thread_id": "stdin-history-thread",
+        "turn_id": "stdin-history-turn",
+        "item": {
+          "type": "CommandExecution",
+          "id": "native-java",
+          "process_id": "30408",
+          "command": [
+            "/bin/bash",
+            "-lc",
+            "java JUnitCore"
+          ],
+          "status": "completed",
+          "exit_code": 0,
+          "aggregated_output": "java checks passed"
+        }
+      }
+    },
+    {
+      "type": "response_item",
+      "payload": {
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "text": "Download stopped; both checks completed."
+          }
+        ],
+        "internal_chat_message_metadata_passthrough": {
+          "turn_id": "stdin-history-turn"
+        }
+      }
+    }
+  ],
+  "messages": [
+    {
+      "type": "user",
+      "content": "Stop the download and run both checks.",
+      "raw": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Stop the download and run both checks."
+          }
+        ],
+        "role": "user",
+        "codexTurnId": "stdin-history-turn",
+        "codexThreadId": "stdin-history-thread",
+        "uuid": "codex-legacy:record:2"
+      }
+    },
+    {
+      "type": "assistant",
+      "content": "",
+      "raw": {
+        "codexThreadId": "stdin-history-thread",
+        "codexTurnId": "stdin-history-turn",
+        "codexReplayedCallId": "download",
+        "uuid": "codex:stdin-history-thread:stdin-history-turn:download:command:0",
+        "codexItemId": "download:command:0",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "download:command:0",
+            "name": "bash",
+            "input": {
+              "cmd": "npx playwright install chromium",
+              "command": "npx playwright install chromium",
+              "description": "Run npx"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "user",
+      "content": "[tool_result]",
+      "raw": {
+        "codexThreadId": "stdin-history-thread",
+        "codexTurnId": "stdin-history-turn",
+        "codexReplayedCallId": "interrupt-and-check",
+        "uuid": "codex:stdin-history-thread:stdin-history-turn:download:command:0:result",
+        "codexItemId": "download:command:0:result",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "download:command:0",
+            "content": "download interrupted",
+            "is_error": true
+          }
+        ]
+      }
+    },
+    {
+      "type": "assistant",
+      "content": "",
+      "raw": {
+        "codexThreadId": "stdin-history-thread",
+        "codexTurnId": "stdin-history-turn",
+        "codexReplayedCallId": "interrupt-and-check",
+        "uuid": "codex:stdin-history-thread:stdin-history-turn:interrupt-and-check:command:1",
+        "codexItemId": "interrupt-and-check:command:1",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "interrupt-and-check:command:1",
+            "name": "bash",
+            "input": {
+              "cmd": "cat > /tmp/review-playwright.config.ts <<'TS'\nexport default { use: { headless: true } };\nTS\nnpx playwright test --config=/tmp/review-playwright.config.ts",
+              "command": "cat > /tmp/review-playwright.config.ts <<'TS'\nexport default { use: { headless: true } };\nTS\nnpx playwright test --config=/tmp/review-playwright.config.ts",
+              "description": "Run cat"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "assistant",
+      "content": "",
+      "raw": {
+        "codexThreadId": "stdin-history-thread",
+        "codexTurnId": "stdin-history-turn",
+        "codexReplayedCallId": "interrupt-and-check",
+        "uuid": "codex:stdin-history-thread:stdin-history-turn:interrupt-and-check:command:2",
+        "codexItemId": "interrupt-and-check:command:2",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "interrupt-and-check:command:2",
+            "name": "bash",
+            "input": {
+              "cmd": "java JUnitCore",
+              "command": "java JUnitCore",
+              "description": "java JUnitCore"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "user",
+      "content": "[tool_result]",
+      "raw": {
+        "codexThreadId": "stdin-history-thread",
+        "codexTurnId": "stdin-history-turn",
+        "codexReplayedCallId": "interrupt-and-check",
+        "uuid": "codex:stdin-history-thread:stdin-history-turn:interrupt-and-check:command:1:result",
+        "codexItemId": "interrupt-and-check:command:1:result",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "interrupt-and-check:command:1",
+            "content": "browser checks passed",
+            "is_error": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "user",
+      "content": "[tool_result]",
+      "raw": {
+        "codexThreadId": "stdin-history-thread",
+        "codexTurnId": "stdin-history-turn",
+        "codexReplayedCallId": "interrupt-and-check",
+        "uuid": "codex:stdin-history-thread:stdin-history-turn:interrupt-and-check:command:2:result",
+        "codexItemId": "interrupt-and-check:command:2:result",
+        "codexAuthoritative": true,
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "interrupt-and-check:command:2",
+            "content": "java checks passed",
+            "is_error": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "assistant",
+      "content": "Download stopped; both checks completed.",
+      "raw": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Download stopped; both checks completed."
+          }
+        ],
+        "role": "assistant",
+        "codexTurnId": "stdin-history-turn",
+        "codexThreadId": "stdin-history-thread",
+        "uuid": "codex-legacy:record:10"
+      }
+    }
+  ],
+  "expectedFailedCount": 1,
+  "finalText": "Download stopped; both checks completed."
+}

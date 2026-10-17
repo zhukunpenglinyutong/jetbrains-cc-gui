@@ -1247,9 +1247,8 @@ public class ClaudeChatWindow {
         webviewEventQueue.browserChanged();
         streamCoalescer.resetDeliveryBaseline();
         if (nextBrowser != null) {
-            // macOS 27 paste fix: every browser instance carries its own CefClient,
-            // so each (re)bind needs the hook installed on the new client.
-            CefPasteHook.installForWindow(this);
+            // Register per browser through the platform client so default keyboard handling survives.
+            CefPasteHook.install(nextBrowser, this);
             observedBrowserComponent = nextBrowser.getComponent();
             observedBrowserComponent.addComponentListener(surfaceRefreshComponentListener);
             rebindNativeSurfaceComponent(getNativeSurfaceComponent(nextBrowser));
@@ -2192,6 +2191,16 @@ public class ClaudeChatWindow {
         webviewEventQueue.enqueueRaw(jsCode);
     }
 
+    /** Keep an IDE action's captured clipboard image while its draft claims ownership. */
+    public void offerClipboardImage(Image image) {
+        this.chatWindowDelegate.offerClipboardImage(image);
+    }
+
+    /** Capture the macOS hook's image on the EDT before making the frontend round trip. */
+    public void captureClipboardPaste() {
+        this.chatWindowDelegate.captureClipboardPaste();
+    }
+
     private boolean executeQueuedWebviewScript(
             JBCefBrowser targetBrowser,
             int expectedPageGeneration,
@@ -2307,6 +2316,7 @@ public class ClaudeChatWindow {
         if (this.sessionCallbackAdapter != null) {
             this.sessionCallbackAdapter.deactivate();
         }
+        ClaudeSession callbackSession = this.session;
         this.sessionCallbackAdapter = new SessionCallbackAdapter(
                 streamCoalescer,
                 new SessionCallbackAdapter.JsTarget() {
@@ -2319,15 +2329,24 @@ public class ClaudeChatWindow {
                 () -> slashCommandsFetched,
                 this::onStreamEnded
         ) {
+            /** Keeps window identity and persisted tabs aligned with the bound session. */
             @Override
             public void onSessionIdReceived(String newSessionId) {
-                super.onSessionIdReceived(newSessionId);
-                if (newSessionId == null || newSessionId.trim().isEmpty()
-                        || newSessionId.equals(sessionId)) {
+                if (newSessionId == null || ClaudeChatWindow.this.session != callbackSession) {
                     return;
                 }
-                sessionId = newSessionId;
-                persistTabSessionState();
+                super.onSessionIdReceived(newSessionId);
+                String exposedSessionId = resolveExposedSessionId(newSessionId, ClaudeChatWindow.this.permissionServiceKey);
+                if (exposedSessionId.equals(ClaudeChatWindow.this.sessionId)) {
+                    return;
+                }
+                ClaudeChatWindow.this.sessionId = exposedSessionId;
+                // Tab indexes belong to Swing; history and daemon callbacks run off the EDT.
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (!ClaudeChatWindow.this.disposed && ClaudeChatWindow.this.session == callbackSession) {
+                        ClaudeChatWindow.this.persistTabSessionState();
+                    }
+                });
             }
         };
         session.setCallback(sessionCallbackAdapter);
@@ -2399,6 +2418,33 @@ public class ClaudeChatWindow {
                     // loadFromServer() returns, so a reload never lands on a session
                     // that the user has navigated away from.
                     requestSessionReload(updatedSessionId);
+                } else if ("session_resume_expired".equals(event)) {
+                    String expiredSessionId = data.has("sessionId") && data.get("sessionId").isJsonPrimitive()
+                            ? data.get("sessionId").getAsString() : null;
+                    String expiredEpoch = data.has("runtimeSessionEpoch") && data.get("runtimeSessionEpoch").isJsonPrimitive()
+                            ? data.get("runtimeSessionEpoch").getAsString() : null;
+                    ClaudeSession expiredSession = this.session;
+                    // Retire the backend ID before the send error releases the next
+                    // queued send. The UI continuation checks the same owner again.
+                    if (this.disposed || expiredSession == null
+                            || !retireExpiredClaudeResume(expiredSession.getState(), expiredSessionId, expiredEpoch)) {
+                        return;
+                    }
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        if (this.disposed || this.session != expiredSession) {
+                            return;
+                        }
+                        synchronized (expiredSession.getState().getMessageStateLock()) {
+                            if (expiredSession.getSessionId() != null
+                                    || !"claude".equals(expiredSession.getProvider())
+                                    || !expiredEpoch.equals(expiredSession.getState().getRuntimeSessionEpoch())) {
+                                return;
+                            }
+                            this.sessionCallbackAdapter.onSessionIdReceived("");
+                        }
+                        LOG.info("[ClaudeChatWindow] Cleared stale sessionId=" + expiredSessionId
+                                + " after resume failure; next send starts a fresh session");
+                    });
                 } else if ("task_event".equals(event)) {
                     // Async subagent (Agent/Task tool with run_in_background:true)
                     // lifecycle event forwarded by the
@@ -2793,6 +2839,22 @@ public class ClaudeChatWindow {
                 : permissionServiceKey;
     }
 
+    /**
+     * Retire only the Claude runtime that reported the missing resume target.
+     * Keeping the live transcript lets the user inspect and retry the failed input.
+     */
+    static boolean retireExpiredClaudeResume(SessionState state, String expiredSessionId, String expiredEpoch) {
+        synchronized (state.getMessageStateLock()) {
+            if (!"claude".equals(state.getProvider()) || expiredSessionId == null || expiredEpoch == null
+                    || !expiredSessionId.equals(state.getSessionId())
+                    || !expiredEpoch.equals(state.getRuntimeSessionEpoch())) {
+                return false;
+            }
+            state.setSessionId(null);
+            return true;
+        }
+    }
+
     // ==================== Code Snippets ====================
 
     private void addCodeSnippet(String selectionInfo) {
@@ -3062,17 +3124,18 @@ public class ClaudeChatWindow {
             @Override
             public void activatePageGeneration(int pageGeneration) {
                 boolean generationChanged = activePageGeneration != pageGeneration;
-                if (generationChanged) {
-                    surfaceRefreshCoordinator.invalidate();
-                    cancelScheduledOsrSurfaceRefresh();
-                    activePageGeneration = pageGeneration;
-                    webviewEventQueue.pageChanged();
-                    streamCoalescer.resetDeliveryBaseline();
-                }
-                dispatchGate.activatePageGeneration(pageGeneration);
-                if (generationChanged) {
-                    // After the dispatch gate: a replay failure must not leave the
-                    // new page's dispatch path closed.
+                // Keep both pages out of dispatch until the identity and delivery baselines agree.
+                boolean activated = dispatchGate.activatePageGeneration(pageGeneration, () -> {
+                    if (generationChanged) {
+                        surfaceRefreshCoordinator.invalidate();
+                        cancelScheduledOsrSurfaceRefresh();
+                        activePageGeneration = pageGeneration;
+                        webviewEventQueue.pageChanged();
+                        streamCoalescer.resetDeliveryBaseline();
+                    }
+                });
+                if (activated && generationChanged) {
+                    // Replay stays outside the gate: a replay failure must not close the new page's dispatch path.
                     replayCurrentSessionSnapshot("page_generation_changed");
                 }
             }
@@ -3319,6 +3382,11 @@ public class ClaudeChatWindow {
             @Override
             public void executeJavaScriptCode(String jsCode) {
                 ClaudeChatWindow.this.executeJavaScriptCode(jsCode);
+            }
+
+            @Override
+            public HandlerContext.JsSender captureJavaScriptExecutor() {
+                return webviewEventQueue.captureRawSender();
             }
 
             @Override

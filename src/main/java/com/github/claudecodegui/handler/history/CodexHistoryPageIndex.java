@@ -7,6 +7,7 @@ import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,11 +18,16 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.CancellationException;
 import java.util.function.BooleanSupplier;
 
 final class CodexHistoryPageIndex implements AutoCloseable {
     private static final long MAX_IDLE_NANOS = java.util.concurrent.TimeUnit.MINUTES.toNanos(5);
+    private static final int VALIDATION_BLOCK_BYTES = 4096;
+    // Each digest also retains an array header and an ArrayList reference.
+    private static final int VALIDATION_HASH_BYTES = 64;
     private final int maxSessions;
     private final int maxMessages;
     private final long maxBytes;
@@ -50,8 +56,12 @@ final class CodexHistoryPageIndex implements AutoCloseable {
         expire();
         Path source = reader.resolveSessionFile(sessionId);
         Snapshot snapshot = Snapshot.read(source);
-        Entry entry = entries.get(source);
-        if (entry != null && !entry.snapshot.equals(snapshot) && !entry.canAppend(source, snapshot)) {
+        Entry entry = this.entries.get(source);
+        // Windows replacement can preserve all exposed metadata, so a cache hit still needs content validation.
+        // A null snapshot means a half-initialized entry; skip validation and let the indexing branch fill it.
+        if (entry != null && entry.snapshot != null
+                && (entry.snapshot.equals(snapshot)
+                ? !entry.stillRecognizesSource(source) : !entry.canAppend(source, snapshot))) {
             remove(source);
             entry = null;
         }
@@ -68,10 +78,14 @@ final class CodexHistoryPageIndex implements AutoCloseable {
             long readBytes = snapshot.size - start;
             if (entry.snapshot == null || !entry.snapshot.equals(snapshot)) {
                 Entry target = entry;
-                parsed = reader.forEachSessionMessage(source, start, snapshot.size, active, raw -> {
+                Entry.SourceCapture capture = entry.new SourceCapture(snapshot, active);
+                parsed = reader.forEachSessionMessage(sessionId, source, start, snapshot.size, active, raw -> {
                     HistoryMessageInjector.extractSessionMeta(raw, target.metadata);
                     target.accumulator.accept(raw);
-                });
+                    if (target.accumulator.retainedBytes() > this.maxBytes) {
+                        throw new IndexLimitException();
+                    }
+                }, capture::accept);
                 if (entry.accumulator.retainedBytes() > maxBytes) {
                     throw new IndexLimitException();
                 }
@@ -79,7 +93,7 @@ final class CodexHistoryPageIndex implements AutoCloseable {
                 if (!snapshot.equals(Snapshot.read(source))) {
                     throw new IOException("Codex history changed while indexing; retry the page");
                 }
-                entry.capture(source, snapshot);
+                capture.finish();
             }
             HistoryMessageInjector.CodexHistoryPage page = entry.page(beforeTurn, pageSize, active);
             page.rawRecordCount = parsed;
@@ -166,6 +180,8 @@ final class CodexHistoryPageIndex implements AutoCloseable {
         private Snapshot snapshot;
         private byte[] head;
         private byte[] tail;
+        private final List<byte[]> blockHashes = new ArrayList<>();
+        private int nextValidationBlock = 1;
         private boolean terminated;
         private JsonObject lastAssistant;
         private int lastAssistantIndex = -1;
@@ -222,8 +238,8 @@ final class CodexHistoryPageIndex implements AutoCloseable {
         private HistoryMessageInjector.CodexHistoryPage page(Integer beforeTurn, int pageSize,
                                                             BooleanSupplier active) throws IOException {
             lastAccess = System.nanoTime();
-            JsonObject pending = accumulator.pendingMessage();
-            boolean pendingTurn = pending != null && HistoryMessageInjector.isHumanUserMessage(pending);
+            List<JsonObject> pending = this.accumulator.pendingMessages();
+            boolean pendingTurn = !pending.isEmpty() && HistoryMessageInjector.isHumanUserMessage(pending.get(0));
             int totalTurns = turns.size() + (pendingTurn ? 1 : 0);
             HistoryMessageInjector.CodexHistoryPage page = new HistoryMessageInjector.CodexHistoryPage();
             page.threadId = metadata.threadId;
@@ -238,31 +254,120 @@ final class CodexHistoryPageIndex implements AutoCloseable {
                 checkActive(active);
                 page.messages.add(readMessage(index));
             }
-            if (pending != null && page.toTurn == totalTurns && page.toTurn > page.fromTurn) {
-                page.messages.add(pending);
+            if (page.toTurn == totalTurns && page.toTurn > page.fromTurn) {
+                page.messages.addAll(pending);
             }
             checkActive(active);
             return page;
         }
 
         private boolean canAppend(Path source, Snapshot next) throws IOException {
-            if (snapshot == null || !terminated || next.size <= snapshot.size || !snapshot.sameFile(next)) {
+            if (this.snapshot == null || !this.terminated || next.size <= this.snapshot.size || !this.snapshot.sameFile(next)) {
                 return false;
             }
+            return this.stillRecognizesSource(source);
+        }
+
+        private boolean stillRecognizesSource(Path source) throws IOException {
             try (RandomAccessFile input = new RandomAccessFile(source.toFile(), "r")) {
-                return Arrays.equals(head, sample(input, 0, head.length))
-                        && Arrays.equals(tail, sample(input, snapshot.size - tail.length, tail.length));
+                if (!Arrays.equals(this.head, this.sample(input, 0, this.head.length))
+                        || !Arrays.equals(this.tail, this.sample(input, this.snapshot.size - this.tail.length, this.tail.length))) {
+                    return false;
+                }
+                // At most 12 KiB per check; rotating blocks eventually find equal-metadata interior rewrites.
+                int endBlock = this.blockHashes.size() - 1;
+                if (endBlock > 1) {
+                    if (this.nextValidationBlock >= endBlock) {
+                        this.nextValidationBlock = 1;
+                    }
+                    int block = this.nextValidationBlock;
+                    this.nextValidationBlock = block + 1 >= endBlock ? 1 : block + 1;
+                    byte[] bytes = this.sample(input, (long) block * VALIDATION_BLOCK_BYTES, VALIDATION_BLOCK_BYTES);
+                    return Arrays.equals(this.blockHashes.get(block), this.checksum(bytes));
+                }
+                return true;
             }
         }
 
-        private void capture(Path source, Snapshot next) throws IOException {
-            try (RandomAccessFile input = new RandomAccessFile(source.toFile(), "r")) {
-                int length = (int) Math.min(4096, next.size);
-                head = sample(input, 0, length);
-                tail = sample(input, next.size - length, length);
-                terminated = next.size == 0 || tail[tail.length - 1] == '\n';
+        private final class SourceCapture {
+            private final Snapshot next;
+            private final BooleanSupplier active;
+            private final byte[] head;
+            private final byte[] tail;
+            private final byte[] block = new byte[VALIDATION_BLOCK_BYTES];
+            private long position;
+            private int tailSize;
+            private int blockSize;
+
+            private SourceCapture(Snapshot next, BooleanSupplier active) {
+                long blocks = next.size / VALIDATION_BLOCK_BYTES + (next.size % VALIDATION_BLOCK_BYTES == 0 ? 0 : 1);
+                int sampleSize = (int) Math.min(VALIDATION_BLOCK_BYTES, next.size);
+                if (2L * sampleSize + blocks * VALIDATION_HASH_BYTES > CodexHistoryPageIndex.this.maxBytes) {
+                    throw new IndexLimitException();
+                }
+                this.next = next;
+                this.active = active;
+                this.head = new byte[sampleSize];
+                this.tail = new byte[sampleSize];
+                this.position = Entry.this.snapshot == null ? 0 : Entry.this.snapshot.size;
+                this.blockSize = (int) (this.position % VALIDATION_BLOCK_BYTES);
+                if (Entry.this.snapshot != null) {
+                    System.arraycopy(Entry.this.head, 0, this.head, 0, Entry.this.head.length);
+                    System.arraycopy(Entry.this.tail, 0, this.tail, 0, Entry.this.tail.length);
+                    this.tailSize = Entry.this.tail.length;
+                    System.arraycopy(Entry.this.tail, Entry.this.tail.length - this.blockSize,
+                            this.block, 0, this.blockSize);
+                }
+                // Appends extend the prior partial block without rereading old source bytes.
+                int startBlock = Math.toIntExact(this.position / VALIDATION_BLOCK_BYTES);
+                Entry.this.blockHashes.subList(startBlock, Entry.this.blockHashes.size()).clear();
             }
-            snapshot = next;
+
+            private void accept(ByteBuffer bytes) {
+                // A later read can observe a rewrite that the parser never saw and bless stale page contents.
+                while (bytes.hasRemaining()) {
+                    checkActive(this.active);
+                    int start = this.blockSize;
+                    int length = Math.min(VALIDATION_BLOCK_BYTES - start, bytes.remaining());
+                    bytes.get(this.block, start, length);
+                    if (this.position < this.head.length) {
+                        int headLength = (int) Math.min(length, this.head.length - this.position);
+                        System.arraycopy(this.block, start, this.head, (int) this.position, headLength);
+                    }
+                    int retainedTail = Math.min(this.tailSize, this.tail.length - length);
+                    System.arraycopy(this.tail, this.tailSize - retainedTail, this.tail, 0, retainedTail);
+                    System.arraycopy(this.block, start, this.tail, retainedTail, length);
+                    this.tailSize = retainedTail + length;
+                    this.position += length;
+                    this.blockSize += length;
+                    if (this.blockSize == VALIDATION_BLOCK_BYTES) {
+                        Entry.this.blockHashes.add(Entry.this.checksum(this.block));
+                        this.blockSize = 0;
+                    }
+                }
+            }
+
+            private void finish() throws IOException {
+                checkActive(this.active);
+                if (this.position != this.next.size) {
+                    throw new IOException("Codex history byte range changed while indexing");
+                }
+                if (this.blockSize > 0) {
+                    Entry.this.blockHashes.add(Entry.this.checksum(Arrays.copyOf(this.block, this.blockSize)));
+                }
+                Entry.this.head = this.head;
+                Entry.this.tail = this.tail;
+                Entry.this.terminated = this.next.size == 0 || this.tail[this.tail.length - 1] == '\n';
+                Entry.this.snapshot = this.next;
+            }
+        }
+
+        private byte[] checksum(byte[] bytes) {
+            try {
+                return MessageDigest.getInstance("SHA-256").digest(bytes);
+            } catch (NoSuchAlgorithmException exception) {
+                throw new IllegalStateException("SHA-256 is required by the Java runtime", exception);
+            }
         }
 
         private byte[] sample(RandomAccessFile input, long offset, int length) throws IOException {

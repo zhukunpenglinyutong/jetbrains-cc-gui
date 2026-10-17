@@ -42,7 +42,18 @@ tasks.named('checkstyleTest') {
 }
 
 group = 'com.github.idea-claude-code-gui'
-version = '0.5.9'
+// Keep this line as a plain literal: webview/scripts/extract-version.mjs matches it
+// with /^version\s*=\s*'(.+)'$/ to generate the webview's APP_VERSION.
+version = '0.6.0-beta1'
+
+// Local-only override for custom builds (e.g. distribution flavors). Put
+// plugin.version=... in the gitignored local.properties (or pass -Pplugin.version=...)
+// instead of editing the line above, so a personal build version can never ride along
+// into a shared branch again.
+def pluginVersionOverride = getLocalProperty('plugin.version')
+if (pluginVersionOverride) {
+    version = pluginVersionOverride
+}
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -440,26 +451,34 @@ tasks.named('processResources') {
     mustRunAfter('buildWebview')
 }
 
+// A pre-existing node_modules may belong to an older branch. Refresh it when
+// either dependency manifest changes instead of only checking directory presence.
+tasks.register('installAiBridgeDependencies', Exec) {
+    onlyIf { aiBridgeDir.exists() }
+    workingDir aiBridgeDir
+    inputs.files(new File(aiBridgeDir, 'package.json'), new File(aiBridgeDir, 'package-lock.json'))
+    outputs.dir(new File(aiBridgeDir, 'node_modules'))
+    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+        commandLine 'cmd', '/c', 'npm', 'ci', '--omit=dev', '--silent', '--loglevel=error'
+    } else {
+        commandLine 'npm', 'ci', '--omit=dev', '--silent', '--loglevel=error'
+    }
+}
+
 // Use system zip command to package ai-bridge, preserving file permissions
 tasks.register('packageAiBridge', Exec) {
+    dependsOn('installAiBridgeDependencies')
     onlyIf { aiBridgeDir.exists() }
 
     // Switch to ai-bridge directory for packaging, avoiding inclusion of top-level directory
     workingDir aiBridgeDir
 
-    // Ensure output directory exists and dependencies are installed
+    // Dependencies are synchronized by installAiBridgeDependencies before packaging.
     doFirst {
         aiBridgePackDir.mkdirs()
         // Delete old zip file
         if (aiBridgeArchive.exists()) {
             aiBridgeArchive.delete()
-        }
-        // Install npm dependencies if node_modules doesn't exist
-        if (!new File(aiBridgeDir, 'node_modules').exists()) {
-            println 'Installing ai-bridge npm dependencies...'
-            String npmCmd = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
-            exec { commandLine npmCmd, 'install', '--silent', '--loglevel=error'; workingDir = aiBridgeDir }
-            println 'ai-bridge npm dependencies installed.'
         }
     }
 

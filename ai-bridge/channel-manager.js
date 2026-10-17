@@ -9,7 +9,7 @@
  *
  * Provider:
  *   claude   - Claude Agent SDK (@anthropic-ai/claude-agent-sdk)
- *   codex    - Codex SDK (@openai/codex-sdk)
+ *   codex    - Codex CLI app-server (persistent stdio)
  *   grok     - Grok CLI (no SDK; spawns local `grok` binary)
  *   kimi     - Kimi CLI (no SDK; spawns local `kimi` binary)
  *   opencode - OpenCode CLI (no SDK; spawns local `opencode` binary)

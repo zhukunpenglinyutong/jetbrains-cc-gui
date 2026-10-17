@@ -32,6 +32,8 @@ public final class ClaudeSettingsSyncPlan {
             "ANTHROPIC_MODEL", "ANTHROPIC_SMALL_FAST_MODEL",
             "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
             "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL",
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME", "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME", "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
             "CLAUDE_CODE_USE_BEDROCK",
             "API_TIMEOUT_MS", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
             "CCGUI_CLI_LOGIN_AUTHORIZED"
@@ -105,6 +107,9 @@ public final class ClaudeSettingsSyncPlan {
         JsonObject next = currentSettings != null && !currentSettings.isJsonNull()
                 ? currentSettings.deepCopy()
                 : new JsonObject();
+
+        // The picker belongs to the selected provider; replace it along with its env.
+        next.remove("modelPicker");
 
         JsonObject nextEnv = new JsonObject();
         if (next.has("env") && next.get("env").isJsonObject()) {

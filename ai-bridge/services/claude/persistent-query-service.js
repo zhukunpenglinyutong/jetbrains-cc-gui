@@ -29,6 +29,7 @@ import {
   cleanupStaleAnonymousRuntimes,
   cleanupStaleSessionRuntimes,
   disposeRuntime,
+  notifyExpiredResume,
   registerRuntimeSession,
   acquireRuntime,
   applyDynamicControls,
@@ -269,7 +270,7 @@ _runtimeCleanupTimer.unref();
 
   async function executeTurn(runtime, requestContext, turnMeta) {
   if (!runtime || runtime.closed) {
-    const err = new Error('Runtime is closed');
+    const err = runtime?.terminalError || new Error('Runtime is closed');
     err.runtimeTerminated = true;
     throw err;
   }
@@ -321,6 +322,7 @@ _runtimeCleanupTimer.unref();
       } catch (error) {
         const wrapped = new Error(error?.message || String(error));
         wrapped.runtimeTerminated = true;
+        wrapped.resumeExpiredNotified = error?.resumeExpiredNotified === true;
         throw wrapped;
       }
 
@@ -607,6 +609,7 @@ async function sendInternal(params, withAttachments) {
       turnMeta.state.streamEnded = true;
     }
 
+    let expiredResume = false;
     if (wasAborted) {
       // Graceful abort — output a clean result instead of SEND_ERROR so Java side
       // does not show an error toast. Also emit elapsed time like Codex does.
@@ -616,11 +619,13 @@ async function sendInternal(params, withAttachments) {
         elapsedMs
       }));
     } else {
+      expiredResume = notifyExpiredResume(requestContext, error, runtime);
       emitSendError(runtime, error, requestContext);
     }
 
-    // Only dispose if not already disposed by abort
-    if (runtime && !runtime.closed && error?.runtimeTerminated) {
+    // A failed resume must retire its query too, even if the SDK returned an
+    // error result without closing the iterator.
+    if (runtime && !runtime.closed && (error?.runtimeTerminated || expiredResume)) {
       await disposeRuntime(runtime, { removeSession });
     }
   }
@@ -881,6 +886,7 @@ export const __testing = {
   setQueryFn(queryFn) {
     setCachedQueryFn(queryFn);
   },
+  notifyExpiredResume,
   async buildRequestContext(params = {}, withAttachments = false, overrides = {}) {
     return buildRequestContext(params, withAttachments, overrides);
   },

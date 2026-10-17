@@ -356,6 +356,11 @@
   box-shadow: 0 0 0 1px var(--accent-primary);
 }
 
+/* JCEF uses Chromium; masking keeps native secrets editable without replacing multiline input. */
+.custom-input.secret-input {
+  -webkit-text-security: disc;
+}
+
 .custom-input::placeholder {
   color: var(--text-placeholder);
 }

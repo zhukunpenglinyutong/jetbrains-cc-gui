@@ -157,13 +157,43 @@ public class ProviderManagerTest {
      * Build a ProviderManager backed only by in-memory config to avoid depending on the real filesystem in tests.
      */
     private ProviderManager createProviderManager(AtomicReference<JsonObject> configRef) {
+        JsonObject settings = new JsonObject();
+        settings.add("env", new JsonObject());
+        return createProviderManager(configRef, settings);
+    }
+
+    @Test
+    public void localProviderIncludesFableAndDisplayNamesWithoutCredentials() {
+        JsonObject settings = JsonParser.parseString("{\"env\":{"
+                + "\"ANTHROPIC_DEFAULT_SONNET_MODEL\":\"claude-sonnet-5\","
+                + "\"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME\":\"GLM Flash\","
+                + "\"ANTHROPIC_DEFAULT_OPUS_MODEL\":\"claude-opus-5\","
+                + "\"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME\":\"GLM Pro\","
+                + "\"ANTHROPIC_DEFAULT_FABLE_MODEL\":\"claude-fable-5\","
+                + "\"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME\":\"Fable Pro\","
+                + "\"ANTHROPIC_DEFAULT_HAIKU_MODEL\":\"claude-haiku-4-5\","
+                + "\"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME\":\"Fast Model\","
+                + "\"ANTHROPIC_AUTH_TOKEN\":\"secret\","
+                + "\"ANTHROPIC_BASE_URL\":\"http://example.test\"}}")
+                .getAsJsonObject();
+        ProviderManager manager = createProviderManager(
+                new AtomicReference<>(createConfigWithCurrent(ProviderManager.LOCAL_SETTINGS_PROVIDER_ID)), settings);
+        JsonObject env = manager.getActiveClaudeProvider().getAsJsonObject("settingsConfig").getAsJsonObject("env");
+        assertEquals("claude-fable-5", env.get("ANTHROPIC_DEFAULT_FABLE_MODEL").getAsString());
+        assertEquals("GLM Flash", env.get("ANTHROPIC_DEFAULT_SONNET_MODEL_NAME").getAsString());
+        assertEquals("GLM Pro", env.get("ANTHROPIC_DEFAULT_OPUS_MODEL_NAME").getAsString());
+        assertEquals("Fable Pro", env.get("ANTHROPIC_DEFAULT_FABLE_MODEL_NAME").getAsString());
+        assertEquals("Fast Model", env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME").getAsString());
+        assertFalse(env.has("ANTHROPIC_AUTH_TOKEN"));
+        assertFalse(env.has("ANTHROPIC_BASE_URL"));
+    }
+
+    private ProviderManager createProviderManager(AtomicReference<JsonObject> configRef, JsonObject settings) {
         Gson gson = new Gson();
         ClaudeSettingsManager claudeSettingsManager = new ClaudeSettingsManager(gson, null) {
             @Override
             public JsonObject readClaudeSettings() {
-                JsonObject settings = new JsonObject();
-                settings.add("env", new JsonObject());
-                return settings;
+                return settings.deepCopy();
             }
         };
 

@@ -4,8 +4,9 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { homedir } from 'os';
+import { spawnSync } from 'child_process';
 import {
   selectWorkingDirectory,
   isBridgeDirectory,
@@ -13,6 +14,7 @@ import {
   getClaudeProjectKey,
   getClaudeProjectSessionFilePath,
   getClaudeProjectSessionFileCandidates,
+  isMainEntryModule,
 } from './path-utils.js';
 
 // This test sits in <bridge>/utils/, so the bridge install dir is one level up.
@@ -166,4 +168,46 @@ test('getClaudeProjectSessionFilePath rejects path-like session IDs', () => {
     () => getClaudeProjectSessionFilePath('../outside', 'C:\\project'),
     /Invalid session ID/,
   );
+});
+
+test('isMainEntryModule returns false for non-entry imports', () => {
+  // Under node --test, argv[1] is this test file, so this file's own
+  // import.meta.url would be the entry. Pass the URL of another loaded
+  // module (path-utils.js itself) to exercise the realpath comparison
+  // and prove a non-entry module is rejected.
+  const nonEntryUrl = pathToFileURL(resolve(BRIDGE_DIR, 'utils', 'path-utils.js')).href;
+  assert.equal(isMainEntryModule(nonEntryUrl), false);
+});
+
+test('isMainEntryModule survives a junctioned entry path', (t) => {
+  // Regression: launching through a Windows junction/symlink must still count
+  // as the entry script. Node realpaths the entry module's URL, so the naive
+  // URL comparison fails when the launcher passes the junctioned path
+  // (JetBrains configs migrated to another drive via AppData\Roaming junction).
+  const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'main-entry-'));
+  try {
+    const realDir = path.join(fixtureDir, 'real');
+    const linkDir = path.join(fixtureDir, 'link');
+    fs.mkdirSync(realDir);
+    const entryPath = path.join(realDir, 'entry.mjs');
+    fs.writeFileSync(entryPath, [
+      `import { isMainEntryModule } from ${JSON.stringify(pathToFileURL(resolve(BRIDGE_DIR, 'utils', 'path-utils.js')).href)};`,
+      'console.log(isMainEntryModule(import.meta.url) ? "ENTRY" : "NOT_ENTRY");',
+      '',
+    ].join('\n'));
+    let linkPath = null;
+    try {
+      fs.symlinkSync(realDir, linkDir, process.platform === 'win32' ? 'junction' : 'dir');
+      linkPath = path.join(linkDir, 'entry.mjs');
+    } catch {
+      t.skip('symlink/junction creation not permitted on this host');
+    }
+    const run = (entry) => spawnSync(process.execPath, [entry], { encoding: 'utf8' });
+    assert.equal(run(entryPath).stdout.trim(), 'ENTRY');
+    if (linkPath) {
+      assert.equal(run(linkPath).stdout.trim(), 'ENTRY');
+    }
+  } finally {
+    fs.rmSync(fixtureDir, { recursive: true, force: true });
+  }
 });

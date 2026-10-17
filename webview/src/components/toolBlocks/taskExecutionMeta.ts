@@ -1,7 +1,8 @@
 import type { SubagentHistoryResponse, TaskEvent, ToolInput, ToolResultBlock } from '../../types';
 import { normalizeToolName } from '../../utils/toolConstants';
 import {
-  extractResultText,
+  extractAgentResultText,
+  isSubagentHistoryCurrent,
   isAsyncAgentInput,
   parseAgentToolMeta,
   parseSpawnAgentMeta,
@@ -139,7 +140,7 @@ export function resolveTaskInputMeta(args: {
     agentPath,
     ...identity,
     descriptionText: typeof description === 'string' ? description : undefined,
-    promptText: typeof prompt === 'string' ? prompt : undefined,
+    promptText: isSpawnAgent ? spawnMeta.prompt : typeof prompt === 'string' ? prompt : undefined,
     rest,
   };
 }
@@ -159,7 +160,7 @@ export function resolveTaskOutcome(args: {
 }): TaskOutcome {
   const { isAsync, taskEvent, history, result, hasTerminalResult } = args;
   const taskFailed = taskEvent?.status === 'failed' || taskEvent?.status === 'stopped';
-  const historyFailed = history?.status === 'error';
+  const historyFailed = history?.success === true && history.status === 'error';
   // Async completion has two authoritative sources: the live task_notification,
   // and (after reload/polling) a sidechain transcript that ends in
   // assistant/end_turn. A settled main turn alone proves only that the launch
@@ -191,6 +192,7 @@ export function resolveTaskStatus(args: {
   histories: Record<string, SubagentHistoryResponse>;
   agentId?: string;
   agentPath?: string;
+  nativeTaskId?: string;
 }): TaskStatusResolution {
   const {
     input,
@@ -202,6 +204,7 @@ export function resolveTaskStatus(args: {
     histories,
     agentId,
     agentPath,
+    nativeTaskId,
   } = args;
   // A background (run_in_background) Agent only gets a launch acknowledgment
   // tool_result; its real terminal status arrives later via a task_notification
@@ -218,7 +221,8 @@ export function resolveTaskStatus(args: {
     ? isAsyncAgentInput(input, normalizedName, result, readToolUseStatus(toolId ? getToolResultRaw(toolId) : null))
     : false;
   const hasTerminalResult = result !== undefined && result !== null;
-  const history = (toolId ? histories[toolId] : undefined) ?? (agentId ? histories[agentId] : undefined);
+  const candidate = (toolId ? histories[toolId] : undefined) ?? (agentId ? histories[agentId] : undefined);
+  const history = isSubagentHistoryCurrent(candidate, nativeTaskId) ? candidate : undefined;
   const { isCompleted, isError } = resolveTaskOutcome({
     isAsync,
     taskEvent,
@@ -251,8 +255,9 @@ export function resolveTaskDetails(args: {
   resolvedAgentId?: string;
   agentToolMeta: AgentToolMeta;
   result?: ToolResultBlock | null;
+  normalizedName?: string;
 }): TaskDetailResolution {
-  const { isAsync, taskEvent, resolvedAgentId, agentToolMeta, result } = args;
+  const { isAsync, taskEvent, resolvedAgentId, agentToolMeta, result, normalizedName } = args;
   // For background agents the task_notification carries the authoritative usage
   // and summary (the launch ack has none); prefer it over toolUseResult. Sync
   // agents keep reading toolUseResult as before.
@@ -261,6 +266,6 @@ export function resolveTaskDetails(args: {
     detailDurationMs: (isAsync ? taskEvent?.totalDurationMs : undefined) ?? agentToolMeta.totalDurationMs,
     detailTokens: (isAsync ? taskEvent?.totalTokens : undefined) ?? agentToolMeta.totalTokens,
     detailToolUseCount: (isAsync ? taskEvent?.totalToolUseCount : undefined) ?? agentToolMeta.totalToolUseCount,
-    detailResultText: (isAsync ? taskEvent?.summary : undefined) ?? extractResultText(result),
+    detailResultText: (isAsync ? taskEvent?.summary : undefined) ?? extractAgentResultText(result, normalizedName),
   };
 }

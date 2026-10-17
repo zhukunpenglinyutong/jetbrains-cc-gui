@@ -13,6 +13,15 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+function emitNativeSkill() {
+  const call = vi.mocked(sendToJava).mock.calls.filter(([type]) => type === 'codex_native_list_skills').at(-1)!;
+  const request = JSON.parse(String(call[1]));
+  act(() => window.dispatchEvent(new CustomEvent('codex-native-data', { detail: {
+    requestType: 'codex_native_list_skills', requestId: request.requestId,
+    data: [{ cwd: 'C:/repo', skills: [{ name: 'review', scope: 'user', path: 'C:/skills/review/SKILL.md', enabled: true }] }],
+  } })));
+}
+
 describe('SkillsSettingsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -23,25 +32,10 @@ describe('SkillsSettingsSection', () => {
   });
 
   it('correlates Codex toggle responses by the stable skill id', () => {
-    const skillId = 'user:C:/skills/review';
+    const skillId = 'user:review:C:/skills/review/SKILL.md';
     render(<SkillsSettingsSection currentProvider="codex" />);
 
-    act(() => {
-      window.updateSkills?.(JSON.stringify({
-        user: {
-          [skillId]: {
-            id: skillId,
-            name: 'review',
-            type: 'directory',
-            scope: 'user',
-            path: 'C:/skills/review',
-            skillPath: 'C:/skills/review/SKILL.md',
-            enabled: true,
-          },
-        },
-        repo: {},
-      }));
-    });
+    emitNativeSkill();
 
     const toggleButton = screen.getByTitle('chat.clickToDisable') as HTMLButtonElement;
     fireEvent.click(toggleButton);
@@ -72,25 +66,10 @@ describe('SkillsSettingsSection', () => {
 
   it('ignores a late response after a timed-out toggle is retried', () => {
     vi.useFakeTimers();
-    const skillId = 'user:C:/skills/review';
+    const skillId = 'user:review:C:/skills/review/SKILL.md';
     render(<SkillsSettingsSection currentProvider="codex" />);
 
-    act(() => {
-      window.updateSkills?.(JSON.stringify({
-        user: {
-          [skillId]: {
-            id: skillId,
-            name: 'review',
-            type: 'directory',
-            scope: 'user',
-            path: 'C:/skills/review',
-            skillPath: 'C:/skills/review/SKILL.md',
-            enabled: true,
-          },
-        },
-        repo: {},
-      }));
-    });
+    emitNativeSkill();
 
     fireEvent.click(screen.getByTitle('chat.clickToDisable'));
     const firstRequest = vi.mocked(sendToJava).mock.calls.at(-1)?.[1] as { requestId: string };

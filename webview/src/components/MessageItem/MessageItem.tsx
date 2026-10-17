@@ -10,7 +10,9 @@ import { GroupedBlocksRenderer } from './GroupedBlocksRenderer';
 import { copyToClipboard } from '../../utils/copyUtils';
 import { quoteToChatInput } from '../../utils/quoteUtils';
 import { isNonRenderedToolUse } from '../../utils/toolConstants';
+import { shouldRevealThinking } from '../../utils/thinkingVisibility';
 import { groupBlocks } from './groupBlocks';
+import { ImageBlock } from './blocks/ImageBlock';
 
 export interface MessageItemProps {
   message: ClaudeMessage;
@@ -156,14 +158,21 @@ export const MessageItem = memo(function MessageItem({
   // non-rendered tools never disturb the message list. `blocks` is kept whole
   // for the empty-placeholder check below, since a message carrying only a
   // non-rendered tool is not an empty streaming placeholder.
+  // Empty native reasoning cannot create a row or interrupt a visible tool batch.
   const renderedBlocks = useMemo(
-    () => blocks.filter((block) => !isNonRenderedToolUse(block, isMessageStreaming)),
+    () => blocks.filter((block) => shouldRevealThinking(block) && !isNonRenderedToolUse(block, isMessageStreaming)),
     [blocks, isMessageStreaming],
   );
   const isUserImageOnly =
     message.type === 'user' &&
     renderedBlocks.length > 0 &&
     renderedBlocks.every((block) => block.type === 'image');
+  const isCompactionBoundary = typeof message.raw === 'object' && message.raw?.isCompactSummary === true;
+  const userImages = useMemo(() => message.type === 'user'
+    ? renderedBlocks.filter((block): block is Extract<ClaudeContentBlock, { type: 'image' }> => block.type === 'image')
+    : [], [message.type, renderedBlocks]);
+  const bubbleBlocks = useMemo(() => message.type === 'user'
+    ? renderedBlocks.filter((block) => block.type !== 'image') : renderedBlocks, [message.type, renderedBlocks]);
   const isEmptyStreamingPlaceholder =
     message.type === 'assistant' &&
     isMessageStreaming &&
@@ -214,7 +223,7 @@ export const MessageItem = memo(function MessageItem({
     });
   }
 
-  const groupedBlocks = useMemo(() => groupBlocks(renderedBlocks), [renderedBlocks]);
+  const groupedBlocks = useMemo(() => groupBlocks(bubbleBlocks), [bubbleBlocks]);
 
   // Register user message DOM node for anchor navigation
   // Must be called before any early returns to satisfy React hooks rules
@@ -235,10 +244,13 @@ export const MessageItem = memo(function MessageItem({
   if (isEmptyStreamingPlaceholder && !showStreamingConnectHint) {
     return <></>;
   }
+  if (message.type === 'assistant' && blocks.length > 0 && renderedBlocks.length === 0) {
+    return <></>;
+  }
 
   return (
     <div
-      className={`message ${message.type}${isLast ? ' is-last-message' : ''}${isProviderNotConfigured ? ' provider-not-configured' : ''}`}
+      className={`message ${message.type}${currentProvider === 'codex' ? ' codex-message' : ''}${isCompactionBoundary ? ' compaction-message' : ''}${isLast ? ' is-last-message' : ''}${isProviderNotConfigured ? ' provider-not-configured' : ''}`}
       ref={anchorRefCallback}
       data-message-anchor-id={message.type === 'user' ? messageKey : undefined}
     >
@@ -266,7 +278,10 @@ export const MessageItem = memo(function MessageItem({
 
       <MessageRoleLabel messageType={message.type} />
 
-      <div className={`message-content${isUserImageOnly ? ' image-only' : ''}`}>
+      {userImages.length > 0 && <div className="user-message-images">
+        {userImages.map((block, index) => <ImageBlock key={`${index}:${block.src}`} block={block} messageType="user" t={t} />)}
+      </div>}
+      {!isUserImageOnly && <div className="message-content">
         <GroupedBlocksRenderer
           message={message}
           messageIndex={messageIndex}
@@ -279,7 +294,7 @@ export const MessageItem = memo(function MessageItem({
           isEmptyStreamingPlaceholder={isEmptyStreamingPlaceholder}
           currentProvider={currentProvider}
           groupedBlocks={groupedBlocks}
-          renderedBlockCount={renderedBlocks.length}
+          renderedBlockCount={bubbleBlocks.length}
           isMessageStreaming={isMessageStreaming}
           isThinking={isThinking}
           isLast={isLast}
@@ -288,7 +303,7 @@ export const MessageItem = memo(function MessageItem({
           onNavigateToProviderSettings={onNavigateToProviderSettings}
           onNavigateToDependencySettings={onNavigateToDependencySettings}
         />
-      </div>
+      </div>}
 
       <MessageDurationFooter
         message={message}

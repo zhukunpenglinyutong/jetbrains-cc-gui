@@ -3,6 +3,27 @@ import { resolveProviderModels } from './resolveProviderModels';
 import { CODEX_MODELS, GROK_MODELS, CLAUDE_MODELS, OMP_MODELS } from './types';
 
 describe('resolveProviderModels', () => {
+  it('uses cc-switch picker routes instead of mapped Claude family slots or customs', () => {
+    const catalog = [
+      { id: 'ccs-claude-provider-a--grok-4.7', label: 'grok-4.7（供应商 A）' },
+      { id: 'ccs-claude-provider-b--glm-5.3', label: 'glm-5.3（供应商 B）' },
+    ];
+    expect(resolveProviderModels({
+      provider: 'claude', cliModels: catalog, cliCatalogHasEntries: true,
+      claudeReplaceBuiltInOptions: true,
+      claudeMapping: { sonnet: 'ccs-claude-provider-b--glm-5.3[1M]', opus: 'ccs-claude-provider-b--glm-5.3[1M]' },
+      claudeCustomModels: [{ id: 'old-route', label: 'Old route' }],
+    })).toEqual(catalog);
+  });
+
+  it('honors an empty replacement and merges additive picker options with built-ins', () => {
+    expect(resolveProviderModels({ provider: 'claude', cliModels: [], claudeReplaceBuiltInOptions: true })).toEqual([]);
+    const result = resolveProviderModels({
+      provider: 'claude', cliModels: [{ id: 'ccs-claude-a--glm', label: 'GLM（A）' }], cliCatalogHasEntries: true,
+    });
+    expect(result[0].id).toBe('ccs-claude-a--glm');
+    expect(result.map(m => m.id)).toContain(CLAUDE_MODELS[0].id);
+  });
   it('uses dynamic Grok catalog when catalogHasEntries is true', () => {
     const catalog = [
       { id: 'grok', label: 'Grok 4.6', description: 'grok-4.6' },

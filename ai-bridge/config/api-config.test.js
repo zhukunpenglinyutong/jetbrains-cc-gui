@@ -8,10 +8,31 @@ import { pathToFileURL } from 'node:url';
 import {
   buildCliEnv,
   buildWebviewControlledSettingsOverride,
+  isDangerousEnvVar,
   isWebviewControlledEnvVar,
 } from './api-config.js';
 
 const API_CONFIG_MODULE = pathToFileURL(path.resolve('ai-bridge/config/api-config.js')).href;
+
+test('Codex native access requires an active managed provider or explicitly authorized CLI Login', () => {
+  const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-runtime-access-'));
+  try {
+    fs.mkdirSync(path.join(homeDir, '.codemoss'));
+    for (const [codex, access] of [
+      [{ current: '' }, 'inactive'],
+      [{ current: '__codex_cli_login__' }, 'inactive'],
+      [{ current: '__codex_cli_login__', localConfigAuthorized: true }, 'cli_login'],
+      [{ current: 'provider', providers: { provider: { configToml: 'model="test"' } } }, 'managed'],
+      [{ current: 'provider', providers: { provider: 'invalid' } }, 'inactive'],
+    ]) {
+      fs.writeFileSync(path.join(homeDir, '.codemoss', 'config.json'), JSON.stringify({ codex }));
+      const output = execFileSync(process.execPath, ['--input-type=module', '--eval',
+        `import { getCodexRuntimeState } from ${JSON.stringify(API_CONFIG_MODULE)}; console.log(JSON.stringify(getCodexRuntimeState()));`],
+      { env: buildChildEnv(homeDir), encoding: 'utf8' });
+      assert.equal(JSON.parse(output.trim()).access, access);
+    }
+  } finally { fs.rmSync(homeDir, { recursive: true, force: true }); }
+});
 
 function buildChildEnv(homeDir) {
   const env = {
@@ -227,6 +248,19 @@ test('isWebviewControlledEnvVar classifies model, context, and reasoning control
   assert.equal(isWebviewControlledEnvVar('CLAUDE_CODE_DISABLE_1M_CONTEXT'), true);
   assert.equal(isWebviewControlledEnvVar('HTTPS_PROXY'), false);
   assert.equal(isWebviewControlledEnvVar('ANTHROPIC_API_KEY'), false);
+});
+
+test('isDangerousEnvVar blocks code injection and Codex CLI path overrides', () => {
+  assert.equal(isDangerousEnvVar('NODE_OPTIONS'), true);
+  assert.equal(isDangerousEnvVar('LD_PRELOAD'), true);
+  // A request-injected CLI path override would relaunch the app-server child
+  // as an attacker binary with managed credentials.
+  assert.equal(isDangerousEnvVar('CODEX_BIN'), true);
+  assert.equal(isDangerousEnvVar('CODEX_PATH'), true);
+  assert.equal(isDangerousEnvVar('CODEX_CLI_PATH'), true);
+  assert.equal(isDangerousEnvVar('codex_cli_path'), true); // case-insensitive
+  assert.equal(isDangerousEnvVar('ANTHROPIC_API_KEY'), false);
+  assert.equal(isDangerousEnvVar('PATH'), false); // Java EnvironmentConfigurator supplies PATH
 });
 
 test('buildCliEnv strips stale CLI override env vars and sets host-managed for first-party auth', () => {
