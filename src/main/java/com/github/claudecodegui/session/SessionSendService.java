@@ -1,6 +1,7 @@
 package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
+import com.github.claudecodegui.markdown.MarkdownReviewPrompt;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.CodexSettingsManager;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
@@ -40,6 +41,7 @@ public class SessionSendService {
     private final ZcodeSDKBridge zcodeSDKBridge;
     private final Map<String, MarkerCliBridge> cliBridges;
     private final SessionContextService contextService;
+    private final MarkdownReviewPrompt.SessionContext markdownReviewContext = new MarkdownReviewPrompt.SessionContext();
 
     public SessionSendService(
             Project project,
@@ -120,6 +122,10 @@ public class SessionSendService {
             String baseSummary = (userMessage.content != null && !userMessage.content.isEmpty())
                     ? userMessage.content
                     : normalizedInput;
+            String reviewSummary = MarkdownReviewPrompt.displaySummary(baseSummary);
+            if (reviewSummary != null) {
+                baseSummary = reviewSummary;
+            }
             String newSummary = baseSummary.length() > 45 ? baseSummary.substring(0, 45) + "..." : baseSummary;
             state.setSummary(newSummary);
             callbackFacade.notifySummaryReceived(newSummary);
@@ -224,6 +230,13 @@ public class SessionSendService {
         }
 
         String currentProvider = state.getProvider();
+        // Claude's persistent runtime receives the stable append once when it is
+        // created; subsequent turns reuse it. Other providers use their existing
+        // hidden agent-context path only on turns containing review snapshots.
+        boolean restoredReviews = "claude".equals(currentProvider) && !markdownReviewContext.isActiveFor(state.getRuntimeSessionEpoch())
+                && state.getMessages().stream().anyMatch(message ->
+                message.type == ClaudeSession.Message.Type.USER && MarkdownReviewPrompt.hasReview(message.content));
+        agentPrompt = markdownReviewContext.apply(currentProvider, input, agentPrompt, state.getRuntimeSessionEpoch(), restoredReviews);
         String sessionModeBeforeSend = state.getPermissionMode();
         String normalizedRequestedMode = normalizeRequestedPermissionMode(requestedPermissionMode);
         String effectivePermissionMode = resolveEffectivePermissionMode(

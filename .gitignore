@@ -56,6 +56,8 @@ webview/test-results/
 webview/playwright-report/
 
 src/main/resources/html/*
+src/main/resources/markdown-annotations/*.js
+src/main/resources/markdown-annotations/*.css
 
 .specify
 .claude
@@ -87,3 +89,6 @@ logs/*.log
 
 # Playwright MCP local test artifacts
 .playwright-mcp/
+
+# Local PR description
+/docs/markdown-review-pr.md

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="markdown-position-attribute-name" content="data-src">
+  <style>body { margin: 60px 40px; font: 18px system-ui; color-scheme: light dark; } p { max-width: 650px; }</style>
+</head>
+<body>
+  <div data-src="0..200">
+    <h1 data-src="0..20">Native preview fixture</h1>
+    <p data-src="22..80">First paragraph with <strong>bold text</strong> and 中文😀.</p>
+    <p data-src="82..120">Second paragraph for selection.</p>
+  </div>
+  <script>
+    // Models the IDE-owned DOM/pipe contract. Actual JCEF is tested separately.
+    window.__requests = [];
+    window.__state = { kind: 'state', panelId: 'fixture', documentVersion: 1, enabled: true, language: 'en', dirty: false, path: 'docs/plan.md', annotations: [] };
+    window.IncrementalDOM = { notifications: { afterPatchListeners: [] } };
+    window.__IntelliJTools = { messagePipe: {
+      subscribe(type, callback) { window.__response = callback; },
+      post(type, raw) {
+        const request = JSON.parse(raw); window.__requests.push(request);
+        if (request.action === 'create') {
+          window.__state.annotations.push({ id: request.requestId, revision: 1, ...request, status: 'attached', precision: 'block' });
+        }
+        if (request.action === 'update') {
+          const annotation = window.__state.annotations.find(item => item.id === request.id);
+          annotation.comment = request.comment; annotation.revision++;
+        }
+        if (request.action === 'delete') window.__state.annotations = window.__state.annotations.filter(item => item.id !== request.id);
+        if (request.action === 'complete') {
+          const annotation = window.__state.annotations.find(item => item.id === request.id);
+          annotation.completed = request.completed; annotation.revision++;
+        }
+        setTimeout(() => {
+          window.__response(JSON.stringify({ requestId: request.requestId, status: 'ok',
+            ...(window.__autoFail && request.action === 'create' ? { messageKey: 'reviewSavedNotAdded' }
+              : request.action === 'transfer' ? { messageKey: 'reviewAdded' } : {}) }));
+          window.__response(JSON.stringify(window.__state));
+        }, 0);
+      }
+    } };
+  </script>
+  <script type="module" src="/src/nativeMarkdownAnnotations/index.ts"></script>
+</body>
+</html>

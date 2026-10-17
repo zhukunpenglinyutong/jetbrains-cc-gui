@@ -1,4 +1,48 @@
 {
+  "markdownReview": {
+    "legacyContextCard": "Markdown 批注上下文",
+    "contextCard": "Markdown 批注 · {{count}} 项",
+    "contextDetails": "原文快照与引用信息",
+    "settings": {
+      "submitShortcut": {
+        "label": "Markdown 批注录入快捷键",
+        "enter": "Enter 录入，Ctrl+Enter 换行",
+        "ctrlEnter": "Ctrl+Enter 录入，Enter 换行",
+        "hint": "用于添加和保存批注。Shift+Enter 始终换行；macOS 可用 Command 代替 Ctrl。中文输入法确认期间不会录入。"
+      },
+      "title": "Markdown 批注（当前项目）",
+      "on": "开启",
+      "off": "关闭",
+      "error": "无法更新批注设置，请重新打开设置后重试。",
+      "enabled": {
+        "label": "启用 Markdown 预览批注 (beta)",
+        "hint": "为当前项目的 IDE 原生 Markdown 预览添加批注入口；关闭后立即隐藏交互层，不清空当前批注。"
+      },
+      "autoAddToChat": {
+        "label": "自动将批注加入当前聊天草稿 (beta)",
+        "hint": "默认关闭。新建或编辑批注后，将最新快照加入当前 CC GUI 聊天输入框，确认后再发送。"
+      },
+      "autoDeleteAffected": {
+        "label": "自动删除受修改影响的批注 (beta)",
+        "hint": "修改或删除批注的源码范围时清理该批注，仅位置移动时保留；格式化选文可能使用整个源码块。清理不代表要求已完成，agent 会被要求提示未完成项。已加入聊天的快照不受影响。"
+      },
+      "persist": {
+        "label": "重启后保留批注和待发快照 (beta)",
+        "hint": "默认关闭，仅在本次项目打开期间保存。开启后保存至项目工作区；关闭后下次 IDE 保存会移除持久化内容，当前批注仍可使用。聊天消息本身仍按原有方式保存。"
+      }
+    },
+    "count": "{{count}} 条批注 / 引用",
+    "removeBatch": "从草稿移除这组内容",
+    "remove": "移除",
+    "snapshot": "草稿保留加入时的快照，后续修改原文或批注不会改变它。",
+    "tooLarge": "批注内容过大，请移除部分内容后再发送。",
+    "block": "原文块",
+    "source": "所选文本",
+    "quote": "引用",
+    "attached": "已定位",
+    "ambiguous": "存在多个可能位置",
+    "orphaned": "原文已变化"
+  },
   "codexPet": {
     "title": "Codex 宠物",
     "close": "隐藏宠物",

@@ -13,6 +13,7 @@ import { isNonRenderedToolUse } from '../../utils/toolConstants';
 import { shouldRevealThinking } from '../../utils/thinkingVisibility';
 import { groupBlocks } from './groupBlocks';
 import { ImageBlock } from './blocks/ImageBlock';
+import { parseLegacyReviewDisplay, parseReviewMessage } from '../../utils/markdownReviewMessage';
 
 export interface MessageItemProps {
   message: ClaudeMessage;
@@ -173,6 +174,8 @@ export const MessageItem = memo(function MessageItem({
     : [], [message.type, renderedBlocks]);
   const bubbleBlocks = useMemo(() => message.type === 'user'
     ? renderedBlocks.filter((block) => block.type !== 'image') : renderedBlocks, [message.type, renderedBlocks]);
+  const isReviewMessage = useMemo(() => message.type === 'user' && renderedBlocks.some(block =>
+    block.type === 'text' && (parseReviewMessage(block.text ?? '') !== null || parseLegacyReviewDisplay(block.text ?? '') !== null)), [message.type, renderedBlocks]);
   const isEmptyStreamingPlaceholder =
     message.type === 'assistant' &&
     isMessageStreaming &&
@@ -250,7 +253,7 @@ export const MessageItem = memo(function MessageItem({
 
   return (
     <div
-      className={`message ${message.type}${currentProvider === 'codex' ? ' codex-message' : ''}${isCompactionBoundary ? ' compaction-message' : ''}${isLast ? ' is-last-message' : ''}${isProviderNotConfigured ? ' provider-not-configured' : ''}`}
+      className={`message ${message.type}${currentProvider === 'codex' ? ' codex-message' : ''}${isCompactionBoundary ? ' compaction-message' : ''}${isReviewMessage ? ' markdown-review-message' : ''}${isLast ? ' is-last-message' : ''}${isProviderNotConfigured ? ' provider-not-configured' : ''}`}
       ref={anchorRefCallback}
       data-message-anchor-id={message.type === 'user' ? messageKey : undefined}
     >

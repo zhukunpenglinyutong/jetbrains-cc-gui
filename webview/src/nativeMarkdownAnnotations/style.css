@@ -1,0 +1,64 @@
+#ccgui-markdown-review { position: fixed; inset: 0; margin: 0; padding: 0; z-index: 9999; pointer-events: none; font: 13px/1.5 var(--cc-gui-ui-font-family, 'Inter', system-ui, sans-serif); }
+#ccgui-markdown-review * { box-sizing: border-box; }
+#ccgui-markdown-review .ccgui-md-theme { position: absolute; inset: 0; color: var(--text-primary); }
+#ccgui-markdown-review [hidden] { display: none !important; }
+#ccgui-markdown-review svg { width: 16px; height: 16px; flex-shrink: 0; }
+#ccgui-markdown-review button, #ccgui-markdown-review textarea { font: inherit; }
+#ccgui-markdown-review .ccgui-md-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 28px; margin: 0; padding: 5px 10px; border: 1px solid var(--border-secondary); border-radius: 4px; background: transparent; color: var(--text-primary); cursor: pointer; pointer-events: auto; transition: background .15s, border-color .15s, color .15s; }
+#ccgui-markdown-review .ccgui-md-button:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-hover); }
+#ccgui-markdown-review .ccgui-md-button.primary { background: var(--accent-primary); border-color: transparent; color: var(--color-button-text); font-weight: 500; }
+#ccgui-markdown-review .ccgui-md-button.primary:hover:not(:disabled) { background: var(--accent-primary-hover); }
+#ccgui-markdown-review .ccgui-md-button.primary:active:not(:disabled) { background: var(--accent-primary-active); }
+#ccgui-markdown-review .ccgui-md-button.danger { color: var(--color-error); }
+#ccgui-markdown-review .ccgui-md-button.danger:hover:not(:disabled) { background: var(--color-button-danger-hover-bg); }
+#ccgui-markdown-review button:disabled { opacity: .5; cursor: not-allowed; }
+#ccgui-markdown-review button:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+#ccgui-markdown-review .ccgui-md-controls, #ccgui-markdown-review .ccgui-md-toolbar, #ccgui-markdown-review .ccgui-md-popup { position: fixed; border: 1px solid var(--border-secondary); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); box-shadow: var(--shadow-md); pointer-events: auto; }
+#ccgui-markdown-review .ccgui-md-controls { right: 12px; bottom: 12px; display: grid; grid-template-columns: auto auto auto; align-items: center; gap: 4px; max-width: calc(100vw - 24px); padding: 3px 4px; }
+#ccgui-markdown-review .ccgui-md-controls .ccgui-md-button { min-height: 24px; padding: 2px 6px; font-size: 12px; }
+#ccgui-markdown-review .ccgui-md-controls svg { width: 14px; height: 14px; }
+#ccgui-markdown-review .ccgui-md-controls > .secondary { border-color: transparent; color: var(--text-tertiary); }
+#ccgui-markdown-review .ccgui-md-toolbar { display: flex; flex-wrap: wrap; gap: 4px; max-width: calc(100vw - 16px); padding: 4px; }
+#ccgui-markdown-review .ccgui-md-toolbar .ccgui-md-button { border-color: transparent; }
+#ccgui-markdown-review .ccgui-md-popup { width: 420px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto; padding: 12px; box-shadow: var(--shadow-lg); }
+#ccgui-markdown-review .ccgui-md-popup-title { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
+#ccgui-markdown-review .ccgui-md-popup-title svg { color: var(--accent-primary); }
+#ccgui-markdown-review .ccgui-md-popup-title { cursor: move; touch-action: none; user-select: none; }
+#ccgui-markdown-review .ccgui-md-popup-close { margin-left: auto; width: 28px; height: 28px; padding: 4px; border-color: transparent; }
+#ccgui-markdown-review .ccgui-md-popup-close svg { color: var(--text-primary); }
+#ccgui-markdown-review .ccgui-md-summary { width: 360px; padding: 8px; max-height: min(360px, calc(100vh - 56px)); }
+#ccgui-markdown-review .ccgui-md-summary .ccgui-md-popup-title { margin-bottom: 4px; font-size: 13px; }
+#ccgui-markdown-review .ccgui-md-comment-list { list-style: none; padding: 0; margin: 0; }
+#ccgui-markdown-review .ccgui-md-comment-list li { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border-secondary); }
+#ccgui-markdown-review .ccgui-md-comment-list .ccgui-md-button { display: grid; width: 100%; gap: 3px; padding: 7px 6px; border: 0; text-align: left; justify-content: stretch; }
+#ccgui-markdown-review .ccgui-md-comment-list small { color: var(--text-tertiary); font-size: 10px; }
+#ccgui-markdown-review .ccgui-md-list-quote { color: var(--text-tertiary); font-size: 11px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#ccgui-markdown-review .ccgui-md-list-comment { font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+#ccgui-markdown-review .ccgui-md-comment-list .ccgui-md-list-empty { padding: 12px 6px; color: var(--text-tertiary); }
+.mermaid[data-actual-fence-content] svg text,
+.mermaid[data-actual-fence-content] svg tspan,
+.mermaid[data-actual-fence-content] svg foreignObject,
+.mermaid[data-actual-fence-content] svg foreignObject * { user-select: text !important; -webkit-user-select: text !important; cursor: text; }
+#ccgui-markdown-review .ccgui-md-popup { z-index: 3; }
+#ccgui-markdown-review .ccgui-md-toolbar { z-index: 4; }
+#ccgui-markdown-review .ccgui-md-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: nowrap; gap: 4px; margin-top: 12px; }
+#ccgui-markdown-review .ccgui-md-actions .ccgui-md-icon-button { min-height: 26px; width: 26px; height: 26px; flex-shrink: 0; padding: 4px; border-color: transparent; }
+#ccgui-markdown-review .ccgui-md-actions .ccgui-md-icon-button.primary { margin-left: auto; }
+#ccgui-markdown-review .ccgui-md-button-label { display: none; }
+@media (min-width: 360px) { #ccgui-markdown-review .ccgui-md-actions .primary.ccgui-md-icon-button { width: auto; padding: 4px 8px; } #ccgui-markdown-review .ccgui-md-button-label { display: inline; } }
+#ccgui-markdown-review .ccgui-md-popup > .ccgui-md-button { display: flex; width: 100%; margin-top: 8px; justify-content: flex-start; text-align: left; overflow-wrap: anywhere; }
+#ccgui-markdown-review textarea { display: block; width: 100%; min-height: 96px; max-height: 40vh; resize: vertical; padding: 10px 12px; border: 1px solid var(--border-secondary); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); outline: none; transition: border-color .15s, box-shadow .15s; }
+#ccgui-markdown-review textarea::placeholder { color: var(--text-placeholder); }
+#ccgui-markdown-review textarea:hover, #ccgui-markdown-review textarea:focus { border-color: var(--accent-primary); box-shadow: 0 0 0 1px var(--accent-primary); }
+#ccgui-markdown-review blockquote { margin: 0 0 12px; padding: 8px 12px; border: 0; border-left: 2px solid var(--accent-primary); border-radius: 4px; background: var(--bg-secondary); color: var(--text-tertiary); font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 100px; overflow-y: auto; }
+#ccgui-markdown-review p { margin: 12px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+#ccgui-markdown-review .ccgui-md-highlight { position: fixed; background: color-mix(in srgb, var(--accent-primary) 12%, transparent); border-bottom: 2px solid color-mix(in srgb, var(--accent-primary) 60%, transparent); pointer-events: none; }
+#ccgui-markdown-review .ccgui-md-marker { position: fixed; z-index: 1; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 4px; background: var(--accent-primary); color: var(--color-button-text); pointer-events: auto; cursor: pointer; box-shadow: var(--shadow-sm); }
+#ccgui-markdown-review .ccgui-md-marker:hover { background: var(--accent-primary-hover); }
+#ccgui-markdown-review .ccgui-md-status { grid-column: 1 / -1; max-width: 360px; padding: 4px 6px; color: var(--text-tertiary); font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
+#ccgui-markdown-review .ccgui-md-popup, #ccgui-markdown-review blockquote, #ccgui-markdown-review textarea { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+
+#ccgui-markdown-review .ccgui-md-comment-list .ccgui-md-list-actions { margin: 0; padding: 0 4px 6px; }
+#ccgui-markdown-review .ccgui-md-comment-list .ccgui-md-list-actions .ccgui-md-button { display: inline-flex; width: 26px; padding: 4px; }
+#ccgui-markdown-review .ccgui-md-comment-list .completed .ccgui-md-list-comment { color: var(--text-tertiary); text-decoration: line-through; }
+#ccgui-markdown-review .ccgui-md-controls [aria-pressed="true"] { color: var(--accent-primary); background: var(--bg-hover); }
