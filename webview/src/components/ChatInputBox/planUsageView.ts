@@ -1,6 +1,7 @@
 import type { TFunction } from 'i18next';
 import {
   clampPercent,
+  formatBalance,
   formatFullReset,
   formatShortReset,
   paceColor,
@@ -20,6 +21,13 @@ export interface PlanUsageDisplay {
   periodType: string | null | undefined;
 }
 
+export interface PlanUsageBalanceView {
+  /** Formatted remaining amount, e.g. "¥42.50". */
+  amount: string;
+  /** Red when the balance is exhausted, neutral otherwise. */
+  color: PaceColor;
+}
+
 export interface PlanUsageView {
   present: boolean;
   tp: number;
@@ -28,11 +36,16 @@ export interface PlanUsageView {
   shortReset: string;
   fullReset: string;
   winLabel: string;
+  /** Non-null only for prepaid balance vendors without pct windows. */
+  balance: PlanUsageBalanceView | null;
 }
 
 /**
  * Derived view values for the indicator.
  * Bar/% = selected window; trailing dot = worst across all windows.
+ * Prepaid balance vendors (DeepSeek/Moonshot/OpenRouter/…) have no
+ * percentage denominator — when a balance exists and there are no windows,
+ * the indicator renders the labeled amount instead of the bar.
  */
 export function derivePlanUsageView(
   snapshot: PlanUsageSnapshot | null,
@@ -53,7 +66,15 @@ export function derivePlanUsageView(
   const shortReset = present ? formatShortReset(display!.resetAt, language) : '';
   const fullReset = present ? formatFullReset(display!.resetAt, language) : '';
   const winLabel = windowShortLabel(display?.windowId || display?.periodType);
-  return { present, tp, color, worstColor, shortReset, fullReset, winLabel };
+  const balance = snapshot?.balance;
+  const balanceView =
+    balance && (snapshot?.windows ?? []).length === 0
+      ? {
+        amount: formatBalance(balance.remaining, balance.unit),
+        color: (balance.remaining <= 0 ? 'red' : 'neutral') as PaceColor,
+      }
+      : null;
+  return { present, tp, color, worstColor, shortReset, fullReset, winLabel, balance: balanceView };
 }
 
 export interface PlanUsageTooltipArgs {
@@ -124,6 +145,38 @@ export function buildPlanUsageTooltip({
     lines.push(
       t('chat.planUsage.clickToSwitch', {
         defaultValue: 'Click period label to switch window',
+      }),
+    );
+  }
+  if (snapshot?.stale) {
+    lines.push(
+      t('chat.planUsage.stale', {
+        defaultValue: 'Data may be outdated (refresh failed)',
+      }),
+    );
+  }
+  return lines.join('\n');
+}
+
+/** Multi-line tooltip text for the prepaid balance view. */
+export function buildBalanceTooltip(
+  snapshot: PlanUsageSnapshot | null,
+  amount: string,
+  t: TFunction,
+): string {
+  const balance = snapshot?.balance;
+  const lines: string[] = [
+    t('chat.planUsage.balanceRemaining', {
+      value: amount,
+      defaultValue: 'Balance: {{value}}',
+    }),
+  ];
+  if (balance && (balance.total != null || balance.used != null)) {
+    lines.push(
+      t('chat.planUsage.balanceDetail', {
+        total: balance.total != null ? formatBalance(balance.total, balance.unit) : '—',
+        used: balance.used != null ? formatBalance(balance.used, balance.unit) : '—',
+        defaultValue: 'Total {{total}} · Used {{used}}',
       }),
     );
   }
