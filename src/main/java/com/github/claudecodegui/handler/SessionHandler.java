@@ -98,16 +98,19 @@ public class SessionHandler extends BaseMessageHandler {
     }
 
     /**
-     * Send message to Claude
-     * [FIX] Now parses JSON format to extract text, agent info and file tags
+     * Validates the Node.js version and reports failures to the webview. Must
+     * run on a pooled thread: the cache-miss recovery in resolveNodeVersion
+     * spawns probe processes with up to 5s waits, and message dispatch enters
+     * this handler synchronously on the JCEF UI thread — an inline call would
+     * freeze the webview on the first send after a cache reset.
      */
-    private void handleSendMessage(String content) {
-        String nodeVersion = this.resolveNodeVersion();
+    private boolean ensureNodeVersionReady() {
+        String nodeVersion = resolveNodeVersion();
         if (nodeVersion == null) {
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("addErrorMessage", escapeJs("未检测到有效的 Node.js 版本，请在设置中配置或重新打开工具窗口。"));
             });
-            return;
+            return false;
         }
         if (!NodeDetector.isVersionSupported(nodeVersion)) {
             int minVersion = NodeDetector.MIN_NODE_MAJOR_VERSION;
@@ -115,8 +118,16 @@ public class SessionHandler extends BaseMessageHandler {
                 callJavaScript("addErrorMessage", escapeJs(
                         "Node.js 版本过低 (" + nodeVersion + ")，插件需要 v" + minVersion + " 或更高版本才能正常运行。请在设置中配置正确的 Node.js 路径。"));
             });
-            return;
+            return false;
         }
+        return true;
+    }
+
+    /**
+     * Send message to Claude
+     * [FIX] Now parses JSON format to extract text, agent info and file tags
+     */
+    private void handleSendMessage(String content) {
 
         // [FIX] Parse JSON format to extract text, agent info and file tags
         String prompt;
@@ -198,6 +209,9 @@ public class SessionHandler extends BaseMessageHandler {
         final JsonObject finalNativeCodexSettings = nativeCodexSettings;
 
         CompletableFuture.runAsync(() -> {
+            if (!ensureNodeVersionReady()) {
+                return;
+            }
             String currentWorkingDir = determineWorkingDirectory();
             String previousCwd = context.getSession().getCwd();
 
@@ -352,23 +366,9 @@ public class SessionHandler extends BaseMessageHandler {
         String clientMessageId,
         JsonObject nativeCodexSettings
     ) {
-        // Version check (consistent with handleSendMessage)
-        String nodeVersion = this.resolveNodeVersion();
-        if (nodeVersion == null) {
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("addErrorMessage", escapeJs("未检测到有效的 Node.js 版本，请在设置中配置或重新打开工具窗口。"));
-            });
-            return;
-        }
-        if (!NodeDetector.isVersionSupported(nodeVersion)) {
-            int minVersion = NodeDetector.MIN_NODE_MAJOR_VERSION;
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("addErrorMessage", escapeJs(
-                        "Node.js 版本过低 (" + nodeVersion + ")，插件需要 v" + minVersion + " 或更高版本才能正常运行。请在设置中配置正确的 Node.js 路径。"));
-            });
-            return;
-        }
-
+        // Version check (consistent with handleSendMessage) — runs inside the
+        // async block below; see ensureNodeVersionReady for why it must not
+        // block the JCEF UI thread.
         final String finalAgentPrompt = agentPrompt;
         final java.util.List<String> finalFileTagPaths = fileTagPaths;
         final String finalRequestedPermissionMode = requestedPermissionMode;
@@ -379,6 +379,9 @@ public class SessionHandler extends BaseMessageHandler {
         final JsonObject finalNativeCodexSettings = nativeCodexSettings;
 
         CompletableFuture.runAsync(() -> {
+            if (!ensureNodeVersionReady()) {
+                return;
+            }
             String currentWorkingDir = determineWorkingDirectory();
             String previousCwd = context.getSession().getCwd();
             if (!currentWorkingDir.equals(previousCwd)) {
