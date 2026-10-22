@@ -157,7 +157,11 @@ const WEBVIEW_CONTROLLED_ENV_VAR_SET = new Set(
 
 // Subset stripped from the SDK child env: the reasoning/context controls must
 // reach the CLI only via SDK options + the inline settings override, never
-// inherited from process.env.
+// inherited from process.env. Model routing vars are intentionally NOT
+// stripped: the CLI child env is the frozen per-request snapshot written by
+// setModelEnvironmentVariables() right before buildQueryOptions(), and the
+// [1m] context-window suffix must survive into the spawned runtime (see
+// runtime-lifecycle.1m-toggle.child.mjs).
 const CLI_ENV_OVERRIDE_VAR_SET = new Set(
   REASONING_CONTROL_ENV_VARS.map((varName) => varName.toUpperCase())
 );
@@ -202,6 +206,26 @@ export function isDangerousEnvVar(varName) {
 }
 
 /**
+ * Read the per-request value a model routing var currently holds in process.env.
+ *
+ * setModelEnvironmentVariables() writes the request-resolved routing values right before
+ * buildQueryOptions(), so at this point process.env is the authoritative snapshot for the
+ * current request. Unset and blank are treated alike ("no per-request value"), which lets
+ * callers fall back to settings.json or to neutralization.
+ *
+ * @param {string} varName - model routing env var name
+ * @returns {string|null} the trimmed per-request value, or null when the request set none
+ */
+function perRequestModelRoutingValue(varName) {
+  const value = process.env[varName];
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const trimmed = String(value).trim();
+  return trimmed === '' ? null : trimmed;
+}
+
+/**
  * Build the inline settings override handed to the Claude CLI (the `--settings` argument).
  *
  * @param {string} [modelId] - the raw model ID selected in the webview
@@ -216,14 +240,19 @@ export function buildWebviewControlledSettingsOverride(modelId, settingsEnv) {
     MAX_THINKING_TOKENS: '',
   };
 
-  // ANTHROPIC_MODEL stays blank: it belongs to the current request, written exclusively
-  // through process.env by setModelEnvironmentVariables(). A stale copy in settings.json
-  // must be blocked, otherwise it overrides the webview-selected model and every model
-  // family resolves to the same value (issue #1509).
-  env.ANTHROPIC_MODEL = '';
-
-  // The remaining tier vars echo the real model names the user configured in settings.json
-  // instead of being blanked across the board.
+  // Model routing vars: the per-request snapshot wins over settings.json.
+  //
+  // setModelEnvironmentVariables() writes the request-resolved values into process.env
+  // immediately before this function is called, so process.env is the authoritative
+  // per-request snapshot here - the tier owned by the current request included, which may
+  // deliberately differ from the (possibly stale) settings.json mapping.
+  //
+  // Mirroring those values instead of blanking them is what keeps third-party relay setups
+  // working (issue #1741): with every var blanked, a CLI that honors this env block cannot
+  // resolve a tier alias ('sonnet') to the relay's custom model name and falls back to the
+  // official claude-* names. Vars the request did not set fall back to the user's
+  // settings.json tier mapping - and ANTHROPIC_MODEL to blank - so a stale settings.json
+  // copy still cannot override the webview selection (issue #1509).
   //
   // Measured conclusion (Claude Agent SDK 0.3.290 / bundled CLI 2.1.290): the `--settings`
   // env block does not become environment variables of the CLI child process. Pointing
@@ -233,14 +262,14 @@ export function buildWebviewControlledSettingsOverride(modelId, settingsEnv) {
   // name. So this layer has no practical effect on tier resolution.
   //
   // The real guarantee for subagent tiers is setModelEnvironmentVariables() spreading every
-  // tier into process.env. The pass-through is kept because it truthfully expresses the intent
-  // that configured tiers reach the CLI, and it would start taking effect by itself should the
-  // CLI begin honoring settings.env. Note its values are settings.json verbatim, so for the tier
-  // owned by the current request they can differ from the request-resolved value written to
-  // process.env (see the tier sync in model-utils.js). Tiers the user never configured stay blank.
+  // tier into process.env. This layer is kept truthful rather than merely intent-expressing:
+  // it mirrors the per-request snapshot, so it already holds the correct value should the CLI
+  // begin honoring settings.env - a blank or stale entry here would reintroduce #1741.
+  env.ANTHROPIC_MODEL = perRequestModelRoutingValue('ANTHROPIC_MODEL') ?? '';
+
   const configuredTiers = readConfiguredModelTiers(settingsEnv);
   for (const key of MODEL_TIER_ENV_KEYS) {
-    env[key] = configuredTiers[key] ?? '';
+    env[key] = perRequestModelRoutingValue(key) ?? configuredTiers[key] ?? '';
   }
 
   const normalizedModel = typeof modelId === 'string' ? modelId.trim() : '';

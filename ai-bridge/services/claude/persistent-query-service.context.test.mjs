@@ -110,16 +110,20 @@ test('buildRequestContext preserves resolved model mapping for context usage run
     assert.equal(requestContext.resolvedModelId, 'custom-sonnet-model');
     assert.equal(requestContext.options.env.ANTHROPIC_MODEL, 'custom-sonnet-model');
     assert.equal(requestContext.options.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'custom-sonnet-model');
-    // The inline settings echo the user's configured tiers verbatim, all of them taken from
-    // settings.json - the current tier included, since modelId does not feed this layer. This is
-    // only a faithful read-back of the user's config: measurements show the CLI does not adopt
-    // it (see buildWebviewControlledSettingsOverride in api-config.js). The path that actually
-    // takes effect for subagent tiers is the one asserted against process.env below.
+    // The inline settings override MIRRORS the per-request routing values written to
+    // process.env by setModelEnvironmentVariables() just before buildQueryOptions() - the
+    // current tier included - instead of blanking them: blanking regressed third-party relays
+    // where the CLI could no longer resolve the SDK alias ('sonnet') to the relay's custom
+    // model name and kept requesting the official claude-* models (issue #1741). Vars the
+    // request did not set fall back to the user's settings.json tier mapping, and
+    // ANTHROPIC_MODEL to blank, so stale settings.json copies stay blocked (issue #1509).
+    // The tier asserted here as 'glm-5.3-flash' is such a fallback: only the current tier
+    // carries a request-resolved value of its own.
     assert.deepEqual(requestContext.options.settings, {
       env: {
         CLAUDE_CODE_EFFORT_LEVEL: '',
         MAX_THINKING_TOKENS: '',
-        ANTHROPIC_MODEL: '',
+        ANTHROPIC_MODEL: 'custom-sonnet-model',
         ANTHROPIC_DEFAULT_FABLE_MODEL: '',
         ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5.3-flash',
         ANTHROPIC_DEFAULT_SONNET_MODEL: 'custom-sonnet-model',

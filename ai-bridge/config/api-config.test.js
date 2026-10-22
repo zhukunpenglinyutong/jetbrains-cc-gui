@@ -10,9 +10,57 @@ import {
   buildWebviewControlledSettingsOverride,
   isDangerousEnvVar,
   isWebviewControlledEnvVar,
+  WEBVIEW_CONTROLLED_ENV_VARS,
 } from './api-config.js';
 
 const API_CONFIG_MODULE = pathToFileURL(path.resolve('ai-bridge/config/api-config.js')).href;
+
+// buildWebviewControlledSettingsOverride() mirrors the per-request model routing snapshot it
+// finds in process.env, so these tests must not depend on whatever the surrounding shell
+// exports (relay users commonly export ANTHROPIC_MODEL / ANTHROPIC_DEFAULT_*_MODEL globally).
+// Clear the webview-controlled vars for the whole file; each test sets the ones it needs.
+const FILE_SAVED_ENV = new Map(
+  WEBVIEW_CONTROLLED_ENV_VARS.map((name) => [name, process.env[name]])
+);
+for (const name of WEBVIEW_CONTROLLED_ENV_VARS) {
+  delete process.env[name];
+}
+
+test.after(() => {
+  for (const [name, value] of FILE_SAVED_ENV) {
+    if (value === undefined) {
+      delete process.env[name];
+    } else {
+      process.env[name] = value;
+    }
+  }
+});
+
+/**
+ * Run `body` with the given per-request routing values placed in process.env, restoring the
+ * previous state of every webview-controlled var afterwards.
+ *
+ * @param {Object} values - env var name to value pairs to set for the duration of the body
+ * @param {Function} body - test body to run
+ */
+function withPerRequestRoutingEnv(values, body) {
+  const saved = new Map(WEBVIEW_CONTROLLED_ENV_VARS.map((name) => [name, process.env[name]]));
+  for (const name of WEBVIEW_CONTROLLED_ENV_VARS) {
+    delete process.env[name];
+  }
+  Object.assign(process.env, values);
+  try {
+    body();
+  } finally {
+    for (const [name, value] of saved) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+  }
+}
 
 test('Codex native access requires an active managed provider or explicitly authorized CLI Login', () => {
   const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-runtime-access-'));
@@ -372,6 +420,48 @@ test('buildWebviewControlledSettingsOverride leaves unconfigured tiers blank', (
     '',
     'ANTHROPIC_MODEL must stay blank: blocking the stale settings.json copy is exactly the issue #1509 fix'
   );
+});
+
+test('buildWebviewControlledSettingsOverride mirrors per-request routing values over settings.json', () => {
+  // The override must state what the current request actually routes to: the values
+  // setModelEnvironmentVariables() has just written into process.env win over the user's
+  // settings.json mapping for the tier they own. Blanking that entry - or letting a stale
+  // settings.json copy through - is what made third-party relays request the official
+  // claude-* models instead of the selected one (issue #1741). Tiers the request did not
+  // touch keep echoing settings.json.
+  withPerRequestRoutingEnv(
+    {
+      ANTHROPIC_MODEL: 'relay-sonnet-model',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'relay-sonnet-model',
+    },
+    () => {
+      const result = buildWebviewControlledSettingsOverride('claude-sonnet-4-6', {
+        ANTHROPIC_MODEL: 'stale-global-model',
+        ANTHROPIC_DEFAULT_SONNET_MODEL: 'stale-sonnet-model',
+        ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5.3-flash',
+      });
+
+      assert.equal(result.env.ANTHROPIC_MODEL, 'relay-sonnet-model',
+        'the per-request selection must win over the settings.json copy');
+      assert.equal(result.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'relay-sonnet-model',
+        'the tier owned by the current request must mirror the request-resolved value');
+      assert.equal(result.env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'glm-5.3-flash',
+        'tiers the request did not touch keep echoing settings.json');
+      assert.equal(result.env.ANTHROPIC_DEFAULT_HAIKU_MODEL, '');
+      assert.equal(result.env.CLAUDE_CODE_SUBAGENT_MODEL, '');
+    },
+  );
+
+  // Without a per-request value the stale settings.json copy must stay blocked (#1509):
+  // neutralization by empty string is still the fallback for ANTHROPIC_MODEL.
+  withPerRequestRoutingEnv({}, () => {
+    const result = buildWebviewControlledSettingsOverride('claude-sonnet-4-6', {
+      ANTHROPIC_MODEL: 'stale-global-model',
+    });
+
+    assert.equal(result.env.ANTHROPIC_MODEL, '');
+    assert.equal(result.env.ANTHROPIC_DEFAULT_SONNET_MODEL, '');
+  });
 });
 
 test('buildCliEnv leaves CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST unset for cloud providers', () => {
