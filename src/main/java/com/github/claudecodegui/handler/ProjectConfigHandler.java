@@ -146,6 +146,59 @@ public class ProjectConfigHandler {
 
     // ---- Working Directory -------------------------------------------------
 
+    public void handleGetMarkdownReviewConfig() {
+        pushJson("window.setMarkdownReviewConfig", gson.toJsonTree(
+                com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(context.getProject()).getConfig()));
+    }
+
+    public void handleSetMarkdownReviewConfig(String content) {
+        try {
+            JsonObject patch = gson.fromJson(content, JsonObject.class);
+            if (patch == null || patch.size() != 1) {
+                throw new IllegalArgumentException("Expected one Markdown review preference");
+            }
+            var service = com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(context.getProject());
+            var config = service.getConfig();
+            for (var entry : patch.entrySet()) {
+                if ("submitShortcut".equals(entry.getKey())) {
+                    if (!entry.getValue().isJsonPrimitive() || !entry.getValue().getAsJsonPrimitive().isString()
+                            || !java.util.Set.of("enter", "ctrlEnter").contains(entry.getValue().getAsString())) {
+                        throw new IllegalArgumentException("Expected a valid Markdown review submit shortcut");
+                    }
+                    config.submitShortcut = entry.getValue().getAsString();
+                    continue;
+                }
+                if (!entry.getValue().isJsonPrimitive() || !entry.getValue().getAsJsonPrimitive().isBoolean()) {
+                    throw new IllegalArgumentException("Expected a boolean preference");
+                }
+                switch (entry.getKey()) {
+                    case "enabled":
+                        config.enabled = entry.getValue().getAsBoolean();
+                        break;
+                    case "autoAddToChat":
+                        config.autoAddToChat = entry.getValue().getAsBoolean();
+                        break;
+                    case "autoDeleteAffected":
+                        config.autoDeleteAffected = entry.getValue().getAsBoolean();
+                        break;
+                    case "persist":
+                        config.persist = entry.getValue().getAsBoolean();
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unknown Markdown review preference");
+                }
+            }
+            service.configure(config);
+            handleGetMarkdownReviewConfig();
+        } catch (RuntimeException error) {
+            JsonObject response = gson.toJsonTree(
+                    com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(context.getProject()).getConfig()).getAsJsonObject();
+            response.addProperty("error", "Unable to update Markdown review preferences");
+            pushJson("window.setMarkdownReviewConfig", response);
+            LOG.warn("Unable to update Markdown review preferences", error);
+        }
+    }
+
     public void handleGetWorkingDirectory() {
         try {
             String projectPath = context.getProject().getBasePath();

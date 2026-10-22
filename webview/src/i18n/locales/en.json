@@ -1,4 +1,50 @@
 {
+  "markdownReview": {
+    "legacyContextCard": "Markdown review context",
+    "contextCard_one": "Markdown review · {{count}} item",
+    "contextCard_other": "Markdown review · {{count}} items",
+    "contextDetails": "Source snapshot and reference",
+    "settings": {
+      "submitShortcut": {
+        "label": "Markdown comment submit shortcut",
+        "enter": "Enter submits, Ctrl+Enter inserts a newline",
+        "ctrlEnter": "Ctrl+Enter submits, Enter inserts a newline",
+        "hint": "Applies to adding and saving comments. Shift+Enter always inserts a newline; use Command on macOS. IME confirmation does not submit."
+      },
+      "title": "Markdown reviews (current project)",
+      "on": "Enabled",
+      "off": "Disabled",
+      "error": "Unable to update review preferences. Reopen settings and try again.",
+      "enabled": {
+        "label": "Enable Markdown preview annotations (beta)",
+        "hint": "Add review controls to the current project's native Markdown preview. Disabling hides the overlay immediately and keeps current comments."
+      },
+      "autoAddToChat": {
+        "label": "Automatically add comments to the current chat draft (beta)",
+        "hint": "Off by default. Creating or editing a comment adds its latest snapshot to the selected CC GUI chat input. Review the draft before sending."
+      },
+      "autoDeleteAffected": {
+        "label": "Automatically delete comments affected by edits (beta)",
+        "hint": "Edits or deletions inside an annotated source range clear its comment; position changes alone retain it. Formatted selections may cover a whole source block. Cleanup does not prove completion: the agent must report unfinished items. Transferred snapshots remain intact."
+      },
+      "persist": {
+        "label": "Keep comments and pending snapshots after restart (beta)",
+        "hint": "Off by default: keep data only while this project is open. Enable to save to the project workspace. Disabling removes stored content on the next IDE save and retains current comments. Chat messages still use their existing storage."
+      }
+    },
+    "count_one": "{{count}} review item",
+    "count_other": "{{count}} review items",
+    "removeBatch": "Remove review from draft",
+    "remove": "Remove",
+    "snapshot": "This draft is a snapshot; later source comments do not change it.",
+    "tooLarge": "This review is too large. Remove some items before sending.",
+    "block": "Source block",
+    "source": "Selected text",
+    "quote": "Quotation",
+    "attached": "Located",
+    "ambiguous": "Multiple possible locations",
+    "orphaned": "Original text changed"
+  },
   "codexPet": {
     "title": "Codex pet",
     "close": "Hide pet",

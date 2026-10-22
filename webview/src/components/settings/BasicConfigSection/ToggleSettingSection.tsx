@@ -8,6 +8,8 @@ export interface ToggleSettingSectionProps {
   enabledLabel: string;
   disabledLabel: string;
   hint: string;
+  ariaLabel?: string;
+  disabled?: boolean;
 }
 
 /** Shared layout for the repeated boolean toggle setting sections. */
@@ -19,6 +21,8 @@ export function ToggleSettingSection({
   enabledLabel,
   disabledLabel,
   hint,
+  ariaLabel,
+  disabled,
 }: ToggleSettingSectionProps) {
   return (
     <div className={styles.streamingSection}>
@@ -31,6 +35,8 @@ export function ToggleSettingSection({
           type="checkbox"
           className={styles.toggleInput}
           checked={checked}
+          aria-label={ariaLabel}
+          disabled={disabled}
           onChange={(e) => onChange(e.target.checked)}
         />
         <span className={styles.toggleSlider} />

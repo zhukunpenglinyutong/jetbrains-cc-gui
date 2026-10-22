@@ -1,0 +1,44 @@
+// Development-only harness: gradlew -I scripts/native-markdown-smoke.init.gradle runIde -PskipWebview=true
+gradle.projectsEvaluated {
+    def project = gradle.rootProject
+    def smoke = project.layout.buildDirectory.dir('native-markdown-smoke').get().asFile
+    def smokeJar = project.tasks.register('nativeMarkdownSmokeJar', Jar) {
+        dependsOn project.tasks.named('compileTestJava')
+        archiveFileName = 'native-markdown-smoke.jar'
+        destinationDirectory = project.layout.buildDirectory.dir('native-markdown-smoke-plugin')
+        from(project.sourceSets.test.output.classesDirs) {
+            include 'com/github/claudecodegui/markdown/NativeMarkdownSmokeActivity*.class'
+        }
+        from(project.file('src/test/resources/native-markdown-smoke-plugin'))
+    }
+    project.tasks.named('prepareSandbox') {
+        dependsOn smokeJar
+        inputs.file(smokeJar.flatMap { it.archiveFile })
+        doLast {
+            project.copy {
+                from smokeJar.get().archiveFile
+                into project.layout.buildDirectory.dir('idea-sandbox/IC-2024.3.1/plugins/native-markdown-smoke/lib')
+            }
+            smoke.mkdirs()
+            new File(smoke, 'command.json').delete()
+            project.copy {
+                from project.file('src/test/resources/native-markdown-review.md')
+                into smoke
+                rename { 'review.md' }
+            }
+        }
+    }
+    project.tasks.named('runIde') {
+        doFirst {
+            // prepareSandbox may be up-to-date on restart; never replay an old exit/edit command.
+            new File(smoke, 'command.json').delete()
+        }
+        args smoke.absolutePath
+        systemProperty 'ccgui.markdown.smoke.dir', smoke.absolutePath.replace('\\', '/')
+        systemProperty 'ide.browser.jcef.debug.port', '9228'
+        systemProperty 'ide.browser.jcef.out-of-process.enabled', 'false'
+        systemProperty 'idea.trust.all.projects', 'true'
+        systemProperty 'idea.initially.ask.config', 'never'
+        systemProperty 'ide.show.tips.on.startup', 'false'
+    }
+}

@@ -137,6 +137,8 @@ dependencies {
         // Git-less IDE configurations. Used for real `git diff` via
         // git4idea.commands.* in the Commit AI feature.
         bundledPlugin('Git4Idea')
+        // Native Markdown preview annotations load only with this optional plugin.
+        bundledPlugin('org.intellij.plugins.markdown')
 
         instrumentationTools()
 
