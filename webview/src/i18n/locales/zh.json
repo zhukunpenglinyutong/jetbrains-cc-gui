@@ -2589,6 +2589,10 @@
     "copied": "已复制",
     "openDependencySettings": "打开依赖管理",
     "recommended": "推荐",
+    "updateClaudeSdk": "更新 SDK",
+    "updatingClaudeSdk": "更新中...",
+    "updateClaudeSdkSuccess": "已更新到 {{version}}，请重新发送消息。",
+    "updateClaudeSdkFailed": "更新失败：{{error}}",
     "codexWriterConflict": {
       "title": "Codex 线程被占用",
       "intro": "该会话正由另一个 Codex 回合或客户端写入，本次发送未能启动。",
@@ -2613,6 +2617,21 @@
         "downgrade": {
           "title": "方案二：版本回退",
           "step0": "在「依赖管理」中将 SDK 版本切换到 v0.2.112 或更早版本，切换后需要重启 IDEA。"
+        }
+      }
+    },
+    "claudeCodeVersionTooOld": {
+      "title": "Claude Code SDK 版本过低，无法使用此模型",
+      "intro": "插件运行的是自身 SDK 内置的 Claude Code，而不是终端里的 claude 命令。该内置版本低于此模型要求的版本。",
+      "reason": "SDK 与插件分开安装，因此更新插件或终端里的 claude 命令都不会更新 SDK。",
+      "solutions": {
+        "updateSdk": {
+          "title": "方案一：更新 Claude Code SDK",
+          "step0": "安装支持范围内的最新 SDK。之后插件会重启 Claude 进程，可以直接重新发送消息。"
+        },
+        "updateCustomCli": {
+          "title": "方案二：更新自定义的 Claude CLI",
+          "step0": "如果设置了「Claude CLI 路径（覆盖）」，插件会运行该程序而不是 SDK。请在终端中更新："
         }
       }
     },

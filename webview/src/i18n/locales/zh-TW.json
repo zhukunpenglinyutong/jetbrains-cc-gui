@@ -2112,6 +2112,10 @@
     "copied": "已複製",
     "openDependencySettings": "開啟相依性管理",
     "recommended": "推薦",
+    "updateClaudeSdk": "更新 SDK",
+    "updatingClaudeSdk": "更新中...",
+    "updateClaudeSdkSuccess": "已更新至 {{version}}，請重新傳送訊息。",
+    "updateClaudeSdkFailed": "更新失敗：{{error}}",
     "codexWriterConflict": {
       "title": "Codex 執行緒被佔用",
       "intro": "此會話正由另一個 Codex 回合或用戶端寫入，本次傳送未能啟動。",
@@ -2136,6 +2140,21 @@
         "downgrade": {
           "title": "方案二：版本回退",
           "step0": "在「相依性管理」中將 SDK 版本切換到 v0.2.112 或更早版本，切換後需要重新啟動 IDEA。"
+        }
+      }
+    },
+    "claudeCodeVersionTooOld": {
+      "title": "Claude Code SDK 版本過舊，無法使用此模型",
+      "intro": "外掛執行的是自身 SDK 內建的 Claude Code，而不是終端機中的 claude 指令。該內建版本低於此模型要求的版本。",
+      "reason": "SDK 與外掛分開安裝，因此更新外掛或終端機中的 claude 指令都不會更新 SDK。",
+      "solutions": {
+        "updateSdk": {
+          "title": "方案一：更新 Claude Code SDK",
+          "step0": "安裝支援範圍內的最新 SDK。之後外掛會重新啟動 Claude 程序，可以直接重新傳送訊息。"
+        },
+        "updateCustomCli": {
+          "title": "方案二：更新自訂的 Claude CLI",
+          "step0": "如果設定了「Claude CLI 路徑（覆寫）」，外掛會執行該程式而不是 SDK。請在終端機中更新："
         }
       }
     },

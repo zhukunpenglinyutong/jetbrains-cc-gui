@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 import type { DiagnosticPattern, DiagnosticStep } from '../../utils/errorMatcher';
 import { copyToClipboard } from '../../utils/copyUtils';
 import { openBrowserExternal } from '../../utils/bridge';
+import { requestClaudeSdkUpdate, type ClaudeSdkUpdateResult } from '../../utils/claudeSdkUpdate';
 
 interface ErrorDiagnosticCardProps {
   t: TFunction;
@@ -71,6 +72,70 @@ const CommandBlock = memo(function CommandBlock({ command, t }: CommandBlockProp
   );
 });
 
+type ClaudeSdkUpdateState =
+  | { status: 'idle' }
+  | { status: 'updating' }
+  | { status: 'done'; result: ClaudeSdkUpdateResult };
+
+interface UpdateClaudeSdkActionProps {
+  t: TFunction;
+  onNavigateToDependencySettings?: () => void;
+}
+
+const UpdateClaudeSdkAction = memo(function UpdateClaudeSdkAction({
+  t,
+  onNavigateToDependencySettings,
+}: UpdateClaudeSdkActionProps) {
+  const [state, setState] = useState<ClaudeSdkUpdateState>({ status: 'idle' });
+
+  const handleUpdate = useCallback(() => {
+    setState({ status: 'updating' });
+    void requestClaudeSdkUpdate().then((result) => setState({ status: 'done', result }));
+  }, []);
+
+  if (state.status === 'done' && state.result.success) {
+    return (
+      <p className="error-diagnostic-action-status success" role="status">
+        {t('errorDiagnostic.updateClaudeSdkSuccess', {
+          version: state.result.installedVersion ?? 'unknown',
+        })}
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className="error-diagnostic-nav-btn"
+        onClick={handleUpdate}
+        disabled={state.status === 'updating'}
+      >
+        {state.status === 'updating'
+          ? t('errorDiagnostic.updatingClaudeSdk')
+          : t('errorDiagnostic.updateClaudeSdk')}
+      </button>
+      {state.status === 'done' && (
+        <>
+          <p className="error-diagnostic-action-status error" role="alert">
+            {t('errorDiagnostic.updateClaudeSdkFailed', { error: state.result.error ?? '' })}
+          </p>
+          {onNavigateToDependencySettings && (
+            <button
+              type="button"
+              className="error-diagnostic-nav-btn"
+              onClick={onNavigateToDependencySettings}
+            >
+              {t('errorDiagnostic.openDependencySettings')}
+              <ArrowRightIcon />
+            </button>
+          )}
+        </>
+      )}
+    </>
+  );
+});
+
 interface StepRendererProps {
   step: DiagnosticStep;
   description: string;
@@ -123,6 +188,20 @@ function StepRenderer({ step, description, t, onNavigateToDependencySettings }: 
             {t('errorDiagnostic.openDependencySettings')}
             <ArrowRightIcon />
           </button>
+        )}
+      </div>
+    );
+  }
+
+  if (step.kind === 'action') {
+    return (
+      <div className="error-diagnostic-step">
+        <p className="error-diagnostic-step-text">{description}</p>
+        {step.action === 'updateClaudeSdk' && (
+          <UpdateClaudeSdkAction
+            t={t}
+            onNavigateToDependencySettings={onNavigateToDependencySettings}
+          />
         )}
       </div>
     );

@@ -552,6 +552,26 @@
     &:active {
         background: var(--color-provider-card-action-active-bg);
     }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+}
+
+.error-diagnostic-action-status {
+    font-size: 12px;
+    line-height: 1.5;
+    margin: 0;
+
+    &.success {
+        color: var(--color-success);
+    }
+
+    &.error {
+        color: var(--color-error);
+    }
 }
 
 .error-diagnostic-reason {

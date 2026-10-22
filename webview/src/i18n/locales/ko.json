@@ -2096,6 +2096,10 @@
     "copied": "복사됨",
     "openDependencySettings": "종속성 관리 열기",
     "recommended": "권장",
+    "updateClaudeSdk": "SDK 업데이트",
+    "updatingClaudeSdk": "업데이트 중...",
+    "updateClaudeSdkSuccess": "{{version}}(으)로 업데이트했습니다. 메시지를 다시 보내 주세요.",
+    "updateClaudeSdkFailed": "업데이트 실패: {{error}}",
     "codexWriterConflict": {
       "title": "Codex 스레드 사용 중",
       "intro": "다른 Codex 턴이나 클라이언트가 이 대화에 기록 중이어서 이번 전송을 시작할 수 없습니다.",
@@ -2120,6 +2124,21 @@
         "downgrade": {
           "title": "방법 2: 버전 롤백",
           "step0": "'종속성 관리'에서 SDK 버전을 v0.2.112 또는 그 이전으로 전환하세요. 전환 후 IDEA를 재시작해야 합니다."
+        }
+      }
+    },
+    "claudeCodeVersionTooOld": {
+      "title": "이 모델을 쓰기에는 Claude Code SDK 버전이 낮습니다",
+      "intro": "플러그인은 터미널의 claude 명령 대신 자체 SDK에 포함된 Claude Code를 실행합니다. 포함된 버전이 이 모델이 요구하는 버전보다 낮습니다.",
+      "reason": "SDK는 플러그인과 따로 설치되므로 플러그인이나 터미널의 claude 명령을 업데이트해도 SDK는 그대로입니다.",
+      "solutions": {
+        "updateSdk": {
+          "title": "방법 1: Claude Code SDK 업데이트",
+          "step0": "지원되는 최신 SDK를 설치합니다. 설치가 끝나면 플러그인이 Claude 프로세스를 다시 시작하므로 바로 메시지를 다시 보낼 수 있습니다."
+        },
+        "updateCustomCli": {
+          "title": "방법 2: 직접 지정한 Claude CLI 업데이트",
+          "step0": "'Claude CLI 경로 (재정의)'를 설정했다면 플러그인은 SDK 대신 그 바이너리를 실행합니다. 터미널에서 업데이트하세요:"
         }
       }
     },

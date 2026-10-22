@@ -216,6 +216,7 @@ public class DependencyHandler extends BaseMessageHandler {
                         this.sendInstallProgress(sdkId, logLine);
                     });
 
+                    this.restartClaudeDaemonAfterSdkChange(result);
                     this.sendInstallResult(result);
 
                     // Refresh status after installation completes
@@ -325,6 +326,7 @@ public class DependencyHandler extends BaseMessageHandler {
                         this.sendInstallProgress(sdkId, logLine);
                     });
 
+                    this.restartClaudeDaemonAfterSdkChange(result);
                     this.sendInstallResult(result);
 
                     // Refresh status after update completes
@@ -523,6 +525,27 @@ public class DependencyHandler extends BaseMessageHandler {
     }
 
     // ==================== Helper Methods ====================
+
+    /**
+     * The Claude daemon keeps the SDK module it imported at startup, so a newly installed
+     * Claude SDK only takes effect in a fresh daemon. Shut it down before reporting success
+     * so the next request (e.g. a resend right after the chat's update button) spawns one
+     * with the new SDK, as {@link ClaudeCliPathHandler} does after a CLI path change.
+     */
+    private void restartClaudeDaemonAfterSdkChange(InstallResult result) {
+        if (!shouldRestartClaudeDaemon(result)) {
+            return;
+        }
+        try {
+            this.context.getClaudeSDKBridge().shutdownDaemon();
+        } catch (Exception e) {
+            LOG.warn("[DependencyHandler] Failed to shutdown Claude daemon after SDK change: " + e.getMessage());
+        }
+    }
+
+    static boolean shouldRestartClaudeDaemon(InstallResult result) {
+        return result.isSuccess() && SdkDefinition.CLAUDE_SDK.getId().equals(result.getSdkId());
+    }
 
     private void sendNodeEnvironmentStatus(JsonObject result) {
         ApplicationManager.getApplication().invokeLater(() ->
