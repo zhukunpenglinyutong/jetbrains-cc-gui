@@ -100,6 +100,10 @@
              fallback listener plus a CEF-level keyboard hook that detects the
              orphaned Cmd+V KEYUP and forwards clipboard images to the webview. -->
         <postStartupActivity implementation="com.github.claudecodegui.startup.PasteKeyInitializer"/>
+        <!-- Keep Ctrl+Z/Ctrl+Shift+Z inside the CCG webview: remove the IDE's
+             built-in Undo/Redo bindings while the chat tool window has focus and
+             restore them as soon as focus returns to an editor. -->
+        <postStartupActivity implementation="com.github.claudecodegui.startup.ChatUndoShortcutGuard"/>
 
         <!-- StatusBar widget for task notification -->
         <statusBarWidgetFactory id="ClaudeStatusBarWidget"
@@ -212,6 +216,30 @@
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl V"/>
             <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta V"/>
             <keyboard-shortcut keymap="macOS" first-keystroke="meta V"/>
+        </action>
+
+        <!--
+          Undo/Redo in the chat input. Registered in the IDE keymap so the
+          built-in Undo/Redo actions do not revert the host editor before the
+          JCEF webview gets the key; the actions forward the operation to the
+          contenteditable element's native browser undo stack.
+        -->
+        <action id="ClaudeCodeGUI.ChatUndoAction"
+                class="com.github.claudecodegui.action.ChatUndoAction"
+                text="Undo (Chat Window)"
+                description="Undo text in the Claude chat input">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl Z"/>
+            <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta Z"/>
+            <keyboard-shortcut keymap="macOS" first-keystroke="meta Z"/>
+        </action>
+        <action id="ClaudeCodeGUI.ChatRedoAction"
+                class="com.github.claudecodegui.action.ChatRedoAction"
+                text="Redo (Chat Window)"
+                description="Redo text in the Claude chat input">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift Z"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl Y"/>
+            <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift Z"/>
+            <keyboard-shortcut keymap="macOS" first-keystroke="meta shift Z"/>
         </action>
 
         <!-- Chat tool window send action (no default shortcut; dynamically managed by SendShortcutSync) -->
