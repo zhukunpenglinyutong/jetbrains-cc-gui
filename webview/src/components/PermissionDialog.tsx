@@ -180,7 +180,7 @@ const PermissionDialog = ({
       const record = entry as Record<string, unknown>;
       const kind = Object.keys(record)[0] as NativeDecision | undefined;
       return kind && (kind === 'acceptWithExecpolicyAmendment' || kind === 'applyNetworkPolicyAmendment')
-        ? [{ kind, decision: { [kind]: record[kind] } }]
+        ? [{ kind, decision: { decision: { [kind]: record[kind] } } }]
         : [];
     });
   }, [request]);

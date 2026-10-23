@@ -1,7 +1,12 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PermissionDialog, { type PermissionRequest } from './PermissionDialog';
+import { useDialogManagement } from '../hooks/useDialogManagement';
+import { sendBridgeEvent } from '../utils/bridge';
+import type { TFunction } from 'i18next';
 import { resetLinkifyCapabilities, setLinkifyCapabilities } from '../utils/linkifyCapabilities';
+
+vi.mock('../utils/bridge', () => ({ sendBridgeEvent: vi.fn(() => true) }));
 
 vi.mock('../hooks/useDialogResize', () => ({
   useDialogResize: () => ({
@@ -259,8 +264,34 @@ describe('PermissionDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Allow with this command rule/ }));
     expect(onDecision).toHaveBeenCalledWith('perm-1', {
-      acceptWithExecpolicyAmendment: { execpolicy_amendment: ['allow echo'] },
+      decision: { acceptWithExecpolicyAmendment: { execpolicy_amendment: ['allow echo'] } },
     });
+  });
+
+  it.each([
+    { label: /Allow with this command rule/, rule: {
+      acceptWithExecpolicyAmendment: { execpolicy_amendment: ['echo', 'hello'] },
+    } },
+    { label: /Allow with this network rule/, rule: {
+      applyNetworkPolicyAmendment: { network_policy_amendment: { host: 'example.com', action: 'allow' } },
+    } },
+  ])('sends the complete native result through the bridge for $label', ({ label, rule }) => {
+    vi.mocked(sendBridgeEvent).mockClear();
+    const { result } = renderHook(() => useDialogManagement({ t: ((key: string) => key) as TFunction }));
+    act(() => result.current.openPermissionDialog(buildRequest({
+      provider: 'codex', codexMethod: 'item/commandExecution/requestApproval',
+      codexInteractionKey: 'rule-request', dialogToken: 'rule-token', suggestions: [rule],
+    })));
+    render(<PermissionDialog isOpen request={result.current.currentPermissionRequest}
+      onApprove={result.current.handlePermissionApprove}
+      onSkip={result.current.handlePermissionSkip}
+      onApproveAlways={result.current.handlePermissionApproveAlways}
+      onDecision={result.current.handlePermissionDecision} />);
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    expect(sendBridgeEvent).toHaveBeenCalledWith('codex_interaction_response', JSON.stringify({
+      interactionKey: 'rule-request', channelId: 'perm-1', dialogToken: 'rule-token',
+      result: { decision: rule },
+    }));
   });
 
   it('auto-denies with the original channelId after timeoutSeconds elapses', () => {

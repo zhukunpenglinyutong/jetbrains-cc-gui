@@ -2096,6 +2096,20 @@ public class CodemossSettingsService {
         LOG.info("[CodemossSettings] Set commit generation enabled: " + enabled);
     }
 
+    /** Whether history also includes matching Git remote repository names. Defaults to false. */
+    public boolean getSessionGitRepositoryMatchingEnabled() throws IOException {
+        JsonObject config = readConfig();
+        return config.has("sessionGitRepositoryMatchingEnabled")
+                && !config.get("sessionGitRepositoryMatchingEnabled").isJsonNull()
+                && config.get("sessionGitRepositoryMatchingEnabled").getAsBoolean();
+    }
+
+    public void setSessionGitRepositoryMatchingEnabled(boolean enabled) throws IOException {
+        JsonObject config = readConfig();
+        config.addProperty("sessionGitRepositoryMatchingEnabled", enabled);
+        writeConfig(config);
+    }
+
     /**
      * Get whether status bar widget is enabled.
      *

@@ -2218,3 +2218,21 @@ test('deprecated compact notification does not duplicate the current canonical b
     await send;
   } finally { await service.resetRuntime(); }
 });
+
+for (const decision of [
+  { acceptWithExecpolicyAmendment: { execpolicy_amendment: ['echo', 'hello'] } },
+  { applyNetworkPolicyAmendment: { network_policy_amendment: { host: 'example.com', action: 'allow' } } },
+]) {
+  test(`rule approval requires the decision envelope: ${Object.keys(decision)[0]}`, () => {
+    const service = new CodexAppServerService({ channelId: 'rules-test' });
+    const replies = [];
+    service.client = { alive: true, replyServerRequest: (...args) => replies.push(args) };
+    service.pendingInteractions.set('rule-request', { method: 'item/commandExecution/requestApproval' });
+    assert.equal(service.respondInteraction('rule-request', decision), false);
+    assert.equal(service.pendingInteractions.has('rule-request'), true);
+    assert.deepEqual(replies, []);
+    assert.equal(service.respondInteraction('rule-request', { decision }), true);
+    assert.deepEqual(replies, [['rule-request', { decision }]]);
+    assert.equal(service.pendingInteractions.has('rule-request'), false);
+  });
+}

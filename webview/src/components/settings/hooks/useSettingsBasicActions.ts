@@ -115,6 +115,7 @@ export interface UseSettingsBasicActionsReturn {
   skipNewSessionConfirm: boolean;
   commitGenerationEnabled: boolean;
   aiTitleGenerationEnabled: boolean;
+  sessionGitRepositoryMatchingEnabled: boolean;
   statusBarWidgetEnabled: boolean;
   taskCompletionNotificationEnabled: boolean;
   askUserQuestionNotificationEnabled: boolean;
@@ -151,6 +152,7 @@ export interface UseSettingsBasicActionsReturn {
   handleSaveProjectCommitPrompt: () => void;
   handleCommitGenerationEnabledChange: (enabled: boolean) => void;
   handleAiTitleGenerationEnabledChange: (enabled: boolean) => void;
+  handleSessionGitRepositoryMatchingEnabledChange: (enabled: boolean) => void;
   handleStatusBarWidgetEnabledChange: (enabled: boolean) => void;
   handleTaskCompletionNotificationEnabledChange: (enabled: boolean) => void;
   handleAskUserQuestionNotificationEnabledChange: (enabled: boolean) => void;
@@ -207,6 +209,7 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setSkipNewSessionConfirm: (enabled: boolean) => void;
   /** @internal */ setCommitGenerationEnabled: (enabled: boolean) => void;
   /** @internal */ setAiTitleGenerationEnabled: (enabled: boolean) => void;
+  /** @internal */ setSessionGitRepositoryMatchingEnabled: (enabled: boolean) => void;
   /** @internal */ setStatusBarWidgetEnabled: (enabled: boolean) => void;
   /** @internal */ setTaskCompletionNotificationEnabled: (enabled: boolean) => void;
   /** @internal */ setAskUserQuestionNotificationEnabled: (enabled: boolean) => void;
@@ -345,6 +348,8 @@ export function useSettingsBasicActions({
   const [aiTitleGenerationEnabled, setAiTitleGenerationEnabled] = useState<boolean>(true);
 
   // Status bar widget toggle (default: true)
+  const [sessionGitRepositoryMatchingEnabled, setSessionGitRepositoryMatchingEnabled] = useState<boolean>(false);
+
   const [statusBarWidgetEnabled, setStatusBarWidgetEnabled] = useState<boolean>(true);
 
   // Task completion notification toggle (default: false, opt-in feature)
@@ -571,6 +576,11 @@ export function useSettingsBasicActions({
     setAiTitleGenerationEnabled(enabled);
     const payload = { aiTitleGenerationEnabled: enabled };
     sendToJava(`set_ai_title_generation_enabled:${JSON.stringify(payload)}`);
+  }, []);
+
+  const handleSessionGitRepositoryMatchingEnabledChange = useCallback((enabled: boolean) => {
+    setSessionGitRepositoryMatchingEnabled(enabled);
+    sendToJava(`set_session_git_repository_matching_enabled:${JSON.stringify({ sessionGitRepositoryMatchingEnabled: enabled })}`);
   }, []);
 
   // Status bar widget toggle change handler
@@ -893,6 +903,9 @@ export function useSettingsBasicActions({
     aiTitleGenerationEnabled,
     setAiTitleGenerationEnabled,
     handleAiTitleGenerationEnabledChange,
+    sessionGitRepositoryMatchingEnabled,
+    setSessionGitRepositoryMatchingEnabled,
+    handleSessionGitRepositoryMatchingEnabledChange,
     statusBarWidgetEnabled,
     setStatusBarWidgetEnabled,
     handleStatusBarWidgetEnabledChange,

@@ -749,6 +749,20 @@ public class ProjectConfigHandler {
             "Failed to save AI title generation config");
     }
 
+    public void handleGetSessionGitRepositoryMatchingEnabled() {
+        respondWithJson("window.updateSessionGitRepositoryMatchingEnabled",
+            () -> jsonOf("sessionGitRepositoryMatchingEnabled", settingsService.getSessionGitRepositoryMatchingEnabled()),
+            jsonOf("sessionGitRepositoryMatchingEnabled", false),
+            "Failed to get session repository matching config");
+    }
+
+    public void handleSetSessionGitRepositoryMatchingEnabled(String content) {
+        handleBooleanToggle(content, "sessionGitRepositoryMatchingEnabled", false, "session repository matching",
+            settingsService::setSessionGitRepositoryMatchingEnabled,
+            "window.updateSessionGitRepositoryMatchingEnabled",
+            "Failed to save session repository matching config");
+    }
+
     public void handleGetStatusBarWidgetEnabled() {
         respondWithJson("window.updateStatusBarWidgetEnabled",
             () -> jsonOf("statusBarWidgetEnabled", settingsService.getStatusBarWidgetEnabled()),

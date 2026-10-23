@@ -23,7 +23,7 @@ public class NodeJsServiceCaller {
     private static final int PROCESS_TIMEOUT_SECONDS = 30;
 
     private static final Set<String> ALLOWED_FAVORITES_FUNCTIONS = Set.of(
-        "loadFavorites", "toggleFavorite"
+        "loadFavorites", "toggleFavorite", "removeFavorite"
     );
 
     private static final Set<String> ALLOWED_TITLES_FUNCTIONS = Set.of(

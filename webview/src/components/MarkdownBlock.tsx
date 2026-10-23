@@ -12,6 +12,7 @@ import { useMarkdownFileLinkTooltip } from '../hooks/useMarkdownFileLinkTooltip'
 import {
   decorateExistingAnchors,
   linkifyHtml,
+  normalizeFileLinkHref,
 } from '../utils/linkify';
 import {
   getLinkifyCapabilities,
@@ -80,6 +81,10 @@ function isAllowedHrefValue(value: string): boolean {
   }
 
   if (FILE_URI_SCHEME_REGEX.test(trimmed)) {
+    return true;
+  }
+
+  if (normalizeFileLinkHref(trimmed)) {
     return true;
   }
 
@@ -532,7 +537,7 @@ function renderFullMarkdownHtml(
       typeof parsed === 'string' ? parsed : String(parsed),
       {
         ...MARKDOWN_LINK_SANITIZE_OPTIONS,
-        ADD_ATTR: ['class', 'data-lang', 'data-copy-success', 'data-copy-title'],
+        ADD_ATTR: ['class', 'data-lang', 'data-copy-success', 'data-copy-title', 'data-file-path'],
       }
     );
     const rawHtml = sanitized.trim();

@@ -70,6 +70,8 @@ const BasicTab = ({ themeSync, basicActions, addToast }: BasicTabProps) => {
         basicActions.handleCommitGenerationEnabledChange(enabled);
         addToast(t('toast.restartRequired'), 'warning');
       }}
+      sessionGitRepositoryMatchingEnabled={basicActions.sessionGitRepositoryMatchingEnabled}
+      onSessionGitRepositoryMatchingEnabledChange={basicActions.handleSessionGitRepositoryMatchingEnabledChange}
       statusBarWidgetEnabled={basicActions.statusBarWidgetEnabled}
       onStatusBarWidgetEnabledChange={(enabled) => {
         basicActions.handleStatusBarWidgetEnabledChange(enabled);

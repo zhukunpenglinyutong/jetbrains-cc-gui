@@ -153,8 +153,12 @@ class ClaudeHistorySearchService {
      * Get project data as JSON string.
      */
     String getProjectDataAsJson(String projectPath) {
+        return getProjectDataAsJson(projectPath, null);
+    }
+
+    String getProjectDataAsJson(String projectPath, java.util.function.Predicate<String> additionalMatch) {
         try {
-            List<ClaudeHistoryReader.SessionInfo> sessions = indexService.readProjectSessions(projectPath);
+            List<ClaudeHistoryReader.SessionInfo> sessions = indexService.readProjectSessions(projectPath, additionalMatch);
 
             int totalMessages = sessions.stream()
                                         .mapToInt(s -> s.messageCount)
@@ -173,9 +177,36 @@ class ClaudeHistorySearchService {
         }
     }
 
-    /**
-     * Read a single session's messages.
-     */
+    /** Finds the original cwd of an allowed cross-directory transcript. */
+    String findSessionHistoryCwd(String sessionId, String currentCwd,
+            java.util.function.Predicate<String> repositoryMatch) {
+        if (repositoryMatch == null || sessionId == null || !sessionId.matches("[a-zA-Z0-9_-]+")
+                || !Files.isDirectory(projectsDir)) {
+            return currentCwd;
+        }
+        for (Path directory : resolveExistingProjectDirs(currentCwd)) {
+            if (Files.isRegularFile(directory.resolve(sessionId + ".jsonl"))) {
+                return currentCwd;
+            }
+        }
+        ClaudeSessionLiteReader liteReader = new ClaudeSessionLiteReader();
+        try (var directories = Files.list(projectsDir)) {
+            for (Path directory : directories.filter(Files::isDirectory).toList()) {
+                Path transcript = directory.resolve(sessionId + ".jsonl");
+                if (!Files.isRegularFile(transcript)) {
+                    continue;
+                }
+                var session = liteReader.readSessionLite(transcript);
+                if (session != null && repositoryMatch.test(session.cwd)) {
+                    return session.cwd;
+                }
+            }
+        } catch (IOException error) {
+            LOG.debug("Could not locate repository session history", error);
+        }
+        return currentCwd;
+    }
+
     String getSessionMessagesAsJson(String projectPath, String sessionId) {
         try {
             if (projectPath == null || projectPath.isEmpty() || sessionId == null || sessionId.isEmpty()) {

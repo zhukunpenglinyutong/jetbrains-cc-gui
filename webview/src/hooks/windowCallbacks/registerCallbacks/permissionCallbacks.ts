@@ -37,12 +37,9 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 /**
  * Build the typed decision suggestions a Codex approval dialog may offer.
  *
- * The app-server does not send an `availableDecisions` list; it proposes
- * amendments through `proposedExecpolicyAmendment` (string[]) and
- * `proposedNetworkPolicyAmendments` ({host, action}[]) on the approval
- * params. Those become extra "allow with rule" options on top of the
- * standard accept/acceptForSession/decline decisions. Returns undefined when
- * there is nothing to advertise so the dialog keeps its default options.
+ * Combine advertised decisions with proposed command and network rules.
+ * The same rule can arrive in both fields, so identical suggestions are
+ * offered once while distinct rules remain separate choices.
  */
 function buildCodexApprovalSuggestions(params: Record<string, unknown>): unknown[] | undefined {
   const suggestions: unknown[] = [];
@@ -73,7 +70,14 @@ function buildCodexApprovalSuggestions(params: Record<string, unknown>): unknown
       }
     }
   }
-  return suggestions.length > 0 ? suggestions : undefined;
+  const seen = new Set<string | undefined>();
+  const unique = suggestions.filter((suggestion) => {
+    const key = JSON.stringify(suggestion);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.length > 0 ? unique : undefined;
 }
 
 function schemaQuestions(

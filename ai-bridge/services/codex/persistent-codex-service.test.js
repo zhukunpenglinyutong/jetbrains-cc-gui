@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +35,7 @@ const {
   filterCodexProjectThreads,
   projectThreadFileChanges,
   codexReadThreadPersistent,
+  codexListThreadsPersistent,
   codexCountThreadMessagesPersistent,
   setCodexPristineBaseEnv,
   buildTurnSettings,
@@ -267,11 +268,92 @@ test('executing a plan rechecks its native body and the latest turn before dispa
   }
 });
 
+test('native thread lists restore plugin metadata on every request and retain native pagination', async () => {
+  const data = { channelId: 'metadata-history', cwd: testCwd,
+    codexCommandPrefix: peerCommandPrefix('early-notification'), params: { projectPath: [] } };
+  let favorites = { 'th-test-root-0001': { favoritedAt: 123 } };
+  let titles = { 'th-test-root-0001': { customTitle: 'My saved title' } };
+  const dependencies = { historyMetadata: { loadFavorites: () => favorites, loadTitles: () => titles } };
+  const first = await codexListThreadsPersistent(data, dependencies);
+  assert.equal(first.data[0].customTitle, 'My saved title');
+  assert.equal(first.data[0].hasCustomTitle, true);
+  assert.equal(first.data[0].isFavorited, true);
+  assert.equal(first.data[0].favoritedAt, 123);
+  assert.equal(first.nextCursor, null);
+  favorites = {};
+  titles = { 'th-test-root-0001': { customTitle: 'Renamed title' } };
+  const reopened = await codexListThreadsPersistent(data, dependencies);
+  assert.equal(reopened.data[0].customTitle, 'Renamed title');
+  assert.equal(reopened.data[0].isFavorited, false);
+});
+
+test('first list resolves every favorite before ordinary history and paging never repeats favorite reads', async () => {
+  const original = CodexAppServerService.prototype.readOnly;
+  const calls = [];
+  const favorites = Object.fromEntries(Array.from({ length: 9 }, (_, index) => [`favorite-${index}`, { favoritedAt: index }]));
+  favorites.missing = {};
+  favorites.outside = {};
+  favorites.guardian = {};
+  CodexAppServerService.prototype.readOnly = async function (method, params) {
+    calls.push({ method, params });
+    if (method === 'thread/read') {
+      assert.equal(params.includeTurns, false);
+      if (params.threadId === 'missing') throw new Error('Rollout no longer exists');
+      return { thread: { id: params.threadId, cwd: params.threadId === 'outside' ? '/other' : '/project',
+        thread_source: params.threadId === 'guardian' ? 'guardian_review' : 'user',
+        turns: [{ id: 'not-list-metadata' }], updatedAt: 1 } };
+    }
+    assert.equal(method, 'thread/list');
+    return { data: [{ id: 'favorite-0', cwd: '/project', updatedAt: 2 },
+      { id: params.cursor ? 'older-ordinary' : 'ordinary', cwd: '/project' }], nextCursor: params.cursor ? null : 'next-page' };
+  };
+  try {
+    const data = { channelId: 'favorite-first', cwd: testCwd, params: { projectPath: '/project', limit: 2 } };
+    const dependencies = { historyMetadata: { loadFavorites: () => favorites, loadTitles: () => ({}) } };
+    const first = await codexListThreadsPersistent(data, dependencies);
+    assert.equal(first.data.filter(row => row.isFavorited).length, 9);
+    assert.equal(first.data.length, 10, 'all favorites must appear even with a page size of two');
+    assert.equal(new Set(first.data.map(row => row.id)).size, 10);
+    assert.equal(first.data.find(row => row.id === 'favorite-0').updatedAt, 2);
+    assert.ok(first.data.every(row => !Object.hasOwn(row, 'turns')));
+    assert.equal(first.nextCursor, 'next-page');
+    assert.equal(calls.filter(call => call.method === 'thread/read').length, 12);
+    assert.equal(calls.at(-1).method, 'thread/list');
+    const second = await codexListThreadsPersistent({ ...data, params: { ...data.params, cursor: first.nextCursor } }, dependencies);
+    assert.equal(calls.filter(call => call.method === 'thread/read').length, 12);
+    assert.equal(second.nextCursor, null);
+    assert.ok(second.data.some(row => row.id === 'older-ordinary'));
+    assert.equal(getCodexRuntimeSnapshot().sessions[0].rootThreadId, null);
+  } finally {
+    CodexAppServerService.prototype.readOnly = original;
+  }
+});
+
 test('project history includes descendants and drive aliases without crossing a directory boundary', () => {
   const threads = [{ cwd: 'C:\\Project\\Repo' }, { cwd: 'c:/project/repo/packages' },
     { cwd: 'C:/Project/Repository' }, { cwd: '/linux/Repo' }, { cwd: '/linux/repo' }];
   assert.deepEqual(filterCodexProjectThreads(threads, ['C:/PROJECT/REPO/', '/linux/Repo']), [threads[0], threads[1], threads[3]]);
   assert.deepEqual(filterCodexProjectThreads(threads, '/linux/repo'), [threads[4]]);
+});
+
+test('project history matches extended Windows drive paths in both directions', () => {
+  const threads = [
+    { cwd: String.raw`\\?\C:\Project\Repo` }, { cwd: '//?/c:/project/repo/child' },
+    { cwd: 'C:/Project/Repo' }, { cwd: String.raw`\\?\C:\Project\Repository` },
+  ];
+  for (const root of ['C:/PROJECT/REPO/', String.raw`\\?\C:\Project\Repo`, '//?/c:/project/repo/']) {
+    assert.deepEqual(filterCodexProjectThreads(threads, root), threads.slice(0, 3));
+  }
+});
+
+test('project history matches extended UNC paths while retaining server and directory boundaries', () => {
+  const threads = [
+    { cwd: String.raw`\\?\UNC\Server\Share\Repo` }, { cwd: '//?/unc/server/share/repo/child' },
+    { cwd: String.raw`\\server\share\repo` }, { cwd: '//other/share/repo' }, { cwd: '//server/share/repository' },
+  ];
+  for (const root of ['//SERVER/SHARE/REPO/', String.raw`\\?\UNC\Server\Share\Repo`]) {
+    assert.deepEqual(filterCodexProjectThreads(threads, root), threads.slice(0, 3));
+  }
 });
 
 test('project history hides guardian review sources without hiding user reviews or names', () => {
@@ -678,4 +760,46 @@ test('resetRuntime drains and disposes the session entry', async () => {
   });
   assert.equal(result.reset, true);
   assert.equal(getCodexRuntimeSnapshot().sessionCount, 0);
+});
+
+test('deleting a rollout stays deleted after reopening native history, even with a stale favorite', async () => {
+  const original = CodexAppServerService.prototype.readOnly;
+  const path = join(testCwd, 'deleted-favorite.jsonl');
+  const thread = { id: 'deleted-favorite', cwd: testCwd, path };
+  writeFileSync(path, '{}');
+  CodexAppServerService.prototype.readOnly = async method => method === 'thread/read'
+    ? { thread } : { data: [thread], nextCursor: null };
+  try {
+    const data = { channelId: 'deleted-favorite', cwd: testCwd, params: { projectPath: [] } };
+    const dependencies = { historyMetadata: {
+      loadFavorites: () => ({ 'deleted-favorite': { favoritedAt: 1 } }), loadTitles: () => ({}),
+    } };
+    assert.equal((await codexListThreadsPersistent(data, dependencies)).data.length, 1);
+    unlinkSync(path);
+    assert.deepEqual((await codexListThreadsPersistent(data, dependencies)).data, []);
+    assert.deepEqual((await codexListThreadsPersistent(data, dependencies)).data, []);
+  } finally {
+    CodexAppServerService.prototype.readOnly = original;
+  }
+});
+
+test('history skips stale-only pages without losing the native cursor', async () => {
+  const original = CodexAppServerService.prototype.readOnly;
+  const cursors = [];
+  CodexAppServerService.prototype.readOnly = async (method, params) => {
+    assert.equal(method, 'thread/list');
+    cursors.push(params.cursor);
+    return params.cursor === 'next'
+      ? { data: [{ id: 'exists', cwd: testCwd }], nextCursor: 'last' }
+      : { data: [{ id: 'missing', path: join(testCwd, 'missing.jsonl') }], nextCursor: 'next' };
+  };
+  try {
+    const result = await codexListThreadsPersistent({ channelId: 'stale-page', cwd: testCwd,
+      params: { projectPath: [] } }, { historyMetadata: { loadFavorites: () => ({}), loadTitles: () => ({}) } });
+    assert.deepEqual(result.data.map(thread => thread.id), ['exists']);
+    assert.equal(result.nextCursor, 'last');
+    assert.deepEqual(cursors, [undefined, 'next']);
+  } finally {
+    CodexAppServerService.prototype.readOnly = original;
+  }
 });

@@ -109,6 +109,19 @@ describe('useSettingsWindowCallbacks', () => {
     expect(allMessages).not.toContain('get_prompt_enhancer_config:');
   });
 
+  it('loads and applies the persisted repository history preference and cleans up its callback', () => {
+    const deps = createDeps();
+    deps.setSessionGitRepositoryMatchingEnabled = vi.fn();
+    const hook = renderHook(() => useSettingsWindowCallbacks(deps));
+    expect(SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES).toContain('get_session_git_repository_matching_enabled:');
+    window.updateSessionGitRepositoryMatchingEnabled?.('{"sessionGitRepositoryMatchingEnabled":true}');
+    expect(deps.setSessionGitRepositoryMatchingEnabled).toHaveBeenLastCalledWith(true);
+    window.updateSessionGitRepositoryMatchingEnabled?.('{}');
+    expect(deps.setSessionGitRepositoryMatchingEnabled).toHaveBeenLastCalledWith(false);
+    hook.unmount();
+    expect(window.updateSessionGitRepositoryMatchingEnabled).toBeUndefined();
+  });
+
   it('registers prompt enhancer callback and updates state from backend payload', () => {
     const deps = createDeps();
 

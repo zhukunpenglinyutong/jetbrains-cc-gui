@@ -47,14 +47,15 @@ public class RefreshFileHandler implements DiffActionHandler {
                 return;
             }
 
-            if (!fileOperations.isPathWithinProject(filePath)) {
+            String projectFilePath = fileOperations.toProjectPathIfPossible(filePath);
+            if (!fileOperations.isPathWithinProject(projectFilePath)) {
                 LOG.warn("Security: file path outside project directory: " + filePath);
                 return;
             }
 
-            LOG.info("Refreshing file: " + filePath);
+            LOG.info("Refreshing file: " + projectFilePath);
 
-            CompletableFuture.runAsync(() -> refreshFile(filePath));
+            CompletableFuture.runAsync(() -> refreshFile(projectFilePath));
         } catch (Exception e) {
             LOG.error("Failed to parse refresh_file request: " + e.getMessage(), e);
         }

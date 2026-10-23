@@ -5,6 +5,8 @@ import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.provider.common.SessionHistoryIncompleteException;
 import com.github.claudecodegui.provider.common.SessionHistoryNotFoundException;
+import com.github.claudecodegui.provider.common.GitRepositorySessionMatcher;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.Gson;
@@ -182,6 +184,12 @@ class ClaudeSessionQueryService {
             throw new IllegalArgumentException("Invalid sessionId: " + sessionId);
         }
 
+        if (GitRepositorySessionMatcher.isEnabled(new CodemossSettingsService())) {
+            GitRepositorySessionMatcher matcher = new GitRepositorySessionMatcher(cwd);
+            if (matcher.hasRepository()) {
+                cwd = new ClaudeHistoryReader().findSessionHistoryCwd(sessionId, cwd, matcher);
+            }
+        }
         String node = nodeDetector.findNodeExecutable();
 
         File workDir = sdkDirSupplier.get();

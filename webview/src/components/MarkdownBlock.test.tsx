@@ -207,6 +207,47 @@ describe('MarkdownBlock linkify integration', () => {
     expect(markdownLink.classList.contains('url-link')).toBe(true);
   });
 
+  it('routes markdown file links through openFile and shows file tooltips', () => {
+    bridgeMocks.resolveFilePathWithCallback.mockImplementation((path: string, callback: (result: string | null) => void) => {
+      callback(path);
+    });
+
+    render(
+      <MarkdownBlock content={'Open [Foo.cs](Assets/GameScripts/Foo.cs#L12)'} />,
+    );
+
+    const fileLink = screen.getByRole('link', { name: 'Foo.cs' });
+    expect(fileLink.classList.contains('file-link')).toBe(true);
+    expect(fileLink.getAttribute('data-linkify')).toBe('file');
+    expect(fileLink.getAttribute('data-file-path')).toBe('Assets/GameScripts/Foo.cs:12');
+
+    fireEvent.mouseOver(fileLink, {
+      clientX: 10,
+      clientY: 10,
+    });
+    expect(bridgeMocks.resolveFilePathWithCallback).toHaveBeenCalledWith(
+      'Assets/GameScripts/Foo.cs:12',
+      expect.any(Function),
+    );
+    expect(document.querySelector('.file-link-tooltip')?.textContent).toBe('Assets/GameScripts/Foo.cs:12');
+
+    fireEvent.click(fileLink);
+    expect(bridgeMocks.openFile).toHaveBeenCalledWith('Assets/GameScripts/Foo.cs:12');
+  });
+
+  it('preserves standalone markdown file links with colon line suffixes', () => {
+    render(
+      <MarkdownBlock content={'Open [Foo.cs](Foo.cs:12)'} />,
+    );
+
+    const fileLink = screen.getByRole('link', { name: 'Foo.cs' });
+    expect(fileLink.getAttribute('href')).toBe('Foo.cs:12');
+    expect(fileLink.getAttribute('data-file-path')).toBe('Foo.cs:12');
+
+    fireEvent.click(fileLink);
+    expect(bridgeMocks.openFile).toHaveBeenCalledWith('Foo.cs:12');
+  });
+
   it('renders LaTeX math while preserving dollar signs in code blocks', () => {
     render(
       <MarkdownBlock

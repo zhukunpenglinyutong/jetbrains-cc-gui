@@ -41,7 +41,8 @@ public class NodeJsServiceCallerPathTest {
         writeService(servicesDir.resolve("favorites-service.cjs"),
                 "module.exports = {"
                         + " loadFavorites: sessionId => ({ sessionId }),"
-                        + " toggleFavorite: sessionId => ({ sessionId })"
+                        + " toggleFavorite: sessionId => ({ sessionId }),"
+                        + " removeFavorite: sessionId => ({ sessionId, removed: true })"
                         + " };\n");
         writeService(servicesDir.resolve("input-history-service.cjs"),
                 "module.exports = {"
@@ -79,6 +80,16 @@ public class NodeJsServiceCallerPathTest {
 
         JsonObject json = JsonParser.parseString(result).getAsJsonObject();
         assertEquals("session-2", json.get("sessionId").getAsString());
+        assertEquals(0, bridge.getProcessManager().getActiveProcessCount());
+    }
+
+    @Test
+    public void deletionCanInvokeFavoriteRemoval() throws Exception {
+        String result = new NodeJsServiceCaller(context)
+                .callNodeJsFavoritesService("removeFavorite", "deleted-session");
+        JsonObject json = JsonParser.parseString(result).getAsJsonObject();
+        assertEquals("deleted-session", json.get("sessionId").getAsString());
+        assertEquals(true, json.get("removed").getAsBoolean());
         assertEquals(0, bridge.getProcessManager().getActiveProcessCount());
     }
 

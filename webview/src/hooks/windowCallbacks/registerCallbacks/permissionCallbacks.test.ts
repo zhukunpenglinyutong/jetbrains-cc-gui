@@ -134,3 +134,19 @@ it('offers confirm and cancel for MCP user verification and maps cancel to the n
   expect(call).toBeDefined();
   expect(JSON.parse(call![1] as string).result).toEqual({ action: 'cancel', content: null });
 });
+
+it('deduplicates advertised and proposed command rules while retaining distinct rules', () => {
+  const { result } = renderHook(() => useDialogManagement({ t }));
+  act(() => registerDialogCallbacks(result.current));
+  const first = { acceptWithExecpolicyAmendment: { execpolicy_amendment: ['echo', 'hello'] } };
+  const second = { acceptWithExecpolicyAmendment: { execpolicy_amendment: ['git', 'status'] } };
+  act(() => window.onCodexRuntimeEvent?.(JSON.stringify({
+    kind: 'interactionRequested', channelId: 'C', interactionKey: 'rules', dialogToken: 'rules-token',
+    payload: { method: 'item/commandExecution/requestApproval', params: {
+      availableDecisions: ['accept', 'acceptForSession', 'decline', first, second],
+      proposedExecpolicyAmendment: ['echo', 'hello'],
+    } },
+  })));
+  expect(result.current.currentPermissionRequest?.suggestions)
+    .toEqual(['accept', 'acceptForSession', 'decline', first, second]);
+});

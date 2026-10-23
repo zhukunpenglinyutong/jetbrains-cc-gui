@@ -332,3 +332,18 @@ describe('useSettingsBasicActions', () => {
     expect(window.sendToJava).not.toHaveBeenCalled();
   });
 });
+
+
+it('persists the opt-in Git repository history preference through the Java bridge', () => {
+  const previousBridge = window.sendToJava;
+  window.sendToJava = vi.fn();
+  const hook = renderHook(() => useSettingsBasicActions({}));
+  expect(hook.result.current.sessionGitRepositoryMatchingEnabled).toBe(false);
+  act(() => hook.result.current.handleSessionGitRepositoryMatchingEnabledChange(true));
+  expect(hook.result.current.sessionGitRepositoryMatchingEnabled).toBe(true);
+  expect(window.sendToJava).toHaveBeenLastCalledWith(
+    'set_session_git_repository_matching_enabled:{"sessionGitRepositoryMatchingEnabled":true}',
+  );
+  hook.unmount();
+  window.sendToJava = previousBridge;
+});

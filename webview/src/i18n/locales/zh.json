@@ -548,6 +548,12 @@
         "disabled": "已关闭",
         "hint": "开启后，在提交对话框中显示「AI 生成提交信息」按钮。关闭后隐藏该按钮。"
       },
+      "sessionGitRepositoryMatching": {
+        "label": "按 Git 仓库名匹配历史会话",
+        "enabled": "启用",
+        "disabled": "禁用",
+        "hint": "同时显示其他目录下 Git 远程仓库名相同的 Codex 和 Claude Code 历史会话。无法获取 Git 信息时，按工作目录匹配。"
+      },
       "statusBarWidget": {
         "label": "状态栏信息展示",
         "enabled": "已开启",

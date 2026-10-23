@@ -450,6 +450,7 @@ interface Window {
   /**
    * Update status bar widget enabled state
    */
+  updateSessionGitRepositoryMatchingEnabled?: (json: string) => void;
   updateStatusBarWidgetEnabled?: (json: string) => void;
 
   /**

@@ -45,6 +45,7 @@ export const SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES = [
   'get_sound_notification_config:',
   'get_commit_generation_enabled:',
   'get_ai_title_generation_enabled:',
+  'get_session_git_repository_matching_enabled:',
   'get_status_bar_widget_enabled:',
   'get_task_completion_notification_enabled:',
   'get_ask_user_question_notification_enabled:',
@@ -85,6 +86,7 @@ export interface SettingsWindowCallbacksDeps {
   // AI feature toggle setters
   setCommitGenerationEnabled?: (enabled: boolean) => void;
   setAiTitleGenerationEnabled?: (enabled: boolean) => void;
+  setSessionGitRepositoryMatchingEnabled?: (enabled: boolean) => void;
   setStatusBarWidgetEnabled?: (enabled: boolean) => void;
   setTaskCompletionNotificationEnabled?: (enabled: boolean) => void;
   setAskUserQuestionNotificationEnabled?: (enabled: boolean) => void;
@@ -392,6 +394,15 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    window.updateSessionGitRepositoryMatchingEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setSessionGitRepositoryMatchingEnabled?.(data.sessionGitRepositoryMatchingEnabled === true);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse session repository matching config:', error);
+      }
+    };
+
     // Status bar widget config callback
     window.updateStatusBarWidgetEnabled = (jsonStr: string) => {
       try {
@@ -625,6 +636,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateSoundNotificationConfig = undefined;
       window.updateCommitGenerationEnabled = undefined;
       window.updateAiTitleGenerationEnabled = undefined;
+      window.updateSessionGitRepositoryMatchingEnabled = undefined;
       window.updateStatusBarWidgetEnabled = undefined;
       window.updateTaskCompletionNotificationEnabled = undefined;
       window.updateAskUserQuestionNotificationEnabled = undefined;

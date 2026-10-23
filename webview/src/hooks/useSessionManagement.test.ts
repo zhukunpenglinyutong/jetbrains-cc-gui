@@ -140,6 +140,18 @@ describe('useSessionManagement', () => {
     expect(mocks.setCurrentView).toHaveBeenCalledWith('chat');
   });
 
+  it('sends the selected Codex provider even when the history rows are unavailable', () => {
+    const mocks = createMocks();
+    const { result } = renderHook(() => useSessionManagement({ messages: [], loading: false,
+      historyData: null, currentSessionId: null, currentProvider: 'codex', ...mocks, t }));
+    act(() => {
+      result.current.deleteHistorySession('codex-one');
+      result.current.deleteHistorySessions(['codex-two', 'codex-three']);
+    });
+    expect(window.sendToJava).toHaveBeenCalledWith('delete_session:{"sessionId":"codex-one","provider":"codex"}');
+    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:{"sessionIds":["codex-two","codex-three"],"provider":"codex"}');
+  });
+
   it('applies repeated history deletes against the latest state', () => {
     let historyData = {
       success: true,
@@ -187,11 +199,11 @@ describe('useSessionManagement', () => {
 
     expect(historyData.sessions).toEqual([]);
     expect(historyData.total).toBe(0);
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_session:history-1');
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_session:history-2');
+    expect(window.sendToJava).toHaveBeenCalledWith('delete_session:{"sessionId":"history-1","provider":"claude"}');
+    expect(window.sendToJava).toHaveBeenCalledWith('delete_session:{"sessionId":"history-2","provider":"codex"}');
   });
 
-  it('sends one backend request when deleting multiple history sessions', () => {
+  it('groups batch delete requests by the provider of each history session', () => {
     let historyData = {
       success: true,
       sessions: [
@@ -237,8 +249,9 @@ describe('useSessionManagement', () => {
 
     expect(historyData.sessions).toEqual([]);
     expect(historyData.total).toBe(0);
-    expect(window.sendToJava).toHaveBeenCalledTimes(1);
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:["history-1","history-2"]');
+    expect(window.sendToJava).toHaveBeenCalledTimes(2);
+    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:{"sessionIds":["history-1"],"provider":"claude"}');
+    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:{"sessionIds":["history-2"],"provider":"codex"}');
     expect(mocks.addToast).toHaveBeenCalledWith('history.sessionDeleted', 'success');
   });
 
@@ -260,7 +273,7 @@ describe('useSessionManagement', () => {
       result.current.deleteHistorySessions(['history-1', 'history-2', 'history-1']);
     });
 
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:["history-1","history-2"]');
+    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:{"sessionIds":["history-1","history-2"],"provider":"claude"}');
     expect(mocks.addToast).toHaveBeenCalledWith('history.sessionDeleted', 'success');
   });
 
@@ -342,7 +355,8 @@ describe('useSessionManagement', () => {
       result.current.deleteHistorySessions(['history-1', 'history-2']);
     });
 
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:["history-1","history-2"]');
+    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:{"sessionIds":["history-1"],"provider":"claude"}');
+    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:{"sessionIds":["history-2"],"provider":"codex"}');
     expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
     expect(mocks.addToast).not.toHaveBeenCalledWith('history.sessionDeleted', 'success');
     expect(window.__pendingSessionTransitionToast).toEqual({

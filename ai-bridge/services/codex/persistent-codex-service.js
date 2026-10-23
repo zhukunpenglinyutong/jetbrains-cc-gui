@@ -36,6 +36,7 @@ import { createNativeHistoryCounter } from './codex-history-message-count.js';
 import { readNativeSubagent } from './codex-native-subagents.js';
 import { projectCodexItemMessages } from './codex-item-projection.js';
 import { isGuardianReviewThread } from './codex-thread-visibility.js';
+import { enrichCodexHistoryThreads, readFavoriteCodexThreads, filterAvailableCodexThreads } from './codex-history-metadata.js';
 import { settleCodexSessionTitle } from './codex-session-title.js';
 import { generateCodexText } from './codex-text-service.js';
 import { prepareCodexRuntimeEnvironment } from './codex-native-runtime-env.js';
@@ -628,7 +629,7 @@ async function codexReadOnlyPersistent(method, stdinData = {}) {
   return await service.readOnly(method, params);
 }
 
-export async function codexListThreadsPersistent(stdinData) {
+export async function codexListThreadsPersistent(stdinData, dependencies = {}) {
   const projectPath = stdinData?.params?.projectPath ?? stdinData?.cwd;
   const params = {
     cwd: null,
@@ -638,8 +639,24 @@ export async function codexListThreadsPersistent(stdinData) {
     ...stdinData?.params,
   };
   delete params.projectPath;
-  const result = await codexReadOnlyPersistent('thread/list', { ...stdinData, params });
-  return { ...result, data: filterCodexProjectThreads(result.data, projectPath) };
+  const cursor = params.cursor === undefined ? stdinData?.cursor : params.cursor;
+  const favorites = cursor == null ? await readFavoriteCodexThreads(
+    threadId => codexReadOnlyPersistent('thread/read', { ...stdinData, threadId,
+      params: { threadId, includeTurns: false } }), dependencies.historyMetadata) : [];
+  let result;
+  let threads;
+  const visited = new Set();
+  do {
+    result = await codexReadOnlyPersistent('thread/list', { ...stdinData, params });
+    const merged = [...new Map([...favorites, ...(result.data ?? [])].map(thread => [thread.id, thread])).values()];
+    threads = await filterAvailableCodexThreads(merged, dependencies.historyAvailability);
+    // A stale-only page must not hide valid sessions on subsequent pages.
+    if (threads.length > 0 || result.nextCursor == null || visited.has(result.nextCursor)) break;
+    visited.add(result.nextCursor);
+    params.cursor = result.nextCursor;
+  } while (true);
+  return { ...result, data: enrichCodexHistoryThreads(
+    filterCodexProjectThreads(threads, projectPath), dependencies.historyMetadata) };
 }
 
 /** Counts history independently so listing metadata never waits for full transcripts. */
@@ -679,8 +696,12 @@ export async function codexCountThreadMessagesPersistent(stdinData) {
 
 /** Keeps descendant directories while honoring Windows case and project boundaries. */
 export function filterCodexProjectThreads(threads, projectPath) {
-  const normalize = (path) => String(path ?? '').replaceAll('\\', '/').replace(/\/$/, '')
-    .replace(/^([A-Z]):/, (_, drive) => `${drive.toLowerCase()}:`);
+  const normalize = (path) => {
+    let value = String(path ?? '').replaceAll('\\', '/');
+    if (/^\/\/\?\/UNC\//i.test(value)) value = `//${value.slice(8)}`;
+    else value = value.replace(/^\/\/\?\/(?=[a-z]:\/)/i, '');
+    return value.replace(/\/$/, '').replace(/^([A-Z]):/, (_, drive) => `${drive.toLowerCase()}:`);
+  };
   const normalizeProject = (path) => {
     const normalized = normalize(path);
     return /^[a-z]:\//i.test(normalized) || normalized.startsWith('//') ? normalized.toLowerCase() : normalized;

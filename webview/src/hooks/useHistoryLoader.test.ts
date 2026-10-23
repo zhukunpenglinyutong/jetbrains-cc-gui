@@ -46,6 +46,39 @@ const mountHistory = () => {
 };
 
 describe('native history visibility', () => {
+  it('restores saved custom titles and favorites on a cold list and after reopening history', () => {
+    const history = mountHistory();
+    const data = [
+      { id: 'saved', name: 'Native name', title: 'Native prompt', customTitle: 'My saved title',
+        hasCustomTitle: true, isFavorited: true, favoritedAt: 123, messageCount: 2 },
+      { id: 'native-only', name: 'Native only', isFavorited: false, messageCount: 0 },
+    ];
+    deliver({ requestType: 'codex_native_list_threads', data });
+    expect(history.data?.sessions?.[0]).toMatchObject({ sessionId: 'saved', title: 'My saved title',
+      hasCustomTitle: true, isFavorited: true, favoritedAt: 123 });
+    expect(history.data?.sessions?.[1]).toMatchObject({ title: 'Native only', isFavorited: false });
+    history.rerender({ currentView: 'chat', currentProvider: 'codex' });
+    history.rerender({ currentView: 'history', currentProvider: 'codex' });
+    deliver({ requestType: 'codex_native_list_threads', data });
+    expect(history.data?.sessions?.[0]).toMatchObject({ title: 'My saved title', isFavorited: true, favoritedAt: 123 });
+  });
+
+  it('restores metadata on older pages while preserving local unfavorite and rename edits', () => {
+    const history = mountHistory();
+    const saved = { id: 'saved', name: 'Native', customTitle: 'Saved title', hasCustomTitle: true,
+      isFavorited: true, favoritedAt: 10, messageCount: 1 };
+    deliver({ requestType: 'codex_native_list_threads', data: [saved], nextCursor: 'older' });
+    history.replace({ ...history.data!, sessions: [{ ...history.data!.sessions![0], title: 'Edited now',
+      isFavorited: false, favoritedAt: undefined }] });
+    deliver({ requestType: 'codex_native_list_threads_page', data: [saved,
+      { id: 'older', name: 'Native older', customTitle: 'Older saved title', hasCustomTitle: true,
+        isFavorited: true, favoritedAt: 5, messageCount: 1 }], nextCursor: null });
+    expect(history.data?.sessions).toMatchObject([
+      { sessionId: 'saved', title: 'Edited now', isFavorited: false },
+      { sessionId: 'older', title: 'Older saved title', hasCustomTitle: true, isFavorited: true, favoritedAt: 5 },
+    ]);
+  });
+
   it('filters guardian metadata and sums message counts across overlapping thread pages', () => {
     const history = mountHistory();
     deliver({ requestType: 'codex_native_list_threads', nextCursor: 'next', data: [

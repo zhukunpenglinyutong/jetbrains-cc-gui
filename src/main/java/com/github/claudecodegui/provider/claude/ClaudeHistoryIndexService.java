@@ -215,9 +215,33 @@ class ClaudeHistoryIndexService {
         return new ArrayList<>(sessions.subList(fromIndex, toIndex));
     }
 
-    /**
-     * Legacy method without pagination for backward compatibility.
-     */
+    /** Includes other project directories only when their recorded cwd matches the extra predicate. */
+    List<ClaudeHistoryReader.SessionInfo> readProjectSessions(String projectPath,
+            java.util.function.Predicate<String> additionalMatch) throws IOException {
+        List<ClaudeHistoryReader.SessionInfo> sessions = new ArrayList<>(readProjectSessions(projectPath));
+        if (additionalMatch == null || !Files.isDirectory(projectsDir)) {
+            return sessions;
+        }
+        Set<String> currentKeys = new HashSet<>(PathUtils.getSanitizedPathCandidates(projectPath));
+        try (Stream<Path> directories = Files.list(projectsDir)) {
+            for (Path directory : directories.filter(Files::isDirectory).toList()) {
+                if (currentKeys.contains(directory.getFileName().toString())) {
+                    continue;
+                }
+                try {
+                    for (ClaudeHistoryReader.SessionInfo session : scanProjectSessionsLite(directory, 0, 0).sessions) {
+                        if (additionalMatch.test(session.cwd)) {
+                            sessions.add(session);
+                        }
+                    }
+                } catch (IOException error) {
+                    LOG.debug("Skipping unavailable history directory " + directory, error);
+                }
+            }
+        }
+        return mergeSessions(sessions);
+    }
+
     List<ClaudeHistoryReader.SessionInfo> readProjectSessions(String projectPath) throws IOException {
         return readProjectSessions(projectPath, 0, 0);
     }
@@ -570,6 +594,7 @@ class ClaudeHistoryIndexService {
         session.firstTimestamp = liteInfo.createdAt;
         session.fileSize = liteInfo.fileSize;
         session.entrypoint = liteInfo.entrypoint;
+        session.cwd = liteInfo.cwd;
         return session;
     }
 
