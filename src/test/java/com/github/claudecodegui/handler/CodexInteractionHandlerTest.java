@@ -14,6 +14,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import com.github.claudecodegui.clawbot.ClawBotTurnLifecycle;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -22,6 +23,38 @@ import static org.junit.Assert.assertTrue;
 
 /** Checks that controls share the frontend's rule of waiting behind live sends. */
 public class CodexInteractionHandlerTest {
+    @Test
+    public void ideAnswerContinuesRemoteTaskWithoutAlsoEnqueuingInTheBrowser() throws Exception {
+        for (boolean remote : new boolean[]{false, true}) {
+            CodexSDKBridge bridge = new CodexSDKBridge() {
+                @Override
+                public JsonObject respondCodexInteraction(String channel, String cwd, String key, String token, JsonObject result) {
+                    return JsonParser.parseString("{\"replied\":true,\"followUp\":{\"threadId\":\"root\",\"text\":\"Answer C\"}}").getAsJsonObject();
+                }
+            };
+            RecordingJs callbacks = new RecordingJs();
+            ClaudeSession owner = new ClaudeSession(null, null, bridge, null);
+            owner.setProvider("codex");
+            owner.setSessionInfo("root", "/workspace");
+            HandlerContext context = new HandlerContext(null, null, bridge, null, callbacks);
+            context.setSession(owner);
+            AtomicInteger continuations = new AtomicInteger();
+            if (remote) {
+                ClawBotTurnLifecycle turn = new ClawBotTurnLifecycle();
+                turn.bind(CompletableFuture.completedFuture(null));
+                context.setCodexInteractionResponder((session, response) -> turn.respond(response, session::getSessionId, () -> true,
+                        input -> { assertEquals("Answer C", input); continuations.incrementAndGet(); return CompletableFuture.completedFuture(null); }, Runnable::run));
+            }
+            new CodexInteractionHandler(context).handle("codex_interaction_response",
+                    "{\"interactionKey\":\"native-question\",\"dialogToken\":\"page\",\"result\":{\"answers\":{}}}");
+            JsonObject result = callbacks.results.poll(5, TimeUnit.SECONDS);
+            assertNotNull(result);
+            assertEquals(remote ? 1 : 0, continuations.get());
+            assertEquals(!remote, result.has("followUp"));
+            assertEquals("native-question", result.get("interactionKey").getAsString());
+        }
+    }
+
     /** A request from the previous chat must not claim the restored chat's wait. */
     @Test
     public void rejectsControlsForAThreadThatIsNoLongerSelected() throws Exception {

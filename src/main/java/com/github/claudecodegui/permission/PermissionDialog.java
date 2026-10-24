@@ -2,6 +2,8 @@ package com.github.claudecodegui.permission;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.Disposable;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.ui.jcef.JBCefBrowser;
 import com.github.claudecodegui.util.JBCefBrowserFactory;
@@ -62,27 +64,50 @@ public class PermissionDialog extends DialogWrapper {
 
         // Create the JCEF browser
         this.browser = JBCefBrowserFactory.create();
-        JBCefBrowserBase browserBase = this.browser;
-        this.jsQuery = JBCefJSQuery.create(browserBase);
+        JBCefJSQuery createdQuery = null;
+        try {
+            Disposer.register(getDisposable(), browser);
+            JBCefBrowserBase browserBase = this.browser;
+            createdQuery = JBCefJSQuery.create(browserBase);
+            this.jsQuery = createdQuery;
+            Disposer.register(getDisposable(), jsQuery);
 
-        // Set up JavaScript callback
-        jsQuery.addHandler((message) -> {
-            if (message.startsWith("permission_decision:")) {
-                String jsonData = message.substring("permission_decision:".length());
-                PermissionDecision decision = gson.fromJson(jsonData, PermissionDecision.class);
-                if (decisionCallback != null) {
-                    decisionCallback.accept(decision);
+            // Set up JavaScript callback
+            jsQuery.addHandler((message) -> {
+                if (message.startsWith("permission_decision:")) {
+                    String jsonData = message.substring("permission_decision:".length());
+                    PermissionDecision decision = gson.fromJson(jsonData, PermissionDecision.class);
+                    if (decisionCallback != null) {
+                        decisionCallback.accept(decision);
+                    }
+                    ApplicationManager.getApplication().invokeLater(() -> close(0));
+                    return null;
                 }
-                ApplicationManager.getApplication().invokeLater(() -> close(0));
                 return null;
+            });
+
+            // Load HTML
+            loadHtml();
+
+            init();
+        } catch (RuntimeException | LinkageError failure) {
+            // The constructor may fail before DialogWrapper can own every native handle.
+            for (Disposable resource : new Disposable[]{createdQuery, browser}) {
+                if (resource != null) {
+                    try {
+                        Disposer.dispose(resource);
+                    } catch (RuntimeException | LinkageError disposalFailure) {
+                        failure.addSuppressed(disposalFailure);
+                    }
+                }
             }
-            return null;
-        });
-
-        // Load HTML
-        loadHtml();
-
-        init();
+            try {
+                super.dispose();
+            } catch (RuntimeException | LinkageError disposalFailure) {
+                failure.addSuppressed(disposalFailure);
+            }
+            throw failure;
+        }
     }
 
     private void loadHtml() {
@@ -162,12 +187,5 @@ public class PermissionDialog extends DialogWrapper {
     protected Action[] createActions() {
         // Do not show the default OK and Cancel buttons
         return new Action[0];
-    }
-
-    @Override
-    public void dispose() {
-        jsQuery.dispose();
-        browser.dispose();
-        super.dispose();
     }
 }

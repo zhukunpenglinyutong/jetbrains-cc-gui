@@ -18,6 +18,29 @@ import static org.junit.Assert.assertTrue;
 public class CodexKnownExecReplayTest {
     private static final String PATCH = "*** Begin Patch\n*** Add File: a.ts\n+created\n*** End Patch";
 
+    @Test
+    public void lifecycleTurnOwnsMcpReceiptsWhenModelMetadataUsesAnotherTurnId() {
+        JsonArray records = new JsonArray();
+        records.add(JsonParser.parseString("{\"type\":\"session_meta\",\"payload\":{\"id\":\"root\"}}"));
+        records.add(JsonParser.parseString("{\"type\":\"turn_context\",\"payload\":{\"turn_id\":\"native-turn\"}}"));
+        JsonObject wrapper = call("mcp-wrapper", "text(await tools.mcp__web_fetch__web_get_metadata({url:'https://example.com'}));");
+        wrapper.getAsJsonObject("payload").add("internal_chat_message_metadata_passthrough",
+                JsonParser.parseString("{\"turn_id\":\"model-turn\"}"));
+        records.add(wrapper);
+        records.add(JsonParser.parseString("""
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"root","turn_id":"native-turn",
+                "item":{"type":"McpToolCall","id":"native-mcp","server":"web-fetch","tool":"web_get_metadata",
+                "arguments":{"url":"https://example.com"},"status":"completed",
+                "result":{"content":[{"type":"text","text":"Example Domain"}]}}}}
+                """));
+        records.add(output("mcp-wrapper", "Script completed"));
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("web_get_metadata"), toolNames(projected));
+        assertEquals("Example Domain", projected.get(1).getAsJsonArray("content").get(0).getAsJsonObject().get("text").getAsString());
+        assertFalse(projected.get(1).get("is_error").getAsBoolean());
+        assertFalse(toolNames(projected).contains("exec"));
+    }
+
     /** Identical commands in separate directories keep their process-owned results despite receipt reordering. */
     @Test
     public void pairsIdenticalBatchCommandsByTheirReturnedProcessIds() {
@@ -950,6 +973,319 @@ public class CodexKnownExecReplayTest {
             mismatch.add(output("mismatch", "Script completed"));
             assertTrue(toolNames(blocks(mismatch)).contains("exec"));
         }
+    }
+
+    /** Code Mode catalog lookups keep the two real MCP cards instead of duplicating their exec wrappers. */
+    @Test
+    public void catalogSelectedMcpWrappersReplayEachNativeResultOnce() {
+        JsonArray records = catalogMcpScope();
+        List<String> names = List.of("ccqa_get_success", "ccqa_get_expected_error");
+        for (int index = 0; index < names.size(); index++) {
+            String name = names.get(index);
+            String callId = "catalog-" + index;
+            records.add(call(callId, catalogMcpScript(name)));
+            records.add(nativeCatalogMcp("native-" + index, name, index == 0 ? "completed" : "failed"));
+            records.add(output(callId, "Script completed"));
+        }
+        List<JsonObject> projected = blocks(records);
+        assertEquals(names, toolNames(projected));
+        List<JsonObject> tools = projected.stream().filter(block -> "tool_use".equals(string(block, "type"))).toList();
+        List<JsonObject> results = projected.stream().filter(block -> "tool_result".equals(string(block, "type"))).toList();
+        assertEquals(List.of("native-0", "native-1"), tools.stream().map(tool -> string(tool, "id")).toList());
+        assertEquals(List.of("native-0", "native-1"), results.stream().map(result -> string(result, "tool_use_id")).toList());
+        assertEquals(List.of(false, true), results.stream().map(result -> result.get("is_error").getAsBoolean()).toList());
+        assertEquals("CCQA_MCP_SUCCESS", results.get(0).getAsJsonArray("content").get(0).getAsJsonObject().get("text").getAsString());
+        assertEquals("CCQA_MCP_EXPECTED_ERROR", results.get(1).getAsJsonArray("content").get(0).getAsJsonObject().get("text").getAsString());
+    }
+
+    /** Renamed bindings and nonempty literal arguments still require an exact native MCP match. */
+    @Test
+    public void catalogSelectedMcpWrappersPreserveLiteralArguments() {
+        JsonArray records = catalogMcpScope();
+        records.add(call("literal-catalog", "\nconst selected = ALL_TOOLS.find(candidate => /(?:^|__)inspect$/.test(candidate.name)"
+                + " && candidate.name.includes('test_server'));\nconst reply = await tools[selected.name]("
+                + "{path:'example.txt',nested:{enabled:true},entries:[1,'two']});\ntext(reply)\n"));
+        JsonObject event = nativeCatalogMcp("native-literal", "inspect", "completed");
+        JsonObject item = event.getAsJsonObject("payload").getAsJsonObject("item");
+        item.addProperty("server", "test_server");
+        JsonObject arguments = JsonParser.parseString("{\"path\":\"example.txt\",\"nested\":{\"enabled\":true},\"entries\":[1,\"two\"]}").getAsJsonObject();
+        item.add("arguments", arguments);
+        records.add(event);
+        records.add(output("literal-catalog", "Script completed"));
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("inspect"), toolNames(projected));
+        assertEquals("test_server", string(projected.get(0).getAsJsonObject("input"), "server"));
+        assertEquals(arguments, projected.get(0).getAsJsonObject("input").getAsJsonObject("arguments"));
+        assertEquals("native-literal", string(projected.get(1), "tool_use_id"));
+    }
+
+    /** The fresh owned rollout selects by endsWith and prints only text content blocks. */
+    @Test
+    public void catalogSelectedMcpWrappersReplayTextContentLoopsOnce() {
+        JsonArray records = catalogMcpScope();
+        List<String> names = List.of("ccqa_get_success", "ccqa_get_expected_error");
+        for (int index = 0; index < names.size(); index++) {
+            String name = names.get(index);
+            String callId = "content-catalog-" + index;
+            records.add(call(callId, catalogMcpTextContentScript(name)));
+            records.add(nativeCatalogMcp("native-content-" + index, name, index == 0 ? "completed" : "failed"));
+            records.add(output(callId, "Script completed"));
+        }
+        List<JsonObject> projected = blocks(records);
+        assertEquals(names, toolNames(projected));
+        List<JsonObject> tools = projected.stream().filter(block -> "tool_use".equals(string(block, "type"))).toList();
+        List<JsonObject> results = projected.stream().filter(block -> "tool_result".equals(string(block, "type"))).toList();
+        assertEquals(List.of("native-content-0", "native-content-1"), tools.stream().map(tool -> string(tool, "id")).toList());
+        assertEquals(List.of("native-content-0", "native-content-1"), results.stream().map(result -> string(result, "tool_use_id")).toList());
+        assertEquals(List.of(false, true), results.stream().map(result -> result.get("is_error").getAsBoolean()).toList());
+    }
+
+    /** Both exact selectors permit the formatter, including safe block-local binding reuse. */
+    @Test
+    public void catalogSelectedMcpWrappersAcceptEquivalentTextFormatters() {
+        String script = catalogMcpTextContentScript("ccqa_get_success");
+        String loop = "for (const c of r.content ?? []) { if (c.type === \"text\") text(c.text); }";
+        List<String> scripts = new ArrayList<>(List.of(script.replace(loop, "text(r);"),
+                catalogMcpScript("ccqa_get_success").replace("text(r);", loop),
+                script.replace("const t =", "const selected =").replace("tools[t.name]", "tools[selected.name]")
+                        .replace("const r =", "const reply =").replace("r.content", "reply.content").replace('"', '\'')));
+        for (String binding : List.of("t", "tools", "ALL_TOOLS")) {
+            scripts.add(script.replace("const c of", "const " + binding + " of")
+                    .replace("c.type", binding + ".type").replace("c.text", binding + ".text"));
+        }
+        for (String valid : scripts) {
+            JsonArray records = catalogMcpScope();
+            records.add(call("content-formatter", valid));
+            records.add(nativeCatalogMcp("native-content", "ccqa_get_success", "completed"));
+            records.add(output("content-formatter", "Script completed", "CCQA_MCP_SUCCESS"));
+            assertEquals(valid, List.of("ccqa_get_success"), toolNames(blocks(records)));
+        }
+    }
+
+    /** Complete matching excludes changed predicates, dynamic inputs, extra work and unsafe loop bindings. */
+    @Test
+    public void catalogSelectedMcpWrappersRejectChangedTextFormatters() {
+        String script = catalogMcpTextContentScript("ccqa_get_success");
+        List<String> invalid = new ArrayList<>(List.of(script + "text('extra');", "text('extra');" + script,
+                script.replace(".endsWith(", ".includes("), script.replace("x.name.includes", "other.name.includes"),
+                script.replace("({})", "({value: getValue()})"), script.replace("r.content", "other.content"),
+                script.replace("c.type ===", "c.type !=="), script.replace("text(c.text)", "text(c.other)"),
+                script.replace("text(c.text)", "text(other.text)"), script.replace("text(c.text)", "text(c.text); doWork()")));
+        for (String binding : List.of("text", "r")) {
+            invalid.add(script.replace("const c of", "const " + binding + " of")
+                    .replace("c.type", binding + ".type").replace("c.text", binding + ".text"));
+        }
+        for (String unknown : invalid) {
+            assertNull(unknown, CodexKnownExecReplay.begin(call("invalid-content", unknown), "root", "native-turn"));
+        }
+    }
+
+    /** Neither native status nor isError can explain a later wrapper TypeError. */
+    @Test
+    public void catalogSelectedMcpWrappersRetainExplicitOuterFailures() {
+        for (String script : List.of(catalogMcpScript("ccqa_get_success"), catalogMcpTextContentScript("ccqa_get_success"),
+                "text(await tools.mcp__ccqa_acceptance__ccqa_get_success({}));")) {
+            for (String status : List.of("completed", "failed")) {
+                for (boolean isError : List.of(false, true)) {
+                    for (String header : List.of("Script failed", "Script error: TypeError")) {
+                        JsonArray records = catalogMcpScope();
+                        records.add(call("outer-failure", script));
+                        JsonObject nativeCall = nativeCatalogMcp("native-outcome", "ccqa_get_success", status);
+                        nativeCall.getAsJsonObject("payload").getAsJsonObject("item").getAsJsonObject("result").addProperty("isError", isError);
+                        records.add(nativeCall);
+                        records.add(output("outer-failure", "  " + header + "\nOutput:\nTypeError: content is not iterable"));
+                        List<JsonObject> projected = blocks(records);
+                        assertEquals(List.of("exec", "ccqa_get_success"), toolNames(projected));
+                        JsonObject exec = projected.stream().filter(block -> "tool_use".equals(string(block, "type"))
+                                && "exec".equals(string(block, "name"))).findFirst().orElseThrow();
+                        JsonObject result = projected.stream().filter(block -> "tool_result".equals(string(block, "type"))
+                                && string(exec, "id").equals(string(block, "tool_use_id"))).findFirst().orElseThrow();
+                        assertTrue(result.get("is_error").getAsBoolean());
+                        assertTrue(string(result, "content").contains("TypeError: content is not iterable"));
+                    }
+                }
+            }
+        }
+    }
+
+    /** Completed outer headers ignore native status, nested isError and error-like MCP body text. */
+    @Test
+    public void catalogSelectedMcpWrappersKeepNativeAndOuterOutcomesSeparate() {
+        for (String status : List.of("completed", "failed")) {
+            JsonArray records = catalogMcpScope();
+            records.add(call("native-error", catalogMcpTextContentScript("ccqa_get_expected_error")));
+            JsonObject nativeCall = nativeCatalogMcp("native-error", "ccqa_get_expected_error", status);
+            nativeCall.getAsJsonObject("payload").getAsJsonObject("item").getAsJsonObject("result").addProperty("isError", true);
+            records.add(nativeCall);
+            records.add(output("native-error", "Script completed\nOutput:\nScript failed", "{\"isError\":true,\"content\":\"Script failed\"}"));
+            List<JsonObject> projected = blocks(records);
+            assertEquals(List.of("ccqa_get_expected_error"), toolNames(projected));
+            assertTrue(projected.get(1).get("is_error").getAsBoolean());
+        }
+    }
+
+    /** The PyCharm owned rollout contains two sequential literal MCP calls in the same exec. */
+    @Test
+    public void sequentialLiteralMcpWrappersReplayEachNativeResultOnce() {
+        JsonArray records = catalogMcpScope();
+        JsonObject wrapper = call("literal-sequence", "text(await tools.mcp__ccqa_acceptance__ccqa_get_success({}));\n"
+                + "text(await tools.mcp__ccqa_acceptance__ccqa_get_expected_error({}));\n");
+        wrapper.getAsJsonObject("payload").add("internal_chat_message_metadata_passthrough", JsonParser.parseString("{\"turn_id\":\"model-turn\"}"));
+        records.add(wrapper);
+        records.add(nativeCatalogMcp("native-literal-success", "ccqa_get_success", "completed"));
+        records.add(JsonParser.parseString("{\"type\":\"token_usage_record\",\"payload\":{\"turn_id\":\"native-turn\"}}"));
+        records.add(nativeCatalogMcp("native-literal-error", "ccqa_get_expected_error", "failed"));
+        records.add(output("literal-sequence", "Script completed", "{\"content\":[{\"type\":\"text\",\"text\":\"CCQA_MCP_SUCCESS\"}],\"isError\":false}",
+                "{\"content\":[{\"type\":\"text\",\"text\":\"CCQA_MCP_EXPECTED_ERROR\"}],\"isError\":true}"));
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("ccqa_get_success", "ccqa_get_expected_error"), toolNames(projected));
+        List<JsonObject> tools = projected.stream().filter(block -> "tool_use".equals(string(block, "type"))).toList();
+        List<JsonObject> results = projected.stream().filter(block -> "tool_result".equals(string(block, "type"))).toList();
+        assertEquals(List.of("native-literal-success", "native-literal-error"), tools.stream().map(tool -> string(tool, "id")).toList());
+        assertEquals(List.of("native-literal-success", "native-literal-error"), results.stream().map(result -> string(result, "tool_use_id")).toList());
+        assertEquals(List.of(false, true), results.stream().map(result -> result.get("is_error").getAsBoolean()).toList());
+    }
+
+    /** The owned PyCharm history also contains an independent catalog-discovery exec that must remain visible. */
+    @Test
+    public void catalogDiscoveryRemainsDistinctFromSequentialMcpWrapper() {
+        JsonArray records = catalogMcpScope();
+        String discovery = "const matches = ALL_TOOLS.filter(x => /ccqa.*(get_success|get_expected_error)/.test(x.name)); "
+                + "for (const t of matches) text(t);\n";
+        assertNull(CodexKnownExecReplay.begin(call("catalog-discovery", discovery), "root", "native-turn"));
+        records.add(call("catalog-discovery", discovery));
+        records.add(output("catalog-discovery", "Script completed", "{\"name\":\"ccqa_get_success\"}", "{\"name\":\"ccqa_get_expected_error\"}"));
+        records.add(call("literal-sequence", "text(await tools.mcp__ccqa_acceptance__ccqa_get_success({}));\n"
+                + "text(await tools.mcp__ccqa_acceptance__ccqa_get_expected_error({}));\n"));
+        records.add(nativeCatalogMcp("native-success", "ccqa_get_success", "completed"));
+        records.add(nativeCatalogMcp("native-error", "ccqa_get_expected_error", "failed"));
+        records.add(output("literal-sequence", "Script completed", "{\"isError\":false}", "{\"isError\":true}"));
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("exec", "ccqa_get_success", "ccqa_get_expected_error"), toolNames(projected));
+        List<JsonObject> tools = projected.stream().filter(block -> "tool_use".equals(string(block, "type"))).toList();
+        List<JsonObject> results = projected.stream().filter(block -> "tool_result".equals(string(block, "type"))).toList();
+        assertEquals(List.of("catalog-discovery", "native-success", "native-error"), tools.stream().map(tool -> string(tool, "id")).toList());
+        assertEquals(List.of("catalog-discovery", "native-success", "native-error"), results.stream().map(result -> string(result, "tool_use_id")).toList());
+        assertEquals(List.of(false, false, true), results.stream().map(result -> result.get("is_error").getAsBoolean()).toList());
+    }
+
+    /** A completed MCP call cannot hide a later TypeError from a shadowed output function. */
+    @Test
+    public void catalogSelectedMcpWrappersRetainShadowedOutputFailures() {
+        String script = catalogMcpScript("ccqa_get_success");
+        List<String> shadowed = List.of(
+                script.replace("const t =", "const text =").replace("tools[t.name]", "tools[text.name]"),
+                script.replace("const r =", "const text =").replace("text(r)", "text(text)"));
+        for (String invalid : shadowed) {
+            JsonObject wrapper = call("catalog-shadow", invalid);
+            assertNull(invalid, CodexKnownExecReplay.begin(wrapper, "root", "native-turn"));
+            JsonArray records = catalogMcpScope();
+            records.add(wrapper);
+            records.add(nativeCatalogMcp("native-success", "ccqa_get_success", "completed"));
+            records.add(output("catalog-shadow", "Script failed\nOutput:\nTypeError: text is not a function"));
+            List<JsonObject> projected = blocks(records);
+            assertEquals(List.of("exec", "ccqa_get_success"), toolNames(projected));
+            JsonObject exec = projected.stream().filter(block -> "tool_use".equals(string(block, "type"))
+                    && "exec".equals(string(block, "name"))).findFirst().orElseThrow();
+            JsonObject execResult = projected.stream().filter(block -> "tool_result".equals(string(block, "type"))
+                    && string(exec, "id").equals(string(block, "tool_use_id"))).findFirst().orElseThrow();
+            assertTrue(execResult.get("is_error").getAsBoolean());
+            assertTrue(string(execResult, "content").contains("TypeError: text is not a function"));
+        }
+    }
+
+    /** Only the outer bindings can shadow the wrapper globals or collide with each other. */
+    @Test
+    public void catalogSelectedMcpWrappersRejectConflictingOuterBindings() {
+        String script = catalogMcpScript("ccqa_get_success");
+        for (String reserved : List.of("tools", "ALL_TOOLS", "text")) {
+            String selected = script.replace("const t =", "const " + reserved + " =")
+                    .replace("tools[t.name]", "tools[" + reserved + ".name]");
+            String result = script.replace("const r =", "const " + reserved + " =").replace("text(r)", "text(" + reserved + ")");
+            assertNull(selected, CodexKnownExecReplay.begin(call("selected-binding", selected), "root", "native-turn"));
+            assertNull(result, CodexKnownExecReplay.begin(call("result-binding", result), "root", "native-turn"));
+        }
+        String duplicate = script.replace("const r =", "const t =").replace("text(r)", "text(t)");
+        assertNull(CodexKnownExecReplay.begin(call("duplicate-binding", duplicate), "root", "native-turn"));
+    }
+
+    /** Dynamic arguments and work beyond the single catalog-selected call must remain reviewable as exec. */
+    @Test
+    public void catalogSelectedMcpWrappersRequireCompleteLiteralScripts() {
+        String script = catalogMcpScript("ccqa_get_success");
+        for (String unknown : List.of("text('extra');" + script, script + "text('extra');",
+                script.replace("({})", "(getArguments())"), script.replace("({})", "({value: getValue()})"),
+                script.replace(".test(t.name)", ".test(other.name)"), script.replace("tools[t.name]", "tools[other.name]"),
+                script.replace("text(r)", "text(other)"), script.replace("ccqa_get_success$", "ccqa_get_.*$"),
+                script.replace("ALL_TOOLS.find", "getTools().find"), "text(await tools[selected.name]({}));",
+                "text('" + script.replace("'", "\\'").replace("\n", "\\n") + "');")) {
+            JsonArray records = catalogMcpScope();
+            records.add(call("unknown-catalog", unknown));
+            records.add(nativeCatalogMcp("native", "ccqa_get_success", "completed"));
+            records.add(output("unknown-catalog", "Script completed"));
+            assertTrue(unknown, toolNames(blocks(records)).contains("exec"));
+        }
+    }
+
+    /** A selector does not own missing, ambiguous or unrelated native receipts. */
+    @Test
+    public void catalogSelectedMcpWrappersRequireUniqueMatchingNativeReceipts() {
+        for (String mismatch : List.of("missing", "arguments", "tool", "server", "duplicate", "thread", "turn")) {
+            JsonArray records = catalogMcpScope();
+            records.add(call("catalog-mismatch", catalogMcpScript("ccqa_get_success")));
+            JsonObject event = nativeCatalogMcp("native", "ccqa_get_success", "completed");
+            JsonObject payload = event.getAsJsonObject("payload");
+            JsonObject item = payload.getAsJsonObject("item");
+            switch (mismatch) {
+                case "arguments" -> item.add("arguments", JsonParser.parseString("{\"different\":true}"));
+                case "tool" -> item.addProperty("tool", "another_tool");
+                case "server" -> item.addProperty("server", "prefix_ccqa_acceptance");
+                case "thread" -> payload.addProperty("thread_id", "another-root");
+                case "turn" -> payload.addProperty("turn_id", "another-turn");
+                default -> { }
+            }
+            if (!mismatch.equals("missing")) {
+                records.add(event);
+            }
+            if (mismatch.equals("duplicate")) {
+                records.add(nativeCatalogMcp("another-native", "ccqa_get_success", "completed"));
+            }
+            records.add(output("catalog-mismatch", "Script completed"));
+            assertTrue(mismatch, toolNames(blocks(records)).contains("exec"));
+        }
+    }
+
+    private static JsonArray catalogMcpScope() {
+        JsonArray records = new JsonArray();
+        records.add(JsonParser.parseString("{\"type\":\"session_meta\",\"payload\":{\"id\":\"root\"}}"));
+        records.add(JsonParser.parseString("{\"type\":\"turn_context\",\"payload\":{\"turn_id\":\"native-turn\"}}"));
+        return records;
+    }
+
+    private static String catalogMcpScript(String tool) {
+        return "const t = ALL_TOOLS.find(t => /(?:^|__)" + tool
+                + "$/.test(t.name) && t.name.includes(\"ccqa_acceptance\")); const r = await tools[t.name]({}); text(r);\n";
+    }
+
+    private static String catalogMcpTextContentScript(String tool) {
+        return "const t = ALL_TOOLS.find(x => x.name.endsWith(\"" + tool
+                + "\") && x.name.includes(\"ccqa_acceptance\")); const r = await tools[t.name]({}); "
+                + "for (const c of r.content ?? []) { if (c.type === \"text\") text(c.text); }\n";
+    }
+
+    private static JsonObject nativeCatalogMcp(String id, String tool, String status) {
+        JsonObject event = JsonParser.parseString("""
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"root","turn_id":"native-turn",
+                "item":{"type":"McpToolCall","server":"ccqa_acceptance","arguments":{},
+                "result":{"content":[{"type":"text"}]}}}}
+                """).getAsJsonObject();
+        JsonObject item = event.getAsJsonObject("payload").getAsJsonObject("item");
+        item.addProperty("id", id);
+        item.addProperty("tool", tool);
+        item.addProperty("status", status);
+        item.getAsJsonObject("result").getAsJsonArray("content").get(0).getAsJsonObject()
+                .addProperty("text", status.equals("completed") ? "CCQA_MCP_SUCCESS" : "CCQA_MCP_EXPECTED_ERROR");
+        return event;
     }
 
     /** Conflicting native thread identities cannot make unrelated work look like one batch. */

@@ -464,7 +464,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         restoreTabSessionState(firstSavedState, 0, firstChatWindow, true);
 
         for (int i = 1; i < savedTabCount; i++) {
-            ClaudeChatWindow chatWindow = new ClaudeChatWindow(project, true);
+            ClaudeChatWindow chatWindow = new ClaudeChatWindow(project, true, false);
             String tabName = resolveRestoredTabName(tabStateService, i);
             TabStateService.TabSessionState savedState = tabStateService.getTabSessionState(i);
 
@@ -489,7 +489,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         for (int i = 0; i < savedTabCount; i++) {
             boolean isFirstTab = (i == 0);
-            ClaudeChatWindow chatWindow = new ClaudeChatWindow(project, !isFirstTab);
+            ClaudeChatWindow chatWindow = new ClaudeChatWindow(project, !isFirstTab, isFirstTab);
             String tabName = resolveRestoredTabName(tabStateService, i);
             TabStateService.TabSessionState savedState = tabStateService.getTabSessionState(i);
 

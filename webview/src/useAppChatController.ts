@@ -18,6 +18,7 @@ import {
   CONTEXT_COMMANDS,
 } from './hooks/useMessageSender';
 import { parseCodexCommand } from './hooks/codexCommandDispatcher';
+import { useCodexQuestionResponses } from './hooks/useCodexQuestionResponses';
 import { useCodexTurnActivity } from './hooks/useCodexTurnActivity';
 import { useCodexCompactionStatus } from './hooks/useCodexCompactionStatus';
 import type { Attachment, ChatInputBoxHandle, PermissionMode } from './components/ChatInputBox/types';
@@ -48,6 +49,7 @@ export interface ChatControllerModelSlice {
   codexCollaborationMode: UseMessageSenderOptions['codexCollaborationMode'];
   codexApprovalPreset: UseMessageSenderOptions['codexApprovalPreset'];
   codexSandboxSelection: UseMessageSenderOptions['codexSandboxSelection'];
+  codexSandboxSource?: UseMessageSenderOptions['codexSandboxSource'];
   dshPreset: UseMessageSenderOptions['dshPreset'];
   longContextEnabled: UseMessageSenderOptions['longContextEnabled'];
   handleModeSelect: (mode: PermissionMode) => void;
@@ -151,7 +153,7 @@ export const useAppChatController = ({
     selectedAgent, sdkStatusLoading, currentSdkInstalled,
     codexNativeAutoReviewAvailable,
     reasoningEffort, codexFastMode, codexCollaborationMode, codexApprovalPreset,
-    codexSandboxSelection, dshPreset, longContextEnabled,
+    codexSandboxSelection, codexSandboxSource, dshPreset, longContextEnabled,
     handleModeSelect, handleProviderSelect,
     currentProviderRef, syncActiveProviderModelMapping,
     setPermissionMode, setCurrentProvider,
@@ -291,7 +293,7 @@ export const useAppChatController = ({
   } = useMessageSender({
     t, addToast,
     currentProvider, selectedModel, permissionMode, reasoningEffort, selectedAgent, codexFastMode,
-    codexCollaborationMode, codexApprovalPreset, codexSandboxSelection,
+    codexCollaborationMode, codexApprovalPreset, codexSandboxSelection, codexSandboxSource,
     codexNativeAutoReviewAvailable, dshPreset,
     sdkStatusLoading, currentSdkInstalled,
     sentAttachmentsRef, chatInputRef, messagesContainerRef,
@@ -315,6 +317,10 @@ export const useAppChatController = ({
     clearQueue,
     reorder: reorderMessageQueue,
   } = useMessageQueue({ isLoading: loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending, onExecute: hookHandleSubmit });
+
+  const onCodexQuestionError = useCallback((message: string) => addToast(message, 'error'), [addToast]);
+  useCodexQuestionResponses({ provider: currentProvider, threadId: currentSessionId,
+    enqueue: enqueueMessage, onError: onCodexQuestionError });
 
   // Point the session-transition indirection at the real clearQueue.
   useEffect(() => {

@@ -1,8 +1,12 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.session.ClaudeSession;
+
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.permission.PermissionService;
+import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.junit.Before;
 import org.junit.Test;
@@ -12,6 +16,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Deque;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -42,6 +47,52 @@ public class PermissionHandlerTest {
     }
 
     @Test
+    public void officeWaitUsesActualQuestionPlanAndPermissionFuturesAcrossRebinding() {
+        HandlerContext context = contextStub();
+        ClaudeSession session = new ClaudeSession(null, null, null, null);
+        session.getState().beginTurn();
+        context.setSession(session);
+        PermissionHandler configured = new PermissionHandler(context, new FakeSafetyNetScheduler(), new FakeEdtDispatcher(),
+                new FakeAskUserQuestionVisualNotifier(), new FakeAskUserQuestionSoundNotifier());
+        com.github.claudecodegui.session.SessionExecutionOwnership old = session.getState().currentExecutionOwnership();
+        CompletableFuture<JsonObject> question = configured.showAskUserQuestionDialog("office-question", new JsonObject());
+        assertEquals(com.github.claudecodegui.session.SessionExecutionState.WaitReason.QUESTION, old.state().snapshot().waitReason());
+        session.setProvider("codex");
+        session.getState().beginTurn();
+        CompletableFuture<JsonObject> plan = configured.showPlanApprovalDialog("office-plan", new JsonObject());
+        assertEquals(com.github.claudecodegui.session.SessionExecutionState.WaitReason.PLAN, session.getState().getExecutionSnapshot().waitReason());
+        question.complete(new JsonObject());
+        assertEquals(0, old.state().snapshot().pendingInteractionCount());
+        assertFalse(plan.isDone());
+        CompletableFuture<Integer> permission = configured.showFrontendPermissionDialog("Bash", new JsonObject());
+        assertEquals(2, session.getState().getExecutionSnapshot().pendingInteractionCount());
+        configured.clearPendingRequests();
+        assertTrue(plan.isDone());
+        assertTrue(permission.isDone());
+        assertEquals(0, session.getState().getExecutionSnapshot().pendingInteractionCount());
+        assertEquals(com.github.claudecodegui.session.SessionExecutionState.Outcome.NONE, session.getState().getExecutionSnapshot().outcome());
+    }
+
+    @Test
+    public void obsoleteFileRequestCannotAddOfficeWaitToTheNextTurn() {
+        HandlerContext context = contextStub();
+        ClaudeSession session = new ClaudeSession(null, null, null, null);
+        session.getState().beginTurn();
+        context.setSession(session);
+        com.github.claudecodegui.session.SessionExecutionOwnership old = session.getState().currentExecutionOwnership();
+        session.getState().beginTurn();
+        PermissionHandler configured = new PermissionHandler(context, new FakeSafetyNetScheduler(), new FakeEdtDispatcher(),
+                new FakeAskUserQuestionVisualNotifier(), new FakeAskUserQuestionSoundNotifier());
+        CompletableFuture<JsonObject> question = com.github.claudecodegui.session.SessionInteractionScope.forFileRequest(
+                old.turn().bindingEpoch() + "/" + old.turn().turnId(), session.getState().currentExecutionOwnership(),
+                () -> configured.showAskUserQuestionDialog("stale-office-question", new JsonObject()));
+        assertEquals(0, session.getState().getExecutionSnapshot().pendingInteractionCount());
+        configured.clearPendingRequests();
+        assertTrue(question.isDone());
+        assertEquals(com.github.claudecodegui.session.SessionExecutionState.Phase.RUNNING, session.getState().getExecutionSnapshot().phase());
+    }
+
+    @Test
     public void getSupportedTypesReturnsDialogIpcMessageTypes() {
         String[] actual = handler.getSupportedTypes().clone();
         String[] expected = {
@@ -53,6 +104,54 @@ public class PermissionHandlerTest {
         Arrays.sort(actual);
         Arrays.sort(expected);
         assertArrayEquals(expected, actual);
+    }
+
+    @Test
+    public void reportsPendingProviderInteractionForClawBotProgress() throws Exception {
+        assertEquals("", handler.getClawBotPendingInteractionPhase());
+
+        injectPlanApprovalFuture("plan-progress", new CompletableFuture<>());
+        assertEquals("WAITING_PLAN_APPROVAL", handler.getClawBotPendingInteractionPhase());
+
+        injectAskUserFuture("question-progress", new CompletableFuture<>());
+        assertEquals("WAITING_USER", handler.getClawBotPendingInteractionPhase());
+    }
+
+    @Test
+    public void exposesAskUserQuestionToClawBotAndResolvesTheSameFuture() throws Exception {
+        HandlerContext context = contextStub();
+        ClaudeSession session = new ClaudeSession(null, null, null, null);
+        session.getState().beginTurn();
+        session.getState().addMessage(new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "question"));
+        context.setSession(session);
+        FakeSafetyNetScheduler scheduler = new FakeSafetyNetScheduler();
+        PermissionHandler configuredHandler = new PermissionHandler(
+                context, scheduler, new FakeEdtDispatcher(),
+                new FakeAskUserQuestionVisualNotifier(), new FakeAskUserQuestionSoundNotifier());
+
+        JsonObject question = new JsonObject();
+        question.addProperty("question", "选择颜色");
+        JsonArray options = new JsonArray();
+        options.add("红");
+        options.add("蓝");
+        question.add("options", options);
+        JsonArray questions = new JsonArray();
+        questions.add(question);
+        JsonObject data = new JsonObject();
+        data.add("questions", questions);
+
+        CompletableFuture<JsonObject> future = configuredHandler.showAskUserQuestionDialog("remote-ask", data);
+        List<com.github.claudecodegui.clawbot.ClawBotInteraction> interactions =
+                configuredHandler.getClawBotInteractions();
+        assertEquals(1, interactions.size());
+
+        JsonObject answer = new JsonObject();
+        JsonObject answers = new JsonObject();
+        answers.addProperty("选择颜色", "蓝");
+        answer.add("answers", answers);
+        assertTrue(configuredHandler.answerClawBotInteraction(interactions.get(0).token(), answer));
+        assertEquals("蓝", future.get(1, TimeUnit.SECONDS).get("选择颜色").getAsString());
+        assertTrue(configuredHandler.getClawBotInteractions().isEmpty());
     }
 
     @Test
@@ -496,6 +595,55 @@ public class PermissionHandlerTest {
         assertEquals(com.github.claudecodegui.permission.PermissionRequest.PermissionResult.Behavior.ALLOW,
                 current.getResultFuture().join().getBehavior());
         assertTrue(manager.createRequest("next", "Bash", Map.of(), null, null).getResultFuture().isDone());
+    }
+
+    @Test
+    public void remotePermissionDecisionCannotBeOverwrittenByLateIdeDecision() {
+        com.github.claudecodegui.permission.PermissionManager manager = new com.github.claudecodegui.permission.PermissionManager();
+        com.github.claudecodegui.permission.PermissionRequest request =
+                manager.createRequest("remote-approval", "Bash", Map.of(), null, null);
+
+        assertTrue(manager.tryHandleRemotePermissionDecision(request, true, null));
+        manager.handlePermissionDecision(request, false, false, "Late IDE denial");
+
+        assertEquals(com.github.claudecodegui.permission.PermissionRequest.PermissionResult.Behavior.ALLOW,
+                request.getResultFuture().join().getBehavior());
+    }
+
+    @Test
+    public void concurrentRemoteAndIdePermissionDecisionsResolveExactlyOnce() throws Exception {
+        com.github.claudecodegui.permission.PermissionManager manager = new com.github.claudecodegui.permission.PermissionManager();
+        com.github.claudecodegui.permission.PermissionRequest request =
+                manager.createRequest("remote-race", "Bash", Map.of(), null, null);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Future<?> ideDecision = executor.submit(() -> {
+                awaitLatch(start);
+                manager.handlePermissionDecision(request, false, false, "IDE denial");
+            });
+            java.util.concurrent.Future<Boolean> remoteDecision = executor.submit(() -> {
+                awaitLatch(start);
+                return manager.tryHandleRemotePermissionDecision(request, true, null);
+            });
+            start.countDown();
+            ideDecision.get(2, TimeUnit.SECONDS);
+            remoteDecision.get(2, TimeUnit.SECONDS);
+
+            assertTrue(request.getResultFuture().isDone());
+            assertTrue(request.isResolved());
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private void awaitLatch(java.util.concurrent.CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting to start decision race", exception);
+        }
     }
 
     @Test

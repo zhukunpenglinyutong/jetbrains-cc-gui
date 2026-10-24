@@ -51,6 +51,7 @@ export interface UseMessageSenderOptions {
   codexCollaborationMode?: 'default' | 'plan';
   codexApprovalPreset?: 'request' | 'auto' | 'sandboxed-auto' | 'full-access';
   codexSandboxSelection?: 'read-only' | 'workspace-write' | 'danger-full-access';
+  codexSandboxSource?: 'default' | 'native' | 'migrated' | 'user';
   codexNativeAutoReviewAvailable: boolean;
   dshPreset?: string;
   selectedAgent: SelectedAgent | null;
@@ -91,6 +92,7 @@ export function useMessageSender({
   codexCollaborationMode = 'default',
   codexApprovalPreset = 'request',
   codexSandboxSelection = 'workspace-write',
+  codexSandboxSource = 'default',
   codexNativeAutoReviewAvailable,
   dshPreset,
   selectedAgent,
@@ -354,6 +356,7 @@ export function useMessageSender({
             collaborationMode: effectivePermissionMode === 'plan' ? 'plan' : codexCollaborationMode,
             approvalPreset: codexApprovalPreset,
             sandboxSelection: codexSandboxSelection,
+            sandboxSource: codexSandboxSource,
             skills: selectedCodexSkillInputs(text),
           },
         } : {}),
@@ -369,7 +372,7 @@ export function useMessageSender({
       return false;
     }
   }, [codexApprovalPreset, codexCollaborationMode, codexFastMode, codexNativeAutoReviewAvailable,
-    codexSandboxSelection, currentProvider, dshPreset, selectedModel, reasoningEffort, longContextEnabled]);
+    codexSandboxSelection, codexSandboxSource, currentProvider, dshPreset, selectedModel, reasoningEffort, longContextEnabled]);
 
   /**
    * Execute message sending (from queue or directly)

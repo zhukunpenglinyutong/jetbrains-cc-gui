@@ -50,6 +50,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
     private final String bridgeOwnerId = UUID.randomUUID().toString();
     private final String ownerScope;
     private final CodexInteractionRegistry interactionRegistry = new CodexInteractionRegistry();
+    private final Set<String> answeringInteractions = ConcurrentHashMap.newKeySet();
 
     /** Executor for blocking daemon round-trips; never the common pool, never the UI thread. */
     public static java.util.concurrent.Executor codexControlExecutor() {
@@ -660,7 +661,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 if (!result.success && result.error == null) {
                     result.error = streamedResult.error;
                 }
-                if (result.success || "User interrupted".equals(result.error)) {
+                if (result.success || result.cancelled) {
                     if (!hadSendError.get()) {
                         callback.onComplete(result);
                     }
@@ -710,18 +711,66 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 || !this.interactionRegistry.matchesPageToken(interactionKey, pageToken)) {
             return interactionError("Unknown or stale Codex interaction");
         }
-        JsonObject acknowledgement = sendCodexControl(
+        return respondCodexInteraction(entry, cwd, result);
+    }
+
+    /** Native questions exposed to the authenticated remote conversation, independent of page reloads. */
+    public List<CodexInteractionRegistry.Entry> getPendingCodexQuestions(String channelId, String rootThreadId) {
+        return this.interactionRegistry.snapshot(channelId).stream()
+                .filter(entry -> isCurrentCodexQuestion(entry, channelId, rootThreadId)).toList();
+    }
+
+    public long getCodexInteractionRevision() {
+        return this.interactionRegistry.revision();
+    }
+
+    public JsonObject respondCodexQuestion(String channelId, String cwd, String rootThreadId,
+                                          String remoteToken, JsonObject result) {
+        CodexInteractionRegistry.Entry entry = this.interactionRegistry.snapshot(channelId).stream()
+                .filter(candidate -> candidate.remoteToken().equals(remoteToken)).findFirst().orElse(null);
+        if (!isCurrentCodexQuestion(entry, channelId, rootThreadId)) {
+            return interactionError("Unknown or stale Codex question");
+        }
+        return respondCodexInteraction(entry, cwd, result);
+    }
+
+    private boolean isCurrentCodexQuestion(CodexInteractionRegistry.Entry entry, String channelId, String rootThreadId) {
+        if (entry == null || channelId == null) {
+            return false;
+        }
+        RuntimeGenerationScope generation = this.runtimeGenerations.get(channelId);
+        return entry.method().endsWith("/requestUserInput")
+                && sameChannel(channelId, entry.channelId())
+                && java.util.Objects.equals(entry.sessionEpoch(), this.runtimeSessionEpochs.get(channelId))
+                && rootThreadId != null && rootThreadId.equals(entry.rootThreadId())
+                && generation != null && java.util.Objects.equals(generation.runtimeGeneration(), entry.runtimeGeneration())
+                && (entry.deadlineAt() <= 0 || entry.deadlineAt() > System.currentTimeMillis());
+    }
+
+    private JsonObject respondCodexInteraction(CodexInteractionRegistry.Entry entry, String cwd, JsonObject result) {
+        String interactionKey = entry.interactionKey();
+        if (!this.answeringInteractions.add(interactionKey)) {
+            return interactionError("Codex interaction is already being answered");
+        }
+        try {
+            if (this.interactionRegistry.get(interactionKey) != entry) {
+                return interactionError("Unknown or stale Codex interaction");
+            }
+            JsonObject acknowledgement = sendCodexControl(
                 "codex.respondInteraction",
-                channelId,
+                entry.channelId(),
                 cwd,
                 params -> {
                     params.add("rpcId", entry.rpcId() == null ? new JsonObject() : entry.rpcId().deepCopy());
                     params.add("result", result == null ? new JsonObject() : result.deepCopy());
                 });
-        if (!acknowledgement.has("error")) {
-            this.interactionRegistry.resolve(interactionKey);
+            if (!acknowledgement.has("error")) {
+                this.interactionRegistry.resolve(interactionKey);
+            }
+            return acknowledgement;
+        } finally {
+            this.answeringInteractions.remove(interactionKey);
         }
-        return acknowledgement;
     }
 
     /**
@@ -750,7 +799,14 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 || !this.interactionRegistry.matchesPageToken(interactionKey, pageToken)) {
             return interactionError("Unknown or stale Codex interaction");
         }
-        JsonObject acknowledgement = sendCodexControl(
+        if (!this.answeringInteractions.add(interactionKey)) {
+            return interactionError("Codex interaction is already being answered");
+        }
+        try {
+            if (this.interactionRegistry.get(interactionKey) != entry) {
+                return interactionError("Unknown or stale Codex interaction");
+            }
+            JsonObject acknowledgement = sendCodexControl(
                 "codex.respondInteractionError",
                 channelId,
                 cwd,
@@ -759,10 +815,13 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     params.addProperty("code", code);
                     params.addProperty("message", message == null ? "Codex interaction cancelled" : message);
                 });
-        if (!acknowledgement.has("error")) {
-            this.interactionRegistry.resolve(interactionKey);
+            if (!acknowledgement.has("error")) {
+                this.interactionRegistry.resolve(interactionKey);
+            }
+            return acknowledgement;
+        } finally {
+            this.answeringInteractions.remove(interactionKey);
         }
-        return acknowledgement;
     }
 
     private static boolean sameChannel(String first, String second) {
@@ -1020,6 +1079,25 @@ public class CodexSDKBridge extends BaseSDKBridge {
         });
     }
 
+    /** Whether this bridge owns the native writer for the given persisted thread. */
+    public boolean ownsCodexThread(String threadId) {
+        return threadId != null
+                && this.bridgeOwnerId.equals(CodexThreadOwnerRegistry.ownerOf(this.ownerScope, threadId));
+    }
+
+    /** Release an idle owner for deletion without cancelling a turn that started concurrently. */
+    public CompletableFuture<JsonObject> releaseIdleCodexThread(String channelId, String cwd, String threadId) {
+        CompletableFuture<JsonObject> release = runCodexLifecycleOperation(
+                "codex.releaseThread", channelId, cwd, threadId, true);
+        String sessionEpoch = this.runtimeSessionEpochs.get(safeChannelId(channelId));
+        return release.whenComplete((result, error) -> {
+            // A busy refusal must preserve the live channel and every other daemon session.
+            if (error == null && result != null && !result.has("error")) {
+                this.forgetChannelState(channelId, threadId, sessionEpoch);
+            }
+        });
+    }
+
     /**
      * Clears channel-scoped runtime state, but only when the given epoch still
      * owns the channel. Release/preconnect complete asynchronously; without the
@@ -1054,6 +1132,12 @@ public class CodexSDKBridge extends BaseSDKBridge {
             String cwd,
             String threadId
     ) {
+        return runCodexLifecycleOperation(method, channelId, cwd, threadId, false);
+    }
+
+    private CompletableFuture<JsonObject> runCodexLifecycleOperation(
+            String method, String channelId, String cwd, String threadId, boolean onlyIfIdle
+    ) {
         boolean releasing = "codex.releaseThread".equals(method);
         if (!releasing && !this.isCodexRuntimeAccessAllowed()) {
             return CompletableFuture.completedFuture(interactionError("Codex runtime access is inactive"));
@@ -1073,6 +1157,9 @@ public class CodexSDKBridge extends BaseSDKBridge {
         params.addProperty("channelId", safeChannelId);
         params.addProperty("cwd", cwd == null ? "" : cwd);
         params.addProperty("threadId", threadId == null ? "" : threadId);
+        if (releasing && onlyIfIdle) {
+            params.addProperty("onlyIfIdle", true);
+        }
         params.addProperty("sessionEpoch", this.runtimeSessionEpochs.computeIfAbsent(
                 safeChannelId, ignored -> UUID.randomUUID().toString()));
         if (!releasing) {
@@ -1190,6 +1277,9 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 safeChannelId, ignored -> UUID.randomUUID().toString());
         params.addProperty("sessionEpoch", sessionEpoch);
         payloadWriter.accept(params);
+        if ("codex.updateSettings".equals(method)) {
+            this.captureRuntimeConfiguration(params);
+        }
         return this.appServerRequestExecutor.sendControlCommand(daemon, method, params, 10_000L);
     }
 
@@ -1200,6 +1290,9 @@ public class CodexSDKBridge extends BaseSDKBridge {
         // revision hash travel here, so a provider change rebuilds the runtime.
         params.addProperty("authMode", this.isCodexCliLoginActive() ? "cli_login" : "managed");
         try {
+            new com.github.claudecodegui.settings.CodexSettingsManager(this.gson, Path.of(this.ownerScope))
+                    .prepareNativeConfig(this::isCodexRuntimeAccessAllowed);
+            params.addProperty("codexHome", this.ownerScope.toString());
             JsonObject provider = this.settingsService.getActiveCodexProvider();
             if (provider != null) {
                 byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(
@@ -1238,6 +1331,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                             callback.onError(result.get("error").getAsString());
                             result.addProperty("errorReported", true);
                         } else {
+                            streamed.cancelled = cancelled;
                             streamed.success = !cancelled && !result.has("error");
                             callback.onComplete(streamed);
                         }
@@ -1625,8 +1719,12 @@ public class CodexSDKBridge extends BaseSDKBridge {
     }
 
     private static String resolveOwnerScope() {
-        String codexHome = System.getenv("CODEX_HOME");
-        return codexHome == null || codexHome.trim().isEmpty() ? "default" : codexHome.trim();
+        Path home = com.github.claudecodegui.util.CodexHomeResolver.resolve();
+        try {
+            return home.toRealPath().toString();
+        } catch (java.io.IOException error) {
+            return home.toString();
+        }
     }
 
     /**

@@ -13,6 +13,21 @@ describe('dollarCommandProvider', () => {
     delete window.__pendingDollarCommands;
   });
 
+  it('excludes disabled Skills and clears a selection after disabling and refreshing', async () => {
+    publishNativeCodexSkills([
+      { name: 'enabled', path: '/enabled/SKILL.md', enabled: true },
+      { name: 'disabled', path: '/disabled/SKILL.md', enabled: false },
+    ]);
+    const commands = await dollarCommandProvider('', new AbortController().signal);
+    expect(commands.map((row) => row.label)).toEqual(['$enabled']);
+    rememberNativeCodexSkill(commands[0]);
+    expect(selectedCodexSkillInputs('$enabled this change')).toHaveLength(1);
+
+    publishNativeCodexSkills([{ name: 'enabled', path: '/enabled/SKILL.md', enabled: false }]);
+    expect(await dollarCommandProvider('', new AbortController().signal)).toEqual([]);
+    expect(selectedCodexSkillInputs('$enabled this change')).toEqual([]);
+  });
+
   it('sends the chosen native path and invalidates it after cwd/catalog changes', async () => {
     publishNativeCodexSkills([{ name: 'review', path: '/user/SKILL.md' }, { name: 'review', path: '/repo/SKILL.md' }]);
     const commands = await dollarCommandProvider('', new AbortController().signal);

@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class CodexSettingsManagerModelAliasTest {
@@ -60,8 +61,10 @@ public class CodexSettingsManagerModelAliasTest {
         manager.transitionProvider(null, provider, false, () -> { });
 
         String written = Files.readString(home.resolve(".codex/config.toml"), StandardCharsets.UTF_8);
-        assertTrue(written.contains("[model_aliases]"));
-        assertTrue(written.contains("\"gpt-5.5\" = \"proxy-gpt-5.5\""));
+        assertFalse(written.contains("model_aliases"));
+        String pluginConfig = Files.readString(home.resolve(".codex/" + CodexSettingsManager.PLUGIN_CONFIG_FILE_NAME), StandardCharsets.UTF_8);
+        assertTrue(pluginConfig.contains("[model_aliases]"));
+        assertTrue(pluginConfig.contains("\"gpt-5.5\" = \"proxy-gpt-5.5\""));
         assertTrue(written.contains("[mcp_servers.codegraph]"));
         assertEquals("proxy-gpt-5.5", manager.resolveModelAlias("gpt-5.5"));
     }

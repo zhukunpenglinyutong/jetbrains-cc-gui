@@ -6,6 +6,8 @@ interface Window {
    * Send message to Java backend
    */
   sendToJava?: (message: string) => void;
+  onClawBotStatus?: (json: string) => void;
+  onClawBotOperation?: (json: string) => void;
 
   /** Legacy windowed-JCEF repaint requested after its IntelliJ content tab is activated. */
   onTabActivated?: () => void;

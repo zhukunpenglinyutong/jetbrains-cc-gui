@@ -4,6 +4,8 @@ import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.handler.AgentHandler;
+import com.github.claudecodegui.handler.ClawBotControlHandler;
+import com.github.claudecodegui.handler.ClawBotStatusHandler;
 import com.github.claudecodegui.handler.ClipboardHandler;
 import com.github.claudecodegui.handler.ContextHandler;
 import com.github.claudecodegui.handler.CodexInteractionHandler;
@@ -401,6 +403,8 @@ public class ChatWindowDelegate {
         this.clipboardHandler = new ClipboardHandler(handlerContext);
         messageDispatcher.registerHandler(this.clipboardHandler);
         messageDispatcher.registerHandler(new NodeProcessHandler(handlerContext));
+        messageDispatcher.registerHandler(new ClawBotStatusHandler(handlerContext));
+        messageDispatcher.registerHandler(new ClawBotControlHandler(handlerContext));
         messageDispatcher.registerHandler(new CodexInteractionHandler(handlerContext));
         messageDispatcher.registerHandler(new CodexNativeDataHandler(handlerContext));
         messageDispatcher.registerHandler(new CodexWorkspaceDiffHandler(handlerContext));

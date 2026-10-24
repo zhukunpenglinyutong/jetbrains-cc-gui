@@ -113,6 +113,46 @@ describe('Codex native auto availability', () => {
     }));
   });
 
+  it.each([
+    { kind: 'runtimeReset', payload: { reason: 'requested' } },
+    ...['starting', 'initializing', 'draining', 'stopped', 'failed'].map(state => ({
+      kind: 'runtimeStateChanged', payload: { state },
+    })),
+  ])('clears the old native confirmation on $kind $payload', detail => {
+    const { result } = renderHook(() => useModelProviderState(options));
+    act(() => result.current.handleProviderSelect('codex'));
+    act(() => result.current.handleModeSelect('bypassPermissions'));
+    act(() => {
+      window.dispatchEvent(new CustomEvent('codex-runtime-event', {
+        detail: { kind: 'thread/settings/updated', payload: {
+          sandboxPolicy: { type: 'dangerFullAccess' }, approvalPolicy: 'never',
+        } },
+      }));
+    });
+    expect(result.current.codexEffectiveSandbox).toBe('danger-full-access');
+
+    act(() => window.dispatchEvent(new CustomEvent('codex-runtime-event', { detail })));
+
+    expect(result.current.codexEffectiveSandbox).toBeNull();
+    expect(result.current.codexEffectiveSettings).toBeNull();
+    expect(result.current.codexSandboxSelection).toBe('danger-full-access');
+  });
+
+  it('does not reuse a previous provider confirmation after switching away and back', () => {
+    const { result } = renderHook(() => useModelProviderState(options));
+    act(() => result.current.handleProviderSelect('codex'));
+    act(() => window.dispatchEvent(new CustomEvent('codex-runtime-event', {
+      detail: { kind: 'thread/settings/updated', payload: { sandboxPolicy: { type: 'readOnly' } } },
+    })));
+    expect(result.current.codexEffectiveSandbox).toBe('read-only');
+
+    act(() => result.current.handleProviderSelect('claude'));
+    act(() => result.current.handleProviderSelect('codex'));
+
+    expect(result.current.codexEffectiveSettings).toBeNull();
+    expect(result.current.codexEffectiveSandbox).toBeNull();
+  });
+
   it('never overrides an explicitly chosen access scope', () => {
     localStorage.setItem('model-selection-state', JSON.stringify({
       provider: 'codex',

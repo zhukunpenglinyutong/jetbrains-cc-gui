@@ -105,21 +105,20 @@ public class PermissionManager {
      * Handle a permission decision (with remember option).
      */
     public void handlePermissionDecision(String channelId, boolean allow, boolean rememberDecision, String rejectMessage) {
-        PermissionRequest request = pendingRequests.remove(channelId);
-        if (request == null || request.isResolved()) {
+        PermissionRequest request = pendingRequests.get(channelId);
+        if (request == null) {
             return;
         }
 
-        // If the user chose to remember the decision, save it to memory
-        if (rememberDecision) {
-            String memoryKey = request.getToolName() + ":" + generateInputHash(request.getInputs());
-            toolPermissionMemory.put(memoryKey, allow);
-        }
-
-        if (allow) {
-            request.accept();
-        } else {
-            request.reject(rejectMessage != null ? rejectMessage : "Denied by user", true);
+        synchronized (request) {
+            if (!pendingRequests.remove(channelId, request) || request.isResolved()) {
+                return;
+            }
+            if (rememberDecision) {
+                String memoryKey = request.getToolName() + ":" + generateInputHash(request.getInputs());
+                toolPermissionMemory.put(memoryKey, allow);
+            }
+            applyDecision(request, allow, rejectMessage);
         }
     }
 
@@ -127,18 +126,17 @@ public class PermissionManager {
      * Handle a permission decision (always allow/deny - by tool type).
      */
     public void handlePermissionDecisionAlways(String channelId, boolean allow) {
-        PermissionRequest request = pendingRequests.remove(channelId);
-        if (request == null || request.isResolved()) {
+        PermissionRequest request = pendingRequests.get(channelId);
+        if (request == null) {
             return;
         }
 
-        // Save tool-level permission memory
-        toolOnlyPermissionMemory.put(request.getToolName(), allow);
-
-        if (allow) {
-            request.accept();
-        } else {
-            request.reject("Denied by user", true);
+        synchronized (request) {
+            if (!pendingRequests.remove(channelId, request) || request.isResolved()) {
+                return;
+            }
+            toolOnlyPermissionMemory.put(request.getToolName(), allow);
+            applyDecision(request, allow, "Denied by user");
         }
     }
 
@@ -151,18 +149,52 @@ public class PermissionManager {
      * @param rejectMessage the reason for rejection
      */
     public void handlePermissionDecision(PermissionRequest request, boolean allow, boolean remember, String rejectMessage) {
-        // Superseded requests must finish their own futures without removing replacements or changing permission memory.
-        boolean current = pendingRequests.remove(request.getChannelId(), request);
-        if (request.getResultFuture().isDone()) {
-            return;
+        synchronized (request) {
+            boolean current = pendingRequests.remove(request.getChannelId(), request);
+            if (request.getResultFuture().isDone()) {
+                return;
+            }
+            if (current && remember) {
+                toolOnlyPermissionMemory.put(request.getToolName(), allow);
+            }
+            if (!current && pendingRequests.containsKey(request.getChannelId())) {
+                request.reject(rejectMessage != null ? rejectMessage : "Permission request was superseded", true);
+                return;
+            }
+            if (!current) {
+                return;
+            }
+            applyDecision(request, allow, rejectMessage);
         }
-        if (current && remember) {
-            toolOnlyPermissionMemory.put(request.getToolName(), allow);
+    }
+
+    /**
+     * Handle a remote decision only while the exact request is still pending.
+     *
+     * @param request the request bound to the remote approval token
+     * @param allow whether to allow the request
+     * @param rejectMessage the reason for rejection
+     * @return whether this call resolved the pending request
+     */
+    public boolean tryHandleRemotePermissionDecision(
+            PermissionRequest request, boolean allow, String rejectMessage) {
+        if (request == null) {
+            return false;
         }
+        synchronized (request) {
+            if (!pendingRequests.remove(request.getChannelId(), request) || request.isResolved()) {
+                return false;
+            }
+            applyDecision(request, allow, rejectMessage);
+            return request.isResolved();
+        }
+    }
+
+    private void applyDecision(PermissionRequest request, boolean allow, String rejectMessage) {
         if (allow) {
             request.accept();
         } else {
-            request.reject(rejectMessage, true);
+            request.reject(rejectMessage != null ? rejectMessage : "Denied by user", true);
         }
     }
 

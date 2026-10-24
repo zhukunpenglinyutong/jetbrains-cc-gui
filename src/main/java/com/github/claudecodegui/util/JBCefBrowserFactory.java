@@ -20,6 +20,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * JBCefBrowser factory.
@@ -94,46 +96,26 @@ public final class JBCefBrowserFactory {
                 + " (platform=" + getPlatformName() + ", ideaVersion=" + getIdeaMajorVersion()
                 + ", devMode=" + isDevMode + ")");
 
-        JBCefBrowser browser = null;
-        Throwable builderFailure;
         try {
-            JBCefBrowserBuilder builder = configureBuilder(
-                    JBCefBrowser.createBuilder(),
-                    isOffScreenRendering,
-                    isDevMode,
-                    osrHandlerFactory);
             // .setCreateImmediately(true) causes new tabs to stall on "Checking SDK status".
-            browser = builder.build();
-            configureKeyboardWorkaround(browser);
-            configureContextMenu(browser, isDevMode);
-            LOG.info("JBCefBrowser created successfully using builder"
+            JBCefBrowser browser = createWithFallback(
+                    () -> configureBuilder(JBCefBrowser.createBuilder(), isOffScreenRendering,
+                            isDevMode, osrHandlerFactory).build(),
+                    value -> {
+                        configureKeyboardWorkaround(value);
+                        configureContextMenu(value, isDevMode);
+                    },
+                    failure -> {
+                        LOG.warn("JBCefBrowser builder failed; creating a default browser after cleanup", failure);
+                        return new JBCefBrowser();
+                    },
+                    JBCefBrowser::dispose,
+                    osrHandlerFactory == null);
+            LOG.info("JBCefBrowser created successfully, browserId=" + System.identityHashCode(browser)
                     + ", osrFactoryInstalled=" + (osrHandlerFactory != null));
             return browser;
         } catch (Exception | LinkageError e) {
-            builderFailure = e;
-            disposeQuietly(browser);
-        }
-
-        if (osrHandlerFactory != null) {
-            LOG.error("JBCefBrowser builder failed while a required OSR handler factory was installed; "
-                    + "refusing an unwrapped Remote OSR fallback", builderFailure);
-            throw newJcefUnavailableException(builderFailure);
-        }
-
-        LOG.warn("JBCefBrowser builder failed, falling back to default constructor "
-                + "(missing OSR and dev-tools config)", builderFailure);
-        try {
-            JBCefBrowser fallbackBrowser = new JBCefBrowser();
-            try {
-                configureContextMenu(fallbackBrowser, isDevMode);
-                configureKeyboardWorkaround(fallbackBrowser);
-                return fallbackBrowser;
-            } catch (Exception | LinkageError configurationFailure) {
-                disposeQuietly(fallbackBrowser);
-                throw configurationFailure;
-            }
-        } catch (Exception | LinkageError fallbackFailure) {
-            throw newJcefUnavailableException(fallbackFailure);
+            throw newJcefUnavailableException(e);
         }
     }
 
@@ -173,14 +155,32 @@ public final class JBCefBrowserFactory {
         }
     }
 
-    private static void disposeQuietly(JBCefBrowser browser) {
-        if (browser == null) {
-            return;
-        }
+    /** A fallback is permitted only after the failed instance released its native resources. */
+    static <T> T createWithFallback(Supplier<T> primary, Consumer<T> configure, Function<Throwable, T> fallback,
+                                    Consumer<T> dispose, boolean fallbackAllowed) {
+        T browser = null;
         try {
-            browser.dispose();
-        } catch (Exception | LinkageError disposalFailure) {
-            LOG.warn("Failed to dispose partially configured JBCefBrowser", disposalFailure);
+            browser = primary.get();
+            configure.accept(browser);
+            return browser;
+        } catch (RuntimeException | LinkageError failure) {
+            if (browser != null) {
+                try {
+                    dispose.accept(browser);
+                } catch (RuntimeException | LinkageError disposalFailure) {
+                    failure.addSuppressed(disposalFailure);
+                    throw failure;
+                }
+            }
+            if (!fallbackAllowed) {
+                throw failure;
+            }
+            try {
+                return initializeBrowser(() -> fallback.apply(failure), configure, dispose);
+            } catch (RuntimeException | LinkageError fallbackFailure) {
+                fallbackFailure.addSuppressed(failure);
+                throw fallbackFailure;
+            }
         }
     }
 
@@ -191,34 +191,26 @@ public final class JBCefBrowserFactory {
      * @return a JBCefBrowser instance
      */
     public static JBCefBrowser create(String url) {
-        boolean isOffScreenRendering = determineOsrMode();
-        boolean isDevMode = PlatformUtils.isPluginDevMode();
-        LOG.info("Creating JBCefBrowser with URL and OSR=" + isOffScreenRendering + ", devMode=" + isDevMode);
-
-        try {
-            JBCefBrowserBuilder builder = JBCefBrowser.createBuilder()
-                    .setOffScreenRendering(isOffScreenRendering)
-                    .setEnableOpenDevToolsMenuItem(isDevMode)
-                    .setCreateImmediately(true)
-                    .setUrl(url);
-            JBCefBrowser browser = builder.build();
-            configureKeyboardWorkaround(browser);
-            configureContextMenu(browser, isDevMode);
-            LOG.info("JBCefBrowser created successfully with URL");
-            return browser;
-        } catch (Exception | LinkageError e) {
-            LOG.warn("JBCefBrowser builder failed, falling back to default constructor (missing OSR and dev-tools config)", e);
-            try {
-                JBCefBrowser browser = new JBCefBrowser();
-                if (url != null && !url.isEmpty()) {
-                    browser.loadURL(url);
-                }
-                configureContextMenu(browser, isDevMode);
-                configureKeyboardWorkaround(browser);
-                return browser;
-            } catch (Exception | LinkageError fallbackFailure) {
-                throw newJcefUnavailableException(fallbackFailure);
+        return initializeBrowser(JBCefBrowserFactory::create, browser -> {
+            if (url != null && !url.isEmpty()) {
+                browser.loadURL(url);
             }
+        }, JBCefBrowser::dispose);
+    }
+
+    /** Retain ownership until initialization succeeds; a load failure must not leak a browser. */
+    static <T> T initializeBrowser(Supplier<T> factory, Consumer<T> initialize, Consumer<T> dispose) {
+        T browser = factory.get();
+        try {
+            initialize.accept(browser);
+            return browser;
+        } catch (RuntimeException | LinkageError failure) {
+            try {
+                dispose.accept(browser);
+            } catch (RuntimeException | LinkageError disposalFailure) {
+                failure.addSuppressed(disposalFailure);
+            }
+            throw failure;
         }
     }
 

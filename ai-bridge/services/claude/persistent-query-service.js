@@ -237,6 +237,7 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   return {
     requestedSessionId,
     runtimeSessionEpoch,
+    executionScope: params.executionScope,
     streamingEnabled,
     options,
     userMessage,
@@ -309,6 +310,9 @@ _runtimeCleanupTimer.unref();
     // Create and register turnSink after beginRuntimeTurn to avoid race
     // (ensures executeTurn is ready to consume before perpetual reader can push)
     runtime.turnSink = createTurnSink();
+    if (runtime.permissionModeState) {
+      runtime.permissionModeState.executionScope = requestContext.executionScope || '';
+    }
 
     console.log('[MESSAGE_START]');
     runtime.inputStream.enqueue(requestContext.userMessage);
@@ -465,6 +469,9 @@ _runtimeCleanupTimer.unref();
     }
   } finally {
     endRuntimeTurn(runtime);
+    if (runtime.permissionModeState) {
+      runtime.permissionModeState.executionScope = '';
+    }
     // Clear turnSink after endRuntimeTurn (reverse of creation order)
     runtime.turnSink = null;
     // Only clear if this runtime still owns the pointer (not cleared by abort)

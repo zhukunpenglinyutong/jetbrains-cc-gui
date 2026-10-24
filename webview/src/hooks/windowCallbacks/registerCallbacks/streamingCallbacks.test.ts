@@ -10,12 +10,22 @@
  * - the normal path appends a fresh streaming bubble.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { registerStreamingCallbacks } from './streamingCallbacks';
+import { registerStreamingCallbacks, collectUnresolvedToolUseIds } from './streamingCallbacks';
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import type { ClaudeMessage } from '../../../types';
 
 type Ref<T> = { current: T };
 const ref = <T,>(value: T): Ref<T> => ({ current: value });
+
+it('never marks native async questions as denied when the originating stream ends or history finishes loading', () => {
+  const messages: ClaudeMessage[] = [{ type: 'assistant', content: '', raw: { content: [
+    { type: 'tool_use', id: 'question', name: 'codex_user_input', input: {} },
+    { type: 'tool_use', id: 'actual-missing-tool', name: 'bash', input: {} },
+  ] } }];
+  for (const scope of ['all', 'lastTurn'] as const) {
+    expect(collectUnresolvedToolUseIds(messages, scope)).toEqual(['actual-missing-tool']);
+  }
+});
 
 function createHarness(initialMessages: ClaudeMessage[], turnIdCounter: number) {
   let messages = [...initialMessages];
