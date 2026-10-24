@@ -5,6 +5,9 @@ import { sendBridgeEvent } from '../utils/bridge';
 import { getSkipNewSessionConfirm } from '../utils/skipNewSessionConfirm';
 import { clearAllPersistedExpanded } from '../utils/expandedState';
 import { normalizeClaudeModelForBridge } from '../utils/customClaudeModels';
+import {
+  CodexStorageError, deleteCodexHistorySessions as requestCodexHistoryDeletion, operationSucceeded, subscribeCodexDeletion,
+} from '../components/settings/AiDataStorageSection/codexStorageBridge';
 import { sumKnownHistoryMessages } from '../utils/historyMessageCount';
 
 type ViewMode = 'chat' | 'history' | 'settings';
@@ -110,6 +113,12 @@ export function useSessionManagement({
   const suppressNextStatusToastRef = useRef(false);
   const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyDataRef = useRef(historyData);
+  const pendingCodexDeletions = useRef(new Set<string>());
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   useEffect(() => {
     historyDataRef.current = historyData;
   }, [historyData]);
@@ -335,8 +344,61 @@ export function useSessionManagement({
     setCurrentView('chat');
   }, [applyHistoryModel, beginSessionTransition, currentProvider, loading, setCurrentView, currentSessionId]);
 
+  // History and storage share one confirmed database/file deletion receipt.
+  useEffect(() => subscribeCodexDeletion(operation => {
+    const ids = new Set(operation.result?.deletedSessionIds ?? []);
+    if (ids.size === 0) return;
+    setHistoryData(previous => {
+      if (!previous?.sessions) return previous;
+      const removed = previous.sessions.filter(session => ids.has(session.sessionId)
+        && (session.provider || currentProvider) === 'codex');
+      return {
+        ...previous,
+        sessions: previous.sessions.filter(session => !removed.includes(session)),
+        total: sumKnownHistoryMessages(previous.sessions.filter(session => !removed.includes(session))),
+      };
+    });
+    const transition = currentProvider === 'codex' && currentSessionId !== null && ids.has(currentSessionId);
+    if (transition) {
+      beginSessionTransition(null, null);
+      suppressNextStatusToastRef.current = true;
+      sendBridgeEvent('create_new_session');
+    }
+    showSessionDeletedToast(transition);
+  }), [beginSessionTransition, currentProvider, currentSessionId, setHistoryData, showSessionDeletedToast]);
+
+  const deleteCodexHistorySessions = useCallback(async (ids: string[]) => {
+    const reason = (code: string) => t(`settings.codexStorage.errors.${code}`, {
+      defaultValue: t('settings.codexStorage.errors.STORAGE_OPERATION_FAILED'),
+    });
+    if (loading && currentProvider === 'codex' && currentSessionId && ids.includes(currentSessionId)) {
+      addToast(reason('SESSION_RUNNING'), 'warning');
+      return;
+    }
+    if (ids.some(id => pendingCodexDeletions.current.has(id))) return;
+    ids.forEach(id => pendingCodexDeletions.current.add(id));
+    try {
+      const operation = await requestCodexHistoryDeletion(ids);
+      if (!mounted.current) return;
+      if (!operationSucceeded(operation)) {
+        addToast(reason(operation.error ?? 'STORAGE_OPERATION_FAILED'), 'error');
+      } else if (operation.result?.warning) {
+        addToast(reason(operation.result.warning), 'warning');
+      }
+    } catch (error) {
+      if (mounted.current) addToast(reason(error instanceof CodexStorageError ? error.code : 'STORAGE_OPERATION_FAILED'), 'error');
+    } finally {
+      ids.forEach(id => pendingCodexDeletions.current.delete(id));
+    }
+  }, [addToast, currentProvider, currentSessionId, loading, t]);
+
   // Delete history session
   const deleteHistorySession = useCallback((sessionId: string) => {
+    const provider = historyDataRef.current?.sessions?.find(session => session.sessionId === sessionId)?.provider || currentProvider;
+    if (provider === 'codex') {
+      void deleteCodexHistorySessions([sessionId]);
+      return;
+    }
     // Send delete request to Java backend
     sendBridgeEvent('delete_session', sessionId);
     let startedSessionTransition = false;
@@ -373,14 +435,17 @@ export function useSessionManagement({
 
     }
     showSessionDeletedToast(startedSessionTransition);
-  }, [historyData, currentSessionId, loading, setHistoryData, setMessages, setCurrentSessionId, setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, showSessionDeletedToast]);
+  }, [historyData, currentProvider, currentSessionId, loading, setHistoryData, setMessages, setCurrentSessionId, setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, showSessionDeletedToast, deleteCodexHistorySessions]);
 
   // Batch delete history sessions
   const deleteHistorySessions = useCallback((sessionIds: string[]) => {
-    const uniqueSessionIds = Array.from(new Set(sessionIds.filter(Boolean)));
-    if (uniqueSessionIds.length === 0) {
-      return;
-    }
+    const selectedIds = Array.from(new Set(sessionIds.filter(Boolean)));
+    const codexIds = selectedIds.filter(id =>
+      (historyDataRef.current?.sessions?.find(session => session.sessionId === id)?.provider || currentProvider) === 'codex');
+    if (codexIds.length > 0) void deleteCodexHistorySessions(codexIds);
+    const codexSet = new Set(codexIds);
+    const uniqueSessionIds = selectedIds.filter(id => !codexSet.has(id));
+    if (uniqueSessionIds.length === 0) return;
 
     sendBridgeEvent('delete_sessions', JSON.stringify(uniqueSessionIds));
     let startedSessionTransition = false;
@@ -417,7 +482,7 @@ export function useSessionManagement({
 
     }
     showSessionDeletedToast(startedSessionTransition);
-  }, [historyData, currentSessionId, loading, setHistoryData, beginSessionTransition, showSessionDeletedToast]);
+  }, [historyData, currentProvider, currentSessionId, loading, setHistoryData, beginSessionTransition, showSessionDeletedToast, deleteCodexHistorySessions]);
 
   // Export history session
   const exportHistorySession = useCallback((sessionId: string, title: string) => {

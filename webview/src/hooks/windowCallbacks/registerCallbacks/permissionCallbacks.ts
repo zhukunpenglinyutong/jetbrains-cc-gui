@@ -1,4 +1,6 @@
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
+import { createElement } from 'react';
+import { Modal } from 'antd';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import type { AskUserQuestionRequest, Question } from '../../../components/AskUserQuestionDialog';
 
@@ -6,11 +8,13 @@ type PermissionCallbacks = Pick<UseWindowCallbacksOptions,
   | 'openPermissionDialog' | 'openAskUserQuestionDialog' | 'openPlanApprovalDialog'
   | 'forceClosePermissionDialog' | 'forceCloseAskUserQuestionDialog' | 'forceClosePlanApprovalDialog'
   | 'addToast' | 'currentProviderRef' | 'currentSessionIdRef'
->;
+> & Partial<Pick<UseWindowCallbacksOptions, 't'>>;
 
 interface CodexRuntimeEnvelope {
   kind?: string;
   channelId?: string;
+  sessionEpoch?: string;
+  runtimeBackend?: string;
   threadId?: string | null;
   rootThreadId?: string | null;
   turnId?: string | null;
@@ -170,7 +174,9 @@ function buildMcpQuestionRequest(
   };
 }
 
-export function registerPermissionCallbacks(options: PermissionCallbacks): void {
+export function registerPermissionCallbacks(options: PermissionCallbacks, getTranslation?: () => UseWindowCallbacksOptions['t']): void {
+  const recentConfigurationWarnings = new Map<string, number>();
+  const translate = (key: string, fallback: string) => (getTranslation?.() ?? options.t)?.(key, fallback) ?? fallback;
   const {
     openPermissionDialog,
     openAskUserQuestionDialog,
@@ -227,9 +233,42 @@ export function registerPermissionCallbacks(options: PermissionCallbacks): void 
       if (event.kind === 'nativeWarning') {
         const currentThread = options.currentSessionIdRef.current;
         const warningRoot = event.rootThreadId ?? event.threadId;
-        if (options.currentProviderRef.current === 'codex' && (!currentThread || warningRoot === currentThread)
+        if (options.currentProviderRef.current === 'codex' && (!warningRoot || !currentThread || warningRoot === currentThread)
             && event.payload?.message) {
-          options.addToast(event.payload.message, 'warning');
+          const method = event.payload.method;
+          if (method === 'configWarning' || method === 'deprecationNotice') {
+            // Startup and thread loading can repeat the same notice. Other warnings stay independent.
+            const key = JSON.stringify([event.channelId, event.sessionEpoch, event.runtimeBackend, event.payload.message]);
+            const now = Date.now();
+            const previous = recentConfigurationWarnings.get(key);
+            if (previous !== undefined && now - previous < 60_000) return;
+            recentConfigurationWarnings.delete(key);
+            recentConfigurationWarnings.set(key, now);
+            if (recentConfigurationWarnings.size > 64) {
+              const oldest = recentConfigurationWarnings.keys().next().value;
+              if (oldest !== undefined) recentConfigurationWarnings.delete(oldest);
+            }
+          }
+          if (method === 'configWarning' || method === 'deprecationNotice') {
+            const diagnostic = event.payload.message;
+            const isConfiguration = method === 'configWarning';
+            options.addToast(isConfiguration
+              ? translate('askUserQuestion.configWarning', 'Codex reported a configuration warning. Review the details.')
+              : translate('askUserQuestion.apiDeprecationWarning', 'Codex reported an API compatibility notice. Review the details.'), 'warning', {
+              label: translate('askUserQuestion.warningDetails', 'View details'),
+              onClick: () => Modal.warning({
+                zIndex: 12000,
+                title: isConfiguration
+                  ? translate('askUserQuestion.configWarningTitle', 'Codex configuration warning')
+                  : translate('askUserQuestion.apiDeprecationTitle', 'Codex API compatibility notice'),
+                content: createElement('pre', {
+                  style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' },
+                }, diagnostic),
+              }),
+            });
+          } else {
+            options.addToast(event.payload.message, 'warning');
+          }
         }
         return;
       }

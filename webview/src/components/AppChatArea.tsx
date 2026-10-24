@@ -3,6 +3,7 @@ import { ChatScreen } from './ChatScreen';
 import type { ChatScreenProps } from './ChatScreen';
 import { useSession } from '../contexts/SessionContext';
 import { useUIState } from '../contexts/UIStateContext';
+import { useMessages } from '../contexts/MessagesContext';
 
 /** HistoryView callbacks (HistoryViewProps is not exported; mirrored here). */
 interface HistoryCallbacks {
@@ -26,6 +27,7 @@ interface AppChatAreaProps extends ChatScreenProps, HistoryCallbacks {}
 export const AppChatArea = (props: AppChatAreaProps) => {
   const { currentView } = useUIState();
   const { historyData, currentSessionId } = useSession();
+  const { loading, streamingActive } = useMessages();
   const {
     onLoadSession,
     onDeleteSession,
@@ -53,6 +55,7 @@ export const AppChatArea = (props: AppChatAreaProps) => {
           historyData={historyData}
           currentProvider={props.currentProvider}
           currentSessionId={currentSessionId}
+          currentSessionBusy={loading || streamingActive}
           onLoadSession={onLoadSession}
           onDeleteSession={onDeleteSession}
           onDeleteSessions={onDeleteSessions}

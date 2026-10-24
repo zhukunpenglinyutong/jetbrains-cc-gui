@@ -81,6 +81,15 @@ public class CodexNativeDataHandler extends BaseMessageHandler {
                 output.addProperty("error", failure.getMessage() == null
                         ? "Native Codex request failed" : failure.getMessage());
             }
+            if ("codex.listThreads".equals(method) && output.has("data") && output.get("data").isJsonArray()) {
+                var running = com.github.claudecodegui.storage.CodexStorageActivity.runningSessionIds();
+                for (var element : output.getAsJsonArray("data")) {
+                    if (element.isJsonObject()) {
+                        JsonObject row = element.getAsJsonObject();
+                        row.addProperty("running", running.contains(stringValue(row, "id")));
+                    }
+                }
+            }
             publish(type, output);
         });
         return true;

@@ -209,6 +209,9 @@ public class CodexMessageHandlerTest {
         callbacks.setCallback(recorded);
         CodexMessageHandler previous = new CodexMessageHandler(state, callbacks);
         state.rotateRuntimeSessionEpoch();
+        assertFalse(state.isBusy());
+        assertFalse(state.isLoading());
+        state.beginTurn();
 
         previous.onMessage("session_id", "old-session");
         previous.onMessage("content_delta", "old answer");

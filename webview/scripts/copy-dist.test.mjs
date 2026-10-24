@@ -98,3 +98,39 @@ test('fails the build when the entry module is missing', async (t) => {
   assert.notEqual(result.status, 0);
   await assert.rejects(readFile(path.join(resources, 'html/claude-chat.html')), { code: 'ENOENT' });
 });
+
+test('packages the Office alongside compressed chat assets', async (t) => {
+  const { cwd, assets, resources } = await fixture(t, html);
+  await writeFile(path.join(assets, 'index-entry.js'), 'export const chat = true;');
+  await mkdir(path.join(cwd, 'dist/office'), { recursive: true });
+  const office = '<html><body>Office fixture</body></html>';
+  await writeFile(path.join(cwd, 'dist/office/office.html'), office);
+
+  const result = spawnSync(process.execPath, [script, '--with-office'], { cwd, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(await readFile(path.join(resources, 'html/pet-office.html'), 'utf8'), office);
+  assert.equal(gunzipSync(await readFile(path.join(resources, 'webview/assets/index-entry.js.gz'))).toString(),
+    'export const chat = true;');
+});
+
+test('an Office-only rebuild leaves the existing chat bootstrap and assets intact', async (t) => {
+  const { cwd, resources } = await fixture(t, 'unused chat source');
+  await mkdir(path.join(cwd, 'dist/office'), { recursive: true });
+  await writeFile(path.join(cwd, 'dist/office/office.html'), '<html>New Office</html>');
+  await mkdir(path.join(resources, 'html'), { recursive: true });
+  await mkdir(path.join(resources, 'webview/assets'), { recursive: true });
+  await writeFile(path.join(resources, 'html/claude-chat.html'), 'existing chat bootstrap');
+  await writeFile(path.join(resources, 'webview/assets/existing.js.gz'), 'existing chat asset');
+
+  const result = spawnSync(process.execPath, [script, '--office-only'], { cwd, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(await readFile(path.join(resources, 'html/pet-office.html'), 'utf8'), '<html>New Office</html>');
+  assert.equal(await readFile(path.join(resources, 'html/claude-chat.html'), 'utf8'), 'existing chat bootstrap');
+  assert.equal(await readFile(path.join(resources, 'webview/assets/existing.js.gz'), 'utf8'), 'existing chat asset');
+});
+
+test('an explicitly requested Office build fails when the Office output is missing', async (t) => {
+  const { cwd } = await fixture(t, html);
+  const result = spawnSync(process.execPath, [script, '--office-only'], { cwd, encoding: 'utf8' });
+  assert.notEqual(result.status, 0);
+});

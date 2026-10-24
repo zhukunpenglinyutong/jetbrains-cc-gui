@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
@@ -41,7 +42,8 @@ public class NodeJsServiceCallerPathTest {
         writeService(servicesDir.resolve("favorites-service.cjs"),
                 "module.exports = {"
                         + " loadFavorites: sessionId => ({ sessionId }),"
-                        + " toggleFavorite: sessionId => ({ sessionId })"
+                        + " toggleFavorite: sessionId => ({ sessionId }),"
+                        + " removeFavorite: () => false"
                         + " };\n");
         writeService(servicesDir.resolve("input-history-service.cjs"),
                 "module.exports = {"
@@ -73,12 +75,29 @@ public class NodeJsServiceCallerPathTest {
     }
 
     @Test
+    public void storageDisplayTitlesUseTheHistoryServiceAndPreserveUnicode() throws Exception {
+        writeService(bridge.getSdkTestDir().toPath().resolve("services/session-titles-service.cjs"),
+                "module.exports = { loadTitles: () => ({ 'session-1': { customTitle: 'Pet 工作室优化', updatedAt: 1000 } }) };\n");
+
+        assertEquals(Map.of("session-1", "Pet 工作室优化"), CodexStorageHandler.loadSessionTitles(new NodeJsServiceCaller(context)));
+        assertEquals(0, bridge.getProcessManager().getActiveProcessCount());
+    }
+
+    @Test
     public void favoritesServiceLoadsFromPathContainingSingleQuote() throws Exception {
         String result = new NodeJsServiceCaller(context)
                 .callNodeJsFavoritesService("loadFavorites", "session-2");
 
         JsonObject json = JsonParser.parseString(result).getAsJsonObject();
         assertEquals("session-2", json.get("sessionId").getAsString());
+        assertEquals(0, bridge.getProcessManager().getActiveProcessCount());
+    }
+
+    @Test
+    public void favoriteRemovalIsAllowedAndReturnsTheServiceOutcome() throws Exception {
+        String result = new NodeJsServiceCaller(context).callNodeJsFavoritesService("removeFavorite", "session-2");
+
+        assertEquals("false", result);
         assertEquals(0, bridge.getProcessManager().getActiveProcessCount());
     }
 

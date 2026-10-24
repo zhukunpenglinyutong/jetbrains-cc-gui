@@ -135,6 +135,8 @@ export interface TodoItem {
 export interface HistorySessionSummary {
   sessionId: string;
   title: string;
+  /** Running targets cannot be selected or deleted from history. */
+  running?: boolean;
   /** Native thread metadata does not contain a count until history has been read. */
   messageCount?: number;
   /** Scopes asynchronous counts to the metadata revision displayed by this list. */

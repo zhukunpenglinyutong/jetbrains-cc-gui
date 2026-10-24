@@ -1,13 +1,17 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.bridge.AiDataProcessGate;
 import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
+import com.github.claudecodegui.bridge.DshHostProcessCoordinator;
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.dsh.DshEnvSupport;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.startup.BridgePreloader;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -63,11 +67,16 @@ public class DshHostHandler extends BaseMessageHandler {
     private final NodeDetector nodeDetector = NodeDetector.getInstance();
     private final EnvironmentConfigurator envConfigurator = new EnvironmentConfigurator();
     private final CodemossSettingsService settingsService = new CodemossSettingsService();
+    private final ProcessManager processManager;
     // Re-entry guard for start/stop (double clicks); status polls stay unrestricted.
     private final AtomicBoolean lifecycleInProgress = new AtomicBoolean(false);
+    private final DshHostProcessCoordinator hostCoordinator = DshHostProcessCoordinator.getInstance();
 
     public DshHostHandler(HandlerContext context) {
         super(context);
+        this.processManager = context.getClaudeSDKBridge() != null
+                ? context.getClaudeSDKBridge().getProcessManager()
+                : new ProcessManager();
     }
 
     @Override
@@ -79,9 +88,7 @@ public class DshHostHandler extends BaseMessageHandler {
     public boolean handle(String type, String content) {
         switch (type) {
             case "get_dsh_status":
-                CompletableFuture.runAsync(
-                        () -> pushStatus(runDshCommand("status", null, STATUS_TIMEOUT_SECONDS)),
-                        AppExecutorUtil.getAppExecutorService());
+                runStatusCommand();
                 return true;
             case "start_dsh_host":
                 runLifecycleCommand("ensureHost", LIFECYCLE_TIMEOUT_SECONDS);
@@ -91,9 +98,7 @@ public class DshHostHandler extends BaseMessageHandler {
                 return true;
             case "save_dsh_settings":
                 saveSettings(content);
-                CompletableFuture.runAsync(
-                        () -> pushStatus(runDshCommand("status", null, STATUS_TIMEOUT_SECONDS)),
-                        AppExecutorUtil.getAppExecutorService());
+                runStatusCommand();
                 return true;
             default:
                 return false;
@@ -111,12 +116,75 @@ public class DshHostHandler extends BaseMessageHandler {
             return;
         }
         CompletableFuture.runAsync(() -> {
+            AiDataProcessGate.ProcessPermit permit = null;
             try {
-                pushStatus(runDshCommand(command, null, timeoutSeconds));
+                permit = hostCoordinator.acquireCommandPermit();
+                AiDataProcessGate.ProcessPermit commandPermit = permit;
+                JsonObject result = runDshCommand(command, null, timeoutSeconds);
+                if ("ensureHost".equals(command) && isOwnedHostResult(result)) {
+                    long pid = result.get("pid").getAsLong();
+                    hostCoordinator.retainOwnedHost(commandPermit, pid);
+                    permit = null;
+                }
+                if ("stopHost".equals(command) && isStoppedHostResult(result)) {
+                    hostCoordinator.releaseOwnedHost(result.get("pid").getAsLong());
+                }
+                pushStatus(result);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                pushStatus(errorPayload("AI_PROCESS_START_INTERRUPTED"));
+            } catch (RuntimeException error) {
+                LOG.warn("[DshHost] Failed to acquire or transfer the AI data permit", error);
+                pushStatus(errorPayload("AI_DATA_COORDINATION_UNAVAILABLE"));
             } finally {
+                if (permit != null) {
+                    permit.close();
+                }
                 lifecycleInProgress.set(false);
             }
         }, AppExecutorUtil.getAppExecutorService());
+    }
+
+    private void runStatusCommand() {
+        CompletableFuture.runAsync(() -> {
+            AiDataProcessGate.ProcessPermit permit = null;
+            try {
+                permit = hostCoordinator.acquireCommandPermit();
+                pushStatus(runDshCommand("status", null, STATUS_TIMEOUT_SECONDS));
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                pushStatus(errorPayload("AI_PROCESS_START_INTERRUPTED"));
+            } catch (RuntimeException error) {
+                LOG.warn("[DshHost] Failed to acquire the AI data permit", error);
+                pushStatus(errorPayload("AI_DATA_COORDINATION_UNAVAILABLE"));
+            } finally {
+                if (permit != null) {
+                    permit.close();
+                }
+            }
+        }, AppExecutorUtil.getAppExecutorService());
+    }
+
+    private static boolean isOwnedHostResult(JsonObject result) {
+        return result != null
+                && result.has("success") && result.get("success").getAsBoolean()
+                && result.has("ownership") && "spawned".equals(result.get("ownership").getAsString())
+                && result.has("pid") && result.get("pid").isJsonPrimitive()
+                && result.get("pid").getAsLong() > 0L;
+    }
+
+    static boolean isStoppedHostResult(JsonObject result) {
+        if (result == null || !result.has("success") || !result.get("success").getAsBoolean()
+                || !result.has("pid") || !result.get("pid").isJsonPrimitive()
+                || !result.getAsJsonPrimitive("pid").isNumber() || result.get("pid").getAsLong() <= 0L) {
+            return false;
+        }
+        if (result.has("stopped") && result.get("stopped").getAsBoolean()) {
+            return true;
+        }
+        return result.has("reason")
+                && !result.get("reason").isJsonNull()
+                && "pid-reused".equals(result.get("reason").getAsString());
     }
 
     private void saveSettings(String content) {
@@ -221,6 +289,7 @@ public class DshHostHandler extends BaseMessageHandler {
 
     private JsonObject runDshCommand(String command, JsonObject stdinPayload, long timeoutSeconds) {
         Process process = null;
+        String channelId = ProcessManager.newChannelId("dsh-host-" + command);
         try {
             String node = nodeDetector.findNodeExecutable();
             BridgeDirectoryResolver resolver = BridgePreloader.getSharedResolver();
@@ -247,7 +316,7 @@ public class DshHostHandler extends BaseMessageHandler {
                 pb.environment().put("DSH_USE_STDIN", "true");
             }
 
-            process = pb.start();
+            process = processManager.startManagedProcess(channelId, pb);
             writeStdin(process, stdinPayload);
 
             StringBuilder output = new StringBuilder();
@@ -257,7 +326,7 @@ public class DshHostHandler extends BaseMessageHandler {
 
             boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
             if (!finished) {
-                process.destroyForcibly();
+                PlatformUtils.terminateProcess(process);
                 LOG.warn("[DshHost] dsh " + command + " timed out" + stderrSuffix(stderrTail));
                 return errorPayload("Timed out running dsh " + command + stderrSuffix(stderrTail));
             }
@@ -275,7 +344,11 @@ public class DshHostHandler extends BaseMessageHandler {
             return errorPayload(e.getMessage() != null ? e.getMessage() : "dsh " + command + " failed");
         } finally {
             if (process != null && process.isAlive()) {
-                process.destroyForcibly();
+                PlatformUtils.terminateProcess(process);
+            }
+            if (process != null) {
+                processManager.waitForProcessTermination(process);
+                processManager.unregisterProcess(channelId, process);
             }
         }
     }

@@ -1,6 +1,6 @@
 package com.github.claudecodegui.provider.codex;
 
-import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.util.CodexHomeResolver;
 import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.util.PathUtils;
@@ -11,7 +11,6 @@ import com.intellij.openapi.diagnostic.Logger;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,11 +31,12 @@ public class CodexHistoryReader {
     private final CodexHistoryParser parser;
     private final CodexHistoryIndexService indexService;
     private final CodexHistorySessionService sessionService;
+    private final CodexStoredHistoryReader storedHistory;
     private final ThreadLocal<String> privacyThread = new ThreadLocal<>();
     private final ThreadLocal<Consumer<ByteBuffer>> sourceBytesObserver = new ThreadLocal<>();
 
     private static Path defaultSessionsDir() {
-        return Paths.get(NodeDetector.resolveHomeForFileOps(), ".codex", "sessions");
+        return CodexHomeResolver.resolve().resolve("sessions");
     }
 
     public CodexHistoryReader() {
@@ -48,6 +48,7 @@ public class CodexHistoryReader {
         this.parser = new CodexHistoryParser(gson);
         this.indexService = new CodexHistoryIndexService(sessionsDir, parser);
         this.sessionService = new CodexHistorySessionService(sessionsDir, gson);
+        this.storedHistory = new CodexStoredHistoryReader(sessionsDir.toAbsolutePath().normalize().getParent());
     }
 
     CodexHistoryReader(Path sessionsDir, Gson gson, SessionIndexManager indexManager) {
@@ -55,6 +56,7 @@ public class CodexHistoryReader {
         this.parser = new CodexHistoryParser(gson);
         this.indexService = new CodexHistoryIndexService(sessionsDir, parser, indexManager);
         this.sessionService = new CodexHistorySessionService(sessionsDir, gson);
+        this.storedHistory = new CodexStoredHistoryReader(sessionsDir.toAbsolutePath().normalize().getParent());
     }
 
     /**
@@ -68,6 +70,7 @@ public class CodexHistoryReader {
         public long firstTimestamp;
         public String cwd;
         public long fileSize;
+        public boolean running;
     }
 
     /**
@@ -86,7 +89,24 @@ public class CodexHistoryReader {
      */
     public List<SessionInfo> readAllSessions() throws IOException {
         logSessionAccessWithoutLocalConfigAuthorization();
-        return indexService.readAllSessions();
+        try (var permit = requireReadPermit()) {
+            List<SessionInfo> sessions = new java.util.ArrayList<>(indexService.readAllSessions());
+            java.util.Set<String> known = new java.util.HashSet<>();
+            for (SessionInfo session : sessions) {
+                known.add(session.sessionId);
+            }
+            for (SessionInfo session : storedHistory.sessions()) {
+                if (known.add(session.sessionId)) {
+                    sessions.add(session);
+                }
+            }
+            sessions.sort(java.util.Comparator.comparingLong((SessionInfo session) -> session.lastTimestamp).reversed());
+            var running = com.github.claudecodegui.storage.CodexStorageActivity.runningSessionIds();
+            for (SessionInfo session : sessions) {
+                session.running = running.contains(session.sessionId);
+            }
+            return sessions;
+        }
     }
 
     /**
@@ -103,7 +123,9 @@ public class CodexHistoryReader {
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
             result.put("sessions", sessions);
-            result.put("total", totalMessages);
+            if (sessions.stream().allMatch(session -> session.messageCount >= 0)) {
+                result.put("total", totalMessages);
+            }
             result.put("sessionCount", sessions.size());
 
             return gson.toJson(result);
@@ -166,7 +188,9 @@ public class CodexHistoryReader {
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
             result.put("sessions", filteredSessions);
-            result.put("total", totalMessages);
+            if (filteredSessions.stream().allMatch(session -> session.messageCount >= 0)) {
+                result.put("total", totalMessages);
+            }
             result.put("sessionCount", filteredSessions.size());
 
             return gson.toJson(result);
@@ -201,18 +225,25 @@ public class CodexHistoryReader {
      * missing and the caller should treat the session id as stale.
      */
     public String getSessionMessagesAsJson(String sessionId) {
-        logSessionAccessWithoutLocalConfigAuthorization();
-        String source = this.sessionService.getSessionMessagesAsJson(sessionId);
-        if (source == null) {
-            return null;
+        try (var permit = requireReadPermit()) {
+            logSessionAccessWithoutLocalConfigAuthorization();
+            String source = this.sessionService.getSessionMessagesAsJson(sessionId);
+            if (source == null) {
+                return null;
+            }
+            CodexHistoryPrivacy privacy = new CodexHistoryPrivacy(sessionId);
+            com.google.gson.JsonArray sourceArray = this.gson.fromJson(source, com.google.gson.JsonArray.class);
+            com.google.gson.JsonArray result = new com.google.gson.JsonArray();
+            for (var entry : sourceArray) {
+                result.add(entry.isJsonObject() ? privacy.protect(entry.getAsJsonObject()) : entry);
+            }
+            return this.gson.toJson(result);
+        } catch (IOException error) {
+            JsonObject result = new JsonObject();
+            result.addProperty("success", false);
+            result.addProperty("error", error.getMessage());
+            return result.toString();
         }
-        CodexHistoryPrivacy privacy = new CodexHistoryPrivacy(sessionId);
-        com.google.gson.JsonArray sourceArray = this.gson.fromJson(source, com.google.gson.JsonArray.class);
-        com.google.gson.JsonArray result = new com.google.gson.JsonArray();
-        for (var entry : sourceArray) {
-            result.add(entry.isJsonObject() ? privacy.protect(entry.getAsJsonObject()) : entry);
-        }
-        return this.gson.toJson(result);
     }
 
     /**
@@ -221,12 +252,14 @@ public class CodexHistoryReader {
      * @return number of parsed top-level Codex records
      */
     public int forEachSessionMessage(String sessionId, Consumer<JsonObject> consumer) throws IOException {
-        logSessionAccessWithoutLocalConfigAuthorization();
-        CodexHistoryPrivacy privacy = new CodexHistoryPrivacy(sessionId);
-        return this.sessionService.forEachSessionMessage(sessionId, message -> {
-            JsonObject raw = this.gson.toJsonTree(message).getAsJsonObject();
-            consumer.accept(privacy.protect(raw));
-        });
+        try (var permit = requireReadPermit()) {
+            logSessionAccessWithoutLocalConfigAuthorization();
+            CodexHistoryPrivacy privacy = new CodexHistoryPrivacy(sessionId);
+            return this.sessionService.forEachSessionMessage(sessionId, message -> {
+                JsonObject raw = this.gson.toJsonTree(message).getAsJsonObject();
+                consumer.accept(privacy.protect(raw));
+            });
+        }
     }
 
     public Path resolveSessionFile(String sessionId) throws IOException {
@@ -241,16 +274,18 @@ public class CodexHistoryReader {
     public int forEachSessionMessage(Path file, long offset, long end,
                                      java.util.function.BooleanSupplier active,
                                      Consumer<JsonObject> consumer) throws IOException {
-        CodexHistoryPrivacy privacy = new CodexHistoryPrivacy(this.privacyThread.get());
-        Consumer<ByteBuffer> observer = this.sourceBytesObserver.get();
-        // Nested reads started by a record consumer must not feed this read's fingerprint.
-        this.sourceBytesObserver.remove();
-        try {
-            return this.sessionService.forEachSessionMessage(file, offset, end, active, observer,
-                    message -> consumer.accept(privacy.protect(this.gson.toJsonTree(message).getAsJsonObject())));
-        } finally {
-            if (observer != null) {
-                this.sourceBytesObserver.set(observer);
+        try (var permit = requireReadPermit()) {
+            CodexHistoryPrivacy privacy = new CodexHistoryPrivacy(this.privacyThread.get());
+            Consumer<ByteBuffer> observer = this.sourceBytesObserver.get();
+            // Nested reads started by a record consumer must not feed this read's fingerprint.
+            this.sourceBytesObserver.remove();
+            try {
+                return this.sessionService.forEachSessionMessage(file, offset, end, active, observer,
+                        message -> consumer.accept(privacy.protect(this.gson.toJsonTree(message).getAsJsonObject())));
+            } finally {
+                if (observer != null) {
+                    this.sourceBytesObserver.set(observer);
+                }
             }
         }
     }
@@ -307,6 +342,18 @@ public class CodexHistoryReader {
         } catch (Exception e) {
             LOG.warn("[CodexHistoryReader] Failed to read Codex local authorization state: " + e.getMessage());
             return false;
+        }
+    }
+
+    public static com.github.claudecodegui.bridge.AiDataProcessGate.ReadPermit requireReadPermit() throws IOException {
+        try {
+            var permit = com.github.claudecodegui.bridge.AiDataProcessGate.getInstance().tryAcquireReadPermit();
+            if (permit == null) {
+                throw new IOException("DATABASE_BUSY");
+            }
+            return permit;
+        } catch (IllegalStateException error) {
+            throw new IOException(error.getCause() == null ? error.getMessage() : error.getCause().getMessage(), error);
         }
     }
 }

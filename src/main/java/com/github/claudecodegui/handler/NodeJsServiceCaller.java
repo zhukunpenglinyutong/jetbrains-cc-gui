@@ -23,7 +23,7 @@ public class NodeJsServiceCaller {
     private static final int PROCESS_TIMEOUT_SECONDS = 30;
 
     private static final Set<String> ALLOWED_FAVORITES_FUNCTIONS = Set.of(
-        "loadFavorites", "toggleFavorite"
+        "loadFavorites", "toggleFavorite", "removeFavorite"
     );
 
     private static final Set<String> ALLOWED_TITLES_FUNCTIONS = Set.of(
@@ -167,8 +167,7 @@ public class NodeJsServiceCaller {
         String channelId = ProcessManager.newChannelId("node-service");
         Process process = null;
         try {
-            process = pb.start();
-            processManager.registerProcess(channelId, process);
+            process = processManager.startManagedProcess(channelId, pb);
 
             StringBuilder output = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(

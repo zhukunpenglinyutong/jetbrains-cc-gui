@@ -2,8 +2,17 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { HistoryData } from '../../types';
+import type { CodexStorageMutationStatus } from '../settings/AiDataStorageSection/codexStorageBridge';
 import { sendBridgeEvent } from '../../utils/bridge';
 import HistoryView from './HistoryView';
+
+const activity = vi.hoisted(() => ({ status: null as CodexStorageMutationStatus | null, observe: vi.fn() }));
+vi.mock('../settings/AiDataStorageSection/useCodexStorageMutationStatus', () => ({
+  useCodexStorageMutationStatus: (enabled: boolean) => {
+    activity.observe(enabled);
+    return { status: activity.status };
+  },
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -74,11 +83,137 @@ const historyData: HistoryData = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  activity.status = null;
 });
 
 describe('HistoryView native message counts', () => {
   const actions = { currentProvider: 'codex', onLoadSession: vi.fn(), onDeleteSession: vi.fn(),
     onDeleteSessions: vi.fn(), onExportSession: vi.fn(), onToggleFavorite: vi.fn(), onUpdateTitle: vi.fn(), onConvertToCliSession: vi.fn() };
+
+  it('disables deletion and selection only for running targets, leaving idle sessions deletable', () => {
+    const onDeleteSessions = vi.fn();
+    const data: HistoryData = { success: true, source: 'native', sessions: [
+      { sessionId: 'busy', title: 'Running target', provider: 'codex', running: true },
+      { sessionId: 'idle', title: 'Idle target', provider: 'codex' },
+    ] };
+    const { container } = render(<HistoryView {...actions} onDeleteSessions={onDeleteSessions} historyData={data} />);
+    const buttons = container.querySelectorAll<HTMLButtonElement>('.history-delete-btn');
+    expect(buttons[0].disabled).toBe(true);
+    expect(buttons[1].disabled).toBe(false);
+    fireEvent.click(buttons[0]);
+    expect(screen.queryByText('common.confirmDelete')).toBeNull();
+    fireEvent.click(screen.getByText('Select'));
+    expect((screen.getByLabelText('Select Running target') as HTMLInputElement).disabled).toBe(true);
+    fireEvent.click(screen.getByText('Select all'));
+    fireEvent.click(screen.getByText('Delete selected'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(onDeleteSessions).toHaveBeenCalledWith(['idle']);
+  });
+
+  it('closes an outstanding delete confirmation when the target starts a turn', () => {
+    const onDeleteSession = vi.fn();
+    const data: HistoryData = { success: true, sessions: [{ sessionId: 'target', title: 'Target', provider: 'codex' }] };
+    const { container, rerender } = render(<HistoryView {...actions} historyData={data} currentSessionId="target"
+      currentSessionBusy={false} onDeleteSession={onDeleteSession} />);
+    fireEvent.click(container.querySelector('.history-delete-btn')!);
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
+    rerender(<HistoryView {...actions} historyData={data} currentSessionId="target"
+      currentSessionBusy onDeleteSession={onDeleteSession} />);
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(onDeleteSession).not.toHaveBeenCalled();
+  });
+
+  it('unlocks a fetched running row after the host confirms its current turn is idle', () => {
+    const onDeleteSession = vi.fn();
+    const onDeleteSessions = vi.fn();
+    const data: HistoryData = { success: true, source: 'native', sessions: [
+      { sessionId: 'target', title: 'Finished target', provider: 'codex', running: true },
+      { sessionId: 'other', title: 'Still running', provider: 'codex', running: true },
+    ] };
+    const props = { ...actions, historyData: data, currentSessionId: 'target', onDeleteSession, onDeleteSessions };
+    const { container, rerender } = render(<HistoryView {...props} currentSessionBusy />);
+    expect(container.querySelector<HTMLButtonElement>('.history-delete-btn')!.disabled).toBe(true);
+    activity.status = { available: false, unavailableReason: 'SESSION_RUNNING', deletionAvailable: true,
+      runningSessionIds: ['other'], writerSessionIds: ['other'] };
+    rerender(<HistoryView {...props} currentSessionBusy={false} />);
+    expect(container.querySelectorAll<HTMLButtonElement>('.history-delete-btn')[0].disabled).toBe(false);
+    expect(container.querySelectorAll<HTMLButtonElement>('.history-delete-btn')[1].disabled).toBe(true);
+    fireEvent.click(container.querySelector('.history-delete-btn')!);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(onDeleteSession).toHaveBeenCalledWith('target');
+    fireEvent.click(screen.getByText('Select'));
+    expect((screen.getByLabelText('Select Finished target') as HTMLInputElement).disabled).toBe(false);
+    expect((screen.getByLabelText('Select Still running') as HTMLInputElement).disabled).toBe(true);
+    fireEvent.click(screen.getByText('Select all'));
+    fireEvent.click(screen.getByText('Delete selected'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(onDeleteSessions).toHaveBeenCalledWith(['target']);
+  });
+
+  it.each(['pending-question', 'native-writer', 'failed-status', 'fresh-turn'])('keeps a current running row protected for %s', reason => {
+    activity.status = { available: true, deletionAvailable: true,
+      runningSessionIds: reason === 'pending-question' ? ['target'] : [],
+      writerSessionIds: reason === 'native-writer' ? ['target'] : [] };
+    if (reason === 'failed-status') activity.status = { available: false, deletionAvailable: false,
+      deletionUnavailableReason: 'STORAGE_RESPONSE_TIMEOUT', runningSessionIds: [], writerSessionIds: [] };
+    const data: HistoryData = { success: true, source: 'native', sessions: [
+      { sessionId: 'target', title: 'Protected target', provider: 'codex', running: true },
+    ] };
+    const { container } = render(<HistoryView {...actions} historyData={data} currentSessionId="target"
+      currentSessionBusy={reason === 'fresh-turn'} />);
+    expect(container.querySelector<HTMLButtonElement>('.history-delete-btn')!.disabled).toBe(true);
+    fireEvent.click(screen.getByText('Select'));
+    expect((screen.getByLabelText('Select Protected target') as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it.each(['observer', null])('reconciles other tabs in the existing history with current session %s', currentSessionId => {
+    const onDeleteSessions = vi.fn();
+    const data: HistoryData = { success: true, source: 'native', sessions: [
+      { sessionId: 'target', title: 'Other tab', provider: 'codex', running: true },
+      { sessionId: 'waiting', title: 'Pending question', provider: 'codex', running: true },
+      { sessionId: 'fresh', title: 'New turn', provider: 'codex', running: false },
+      { sessionId: 'claude', title: 'Claude turn', provider: 'claude', running: true },
+    ] };
+    const props = { ...actions, historyData: data, currentSessionId, onDeleteSessions };
+    const { rerender } = render(<HistoryView {...props} />);
+    expect(activity.observe).toHaveBeenLastCalledWith(true);
+    fireEvent.click(screen.getByText('Select'));
+    expect(screen.getByLabelText('Select Other tab')).toHaveProperty('disabled', true);
+
+    activity.status = { available: false, unavailableReason: 'SESSION_RUNNING', deletionAvailable: true,
+      runningSessionIds: ['waiting', 'fresh'], writerSessionIds: ['target', 'waiting', 'fresh'] };
+    rerender(<HistoryView {...props} />);
+    // An idle loaded thread in another tab can retain its native writer lease.
+    expect(screen.getByLabelText('Select Other tab')).toHaveProperty('disabled', false);
+    expect(screen.getByLabelText('Select Pending question')).toHaveProperty('disabled', true);
+    expect(screen.getByLabelText('Select New turn')).toHaveProperty('disabled', true);
+    expect(screen.getByLabelText('Select Claude turn')).toHaveProperty('disabled', true);
+    fireEvent.click(screen.getByLabelText('Select Other tab'));
+
+    // A new turn must invalidate a selection made before the next activity update.
+    activity.status = { ...activity.status, runningSessionIds: ['target', 'waiting', 'fresh'] };
+    rerender(<HistoryView {...props} />);
+    expect(screen.getByLabelText('Select Other tab')).toHaveProperty('disabled', true);
+    expect(screen.getByLabelText('Select Other tab')).toHaveProperty('checked', false);
+
+    activity.status = { ...activity.status, runningSessionIds: ['waiting', 'fresh'] };
+    rerender(<HistoryView {...props} />);
+    fireEvent.click(screen.getByText('Select all'));
+    fireEvent.click(screen.getByText('Delete selected'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(onDeleteSessions).toHaveBeenCalledWith(['target']);
+  });
+
+  it.each([null, { available: false, deletionAvailable: false, runningSessionIds: [], writerSessionIds: [] }])(
+    'keeps other running tabs protected without a confirmed activity snapshot', status => {
+      activity.status = status;
+      render(<HistoryView {...actions} currentSessionId="observer" historyData={{ success: true, sessions: [
+        { sessionId: 'other', title: 'Unconfirmed target', provider: 'codex', running: true },
+      ] }} />);
+      fireEvent.click(screen.getByText('Select'));
+      expect(screen.getByLabelText('Select Unconfirmed target')).toHaveProperty('disabled', true);
+    },
+  );
 
   it('distinguishes unknown counts from zero and shows a message total only when known', () => {
     const data: HistoryData = { ...historyData, source: 'native', total: undefined,

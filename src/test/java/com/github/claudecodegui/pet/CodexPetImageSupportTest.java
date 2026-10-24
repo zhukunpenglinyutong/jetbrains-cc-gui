@@ -7,7 +7,6 @@ import javax.imageio.ImageIO;
 import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageOutputStream;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
 import java.util.Base64;
@@ -76,7 +75,7 @@ public class CodexPetImageSupportTest {
         byte[] onePixelWebp = Base64.getDecoder().decode(
                 "UklGRrYAAABXRUJQVlA4IKoAAACwEACdASoAAQABPm02mUmCAoAIANiWlu4XaxHtwAABPYB77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJwoAP7/Qwv//hyp9O3sf//Ys5bAsQAAAAAAAAAAAA==");
 
-        assertNotNull(ImageIO.read(new ByteArrayInputStream(onePixelWebp)));
+        assertNotNull(CodexPetImageSupport.readImage(onePixelWebp));
     }
 
     private static byte[] pngHeader(int width, int height) {

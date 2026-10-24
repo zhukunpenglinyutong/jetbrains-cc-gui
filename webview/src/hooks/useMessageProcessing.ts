@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { TFunction } from 'i18next';
 import { createLocalizeMessage } from '../utils/localizationUtils';
+import { projectCodexQuestionTranscript } from '../utils/codexQuestionTranscript';
 import {
   normalizeBlocks as normalizeBlocksUtil,
   getMessageText as getMessageTextUtil,
@@ -36,6 +37,7 @@ export function useMessageProcessing({ messages, currentSessionId, t }: UseMessa
   const mergedAssistantMessageCache = useRef(new Map<string, { source: ClaudeMessage[]; merged: ClaudeMessage }>());
   // Persistent storage: non-image attachment metadata from sent messages
   const sentAttachmentsRef = useRef(new Map<string, Array<{ fileName: string; mediaType: string }>>());
+  const questionProjectionCache = useRef<Parameters<typeof projectCodexQuestionTranscript>[1]>(new WeakMap());
 
   // Clear cache when dependencies change
   useEffect(() => {
@@ -115,7 +117,8 @@ export function useMessageProcessing({ messages, currentSessionId, t }: UseMessa
   const mergedMessages = useMemo(() => {
     // Pair compact_boundary system lines with their compact-summary user line
     // (attaches compactMetadata, drops the metadata-only boundary line).
-    const withBoundaries = attachCompactBoundaryMetadata(messages).map((message) =>
+    const withQuestions = projectCodexQuestionTranscript(messages, questionProjectionCache.current);
+    const withBoundaries = attachCompactBoundaryMetadata(withQuestions).map((message) =>
       typeof message.raw === 'object' && message.raw?.isCompactSummary
         ? { ...message, type: MESSAGE_TYPES.NOTIFICATION } : message);
     const merged = mergeConsecutiveAssistantMessages(

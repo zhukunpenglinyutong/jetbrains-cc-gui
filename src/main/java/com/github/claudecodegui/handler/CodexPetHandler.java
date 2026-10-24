@@ -5,6 +5,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.pet.CodexPetFloatingService;
 import com.github.claudecodegui.pet.CodexPetImageSupport;
 import com.github.claudecodegui.pet.PetdexRepository;
+import com.github.claudecodegui.pet.office.PetOfficePrototypeService;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
@@ -22,11 +23,7 @@ import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.util.concurrency.AppExecutorUtil;
 
-import javax.imageio.ImageIO;
-import javax.imageio.ImageReader;
-import javax.imageio.stream.ImageInputStream;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
@@ -61,6 +58,8 @@ public class CodexPetHandler extends BaseMessageHandler {
         "reset_codex_pet_position",
         "get_codex_pet_preview",
         "refresh_codex_pet_assets",
+        "open_codex_pet_office",
+        "exit_codex_pet_office",
         "get_petdex_catalog",
         "get_petdex_preview",
         "install_petdex_pet",
@@ -124,6 +123,27 @@ public class CodexPetHandler extends BaseMessageHandler {
                 return true;
             case "refresh_codex_pet_assets":
                 handleRefreshPetAssets();
+                return true;
+            case "open_codex_pet_office":
+                if (!context.isDisposed()) {
+                    PetOfficePrototypeService.getInstance().open();
+                }
+                return true;
+            case "exit_codex_pet_office":
+                if (!context.isDisposed()) {
+                    com.github.claudecodegui.pet.office.PetOfficeRuntimeService.getInstance().exitOffice(code -> {
+                        if (!code.isEmpty() && !context.isDisposed()) {
+                            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(() -> {
+                                if (!context.isDisposed()) {
+                                    com.intellij.notification.NotificationGroupManager.getInstance().getNotificationGroup("CC GUI Notifications")
+                                            .createNotification(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("petOffice.prototype.title"),
+                                                    com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("petOffice.prototype.unavailable", code),
+                                                    com.intellij.notification.NotificationType.WARNING).notify(null);
+                                }
+                            });
+                        }
+                    });
+                }
                 return true;
             case "get_petdex_catalog":
                 runAsync(() -> pushCatalog(
@@ -918,7 +938,7 @@ public class CodexPetHandler extends BaseMessageHandler {
             String mimeType = CodexPetImageSupport.detectMimeType(realPath, header);
             CodexPetImageSupport.ImageDimensions dimensions = CodexPetImageSupport.readDimensions(mimeType, header);
             if (mimeType == null || !CodexPetImageSupport.hasSafeDimensions(dimensions)
-                    || !hasReadableImageMetadata(realPath, dimensions)) {
+                    || !CodexPetImageSupport.hasReadableMetadata(realPath, mimeType, dimensions)) {
                 return;
             }
             boolean spriteSheet = CodexPetImageSupport.isCanonicalPetdexSheet(dimensions);
@@ -967,7 +987,7 @@ public class CodexPetHandler extends BaseMessageHandler {
                 || !CodexPetImageSupport.hasSafeFrameBudget(mimeType, bytes)) {
             throw new IOException("INVALID_LOCAL_PET_IMAGE");
         }
-        BufferedImage decodedImage = ImageIO.read(new ByteArrayInputStream(bytes));
+        BufferedImage decodedImage = CodexPetImageSupport.readImage(bytes);
         if (decodedImage == null) {
             throw new IOException("INVALID_LOCAL_PET_IMAGE");
         }
@@ -985,31 +1005,6 @@ public class CodexPetHandler extends BaseMessageHandler {
         int headerSize = (int) Math.min(fileSize, MAX_IMAGE_HEADER_BYTES);
         try (InputStream input = Files.newInputStream(path)) {
             return input.readNBytes(headerSize);
-        }
-    }
-
-    private static boolean hasReadableImageMetadata(
-            Path path,
-            CodexPetImageSupport.ImageDimensions expectedDimensions
-    ) {
-        try (ImageInputStream input = ImageIO.createImageInputStream(path.toFile())) {
-            if (input == null) {
-                return false;
-            }
-            Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
-            if (!readers.hasNext()) {
-                return false;
-            }
-            ImageReader reader = readers.next();
-            try {
-                reader.setInput(input, true, true);
-                return reader.getWidth(0) == expectedDimensions.getWidth()
-                        && reader.getHeight(0) == expectedDimensions.getHeight();
-            } finally {
-                reader.dispose();
-            }
-        } catch (IOException | RuntimeException e) {
-            return false;
         }
     }
 

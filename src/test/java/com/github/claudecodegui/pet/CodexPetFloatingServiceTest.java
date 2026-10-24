@@ -17,8 +17,24 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 
 public class CodexPetFloatingServiceTest {
+
+    @Test
+    public void officeVisualConfigurationIsImmutableAndDoesNotCreateAnOverlay() throws Exception {
+        CodexPetFloatingService service = createService();
+        var configuration = service.visualConfiguration();
+        assertEquals("builtin", configuration.selectedPetId());
+        assertThrows(UnsupportedOperationException.class, () -> configuration.actionMappings().put("idle", List.of("jumping")));
+        assertThrows(UnsupportedOperationException.class, () -> configuration.actionMappings().get("idle").add("jumping"));
+        JsonObject changed = new JsonObject();
+        changed.addProperty("opacity", 0.5);
+        service.applyConfig(changed);
+        assertEquals(1.0, configuration.opacity(), 0.001);
+        assertEquals(0.5, service.visualConfiguration().opacity(), 0.001);
+        assertNull(activeBubble(service));
+    }
 
     @Test
     public void rejectsUnsafeSelectedPetIds() {

@@ -49,6 +49,14 @@ final class CodexHistoryPageIndex implements AutoCloseable {
     synchronized HistoryMessageInjector.CodexHistoryPage read(
             CodexHistoryReader reader, String sessionId, Integer beforeTurn, int pageSize,
             BooleanSupplier active) throws IOException {
+        try (var permit = CodexHistoryReader.requireReadPermit()) {
+            return readAdmitted(reader, sessionId, beforeTurn, pageSize, active);
+        }
+    }
+
+    private HistoryMessageInjector.CodexHistoryPage readAdmitted(
+            CodexHistoryReader reader, String sessionId, Integer beforeTurn, int pageSize,
+            BooleanSupplier active) throws IOException {
         checkActive(active);
         if (pageSize <= 0 || (beforeTurn != null && beforeTurn < 0)) {
             throw new IllegalArgumentException("Invalid Codex history page cursor or size");

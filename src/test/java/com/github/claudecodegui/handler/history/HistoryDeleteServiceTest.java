@@ -2,6 +2,9 @@ package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -24,6 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 
 public class HistoryDeleteServiceTest {
 
@@ -135,6 +139,18 @@ public class HistoryDeleteServiceTest {
     }
 
     @Test
+    public void codexDeletionRequiresAConfirmedDatabaseAndFileReceipt() throws Exception {
+        HistoryDeleteService.confirmedCodexDeletion(JsonParser.parseString(
+                "{\"state\":\"COMPLETED\",\"result\":{\"deletedSessionIds\":[\"parent\",\"child\"]}}"
+        ).getAsJsonObject());
+        for (String state : List.of("FAILED_CLEAN", "RECONCILIATION_REQUIRED", "COMMITTING")) {
+            var error = assertThrows(java.io.IOException.class, () -> HistoryDeleteService.confirmedCodexDeletion(
+                    JsonParser.parseString("{\"state\":\"" + state + "\",\"error\":\"DATABASE_BUSY\"}").getAsJsonObject()));
+            assertEquals("DATABASE_BUSY", error.getMessage());
+        }
+    }
+
+    @Test
     public void quiescesOnlyTheMatchingProviderSessionBeforeDeletion() {
         RecordingClaudeSession matching = new RecordingClaudeSession("session-1", "codex");
         HistoryDeleteService.quiesceActiveSessionForDeletion(
@@ -175,6 +191,29 @@ public class HistoryDeleteServiceTest {
         }
         assertFalse(deletionStarted.get());
         assertTrue(deletion.isCompletedExceptionally());
+    }
+
+    @Test
+    public void legacyHistoryDeletionAlsoWaitsForThePersistentNativeWriterRelease() {
+        CompletableFuture<JsonObject> released = new CompletableFuture<>();
+        CodexSDKBridge bridge = new CodexSDKBridge() {
+            @Override
+            public CompletableFuture<JsonObject> releaseCodexThread(String channelId, String cwd, String threadId) {
+                assertEquals("session-1", threadId);
+                return released;
+            }
+        };
+        try {
+            RecordingClaudeSession matching = new RecordingClaudeSession("session-1", "codex");
+            var deletion = HistoryDeleteService.quiesceActiveSessionForDeletion(
+                    matching, List.of("session-1"), "codex", bridge);
+            assertTrue(matching.interrupted);
+            assertFalse(deletion.isDone());
+            released.complete(new JsonObject());
+            deletion.join();
+        } finally {
+            bridge.cleanupAllProcesses();
+        }
     }
 
     @Test

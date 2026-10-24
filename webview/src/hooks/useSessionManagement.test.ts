@@ -1,9 +1,23 @@
 import { act, renderHook } from '@testing-library/react';
 import { useSessionManagement } from './useSessionManagement.js';
 import type { HistoryData } from '../types/index.js';
+import { receiveCodexStorageResponse } from '../components/settings/AiDataStorageSection/codexStorageBridge';
+import type { TFunction } from 'i18next';
 
 describe('useSessionManagement', () => {
-  const t = ((key: string) => key) as any;
+  const t = ((key: string) => key) as TFunction;
+
+  const confirmCodexDeletion = () => {
+    const message = vi.mocked(window.sendToJava!).mock.calls.map(([value]) => value)
+      .find(value => value.startsWith('delete_ai_storage_sessions:'))!;
+    const pending = JSON.parse(message.substring(message.indexOf(':') + 1)) as {
+      requestId: string; operationId: string; sessionIds: string[];
+    };
+    receiveCodexStorageResponse(JSON.stringify({ action: 'delete_ai_storage_sessions', requestId: pending.requestId, success: true,
+      data: { operationId: pending.operationId, kind: 'DELETE_SESSIONS', state: 'COMPLETED', targets: pending.sessionIds,
+        createdAt: '2026-10-19T00:00:00Z', updatedAt: '2026-10-19T00:00:01Z', result: { deletedSessionIds: pending.sessionIds } },
+    }));
+  };
 
   const createMocks = () => ({
     setHistoryData: vi.fn(),
@@ -140,7 +154,7 @@ describe('useSessionManagement', () => {
     expect(mocks.setCurrentView).toHaveBeenCalledWith('chat');
   });
 
-  it('applies repeated history deletes against the latest state', () => {
+  it('applies repeated history deletes against the latest state and waits for Codex confirmation', async () => {
     let historyData = {
       success: true,
       sessions: [
@@ -185,13 +199,15 @@ describe('useSessionManagement', () => {
       result.current.deleteHistorySession('history-2');
     });
 
+    expect(historyData.sessions?.map(session => session.sessionId)).toEqual(['history-2']);
+    await act(async () => confirmCodexDeletion());
     expect(historyData.sessions).toEqual([]);
     expect(historyData.total).toBe(0);
     expect(window.sendToJava).toHaveBeenCalledWith('delete_session:history-1');
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_session:history-2');
+    expect(window.sendToJava).not.toHaveBeenCalledWith('delete_session:history-2');
   });
 
-  it('sends one backend request when deleting multiple history sessions', () => {
+  it('separates Codex maintenance from a mixed-provider batch deletion', async () => {
     let historyData = {
       success: true,
       sessions: [
@@ -235,10 +251,12 @@ describe('useSessionManagement', () => {
       result.current.deleteHistorySessions(['history-1', 'history-2', 'history-1']);
     });
 
+    expect(historyData.sessions?.map(session => session.sessionId)).toEqual(['history-2']);
+    await act(async () => confirmCodexDeletion());
     expect(historyData.sessions).toEqual([]);
     expect(historyData.total).toBe(0);
-    expect(window.sendToJava).toHaveBeenCalledTimes(1);
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:["history-1","history-2"]');
+    expect(window.sendToJava).toHaveBeenCalledTimes(2);
+    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:["history-1"]');
     expect(mocks.addToast).toHaveBeenCalledWith('history.sessionDeleted', 'success');
   });
 
@@ -298,7 +316,7 @@ describe('useSessionManagement', () => {
     expect(historyData).toMatchObject({ total: 7, sessions: [{ messageCount: 7, isFavorited: true, title: 'Generated' }] });
   });
 
-  it('defers the deleted toast until transition completion when batch delete removes current session', () => {
+  it('defers the deleted toast until transition completion when a legacy batch removes the current session', () => {
     let historyData = {
       success: true,
       sessions: [
@@ -312,7 +330,7 @@ describe('useSessionManagement', () => {
         {
           sessionId: 'history-2',
           title: 'History Two',
-          provider: 'codex',
+          provider: 'claude',
           messageCount: 5,
           lastTimestamp: Date.now(),
         },

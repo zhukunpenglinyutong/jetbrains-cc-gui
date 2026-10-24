@@ -3,7 +3,7 @@ package com.github.claudecodegui.handler;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
-
+import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.skill.CodexSkillService;
 import com.github.claudecodegui.skill.SkillService;
 import com.google.gson.Gson;
@@ -19,6 +19,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.concurrency.AppExecutorUtil;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -43,6 +44,15 @@ public class SkillHandler extends BaseMessageHandler {
 
     public SkillHandler(HandlerContext context) {
         super(context);
+    }
+
+    private String workspaceRoot(boolean isCodex) {
+        ClaudeSession session = context.getSession();
+        return resolveWorkspaceRoot(isCodex, session == null ? null : session.getCwd(), context.getProject().getBasePath());
+    }
+
+    static String resolveWorkspaceRoot(boolean isCodex, String sessionCwd, String projectBase) {
+        return isCodex && sessionCwd != null && !sessionCwd.isBlank() ? sessionCwd : projectBase;
     }
 
     @Override
@@ -79,7 +89,7 @@ public class SkillHandler extends BaseMessageHandler {
     private void handleGetAllSkills() {
         boolean isCodex = "codex".equalsIgnoreCase(context.getCurrentProvider());
         try {
-            String workspaceRoot = context.getProject().getBasePath();
+            String workspaceRoot = workspaceRoot(isCodex);
 
             JsonObject skills;
             if (isCodex) {
@@ -112,6 +122,8 @@ public class SkillHandler extends BaseMessageHandler {
             String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
             boolean isCodex = "codex".equalsIgnoreCase(context.getCurrentProvider());
 
+            // Capture the target before the chooser or background work can outlive a session switch.
+            String workspaceRoot = workspaceRoot(isCodex);
             ApplicationManager.getApplication().invokeLater(() -> {
                 FileChooserDescriptor descriptor;
                 if (isCodex) {
@@ -137,9 +149,9 @@ public class SkillHandler extends BaseMessageHandler {
                     descriptor.setTitle("选择 Skill 文件或文件夹");
                 }
 
-                // Set initial directory to project base path
+                // Start in the same workspace that will receive the imported skill.
                 VirtualFile initialDir = null;
-                String projectPath = context.getProject().getBasePath();
+                String projectPath = workspaceRoot;
                 if (projectPath != null) {
                     initialDir = LocalFileSystem.getInstance().findFileByPath(NodeDetector.toVfsPath(projectPath));
                 }
@@ -153,7 +165,6 @@ public class SkillHandler extends BaseMessageHandler {
 
                     CompletableFuture.runAsync(() -> {
                         try {
-                            String workspaceRoot = context.getProject().getBasePath();
                             JsonObject importResult;
                             if (isCodex) {
                                 importResult = CodexSkillService.importSkill(paths, scope, workspaceRoot);
@@ -191,8 +202,8 @@ public class SkillHandler extends BaseMessageHandler {
             String skillName = json.get("name").getAsString();
             String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
             boolean enabled = json.has("enabled") ? json.get("enabled").getAsBoolean() : true;
-            String workspaceRoot = context.getProject().getBasePath();
             boolean isCodex = "codex".equalsIgnoreCase(context.getCurrentProvider());
+            String workspaceRoot = workspaceRoot(isCodex);
 
             CompletableFuture.runAsync(() -> {
                 try {
@@ -247,8 +258,8 @@ public class SkillHandler extends BaseMessageHandler {
             String requestId = json.has("requestId") ? json.get("requestId").getAsString() : null;
             String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
             boolean currentEnabled = json.has("enabled") ? json.get("enabled").getAsBoolean() : true;
-            String workspaceRoot = context.getProject().getBasePath();
             boolean isCodex = "codex".equalsIgnoreCase(context.getCurrentProvider());
+            String workspaceRoot = workspaceRoot(isCodex);
             String skillPath = isCodex && json.has("skillPath") ? json.get("skillPath").getAsString() : null;
 
             CompletableFuture.runAsync(() -> {
@@ -360,6 +371,14 @@ public class SkillHandler extends BaseMessageHandler {
      */
     private boolean isInsideSkillsDirectory(String path) {
         try {
+            if ("codex".equalsIgnoreCase(context.getCurrentProvider())) {
+                Path candidate = Paths.get(path);
+                if (Files.isDirectory(candidate)) {
+                    Path upper = candidate.resolve("SKILL.md");
+                    candidate = Files.isRegularFile(upper) ? upper : candidate.resolve("skill.md");
+                }
+                return CodexSkillService.isToggleSkillPathAllowed(candidate.toString(), workspaceRoot(true));
+            }
             Path normalized = Paths.get(path).toAbsolutePath().normalize();
             String userHome = NodeDetector.resolveHomeForFileOps();
             String projectBase = context.getProject().getBasePath();

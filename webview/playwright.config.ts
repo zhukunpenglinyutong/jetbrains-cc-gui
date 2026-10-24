@@ -15,6 +15,8 @@ const viteCommand = `"${process.execPath}" "${process.cwd()}/node_modules/vite/b
 
 export default defineConfig({
   testDir: './e2e',
+  // Office checks exercise its isolated production bundle, using its own config.
+  testIgnore: '**/pet-office*.spec.ts',
   timeout: 30_000,
   expect: { timeout: 5_000 },
   fullyParallel: false,

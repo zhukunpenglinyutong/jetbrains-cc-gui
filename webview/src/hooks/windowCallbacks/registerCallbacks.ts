@@ -106,7 +106,7 @@ export function registerWindowCallbacks(
   registerStreamingCallbacks(options);
   registerSessionAndSdkCallbacks(options, tRef);
   registerUsageModeCallbacks(options);
-  registerPermissionCallbacks(options);
+  registerPermissionCallbacks(options, () => tRef.current);
   const pageGeneration = (window.__codexFrontendPageGeneration ?? 0) + 1;
   window.__codexFrontendPageGeneration = pageGeneration;
   sendBridgeEvent('codex_runtime_frontend_ready', JSON.stringify({ pageGeneration }));

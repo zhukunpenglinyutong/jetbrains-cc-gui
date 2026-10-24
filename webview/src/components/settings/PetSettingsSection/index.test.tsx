@@ -84,6 +84,8 @@ const mocks = vi.hoisted(() => ({
   deleteLocalPet: vi.fn(),
   uninstall: vi.fn(),
   refreshAssets: vi.fn(),
+  openOffice: vi.fn(),
+  exitOffice: vi.fn(),
   getHatchStatus: vi.fn(),
   prepareHatchCommand: vi.fn(),
 }));
@@ -166,6 +168,8 @@ vi.mock('../../codexPet/petBridge', () => ({
     setAlias: mocks.setAlias,
     deleteLocalPet: mocks.deleteLocalPet,
     refreshAssets: mocks.refreshAssets,
+    openOffice: mocks.openOffice,
+    exitOffice: mocks.exitOffice,
     openPetDirectory: vi.fn(),
     getHatchStatus: mocks.getHatchStatus,
     openHatchWebsite: vi.fn(),
@@ -202,6 +206,8 @@ describe('PetSettingsSection catalog pagination', () => {
     mocks.deleteLocalPet.mockClear();
     mocks.uninstall.mockClear();
     mocks.refreshAssets.mockClear();
+    mocks.openOffice.mockClear();
+    mocks.exitOffice.mockClear();
     mocks.getHatchStatus.mockClear();
     mocks.prepareHatchCommand.mockClear();
   });
@@ -226,6 +232,25 @@ describe('PetSettingsSection catalog pagination', () => {
   const openActionsTab = () => {
     fireEvent.click(screen.getByRole('tab', { name: 'settings.pet.tabs.actions' }));
   };
+
+  it('opens the Office from every Pet tab without enabling the overlay or leaving settings', () => {
+    render(<PetSettingsSection addToast={vi.fn()} />);
+    openActionsTab();
+    fireEvent.click(screen.getByRole('button', { name: 'settings.pet.openOffice' }));
+    expect(mocks.openOffice).toHaveBeenCalledTimes(1);
+    expect(mocks.setConfig).not.toHaveBeenCalled();
+    expect(mocks.setCurrentView).not.toHaveBeenCalled();
+    expect(mocks.getCatalog).not.toHaveBeenCalled();
+  });
+
+  it('keeps the Office entry without a separate return-to-overlay action', () => {
+    render(<PetSettingsSection addToast={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'settings.pet.exitOffice' })).toBeNull();
+    expect(mocks.exitOffice).not.toHaveBeenCalled();
+    expect(mocks.setConfig).not.toHaveBeenCalled();
+    expect(mocks.openOffice).not.toHaveBeenCalled();
+    expect(mocks.setCurrentView).not.toHaveBeenCalled();
+  });
 
   it('keeps Simplified Chinese pet translations complete', () => {
     expect(collectTranslationLeaves(zh.codexPet).sort())

@@ -1,17 +1,13 @@
 package com.github.claudecodegui.settings;
 
-import com.github.claudecodegui.cli.CliStatusDetector;
-import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.JsonObject;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermissions;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -19,18 +15,17 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class CodemossSettingsServiceCommitAiConfigTest {
-    private String originalHomeDir;
+    private AiFeatureAvailabilityFixture availabilityFixture;
 
     @Before
-    public void setUp() {
-        resetCliStatusDetectorCache();
+    public void setUp() throws Exception {
+        availabilityFixture = new AiFeatureAvailabilityFixture();
     }
 
     @After
     public void tearDown() throws Exception {
-        if (originalHomeDir != null) {
-            setCachedHomeDirectory(originalHomeDir);
-            originalHomeDir = null;
+        if (availabilityFixture != null) {
+            availabilityFixture.close();
         }
     }
 
@@ -41,7 +36,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         writeConfig(tempHome, "claude-a", "codex-a");
         installSdk(tempHome, "claude-sdk", "@anthropic-ai/claude-agent-sdk", "0.2.88");
         installSdk(tempHome, "codex-sdk", "@openai/codex-sdk", "0.117.0");
-        installLegacyCodexCli(tempHome);
+        configureCodexCli(tempHome);
 
         CodemossSettingsService service = new CodemossSettingsService();
 
@@ -63,7 +58,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         writeConfig(tempHome, "claude-a", "codex-a");
         installSdk(tempHome, "claude-sdk", "@anthropic-ai/claude-agent-sdk", "0.2.88");
         installSdk(tempHome, "codex-sdk", "@openai/codex-sdk", "0.117.0");
-        installLegacyCodexCli(tempHome);
+        configureCodexCli(tempHome);
 
         CodemossSettingsService service = new CodemossSettingsService();
 
@@ -112,7 +107,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         writeConfig(tempHome, "claude-a", "codex-a");
         installSdk(tempHome, "claude-sdk", "@anthropic-ai/claude-agent-sdk", "0.2.88");
         installSdk(tempHome, "codex-sdk", "@openai/codex-sdk", "0.117.0");
-        installLegacyCodexCli(tempHome);
+        configureCodexCli(tempHome);
 
         CodemossSettingsService service = new CodemossSettingsService();
 
@@ -178,7 +173,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         writeConfig(tempHome, "claude-a", "codex-a");
         installSdk(tempHome, "claude-sdk", "@anthropic-ai/claude-agent-sdk", "0.2.88");
         installSdk(tempHome, "codex-sdk", "@openai/codex-sdk", "0.117.0");
-        installLegacyCodexCli(tempHome);
+        configureCodexCli(tempHome);
 
         CodemossSettingsService service = new CodemossSettingsService();
         invokeSetPromptEnhancerConfig(service, "claude", "claude-opus-5", "gpt-5.4");
@@ -264,10 +259,7 @@ public class CodemossSettingsServiceCommitAiConfigTest {
     }
 
     private void useTemporaryHomeDirectory(Path tempHome) throws Exception {
-        if (originalHomeDir == null) {
-            originalHomeDir = getCachedHomeDirectory();
-        }
-        setCachedHomeDirectory(tempHome.toString());
+        availabilityFixture.useHome(tempHome);
         Files.createDirectories(tempHome.resolve(".codemoss"));
     }
 
@@ -337,57 +329,8 @@ public class CodemossSettingsServiceCommitAiConfigTest {
         Files.writeString(packageDir.resolve("package.json"), pkgJson.toString());
     }
 
-    /**
-     * Creates an executable stub for the legacy bundled Codex CLI at the layout
-     * {@link CliStatusDetector} probes, so codex availability does not depend on
-     * a real CLI being on the machine's PATH (CI runners have none).
-     */
-    private void installLegacyCodexCli(Path tempHome) throws Exception {
-        if (PlatformUtils.isWindows()) {
-            // Windows probes the real CLI through PATH resolution; a fake codex.exe
-            // cannot be produced here and is not needed.
-            return;
-        }
-        String platform = PlatformUtils.isMac() ? "darwin" : "linux";
-        String arch = "aarch64".equals(System.getProperty("os.arch"))
-                || "arm64".equals(System.getProperty("os.arch")) ? "aarch64" : "x86_64";
-        String triple = arch + ("darwin".equals(platform) ? "-apple-darwin" : "-unknown-linux-musl");
-        Path vendor = tempHome.resolve(".codemoss")
-                .resolve("dependencies")
-                .resolve("codex-sdk")
-                .resolve("node_modules")
-                .resolve("@openai")
-                .resolve("codex-sdk")
-                .resolve("vendor")
-                .resolve(triple)
-                .resolve("codex");
-        Files.createDirectories(vendor);
-        Path binary = vendor.resolve("codex");
-        Files.writeString(binary, "#!/bin/sh\nprintf 'codex-cli 0.117.0\\n'\n");
-        Files.setPosixFilePermissions(binary, PosixFilePermissions.fromString("rwxr-xr-x"));
-    }
-
-    /** The detector caches probe results for the whole JVM; tests need fresh probes per fixture. */
-    private void resetCliStatusDetectorCache() {
-        try {
-            Field cacheField = CliStatusDetector.class.getDeclaredField("detectAllCache");
-            cacheField.setAccessible(true);
-            cacheField.set(null, null);
-        } catch (ReflectiveOperationException ignored) {
-            // Detection then simply keeps whatever result is cached; tests that
-            // probe before the fixture exists would surface as flaky here.
-        }
-    }
-
-    private String getCachedHomeDirectory() throws Exception {
-        Field field = PlatformUtils.class.getDeclaredField("cachedRealHomeDir");
-        field.setAccessible(true);
-        return (String) field.get(null);
-    }
-
-    private void setCachedHomeDirectory(String homeDir) throws Exception {
-        Field field = PlatformUtils.class.getDeclaredField("cachedRealHomeDir");
-        field.setAccessible(true);
-        field.set(null, homeDir);
+    /** CLI execution is covered by detector tests; this fixture controls provider availability. */
+    private void configureCodexCli(Path tempHome) throws Exception {
+        availabilityFixture.installCodex(tempHome);
     }
 }

@@ -548,6 +548,8 @@ export const petBridge = {
     sendToJava('set_codex_pet_config', config),
   getLocalPets: () => sendToJava('get_codex_pets'),
   refreshAssets: () => sendToJava('refresh_codex_pet_assets'),
+  openOffice: () => sendToJava('open_codex_pet_office'),
+  exitOffice: () => sendToJava('exit_codex_pet_office'),
   getLocalPreview: (petId: string) => {
     const cached = localPreviewCache.get(petId);
     if (cached) {
@@ -604,10 +606,12 @@ export const petBridge = {
     style?: string;
     referencePath?: string;
   }) => sendToJava('prepare_hatch_pet_command', payload),
-  updateState: (sourceId: string, state: string) =>
-    sendToJava('set_codex_pet_state', { sourceId, state }),
-  showBubble: (payload: CodexPetBubblePayload) =>
-    sendToJava('show_codex_pet_bubble', payload),
+  updateState: (sourceId: string, state: string) => {
+    sendToJava('set_codex_pet_state', { sourceId, state });
+  },
+  showBubble: (payload: CodexPetBubblePayload) => {
+    sendToJava('show_codex_pet_bubble', payload);
+  },
 };
 
 export {

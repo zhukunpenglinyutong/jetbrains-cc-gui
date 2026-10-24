@@ -7,6 +7,7 @@ export interface HistorySelectionCheckboxProps {
   sessionId: string;
   sessionTitle: string;
   isSelected: boolean;
+  disabled?: boolean;
   t: TFunction;
   onSelectionToggle: (sessionId: string) => void;
 }
@@ -15,6 +16,7 @@ export const HistorySelectionCheckbox = ({
   sessionId,
   sessionTitle,
   isSelected,
+  disabled,
   t,
   onSelectionToggle,
 }: HistorySelectionCheckboxProps) => {
@@ -32,6 +34,7 @@ export const HistorySelectionCheckbox = ({
         type="checkbox"
         className="history-selection-checkbox"
         checked={isSelected}
+        disabled={disabled}
         onChange={handleCheckboxChange}
         onClick={stopPropagationHandler}
         aria-label={t('history.selectSessionWithTitle', { title: extractCommandMessageContent(sessionTitle) })}

@@ -57,6 +57,21 @@ public class CodexPetHandlerTest {
     }
 
     @Test
+    public void sharedWebpPackageIsListedByNameAndCanBePreviewed() throws Exception {
+        Path root = temporaryFolder.newFolder("shared-pets").toPath();
+        Path pet = Files.createDirectory(root.resolve("shared-duck"));
+        Files.write(pet.resolve("spritesheet.webp"), Base64.getDecoder().decode(
+                "UklGRh4AAABXRUJQVlA4TBEAAAAvB8ABEAdQz8JUu9yBiOh/AAA="));
+        Files.writeString(pet.resolve("pet.json"), "{\"displayName\":\"Shared duck\",\"spritesheetPath\":\"spritesheet.webp\"}");
+        JsonArray catalog = CodexPetHandler.loadPetAssets(root);
+        assertEquals(1, catalog.size());
+        assertEquals("shared-duck/spritesheet.webp", catalog.get(0).getAsJsonObject().get("id").getAsString());
+        assertEquals("Shared duck", catalog.get(0).getAsJsonObject().get("name").getAsString());
+        JsonObject preview = CodexPetHandler.loadPetPreview(root, "shared-duck/spritesheet.webp");
+        assertTrue(preview.get("dataUrl").getAsString().startsWith("data:image/webp;base64,"));
+    }
+
+    @Test
     public void exposesMoreThanTwentyFourInstalledPetsForSearchableSelection() throws Exception {
         Path root = temporaryFolder.newFolder("many-pets").toPath();
         byte[] image = pngImage(8, 8);

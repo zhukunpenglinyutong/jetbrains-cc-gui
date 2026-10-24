@@ -3,6 +3,7 @@ import {
   openBrowser,
   openClass,
   openFile,
+  sendToJava,
   showEditableDiff,
   showInteractiveDiff,
   undoFileChanges,
@@ -80,5 +81,16 @@ describe('bridge navigation helpers', () => {
     openBrowser('javascript:alert(1)');
 
     expect(window.sendToJava).not.toHaveBeenCalled();
+  });
+
+  it('returns bridge availability from sendToJava', () => {
+    const sendToJavaBridge = vi.fn();
+    window.sendToJava = sendToJavaBridge;
+
+    expect(sendToJava('test_bridge', { value: 1 })).toBe(true);
+    expect(sendToJavaBridge).toHaveBeenCalledWith('test_bridge:{"value":1}');
+
+    delete window.sendToJava;
+    expect(sendToJava('test_bridge')).toBe(false);
   });
 });

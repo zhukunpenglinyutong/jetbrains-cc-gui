@@ -21,7 +21,6 @@ import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
@@ -51,7 +50,6 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -79,6 +77,7 @@ public final class CodexPetFloatingService
     private static final String GLOBAL_STATE_KEY = "claudecodegui.codexPetFloating.globalState";
     private static final String DELETE_CONFIRMATION_KEY = "claudecodegui.codexPetFloating.confirmBeforeDelete";
     private static final AtomicLong GLOBAL_STATE_VERSION = new AtomicLong();
+    private static volatile boolean officeOverlayPermission = !com.intellij.openapi.util.SystemInfo.isWindows;
     private static final Set<CodexPetFloatingService> INSTANCES =
             Collections.newSetFromMap(new WeakHashMap<>());
     public static final String SCOPE_PROJECT = "project";
@@ -180,10 +179,38 @@ public final class CodexPetFloatingService
         synchronized (INSTANCES) {
             INSTANCES.add(this);
         }
+        Application app = ApplicationManager.getApplication();
+        if (app != null && !app.isUnitTestMode() && com.intellij.openapi.util.SystemInfo.isWindows) {
+            com.github.claudecodegui.pet.office.PetOfficeRuntimeService.getInstance().start();
+        }
     }
 
     public static CodexPetFloatingService getInstance(@NotNull Project project) {
         return project.getService(CodexPetFloatingService.class);
+    }
+
+    /** Worker-side revocation is immediate; no filesystem probe occurs during rendering or dragging. */
+    public static void revokeOfficeOverlayPermission() { officeOverlayPermission = false; }
+
+    public static boolean officeOverlayPermitted() { return officeOverlayPermission; }
+
+    /** Called only on the EDT. A detachment acknowledgement requires physical overlay removal. */
+    public static boolean reconcileOfficeDisplay(boolean allowOverlay) {
+        officeOverlayPermission = allowOverlay;
+        List<CodexPetFloatingService> services;
+        synchronized (INSTANCES) {
+            services = new ArrayList<>(INSTANCES);
+        }
+        boolean detached = true;
+        for (CodexPetFloatingService service : services) {
+            if (allowOverlay) {
+                service.syncComponent();
+            } else {
+                service.detachComponent();
+                detached &= service.overlayWindow == null && service.petComponent == null;
+            }
+        }
+        return detached;
     }
 
     @Override
@@ -223,6 +250,21 @@ public final class CodexPetFloatingService
         result.addProperty("scope", state.scope);
         return result;
     }
+
+    /** Immutable visual configuration; does not attach an overlay, advance animation or read Pet files. */
+    public synchronized VisualConfiguration visualConfiguration() {
+        String scope = normalizeScope(state.scope);
+        // Read a newer global configuration without consuming the overlay's pending reload/version.
+        PetState current = SCOPE_GLOBAL.equals(scope)
+                ? (observedGlobalStateVersion == GLOBAL_STATE_VERSION.get() ? globalState() : loadGlobalState()) : state;
+        Map<String, List<String>> mappings = new LinkedHashMap<>();
+        sanitizeActionMappings(current.actionMappings).forEach((key, value) -> mappings.put(key, List.copyOf(value)));
+        return new VisualConfiguration(sanitizePetId(current.selectedPetId), scope, current.opacity,
+                Map.copyOf(mappings), assetGeneration.get());
+    }
+
+    public record VisualConfiguration(String selectedPetId, String scope, double opacity,
+                                      Map<String, List<String>> actionMappings, long generation) { }
 
     static void addProjectPosition(JsonObject result, PetState projectState) {
         // Position belongs to the current project window even when visual settings are global.
@@ -572,7 +614,7 @@ public final class CodexPetFloatingService
             }
             boolean visible;
             synchronized (this) {
-                visible = activeState().enabled;
+                visible = activeState().enabled && officeOverlayPermission;
             }
             if (!visible) {
                 detachComponent();
@@ -604,6 +646,9 @@ public final class CodexPetFloatingService
             return;
         }
         detachComponent();
+        if (overlayWindow != null) {
+            return;
+        }
         Object existingOwner = targetPane.getClientProperty(PET_OWNER_KEY);
         if (existingOwner instanceof CodexPetFloatingService && existingOwner != this) {
             LOG.debug("[CodexPet] Another project already owns the pet slot for this IDE frame");
@@ -703,6 +748,9 @@ public final class CodexPetFloatingService
         }
         if (overlayWindow != null) {
             overlayWindow.dispose();
+            if (overlayWindow.isDisplayable()) {
+                return;
+            }
         }
         overlayWindow = null;
         petComponent = null;
@@ -814,7 +862,7 @@ public final class CodexPetFloatingService
             }
             Image image = "image/gif".equals(mimeType)
                     ? new ImageIcon(bytes).getImage()
-                    : ImageIO.read(new ByteArrayInputStream(bytes));
+                    : CodexPetImageSupport.readImage(bytes);
             if (image == null) {
                 return null;
             }

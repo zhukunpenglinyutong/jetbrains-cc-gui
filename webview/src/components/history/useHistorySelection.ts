@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { HistorySessionSummary } from '../../types';
 
 export const useHistorySelection = (sessions: HistorySessionSummary[], onDeleteSessions: (sessionIds: string[]) => void) => {
+  const deletableSessions = useMemo(() => sessions.filter(session => !session.running), [sessions]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(() => new Set());
   const [isDeletingSelected, setIsDeletingSelected] = useState(false);
 
-  const selectedCount = selectedSessionIds.size;
-  const allVisibleSelected = sessions.length > 0 && sessions.every(session => selectedSessionIds.has(session.sessionId));
+  const selectedCount = deletableSessions.filter(session => selectedSessionIds.has(session.sessionId)).length;
+  const allVisibleSelected = deletableSessions.length > 0 && deletableSessions.every(session => selectedSessionIds.has(session.sessionId));
 
   useEffect(() => {
     setSelectedSessionIds(prev => {
@@ -15,11 +16,11 @@ export const useHistorySelection = (sessions: HistorySessionSummary[], onDeleteS
         return prev;
       }
 
-      const visibleSessionIds = new Set(sessions.map(session => session.sessionId));
+      const visibleSessionIds = new Set(deletableSessions.map(session => session.sessionId));
       const next = new Set(Array.from(prev).filter(sessionId => visibleSessionIds.has(sessionId)));
       return next.size === prev.size ? prev : next;
     });
-  }, [sessions]);
+  }, [deletableSessions]);
 
   const enterSelectionMode = useCallback(() => {
     setIsSelectionMode(true);
@@ -32,6 +33,7 @@ export const useHistorySelection = (sessions: HistorySessionSummary[], onDeleteS
   }, []);
 
   const toggleSessionSelection = useCallback((sessionId: string) => {
+    if (!deletableSessions.some(session => session.sessionId === sessionId)) return;
     setSelectedSessionIds(prev => {
       const next = new Set(prev);
       if (next.has(sessionId)) {
@@ -41,26 +43,27 @@ export const useHistorySelection = (sessions: HistorySessionSummary[], onDeleteS
       }
       return next;
     });
-  }, []);
+  }, [deletableSessions]);
 
   const toggleSelectAllVisible = useCallback(() => {
     setSelectedSessionIds(prev => {
-      if (sessions.length > 0 && sessions.every(session => prev.has(session.sessionId))) {
+      if (deletableSessions.length > 0 && deletableSessions.every(session => prev.has(session.sessionId))) {
         return new Set();
       }
-      return new Set(sessions.map(session => session.sessionId));
+      return new Set(deletableSessions.map(session => session.sessionId));
     });
-  }, [sessions]);
+  }, [deletableSessions]);
 
   const confirmDeleteSelected = useCallback(() => {
-    if (selectedSessionIds.size === 0) {
+    const ids = deletableSessions.filter(session => selectedSessionIds.has(session.sessionId)).map(session => session.sessionId);
+    if (ids.length === 0) {
       setIsDeletingSelected(false);
       return;
     }
 
-    onDeleteSessions(Array.from(selectedSessionIds));
+    onDeleteSessions(ids);
     exitSelectionMode();
-  }, [selectedSessionIds, onDeleteSessions, exitSelectionMode]);
+  }, [selectedSessionIds, deletableSessions, onDeleteSessions, exitSelectionMode]);
 
   const startDeleteSelected = useCallback(() => {
     setIsDeletingSelected(true);

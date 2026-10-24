@@ -79,8 +79,9 @@ export function collectUnresolvedToolUseIds(
         const rawObj = typeof msg.raw === 'string' ? JSON.parse(msg.raw) : msg.raw;
         const content = rawObj?.content ?? rawObj?.message?.content;
         if (!Array.isArray(content)) continue;
-        for (const block of content as Array<{ type?: string; id?: string }>) {
+        for (const block of content as Array<{ type?: string; id?: string; name?: string }>) {
           if (block?.type === 'tool_use' && block.id
+              && block.name !== 'codex_user_input'
               && !resolvedIds.has(block.id)
               && !window.__deniedToolIds?.has(block.id)) {
             idsToAdd.push(block.id);
@@ -120,7 +121,7 @@ export function collectUnresolvedToolUseIds(
       }
 
       for (const tu of toolUses) {
-        if (!existingResultIds.has(tu.id) && !window.__deniedToolIds?.has(tu.id)) {
+        if (tu.name !== 'codex_user_input' && !existingResultIds.has(tu.id) && !window.__deniedToolIds?.has(tu.id)) {
           idsToAdd.push(tu.id);
         }
       }
