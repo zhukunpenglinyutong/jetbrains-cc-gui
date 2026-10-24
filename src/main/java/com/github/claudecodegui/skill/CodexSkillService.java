@@ -45,7 +45,6 @@ import java.util.regex.Pattern;
 public class CodexSkillService {
     private static final Logger LOG = Logger.getInstance(CodexSkillService.class);
     private static final Gson gson = new Gson();
-    private static final int MAX_SCAN_LEVELS = 3;
     private static final int MAX_SKILL_SCAN_DEPTH = 8;
     private static final int MAX_SKILL_SCAN_NODES = 10_000;
     private static final int MAX_DISCOVERED_SKILLS = 1_000;
@@ -92,10 +91,15 @@ public class CodexSkillService {
      */
     private static String normalizePath(String path) {
         if (path == null || path.isEmpty()) { return path; }
-        return Paths.get(path).toAbsolutePath().normalize().toString();
+        Path normalized = Paths.get(path).toAbsolutePath().normalize();
+        try {
+            return normalized.toRealPath().toString();
+        } catch (IOException ignored) {
+            return normalized.toString();
+        }
     }
 
-    static boolean isToggleSkillPathAllowed(String skillPath, String cwd) {
+    public static boolean isToggleSkillPathAllowed(String skillPath, String cwd) {
         if (skillPath == null || skillPath.isEmpty()) {
             return false;
         }
@@ -122,7 +126,7 @@ public class CodexSkillService {
     }
 
     /**
-     * Finds the repository root by walking up from cwd looking for a .git directory.
+     * Finds the nearest repository boundary, including Git worktree and submodule gitfiles.
      *
      * @return the repo root path, or null if not in a git repository
      */
@@ -130,11 +134,11 @@ public class CodexSkillService {
         if (cwd == null || cwd.isEmpty()) {
             return null;
         }
-        Path current = Paths.get(cwd).toAbsolutePath().normalize();
-        Path root = current.getRoot();
+        Path current = Paths.get(normalizePath(cwd));
 
-        while (current != null && !current.equals(root)) {
-            if (Files.isDirectory(current.resolve(".git"))) {
+        while (current != null) {
+            Path git = current.resolve(".git");
+            if (Files.isDirectory(git) || Files.isRegularFile(git)) {
                 return current.toString();
             }
             current = current.getParent();
@@ -146,8 +150,8 @@ public class CodexSkillService {
 
     /**
      * Gets the list of directories to scan for Codex skills.
-     * Scans from CWD upward (max 3 levels), ensures repo root is included,
-     * then adds the user-level ~/.agents/skills/ directory.
+     * Scans every ancestor through the nearest repository root, or only CWD outside a repository,
+     * then adds the configured user-level directories, matching native CLI discovery.
      */
     public static List<SkillScanDir> getSkillScanDirs(String cwd) {
         List<SkillScanDir> dirs = new ArrayList<>();
@@ -155,30 +159,18 @@ public class CodexSkillService {
 
         if (cwd != null && !cwd.isEmpty()) {
             String repoRoot = findRepoRoot(cwd);
-            Path current = Paths.get(cwd).toAbsolutePath().normalize();
-            Path fsRoot = current.getRoot();
-            int level = 0;
+            Path current = Paths.get(normalizePath(cwd));
 
-            while (level < MAX_SCAN_LEVELS && current != null && !current.equals(fsRoot)) {
+            while (current != null) {
                 String candidate = current.resolve(".agents").resolve("skills").toString();
                 String normalizedCandidate = normalizePath(candidate);
                 if (Files.isDirectory(Path.of(candidate)) && seen.add(normalizedCandidate)) {
                     dirs.add(new SkillScanDir(candidate, "repo"));
                 }
-                if (current.toString().equals(repoRoot)) {
+                if (repoRoot == null || current.toString().equals(repoRoot)) {
                     break;
                 }
                 current = current.getParent();
-                level++;
-            }
-
-            // Ensure repo root is scanned even if beyond 3 levels
-            if (repoRoot != null) {
-                String repoCandidate = Paths.get(repoRoot, ".agents", "skills").toString();
-                String normalizedRepo = normalizePath(repoCandidate);
-                if (Files.isDirectory(Path.of(repoCandidate)) && seen.add(normalizedRepo)) {
-                    dirs.add(new SkillScanDir(repoCandidate, "repo"));
-                }
             }
         }
 
@@ -193,13 +185,13 @@ public class CodexSkillService {
 
         // ~/.codex/skills/ (Codex CLI installed skills)
         if (isCodexConfigManagementAllowed()) {
-            String codexDir = Paths.get(userHome, ".codex", "skills").toString();
+            String codexDir = com.github.claudecodegui.util.CodexHomeResolver.resolve().resolve("skills").toString();
             if (Files.isDirectory(Path.of(codexDir)) && seen.add(normalizePath(codexDir))) {
                 dirs.add(new SkillScanDir(codexDir, "user"));
             }
 
             // ~/.codex/skills/.system/ (Codex system-level skills)
-            String systemDir = Paths.get(userHome, ".codex", "skills", ".system").toString();
+            String systemDir = Path.of(codexDir).resolve(".system").toString();
             if (Files.isDirectory(Path.of(systemDir)) && seen.add(normalizePath(systemDir))) {
                 dirs.add(new SkillScanDir(systemDir, "user"));
             }
@@ -491,10 +483,7 @@ public class CodexSkillService {
 
                 if (currentEnabled) {
                     // Disable: remove any existing entry first (idempotent), then add
-                    configList.removeIf(entry -> {
-                        Object pathVal = entry.get("path");
-                        return pathVal instanceof String && normalizedSkillPath.equals(normalizePath((String) pathVal));
-                    });
+                    removeSkillOverrides(configList, normalizedSkillPath);
                     Map<String, Object> entry = new LinkedHashMap<>();
                     entry.put("path", normalizedSkillPath);
                     entry.put("enabled", false);
@@ -502,10 +491,7 @@ public class CodexSkillService {
                     result.addProperty("enabled", false);
                 } else {
                     // Enable: remove matching entry
-                    configList.removeIf(entry -> {
-                        Object pathVal = entry.get("path");
-                        return pathVal instanceof String && normalizedSkillPath.equals(normalizePath((String) pathVal));
-                    });
+                    removeSkillOverrides(configList, normalizedSkillPath);
                     result.addProperty("enabled", true);
                 }
                 return true;
@@ -518,6 +504,14 @@ public class CodexSkillService {
             LOG.error("[CodexSkills] Toggle failed: " + e.getMessage(), e);
         }
         return result;
+    }
+
+    static void removeSkillOverrides(List<Map<String, Object>> entries, String skillPath) {
+        Path selected = Path.of(normalizePath(skillPath));
+        entries.removeIf(entry -> {
+            Object value = entry.get("path");
+            return value instanceof String path && selected.equals(Path.of(normalizePath(path)));
+        });
     }
 
     // ==================== Import ====================
@@ -688,31 +682,19 @@ public class CodexSkillService {
         List<Path> validBaseDirs = new ArrayList<>();
         String userHome = NodeDetector.resolveHomeForFileOps();
         validBaseDirs.add(Paths.get(userHome, ".agents", "skills"));
-        validBaseDirs.add(Paths.get(userHome, ".codex", "skills"));
-        validBaseDirs.add(Paths.get(userHome, ".codex", "skills", ".system"));
-        if (cwd != null && !cwd.isEmpty()) {
-            // Scan upward from cwd (consistent with getSkillScanDirs)
-            String repoRoot = findRepoRoot(cwd);
-            Path current = Paths.get(cwd).toAbsolutePath().normalize();
-            Path fsRoot = current.getRoot();
-            int level = 0;
-            while (level < MAX_SCAN_LEVELS && current != null && !current.equals(fsRoot)) {
-                validBaseDirs.add(current.resolve(".agents").resolve("skills"));
-                if (current.toString().equals(repoRoot)) {
-                    break;
-                }
-                current = current.getParent();
-                level++;
-            }
-            // Ensure repo root is included even if beyond MAX_SCAN_LEVELS
-            if (repoRoot != null) {
-                validBaseDirs.add(Paths.get(repoRoot, ".agents", "skills"));
+        validBaseDirs.add(com.github.claudecodegui.util.CodexHomeResolver.resolve().resolve("skills"));
+        validBaseDirs.add(com.github.claudecodegui.util.CodexHomeResolver.resolve().resolve("skills/.system"));
+        for (SkillScanDir scanDir : getSkillScanDirs(cwd)) {
+            if ("repo".equals(scanDir.scope())) {
+                validBaseDirs.add(Paths.get(scanDir.path()));
             }
         }
 
-        Path normalizedSkillDir = skillDir.toPath().toAbsolutePath().normalize();
+        // Resolve ancestor aliases, but retain the final entry so deleting a skill link
+        // still removes only that link rather than authorizing deletion of its target.
+        Path normalizedSkillDir = Paths.get(normalizePath(skillDir.getAbsoluteFile().getParent())).resolve(skillDir.getName());
         boolean isInsideValidDir = validBaseDirs.stream()
-                                           .anyMatch(base -> isPathSafe(normalizedSkillDir, base));
+                                           .anyMatch(base -> isPathSafe(normalizedSkillDir, Paths.get(normalizePath(base.toString()))));
         if (!isInsideValidDir) {
             result.addProperty("success", false);
             result.addProperty("error", "Skill directory is not inside a valid skills directory");
@@ -720,7 +702,7 @@ public class CodexSkillService {
             return result;
         }
 
-        Path codexSkillsDir = Paths.get(userHome, ".codex", "skills").toAbsolutePath().normalize();
+        Path codexSkillsDir = Paths.get(normalizePath(com.github.claudecodegui.util.CodexHomeResolver.resolve().resolve("skills").toString()));
         boolean isCodexManagedSkill = isPathSafe(normalizedSkillDir, codexSkillsDir);
 
         try {
@@ -838,10 +820,11 @@ public class CodexSkillService {
     }
 
     private static void deleteSkillDirectory(File skillDir) throws IOException {
-        // Delete a directory symlink itself, never the target it references.
-        if (Files.isSymbolicLink(skillDir.toPath())) {
+        // Windows junctions are reported as "other", not as symbolic links.
+        BasicFileAttributes attributes = Files.readAttributes(skillDir.toPath(), BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        if (attributes.isSymbolicLink() || attributes.isOther()) {
             Files.delete(skillDir.toPath());
-            LOG.info("[CodexSkills] Deleted symbolic link skill: " + skillDir);
+            LOG.info("[CodexSkills] Deleted linked skill entry: " + skillDir);
         } else {
             deleteDirectory(skillDir.toPath());
             LOG.info("[CodexSkills] Deleted skill directory: " + skillDir);
@@ -851,6 +834,16 @@ public class CodexSkillService {
     private static void deleteDirectory(Path dir) throws IOException {
         Path normalizedDir = dir.toAbsolutePath().normalize();
         Files.walkFileTree(dir, EnumSet.noneOf(FileVisitOption.class), Integer.MAX_VALUE, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attrs) throws IOException {
+                // NOFOLLOW_LINKS alone does not prevent descent into a Windows junction.
+                if (attrs.isSymbolicLink() || attrs.isOther()) {
+                    Files.delete(directory);
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                 if (!file.toAbsolutePath().normalize().startsWith(normalizedDir)) {

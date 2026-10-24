@@ -310,8 +310,7 @@ public abstract class BaseSDKBridge {
 
                 Process process = null;
                 try {
-                    process = pb.start();
-                    processManager.registerProcess(channelId, process);
+                    process = processManager.startManagedProcess(channelId, pb);
 
                     // Write to stdin
                     try (java.io.OutputStream stdin = process.getOutputStream()) {
@@ -346,6 +345,7 @@ public abstract class BaseSDKBridge {
                     process.waitFor();
 
                     int exitCode = process.exitValue();
+                    result.processExited = true;
                     boolean wasInterrupted = processManager.wasInterrupted(channelId);
 
                     result.finalResult = assistantContent.toString();
@@ -353,6 +353,7 @@ public abstract class BaseSDKBridge {
 
                     if (wasInterrupted) {
                         result.success = false;
+                        result.cancelled = exitCode != 0;
                         result.error = "User interrupted";
                         callback.onComplete(result);
                     } else if (!hadSendError.get()) {

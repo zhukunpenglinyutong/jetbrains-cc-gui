@@ -1,3 +1,5 @@
+import { withExecutionScope } from '../utils/execution-scope.js';
+
 /**
  * Claude channel command handler – isolates all Claude specific command logic
  * away from the shared channel-manager entry point.
@@ -25,7 +27,11 @@ import { listModels } from '../services/claude/models-service.js';
  * @param {string[]} args
  * @param {object|null} stdinData
  */
-export async function handleClaudeCommand(command, args, stdinData) {
+export function handleClaudeCommand(command, args, stdinData) {
+  return withExecutionScope(stdinData?.executionScope, () => handleScopedClaudeCommand(command, args, stdinData));
+}
+
+async function handleScopedClaudeCommand(command, args, stdinData) {
   switch (command) {
     case 'listModels':
       listModels();

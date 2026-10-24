@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -31,6 +32,107 @@ import static org.junit.Assert.assertTrue;
 public class CodexProviderTransportIntegrationTest {
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
+
+    @Test
+    public void nativeBootstrapHistoryAndChatMigrateLegacyConfigBeforeDispatch() throws Exception {
+        for (int entryPoint = 0; entryPoint < 3; entryPoint++) {
+            try (Fixture fixture = fixture("async-question-completed")) {
+                Path home = Path.of(fixture.scope);
+                String legacy = "disable_response_storage = true\nnetwork_access = \"enabled\"\n"
+                        + "windows_wsl_setup_acknowledged = true\n[model_aliases]\n\"test-model\" = \"vendor-model\"\n";
+                Files.writeString(home.resolve("config.toml"), legacy);
+                if (entryPoint == 0) {
+                    JsonObject result = fixture.bridge.preconnectCodex("fixture", fixture.cwd.toString(), null).get(15, TimeUnit.SECONDS);
+                    assertFalse(result.toString(), result.has("error"));
+                } else if (entryPoint == 1) {
+                    JsonObject result = fixture.bridge.readCodexNative("codex.readThread", "fixture", fixture.cwd.toString(),
+                            "th-test-root-0001", new JsonObject()).get(15, TimeUnit.SECONDS);
+                    assertFalse(result.toString(), result.has("error"));
+                } else {
+                    assertTrue(fixture.send().get(15, TimeUnit.SECONDS).success);
+                }
+                String migrated = Files.readString(home.resolve("config.toml"));
+                assertFalse(migrated.contains("disable_response_storage"));
+                assertFalse(migrated.contains("model_aliases"));
+                assertTrue(migrated.contains("[sandbox_workspace_write]"));
+                assertEquals(legacy, Files.readString(home.resolve("config.toml.pre-cli-migration.bak")));
+                assertEquals("vendor-model", new com.github.claudecodegui.settings.CodexSettingsManager(new com.google.gson.Gson(), home)
+                        .resolveModelAlias("test-model"));
+            }
+        }
+    }
+
+
+
+
+    @Test
+    public void concurrentIdeAndWeChatAnswersDispatchOnlyOneNativeDecision() throws Exception {
+        try (Fixture fixture = fixture("async-question")) {
+            CompletableFuture<SDKResult> send = fixture.send();
+            JsonObject question = fixture.awaitEvent("interactionRequested");
+            String remoteToken = fixture.bridge.getPendingCodexQuestions("fixture", "th-test-root-0001").get(0).remoteToken();
+            JsonObject answer = JsonParser.parseString("{\"answers\":{\"question-1\":{\"answers\":[\"A\"]}}}").getAsJsonObject();
+            CountDownLatch start = new CountDownLatch(1);
+            CompletableFuture<JsonObject> ide = CompletableFuture.supplyAsync(() -> {
+                await(start);
+                return fixture.bridge.respondCodexInteraction("fixture", fixture.cwd.toString(),
+                        string(question, "interactionKey"), string(question, "dialogToken"), answer);
+            });
+            CompletableFuture<JsonObject> weChat = CompletableFuture.supplyAsync(() -> {
+                await(start);
+                return fixture.bridge.respondCodexQuestion("fixture", fixture.cwd.toString(), "th-test-root-0001", remoteToken, answer);
+            });
+            start.countDown();
+            assertFalse(ide.get(15, TimeUnit.SECONDS).has("error") == weChat.get(15, TimeUnit.SECONDS).has("error"));
+            assertTrue(send.get(15, TimeUnit.SECONDS).success);
+            assertEquals(1, fixture.trace().stream().filter(event -> "turn/steer".equals(string(event, "method"))).count());
+        }
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(5, TimeUnit.SECONDS)) throw new AssertionError("Native response fixture did not start");
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(error);
+        }
+    }
+
+
+
+
+    /** Async question identities and typed replies survive the real Java/daemon transport. */
+    @Test
+    public void asyncQuestionDialogsCanAnswerDuringAndAfterTheOriginalNativeTurn() throws Exception {
+        for (boolean completed : new boolean[]{false, true}) {
+            try (Fixture fixture = this.fixture(completed ? "async-question-completed" : "async-question")) {
+                CompletableFuture<SDKResult> send = fixture.send();
+                JsonObject question = fixture.awaitEvent("interactionRequested");
+                assertTrue(question.has("interactionKey"));
+                assertTrue(question.has("dialogToken"));
+                assertFalse(question.getAsJsonObject("payload").getAsJsonObject("params").get("isBlocking").getAsBoolean());
+                if (completed) {
+                    assertTrue(send.get(15, TimeUnit.SECONDS).success);
+                }
+                JsonObject answers = JsonParser.parseString("{\"answers\":{\"question-1\":{\"answers\":[\"B\"]}}}").getAsJsonObject();
+                JsonObject reply = fixture.bridge.respondCodexInteraction("fixture", fixture.cwd.toString(),
+                        string(question, "interactionKey"), string(question, "dialogToken"), answers);
+                assertFalse(reply.toString(), reply.has("error"));
+                assertTrue(reply.toString(), reply.get("replied").getAsBoolean());
+                if (completed) {
+                    JsonObject followUp = reply.getAsJsonObject("followUp");
+                    assertEquals("th-test-root-0001", string(followUp, "threadId"));
+                    assertTrue(string(followUp, "text").endsWith("\nB"));
+                } else {
+                    assertFalse(reply.has("followUp"));
+                    assertTrue(send.get(15, TimeUnit.SECONDS).success);
+                    assertTrue(fixture.callback.messages.stream().anyMatch(message -> message.contains("Choose A, B or C\\nB")));
+                }
+                assertTrue(fixture.bridge.respondCodexInteraction("fixture", fixture.cwd.toString(),
+                        string(question, "interactionKey"), string(question, "dialogToken"), answers).has("error"));
+            }
+        }
+    }
 
     /** History reads and controls cannot steal live messages before the native terminal. */
     @Test
@@ -238,6 +340,9 @@ public class CodexProviderTransportIntegrationTest {
             String threadId = "th-test-root-0001";
             CodexThreadOwnerRegistry.claim(fixture.scope, threadId, "foreign-window");
             try {
+                assertFalse(fixture.bridge.ownsCodexThread(threadId));
+                assertFalse(fixture.bridge.ownsCodexThread(null));
+                assertFalse(fixture.bridge.ownsCodexThread("unknown-thread"));
                 JsonObject result = fixture.bridge.compactCodex("fixture", fixture.cwd.toString(), threadId, fixture.callback).get();
                 assertTrue(result.get("error").getAsString().contains("already owned"));
                 assertTrue(fixture.process.get() == null);
@@ -272,6 +377,87 @@ public class CodexProviderTransportIntegrationTest {
             assertFalse(ProcessHandle.of(peerPid).map(ProcessHandle::isAlive).orElse(false));
             assertTrue(CodexThreadOwnerRegistry.claim(fixture.scope, "th-test-root-0001", "another-window").acquired());
             CodexThreadOwnerRegistry.releaseOwner("another-window");
+        }
+    }
+
+    /** The idle-only flag must reach the daemon: ordinary release would cancel these waiting turns. */
+    @Test
+    public void idleDeletionReleasePreservesAnActiveApprovalOrQuestionAndOnlyClosesTheFinishedWriter() throws Exception {
+        for (String scenario : List.of("reverse-approval", "blocking-user-input")) {
+            try (Fixture fixture = fixture(scenario)) {
+                String threadId = "th-test-root-0001";
+                assertFalse(fixture.bridge.ownsCodexThread(threadId));
+                CompletableFuture<SDKResult> send = fixture.send();
+                JsonObject requested = fixture.awaitEvent("interactionRequested");
+                String epoch = string(requested, "sessionEpoch");
+                String generation = string(requested, "runtimeGeneration");
+                assertTrue(requested.toString(), epoch != null && !epoch.isBlank());
+                assertTrue(fixture.bridge.ownsCodexThread(threadId));
+                assertFalse(send.isDone());
+                Process daemon = fixture.process.get();
+                long peerPid = fixture.peerPid();
+                assertTrue(daemon.isAlive());
+                assertTrue(ProcessHandle.of(peerPid).orElseThrow().isAlive());
+                long revision = fixture.bridge.getCodexInteractionRevision();
+                List<CodexInteractionRegistry.Entry> questions = fixture.bridge.getPendingCodexQuestions("fixture", threadId);
+                if (scenario.equals("blocking-user-input")) {
+                    assertEquals(1, questions.size());
+                }
+
+                try {
+                    fixture.bridge.releaseIdleCodexThread("fixture", fixture.cwd.toString(), threadId).get(15, TimeUnit.SECONDS);
+                    throw new AssertionError("An active native owner must reject idle-only release");
+                } catch (java.util.concurrent.ExecutionException refusal) {
+                    assertTrue(refusal.getCause() instanceof RuntimeException);
+                    assertEquals("Codex session has pending work and cannot be deleted", refusal.getCause().getMessage());
+                }
+                assertFalse(send.isDone());
+                assertTrue(fixture.process.get() == daemon);
+                assertTrue(daemon.isAlive());
+                assertTrue(ProcessHandle.of(peerPid).orElseThrow().isAlive());
+                assertTrue(fixture.bridge.ownsCodexThread(threadId));
+                assertFalse(CodexThreadOwnerRegistry.claim(fixture.scope, threadId, "another-window").acquired());
+                assertEquals(revision, fixture.bridge.getCodexInteractionRevision());
+                if (scenario.equals("blocking-user-input")) {
+                    var stillPending = fixture.bridge.getPendingCodexQuestions("fixture", threadId);
+                    assertEquals(1, stillPending.size());
+                    assertEquals(questions.get(0).remoteToken(), stillPending.get(0).remoteToken());
+                }
+                assertEquals(0, fixture.callback.errors.get());
+                assertEquals(0, fixture.callback.completions.get());
+                assertFalse(fixture.trace().stream().anyMatch(event -> "turn/interrupt".equals(string(event, "method"))));
+
+                JsonObject answer = scenario.equals("blocking-user-input")
+                        ? JsonParser.parseString("{\"answers\":{\"choice\":{\"answers\":[\"B\"]}}}").getAsJsonObject() : new JsonObject();
+                if (scenario.equals("reverse-approval")) {
+                    answer.addProperty("decision", "accept");
+                }
+                JsonObject reply = fixture.bridge.respondCodexInteraction("fixture", fixture.cwd.toString(),
+                        string(requested, "interactionKey"), string(requested, "dialogToken"), answer);
+                assertFalse(reply.toString(), reply.has("error"));
+                assertTrue(send.get(15, TimeUnit.SECONDS).success);
+                JsonObject terminal = fixture.awaitEvent("operationDone");
+                assertEquals(epoch, string(terminal, "sessionEpoch"));
+                assertEquals(generation, string(terminal, "runtimeGeneration"));
+                assertEquals(1, fixture.callback.completions.get());
+                assertEquals(0, fixture.callback.errors.get());
+                if (scenario.equals("blocking-user-input")) {
+                    assertTrue(fixture.callback.messages.stream().anyMatch(message -> message.contains("choice") && message.contains("B")));
+                }
+                assertTrue(fixture.bridge.ownsCodexThread(threadId));
+                assertTrue(fixture.bridge.getPendingCodexQuestions("fixture", threadId).isEmpty());
+                assertEquals(1, fixture.trace().stream().filter(event -> "initialize".equals(string(event, "method"))).count());
+                assertTrue(fixture.trace().stream().anyMatch(event -> "server_response".equals(string(event, "kind"))));
+
+                JsonObject released = fixture.bridge.releaseIdleCodexThread("fixture", fixture.cwd.toString(), threadId)
+                        .get(15, TimeUnit.SECONDS);
+                assertFalse(released.toString(), released.has("error"));
+                assertFalse(ProcessHandle.of(peerPid).map(ProcessHandle::isAlive).orElse(false));
+                assertTrue(daemon.isAlive());
+                assertFalse(fixture.bridge.ownsCodexThread(threadId));
+                assertTrue(CodexThreadOwnerRegistry.claim(fixture.scope, threadId, "another-window").acquired());
+                CodexThreadOwnerRegistry.releaseOwner("another-window");
+            }
         }
     }
 
@@ -331,7 +517,7 @@ public class CodexProviderTransportIntegrationTest {
     }
 
     private Fixture fixture(String scenario) throws Exception {
-        Path root = this.folder.newFolder(scenario).toPath();
+        Path root = Files.createTempDirectory(this.folder.getRoot().toPath(), scenario + "-");
         Path cwd = Files.createDirectory(root.resolve("workspace"));
         Path trace = root.resolve("trace.ndjson");
         AtomicReference<Process> process = new AtomicReference<>();

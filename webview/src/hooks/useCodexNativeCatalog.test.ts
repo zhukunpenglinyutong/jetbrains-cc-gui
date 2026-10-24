@@ -6,7 +6,28 @@ const sendBridgeEvent = vi.hoisted(() => vi.fn());
 vi.mock('../utils/bridge', () => ({ sendBridgeEvent }));
 
 describe('useCodexNativeCatalog', () => {
-  afterEach(() => sendBridgeEvent.mockClear());
+  afterEach(() => { sendBridgeEvent.mockClear(); vi.useRealTimers(); });
+
+  it('refreshes after a working directory change and ignores the retired catalog response', async () => {
+    const { result, unmount } = renderHook(() => useCodexNativeCatalog('codex', '', true, 'skills'));
+    const requestId = JSON.parse(sendBridgeEvent.mock.calls[0][1]).requestId;
+    await act(async () => {
+      window.dispatchEvent(new Event('codex-working-directory-changed'));
+      await Promise.resolve();
+    });
+    expect(sendBridgeEvent).toHaveBeenCalledTimes(2);
+    act(() => window.dispatchEvent(new CustomEvent('codex-native-data', { detail: {
+      requestType: 'codex_native_list_skills', requestId, data: [{ name: 'retired' }],
+    } })));
+    expect(result.current.skills).toEqual([]);
+    unmount();
+    sendBridgeEvent.mockClear();
+    await act(async () => {
+      window.dispatchEvent(new Event('codex-working-directory-changed'));
+      await Promise.resolve();
+    });
+    expect(sendBridgeEvent).not.toHaveBeenCalled();
+  });
 
   it('ends loading with an error when the bridge rejects dispatch', () => {
     sendBridgeEvent.mockReturnValueOnce(false);
@@ -71,6 +92,42 @@ describe('useCodexNativeCatalog', () => {
       requestType: 'codex_native_list_skills', data: [{ name: 'stale', path: '/stale' }],
     } })));
     expect(result.current.skills).toEqual([]);
+  });
+
+  it('keeps a forced skills request when native reload emits skills/changed', async () => {
+    const { result } = renderHook(() => useCodexNativeCatalog('codex', '', true, 'skills'));
+    const requestId = JSON.parse(sendBridgeEvent.mock.calls[0][1]).requestId;
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('codex-runtime-event', { detail: { payload: { method: 'skills/changed' } } }));
+      await Promise.resolve();
+    });
+    expect(sendBridgeEvent).toHaveBeenCalledTimes(1);
+    act(() => window.dispatchEvent(new CustomEvent('codex-native-data', { detail: {
+      requestType: 'codex_native_list_skills', requestId, data: [{ name: 'enabled', path: '/skill.md', enabled: true }],
+    } })));
+    expect(result.current.skills[0].enabled).toBe(true);
+    expect(result.current.loading).toBe(false);
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('codex-runtime-event', { detail: { payload: { method: 'skills/changed' } } }));
+      await Promise.resolve();
+    });
+    expect(JSON.parse(sendBridgeEvent.mock.calls.at(-1)![1]).params.forceReload).toBe(false);
+    expect(result.current.skills).toHaveLength(1);
+  });
+
+  it('ends loading when a native response never arrives and ignores its late result', () => {
+    vi.useFakeTimers();
+    const { result, unmount } = renderHook(() => useCodexNativeCatalog('codex', '', true, 'skills'));
+    const requestId = JSON.parse(sendBridgeEvent.mock.calls[0][1]).requestId;
+    act(() => vi.advanceTimersByTime(45_000));
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toMatch(/timed out/);
+    act(() => window.dispatchEvent(new CustomEvent('codex-native-data', { detail: {
+      requestType: 'codex_native_list_skills', requestId, data: [{ name: 'late', path: '/late.md' }],
+    } })));
+    expect(result.current.skills).toEqual([]);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('ignores obsolete refreshes and flattens native per-cwd skills', () => {

@@ -529,6 +529,7 @@ public class PermissionHandler extends BaseMessageHandler {
     public CompletableFuture<Integer> showFrontendPermissionDialog(String toolName, JsonObject inputs) {
         String channelId = UUID.randomUUID().toString();
         CompletableFuture<Integer> future = new CompletableFuture<>();
+        bindExecutionInteraction(com.github.claudecodegui.session.SessionExecutionState.WaitReason.PERMISSION, future);
 
         LOG.info("[PERM_SHOW] showFrontendPermissionDialog called: channelId=" + channelId + ", toolName=" + toolName);
 
@@ -583,6 +584,7 @@ public class PermissionHandler extends BaseMessageHandler {
      * Show permission request dialog (from PermissionRequest).
      */
     public void showPermissionDialog(PermissionRequest request) {
+        bindExecutionInteraction(com.github.claudecodegui.session.SessionExecutionState.WaitReason.PERMISSION, request.getResultFuture());
         LOG.info("[PermissionHandler] 显示权限请求对话框: " + request.getToolName());
 
         try {
@@ -630,6 +632,21 @@ public class PermissionHandler extends BaseMessageHandler {
             }
 
             denyLegacyRequest(request, "Failed to show permission dialog");
+        }
+    }
+
+    private void bindExecutionInteraction(com.github.claudecodegui.session.SessionExecutionState.WaitReason reason, CompletableFuture<?> future) {
+        try {
+            com.github.claudecodegui.session.ClaudeSession owner = context.getSession();
+            if (owner != null) {
+                com.github.claudecodegui.session.SessionExecutionOwnership execution =
+                        com.github.claudecodegui.session.SessionInteractionScope.resolve(owner.getState().currentExecutionOwnership());
+                if (execution != null) {
+                    execution.bindInteraction(reason, future);
+                }
+            }
+        } catch (RuntimeException error) {
+            LOG.warn("[SessionExecution] Dialog observation unavailable", error);
         }
     }
 
@@ -801,6 +818,7 @@ public class PermissionHandler extends BaseMessageHandler {
      */
     public CompletableFuture<JsonObject> showAskUserQuestionDialog(String requestId, JsonObject questionsData) {
         CompletableFuture<JsonObject> future = new CompletableFuture<>();
+        bindExecutionInteraction(com.github.claudecodegui.session.SessionExecutionState.WaitReason.QUESTION, future);
 
         LOG.debug("[ASK_USER_QUESTION][SHOW_DIALOG] Starting showAskUserQuestionDialog");
         LOG.debug("[ASK_USER_QUESTION][SHOW_DIALOG] requestId=" + requestId);
@@ -915,6 +933,7 @@ public class PermissionHandler extends BaseMessageHandler {
      */
     public CompletableFuture<JsonObject> showPlanApprovalDialog(String requestId, JsonObject planData) {
         CompletableFuture<JsonObject> future = new CompletableFuture<>();
+        bindExecutionInteraction(com.github.claudecodegui.session.SessionExecutionState.WaitReason.PLAN, future);
 
         LOG.debug("[PLAN_APPROVAL][SHOW_DIALOG] Starting showPlanApprovalDialog");
         LOG.debug("[PLAN_APPROVAL][SHOW_DIALOG] requestId=" + requestId);

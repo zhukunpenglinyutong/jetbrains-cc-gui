@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.bridge.AiDataProcessGate;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.util.PlatformUtils;
@@ -449,7 +450,9 @@ public class TokenTrackerHandler {
      * desktop client's behavior).
      */
     private void spawnServer(String bin, int port) throws TokenTrackerException {
+        AiDataProcessGate.ProcessPermit processPermit = null;
         try {
+            processPermit = AiDataProcessGate.getInstance().acquireProcessPermit();
             ProcessBuilder pb = new ProcessBuilder(
                     bin, "serve", "--no-open", "--port", String.valueOf(port));
             pb.environment().put("TOKENTRACKER_NO_TELEMETRY", "1");
@@ -459,10 +462,20 @@ public class TokenTrackerHandler {
             pb.redirectInput(ProcessBuilder.Redirect.from(new File(PlatformUtils.isWindows() ? "NUL" : "/dev/null")));
             pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
             pb.redirectError(ProcessBuilder.Redirect.DISCARD);
-            pb.start();
+            Process process = pb.start();
+            AiDataProcessGate.ProcessPermit permit = processPermit;
+            processPermit = null;
+            process.toHandle().onExit().thenRun(permit::close);
             LOG.info("[TokenTrackerHandler] Started tokentracker server on port " + port);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new TokenTrackerException("Interrupted while waiting to start tokentracker server");
         } catch (Exception e) {
             throw new TokenTrackerException("Failed to start tokentracker server: " + e.getMessage());
+        } finally {
+            if (processPermit != null) {
+                processPermit.close();
+            }
         }
     }
 

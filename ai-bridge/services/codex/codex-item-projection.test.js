@@ -2,6 +2,46 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { projectCodexItemMessages } from './codex-item-projection.js';
 
+test('file changes emit their own terminal receipt so stream cleanup cannot mark a successful edit as denied', () => {
+  for (const status of ['completed', 'failed', 'declined', 'interrupted', 'inProgress', 'proposed']) {
+    const messages = projectCodexItemMessages({ type: 'fileChange', id: 'patch', status,
+      changes: [{ path: 'note.txt', kind: 'update', diff: '-8\n+9' }], stdout: 'Patch output' },
+    { threadId: 'thread', turnId: 'turn', authoritative: true });
+    const terminal = !['inProgress', 'proposed'].includes(status);
+    assert.equal(messages.length, terminal ? 2 : 1);
+    if (terminal) {
+      assert.equal(messages[1].codexItemId, 'patch:result');
+      assert.deepEqual(messages[1].message.content[0], {
+        type: 'tool_result', tool_use_id: 'patch', content: 'Patch output', is_error: status !== 'completed',
+      });
+    }
+  }
+});
+
+test('async native questions retain structured options in both live and reloaded history', () => {
+  const item = { type: 'agentMessage', id: 'question', delivery: 'async', text: 'Pick one.\n\n- A\n- B\n- C',
+    questions: [{ title: 'Pick one.', options: ['A', 'B', 'C'] }, { title: 'Any comment?', options: null }] };
+  for (const authoritative of [false, true]) {
+    const [raw] = projectCodexItemMessages(item, { threadId: 'thread', turnId: 'turn', authoritative });
+    const [block] = raw.message.content;
+    assert.equal(block.name, 'codex_user_input');
+    assert.equal(block.id, 'question');
+    assert.deepEqual(block.input.questions[0].options.map(option => option.label), ['A', 'B', 'C']);
+    assert.deepEqual(block.input.questions[1].options, []);
+    assert.equal(raw.codexItemId, 'question');
+  }
+});
+
+test('native clock waits never manufacture a tool receipt; actual dynamic errors stay errors', () => {
+  for (const item of [{ type: 'sleep', id: 'wait', durationMs: 60000 },
+    { type: 'Extension', kind: 'clock.sleep', id: 'wait', durationMs: 60000 }]) {
+    for (const authoritative of [false, true]) assert.deepEqual(projectCodexItemMessages(item, { authoritative }), []);
+  }
+  const item = { type: 'dynamicToolCall', id: 'other', tool: 'sleep', namespace: 'clock',
+    status: 'failed', success: false, contentItems: [{ type: 'inputText', text: 'Actual tool failure' }] };
+  assert.equal(projectCodexItemMessages(item)[1].message.content[0].is_error, true);
+});
+
 test('native collab control calls settle their own card without completing a running child', () => {
   for (const tool of ['wait', 'sendMessage', 'resumeAgent', 'closeAgent']) {
     const item = { id: `control-${tool}`, type: 'collabAgentToolCall', tool, status: 'completed',
@@ -133,6 +173,23 @@ test('terminal commands and MCP calls retain empty results and failure states', 
   }
   const [running] = projectCodexItemMessages({ id: 'mcp', type: 'mcpToolCall', status: 'inProgress', result: null });
   assert.equal(running.message.content[0].type, 'tool_use');
+});
+
+test('completed MCP transport receipts retain tool-level failures in live and restored projections', () => {
+  for (const authoritative of [false, true]) {
+    for (const status of ['completed', 'failed', 'declined', 'interrupted']) {
+      for (const isError of [true, false, undefined]) {
+        const item = { type: 'mcpToolCall', id: 'mcp-result', tool: 'inspect', server: 'fixture', status,
+          result: { ...(isError !== undefined ? { isError } : {}), content: [{ type: 'text', text: 'Tool response' }] } };
+        const before = JSON.stringify(item);
+        const messages = projectCodexItemMessages(item, { threadId: 'thread', turnId: 'turn', authoritative });
+        assert.equal(messages[0].message.content[0].name, 'inspect');
+        assert.equal(messages[1].message.content[0].is_error, status !== 'completed' || isError === true);
+        assert.deepEqual(messages[1].message.content[0].content, [{ type: 'text', text: 'Tool response' }]);
+        assert.equal(JSON.stringify(item), before);
+      }
+    }
+  }
 });
 
 test('unknown visible native items keep their original type in a generic card', () => {

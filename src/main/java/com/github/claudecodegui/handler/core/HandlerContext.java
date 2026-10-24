@@ -8,8 +8,10 @@ import com.github.claudecodegui.provider.zcode.ZcodeSDKBridge;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.jcef.JBCefBrowser;
+import com.google.gson.JsonObject;
 
 import java.util.function.BooleanSupplier;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 /**
@@ -31,6 +33,7 @@ public class HandlerContext {
     private final BooleanSupplier activeContentSupplier;
     private final Supplier<String> contentTitleSupplier;
     private volatile Runnable contentActivator = () -> { };
+    private volatile BiFunction<ClaudeSession, Supplier<JsonObject>, JsonObject> codexInteractionResponder = (owner, response) -> response.get();
 
     // Mutable state accessed via getters/setters — volatile for thread safety
     private volatile ClaudeSession session;
@@ -217,6 +220,15 @@ public class HandlerContext {
     }
 
     // Setters
+    /** Keeps remote question continuations inside the originating tracked turn. */
+    public JsonObject respondToCodexInteraction(ClaudeSession owner, Supplier<JsonObject> response) {
+        return codexInteractionResponder.apply(owner, response);
+    }
+
+    public void setCodexInteractionResponder(BiFunction<ClaudeSession, Supplier<JsonObject>, JsonObject> responder) {
+        this.codexInteractionResponder = responder;
+    }
+
     public void setSession(ClaudeSession session) {
         this.session = session;
     }

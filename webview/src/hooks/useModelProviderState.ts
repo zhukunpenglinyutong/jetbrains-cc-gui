@@ -79,15 +79,29 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     currentProviderRef.current = currentProvider;
   }, [currentProvider]);
 
+  // A previous provider's confirmation cannot describe a newly selected runtime.
+  useEffect(() => {
+    setCodexEffectiveSettings(null);
+  }, [currentProvider]);
+
   // Native settings acknowledgements only become effective after the app
   // server emits thread/settings/updated. Keep that boundary visible to the
   // UI so a mid-turn selection is presented as “next turn” until confirmed.
   useEffect(() => {
     const handleRuntimeEvent = (event: Event) => {
       const detail = (event as CustomEvent<Record<string, unknown>>).detail;
-      if (currentProvider !== 'codex' || !detail || detail.kind !== 'thread/settings/updated'
-        || (detail.rootThreadId && detail.threadId !== detail.rootThreadId)) return;
+      if (currentProvider !== 'codex' || !detail) return;
       const payload = detail.payload;
+      const runtimeState = payload && typeof payload === 'object'
+        ? (payload as Record<string, unknown>).state : undefined;
+      if (detail.kind === 'runtimeReset' || (detail.kind === 'runtimeStateChanged'
+        && typeof runtimeState === 'string'
+        && ['starting', 'initializing', 'draining', 'stopped', 'failed'].includes(runtimeState))) {
+        setCodexEffectiveSettings(null);
+        return;
+      }
+      if (detail.kind !== 'thread/settings/updated'
+        || (detail.rootThreadId && detail.threadId !== detail.rootThreadId)) return;
       setCodexEffectiveSettings(payload && typeof payload === 'object' && !Array.isArray(payload)
         ? payload as Record<string, unknown> : null);
       const settings = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
