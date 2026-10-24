@@ -15,6 +15,7 @@ import {
   useProviderManagement,
   useCodexProviderManagement,
   useAgentManagement,
+  useHookManagement,
   useSettingsWindowCallbacks,
   useSettingsPageState,
   useSettingsThemeSync,
@@ -116,6 +117,7 @@ const SettingsView = ({
   const agentManagement = useAgentManagement({
     onSuccess: (msg) => pageState.addToast(msg, 'success'),
   });
+  const hooksManagement = useHookManagement();
 
   // Note: Prompt management is now handled internally by PromptSection component
 
@@ -123,6 +125,7 @@ const SettingsView = ({
     loadProviders: providerManagement.loadProviders,
     loadCodexProviders: codexProviderManagement.loadCodexProviders,
     loadAgents: agentManagement.loadAgents,
+    loadHooks: hooksManagement.loadHooks,
   });
 
   // Register window callbacks for Java bridge communication
@@ -133,6 +136,7 @@ const SettingsView = ({
     ...providerManagement,
     ...codexProviderManagement,
     ...agentManagement,
+    ...hooksManagement,
     onStreamingEnabledChangeProp,
     onSendShortcutChangeProp,
   });
@@ -190,6 +194,7 @@ const SettingsView = ({
           providerManagement={providerManagement}
           codexProviderManagement={codexProviderManagement}
           agentManagement={agentManagement}
+          hooksManagement={hooksManagement}
         />
       </div>
 
