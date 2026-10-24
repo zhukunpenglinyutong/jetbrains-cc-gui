@@ -577,7 +577,8 @@ public class DependencyHandler extends BaseMessageHandler {
 
     private JsonObject buildVersionPayload(String sdkId) {
         JsonObject json = new JsonObject();
-        List<String> remoteVersions = this.dependencyManager.getAvailableVersions(sdkId);
+        DependencyManager.VersionQueryResult result = this.dependencyManager.getVersionInfo(sdkId);
+        List<String> remoteVersions = result.versions();
         List<String> fallbackVersions = this.dependencyManager.getFallbackVersions(sdkId);
         boolean usingRemote = !remoteVersions.isEmpty();
         List<String> effectiveVersions = usingRemote ? remoteVersions : fallbackVersions;
@@ -587,13 +588,13 @@ public class DependencyHandler extends BaseMessageHandler {
         json.add("fallbackVersions", this.gson.toJsonTree(fallbackVersions));
         json.addProperty("source", usingRemote ? "remote" : "fallback");
 
-        String latestVersion = this.dependencyManager.getLatestVersion(sdkId);
+        String latestVersion = result.latestVersion();
         if (latestVersion != null && !latestVersion.isEmpty()) {
             json.addProperty("latestVersion", latestVersion);
         }
 
         if (!usingRemote) {
-            json.addProperty("error", "remote_versions_unavailable");
+            json.addProperty("error", result.error());
         }
 
         return json;

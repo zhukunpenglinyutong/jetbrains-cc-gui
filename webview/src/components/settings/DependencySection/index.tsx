@@ -29,6 +29,7 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
     handleUninstall,
     handleUpdate,
     handleRetryStatus,
+    handleRetryVersions,
   } = useDependencySection({ addToast, isActive });
 
   // Only allow one operation at a time (install, uninstall, or update)
@@ -77,6 +78,7 @@ const DependencySection = ({ addToast, isActive }: DependencySectionProps) => {
               onInstall={() => handleInstall(sdk.id)}
               onUpdate={() => handleUpdate(sdk.id)}
               onUninstall={() => handleUninstall(sdk.id)}
+              onRetryVersions={() => handleRetryVersions(sdk.id)}
             />
           ))
         )}
