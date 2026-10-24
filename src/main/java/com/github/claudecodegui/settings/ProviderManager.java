@@ -894,8 +894,10 @@ public class ProviderManager {
             currentId = claude.get("current").getAsString();
         }
 
+        // An explicitly empty id is a valid disabled state and must not trigger a config rewrite.
         boolean invalidCurrent = currentId == null
-                || (!LOCAL_SETTINGS_PROVIDER_ID.equals(currentId)
+                || (!currentId.isEmpty()
+                    && !LOCAL_SETTINGS_PROVIDER_ID.equals(currentId)
                     && !CLI_LOGIN_PROVIDER_ID.equals(currentId)
                     && !providers.has(currentId));
 
