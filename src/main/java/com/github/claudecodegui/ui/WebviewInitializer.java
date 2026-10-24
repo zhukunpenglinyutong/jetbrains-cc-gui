@@ -47,9 +47,9 @@ import java.awt.dnd.DropTargetDropEvent;
 import java.io.File;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.IntPredicate;
 import java.util.function.Supplier;
 
@@ -107,10 +107,7 @@ public class WebviewInitializer {
     private final WebviewHost host;
 
     private final Object bridgeLock = new Object();
-    /** Invalidates background preparation when the browser lifecycle advances. */
-    private final AtomicInteger initializationGeneration = new AtomicInteger();
-    /** Prevents duplicate background preparation for one browser lifecycle. */
-    private final AtomicBoolean initializationInProgress = new AtomicBoolean();
+    private final InitializationState initialization = new InitializationState();
 
     private static void applyNodePathToCliBridges(Map<String, MarkerCliBridge> cliBridges, String path) {
         if (cliBridges == null) {
@@ -129,6 +126,7 @@ public class WebviewInitializer {
      * native callback handles during a watchdog recreation.
      */
     private volatile BrowserBridges bridges;
+    private boolean browserCleanupFailed;
     private int pageGeneration;
     private PageLoadKind nextBrowserPageLoadKind = PageLoadKind.INITIAL_LOAD;
 
@@ -144,10 +142,14 @@ public class WebviewInitializer {
             invokeLaterForToolWindow(this::createUIComponents);
             return;
         }
-        if (this.host.isDisposed()) {
+        if (isOwnerDisposed()) {
             return;
         }
         JBCefBrowser existingBrowser = this.host.getBrowser();
+        if (browserCleanupFailed) {
+            showWebviewRecoveryFailedPanel();
+            return;
+        }
         if (existingBrowser != null) {
             // Browser lifecycle is owned by this initializer. Remote JCEF can
             // report isClosed() for an active proxy, so a non-null host browser
@@ -155,12 +157,24 @@ public class WebviewInitializer {
             LOG.debug("Skip duplicate webview initialization: browser is already active");
             return;
         }
-        if (!this.initializationInProgress.compareAndSet(false, true)) {
+        int initializationId = this.initialization.begin();
+        if (initializationId == 0) {
             LOG.debug("Skip duplicate webview initialization: preparation is already running");
             return;
         }
 
-        int initializationId = this.initializationGeneration.incrementAndGet();
+        try {
+            schedulePreparation(initializationId);
+        } catch (RuntimeException | LinkageError error) {
+            releaseInitialization(initializationId);
+            if (!isOwnerDisposed()) {
+                LOG.warn("Unable to schedule webview preparation", error);
+                showErrorPanel();
+            }
+        }
+    }
+
+    private void schedulePreparation(int initializationId) {
         // Use the shared resolver from BridgePreloader for consistent state.
         com.github.claudecodegui.bridge.BridgeDirectoryResolver sharedResolver =
                 BridgePreloader.getSharedResolver();
@@ -325,12 +339,12 @@ public class WebviewInitializer {
             int initializationId,
             InitializationResult result
     ) {
-        if (host.isDisposed()) {
+        if (isOwnerDisposed()) {
             releaseInitialization(initializationId);
             return;
         }
         invokeLaterForToolWindow(() -> {
-            if (!isCurrentInitialization(initializationId) || host.isDisposed()) {
+            if (!isCurrentInitialization(initializationId) || isOwnerDisposed()) {
                 releaseInitialization(initializationId);
                 return;
             }
@@ -348,7 +362,7 @@ public class WebviewInitializer {
                     return;
                 case READY:
                     try {
-                        continueCreateUIComponentsAfterNodeSetup(result.nodeResult, result.htmlContent);
+                        continueCreateUIComponentsAfterNodeSetup(initializationId, result.nodeResult, result.htmlContent);
                     } finally {
                         releaseInitialization(initializationId);
                     }
@@ -356,8 +370,7 @@ public class WebviewInitializer {
                 case ENVIRONMENT_UNAVAILABLE:
                 case FAILURE:
                 default:
-                    // default guards future enum values: skipping the release would leave
-                    // initializationInProgress latched and block every later browser creation.
+                    // Release terminal results so a later explicit retry can start fresh.
                     releaseInitialization(initializationId);
                     if (result.errorMessage != null) {
                         LOG.warn("Webview preparation failed: " + result.errorMessage);
@@ -369,14 +382,11 @@ public class WebviewInitializer {
     }
 
     private boolean isCurrentInitialization(int initializationId) {
-        return this.initializationGeneration.get() == initializationId
-                && this.initializationInProgress.get();
+        return this.initialization.isCurrent(initializationId) && !isOwnerDisposed();
     }
 
     private void releaseInitialization(int initializationId) {
-        if (this.initializationGeneration.get() == initializationId) {
-            this.initializationInProgress.set(false);
-        }
+        this.initialization.finish(initializationId);
     }
 
     /**
@@ -384,9 +394,13 @@ public class WebviewInitializer {
      * Browser creation and Swing/JCEF registration must remain on the EDT.
      */
     private void continueCreateUIComponentsAfterNodeSetup(
+            int initializationId,
             NodeDetectionResult nodeResult,
             String htmlContent
     ) {
+        if (!isCurrentInitialization(initializationId) || host.getBrowser() != null) {
+            return;
+        }
         ClaudeSDKBridge claudeSDKBridge = host.getClaudeSDKBridge();
         JPanel mainPanel = host.getMainPanel();
         JBCefBrowser browser = null;
@@ -416,6 +430,11 @@ public class WebviewInitializer {
 
         try {
             browser = JBCefBrowserFactory.create(host.getOsrHandlerFactory());
+            // Native creation may pump EDT events. Recheck ownership before publishing it.
+            if (!isCurrentInitialization(initializationId) || host.getBrowser() != null) {
+                browser.dispose();
+                return;
+            }
             JBCefBrowser createdBrowser = browser;
             host.setBrowser(createdBrowser);
             host.getHandlerContext().setBrowser(createdBrowser);
@@ -656,14 +675,24 @@ public class WebviewInitializer {
                 }
             });
 
+            if (!isCurrentInitialization(initializationId) || host.getBrowser() != createdBrowser) {
+                disposeFailedBrowser(createdBrowser);
+                return;
+            }
             mainPanel.add(browserComponent, BorderLayout.CENTER);
             mainPanel.revalidate();
             mainPanel.repaint();
             host.getWebviewWatchdog().resetTimestamps();
             host.getWebviewWatchdog().start();
+            LOG.info("Webview browser attached, initializerId=" + System.identityHashCode(this)
+                    + ", browserId=" + System.identityHashCode(createdBrowser)
+                    + ", pageGeneration=" + initialPageGeneration);
 
         } catch (IllegalStateException e) {
             this.disposeFailedBrowser(browser);
+            if (!isCurrentInitialization(initializationId)) {
+                return;
+            }
             if (e.getMessage() != null && e.getMessage().contains("JCEF")) {
                 LOG.error("JCEF initialization failed: " + e.getMessage(), e);
                 showJcefNotSupportedPanel(JBCefBrowserFactory.JcefSupportStatus.UNAVAILABLE);
@@ -673,6 +702,9 @@ public class WebviewInitializer {
             }
         } catch (NullPointerException e) {
             this.disposeFailedBrowser(browser);
+            if (!isCurrentInitialization(initializationId)) {
+                return;
+            }
             String msg = e.getMessage();
             if (msg != null && msg.contains("isNull") && msg.contains("robj")) {
                 LOG.error("JCEF remote mode incompatibility: " + e.getMessage(), e);
@@ -683,10 +715,16 @@ public class WebviewInitializer {
             }
         } catch (Exception e) {
             this.disposeFailedBrowser(browser);
+            if (!isCurrentInitialization(initializationId)) {
+                return;
+            }
             LOG.error("Failed to create UI components: " + e.getMessage(), e);
             showErrorPanel();
         } catch (LinkageError e) {
             this.disposeFailedBrowser(browser);
+            if (!isCurrentInitialization(initializationId)) {
+                return;
+            }
             // Platform/JBR binary mismatch (e.g. Android Studio 2026.x whose
             // bundled JBR lacks JCefAppConfig.isRemoteEnabled()) throws Error,
             // not Exception - it must not crash the EDT with a blank panel.
@@ -1110,15 +1148,22 @@ public class WebviewInitializer {
         if (currentBridges != null) {
             currentBridges.dispose();
         }
+        try {
+            browser.dispose();
+        } catch (Exception | LinkageError e) {
+            browserCleanupFailed = true;
+            if (host.getBrowser() == null) {
+                host.setBrowser(browser);
+            }
+            LOG.warn("Failed to dispose browser after webview initialization error: " + e.getMessage(), e);
+            return;
+        }
         if (this.host.getBrowser() == browser) {
             this.host.setBrowser(null);
             this.host.getHandlerContext().setBrowser(null);
         }
-        try {
-            browser.dispose();
-        } catch (Exception | LinkageError e) {
-            LOG.warn("Failed to dispose browser after webview initialization error: " + e.getMessage(), e);
-        }
+        LOG.info("Incomplete webview browser disposed, initializerId=" + System.identityHashCode(this)
+                + ", browserId=" + System.identityHashCode(browser));
     }
 
     /**
@@ -1297,12 +1342,37 @@ public class WebviewInitializer {
     }
 
     private void invokeLaterForToolWindow(@NotNull Runnable runnable) {
-        Project project = this.host.getProject();
-        if (project != null && !project.isDisposed()) {
-            ToolWindowManager.getInstance(project).invokeLater(runnable);
+        if (isOwnerDisposed()) {
             return;
         }
-        ApplicationManager.getApplication().invokeLater(runnable);
+        Project project = this.host.getProject();
+        Consumer<Runnable> scheduler = project == null
+                ? action -> ApplicationManager.getApplication().invokeLater(action)
+                : action -> ToolWindowManager.getInstance(project).invokeLater(action);
+        scheduleWhileAlive(this::isOwnerDisposed, scheduler, runnable);
+    }
+
+    private boolean isOwnerDisposed() {
+        Project project = host.getProject();
+        return host.isDisposed() || (project != null && project.isDisposed());
+    }
+
+    /** Check both before enqueueing and at delivery; never fall back for a disposed project. */
+    static void scheduleWhileAlive(BooleanSupplier disposed, Consumer<Runnable> scheduler, Runnable action) {
+        if (disposed.getAsBoolean()) {
+            return;
+        }
+        try {
+            scheduler.accept(() -> {
+                if (!disposed.getAsBoolean()) {
+                    action.run();
+                }
+            });
+        } catch (RuntimeException | LinkageError error) {
+            if (!disposed.getAsBoolean()) {
+                throw error;
+            }
+        }
     }
 
     /**
@@ -1411,7 +1481,7 @@ public class WebviewInitializer {
                         applyNodePathToCliBridges(cliBridges, detectedPath);
                         LOG.info("Auto-detected and saved Node.js path: " + detectedPath);
                     }
-                    reinitializeUi(mainPanel);
+                    reinitializeUi();
                     return;
                 }
 
@@ -1424,7 +1494,7 @@ public class WebviewInitializer {
                     codexSDKBridge.setNodeExecutable(manualPath);
                     applyNodePathToCliBridges(cliBridges, manualPath);
                     LOG.info("Saved manual Node.js path: " + manualPath);
-                    reinitializeUi(mainPanel);
+                    reinitializeUi();
                 } else {
                     // Verification failed, show error and don't save invalid path.
                     // Don't reinitialize UI, let user try again.
@@ -1445,16 +1515,8 @@ public class WebviewInitializer {
     /**
      * Rebuild the tool window UI on the EDT after the Node.js path changed.
      */
-    private void reinitializeUi(JPanel mainPanel) {
-        invokeLaterForToolWindow(() -> {
-            if (host.isDisposed()) {
-                return;
-            }
-            mainPanel.removeAll();
-            createUIComponents();
-            mainPanel.revalidate();
-            mainPanel.repaint();
-        });
+    private void reinitializeUi() {
+        recreateWebview("node_path_changed", true);
     }
 
     /**
@@ -1463,6 +1525,10 @@ public class WebviewInitializer {
     public void reloadWebview(String reason) {
         runOnEventDispatchThread(() -> {
             if (host.isDisposed()) { return; }
+            if (browserCleanupFailed) {
+                showWebviewRecoveryFailedPanel();
+                return;
+            }
             JBCefBrowser browser = host.getBrowser();
             if (browser == null) {
                 recreateWebview(reason + "_no_browser");
@@ -1525,13 +1591,25 @@ public class WebviewInitializer {
      * Recreate the webview from scratch (dispose old, create new).
      */
     public void recreateWebview(String reason) {
+        recreateWebview(reason, false);
+    }
+
+    private void recreateWebview(String reason, boolean replacePreparation) {
         runOnEventDispatchThread(() -> {
-            if (host.isDisposed()) { return; }
+            if (isOwnerDisposed()) { return; }
+            if (browserCleanupFailed) {
+                showWebviewRecoveryFailedPanel();
+                return;
+            }
+            JBCefBrowser browser = host.getBrowser();
+            if (!replacePreparation && initialization.isInProgress()) {
+                LOG.debug("[WebviewWatchdog] Reuse pending webview preparation (" + reason + ")");
+                return;
+            }
 
             // Invalidate a preparation worker even when the old browser is already absent.
             // Otherwise a stale worker can publish its HTML after this recreate request.
-            this.initializationGeneration.incrementAndGet();
-            this.initializationInProgress.set(false);
+            this.initialization.invalidate();
 
             synchronized (this.bridgeLock) {
                 this.nextBrowserPageLoadKind = recoveryPageLoadKind();
@@ -1540,7 +1618,6 @@ public class WebviewInitializer {
             host.activatePageGeneration(invalidationGeneration);
             host.setFrontendReady(false);
             JPanel mainPanel = host.getMainPanel();
-            JBCefBrowser browser = host.getBrowser();
             try {
                 if (browser != null) {
                     try {
@@ -1550,13 +1627,19 @@ public class WebviewInitializer {
                     // Release the JS bridges before the browser itself so the
                     // native callback handles do not outlive the browser.
                     this.disposeBridges();
-                    host.getHandlerContext().setBrowser(null);
-                    host.setBrowser(null);
                     try {
                         browser.dispose();
+                        LOG.info("Previous webview browser disposed, initializerId=" + System.identityHashCode(this)
+                                + ", browserId=" + System.identityHashCode(browser));
                     } catch (Exception | LinkageError e) {
-                        LOG.debug("[WebviewWatchdog] Failed to dispose old browser: " + e.getMessage(), e);
+                        browserCleanupFailed = true;
+                        LOG.warn("[WebviewWatchdog] Browser disposal failed; replacement cancelled", e);
+                        showWebviewRecoveryFailedPanel();
+                        return;
                     }
+                    host.getHandlerContext().setBrowser(null);
+                    host.setBrowser(null);
+                    browserCleanupFailed = false;
                 }
 
                 LOG.info("[WebviewWatchdog] Recreating webview (" + reason + ")");
@@ -1564,7 +1647,7 @@ public class WebviewInitializer {
                 createUIComponents();
                 mainPanel.revalidate();
                 mainPanel.repaint();
-            } catch (Exception e) {
+            } catch (Exception | LinkageError e) {
                 LOG.warn("[WebviewWatchdog] Recreate failed: " + e.getMessage(), e);
                 // An exception reaching here escaped createUIComponents' internal
                 // handler (which already routes JCEF remote NPEs to the restart
@@ -1595,8 +1678,7 @@ public class WebviewInitializer {
         // A preparation worker may still be reading the bundled page when the browser is
         // replaced or the window is disposed. Invalidate its EDT continuation so it cannot
         // attach stale HTML to a later browser lifecycle.
-        this.initializationGeneration.incrementAndGet();
-        this.initializationInProgress.set(false);
+        this.initialization.invalidate();
 
         BrowserBridges currentBridges;
         synchronized (this.bridgeLock) {
@@ -1611,6 +1693,39 @@ public class WebviewInitializer {
         // dispatching into the host.
         if (currentBridges != null) {
             currentBridges.dispose();
+        }
+    }
+
+    /** Owns preparation admission and invalidation as one atomic state transition. */
+    static final class InitializationState {
+        private int generation;
+        private boolean inProgress;
+
+        synchronized int begin() {
+            if (inProgress) {
+                return 0;
+            }
+            inProgress = true;
+            return ++generation;
+        }
+
+        synchronized boolean isCurrent(int expectedGeneration) {
+            return inProgress && generation == expectedGeneration;
+        }
+
+        synchronized boolean isInProgress() {
+            return inProgress;
+        }
+
+        synchronized void finish(int expectedGeneration) {
+            if (generation == expectedGeneration) {
+                inProgress = false;
+            }
+        }
+
+        synchronized void invalidate() {
+            generation++;
+            inProgress = false;
         }
     }
 

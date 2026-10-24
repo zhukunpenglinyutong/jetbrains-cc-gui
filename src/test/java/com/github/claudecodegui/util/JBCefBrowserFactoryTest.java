@@ -6,12 +6,146 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Tests browser-builder compatibility gates and keyboard/JCEF support helpers without creating a
  * live browser process.
  */
 public class JBCefBrowserFactoryTest {
+
+    @Test
+    public void disposesPartialPrimaryBeforeAllocatingFallback() {
+        BrowserFixture fixture = new BrowserFixture();
+        BrowserHandle browser = JBCefBrowserFactory.createWithFallback(
+                () -> fixture.create("primary"), value -> {
+                    if ("primary".equals(value.name)) {
+                        throw new IllegalStateException("Configuration failed");
+                    }
+                }, failure -> fixture.create("fallback"), BrowserHandle::dispose, true);
+        Assert.assertEquals(Arrays.asList("create:primary", "dispose:primary", "create:fallback"), fixture.events);
+        Assert.assertEquals(1, fixture.live.get());
+        browser.dispose();
+        Assert.assertEquals(0, fixture.live.get());
+    }
+
+    @Test
+    public void requiredOsrFactoryCannotFallBackAfterConfigurationFailure() {
+        BrowserFixture fixture = new BrowserFixture();
+        Assert.assertThrows(IllegalStateException.class, () -> JBCefBrowserFactory.createWithFallback(
+                () -> fixture.create("primary"), value -> {
+                    throw new IllegalStateException("Required OSR configuration failed");
+                }, failure -> fixture.create("fallback"), BrowserHandle::dispose, false));
+        Assert.assertEquals(Arrays.asList("create:primary", "dispose:primary"), fixture.events);
+        Assert.assertEquals(0, fixture.live.get());
+    }
+
+    @Test
+    public void cleanupFailurePreventsAnotherNativeAllocation() {
+        BrowserFixture fixture = new BrowserFixture();
+        IllegalStateException configurationFailure = new IllegalStateException("Configuration failed");
+        LinkageError disposalFailure = new LinkageError("Native disposal failed");
+        IllegalStateException caught = Assert.assertThrows(IllegalStateException.class,
+                () -> JBCefBrowserFactory.createWithFallback(() -> fixture.create("primary"), value -> {
+                    throw configurationFailure;
+                }, failure -> fixture.create("fallback"), value -> {
+                    throw disposalFailure;
+                }, true));
+        Assert.assertSame(configurationFailure, caught);
+        Assert.assertArrayEquals(new Throwable[]{disposalFailure}, caught.getSuppressed());
+        Assert.assertEquals(Arrays.asList("create:primary"), fixture.events);
+        fixture.created.get(0).dispose();
+    }
+
+    @Test
+    public void bothFailedInstancesAreDisposedAndBothCausesAreRetained() {
+        BrowserFixture fixture = new BrowserFixture();
+        IllegalStateException caught = Assert.assertThrows(IllegalStateException.class,
+                () -> JBCefBrowserFactory.createWithFallback(() -> fixture.create("primary"), value -> {
+                    throw new IllegalStateException(value.name);
+                }, failure -> fixture.create("fallback"), BrowserHandle::dispose, true));
+        Assert.assertEquals("fallback", caught.getMessage());
+        Assert.assertEquals("primary", caught.getSuppressed()[0].getMessage());
+        Assert.assertEquals(0, fixture.live.get());
+        Assert.assertEquals(Arrays.asList("create:primary", "dispose:primary", "create:fallback", "dispose:fallback"), fixture.events);
+    }
+
+    @Test
+    public void repeatedLoadFailuresLeaveNoLiveHandles() {
+        BrowserFixture fixture = new BrowserFixture();
+        for (int i = 0; i < 100; i++) {
+            Assert.assertThrows(LinkageError.class, () -> JBCefBrowserFactory.initializeBrowser(
+                    () -> fixture.create("url"), value -> {
+                        throw new LinkageError("URL loading failed");
+                    }, BrowserHandle::dispose));
+            Assert.assertEquals(0, fixture.live.get());
+        }
+        Assert.assertEquals(100, fixture.created.size());
+    }
+
+    @Test
+    public void successfulUrlInitializationTransfersOwnershipToCaller() {
+        BrowserFixture fixture = new BrowserFixture();
+        AtomicInteger loads = new AtomicInteger();
+        BrowserHandle browser = JBCefBrowserFactory.initializeBrowser(
+                () -> fixture.create("url"), value -> loads.incrementAndGet(), BrowserHandle::dispose);
+        Assert.assertEquals(1, loads.get());
+        Assert.assertEquals(1, fixture.live.get());
+        browser.dispose();
+        Assert.assertEquals(0, fixture.live.get());
+    }
+
+    @Test
+    public void urlLoadFailureRetainsDisposalFailureWithoutRetryingAllocation() {
+        BrowserFixture fixture = new BrowserFixture();
+        IllegalStateException loadFailure = new IllegalStateException("Load failed");
+        IllegalStateException cleanupFailure = new IllegalStateException("Cleanup failed");
+        IllegalStateException caught = Assert.assertThrows(IllegalStateException.class,
+                () -> JBCefBrowserFactory.initializeBrowser(() -> fixture.create("url"), value -> {
+                    throw loadFailure;
+                }, value -> {
+                    throw cleanupFailure;
+                }));
+        Assert.assertSame(loadFailure, caught);
+        Assert.assertArrayEquals(new Throwable[]{cleanupFailure}, caught.getSuppressed());
+        Assert.assertEquals(1, fixture.created.size());
+        fixture.created.get(0).dispose();
+    }
+
+    private static final class BrowserFixture {
+        private final AtomicInteger live = new AtomicInteger();
+        private final List<String> events = new ArrayList<>();
+        private final List<BrowserHandle> created = new ArrayList<>();
+
+        private BrowserHandle create(String name) {
+            BrowserHandle browser = new BrowserHandle(name, this);
+            live.incrementAndGet();
+            events.add("create:" + name);
+            created.add(browser);
+            return browser;
+        }
+    }
+
+    private static final class BrowserHandle {
+        private final String name;
+        private final BrowserFixture fixture;
+        private boolean disposed;
+
+        private BrowserHandle(String name, BrowserFixture fixture) {
+            this.name = name;
+            this.fixture = fixture;
+        }
+
+        private void dispose() {
+            Assert.assertFalse("Handle was disposed twice", disposed);
+            disposed = true;
+            fixture.live.decrementAndGet();
+            fixture.events.add("dispose:" + name);
+        }
+    }
 
     /** Verifies control characters are suppressed outside editable fields. */
     @Test

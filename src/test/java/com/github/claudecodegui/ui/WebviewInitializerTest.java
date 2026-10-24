@@ -7,7 +7,12 @@ import org.cef.browser.CefBrowser;
 import javax.swing.Timer;
 import java.awt.event.ActionEvent;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -328,6 +333,116 @@ public class WebviewInitializerTest {
         timer.stop();
         for (java.awt.event.ActionListener listener : timer.getActionListeners()) {
             listener.actionPerformed(new ActionEvent(timer, ActionEvent.ACTION_PERFORMED, "test"));
+        }
+    }
+
+    @Test
+    public void disposedOwnerCannotQueueInitialization() {
+        List<Runnable> queued = new ArrayList<>();
+        AtomicInteger allocations = new AtomicInteger();
+        WebviewInitializer.scheduleWhileAlive(() -> true, queued::add, allocations::incrementAndGet);
+        Assert.assertTrue(queued.isEmpty());
+        assertEquals(0, allocations.get());
+    }
+
+    @Test
+    public void projectDisposalAfterQueueingCancelsInitialization() {
+        List<Runnable> queued = new ArrayList<>();
+        AtomicBoolean windowDisposed = new AtomicBoolean();
+        AtomicBoolean projectDisposed = new AtomicBoolean();
+        AtomicInteger allocations = new AtomicInteger();
+        WebviewInitializer.scheduleWhileAlive(
+                () -> windowDisposed.get() || projectDisposed.get(), queued::add, allocations::incrementAndGet);
+        assertEquals(1, queued.size());
+        projectDisposed.set(true);
+        queued.get(0).run();
+        assertEquals(0, allocations.get());
+    }
+
+    @Test
+    public void disposalDuringSchedulerLookupIsIgnoredWithoutGlobalFallback() {
+        AtomicBoolean disposed = new AtomicBoolean();
+        WebviewInitializer.scheduleWhileAlive(disposed::get, action -> {
+            disposed.set(true);
+            throw new IllegalStateException("Project was disposed during scheduler lookup");
+        }, () -> {
+            throw new AssertionError("Disposed owner reached native allocation");
+        });
+    }
+
+    @Test
+    public void currentOwnerRunsItsQueuedInitialization() {
+        List<Runnable> queued = new ArrayList<>();
+        AtomicInteger allocations = new AtomicInteger();
+        WebviewInitializer.scheduleWhileAlive(() -> false, queued::add, allocations::incrementAndGet);
+        assertEquals(0, allocations.get());
+        queued.get(0).run();
+        assertEquals(1, allocations.get());
+    }
+
+    @Test
+    public void disposedProjectCannotFallBackToGlobalInitialization() {
+        com.intellij.openapi.project.Project project = (com.intellij.openapi.project.Project) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{com.intellij.openapi.project.Project.class},
+                (proxy, method, args) -> "isDisposed".equals(method.getName()) ? true : null);
+        WebviewInitializer.WebviewHost host = (WebviewInitializer.WebviewHost) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{WebviewInitializer.WebviewHost.class},
+                (proxy, method, args) -> {
+                    if ("getProject".equals(method.getName())) {
+                        return project;
+                    }
+                    if ("isDisposed".equals(method.getName())) {
+                        return false;
+                    }
+                    throw new AssertionError("Disposed project reached " + method.getName());
+                });
+        new WebviewInitializer(host).createUIComponents();
+    }
+
+    @Test
+    public void stalePreparationCannotCompleteOrReleaseItsReplacement() {
+        WebviewInitializer.InitializationState state = new WebviewInitializer.InitializationState();
+        int obsolete = state.begin();
+        state.invalidate();
+        int current = state.begin();
+        state.finish(obsolete);
+        Assert.assertFalse(state.isCurrent(obsolete));
+        Assert.assertTrue(state.isCurrent(current));
+        assertEquals(0, state.begin());
+        state.finish(current);
+        Assert.assertFalse(state.isCurrent(current));
+        int next = state.begin();
+        state.finish(current);
+        Assert.assertTrue(state.isCurrent(next));
+    }
+
+    @Test
+    public void concurrentPreparationRequestsAdmitOnlyOneWorker() throws Exception {
+        WebviewInitializer.InitializationState state = new WebviewInitializer.InitializationState();
+        ExecutorService workers = Executors.newFixedThreadPool(4);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            List<Future<Integer>> attempts = new ArrayList<>();
+            for (int i = 0; i < 32; i++) {
+                attempts.add(workers.submit(() -> {
+                    start.await();
+                    return state.begin();
+                }));
+            }
+            start.countDown();
+            List<Integer> accepted = new ArrayList<>();
+            for (Future<Integer> attempt : attempts) {
+                int generation = attempt.get();
+                if (generation != 0) {
+                    accepted.add(generation);
+                }
+            }
+            assertEquals(1, accepted.size());
+            state.finish(accepted.get(0));
+            Assert.assertFalse(state.isInProgress());
+            Assert.assertTrue(state.begin() > accepted.get(0));
+        } finally {
+            workers.shutdownNow();
         }
     }
 }
