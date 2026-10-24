@@ -315,6 +315,15 @@ public class ClaudeChatWindow {
         chatWindowDelegate.initializeHandlers();
         this.permissionServiceKey = chatWindowDelegate.setupPermissionService();
         this.sessionId = this.permissionServiceKey;
+        java.lang.ref.WeakReference<ClaudeChatWindow> officeOwner = new java.lang.ref.WeakReference<>(this);
+        PermissionService.getInstance(project, permissionServiceKey).setExecutionOwnerSupplier(() -> {
+            ClaudeChatWindow current = officeOwner.get();
+            if (current == null || current.disposed || current.project.isDisposed()) {
+                return null;
+            }
+            ClaudeSession owner = current.session;
+            return owner == null ? null : owner.getState().currentExecutionOwnership();
+        });
 
         this.sessionLifecycleManager = new SessionLifecycleManager(new SessionLifecycleManager.SessionHost() {
             @Override

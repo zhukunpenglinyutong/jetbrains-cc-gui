@@ -660,7 +660,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 if (!result.success && result.error == null) {
                     result.error = streamedResult.error;
                 }
-                if (result.success || "User interrupted".equals(result.error)) {
+                if (result.success || result.cancelled) {
                     if (!hadSendError.get()) {
                         callback.onComplete(result);
                     }
@@ -1238,6 +1238,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                             callback.onError(result.get("error").getAsString());
                             result.addProperty("errorReported", true);
                         } else {
+                            streamed.cancelled = cancelled;
                             streamed.success = !cancelled && !result.has("error");
                             callback.onComplete(streamed);
                         }

@@ -135,6 +135,7 @@ class CodexAppServerRequestExecutor {
                 result.messageCount = result.messages.size();
                 if (wasAborted.get()) {
                     result.success = false;
+                    result.cancelled = true;
                     result.error = "User interrupted";
                     return result;
                 }
@@ -150,12 +151,14 @@ class CodexAppServerRequestExecutor {
                     }
                 } else if (wasAborted.get()) {
                     result.success = false;
+                    result.cancelled = true;
                     result.error = "User interrupted";
                 }
                 return result;
             } catch (Exception e) {
                 if (wasAborted.get()) {
                     result.success = false;
+                    result.cancelled = true;
                     result.error = "User interrupted";
                     return result;
                 }

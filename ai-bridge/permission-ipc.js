@@ -6,6 +6,7 @@ import { writeFileSync, readFileSync, existsSync, unlinkSync, readdirSync, mkdir
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
+import { currentExecutionScope } from './utils/execution-scope.js';
 
 // ========== Debug logging ==========
 export function debugLog(tag, message, data = null) {
@@ -129,6 +130,7 @@ export async function requestAskUserQuestionAnswers(input) {
 
     const requestData = {
       requestId,
+      executionScope: currentExecutionScope(),
       toolName: 'AskUserQuestion',
       questions: input.questions || [],
       timestamp: new Date().toISOString(),
@@ -233,6 +235,7 @@ export async function requestPlanApproval(input) {
 
     const requestData = {
       requestId,
+      executionScope: currentExecutionScope(),
       toolName: 'ExitPlanMode',
       plan,
       allowedPrompts,
@@ -340,6 +343,7 @@ export async function requestPermissionFromJava(toolName, input) {
     const requestData = {
       requestId,
       toolName,
+      executionScope: currentExecutionScope(),
       inputs: input,
       timestamp: new Date().toISOString(),
       cwd: process.cwd()

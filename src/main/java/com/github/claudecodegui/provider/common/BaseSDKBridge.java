@@ -346,6 +346,7 @@ public abstract class BaseSDKBridge {
                     process.waitFor();
 
                     int exitCode = process.exitValue();
+                    result.processExited = true;
                     boolean wasInterrupted = processManager.wasInterrupted(channelId);
 
                     result.finalResult = assistantContent.toString();
@@ -353,6 +354,7 @@ public abstract class BaseSDKBridge {
 
                     if (wasInterrupted) {
                         result.success = false;
+                        result.cancelled = exitCode != 0;
                         result.error = "User interrupted";
                         callback.onComplete(result);
                     } else if (!hadSendError.get()) {

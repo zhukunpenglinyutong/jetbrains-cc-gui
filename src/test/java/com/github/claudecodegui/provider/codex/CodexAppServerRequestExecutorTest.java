@@ -58,6 +58,28 @@ public class CodexAppServerRequestExecutorTest {
     }
 
     @Test
+    public void onlyTheNativeAbortCallbackConfirmsCancellation() {
+        for (boolean aborted : new boolean[]{true, false}) {
+            DaemonBridge daemon = new DaemonBridge(null, null, null) {
+                @Override
+                public CompletableFuture<Boolean> sendCommand(String method, JsonObject params, DaemonOutputCallback callback) {
+                    if (aborted) {
+                        callback.onAbort();
+                    } else {
+                        callback.onError("User interrupted");
+                    }
+                    return CompletableFuture.completedFuture(false);
+                }
+            };
+            SDKResult result = new CodexAppServerRequestExecutor(
+                    Logger.getInstance(CodexAppServerRequestExecutorTest.class), null)
+                    .sendMessageViaDaemon(daemon, new JsonObject(), ignored -> { }).join();
+            assertEquals(aborted, result.cancelled);
+            assertEquals(false, result.success);
+        }
+    }
+
+    @Test
     public void threeTurnsReuseTheDaemonCommandSurface() {
         RecordingDaemon daemon = new RecordingDaemon();
         AtomicInteger markerCount = new AtomicInteger();
