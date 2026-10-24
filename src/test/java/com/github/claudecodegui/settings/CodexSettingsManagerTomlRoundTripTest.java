@@ -58,7 +58,8 @@ public class CodexSettingsManagerTomlRoundTripTest {
 
         String writtenConfig = Files.readString(codexDir.resolve("config.toml"), StandardCharsets.UTF_8);
         assertTrue(writtenConfig.contains("\"provider.name\" = \"proxy\""));
-        assertTrue(writtenConfig.contains("\"gpt-5.4\" = \"vendor/gpt-5.4\""));
+        assertFalse(writtenConfig.contains("model_aliases"));
+        assertEquals("vendor/gpt-5.4", manager.resolveModelAlias("gpt-5.4"));
         assertTrue(writtenConfig.contains("[mcp_servers.codegraph]"));
         assertTrue(writtenConfig.contains("command = \"uvx\""));
     }

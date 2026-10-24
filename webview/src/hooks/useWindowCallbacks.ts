@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
+import type { ToastAction } from '../components/Toast';
 import type { MutableRefObject, RefObject } from 'react';
 import type { ClaudeMessage, ClaudeRawMessage, HistoryData, SubagentHistoryResponse, TaskEventMap } from '../types';
 import type {
@@ -29,7 +30,7 @@ export interface ContextInfo {
 
 export interface UseWindowCallbacksOptions {
   t: TFunction;
-  addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
+  addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error', action?: ToastAction) => void;
   clearToasts: () => void;
 
   // State setters

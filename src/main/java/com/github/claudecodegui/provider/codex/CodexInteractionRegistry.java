@@ -24,6 +24,11 @@ public final class CodexInteractionRegistry {
     private final Map<String, String> pageTokens = new ConcurrentHashMap<>();
     private final Map<String, Tombstone> resolvedTombstones = new ConcurrentHashMap<>();
     private final AtomicLong deliverySequence = new AtomicLong();
+    private final AtomicLong revision = new AtomicLong();
+
+    public long revision() {
+        return this.revision.get();
+    }
 
     /** Register a native reverse request. */
     public Entry register(
@@ -48,6 +53,7 @@ public final class CodexInteractionRegistry {
         this.pending.put(entry.interactionKey(), entry);
         this.pageTokens.put(entry.interactionKey(), UUID.randomUUID().toString());
         this.resolvedTombstones.remove(entry.interactionKey());
+        this.revision.incrementAndGet();
         return entry;
     }
 
@@ -91,6 +97,7 @@ public final class CodexInteractionRegistry {
         Entry removed = this.pending.remove(interactionKey);
         String token = this.pageTokens.remove(interactionKey);
         if (removed != null) {
+            this.revision.incrementAndGet();
             this.resolvedTombstones.put(interactionKey, new Tombstone(
                     token, removed.deliverySequence(), System.currentTimeMillis()));
             if (this.resolvedTombstones.size() > 2048) {
@@ -108,6 +115,7 @@ public final class CodexInteractionRegistry {
 
     /** Remove every pending interaction owned by a runtime session. */
     public void clearSession(String channelId, String sessionEpoch) {
+        this.revision.incrementAndGet();
         this.pending.entrySet().removeIf(entry -> same(channelId, entry.getValue().channelId())
                 && same(sessionEpoch, entry.getValue().sessionEpoch()));
         // Interaction keys are prefixed with channelId\0epoch\0 (see key()), so
@@ -122,6 +130,7 @@ public final class CodexInteractionRegistry {
 
     /** Clear all entries during bridge disposal. */
     public void clear() {
+        this.revision.incrementAndGet();
         this.pending.clear();
         this.pageTokens.clear();
         this.resolvedTombstones.clear();
@@ -214,6 +223,10 @@ public final class CodexInteractionRegistry {
             long deadlineAt,
             long deliverySequence
     ) {
+        /** Remote replies identify the exact delivery even if a restarted runtime reuses an RPC id. */
+        public String remoteToken() {
+            return interactionKey + "\u0000" + deliverySequence;
+        }
     }
 
     private record Tombstone(String dialogToken, long deliverySequence, long resolvedAt) {

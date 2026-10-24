@@ -78,6 +78,7 @@ class ClaudeDaemonRequestExecutor {
                 );
 
                 boolean hasAttachments = attachments != null && !attachments.isEmpty() && params.has("attachments");
+                params.addProperty("executionScope", callback.executionScope());
                 params.add("env", ClaudeBridgeUtils.buildDaemonEnv(cwd));
 
                 String method = hasAttachments ? "claude.sendWithAttachments" : "claude.send";

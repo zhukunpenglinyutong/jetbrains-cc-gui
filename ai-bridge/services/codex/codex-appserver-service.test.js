@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 import { CodexAppServerClient, ClassifiedError } from './codex-appserver-client.js';
 import { CodexAppServerService } from './codex-appserver-service.js';
-import { startPeerWithStreams, THREAD_ID } from './testing/codex-stdio-peer.js';
+import { startPeerWithStreams, THREAD_ID, CHILD_THREAD_ID } from './testing/codex-stdio-peer.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -85,6 +85,327 @@ function eventsOf(events, kind) {
   return events.filter((event) => event.kind === kind);
 }
 
+test('idle deletion refuses an active turn and its queued successor without interrupting either', async () => {
+  const { service, dispatchCounts } = makeService({ scenario: 'never-respond' });
+  const first = service.enqueueOperation({ kind: 'send', markerPayload: { input: [] } });
+  let second;
+  try {
+    await waitFor(() => first.nativeTurnId, 1000, 'active turn before deletion');
+    second = service.enqueueOperation({ kind: 'compact', threadId: first.threadId });
+    await assert.rejects(service.releaseThread(first.threadId, { onlyIfIdle: true }), { code: 'SESSION_RUNNING' });
+    assert.equal(first.settled, false);
+    assert.equal(second.settled, false);
+    assert.equal(service.queue.includes(second), true);
+    assert.equal(dispatchCounts.get('turn/interrupt') ?? 0, 0);
+    assert.equal(service.idleReleaseInProgress, false);
+  } finally {
+    await service.resetRuntime();
+    await Promise.all([first.promise, second?.promise]);
+  }
+});
+
+test('idle deletion preserves a child question after its parent turn has completed', async () => {
+  const { service, events, dispatchCounts } = makeService({ scenario: 'child-interaction' });
+  try {
+    const send = service.send({ input: [], clientMessageId: 'idle-delete-child' });
+    await waitFor(() => eventsOf(events, 'interactionRequested').length === 1, 3000, 'child question');
+    const request = eventsOf(events, 'interactionRequested')[0];
+    assert.equal((await send).outcome, 'completed');
+    assert.equal(service.busy, false);
+    await assert.rejects(service.releaseThread(service.rootThreadId, { onlyIfIdle: true }), { code: 'SESSION_RUNNING' });
+    assert.equal(service.pendingInteractions.size, 1);
+    assert.equal(dispatchCounts.get('turn/interrupt') ?? 0, 0);
+    assert.equal(service.respondInteraction(request.payload.rpcId, { decision: 'decline' }), true);
+    await service.releaseThread(service.rootThreadId, { onlyIfIdle: true });
+  } finally { await service.resetRuntime(); }
+});
+
+test('idle deletion preserves a running verified child after its approval and parent have completed', async () => {
+  const { service, events, getPeer, getClient, dispatchCounts } = makeService({ scenario: 'child-interaction' });
+  try {
+    await service.ensureRuntime();
+    const peer = getPeer();
+    const notify = peer.notify.bind(peer);
+    let childTerminal;
+    peer.notify = notification => {
+      if (notification.method === 'turn/completed' && notification.params.threadId === CHILD_THREAD_ID) {
+        childTerminal = notification;
+        return;
+      }
+      return notify(notification);
+    };
+    const send = service.send({ input: [], clientMessageId: 'idle-delete-running-child' });
+    await waitFor(() => eventsOf(events, 'interactionRequested').length === 1, 3000, 'child approval');
+    const request = eventsOf(events, 'interactionRequested')[0];
+    assert.equal((await send).outcome, 'completed');
+    notify({ method: 'turn/started', params: { threadId: CHILD_THREAD_ID,
+      turn: { id: 'turn-child-0001', status: 'inProgress' } } });
+    await waitFor(() => service.threads.get(CHILD_THREAD_ID)?.state === 'running');
+    assert.equal(service.respondInteraction(request.payload.rpcId, { decision: 'accept' }), true);
+    await waitFor(() => childTerminal, 1000, 'child continues after approval');
+    const child = service.threads.get(CHILD_THREAD_ID);
+    assert.equal(child.relationVerified, true);
+    assert.equal(child.rootThreadId, THREAD_ID);
+    assert.equal(service.busy, false);
+    assert.equal(service.pendingInteractions.size, 0);
+    assert.equal(service.operations.size, 0);
+    const client = getClient();
+    await assert.rejects(service.releaseThread(THREAD_ID, { onlyIfIdle: true }), { code: 'SESSION_RUNNING' });
+    assert.equal(client.alive, true);
+    assert.equal(child.state, 'running');
+    assert.equal(service.idleReleaseInProgress, false);
+    assert.equal(dispatchCounts.get('turn/interrupt') ?? 0, 0);
+    notify(childTerminal);
+    await waitFor(() => child.state === 'idle');
+    assert.deepEqual(await service.releaseThread(THREAD_ID, { onlyIfIdle: true }), { released: THREAD_ID });
+    assert.equal(client.alive, false);
+  } finally { await service.resetRuntime(); }
+});
+
+test('idle deletion waits for every native child to finish', async () => {
+  const { service, getPeer, getClient } = makeService();
+  try {
+    await service.preconnect({ threadId: THREAD_ID });
+    const peer = getPeer();
+    for (const threadId of [CHILD_THREAD_ID, 'second-native-child']) {
+      peer.notify({ method: 'turn/started', params: { threadId, turn: { id: `${threadId}-turn`, status: 'inProgress' } } });
+    }
+    await waitFor(() => service.threads.get('second-native-child')?.state === 'running');
+    peer.notify({ method: 'turn/completed', params: { threadId: CHILD_THREAD_ID,
+      turn: { id: `${CHILD_THREAD_ID}-turn`, status: 'completed' } } });
+    await waitFor(() => service.threads.get(CHILD_THREAD_ID)?.state === 'idle');
+    await assert.rejects(service.releaseThread(THREAD_ID, { onlyIfIdle: true }), { code: 'SESSION_RUNNING' });
+    assert.equal(getClient().alive, true);
+    peer.notify({ method: 'turn/completed', params: { threadId: 'second-native-child',
+      turn: { id: 'second-native-child-turn', status: 'completed' } } });
+    await waitFor(() => service.threads.get('second-native-child')?.state === 'idle');
+    assert.deepEqual(await service.releaseThread(THREAD_ID, { onlyIfIdle: true }), { released: THREAD_ID });
+  } finally { await service.resetRuntime(); }
+});
+
+test('idle deletion protects an in-flight resume on an already ready runtime', async () => {
+  const { service, getClient, dispatchCounts } = makeService();
+  let releaseResume;
+  let connecting;
+  try {
+    await service.ensureRuntime();
+    const client = getClient();
+    const request = client.request.bind(client);
+    const gate = new Promise(resolve => { releaseResume = resolve; });
+    client.request = (method, params, options) => method === 'thread/resume'
+      ? gate.then(() => request(method, params, options)) : request(method, params, options);
+    connecting = service.preconnect({ threadId: THREAD_ID });
+    await waitFor(() => service.threadResumes.size === 1);
+    await assert.rejects(service.releaseThread(THREAD_ID, { onlyIfIdle: true }), { code: 'SESSION_RUNNING' });
+    assert.equal(client.alive, true);
+    assert.equal(service.idleReleaseInProgress, false);
+    releaseResume();
+    await connecting;
+    assert.equal(dispatchCounts.get('thread/resume'), 1);
+    await service.releaseThread(THREAD_ID, { onlyIfIdle: true });
+  } finally {
+    releaseResume?.();
+    await connecting?.catch(() => {});
+    await service.resetRuntime();
+  }
+});
+
+test('an idle deletion retires its owner before new sends or preconnects can revive it', async () => {
+  const { service, getClient, dispatchCounts } = makeService();
+  try {
+    await service.preconnect({ threadId: THREAD_ID });
+    const client = getClient();
+    const releasing = service.releaseThread(THREAD_ID, { onlyIfIdle: true });
+    assert.throws(() => service.enqueueOperation({ kind: 'send', markerPayload: { input: [] } }), { code: 'THREAD_RELEASING' });
+    await assert.rejects(service.preconnect({ threadId: THREAD_ID }), { code: 'THREAD_RELEASING' });
+    assert.deepEqual(await releasing, { released: THREAD_ID });
+    await assert.rejects(service.ensureRuntime(), { code: 'THREAD_RELEASING' });
+    assert.equal(client.alive, false);
+    assert.equal(service.client, null);
+    assert.equal(service.state, 'stopped');
+    assert.equal(dispatchCounts.get('initialize'), 1);
+    assert.equal(dispatchCounts.get('turn/start') ?? 0, 0);
+  } finally { await service.resetRuntime(); }
+});
+
+test('an initializing owner is protected until its preconnect has completed', async () => {
+  const { service, dispatchCounts } = makeService();
+  try {
+    const connecting = service.preconnect({ threadId: THREAD_ID });
+    await assert.rejects(service.releaseThread(THREAD_ID, { onlyIfIdle: true }), { code: 'SESSION_RUNNING' });
+    await connecting;
+    await service.releaseThread(THREAD_ID, { onlyIfIdle: true });
+    assert.equal(dispatchCounts.get('initialize'), 1);
+  } finally { await service.resetRuntime(); }
+});
+
+test('a failed idle runtime can be released without starting a replacement child', async () => {
+  const { service, dispatchCounts } = makeService({ scenario: 'disconnect-mid-turn' });
+  try {
+    assert.equal((await service.send({ input: [] })).outcome, 'failed');
+    await waitFor(() => service.state === 'failed', 1000, 'failed runtime');
+    await service.releaseThread(service.rootThreadId, { onlyIfIdle: true });
+    assert.equal(service.client, null);
+    assert.equal(service.state, 'stopped');
+    assert.equal(dispatchCounts.get('initialize'), 1);
+    assert.equal(dispatchCounts.get('turn/start'), 1);
+  } finally { await service.resetRuntime(); }
+});
+
+async function asyncQuestionFixture() {
+  const fixture = makeService({ scenario: 'never-respond' });
+  const operation = fixture.service.enqueueOperation({ kind: 'send',
+    markerPayload: { input: [{ type: 'text', text: 'Ask A, B or C' }] } });
+  await waitFor(() => operation.nativeTurnId, 1000, 'async question turn');
+  const peer = fixture.getPeer();
+  for (const id of peer.pendingAcks.keys()) peer.ackPending(id, { turn: { id: operation.nativeTurnId } });
+  const params = { threadId: operation.threadId, turnId: operation.nativeTurnId,
+    item: { type: 'agentMessage', id: 'async-question-item', text: 'Choose an answer', delivery: 'async',
+      questions: [{ title: 'Choose A, B or C', options: ['A', 'B', 'C'] }, { title: 'Any comment?', options: null }] } };
+  const publish = () => peer.notify({ method: 'item/completed', params });
+  publish();
+  await waitFor(() => eventsOf(fixture.events, 'interactionRequested').length, 1000, 'async dialog');
+  return { ...fixture, operation, peer, params, publish,
+    request: eventsOf(fixture.events, 'interactionRequested')[0],
+    result: { answers: { 'question-1': { answers: ['B'] }, 'question-2': { answers: ['Test comment'] } } } };
+}
+
+test('native configuration and guardian warnings remain visible without finishing a running turn', async () => {
+  const fixture = await asyncQuestionFixture();
+  try {
+    const client = fixture.getClient();
+    client.sanitizeDiagnostic = text => text.replaceAll('fixture-secret', '[redacted]');
+    for (const method of ['warning', 'configWarning', 'guardianWarning', 'deprecationNotice']) {
+      fixture.peer.notify({ method, params: { threadId: fixture.operation.threadId,
+        summary: 'Check native configuration', message: 'Check native configuration', details: 'fixture-secret is obsolete' } });
+    }
+    const warnings = eventsOf(fixture.events, 'nativeWarning');
+    assert.equal(warnings.length, 4);
+    assert.ok(warnings.every(event => event.payload.message.includes('Check native configuration')));
+    assert.ok(warnings.every(event => !event.payload.message.includes('fixture-secret')));
+    assert.equal(fixture.service.busy, true);
+  } finally { await fixture.service.resetRuntime(); }
+});
+
+test('Codex 0.163 async agent messages open one nonblocking choice/free-text dialog and steer only their turn', async () => {
+  const fixture = await asyncQuestionFixture();
+  try {
+    const { service, peer, request, result, operation } = fixture;
+    const replies = [];
+    const originalDispatch = peer.dispatch.bind(peer);
+    peer.dispatch = (method, params, id) => {
+      if (method === 'turn/steer') { replies.push(params); peer.reply(id, { turnId: params.expectedTurnId }); return; }
+      return originalDispatch(method, params, id);
+    };
+    assert.equal(request.payload.params.isBlocking, false);
+    assert.deepEqual(request.payload.params.questions[0].options.map(option => option.label), ['A', 'B', 'C']);
+    assert.deepEqual(request.payload.params.questions[1].options, []);
+    fixture.publish();
+    assert.equal(eventsOf(fixture.events, 'interactionRequested').length, 1);
+    assert.equal(await service.respondInteraction(request.payload.rpcId, { answers: { unknown: { answers: ['A'] } } }), false);
+    assert.equal(service.pendingInteractions.size, 1);
+    assert.deepEqual(await service.respondInteraction(request.payload.rpcId, result), { replied: true });
+    assert.equal(replies.length, 1);
+    assert.equal(replies[0].expectedTurnId, operation.nativeTurnId);
+    assert.ok(replies[0].input[0].text.startsWith('Answers to your questions (request: async-question-item):\n\n'));
+    assert.match(replies[0].input[0].text, /Choose A, B or C\nB/);
+    assert.match(replies[0].input[0].text, /Any comment\?\nTest comment/);
+    assert.equal(service.respondInteraction(request.payload.rpcId, result), false);
+    fixture.publish();
+    assert.equal(eventsOf(fixture.events, 'interactionRequested').length, 1);
+    assert.equal(eventsOf(fixture.events, 'interactionResolved').length, 1);
+    assert.equal(service.busy, true);
+  } finally { await fixture.service.resetRuntime(); }
+});
+
+test('async answers after a terminal use a tracked follow-up instead of an unowned native turn', async () => {
+  const fixture = await asyncQuestionFixture();
+  try {
+    const { service, peer, operation, request, result } = fixture;
+    peer.notify({ method: 'turn/completed', params: { threadId: operation.threadId,
+      turn: { id: operation.nativeTurnId, status: 'completed' } } });
+    await operation.promise;
+    const response = await service.respondInteraction(request.payload.rpcId, result);
+    assert.equal(response.replied, true);
+    assert.equal(response.followUp.threadId, operation.threadId);
+    assert.match(response.followUp.text, /\nB\n/);
+    assert.equal(fixture.dispatchCounts.get('turn/start'), 1);
+    assert.equal(fixture.dispatchCounts.get('turn/steer') ?? 0, 0);
+  } finally { await fixture.service.resetRuntime(); }
+});
+
+test('async cancellation interrupts its waiting turn without manufacturing a JSON-RPC response or user answer', async () => {
+  const fixture = await asyncQuestionFixture();
+  try {
+    const client = fixture.getClient();
+    client.replyServerRequest = () => { throw new Error('async questions are not reverse RPCs'); };
+    assert.deepEqual(await fixture.service.respondInteraction(fixture.request.payload.rpcId, { answers: {} }), { replied: true });
+    assert.equal(fixture.service.pendingInteractions.size, 0);
+    assert.equal(fixture.dispatchCounts.get('turn/steer') ?? 0, 0);
+    await waitFor(() => fixture.dispatchCounts.get('turn/interrupt') === 1, 1000, 'cancelled question interrupt');
+    const interrupt = fixture.dispatched.find(value => value.method === 'turn/interrupt');
+    assert.deepEqual(interrupt.params, { threadId: fixture.operation.threadId, turnId: fixture.operation.nativeTurnId });
+    assert.equal((await fixture.operation.promise).outcome, 'interrupted');
+    assert.equal(fixture.service.busy, false);
+  } finally { await fixture.service.resetRuntime(); }
+});
+
+test('typed async question cancellation releases its waiting operation', async () => {
+  const fixture = await asyncQuestionFixture();
+  try {
+    assert.equal(fixture.service.respondInteractionError(fixture.request.payload.rpcId, -32800, 'Question expired'), true);
+    await waitFor(() => fixture.dispatchCounts.get('turn/interrupt') === 1, 1000, 'expired question interrupt');
+    assert.equal((await fixture.operation.promise).outcome, 'interrupted');
+    assert.equal(fixture.service.pendingInteractions.size, 0);
+    assert.equal(fixture.dispatchCounts.get('turn/steer') ?? 0, 0);
+  } finally { await fixture.service.resetRuntime(); }
+});
+
+test('cancelling a question from a completed turn never interrupts the subsequent turn', async () => {
+  const fixture = await asyncQuestionFixture();
+  try {
+    fixture.peer.notify({ method: 'turn/completed', params: { threadId: fixture.operation.threadId,
+      turn: { id: fixture.operation.nativeTurnId, status: 'completed' } } });
+    await fixture.operation.promise;
+    const next = fixture.service.enqueueOperation({ kind: 'send', markerPayload: { input: [{ type: 'text', text: 'Next turn' }] } });
+    await waitFor(() => next.nativeTurnId, 1000, 'subsequent turn');
+    assert.deepEqual(await fixture.service.respondInteraction(fixture.request.payload.rpcId, { answers: {} }), { replied: true });
+    assert.equal(fixture.dispatchCounts.get('turn/interrupt') ?? 0, 0);
+    assert.equal(next.cancelRequested, false);
+  } finally { await fixture.service.resetRuntime(); }
+});
+
+test('stopping or resetting an async question cannot leave an answerable stale dialog', async () => {
+  for (const reset of [false, true]) {
+    const fixture = await asyncQuestionFixture();
+    try {
+      if (reset) await fixture.service.resetRuntime();
+      else {
+        fixture.peer.notify({ method: 'turn/completed', params: { threadId: fixture.operation.threadId,
+          turn: { id: fixture.operation.nativeTurnId, status: 'interrupted' } } });
+        await fixture.operation.promise;
+      }
+      assert.equal(fixture.service.pendingInteractions.size, 0);
+      assert.equal(fixture.service.respondInteraction(fixture.request.payload.rpcId, fixture.result), false);
+    } finally { await fixture.service.resetRuntime(); }
+  }
+});
+
+test('history, foreign-thread and unstructured text items cannot become actionable async dialogs', async () => {
+  const fixture = await asyncQuestionFixture();
+  try {
+    fixture.peer.notify({ method: 'item/completed', params: { ...fixture.params, threadId: 'foreign-thread' } });
+    fixture.peer.notify({ method: 'item/completed', params: { ...fixture.params,
+      item: { type: 'agentMessage', id: 'plain-text', text: 'A B C' } } });
+    fixture.peer.notify({ method: 'turn/completed', params: { threadId: fixture.operation.threadId,
+      turn: { id: fixture.operation.nativeTurnId, status: 'completed' } } });
+    await fixture.operation.promise;
+    fixture.peer.notify({ method: 'item/completed', params: { ...fixture.params,
+      item: { ...fixture.params.item, id: 'historical-question' } } });
+    assert.equal(eventsOf(fixture.events, 'interactionRequested').length, 1);
+  } finally { await fixture.service.resetRuntime(); }
+});
+
 test('restored usage cannot steal sends around a manual compaction', async () => {
   const markers = [];
   const { service, events } = makeService({ scenario: 'resume-replayed-usage',
@@ -138,6 +459,7 @@ test('module context and role initialize native threads without entering user tu
     assert.equal((await service.send({ input: [{ type: 'text', text: 'cold prompt' }] })).outcome, 'completed');
     const initialization = dispatched.filter((entry) => ['thread/start', 'thread/resume'].includes(entry.method));
     assert.deepEqual(initialization.map((entry) => entry.method), ['thread/start', 'thread/resume']);
+    assert.equal(initialization[1].params.excludeTurns, true, 'Cold sends must not hydrate the historical transcript');
     for (const entry of initialization) assert.equal(entry.params.developerInstructions, instructions);
     const turns = dispatched.filter((entry) => entry.method === 'turn/start');
     assert.deepEqual(turns.map((entry) => entry.params.input), ['first prompt', 'next prompt', 'cold prompt']

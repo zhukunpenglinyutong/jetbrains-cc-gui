@@ -46,6 +46,18 @@ const mountHistory = () => {
 };
 
 describe('native history visibility', () => {
+  it('retains local manual titles and running state on native list refreshes', () => {
+    const history = mountHistory();
+    for (const updatedAt of [1, 2]) {
+      deliver({ requestType: 'codex_native_list_threads', data: [
+        { id: 'thread', name: 'First prompt', customTitle: 'Manual title', updatedAt, status: { type: 'active' } },
+        { id: 'other-tab', name: 'Other tab', running: true },
+      ] });
+      expect(history.data?.sessions).toMatchObject([
+        { sessionId: 'thread', title: 'Manual title', running: true }, { sessionId: 'other-tab', running: true },
+      ]);
+    }
+  });
   it('filters guardian metadata and sums message counts across overlapping thread pages', () => {
     const history = mountHistory();
     deliver({ requestType: 'codex_native_list_threads', nextCursor: 'next', data: [

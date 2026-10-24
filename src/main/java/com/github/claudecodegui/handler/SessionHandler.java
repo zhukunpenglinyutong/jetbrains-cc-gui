@@ -515,7 +515,7 @@ public class SessionHandler extends BaseMessageHandler {
             return result;
         }
         JsonObject source = payload.getAsJsonObject("codexSettings");
-        for (String key : new String[] {"collaborationMode", "approvalPreset", "sandboxSelection"}) {
+        for (String key : new String[] {"collaborationMode", "approvalPreset", "sandboxSelection", "sandboxSource"}) {
             if (source.has(key) && source.get(key).isJsonPrimitive()) {
                 String value = source.get(key).getAsString();
                 if (value != null && !value.trim().isEmpty()) {

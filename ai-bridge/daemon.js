@@ -916,8 +916,8 @@ async function runDaemonMain() {
       const handler = request.method === 'codex.respondInteraction'
         ? codexRespondInteractionPersistent
         : codexRespondInteractionErrorPersistent;
-      handler(request.params || {})
-        .then(() => writeRawLine({ id: replyId, done: true, success: true }))
+      Promise.resolve().then(() => handler(request.params || {}))
+        .then((result) => writeRawLine({ id: replyId, done: true, success: true, result }))
         .catch((e) => {
           _originalStderrWrite('[daemon] codex interaction reply error: ' + (e.message || String(e)) + '\n');
           writeRawLine({ id: replyId, done: true, success: false, error: e.message || String(e) });
@@ -929,7 +929,7 @@ async function runDaemonMain() {
     // must reach the service while the send operation still owns the queue.
     if (request.method === 'codex.abortTurn') {
       const abortId = request.id || '0';
-      codexAbortTurnPersistent(request.params || {})
+      Promise.resolve().then(() => codexAbortTurnPersistent(request.params || {}))
         .then((result) => writeRawLine({ id: abortId, done: true, success: true, result }))
         .catch((e) => {
           _originalStderrWrite('[daemon] codex.abortTurn error: ' + (e.message || String(e)) + '\n');
@@ -941,7 +941,7 @@ async function runDaemonMain() {
     if (request.method === 'codex.resetRuntime' || request.method === 'codex.releaseThread') {
       const handler = request.method === 'codex.resetRuntime'
         ? codexResetRuntimePersistent : codexReleaseThreadPersistent;
-      handler(request.params || {})
+      Promise.resolve().then(() => handler(request.params || {}))
         .then((result) => writeRawLine({ id: request.id || '0', done: true, success: true, result }))
         .catch((error) => writeRawLine({ id: request.id || '0', done: true, success: false,
           error: error?.message || String(error) }));
@@ -963,8 +963,8 @@ async function runDaemonMain() {
     // later FIFO operation and never mutate an active native turn in place.
     if (request.method === 'codex.updateSettings') {
       const controlId = request.id || '0';
-      Promise.resolve(codexUpdateSettingsPersistent(request.params || {}))
-        .then(() => writeRawLine({ id: controlId, done: true, success: true }))
+      Promise.resolve().then(() => codexUpdateSettingsPersistent(request.params || {}))
+        .then((result) => writeRawLine({ id: controlId, done: true, success: true, result }))
         .catch((error) => writeRawLine({
           id: controlId,
           done: true,
@@ -991,7 +991,7 @@ async function runDaemonMain() {
     const readOnlyHandler = readOnlyCodexMethods.get(request.method);
     if (readOnlyHandler) {
       const readId = request.id || '0';
-      readOnlyHandler(request.params || {})
+      Promise.resolve().then(() => readOnlyHandler(request.params || {}))
         .then((result) => writeRawLine({ id: readId, done: true, success: true, result }))
         .catch((error) => writeRawLine({
           id: readId,

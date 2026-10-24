@@ -1491,6 +1491,13 @@
     "allowWithNetworkRule": "允许并添加此网络规则"
   },
   "askUserQuestion": {
+    "recordTitle": "Codex 提问",
+    "recordAnswer": "你的回答",
+    "configWarning": "Codex 部分配置可能未生效，请查看兼容提示详情。",
+    "warningDetails": "查看详情",
+    "configWarningTitle": "Codex 配置兼容提示",
+    "apiDeprecationWarning": "Codex 返回接口兼容提示，可查看详情。",
+    "apiDeprecationTitle": "Codex 接口兼容提示",
     "title": "Claude 有一些问题想问你",
     "progress": "问题 {{current}} / {{total}}",
     "multiSelectHint": "可以选择多个选项",
@@ -1821,7 +1828,25 @@
     "required": "必填",
     "optional": "可选",
     "refreshServer": "刷新 {{name}}",
-    "nativeStatus": "原生 Codex MCP 状态"
+    "nativeStatus": "原生 Codex MCP 状态",
+    "nativeToolCount": "{{count}} 个工具",
+    "nativeRuntime": {
+      "notStarted": "尚未启动",
+      "starting": "连接中",
+      "connected": "已连接",
+      "authenticationRequired": "需要认证",
+      "failed": "连接失败",
+      "cancelled": "已取消",
+      "disabled": "已禁用",
+      "unknown": "连接状态未知"
+    },
+    "nativeAuth": {
+      "unsupported": "OAuth 不适用",
+      "notLoggedIn": "OAuth 尚未登录",
+      "bearerToken": "令牌认证",
+      "oAuth": "OAuth 已登录",
+      "unknown": "认证状态未知"
+    }
   },
   "tools": {
     "toolCall": "工具调用",

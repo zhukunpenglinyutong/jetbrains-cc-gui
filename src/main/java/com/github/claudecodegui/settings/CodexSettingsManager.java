@@ -1,6 +1,6 @@
 package com.github.claudecodegui.settings;
 
-import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.util.CodexHomeResolver;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -17,7 +17,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.LocalDate;
@@ -41,6 +40,8 @@ public class CodexSettingsManager {
     private static final String MODEL_PROVIDERS_KEY = "model_providers";
     private static final String CLI_AUTH_BACKUP_FILE_NAME = "auth.json.cli_backup";
     private static final String PROVIDER_CONFIG_BASELINE_FILE_NAME = "config.toml.provider_backup";
+    static final String PLUGIN_CONFIG_FILE_NAME = "config.toml.ccgui";
+    static final String CLI_MIGRATION_BACKUP_FILE_NAME = "config.toml.pre-cli-migration.bak";
     private static final Set<String> GLOBAL_CONFIG_KEYS = Set.of("mcp_servers", "skills");
     private static final Object CONFIG_FILE_LOCK = new Object();
 
@@ -51,9 +52,12 @@ public class CodexSettingsManager {
     private final Path codexDir;
 
     public CodexSettingsManager(Gson gson) {
+        this(gson, CodexHomeResolver.resolve());
+    }
+
+    public CodexSettingsManager(Gson gson, Path codexDir) {
         this.gson = gson;
-        String userHome = NodeDetector.resolveHomeForFileOps();
-        this.codexDir = Paths.get(userHome, ".codex");
+        this.codexDir = codexDir;
     }
 
     /**
@@ -99,7 +103,15 @@ public class CodexSettingsManager {
 
         try {
             String content = Files.readString(configPath, StandardCharsets.UTF_8);
-            return parseToml(content);
+            Map<String, Object> config = parseToml(content);
+            if (!config.containsKey(MODEL_ALIASES_KEY)) {
+                Map<String, Object> pluginConfig = readPluginConfigUnlocked();
+                if (pluginConfig.containsKey(MODEL_ALIASES_KEY)) {
+                    config.put(MODEL_ALIASES_KEY, pluginConfig.get(MODEL_ALIASES_KEY));
+                }
+            }
+            CodexConfigCompatibility.normalize(config);
+            return config;
         } catch (Exception e) {
             LOG.warn("[CodexSettingsManager] Failed to read config.toml: " + e.getMessage());
             throw new IOException("Failed to read config.toml: " + e.getMessage(), e);
@@ -117,8 +129,65 @@ public class CodexSettingsManager {
 
     private void writeConfigTomlUnlocked(Map<String, Object> config) throws IOException {
         Path configPath = getConfigTomlPath();
-        writeStringAtomically(configPath, generateToml(config));
+        Path pluginPath = codexDir.resolve(PLUGIN_CONFIG_FILE_NAME);
+        Map<String, Object> nativeConfig = nativeConfig(config);
+        Map<String, Object> pluginConfig = readPluginConfigUnlocked();
+        if (config.containsKey(MODEL_ALIASES_KEY)) {
+            pluginConfig.put(MODEL_ALIASES_KEY, deepCopyValue(config.get(MODEL_ALIASES_KEY)));
+        } else {
+            pluginConfig.remove(MODEL_ALIASES_KEY);
+        }
+        FileSnapshot configSnapshot = FileSnapshot.capture(configPath);
+        FileSnapshot pluginSnapshot = FileSnapshot.capture(pluginPath);
+        if (configSnapshot.exists()) {
+            String original = new String(configSnapshot.content(), StandardCharsets.UTF_8);
+            Map<String, Object> originalConfig = parseToml(original);
+            Path backupPath = codexDir.resolve(CLI_MIGRATION_BACKUP_FILE_NAME);
+            if (!originalConfig.equals(nativeConfig(originalConfig)) && !Files.exists(backupPath)) {
+                writeStringAtomically(backupPath, original);
+            }
+        }
+        try {
+            if (!pluginConfig.isEmpty() || pluginSnapshot.exists()) {
+                writeStringAtomically(pluginPath, generateToml(pluginConfig));
+            }
+            writeStringAtomically(configPath, generateToml(nativeConfig));
+        } catch (Exception e) {
+            IOException failure = toIOException("Failed to write compatible Codex config", e);
+            restoreSnapshot(configPath, configSnapshot, failure);
+            restoreSnapshot(pluginPath, pluginSnapshot, failure);
+            throw failure;
+        }
         LOG.info("[CodexSettingsManager] Wrote config.toml to: " + configPath);
+    }
+
+    private Map<String, Object> readPluginConfigUnlocked() throws IOException {
+        Path path = codexDir.resolve(PLUGIN_CONFIG_FILE_NAME);
+        return Files.exists(path)
+                ? parseToml(Files.readString(path, StandardCharsets.UTF_8)) : new LinkedHashMap<>();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> nativeConfig(Map<String, Object> config) {
+        Map<String, Object> nativeConfig = (Map<String, Object>) deepCopyValue(config);
+        nativeConfig.remove(MODEL_ALIASES_KEY);
+        CodexConfigCompatibility.normalize(nativeConfig);
+        return nativeConfig;
+    }
+
+    /** Migrates an authorized home before any native catalog, history, or chat runtime starts. */
+    public void prepareNativeConfig(ConfigAccessGuard guard) throws IOException {
+        runWithConfigAccess(guard, () -> {
+            Path path = getConfigTomlPath();
+            if (!Files.exists(path)) {
+                return;
+            }
+            Map<String, Object> original = parseToml(Files.readString(path, StandardCharsets.UTF_8));
+            Map<String, Object> config = readConfigTomlUnlocked();
+            if (!original.equals(nativeConfig(config))) {
+                writeConfigTomlUnlocked(config);
+            }
+        });
     }
 
     @FunctionalInterface
@@ -240,6 +309,7 @@ public class CodexSettingsManager {
             Path authPath = getAuthJsonPath();
             Path cliAuthBackupPath = codexDir.resolve(CLI_AUTH_BACKUP_FILE_NAME);
             Path configBaselinePath = codexDir.resolve(PROVIDER_CONFIG_BASELINE_FILE_NAME);
+            Path pluginConfigPath = codexDir.resolve(PLUGIN_CONFIG_FILE_NAME);
             Map<String, Object> configBaseline = prepareProviderConfigBaseline(
                     previousProvider != null,
                     configBaselinePath);
@@ -257,6 +327,7 @@ public class CodexSettingsManager {
             FileSnapshot authSnapshot = FileSnapshot.capture(authPath);
             FileSnapshot cliAuthBackupSnapshot = FileSnapshot.capture(cliAuthBackupPath);
             FileSnapshot configBaselineSnapshot = FileSnapshot.capture(configBaselinePath);
+            FileSnapshot pluginConfigSnapshot = FileSnapshot.capture(pluginConfigPath);
 
             try {
                 if (nextProvider != null) {
@@ -285,6 +356,7 @@ public class CodexSettingsManager {
                 restoreSnapshot(authPath, authSnapshot, failure);
                 restoreSnapshot(cliAuthBackupPath, cliAuthBackupSnapshot, failure);
                 restoreSnapshot(configBaselinePath, configBaselineSnapshot, failure);
+                restoreSnapshot(pluginConfigPath, pluginConfigSnapshot, failure);
                 throw failure;
             }
         }
@@ -329,6 +401,7 @@ public class CodexSettingsManager {
                 }
             }
         }
+        CodexConfigCompatibility.normalize(fragment);
         return fragment;
     }
 
@@ -351,7 +424,9 @@ public class CodexSettingsManager {
             boolean hasPreviousProvider,
             Path baselinePath) throws IOException {
         if (hasPreviousProvider && Files.exists(baselinePath)) {
-            return parseToml(Files.readString(baselinePath, StandardCharsets.UTF_8));
+            Map<String, Object> baseline = parseToml(Files.readString(baselinePath, StandardCharsets.UTF_8));
+            CodexConfigCompatibility.normalize(baseline);
+            return baseline;
         }
         return new LinkedHashMap<>();
     }

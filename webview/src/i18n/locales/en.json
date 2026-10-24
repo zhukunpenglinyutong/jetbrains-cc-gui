@@ -1486,6 +1486,13 @@
     "allowWithNetworkRule": "Allow with this network rule"
   },
   "askUserQuestion": {
+    "recordTitle": "Codex questions",
+    "recordAnswer": "Your answer",
+    "configWarning": "Codex reported a configuration warning. Review the details.",
+    "warningDetails": "View details",
+    "configWarningTitle": "Codex configuration warning",
+    "apiDeprecationWarning": "Codex reported an API compatibility notice. Review the details.",
+    "apiDeprecationTitle": "Codex API compatibility notice",
     "title": "Claude has some questions for you",
     "progress": "Question {{current}} / {{total}}",
     "multiSelectHint": "You can select multiple options",
@@ -1816,7 +1823,25 @@
     "required": "Required",
     "optional": "Optional",
     "refreshServer": "Refresh {{name}}",
-    "nativeStatus": "Native Codex MCP status"
+    "nativeStatus": "Native Codex MCP status",
+    "nativeToolCount": "{{count}} tools",
+    "nativeRuntime": {
+      "notStarted": "Not started",
+      "starting": "Connecting",
+      "connected": "Connected",
+      "authenticationRequired": "Authentication required",
+      "failed": "Connection failed",
+      "cancelled": "Cancelled",
+      "disabled": "Disabled",
+      "unknown": "Connection status unknown"
+    },
+    "nativeAuth": {
+      "unsupported": "OAuth not applicable",
+      "notLoggedIn": "OAuth not logged in",
+      "bearerToken": "Token authentication",
+      "oAuth": "OAuth logged in",
+      "unknown": "Authentication status unknown"
+    }
   },
   "tools": {
     "toolCall": "Tool Call",

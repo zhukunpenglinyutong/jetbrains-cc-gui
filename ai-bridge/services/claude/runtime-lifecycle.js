@@ -18,6 +18,8 @@ import {
 
 let cachedQueryFn = null;
 
+import { withExecutionScope } from '../../utils/execution-scope.js';
+
 /**
  * Emit a process-level daemon event that bypasses daemon.js's activeRequestId
  * interception.
@@ -354,16 +356,23 @@ async function createRuntime(requestContext, callbacks) {
     }
   };
 
+  const originalCanUseTool = options.canUseTool;
+  if (typeof originalCanUseTool === 'function') {
+    options.canUseTool = (...args) => withExecutionScope(runtime.permissionModeState.executionScope,
+      () => originalCanUseTool(...args));
+  }
+  const preToolUse = createPreToolUseHook(runtime.permissionModeState, options.cwd, async (mode) => {
+    const applied = await applyPermissionModeToRuntime(runtime, mode);
+    if (!applied) {
+      console.warn('[LIFECYCLE] hook setPermissionMode failed, keeping local state unchanged:', mode);
+    }
+    return applied;
+  });
+
   options.hooks = {
     ...(options.hooks || {}),
     PreToolUse: [{
-      hooks: [createPreToolUseHook(runtime.permissionModeState, options.cwd, async (mode) => {
-        const applied = await applyPermissionModeToRuntime(runtime, mode);
-        if (!applied) {
-          console.warn('[LIFECYCLE] hook setPermissionMode failed, keeping local state unchanged:', mode);
-        }
-        return applied;
-      })]
+      hooks: [input => withExecutionScope(runtime.permissionModeState.executionScope, () => preToolUse(input))]
     }]
   };
 
