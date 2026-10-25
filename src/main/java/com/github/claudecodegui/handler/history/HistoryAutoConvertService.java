@@ -3,6 +3,8 @@ package com.github.claudecodegui.handler.history;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.github.claudecodegui.util.PathUtils;
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
 import com.intellij.openapi.diagnostic.Logger;
@@ -101,7 +103,7 @@ public class HistoryAutoConvertService {
     // VisibleForTesting
     static final int MAX_ENTRYPOINT_SNIFF_LINES = 50;
 
-    private final SessionConversionCore conversionCore = new SessionConversionCore();
+private final SessionConversionCore conversionCore = new SessionConversionCore();
 
     /**
      * Whether any early row declares a convertible entrypoint. Metadata rows —
@@ -114,6 +116,8 @@ public class HistoryAutoConvertService {
     private boolean needsConversion(Path sessionFile) {
         return conversionCore.needsConversion(sessionFile);
     }
+
+    private final Gson gson = new Gson();
 
     /**
      * Resolves {@code ~/.claude/projects} at call time — never in a static field,
@@ -230,6 +234,26 @@ public class HistoryAutoConvertService {
     }
 
     /**
+     * Sessions open in any chat window of any open project. A failure to enumerate them
+     * degrades to an empty set: the pre-swap stat guard still catches a writer that
+     * appended during the conversion.
+     */
+    public static Set<String> activeSessionIdsAcrossOpenProjects() {
+        try {
+            ProjectManager projectManager = ProjectManager.getInstance();
+            if (projectManager == null) {
+                return Set.of();
+            }
+            Set<String> ids = new HashSet<>();
+            for (Project project : projectManager.getOpenProjects()) {
+                ids.addAll(ClaudeSDKToolWindow.getActiveSessionIdsForProject(project));
+            }
+            return ids;
+        } catch (Exception e) {
+            LOG.warn("[HistoryAutoConvert] Cannot enumerate active sessions: " + e.getMessage());
+            return Set.of();
+        }
+    }
      * Sessions open in any chat window of any open project. A failure to enumerate them
      * degrades to an empty set: the pre-swap stat guard still catches a writer that
      * appended during the conversion.
@@ -408,7 +432,13 @@ public class HistoryAutoConvertService {
             return outcome.converted();
         } catch (IOException e) {
             LOG.warn("[HistoryAutoConvert] Failed to convert " + sessionFile + ": " + e.getMessage());
+                        LOG.warn("[HistoryAutoConvert] Failed to convert " + sessionFile + ": " + e.getMessage());
             return false;
+        } finally {
+            deleteQuietly(tempFile);
+            deleteQuietly(backupFile);
+        }
+    }
         }
     }
 }

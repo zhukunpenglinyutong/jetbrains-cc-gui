@@ -650,6 +650,7 @@
         "enabled": "Enabled",
         "disabled": "Disabled",
         "hint": "Sessions created by the plugin through the SDK don't appear in the Claude Code CLI /resume list because their entrypoint is sdk-cli. When enabled, they are converted automatically on the next IDE start (the session open when you quit is skipped on exit because its daemon is still running, so it's converted at startup instead)."
+        "hint": "Sessions created by the plugin through the SDK don't appear in the Claude Code CLI /resume list because their entrypoint is sdk-cli. When enabled, they are converted automatically when the IDE closes."
       },
       "askUserQuestionSoundNotification": {
         "label": "Question alert sound",
@@ -927,6 +928,7 @@
       "versionQueryNetworkError": "Cannot connect to the npm registry. Check your network, proxy, or registry URL and retry.",
       "versionQueryTimeout": "The npm version query timed out. Check your network or proxy and retry.",
       "versionCacheAccessError": "npm file access was denied, including the separate-cache retry. Check cache permissions or security software."
+      "cliTransportBadge": "CLI · {{transport}}"
     },
     "usage": "Usage Statistics",
     "usageDesc": "View your Token consumption, cost statistics and usage trend analysis",
