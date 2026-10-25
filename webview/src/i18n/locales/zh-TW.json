@@ -1290,6 +1290,17 @@
       "remote": "此會話由遠程 Claude Code 實例創建"
     },
     "loadMore": "載入更多",
+    "convertAllPartial": "已轉換 {{total}} 個會話中的 {{count}} 個，{{failed}} 個失敗",
+    "convertAllBridgeUnavailable": "與 IDE 的連線不可用，請求未送出",
+    "convertAllSuccess": "已轉換 {{count}} 個會話，現在可在 CLI 的 /resume 中顯示",
+    "convertAllToCliSessionsEmptyTooltip": "沒有可轉換的 SDK 或 VS Code 會話。只有透過 SDK 或 VS Code 擴充功能建立的會話才能轉換為 CLI 項目；由 Claude Code CLI 直接建立的會話已經可以繼續。",
+    "convertAllTimeout": "轉換耗時過長。清單已重新整理，請稍後查看。",
+    "convertAllAlreadyRunning": "已有轉換正在進行中，請等待完成",
+    "convertActiveHintTooltip": "請先結束或關閉此會話，然後從歷史記錄中轉換",
+    "convertAllToCliSessions": "全部轉換為 CLI（{{count}}）",
+    "convertActiveHint": "結束會話後可轉換為 CLI",
+    "convertAllToCliSessionsLabel": "全部轉換為 CLI",
+    "convertAllToCliSessionsTooltip": "將 {{count}} 個透過 SDK 建立的會話轉換為 CLI 項目，以便它們出現在 Claude Code CLI 的 /resume 列表中。目前使用中的會話會被略過。"
     "sessionInUse": "會話正在使用中，無法刪除。",
     "deleteFailed": "刪除會話失敗，請重試。",
     "convertActiveHint": "Convert to CLI after ending the session",

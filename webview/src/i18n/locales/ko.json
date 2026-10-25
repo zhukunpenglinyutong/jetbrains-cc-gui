@@ -1341,6 +1341,17 @@
       "remote": "이 세션은 원격 Claude Code 인스턴스에서 생성되었습니다"
     },
     "loadMore": "Load more",
+    "convertAllPartial": "총 {{total}}개 중 {{count}}개 변환됨, {{failed}}개 실패",
+    "convertAllBridgeUnavailable": "IDE 연결을 사용할 수 없어 요청이 전송되지 않았습니다",
+    "convertAllSuccess": "세션 {{count}}개를 변환했습니다. 이제 CLI /resume에 표시됩니다",
+    "convertAllToCliSessionsEmptyTooltip": "변환할 SDK 또는 VS Code 세션이 없습니다. SDK나 VS Code 확장으로 만든 세션만 CLI 항목으로 변환할 수 있으며, Claude Code CLI로 직접 만든 세션은 이미 다시 열 수 있습니다.",
+    "convertAllTimeout": "변환 시간이 너무 오래 걸렸습니다. 목록을 새로 고쳤으니 잠시 후 확인해 주세요.",
+    "convertAllAlreadyRunning": "이미 변환이 진행 중입니다. 완료될 때까지 기다려 주세요",
+    "convertActiveHintTooltip": "먼저 이 세션을 종료하거나 닫은 다음 기록에서 변환하세요",
+    "convertAllToCliSessions": "모두 CLI로 변환 ({{count}})",
+    "convertActiveHint": "세션 종료 후 CLI로 변환",
+    "convertAllToCliSessionsLabel": "모두 CLI로 변환",
+    "convertAllToCliSessionsTooltip": "SDK로 만든 세션 {{count}}개를 CLI 항목으로 변환해 Claude Code CLI의 /resume 목록에 표시합니다. 현재 사용 중인 세션은 건너뜁니다."
     "sessionInUse": "사용 중인 세션은 삭제할 수 없습니다.",
     "deleteFailed": "세션을 삭제하지 못했습니다. 다시 시도해 주세요.",
     "confirmDirectoryTitle": "다른 디렉터리에서 세션을 여시겠습니까?",

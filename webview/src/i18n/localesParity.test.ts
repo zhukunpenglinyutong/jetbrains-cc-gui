@@ -67,6 +67,12 @@ const INTENTIONAL_GAPS: Array<{
       'Diff theme options were added in English and never translated; pending translator pass.',
   },
   {
+    keys: ['settings.basic.bashGroupCollapsed.*', 'settings.basic.editGroupCollapsed.*'],
+    locales: ['es', 'fr', 'hi', 'ja', 'ko', 'pt-BR', 'ru'],
+    reason:
+      'Group-collapse settings shipped in English and Chinese only; the other locales fall back to the en.json wording. Pending translator pass.',
+  },
+  {
     keys: ['history.timeAgo.*'],
     locales: ['ru'],
     reason:

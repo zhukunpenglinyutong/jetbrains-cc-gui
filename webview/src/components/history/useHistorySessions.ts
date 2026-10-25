@@ -54,8 +54,8 @@ export const useHistorySessions = (historyData: HistoryData | null, searchQuery:
   // list, never the filtered one — otherwise the button claims "nothing to convert" while
   // the click would have converted N sessions.
   const allSessions = useMemo(
-    () => deduplicateHistorySessions(historyData?.sessions ?? []),
-    [historyData?.sessions]
+    () => deduplicateHistorySessions(historyData?.sessions ?? [], historyData?.source === 'native'),
+    [historyData?.sessions, historyData?.source]
   );
 
   // Sort and filter sessions: favorited on top (by favorite time descending), unfavorited below (original order)

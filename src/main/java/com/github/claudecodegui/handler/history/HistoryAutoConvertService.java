@@ -1,11 +1,15 @@
 package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
+import com.github.claudecodegui.util.PathUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectManager;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -18,6 +22,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -39,10 +45,19 @@ import java.util.function.Supplier;
  *
  * <p>No lock is taken here, and none would help: {@code SessionConversionService}'s
  * {@code tryLock} is an advisory {@code fcntl} lock that neither Node nor the CLI
- * honours. Excluding an external writer requires cooperation we do not have and is
- * tracked as separate work; the current mitigation is that this service only ever
- * rewrites the rows it can parse, and it runs at IDE shutdown, when the IDE-side SDK
- * process is already gone.
+ * honours. And the timing assumption this class used to rely on does not hold either:
+ * {@code appWillBeClosed} runs <em>before</em> the open projects are disposed, so the
+ * IDE-side SDK processes can still be alive and appending while a conversion runs.
+ * The mitigations are therefore cooperative-free ones:
+ * <ul>
+ *   <li>only projects open in this IDE instance are scanned — never the whole
+ *   {@code ~/.claude/projects} tree, which other IDE windows, other IDE instances,
+ *   or a terminal {@code claude --resume} may be writing to;</li>
+ *   <li>sessions active in any chat window of those projects are skipped;</li>
+ *   <li>immediately before the temp file is moved over the session, the session is
+ *   re-stat'ed: if its size or mtime changed since the backup was taken, the
+ *   conversion is abandoned and the newer file on disk is left alone.</li>
+ * </ul>
  */
 public class HistoryAutoConvertService {
 
@@ -62,7 +77,8 @@ public class HistoryAutoConvertService {
      * full copies on disk (backup + temp) and a full read/write pass, and it all has
      * to fit the bounded shutdown budget of {@code AutoConvertOnExitListener} — a
      * 500 MB session would blow that budget on its own and leave scratch files
-     * behind. Such a file is skipped, never truncated, and converts on a later run.
+     * behind. Such a file is skipped, never truncated; no later run will take it
+     * either, so the log points at the manual conversion in the history page.
      */
     // VisibleForTesting
     static final long MAX_SESSION_FILE_SIZE_BYTES = 64L * 1024L * 1024L;
@@ -78,6 +94,16 @@ public class HistoryAutoConvertService {
 
     private static final String ENTRYPOINT_CLI = SessionEntrypoint.CLI.getValue();
 
+    /**
+     * Upper bound on rows sniffed when looking for the first entrypoint-bearing row.
+     * Metadata rows ({@code summary}, {@code file-history-snapshot}) carry no
+     * entrypoint, so the first line alone proves nothing; the scan walks forward until
+     * some row declares one, but stays bounded so a pathological file costs a bounded
+     * read.
+     */
+    // VisibleForTesting
+    static final int MAX_ENTRYPOINT_SNIFF_LINES = 50;
+
     private final Gson gson = new Gson();
 
     /**
@@ -87,20 +113,109 @@ public class HistoryAutoConvertService {
      */
     private final Supplier<Path> projectsDirSupplier;
 
+    /**
+     * Names of the project directories a run may touch, or null for "unrestricted".
+     * Production restricts the scan to the projects open in this IDE instance: the
+     * rest of {@code ~/.claude/projects} belongs to other IDE windows, other IDE
+     * instances, or terminal sessions that may be writing to it right now.
+     */
+    private final Supplier<Set<String>> scannedProjectDirNamesSupplier;
+
+    /**
+     * Sessions currently open in a chat window. Their jsonl is being appended to by a
+     * live SDK process, so a run must leave them alone no matter what the stat guard
+     * would say about this particular microsecond.
+     */
+    private final Supplier<Set<String>> activeSessionIdsSupplier;
+
     public HistoryAutoConvertService() {
-        this(() -> Paths.get(NodeDetector.resolveHomeForFileOps(), ".claude", "projects"));
+        this(
+                () -> Paths.get(NodeDetector.resolveHomeForFileOps(), ".claude", "projects"),
+                HistoryAutoConvertService::openProjectDirectoryNames,
+                HistoryAutoConvertService::activeSessionIdsAcrossOpenProjects
+        );
+    }
+
+    /**
+     * Test-facing constructor: unrestricted scan, no active sessions, so a plain JUnit
+     * JVM without an IDE application exercises the same conversion code.
+     *
+     * @param projectsDirSupplier resolves the {@code ~/.claude/projects} base per call.
+     */
+    public HistoryAutoConvertService(Supplier<Path> projectsDirSupplier) {
+        this(projectsDirSupplier, () -> null, Set::of);
     }
 
     /**
      * @param projectsDirSupplier resolves the {@code ~/.claude/projects} base per call.
+     * @param scannedProjectDirNamesSupplier project directory names to scan, null meaning unrestricted.
+     * @param activeSessionIdsSupplier session ids that must be skipped because a window is writing them.
      */
-    public HistoryAutoConvertService(Supplier<Path> projectsDirSupplier) {
+    // VisibleForTesting
+    HistoryAutoConvertService(
+            Supplier<Path> projectsDirSupplier,
+            Supplier<Set<String>> scannedProjectDirNamesSupplier,
+            Supplier<Set<String>> activeSessionIdsSupplier
+    ) {
         this.projectsDirSupplier = projectsDirSupplier;
+        this.scannedProjectDirNamesSupplier = scannedProjectDirNamesSupplier;
+        this.activeSessionIdsSupplier = activeSessionIdsSupplier;
     }
 
     /**
-     * Convert every SDK-created session found under {@code ~/.claude/projects} so
-     * the Claude Code CLI lists it in {@code /resume}.
+     * Directory names under {@code ~/.claude/projects} that belong to the projects this
+     * IDE instance currently has open. Returns null when there is no application to ask
+     * (a plain unit-test JVM), which callers treat as "unrestricted".
+     */
+    private static Set<String> openProjectDirectoryNames() {
+        try {
+            ProjectManager projectManager = ProjectManager.getInstance();
+            if (projectManager == null) {
+                return null;
+            }
+            Set<String> names = new HashSet<>();
+            for (Project project : projectManager.getOpenProjects()) {
+                String basePath = project.getBasePath();
+                if (basePath != null) {
+                    names.add(PathUtils.sanitizePath(PathUtils.realPath(
+                            SessionConversionService.resolveProjectPathForFileOps(basePath))));
+                }
+            }
+            return names;
+        } catch (Exception e) {
+            LOG.warn("[HistoryAutoConvert] Cannot enumerate open projects; nothing will be scanned: "
+                    + e.getMessage());
+            return Set.of();
+        }
+    }
+
+    /**
+     * Sessions open in any chat window of any open project. A failure to enumerate them
+     * degrades to an empty set: the pre-swap stat guard still catches a writer that
+     * appended during the conversion.
+     */
+    private static Set<String> activeSessionIdsAcrossOpenProjects() {
+        try {
+            ProjectManager projectManager = ProjectManager.getInstance();
+            if (projectManager == null) {
+                return Set.of();
+            }
+            Set<String> ids = new HashSet<>();
+            for (Project project : projectManager.getOpenProjects()) {
+                ids.addAll(ClaudeSDKToolWindow.getActiveSessionIdsForProject(project));
+            }
+            return ids;
+        } catch (Exception e) {
+            LOG.warn("[HistoryAutoConvert] Cannot enumerate active sessions: " + e.getMessage());
+            return Set.of();
+        }
+    }
+
+    /**
+     * Convert every convertible session of the projects this IDE instance has open so
+     * the Claude Code CLI lists it in {@code /resume}. Project directories belonging to
+     * anything else — another IDE window, another IDE instance, a terminal
+     * {@code claude --resume} — are never touched.
      *
      * @return number of sessions converted
      */
@@ -111,6 +226,9 @@ public class HistoryAutoConvertService {
             return 0;
         }
 
+        Set<String> projectDirNames = this.scannedProjectDirNamesSupplier.get();
+        Set<String> suppliedActiveIds = this.activeSessionIdsSupplier.get();
+        Set<String> activeSessionIds = suppliedActiveIds != null ? suppliedActiveIds : Set.of();
         int inspected = 0;
         int converted = 0;
         long bytes = 0L;
@@ -119,7 +237,10 @@ public class HistoryAutoConvertService {
                 if (!Files.isDirectory(projectDir)) {
                     continue;
                 }
-                ProjectScanResult result = convertProjectDir(projectDir,
+                if (projectDirNames != null && !projectDirNames.contains(projectDir.getFileName().toString())) {
+                    continue;
+                }
+                ProjectScanResult result = convertProjectDir(projectDir, activeSessionIds,
                         this.getMaxFilesPerRun() - inspected, this.getMaxTotalBytesPerRun() - bytes);
                 inspected += result.inspected;
                 converted += result.converted;
@@ -167,7 +288,8 @@ public class HistoryAutoConvertService {
         return MAX_FILES_PER_RUN;
     }
 
-    private ProjectScanResult convertProjectDir(Path projectDir, int fileBudget, long byteBudget) {
+    private ProjectScanResult convertProjectDir(Path projectDir, Set<String> activeSessionIds,
+                                                int fileBudget, long byteBudget) {
         int inspected = 0;
         int converted = 0;
         long bytes = 0L;
@@ -179,8 +301,31 @@ public class HistoryAutoConvertService {
                 if (!Files.isRegularFile(sessionFile)) {
                     continue;
                 }
+                String fileName = sessionFile.getFileName().toString();
+                String sessionId = fileName.substring(0, fileName.length() - SESSION_FILE_SUFFIX.length());
+                if (activeSessionIds.contains(sessionId)) {
+                    LOG.info("[HistoryAutoConvert] Skipping " + fileName
+                            + ": the session is open in a chat window and still being written");
+                    continue;
+                }
+                // Sniff before spending any budget on the file: already-CLI sessions are
+                // the overwhelming common case, and counting them would let a stable
+                // prefix of converted files consume the whole run budget every time,
+                // starving everything behind it forever.
+                if (!this.needsConversion(sessionFile)) {
+                    continue;
+                }
+                long size = sizeOfQuietly(sessionFile);
+                if (size > this.getMaxSessionFileSizeBytes()) {
+                    // Not counted against the run budgets: nothing was read or rewritten,
+                    // and no later run will ever take this file either.
+                    LOG.warn("[HistoryAutoConvert] Skipping " + fileName + ": " + size
+                            + " bytes exceeds the per-file limit of " + this.getMaxSessionFileSizeBytes()
+                            + "; convert it manually from the history page");
+                    continue;
+                }
                 inspected++;
-                bytes += sizeOfQuietly(sessionFile);
+                bytes += size;
                 if (convertSessionFile(sessionFile)) {
                     converted++;
                 }
@@ -206,8 +351,8 @@ public class HistoryAutoConvertService {
     /**
      * Convert a single session file when its entrypoint marks it as SDK-created.
      *
-     * <p>The first line is sniffed cheaply so already-CLI sessions — the common
-     * case — cost one read and no rewrite.
+     * <p>The head is sniffed cheaply so already-CLI sessions — the common
+     * case — cost a few row reads and no rewrite.
      *
      * <p>The session file is only ever modified by the final {@code move}, and the
      * backup is only ever written back when it is known to be a complete copy taken
@@ -236,9 +381,10 @@ public class HistoryAutoConvertService {
             if (backupSourceSize > this.getMaxSessionFileSizeBytes()) {
                 LOG.warn("[HistoryAutoConvert] Skipping " + sessionFile.getFileName() + ": " + backupSourceSize
                         + " bytes exceeds the per-file limit of " + this.getMaxSessionFileSizeBytes()
-                        + "; it converts on a later run");
+                        + "; convert it manually from the history page");
                 return false;
             }
+            long backupSourceMtime = Files.getLastModifiedTime(sessionFile).toMillis();
 
             Path sessionDir = sessionFile.getParent();
             backupFile = SessionTempFiles.createPrivateTempFile(
@@ -264,6 +410,19 @@ public class HistoryAutoConvertService {
             if (modified == 0) {
                 Files.deleteIfExists(tempFile);
                 tempFile = null;
+                return false;
+            }
+
+            // The failure path has grew/shrank guards on the restore; the success path
+            // needs the matching guard on the swap. A writer that appended since the
+            // backup was taken would lose those rows to the old inode, and a half-written
+            // last line read mid-append would have been split across two lines in the temp
+            // file. Either change — size or mtime — abandons the conversion and leaves the
+            // newer file on disk exactly as it is.
+            if (Files.size(sessionFile) != backupSourceSize
+                    || Files.getLastModifiedTime(sessionFile).toMillis() != backupSourceMtime) {
+                LOG.warn("[HistoryAutoConvert] " + sessionFile.getFileName()
+                        + " changed during conversion; leaving the newer file alone");
                 return false;
             }
 
@@ -325,20 +484,31 @@ public class HistoryAutoConvertService {
     }
 
     /**
-     * Whether the file's first row declares a convertible entrypoint.
-     * A file that cannot be read or parsed is left alone.
+     * Whether any early row declares a convertible entrypoint. Metadata rows —
+     * {@code summary}, {@code file-history-snapshot} — carry no entrypoint, so the
+     * scan walks forward until some row declares one (bounded by
+     * {@link #MAX_ENTRYPOINT_SNIFF_LINES}): a CLI row settles it as "already CLI",
+     * a convertible row as "convert", anything else keeps the scan going. A file
+     * that cannot be read or that declares nothing within the bound is left alone.
      */
     private boolean needsConversion(Path sessionFile) {
         try (BufferedReader reader = Files.newBufferedReader(sessionFile, StandardCharsets.UTF_8)) {
-            String firstLine = reader.readLine();
-            if (firstLine == null) {
-                return false;
+            String line;
+            int scanned = 0;
+            while ((line = reader.readLine()) != null && scanned++ < MAX_ENTRYPOINT_SNIFF_LINES) {
+                JsonObject row = parseRow(line);
+                if (row == null) {
+                    continue;
+                }
+                SessionEntrypoint entrypoint = SessionEntrypoint.fromValue(readEntrypoint(row));
+                if (entrypoint == SessionEntrypoint.CLI) {
+                    return false;
+                }
+                if (entrypoint.isConvertibleToCli()) {
+                    return true;
+                }
             }
-            JsonObject row = parseRow(firstLine);
-            if (row == null) {
-                return false;
-            }
-            return SessionEntrypoint.fromValue(readEntrypoint(row)).isConvertibleToCli();
+            return false;
         } catch (IOException e) {
             LOG.warn("[HistoryAutoConvert] Cannot read " + sessionFile + ": " + e.getMessage());
             return false;

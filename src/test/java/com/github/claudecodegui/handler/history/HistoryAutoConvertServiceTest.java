@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -285,6 +286,111 @@ public class HistoryAutoConvertServiceTest {
         }
     }
 
+    // ── entrypoint sniffing past metadata rows ─────────────────────────────
+
+    @Test
+    public void convertsWhenAMetadataRowPrecedesTheFirstEntrypointRow() throws IOException {
+        // summary/file-history-snapshot rows carry no entrypoint; the first
+        // entrypoint-bearing row is what settles the decision.
+        Path file = writeSession("proj", "a.jsonl",
+                "{\"type\":\"summary\",\"summary\":\"chat\"}\n{\"type\":\"user\",\"entrypoint\":\"sdk-cli\"}\n");
+
+        assertEquals(1, serviceFor(projectsDir).convertAllProjects());
+
+        List<String> lines = linesOf(file);
+        assertEquals("{\"type\":\"summary\",\"summary\":\"chat\"}", lines.get(0));
+        assertTrue(lines.get(1).contains("\"entrypoint\":\"cli\""));
+    }
+
+    @Test
+    public void metadataRowBeforeACliRowStillMeansNoConversion() throws IOException {
+        String content = "{\"type\":\"summary\"}\n{\"type\":\"user\",\"entrypoint\":\"cli\"}\n";
+        Path file = writeSession("proj", "a.jsonl", content);
+        byte[] before = Files.readAllBytes(file);
+        long mtimeBefore = Files.getLastModifiedTime(file).toMillis();
+
+        assertEquals(0, serviceFor(projectsDir).convertAllProjects());
+
+        assertArrayEquals(before, Files.readAllBytes(file));
+        assertEquals(mtimeBefore, Files.getLastModifiedTime(file).toMillis());
+    }
+
+    // ── run scope: open projects and active sessions ───────────────────────
+
+    @Test
+    public void scanIsRestrictedToTheSuppliedProjectDirectories() throws IOException {
+        writeSession("open-proj", "a.jsonl", "{\"entrypoint\":\"sdk-cli\"}\n");
+        writeSession("other-proj", "b.jsonl", "{\"entrypoint\":\"sdk-cli\"}\n");
+
+        HistoryAutoConvertService service = new HistoryAutoConvertService(
+                () -> projectsDir, () -> Set.of("open-proj"), Set::of);
+
+        assertEquals(1, service.convertAllProjects());
+        assertTrue(Files.readString(projectsDir.resolve("open-proj").resolve("a.jsonl"), StandardCharsets.UTF_8)
+                .contains("\"entrypoint\":\"cli\""));
+        assertEquals("a project outside the scope must stay byte-for-byte untouched",
+                "{\"entrypoint\":\"sdk-cli\"}\n",
+                Files.readString(projectsDir.resolve("other-proj").resolve("b.jsonl"), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void activeSessionIsSkippedEvenWhenConvertible() throws IOException {
+        Path file = writeSession("proj", "11111111-1111-1111-1111-111111111111.jsonl",
+                "{\"entrypoint\":\"sdk-cli\"}\n");
+        byte[] before = Files.readAllBytes(file);
+
+        HistoryAutoConvertService service = new HistoryAutoConvertService(
+                () -> projectsDir, () -> null, () -> Set.of("11111111-1111-1111-1111-111111111111"));
+
+        assertEquals(0, service.convertAllProjects());
+        assertArrayEquals(before, Files.readAllBytes(file));
+    }
+
+    // ── H-3: a writer active during the conversion ─────────────────────────
+
+    @Test
+    public void conversionIsAbandonedWhenTheFileIsAppendedMidConversion() throws IOException {
+        String original = "{\"entrypoint\":\"sdk-cli\"}\n";
+        Path file = writeSession("proj", "a.jsonl", original);
+        String appended = "{\"type\":\"assistant\",\"entrypoint\":\"sdk-cli\"}\n";
+
+        // The seam runs after the backup is complete and before the rewrite: exactly
+        // the window in which a live SDK daemon or a terminal CLI would append.
+        HistoryAutoConvertService service = new HistoryAutoConvertService(() -> projectsDir) {
+            @Override
+            void afterCompleteBackup(Path sessionFile) throws IOException {
+                Files.writeString(sessionFile, appended, StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+            }
+        };
+
+        assertFalse("a file that changed under the conversion must not be swapped out",
+                service.convertSessionFile(file));
+
+        // The appended row survives — the swap would have stranded it on the old inode.
+        assertEquals(original + appended, Files.readString(file, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void anAbandonedSwapLeavesNoScratchFilesBehind() throws IOException {
+        Path projectDir = projectsDir.resolve("proj");
+        Files.createDirectories(projectDir);
+        Path file = writeSession("proj", "a.jsonl", "{\"entrypoint\":\"sdk-cli\"}\n");
+
+        HistoryAutoConvertService service = new HistoryAutoConvertService(() -> projectsDir) {
+            @Override
+            void afterCompleteBackup(Path sessionFile) throws IOException {
+                Files.writeString(sessionFile, "{\"type\":\"assistant\"}\n",
+                        StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+            }
+        };
+        service.convertSessionFile(file);
+
+        try (Stream<Path> entries = Files.list(projectDir)) {
+            List<String> names = entries.map(p -> p.getFileName().toString()).sorted().collect(Collectors.toList());
+            assertEquals(List.of("a.jsonl"), names);
+        }
+    }
+
     // ── M-6: size budgets ──────────────────────────────────────────────────
 
     @Test
@@ -315,6 +421,22 @@ public class HistoryAutoConvertServiceTest {
     }
 
     // ── M-7: per-run file count ────────────────────────────────────────────
+
+    @Test
+    public void alreadyCliSessionsDoNotConsumeThePerRunFileBudget() throws IOException {
+        // The CLI file sorts into the same directory as the convertible one; if it
+        // counted against the cap of one, the convertible file behind it would starve
+        // on every run.
+        writeSession("proj", "already.jsonl", "{\"entrypoint\":\"cli\"}\n");
+        writeSession("proj", "pending.jsonl", "{\"entrypoint\":\"sdk-cli\"}\n");
+
+        HistoryAutoConvertService service = new FileLimitedService(projectsDir, 1);
+
+        assertEquals("an already-CLI file must not spend the budget the convertible file needs",
+                1, service.convertAllProjects());
+        assertTrue(Files.readString(projectsDir.resolve("proj").resolve("pending.jsonl"), StandardCharsets.UTF_8)
+                .contains("\"entrypoint\":\"cli\""));
+    }
 
     @Test
     public void defaultFileLimitIsTheDocumentedCap() {

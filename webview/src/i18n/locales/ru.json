@@ -1268,6 +1268,17 @@
       "remote": "Этот сеанс был создан удаленным экземпляром Claude Code"
     },
     "loadMore": "Load more",
+    "convertAllPartial": "Преобразовано {{count}} из {{total}} сессий, с ошибкой — {{failed}}",
+    "convertAllBridgeUnavailable": "Связь с IDE недоступна, запрос не отправлен",
+    "convertAllSuccess": "Преобразовано сессий: {{count}}. Теперь они видны в CLI /resume",
+    "convertAllToCliSessionsEmptyTooltip": "Нечего конвертировать: нет сессий, созданных через SDK или расширение VS Code. Только такие сессии можно превратить в записи CLI; созданные самим Claude Code CLI уже доступны для возобновления.",
+    "convertAllTimeout": "Преобразование заняло слишком много времени. Список обновлён, проверьте его немного позже.",
+    "convertAllAlreadyRunning": "Преобразование уже выполняется, дождитесь его завершения",
+    "convertActiveHintTooltip": "Сначала завершите или закройте сессию, затем конвертируйте её из списка истории",
+    "convertAllToCliSessions": "Преобразовать все в CLI ({{count}})",
+    "convertActiveHint": "Конвертация в CLI после завершения сессии",
+    "convertAllToCliSessionsLabel": "Преобразовать все в CLI",
+    "convertAllToCliSessionsTooltip": "Преобразовать {{count}} сессий, созданных через SDK, в записи CLI, чтобы они появились в списке /resume CLI Claude Code. Текущая активная сессия пропускается."
     "sessionInUse": "Используемые чаты нельзя удалить.",
     "deleteFailed": "Не удалось удалить чат. Повторите попытку.",
     "confirmDirectoryTitle": "Открыть сессию в другом каталоге?",

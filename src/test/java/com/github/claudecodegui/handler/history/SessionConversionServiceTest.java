@@ -133,6 +133,29 @@ public class SessionConversionServiceTest {
     }
 
     @Test
+    public void abandonsTheSwapWhenTheFileGrowsMidConversion() throws IOException {
+        Path projectsDir = temporaryFolder.newFolder("projects-append").toPath();
+        String original = "{\"entrypoint\":\"sdk-cli\"}\n";
+        Path sessionFile = writeSdkSession(projectsDir, "abc-grow", original);
+        String appended = "{\"type\":\"assistant\",\"entrypoint\":\"sdk-cli\"}\n";
+
+        // The seam runs after the backup is complete and before the rewrite: exactly
+        // the window in which a writer this process cannot lock out — another IDE
+        // window's SDK daemon, a terminal claude --resume — would append.
+        SessionConversionService racing = new SessionConversionService(null, () -> projectsDir) {
+            @Override
+            void afterCompleteBackup(Path sessionFile) throws IOException {
+                Files.writeString(sessionFile, appended, StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+            }
+        };
+
+        assertEquals("a file that changed under the conversion must not be swapped out",
+                ConversionResultCode.SESSION_ACTIVE, racing.convertSession("abc-grow", null));
+        assertEquals("the appended row must survive on disk, unconverted",
+                original + appended, Files.readString(sessionFile, StandardCharsets.UTF_8));
+    }
+
+    @Test
     public void rewritesWhenTheSessionStaysInactive() throws IOException {
         Path projectsDir = temporaryFolder.newFolder("projects-idle").toPath();
         Path sessionFile = writeSdkSession(projectsDir, "abc-456");

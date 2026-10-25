@@ -142,6 +142,30 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         return collectProjectChatWindows(project);
     }
 
+    /**
+     * Session ids currently open in any chat window of the project — every tab and every
+     * detached window, not just the selected one. Each window owns an independent SDK
+     * bridge that keeps appending to its session's jsonl, so history conversions must
+     * treat every id in this set as actively written, not only the caller's own tab.
+     */
+    public static Set<String> getActiveSessionIdsForProject(@NotNull Project project) {
+        Set<String> sessionIds = new HashSet<>();
+        for (ClaudeChatWindow window : collectProjectChatWindows(project)) {
+            if (window == null) {
+                continue;
+            }
+            try {
+                String sessionId = window.getSessionId();
+                if (sessionId != null && !sessionId.isEmpty()) {
+                    sessionIds.add(sessionId);
+                }
+            } catch (Exception e) {
+                LOG.warn("[ToolWindow] Failed to read a chat window's session id: " + e.getMessage());
+            }
+        }
+        return sessionIds;
+    }
+
     private static Set<ClaudeChatWindow> collectAllChatWindows() {
         Set<ClaudeChatWindow> windows = Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         windows.addAll(instances.values());

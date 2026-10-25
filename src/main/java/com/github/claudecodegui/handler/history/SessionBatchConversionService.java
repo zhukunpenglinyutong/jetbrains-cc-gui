@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
+import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -10,7 +11,9 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -63,7 +66,7 @@ class SessionBatchConversionService {
     }
 
     private final Supplier<List<SessionCandidate>> candidatesSupplier;
-    private final Supplier<String> activeSessionIdSupplier;
+    private final Supplier<Set<String>> activeSessionIdsSupplier;
     private final Supplier<String> projectPathSupplier;
     private final SingleSessionConverter converter;
     private final Consumer<JsonObject> resultSink;
@@ -78,7 +81,7 @@ class SessionBatchConversionService {
     SessionBatchConversionService(HandlerContext context) {
         this(
                 () -> readProjectSessionCandidates(context),
-                () -> readActiveSessionId(context),
+                () -> readActiveSessionIds(context),
                 () -> context.resolveEffectiveWorkingDirectory(),
                 new SessionConversionService(context)::convertSession,
                 result -> sendBatchResult(context, result),
@@ -88,14 +91,14 @@ class SessionBatchConversionService {
 
     SessionBatchConversionService(
             Supplier<List<SessionCandidate>> candidatesSupplier,
-            Supplier<String> activeSessionIdSupplier,
+            Supplier<Set<String>> activeSessionIdsSupplier,
             Supplier<String> projectPathSupplier,
             SingleSessionConverter converter,
             Consumer<JsonObject> resultSink,
             Executor backgroundExecutor
     ) {
         this.candidatesSupplier = candidatesSupplier;
-        this.activeSessionIdSupplier = activeSessionIdSupplier;
+        this.activeSessionIdsSupplier = activeSessionIdsSupplier;
         this.projectPathSupplier = projectPathSupplier;
         this.converter = converter;
         this.resultSink = resultSink;
@@ -143,11 +146,12 @@ class SessionBatchConversionService {
      */
     JsonObject runBatch() {
         List<SessionCandidate> candidates;
-        String activeSessionId;
+        Set<String> activeSessionIds;
         String projectPath;
         try {
             candidates = this.candidatesSupplier.get();
-            activeSessionId = this.activeSessionIdSupplier.get();
+            Set<String> suppliedActiveIds = this.activeSessionIdsSupplier.get();
+            activeSessionIds = suppliedActiveIds != null ? suppliedActiveIds : Set.of();
             projectPath = this.projectPathSupplier.get();
         } catch (Exception e) {
             LOG.warn("[SessionBatchConversion] Cannot read history index: " + e.getMessage());
@@ -177,9 +181,10 @@ class SessionBatchConversionService {
                 continue;
             }
 
-            // The live session is re-checked here, not just in the client: the SDK keeps
-            // appending to that jsonl, so replacing the file under it would drop new messages.
-            if (sessionId.equals(activeSessionId)) {
+            // The live sessions are re-checked here, not just in the client: every chat
+            // window (tab or detached) owns an SDK bridge that keeps appending to its
+            // session's jsonl, so replacing any of those files would drop new messages.
+            if (activeSessionIds.contains(sessionId)) {
                 LOG.info("[SessionBatchConversion] Skipping active session: " + sessionId);
                 skipped++;
                 skippedSessionIds.add(sessionId);
@@ -288,14 +293,21 @@ class SessionBatchConversionService {
         return candidates;
     }
 
-    private static String readActiveSessionId(HandlerContext context) {
+    private static Set<String> readActiveSessionIds(HandlerContext context) {
+        Set<String> ids = new HashSet<>();
         try {
             var session = context.getSession();
-            return session != null ? session.getSessionId() : null;
+            if (session != null && session.getSessionId() != null) {
+                ids.add(session.getSessionId());
+            }
+            var project = context.getProject();
+            if (project != null && !project.isDisposed()) {
+                ids.addAll(ClaudeSDKToolWindow.getActiveSessionIdsForProject(project));
+            }
         } catch (Exception e) {
-            LOG.warn("[SessionBatchConversion] Failed to resolve active session: " + e.getMessage());
-            return null;
+            LOG.warn("[SessionBatchConversion] Failed to resolve active sessions: " + e.getMessage());
         }
+        return ids;
     }
 
     /**

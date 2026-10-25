@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
@@ -97,7 +98,7 @@ public class SessionBatchConversionServiceTest {
     ) {
         return new SessionBatchConversionService(
                 () -> candidates,
-                () -> activeSessionId,
+                () -> activeSessionId == null ? Set.of() : Set.of(activeSessionId),
                 () -> null,
                 converter,
                 this.results::add,

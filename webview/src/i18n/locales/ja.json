@@ -1251,6 +1251,17 @@
       "remote": "このセッションはリモートのClaude Codeインスタンスによって作成されました"
     },
     "loadMore": "Load more",
+    "convertAllPartial": "{{total}} 件中 {{count}} 件を変換しました。{{failed}} 件は失敗しました",
+    "convertAllBridgeUnavailable": "IDE への接続が利用できないため、リクエストは送信されませんでした",
+    "convertAllSuccess": "{{count}} 件のセッションを変換しました。CLI /resume に表示されます",
+    "convertAllToCliSessionsEmptyTooltip": "変換できる SDK / VS Code セッションがありません。SDK または VS Code 拡張機能で作成したセッションのみ CLI エントリに変換できます。Claude Code CLI で直接作成したセッションはすでに再開できます。",
+    "convertAllTimeout": "変換に時間がかかりすぎました。一覧を更新しました。しばらくしてからご確認ください。",
+    "convertAllAlreadyRunning": "別の変換を実行中です。完了までお待ちください",
+    "convertActiveHintTooltip": "先にこのセッションを終了または閉じしてから、履歴から変換してください",
+    "convertAllToCliSessions": "すべて CLI に変換 ({{count}})",
+    "convertActiveHint": "セッション終了後にCLIへ変換",
+    "convertAllToCliSessionsLabel": "すべて CLI に変換",
+    "convertAllToCliSessionsTooltip": "SDK で作成した {{count}} 件のセッションを CLI エントリに変換し、Claude Code CLI の /resume リストに表示させます。現在使用中のセッションはスキップされます。"
     "sessionInUse": "使用中のセッションは削除できません。",
     "deleteFailed": "セッションを削除できませんでした。もう一度お試しください。",
     "confirmDirectoryTitle": "別のディレクトリでセッションを開きますか？",

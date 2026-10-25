@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.github.claudecodegui.util.PathUtils;
 import com.github.claudecodegui.util.SessionTempFiles;
 import com.google.gson.Gson;
@@ -25,6 +26,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -81,7 +84,7 @@ class SessionConversionService {
      * {@code D:\proj} must become {@code /mnt/d/proj} before sanitizing; a native node
      * keeps the path as-is. Mirrors {@code HistoryDeleteService}.
      */
-    private static String resolveProjectPathForFileOps(String rawProjectPath) {
+    static String resolveProjectPathForFileOps(String rawProjectPath) {
         String nodePath = NodeDetector.getInstance().getCachedNodePath();
         return NodeDetector.isWslPath(nodePath)
                 ? NodeDetector.convertToWslPath(rawProjectPath)
@@ -300,6 +303,7 @@ class SessionConversionService {
             Path sessionDir = sessionFile.getParent();
             backupFile = SessionTempFiles.createPrivateTempFile(sessionDir, sessionId + ".jsonl.backup.", ".tmp");
             backupSourceSize = Files.size(sessionFile);
+            long backupSourceMtime = Files.getLastModifiedTime(sessionFile).toMillis();
             this.copyBackup(sessionFile, backupFile);
             long backupSize = Files.size(backupFile);
             if (backupSize != backupSourceSize) {
@@ -369,6 +373,22 @@ class SessionConversionService {
             // every message appended from here on, so refuse instead.
             if (this.isSessionActive(sessionId)) {
                 LOG.warn("[SessionConversionService] Conversion abandoned: session became active while converting");
+                return ConversionResultCode.SESSION_ACTIVE;
+            }
+
+            // The failure path re-stats before restoring; the success path needs the
+            // matching guard before the swap. The tryLock above is an advisory fcntl
+            // lock that neither Node nor the CLI honours, so a writer outside this
+            // process — another IDE window's SDK daemon, a terminal claude --resume —
+            // can have appended since the backup was taken. Swapping now would strand
+            // those rows on the old inode, and a half-written last line read mid-append
+            // would already have been split across two lines in the temp file. Any
+            // change in size or mtime abandons the conversion and leaves the newer
+            // file on disk exactly as it is.
+            if (Files.size(sessionFile) != backupSourceSize
+                    || Files.getLastModifiedTime(sessionFile).toMillis() != backupSourceMtime) {
+                LOG.warn("[SessionConversionService] Conversion abandoned: " + sessionFile.getFileName()
+                        + " changed while it was being converted; leaving the newer file alone");
                 return ConversionResultCode.SESSION_ACTIVE;
             }
 
@@ -565,14 +585,42 @@ class SessionConversionService {
     }
 
     /**
-     * Check whether the given session is the one currently active in this window.
+     * Check whether the given session is active in any chat window of this project.
+     * Every tab and every detached window owns an independent SDK bridge that appends
+     * to its own session's jsonl, so "active" is the union over all of them — checking
+     * only this window's session would let a conversion replace the file another tab
+     * is streaming into.
      *
      * @param sessionId Session ID to check.
      * @return true if the session is active and must not be converted.
      */
     private boolean isSessionActive(String sessionId) {
-        String activeSessionId = this.activeSessionId();
-        return activeSessionId != null && activeSessionId.equals(sessionId);
+        return this.activeSessionIds().contains(sessionId);
+    }
+
+    /**
+     * Ids of all sessions currently open in this project's chat windows, including this
+     * window's own session. Read at call time — the set changes as the user switches
+     * chats, so it must never be cached.
+     *
+     * @return active session ids, never null.
+     */
+    // VisibleForTesting
+    Set<String> activeSessionIds() {
+        Set<String> ids = new HashSet<>();
+        String ownSessionId = this.activeSessionId();
+        if (ownSessionId != null) {
+            ids.add(ownSessionId);
+        }
+        try {
+            Project project = this.context != null ? this.context.getProject() : null;
+            if (project != null && !project.isDisposed()) {
+                ids.addAll(ClaudeSDKToolWindow.getActiveSessionIdsForProject(project));
+            }
+        } catch (Exception e) {
+            LOG.warn("[SessionConversionService] Failed to resolve other windows' sessions: " + e.getMessage());
+        }
+        return ids;
     }
 
     /**

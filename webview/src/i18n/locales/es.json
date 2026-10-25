@@ -1256,6 +1256,17 @@
       "remote": "Esta sesión fue creada por una instancia remota de Claude Code"
     },
     "loadMore": "Load more",
+    "convertAllPartial": "Se convirtieron {{count}} de {{total}} sesión(es), {{failed}} con error",
+    "convertAllBridgeUnavailable": "El puente con el IDE no está disponible, la solicitud no se envió",
+    "convertAllSuccess": "{{count}} sesión(es) convertida(s), ahora visible en CLI /resume",
+    "convertAllToCliSessionsEmptyTooltip": "No hay sesiones del SDK ni de VS Code que convertir. Solo las sesiones creadas por el SDK o por la extensión de VS Code pueden convertirse en entradas CLI; las creadas directamente por Claude Code CLI ya se pueden reanudar.",
+    "convertAllTimeout": "La conversión tardó demasiado. La lista se ha actualizado, compruébala en un momento.",
+    "convertAllAlreadyRunning": "Ya hay una conversión en curso, espera a que termine",
+    "convertActiveHintTooltip": "Finaliza o cierra esta sesión primero y luego conviértela desde el historial",
+    "convertAllToCliSessions": "Convertir todo a CLI ({{count}})",
+    "convertActiveHint": "Convertir a CLI tras finalizar la sesión",
+    "convertAllToCliSessionsLabel": "Convertir todo a CLI",
+    "convertAllToCliSessionsTooltip": "Convertir {{count}} sesión(es) creada(s) por el SDK a entradas CLI para que aparezcan en la lista /resume de Claude Code CLI. Se omite la sesión en uso."
     "sessionInUse": "No se pueden eliminar las sesiones en uso.",
     "deleteFailed": "No se pudo eliminar la sesión. Inténtalo de nuevo.",
 "confirmDirectoryTitle": "¿Abrir la sesión en otro directorio?",
