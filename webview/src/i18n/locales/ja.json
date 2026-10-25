@@ -1081,6 +1081,19 @@
       "ALREADY_CLI_SESSION": "このセッションはすでにCLIセッションです",
       "CONVERSION_FAILED": "変換に失敗しました。後でもう一度お試しください"
     },
+    "forkSession": "セッションをフォーク",
+    "forkSuccess": "セッションをフォークしました",
+    "forkFailed": "フォークに失敗しました",
+    "forkedTitleSuffix": "（フォーク）",
+    "forkFromHere": "この返信からフォーク",
+    "forkErrors": {
+      "INVALID_SESSION_ID": "無効なセッション ID",
+      "UNSUPPORTED_PROVIDER": "現在フォークは Claude セッションのみ対応しています",
+      "SESSION_NOT_FOUND": "セッションファイルが見つかりません",
+      "FILE_NOT_EXIST": "セッションファイルが存在しません",
+      "FORK_POINT_NOT_FOUND": "セッション内にフォーク地点のメッセージが見つかりません",
+      "FORK_FAILED": "フォークに失敗しました。しばらくしてからもう一度お試しください"
+    },
     "entrypointLabel": {
       "sdk-cli": "SDKセッション",
       "claude-vscode": "VS Code",

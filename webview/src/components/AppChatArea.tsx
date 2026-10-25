@@ -1,6 +1,8 @@
 import HistoryView from './history/HistoryView';
 import { ChatScreen } from './ChatScreen';
 import type { ChatScreenProps } from './ChatScreen';
+import { useCallback } from 'react';
+import type { ClaudeMessage } from '../types';
 import { useSession } from '../contexts/SessionContext';
 import { useUIState } from '../contexts/UIStateContext';
 import { useMessages } from '../contexts/MessagesContext';
@@ -14,6 +16,7 @@ interface HistoryCallbacks {
   onToggleFavorite: (sessionId: string) => void;
   onUpdateTitle: (sessionId: string, newTitle: string) => void;
   onConvertToCliSession: (sessionId: string) => void;
+  onForkSession: (sessionId: string, options?: { forkPointUuid?: string }) => void;
 }
 
 interface AppChatAreaProps extends ChatScreenProps, HistoryCallbacks {
@@ -40,11 +43,23 @@ export const AppChatArea = (props: AppChatAreaProps) => {
     onUpdateTitle,
     onConvertToCliSession,
     codexTurnActive,
+    onForkSession,
     ...chatScreenProps
   } = props;
   // Same notion of busy as the send queue: deleting must wait for every native phase.
   const currentSessionBusy = loading || streamingActive || Boolean(codexTurnActive)
     || Boolean(props.codexPlanExecutionPending) || Boolean(props.codexCompactionPending);
+
+  // Fork the active session at an assistant reply: the message carries the JSONL row
+  // uuid the backend needs to cut the fork at that turn's end.
+  const handleForkFromMessage = useCallback((message: ClaudeMessage) => {
+    if (!currentSessionId || !onForkSession) return;
+    const raw = message.raw;
+    const uuid = raw && typeof raw === 'object'
+      ? (raw as Record<string, unknown>).uuid : undefined;
+    if (typeof uuid !== 'string' || !uuid) return;
+    onForkSession(currentSessionId, { forkPointUuid: uuid });
+  }, [currentSessionId, onForkSession]);
 
   return (
     <>
@@ -55,7 +70,10 @@ export const AppChatArea = (props: AppChatAreaProps) => {
           ? { display: 'flex', flex: 1, minHeight: 0, flexDirection: 'column', overflow: 'hidden' }
           : { display: 'none' }}
       >
-        <ChatScreen {...chatScreenProps} />
+        <ChatScreen
+          {...chatScreenProps}
+          onForkFromMessage={handleForkFromMessage}
+        />
       </div>
       {currentView === 'history' && (
         <HistoryView
@@ -70,6 +88,7 @@ export const AppChatArea = (props: AppChatAreaProps) => {
           onToggleFavorite={onToggleFavorite}
           onUpdateTitle={onUpdateTitle}
           onConvertToCliSession={onConvertToCliSession}
+          onForkSession={onForkSession}
         />
       )}
     </>

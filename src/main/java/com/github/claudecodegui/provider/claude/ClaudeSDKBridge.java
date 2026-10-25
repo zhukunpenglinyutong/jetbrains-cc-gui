@@ -1,5 +1,6 @@
 package com.github.claudecodegui.provider.claude;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import com.github.claudecodegui.bridge.NodeDetector;
@@ -469,6 +470,15 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
 
     public JsonObject getLatestClaudeUserMessage(String sessionId, String cwd) {
         return sessionQueryService.getLatestUserMessage(sessionId, cwd);
+    }
+
+    /**
+     * Recent assistant transcript rows ({ uuid, text }), oldest first; null when the
+     * transcript tail is incomplete. Feeds the streamed-assistant uuid backfill that
+     * enables per-message forks in live sessions.
+     */
+    public JsonArray getRecentClaudeAssistantMessages(String sessionId, String cwd, int limit) {
+        return sessionQueryService.getRecentAssistantMessages(sessionId, cwd, limit);
     }
 
     /**

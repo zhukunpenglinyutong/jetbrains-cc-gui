@@ -846,6 +846,32 @@ export function registerMessageCallbacks(
     if (!content || !uuid) return;
 
     setMessages((prev) => {
+      let assistantMatched = false;
+      const next = [...prev];
+      // Assistant pass first: streamed replies are synthesized from deltas without
+      // a row uuid, and the fork button needs it. The backend backfills after the
+      // turn ends, matching the transcript row by joined text and pushing oldest
+      // first — so pair the oldest unresolved message with each push.
+      for (let i = 0; i < next.length; i += 1) {
+        const message = next[i];
+        if (message.type !== 'assistant') continue;
+        if (getRawUuid(message)) continue;
+        if ((message.content || '') !== content) continue;
+
+        next[i] = {
+          ...message,
+          raw:
+            typeof message.raw === 'object' && message.raw
+              ? { ...message.raw, uuid }
+              : { uuid, message: { content: [{ type: 'text' as const, text: message.content || content }] } },
+        };
+        assistantMatched = true;
+        break;
+      }
+      if (assistantMatched) {
+        return next;
+      }
+
       for (let i = prev.length - 1; i >= 0; i -= 1) {
         const message = prev[i];
         if (message.type !== 'user') continue;
@@ -870,7 +896,6 @@ export function registerMessageCallbacks(
                 },
               };
 
-        const next = [...prev];
         next[i] = {
           ...message,
           raw,

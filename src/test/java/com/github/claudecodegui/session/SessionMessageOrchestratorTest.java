@@ -123,6 +123,129 @@ public class SessionMessageOrchestratorTest {
     }
 
     @Test
+    public void updateAssistantMessageUuidsBackfillsStreamedAssistantFromTranscript() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-1");
+        state.setCwd("/workspace");
+
+        // Streamed replies arrive without a row uuid: raw carries only the delta envelope.
+        JsonObject streamedRaw = new JsonObject();
+        streamedRaw.add("message", new JsonObject());
+        ClaudeSession.Message streamedAssistant = new ClaudeSession.Message(
+                ClaudeSession.Message.Type.ASSISTANT, "收到", streamedRaw);
+        state.addMessage(streamedAssistant);
+
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+        callbackFacade.setCallback(callback);
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        JsonArray rows = new JsonArray();
+        JsonObject row = new JsonObject();
+        row.addProperty("uuid", "row-uuid-1");
+        row.addProperty("text", "收到");
+        rows.add(row);
+        historyAccess.recentAssistantRows = rows;
+
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.updateAssistantMessageUuids();
+
+        assertEquals(1, historyAccess.recentAssistantMessagesRequests.get());
+        assertTrue(streamedAssistant.raw.has("uuid"));
+        assertEquals("row-uuid-1", streamedAssistant.raw.get("uuid").getAsString());
+        assertEquals(List.of("收到|row-uuid-1"), callback.messageUuidPatches);
+    }
+
+    @Test
+    public void updateAssistantMessageUuidsSkipsLookupWhenAllAssistantMessagesHaveUuid() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-1");
+        state.setCwd("/workspace");
+
+        JsonObject restoredRaw = new JsonObject();
+        restoredRaw.addProperty("uuid", "already-set");
+        state.addMessage(new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, "收到", restoredRaw));
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.updateAssistantMessageUuids();
+
+        assertEquals(0, historyAccess.recentAssistantMessagesRequests.get());
+    }
+
+    @Test
+    public void updateAssistantMessageUuidsPairsDuplicateTextsOldestFirst() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-1");
+        state.setCwd("/workspace");
+
+        JsonObject firstRaw = new JsonObject();
+        ClaudeSession.Message first = new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, "again", firstRaw);
+        state.addMessage(first);
+        JsonObject secondRaw = new JsonObject();
+        ClaudeSession.Message second = new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, "again", secondRaw);
+        state.addMessage(second);
+
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+        callbackFacade.setCallback(callback);
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        JsonArray rows = new JsonArray();
+        JsonObject rowOne = new JsonObject();
+        rowOne.addProperty("uuid", "row-older");
+        rowOne.addProperty("text", "again");
+        rows.add(rowOne);
+        JsonObject rowTwo = new JsonObject();
+        rowTwo.addProperty("uuid", "row-newer");
+        rowTwo.addProperty("text", "again");
+        rows.add(rowTwo);
+        historyAccess.recentAssistantRows = rows;
+
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.updateAssistantMessageUuids();
+
+        assertEquals("row-older", first.raw.get("uuid").getAsString());
+        assertEquals("row-newer", second.raw.get("uuid").getAsString());
+        assertEquals(List.of("again|row-older", "again|row-newer"), callback.messageUuidPatches);
+    }
+
+    @Test
     public void loadFromServerParsesHistoryAndClearsLoadingState() {
         SessionState state = new SessionState();
         state.setProvider("claude");
@@ -2855,9 +2978,11 @@ public class SessionMessageOrchestratorTest {
         private final AtomicInteger cancellableHistoryRequests = new AtomicInteger();
         private final AtomicInteger cancellablePageRequests = new AtomicInteger();
         private final AtomicInteger latestClaudeUserMessageRequests = new AtomicInteger();
+        private final AtomicInteger recentAssistantMessagesRequests = new AtomicInteger();
         private List<JsonObject> providerHistory = List.of();
         private RuntimeException providerHistoryFailure;
         private JsonObject latestClaudeUserMessage;
+        private JsonArray recentAssistantRows;
         private JsonObject messagesPage;
         private final AtomicInteger earlierPageRequests = new AtomicInteger();
         private CountDownLatch earlierReadStarted;
@@ -2893,6 +3018,12 @@ public class SessionMessageOrchestratorTest {
             return latestClaudeUserMessage;
         }
 
+        @Override
+        public JsonArray getRecentClaudeAssistantMessages(String sessionId, String cwd, int limit) {
+            recentAssistantMessagesRequests.incrementAndGet();
+            return recentAssistantRows;
+        }
+
         /** Let a newer history commit overtake the earlier page's captured response. */
         @Override
         public JsonObject getProviderSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit) {
@@ -2923,6 +3054,11 @@ public class SessionMessageOrchestratorTest {
         private final List<List<ClaudeSession.Message>> messageUpdates = new ArrayList<>();
         private final List<String> stateChanges = new ArrayList<>();
         private final List<String> messageUuidPatches = new ArrayList<>();
+
+        @Override
+        public void onAssistantMessageUuidPatched(String content, String uuid) {
+            messageUuidPatches.add(content + "|" + uuid);
+        }
         private final List<String> usageUpdates = new ArrayList<>();
         private final List<String> claudeHistoryPageInfos = new ArrayList<>();
         private final List<String> claudeHistoryPageErrors = new ArrayList<>();

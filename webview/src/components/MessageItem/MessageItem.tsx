@@ -29,6 +29,11 @@ export interface MessageItemProps {
   onNodeRef?: (id: string, node: HTMLDivElement | null) => void;
   onNavigateToProviderSettings?: () => void;
   onNavigateToDependencySettings?: () => void;
+  /**
+   * Present for claude sessions: forks the session at this assistant reply's turn
+   * end. The button itself only renders when the message carries a raw row uuid.
+   */
+  onForkFromMessage?: (message: ClaudeMessage) => void;
   toolResultSignature?: string;
   /** Current active provider id (e.g. 'claude', 'codex'); drives the streaming-connect label. */
   currentProvider?: string;
@@ -51,6 +56,7 @@ export const MessageItem = memo(function MessageItem({
   onNodeRef,
   onNavigateToProviderSettings,
   onNavigateToDependencySettings,
+  onForkFromMessage,
   toolResultSignature: _toolResultSignature,
   currentProvider,
   detailedOutputEnabled = false,
@@ -88,6 +94,15 @@ export const MessageItem = memo(function MessageItem({
 
   const isLastAssistantMessage = message.type === 'assistant' && isLast;
   const isMessageStreaming = streamingActive && isLastAssistantMessage;
+
+  // Fork-from-this-reply: only claude sessions fork at the file level, and the
+  // backend needs the JSONL row uuid to know where to cut.
+  const forkUuid = (() => {
+    if (!onForkFromMessage || message.type !== 'assistant' || currentProvider !== 'claude') return null;
+    const raw = message.raw;
+    const uuid = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).uuid : undefined;
+    return typeof uuid === 'string' && uuid ? uuid : null;
+  })();
 
   // Cache markdown content extraction for better performance
   const markdownContent = useMemo(() => {
@@ -273,6 +288,7 @@ export const MessageItem = memo(function MessageItem({
         isCopied={copiedMessageIndex === messageIndex}
         onQuote={handleQuoteMessage}
         onCopy={handleCopyMessage}
+        onFork={forkUuid && onForkFromMessage ? () => onForkFromMessage(message) : undefined}
         t={t}
       />
 

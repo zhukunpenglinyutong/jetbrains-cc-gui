@@ -32,9 +32,10 @@ interface HistoryViewProps {
   onToggleFavorite: (sessionId: string) => void; // Toggle favorite callback
   onUpdateTitle: (sessionId: string, newTitle: string) => void; // Update title callback
   onConvertToCliSession: (sessionId: string) => void; // Convert sidechain session to CLI session callback
+  onForkSession: (sessionId: string) => void; // Fork (duplicate) session callback
 }
 
-const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSessionBusy, onLoadSession, onDeleteSession, onDeleteSessions, onExportSession, onToggleFavorite, onUpdateTitle, onConvertToCliSession }: HistoryViewProps) => {
+const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSessionBusy, onLoadSession, onDeleteSession, onDeleteSessions, onExportSession, onToggleFavorite, onUpdateTitle, onConvertToCliSession, onForkSession }: HistoryViewProps) => {
   const { t } = useTranslation();
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // Session ID pending deletion
@@ -262,6 +263,7 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
       onFavorite={handleFavoriteRequest}
       onCopySessionId={handleCopySessionId}
       onConvertToCliSession={handleConvertRequest}
+      onFork={onForkSession}
     />
   );
 

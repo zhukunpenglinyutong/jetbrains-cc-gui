@@ -1117,6 +1117,19 @@
       "ALREADY_CLI_SESSION": "此會話已經是 CLI 會話",
       "CONVERSION_FAILED": "轉換失敗，請稍後重試"
     },
+    "forkSession": "分岔會話",
+    "forkSuccess": "會話已分岔",
+    "forkFailed": "分岔失敗",
+    "forkedTitleSuffix": "（分岔）",
+    "forkFromHere": "從此回覆分岔",
+    "forkErrors": {
+      "INVALID_SESSION_ID": "無效的會話 ID",
+      "UNSUPPORTED_PROVIDER": "目前僅支援分岔 Claude 會話",
+      "SESSION_NOT_FOUND": "找不到會話檔案",
+      "FILE_NOT_EXIST": "會話檔案不存在",
+      "FORK_POINT_NOT_FOUND": "會話中找不到分岔點訊息",
+      "FORK_FAILED": "分岔失敗，請稍後再試"
+    },
     "entrypointLabel": {
       "sdk-cli": "SDK會話",
       "claude-vscode": "VS Code",

@@ -17,7 +17,8 @@ import {
 import {
   getSessionMessages as claudeGetSessionMessages,
   getSessionMessagesPage as claudeGetSessionMessagesPage,
-  getLatestUserMessage as claudeGetLatestUserMessage
+  getLatestUserMessage as claudeGetLatestUserMessage,
+  getRecentAssistantMessages as claudeGetRecentAssistantMessages
 } from '../services/claude/session-service.js';
 import { listModels } from '../services/claude/models-service.js';
 
@@ -133,6 +134,13 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
     case 'getLatestUserMessage':
       await claudeGetLatestUserMessage(args[0], args[1]);
       break;
+
+    case 'getRecentAssistantMessages': {
+      const parsedLimit = Number.parseInt(stdinData?.limit ?? args[2], 10);
+      const limit = Number.isInteger(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 20;
+      await claudeGetRecentAssistantMessages(args[0], args[1], limit);
+      break;
+    }
 
     case 'rewindFiles': {
       const sessionId = stdinData?.sessionId || args[0];

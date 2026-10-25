@@ -217,6 +217,15 @@ interface Window {
   onHistoryDeleteResult?: (json: string) => void;
 
   /**
+   * Session fork result callback.
+   * Called by the Java backend after attempting to fork (duplicate) a session.
+   * Payload: { success: boolean, newSessionId?: string, errorCode?: string }.
+   * newSessionId identifies the created fork on success;
+   * errorCode identifies the failure reason for i18n lookup.
+   */
+  onForkResult?: (json: string) => void;
+
+  /**
    * Add user message to chat (used for external Quick Fix feature)
    * Immediately shows the user's message in the chat UI before AI response
    */
@@ -239,6 +248,20 @@ interface Window {
   __pendingSessionTransitionToast?: {
     message: string;
     type?: 'success' | 'error' | 'warning' | 'info';
+  };
+
+  /**
+   * Title the frontend asked the backend to set for a fork that is still being
+   * created. Bound to the fork's session id when onForkResult arrives, then
+   * applied by setSessionId once that session becomes active — the fork row is
+   * not in the history list yet, so the chat header would otherwise fall back
+   * to the message-derived title.
+   */
+  __pendingForkTitleRequest?: string;
+
+  __pendingForkTitle?: {
+    sessionId: string;
+    title: string;
   };
 
   /**

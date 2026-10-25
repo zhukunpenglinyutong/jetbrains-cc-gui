@@ -6,6 +6,7 @@ import { getSkipNewSessionConfirm } from '../utils/skipNewSessionConfirm';
 import { clearAllPersistedExpanded } from '../utils/expandedState';
 import { normalizeClaudeModelForBridge } from '../utils/customClaudeModels';
 import { sumKnownHistoryMessages } from '../utils/historyMessageCount';
+import { deriveSessionTitle } from './useChatComputations';
 
 type ViewMode = 'chat' | 'history' | 'settings';
 
@@ -23,6 +24,9 @@ interface HistoryDeleteResult {
 
 const createDeletionRequestId = () =>
   `delete-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+// Matches session-titles-service.cjs#updateTitle, which rejects longer titles.
+const CUSTOM_TITLE_MAX_LENGTH = 50;
 
 const createSessionTransitionToken = () =>
   `transition-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -59,6 +63,11 @@ interface UseSessionManagementOptions {
    */
   applyHistoryModel?: (provider: string, model: string, agent?: string | null) => void;
   /**
+   * Extract a message's display text; used to derive a fork's base title when the
+   * source session is not in the history list yet (fresh chat sessions).
+   */
+  getMessageText?: (message: ClaudeMessage) => string;
+  /**
    * Discards messages still waiting in the send queue. Queued messages belong
    * to the session they were typed in, so they must not leak into the next
    * session when the user switches away.
@@ -85,6 +94,7 @@ interface UseSessionManagementReturn {
   updateHistoryTitle: (sessionId: string, newTitle: string) => void;
   applyHistoryTitleLocal: (sessionId: string, newTitle: string) => void;
   convertToCliSession: (sessionId: string) => void;
+  forkHistorySession: (sessionId: string, options?: { forkPointUuid?: string }) => void;
 }
 
 /**
@@ -115,6 +125,7 @@ export function useSessionManagement({
   addToast,
   t,
   applyHistoryModel,
+  getMessageText,
   clearQueuedMessages,
 }: UseSessionManagementOptions): UseSessionManagementReturn {
   const [showNewSessionConfirm, setShowNewSessionConfirm] = useState(false);
@@ -607,6 +618,52 @@ export function useSessionManagement({
     });
   }, [setHistoryData]);
 
+  // Fork (duplicate) a session into a new independent session. The backend sends an
+  // onForkResult callback with success/failure; the registered handler in
+  // sessionCallbacks shows the toast and reloads the list to reveal the fork.
+  // No optimistic insert: the fork row's messageCount/fileSize are only known to the
+  // backend, and a wrong placeholder would be jarring once the real row lands.
+  // options.forkPointUuid narrows the fork to the conversation up to the end of that
+  // assistant reply's turn (backend cuts before the next real user message).
+  const forkHistorySession = useCallback((sessionId: string, options?: { forkPointUuid?: string }) => {
+    const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
+    const provider = session?.provider || currentProvider || 'claude';
+
+    // One uniform rule: the fork's title is the source's current title plus one
+    // localized " (fork)" suffix. Chained forks therefore read "1 (fork)",
+    // "1 (fork) (fork)", … with no counting or dedupe. Truncate the base first so
+    // the suffix always survives the custom-title service's length limit.
+    const suffix = t('history.forkedTitleSuffix');
+    let baseTitle = (session?.title ?? '').trim();
+    if (!baseTitle && getMessageText) {
+      // Fresh chat sessions are not in the history list yet, so the row lookup
+      // above misses; derive the same base title the chat header shows.
+      baseTitle = deriveSessionTitle({
+        customSessionTitle: null,
+        restoredSessionTitle: null,
+        currentSessionId: sessionId,
+        messages,
+        fallbackTitle: '',
+        getMessageText,
+      }).trim();
+    }
+    const forkTitle = baseTitle
+      ? baseTitle.slice(0, Math.max(0, CUSTOM_TITLE_MAX_LENGTH - suffix.length)) + suffix
+      : '';
+
+    // The fork row is not in the list yet when the fork opens, so remember the title
+    // this fork should carry; onForkResult binds it to the new session id and
+    // window.setSessionId applies it once that session becomes active.
+    window.__pendingForkTitleRequest = forkTitle;
+
+    sendBridgeEvent('fork_session', JSON.stringify({
+      sessionId,
+      provider,
+      ...(forkTitle ? { title: forkTitle } : {}),
+      ...(options?.forkPointUuid ? { forkPointUuid: options.forkPointUuid } : {}),
+    }));
+  }, [currentProvider, t, messages, getMessageText]);
+
   return {
     showNewSessionConfirm,
     showInterruptConfirm,
@@ -626,5 +683,6 @@ export function useSessionManagement({
     updateHistoryTitle,
     applyHistoryTitleLocal,
     convertToCliSession,
+    forkHistorySession,
   };
 }

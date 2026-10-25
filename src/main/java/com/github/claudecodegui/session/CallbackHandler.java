@@ -159,6 +159,16 @@ public class CallbackHandler {
     }
 
     /**
+     * Notify that a streamed assistant message received its transcript uuid.
+     * Uses the same frontend patch channel as the user-message variant.
+     */
+    public void notifyAssistantMessageUuidPatched(String content, String uuid) {
+        if (callback != null) {
+            callback.onAssistantMessageUuidPatched(content, uuid);
+        }
+    }
+
+    /**
      * Notify of a Claude Code task_* SDK system event (task_started /
      * task_progress / task_notification).
      */

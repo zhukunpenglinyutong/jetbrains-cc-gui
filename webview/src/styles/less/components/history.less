@@ -296,6 +296,28 @@
     }
 }
 
+/* Fork button styles */
+.history-fork-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0; /* hidden until hover */
+    line-height: 1;
+
+    .codicon {
+        font-size: 14px;
+        pointer-events: none;
+    }
+}
+
 /* 操作按钮容器：绝对定位浮层（贴右下、对齐 meta 行），不占据文档流空间，悬停时显示 */
 .history-action-buttons {
     position: absolute;
@@ -316,7 +338,8 @@
 
 .history-item:not(:hover) .history-action-buttons.has-favorite .history-edit-btn,
 .history-item:not(:hover) .history-action-buttons.has-favorite .history-export-btn,
-.history-item:not(:hover) .history-action-buttons.has-favorite .history-delete-btn {
+.history-item:not(:hover) .history-action-buttons.has-favorite .history-delete-btn,
+.history-item:not(:hover) .history-action-buttons.has-favorite .history-fork-btn {
     visibility: hidden;
     opacity: 0;
 }
@@ -330,6 +353,7 @@
 .history-item:hover .history-export-btn,
 .history-item:hover .history-favorite-btn,
 .history-item:hover .history-edit-btn,
+.history-item:hover .history-fork-btn,
 .history-item:hover .history-copy-id-btn {
     opacity: 1; /* 鼠标悬停时显示 */
 }
@@ -352,6 +376,16 @@
 .history-export-btn:active {
     transform: scale(0.92);
     background-color: rgba(10, 132, 255, 0.25);
+}
+
+.history-fork-btn:hover {
+    background-color: rgba(175, 82, 222, 0.15);
+    color: #af52de; /* purple marks the fork action */
+}
+
+.history-fork-btn:active {
+    transform: scale(0.92);
+    background-color: rgba(175, 82, 222, 0.25);
 }
 
 .history-delete-btn:hover {

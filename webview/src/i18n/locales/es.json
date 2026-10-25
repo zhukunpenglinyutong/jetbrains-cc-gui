@@ -1076,6 +1076,19 @@
       "ALREADY_CLI_SESSION": "Esta sesión ya es una sesión CLI",
       "CONVERSION_FAILED": "Conversión fallida, por favor intente más tarde"
     },
+    "forkSession": "Bifurcar sesión",
+    "forkSuccess": "Sesión bifurcada",
+    "forkFailed": "Error al bifurcar",
+    "forkedTitleSuffix": " (bifurcada)",
+    "forkFromHere": "Bifurcar desde esta respuesta",
+    "forkErrors": {
+      "INVALID_SESSION_ID": "ID de sesión no válido",
+      "UNSUPPORTED_PROVIDER": "La bifurcación solo es compatible con sesiones de Claude por ahora",
+      "SESSION_NOT_FOUND": "No se encontró el archivo de sesión",
+      "FILE_NOT_EXIST": "El archivo de sesión no existe",
+      "FORK_POINT_NOT_FOUND": "No se encontró el mensaje del punto de bifurcación en la sesión",
+      "FORK_FAILED": "Error al bifurcar, inténtalo de nuevo más tarde"
+    },
     "entrypointLabel": {
       "sdk-cli": "Sesión SDK",
       "claude-vscode": "VS Code",

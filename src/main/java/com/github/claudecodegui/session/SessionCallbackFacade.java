@@ -89,6 +89,11 @@ public class SessionCallbackFacade {
         callbackHandler.notifyUserMessageUuidPatched(content, uuid);
     }
 
+    /** Push a backfilled streamed-assistant row uuid to the frontend (same patchMessageUuid channel). */
+    public void notifyAssistantMessageUuidPatched(String content, String uuid) {
+        callbackHandler.notifyAssistantMessageUuidPatched(content, uuid);
+    }
+
     public void notifyClaudeHistoryPageInfo(String sessionId, int fromTurn, int totalTurns, boolean hasMore, boolean cursorReset, String sessionTitle) {
         callbackHandler.notifyClaudeHistoryPageInfo(sessionId, fromTurn, totalTurns, hasMore, cursorReset, sessionTitle);
     }

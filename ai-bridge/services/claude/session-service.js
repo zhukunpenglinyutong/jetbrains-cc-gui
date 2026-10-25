@@ -372,6 +372,88 @@ export async function getLatestUserMessage(sessionId, cwd = null) {
   }
 }
 
+/**
+ * Return the most recent assistant rows of a session, oldest first, each shaped
+ * as { uuid, text } where text is the row's joined text-block content. Feeds the
+ * Java-side assistant uuid backfill: streaming-mode assistant messages are
+ * synthesized from deltas by the bridge and never carry the row uuid that the
+ * CLI assigns when it appends the JSONL, so the chat cannot fork from them
+ * until the uuid is resolved against the transcript.
+ */
+export async function getRecentAssistantMessages(sessionId, cwd = null, limit = 20) {
+  try {
+    const sessionFile = resolveSessionFile(sessionId, cwd);
+
+    if (!existsSync(sessionFile)) {
+      await writeJsonResponse({
+        success: true,
+        messages: []
+      });
+      return;
+    }
+
+    // Assistant rows can be large (tool_use payloads); scan a generous tail.
+    const TAIL_BYTES = 256 * 1024;
+    const stat = statSync(sessionFile);
+    const startByte = Math.max(0, stat.size - TAIL_BYTES);
+
+    const collected = [];
+    let tailMalformed = false;
+    const rl = createInterface({
+      input: createReadStream(sessionFile, { encoding: 'utf8', start: startByte }),
+      crlfDelay: Infinity
+    });
+
+    let firstLine = startByte > 0;
+    for await (const line of rl) {
+      // Skip potentially partial first line when reading from mid-file
+      if (firstLine) { firstLine = false; continue; }
+      if (!line.trim()) continue;
+      try {
+        const message = JSON.parse(line);
+        tailMalformed = false;
+        if (
+          message &&
+          message.type === 'assistant' &&
+          typeof message.uuid === 'string' &&
+          !message.isSidechain
+        ) {
+          collected.push({
+            uuid: message.uuid,
+            text: extractTextContent(message)
+          });
+          if (collected.length > limit) {
+            collected.shift();
+          }
+        }
+      } catch {
+        tailMalformed = true;
+      }
+    }
+
+    if (tailMalformed) {
+      await writeJsonResponse({
+        success: false,
+        incomplete: true,
+        error: incompleteHistoryError(),
+        messages: [],
+      });
+      return;
+    }
+
+    await writeJsonResponse({
+      success: true,
+      messages: collected
+    });
+  } catch (error) {
+    console.error('[GET_RECENT_ASSISTANT_ERROR]', error.message);
+    await writeJsonResponse({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
 export function isUserTextMessage(message) {
   return Boolean(
     message &&

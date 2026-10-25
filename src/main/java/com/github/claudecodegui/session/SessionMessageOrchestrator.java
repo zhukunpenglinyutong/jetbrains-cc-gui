@@ -30,6 +30,8 @@ public class SessionMessageOrchestrator {
 
     private static final Logger LOG = Logger.getInstance(SessionMessageOrchestrator.class);
     private static final int MAX_UUID_SYNC_RETRIES = 3;
+    /** Extra transcript rows fetched beyond the unresolved count, so rows filtered out of the chat view cannot starve a match. */
+    private static final int UUID_SYNC_ROW_MARGIN = 5;
 
     public interface SessionHistoryAccess {
         List<JsonObject> getProviderSessionMessages(String provider, String sessionId, String cwd);
@@ -44,6 +46,16 @@ public class SessionMessageOrchestrator {
         }
 
         JsonObject getLatestClaudeUserMessage(String sessionId, String cwd);
+
+        /**
+         * Recent assistant transcript rows, oldest first, each { uuid, text }.
+         * Returns null when the tail was incomplete (writer mid-append); the
+         * caller should retry. Feeds the assistant uuid backfill that lets
+         * streamed messages anchor session forks.
+         */
+        default JsonArray getRecentClaudeAssistantMessages(String sessionId, String cwd, int limit) {
+            return new JsonArray();
+        }
 
         /**
          * Load a page of Claude session history (turn-based pagination).
@@ -232,6 +244,151 @@ public class SessionMessageOrchestrator {
     /** Number of history loads whose transcript replaced the live list. */
     public long getCommittedHistoryLoadCount() {
         return committedHistoryLoads.get();
+    }
+
+    /**
+     * Backfill the uuids of live-streamed assistant messages after a turn ends.
+     * Streaming replies are synthesized from deltas by the bridge, so their raw
+     * carries no uuid — and without one the chat cannot offer per-message forks.
+     * The CLI assigns the row uuid when it appends the transcript, so after the
+     * turn we resolve each uuid-less assistant message against the recent
+     * transcript rows by text and stamp it, mirroring the user-message sync
+     * that powers rewind.
+     */
+    public CompletableFuture<Void> syncAssistantMessageUuidsAfterSend() {
+        String provider = state.getProvider();
+        if ("codex".equals(provider) || SessionProviderRouter.isCliProvider(provider)) {
+            return CompletableFuture.completedFuture(null);
+        }
+        if (findUnresolvedAssistantMessages().isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        return CompletableFuture.runAsync(() -> updateAssistantMessageUuids());
+    }
+
+    void updateAssistantMessageUuids() {
+        String sessionId = state.getSessionId();
+        String cwd = state.getCwd();
+        if (sessionId == null || sessionId.isEmpty()) {
+            return;
+        }
+
+        for (int attempt = 1; attempt <= MAX_UUID_SYNC_RETRIES; attempt++) {
+            List<ClaudeSession.Message> unresolved = findUnresolvedAssistantMessages();
+            if (unresolved.isEmpty()) {
+                return;
+            }
+
+            try {
+                JsonArray rows = historyAccess.getRecentClaudeAssistantMessages(
+                        sessionId, cwd, unresolved.size() + UUID_SYNC_ROW_MARGIN);
+                if (rows == null) {
+                    // Transcript tail still being written; retry after a beat.
+                    if (attempt < MAX_UUID_SYNC_RETRIES) {
+                        sleep(uuidRetryDelayMs);
+                        continue;
+                    }
+                    return;
+                }
+
+                int patchedCount = 0;
+                List<String[]> pendingNotifications = new ArrayList<>();
+                java.util.Set<String> usedUuids = new java.util.HashSet<>();
+                synchronized (state.getMessageStateLock()) {
+                    // Re-read under the lock: a concurrent append could have added
+                    // messages after the lockless pre-check.
+                    List<ClaudeSession.Message> locked = findUnresolvedAssistantMessages();
+                    for (ClaudeSession.Message localMsg : locked) {
+                        String matchedUuid = findRowUuidByText(rows, localMsg.content, usedUuids);
+                        if (matchedUuid == null) {
+                            continue;
+                        }
+                        if (localMsg.raw == null) {
+                            localMsg.raw = new JsonObject();
+                        }
+                        localMsg.raw.addProperty("uuid", matchedUuid);
+                        patchedCount++;
+                        pendingNotifications.add(new String[]{
+                                localMsg.content != null ? localMsg.content : "", matchedUuid});
+                    }
+                }
+                if (patchedCount > 0) {
+                    LOG.info("[Fork] Backfilled " + patchedCount + " streamed assistant message uuid(s)");
+                    for (String[] notification : pendingNotifications) {
+                        callbackFacade.notifyAssistantMessageUuidPatched(notification[0], notification[1]);
+                    }
+                    return;
+                }
+
+                if (attempt < MAX_UUID_SYNC_RETRIES) {
+                    sleep(uuidRetryDelayMs);
+                }
+            } catch (Exception e) {
+                LOG.warn("[Fork] Failed to backfill assistant message uuids (attempt "
+                        + attempt + "): " + e.getMessage());
+                if (attempt < MAX_UUID_SYNC_RETRIES) {
+                    sleep(uuidRetryDelayMs);
+                }
+            }
+        }
+    }
+
+    /**
+     * Assistant messages still missing a transcript uuid, oldest first. Only
+     * text-bearing ones are collected: the per-message fork button renders on
+     * copyable (text) replies, so rows without text never need a uuid.
+     */
+    private List<ClaudeSession.Message> findUnresolvedAssistantMessages() {
+        synchronized (state.getMessageStateLock()) {
+            List<ClaudeSession.Message> messages = state.getMessagesReference();
+            List<ClaudeSession.Message> unresolved = new ArrayList<>();
+            for (ClaudeSession.Message msg : messages) {
+                if (msg.type != ClaudeSession.Message.Type.ASSISTANT) {
+                    continue;
+                }
+                if (msg.raw != null && msg.raw.has("uuid") && !msg.raw.get("uuid").isJsonNull()) {
+                    continue;
+                }
+                if (msg.content == null || msg.content.isEmpty()) {
+                    continue;
+                }
+                unresolved.add(msg);
+            }
+            return unresolved;
+        }
+    }
+
+    /**
+     * Find a recent assistant row whose joined text equals the local message's
+     * streamed text. Rows already consumed by a previous match are skipped via
+     * usedUuids so duplicate texts cannot share one uuid.
+     */
+    private static String findRowUuidByText(JsonArray rows, String text, java.util.Set<String> usedUuids) {
+        if (text == null || text.isEmpty()) {
+            return null;
+        }
+        for (JsonElement element : rows) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject row = element.getAsJsonObject();
+            JsonElement uuidElement = row.get("uuid");
+            JsonElement textElement = row.get("text");
+            if (uuidElement == null || !uuidElement.isJsonPrimitive()
+                    || textElement == null || !textElement.isJsonPrimitive()) {
+                continue;
+            }
+            String uuid = uuidElement.getAsString();
+            if (usedUuids.contains(uuid)) {
+                continue;
+            }
+            if (text.equals(textElement.getAsString())) {
+                usedUuids.add(uuid);
+                return uuid;
+            }
+        }
+        return null;
     }
 
     /** Load provider history without letting obsolete reads replace a newer transcript. */

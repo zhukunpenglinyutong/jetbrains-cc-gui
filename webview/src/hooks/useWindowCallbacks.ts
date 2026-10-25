@@ -126,6 +126,8 @@ export interface UseWindowCallbacksOptions {
   currentSessionIdRef: MutableRefObject<string | null>;
   updateHistoryTitle: (sessionId: string, newTitle: string) => void;
   applyHistoryTitleLocal: (sessionId: string, newTitle: string) => void;
+  /** Standard session switch flow; used to auto-open a fork created from a message. */
+  loadHistorySession?: (sessionId: string, provider?: string, model?: string, agent?: string) => void;
 
   /**
    * Discards messages waiting in the send queue; wired into

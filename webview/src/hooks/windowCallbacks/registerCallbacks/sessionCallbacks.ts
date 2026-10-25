@@ -38,6 +38,7 @@ export function registerSessionAndSdkCallbacks(
     updateHistoryTitle,
     applyHistoryTitleLocal,
     setCustomSessionTitle,
+    loadHistorySession,
   } = options;
 
   window.setSessionId = (sessionId: string) => {
@@ -62,6 +63,19 @@ export function registerSessionAndSdkCallbacks(
         updateHistoryTitle(sessionId, title);
       } else {
         applyHistoryTitleLocal(sessionId, title);
+      }
+    }
+
+    // A just-created fork carries the title the frontend requested, but its row
+    // is not in the history list yet (or was stale when opened), so the header
+    // would otherwise fall back to the message-derived title. Apply the pending
+    // fork title the moment this session becomes active.
+    const pendingForkTitle = window.__pendingForkTitle;
+    if (pendingForkTitle && pendingForkTitle.sessionId === sessionId) {
+      delete window.__pendingForkTitle;
+      if (pendingForkTitle.title) {
+        setCustomSessionTitle(pendingForkTitle.title);
+        applyHistoryTitleLocal(sessionId, pendingForkTitle.title);
       }
     }
   };
@@ -258,6 +272,63 @@ export function registerSessionAndSdkCallbacks(
       console.error('[Frontend] Failed to parse conversion result:', error);
       addToast(tRef.current('history.convertFailed'), 'error');
       reloadHistory();
+    }
+  };
+
+  // =========================================================================
+  // Session Fork Result Callback
+  // =========================================================================
+
+  window.onForkResult = (json: string) => {
+    try {
+      const result = JSON.parse(json);
+      if (result.success) {
+        // Bind the title the frontend requested to the fork's real session id so
+        // window.setSessionId can apply it when the fork becomes active — the fork
+        // row is not in the history list yet (or was stale when opened).
+        if (result.newSessionId && typeof window.__pendingForkTitleRequest === 'string') {
+          window.__pendingForkTitle = {
+            sessionId: result.newSessionId,
+            title: window.__pendingForkTitleRequest,
+          };
+          delete window.__pendingForkTitleRequest;
+        }
+        // Reload so the fork row appears in the list. No optimistic insert: the
+        // row's messageCount/fileSize are only known to the backend, and unlike
+        // conversion there is no optimistic state to roll back on failure.
+        const provider = options.currentProviderRef.current;
+        if (provider) {
+          sendBridgeEvent('deep_search_history', provider);
+        } else {
+          console.warn('[Frontend] Provider unavailable for fork list reload');
+        }
+
+        // A fork created from an assistant message switches straight to the fork so
+        // the user continues from that point; history-list forks keep the list open.
+        // The transition clears toasts, so a message-level fork defers its success
+        // toast until the switch completes (same mechanism as the delete toast);
+        // adding it directly here would be wiped before a single frame renders.
+        if (result.forkPointUuid && result.newSessionId) {
+          window.__pendingSessionTransitionToast = {
+            message: tRef.current('history.forkSuccess'),
+            type: 'success',
+          };
+          loadHistorySession?.(result.newSessionId);
+        } else {
+          addToast(tRef.current('history.forkSuccess'), 'success');
+        }
+        return;
+      }
+
+      const errorCode = result.errorCode;
+      let errorMessage = tRef.current('history.forkFailed');
+      if (errorCode && tRef.current(`history.forkErrors.${errorCode}`)) {
+        errorMessage = tRef.current(`history.forkErrors.${errorCode}`);
+      }
+      addToast(errorMessage, 'error');
+    } catch (error) {
+      console.error('[Frontend] Failed to parse fork result:', error);
+      addToast(tRef.current('history.forkFailed'), 'error');
     }
   };
 }

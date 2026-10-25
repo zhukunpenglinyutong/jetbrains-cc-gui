@@ -28,6 +28,8 @@ describe('useSessionManagement', () => {
     window.__sessionTransitionToken = null;
     window.__pendingSessionTransitionToast = undefined;
     window.sendToJava = vi.fn();
+    delete window.__pendingForkTitleRequest;
+    delete window.__pendingForkTitle;
     // Reset the "skip new-session confirm" preference between tests so cases
     // that exercise the localStorage path can't leak into ones that don't.
     localStorage.removeItem('skipNewSessionConfirm');
@@ -1037,4 +1039,237 @@ describe('useSessionManagement', () => {
     expect(window.__sessionTransitioning).toBe(false);
     expect(window.__sessionTransitionToken).toBeNull();
   });
+
+  it('forkHistorySession sends payload with provider and localized title suffix', () => {
+    const mocks = createMocks();
+    const historyData = {
+      success: true,
+      sessions: [
+        {
+          sessionId: 'history-1',
+          title: 'My Session',
+          provider: 'claude',
+          messageCount: 3,
+          lastTimestamp: Date.now(),
+        },
+      ],
+      total: 3,
+    } as unknown as HistoryData;
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData,
+        currentSessionId: null,
+        ...mocks,
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.forkHistorySession('history-1');
+    });
+
+    expect(window.sendToJava).toHaveBeenCalledTimes(1);
+    const [payload] = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls[0] as string[];
+    expect(payload.startsWith('fork_session:')).toBe(true);
+    const body = JSON.parse(payload.slice('fork_session:'.length));
+    expect(body).toEqual({
+      sessionId: 'history-1',
+      provider: 'claude',
+      // t() returns the key itself, so the suffix is the raw i18n key.
+      title: 'My Session' + 'history.forkedTitleSuffix',
+    });
+  });
+
+  it('forkHistorySession truncates the base title so the suffix survives', () => {
+    const mocks = createMocks();
+    const longTitle = 'x'.repeat(60);
+    const historyData = {
+      success: true,
+      sessions: [
+        {
+          sessionId: 'history-1',
+          title: longTitle,
+          provider: 'claude',
+          messageCount: 1,
+          lastTimestamp: Date.now(),
+        },
+      ],
+      total: 1,
+    } as unknown as HistoryData;
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData,
+        currentSessionId: null,
+        ...mocks,
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.forkHistorySession('history-1');
+    });
+
+    const [payload] = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls[0] as string[];
+    const body = JSON.parse(payload.slice('fork_session:'.length));
+    // The custom-title service rejects titles over 50 chars; the suffix must
+    // survive truncation, so the base title is cut first.
+    expect(body.title.length).toBeLessThanOrEqual(50);
+    expect(body.title.endsWith('history.forkedTitleSuffix')).toBe(true);
+  });
+
+  it('forkHistorySession omits the title field for untitled sessions and keeps the row provider', () => {
+    const mocks = createMocks();
+    const historyData = {
+      success: true,
+      sessions: [
+        {
+          sessionId: 'history-1',
+          title: '',
+          provider: 'grok',
+          messageCount: 1,
+          lastTimestamp: Date.now(),
+        },
+      ],
+      total: 1,
+    } as unknown as HistoryData;
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData,
+        currentSessionId: null,
+        currentProvider: 'claude',
+        ...mocks,
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.forkHistorySession('history-1');
+    });
+
+    const [payload] = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls[0] as string[];
+    const body = JSON.parse(payload.slice('fork_session:'.length));
+    expect(body).toEqual({ sessionId: 'history-1', provider: 'grok' });
+  });
+
+  it('forkHistorySession forwards the fork point uuid for message-level forks', () => {
+    const mocks = createMocks();
+    const historyData = {
+      success: true,
+      sessions: [
+        {
+          sessionId: 'history-1',
+          title: 'My Session',
+          provider: 'claude',
+          messageCount: 3,
+          lastTimestamp: Date.now(),
+        },
+      ],
+      total: 3,
+    } as unknown as HistoryData;
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData,
+        currentSessionId: 'history-1',
+        ...mocks,
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.forkHistorySession('history-1', { forkPointUuid: 'row-uuid-9' });
+    });
+
+    const [payload] = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls[0] as string[];
+    const body = JSON.parse(payload.slice('fork_session:'.length));
+    expect(body.forkPointUuid).toBe('row-uuid-9');
+    expect(body.sessionId).toBe('history-1');
+    expect(body.provider).toBe('claude');
+  });
+
+  it('forkHistorySession derives the base title from messages for sessions missing from the list', () => {
+    const mocks = createMocks();
+    const numberedT = ((key: string, opts?: Record<string, unknown>) =>
+      key === 'history.forkedTitleSuffix' ? ' (fork)'
+        : key === 'history.forkedTitleNumberedSuffix' ? ` (fork ${opts?.n})`
+        : key) as typeof t;
+    const historyData = {
+      success: true,
+      sessions: [
+        // Another session's fork of the same base already exists in the list.
+        { sessionId: 'older-fork', title: 'Fresh Chat (fork)', provider: 'claude', messageCount: 1, lastTimestamp: Date.now() },
+      ],
+      total: 1,
+    } as unknown as HistoryData;
+    const getMessageText = (message: { content?: string }) => message.content ?? '';
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [{ type: 'user', content: 'Fresh Chat' }] as any,
+        loading: false,
+        historyData,
+        currentSessionId: null,
+        ...mocks,
+        t: numberedT,
+        getMessageText,
+      })
+    );
+
+    act(() => {
+      result.current.forkHistorySession('fresh-session-id');
+    });
+
+    // The source row is absent, so the base comes from the first user message and
+    // one suffix is appended, exactly as for list-row sources.
+    expect(window.__pendingForkTitleRequest).toBe('Fresh Chat (fork)');
+  });
+
+  it('forkHistorySession stashes the requested fork title for setSessionId to apply', () => {
+    const mocks = createMocks();
+    const historyData = {
+      success: true,
+      sessions: [
+        {
+          sessionId: 'history-1',
+          title: 'My Session',
+          provider: 'claude',
+          messageCount: 3,
+          lastTimestamp: Date.now(),
+        },
+      ],
+      total: 3,
+    } as unknown as HistoryData;
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData,
+        currentSessionId: null,
+        ...mocks,
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.forkHistorySession('history-1');
+    });
+
+    // t() returns the key, so the requested title is "My Session" + the raw key.
+    expect(window.__pendingForkTitleRequest).toBe('My Session' + 'history.forkedTitleSuffix');
+  });
+
+
+
 });

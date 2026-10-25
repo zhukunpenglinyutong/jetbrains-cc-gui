@@ -139,6 +139,7 @@ it('does not render a memoized historical item during 30 tail text updates', () 
 function renderMessageItem(message: ClaudeMessage, options: {
   detailedOutputEnabled?: boolean; currentProvider?: string; streamingActive?: boolean; isLast?: boolean;
   getContentBlocks?: (message: ClaudeMessage) => ClaudeContentBlock[];
+  onForkFromMessage?: (message: ClaudeMessage) => void;
 } = {}) {
   return render(
     <MessageItem
@@ -155,6 +156,7 @@ function renderMessageItem(message: ClaudeMessage, options: {
       extractMarkdownContent={extractMarkdownContent}
       detailedOutputEnabled={options.detailedOutputEnabled}
       currentProvider={options.currentProvider}
+      onForkFromMessage={options.onForkFromMessage}
     />
   );
 }
@@ -375,6 +377,45 @@ describe('MessageItem copy button visibility', () => {
     rerender(renderAgentMessage(makeMessage('tool-1')));
 
     expect(screen.getByTestId('agent-group-block')).toBe(initialBlock);
+  });
+});
+
+describe('MessageItem fork from message', () => {
+  const forkableMessage: ClaudeMessage = {
+    type: 'assistant',
+    content: '提交完成。',
+    raw: {
+      uuid: 'row-uuid-1',
+      content: [{ type: 'text', text: '提交完成。' }],
+    } as any,
+  } as unknown as ClaudeMessage;
+
+  it('renders the fork button for claude assistant messages and passes the message', () => {
+    const onForkFromMessage = vi.fn();
+    renderMessageItem(forkableMessage, { currentProvider: 'claude', onForkFromMessage });
+
+    const button = screen.getByRole('button', { name: 'history.forkFromHere' });
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(onForkFromMessage).toHaveBeenCalledTimes(1);
+    expect(onForkFromMessage).toHaveBeenCalledWith(forkableMessage);
+    cleanup();
+  });
+
+  it('hides the fork button for non-claude providers', () => {
+    renderMessageItem(forkableMessage, { currentProvider: 'codex', onForkFromMessage: vi.fn() });
+    expect(screen.queryByRole('button', { name: 'history.forkFromHere' })).toBeNull();
+    cleanup();
+  });
+
+  it('hides the fork button when the message has no raw row uuid', () => {
+    const noUuid: ClaudeMessage = {
+      type: 'assistant',
+      content: 'no uuid here',
+      raw: { content: [{ type: 'text', text: 'no uuid here' }] } as any,
+    };
+    renderMessageItem(noUuid, { currentProvider: 'claude', onForkFromMessage: vi.fn() });
+    expect(screen.queryByRole('button', { name: 'history.forkFromHere' })).toBeNull();
+    cleanup();
   });
 });
 

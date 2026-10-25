@@ -423,6 +423,14 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     }
 
     @Override
+    public void onAssistantMessageUuidPatched(String content, String uuid) {
+        if (isInactive()) {
+            return;
+        }
+        jsTarget.callJavaScript("patchMessageUuid", JsUtils.escapeJs(content), JsUtils.escapeJs(uuid));
+    }
+
+    @Override
     public void onTaskEvent(String eventJson) {
         if (isInactive() || eventJson == null || eventJson.trim().isEmpty()) {
             return;
