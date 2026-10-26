@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.NodeJsServiceCaller;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.util.PathUtils;
 import com.google.gson.JsonObject;
 import com.github.claudecodegui.testing.SessionMetadataBridgeFixture;
 import org.junit.Rule;
@@ -715,6 +716,69 @@ public class HistoryDeleteServiceTest {
         Path projectDir = temporaryFolder.newFolder("projects", "proj").toPath();
 
         assertEquals(0, HistoryDeleteService.deleteSessionSidecarDirectory(projectDir, "missing-session"));
+    }
+
+    @Test
+    public void deleteRemovesTranscriptLegacyAgentFilesAndSidecars() throws Exception {
+        String sessionId = "0b6f7d3e-2c1a-4d5e-8f90-1a2b3c4d5e6f";
+        String otherSessionId = "11111111-2222-3333-4444-555555555555";
+        Path homeDir = temporaryFolder.newFolder("home").toPath();
+        String projectPath = temporaryFolder.newFolder("project").getAbsolutePath();
+        Path projectDir = claudeProjectDir(homeDir, projectPath);
+
+        Path transcript = write(projectDir.resolve(sessionId + ".jsonl"), "{}");
+        Path legacyAgent = write(projectDir.resolve("agent-legacy.jsonl"),
+                "{\"sessionId\":\"" + sessionId + "\"}");
+        Path sidecarTranscript = write(
+                projectDir.resolve(sessionId).resolve("subagents").resolve("agent-new.jsonl"), "{}");
+        Path sidecarMeta = write(
+                projectDir.resolve(sessionId).resolve("subagents").resolve("agent-new.meta.json"), "{}");
+        Path otherTranscript = write(projectDir.resolve(otherSessionId + ".jsonl"), "{}");
+        Path otherSidecar = write(
+                projectDir.resolve(otherSessionId).resolve("subagents").resolve("agent-keep.jsonl"), "{}");
+
+        int[] result = new HistoryDeleteService(new HandlerContext(null, null, null, null, null), null, null)
+                .deleteClaudeSession(sessionId, projectPath, homeDir);
+
+        assertEquals(1, result[0]);
+        assertEquals(3, result[1]);
+        assertFalse(Files.exists(transcript));
+        assertFalse(Files.exists(legacyAgent));
+        assertFalse(Files.exists(sidecarTranscript));
+        assertFalse(Files.exists(sidecarMeta));
+        assertFalse(Files.exists(projectDir.resolve(sessionId)));
+        assertTrue(Files.exists(otherTranscript));
+        assertTrue(Files.exists(otherSidecar));
+    }
+
+    @Test
+    public void deleteLeavesSidecarsAloneWhenTheTranscriptIsAlreadyGone() throws Exception {
+        // A stray sidecar directory must not authorize a delete on its own: the
+        // transcript has to be there for the sidecars to count as this session's.
+        String sessionId = "0b6f7d3e-2c1a-4d5e-8f90-1a2b3c4d5e6f";
+        Path homeDir = temporaryFolder.newFolder("home").toPath();
+        String projectPath = temporaryFolder.newFolder("project").getAbsolutePath();
+        Path projectDir = claudeProjectDir(homeDir, projectPath);
+        Path sidecar = write(projectDir.resolve(sessionId).resolve("subagents").resolve("agent-new.jsonl"), "{}");
+
+        int[] result = new HistoryDeleteService(new HandlerContext(null, null, null, null, null), null, null)
+                .deleteClaudeSession(sessionId, projectPath, homeDir);
+
+        assertEquals(0, result[0]);
+        assertEquals(0, result[1]);
+        assertTrue(Files.exists(sidecar));
+    }
+
+    private Path claudeProjectDir(Path homeDir, String projectPath) throws Exception {
+        Path projectsDir = Files.createDirectories(homeDir.resolve(".claude").resolve("projects"));
+        Path projectDir = projectsDir.resolve(PathUtils.getSanitizedPathCandidates(projectPath).get(0));
+        Files.createDirectories(projectDir);
+        return projectDir;
+    }
+
+    private Path write(Path file, String line) throws Exception {
+        Files.createDirectories(file.getParent());
+        return Files.write(file, Collections.singletonList(line), StandardCharsets.UTF_8);
     }
 
     private Path writeCodexRollout(Path sessionDir, String sessionId, String parentId, String body)

@@ -599,8 +599,18 @@ class HistoryDeleteService {
      * @return int[2]: [mainDeleted(0/1), agentFilesDeleted]
      */
     private int[] deleteClaudeSession(String sessionId, String projectPath) throws java.io.IOException {
-        String homeDir = NodeDetector.resolveHomeForFileOps();
-        Path claudeDir = Paths.get(homeDir, ".claude");
+        return deleteClaudeSession(sessionId, projectPath, Paths.get(NodeDetector.resolveHomeForFileOps()));
+    }
+
+    /**
+     * Same as {@link #deleteClaudeSession(String, String)}, with the home directory
+     * injected so the whole transcript + sidecar cleanup can be exercised against a
+     * temporary {@code ~/.claude} instead of the developer's own history.
+     *
+     * @return int[2]: [mainDeleted(0/1), agentFilesDeleted]
+     */
+    int[] deleteClaudeSession(String sessionId, String projectPath, Path homeDir) throws java.io.IOException {
+        Path claudeDir = homeDir.resolve(".claude");
         Path projectsDir = claudeDir.resolve("projects");
         List<Path> sessionDirs = PathUtils.getSanitizedPathCandidates(projectPath).stream()
                 .map(projectsDir::resolve)
