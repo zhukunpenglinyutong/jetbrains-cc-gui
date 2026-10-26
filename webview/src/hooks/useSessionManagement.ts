@@ -411,6 +411,14 @@ export function useSessionManagement({
     // live reply.
     const isSameSession = sessionId === currentSessionId;
     if (isSameSession && effectiveProvider !== 'codex') {
+      // The row title can have changed since this session was opened (rename in
+      // the history list). The soft reload keeps the mounted session, so the
+      // header has to be told the new title explicitly — the full transition
+      // path below does it through beginSessionTransition. Only touch the title
+      // when the row is present: a missing row must not wipe the current one.
+      if (session) {
+        setCustomSessionTitle(session.title?.trim() ? session.title : null);
+      }
       sendBridgeEvent('load_session', JSON.stringify({
         sessionId,
         provider: effectiveProvider,
@@ -432,7 +440,7 @@ export function useSessionManagement({
       ...(bridgeModel ? { model: bridgeModel } : {}),
     }));
     setCurrentView('chat');
-  }, [applyHistoryModel, beginSessionTransition, currentProvider, loading, setCurrentView, currentSessionId]);
+  }, [applyHistoryModel, beginSessionTransition, currentProvider, loading, setCurrentView, setCustomSessionTitle, currentSessionId]);
 
   // Delete history session
   const deleteHistorySession = useCallback((sessionId: string) => {

@@ -875,6 +875,75 @@ describe('useSessionManagement', () => {
     );
   });
 
+  it('applies a renamed row title when re-opening the already active session', () => {
+    const historyData = {
+      success: true,
+      sessions: [
+        {
+          sessionId: 'active-1',
+          title: 'Renamed Title',
+          provider: 'claude',
+          messageCount: 2,
+          lastTimestamp: Date.now(),
+        },
+      ],
+      total: 2,
+    } as unknown as HistoryData;
+
+    const mocks = createMocks();
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData,
+        currentSessionId: 'active-1',
+        ...mocks,
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.loadHistorySession('active-1');
+    });
+
+    // The soft reload keeps the mounted session, so a rename done in the
+    // history list has to be pushed to the header explicitly.
+    expect(mocks.setCustomSessionTitle).toHaveBeenCalledWith('Renamed Title');
+    expect(window.sendToJava).toHaveBeenCalledWith(
+      'load_session:{"sessionId":"active-1","provider":"claude"}'
+    );
+  });
+
+  it('keeps the current title when the active session is missing from the list', () => {
+    const historyData = {
+      success: true,
+      sessions: [],
+      total: 0,
+    } as unknown as HistoryData;
+
+    const mocks = createMocks();
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData,
+        currentSessionId: 'active-1',
+        ...mocks,
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.loadHistorySession('active-1');
+    });
+
+    // A row that is not (yet) in the list must not wipe the title the header
+    // already shows.
+    expect(mocks.setCustomSessionTitle).not.toHaveBeenCalled();
+  });
+
   it('loadHistorySession falls back to current provider when history item has no provider', () => {
     const historyData = {
       success: true,
