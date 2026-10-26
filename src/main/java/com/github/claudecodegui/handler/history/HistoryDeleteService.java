@@ -25,6 +25,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -229,6 +230,19 @@ class HistoryDeleteService {
             CodexSDKBridge bridge
     ) {
         return HistoryDeletionGuard.quiesce(session, sessionIds, currentProvider, bridge);
+    }
+
+    /**
+     * Resolve which provider owns the row being deleted. The payload wins: the
+     * panel's currentProvider is only what the chat surface is showing, and it can
+     * lag behind the history list (switching providers without reopening the list),
+     * which would route a Claude session into the Codex branch and delete nothing.
+     */
+    static String resolveProvider(JsonObject request, String currentProvider) {
+        if (request != null && request.has("provider") && request.get("provider").isJsonPrimitive()) {
+            return request.get("provider").getAsString();
+        }
+        return currentProvider;
     }
 
     static List<String> parseSessionIds(String content) {
@@ -607,10 +621,12 @@ class HistoryDeleteService {
                 LOG.warn("[HistoryHandler] Refused out-of-bounds path: " + mainSessionFile);
                 continue;
             }
+            boolean mainDeletedHere = false;
             if (Files.exists(mainSessionFile)) {
                 Files.delete(mainSessionFile);
                 LOG.info("[HistoryHandler] Deleted main session file: " + mainSessionFile.getFileName());
                 mainDeleted = true;
+                mainDeletedHere = true;
             }
 
             // Delete related agent files
@@ -632,6 +648,13 @@ class HistoryDeleteService {
                         LOG.error("[HistoryHandler] Failed to delete agent file: " + agentFile.getFileName() + " - " + e.getMessage(), e);
                     }
                 }
+            }
+
+            // Current layout keeps subagent transcripts under <project>/<sessionId>/,
+            // so the flat scan above never reaches them and deleting the session used
+            // to leave that directory behind for good.
+            if (mainDeletedHere) {
+                agentFilesDeleted += deleteSessionSidecarDirectory(sessionDir, sessionId);
             }
         }
 
@@ -659,6 +682,85 @@ class HistoryDeleteService {
             LOG.info("[HistoryHandler] Cleaned up metadata of " + sessionIds.size() + " session(s)");
         }
         return favoritesRemoved && titlesDeleted;
+    }
+
+    /**
+     * Remove the subagent sidecars Claude Code keeps beside the transcript
+     * ({@code <project>/<sessionId>/subagents/agent-*.jsonl} plus the matching
+     * {@code .meta.json}), then drop the session directory once it is empty.
+     *
+     * <p>Only the known {@code subagents} subtree is removed: anything else that
+     * may appear beside it belongs to Claude Code, not to this feature, and must
+     * not be deleted on a guess. Only called once the main transcript is gone, so
+     * a failed delete cannot destroy a live session's sidecars.</p>
+     *
+     * <p>Best effort per entry: Windows can hold a transcript open while the agent
+     * that wrote it exits, and a locked file must not fail the whole delete.</p>
+     *
+     * @param projectDir directory holding every session of one project
+     * @param sessionId  session whose sidecars are removed
+     * @return number of files removed
+     */
+    static int deleteSessionSidecarDirectory(Path projectDir, String sessionId) throws java.io.IOException {
+        if (projectDir == null || !isValidSessionId(sessionId)) {
+            return 0;
+        }
+        Path normalizedProjectDir = projectDir.normalize();
+        Path sessionDir = normalizedProjectDir.resolve(sessionId).normalize();
+        // The id is already validated above; the containment check keeps this
+        // method safe on its own terms if a future caller passes something else.
+        // A symlinked session directory would make every path below resolve into
+        // whatever it points at, so refuse it instead of deleting someone else's
+        // transcripts through the link.
+        if (!sessionDir.startsWith(normalizedProjectDir)
+                || Files.isSymbolicLink(sessionDir)
+                || !Files.isDirectory(sessionDir)) {
+            return 0;
+        }
+
+        Path subagentsDir = sessionDir.resolve("subagents");
+        int filesDeleted = Files.isDirectory(subagentsDir) ? deleteDirectoryTree(subagentsDir) : 0;
+        if (filesDeleted > 0) {
+            LOG.info("[HistoryHandler] Deleted " + filesDeleted + " subagent sidecar file(s) for session " + sessionId);
+        }
+        if (isEmptyDirectory(sessionDir)) {
+            Files.deleteIfExists(sessionDir);
+        }
+        return filesDeleted;
+    }
+
+    /**
+     * Delete every entry below {@code directory}, deepest first, counting files
+     * only. Failures are logged and skipped so one locked transcript cannot abort
+     * the rest of the cleanup.
+     */
+    private static int deleteDirectoryTree(Path directory) throws java.io.IOException {
+        List<Path> entries;
+        try (Stream<Path> paths = Files.walk(directory)) {
+            // Deepest first: a directory can only be removed once it is empty.
+            entries = paths.sorted(Comparator.reverseOrder()).collect(Collectors.toList());
+        }
+
+        int filesDeleted = 0;
+        for (Path entry : entries) {
+            boolean isDirectory = Files.isDirectory(entry);
+            try {
+                if (Files.deleteIfExists(entry) && !isDirectory) {
+                    filesDeleted++;
+                }
+            } catch (Exception e) {
+                LOG.warn("[HistoryHandler] Failed to delete session sidecar entry: " + entry + " - " + e.getMessage());
+            }
+        }
+        return filesDeleted;
+    }
+
+    private static boolean isEmptyDirectory(Path directory) {
+        try (Stream<Path> entries = Files.list(directory)) {
+            return entries.findAny().isEmpty();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private static boolean runMetadataCleanupStep(String step, Callable<Boolean> action) {
