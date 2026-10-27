@@ -291,17 +291,9 @@ export function registerSessionAndSdkCallbacks(
     try {
       const result = JSON.parse(json);
       if (result.success) {
-        // Bind the title the frontend requested to the fork's real session id so
-        // window.setSessionId can apply it when the fork becomes active — the fork
-        // row is not in the history list yet (or was stale when opened).
-        if (result.newSessionId && typeof window.__pendingForkTitleRequest === 'string') {
-          window.__pendingForkTitle = {
-            sessionId: result.newSessionId,
-            title: window.__pendingForkTitleRequest,
-          };
-        }
-        // Always consume the request: a result without a new session id must not
-        // leave a stale title to be bound to some later fork.
+        // Consume the requested title on every outcome: a result without a new
+        // session id must not leave a stale title to be bound to some later fork.
+        const requestedTitle = window.__pendingForkTitleRequest;
         delete window.__pendingForkTitleRequest;
         // Reload so the fork row appears in the list. No optimistic insert: the
         // row's messageCount/fileSize are only known to the backend, and unlike
@@ -319,6 +311,17 @@ export function registerSessionAndSdkCallbacks(
         // toast until the switch completes (same mechanism as the delete toast);
         // adding it directly here would be wiped before a single frame renders.
         if (result.forkPointUuid && result.newSessionId) {
+          // Only the auto-opened fork needs the pending title: setSessionId applies
+          // it to the header, and the fork's row is not in the list yet. A
+          // history-list fork keeps the title the backend wrote through the
+          // custom-title service, so stashing it here would leave an unclaimed
+          // global waiting for a session the user may never open.
+          if (typeof requestedTitle === 'string') {
+            window.__pendingForkTitle = {
+              sessionId: result.newSessionId,
+              title: requestedTitle,
+            };
+          }
           window.__pendingSessionTransitionToast = {
             message: tRef.current('history.forkSuccess'),
             type: 'success',

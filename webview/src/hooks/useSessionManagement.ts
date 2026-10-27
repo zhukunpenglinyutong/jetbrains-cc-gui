@@ -664,10 +664,12 @@ export function useSessionManagement({
       return;
     }
     window.__forkInFlight = true;
-    // Release the guard even if the backend callback never arrives.
+    // Release the guard even if the backend callback never arrives. Generous on
+    // purpose: forking copies the whole transcript, and a large session can take
+    // well past 15s — releasing early would let a second click duplicate the fork.
     setTimeout(() => {
       window.__forkInFlight = false;
-    }, 15_000);
+    }, 60_000);
 
     const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
     const provider = session?.provider || currentProvider || 'claude';
