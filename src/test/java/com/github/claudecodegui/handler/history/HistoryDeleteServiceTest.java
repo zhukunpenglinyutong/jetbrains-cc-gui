@@ -270,6 +270,27 @@ public class HistoryDeleteServiceTest {
     }
 
     @Test
+    public void batchDeleteQuiescesTheActiveSessionWithThePayloadProvider() throws Exception {
+        // Same stale-panel scenario as the single delete: the interrupt has to be
+        // routed by the payload provider, otherwise the CLI keeps appending to a
+        // transcript this batch is about to delete.
+        HandlerContext context = new HandlerContext(null, null, null, null, null);
+        RecordingClaudeSession active = new RecordingClaudeSession("session-1", "claude");
+        context.setSession(active);
+        RecordingHistoryLoadService historyLoadService = new RecordingHistoryLoadService(context);
+        HistoryDeleteService service = new HistoryDeleteService(context, null, historyLoadService);
+
+        service.handleDeleteSessions("{\"sessionIds\":[\"session-1\"],\"provider\":\"claude\"}", "codex");
+
+        assertTrue(historyLoadService.awaitReload());
+        assertTrue("the active session must be interrupted before its files go away",
+                active.interrupted);
+        // The reload follows the deleted rows, not the panel: reloading the panel's
+        // provider would swap the visible list for another provider's rows.
+        assertEquals("claude", historyLoadService.provider);
+    }
+
+    @Test
     public void abortedDeletionReloadsHistoryAfterOptimisticFrontendRemoval() throws Exception {
         HandlerContext context = new HandlerContext(null, null, null, null, null);
         RecordingClaudeSession session = new RecordingClaudeSession("session-1", "codex");
