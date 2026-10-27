@@ -154,7 +154,12 @@ public class SessionMessageOrchestrator {
                     callbackFacade.notifyUsageUpdate(usedTokens, maxTokens);
                 },
                 100,
-                50
+                // The transcript row lands after the CLI flushes the turn, and every
+                // attempt spawns a fresh bridge process, so a 50ms base gave the
+                // backfill barely 150ms of room. The assistant path doubles this per
+                // attempt; the user path uses it flat and is unaffected in practice
+                // (it runs on a pooled thread after the send).
+                250
         );
     }
 
@@ -286,7 +291,7 @@ public class SessionMessageOrchestrator {
                 if (rows == null) {
                     // Transcript tail still being written; retry after a beat.
                     if (attempt < MAX_UUID_SYNC_RETRIES) {
-                        sleep(uuidRetryDelayMs);
+                        sleep(assistantRetryDelayMs(attempt));
                         continue;
                     }
                     return;
@@ -296,6 +301,13 @@ public class SessionMessageOrchestrator {
                 List<String[]> pendingNotifications = new ArrayList<>();
                 java.util.Set<String> usedUuids = new java.util.HashSet<>();
                 synchronized (state.getMessageStateLock()) {
+                    // The rows above belong to the session captured on entry. If the
+                    // user switched sessions during the retries, this loop would stamp
+                    // the new session's messages with the old session's uuids — a fork
+                    // point that does not exist in the new transcript. Abandon instead.
+                    if (!sessionId.equals(state.getSessionId())) {
+                        return;
+                    }
                     // Re-read under the lock: a concurrent append could have added
                     // messages after the lockless pre-check.
                     List<ClaudeSession.Message> locked = findUnresolvedAssistantMessages();
@@ -322,13 +334,13 @@ public class SessionMessageOrchestrator {
                 }
 
                 if (attempt < MAX_UUID_SYNC_RETRIES) {
-                    sleep(uuidRetryDelayMs);
+                    sleep(assistantRetryDelayMs(attempt));
                 }
             } catch (Exception e) {
                 LOG.warn("[Fork] Failed to backfill assistant message uuids (attempt "
                         + attempt + "): " + e.getMessage());
                 if (attempt < MAX_UUID_SYNC_RETRIES) {
-                    sleep(uuidRetryDelayMs);
+                    sleep(assistantRetryDelayMs(attempt));
                 }
             }
         }
@@ -342,6 +354,20 @@ public class SessionMessageOrchestrator {
                     + " assistant message(s) still have no transcript uuid; first text: "
                     + abbreviate(remaining.get(0).content));
         }
+    }
+
+    /**
+     * Backoff between assistant-uuid backfill attempts.
+     *
+     * <p>The CLI appends the transcript row only after it flushes the turn, and each
+     * attempt spawns a fresh bridge process to read the tail, so a flat short delay
+     * spends the whole budget before the row exists. Doubling from the injected base
+     * (250ms in production) gives 250ms + 500ms of waiting across the two gaps, which
+     * is roughly 1.7s wall clock once the three bridge spawns are counted. Tests
+     * inject 0, which collapses to no waiting.
+     */
+    private long assistantRetryDelayMs(int attempt) {
+        return this.uuidRetryDelayMs * (1L << (attempt - 1));
     }
 
     /** First 40 characters of a message with newlines flattened, for a one-line log. */

@@ -441,6 +441,21 @@ export async function getRecentAssistantMessages(sessionId, cwd = null, limit = 
       return;
     }
 
+    // The window can start inside a single row: one assistant row carrying a large
+    // tool_use payload can exceed TAIL_BYTES on its own, and that skipped partial
+    // line may be exactly the row the caller is looking for. Reporting an empty
+    // success would make the caller conclude "no match" and give up; an incomplete
+    // tail makes it retry (and log the failure if it never resolves).
+    if (startByte > 0 && collected.length === 0) {
+      await writeJsonResponse({
+        success: false,
+        incomplete: true,
+        error: incompleteHistoryError(),
+        messages: [],
+      });
+      return;
+    }
+
     await writeJsonResponse({
       success: true,
       messages: collected

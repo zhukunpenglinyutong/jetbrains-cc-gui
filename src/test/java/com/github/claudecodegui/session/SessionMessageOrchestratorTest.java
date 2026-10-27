@@ -198,6 +198,136 @@ public class SessionMessageOrchestratorTest {
     }
 
     @Test
+    public void updateAssistantMessageUuidsRetriesUntilTheTranscriptTailIsComplete() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-1");
+        state.setCwd("/workspace");
+
+        JsonObject streamedRaw = new JsonObject();
+        streamedRaw.add("message", new JsonObject());
+        ClaudeSession.Message streamedAssistant = new ClaudeSession.Message(
+                ClaudeSession.Message.Type.ASSISTANT, "收到", streamedRaw);
+        state.addMessage(streamedAssistant);
+
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+        callbackFacade.setCallback(callback);
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        JsonArray rows = new JsonArray();
+        JsonObject row = new JsonObject();
+        row.addProperty("uuid", "row-uuid-1");
+        row.addProperty("text", "收到");
+        rows.add(row);
+        historyAccess.recentAssistantRows = rows;
+        // The writer is still flushing for the first two reads: null means "tail incomplete".
+        historyAccess.recentAssistantIncompleteTimes = 2;
+
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.updateAssistantMessageUuids();
+
+        assertEquals(3, historyAccess.recentAssistantMessagesRequests.get());
+        assertEquals("row-uuid-1", streamedAssistant.raw.get("uuid").getAsString());
+        assertEquals(List.of("收到|row-uuid-1"), callback.messageUuidPatches);
+    }
+
+    @Test
+    public void updateAssistantMessageUuidsGivesUpAfterTheRetryBudget() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-1");
+        state.setCwd("/workspace");
+
+        JsonObject streamedRaw = new JsonObject();
+        streamedRaw.add("message", new JsonObject());
+        ClaudeSession.Message streamedAssistant = new ClaudeSession.Message(
+                ClaudeSession.Message.Type.ASSISTANT, "收到", streamedRaw);
+        state.addMessage(streamedAssistant);
+
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+        callbackFacade.setCallback(callback);
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        // Never complete: every read reports an unfinished tail.
+        historyAccess.recentAssistantIncompleteTimes = Integer.MAX_VALUE;
+
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.updateAssistantMessageUuids();
+
+        assertEquals(3, historyAccess.recentAssistantMessagesRequests.get());
+        assertFalse(streamedAssistant.raw.has("uuid"));
+        assertTrue(callback.messageUuidPatches.isEmpty());
+    }
+
+    @Test
+    public void updateAssistantMessageUuidsAbandonsWhenTheSessionChangesMidway() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-1");
+        state.setCwd("/workspace");
+
+        JsonObject streamedRaw = new JsonObject();
+        streamedRaw.add("message", new JsonObject());
+        ClaudeSession.Message streamedAssistant = new ClaudeSession.Message(
+                ClaudeSession.Message.Type.ASSISTANT, "收到", streamedRaw);
+        state.addMessage(streamedAssistant);
+
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+        callbackFacade.setCallback(callback);
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        JsonArray rows = new JsonArray();
+        JsonObject row = new JsonObject();
+        row.addProperty("uuid", "row-uuid-1");
+        row.addProperty("text", "收到");
+        rows.add(row);
+        historyAccess.recentAssistantRows = rows;
+        // The user opens another session while the transcript read is in flight, so the
+        // rows above describe a transcript that is no longer the active one.
+        historyAccess.recentAssistantReadHook = () -> state.setSessionId("session-2");
+
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.updateAssistantMessageUuids();
+
+        assertFalse("a stale uuid must not be stamped onto the new session's messages",
+                streamedAssistant.raw.has("uuid"));
+        assertTrue(callback.messageUuidPatches.isEmpty());
+    }
+
+    @Test
     public void updateAssistantMessageUuidsPairsDuplicateTextsOldestFirst() {
         SessionState state = new SessionState();
         state.setProvider("claude");
@@ -3028,6 +3158,9 @@ public class SessionMessageOrchestratorTest {
         private RuntimeException providerHistoryFailure;
         private JsonObject latestClaudeUserMessage;
         private JsonArray recentAssistantRows;
+        /** Reads that report an unfinished transcript tail before rows become available. */
+        private int recentAssistantIncompleteTimes;
+        private Runnable recentAssistantReadHook;
         private JsonObject messagesPage;
         private final AtomicInteger earlierPageRequests = new AtomicInteger();
         private CountDownLatch earlierReadStarted;
@@ -3066,6 +3199,13 @@ public class SessionMessageOrchestratorTest {
         @Override
         public JsonArray getRecentClaudeAssistantMessages(String sessionId, String cwd, int limit) {
             recentAssistantMessagesRequests.incrementAndGet();
+            if (this.recentAssistantReadHook != null) {
+                this.recentAssistantReadHook.run();
+            }
+            if (this.recentAssistantIncompleteTimes > 0) {
+                this.recentAssistantIncompleteTimes--;
+                return null;
+            }
             return recentAssistantRows;
         }
 
