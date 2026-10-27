@@ -5,9 +5,11 @@
  */
 
 import { appendFile, mkdir, access, open as fsOpen, stat as fsStat, readFile } from 'fs/promises';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { setupApiKey, loadClaudeSettings, getCliUserAgent } from '../config/api-config.js';
 import { ensureAnthropicSdk, ensureBedrockSdk } from './claude/message-utils.js';
+import { extractTextContent, isInterruptionMarker } from './claude/session-service.js';
 import { resolveModelFromSettings } from '../utils/model-utils.js';
 import { getExistingClaudeProjectSessionFilePath, getCodemossDir } from '../utils/path-utils.js';
 
@@ -45,13 +47,12 @@ Bad: {"title": "修复登录按钮在移动设备上不响应的问题"} (too lo
 // DaemonBridge.java handles "title_log" events with appropriate log levels.
 
 function logTitleEvent(level, message) {
-  const line = JSON.stringify({
+  writeDaemonEventLine({
     type: 'daemon',
     event: 'title_log',
     level,
     message
-  }) + '\n';
-  process.stdout.write(line);
+  });
 }
 
 /**
@@ -59,13 +60,26 @@ function logTitleEvent(level, message) {
  * AI title to the frontend for immediate display in the chat header.
  */
 function emitTitleGenerated(sessionId, title) {
-  const line = JSON.stringify({
+  writeDaemonEventLine({
     type: 'daemon',
     event: 'title_generated',
     sessionId,
     title
-  }) + '\n';
-  process.stdout.write(line);
+  });
+}
+
+/**
+ * Write a daemon event line through the out-of-band stdout writer when the
+ * daemon exposes one. daemon.js replaces process.stdout.write so plain string
+ * output is tagged with the active request id; a title event emitted while an
+ * unrelated request is active (e.g. an on-demand regeneration running beside a
+ * streaming turn) would then be misrouted into that request's line stream and
+ * never reach DaemonBridge's event dispatch. _originalStdoutWrite bypasses the
+ * tagging; the raw-write fallback keeps one-shot CLI/test invocations working.
+ */
+function writeDaemonEventLine(event) {
+  const write = process.stdout._originalStdoutWrite ?? process.stdout.write.bind(process.stdout);
+  write(JSON.stringify(event) + '\n', 'utf8');
 }
 
 /**
@@ -363,15 +377,7 @@ export async function generateSessionTitle(userMessage, sessionId, cwd) {
   }
 
   try {
-    // Iterate by Unicode code point so we never split a surrogate pair
-    // (e.g. CJK extension characters or emoji) when truncating.
-    let input = userMessage;
-    if (userMessage.length > MAX_CONVERSATION_TEXT) {
-      const codePoints = Array.from(userMessage);
-      if (codePoints.length > MAX_CONVERSATION_TEXT) {
-        input = codePoints.slice(-MAX_CONVERSATION_TEXT).join('');
-      }
-    }
+    const input = truncateByCodePoints(userMessage, MAX_CONVERSATION_TEXT);
 
     const title = await callHaikuApi(input, sessionId);
     if (title) {
@@ -390,5 +396,153 @@ export async function generateSessionTitle(userMessage, sessionId, cwd) {
     // transient — return false so callers may reset their guard and retry.
     logTitleEvent('error', 'Title generation failed: ' + e.message);
     return false;
+  }
+}
+
+// --- On-demand regeneration (history-list refresh button) ---
+
+// Keep the tail of the text so recent context shapes the regenerated title.
+function truncateByCodePoints(text, maxCodePoints) {
+  if (text.length <= maxCodePoints) {
+    return text;
+  }
+  // Iterate by Unicode code point so we never split a surrogate pair
+  // (e.g. CJK extension characters or emoji) when truncating.
+  const codePoints = Array.from(text);
+  return codePoints.length > maxCodePoints
+    ? codePoints.slice(-maxCodePoints).join('')
+    : text;
+}
+
+/** Parse a session JSONL file into rows, skipping blank and malformed lines. */
+function readSessionRows(sessionFile) {
+  return readFileSync(sessionFile, 'utf8')
+    .split('\n')
+    .flatMap((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return [];
+      try {
+        return [JSON.parse(trimmed)];
+      } catch {
+        return [];
+      }
+    });
+}
+
+/**
+ * Collect the user prompts that define a session's topic, mirroring the CLI's
+ * firstPrompt scan: meta rows, interruption markers, tool-result carriers
+ * (no text blocks), and XML-wrapped CLI plumbing (<command-name> etc.) are
+ * not real user input and must not shape the title.
+ * Exposed for tests.
+ */
+export function collectSessionUserPrompts(rows) {
+  const prompts = [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || row.type !== 'user') continue;
+    if (row.isMeta === true) continue;
+    if (isInterruptionMarker(row)) continue;
+    const text = extractTextContent(row).trim();
+    if (!text || text.startsWith('<')) continue;
+    prompts.push(text);
+  }
+  return prompts;
+}
+
+/**
+ * Number of recent prompts (beyond the first one) that feed a regeneration.
+ * The first prompt anchors the session's topic; recent prompts let the title
+ * track where the conversation ended up.
+ */
+const REGENERATE_RECENT_PROMPTS = 4;
+
+/**
+ * Build the title-generation input from a session's user prompts: the first
+ * prompt plus the most recent ones. Returns null when there is no prompt at
+ * all (nothing to derive a title from).
+ * Exposed for tests.
+ */
+export function buildRegenerationInput(prompts) {
+  if (prompts.length === 0) {
+    return null;
+  }
+  const selected = prompts.length <= 1 + REGENERATE_RECENT_PROMPTS
+    ? prompts
+    : [prompts[0], ...prompts.slice(-REGENERATE_RECENT_PROMPTS)];
+  return selected.join('\n\n');
+}
+
+/**
+ * Regenerate a session's AI title from its recorded conversation content.
+ * Unlike the fire-and-forget generateSessionTitle (first turn only, guarded
+ * by hasExistingAiTitle), this is an on-demand user action and intentionally
+ * appends a fresh ai-title row — the CLI resolves title rows last-write-wins,
+ * so the new row overrides the old one everywhere titles are read.
+ *
+ * Reuses the same pipeline as auto-generation: SESSION_TITLE_PROMPT, the
+ * resolved Haiku model, JSON parsing, and saveAiTitle persistence.
+ *
+ * The optional dependencies parameter exists for tests only (same style as
+ * settleCodexSessionTitle); production callers omit it.
+ *
+ * @param {string} sessionId - Session ID
+ * @param {string|null} cwd - Working directory used to locate the session file
+ * @param {object} [dependencies] - Test seams; each defaults to the real path
+ * @returns {Promise<{success: boolean, title?: string, code?: string}>}
+ *   code is a stable machine-readable failure reason (session_not_found,
+ *   empty_session, disabled, generation_failed, persist_failed) the frontend
+ *   maps to a friendly toast.
+ */
+export async function regenerateSessionTitle(sessionId, cwd, dependencies = {}) {
+  const {
+    isEnabled = isTitleGenerationEnabled,
+    resolveSessionFile = () => getSessionFilePath(sessionId, cwd),
+    readRows = (sessionFile) => readSessionRows(sessionFile),
+    generateTitle = (input) => callHaikuApi(input, sessionId),
+    saveTitle = (title) => saveAiTitle(sessionId, title, cwd),
+  } = dependencies;
+
+  if (!sessionId || !isValidSessionId(sessionId)) {
+    return { success: false, code: 'invalid_session' };
+  }
+
+  const sessionFile = resolveSessionFile();
+  if (!existsSync(sessionFile)) {
+    logTitleEvent('warn', 'Regenerate skipped: session file not found for ' + sessionId);
+    return { success: false, code: 'session_not_found' };
+  }
+
+  if (!(await isEnabled())) {
+    logTitleEvent('info', 'Regenerate skipped: disabled in user settings');
+    return { success: false, code: 'disabled' };
+  }
+
+  let input;
+  try {
+    input = buildRegenerationInput(collectSessionUserPrompts(readRows(sessionFile)));
+  } catch (e) {
+    logTitleEvent('warn', 'Regenerate failed to read session rows: ' + e.message);
+    return { success: false, code: 'unreadable_session' };
+  }
+  if (!input) {
+    logTitleEvent('info', 'Regenerate skipped: session has no user prompts');
+    return { success: false, code: 'empty_session' };
+  }
+
+  try {
+    const title = await generateTitle(truncateByCodePoints(input, MAX_CONVERSATION_TEXT));
+    if (!title) {
+      // callHaikuApi returns null for permanent skips (cli_login, missing key,
+      // unparseable response) — nothing transient to retry at this layer.
+      return { success: false, code: 'generation_failed' };
+    }
+    const saved = await saveTitle(title);
+    if (!saved) {
+      return { success: false, code: 'persist_failed' };
+    }
+    return { success: true, title };
+  } catch (e) {
+    logTitleEvent('error', 'Regenerate failed: ' + e.message);
+    return { success: false, code: 'generation_failed' };
   }
 }
