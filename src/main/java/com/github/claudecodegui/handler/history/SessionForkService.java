@@ -407,7 +407,8 @@ class SessionForkService {
      * </ul>
      * Failures are logged and swallowed on purpose — see the caller.
      */
-    private void copySidechains(Path sessionDir, String sourceSessionId, String newSessionId) {
+    // Package-private so SessionForkServiceTest can copy a temp sidechain tree.
+    void copySidechains(Path sessionDir, String sourceSessionId, String newSessionId) {
         try {
             Path sidechainDir = sessionDir.resolve(sourceSessionId);
             if (Files.isDirectory(sidechainDir)) {

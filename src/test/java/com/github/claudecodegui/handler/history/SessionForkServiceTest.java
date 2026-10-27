@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -266,6 +267,102 @@ public class SessionForkServiceTest {
 
         String raw = new String(Files.readAllBytes(target), StandardCharsets.UTF_8);
         assertFalse("the fork must keep the CLI's LF endings", raw.contains("\r"));
+    }
+
+    // ── sidechain copy ─────────────────────────────────────────────────────────
+
+    /** Current layout: {@code <project>/<sessionId>/subagents/**} copied under the fork id. */
+    @Test
+    public void copySidechainsMirrorsTheCurrentLayoutUnderTheForkId() throws IOException {
+        Path projectDir = temporaryFolder.newFolder("sidechains").toPath();
+        Path subagents = Files.createDirectories(projectDir.resolve(SOURCE_ID).resolve("subagents"));
+        Path nested = Files.createDirectories(subagents.resolve("nested"));
+        Files.write(subagents.resolve("agent-a1.jsonl"), List.of(
+                        "{\"uuid\":\"s1\",\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"assistant\"}"),
+                StandardCharsets.UTF_8);
+        Files.write(subagents.resolve("agent-a1.meta.json"),
+                "{\"agentId\":\"a1\"}".getBytes(StandardCharsets.UTF_8));
+        Files.write(nested.resolve("agent-a2.jsonl"), List.of(
+                        "{\"uuid\":\"s2\",\"parentSessionId\":\"" + SOURCE_ID + "\",\"type\":\"assistant\"}"),
+                StandardCharsets.UTF_8);
+
+        service.copySidechains(projectDir, SOURCE_ID, FORK_ID);
+
+        Path forkSubagents = projectDir.resolve(FORK_ID).resolve("subagents");
+        String transcript = Files.readString(forkSubagents.resolve("agent-a1.jsonl"), StandardCharsets.UTF_8);
+        assertTrue(transcript.contains("\"sessionId\":\"" + FORK_ID + "\""));
+        assertFalse(transcript.contains(SOURCE_ID));
+        // Non-JSONL sidecars are copied verbatim, not parsed.
+        assertEquals("{\"agentId\":\"a1\"}",
+                Files.readString(forkSubagents.resolve("agent-a1.meta.json"), StandardCharsets.UTF_8));
+        // Nested levels come along: a missed level would leave the fork's subagent
+        // panel half-empty while the copy still looked successful.
+        assertTrue(Files.readString(forkSubagents.resolve("nested/agent-a2.jsonl"), StandardCharsets.UTF_8)
+                .contains("\"parentSessionId\":\"" + FORK_ID + "\""));
+    }
+
+    /** Legacy layout: flat {@code agent-*.jsonl} referencing the session, copied under a fresh name. */
+    @Test
+    public void copySidechainsCopiesLegacyAgentFilesUnderFreshNames() throws IOException {
+        Path projectDir = temporaryFolder.newFolder("legacy-agents").toPath();
+        Files.write(projectDir.resolve("agent-owned.jsonl"), List.of(
+                        "{\"uuid\":\"l1\",\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"assistant\"}"),
+                StandardCharsets.UTF_8);
+        Files.write(projectDir.resolve("agent-foreign.jsonl"), List.of(
+                        "{\"uuid\":\"f1\",\"sessionId\":\"99999999-9999-9999-9999-999999999999\"}"),
+                StandardCharsets.UTF_8);
+
+        service.copySidechains(projectDir, SOURCE_ID, FORK_ID);
+
+        List<Path> agentFiles;
+        try (Stream<Path> entries = Files.list(projectDir)) {
+            agentFiles = entries
+                    .filter(path -> path.getFileName().toString().startsWith("agent-"))
+                    .collect(Collectors.toList());
+        }
+        // Two originals plus exactly one copy.
+        assertEquals(3, agentFiles.size());
+
+        List<Path> copies = agentFiles.stream()
+                .filter(path -> !path.getFileName().toString().equals("agent-owned.jsonl")
+                        && !path.getFileName().toString().equals("agent-foreign.jsonl"))
+                .collect(Collectors.toList());
+        assertEquals(1, copies.size());
+        String copied = Files.readString(copies.get(0), StandardCharsets.UTF_8);
+        assertTrue(copied.contains("\"sessionId\":\"" + FORK_ID + "\""));
+        assertFalse(copied.contains(SOURCE_ID));
+        // The unrelated transcript is not dragged along.
+        assertTrue(Files.readString(projectDir.resolve("agent-foreign.jsonl"), StandardCharsets.UTF_8)
+                .contains("99999999-9999-9999-9999-999999999999"));
+    }
+
+    /**
+     * The whole point of copying the sidechains: deleting one session's sidecars must
+     * not touch the other's. Guards the pair of trees the delete path now relies on.
+     */
+    @Test
+    public void deletingTheForkSidechainsLeavesTheSourceIntact() throws IOException {
+        Path projectDir = temporaryFolder.newFolder("independent").toPath();
+        Path subagents = Files.createDirectories(projectDir.resolve(SOURCE_ID).resolve("subagents"));
+        Files.write(subagents.resolve("agent-a1.jsonl"), List.of(
+                        "{\"uuid\":\"s1\",\"sessionId\":\"" + SOURCE_ID + "\"}"),
+                StandardCharsets.UTF_8);
+
+        service.copySidechains(projectDir, SOURCE_ID, FORK_ID);
+        deleteRecursively(projectDir.resolve(FORK_ID));
+
+        assertFalse(Files.exists(projectDir.resolve(FORK_ID)));
+        assertTrue(Files.exists(subagents.resolve("agent-a1.jsonl")));
+        assertTrue(Files.readString(subagents.resolve("agent-a1.jsonl"), StandardCharsets.UTF_8)
+                .contains(SOURCE_ID));
+    }
+
+    private static void deleteRecursively(Path root) throws IOException {
+        try (Stream<Path> paths = Files.walk(root)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).collect(Collectors.toList())) {
+                Files.delete(path);
+            }
+        }
     }
 
     /** Temp files are named {@code <id>.jsonl.fork.<random>.tmp}; assert none survive. */
