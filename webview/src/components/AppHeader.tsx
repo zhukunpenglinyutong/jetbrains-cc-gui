@@ -8,6 +8,10 @@ interface AppHeaderProps {
   sessionTitle: string;
   onNewSession: () => void;
   onUpdateHistoryTitle: (sessionId: string, newTitle: string) => void;
+  /** Regenerate the current session's AI title (Claude sessions only). */
+  onRegenerateTitle: (sessionId: string) => void;
+  regeneratingTitleSessionIds: ReadonlySet<string>;
+  canRegenerateTitle: boolean;
 }
 
 /**
@@ -15,13 +19,19 @@ interface AppHeaderProps {
  * actions, and inline title editing into ChatHeader. View/session state is
  * consumed from contexts directly (same convention as ChatScreen).
  */
-export const AppHeader = ({ sessionTitle, onNewSession, onUpdateHistoryTitle }: AppHeaderProps) => {
+export const AppHeader = ({ sessionTitle, onNewSession, onUpdateHistoryTitle, onRegenerateTitle, regeneratingTitleSessionIds, canRegenerateTitle }: AppHeaderProps) => {
   const { t } = useTranslation();
   const {
     currentView, setCurrentView,
     setSettingsInitialTab, setSettingsProviderSubTab,
   } = useUIState();
   const { currentSessionId, setCustomSessionTitle } = useSession();
+
+  // The chat-header refresh button only exists for Claude sessions with an
+  // active id; the spinner reflects the shared per-session regeneration state.
+  const handleRegenerateTitle = canRegenerateTitle && currentSessionId
+    ? () => onRegenerateTitle(currentSessionId)
+    : undefined;
 
   return (
     <ChatHeader
@@ -38,6 +48,8 @@ export const AppHeader = ({ sessionTitle, onNewSession, onUpdateHistoryTitle }: 
         setCurrentView('settings');
       }}
       titleEditable
+      onRegenerateTitle={handleRegenerateTitle}
+      isRegeneratingTitle={currentSessionId != null && regeneratingTitleSessionIds.has(currentSessionId)}
       onTitleChange={(newTitle) => {
         setCustomSessionTitle(newTitle);
         if (currentSessionId) {

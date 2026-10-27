@@ -4,20 +4,24 @@ import type { HistorySessionSummary } from '../../types';
 
 export interface HistoryItemActionsProps {
   session: HistorySessionSummary;
+  isRegeneratingTitle: boolean;
   t: TFunction;
   onEditStart: (sessionId: string, currentTitle: string) => void;
   onExport: (sessionId: string, title: string) => void;
   onDelete: (sessionId: string) => void;
   onFavorite: (sessionId: string) => void;
+  onRegenerate: (sessionId: string) => void;
 }
 
 export const HistoryItemActions = ({
   session,
+  isRegeneratingTitle,
   t,
   onEditStart,
   onExport,
   onDelete,
   onFavorite,
+  onRegenerate,
 }: HistoryItemActionsProps) => {
   const handleEditStart = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -39,8 +43,26 @@ export const HistoryItemActions = ({
     onFavorite(session.sessionId);
   }, [onFavorite, session.sessionId]);
 
+  const handleRegenerate = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isRegeneratingTitle) {
+      onRegenerate(session.sessionId);
+    }
+  }, [isRegeneratingTitle, onRegenerate, session.sessionId]);
+
   return (
-    <div className={`history-action-buttons ${session.isFavorited ? 'has-favorite' : ''}`}>
+    <div className={`history-action-buttons ${session.isFavorited ? 'has-favorite' : ''} ${isRegeneratingTitle ? 'has-regenerating' : ''}`}>
+      {session.provider === 'claude' && (
+        <button
+          className={`history-regenerate-btn ${isRegeneratingTitle ? 'is-loading' : ''}`}
+          onClick={handleRegenerate}
+          disabled={isRegeneratingTitle}
+          title={t('history.regenerateTitle')}
+          aria-label={t('history.regenerateTitle')}
+        >
+          <span className={`codicon ${isRegeneratingTitle ? 'codicon-loading codicon-modifier-spin' : 'codicon-refresh'}`} />
+        </button>
+      )}
       <button
         className="history-edit-btn"
         onClick={handleEditStart}
