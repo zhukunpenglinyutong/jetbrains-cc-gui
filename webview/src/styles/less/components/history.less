@@ -336,10 +336,10 @@
     opacity: 1;
 }
 
-.history-item:not(:hover) .history-action-buttons.has-favorite .history-edit-btn,
-.history-item:not(:hover) .history-action-buttons.has-favorite .history-export-btn,
-.history-item:not(:hover) .history-action-buttons.has-favorite .history-delete-btn,
-.history-item:not(:hover) .history-action-buttons.has-favorite .history-fork-btn {
+.history-item:not(:hover):not(:focus-within) .history-action-buttons.has-favorite .history-edit-btn,
+.history-item:not(:hover):not(:focus-within) .history-action-buttons.has-favorite .history-export-btn,
+.history-item:not(:hover):not(:focus-within) .history-action-buttons.has-favorite .history-delete-btn,
+.history-item:not(:hover):not(:focus-within) .history-action-buttons.has-favorite .history-fork-btn {
     visibility: hidden;
     opacity: 0;
 }
@@ -356,6 +356,28 @@
 .history-item:hover .history-fork-btn,
 .history-item:hover .history-copy-id-btn {
     opacity: 1; /* 鼠标悬停时显示 */
+}
+
+/* Keyboard focus mirrors hover. :focus-visible on the button alone cannot help:
+   its container is visibility:hidden, so it is unreachable by Tab until focus is
+   already inside the row (e.g. on the always-visible favorite star). */
+.history-item:focus-within .history-action-buttons {
+    visibility: visible;
+    opacity: 1;
+}
+
+.history-item:focus-within .history-delete-btn,
+.history-item:focus-within .history-export-btn,
+.history-item:focus-within .history-favorite-btn,
+.history-item:focus-within .history-edit-btn,
+.history-item:focus-within .history-fork-btn,
+.history-item:focus-within .history-copy-id-btn {
+    opacity: 1;
+}
+
+.history-fork-btn:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
 }
 
 .history-favorite-btn:hover {

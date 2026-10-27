@@ -258,8 +258,13 @@ export function registerSessionAndSdkCallbacks(
       const errorCode = result.errorCode;
       let errorMessage = tRef.current('history.convertFailed');
 
-      if (errorCode && tRef.current(`history.conversionErrors.${errorCode}`)) {
-        errorMessage = tRef.current(`history.conversionErrors.${errorCode}`);
+      if (errorCode) {
+        // See the fork path: an empty default distinguishes a missing key from a
+        // real translation, which i18next would otherwise return as the key.
+        const translated = tRef.current(`history.conversionErrors.${errorCode}`, { defaultValue: '' });
+        if (translated) {
+          errorMessage = translated;
+        }
       }
 
       addToast(errorMessage, 'error');
@@ -280,6 +285,9 @@ export function registerSessionAndSdkCallbacks(
   // =========================================================================
 
   window.onForkResult = (json: string) => {
+    // Release the one-fork-at-a-time guard on every outcome, including a
+    // malformed payload that never reaches the try block below.
+    window.__forkInFlight = false;
     try {
       const result = JSON.parse(json);
       if (result.success) {
@@ -291,8 +299,10 @@ export function registerSessionAndSdkCallbacks(
             sessionId: result.newSessionId,
             title: window.__pendingForkTitleRequest,
           };
-          delete window.__pendingForkTitleRequest;
         }
+        // Always consume the request: a result without a new session id must not
+        // leave a stale title to be bound to some later fork.
+        delete window.__pendingForkTitleRequest;
         // Reload so the fork row appears in the list. No optimistic insert: the
         // row's messageCount/fileSize are only known to the backend, and unlike
         // conversion there is no optimistic state to roll back on failure.
@@ -322,12 +332,21 @@ export function registerSessionAndSdkCallbacks(
 
       const errorCode = result.errorCode;
       let errorMessage = tRef.current('history.forkFailed');
-      if (errorCode && tRef.current(`history.forkErrors.${errorCode}`)) {
-        errorMessage = tRef.current(`history.forkErrors.${errorCode}`);
+      if (errorCode) {
+        // A missing key makes i18next echo the key itself, which is truthy; ask
+        // for an empty default so an untranslated code falls back to the generic
+        // message instead of leaking `history.forkErrors.XXX` into the toast.
+        const translated = tRef.current(`history.forkErrors.${errorCode}`, { defaultValue: '' });
+        if (translated) {
+          errorMessage = translated;
+        }
       }
       addToast(errorMessage, 'error');
+      // The fork never produced a session: drop the title it was waiting to bind.
+      delete window.__pendingForkTitleRequest;
     } catch (error) {
       console.error('[Frontend] Failed to parse fork result:', error);
+      delete window.__pendingForkTitleRequest;
       addToast(tRef.current('history.forkFailed'), 'error');
     }
   };

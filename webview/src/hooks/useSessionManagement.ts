@@ -234,14 +234,16 @@ export function useSessionManagement({
   }, [currentSessionId]);
 
   /** Send a delete request; returns false when the bridge refused it. */
-  const requestHistoryDeletion = useCallback((type: 'delete_session' | 'delete_sessions', sessionIds: string[]) => {
+  const requestHistoryDeletion = useCallback((type: 'delete_session' | 'delete_sessions', sessionIds: string[], provider?: string) => {
     const requestId = createDeletionRequestId();
     // The provider travels with the request: native Codex history never tells
-    // the backend which history view is open.
+    // the backend which history view is open, and the panel's currentProvider
+    // can be stale after switching chat providers without reopening the list.
+    const requestProvider = provider ?? currentProvider;
     const payload = type === 'delete_session'
-      ? { sessionId: sessionIds[0], provider: currentProvider, requestId }
-      : { sessionIds, provider: currentProvider, requestId };
-    pendingDeletionsRef.current.set(requestId, currentProvider);
+      ? { sessionId: sessionIds[0], provider: requestProvider, requestId }
+      : { sessionIds, provider: requestProvider, requestId };
+    pendingDeletionsRef.current.set(requestId, requestProvider);
     if (sendBridgeEvent(type, JSON.stringify(payload))) {
       return true;
     }
@@ -444,7 +446,10 @@ export function useSessionManagement({
 
   // Delete history session
   const deleteHistorySession = useCallback((sessionId: string) => {
-    if (!requestHistoryDeletion('delete_session', [sessionId])) return;
+    // Provider rides the payload: the row knows which store it came from, and
+    // the backend routes the delete (and the list reload) by it.
+    const rowProvider = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId)?.provider;
+    if (!requestHistoryDeletion('delete_session', [sessionId], rowProvider)) return;
     let startedSessionTransition = false;
 
     // Immediately update frontend state, remove session from history list
@@ -491,7 +496,26 @@ export function useSessionManagement({
       return;
     }
 
-    if (!requestHistoryDeletion('delete_sessions', uniqueSessionIds)) return;
+    // Group the selection by the provider recorded on each row and send one
+    // delete_sessions request per provider. A single request routes the whole
+    // batch through one provider, so a mixed selection would silently fail to
+    // delete the other half while the UI still reported success.
+    const knownSessions = historyDataRef.current?.sessions ?? [];
+    const idsByProvider = new Map<string, string[]>();
+    for (const sessionId of uniqueSessionIds) {
+      const provider = knownSessions.find(s => s.sessionId === sessionId)?.provider
+        || currentProvider
+        || 'claude';
+      const bucket = idsByProvider.get(provider);
+      if (bucket) {
+        bucket.push(sessionId);
+      } else {
+        idsByProvider.set(provider, [sessionId]);
+      }
+    }
+    for (const [provider, providerSessionIds] of idsByProvider) {
+      if (!requestHistoryDeletion('delete_sessions', providerSessionIds, provider)) return;
+    }
     let startedSessionTransition = false;
 
     if (historyData && historyData.sessions) {
@@ -634,6 +658,17 @@ export function useSessionManagement({
   // options.forkPointUuid narrows the fork to the conversation up to the end of that
   // assistant reply's turn (backend cuts before the next real user message).
   const forkHistorySession = useCallback((sessionId: string, options?: { forkPointUuid?: string }) => {
+    // One fork at a time: a double click would create two copies, and the two
+    // onForkResult callbacks would race over __pendingForkTitleRequest.
+    if (window.__forkInFlight) {
+      return;
+    }
+    window.__forkInFlight = true;
+    // Release the guard even if the backend callback never arrives.
+    setTimeout(() => {
+      window.__forkInFlight = false;
+    }, 15_000);
+
     const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
     const provider = session?.provider || currentProvider || 'claude';
 

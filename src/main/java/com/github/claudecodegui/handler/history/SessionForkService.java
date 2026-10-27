@@ -21,9 +21,7 @@ import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
@@ -102,7 +100,9 @@ class SessionForkService {
             request = this.gson.fromJson(content, JsonObject.class);
         } catch (JsonSyntaxException e) {
             LOG.warn("[SessionForkService] Fork rejected: unparseable payload");
-            this.sendForkResult(false, null, ForkResultCode.INVALID_SESSION_ID, null);
+            // Not a session-id problem: report the generic failure so the user is
+            // not told their id is invalid when the payload itself was malformed.
+            this.sendForkResult(false, null, ForkResultCode.FORK_FAILED, null);
             return;
         }
 
@@ -132,10 +132,12 @@ class SessionForkService {
 
         // The frontend already truncates the title to the service limit; this is the
         // backend belt-and-braces so the Node call cannot fail on length alone.
+        // Truncate by code point: a plain substring can split a surrogate pair and
+        // persist half an emoji.
         String forkTitle = request.has("title") && request.get("title").isJsonPrimitive()
                 ? request.get("title").getAsString() : null;
-        if (forkTitle != null && forkTitle.length() > MAX_TITLE_LENGTH) {
-            forkTitle = forkTitle.substring(0, MAX_TITLE_LENGTH);
+        if (forkTitle != null && forkTitle.codePointCount(0, forkTitle.length()) > MAX_TITLE_LENGTH) {
+            forkTitle = forkTitle.substring(0, forkTitle.offsetByCodePoints(0, MAX_TITLE_LENGTH));
         }
 
         String finalForkTitle = forkTitle;
@@ -234,7 +236,10 @@ class SessionForkService {
                 lines.takeWhile(line -> copied.get() < limit).forEach(line -> {
                     try {
                         writer.write(this.rewriteRowForFork(line, sourceSessionId, newSessionId));
-                        writer.newLine();
+                        // The CLI always writes '\n'; writer.newLine() would turn the
+                        // whole fork into CRLF on Windows and break byte-for-byte
+                        // comparisons with the source.
+                        writer.write('\n');
                     } catch (IOException e) {
                         throw new UncheckedIOException(e);
                     } finally {
@@ -277,16 +282,12 @@ class SessionForkService {
         String uuidNeedle = "\"uuid\":\"" + forkPointUuid + "\"";
         int anchor = -1;
         int lineIndex = 0;
-        List<String> linesAfterAnchor = new ArrayList<>();
+        // Pass one stops at the anchor line; nothing after it is retained.
         try (Stream<String> lines = Files.lines(source, StandardCharsets.UTF_8)) {
             for (Iterator<String> it = lines.iterator(); it.hasNext(); lineIndex++) {
-                String line = it.next();
-                if (anchor < 0) {
-                    if (line.contains(uuidNeedle)) {
-                        anchor = lineIndex;
-                    }
-                } else {
-                    linesAfterAnchor.add(line);
+                if (it.next().contains(uuidNeedle)) {
+                    anchor = lineIndex;
+                    break;
                 }
             }
         }
@@ -294,14 +295,23 @@ class SessionForkService {
             return -1;
         }
 
-        int cut = anchor + 1 + linesAfterAnchor.size();
-        for (int i = 0; i < linesAfterAnchor.size(); i++) {
-            if (isRealUserTextRow(linesAfterAnchor.get(i))) {
-                cut = anchor + 1 + i;
-                break;
+        // Pass two only tracks line numbers: the previous version buffered every
+        // row after the anchor, which peaked at the whole file tail in memory.
+        int cut = -1;
+        int totalLines = 0;
+        lineIndex = 0;
+        try (Stream<String> lines = Files.lines(source, StandardCharsets.UTF_8)) {
+            for (Iterator<String> it = lines.iterator(); it.hasNext(); lineIndex++) {
+                String line = it.next();
+                totalLines = lineIndex + 1;
+                if (lineIndex > anchor && isRealUserTextRow(line)) {
+                    cut = lineIndex;
+                    break;
+                }
             }
         }
-        return cut;
+        // No following user turn: the fork keeps the rest of the transcript.
+        return cut >= 0 ? cut : totalLines;
     }
 
     /**
@@ -412,7 +422,7 @@ class SessionForkService {
             entries.filter(path -> {
                         String filename = path.getFileName().toString();
                         return filename.startsWith("agent-") && filename.endsWith(".jsonl")
-                                && this.isAgentFileRelatedToSession(path, sourceSessionId);
+                                && AgentFileMatcher.isRelatedToSession(path, sourceSessionId);
                     })
                     .forEach(agentFile -> {
                         try {
@@ -449,35 +459,6 @@ class SessionForkService {
                             + entry.getFileName() + ": " + e.getMessage());
                 }
             });
-        }
-    }
-
-    /**
-     * Check whether a legacy agent file belongs to the given session. Mirrors
-     * {@code HistoryDeleteService.isAgentFileRelatedToSession} so a fork's copies are
-     * cleaned up when the fork is deleted.
-     *
-     * @param agentFilePath Candidate agent file.
-     * @param sessionId Session id to match.
-     * @return true if the file references the session in its first 20 lines.
-     */
-    private boolean isAgentFileRelatedToSession(Path agentFilePath, String sessionId) {
-        try (var reader = Files.newBufferedReader(agentFilePath, StandardCharsets.UTF_8)) {
-            String line;
-            int lineCount = 0;
-            // Only read the first 20 lines for performance
-            while ((line = reader.readLine()) != null && lineCount < 20) {
-                if (line.contains("\"sessionId\":\"" + sessionId + "\"")
-                        || line.contains("\"parentSessionId\":\"" + sessionId + "\"")) {
-                    return true;
-                }
-                lineCount++;
-            }
-            return false;
-        } catch (Exception e) {
-            LOG.warn("[SessionForkService] Failed to read agent file "
-                    + agentFilePath.getFileName() + ": " + e.getMessage());
-            return false;
         }
     }
 

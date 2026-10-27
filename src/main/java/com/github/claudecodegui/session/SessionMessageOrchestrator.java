@@ -332,6 +332,25 @@ public class SessionMessageOrchestrator {
                 }
             }
         }
+
+        // Every retry was spent without a match: surface it instead of silently
+        // leaving those replies without a fork button, which is impossible to
+        // diagnose from the UI alone.
+        List<ClaudeSession.Message> remaining = findUnresolvedAssistantMessages();
+        if (!remaining.isEmpty()) {
+            LOG.warn("[Fork] " + remaining.size()
+                    + " assistant message(s) still have no transcript uuid; first text: "
+                    + abbreviate(remaining.get(0).content));
+        }
+    }
+
+    /** First 40 characters of a message with newlines flattened, for a one-line log. */
+    private static String abbreviate(String text) {
+        if (text == null) {
+            return "";
+        }
+        String flattened = text.replace('\n', ' ').replace('\r', ' ');
+        return flattened.length() <= 40 ? flattened : flattened.substring(0, 40) + "...";
     }
 
     /**
@@ -363,11 +382,25 @@ public class SessionMessageOrchestrator {
      * Find a recent assistant row whose joined text equals the local message's
      * streamed text. Rows already consumed by a previous match are skipped via
      * usedUuids so duplicate texts cannot share one uuid.
+     *
+     * <p>An exact match is attempted first, which keeps duplicate replies pairing
+     * up in order. The transcript reader joins a row's text blocks with {@code '\n'}
+     * ({@code extractTextContent} in session-service.js), while the streamed
+     * accumulator appends them back-to-back, so a reply split across text /
+     * thinking / tool blocks only matches once whitespace is ignored — that is
+     * the second pass.
      */
-    private static String findRowUuidByText(JsonArray rows, String text, java.util.Set<String> usedUuids) {
+    private static String findRowUuidByText(JsonArray rows, String text, Set<String> usedUuids) {
         if (text == null || text.isEmpty()) {
             return null;
         }
+        String exact = findRowUuid(rows, text, usedUuids, false);
+        return exact != null ? exact : findRowUuid(rows, text, usedUuids, true);
+    }
+
+    private static String findRowUuid(JsonArray rows, String text, Set<String> usedUuids,
+                                      boolean ignoreWhitespace) {
+        String needle = ignoreWhitespace ? stripWhitespace(text) : text;
         for (JsonElement element : rows) {
             if (!element.isJsonObject()) {
                 continue;
@@ -383,12 +416,34 @@ public class SessionMessageOrchestrator {
             if (usedUuids.contains(uuid)) {
                 continue;
             }
-            if (text.equals(textElement.getAsString())) {
+            String candidate = textElement.getAsString();
+            String haystack = ignoreWhitespace ? stripWhitespace(candidate) : candidate;
+            if (needle.equals(haystack)) {
                 usedUuids.add(uuid);
                 return uuid;
             }
         }
         return null;
+    }
+
+    /** Drop every whitespace character so the two concatenation styles compare equal. */
+    private static String stripWhitespace(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        StringBuilder stripped = null;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (Character.isWhitespace(c)) {
+                if (stripped == null) {
+                    stripped = new StringBuilder(value.length());
+                    stripped.append(value, 0, i);
+                }
+            } else if (stripped != null) {
+                stripped.append(c);
+            }
+        }
+        return stripped == null ? value : stripped.toString();
     }
 
     /** Load provider history without letting obsolete reads replace a newer transcript. */

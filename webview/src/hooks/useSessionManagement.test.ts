@@ -30,6 +30,7 @@ describe('useSessionManagement', () => {
     window.sendToJava = vi.fn();
     delete window.__pendingForkTitleRequest;
     delete window.__pendingForkTitle;
+    delete window.__forkInFlight;
     // Reset the "skip new-session confirm" preference between tests so cases
     // that exercise the localStorage path can't leak into ones that don't.
     localStorage.removeItem('skipNewSessionConfirm');
@@ -199,7 +200,7 @@ describe('useSessionManagement', () => {
     expect(sentRequests('delete_session').map(request => request.sessionId)).toEqual(['history-1', 'history-2']);
   });
 
-  it('sends one backend request when deleting multiple history sessions', () => {
+  it('dedupes ids and sends one backend request per provider when deleting multiple history sessions', () => {
     let historyData = {
       success: true,
       sessions: [
@@ -245,8 +246,11 @@ describe('useSessionManagement', () => {
 
     expect(historyData.sessions).toEqual([]);
     expect(historyData.total).toBe(0);
-    expect(window.sendToJava).toHaveBeenCalledTimes(1);
-    expect(sentRequest('delete_sessions').sessionIds).toEqual(['history-1', 'history-2']);
+    // One request per provider; the duplicate id is dropped inside its group.
+    expect(sentRequests('delete_sessions')).toEqual([
+      expect.objectContaining({ sessionIds: ['history-1'], provider: 'claude' }),
+      expect.objectContaining({ sessionIds: ['history-2'], provider: 'codex' }),
+    ]);
     expect(mocks.addToast).toHaveBeenCalledWith('history.sessionDeleted', 'success');
   });
 
@@ -382,7 +386,12 @@ describe('useSessionManagement', () => {
       result.current.deleteHistorySessions(['history-1', 'history-2']);
     });
 
-    expect(sentRequest('delete_sessions').sessionIds).toEqual(['history-1', 'history-2']);
+    // Mixed providers are split into one request per provider: routing the whole
+    // batch through the first row's provider silently skips the other half.
+    expect(sentRequests('delete_sessions')).toEqual([
+      expect.objectContaining({ sessionIds: ['history-1'], provider: 'claude' }),
+      expect.objectContaining({ sessionIds: ['history-2'], provider: 'codex' }),
+    ]);
     expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
     expect(mocks.addToast).not.toHaveBeenCalledWith('history.sessionDeleted', 'success');
     expect(window.__pendingSessionTransitionToast).toEqual({
@@ -1150,6 +1159,36 @@ describe('useSessionManagement', () => {
       // t() returns the key itself, so the suffix is the raw i18n key.
       title: 'My Session' + 'history.forkedTitleSuffix',
     });
+  });
+
+  it('forkHistorySession ignores a second click while the first fork is in flight', () => {
+    const mocks = createMocks();
+    const historyData = {
+      success: true,
+      sessions: [
+        { sessionId: 'history-1', title: 'My Session', provider: 'claude', messageCount: 1, lastTimestamp: Date.now() },
+      ],
+      total: 1,
+    } as unknown as HistoryData;
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData,
+        currentSessionId: null,
+        ...mocks,
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.forkHistorySession('history-1');
+      result.current.forkHistorySession('history-1');
+    });
+
+    // A double click must not create two copies (and two racing title bindings).
+    expect(window.sendToJava).toHaveBeenCalledTimes(1);
   });
 
   it('forkHistorySession truncates the base title so the suffix survives', () => {

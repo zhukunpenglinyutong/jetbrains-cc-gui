@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -115,8 +116,7 @@ public class SessionForkServiceTest {
         service.copySessionFile(source, target, SOURCE_ID, FORK_ID, null);
 
         assertTrue(Files.exists(target));
-        assertFalse("temp files must be cleaned up after the move",
-                Files.exists(dir.resolve(FORK_ID + ".jsonl.fork")));
+        assertNoTempFiles(dir);
 
         List<String> forkedRows = Files.readAllLines(target, StandardCharsets.UTF_8);
         assertEquals(3, forkedRows.size());
@@ -249,7 +249,31 @@ public class SessionForkServiceTest {
             // expected
         }
         assertFalse(Files.exists(target));
-        assertFalse(Files.exists(source.getParent().resolve(FORK_ID + ".jsonl.fork")));
+        assertNoTempFiles(source.getParent());
+    }
+
+    @Test
+    public void copySessionFileWritesLfLineEndings() throws IOException {
+        Path dir = temporaryFolder.newFolder("eol").toPath();
+        Path source = dir.resolve(SOURCE_ID + ".jsonl");
+        Files.write(source, List.of(
+                "{\"sessionId\":\"" + SOURCE_ID + "\"}",
+                "{\"type\":\"user\"}"
+        ), StandardCharsets.UTF_8);
+
+        Path target = dir.resolve(FORK_ID + ".jsonl");
+        service.copySessionFile(source, target, SOURCE_ID, FORK_ID, null);
+
+        String raw = new String(Files.readAllBytes(target), StandardCharsets.UTF_8);
+        assertFalse("the fork must keep the CLI's LF endings", raw.contains("\r"));
+    }
+
+    /** Temp files are named {@code <id>.jsonl.fork.<random>.tmp}; assert none survive. */
+    private static void assertNoTempFiles(Path dir) throws IOException {
+        try (Stream<Path> entries = Files.list(dir)) {
+            assertFalse("temp files must be cleaned up",
+                    entries.anyMatch(path -> path.getFileName().toString().endsWith(".tmp")));
+        }
     }
 
     @Test

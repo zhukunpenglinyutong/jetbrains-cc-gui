@@ -645,7 +645,7 @@ class HistoryDeleteService {
                         .filter(path -> {
                             String filename = path.getFileName().toString();
                             return filename.startsWith("agent-") && filename.endsWith(".jsonl")
-                                    && isAgentFileRelatedToSession(path, sessionId);
+                                    && AgentFileMatcher.isRelatedToSession(path, sessionId);
                         })
                         .collect(Collectors.toList());
 
@@ -810,30 +810,6 @@ class HistoryDeleteService {
             }
         } catch (Exception e) {
             LOG.warn("[HistoryHandler] Failed to clean up cache (does not affect deletion): " + e.getMessage());
-        }
-    }
-
-    /**
-     * Check if an agent file belongs to the specified session.
-     */
-    private boolean isAgentFileRelatedToSession(Path agentFilePath, String sessionId) {
-        try (BufferedReader reader = Files.newBufferedReader(agentFilePath, StandardCharsets.UTF_8)) {
-            String line;
-            int lineCount = 0;
-            // Only read the first 20 lines for performance
-            while ((line = reader.readLine()) != null && lineCount < 20) {
-                if (line.contains("\"sessionId\":\"" + sessionId + "\"") ||
-                            line.contains("\"parentSessionId\":\"" + sessionId + "\"")) {
-                    LOG.debug("[HistoryHandler] Agent file " + agentFilePath.getFileName() + " belongs to session " + sessionId);
-                    return true;
-                }
-                lineCount++;
-            }
-            LOG.debug("[HistoryHandler] Agent file " + agentFilePath.getFileName() + " does not belong to session " + sessionId);
-            return false;
-        } catch (Exception e) {
-            LOG.warn("[HistoryHandler] Failed to read agent file " + agentFilePath.getFileName() + ": " + e.getMessage());
-            return false;
         }
     }
 

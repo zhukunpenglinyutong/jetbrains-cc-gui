@@ -246,6 +246,51 @@ public class SessionMessageOrchestratorTest {
     }
 
     @Test
+    public void updateAssistantMessageUuidsMatchesMultiBlockRepliesAcrossJoinStyles() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-1");
+        state.setCwd("/workspace");
+
+        // The streamed accumulator concatenates text blocks with no separator.
+        JsonObject streamedRaw = new JsonObject();
+        streamedRaw.add("message", new JsonObject());
+        ClaudeSession.Message streamedAssistant = new ClaudeSession.Message(
+                ClaudeSession.Message.Type.ASSISTANT, "first partsecond part", streamedRaw);
+        state.addMessage(streamedAssistant);
+
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+        callbackFacade.setCallback(callback);
+
+        // The transcript reader joins the same blocks with '\n'.
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        JsonArray rows = new JsonArray();
+        JsonObject row = new JsonObject();
+        row.addProperty("uuid", "row-uuid-multi");
+        row.addProperty("text", "first part\nsecond part");
+        rows.add(row);
+        historyAccess.recentAssistantRows = rows;
+
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.updateAssistantMessageUuids();
+
+        assertTrue(streamedAssistant.raw.has("uuid"));
+        assertEquals("row-uuid-multi", streamedAssistant.raw.get("uuid").getAsString());
+        assertEquals(List.of("first partsecond part|row-uuid-multi"), callback.messageUuidPatches);
+    }
+
+    @Test
     public void loadFromServerParsesHistoryAndClearsLoadingState() {
         SessionState state = new SessionState();
         state.setProvider("claude");
