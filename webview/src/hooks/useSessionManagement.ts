@@ -464,6 +464,13 @@ export function useSessionManagement({
     const updateData = JSON.stringify({ sessionId, customTitle: newTitle });
     sendBridgeEvent('update_title', updateData);
 
+    // The chat header derives its title from customSessionTitle, which only the
+    // header editor used to update. Retitle the session on screen when the edit
+    // comes from the history list.
+    if (sessionId === currentSessionId) {
+      setCustomSessionTitle(newTitle);
+    }
+
     // Immediately update frontend state
     if (historyData && historyData.sessions) {
       setHistoryData(previous => previous?.sessions ? {
@@ -474,7 +481,7 @@ export function useSessionManagement({
       // Show success toast
       addToast(t('history.titleUpdated'), 'success');
     }
-  }, [historyData, setHistoryData, addToast, t]);
+  }, [historyData, setHistoryData, addToast, t, currentSessionId, setCustomSessionTitle]);
 
   // AI-generated titles are already persisted by saveAiTitle to the JSONL
   // session file. This skips the round-trip through the customTitle endpoint,

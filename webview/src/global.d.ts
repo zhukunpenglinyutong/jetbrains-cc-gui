@@ -234,6 +234,9 @@ interface Window {
   /** Buffers the latest usage update received before React callbacks mount. */
   __pendingUsageUpdate?: string;
 
+  /** Custom title pushed before React registered restoreSessionTitle. */
+  __pendingRestoreSessionTitle?: { sessionId: string; title: string };
+
   /**
    * Mode changed callback
    */
@@ -658,6 +661,14 @@ interface Window {
    * @param title - The generated title text
    */
   updateSessionTitle?: (sessionId: string, title: string) => void;
+
+  /**
+   * Restore the user-set title persisted in session-titles.json after a
+   * webview restart.
+   * @param sessionId - The session ID the title belongs to
+   * @param title - The persisted custom title text
+   */
+  restoreSessionTitle?: (sessionId: string, title: string) => void;
 
   /**
    * Editor font config received callback - receives IDEA editor font configuration

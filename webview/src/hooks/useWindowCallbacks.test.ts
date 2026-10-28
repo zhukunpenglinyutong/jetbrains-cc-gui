@@ -407,7 +407,10 @@ describe('useWindowCallbacks integration', () => {
 
     expect(opts.applyHistoryTitleLocal).toHaveBeenCalledWith('sess-123', longAiTitle);
     expect(opts.updateHistoryTitle).not.toHaveBeenCalled();
-    expect(opts.setCustomSessionTitle).toHaveBeenCalledWith(longAiTitle);
+    // Automatic titles never enter customSessionTitle; that slot is reserved
+    // for manual edits and the persisted custom title.
+    expect(opts.setRestoredSessionTitle).toHaveBeenCalledWith({ sessionId: 'sess-123', title: longAiTitle });
+    expect(opts.setCustomSessionTitle).not.toHaveBeenCalled();
   });
 
   it('updateSessionTitle skips when sessionId does not match currentSessionIdRef (stale event)', () => {

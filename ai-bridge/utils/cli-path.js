@@ -13,7 +13,7 @@
  * and launch `.cmd`/`.bat` via `cmd.exe /d /s /c` (see `resolveCliSpawn`).
  */
 
-import { existsSync, readdirSync, realpathSync } from 'fs';
+import { existsSync, readdirSync, realpathSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { join, dirname, isAbsolute, win32 as pathWin32 } from 'path';
 import { execFileSync, execSync } from 'child_process';
@@ -40,6 +40,47 @@ export function stripOuterQuotes(value) {
  */
 export function isWindowsCmdShim(bin) {
   return process.platform === 'win32' && /\.(cmd|bat)$/i.test(stripOuterQuotes(bin));
+}
+
+/**
+ * Detect a Windows `.cmd`/`.bat` shim whose delegation target no longer
+ * exists — e.g. an old install dir left on PATH whose `minimax.cmd` still
+ * invokes a removed `"D:\npm-global\mcode.cmd"`. Spawning such a shim makes
+ * cmd.exe print a localized "file not found" and exit 1, which surfaces as an
+ * opaque send error, so CLI discovery skips these candidates.
+ *
+ * Only a confident answer counts as dead: the LAST quoted absolute path in
+ * the script is taken as the delegation target (installers append the real
+ * invocation last; earlier quoted paths are `set "VAR=..."` assignments).
+ * `%~dp0` resolves against the shim's own directory; any other unresolved
+ * `%VAR%` means the target cannot be verified statically, so the shim is
+ * assumed alive. Scripts without a quoted absolute target are alive too.
+ *
+ * @param {string} bin - candidate shim path
+ * @param {object} [options]
+ * @param {boolean} [options.forceWindows] - test hook; defaults to win32
+ * @returns {boolean} true only when the shim provably delegates to a
+ *   missing file
+ */
+export function isDeadCmdShim(bin, { forceWindows = process.platform === 'win32' } = {}) {
+  if (!forceWindows || typeof bin !== 'string') return false;
+  const trimmed = stripOuterQuotes(bin).trim();
+  if (!/\.(cmd|bat)$/i.test(trimmed)) return false;
+  let content;
+  try {
+    content = readFileSync(trimmed, 'utf8');
+  } catch {
+    // Missing or unreadable: let the spawn produce the real error instead of
+    // silently dropping the candidate.
+    return false;
+  }
+  const quoted = content.match(/"((?:[A-Za-z]:\\|%~dp0)[^"\r\n]+)"/g) || [];
+  const last = quoted[quoted.length - 1];
+  if (!last) return false;
+  const shimDir = pathWin32.dirname(trimmed);
+  let target = last.slice(1, -1).replace(/%~dp0/gi, shimDir.endsWith('\\') ? shimDir : `${shimDir}\\`);
+  if (/%[^%]*%/.test(target)) return false;
+  return !pathExists(target);
 }
 
 /**
@@ -74,8 +115,15 @@ function prependPathDir(env, dir) {
  * command again (`cmd /s /c "…"`), and a second quote pair becomes `""C:\Program`.
  *
  * Instead, launch `cmd.exe /d /s /c` ourselves with `windowsVerbatimArguments`
- * and invoke the shim by **basename** after prepending its directory to PATH.
- * That keeps spaces out of the command token entirely.
+ * and invoke the shim by its **quoted full path** after prepending its
+ * directory to PATH. The full path is required, not cosmetic: a batch executed
+ * via a PATH lookup by bare name receives `%0` as typed, so `%~dp0` inside the
+ * script expands to the child process's CWD instead of the script's own
+ * directory — every `%~dp0`-based launcher (npm shims, the mcode release
+ * manager reading `<"%~dp0current"`) then reads its sibling files from the
+ * wrong place and dies with cmd's localized "file not found" + exit 1.
+ * `/s` strips exactly the outer quote pair, so the quoted single token
+ * survives spaces and parentheses in the path.
  *
  * @param {string} bin
  * @param {string[]} [args]
@@ -98,14 +146,13 @@ export function resolveCliSpawn(
 
   if (needsCmd) {
     const looksLikePath = pathWin32.isAbsolute(normalized) || /[\\/]/.test(normalized);
-    // Invoke shims by basename so `C:\Program Files\...` never appears as the
-    // command token. Keep the full path for real `.exe` binaries.
-    const invokeName = isShim && looksLikePath ? pathWin32.basename(normalized) : normalized;
     const env = prependPathDir(
       { ...(options.env || process.env) },
       looksLikePath ? pathWin32.dirname(normalized) : '',
     );
-    let command = [invokeName, ...args].map(quoteCmdArg).join(' ');
+    // See the doc block: the shim MUST be invoked by its quoted full path —
+    // a bare-name PATH lookup leaves %~dp0 pointing at the child's CWD.
+    let command = [normalized, ...args].map(quoteCmdArg).join(' ');
     if (redirectTo) command += ` > ${quoteCmdArg(redirectTo)}`;
     return {
       file: env.ComSpec || env.COMSPEC || process.env.ComSpec || 'cmd.exe',
@@ -278,48 +325,6 @@ export function whichViaLoginShell(binaryName, shellOverride, env = process.env)
   }
 }
 
-function whichOnPath(binaryName, env = process.env) {
-  try {
-    if (process.platform === 'win32') {
-      // Prefer execFile so the binary name is not re-parsed by a shell.
-      // `where` lists every PATHEXT match; the extensionless npm shim is often first
-      // and cannot be spawned — selectWindowsWhereMatch prefers .cmd/.exe.
-      let output;
-      try {
-        output = execFileSync('where.exe', [binaryName], {
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'ignore'],
-          env,
-          windowsHide: true,
-        });
-      } catch {
-        // Fallback for systems where where.exe is not on PATH of the IDE process.
-        output = execSync(`where ${binaryName}`, {
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'ignore'],
-          env,
-          windowsHide: true,
-        });
-      }
-      const lines = String(output || '').split(/\r?\n/);
-      return selectWindowsWhereMatch(lines);
-    }
-
-    const output = execFileSync('which', [binaryName], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      env,
-    });
-    const first = String(output || '')
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .find(Boolean);
-    return first || null;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * npm global installs on Windows ship `.cmd` shims, not `.exe`.
  * @param {string} binaryName
@@ -332,9 +337,9 @@ function candidateExeNames(binaryName) {
 }
 
 /**
- * Every PATH match for `binaryName` in discovery order. Unlike
- * {@link whichOnPath}, the whole list survives: an earlier, broken install must
- * not hide a later, working one (`which -a` / `where` list both).
+ * Every PATH match for `binaryName` in discovery order. The whole list
+ * survives: an earlier, broken install must not hide a later, working one
+ * (`which -a` / `where` list both).
  *
  * @param {string} binaryName
  * @param {NodeJS.ProcessEnv} [env] - environment whose PATH drives the lookup
@@ -430,7 +435,7 @@ export function listCliCandidates({ binaryName, envKeys = [], homeCandidates = [
   }
 
   for (const fromPath of whichAllOnPath(binaryName, env)) {
-    if (pathExists(fromPath)) push(fromPath);
+    if (pathExists(fromPath) && !isDeadCmdShim(fromPath)) push(fromPath);
   }
 
   const home = homedir();
@@ -441,19 +446,23 @@ export function listCliCandidates({ binaryName, envKeys = [], homeCandidates = [
         .replace('{localAppData}', env.LOCALAPPDATA || join(home, 'AppData', 'Local'))
         .replace('{bin}', exeName)
         .replace('{name}', binaryName);
-      if (pathExists(resolved)) push(resolveWindowsSpawnableBin(resolved));
+      const spawnable = resolveWindowsSpawnableBin(resolved);
+      if (pathExists(spawnable) && !isDeadCmdShim(spawnable)) push(spawnable);
     }
   }
 
   for (const dir of commonCliBinDirs(home, env)) {
     for (const exeName of exeNames) {
       const resolved = join(dir, exeName);
-      if (pathExists(resolved)) push(resolveWindowsSpawnableBin(resolved));
+      if (pathExists(resolved) && !isDeadCmdShim(resolved)) push(resolveWindowsSpawnableBin(resolved));
     }
   }
 
   const fromShell = whichViaLoginShell(binaryName, undefined, env);
-  if (fromShell) push(resolveWindowsSpawnableBin(fromShell));
+  if (fromShell) {
+    const spawnable = resolveWindowsSpawnableBin(fromShell);
+    if (!isDeadCmdShim(spawnable)) push(spawnable);
+  }
 
   return candidates;
 }
@@ -477,8 +486,10 @@ export function resolveCliPath({ binaryName, envKeys = [], homeCandidates = [], 
   }
 
   // `where <name>` (no extension) honors PATHEXT; we then prefer .cmd/.exe.
-  const fromPath = whichOnPath(binaryName, env);
-  if (fromPath) return resolveWindowsSpawnableBin(fromPath);
+  // A stale shim left on PATH by a removed install (isDeadCmdShim) is skipped
+  // so discovery falls through to the well-known install dirs below.
+  const aliveFromPath = whichAllOnPath(binaryName, env).find((c) => pathExists(c) && !isDeadCmdShim(c));
+  if (aliveFromPath) return resolveWindowsSpawnableBin(aliveFromPath);
 
   const home = homedir();
   for (const template of homeCandidates) {
@@ -488,7 +499,8 @@ export function resolveCliPath({ binaryName, envKeys = [], homeCandidates = [], 
         .replace('{localAppData}', env.LOCALAPPDATA || join(home, 'AppData', 'Local'))
         .replace('{bin}', exeName)
         .replace('{name}', binaryName);
-      if (pathExists(resolved)) return resolveWindowsSpawnableBin(resolved);
+      const spawnable = resolveWindowsSpawnableBin(resolved);
+      if (pathExists(spawnable) && !isDeadCmdShim(spawnable)) return spawnable;
     }
   }
 
@@ -498,7 +510,8 @@ export function resolveCliPath({ binaryName, envKeys = [], homeCandidates = [], 
   for (const dir of commonCliBinDirs(home, env)) {
     for (const exeName of exeNames) {
       const resolved = join(dir, exeName);
-      if (pathExists(resolved)) return resolveWindowsSpawnableBin(resolved);
+      const spawnable = resolveWindowsSpawnableBin(resolved);
+      if (pathExists(spawnable) && !isDeadCmdShim(spawnable)) return spawnable;
     }
   }
 
@@ -506,7 +519,10 @@ export function resolveCliPath({ binaryName, envKeys = [], homeCandidates = [], 
   // minimal PATH, so CLIs installed via nvm/fnm/mise/asdf or custom prefixes
   // only become visible once the login rc files are sourced.
   const fromShell = whichViaLoginShell(binaryName, undefined, env);
-  if (fromShell) return resolveWindowsSpawnableBin(fromShell);
+  if (fromShell) {
+    const spawnable = resolveWindowsSpawnableBin(fromShell);
+    if (!isDeadCmdShim(spawnable)) return spawnable;
+  }
 
   return binaryName;
 }

@@ -643,6 +643,14 @@ if (typeof window !== 'undefined' && !window.onUsageUpdate) {
   };
 }
 
+// Java restores a session's persisted custom title right after frontend_ready.
+// Keep it until React's callback effect mounts.
+if (typeof window !== 'undefined' && !window.restoreSessionTitle) {
+  window.restoreSessionTitle = (sessionId: string, title: string) => {
+    window.__pendingRestoreSessionTitle = { sessionId, title };
+  };
+}
+
 // Java can answer frontend_ready before React's callback effect mounts. Keep
 // the authoritative recovery snapshot until the real callback is registered.
 if (typeof window !== 'undefined' && !window.applyBackendTabState) {

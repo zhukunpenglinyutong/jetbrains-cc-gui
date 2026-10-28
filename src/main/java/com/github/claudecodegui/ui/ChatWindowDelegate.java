@@ -117,6 +117,7 @@ public class ChatWindowDelegate {
         void setMessageDispatcher(MessageDispatcher d);
         void setPermissionHandler(PermissionHandler h);
         void setHistoryHandler(HistoryHandler h);
+        HistoryHandler getHistoryHandler();
         SessionLifecycleManager getSessionLifecycleManager();
         StreamMessageCoalescer getStreamCoalescer();
         WebviewWatchdog getWebviewWatchdog();
@@ -777,6 +778,13 @@ public class ChatWindowDelegate {
             String sessionId = session.getSessionId();
             if (sessionId != null && !sessionId.trim().isEmpty()) {
                 host.callJavaScript("setSessionId", JsUtils.escapeJs(sessionId));
+                // Transcript replay only restores the CLI-derived title. Re-apply
+                // the user-set title saved in session-titles.json so a webview
+                // restart or watchdog reload does not fall back to the AI title.
+                HistoryHandler historyHandler = host.getHistoryHandler();
+                if (historyHandler != null) {
+                    historyHandler.pushCustomTitleToWebview(sessionId);
+                }
             }
 
             List<ClaudeSession.Message> messages = session.getMessagesSnapshot();

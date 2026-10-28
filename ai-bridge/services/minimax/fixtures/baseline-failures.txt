@@ -1,0 +1,18 @@
+﻿
+not ok 3 - buildCliEnv strips stale CLI override env vars and sets host-managed for first-party auth
+not ok 5 - buildCliEnv leaves CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST unset for cloud providers
+not ok 6 - buildCliEnv leaves CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST unset for CLI login
+not ok 7 - setupApiKey does not fall back to Claude CLI credentials on disk
+not ok 8 - setupApiKey accepts synced provider credentials when a managed provider is active
+not ok 9 - setupApiKey does not read settings.json credentials when Claude provider is inactive
+not ok 10 - setupApiKey enters CLI login when config.json sets claude.current=__cli_login__
+not ok 11 - setupApiKey CLI login takes priority over existing API keys (no fallback)
+not ok 12 - setupApiKey honors legacy CCGUI_CLI_LOGIN_AUTHORIZED flag for backwards compatibility
+not ok 13 - injectStartupEnvVars ignores local proxy settings when Claude provider is inactive
+not ok 14 - injectStartupEnvVars ignores local proxy settings for managed providers
+not ok 15 - injectStartupEnvVars accepts proxy settings for the authorized local provider
+not ok 16 - injectStartupEnvVars clears previously injected proxy vars after switching away from local mode
+not ok 17 - injectStartupEnvVars injects AWS credential vars for the authorized local provider
+not ok 18 - injectStartupEnvVars clears previously injected AWS credential vars after switching away from local mode
+
+

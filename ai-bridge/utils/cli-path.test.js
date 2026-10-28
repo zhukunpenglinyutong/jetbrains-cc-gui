@@ -6,6 +6,7 @@ import { dirname, join, normalize } from 'node:path';
 import {
   decodeCliOutput,
   isWindowsCmdShim,
+  isDeadCmdShim,
   quoteCmdArg,
   resolveCliSpawn,
   selectWindowsWhereMatch,
@@ -256,7 +257,7 @@ test('decodeCliOutput keeps valid UTF-8 and recovers GBK stderr', () => {
   assert.match(decoded, /命令/);
 });
 
-test('resolveCliSpawn launches spaced .cmd shims via cmd basename + PATH', () => {
+test('resolveCliSpawn launches spaced .cmd shims via cmd with the quoted full path', () => {
   const env = { PATH: 'C:\\Windows\\system32', ComSpec: 'C:\\Windows\\system32\\cmd.exe' };
   const invocation = resolveCliSpawn(
     'C:\\Program Files\\nodejs\\opencode.cmd',
@@ -267,11 +268,11 @@ test('resolveCliSpawn launches spaced .cmd shims via cmd basename + PATH', () =>
   assert.equal(invocation.file, 'C:\\Windows\\system32\\cmd.exe');
   assert.equal(invocation.options.shell, false);
   assert.equal(invocation.options.windowsVerbatimArguments, true);
-  // /s strips the outer quotes, leaving `"opencode.cmd" "models"`.
-  assert.deepEqual(invocation.args, ['/d', '/s', '/c', '""opencode.cmd" "models""']);
+  // /s strips the outer quotes, leaving the shim's quoted full path as one
+  // command token — required so %~dp0 inside the shim resolves to the
+  // script's own directory, not the child's CWD.
+  assert.deepEqual(invocation.args, ['/d', '/s', '/c', '""C:\\Program Files\\nodejs\\opencode.cmd" "models""']);
   assert.match(invocation.options.env.PATH, /^C:\\Program Files\\nodejs;/);
-  // The command token must not contain the spaced prefix that cmd splits on.
-  assert.equal(invocation.args[3].includes('C:\\Program'), false);
 });
 
 test('resolveCliSpawn strips a previously quoted .cmd path', () => {
@@ -281,12 +282,38 @@ test('resolveCliSpawn strips a previously quoted .cmd path', () => {
     { env: { PATH: 'C:\\Windows\\system32' } },
     true,
   );
-  assert.equal(invocation.args[3].includes('C:\\Program'), false);
+  assert.equal(invocation.args[3], '""C:\\Program Files\\nodejs\\opencode.cmd" "models""');
   assert.match(invocation.args[3], /opencode\.cmd/);
 });
 
-test('resolveCliSpawn leaves .exe and non-Windows targets as a direct spawn', () => {
-  const exe = resolveCliSpawn(
+test('resolveCliSpawn lets a %~dp0-based shim read its own directory (regression)', async () => {
+  // Regression for the MiniMax mcode failure: a shim resolved through
+  // MINIMAX_BIN reads sibling files via %~dp0. Invoking it by bare name
+  // through a PATH lookup made %~dp0 expand to the child's CWD, so the run
+  // died with cmd's localized "file not found" and exit 1. The quoted
+  // full-path invocation must give the shim its real directory.
+  if (process.platform !== 'win32') return;
+  const { spawn } = await import('node:child_process');
+  const root = mkdtempSync(join(tmpdir(), 'cc-gui-dp0-spawn-'));
+  mkdirSync(join(root, 'inner dir'), { recursive: true });
+  const marker = 'sibling-present';
+  writeFileSync(join(root, 'inner dir', 'release'), marker);
+  const shim = join(root, 'inner dir', 'mcode.cmd');
+  writeFileSync(shim, '@echo off\r\nset /p REL=<"%~dp0release"\r\n echo %REL%\r\n');
+
+  const invocation = resolveCliSpawn(shim, [], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const stdout = await new Promise((resolve, reject) => {
+    const child = spawn(invocation.file, invocation.args, invocation.options);
+    let out = '';
+    child.stdout.on('data', (d) => { out += d.toString(); });
+    child.on('error', reject);
+    child.on('close', (code) => resolve(`${out} [exit=${code}]`));
+  });
+  assert.match(stdout, new RegExp(marker));
+  assert.match(stdout, /exit=0/);
+});
+
+test('resolveCliSpawn leaves .exe and non-Windows targets as a direct spawn', () => {  const exe = resolveCliSpawn(
     'C:\\Program Files\\nodejs\\opencode.exe',
     ['models'],
     { env: { PATH: 'C:\\Windows\\system32' } },
@@ -317,7 +344,8 @@ test('resolveCliSpawn file-redirect quotes both the shim and the dest path', () 
   assert.match(invocation.args[3], /opencode\.cmd/);
   assert.match(invocation.args[3], />/);
   assert.match(invocation.args[3], /models\.txt/);
-  assert.equal(invocation.args[3].includes('C:\\Program'), false);
+  // Full quoted shim path (spaces included) as the command token.
+  assert.equal(invocation.args[3].startsWith('""C:\\Program Files\\nodejs\\opencode.cmd"'), true);
 });
 
 test('whichViaLoginShell rejects unsafe binary names without spawning', () => {
@@ -377,4 +405,78 @@ test('buildCliSpawnEnv leads PATH with the resolved binary own dir', () => {
   const bare = buildCliSpawnEnv('pi', home, { PATH: '/usr/bin' });
   assert.notEqual(bare.PATH.split(':')[0], 'pi');
   assert.ok(bare.PATH.split(':').pop() === '/usr/bin');
+});
+
+test('isDeadCmdShim flags a shim whose last quoted target is missing', () => {
+  const root = mkdtempSync(join(tmpdir(), 'cc-gui-dead-shim-'));
+  // Mirrors the real stale-install shape: an earlier `set "VAR=path"` line,
+  // then a delegation to a target that no longer exists.
+  const dead = join(root, 'minimax.cmd');
+  writeFileSync(dead, '@echo off\r\nset "MINIMAX_DATA_DIR=X:\\data"\r\n"X:\\npm-global\\mcode.cmd" %*\r\n');
+  assert.equal(isDeadCmdShim(dead, { forceWindows: true }), true);
+});
+
+test('isDeadCmdShim keeps a shim whose last quoted target exists', () => {
+  const root = mkdtempSync(join(tmpdir(), 'cc-gui-alive-shim-'));
+  // Runtime-joined absolute path: matches the drive-letter regex on win32 and
+  // exists there; on POSIX the regex never matches, so the shim is alive too.
+  const target = join(root, 'mcode.cmd');
+  writeFileSync(target, '@echo off\r\n');
+  const alive = join(root, 'minimax.cmd');
+  writeFileSync(alive, `@echo off\r\n"${target}" %*\r\n`);
+  assert.equal(isDeadCmdShim(alive, { forceWindows: true }), false);
+});
+
+test('isDeadCmdShim cannot-verify cases stay alive', () => {
+  const root = mkdtempSync(join(tmpdir(), 'cc-gui-unverif-shim-'));
+  // Unresolved %VAR% in the target: statically unknowable.
+  const withVar = join(root, 'mgr.cmd');
+  writeFileSync(withVar, '@echo off\r\n"%~dp0releases\\%MCODE_RELEASE%\\.mcode-launcher.cmd" %*\r\n');
+  assert.equal(isDeadCmdShim(withVar, { forceWindows: true }), false);
+  // No quoted absolute target at all.
+  const plain = join(root, 'plain.cmd');
+  writeFileSync(plain, '@echo off\r\nnode server.js\r\n');
+  assert.equal(isDeadCmdShim(plain, { forceWindows: true }), false);
+  // Missing file and non-shim extensions.
+  assert.equal(isDeadCmdShim(join(root, 'missing.cmd'), { forceWindows: true }), false);
+  assert.equal(isDeadCmdShim(join(root, 'minimax.exe'), { forceWindows: true }), false);
+  // %~dp0-relative target that is genuinely missing (win32 semantics).
+  const dp0Dead = join(root, 'dp0-dead.cmd');
+  writeFileSync(dp0Dead, '@echo off\r\n"%~dp0gone\\target.cmd" %*\r\n');
+  assert.equal(isDeadCmdShim(dp0Dead, { forceWindows: true }), process.platform === 'win32' ? true : false);
+});
+
+test('isDeadCmdShim honors %~dp0 targets that exist next to the shim', () => {
+  if (process.platform !== 'win32') return;
+  const root = mkdtempSync(join(tmpdir(), 'cc-gui-dp0-alive-'));
+  mkdirSync(join(root, 'releases'), { recursive: true });
+  writeFileSync(join(root, 'releases', 'mcode.cmd'), '@echo off\r\n');
+  const shim = join(root, 'minimax.cmd');
+  writeFileSync(shim, '@echo off\r\n"%~dp0releases\\mcode.cmd" %*\r\n');
+  assert.equal(isDeadCmdShim(shim), false);
+});
+
+test('resolveCliPath skips a dead home shim and falls through to the next candidate', () => {
+  // Windows-only: only there can a .cmd candidate be recognized as a dead shim.
+  if (process.platform !== 'win32') return;
+  const root = mkdtempSync(join(tmpdir(), 'cc-gui-skip-dead-'));
+  const staleDir = join(root, 'stale');
+  const freshDir = join(root, 'fresh');
+  mkdirSync(staleDir, { recursive: true });
+  mkdirSync(freshDir, { recursive: true });
+  const name = 'ccgui-deadtest-cli-3fb1';
+  // Stale shim delegates to a removed install.
+  writeFileSync(join(staleDir, `${name}.cmd`), '@echo off\r\n"X:\\removed-install\\cli.cmd" %*\r\n');
+  // Fresh shim delegates to an existing sibling.
+  writeFileSync(join(freshDir, 'real-target.cmd'), '@echo off\r\n');
+  writeFileSync(join(freshDir, `${name}.cmd`), `@echo off\r\n"${join(freshDir, 'real-target.cmd')}" %*\r\n`);
+
+  // A never-on-PATH binary name keeps the which/login-shell lookups from
+  // short-circuiting, so discovery walks the home candidates in order.
+  const resolved = resolveCliPath({
+    binaryName: name,
+    envKeys: [],
+    homeCandidates: [`${root}/stale/{bin}`, `${root}/fresh/{bin}`],
+  });
+  assert.equal(normalize(resolved), normalize(join(freshDir, `${name}.cmd`)));
 });
