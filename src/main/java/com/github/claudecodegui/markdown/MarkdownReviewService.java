@@ -28,6 +28,7 @@ import java.util.Base64;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /** Project-owned state; no Markdown-plugin types leak into core chat classes. */
 @Service(Service.Level.PROJECT)
@@ -540,20 +541,61 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
             }
         }
         // Keep handoff snapshots for diagnosis/recovery; "queued" does not
-        // mean the provider acknowledged receipt. Only prune old terminal
-        // snapshots when the bounded history is full.
+        // mean the provider acknowledged receipt. When the bounded history is
+        // full, evict in order: the oldest terminal snapshot, the oldest
+        // pending snapshot of a retired chat target, or the oldest pending
+        // snapshot — the feature must never lock up on orphans.
         while (state.batches.size() >= MarkdownReviewLimits.MAX_PENDING_BATCHES) {
-            ReviewBatch oldest = state.batches.stream().filter(item -> !isPending(item)).findFirst().orElse(null);
-            if (oldest == null) {
+            ReviewBatch victim = pickVictim();
+            if (victim == null) {
                 break;
             }
-            state.batches.remove(oldest);
+            state.batches.remove(victim);
         }
         if (state.batches.size() >= MarkdownReviewLimits.MAX_PENDING_BATCHES) {
             throw new IllegalStateException("Review draft limit reached. Remove old drafts before adding more.");
         }
         state.batches.add(copy(batch, ReviewBatch.class));
         return copy(batch, ReviewBatch.class);
+    }
+
+    /** Chat targets that can still acknowledge drafts. Registered by the tool window on the EDT;
+     * the default "all targets retired" keeps state-only unit tests on the orphan-eviction tier. */
+    private Supplier<Set<String>> liveTargets = Set::of;
+
+    public void setLiveTargetsSupplier(Supplier<Set<String>> supplier) {
+        liveTargets = java.util.Objects.requireNonNull(supplier);
+    }
+
+    /** Caller must hold the monitor. */
+    private ReviewBatch pickVictim() {
+        Set<String> alive = liveTargets.get();
+        ReviewBatch victim = state.batches.stream().filter(item -> !isPending(item)).findFirst().orElse(null);
+        if (victim == null) {
+            victim = state.batches.stream()
+                    .filter(item -> isPending(item) && !alive.contains(item.targetId))
+                    .findFirst().orElse(null);
+        }
+        if (victim == null) {
+            victim = state.batches.stream().filter(MarkdownReviewService::isPending).findFirst().orElse(null);
+        }
+        return victim;
+    }
+
+    /**
+     * Drops every unacknowledged snapshot registered for a retired chat target. Only handoff
+     * records are removed; the annotations themselves stay for a later re-transfer.
+     */
+    public synchronized int dropPending(String targetId) {
+        int dropped = 0;
+        for (java.util.Iterator<ReviewBatch> iterator = state.batches.iterator(); iterator.hasNext(); ) {
+            ReviewBatch batch = iterator.next();
+            if (targetId.equals(batch.targetId) && isPending(batch)) {
+                iterator.remove();
+                dropped++;
+            }
+        }
+        return dropped;
     }
 
     public synchronized List<ReviewBatch> pending(String targetId, String epoch, String sessionId, boolean allowRecovery) {

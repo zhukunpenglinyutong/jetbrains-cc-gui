@@ -98,15 +98,36 @@ describe('Markdown review chat drafts', () => {
     expect(parseReviewMessage(text)?.batches[0].annotations[0]).toMatchObject({ id: 'comment-1' });
   });
 
-  it('clears visible drafts on session changes without acknowledging them as sent', () => {
+  it('acknowledges discarded drafts as removed on session changes', () => {
+    const { result } = renderHook(() => useArtifactReviews());
+    bindTarget();
+    act(() => window.addArtifactReview!(JSON.stringify(batch())));
+    const second = batch('batch-2');
+    second.annotations = second.annotations.map(item => ({ ...item, id: item.id + '-x' }));
+    act(() => window.addArtifactReview!(JSON.stringify(second)));
+    expect(result.current.batches).toHaveLength(2);
+    vi.clearAllMocks();
+    act(() => result.current.reset());
+    expect(result.current.batches).toHaveLength(0);
+    const acks = vi.mocked(sendBridgeEvent).mock.calls
+      .filter(call => call[0] === 'artifact_review_ack')
+      .map(call => JSON.parse(call[1]!));
+    expect(acks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'batch-1', targetId: 'tab', targetEpoch: 'epoch', status: 'removed' }),
+      expect.objectContaining({ id: 'batch-2', targetId: 'tab', targetEpoch: 'epoch', status: 'removed' }),
+    ]));
+    expect(sendBridgeEvent).toHaveBeenCalledWith('artifact_review_ready');
+  });
+
+  it('acknowledges drafts as removed under their frozen identity when the target changes', () => {
     const { result } = renderHook(() => useArtifactReviews());
     bindTarget();
     act(() => window.addArtifactReview!(JSON.stringify(batch())));
     vi.clearAllMocks();
-    act(() => result.current.reset());
+    bindTarget('new-epoch');
     expect(result.current.batches).toHaveLength(0);
-    expect(sendBridgeEvent).toHaveBeenCalledTimes(1);
-    expect(sendBridgeEvent).toHaveBeenCalledWith('artifact_review_ready');
+    expect(JSON.parse(vi.mocked(sendBridgeEvent).mock.calls[0][1]!))
+      .toMatchObject({ id: 'batch-1', targetId: 'tab', targetEpoch: 'epoch', status: 'removed' });
   });
 
   it('rejects delayed batches from a previous epoch and invalidates a captured submission', () => {

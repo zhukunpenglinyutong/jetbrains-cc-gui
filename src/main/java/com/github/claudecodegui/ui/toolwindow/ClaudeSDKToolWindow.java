@@ -259,6 +259,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         registerShutdownHook();
 
+        // Lets the review service evict orphaned handoff drafts whose chat target no
+        // longer exists, without the storage layer depending on tool-window classes.
+        com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project).setLiveTargetsSupplier(() ->
+                getChatWindows(project).stream().map(ClaudeChatWindow::getReviewTargetId)
+                        .collect(java.util.stream.Collectors.toUnmodifiableSet()));
+
         ContentFactory contentFactory = ContentFactory.getInstance();
         ContentManager contentManager = toolWindow.getContentManager();
 

@@ -49,7 +49,7 @@
       },
       "persist": {
         "label": "Keep comments and pending snapshots after restart (beta)",
-        "hint": "Off by default: keep data only while this project is open. Enable to save to the project workspace. Disabling removes stored content on the next IDE save and retains current comments. Chat messages still use their existing storage."
+        "hint": "Off by default: keep data only while this project is open. Enable to save to the project workspace. Disabling removes stored content on the next IDE save and retains current comments. Chat messages still use their existing storage. While off, comments and unsent drafts are lost when the project closes or the IDE restarts."
       }
     },
     "count_one": "{{count}} review item",

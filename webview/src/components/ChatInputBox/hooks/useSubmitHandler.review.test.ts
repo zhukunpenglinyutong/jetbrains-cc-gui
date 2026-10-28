@@ -49,4 +49,32 @@ describe('review submission snapshot', () => {
     expect(config.addToast).toHaveBeenLastCalledWith('markdownReview.tooLarge', 'warning');
     expect(config.clearInput).not.toHaveBeenCalled();
   });
+
+  it('keeps the typed input when the chat target changes during submission', () => {
+    vi.useFakeTimers();
+    const config = options();
+    config.getTextContent = () => 'typed draft';
+    const onSubmitted = vi.fn();
+    config.captureReviewSubmission = () => ({ text: 'review', onSubmitted, isCurrent: () => false });
+    const { result } = renderHook(() => useSubmitHandler(config));
+    result.current();
+    vi.advanceTimersByTime(20);
+    expect(config.onSubmit).not.toHaveBeenCalled();
+    expect(onSubmitted).not.toHaveBeenCalled();
+    expect(config.clearInput).not.toHaveBeenCalled();
+    expect(config.setInternalAttachments).not.toHaveBeenCalled();
+  });
+
+  it('clears the input only after the target check passes', () => {
+    vi.useFakeTimers();
+    const config = options();
+    const onSubmitted = vi.fn();
+    config.captureReviewSubmission = () => ({ text: 'review', onSubmitted, isCurrent: () => true });
+    const { result } = renderHook(() => useSubmitHandler(config));
+    result.current();
+    expect(config.clearInput).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(20);
+    expect(config.clearInput).toHaveBeenCalled();
+    expect(config.setInternalAttachments).toHaveBeenCalled();
+  });
 });

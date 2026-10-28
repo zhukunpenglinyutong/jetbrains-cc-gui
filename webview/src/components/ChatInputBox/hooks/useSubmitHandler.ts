@@ -151,21 +151,22 @@ export function useSubmitHandler({
 
     const attachmentsToSend = attachments.length > 0 ? [...attachments] : undefined;
 
-    // clearInput also drops any queued draft notification, so a stale debounced
-    // value cannot refill the input after submit.
     invalidateImagePastes?.();
-    clearInput();
-    if (externalAttachments === undefined) {
-      setInternalAttachments([]);
-      // Clear persisted images immediately so a remount cannot restore a submitted draft.
-      clearAttachmentsDraft?.();
-    }
 
-    // Call onSubmit even when loading - let parent handle queueing
+    // Defer clearing until the target check passes: a session switch inside the
+    // window must not swallow the typed input or the review draft. clearInput
+    // also drops any queued draft notification, so a stale debounced value
+    // cannot refill the input after submit.
     setTimeout(() => {
       if (reviews && reviewSubmission?.isCurrent && !reviewSubmission.isCurrent()) return;
       onSubmit(content, attachmentsToSend);
       reviewSubmission?.onSubmitted();
+      clearInput();
+      if (externalAttachments === undefined) {
+        setInternalAttachments([]);
+        // Clear persisted images immediately so a remount cannot restore a submitted draft.
+        clearAttachmentsDraft?.();
+      }
     }, 10);
   }, [
     getTextContent,

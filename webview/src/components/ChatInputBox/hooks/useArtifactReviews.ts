@@ -21,7 +21,7 @@ export function serializeArtifactReviews(batches: ArtifactReviewBatch[]): string
 
 function acknowledge(batch: ArtifactReviewBatch, status: 'received' | 'queued' | 'removed') {
   return sendBridgeEvent('artifact_review_ack', JSON.stringify({
-    id: batch.id, targetEpoch: batch.targetEpoch, status,
+    id: batch.id, targetId: batch.targetId, targetEpoch: batch.targetEpoch, status,
     annotationIds: batch.annotations.map(annotation => annotation.id),
   }));
 }
@@ -38,6 +38,9 @@ export function useArtifactReviews() {
         if (!target.targetId || !target.targetEpoch) return;
         const old = targetRef.current;
         if (old && (old.targetId !== target.targetId || old.targetEpoch !== target.targetEpoch)) {
+          // The retired target can no longer receive these drafts; report them as
+          // discarded under their own frozen identity so the backend reclaims them.
+          for (const batch of batchesRef.current) acknowledge(batch, 'removed');
           batchesRef.current = []; setBatches([]);
         }
         targetRef.current = target;
@@ -113,6 +116,7 @@ export function useArtifactReviews() {
 
   const reset = useCallback(() => {
     // Session changes must not consume/reassign the old session's drafts.
+    for (const batch of batchesRef.current) acknowledge(batch, 'removed');
     batchesRef.current = [];
     targetRef.current = null;
     setBatches([]);

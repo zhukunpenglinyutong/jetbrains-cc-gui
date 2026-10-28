@@ -212,6 +212,54 @@ public class MarkdownReviewServiceTest {
                 MarkdownReviewService.classifyImpact(annotations, 30, false));
     }
 
+    private ReviewBatch orphan(String id, String targetId) {
+        ReviewBatch batch = batch(id);
+        batch.targetId = targetId;
+        return batch;
+    }
+
+    @Test
+    public void evictsTheOldestOrphanedPendingDraftWhenHistoryIsFull() {
+        MarkdownReviewService service = new MarkdownReviewService(null);
+        for (int index = 0; index < MarkdownReviewLimits.MAX_PENDING_BATCHES; index++) {
+            service.saveBatch(orphan("batch-" + index, "tab-" + index));
+        }
+        // Reproduces the reported lock-up: 200 unacknowledged orphans used to reject this save.
+        service.saveBatch(orphan("batch-new", "tab-new"));
+        List<String> targetIds = service.snapshotState().batches.stream().map(item -> item.targetId).toList();
+        assertEquals(MarkdownReviewLimits.MAX_PENDING_BATCHES, targetIds.size());
+        assertFalse(targetIds.contains("tab-0"));
+        assertTrue(targetIds.contains("tab-new"));
+    }
+
+    @Test
+    public void protectsDraftsOfAliveTargetsWhileEvictingOrphans() {
+        MarkdownReviewService service = new MarkdownReviewService(null);
+        service.setLiveTargetsSupplier(() -> java.util.Set.of("alive-tab"));
+        service.saveBatch(orphan("alive-0", "alive-tab"));
+        for (int index = 1; index < MarkdownReviewLimits.MAX_PENDING_BATCHES; index++) {
+            service.saveBatch(orphan("dead-" + index, "dead-tab-" + index));
+        }
+        service.saveBatch(orphan("batch-new", "tab-new"));
+        List<String> targetIds = service.snapshotState().batches.stream().map(item -> item.targetId).toList();
+        assertEquals(MarkdownReviewLimits.MAX_PENDING_BATCHES, targetIds.size());
+        assertTrue(targetIds.contains("alive-tab"));
+        assertFalse(targetIds.contains("dead-tab-1"));
+    }
+
+    @Test
+    public void droppingARetiredTargetClearsOnlyItsUnacknowledgedDrafts() {
+        MarkdownReviewService service = new MarkdownReviewService(null);
+        service.saveBatch(orphan("keep", "keep-tab"));
+        service.saveBatch(orphan("gone", "gone-tab"));
+        service.acknowledge("keep-tab", "epoch-1", "keep", "queued", List.of("comment-1"));
+        assertEquals(1, service.dropPending("gone-tab"));
+        assertEquals(0, service.dropPending("gone-tab"));
+        List<String> remaining = service.snapshotState().batches.stream().map(item -> item.id).toList();
+        assertTrue(remaining.contains("keep"));
+        assertFalse(remaining.contains("gone"));
+    }
+
     @Test
     public void oneFailingListenerDoesNotCutOffTheOthers() {
         MarkdownReviewService service = new MarkdownReviewService(null);

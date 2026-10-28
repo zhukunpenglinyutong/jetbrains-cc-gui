@@ -472,7 +472,14 @@ public class ClaudeChatWindow {
                     // Persist the conversation identity, not only the tab.
                     // Two fresh conversations can both have a null provider
                     // session ID; a later IDE restart must not merge them.
+                    String retiredReviewTargetId = reviewTargetId;
                     reviewTargetId = java.util.UUID.randomUUID().toString();
+                    // Handoff drafts registered for the retired identity can no longer
+                    // be acknowledged by anyone; keep the bounded history orphan-free.
+                    if (retiredReviewTargetId != null && !project.isDisposed()) {
+                        com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project)
+                                .dropPending(retiredReviewTargetId);
+                    }
                 }
                 session = s;
                 allowReviewRecovery = false;
@@ -2579,11 +2586,12 @@ public class ClaudeChatWindow {
                 if (!java.util.Set.of("received", "queued", "removed").contains(status)) {
                     return;
                 }
-                if (session != null && session.getRuntimeSessionEpoch().equals(ack.get("targetEpoch").getAsString())) {
-                    com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project)
-                            .acknowledge(reviewTargetId, session.getRuntimeSessionEpoch(), ack.get("id").getAsString(), status,
-                                    GSON.fromJson(ack.get("annotationIds"), new com.google.gson.reflect.TypeToken<List<String>>() {}.getType()));
-                }
+                // Receipts describe the batch's own frozen target identity, which may
+                // already differ from this window's current one after a session switch.
+                com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project)
+                        .acknowledge(ack.get("targetId").getAsString(), ack.get("targetEpoch").getAsString(),
+                                ack.get("id").getAsString(), status,
+                                GSON.fromJson(ack.get("annotationIds"), new com.google.gson.reflect.TypeToken<List<String>>() {}.getType()));
             } catch (RuntimeException error) {
                 LOG.warn("Invalid Markdown review acknowledgement", error);
             }
@@ -3384,6 +3392,9 @@ public class ClaudeChatWindow {
             return;
         }
         this.disposed = true;
+        // Deliberately no dropPending here: an IDE restart restores the saved
+        // reviewTargetId with its drafts. An explicit tab close is a separate
+        // event and drops them in ClaudeSDKToolWindow (R3).
         JBCefBrowser targetBrowser = this.browser;
         try {
             disposeWindowResources();
