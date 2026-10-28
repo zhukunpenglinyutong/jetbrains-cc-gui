@@ -51,6 +51,8 @@ export const ButtonArea = ({
   codexNativeAutoReviewAvailable = true,
   reasoningEffort = 'high',
   dshPreset = '',
+  claudeUltracode = false,
+  onClaudeUltracodeChange,
   codexFastMode = 'normal',
   onSubmit,
   onStop,
@@ -251,6 +253,7 @@ export const ButtonArea = ({
     selectedModel,
     permissionMode,
     reasoningEffort,
+    claudeUltracode,
     codexFastMode,
     dshPreset,
     selectedAgent?.id ?? '',
@@ -306,6 +309,8 @@ export const ButtonArea = ({
           onLongContextChange={onLongContextChange}
           reasoningEffort={reasoningEffort}
           onReasoningChange={handleReasoningChange}
+          claudeUltracode={claudeUltracode}
+          onClaudeUltracodeChange={onClaudeUltracodeChange}
           codexFastMode={codexFastMode}
           onCodexFastModeChange={handleCodexFastModeChange}
           dshPreset={dshPreset}

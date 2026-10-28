@@ -12,6 +12,7 @@ import { downloadJSON } from '../../../utils/exportMarkdown';
 import { releaseSessionTransition } from '../sessionTransition';
 import { drainPendingDependencyStatus } from '../settingsBootstrap';
 import { sendBridgeEvent } from '../../../utils/bridge';
+import { resetClaudeBackgroundTasks } from '../../../utils/claudeBackgroundTasks';
 import {
   isDependencyStatusResponse,
   settleDependencyStatusRequest,
@@ -42,6 +43,7 @@ export function registerSessionAndSdkCallbacks(
 
   window.setSessionId = (sessionId: string) => {
     const oldId = currentSessionIdRef.current;
+    if (!sessionId || oldId && oldId !== sessionId) resetClaudeBackgroundTasks();
     releaseSessionTransition();
     // Java sends an empty ID when a restored transcript expires. Keep the
     // canonical no-session state and wait for a real ID before migrating titles.

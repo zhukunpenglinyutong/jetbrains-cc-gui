@@ -170,7 +170,9 @@
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "このプランの改善を続ける："
+    "continueRefiningPlan": "このプランの改善を続ける：",
+    "backgroundTasksRunning": "{{count}} 件のバックグラウンドタスクを実行中",
+    "stopBackgroundTasks": "バックグラウンドタスクを停止"
   },
   "settings": {
     "title": "設定",
@@ -2020,6 +2022,10 @@
     "xhigh": {
       "label": "最大",
       "description": "最大の推論深度"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "最大の推論深度と自動タスク委任"
     }
   },
   "errorBoundary": {
@@ -2247,6 +2253,13 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
+    }
+  },
+  "modelConfig": {
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "タスクを自動委任する Claude のネイティブワークフロー。選択した推論強度を保持します。",
+      "unsupported": "XHigh 推論対応モデルと利用可能な Ultracode ワークフローが必要です。"
     }
   }
 }

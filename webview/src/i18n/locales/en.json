@@ -208,7 +208,9 @@
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "Continue refining this plan:"
+    "continueRefiningPlan": "Continue refining this plan:",
+    "backgroundTasksRunning": "{{count}} background tasks running",
+    "stopBackgroundTasks": "Stop background tasks"
   },
   "settings": {
     "title": "Settings",
@@ -2330,7 +2332,12 @@
     "effort": "Effort",
     "speed": "Speed",
     "preset": "Preset",
-    "model": "Model"
+    "model": "Model",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Native Claude workflow with automatic task delegation. Keeps your selected effort.",
+      "unsupported": "Requires a model with XHigh effort and an available Ultracode workflow."
+    }
   },
   "modes": {
     "default": {
@@ -2578,6 +2585,10 @@
     "max": {
       "label": "Max",
       "description": "Maximum reasoning depth"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "Maximum reasoning with automatic task delegation"
     }
   },
   "errorBoundary": {

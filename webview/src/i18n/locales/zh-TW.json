@@ -170,7 +170,9 @@
     "codexDiffUsage": "請直接使用 /diff，無需參數",
     "codexApprovalsUsage": "請直接使用 /approvals，無需參數",
     "codexSandboxConflict": "Codex 自動審查不能使用 danger-full-access 沙箱，請改用 workspace-write 或請求批准模式。",
-    "continueRefiningPlan": "繼續完善此計畫："
+    "continueRefiningPlan": "繼續完善此計畫：",
+    "backgroundTasksRunning": "{{count}} 個背景工作正在執行",
+    "stopBackgroundTasks": "停止背景工作"
   },
   "settings": {
     "title": "設定",
@@ -1879,7 +1881,12 @@
     "effort": "思考強度",
     "speed": "速度",
     "preset": "預設組合",
-    "model": "模型"
+    "model": "模型",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Claude 原生工作流程，自動委派子任務，保留目前推理強度。",
+      "unsupported": "需要支援 XHigh 推理強度的模型及可用的 Ultracode 工作流程。"
+    }
   },
   "modes": {
     "default": {
@@ -2086,6 +2093,10 @@
     "xhigh": {
       "label": "最多",
       "description": "最深推理，最高精度"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "最高推理深度，自動委派子任務"
     }
   },
   "errorBoundary": {

@@ -170,7 +170,9 @@
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "Продолжить доработку этого плана:"
+    "continueRefiningPlan": "Продолжить доработку этого плана:",
+    "backgroundTasksRunning": "Фоновых задач выполняется: {{count}}",
+    "stopBackgroundTasks": "Остановить фоновые задачи"
   },
   "settings": {
     "title": "Настройки",
@@ -2045,6 +2047,10 @@
     "xhigh": {
       "label": "Максимальная",
       "description": "Максимальная глубина рассуждений"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "Максимальное рассуждение с автоматическим делегированием задач"
     }
   },
   "errorBoundary": {
@@ -2272,6 +2278,13 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
+    }
+  },
+  "modelConfig": {
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Встроенный процесс Claude с автоматическим делегированием задач. Сохраняет выбранный уровень рассуждения.",
+      "unsupported": "Требуется модель с поддержкой XHigh и доступный процесс Ultracode."
     }
   }
 }

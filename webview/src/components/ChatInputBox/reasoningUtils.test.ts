@@ -5,6 +5,35 @@ import { claudeModelAllowsEffort, getAvailableReasoningLevels, isReasoningVisibl
 
 describe('cc-switch aggregated model effort', () => {
   beforeEach(() => localStorage.clear());
+  it('uses the native Codex catalog for Ultra instead of the model family', () => {
+    expect(getAvailableReasoningLevels('codex', 'gpt-6-astra', ['high', 'ultra']).map(level => level.id))
+      .toEqual(['high', 'ultra']);
+    expect(getAvailableReasoningLevels('codex', 'gpt-6-luna', ['low', 'high', 'max']).map(level => level.id))
+      .toEqual(['low', 'high', 'max']);
+    expect(getAvailableReasoningLevels('codex', 'gpt-6-astra').some(level => level.id === 'ultra')).toBe(false);
+  });
+
+  it.each(['claude', 'grok', 'dsh', 'kimi'])('never offers Codex Ultra to %s', provider => {
+    expect(getAvailableReasoningLevels(provider, 'ccs-claude-route--anything', ['ultra']).some(level => level.id === 'ultra'))
+      .toBe(false);
+  });
+
+  it('preserves restored Ultra until the catalog arrives, then corrects unsupported models', () => {
+    const onChange = vi.fn();
+    const { result, rerender } = renderHook(({ efforts }: { efforts?: string[] }) =>
+      useReasoningEffortGuard('ultra', onChange, 'gpt-6-luna', 'codex', efforts),
+    { initialProps: {} as { efforts?: string[] } });
+    expect(result.current.currentLevel?.id).toBe('ultra');
+    expect(onChange).not.toHaveBeenCalled();
+    rerender({ efforts: ['medium', 'high', 'max'] });
+    expect(onChange).toHaveBeenCalledWith('high');
+  });
+
+  it('corrects Ultra when switching to another provider', () => {
+    const onChange = vi.fn();
+    renderHook(() => useReasoningEffortGuard('ultra', onChange, 'claude-opus-5', 'claude'));
+    expect(onChange).toHaveBeenCalledWith('high');
+  });
   it('preserves all five effort levels for gateway models', () => {
     const id = 'ccs-claude-provider-a--glm-pro[1M]';
     expect(isReasoningVisible('claude', id)).toBe(true);

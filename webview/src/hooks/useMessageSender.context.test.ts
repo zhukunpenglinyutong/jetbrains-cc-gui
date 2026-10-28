@@ -54,6 +54,30 @@ describe('useMessageSender - /context command', () => {
     window.sendToJava = vi.fn();
   });
 
+  it.each([false, true])('captures explicit Claude Ultracode=%s without changing effort in both send paths', claudeUltracode => {
+    for (const attachments of [undefined, [{ id: 'a', fileName: 'a.txt', mediaType: 'text/plain', data: 'aGk=' }]]) {
+      window.sendToJava = vi.fn();
+      const { result, unmount } = renderHook(() => useMessageSender(createOptions({ claudeUltracode, reasoningEffort: 'low' })));
+      act(() => result.current.handleSubmit('hello', attachments));
+      expect(getBridgePayload(attachments ? 'send_message_with_attachments' : 'send_message'))
+        .toMatchObject({ claudeUltracode, reasoningEffort: 'low' });
+      unmount();
+    }
+  });
+
+  it('sends native Ultra only to Codex even before the provider-change guard runs', () => {
+    const { result, rerender } = renderHook(({ currentProvider }) => useMessageSender(createOptions({
+      currentProvider, selectedModel: currentProvider === 'codex' ? 'gpt-6-astra' : 'claude-opus-5', reasoningEffort: 'ultra',
+    })), { initialProps: { currentProvider: 'codex' } });
+    act(() => result.current.handleSubmit('hello'));
+    expect(getBridgePayload('send_message').reasoningEffort).toBe('ultra');
+    expect(getBridgePayload('send_message')).not.toHaveProperty('claudeUltracode');
+    window.sendToJava = vi.fn();
+    rerender({ currentProvider: 'claude' });
+    act(() => result.current.handleSubmit('hello'));
+    expect(getBridgePayload('send_message').reasoningEffort).toBe('high');
+  });
+
   it.each([false, true])('rechecks route capability before sending (attachments: %s)', attachments => {
     const id = 'ccs-claude-haiku-provider--glm-flash';
     const { result } = renderHook(() => useMessageSender(createOptions({ selectedModel: id, longContextEnabled: true })));

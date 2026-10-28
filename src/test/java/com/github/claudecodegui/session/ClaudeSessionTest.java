@@ -75,6 +75,33 @@ public class ClaudeSessionTest {
     }
 
     @Test
+    public void interruptTargetsTheNativeClaudeRuntimeEvenBetweenForegroundTurns() throws Exception {
+        String[] target = new String[3];
+        var bridge = new com.github.claudecodegui.provider.claude.ClaudeSDKBridge() {
+            @Override
+            public void interruptChannel(String channelId, String sessionId, String epoch) {
+                target[0] = channelId;
+                target[1] = sessionId;
+                target[2] = epoch;
+            }
+
+            @Override
+            public void interruptChannel(String channelId) {
+                throw new AssertionError("A keyless abort could stop a different native runtime");
+            }
+        };
+        ClaudeSession session = new ClaudeSession(null, bridge, null, null);
+        session.setSessionInfo("workflow-session", "/workspace");
+        session.getState().setChannelId("workflow-channel");
+        String epoch = session.getRuntimeSessionEpoch();
+        assertFalse(session.isBusy());
+        session.interrupt().get(5, TimeUnit.SECONDS);
+        assertEquals("workflow-channel", target[0]);
+        assertEquals("workflow-session", target[1]);
+        assertEquals(epoch, target[2]);
+    }
+
+    @Test
     public void setSessionInfoNotifiesSessionIdWhenRestoringHistorySession() {
         ClaudeSession session = createSession(null);
         RecordingCallback callback = new RecordingCallback();

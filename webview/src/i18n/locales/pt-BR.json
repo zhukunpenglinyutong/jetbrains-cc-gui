@@ -170,7 +170,9 @@
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "Continuar refinando este plano:"
+    "continueRefiningPlan": "Continuar refinando este plano:",
+    "backgroundTasksRunning": "{{count}} tarefas em segundo plano em execução",
+    "stopBackgroundTasks": "Parar tarefas em segundo plano"
   },
   "settings": {
     "title": "Configurações",
@@ -2159,6 +2161,10 @@
     "xhigh": {
       "label": "Máximo",
       "description": "Profundidade máxima de raciocínio"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "Raciocínio máximo com delegação automática de tarefas"
     }
   },
   "errorBoundary": {
@@ -2386,6 +2392,13 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
+    }
+  },
+  "modelConfig": {
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Fluxo nativo do Claude com delegação automática de tarefas. Mantém o nível de raciocínio selecionado.",
+      "unsupported": "Requer um modelo compatível com XHigh e um fluxo Ultracode disponível."
     }
   }
 }

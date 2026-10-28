@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { CodexFastMode, ModelInfo, ReasoningEffort } from '../types';
 import { CodexFastModeSelect } from './CodexFastModeSelect';
 import { DshPresetSelect } from './DshPresetSelect';
+import { ModelConfigUltracodeRow } from './ModelConfigUltracodeRow';
 import { ModelConfigContextRow } from './ModelConfigContextRow';
 import { ModelConfigSubmenuRow } from './ModelConfigSubmenuRow';
 import { ModelSelect } from './ModelSelect';
@@ -36,6 +37,11 @@ interface ModelConfigDropdownProps {
   longContextEnabled: boolean;
   onLongContextChange?: (enabled: boolean) => void;
   // Function rows below the model list.
+  showUltracode: boolean;
+  ultracodeSupported: boolean;
+  claudeUltracode: boolean;
+  onClaudeUltracodeChange?: (enabled: boolean) => void;
+  supportedReasoningEfforts?: readonly string[];
   showDivider: boolean;
   showContextRow: boolean;
   contextSupported: boolean;
@@ -81,6 +87,11 @@ export const ModelConfigDropdown = ({
   onAddModel,
   longContextEnabled,
   onLongContextChange,
+  showUltracode,
+  ultracodeSupported,
+  claudeUltracode,
+  onClaudeUltracodeChange,
+  supportedReasoningEfforts,
   showDivider,
   showContextRow,
   contextSupported,
@@ -144,6 +155,14 @@ export const ModelConfigDropdown = ({
         onHover={() => scheduleSubmenu('none')}
       />
 
+      <ModelConfigUltracodeRow
+        visible={showUltracode}
+        supported={ultracodeSupported}
+        enabled={claudeUltracode}
+        onChange={onClaudeUltracodeChange}
+        onHover={() => scheduleSubmenu('none')}
+      />
+
       <ModelConfigSubmenuRow
         visible={showSpeed && !!onCodexFastModeChange}
         active={activeSubmenu === 'speed'}
@@ -201,6 +220,7 @@ export const ModelConfigDropdown = ({
           onChange={onReasoningChange}
           selectedModel={selectedModel}
           currentProvider={currentProvider}
+          supportedReasoningEfforts={supportedReasoningEfforts}
           embedded
           triggerRef={effortTriggerRef}
           onClose={onClose}

@@ -37,6 +37,7 @@ import {
   preconnectPersistent,
   shutdownPersistentRuntimes,
   abortCurrentTurn,
+  abortTurnPersistent as claudeAbortTurnPersistent,
   resetRuntimePersistent,
   getContextUsagePersistent,
   getSnapshot as getClaudeRuntimeSnapshot,
@@ -881,6 +882,15 @@ async function runDaemonMain() {
         ]);
       }
       writeRawLine({ id: request.id || '0', done: true, success: true });
+      return;
+    }
+
+    // Native workflows can outlive the send request. Stop must still reach the
+    // exact Claude session between turns and must never wait behind its work.
+    if (request.method === 'claude.abortTurn') {
+      claudeAbortTurnPersistent(request.params || {})
+        .then(result => writeRawLine({ id: request.id || '0', done: true, success: true, result }))
+        .catch(error => writeRawLine({ id: request.id || '0', done: true, success: false, error: error.message || String(error) }));
       return;
     }
 

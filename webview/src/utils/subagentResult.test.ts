@@ -108,6 +108,13 @@ describe('readToolUseStatus', () => {
 });
 
 describe('parseSpawnAgentMeta', () => {
+  it.each(['max', 'ultra'])('retains native %s child model metadata from launch receipts', (effort) => {
+    expect(parseSpawnAgentMeta({ task_name: 'review' }, { type: 'tool_result',
+      content: `Agent started (gpt-6-astra ${effort})` })).toMatchObject({
+      agentPath: 'review', model: 'gpt-6-astra', reasoningEffort: effort,
+    });
+  });
+
   it('uses Codex task_name as the stable agent path', () => {
     expect(parseSpawnAgentMeta({
       task_name: 'audit_ui',

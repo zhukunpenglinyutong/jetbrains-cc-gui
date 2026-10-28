@@ -170,7 +170,9 @@
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "이 계획 다듬기 계속하기:"
+    "continueRefiningPlan": "이 계획 다듬기 계속하기:",
+    "backgroundTasksRunning": "백그라운드 작업 {{count}}개 실행 중",
+    "stopBackgroundTasks": "백그라운드 작업 중지"
   },
   "settings": {
     "title": "설정",
@@ -2107,6 +2109,10 @@
     "xhigh": {
       "label": "최대",
       "description": "최대 추론 깊이"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "최대 추론 깊이와 자동 작업 위임"
     }
   },
   "errorBoundary": {
@@ -2334,6 +2340,13 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
+    }
+  },
+  "modelConfig": {
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "작업을 자동으로 위임하는 Claude 기본 워크플로입니다. 선택한 추론 수준을 유지합니다.",
+      "unsupported": "XHigh 추론을 지원하는 모델과 사용 가능한 Ultracode 워크플로가 필요합니다."
     }
   }
 }

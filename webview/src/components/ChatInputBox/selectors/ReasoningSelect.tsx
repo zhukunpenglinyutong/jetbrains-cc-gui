@@ -15,7 +15,7 @@ const DROPDOWN_STYLE: React.CSSProperties = {
   overflowX: 'hidden',
 };
 const LEVEL_INFO_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', flex: 1 };
-/** Five two-line rows; only the viewport should clip, not a 300px design cap. */
+/** Six two-line rows; only the viewport should clip, not a 300px design cap. */
 const SUBMENU_MAX_HEIGHT_PX = 480;
 
 interface ReasoningSelectProps {
@@ -24,6 +24,7 @@ interface ReasoningSelectProps {
   disabled?: boolean;
   selectedModel?: string;
   currentProvider?: string;
+  supportedReasoningEfforts?: readonly string[];
   embedded?: boolean;
   triggerRef?: React.RefObject<HTMLElement | null>;
   onClose?: () => void;
@@ -33,7 +34,7 @@ interface ReasoningSelectProps {
  * ReasoningSelect - Reasoning Effort Selector
  * Controls the depth of reasoning for AI models.
  * Visibility and available levels depend on the selected model:
- * - Codex GPT-5.6: low/medium/high/xhigh/max; other Codex models: up to xhigh
+ * - Codex: live model/list capabilities, including Ultra when advertised
  * - Grok CLI: low/medium/high/xhigh
  * - Claude Opus 5.5, Opus 5 and Opus 4.8: low/medium/high/xhigh/max
  * - Claude Sonnet 5, Sonnet 4.7, Opus 4.6, and Sonnet 4.6: low/medium/high/max
@@ -45,6 +46,7 @@ export const ReasoningSelect = ({
   disabled,
   selectedModel,
   currentProvider,
+  supportedReasoningEfforts,
   embedded = false,
   triggerRef,
   onClose,
@@ -70,6 +72,7 @@ export const ReasoningSelect = ({
     onChange,
     selectedModel,
     currentProvider,
+    supportedReasoningEfforts,
   );
 
   /**

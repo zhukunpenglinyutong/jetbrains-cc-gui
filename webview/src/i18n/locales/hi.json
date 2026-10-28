@@ -170,7 +170,9 @@
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "इस योजना को और बेहतर बनाना जारी रखें:"
+    "continueRefiningPlan": "इस योजना को और बेहतर बनाना जारी रखें:",
+    "backgroundTasksRunning": "{{count}} पृष्ठभूमि कार्य चल रहे हैं",
+    "stopBackgroundTasks": "पृष्ठभूमि कार्य रोकें"
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -2016,6 +2018,10 @@
     "xhigh": {
       "label": "अधिकतम",
       "description": "अधिकतम तर्क गहराई"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "स्वचालित कार्य प्रत्यायोजन के साथ अधिकतम तर्क"
     }
   },
   "errorBoundary": {
@@ -2243,6 +2249,13 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
+    }
+  },
+  "modelConfig": {
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "स्वचालित कार्य प्रत्यायोजन वाला Claude का मूल वर्कफ़्लो। चुने गए तर्क स्तर को बनाए रखता है।",
+      "unsupported": "XHigh तर्क का समर्थन करने वाला मॉडल और उपलब्ध Ultracode वर्कफ़्लो आवश्यक है।"
     }
   }
 }

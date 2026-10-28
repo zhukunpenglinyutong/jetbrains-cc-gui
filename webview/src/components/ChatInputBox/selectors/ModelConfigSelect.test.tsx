@@ -42,6 +42,42 @@ const codexModels = [
 
 describe('ModelConfigSelect', () => {
   beforeEach(() => localStorage.clear());
+  it('offers catalog-supported Codex Ultra and selects the native effort', () => {
+    const onReasoningChange = vi.fn();
+    render(<ModelConfigSelect selectedModel="gpt-6-astra" onModelSelect={vi.fn()}
+      models={[{ id: 'gpt-6-astra', label: 'Astra', supportedReasoningEfforts: ['high', 'ultra'] }]}
+      currentProvider="codex" reasoningEffort="high" onReasoningChange={onReasoningChange} />);
+    fireEvent.click(screen.getByTestId('model-config-trigger'));
+    fireEvent.click(screen.getByTestId('model-config-option-effort'));
+    expect(screen.queryByText('Max')).toBeNull();
+    fireEvent.click(screen.getByText('Ultra'));
+    expect(onReasoningChange).toHaveBeenCalledWith('ultra');
+  });
+
+  it('toggles native Claude Ultracode independently of effort', () => {
+    const onReasoningChange = vi.fn();
+    const onClaudeUltracodeChange = vi.fn();
+    render(<ModelConfigSelect selectedModel="claude-opus-5" onModelSelect={vi.fn()}
+      models={[{ id: 'claude-opus-5', label: 'Opus' }]} currentProvider="claude"
+      reasoningEffort="low" onReasoningChange={onReasoningChange}
+      claudeUltracode={false} onClaudeUltracodeChange={onClaudeUltracodeChange} />);
+    fireEvent.click(screen.getByTestId('model-config-trigger'));
+    fireEvent.click(screen.getByTestId('model-config-option-ultracode'));
+    expect(onClaudeUltracodeChange).toHaveBeenCalledWith(true);
+    expect(onReasoningChange).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('model-config-option-effort'));
+    expect(screen.queryByText('Ultra')).toBeNull();
+  });
+
+  it('allows disabling Ultracode after switching to an unsupported model', () => {
+    const onClaudeUltracodeChange = vi.fn();
+    render(<ModelConfigSelect selectedModel="claude-haiku-4-5" onModelSelect={vi.fn()}
+      currentProvider="claude" claudeUltracode onClaudeUltracodeChange={onClaudeUltracodeChange} />);
+    expect(screen.getByTestId('model-config-trigger').textContent).toContain('Ultracode');
+    fireEvent.click(screen.getByTestId('model-config-trigger'));
+    fireEvent.keyDown(screen.getByTestId('model-config-option-ultracode'), { key: ' ' });
+    expect(onClaudeUltracodeChange).toHaveBeenCalledWith(false);
+  });
   it('keeps the effort row visible for an aggregated model', () => {
     render(<ModelConfigSelect selectedModel="ccs-claude-provider-a--glm-pro" onModelSelect={vi.fn()}
       models={[{ id: 'ccs-claude-provider-a--glm-pro', label: 'GLM Pro（供应商 A）' }]}

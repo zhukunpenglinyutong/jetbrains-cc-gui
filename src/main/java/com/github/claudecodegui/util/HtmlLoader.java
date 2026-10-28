@@ -171,7 +171,7 @@ public class HtmlLoader {
             String model,
             List<String> presetIds
     ) {
-        return injectInitialPageState(html, provider, model, presetIds, null);
+        return injectInitialPageState(html, provider, model, presetIds, null, null, null);
     }
 
     /**
@@ -189,9 +189,38 @@ public class HtmlLoader {
             List<String> presetIds,
             String draftCacheKey
     ) {
+        return injectInitialPageState(html, provider, model, presetIds, null, null, draftCacheKey);
+    }
+
+    /** Adds per-tab native effort and workflow preferences before shared-storage hydration. */
+    public String injectInitialPageState(
+            String html,
+            String provider,
+            String model,
+            List<String> presetIds,
+            String reasoningEffort,
+            Boolean claudeUltracode
+    ) {
+        return injectInitialPageState(html, provider, model, presetIds, reasoningEffort, claudeUltracode, null);
+    }
+
+    /** Combines per-tab native preferences with the stable draft cache identity. */
+    public String injectInitialPageState(
+            String html,
+            String provider,
+            String model,
+            List<String> presetIds,
+            String reasoningEffort,
+            Boolean claudeUltracode,
+            String draftCacheKey
+    ) {
         try {
             String safeProvider = escapeForSingleQuotedJs(provider == null ? "" : provider);
             String safeModel = escapeForSingleQuotedJs(model == null ? "" : model);
+            String nativePreferences = claudeUltracode == null ? ""
+                    : "window.__INITIAL_TAB_REASONING_EFFORT__ = "
+                    + (reasoningEffort == null ? "null" : "'" + escapeForSingleQuotedJs(reasoningEffort) + "'") + ";"
+                    + "window.__INITIAL_TAB_CLAUDE_ULTRACODE__ = " + claudeUltracode + ";";
             StringBuilder presetValues = new StringBuilder("[");
             if (presetIds != null) {
                 boolean first = true;
@@ -222,6 +251,7 @@ public class HtmlLoader {
                     + "\n    <script>"
                     + "window.__INITIAL_TAB_PROVIDER__ = '" + safeProvider + "';"
                     + "window.__INITIAL_TAB_MODEL__ = '" + safeModel + "';"
+                    + nativePreferences
                     + "</script>";
             if (draftCacheKey != null && !draftCacheKey.isBlank()) {
                 scriptInjection += "\n    <script>window.__CCGUI_DRAFT_CACHE_KEY__ = '"

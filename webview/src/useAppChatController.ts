@@ -47,6 +47,7 @@ export interface ChatControllerModelSlice {
   currentSdkInstalled: UseMessageSenderOptions['currentSdkInstalled'];
   codexNativeAutoReviewAvailable: UseMessageSenderOptions['codexNativeAutoReviewAvailable'];
   reasoningEffort: UseMessageSenderOptions['reasoningEffort'];
+  claudeUltracode?: UseMessageSenderOptions['claudeUltracode'];
   codexFastMode: UseMessageSenderOptions['codexFastMode'];
   codexCollaborationMode: UseMessageSenderOptions['codexCollaborationMode'];
   codexApprovalPreset: UseMessageSenderOptions['codexApprovalPreset'];
@@ -65,6 +66,7 @@ export interface ChatControllerModelSlice {
   setSelectedCodexModel: UseWindowCallbacksOptions['setSelectedCodexModel'];
   setLongContextEnabled: UseWindowCallbacksOptions['setLongContextEnabled'];
   setReasoningEffort: UseWindowCallbacksOptions['setReasoningEffort'];
+  setClaudeUltracode?: UseWindowCallbacksOptions['setClaudeUltracode'];
   setCodexFastMode: UseWindowCallbacksOptions['setCodexFastMode'];
   setProviderConfigVersion: UseWindowCallbacksOptions['setProviderConfigVersion'];
   setActiveProviderConfig: UseWindowCallbacksOptions['setActiveProviderConfig'];
@@ -159,14 +161,14 @@ export const useAppChatController = ({
     currentProvider, selectedModel, permissionMode,
     selectedAgent, sdkStatusLoading, currentSdkInstalled,
     codexNativeAutoReviewAvailable,
-    reasoningEffort, codexFastMode, codexCollaborationMode, codexApprovalPreset,
+    reasoningEffort, claudeUltracode, codexFastMode, codexCollaborationMode, codexApprovalPreset,
     codexSandboxSelection, dshPreset, longContextEnabled,
     handleModeSelect, handleProviderSelect,
     currentProviderRef, syncActiveProviderModelMapping,
     setPermissionMode, setCurrentProvider,
     setClaudePermissionMode, setCodexPermissionMode,
     setSelectedClaudeModel, setSelectedCodexModel,
-    setLongContextEnabled, setReasoningEffort, setCodexFastMode,
+    setLongContextEnabled, setReasoningEffort, setClaudeUltracode, setCodexFastMode,
     setProviderConfigVersion, setActiveProviderConfig,
     setClaudeSettingsAlwaysThinkingEnabled, setStreamingEnabledSetting,
     setSendShortcut, setAutoOpenFileEnabled,
@@ -248,7 +250,7 @@ export const useAppChatController = ({
     setCurrentSessionId, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
     setPermissionMode, setCurrentProvider, setClaudePermissionMode, setCodexPermissionMode,
     setSelectedClaudeModel, setSelectedCodexModel,
-    setLongContextEnabled, setReasoningEffort, setCodexFastMode,
+    setLongContextEnabled, setReasoningEffort, setClaudeUltracode, setCodexFastMode,
     setProviderConfigVersion, setActiveProviderConfig,
     setClaudeSettingsAlwaysThinkingEnabled, setStreamingEnabledSetting,
     setSendShortcut, setAutoOpenFileEnabled,
@@ -300,7 +302,7 @@ export const useAppChatController = ({
     interruptSession,
   } = useMessageSender({
     t, addToast,
-    currentProvider, selectedModel, permissionMode, reasoningEffort, selectedAgent, codexFastMode,
+    currentProvider, selectedModel, permissionMode, reasoningEffort, claudeUltracode, selectedAgent, codexFastMode,
     codexCollaborationMode, codexApprovalPreset, codexSandboxSelection,
     codexNativeAutoReviewAvailable, dshPreset,
     sdkStatusLoading, currentSdkInstalled,

@@ -34,6 +34,8 @@ interface ModelConfigSelectProps {
   onLongContextChange?: (enabled: boolean) => void;
   reasoningEffort?: ReasoningEffort;
   onReasoningChange?: (effort: ReasoningEffort) => void;
+  claudeUltracode?: boolean;
+  onClaudeUltracodeChange?: (enabled: boolean) => void;
   codexFastMode?: CodexFastMode;
   onCodexFastModeChange?: (mode: CodexFastMode) => void;
   dshPreset?: string;
@@ -59,6 +61,8 @@ export const ModelConfigSelect = ({
   onLongContextChange,
   reasoningEffort = 'high',
   onReasoningChange,
+  claudeUltracode = false,
+  onClaudeUltracodeChange,
   codexFastMode = 'normal',
   onCodexFastModeChange,
   dshPreset = '',
@@ -91,15 +95,20 @@ export const ModelConfigSelect = ({
     onReasoningChange?.(effort);
   }, [onReasoningChange]);
 
-  const { isVisible: showEffort, currentLevel } = useReasoningEffortGuard(
+  const currentModel = useCurrentModel(models, selectedModel, currentProvider);
+  const { isVisible: showEffort, availableLevels, currentLevel } = useReasoningEffortGuard(
     reasoningEffort,
     handleReasoningChange,
     selectedModel,
     currentProvider,
+    currentModel?.supportedReasoningEfforts,
   );
 
   const modelMapping = readClaudeModelMapping();
-  const currentModel = useCurrentModel(models, selectedModel, currentProvider);
+  const showUltracode = currentProvider === 'claude' && !!onClaudeUltracodeChange;
+  const ultracodeSupported = currentModel?.supportedReasoningEfforts
+    ? currentModel.supportedReasoningEfforts.includes('xhigh')
+    : showEffort && availableLevels.some(level => level.id === 'xhigh');
   const {
     show1MContext,
     showContextRow,
@@ -131,11 +140,13 @@ export const ModelConfigSelect = ({
     modelMapping,
     longContextEnabled,
     codexFastMode,
+    claudeUltracode,
     dshPreset,
     show1MContext,
     showEffortRow,
     showSpeed,
     showPreset,
+    showUltracode,
     currentLevel,
   });
 
@@ -186,7 +197,7 @@ export const ModelConfigSelect = ({
       window.addEventListener('resize', mainRecalculate);
       return () => window.removeEventListener('resize', mainRecalculate);
     }
-  }, [isOpen, mainRecalculate, showEffortRow, showSpeed, showPreset, showContextRow]);
+  }, [isOpen, mainRecalculate, showEffortRow, showSpeed, showPreset, showContextRow, showUltracode]);
 
   return (
     <div style={WRAPPER_STYLE}>
@@ -217,7 +228,11 @@ export const ModelConfigSelect = ({
           onAddModel={onAddModel}
           longContextEnabled={longContextEnabled}
           onLongContextChange={onLongContextChange}
-          showDivider={showDivider}
+          showDivider={showDivider || showUltracode}
+          showUltracode={showUltracode}
+          ultracodeSupported={ultracodeSupported}
+          claudeUltracode={claudeUltracode}
+          onClaudeUltracodeChange={onClaudeUltracodeChange}
           showContextRow={showContextRow}
           contextSupported={contextSupported}
           showSpeed={showSpeed}
@@ -229,6 +244,7 @@ export const ModelConfigSelect = ({
           onDshPresetChange={onDshPresetChange}
           dshPresetLabel={dshPresetLabel}
           showEffortRow={showEffortRow}
+          supportedReasoningEfforts={currentModel?.supportedReasoningEfforts}
           reasoningEffort={reasoningEffort}
           onReasoningChange={handleReasoningChange}
           effortLabel={effortLabel}

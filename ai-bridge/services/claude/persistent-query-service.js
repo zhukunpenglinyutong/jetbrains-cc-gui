@@ -66,6 +66,7 @@ import {
 } from './stream-event-processor.js';
 import { generateSessionTitle } from '../session-title-service.js';
 import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
+import { withUltracodeSetting } from './ultracode.js';
 
 const SUPPORTED_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -129,7 +130,7 @@ function resolveRequestModelState(modelId, settingsEnv) {
   };
 }
 
-function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers, modelId, settingsEnv, resolvedModelId) {
+function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers, modelId, settingsEnv, resolvedModelId, ultracode) {
   const claudeCliOverride = getClaudeCliPathOverride();
   return {
     cwd: workingDirectory,
@@ -138,7 +139,7 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
     maxTurns: 1000,
     enableFileCheckpointing: true,
     env: buildCliEnv(),
-    settings: buildWebviewControlledSettingsOverride(modelId, settingsEnv, resolvedModelId),
+    settings: withUltracodeSetting(buildWebviewControlledSettingsOverride(modelId, settingsEnv, resolvedModelId), ultracode),
     ...(reasoningEffort && { effort: reasoningEffort }),
     ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
     ...(streamingEnabled && { includePartialMessages: true }),
@@ -223,7 +224,7 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   const options = buildQueryOptions(
     workingDirectory, sdkModelName, permissionMode,
     maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId,
-    mcpServers, modelId, settings?.env, resolvedModelId
+    mcpServers, modelId, settings?.env, resolvedModelId, params.ultracode
   );
 
   const userMessage = await buildUserMessage(params, withAttachments, requestedSessionId);
@@ -246,6 +247,7 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
     permissionMode,
     maxThinkingTokens,
     reasoningEffort,
+    ultracode: typeof params.ultracode === 'boolean' ? params.ultracode : undefined,
     runtimeSignature
   };
 }
@@ -375,7 +377,7 @@ _runtimeCleanupTimer.unref();
         const event = buildTaskNotificationEvent(parsed);
         if (event && runtime.sessionId) {
           console.log('[LIFECYCLE] In-turn task-notification message for sessionId=' + runtime.sessionId + ', toolUseId=' + parsed.toolUseId + ', status=' + event.status);
-          emitTaskEvent(runtime.sessionId, event);
+          emitTaskEvent(runtime.sessionId, event, runtime.runtimeSessionEpoch);
         } else if (!event) {
           console.log('[LIFECYCLE] In-turn task-notification message could not be parsed (no tool_use_id or non-terminal status), consuming silently');
         } else {
@@ -631,7 +633,7 @@ async function sendInternal(params, withAttachments) {
 
     // A failed resume must retire its query too, even if the SDK returned an
     // error result without closing the iterator.
-    if (runtime && !runtime.closed && (error?.runtimeTerminated || expiredResume)) {
+    if (runtime && !runtime.closed && !wasAborted && (error?.runtimeTerminated || expiredResume)) {
       await disposeRuntime(runtime, { removeSession });
     }
   }
@@ -771,6 +773,24 @@ export async function abortCurrentTurn() {
   // a non-null runtime, subsequent callers see null and exit early.
   const runtime = getActiveTurnRuntime();
   if (!runtime) return;
+  return abortRuntime(runtime);
+}
+
+/** Stop one session's foreground turn and native background workflows. */
+export async function abortTurnPersistent(params = {}) {
+  const sessionId = typeof params.sessionId === 'string' ? params.sessionId.trim() : '';
+  const epoch = typeof params.runtimeSessionEpoch === 'string' ? params.runtimeSessionEpoch.trim() : '';
+  if (!sessionId && !epoch) throw new Error('Claude stop requires a session ID or runtime session epoch.');
+  const runtime = [...getAllRuntimes()].find(candidate => !candidate.closed
+    && (!sessionId || candidate.sessionId === sessionId)
+    && (!epoch || candidate.runtimeSessionEpoch === epoch));
+  if (!runtime) return { stopped: false };
+  await abortRuntime(runtime);
+  return { stopped: true };
+}
+
+async function abortRuntime(runtime) {
+  if (runtime.abortPromise) return runtime.abortPromise;
   console.log('[LIFECYCLE] abortCurrentTurn epoch=' + (runtime.runtimeSessionEpoch || '(none)'));
 
   // Clear turnSink first to stop incoming messages, then fail it to unblock waiting take()
@@ -784,16 +804,31 @@ export async function abortCurrentTurn() {
   // Mark abort after sink is cleared
   runtime.abortRequested = true;
 
-  clearActiveTurnRuntime();
+  clearActiveTurnRuntimeIf(runtime);
 
-  try {
-    if (!runtime.closed) {
+  runtime.abortPromise = (async () => {
+    try {
+      if (!runtime.closed && typeof runtime.query?.interrupt === 'function') {
+        // Without perTaskStopAffordance, native interrupt stops background
+        // agents/workflows too. Give it time to cancel its children before
+        // closing the transport; close also cancels any still-queued input.
+        let timeout;
+        try {
+          await Promise.race([
+            runtime.query.interrupt(),
+            new Promise(resolve => { timeout = setTimeout(resolve, 5000); }),
+          ]);
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
+    } catch (error) {
+      console.error('[ABORT] Native interrupt failed:', error.message);
+    } finally {
       await disposeRuntime(runtime, { removeSession });
     }
-  } catch (error) {
-    // Best-effort — log but don't throw so abort always "succeeds"
-    console.error('[ABORT] Failed to dispose runtime:', error.message);
-  }
+  })();
+  return runtime.abortPromise;
 }
 
 /**
@@ -924,6 +959,7 @@ export const __testing = {
   async abortCurrentTurn() {
     return abortCurrentTurn();
   },
+  abortTurnPersistent,
   setActiveTurnRuntime(runtime) {
     setActiveTurnRuntime(runtime);
   },

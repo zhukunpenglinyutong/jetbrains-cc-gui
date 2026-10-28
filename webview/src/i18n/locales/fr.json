@@ -170,7 +170,9 @@
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "Continuer à affiner ce plan :"
+    "continueRefiningPlan": "Continuer à affiner ce plan :",
+    "backgroundTasksRunning": "{{count}} tâches en arrière-plan en cours",
+    "stopBackgroundTasks": "Arrêter les tâches en arrière-plan"
   },
   "settings": {
     "title": "Paramètres",
@@ -2018,6 +2020,10 @@
     "xhigh": {
       "label": "Maximum",
       "description": "Profondeur de raisonnement maximale"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "Raisonnement maximal avec délégation automatique des tâches"
     }
   },
   "errorBoundary": {
@@ -2245,6 +2251,13 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
+    }
+  },
+  "modelConfig": {
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Workflow natif Claude avec délégation automatique des tâches. Conserve le niveau de raisonnement choisi.",
+      "unsupported": "Nécessite un modèle compatible XHigh et un workflow Ultracode disponible."
     }
   }
 }

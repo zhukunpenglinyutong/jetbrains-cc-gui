@@ -53,6 +53,29 @@ class ClaudeDaemonRequestExecutor {
             String reasoningEffort,
             MessageCallback callback
     ) {
+        return sendMessageViaDaemon(daemon, channelId, message, sessionId, runtimeSessionEpoch, cwd,
+                attachments, permissionMode, model, openedFiles, agentPrompt, streaming,
+                disableThinking, reasoningEffort, false, callback);
+    }
+
+    CompletableFuture<SDKResult> sendMessageViaDaemon(
+            DaemonBridge daemon,
+            String channelId,
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String model,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            boolean ultracode,
+            MessageCallback callback
+    ) {
         return CompletableFuture.supplyAsync(() -> {
             SDKResult result = new SDKResult();
             StringBuilder assistantContent = new StringBuilder();
@@ -74,7 +97,8 @@ class ClaudeDaemonRequestExecutor {
                         agentPrompt,
                         streaming,
                         disableThinking,
-                        reasoningEffort
+                        reasoningEffort,
+                        ultracode
                 );
 
                 boolean hasAttachments = attachments != null && !attachments.isEmpty() && params.has("attachments");
@@ -213,7 +237,7 @@ class ClaudeDaemonRequestExecutor {
                 }
                 return result;
             }
-        }).exceptionally(ex -> {
+        }, ClaudeSDKBridge.claudeExecutor()).exceptionally(ex -> {
             SDKResult errorResult = new SDKResult();
             errorResult.success = false;
             errorResult.error = outputExtractor.extractErrorMessage(ex);

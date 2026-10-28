@@ -12,6 +12,15 @@ test.beforeEach(async ({ page }) => {
     bridge.__agentBridgeMessages = [];
     window.sendToJava = message => {
       bridge.__agentBridgeMessages?.push(message);
+      if (message.startsWith('load_subagent_statuses:')) {
+        const { sessionId, requestId } = JSON.parse(message.slice('load_subagent_statuses:'.length));
+        // The real host acknowledges every bounded batch, even if no native
+        // status could be read. An unanswered mock would exercise the 15s
+        // lost-callback watchdog instead of the followup lifecycle below.
+        setTimeout(() => window.onSubagentStatusesLoaded?.(JSON.stringify({
+          provider: 'codex', sessionId, requestId, statuses: [],
+        })), 0);
+      }
       if (message.startsWith('get_dependency_status:')) setTimeout(() => window.updateDependencyStatus?.(JSON.stringify({
         'claude-sdk': { status: 'installed', meetsMinimumVersion: true },
         'codex-sdk': { status: 'installed', meetsMinimumVersion: true },

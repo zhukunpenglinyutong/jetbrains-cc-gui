@@ -7,7 +7,7 @@ import type { ClaudeContentBlock, ClaudeMessage } from '../types';
 import {
   apply1MContextSuffix,
 } from '../components/ChatInputBox/types';
-import { claudeModelAllowsEffort } from '../components/ChatInputBox/reasoningUtils';
+import { claudeModelAllowsEffort, getAvailableReasoningLevels, resolveCurrentReasoningLevel } from '../components/ChatInputBox/reasoningUtils';
 import type { Attachment, ChatInputBoxHandle, PermissionMode, ReasoningEffort, SelectedAgent, CodexFastMode } from '../components/ChatInputBox/types';
 import { expandQuoteTokens } from '../components/ChatInputBox/utils/quoteRegistry';
 import type { ViewMode } from './useModelProviderState';
@@ -47,6 +47,7 @@ export interface UseMessageSenderOptions {
   selectedModel: string;
   permissionMode: PermissionMode;
   reasoningEffort: ReasoningEffort;
+  claudeUltracode?: boolean;
   codexFastMode: CodexFastMode;
   codexCollaborationMode?: 'default' | 'plan';
   codexApprovalPreset?: 'request' | 'auto' | 'sandboxed-auto' | 'full-access';
@@ -87,6 +88,7 @@ export function useMessageSender({
   selectedModel,
   permissionMode,
   reasoningEffort,
+  claudeUltracode = false,
   codexFastMode,
   codexCollaborationMode = 'default',
   codexApprovalPreset = 'request',
@@ -333,7 +335,8 @@ export function useMessageSender({
     });
 
     const reasoningEffortPayload = shouldSendReasoningEffort(currentProvider, selectedModel)
-      ? { reasoningEffort }
+      ? { reasoningEffort: currentProvider === 'codex' ? reasoningEffort
+        : resolveCurrentReasoningLevel(reasoningEffort, getAvailableReasoningLevels(currentProvider, selectedModel))?.id }
       : {};
 
     try {
@@ -347,6 +350,7 @@ export function useMessageSender({
         permissionMode: effectivePermissionMode,
         clientMessageId,
         ...reasoningEffortPayload,
+        ...(currentProvider === 'claude' ? { claudeUltracode } : {}),
         ...(currentProvider === 'dsh' ? { dshPreset: dshPreset || '' } : {}),
         codexFastMode,
         ...(currentProvider === 'codex' ? {
@@ -368,7 +372,7 @@ export function useMessageSender({
       // Losing attachments changes the user's task; never retry it as text-only work.
       return false;
     }
-  }, [codexApprovalPreset, codexCollaborationMode, codexFastMode, codexNativeAutoReviewAvailable,
+  }, [claudeUltracode, codexApprovalPreset, codexCollaborationMode, codexFastMode, codexNativeAutoReviewAvailable,
     codexSandboxSelection, currentProvider, dshPreset, selectedModel, reasoningEffort, longContextEnabled]);
 
   /**
