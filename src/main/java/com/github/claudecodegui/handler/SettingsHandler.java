@@ -439,6 +439,7 @@ public class SettingsHandler extends BaseMessageHandler {
      * back its optimistic UI update.
      */
     private void refreshMarkdownPreviewLanguage() {
+        LanguageConfigService.invalidateUserLanguageCache();
         if (context.getProject() != null) {
             com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(context.getProject()).refreshPreviewSettings();
         }

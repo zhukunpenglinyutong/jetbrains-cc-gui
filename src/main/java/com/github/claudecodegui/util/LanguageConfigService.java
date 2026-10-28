@@ -21,6 +21,10 @@ public class LanguageConfigService {
             "zh", "en", "zh-TW", "hi", "es", "fr", "ja", "ru", "ko", "pt-BR"
     );
 
+    /** Cached manual preference; "" means "verified absent". Transient read failures are not cached. */
+    private static volatile String cachedUserLanguage;
+    private static volatile boolean cachedUserLanguageLogged;
+
     /**
      * Map IDEA locale codes to i18n-supported language codes.
      * IDEA locale format: zh_CN, en, ja, ko, etc.
@@ -71,7 +75,8 @@ public class LanguageConfigService {
     }
 
     /**
-     * Get user's manually set language preference.
+     * Get user's manually set language preference. The disk read is cached until
+     * {@link #invalidateUserLanguageCache()} is called after a preference write.
      *
      * @return the user's language preference, or null if not manually set
      */
@@ -79,21 +84,56 @@ public class LanguageConfigService {
         if (settingsService == null) {
             return null;
         }
+        return userLanguageWithCache(() -> {
+            try {
+                return settingsService.getUserLanguage();
+            } catch (Exception error) {
+                // Routed into the non-caching failure branch below.
+                throw new RuntimeException(error);
+            }
+        });
+    }
+
+    /**
+     * Cache semantics around a raw preference reader. Package-private for unit tests.
+     */
+    static String userLanguageWithCache(java.util.function.Supplier<String> reader) {
+        String cached = cachedUserLanguage;
+        if (cached != null) {
+            return cached.isEmpty() ? null : cached;
+        }
+        String raw;
         try {
-            String userLanguage = settingsService.getUserLanguage();
-            if (userLanguage == null || userLanguage.isEmpty()) {
-                return null;
-            }
-            if (!SUPPORTED_LANGUAGES.contains(userLanguage)) {
-                LOG.warn("[LanguageConfig] Ignoring unsupported user language in ~/.codemoss/config.json: " + userLanguage);
-                return null;
-            }
-            LOG.info("[LanguageConfig] User manually set language: " + userLanguage);
-            return userLanguage;
-        } catch (Exception e) {
-            LOG.warn("[LanguageConfig] Failed to read user language from ~/.codemoss/config.json: " + e.getMessage());
+            raw = reader.get();
+        } catch (RuntimeException error) {
+            // Transient read failure: do not cache, the next caller retries the disk.
+            LOG.warn("[LanguageConfig] Failed to read user language from ~/.codemoss/config.json: " + error.getMessage());
             return null;
         }
+        String value = normalizeUserLanguage(raw);
+        if (!value.isEmpty() && !cachedUserLanguageLogged) {
+            LOG.info("[LanguageConfig] User manually set language: " + value);
+            cachedUserLanguageLogged = true;
+        }
+        cachedUserLanguage = value;
+        return value.isEmpty() ? null : value;
+    }
+
+    private static String normalizeUserLanguage(String userLanguage) {
+        if (userLanguage == null || userLanguage.isEmpty()) {
+            return "";
+        }
+        if (!SUPPORTED_LANGUAGES.contains(userLanguage)) {
+            LOG.warn("[LanguageConfig] Ignoring unsupported user language in ~/.codemoss/config.json: " + userLanguage);
+            return "";
+        }
+        return userLanguage;
+    }
+
+    /** Drops the cached preference; call after every write to the manual language preference. */
+    public static void invalidateUserLanguageCache() {
+        cachedUserLanguage = null;
+        cachedUserLanguageLogged = false;
     }
 
     /**
