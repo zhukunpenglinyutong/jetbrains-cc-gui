@@ -27,11 +27,26 @@ import java.util.Set;
 import java.util.Base64;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 /** Project-owned state; no Markdown-plugin types leak into core chat classes. */
 @Service(Service.Level.PROJECT)
 @State(name = "CCGuiMarkdownReview", storages = @Storage(StoragePathMacros.WORKSPACE_FILE))
 public final class MarkdownReviewService implements PersistentStateComponent<MarkdownReviewService.State>, Disposable {
+
+    /** How a document edit relates to the tracked annotations; drives the refresh level. */
+    public enum EditImpact {
+        /** The edit is past every annotation: nothing moves, nothing is re-checked. */
+        NONE,
+        /** The edit only shifted annotation positions; a light position refresh suffices. */
+        SHIFT,
+        /** The edit overlapped an annotated range: full validation and cleanup are required. */
+        HIT
+    }
+
+    private static final com.intellij.openapi.diagnostic.Logger LOG =
+            com.intellij.openapi.diagnostic.Logger.getInstance(MarkdownReviewService.class);
+
     public static final class State {
         public int schemaVersion = 3;
         public long nextAnnotationId;
@@ -44,7 +59,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
 
     private static final Gson GSON = new Gson();
     private State state = new State();
-    private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final List<Consumer<EditImpact>> listeners = new CopyOnWriteArrayList<>();
     private final Map<String, RangeMarker> markers = new HashMap<>();
     private final Set<Document> documents = new HashSet<>();
 
@@ -189,7 +204,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
         changed();
     }
 
-    public void subscribe(Runnable listener) {
+    public void subscribe(Consumer<EditImpact> listener) {
         listeners.add(listener);
     }
 
@@ -197,7 +212,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
         changed();
     }
 
-    public void unsubscribe(Runnable listener) {
+    public void unsubscribe(Consumer<EditImpact> listener) {
         listeners.remove(listener);
     }
 
@@ -243,7 +258,9 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
 
     public Annotation snapshot(VirtualFile file, String path, Document document, int start, int end, String selected, String comment) {
         if (start < 0 || end <= start || end > document.getTextLength() || selected.isBlank()
-                || selected.length() > 32_000 || comment.length() > 32_000 || end - start > 64_000) {
+                || selected.length() > MarkdownReviewLimits.TEXT_MAX_CHARS
+                || comment.length() > MarkdownReviewLimits.TEXT_MAX_CHARS
+                || end - start > MarkdownReviewLimits.SPAN_MAX_CHARS) {
             throw new IllegalArgumentException("Invalid selection or empty comment");
         }
         String source = document.getText().substring(start, end);
@@ -284,7 +301,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                     marker.dispose();
                 }
             } else {
-                if (comment.isBlank() || comment.length() > 32_000) {
+                if (comment.isBlank() || comment.length() > MarkdownReviewLimits.TEXT_MAX_CHARS) {
                     throw new IllegalArgumentException("Comment cannot be empty");
                 }
                 annotation.comment = comment;
@@ -392,8 +409,10 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
 
                 @Override
                 public void documentChanged(@NotNull DocumentEvent event) {
+                    boolean hit = !affected.isEmpty();
+                    EditImpact impact;
                     synchronized (MarkdownReviewService.this) {
-                        if (state.config.enabled && state.config.autoDeleteAffected) {
+                        if (hit && state.config.enabled && state.config.autoDeleteAffected) {
                             state.annotations.removeIf(item -> {
                                 if (!affected.contains(item.id) || item.completed) {
                                     return false;
@@ -406,6 +425,15 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                             });
                         }
                         affected.clear();
+                        if (!state.config.enabled) {
+                            // Disabled: positions are reconciled by the next sync after re-enabling.
+                            return;
+                        }
+                        impact = classifyImpact(state.annotations, event.getOffset(), hit);
+                        if (impact == EditImpact.NONE) {
+                            // The edit is past every annotation: no refresh, no fan-out.
+                            return;
+                        }
                         for (Annotation item : state.annotations) {
                             if (item.sourceMissing) {
                                 continue;
@@ -425,7 +453,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                             }
                         }
                     }
-                    changed();
+                    changed(impact);
                 }
             }, this);
         }
@@ -452,6 +480,23 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
         int newMatch = after.indexOf(source);
         return oldMatch >= 0 && newMatch >= 0 && before.indexOf(source, oldMatch + 1) < 0
                 && after.indexOf(source, newMatch + 1) < 0;
+    }
+
+    /**
+     * Classifies an edit against tracked positions: HIT when the edit overlapped an annotated
+     * range, SHIFT when any tracked annotation starts at or after the edit point (it will
+     * shift), otherwise NONE. Pure function for unit tests.
+     */
+    static EditImpact classifyImpact(List<Annotation> annotations, int editOffset, boolean hitAffected) {
+        if (hitAffected) {
+            return EditImpact.HIT;
+        }
+        for (Annotation item : annotations) {
+            if (!item.sourceMissing && item.start >= editOffset) {
+                return EditImpact.SHIFT;
+            }
+        }
+        return EditImpact.NONE;
     }
 
     private static int[] changedRange(int offset, CharSequence oldText, CharSequence newText) {
@@ -497,14 +542,14 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
         // Keep handoff snapshots for diagnosis/recovery; "queued" does not
         // mean the provider acknowledged receipt. Only prune old terminal
         // snapshots when the bounded history is full.
-        while (state.batches.size() >= 200) {
+        while (state.batches.size() >= MarkdownReviewLimits.MAX_PENDING_BATCHES) {
             ReviewBatch oldest = state.batches.stream().filter(item -> !isPending(item)).findFirst().orElse(null);
             if (oldest == null) {
                 break;
             }
             state.batches.remove(oldest);
         }
-        if (state.batches.size() >= 200) {
+        if (state.batches.size() >= MarkdownReviewLimits.MAX_PENDING_BATCHES) {
             throw new IllegalStateException("Review draft limit reached. Remove old drafts before adding more.");
         }
         state.batches.add(copy(batch, ReviewBatch.class));
@@ -568,8 +613,17 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
     }
 
     private void changed() {
-        for (Runnable listener : listeners) {
-            listener.run();
+        changed(EditImpact.HIT);
+    }
+
+    private void changed(EditImpact impact) {
+        for (Consumer<EditImpact> listener : listeners) {
+            try {
+                listener.accept(impact);
+            } catch (RuntimeException error) {
+                // One misbehaving preview panel must not cut off the remaining listeners.
+                LOG.warn("Markdown review listener failed", error);
+            }
         }
     }
 

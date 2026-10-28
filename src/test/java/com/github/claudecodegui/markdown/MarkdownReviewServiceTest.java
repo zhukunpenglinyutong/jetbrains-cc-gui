@@ -191,4 +191,40 @@ public class MarkdownReviewServiceTest {
         assertFalse(MarkdownReviewService.preservesSource("target target", "fixed target", "target"));
         assertFalse(MarkdownReviewService.preservesSource("target", "target target", "target"));
     }
+
+    @Test
+    public void classifiesEditImpactAgainstTrackedPositions() {
+        Annotation before = new Annotation();
+        before.start = 5;
+        Annotation after = new Annotation();
+        after.start = 50;
+        List<Annotation> annotations = List.of(before, after);
+        assertEquals(MarkdownReviewService.EditImpact.NONE,
+                MarkdownReviewService.classifyImpact(annotations, 60, false));
+        assertEquals(MarkdownReviewService.EditImpact.SHIFT,
+                MarkdownReviewService.classifyImpact(annotations, 30, false));
+        assertEquals(MarkdownReviewService.EditImpact.HIT,
+                MarkdownReviewService.classifyImpact(annotations, 30, true));
+        assertEquals(MarkdownReviewService.EditImpact.NONE,
+                MarkdownReviewService.classifyImpact(List.of(), 0, false));
+        after.sourceMissing = true;
+        assertEquals(MarkdownReviewService.EditImpact.NONE,
+                MarkdownReviewService.classifyImpact(annotations, 30, false));
+    }
+
+    @Test
+    public void oneFailingListenerDoesNotCutOffTheOthers() {
+        MarkdownReviewService service = new MarkdownReviewService(null);
+        List<MarkdownReviewService.EditImpact> received = new java.util.ArrayList<>();
+        java.util.function.Consumer<MarkdownReviewService.EditImpact> collector = received::add;
+        service.subscribe(impact -> {
+            throw new IllegalStateException("listener boom");
+        });
+        service.subscribe(collector);
+        service.refreshPreviewSettings();
+        assertEquals(List.of(MarkdownReviewService.EditImpact.HIT), received);
+        service.unsubscribe(collector);
+        service.refreshPreviewSettings();
+        assertEquals(1, received.size());
+    }
 }

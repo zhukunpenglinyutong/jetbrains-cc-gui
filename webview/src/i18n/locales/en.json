@@ -37,7 +37,7 @@
       "error": "Unable to update review preferences. Reopen settings and try again.",
       "enabled": {
         "label": "Enable Markdown preview annotations (beta)",
-        "hint": "Add review controls to the current project's native Markdown preview. Disabling hides the overlay immediately and keeps current comments."
+        "hint": "Add review controls to the current project's native Markdown preview. Disabling hides the overlay immediately and keeps current comments. After enabling, a preview that is already open must be reopened once to show the controls."
       },
       "autoAddToChat": {
         "label": "Automatically add comments to the current chat draft (beta)",

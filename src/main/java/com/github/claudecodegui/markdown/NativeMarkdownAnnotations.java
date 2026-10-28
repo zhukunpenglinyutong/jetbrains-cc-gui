@@ -5,7 +5,6 @@ import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.event.DocumentEvent;
@@ -34,6 +33,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.function.Consumer;
 
 /** Narrow extension-specific protocol on the native BrowserPipe. */
 public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewExtension, ResourceProvider {
@@ -55,16 +55,20 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
             return receive(message);
         }
     };
-    private final Runnable listener = this::publish;
+    private final Consumer<MarkdownReviewService.EditImpact> listener =
+            impact -> publish(impact != MarkdownReviewService.EditImpact.HIT);
     private final Map<String, JsonObject> results = new LinkedHashMap<>();
     private final Set<String> transfers = new HashSet<>();
     private volatile boolean disposed;
     private volatile boolean dirty;
+    /** Tracks whether the last published frame said "enabled"; disabled frames are sent once. */
+    private volatile boolean lastPublishedEnabled;
     private final DocumentListener documentListener = new DocumentListener() {
         @Override
         public void documentChanged(@NotNull DocumentEvent event) {
+            // The preview's sync request after the next IDE render patch drives the refresh;
+            // the panel only tracks staleness here for annotation-creation gating.
             dirty = true;
-            publish();
         }
     };
 
@@ -77,7 +81,8 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
         pipe.subscribe(REQUEST, handler);
         service.subscribe(listener);
         if (document != null) {
-            document.addDocumentListener(documentListener);
+            // The service owns the disposable; the deprecated no-parent overload leaks listeners.
+            document.addDocumentListener(documentListener, service);
         }
     }
 
@@ -111,7 +116,7 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
     }
 
     private boolean receive(String raw) {
-        if (disposed || project.isDisposed() || document == null || !file.isValid() || raw.length() > 256_000) {
+        if (disposed || project.isDisposed() || document == null || !file.isValid() || raw.length() > MarkdownReviewLimits.REQUEST_MAX_CHARS) {
             return true;
         }
         JsonObject request;
@@ -123,7 +128,7 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
         if (request == null || !request.has("action") || !request.has("requestId")
                 || !request.get("action").isJsonPrimitive() || !request.get("action").getAsJsonPrimitive().isString()
                 || !request.get("requestId").isJsonPrimitive() || !request.get("requestId").getAsJsonPrimitive().isString()
-                || request.get("requestId").getAsString().length() > 128) {
+                || request.get("requestId").getAsString().length() > MarkdownReviewLimits.REQUEST_ID_MAX_CHARS) {
             return true;
         }
         ApplicationManager.getApplication().invokeLater(() -> handle(request), ModalityState.nonModal());
@@ -152,7 +157,10 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                 // A delayed patch for an earlier document must not re-enable
                 // annotation creation for stale source offsets.
                 dirty = !request.has("renderedSourceLength") || request.get("renderedSourceLength").getAsLong() != document.getTextLength();
-                ReadAction.run(() -> service.reconcile(file, document));
+                ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
+                    service.reconcile(file, document);
+                    return null;
+                });
                 response.addProperty("status", "ok");
             } else {
                 if (!service.getConfig().enabled) {
@@ -171,7 +179,9 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                         String comment = request.has("comment") ? request.get("comment").getAsString() : "";
                         int start = request.get("start").getAsInt();
                         int end = request.get("end").getAsInt();
-                        if (selected.length() > 32_000 || comment.length() > 32_000 || start < 0 || end > document.getTextLength() || end <= start) {
+                        if (selected.length() > MarkdownReviewLimits.TEXT_MAX_CHARS
+                                || comment.length() > MarkdownReviewLimits.TEXT_MAX_CHARS
+                                || start < 0 || end > document.getTextLength() || end <= start) {
                             throw new IllegalArgumentException("Selection or comment is too large or invalid.");
                         }
                         if (!document.getText().substring(start, end).contains(selected)
@@ -221,13 +231,17 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                                 request.get("completed").getAsBoolean());
                         break;
                     case "transfer":
-                        ReadAction.run(() -> service.reconcile(file, document));
+                        ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
+                            service.reconcile(file, document);
+                            return null;
+                        });
                         List<Annotation> selectedAnnotations = service.list(file).stream().filter(item -> !item.completed).toList();
                         if (request.has("annotationIds")) {
                             List<Annotation> available = selectedAnnotations;
                             List<String> ids = GSON.fromJson(request.get("annotationIds"),
                                     new com.google.gson.reflect.TypeToken<List<String>>() {}.getType());
-                            if (ids == null || ids.size() > 1000 || ids.stream().anyMatch(id -> available.stream().noneMatch(item -> item.id.equals(id)))) {
+                            if (ids == null || ids.size() > MarkdownReviewLimits.TRANSFER_IDS_MAX
+                                    || ids.stream().anyMatch(id -> available.stream().noneMatch(item -> item.id.equals(id)))) {
                                 throw new IllegalArgumentException("One of the selected comments no longer exists.");
                             }
                             selectedAnnotations = available.stream().filter(item -> ids.contains(item.id)).toList();
@@ -250,7 +264,7 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
 
     private boolean matchesRenderedSelection(JsonObject request, int start, int end, String selected) {
         String attribute = request.has("positionAttribute") ? request.get("positionAttribute").getAsString() : "";
-        if (!attribute.matches("[a-zA-Z0-9_-]+") || document.getTextLength() > 500_000) {
+        if (!attribute.matches("[a-zA-Z0-9_-]+") || document.getTextLength() > MarkdownReviewLimits.DOC_MAX_CHARS) {
             return false;
         }
         // Ask the IDE's own generator to validate formatted visible text. This
@@ -315,7 +329,7 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                 batch.targetId = selected.getReviewTargetId();
                 batch.targetEpoch = selected.getSession().getRuntimeSessionEpoch();
                 batch.targetSessionId = selected.getSession().getSessionId();
-                if (GSON.toJson(batch).length() > 200_000) {
+                if (GSON.toJson(batch).length() > MarkdownReviewLimits.BATCH_MAX_CHARS) {
                     throw new IllegalStateException("Review is too large. Add comments individually from their popup, or reduce the context before sending.");
                 }
                 batch = service.saveBatch(batch);
@@ -347,7 +361,7 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
     private void remember(String id, JsonObject response) {
         transfers.remove(id);
         results.put(id, response);
-        if (results.size() > 128) {
+        if (results.size() > MarkdownReviewLimits.RESPONSE_CACHE) {
             results.remove(results.keySet().iterator().next());
         }
     }
@@ -366,22 +380,59 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
     }
 
     private void publish() {
+        publish(false);
+    }
+
+    /**
+     * @param light position-only refresh (the edit shifted annotations but touched none of
+     *              them): skips the full-document Mermaid rescan; the overlay blocks
+     *              annotation creation while the document is dirty anyway.
+     */
+    private void publish(boolean light) {
         if (disposed || document == null || project.isDisposed()) {
             return;
         }
-        ReadAction.run(() -> {
+        if (!service.getConfig().enabled) {
+            if (lastPublishedEnabled) {
+                lastPublishedEnabled = false;
+                publishDisabledState();
+            }
+            return;
+        }
+        lastPublishedEnabled = true;
+        ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
             JsonObject state = new JsonObject();
             state.addProperty("kind", "state");
             state.addProperty("panelId", panelId);
             state.addProperty("documentVersion", document.getModificationStamp());
             state.addProperty("dirty", dirty);
-            state.addProperty("enabled", service.getConfig().enabled);
+            state.addProperty("enabled", true);
             state.addProperty("submitShortcut", service.getConfig().submitShortcut);
             state.addProperty("language", com.github.claudecodegui.util.LanguageConfigService.getCurrentLanguage(settings));
             state.addProperty("path", relativePath());
             state.add("annotations", GSON.toJsonTree(service.list(file)));
-            state.add("diagrams", GSON.toJsonTree(RenderedSelectionMatcher.mermaidRanges(document.getText())));
+            if (!light) {
+                state.add("diagrams", GSON.toJsonTree(RenderedSelectionMatcher.mermaidRanges(document.getText())));
+            }
             reply(state);
+            return null;
+        });
+    }
+
+    /** One final frame while disabled so open overlays hide immediately; later calls are no-ops. */
+    private void publishDisabledState() {
+        ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
+            JsonObject state = new JsonObject();
+            state.addProperty("kind", "state");
+            state.addProperty("panelId", panelId);
+            state.addProperty("documentVersion", document.getModificationStamp());
+            state.addProperty("dirty", dirty);
+            state.addProperty("enabled", false);
+            state.addProperty("submitShortcut", service.getConfig().submitShortcut);
+            state.addProperty("language", com.github.claudecodegui.util.LanguageConfigService.getCurrentLanguage(settings));
+            state.addProperty("path", relativePath());
+            reply(state);
+            return null;
         });
     }
 
