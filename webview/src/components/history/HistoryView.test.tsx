@@ -86,7 +86,7 @@ beforeEach(() => {
 describe('HistoryView native message counts', () => {
   const actions = { currentProvider: 'codex', onLoadSession: vi.fn(), onDeleteSession: vi.fn(),
     onDeleteSessions: vi.fn(), onExportSession: vi.fn(), onToggleFavorite: vi.fn(), onUpdateTitle: vi.fn(),
-    onRegenerateTitle: vi.fn(), regeneratingTitleSessionIds: new Set(), onConvertToCliSession: vi.fn() };
+    onRegenerateTitle: vi.fn(), regeneratingTitleSessionIds: new Set<string>(), onConvertToCliSession: vi.fn() };
 
   it.each(['claude', 'codex'])('confirms the original cwd before opening cross-directory %s history', provider => {
     const onLoadSession = vi.fn();
@@ -225,7 +225,7 @@ describe('HistoryView multi-select', () => {
         onUpdateTitle={vi.fn()}
         onConvertToCliSession={vi.fn()}
         onRegenerateTitle={vi.fn()}
-        regeneratingTitleSessionIds={new Set()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -276,7 +276,7 @@ describe('HistoryView conversion', () => {
         onUpdateTitle={vi.fn()}
         onConvertToCliSession={onConvertToCliSession}
         onRegenerateTitle={vi.fn()}
-        regeneratingTitleSessionIds={new Set()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -315,7 +315,7 @@ describe('HistoryView conversion', () => {
         onUpdateTitle={vi.fn()}
         onConvertToCliSession={vi.fn()}
         onRegenerateTitle={vi.fn()}
-        regeneratingTitleSessionIds={new Set()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -343,7 +343,7 @@ describe('HistoryView conversion', () => {
         onUpdateTitle={vi.fn()}
         onConvertToCliSession={vi.fn()}
         onRegenerateTitle={vi.fn()}
-        regeneratingTitleSessionIds={new Set()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -363,7 +363,7 @@ describe('HistoryView conversion', () => {
         onUpdateTitle={vi.fn()}
         onConvertToCliSession={vi.fn()}
         onRegenerateTitle={vi.fn()}
-        regeneratingTitleSessionIds={new Set()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -388,7 +388,7 @@ describe('HistoryView conversion', () => {
         onUpdateTitle={vi.fn()}
         onConvertToCliSession={vi.fn()}
         onRegenerateTitle={vi.fn()}
-        regeneratingTitleSessionIds={new Set()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -420,7 +420,7 @@ describe('HistoryView favorite visibility', () => {
         onUpdateTitle={vi.fn()}
         onConvertToCliSession={vi.fn()}
         onRegenerateTitle={vi.fn()}
-        regeneratingTitleSessionIds={new Set()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -450,7 +450,7 @@ describe('HistoryView AI title regeneration', () => {
         {...regenerateActions}
         historyData={historyData}
         onRegenerateTitle={vi.fn()}
-        regeneratingTitleSessionIds={new Set()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -465,7 +465,7 @@ describe('HistoryView AI title regeneration', () => {
         {...regenerateActions}
         historyData={historyData}
         onRegenerateTitle={onRegenerateTitle}
-        regeneratingTitleSessionIds={new Set()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -473,7 +473,7 @@ describe('HistoryView AI title regeneration', () => {
     fireEvent.click(button);
     expect(onRegenerateTitle).toHaveBeenCalledTimes(1);
     expect(onRegenerateTitle).toHaveBeenCalledWith('session-one');
-    expect(button.disabled).toBe(false); // idle state — spinner comes from shared state
+    expect((button as HTMLButtonElement).disabled).toBe(false); // idle state — spinner comes from shared state
 
     // Shared spinner state (SessionContext) drives the loading UI; the result
     // callback itself is covered by sessionTitles.test.ts.
@@ -486,7 +486,7 @@ describe('HistoryView AI title regeneration', () => {
       />,
     );
     const loadingButton = screen.getByRole('button', { name: 'Regenerate title from conversation' });
-    expect(loadingButton.disabled).toBe(true);
+    expect((loadingButton as HTMLButtonElement).disabled).toBe(true);
     expect(loadingButton.className).toContain('is-loading');
     expect(loadingButton.closest('.history-action-buttons')?.classList.contains('has-regenerating')).toBe(true);
   });

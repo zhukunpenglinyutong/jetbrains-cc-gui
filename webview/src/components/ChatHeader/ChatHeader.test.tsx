@@ -2,8 +2,9 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ChatHeader } from './ChatHeader';
+import type { ChatHeaderProps } from './ChatHeader';
 
-const t = ((key: string) => key) as ChatHeader['props']['t'];
+const t = ((key: string) => key) as ChatHeaderProps['t'];
 
 const baseProps = {
   currentView: 'chat' as const,
@@ -24,7 +25,7 @@ describe('ChatHeader title regeneration button', () => {
     const button = screen.getByRole('button', { name: 'history.regenerateTitle' });
     fireEvent.click(button);
     expect(onRegenerateTitle).toHaveBeenCalledTimes(1);
-    expect(button.disabled).toBe(false);
+    expect((button as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('disables the button and shows the spinner while a regeneration is in flight', () => {
@@ -38,7 +39,7 @@ describe('ChatHeader title regeneration button', () => {
     );
 
     const button = screen.getByRole('button', { name: 'history.regenerateTitle' });
-    expect(button.disabled).toBe(true);
+    expect((button as HTMLButtonElement).disabled).toBe(true);
     expect(button.className).toContain('is-loading');
 
     fireEvent.click(button); // disabled buttons do not fire onClick in the browser
