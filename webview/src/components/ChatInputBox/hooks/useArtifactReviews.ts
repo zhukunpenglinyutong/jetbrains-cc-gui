@@ -6,6 +6,9 @@ export interface ReviewAnnotation {
   id: string; revision: number; selectedText: string; sourceText: string;
   comment: string; startLine: number; endLine: number; status: string; precision: string;
   sourceContext?: string;
+  completed?: boolean;
+  /** Backend withdrawal marker: the annotation was completed or deleted after handoff. */
+  withdrawn?: boolean;
 }
 export interface ArtifactReviewBatch {
   id: string; targetId: string; targetEpoch: string; path: string;
@@ -16,7 +19,12 @@ export interface ArtifactReviewBatch {
 }
 
 export function serializeArtifactReviews(batches: ArtifactReviewBatch[]): string {
-  return encodeReviewMessage(batches);
+  // Send-time double insurance (plan §9): never hand a withdrawn (completed or
+  // deleted) entry to the model, even if a withdrawal push raced the submit.
+  return encodeReviewMessage(batches
+    .map(batch => ({ ...batch,
+      annotations: batch.annotations.filter(annotation => !annotation.withdrawn && annotation.completed !== true) }))
+    .filter(batch => batch.annotations.length > 0));
 }
 
 function acknowledge(batch: ArtifactReviewBatch, status: 'received' | 'queued' | 'removed') {
@@ -55,12 +63,15 @@ export function useArtifactReviews() {
         if (!existing) {
           // Update the ref immediately: multiple Java events can arrive before
           // React commits the next render.
-          const annotations = batch.annotations.filter(annotation => !batchesRef.current.some(item =>
+          const relocated = batch.annotations.filter(annotation => !batchesRef.current.some(item =>
             item.annotations.some(old => old.id === annotation.id && old.revision >= annotation.revision
               && item.documentHash === batch.documentHash)));
+          // A withdrawal snapshot relocates its stale copy out of every draft
+          // without ever becoming a visible card itself.
+          const annotations = relocated.filter(annotation => !annotation.withdrawn);
           const incoming = { ...batch, annotations };
           const previous = batchesRef.current.flatMap(item => {
-            const remaining = item.annotations.filter(old => !annotations.some(annotation => annotation.id === old.id));
+            const remaining = item.annotations.filter(old => !relocated.some(annotation => annotation.id === old.id));
             if (remaining.length === item.annotations.length) return [item];
             const updated = { ...item, annotations: remaining };
             acknowledge(updated, remaining.length ? 'received' : 'removed');

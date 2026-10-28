@@ -269,6 +269,24 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     .collect(java.util.stream.Collectors.toUnmodifiableSet());
         });
 
+        // Routes withdrawal snapshots (their annotation was completed or deleted) to
+        // the chat that owns the automatic draft; the window rejects stale identities.
+        com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project).setBatchPusher(push -> {
+            com.intellij.openapi.application.ApplicationManager.getApplication().assertIsDispatchThread();
+            for (ClaudeChatWindow window : getChatWindows(project)) {
+                if (push.targetId.equals(window.getReviewTargetId())) {
+                    try {
+                        window.addArtifactReview(push);
+                    } catch (RuntimeException error) {
+                        // The target moved on (session switch); its webview already
+                        // discarded these drafts at the target change.
+                        LOG.warn("Markdown review withdrawal skipped: " + error.getMessage());
+                    }
+                    return;
+                }
+            }
+        });
+
         ContentFactory contentFactory = ContentFactory.getInstance();
         ContentManager contentManager = toolWindow.getContentManager();
 

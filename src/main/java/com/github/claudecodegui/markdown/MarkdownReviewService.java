@@ -301,6 +301,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                 if (marker != null) {
                     marker.dispose();
                 }
+                withdrawAutomaticDrafts();
             } else {
                 if (comment.isBlank() || comment.length() > MarkdownReviewLimits.TEXT_MAX_CHARS) {
                     throw new IllegalArgumentException("Comment cannot be empty");
@@ -318,12 +319,12 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
             if (annotation.revision != revision) {
                 throw new IllegalStateException("This comment changed. Reopen it and try again.");
             }
+            // Completion follows the user's persistence choice; no silent persist flip.
             annotation.completed = completed;
-            if (completed) {
-                // Completing a review explicitly archives it in the workspace.
-                state.config.persist = true;
-            }
             annotation.revision++;
+            if (completed) {
+                withdrawAutomaticDrafts();
+            }
         }
         changed();
     }
@@ -424,6 +425,8 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                                 }
                                 return true;
                             });
+                            // Edit-driven deletions withdraw their automatic drafts too.
+                            withdrawAutomaticDrafts();
                         }
                         affected.clear();
                         if (!state.config.enabled) {
@@ -596,6 +599,70 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
             }
         }
         return dropped;
+    }
+
+    /** Routes ephemeral withdrawal snapshots to live chat drafts. Registered by the
+     * tool window on the EDT; null keeps state-only unit tests free of UI dependencies. */
+    private Consumer<ReviewBatch> batchPusher;
+
+    public void setBatchPusher(Consumer<ReviewBatch> pusher) {
+        batchPusher = pusher;
+    }
+
+    /**
+     * Withdraws automatic draft entries whose annotation was completed or deleted
+     * (plan §9): the entry leaves the handoff history immediately, and an ephemeral
+     * supersede snapshot — never stored — tells the live chat draft to drop it.
+     * Manual transfers and quotes keep their entries.
+     */
+    public synchronized void withdrawAutomaticDrafts() {
+        List<ReviewBatch> pushes = new ArrayList<>();
+        for (java.util.Iterator<ReviewBatch> iterator = state.batches.iterator(); iterator.hasNext(); ) {
+            ReviewBatch batch = iterator.next();
+            if (!isPending(batch) || !batch.automatic) {
+                continue;
+            }
+            List<Annotation> withdrawn = new ArrayList<>();
+            for (java.util.Iterator<Annotation> item = batch.annotations.iterator(); item.hasNext(); ) {
+                Annotation snapshot = item.next();
+                if (!isActiveAnnotation(snapshot.id)) {
+                    item.remove();
+                    withdrawn.add(snapshot);
+                }
+            }
+            if (withdrawn.isEmpty()) {
+                continue;
+            }
+            if (batch.annotations.isEmpty()) {
+                iterator.remove();
+            }
+            ReviewBatch push = copy(batch, ReviewBatch.class);
+            push.id = java.util.UUID.randomUUID().toString();
+            push.annotations = withdrawn;
+            for (Annotation snapshot : withdrawn) {
+                // The chat dedup merge drops entries it already has at this revision;
+                // bump so the withdrawal relocates the stale copy out.
+                snapshot.revision++;
+                snapshot.withdrawn = true;
+            }
+            pushes.add(push);
+        }
+        Consumer<ReviewBatch> pusher = batchPusher;
+        if (pusher != null) {
+            for (ReviewBatch push : pushes) {
+                pusher.accept(push);
+            }
+        }
+    }
+
+    /** Caller must hold the monitor. */
+    private boolean isActiveAnnotation(String annotationId) {
+        for (Annotation live : state.annotations) {
+            if (annotationId.equals(live.id)) {
+                return !live.completed;
+            }
+        }
+        return false; // deleted or never registered in this workspace
     }
 
     public synchronized List<ReviewBatch> pending(String targetId, String epoch, String sessionId, boolean allowRecovery) {

@@ -14,6 +14,9 @@ public final class Annotation {
     public String status = "attached";
     public boolean completed;
     public boolean sourceMissing;
+    /** Ephemeral push-only marker: the annotation was completed or deleted after
+     * handoff, so live chat drafts must drop this snapshot. Never persisted on purpose. */
+    public boolean withdrawn;
     public String precision = "block";
     public int start;
     public int end;

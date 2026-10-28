@@ -275,4 +275,79 @@ public class MarkdownReviewServiceTest {
         service.refreshPreviewSettings();
         assertEquals(1, received.size());
     }
+
+    @Test
+    public void completingOrDeletingAnAnnotationWithdrawsItsAutomaticDraftOnly() {
+        MarkdownReviewService service = new MarkdownReviewService(null);
+        List<ReviewBatch> pushes = new java.util.ArrayList<>();
+        service.setBatchPusher(pushes::add);
+        var persisted = service.snapshotState();
+        persisted.config.persist = true;
+        Annotation active = new Annotation();
+        active.id = "comment-1";
+        Annotation completed = new Annotation();
+        completed.id = "comment-2";
+        completed.completed = true;
+        persisted.annotations.add(active);
+        persisted.annotations.add(completed);
+        service.loadState(persisted);
+        ReviewBatch keep = batch("auto-keep");
+        keep.automatic = true;
+        service.saveBatch(keep);
+        ReviewBatch done = batch("auto-done");
+        done.automatic = true;
+        done.annotations.get(0).id = "comment-2";
+        service.saveBatch(done);
+        ReviewBatch gone = batch("auto-gone");
+        gone.automatic = true;
+        gone.annotations.get(0).id = "comment-x"; // no live annotation: deleted
+        service.saveBatch(gone);
+        ReviewBatch manual = batch("manual-1");
+        manual.annotations.get(0).id = "comment-2"; // completed but manual: kept
+        service.saveBatch(manual);
+
+        service.withdrawAutomaticDrafts();
+
+        List<String> remaining = service.snapshotState().batches.stream().map(item -> item.id).sorted().toList();
+        assertEquals(List.of("auto-keep", "manual-1"), remaining);
+        assertEquals(2, pushes.size());
+        for (ReviewBatch push : pushes) {
+            assertNotEquals("auto-done", push.id);
+            assertTrue(push.automatic);
+            assertEquals("tab", push.targetId);
+            assertEquals("epoch-1", push.targetEpoch);
+            Annotation withdrawn = push.annotations.get(0);
+            assertTrue(withdrawn.withdrawn);
+            assertEquals(2, withdrawn.revision);
+            assertTrue(List.of("comment-2", "comment-x").contains(withdrawn.id));
+        }
+    }
+
+    @Test
+    public void completingThroughTheServiceSweepsTheDraftsAndKeepsPersistUnchanged() {
+        var file = new com.intellij.testFramework.LightVirtualFile("plan.md");
+        MarkdownReviewService service = new MarkdownReviewService(null);
+        List<ReviewBatch> pushes = new java.util.ArrayList<>();
+        service.setBatchPusher(pushes::add);
+        var persisted = service.snapshotState();
+        persisted.config.persist = true;
+        Annotation live = new Annotation();
+        live.id = "comment-1";
+        live.fileUrl = file.getUrl();
+        persisted.annotations.add(live);
+        service.loadState(persisted);
+        ReviewBatch auto = batch("auto-1");
+        auto.automatic = true;
+        service.saveBatch(auto);
+
+        service.complete(file, "comment-1", 1, true);
+
+        assertTrue(pushes.stream().anyMatch(push -> push.annotations.stream()
+                .anyMatch(item -> item.withdrawn && "comment-1".equals(item.id))));
+        assertTrue(service.snapshotState().batches.stream().noneMatch(item -> item.id.equals("auto-1")));
+        assertTrue(service.getConfig().persist); // unchanged: no silent flip either way
+        // Un-completing later must not resurrect a withdrawn automatic draft.
+        service.complete(file, "comment-1", 2, false);
+        assertTrue(service.snapshotState().batches.stream().noneMatch(item -> item.automatic));
+    }
 }

@@ -41,11 +41,11 @@
       },
       "autoAddToChat": {
         "label": "Automatically add comments to the current chat draft (beta)",
-        "hint": "Off by default. Creating or editing a comment adds its latest snapshot to the selected CC GUI chat input. Review the draft before sending."
+        "hint": "Off by default. Creating or editing a comment adds its latest snapshot to the selected CC GUI chat input. Review the draft before sending. Completing or deleting a comment also withdraws its automatically added draft; manually added comments and quotes are kept."
       },
       "autoDeleteAffected": {
         "label": "Automatically delete comments affected by edits (beta)",
-        "hint": "Edits or deletions inside an annotated source range clear its comment; position changes alone retain it. Formatted selections may cover a whole source block. Cleanup does not prove completion: the agent must report unfinished items. Transferred snapshots remain intact."
+        "hint": "Edits or deletions inside an annotated source range clear its comment; position changes alone retain it. Formatted selections may cover a whole source block. Cleanup does not prove completion: the agent must report unfinished items. Automatically added drafts are withdrawn with their comment; manual transfers and quotes remain intact."
       },
       "persist": {
         "label": "Keep comments and pending snapshots after restart (beta)",

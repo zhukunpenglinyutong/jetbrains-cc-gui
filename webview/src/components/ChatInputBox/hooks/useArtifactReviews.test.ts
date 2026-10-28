@@ -140,4 +140,25 @@ describe('Markdown review chat drafts', () => {
     expect(result.current.batches).toHaveLength(0);
     expect(submission.isCurrent()).toBe(false);
   });
+
+  it('retracts draft entries via withdrawal snapshots and filters them at send time', () => {
+    const { result } = renderHook(() => useArtifactReviews());
+    bindTarget();
+    act(() => window.addArtifactReview!(JSON.stringify(batch())));
+    // The backend reports comment-1 as completed/deleted: same annotation id,
+    // higher revision, new batch id, withdrawn marker set.
+    act(() => window.addArtifactReview!(JSON.stringify({
+      ...batch('withdraw-1'),
+      automatic: true,
+      annotations: [{ ...batch().annotations[0], revision: 2, withdrawn: true }],
+    })));
+    expect(result.current.batches.map(item => item.id)).toEqual(['batch-1']);
+    expect(result.current.batches[0].annotations.map(item => item.id)).toEqual(['comment-2']);
+    // Send-time insurance: a withdrawn entry that raced the submit never serializes.
+    const stale = [{ ...batch(), annotations: [{ ...batch().annotations[0], withdrawn: true }, batch().annotations[1]] }];
+    expect(parseReviewMessage(serializeArtifactReviews(stale))?.batches[0].annotations
+      .map(item => item.id)).toEqual(['comment-2']);
+    expect(serializeArtifactReviews([{ ...batch(),
+      annotations: [{ ...batch().annotations[0], completed: true }] }])).toBe('');
+  });
 });

@@ -20,7 +20,12 @@ public class MarkdownCompletionTest {
         config.persist = false;
         service.configure(config);
         service.complete(file, "000a", 1, true);
-        assertTrue(service.getConfig().persist);
+        // Option A: completing no longer silently re-enables persistence.
+        assertFalse(service.getConfig().persist);
+        // The completed flag round-trips only when the user opts in.
+        var optedIn = service.getConfig();
+        optedIn.persist = true;
+        service.configure(optedIn);
         var restored = new MarkdownReviewService(null);
         restored.loadState(service.getState());
         assertTrue(restored.list(file).get(0).completed);
