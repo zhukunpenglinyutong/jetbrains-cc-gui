@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { expandQuoteTokens } from '../utils/quoteRegistry';
 import type { Attachment, ReasoningEffort } from '../types.js';
 import type { Dispatch, SetStateAction } from 'react';
@@ -77,6 +77,10 @@ export function useSubmitHandler({
   addToast,
   t,
 }: UseSubmitHandlerOptions) {
+  // Input clearing is deferred, so a second press inside that window would read
+  // the same still-present text and send it twice; trip this until it fires.
+  const submittingRef = useRef(false);
+
   return useCallback(() => {
     // Force fresh DOM read to avoid stale cache (e.g., after paste)
     invalidateCache();
@@ -157,7 +161,10 @@ export function useSubmitHandler({
     // window must not swallow the typed input or the review draft. clearInput
     // also drops any queued draft notification, so a stale debounced value
     // cannot refill the input after submit.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setTimeout(() => {
+      submittingRef.current = false;
       if (reviews && reviewSubmission?.isCurrent && !reviewSubmission.isCurrent()) return;
       onSubmit(content, attachmentsToSend);
       reviewSubmission?.onSubmitted();

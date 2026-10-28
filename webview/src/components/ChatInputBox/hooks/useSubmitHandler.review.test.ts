@@ -77,4 +77,21 @@ describe('review submission snapshot', () => {
     expect(config.clearInput).toHaveBeenCalled();
     expect(config.setInternalAttachments).toHaveBeenCalled();
   });
+
+  it('ignores a second press while the deferred handoff is still in flight', () => {
+    vi.useFakeTimers();
+    const config = options();
+    const onSubmitted = vi.fn();
+    config.captureReviewSubmission = () => ({ text: 'review', onSubmitted, isCurrent: () => true });
+    const { result } = renderHook(() => useSubmitHandler(config));
+    result.current();
+    result.current();
+    vi.advanceTimersByTime(20);
+    expect(config.onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmitted).toHaveBeenCalledTimes(1);
+    // The guard lifts once the deferred handoff fires; a later press works again.
+    result.current();
+    vi.advanceTimersByTime(20);
+    expect(config.onSubmit).toHaveBeenCalledTimes(2);
+  });
 });
