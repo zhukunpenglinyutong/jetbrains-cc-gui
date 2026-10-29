@@ -1,5 +1,9 @@
 // Shared pure helpers for history list rows and dialogs.
 
+// Entrypoints the backend conversion service actually knows how to rewrite
+// (SessionConversionService only matches sdk-cli / claude-vscode patterns).
+export const CONVERTIBLE_ENTRYPOINTS = new Set(['sdk-cli', 'claude-vscode']);
+
 const HIGHLIGHT_MARK_STYLE: React.CSSProperties = {
   backgroundColor: '#ffd700',
   color: '#000',

@@ -128,6 +128,7 @@
       "userContext": "補充說明：「{{context}}」",
       "expand": "展開摘要",
       "collapse": "摺疊摘要",
+"receivedTime": "記錄時間",
       "nativeCompleted": "上下文已壓縮",
       "nativeInProgress": "正在壓縮上下文",
       "nativeFailed": "上下文壓縮失敗",
@@ -138,7 +139,8 @@
       "timeUnknown": "時間未知",
       "turnTime": "回合開始時間"
     },
-    "codexCompactUsage": "請直接使用 /compact，無需參數",
+"pasteImagePreparing": "正在準備貼上的圖片...",
+"codexCompactUsage": "請直接使用 /compact，無需參數",
     "codexCompactStarted": "Codex 正在壓縮會話上下文",
     "codexReviewUsage": "請直接使用 /review，無需參數",
     "codexReviewStarted": "Codex 正在審查工作區變更",
@@ -305,6 +307,12 @@
         "disabled": "已關閉",
         "hint": "開啟後，訊息底部會在可用時顯示本輪預估費用，並在輸入 Token 中標明快取命中。Token 消耗資訊始終保持顯示。"
       },
+      "autoConvertSessionsOnExit": {
+        "label": "結束時自動轉換會話為 CLI",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "插件透過 SDK 建立的會話不會出現在 Claude Code CLI 的 /resume 列表中，因為它們的 entrypoint 是 sdk-cli。開啟後，會在關閉 IDE 時自動轉換。"
+      },
       "askUserQuestionSoundNotification": {
         "label": "提問提示音",
         "enabled": "已開啟",
@@ -374,6 +382,18 @@
         "enabled": "已開啟",
         "disabled": "已關閉",
         "hint": "關閉後，在已有訊息的會話中點選新建將直接建立，不再彈出確認視窗"
+      },
+      "bashGroupCollapsed": {
+        "label": "預設收起批次執行命令",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "適用於所有 CLI 的批次執行命令群組。開啟後預設僅顯示標題和執行狀態，點擊標題可展開命令清單；關閉後預設展開。設定立即生效，已手動展開或收起的群組維持原狀態。"
+      },
+      "editGroupCollapsed": {
+        "label": "預設收起批次編輯檔案",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "hint": "適用於所有 CLI 的批次編輯檔案群組。開啟後預設顯示標題、編輯次數、增刪行數和執行狀態，點擊標題可展開檔案清單；關閉後預設展開。同一檔案的多次編輯會分別計數。設定立即生效，已手動展開或收起的群組維持原狀態。「預設展開差異」僅控制單項編輯的行內差異，不影響批次群組的展開狀態。"
       }
     },
     "providers": "供應商管理",
@@ -442,6 +462,8 @@
       "uninstallFailed": "解除安裝失敗: {{error}}",
       "updating": "更新中...",
       "updateSuccess": "{{name}} 更新成功",
+"codexMigratedTitle": "Codex 已遷移到「供應商管理 → CLI」",
+      "codexMigratedDesc": "Codex 不再從這裡安裝 SDK，改為直接使用你電腦上已裝好的 Codex CLI（@openai/codex），聊天透過官方 app-server 執行。請在「供應商管理 → CLI」查看偵測狀態；如果還沒安裝，先在終端執行 npm install -g @openai/codex，再回到該頁點「重新偵測」。",
       "cliTransportBadge": "CLI · {{transport}}"
     },
     "usage": "使用統計",
@@ -955,6 +977,10 @@
         "dsh": {
           "name": "DeepSeek Harness",
           "description": "DeepSeek 終端智慧體 CLI（dsh）"
+        },
+        "codex": {
+          "name": "Codex CLI",
+          "description": "識別本機已安裝的 Codex CLI。版本偵測不讀取帳號設定；聊天透過 app-server 執行。"
         }
       },
       "installDialog": {
@@ -1071,6 +1097,17 @@
       "minutesAgo": "分鐘前",
       "secondsAgo": "秒前"
     },
+    "convertActiveHint": "結束會話後可轉換為 CLI",
+    "convertActiveHintTooltip": "請先結束或關閉此會話，然後從歷史記錄中轉換",
+    "convertAllToCliSessions": "全部轉換為 CLI（{{count}}）",
+    "convertAllToCliSessionsTooltip": "將 {{count}} 個透過 SDK 建立的會話轉換為 CLI 項目，以便它們出現在 Claude Code CLI 的 /resume 列表中。目前使用中的會話會被略過。",
+    "convertAllToCliSessionsLabel": "全部轉換為 CLI",
+    "convertAllToCliSessionsEmptyTooltip": "沒有可轉換的 SDK 或 VS Code 會話。只有透過 SDK 或 VS Code 擴充功能建立的會話才能轉換為 CLI 項目；由 Claude Code CLI 直接建立的會話已經可以繼續。",
+    "convertAllSuccess": "已轉換 {{count}} 個會話，現在可在 CLI 的 /resume 中顯示",
+    "convertAllPartial": "已轉換 {{total}} 個會話中的 {{count}} 個，{{failed}} 個失敗",
+    "convertAllAlreadyRunning": "已有轉換正在進行中，請等待完成",
+    "convertAllTimeout": "轉換耗時過長。清單已重新整理，請稍後查看。",
+    "convertAllBridgeUnavailable": "與 IDE 的連線不可用，請求未送出",
     "conversionErrors": {
       "INVALID_SESSION_ID": "無效的會話 ID",
       "SESSION_ACTIVE": "無法轉換當前活躍的會話，請先開啟新會話後再轉換",
@@ -1091,7 +1128,9 @@
       "claude-vscode": "此會話由 VS Code 插件創建，CLI 默認不顯示。點擊「轉為CLI」可使其出現在終端 CLI 的 /resume 列表中",
       "remote": "此會話由遠程 Claude Code 實例創建"
     },
-    "loadMore": "載入更多"
+"totalSessionsOnly": "共 {{count}} 個會話",
+    "messageCountUnknown": "訊息數未統計",
+"loadMore": "載入更多"
   },
   "permission": {
     "dialogTitle": "權限請求",
@@ -1234,7 +1273,20 @@
       "killFailed": "終止失敗：{{error}}",
       "activeRequests": "{{count}} 個進行中"
     },
-    "link": "連結"
+    "link": "連結",
+    "codexQuota": {
+      "title": "Codex 配額",
+      "loading": "正在載入配額...",
+      "unavailable": "配額不可用",
+      "lastUpdated": "更新於 {{value}}",
+      "fiveHour": "5 小時用量",
+      "weekly": "每週用量",
+      "windowRemainingPercent": "剩餘 {{percent}}%",
+      "windowRemainingPercentWithReset": "剩餘 {{percent}}% · 重置於 {{value}}",
+      "windowUsedOnly": "已用 {{used}}",
+      "windowUnavailable": "不可用",
+      "apiKeyMode": "API 金鑰模式無訂閱配額"
+    }
   },
   "markdown": {
     "copyCode": "複製程式碼",
@@ -1537,7 +1589,24 @@
       "expandReport": "展開審查發現",
       "collapseReport": "收合審查發現",
       "untitled": "未命名問題"
-    }
+    },
+    "commandRead": "讀取 {{path}}",
+    "commandList": "列出 {{path}}",
+    "commandSearch": "在 {{path}} 中搜尋 {{query}}",
+    "commandApprovalReason": "批准理由",
+    "patchToggleDiff": "查看修改",
+    "errorOutput": "錯誤詳情",
+    "resultUnknown": "無法確定此工具的個別執行結果",
+    "patchNoDiff": "無可用差異",
+    "patchKind": {
+      "add": "新增",
+      "delete": "刪除",
+      "update": "修改",
+      "move": "移動"
+    },
+    "editGroupProgress": "已結束 {{completed}}/{{total}}",
+    "editGroupAllCompleted": "全部完成",
+    "editGroupFailed": "{{count}} 項失敗"
   },
   "todo": {
     "inProgress": "進行中 {{completed}}/{{total}} 個任務",
@@ -1783,6 +1852,10 @@
       "fable5": {
         "label": "Fable 5",
         "description": "Fable 5 · 保留的前代 Fable 模型"
+      },
+      "sonnet55": {
+        "label": "Sonnet 5.5",
+        "description": "Sonnet 5.5 · Sonnet 最新升級模型"
       }
     },
     "longContext": {
@@ -1827,8 +1900,14 @@
       "gpt54": {
         "label": "GPT-5.4",
         "description": "最新前沿模型，能力進一步增強"
+      },
+      "gpt61sol": {
+        "label": "GPT-6.1 Sol",
+        "description": "面向複雜專業工作的 GPT-6.1 前沿模型"
       }
-    }
+    },
+    "clearSearch": "清除搜尋",
+    "noSearchMatches": "沒有符合「{{query}}」的模型"
   },
   "modelConfig": {
     "title": "模型設定",
@@ -2229,6 +2308,18 @@
         }
       }
     }
+  },
+  "workspaceDiff": {
+    "title": "工作區變更",
+    "staged": "已暫存",
+    "unstaged": "未暫存",
+    "untracked": "未追蹤",
+    "noChanges": "沒有偵測到變更",
+    "binary": "二進位",
+    "truncated": "工作區快照過大，內容已被截斷",
+    "notGit": "目前目錄不是 Git 工作區",
+    "refresh": "重新整理",
+    "fileCount": "{{count}} 個檔案"
   },
   "codex": {
     "plan": {

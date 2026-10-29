@@ -48,16 +48,24 @@ const deduplicateHistorySessions = (sessions: HistorySessionSummary[], nativeHis
 };
 
 export const useHistorySessions = (historyData: HistoryData | null, searchQuery: string, t: TFunction) => {
+  // Deduplicated but unsearched. The search box narrows what is *rendered* only: the
+  // backend walks the whole project index for the convert-all command, so anything that
+  // must mirror the backend's candidate set (the "convert all (N)" count) has to read this
+  // list, never the filtered one — otherwise the button claims "nothing to convert" while
+  // the click would have converted N sessions.
+  const allSessions = useMemo(
+    () => deduplicateHistorySessions(historyData?.sessions ?? [], historyData?.source === 'native'),
+    [historyData?.sessions, historyData?.source]
+  );
+
   // Sort and filter sessions: favorited on top (by favorite time descending), unfavorited below (original order)
   const sessions = useMemo(() => {
-    const rawSessions = deduplicateHistorySessions(historyData?.sessions ?? [], historyData?.source === 'native');
-
     // Search filter (case-insensitive)
     const filteredSessions = searchQuery.trim()
-      ? rawSessions.filter(s =>
+      ? allSessions.filter(s =>
           s.title?.toLowerCase().includes(searchQuery.toLowerCase())
         )
-      : rawSessions;
+      : allSessions;
 
     // Separate favorited and unfavorited sessions
     const favorited = filteredSessions.filter(s => s.isFavorited);
@@ -77,5 +85,5 @@ export const useHistorySessions = (historyData: HistoryData | null, searchQuery:
         total: historyData.total ?? 0,
       });
 
-  return { sessions, infoBar };
+  return { sessions, allSessions, infoBar };
 };

@@ -50,6 +50,8 @@ export interface BehaviorTabProps {
   onAskUserQuestionNotificationEnabledChange?: (enabled: boolean) => void;
   detailedOutputEnabled?: boolean;
   onDetailedOutputEnabledChange?: (enabled: boolean) => void;
+  autoConvertSessionsOnExit?: boolean;
+  onAutoConvertSessionsOnExitChange?: (enabled: boolean) => void;
   systemNotificationOnlyWhenUnfocused?: boolean;
   onSystemNotificationOnlyWhenUnfocusedChange?: (enabled: boolean) => void;
   askUserQuestionSoundNotificationEnabled?: boolean;
@@ -96,6 +98,8 @@ const BehaviorTab = ({
   onAskUserQuestionNotificationEnabledChange = () => {},
   detailedOutputEnabled = false,
   onDetailedOutputEnabledChange = () => {},
+  autoConvertSessionsOnExit = false,
+  onAutoConvertSessionsOnExitChange = () => {},
   systemNotificationOnlyWhenUnfocused = false,
   onSystemNotificationOnlyWhenUnfocusedChange = () => {},
   askUserQuestionSoundNotificationEnabled = false,
@@ -226,6 +230,17 @@ const BehaviorTab = ({
         enabledLabel={t('settings.basic.detailedOutput.enabled')}
         disabledLabel={t('settings.basic.detailedOutput.disabled')}
         hint={t('settings.basic.detailedOutput.hint')}
+      />
+
+      {/* Auto-convert SDK sessions to CLI sessions on exit toggle */}
+      <ToggleSettingSection
+        icon="codicon-arrow-swap"
+        label={t('settings.basic.autoConvertSessionsOnExit.label')}
+        checked={autoConvertSessionsOnExit}
+        onChange={onAutoConvertSessionsOnExitChange}
+        enabledLabel={t('settings.basic.autoConvertSessionsOnExit.enabled')}
+        disabledLabel={t('settings.basic.autoConvertSessionsOnExit.disabled')}
+        hint={t('settings.basic.autoConvertSessionsOnExit.hint')}
       />
 
       {/* ===== Message notification settings (grouped) ===== */}

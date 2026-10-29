@@ -128,6 +128,7 @@
       "userContext": "Contexto: \"{{context}}\"",
       "expand": "Expandir resumo",
       "collapse": "Recolher resumo",
+"receivedTime": "Hora registrada",
       "nativeCompleted": "Contexto compactado",
       "nativeInProgress": "Compactando contexto",
       "nativeFailed": "Falha na compactação",
@@ -138,7 +139,8 @@
       "timeUnknown": "Hora desconhecida",
       "turnTime": "Início do turno"
     },
-    "codexCompactUsage": "Use /compact without arguments",
+"pasteImagePreparing": "Preparando imagem colada...",
+"codexCompactUsage": "Use /compact without arguments",
     "codexCompactStarted": "Codex is compacting the conversation",
     "codexReviewUsage": "Use /review without arguments",
     "codexReviewStarted": "Codex is reviewing the workspace",
@@ -305,6 +307,12 @@
         "disabled": "Desativado",
         "hint": "Quando ativado, o rodapé das mensagens mostra o custo estimado do turno quando disponível e inclui os acertos de cache no resumo de tokens de entrada. O uso de tokens permanece sempre visível."
       },
+      "autoConvertSessionsOnExit": {
+        "label": "Converter sessões em CLI ao sair",
+        "enabled": "Ativado",
+        "disabled": "Desativado",
+        "hint": "As sessões criadas pelo plugin via SDK não aparecem na lista /resume do Claude Code CLI porque o entrypoint delas é sdk-cli. Quando ativado, elas são convertidas automaticamente ao fechar o IDE."
+      },
       "askUserQuestionSoundNotification": {
         "label": "Som de alerta de pergunta",
         "enabled": "Ativado",
@@ -468,6 +476,8 @@
       "uninstallFailed": "Falha ao desinstalar: {{error}}",
       "updating": "Atualizando...",
       "updateSuccess": "{{name}} atualizado com sucesso",
+"codexMigratedTitle": "O Codex foi movido para Gerenciamento de Provedores → CLI",
+      "codexMigratedDesc": "O Codex não instala mais um SDK aqui: ele usa a CLI do Codex já instalada na sua máquina (@openai/codex) e o chat roda pelo app-server oficial. Veja o status em Gerenciamento de Provedores → CLI; se ainda não estiver instalada, execute npm install -g @openai/codex no terminal e clique em Re-check nessa página.",
       "cliTransportBadge": "CLI · {{transport}}"
     },
     "usage": "Estatísticas de Uso",
@@ -1087,6 +1097,10 @@
         "omp": {
           "name": "OMP CLI",
           "description": "Agente de codificação de terminal Oh My Pi com suporte a múltiplos provedores"
+        },
+        "codex": {
+          "name": "Codex CLI",
+          "description": "Detecta o Codex CLI instalado. A consulta de versão não lê a configuração da conta; o chat usa app-server."
         }
       },
       "installDialog": {
@@ -1156,6 +1170,15 @@
     "copyFailed": "Falha ao copiar",
     "convertToCliSession": "Converter para sessão reconhecida pelo CLI",
     "convertButton": "Converter p/ CLI",
+    "convertAllToCliSessions": "Converter tudo para CLI ({{count}})",
+    "convertAllToCliSessionsTooltip": "Converter {{count}} sessão(ões) criada(s) pelo SDK em entradas CLI para que apareçam na lista /resume do Claude Code CLI. A sessão em uso é ignorada.",
+    "convertAllToCliSessionsLabel": "Converter tudo para CLI",
+    "convertAllToCliSessionsEmptyTooltip": "Nenhuma sessão do SDK ou do VS Code para converter. Somente sessões criadas pelo SDK ou pela extensão do VS Code podem ser convertidas em entradas CLI; as criadas diretamente pelo Claude Code CLI já podem ser retomadas.",
+    "convertAllSuccess": "{{count}} sessão(ões) convertida(s), agora visível(is) no CLI /resume",
+    "convertAllPartial": "Convertidas {{count}} de {{total}} sessão(ões), {{failed}} com falha",
+    "convertAllAlreadyRunning": "Uma conversão já está em andamento, aguarde a conclusão",
+    "convertAllTimeout": "A conversão demorou demais. A lista foi atualizada, verifique em breve.",
+    "convertAllBridgeUnavailable": "A ponte para o IDE está indisponível, a solicitação não foi enviada",
     "convertSuccess": "Sessão convertida para ser reconhecida pelo CLI",
     "convertFailed": "Falha na conversão",
     "confirmConvert": "Converter para sessão CLI?",
@@ -1188,7 +1211,11 @@
       "claude-vscode": "Esta sessão foi criada pela extensão do VS Code e não é mostrada no CLI por padrão. Clique em 'Converter para CLI' para fazê-la aparecer na lista /resume do CLI do terminal",
       "remote": "Esta sessão foi criada por uma instância remota do Claude Code"
     },
-    "loadMore": "Load more"
+"convertActiveHint": "Converter para CLI após encerrar a sessão",
+    "convertActiveHintTooltip": "Encerre ou feche esta sessão primeiro e depois converta-a pelo histórico",
+    "totalSessionsOnly": "{{count}} sessões",
+    "messageCountUnknown": "Contagem de mensagens indisponível",
+"loadMore": "Load more"
   },
   "permission": {
     "dialogTitle": "Solicitação de Permissão",
@@ -1332,7 +1359,20 @@
       "killFailed": "Falha ao encerrar: {{error}}",
       "activeRequests": "{{count}} em andamento"
     },
-    "link": "Link"
+    "link": "Link",
+    "codexQuota": {
+      "title": "Cota do Codex",
+      "loading": "Carregando cota...",
+      "unavailable": "Cota indisponível",
+      "lastUpdated": "Atualizado {{value}}",
+      "fiveHour": "Uso de 5 h",
+      "weekly": "Uso semanal",
+      "windowRemainingPercent": "{{percent}}% restante",
+      "windowRemainingPercentWithReset": "{{percent}}% restante · Reinicia {{value}}",
+      "windowUsedOnly": "{{used}} usados",
+      "windowUnavailable": "Indisponível",
+      "apiKeyMode": "O modo de chave de API não tem cota de assinatura"
+    }
   },
   "markdown": {
     "copyCode": "Copiar código",
@@ -1635,6 +1675,20 @@
       "expandReport": "Expandir constatações",
       "collapseReport": "Recolher constatações",
       "untitled": "Constatação sem título"
+    },
+    "commandRead": "Ler {{path}}",
+    "commandList": "Listar {{path}}",
+    "commandSearch": "Buscar {{query}} em {{path}}",
+    "commandApprovalReason": "Motivo da aprovação",
+    "patchToggleDiff": "Ver alterações",
+    "errorOutput": "Detalhes do erro",
+    "resultUnknown": "Resultado individual da ferramenta indisponível",
+    "patchNoDiff": "Diferenças indisponíveis",
+    "patchKind": {
+      "add": "Adicionado",
+      "delete": "Excluído",
+      "update": "Atualizado",
+      "move": "Movido"
     }
   },
   "todo": {
@@ -1880,6 +1934,10 @@
       "fable5": {
         "label": "Fable 5",
         "description": "Fable 5 · Geração anterior do Fable"
+      },
+      "sonnet55": {
+        "label": "Sonnet 5.5",
+        "description": "Sonnet 5.5 · Upgrade mais recente do Sonnet"
       }
     },
     "longContext": {
@@ -1924,8 +1982,14 @@
       "gpt54": {
         "label": "GPT-5.4",
         "description": "Modelo de fronteira mais recente com capacidades aprimoradas."
+      },
+      "gpt61sol": {
+        "label": "GPT-6.1 Sol",
+        "description": "Modelo de fronteira GPT-6.1 para trabalho profissional complexo."
       }
-    }
+    },
+    "clearSearch": "Limpar pesquisa",
+    "noSearchMatches": "Nenhum modelo corresponde a \"{{query}}\""
   },
   "modes": {
     "default": {
@@ -2265,6 +2329,21 @@
         }
       }
     }
+  },
+  "workspaceDiff": {
+    "title": "Alterações do espaço de trabalho",
+    "staged": "Preparadas",
+    "unstaged": "Não preparadas",
+    "untracked": "Não rastreados",
+    "noChanges": "Nenhuma alteração detectada",
+    "binary": "Binário",
+    "truncated": "O snapshot do espaço de trabalho era muito grande e foi truncado",
+    "notGit": "O diretório atual não é uma árvore de trabalho Git",
+    "refresh": "Atualizar",
+    "fileCount": "{{count}} arquivos",
+    "fileCount_one": "{{count}} arquivo",
+    "fileCount_many": "{{count}} arquivos",
+    "fileCount_other": "{{count}} arquivos"
   },
   "codex": {
     "plan": {

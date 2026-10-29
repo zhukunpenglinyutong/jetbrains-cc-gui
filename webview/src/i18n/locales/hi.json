@@ -128,6 +128,7 @@
       "userContext": "संदर्भ: \"{{context}}\"",
       "expand": "सारांश विस्तृत करें",
       "collapse": "सारांश संक्षिप्त करें",
+"receivedTime": "दर्ज समय",
       "nativeCompleted": "संदर्भ संक्षिप्त किया गया",
       "nativeInProgress": "संदर्भ संक्षिप्त हो रहा है",
       "nativeFailed": "संक्षेपण विफल",
@@ -138,7 +139,8 @@
       "timeUnknown": "समय अज्ञात",
       "turnTime": "टर्न का आरंभ समय"
     },
-    "codexCompactUsage": "Use /compact without arguments",
+"pasteImagePreparing": "पेस्ट की गई छवि तैयार हो रही है...",
+"codexCompactUsage": "Use /compact without arguments",
     "codexCompactStarted": "Codex is compacting the conversation",
     "codexReviewUsage": "Use /review without arguments",
     "codexReviewStarted": "Codex is reviewing the workspace",
@@ -293,6 +295,12 @@
         "disabled": "बंद",
         "hint": "चालू होने पर, उपलब्ध होने पर संदेशों के नीचे अनुमानित टर्न लागत दिखेगी और इनपुट Token सारांश में कैश हिट शामिल होंगे। Token उपयोग हमेशा दिखाई देता रहेगा।"
       },
+      "autoConvertSessionsOnExit": {
+        "label": "IDE बंद होने पर सत्रों को CLI में बदलें",
+        "enabled": "सक्षम",
+        "disabled": "अक्षम",
+        "hint": "प्लगइन द्वारा SDK के माध्यम से बनाए गए सत्र Claude Code CLI की /resume सूची में नहीं दिखते, क्योंकि उनका entrypoint sdk-cli है। सक्षम होने पर, IDE बंद करने पर वे स्वतः बदल दिए जाते हैं।"
+      },
       "askUserQuestionSoundNotification": {
         "label": "प्रश्न चेतावनी ध्वनि",
         "enabled": "सक्षम",
@@ -430,6 +438,8 @@
       "uninstallFailed": "अनइंस्टॉल विफल: {{error}}",
       "updating": "अपडेट हो रहा है...",
       "updateSuccess": "{{name}} सफलतापूर्वक अपडेट हो गया",
+"codexMigratedTitle": "Codex अब प्रदाता प्रबंधन → CLI में है",
+      "codexMigratedDesc": "Codex अब यहाँ SDK इंस्टॉल नहीं करता। यह आपके कंप्यूटर पर पहले से इंस्टॉल Codex CLI (@openai/codex) का उपयोग करता है और चैट आधिकारिक app-server के माध्यम से चलती है। इसकी स्थिति प्रदाता प्रबंधन → CLI में देखें; अगर यह इंस्टॉल नहीं है, तो टर्मिनल में npm install -g @openai/codex चलाएँ और फिर उस पेज पर Re-check दबाएँ।",
       "cliTransportBadge": "CLI · {{transport}}"
     },
     "usage": "उपयोग सांख्यिकी",
@@ -934,6 +944,10 @@
         "omp": {
           "name": "OMP CLI",
           "description": "मल्टी-प्रोवाइडर मॉडल सपोर्ट वाला Oh My Pi टर्मिनल कोडिंग एजेंट"
+        },
+        "codex": {
+          "name": "Codex CLI",
+          "description": "स्थापित Codex CLI का पता लगाता है। संस्करण जाँच खाता कॉन्फ़िगरेशन नहीं पढ़ती; चैट app-server का उपयोग करती है।"
         }
       },
       "installDialog": {
@@ -1018,6 +1032,15 @@
     "copyFailed": "कॉपी विफल",
     "convertToCliSession": "CLI पहचान सेशन में बदलें",
     "convertButton": "CLI में बदलें",
+    "convertAllToCliSessions": "सभी को CLI में बदलें ({{count}})",
+    "convertAllToCliSessionsTooltip": "SDK द्वारा बनाए गए {{count}} सत्र(ों) को CLI प्रविष्टियों में बदलें ताकि वे Claude Code CLI की /resume सूची में दिखें। प्रयोग में मौजूद सत्र छोड़ दिया जाता है।",
+    "convertAllToCliSessionsLabel": "सभी को CLI में बदलें",
+    "convertAllToCliSessionsEmptyTooltip": "कन्वर्ट करने के लिए कोई SDK या VS Code सत्र नहीं है। केवल SDK या VS Code एक्सटेंशन द्वारा बनाए गए सत्र ही CLI प्रविष्टियों में बदले जा सकते हैं; Claude Code CLI द्वारा सीधे बनाए गए सत्र पहले से ही पुनः आरंभ करने योग्य हैं।",
+    "convertAllSuccess": "{{count}} सत्र कन्वर्ट किए गए, अब CLI /resume में दिखाई देते हैं",
+    "convertAllPartial": "{{total}} में से {{count}} सत्र कन्वर्ट हुए, {{failed}} विफल",
+    "convertAllAlreadyRunning": "एक रूपांतरण पहले से चल रहा है, कृपया उसके पूरा होने तक प्रतीक्षा करें",
+    "convertAllTimeout": "रूपांतरण में बहुत अधिक समय लग गया। सूची ताज़ा कर दी गई है, कृपया थोड़ी देर बाद देखें।",
+    "convertAllBridgeUnavailable": "IDE से कनेक्शन उपलब्ध नहीं है, अनुरोध नहीं भेजा गया",
     "convertSuccess": "सेशन CLI पहचान में बदल दिया गया",
     "convertFailed": "रूपांतरण विफल",
     "confirmConvert": "CLI सेशन में बदलें?",
@@ -1050,7 +1073,11 @@
       "claude-vscode": "यह सत्र VS Code एक्सटेंशन द्वारा बनाया गया था और CLI में डिफ़ॉल्ट रूप से नहीं दिखाया गया है। टर्मिनल CLI की /resume सूची में इसे दिखाने के लिए 'CLI में कनवर्ट करें' पर क्लिक करें",
       "remote": "यह सत्र Claude Code के रिमोट इंस्टेंस द्वारा बनाया गया था"
     },
-    "loadMore": "Load more"
+"convertActiveHint": "सत्र समाप्त होने के बाद CLI में रूपांतरित करें",
+    "convertActiveHintTooltip": "पहले यह सत्र समाप्त या बंद करें, फिर इसे इतिहास से रूपांतरित करें",
+    "totalSessionsOnly": "कुल {{count}} सत्र",
+    "messageCountUnknown": "संदेश संख्या उपलब्ध नहीं",
+"loadMore": "Load more"
   },
   "permission": {
     "dialogTitle": "अनुमति अनुरोध",
@@ -1193,7 +1220,20 @@
       "killFailed": "समाप्त करने में विफल: {{error}}",
       "activeRequests": "{{count}} चालू"
     },
-    "link": "लिंक"
+    "link": "लिंक",
+    "codexQuota": {
+      "title": "Codex कोटा",
+      "loading": "कोटा लोड हो रहा है...",
+      "unavailable": "कोटा उपलब्ध नहीं है",
+      "lastUpdated": "{{value}} को अपडेट किया गया",
+      "fiveHour": "5 घंटे का उपयोग",
+      "weekly": "साप्ताहिक उपयोग",
+      "windowRemainingPercent": "{{percent}}% शेष",
+      "windowRemainingPercentWithReset": "{{percent}}% शेष · {{value}} को रीसेट",
+      "windowUsedOnly": "{{used}} उपयोग किया गया",
+      "windowUnavailable": "अनुपलब्ध",
+      "apiKeyMode": "API कुंजी मोड में सदस्यता कोटा नहीं है"
+    }
   },
   "markdown": {
     "copyCode": "कोड कॉपी करें",
@@ -1493,6 +1533,20 @@
       "expandReport": "समीक्षा निष्कर्ष विस्तृत करें",
       "collapseReport": "समीक्षा निष्कर्ष संक्षिप्त करें",
       "untitled": "शीर्षकहीन निष्कर्ष"
+    },
+    "commandRead": "{{path}} पढ़ें",
+    "commandList": "{{path}} की सूची",
+    "commandSearch": "{{path}} में {{query}} खोजें",
+    "commandApprovalReason": "स्वीकृति का कारण",
+    "patchToggleDiff": "बदलाव देखें",
+    "errorOutput": "त्रुटि का विवरण",
+    "resultUnknown": "इस टूल का अलग परिणाम उपलब्ध नहीं है",
+    "patchNoDiff": "अंतर उपलब्ध नहीं",
+    "patchKind": {
+      "add": "जोड़ा गया",
+      "delete": "हटाया गया",
+      "update": "बदला गया",
+      "move": "स्थानांतरित"
     }
   },
   "todo": {
@@ -1738,6 +1792,10 @@
       "fable5": {
         "label": "Fable 5",
         "description": "Fable 5 · पिछली Fable पीढ़ी"
+      },
+      "sonnet55": {
+        "label": "Sonnet 5.5",
+        "description": "Sonnet 5.5 · नवीनतम Sonnet अपग्रेड"
       }
     },
     "longContext": {
@@ -1782,8 +1840,14 @@
       "gpt54": {
         "label": "GPT-5.4",
         "description": "उन्नत क्षमताओं के साथ नवीनतम फ्रंटियर मॉडल।"
+      },
+      "gpt61sol": {
+        "label": "GPT-6.1 Sol",
+        "description": "जटिल पेशेवर कार्यों के लिए GPT-6.1 फ्रंटियर मॉडल।"
       }
-    }
+    },
+    "clearSearch": "सर्च साफ़ करें",
+    "noSearchMatches": "\"{{query}}\" से मेल खाता कोई मॉडल नहीं मिला"
   },
   "modes": {
     "default": {
@@ -2122,6 +2186,20 @@
         }
       }
     }
+  },
+  "workspaceDiff": {
+    "title": "वर्कस्पेस परिवर्तन",
+    "staged": "स्टेज किए गए",
+    "unstaged": "अनस्टेज किए गए",
+    "untracked": "अनट्रैक किए गए",
+    "noChanges": "कोई परिवर्तन नहीं मिला",
+    "binary": "बाइनरी",
+    "truncated": "वर्कस्पेस स्नैपशॉट बहुत बड़ा था, काट दिया गया",
+    "notGit": "वर्तमान डायरेक्टरी Git वर्किंग ट्री नहीं है",
+    "refresh": "रिफ्रेश",
+    "fileCount": "{{count}} फ़ाइलें",
+    "fileCount_one": "{{count}} फ़ाइल",
+    "fileCount_other": "{{count}} फ़ाइलें"
   },
   "codex": {
     "plan": {

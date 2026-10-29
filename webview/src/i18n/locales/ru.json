@@ -128,6 +128,7 @@
       "userContext": "Контекст: «{{context}}»",
       "expand": "Развернуть сводку",
       "collapse": "Свернуть сводку",
+"receivedTime": "Время записи",
       "nativeCompleted": "Контекст сжат",
       "nativeInProgress": "Сжатие контекста",
       "nativeFailed": "Ошибка сжатия",
@@ -138,7 +139,8 @@
       "timeUnknown": "Время неизвестно",
       "turnTime": "Начало хода"
     },
-    "codexCompactUsage": "Use /compact without arguments",
+"pasteImagePreparing": "Подготовка вставленного изображения...",
+"codexCompactUsage": "Use /compact without arguments",
     "codexCompactStarted": "Codex is compacting the conversation",
     "codexReviewUsage": "Use /review without arguments",
     "codexReviewStarted": "Codex is reviewing the workspace",
@@ -293,6 +295,12 @@
         "disabled": "Отключено",
         "hint": "Если включено, внизу сообщений при наличии данных показывается оценочная стоимость хода, а попадания в кэш отображаются внутри сводки входных Token. Расход Token всегда остаётся видимым."
       },
+      "autoConvertSessionsOnExit": {
+        "label": "Автоконвертация сессий в CLI при выходе",
+        "enabled": "Включено",
+        "disabled": "Выключено",
+        "hint": "Сессии, созданные плагином через SDK, не отображаются в списке /resume CLI Claude Code, потому что их entrypoint — sdk-cli. Если включено, они автоматически преобразуются при закрытии IDE."
+      },
       "askUserQuestionSoundNotification": {
         "label": "Звуковой сигнал при вопросе",
         "enabled": "Включено",
@@ -430,6 +438,8 @@
       "uninstallFailed": "Ошибка удаления: {{error}}",
       "updating": "Обновление...",
       "updateSuccess": "{{name}} успешно обновлён",
+"codexMigratedTitle": "Codex переехал в «Управление провайдерами → CLI»",
+      "codexMigratedDesc": "Codex больше не устанавливает SDK здесь: он использует уже установленный на компьютере Codex CLI (@openai/codex), а чат работает через официальный app-server. Проверьте состояние в разделе «Управление провайдерами → CLI». Если он не установлен, выполните в терминале npm install -g @openai/codex и нажмите Re-check на этой странице.",
       "cliTransportBadge": "CLI · {{transport}}"
     },
     "usage": "Статистика использования",
@@ -946,6 +956,10 @@
         "omp": {
           "name": "OMP CLI",
           "description": "Терминальный агент для кодирования Oh My Pi с поддержкой нескольких провайдеров"
+        },
+        "codex": {
+          "name": "Codex CLI",
+          "description": "Обнаруживает установленный Codex CLI. Проверка версии не читает настройки аккаунта; чат использует app-server."
         }
       },
       "installDialog": {
@@ -1030,6 +1044,15 @@
     "copyFailed": "Не удалось скопировать",
     "convertToCliSession": "Преобразовать в сессию, распознаваемую CLI",
     "convertButton": "Преобразовать в CLI",
+    "convertAllToCliSessions": "Преобразовать все в CLI ({{count}})",
+    "convertAllToCliSessionsTooltip": "Преобразовать {{count}} сессий, созданных через SDK, в записи CLI, чтобы они появились в списке /resume CLI Claude Code. Текущая активная сессия пропускается.",
+    "convertAllToCliSessionsLabel": "Преобразовать все в CLI",
+    "convertAllToCliSessionsEmptyTooltip": "Нечего конвертировать: нет сессий, созданных через SDK или расширение VS Code. Только такие сессии можно превратить в записи CLI; созданные самим Claude Code CLI уже доступны для возобновления.",
+    "convertAllSuccess": "Преобразовано сессий: {{count}}. Теперь они видны в CLI /resume",
+    "convertAllPartial": "Преобразовано {{count}} из {{total}} сессий, с ошибкой — {{failed}}",
+    "convertAllAlreadyRunning": "Преобразование уже выполняется, дождитесь его завершения",
+    "convertAllTimeout": "Преобразование заняло слишком много времени. Список обновлён, проверьте его немного позже.",
+    "convertAllBridgeUnavailable": "Связь с IDE недоступна, запрос не отправлен",
     "convertSuccess": "Сессия преобразована для распознавания CLI",
     "convertFailed": "Ошибка преобразования",
     "confirmConvert": "Преобразовать в сессию CLI?",
@@ -1077,7 +1100,11 @@
       "claude-vscode": "Этот сеанс был создан расширением VS Code и по умолчанию не отображается в CLI. Нажмите 'Преобразовать в CLI', чтобы он появился в списке /resume терминала CLI",
       "remote": "Этот сеанс был создан удаленным экземпляром Claude Code"
     },
-    "loadMore": "Load more"
+"convertActiveHint": "Конвертация в CLI после завершения сессии",
+    "convertActiveHintTooltip": "Сначала завершите или закройте сессию, затем конвертируйте её из списка истории",
+    "totalSessionsOnly": "{{count}} чатов",
+    "messageCountUnknown": "Количество сообщений неизвестно",
+"loadMore": "Load more"
   },
   "permission": {
     "dialogTitle": "Запрос разрешения",
@@ -1220,7 +1247,20 @@
       "killFailed": "Ошибка завершения: {{error}}",
       "activeRequests": "В работе: {{count}}"
     },
-    "link": "Ссылка"
+    "link": "Ссылка",
+    "codexQuota": {
+      "title": "Квота Codex",
+      "loading": "Загрузка квоты...",
+      "unavailable": "Квота недоступна",
+      "lastUpdated": "Обновлено {{value}}",
+      "fiveHour": "Использование за 5 ч",
+      "weekly": "Недельное использование",
+      "windowRemainingPercent": "Осталось {{percent}}%",
+      "windowRemainingPercentWithReset": "Осталось {{percent}}% · Сброс {{value}}",
+      "windowUsedOnly": "Использовано {{used}}",
+      "windowUnavailable": "Недоступно",
+      "apiKeyMode": "В режиме API-ключа квота подписки отсутствует"
+    }
   },
   "markdown": {
     "copyCode": "Копировать код",
@@ -1520,6 +1560,20 @@
       "expandReport": "Развернуть результаты ревью",
       "collapseReport": "Свернуть результаты ревью",
       "untitled": "Замечание без названия"
+    },
+    "commandRead": "Прочитать {{path}}",
+    "commandList": "Список {{path}}",
+    "commandSearch": "Найти {{query}} в {{path}}",
+    "commandApprovalReason": "Причина одобрения",
+    "patchToggleDiff": "Показать изменения",
+    "errorOutput": "Подробности ошибки",
+    "resultUnknown": "Отдельный результат инструмента недоступен",
+    "patchNoDiff": "Разница недоступна",
+    "patchKind": {
+      "add": "Добавлен",
+      "delete": "Удалён",
+      "update": "Изменён",
+      "move": "Перемещён"
     }
   },
   "todo": {
@@ -1765,6 +1819,10 @@
       "fable5": {
         "label": "Fable 5",
         "description": "Fable 5 · Предыдущее поколение Fable"
+      },
+      "sonnet55": {
+        "label": "Sonnet 5.5",
+        "description": "Sonnet 5.5 · Последнее обновление Sonnet"
       }
     },
     "longContext": {
@@ -1809,8 +1867,14 @@
       "gpt54": {
         "label": "GPT-5.4",
         "description": "Новейшая модель с расширенными возможностями."
+      },
+      "gpt61sol": {
+        "label": "GPT-6.1 Sol",
+        "description": "Передовая модель GPT-6.1 для сложной профессиональной работы."
       }
-    }
+    },
+    "clearSearch": "Очистить поиск",
+    "noSearchMatches": "Нет моделей, соответствующих «{{query}}»"
   },
   "modes": {
     "default": {
@@ -2151,6 +2215,22 @@
         }
       }
     }
+  },
+  "workspaceDiff": {
+    "title": "Изменения рабочей области",
+    "staged": "В индексе",
+    "unstaged": "Не в индексе",
+    "untracked": "Не отслеживаемые",
+    "noChanges": "Изменения не обнаружены",
+    "binary": "Бинарный",
+    "truncated": "Снимок рабочей области был слишком большим и был усечён",
+    "notGit": "Текущий каталог не является рабочим деревом Git",
+    "refresh": "Обновить",
+    "fileCount": "{{count}} файлов",
+    "fileCount_one": "{{count}} файл",
+    "fileCount_few": "{{count}} файла",
+    "fileCount_many": "{{count}} файлов",
+    "fileCount_other": "{{count}} файла"
   },
   "codex": {
     "plan": {

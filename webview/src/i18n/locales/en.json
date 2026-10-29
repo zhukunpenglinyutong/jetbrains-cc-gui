@@ -159,6 +159,7 @@
       "userContext": "Context: \"{{context}}\"",
       "expand": "Expand summary",
       "collapse": "Collapse summary",
+"receivedTime": "Recorded time",
       "nativeCompleted": "Context compacted",
       "nativeInProgress": "Compacting context",
       "nativeFailed": "Compaction failed",
@@ -169,7 +170,25 @@
       "timeUnknown": "Time unavailable",
       "turnTime": "Turn start time"
     },
-    "codexCompactUsage": "Use /compact without arguments",
+"planUsage": {
+      "title": "Claude plan usage",
+      "loading": "Loading usage…",
+      "unavailable": "Usage unavailable",
+      "dash": "Usage —",
+      "tooltipWindow": "{{period}} · {{percent}} used",
+      "tooltipReset": "Resets: {{value}} (local time)",
+      "clickToSwitch": "Click period label to switch window",
+      "worstHint": "Dot shows worst window ({{color}})",
+      "paceColors": {
+        "green": "green",
+        "yellow": "yellow",
+        "red": "red",
+        "neutral": "unknown"
+      },
+      "stale": "Data may be outdated (refresh failed)"
+    },
+    "pasteImagePreparing": "Preparing pasted image...",
+"codexCompactUsage": "Use /compact without arguments",
     "codexCompactStarted": "Codex is compacting the conversation",
     "codexReviewUsage": "Use /review without arguments",
     "codexReviewStarted": "Codex is reviewing the workspace",
@@ -572,6 +591,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, message footers show estimated turn cost when available and include cache hits inside the input token summary. Token usage remains visible either way."
       },
+      "autoConvertSessionsOnExit": {
+        "label": "Auto-convert sessions to CLI on exit",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "Sessions created by the plugin through the SDK don't appear in the Claude Code CLI /resume list because their entrypoint is sdk-cli. When enabled, they are converted automatically when the IDE closes."
+      },
       "askUserQuestionSoundNotification": {
         "label": "Question alert sound",
         "enabled": "Enabled",
@@ -652,6 +677,18 @@
         "enabled": "Enabled",
         "disabled": "Disabled",
         "hint": "When disabled, creating a new session in a conversation with existing messages will skip the confirmation dialog."
+      },
+      "bashGroupCollapsed": {
+        "label": "Collapse batch commands by default",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "Applies to batch command groups from all CLIs. When enabled, groups show only their title and execution status by default; click the title to expand the command list. When disabled, groups expand by default. Changes apply immediately; manually expanded or collapsed groups keep their state."
+      },
+      "editGroupCollapsed": {
+        "label": "Collapse batch file edits by default",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "Applies to batch file edit groups from all CLIs. When enabled, groups show their title, edit count, added/deleted line counts, and execution status by default; click the title to expand the file list. When disabled, groups expand by default. Multiple edits to the same file are counted separately. Changes apply immediately; manually expanded or collapsed groups keep their state. Expand diffs by default controls inline diffs for individual edits; it does not control whether batch groups expand."
       }
     },
     "providers": "Provider Management",
@@ -716,6 +753,10 @@
         "dsh": {
           "name": "DeepSeek Harness",
           "description": "DeepSeek terminal agent CLI (dsh)"
+        },
+        "codex": {
+          "name": "Codex CLI",
+          "description": "Detect the installed Codex CLI. Version probing reads no account configuration; chat uses app-server."
         }
       },
       "installDialog": {
@@ -833,6 +874,8 @@
       "uninstallFailed": "Uninstall failed: {{error}}",
       "updating": "Updating...",
       "updateSuccess": "{{name}} updated successfully",
+"codexMigratedTitle": "Codex has moved to Provider Management → CLI",
+      "codexMigratedDesc": "Codex no longer installs an SDK here. It uses the Codex CLI already installed on your machine (@openai/codex), and chat runs through the official app-server. Check its status under Provider Management → CLI; if it is not installed yet, run npm install -g @openai/codex in a terminal, then click Re-check there.",
       "cliTransportBadge": "CLI · {{transport}}"
     },
     "usage": "Usage Statistics",
@@ -853,7 +896,11 @@
       "fullAccessTitle": "danger-full-access",
       "fullAccessDesc": "Allows higher system access, suitable for commands like adb or docker that require extra permissions.",
       "hint": "This setting only affects Codex process sandboxing and does not change Claude Code permission behavior.",
-      "source": "Source: {{source}}",
+"claudeTip": "Claude Code approval mode is configured from the chat input mode selector.",
+      "desired": "Desired: {{mode}}",
+      "effective": "Effective: {{mode}}",
+      "conflict": "Native policy rejected the requested access range.",
+"source": "Source: {{source}}",
       "readOnlyTitle": "Read only",
       "readOnlyDesc": "Inspect files without writing to the workspace."
     },
@@ -1492,6 +1539,19 @@
       "minutesAgo": "minutes ago",
       "secondsAgo": "seconds ago"
     },
+"convertActiveHint": "Convert to CLI after ending the session",
+    "convertActiveHintTooltip": "End or close this session first, then convert it from the history list",
+    "convertAllToCliSessions": "Convert all to CLI ({{count}})",
+    "convertAllToCliSessionsTooltip": "Convert {{count}} session(s) created through the SDK into CLI entries so they appear in the Claude Code CLI /resume list. The session currently in use is skipped.",
+    "convertAllToCliSessionsLabel": "Convert all to CLI",
+    "convertAllToCliSessionsEmptyTooltip": "No SDK or VS Code sessions to convert. Only sessions created by the SDK or the VS Code extension can be turned into CLI entries; sessions created directly by the Claude Code CLI are already resumable.",
+    "convertAllSuccess": "{{count}} session(s) converted, now visible in CLI /resume",
+    "convertAllPartial": "Converted {{count}} of {{total}} session(s), {{failed}} failed",
+    "convertAllAlreadyRunning": "A conversion is already running, please wait for it to finish",
+    "convertAllTimeout": "The conversion took too long. The list has been refreshed, please check it in a moment.",
+    "convertAllBridgeUnavailable": "The bridge to the IDE is unavailable, so the request was not sent",
+    "totalSessionsOnly": "{{count}} sessions",
+    "messageCountUnknown": "Message count unavailable",
     "loadMore": "Load more"
   },
   "permission": {
@@ -1944,7 +2004,24 @@
       "expandReport": "Expand findings report",
       "collapseReport": "Collapse findings report",
       "untitled": "Untitled finding"
-    }
+    },
+    "commandRead": "Read {{path}}",
+    "commandList": "List {{path}}",
+    "commandSearch": "Search {{query}} in {{path}}",
+    "commandApprovalReason": "Approval reason",
+    "patchToggleDiff": "Show changes",
+    "errorOutput": "Error output",
+    "resultUnknown": "Individual tool result unavailable",
+    "patchNoDiff": "Diff unavailable",
+    "patchKind": {
+      "add": "Added",
+      "delete": "Deleted",
+      "update": "Updated",
+      "move": "Moved"
+    },
+    "editGroupProgress": "{{completed}}/{{total}} finished",
+    "editGroupAllCompleted": "All Completed",
+    "editGroupFailed": "Failed: {{count}}"
   },
   "todo": {
     "inProgress": "In Progress {{completed}}/{{total}} tasks",
@@ -2219,6 +2296,10 @@
       "fable5": {
         "label": "Fable 5",
         "description": "Fable 5 · Previous Fable generation"
+      },
+      "sonnet55": {
+        "label": "Sonnet 5.5",
+        "description": "Sonnet 5.5 · Latest Sonnet upgrade"
       }
     },
     "codex": {
@@ -2257,6 +2338,10 @@
       "gpt54": {
         "label": "GPT-5.4",
         "description": "Latest frontier model with enhanced capabilities."
+      },
+      "gpt61sol": {
+        "label": "GPT-6.1 Sol",
+        "description": "GPT-6.1 frontier model for complex professional work."
       }
     },
     "grok": {
@@ -2264,7 +2349,9 @@
         "label": "Grok 4.6",
         "description": "xAI Grok 4.6"
       }
-    }
+    },
+    "clearSearch": "Clear search",
+    "noSearchMatches": "No models match \"{{query}}\""
   },
   "modelConfig": {
     "title": "Model settings",
@@ -2706,6 +2793,20 @@
         }
       }
     }
+  },
+  "workspaceDiff": {
+    "title": "Workspace changes",
+    "staged": "Staged",
+    "unstaged": "Unstaged",
+    "untracked": "Untracked",
+    "noChanges": "No changes detected",
+    "binary": "Binary",
+    "truncated": "The workspace snapshot was too large and has been truncated",
+    "notGit": "The current directory is not a Git working tree",
+    "refresh": "Refresh",
+    "fileCount": "{{count}} files",
+    "fileCount_one": "{{count}} file",
+    "fileCount_other": "{{count}} files"
   },
   "codex": {
     "plan": {

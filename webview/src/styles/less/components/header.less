@@ -154,6 +154,23 @@
     opacity: 1;
 }
 
+/* Inline hint: the active session cannot be converted yet, so no button is shown */
+.session-convert-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--color-chat-bars-muted-text, var(--text-tertiary));
+    white-space: nowrap;
+    cursor: default;
+    .tooltip-bottom-center(32px);
+
+    .codicon {
+        font-size: 12px;
+    }
+}
+
 /* Edit mode */
 .session-title-edit-mode {
     display: flex;
