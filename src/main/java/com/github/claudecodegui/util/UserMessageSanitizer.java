@@ -1,5 +1,7 @@
 package com.github.claudecodegui.util;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -11,6 +13,9 @@ import java.util.regex.Pattern;
  * rendered back to users in history replay or tab restore flows.
  */
 public final class UserMessageSanitizer {
+
+    private static final String IMAGE_ATTACHMENT_HINT =
+            "The user has attached the image(s) above. Please use the Read tool to view them.";
 
     private static final Pattern DESKTOP_ENVELOPE = Pattern.compile(
             "\\A\\s*# Files mentioned by the user:\\n+(.*?)\\n"
@@ -50,6 +55,47 @@ public final class UserMessageSanitizer {
         String strippedImages = stripCodexImagePlaceholders(strippedTags);
         String strippedContext = stripAppendedContext(stripDesktopAttachmentEnvelope(strippedImages));
         return strippedContext.trim();
+    }
+
+    /**
+     * Normalizes transcript text for equality comparison across the two sources of the
+     * same user message: the text built locally when the message is sent, and the text
+     * the CLI persisted to the session JSONL. The two legitimately differ in line
+     * separators, appended prompt context, system tags, image attachment hints and
+     * incidental blank-line padding — none of which the user typed — so comparing the
+     * raw strings misses matches that this normalization recovers.
+     */
+    public static String normalizeForComparison(@Nullable String text) {
+        if (text == null) {
+            return "";
+        }
+        String normalized = text.replace(IMAGE_ATTACHMENT_HINT, "");
+        normalized = sanitizeUserFacingText(normalized);
+        normalized = normalized.replaceAll("(?m)^[ \\t]+$", "");
+        normalized = normalized.replaceAll("\n{3,}", "\n\n");
+        normalized = normalized.replaceAll("^(?:\\s*\\n)+", "");
+        normalized = normalized.replaceAll("(?:\\n\\s*)+$", "");
+        return normalized.trim();
+    }
+
+    /**
+     * Whether two transcript texts denote the same user message. Exact equality wins;
+     * otherwise both sides are normalized before comparing, so that a locally built
+     * message and the text the provider persisted still match when only formatting,
+     * appended context or system tags differ.
+     */
+    public static boolean matchesUserText(@Nullable String left, @Nullable String right) {
+        if (left == null || right == null) {
+            return false;
+        }
+        if (left.equals(right)) {
+            return true;
+        }
+        String normalizedLeft = normalizeForComparison(left);
+        if (normalizedLeft.isEmpty()) {
+            return false;
+        }
+        return normalizedLeft.equals(normalizeForComparison(right));
     }
 
     private static String stripDesktopAttachmentEnvelope(String text) {

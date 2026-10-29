@@ -123,6 +123,7 @@ export interface ChatScreenProps {
   // Message queue
   messageQueue: MessageQueueValue;
   onRemoveFromQueue: (id: string) => void;
+
   /** Drag-sort callback; orderedIds[0] is the next message to execute */
   onReorderQueue?: (orderedIds: string[]) => void;
 
@@ -133,6 +134,10 @@ export interface ChatScreenProps {
   codexCompactionStartedAt?: number | null;
   onExecuteCodexPlan?: () => void;
   onContinueCodexPlan?: () => void;
+
+  // Rollback
+  onRollbackUserMessage?: (messageIndex: number, message: ClaudeMessage) => void;
+  isRollingBack?: boolean;
 }
 
 /**
@@ -168,6 +173,7 @@ export const ChatScreen = ({
   codexCompactionPending = false,
   codexCompactionStartedAt = null,
   onExecuteCodexPlan, onContinueCodexPlan,
+  onRollbackUserMessage, isRollingBack = false,
 }: ChatScreenProps) => {
   const { t } = useTranslation();
   const { messages, status, loading, isThinking, streamingActive, loadingStartTime, subagentHistories } = useMessages();
@@ -314,6 +320,8 @@ export const ChatScreen = ({
                   onNavigateToProviderSettings={onNavigateToProviderSettings}
                   onNavigateToDependencySettings={handleNavigateToDependencySettings}
                   currentProvider={currentProvider}
+                  onRollbackUserMessage={onRollbackUserMessage}
+                  isRollingBack={isRollingBack}
                   currentSessionId={currentSessionId}
                 />
               </ToolResultRawContext.Provider>

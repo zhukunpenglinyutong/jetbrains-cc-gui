@@ -94,6 +94,13 @@ export interface ClaudeMessage {
   content?: string;
   raw?: ClaudeRawMessage | string;
   timestamp?: string;
+  /**
+   * Backend-assigned, provider-independent message id. Unlike `raw.uuid` it exists as
+   * soon as the message is created, so it lets the webview address a message whose
+   * provider uuid has not been back-filled yet. Absent on optimistic user messages,
+   * which the webview creates before the backend knows about them.
+   */
+  localId?: string;
   isStreaming?: boolean;
   isOptimistic?: boolean;
   /**

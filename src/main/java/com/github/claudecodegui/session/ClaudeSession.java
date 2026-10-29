@@ -90,10 +90,21 @@ public class ClaudeSession {
         public long timestamp;
         public volatile JsonObject raw; // Raw message data from SDK
 
+        /**
+         * Locally assigned, provider-independent identifier for this message.
+         *
+         * <p>{@code raw.uuid} only exists once the provider echoes the message back,
+         * which depends on exact-text matching and can therefore be missing. This id
+         * is assigned at construction time so that features that must address a
+         * specific message (rollback) can still do so without the provider uuid.
+         */
+        public String localId;
+
         public Message(Type type, String content) {
             this.type = type;
             this.content = content;
             this.timestamp = System.currentTimeMillis();
+            this.localId = UUID.randomUUID().toString();
         }
 
         public Message(Type type, String content, JsonObject raw) {

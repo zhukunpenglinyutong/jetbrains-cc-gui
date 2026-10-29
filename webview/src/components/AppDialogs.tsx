@@ -6,6 +6,8 @@ import AskUserQuestionDialog from './AskUserQuestionDialog';
 import PlanApprovalDialog from './PlanApprovalDialog';
 import RewindDialog from './RewindDialog';
 import RewindSelectDialog, { type RewindableMessage } from './RewindSelectDialog';
+import RollbackConfirmDialog from './RollbackConfirmDialog';
+import type { RollbackRequest } from '../hooks/useRollbackHandlers';
 import ChangelogDialog from './ChangelogDialog';
 import CustomModelDialog from './settings/CustomModelDialog';
 import { usePluginModels } from './settings/hooks/usePluginModels';
@@ -65,6 +67,12 @@ export interface AppDialogsProps {
   currentProvider: string;
   /** Permission dialog timeout in seconds (from backend config). */
   permissionDialogTimeoutSeconds?: number;
+  /** Rollback dialog state */
+  rollbackDialogOpen: boolean;
+  currentRollbackRequest: RollbackRequest | null;
+  isRollingBack: boolean;
+  onRollbackConfirm: () => void;
+  onRollbackCancel: () => void;
   /** Apply the execution mode chosen while approving a Claude plan. */
   onPlanApprovalModeChange?: (mode: string) => void;
 }
@@ -89,6 +97,11 @@ export const AppDialogs = ({
   onRewindCancel,
   currentProvider,
   permissionDialogTimeoutSeconds = DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,
+  rollbackDialogOpen,
+  currentRollbackRequest,
+  isRollingBack,
+  onRollbackConfirm,
+  onRollbackCancel,
   onPlanApprovalModeChange,
 }: AppDialogsProps) => {
   const { t } = useTranslation();
@@ -201,6 +214,13 @@ export const AppDialogs = ({
         isLoading={isRewinding}
         onConfirm={onRewindConfirm}
         onCancel={onRewindCancel}
+      />
+      <RollbackConfirmDialog
+        isOpen={rollbackDialogOpen}
+        request={currentRollbackRequest}
+        isLoading={isRollingBack}
+        onConfirm={onRollbackConfirm}
+        onCancel={onRollbackCancel}
       />
       <ChangelogDialog
         isOpen={showChangelogDialog}

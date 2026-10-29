@@ -81,6 +81,36 @@ const QuoteButton = memo(function QuoteButton({
   );
 });
 
+/** Rollback icon SVG */
+const RollbackIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M5 3.5L1.5 7L5 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M1.5 7L9.5 7C12 7 14 8.5 14 11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+
+interface RollbackButtonProps {
+  onClick: () => void;
+  label: string;
+}
+
+const RollbackButton = memo(function RollbackButton({ onClick, label }: RollbackButtonProps) {
+  return (
+    <button
+      type="button"
+      className="message-rollback-btn"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+    >
+      <span className="rollback-icon">
+        <RollbackIcon />
+      </span>
+      <span className="rollback-tooltip">{label}</span>
+    </button>
+  );
+});
+
 interface UserMessageHeaderProps {
   messageType: ClaudeMessage['type'];
   timestamp?: string;
@@ -89,6 +119,8 @@ interface UserMessageHeaderProps {
   isCopied: boolean;
   onQuote: () => void;
   onCopy: () => void;
+  /** Present only when rollback is available for this message. */
+  onRollback?: () => void;
   t: TFunction;
 }
 
@@ -101,6 +133,7 @@ export const UserMessageHeader = memo(function UserMessageHeader({
   isCopied,
   onQuote,
   onCopy,
+  onRollback,
   t,
 }: UserMessageHeaderProps) {
   if (messageType !== 'user' || !timestamp) return null;
@@ -126,6 +159,12 @@ export const UserMessageHeader = memo(function UserMessageHeader({
             copySuccessText={t('markdown.copySuccess')}
           />
         </>
+      )}
+      {onRollback && (
+        <RollbackButton
+          onClick={onRollback}
+          label={t('rollback.tooltip', 'Rollback to here')}
+        />
       )}
     </div>
   );

@@ -38,6 +38,12 @@ public class MessageJsonConverter {
             msgObj.addProperty("type", msg.type.toString().toLowerCase());
             msgObj.addProperty("timestamp", msg.timestamp);
             msgObj.addProperty("content", truncateErrorContent(msg.content != null ? msg.content : ""));
+            // Locally assigned message id. Travels alongside the message (not inside
+            // raw) so the webview can address a message even when the provider uuid
+            // has not been back-filled yet.
+            if (msg.localId != null) {
+                msgObj.addProperty("localId", msg.localId);
+            }
             if (msg.raw != null) {
                 msgObj.add("raw", truncateRawForTransport(msg.raw));
             }

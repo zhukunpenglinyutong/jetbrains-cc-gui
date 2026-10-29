@@ -417,12 +417,12 @@ export const useAppChatController = ({
     // Computed message data
     sessionTitle, mergedMessages, getMessageText, getContentBlocks,
     findToolResult, getToolResultRaw, subagents, allSubagents, globalTodos,
-    filteredFileChanges, rewindableMessages,
+    filteredFileChanges, rewindableMessages, streamingActive,
     subagentHistoryCtxValue, sessionIdCtxValue,
     // Refs
     chatInputRef, messagesContainerRef, messagesEndRef, inputAreaRef, isAutoScrollingRef,
     // Message actions
-    handleUndoFile, onDiscardAll, handleKeepAll,
+    handleUndoFile, onDiscardAll, handleKeepAll, resetProcessedFiles: fileChangeMgmt.resetProcessedFiles,
     handleSubmit, interruptSession, messageQueue, dequeueMessage, reorderMessageQueue,
     handleOpenRewindSelectDialog, handleNavigateToProviderSettings, wrappedHandleProviderSelect,
     codexPlan, codexPlanExecutionPending,

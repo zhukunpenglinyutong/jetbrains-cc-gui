@@ -157,6 +157,18 @@ export function useFileChangesManagement({
     }
   }, [currentSessionId, currentProvider, reviewChanges]);
 
+  // Reset processed files state (used after rollback)
+  const resetProcessedFiles = useCallback(() => {
+    setProcessedFiles([]);
+    if (currentSessionId) {
+      try {
+        localStorage.removeItem(`processed-files-${currentSessionId}`);
+      } catch {
+        // Ignore localStorage errors
+      }
+    }
+  }, [currentSessionId]);
+
   // Callback for Keep All - set current changes as the new baseline (ledger rebuilds from index)
   const handleKeepAll = useCallback(() => {
     if (currentProvider === 'codex') { reviewChanges(fileChangesRef?.current ?? []); return; }
@@ -294,5 +306,6 @@ export function useFileChangesManagement({
     handleUndoFile,
     handleDiscardAll,
     handleKeepAll,
+    resetProcessedFiles,
   };
 }

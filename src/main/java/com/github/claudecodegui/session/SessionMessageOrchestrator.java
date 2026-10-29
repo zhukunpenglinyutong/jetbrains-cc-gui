@@ -5,6 +5,7 @@ import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.common.SessionHistoryIncompleteException;
 import com.github.claudecodegui.provider.common.SessionHistoryNotFoundException;
 import com.github.claudecodegui.util.TokenUsageUtils;
+import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -937,7 +938,7 @@ public class SessionMessageOrchestrator {
             if (localMsg.raw != null && localMsg.raw.has("uuid") && !localMsg.raw.get("uuid").isJsonNull()) {
                 continue;
             }
-            if (!historyContent.equals(localMsg.content)) {
+            if (!UserMessageSanitizer.matchesUserText(historyContent, localMsg.content)) {
                 continue;
             }
 

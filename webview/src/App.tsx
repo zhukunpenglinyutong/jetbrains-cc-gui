@@ -5,6 +5,7 @@ import {
   useThemeInit,
   useContextActions,
   useModelProviderState,
+  useRollbackHandlers,
 } from './hooks';
 import type { MessageListRevealHandle } from './components/ConversationSearch/types';
 import { ToastContainer } from './components/Toast';
@@ -25,7 +26,8 @@ const App = () => {
   // Toast queue + current view drive the top-level layout regions below;
   // everything else from UIStateContext is consumed inside the extracted
   // components/hooks (same convention as ChatScreen / AppDialogs).
-  const { toasts, dismissToast, currentView, addToast } = useUIState();
+  // setDraftInput is needed here to restore rolled-back message text.
+  const { toasts, dismissToast, currentView, addToast, setDraftInput } = useUIState();
 
   // ── Permission dialog timeout (synced with backend config) ──
   const [permissionDialogTimeoutSeconds, setPermissionDialogTimeoutSeconds] = useState(DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS);
@@ -68,10 +70,10 @@ const App = () => {
   const {
     sessionTitle, mergedMessages, getMessageText, getContentBlocks,
     findToolResult, getToolResultRaw, subagents, allSubagents, globalTodos,
-    filteredFileChanges, rewindableMessages,
+    filteredFileChanges, rewindableMessages, streamingActive,
     subagentHistoryCtxValue, sessionIdCtxValue,
     chatInputRef, messagesContainerRef, messagesEndRef, inputAreaRef, isAutoScrollingRef,
-    handleUndoFile, onDiscardAll, handleKeepAll,
+    handleUndoFile, onDiscardAll, handleKeepAll, resetProcessedFiles,
     handleSubmit, interruptSession, messageQueue, dequeueMessage, reorderMessageQueue,
     handleOpenRewindSelectDialog, handleNavigateToProviderSettings, wrappedHandleProviderSelect,
     createNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
@@ -83,6 +85,26 @@ const App = () => {
     codexCompactionPending,
     codexCompactionStartedAt,
   } = useAppChatController({ model, applyHistoryModel, setPermissionDialogTimeoutSeconds });
+
+  // ── Rollback handlers ──
+  const {
+    rollbackDialogOpen,
+    currentRollbackRequest,
+    isRollingBack,
+    showRollbackDialog,
+    handleRollbackConfirm,
+    handleRollbackCancel,
+  } = useRollbackHandlers({
+    t,
+    addToast,
+    messages: mergedMessages,
+    getContentBlocks,
+    findToolResult,
+    getMessageText,
+    setDraftInput,
+    resetProcessedFiles,
+    streamingActive,
+  });
 
   const statusPanelExpanded = !userCollapsedRef.current;
 
@@ -179,6 +201,8 @@ const App = () => {
           onLongContextChange={model.handleLongContextChange}
           messageQueue={messageQueue}
           onRemoveFromQueue={dequeueMessage}
+          onRollbackUserMessage={showRollbackDialog}
+          isRollingBack={isRollingBack}
           onReorderQueue={reorderMessageQueue}
           codexPlan={codexPlan}
           codexPlanExecutionPending={codexPlanExecutionPending}
@@ -211,6 +235,11 @@ const App = () => {
         currentProvider={model.currentProvider}
         permissionDialogTimeoutSeconds={permissionDialogTimeoutSeconds}
         onModeSelect={model.handleModeSelect}
+        rollbackDialogOpen={rollbackDialogOpen}
+        currentRollbackRequest={currentRollbackRequest}
+        isRollingBack={isRollingBack}
+        onRollbackConfirm={handleRollbackConfirm}
+        onRollbackCancel={handleRollbackCancel}
       />
     </SubagentStateContext.Provider>
   );

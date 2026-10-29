@@ -32,6 +32,10 @@ export interface MessageItemProps {
   toolResultSignature?: string;
   /** Current active provider id (e.g. 'claude', 'codex'); drives the streaming-connect label. */
   currentProvider?: string;
+  /** Callback when user clicks the rollback button on a user message */
+  onRollback?: (messageIndex: number, message: ClaudeMessage) => void;
+  /** Whether a rollback operation is currently in progress */
+  isRollingBack?: boolean;
   /** Show opt-in detailed footer extras such as turn cost and cache-hit ratio. */
   detailedOutputEnabled?: boolean;
 }
@@ -53,6 +57,8 @@ export const MessageItem = memo(function MessageItem({
   onNavigateToDependencySettings,
   toolResultSignature: _toolResultSignature,
   currentProvider,
+  onRollback,
+  isRollingBack = false,
   detailedOutputEnabled = false,
 }: MessageItemProps): React.ReactElement {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
@@ -262,6 +268,9 @@ export const MessageItem = memo(function MessageItem({
         isCopied={copiedMessageIndex === messageIndex}
         onQuote={handleQuoteMessage}
         onCopy={handleCopyMessage}
+        onRollback={onRollback && !streamingActive && !isRollingBack
+          ? () => onRollback(messageIndex, message)
+          : undefined}
         t={t}
       />
 
