@@ -11,6 +11,7 @@ export function MarkdownReviewSettings() {
   const [config, setConfig] = useState(defaults);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
+  const [versionSupported, setVersionSupported] = useState(true);
 
   useEffect(() => {
     const receive = (raw: string) => {
@@ -20,6 +21,7 @@ export function MarkdownReviewSettings() {
         const submitShortcut = data.submitShortcut ?? 'enter';
         if (submitShortcut !== 'enter' && submitShortcut !== 'ctrlEnter') return;
         setConfig({ enabled: data.enabled, autoAddToChat: data.autoAddToChat, autoDeleteAffected: data.autoDeleteAffected, persist: data.persist, submitShortcut });
+        setVersionSupported(data.versionSupported !== false);
         setError(Boolean(data.error));
         setPending(false);
       } catch { setError(true); setPending(false); }
@@ -64,6 +66,7 @@ export function MarkdownReviewSettings() {
       </select>
       <p className={styles.sectionDesc}>{t('markdownReview.settings.submitShortcut.hint')}</p>
     </div>
+    {!versionSupported && <p className={styles.sectionDesc} role="note">{t('markdownReview.settings.versionRequired')}</p>}
     {error && <p role="alert">{t('markdownReview.settings.error')}</p>}
   </section>;
 }

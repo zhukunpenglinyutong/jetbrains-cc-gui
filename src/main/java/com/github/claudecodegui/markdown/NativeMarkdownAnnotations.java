@@ -427,6 +427,8 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
             ClaudeChatWindow selected = ClaudeSDKToolWindow.getSelectedChatWindow(project);
             if (!automatic && windows.size() > 1) {
                 String[] labels = windows.stream().map(window -> window.getParentContent().getDisplayName()).toArray(String[]::new);
+                // No non-deprecated chooser overload exists; keep the project-parented
+                // dialog and track the warning as tech debt (R9).
                 int index = Messages.showChooseDialog(project, "Choose the chat for this Markdown review", "CC GUI Markdown Review",
                         null, labels, selected == null ? labels[0] : selected.getParentContent().getDisplayName());
                 if (index < 0) {

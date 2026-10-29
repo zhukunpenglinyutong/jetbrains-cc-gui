@@ -38,13 +38,14 @@
         "hint": "Desativado por padrão. Criar ou editar um comentário adiciona o instantâneo mais recente à caixa de chat do CC GUI selecionado. Revise o rascunho antes de enviar. Concluir ou excluir um comentário também retira o rascunho adicionado automaticamente; comentários adicionados manualmente e citações são mantidos."
       },
       "autoDeleteAffected": {
-        "label": "Excluir automaticamente comentários afetados por edições (beta)",
-        "hint": "Edições ou exclusões dentro de um trecho anotado apagam seu comentário; apenas mudanças de posição o mantêm. Seleções formatadas podem abranger um bloco inteiro da origem. A limpeza não comprova conclusão: o agente deve relatar os itens pendentes. Rascunhos adicionados automaticamente são retirados junto com o comentário; envios manuais e citações permanecem intactos."
+        "label": "Excluir automaticamente comentários que não podem mais ser localizados (beta)",
+        "hint": "O comentário é mantido como “Origem alterada” enquanto o início ou o fim da citação ainda puder ser localizado; edições e quebras de linha sozinhas não o excluem. Ele só é removido quando nenhum fragmento pode ser localizado. Seleções formatadas podem abranger um bloco inteiro da origem. A limpeza não comprova conclusão: o agente deve relatar os itens pendentes. Rascunhos adicionados automaticamente são retirados junto com o comentário removido; envios manuais e citações permanecem intactos."
       },
       "persist": {
         "label": "Manter comentários e instantâneos pendentes após reiniciar (beta)",
         "hint": "Desativado por padrão: mantém os dados apenas enquanto este projeto estiver aberto. Ative para salvar no workspace do projeto. Desativar remove o conteúdo salvo na próxima gravação do IDE e mantém os comentários atuais. As mensagens do chat continuam usando o armazenamento existente. Com a opção desativada, comentários e rascunhos não enviados são perdidos ao fechar o projeto ou reiniciar o IDE."
-      }
+      },
+      "versionRequired": "As anotações de Markdown exigem o IntelliJ IDEA 2024.3 ou mais recente."
     },
     "count_one": "{{count}} item de revisão",
     "count_other": "{{count}} itens de revisão",

@@ -1,3 +1,5 @@
+import { REVIEW_TEXT_MAX_CHARS } from '../utils/markdownReviewLimits';
+
 export interface PreviewSelection {
   start: number;
   end: number;
@@ -34,7 +36,7 @@ export function capturePreviewSelection(root: HTMLElement): PreviewSelection | n
   };
   if (!root.contains(hostNode(range.startContainer)) || !root.contains(hostNode(range.endContainer))) return null;
   const selectedText = range.toString();
-  if (!selectedText.trim() || selectedText.length > 32_000) return null;
+  if (!selectedText.trim() || selectedText.length > REVIEW_TEXT_MAX_CHARS) return null;
   const nearest = (node: Node): [number, number] | null => {
     let element = node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement;
     while (element && root.contains(hostNode(element))) {

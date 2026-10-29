@@ -38,13 +38,14 @@
         "hint": "Désactivé par défaut. Créer ou modifier un commentaire ajoute son dernier instantané à la saisie du chat CC GUI sélectionné. Vérifiez le brouillon avant l’envoi. Terminer ou supprimer un commentaire retire aussi son brouillon ajouté automatiquement ; les commentaires ajoutés manuellement et les citations sont conservés."
       },
       "autoDeleteAffected": {
-        "label": "Supprimer automatiquement les commentaires affectés par les modifications (bêta)",
-        "hint": "Les modifications ou suppressions dans une plage annotée effacent son commentaire ; un simple déplacement le conserve. Les sélections formatées peuvent couvrir tout un bloc source. Le nettoyage ne prouve pas l’achèvement : l’agent doit signaler les éléments inachevés. Les brouillons ajoutés automatiquement sont retirés avec leur commentaire ; les ajouts manuels et les citations restent intacts."
+        "label": "Supprimer automatiquement les commentaires introuvables (bêta)",
+        "hint": "Un commentaire est conservé avec la mention « Source modifiée » tant que le début ou la fin de la citation reste localisable ; une modification ou un saut de ligne ne le supprime pas. Il n'est supprimé que lorsqu'aucun fragment n'est localisable. Les sélections formatées peuvent couvrir tout un bloc source. Le nettoyage ne prouve pas l'achèvement : l'agent doit signaler les éléments inachevés. Les brouillons ajoutés automatiquement sont retirés avec le commentaire supprimé ; les ajouts manuels et les citations restent intacts."
       },
       "persist": {
         "label": "Conserver commentaires et instantanés en attente après redémarrage (bêta)",
         "hint": "Désactivé par défaut : les données ne sont conservées que pendant l’ouverture du projet. Activez pour enregistrer dans l’espace de travail du projet. La désactivation supprime le contenu enregistré à la prochaine sauvegarde de l’IDE et conserve les commentaires actifs. Les messages du chat utilisent leur stockage existant. Lorsque l’option est désactivée, les commentaires et brouillons non envoyés sont perdus à la fermeture du projet ou au redémarrage de l’IDE."
-      }
+      },
+      "versionRequired": "Les annotations Markdown nécessitent IntelliJ IDEA 2024.3 ou une version ultérieure."
     },
     "count_one": "{{count}} élément de revue",
     "count_other": "{{count}} éléments de revue",

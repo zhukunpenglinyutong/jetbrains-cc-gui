@@ -62,7 +62,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
     private State state = new State();
     private final List<Consumer<EditImpact>> listeners = new CopyOnWriteArrayList<>();
     private final Map<String, RangeMarker> markers = new HashMap<>();
-    private final Set<Document> documents = new HashSet<>();
+    private final Map<Document, DocumentListener> documentListeners = new HashMap<>();
 
     public MarkdownReviewService(Project project) {
         if (project == null) {
@@ -201,6 +201,9 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
             if (!config.persist) {
                 state.recoveryPayload = null;
             }
+            if (!config.enabled) {
+                detachAllListeners();
+            }
         }
         changed();
     }
@@ -312,9 +315,11 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
             if (delete) {
                 state.annotations.remove(annotation);
                 RangeMarker marker = markers.remove(id);
+                Document markerDocument = marker == null ? null : marker.getDocument();
                 if (marker != null) {
                     marker.dispose();
                 }
+                removeListenerIfUnused(markerDocument);
                 withdrawn = true;
             } else {
                 if (comment.isBlank() || comment.length() > MarkdownReviewLimits.TEXT_MAX_CHARS) {
@@ -470,6 +475,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                         marker.dispose();
                     }
                 }
+                removeListenerIfUnused(document);
                 modified = true;
                 removed = true;
             }
@@ -490,8 +496,8 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
             }
             markers.put(annotation.id, document.createRangeMarker(annotation.start, annotation.end));
         }
-        if (documents.add(document)) {
-            document.addDocumentListener(new DocumentListener() {
+        if (state.config.enabled && !documentListeners.containsKey(document)) {
+            DocumentListener listener = new DocumentListener() {
                 private final Set<String> affected = new HashSet<>();
 
                 @Override
@@ -586,6 +592,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                                     removed.dispose();
                                 }
                             }
+                            removeListenerIfUnused(document);
                         }
                     }
                     if (!missing.isEmpty() || orphanedAny) {
@@ -595,8 +602,34 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                     // caught-up sync; broadcasting here caused per-keystroke
                     // work in every open preview (R1).
                 }
-            }, this);
+            };
+            documentListeners.put(document, listener);
+            document.addDocumentListener(listener, this);
         }
+    }
+
+    /** Caller must hold the monitor. Drops listeners once a document has no tracked annotation. */
+    private void removeListenerIfUnused(Document document) {
+        if (document == null) {
+            return;
+        }
+        for (RangeMarker marker : markers.values()) {
+            if (marker.getDocument() == document) {
+                return;
+            }
+        }
+        DocumentListener listener = documentListeners.remove(document);
+        if (listener != null) {
+            document.removeDocumentListener(listener);
+        }
+    }
+
+    /** Caller must hold the monitor. */
+    private void detachAllListeners() {
+        for (Map.Entry<Document, DocumentListener> entry : documentListeners.entrySet()) {
+            entry.getKey().removeDocumentListener(entry.getValue());
+        }
+        documentListeners.clear();
     }
 
     /** Trim common edges, so a whole-file save that only prepends text does not clear every review. */
@@ -926,10 +959,10 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
     @Override
     public void dispose() {
         listeners.clear();
+        detachAllListeners();
         for (RangeMarker marker : markers.values()) {
             marker.dispose();
         }
         markers.clear();
-        documents.clear();
     }
 }

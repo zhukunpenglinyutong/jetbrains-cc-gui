@@ -155,8 +155,11 @@ public class ProjectConfigHandler {
     // ---- Working Directory -------------------------------------------------
 
     public void handleGetMarkdownReviewConfig() {
-        pushJson("window.setMarkdownReviewConfig", gson.toJsonTree(
-                com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(context.getProject()).getConfig()));
+        JsonObject config = gson.toJsonTree(
+                com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(context.getProject()).getConfig()).getAsJsonObject();
+        config.addProperty("versionSupported",
+                com.intellij.openapi.application.ApplicationInfo.getInstance().getBuild().getBaselineVersion() >= 243);
+        pushJson("window.setMarkdownReviewConfig", config);
     }
 
     public void handleSetMarkdownReviewConfig(String content) {
