@@ -15,7 +15,7 @@ public final class MarkdownReviewPrompt {
     }
 
     public static boolean hasReview(String text) {
-        if (text == null || !text.startsWith(OPEN) || text.length() > 256_000) {
+        if (text == null || !text.startsWith(OPEN) || text.length() > MarkdownReviewLimits.REQUEST_MAX_CHARS) {
             return false;
         }
         int end = text.indexOf(CLOSE, OPEN.length());
@@ -53,7 +53,7 @@ public final class MarkdownReviewPrompt {
     }
 
     public static String displaySummary(String text) {
-        if (text == null || !text.startsWith(OPEN) || text.length() > 256_000) {
+        if (text == null || !text.startsWith(OPEN) || text.length() > MarkdownReviewLimits.REQUEST_MAX_CHARS) {
             return null;
         }
         int end = text.indexOf(CLOSE, OPEN.length());

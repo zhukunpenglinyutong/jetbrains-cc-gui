@@ -23,4 +23,6 @@ public final class MarkdownReviewLimits {
     public static final int REQUEST_ID_MAX_CHARS = 128;
     /** Upper bound for explicitly requested annotation ids in one transfer. */
     public static final int TRANSFER_IDS_MAX = 1000;
+    /** Context characters kept on each side of an annotation for relocation. */
+    public static final int ANCHOR_CONTEXT_CHARS = 48;
 }

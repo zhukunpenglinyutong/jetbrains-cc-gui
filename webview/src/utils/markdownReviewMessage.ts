@@ -1,4 +1,5 @@
 import type { ArtifactReviewBatch } from '../components/ChatInputBox/hooks/useArtifactReviews';
+import { REVIEW_ANNOTATIONS_MAX, REVIEW_BATCHES_MAX, REVIEW_MESSAGE_MAX_CHARS } from './markdownReviewLimits';
 
 export const REVIEW_OPEN = '<ccgui-markdown-review>';
 const REVIEW_CLOSE = '</ccgui-markdown-review>';
@@ -25,16 +26,16 @@ export function encodeReviewMessage(batches: ArtifactReviewBatch[], userText = '
 }
 
 export function parseReviewMessage(text: string): { batches: ArtifactReviewBatch[]; userText: string } | null {
-  if (!text.startsWith(REVIEW_OPEN) || text.length > 256_000) return null;
+  if (!text.startsWith(REVIEW_OPEN) || text.length > REVIEW_MESSAGE_MAX_CHARS) return null;
   const end = text.indexOf(REVIEW_CLOSE, REVIEW_OPEN.length);
   if (end < 0) return null;
   try {
     const data = JSON.parse(text.slice(REVIEW_OPEN.length, end));
-    if (!Array.isArray(data.batches) || !data.batches.length || data.batches.length > 200) return null;
+    if (!Array.isArray(data.batches) || !data.batches.length || data.batches.length > REVIEW_BATCHES_MAX) return null;
     if (data.version === undefined) {
       const normalized: ArtifactReviewBatch[] = [];
       for (const batch of data.batches) {
-        if (!Array.isArray(batch.annotations) || !batch.annotations.length || batch.annotations.length > 1000) return null;
+        if (!Array.isArray(batch.annotations) || !batch.annotations.length || batch.annotations.length > REVIEW_ANNOTATIONS_MAX) return null;
         for (const item of batch.annotations) {
           if (typeof item.id !== 'string' || typeof item.path !== 'string'
             || !['review', 'quote'].includes(item.kind) || typeof item.selectedText !== 'string'
@@ -48,7 +49,7 @@ export function parseReviewMessage(text: string): { batches: ArtifactReviewBatch
     if (data.version !== 1) return null;
     for (const batch of data.batches) {
       if (typeof batch.id !== 'string' || typeof batch.path !== 'string' || typeof batch.documentHash !== 'string' || !Array.isArray(batch.annotations)
-        || !['review', 'quote'].includes(batch.kind) || !batch.annotations.length || batch.annotations.length > 200) return null;
+        || !['review', 'quote'].includes(batch.kind) || !batch.annotations.length || batch.annotations.length > REVIEW_BATCHES_MAX) return null;
       for (const item of batch.annotations) {
         if (typeof item.id !== 'string' || typeof item.selectedText !== 'string' || typeof item.comment !== 'string'
           || typeof item.status !== 'string' || typeof item.precision !== 'string'

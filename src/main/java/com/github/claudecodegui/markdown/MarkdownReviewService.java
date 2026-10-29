@@ -283,8 +283,8 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
         annotation.endLine = document.getLineNumber(Math.max(start, end - 1)) + 1;
         annotation.selectedText = selected;
         annotation.sourceText = source;
-        annotation.prefix = document.getText().substring(Math.max(0, start - 48), start);
-        annotation.suffix = document.getText().substring(end, Math.min(document.getTextLength(), end + 48));
+        annotation.prefix = document.getText().substring(Math.max(0, start - MarkdownReviewLimits.ANCHOR_CONTEXT_CHARS), start);
+        annotation.suffix = document.getText().substring(end, Math.min(document.getTextLength(), end + MarkdownReviewLimits.ANCHOR_CONTEXT_CHARS));
         annotation.comment = comment;
         return annotation;
     }

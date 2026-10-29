@@ -5,6 +5,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { isCodexEffortIndependentCommand, parseCodexCommand } from '../../../hooks/codexCommandDispatcher';
 import { getCodexReasoningCapabilities, isCodexUltraCapabilityUnconfirmed } from '../../../utils/codexReasoningCapabilities';
 import { getSessionTransitionPending } from '../../../utils/sessionTransitionState';
+import { REVIEW_MESSAGE_MAX_CHARS } from '../../../utils/markdownReviewLimits';
 
 interface CompletionLike {
   close: () => void;
@@ -127,7 +128,7 @@ export function useSubmitHandler({
     if (getSessionTransitionPending()) return;
 
     if (!onSubmit) return;
-    if (reviews && content.length > 256_000) {
+    if (reviews && content.length > REVIEW_MESSAGE_MAX_CHARS) {
       addToast?.(t('markdownReview.tooLarge'), 'warning');
       return;
     }
