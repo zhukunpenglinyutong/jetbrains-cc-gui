@@ -231,6 +231,12 @@
         "statusFollowEditor": "目前跟隨編輯器字體：{{font}}",
         "statusCustom": "目前使用自訂程式碼字體：{{font}}"
       },
+      "sessionGitRepositoryMatching": {
+        "label": "依 Git 儲存庫名稱比對歷史工作階段",
+        "enabled": "啟用",
+        "disabled": "停用",
+        "hint": "同時顯示其他目錄下 Git 遠端儲存庫名稱相同的 Codex 和 Claude Code 歷史工作階段。無法取得 Git 資訊時，依工作目錄比對。"
+      },
       "streaming": {
         "label": "Streaming",
         "enabled": "Enabled",

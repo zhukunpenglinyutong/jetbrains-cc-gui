@@ -8,6 +8,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.function.Predicate;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -136,6 +137,7 @@ public class ClaudeHistoryReader {
      * Session info.
      */
     public static class SessionInfo {
+        public String cwd;
         public String sessionId;
         public String title;
         public int messageCount;
@@ -258,6 +260,15 @@ public class ClaudeHistoryReader {
 
     public Map<String, Object> getProjectDetails(String projectPath) {
         return searchService.getProjectDetails(projectPath);
+    }
+
+    public String getProjectDataAsJson(String projectPath, Predicate<String> additionalMatch) {
+        return searchService.getProjectDataAsJson(projectPath, additionalMatch);
+    }
+
+    /** Locates a matching repository's transcript without changing the active working directory. */
+    public String findSessionHistoryCwd(String sessionId, String currentCwd, Predicate<String> repositoryMatch) {
+        return searchService.findSessionHistoryCwd(sessionId, currentCwd, repositoryMatch);
     }
 
     public String getProjectDataAsJson(String projectPath) {

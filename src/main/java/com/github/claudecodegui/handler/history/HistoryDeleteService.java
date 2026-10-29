@@ -65,7 +65,10 @@ class HistoryDeleteService {
      * Delete session history files.
      * Deletes the .jsonl file for the specified sessionId and related agent-xxx.jsonl files.
      */
-    void handleDeleteSession(String sessionId, String currentProvider) {
+    void handleDeleteSession(String content, String fallbackProvider) {
+        String sessionId = parseSessionId(content);
+        String currentProvider = resolveProvider(content,
+                context.getSession() == null ? null : context.getSession().getProvider(), fallbackProvider);
         if (!isValidSessionId(sessionId)) {
             LOG.warn("[HistoryHandler] Delete session rejected: invalid sessionId");
             return;
@@ -101,8 +104,10 @@ class HistoryDeleteService {
     /**
      * Batch delete session history files in one backend request.
      */
-    void handleDeleteSessions(String content, String currentProvider) {
+    void handleDeleteSessions(String content, String fallbackProvider) {
         List<String> sessionIds = parseSessionIds(content);
+        String currentProvider = resolveProvider(content,
+                context.getSession() == null ? null : context.getSession().getProvider(), fallbackProvider);
         if (sessionIds.isEmpty()) {
             LOG.warn("[HistoryHandler] Batch delete failed: empty sessionIds");
             return;
@@ -180,6 +185,39 @@ class HistoryDeleteService {
             return CompletableFuture.completedFuture(null);
         }
         return session.interrupt();
+    }
+
+    static String parseSessionId(String content) {
+        if (content == null || content.isBlank()) {
+            return null;
+        }
+        if (!content.trim().startsWith("{")) {
+            return content.trim();
+        }
+        try {
+            JsonElement id = JsonParser.parseString(content).getAsJsonObject().get("sessionId");
+            return id != null && id.isJsonPrimitive() && id.getAsJsonPrimitive().isString() ? id.getAsString().trim() : null;
+        } catch (RuntimeException invalid) {
+            return null;
+        }
+    }
+
+    static String resolveProvider(String content, String activeProvider, String fallbackProvider) {
+        if (content != null && content.trim().startsWith("{")) {
+            try {
+                JsonElement provider = JsonParser.parseString(content).getAsJsonObject().get("provider");
+                if (provider != null && provider.isJsonPrimitive() && provider.getAsJsonPrimitive().isString()
+                        && !provider.getAsString().isBlank()) {
+                    return provider.getAsString().trim();
+                }
+            } catch (RuntimeException invalid) {
+                // Legacy clients send a bare session ID or an array without a provider.
+            }
+        }
+        if (activeProvider != null && !activeProvider.isBlank()) {
+            return activeProvider;
+        }
+        return fallbackProvider == null || fallbackProvider.isBlank() ? "claude" : fallbackProvider;
     }
 
     static List<String> parseSessionIds(String content) {

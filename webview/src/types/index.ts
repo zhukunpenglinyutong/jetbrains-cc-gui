@@ -135,6 +135,7 @@ export interface TodoItem {
 export interface HistorySessionSummary {
   sessionId: string;
   title: string;
+  hasCustomTitle?: boolean;
   /** Native thread metadata does not contain a count until history has been read. */
   messageCount?: number;
   /** Scopes asynchronous counts to the metadata revision displayed by this list. */
@@ -153,6 +154,7 @@ export interface HistorySessionSummary {
 
 export interface HistoryData {
   success: boolean;
+  provider?: string;
   error?: string;
   sessions?: HistorySessionSummary[];
   /** Message total; omitted while any listed session has an unknown count. */

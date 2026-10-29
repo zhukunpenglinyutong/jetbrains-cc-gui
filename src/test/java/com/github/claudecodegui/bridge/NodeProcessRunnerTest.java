@@ -86,7 +86,7 @@ public class NodeProcessRunnerTest {
     @Test
     public void trailingBlankLinesAreSkipped() throws Exception {
         NodeProcessRunner.Result result = NodeProcessRunner.run(
-                node("console.log('{\"ok\":true}'); console.log();"),
+                node("console.log(JSON.stringify({ok:true})); console.log();"),
                 processManager, "runner-test", null, TIMEOUT_SECONDS);
 
         assertEquals("{\"ok\":true}", result.lastLine());

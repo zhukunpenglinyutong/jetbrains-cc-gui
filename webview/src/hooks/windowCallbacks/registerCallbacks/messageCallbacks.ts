@@ -786,7 +786,12 @@ export function registerMessageCallbacks(
     if (!summary || !summary.trim()) return;
     setStatus(summary);
   };
-  window.setHistoryData = (data) => setHistoryData(data);
+  window.setHistoryData = (data) => {
+    // A delayed reload for a different provider must not replace the visible history.
+    if (typeof data !== 'function' && data?.provider && options.currentProviderRef?.current
+        && data.provider !== options.currentProviderRef.current) return;
+    setHistoryData(data);
+  };
 
   const pendingStatus = (window as unknown as Record<string, unknown>).__pendingStatusText;
   if (typeof pendingStatus === 'string' && pendingStatus.length > 0) {

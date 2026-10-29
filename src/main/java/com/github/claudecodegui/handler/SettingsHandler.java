@@ -76,6 +76,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_permission_dialog_timeout",
         "get_commit_generation_enabled",
         "set_commit_generation_enabled",
+        "get_session_git_repository_matching_enabled",
+        "set_session_git_repository_matching_enabled",
         "get_status_bar_widget_enabled",
         "set_status_bar_widget_enabled",
 
@@ -282,6 +284,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_commit_generation_enabled":
                 projectConfigHandler.handleSetCommitGenerationEnabled(content);
+                return true;
+            case "get_session_git_repository_matching_enabled":
+                projectConfigHandler.handleGetSessionGitRepositoryMatchingEnabled();
+                return true;
+            case "set_session_git_repository_matching_enabled":
+                projectConfigHandler.handleSetSessionGitRepositoryMatchingEnabled(content);
                 return true;
             case "get_status_bar_widget_enabled":
                 projectConfigHandler.handleGetStatusBarWidgetEnabled();

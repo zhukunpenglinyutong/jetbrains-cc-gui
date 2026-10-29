@@ -62,11 +62,12 @@ export function useHistoryLoader(options: UseHistoryLoaderOptions): void {
           if (!previous || !current) return [session];
           return [{ ...session,
             title: current.title !== previous.title ? current.title : session.title,
+            hasCustomTitle: current.title !== previous.title ? current.hasCustomTitle : session.hasCustomTitle,
             isFavorited: current.isFavorited,
             favoritedAt: current.favoritedAt,
           }];
         });
-        return { success: true, source: 'native', nativeRequestId: requestId, sessions,
+        return { success: true, provider: 'codex', source: 'native', nativeRequestId: requestId, sessions,
           total: sumKnownHistoryMessages(sessions), cursor, partial };
       });
     };
@@ -170,7 +171,7 @@ export function useHistoryLoader(options: UseHistoryLoaderOptions): void {
         if (isGuardianReviewThread(row)) return [];
         const sessionId = typeof row.id === 'string' ? row.id : '';
         if (!sessionId) return [];
-        const title = [row.name, row.title, row.preview, row.summary]
+        const title = [row.customTitle, row.name, row.title, row.preview, row.summary]
           .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
           ?? sessionId;
         const rawTimestamp = [row.updatedAt, row.updated_at, row.createdAt, row.created_at]
@@ -188,6 +189,10 @@ export function useHistoryLoader(options: UseHistoryLoaderOptions): void {
           sessionId,
           title,
           provider: 'codex',
+          hasCustomTitle: row.hasCustomTitle === true,
+          isFavorited: row.isFavorited === true,
+          favoritedAt: row.isFavorited === true && typeof row.favoritedAt === 'number' && Number.isFinite(row.favoritedAt)
+            ? row.favoritedAt : undefined,
           model: typeof row.model === 'string' ? row.model : undefined,
           messageCount: isKnownHistoryMessageCount(row.messageCount) ? row.messageCount
             : nativeRevision === previous?.nativeRevision && !active

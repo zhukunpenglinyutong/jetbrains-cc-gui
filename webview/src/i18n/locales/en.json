@@ -548,6 +548,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, shows the 'AI Generate Commit Message' button in the commit dialog. When disabled, the button is hidden."
       },
+      "sessionGitRepositoryMatching": {
+        "label": "Match sessions by Git repository name",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "Include Codex and Claude Code history from other directories with the same Git remote repository name. When Git information is unavailable, match by working directory."
+      },
       "statusBarWidget": {
         "label": "Status Bar Info Display",
         "enabled": "Enabled",

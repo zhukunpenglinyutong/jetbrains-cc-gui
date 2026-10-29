@@ -22,6 +22,7 @@ interface StoredTitle {
 
 function createHarness(currentSessionId: string | null) {
   const storedTitles: Array<StoredTitle | null> = [];
+  const historyUpdates: unknown[] = [];
   let messages: ClaudeMessage[] = [];
 
   const options = {
@@ -33,7 +34,8 @@ function createHarness(currentSessionId: string | null) {
     setLoading: () => {},
     setLoadingStartTime: () => {},
     setIsThinking: () => {},
-    setHistoryData: () => {},
+    setHistoryData: (data: unknown) => historyUpdates.push(data),
+    currentProviderRef: ref('claude'),
     userPausedRef: ref(false),
     isUserAtBottomRef: ref(true),
     messagesContainerRef: ref(null),
@@ -63,7 +65,7 @@ function createHarness(currentSessionId: string | null) {
   registerMessageCallbacks(options, () => {}, () => {});
   const dispatch = window.claudeHistoryPageInfo;
   if (!dispatch) throw new Error('claudeHistoryPageInfo was not registered');
-  return { storedTitles, dispatch, getMessages: () => messages };
+  return { storedTitles, dispatch, historyUpdates, options, getMessages: () => messages };
 }
 
 const pageInfo = (overrides: Record<string, unknown> = {}) => JSON.stringify({
@@ -145,5 +147,26 @@ describe('native Codex opaque history pages', () => {
     deliver('stale', 'prepend', ['stale'], 'opaque:next', null);
     expect(harness.getMessages()).toHaveLength(3);
     expect(window.__codexHistoryPageInfo?.cursor).toBe('opaque:older');
+  });
+});
+
+describe('history provider isolation', () => {
+  it('ignores stale Claude reloads while Codex history is visible', () => {
+    const harness = createHarness(null);
+    harness.options.currentProviderRef.current = 'codex';
+    window.setHistoryData?.({ success: true, provider: 'claude', sessions: [{ sessionId: 'claude', title: 'Wrong list' }] });
+    expect(harness.historyUpdates).toHaveLength(0);
+    const codex = { success: true, provider: 'codex', sessions: [{ sessionId: 'codex', title: 'Right list' }] };
+    window.setHistoryData?.(codex);
+    expect(harness.historyUpdates).toEqual([codex]);
+  });
+
+  it('checks the current provider when asynchronous deletion reloads arrive', () => {
+    const harness = createHarness(null);
+    harness.options.currentProviderRef.current = 'claude';
+    window.setHistoryData?.({ success: true, provider: 'codex', sessions: [] });
+    expect(harness.historyUpdates).toHaveLength(0);
+    window.setHistoryData?.({ success: true, provider: 'claude', sessions: [] });
+    expect(harness.historyUpdates).toHaveLength(1);
   });
 });

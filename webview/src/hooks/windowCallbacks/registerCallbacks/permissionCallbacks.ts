@@ -74,7 +74,14 @@ function buildCodexApprovalSuggestions(params: Record<string, unknown>): unknown
       }
     }
   }
-  return suggestions;
+  const seen = new Set<string | undefined>();
+  const unique = suggestions.filter((suggestion) => {
+    const key = JSON.stringify(suggestion);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.length > 0 ? unique : undefined;
 }
 
 function schemaQuestions(

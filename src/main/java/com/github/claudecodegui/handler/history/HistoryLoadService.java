@@ -8,6 +8,7 @@ import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
+import com.github.claudecodegui.provider.common.GitRepositorySessionMatcher;
 import com.github.claudecodegui.provider.dsh.DshHistoryReader;
 import com.github.claudecodegui.provider.grok.GrokHistoryReader;
 import com.github.claudecodegui.provider.kimi.KimiHistoryReader;
@@ -55,6 +56,10 @@ class HistoryLoadService {
             try {
                 String historyJson;
 
+                GitRepositorySessionMatcher repositoryMatcher = new GitRepositorySessionMatcher(
+                        GitRepositorySessionMatcher.isEnabled(context.getSettingsService())
+                                ? context.getProject().getBasePath() : null);
+                java.util.function.Predicate<String> additionalMatch = repositoryMatcher.hasRepository() ? repositoryMatcher : null;
                 // Get current project path
                 String rawPath = context.resolveEffectiveWorkingDirectory();
                 String nodePath = NodeDetector.getInstance().getCachedNodePath();
@@ -69,7 +74,7 @@ class HistoryLoadService {
                     // Use CodexHistoryReader to read Codex sessions (filtered by project)
                     LOG.info("[HistoryHandler] 使用 CodexHistoryReader 读取 Codex 会话 (项目: " + projectPath + ")");
                     CodexHistoryReader codexReader = new CodexHistoryReader();
-                    historyJson = codexReader.getSessionsForProjectAsJson(projectPath);
+                    historyJson = codexReader.getSessionsForProjectAsJson(projectPath, additionalMatch);
                     LOG.info("[HistoryHandler] CodexHistoryReader 返回的 JSON 长度: " + historyJson.length());
                 } else if ("grok".equals(provider)) {
                     LOG.info("[HistoryHandler] 使用 GrokHistoryReader 读取 Grok 会话 (项目: " + projectPath + ")");
@@ -115,7 +120,7 @@ class HistoryLoadService {
                     // Default: use ClaudeHistoryReader to read Claude sessions
                     LOG.info("[HistoryHandler] 使用 ClaudeHistoryReader 读取 Claude 会话");
                     ClaudeHistoryReader historyReader = new ClaudeHistoryReader();
-                    historyJson = historyReader.getProjectDataAsJson(projectPath);
+                    historyJson = historyReader.getProjectDataAsJson(projectPath, additionalMatch);
                 }
 
                 // Load favorite data and merge into history data
@@ -127,7 +132,9 @@ class HistoryLoadService {
                 LOG.info("[HistoryHandler] enhanceHistoryWithTitles 完成，JSON 长度: " + finalJson.length());
 
                 // Use Base64 encoding to avoid JavaScript string escaping issues
-                String base64Json = Base64.getEncoder().encodeToString(finalJson.getBytes(StandardCharsets.UTF_8));
+                JsonObject historyPayload = new Gson().fromJson(finalJson, JsonObject.class);
+                historyPayload.addProperty("provider", provider);
+                String base64Json = Base64.getEncoder().encodeToString(historyPayload.toString().getBytes(StandardCharsets.UTF_8));
                 LOG.info("[HistoryHandler] Base64 编码完成，长度: " + base64Json.length());
 
                 ApplicationManager.getApplication().invokeLater(() -> {

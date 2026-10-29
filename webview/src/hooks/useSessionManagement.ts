@@ -338,7 +338,9 @@ export function useSessionManagement({
   // Delete history session
   const deleteHistorySession = useCallback((sessionId: string) => {
     // Send delete request to Java backend
-    sendBridgeEvent('delete_session', sessionId);
+    const session = historyDataRef.current?.sessions?.find(row => row.sessionId === sessionId);
+    const provider = session?.provider || currentProvider || 'claude';
+    sendBridgeEvent('delete_session', JSON.stringify({ sessionId, provider }));
     let startedSessionTransition = false;
 
     // Immediately update frontend state, remove session from history list
@@ -373,7 +375,7 @@ export function useSessionManagement({
 
     }
     showSessionDeletedToast(startedSessionTransition);
-  }, [historyData, currentSessionId, loading, setHistoryData, setMessages, setCurrentSessionId, setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, showSessionDeletedToast]);
+  }, [historyData, currentProvider, currentSessionId, loading, beginSessionTransition, setHistoryData, setMessages, setCurrentSessionId, setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, showSessionDeletedToast]);
 
   // Batch delete history sessions
   const deleteHistorySessions = useCallback((sessionIds: string[]) => {
@@ -382,7 +384,18 @@ export function useSessionManagement({
       return;
     }
 
-    sendBridgeEvent('delete_sessions', JSON.stringify(uniqueSessionIds));
+    const idsByProvider = new Map<string, string[]>();
+    const sessionsById = new Map((historyDataRef.current?.sessions ?? []).map(row => [row.sessionId, row]));
+    for (const sessionId of uniqueSessionIds) {
+      const session = sessionsById.get(sessionId);
+      const provider = session?.provider || currentProvider || 'claude';
+      const ids = idsByProvider.get(provider) ?? [];
+      ids.push(sessionId);
+      idsByProvider.set(provider, ids);
+    }
+    for (const [provider, ids] of idsByProvider) {
+      sendBridgeEvent('delete_sessions', JSON.stringify({ sessionIds: ids, provider }));
+    }
     let startedSessionTransition = false;
 
     if (historyData && historyData.sessions) {
@@ -417,7 +430,7 @@ export function useSessionManagement({
 
     }
     showSessionDeletedToast(startedSessionTransition);
-  }, [historyData, currentSessionId, loading, setHistoryData, beginSessionTransition, showSessionDeletedToast]);
+  }, [historyData, currentProvider, currentSessionId, loading, setHistoryData, beginSessionTransition, showSessionDeletedToast]);
 
   // Export history session
   const exportHistorySession = useCallback((sessionId: string, title: string) => {
@@ -475,7 +488,7 @@ export function useSessionManagement({
     if (historyData && historyData.sessions) {
       setHistoryData(previous => previous?.sessions ? {
         ...previous,
-        sessions: previous.sessions.map(session => session.sessionId === sessionId ? { ...session, title: newTitle } : session),
+        sessions: previous.sessions.map(session => session.sessionId === sessionId ? { ...session, title: newTitle, hasCustomTitle: true } : session),
       } : previous);
 
       // Show success toast

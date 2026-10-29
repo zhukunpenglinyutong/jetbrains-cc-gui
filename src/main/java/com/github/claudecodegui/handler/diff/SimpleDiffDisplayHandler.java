@@ -73,13 +73,14 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
     private void handleShowDiff(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
-            String filePath = json.has("filePath") ? json.get("filePath").getAsString() : "";
+            String rawFilePath = json.has("filePath") ? json.get("filePath").getAsString() : "";
+            String filePath = fileOperations.toProjectPathIfPossible(rawFilePath);
             String oldContent = json.has("oldContent") ? json.get("oldContent").getAsString() : "";
             String newContent = json.has("newContent") ? json.get("newContent").getAsString() : "";
             String title = json.has("title") ? json.get("title").getAsString() : null;
 
             if (!fileOperations.isPathWithinProject(filePath)) {
-                LOG.warn("Security: file path outside project directory: " + filePath);
+                LOG.warn("Security: file path outside project directory: " + rawFilePath);
                 return;
             }
 
@@ -118,12 +119,13 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
     private void handleShowMultiEditDiff(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
-            String filePath = json.has("filePath") ? json.get("filePath").getAsString() : "";
+            String rawFilePath = json.has("filePath") ? json.get("filePath").getAsString() : "";
+            String filePath = fileOperations.toProjectPathIfPossible(rawFilePath);
             JsonArray edits = json.has("edits") ? json.getAsJsonArray("edits") : new JsonArray();
             String currentContent = json.has("currentContent") ? json.get("currentContent").getAsString() : null;
 
             if (!fileOperations.isPathWithinProject(filePath)) {
-                LOG.warn("Security: file path outside project directory: " + filePath);
+                LOG.warn("Security: file path outside project directory: " + rawFilePath);
                 return;
             }
 
@@ -181,14 +183,15 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
     private void handleShowEditPreviewDiff(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
-            String filePath = json.has("filePath") ? json.get("filePath").getAsString() : "";
+            String rawFilePath = json.has("filePath") ? json.get("filePath").getAsString() : "";
+            String filePath = fileOperations.toProjectPathIfPossible(rawFilePath);
             JsonArray edits = json.has("edits") ? json.getAsJsonArray("edits") : new JsonArray();
             String title = json.has("title") ? json.get("title").getAsString() : null;
 
             LOG.info("Showing edit preview diff for file: " + filePath + " with " + edits.size() + " edits");
 
             if (!fileOperations.isPathWithinProject(filePath)) {
-                LOG.warn("Security: file path outside project directory: " + filePath);
+                LOG.warn("Security: file path outside project directory: " + rawFilePath);
                 return;
             }
 
@@ -265,7 +268,8 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
     private void handleShowEditFullDiff(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
-            String filePath = json.has("filePath") ? json.get("filePath").getAsString() : "";
+            String rawFilePath = json.has("filePath") ? json.get("filePath").getAsString() : "";
+            String filePath = fileOperations.toProjectPathIfPossible(rawFilePath);
             String oldString = json.has("oldString") ? json.get("oldString").getAsString() : "";
             String newString = json.has("newString") ? json.get("newString").getAsString() : "";
             String originalContent = json.has("originalContent") ? json.get("originalContent").getAsString() : null;
@@ -275,7 +279,7 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
             LOG.info("Showing edit full diff for file: " + filePath);
 
             if (!fileOperations.isPathWithinProject(filePath)) {
-                LOG.warn("Security: file path outside project directory: " + filePath);
+                LOG.warn("Security: file path outside project directory: " + rawFilePath);
                 return;
             }
 

@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler.diff;
 
 import com.github.claudecodegui.util.WslPathUtil;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.ProjectPathResolver;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -28,12 +29,28 @@ public class DiffFileOperations {
 
     /** Check if a file path is within the project directory. Uses canonical paths to prevent path traversal. */
     public boolean isPathWithinProject(String filePath) {
+        String projectFilePath = toProjectPathIfPossible(filePath);
+        if (ProjectPathResolver.isPathWithinProject(context.getProject(), projectFilePath)) {
+            return true;
+        }
+
         String projectBasePath = context.getProject().getBasePath();
         if (projectBasePath == null) {
             LOG.warn("Security: Cannot validate path - project base path is null");
             return false;
         }
-        return WslPathUtil.isPathWithinDirectory(filePath, projectBasePath);
+        return WslPathUtil.isPathWithinDirectory(filePath, projectBasePath)
+                || WslPathUtil.isPathWithinDirectory(projectFilePath, projectBasePath);
+    }
+
+    /**
+     * Prefer the IDE-visible project path for files that were reported through a linked physical path.
+     */
+    public String toProjectPathIfPossible(String filePath) {
+        if (WslPathUtil.isWslPath(filePath)) {
+            return filePath;
+        }
+        return ProjectPathResolver.preferProjectPath(context.getProject(), filePath);
     }
 
     /**
@@ -41,7 +58,8 @@ public class DiffFileOperations {
      * Used when rejecting a newly created file to fully undo the creation.
      */
     public void deleteFile(String filePath) {
-        if (!isPathWithinProject(filePath)) {
+        String projectFilePath = toProjectPathIfPossible(filePath);
+        if (!isPathWithinProject(projectFilePath)) {
             LOG.warn("Security: Attempted to delete file outside project directory: " + filePath);
             return;
         }
@@ -49,24 +67,24 @@ public class DiffFileOperations {
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
                 VirtualFile file = LocalFileSystem.getInstance()
-                        .refreshAndFindFileByPath(WslPathUtil.toVfsPath(filePath));
+                        .refreshAndFindFileByPath(WslPathUtil.toVfsPath(projectFilePath));
                 if (file != null) {
                     ApplicationManager.getApplication().runWriteAction(() -> {
                         try {
                             file.delete(this);
-                            LOG.info("File deleted (reject new file): " + filePath);
+                            LOG.info("File deleted (reject new file): " + projectFilePath);
                         } catch (IOException e) {
-                            LOG.error("Failed to delete file: " + filePath, e);
+                            LOG.error("Failed to delete file: " + projectFilePath, e);
                         }
                     });
                 } else {
-                    File javaFile = new File(filePath);
+                    File javaFile = new File(WslPathUtil.toVfsPath(projectFilePath));
                     if (javaFile.exists() && javaFile.delete()) {
-                        LOG.info("File deleted via fallback (reject new file): " + filePath);
+                        LOG.info("File deleted via fallback (reject new file): " + projectFilePath);
                     }
                 }
             } catch (Exception e) {
-                LOG.error("Failed to delete file: " + filePath, e);
+                LOG.error("Failed to delete file: " + projectFilePath, e);
             }
         });
     }
@@ -80,7 +98,8 @@ public class DiffFileOperations {
             return;
         }
 
-        if (!isPathWithinProject(filePath)) {
+        String projectFilePath = toProjectPathIfPossible(filePath);
+        if (!isPathWithinProject(projectFilePath)) {
             LOG.warn("Security: Attempted to write file outside project directory: " + filePath);
             return;
         }
@@ -88,7 +107,7 @@ public class DiffFileOperations {
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
                 VirtualFile file = LocalFileSystem.getInstance()
-                        .refreshAndFindFileByPath(WslPathUtil.toVfsPath(filePath));
+                        .refreshAndFindFileByPath(WslPathUtil.toVfsPath(projectFilePath));
 
                 if (file != null) {
                     Charset charset = file.getCharset() != null ? file.getCharset() : StandardCharsets.UTF_8;
@@ -97,24 +116,24 @@ public class DiffFileOperations {
                         try {
                             file.setBinaryContent(content.getBytes(charset));
                             file.refresh(false, false);
-                            LOG.info("File content written successfully: " + filePath);
+                            LOG.info("File content written successfully: " + projectFilePath);
                         } catch (IOException e) {
-                            LOG.error("Failed to write file content: " + filePath, e);
+                            LOG.error("Failed to write file content: " + projectFilePath, e);
                         }
                     });
                 } else {
-                    File javaFile = new File(filePath);
+                    File javaFile = new File(WslPathUtil.toVfsPath(projectFilePath));
                     File parentDir = javaFile.getParentFile();
                     if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
                         LOG.error("Failed to create parent directories: " + parentDir.getAbsolutePath());
                         return;
                     }
                     Files.write(javaFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
-                    LocalFileSystem.getInstance().refreshAndFindFileByPath(WslPathUtil.toVfsPath(filePath));
-                    LOG.info("New file created: " + filePath);
+                    LocalFileSystem.getInstance().refreshAndFindFileByPath(WslPathUtil.toVfsPath(projectFilePath));
+                    LOG.info("New file created: " + projectFilePath);
                 }
             } catch (Exception e) {
-                LOG.error("Failed to write content to file: " + filePath, e);
+                LOG.error("Failed to write content to file: " + projectFilePath, e);
             }
         });
     }

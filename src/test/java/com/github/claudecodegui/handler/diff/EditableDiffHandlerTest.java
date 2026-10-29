@@ -90,7 +90,10 @@ public class EditableDiffHandlerTest {
         ApplicationManager.setApplication(application);
         try {
             Project project = (Project) Proxy.newProxyInstance(Project.class.getClassLoader(), new Class<?>[]{Project.class},
-                    (proxy, method, args) -> "getBasePath".equals(method.getName()) ? root.toString() : null);
+                    (proxy, method, args) -> {
+                        if ("getBasePath".equals(method.getName())) return root.toString();
+                        return method.getReturnType() == boolean.class ? false : null;
+                    });
             HandlerContext context = new HandlerContext(project, null, null, null, null);
             ClaudeSession session = new ClaudeSession(null, null, null, null);
             session.setCwd(first.toString());
@@ -188,7 +191,10 @@ public class EditableDiffHandlerTest {
         ApplicationManager.setApplication(application);
         try {
             Project project = (Project) Proxy.newProxyInstance(Project.class.getClassLoader(), new Class<?>[]{Project.class},
-                    (proxy, method, args) -> "getBasePath".equals(method.getName()) ? root.toString() : null);
+                    (proxy, method, args) -> {
+                        if ("getBasePath".equals(method.getName())) return root.toString();
+                        return method.getReturnType() == boolean.class ? false : null;
+                    });
             HandlerContext context = new HandlerContext(project, null, null, null, null);
             ClaudeSession session = new ClaudeSession(null, null, null, null);
             session.setCwd(first.toString());

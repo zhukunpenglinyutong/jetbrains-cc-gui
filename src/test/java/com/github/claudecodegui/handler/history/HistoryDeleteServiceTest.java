@@ -202,6 +202,47 @@ public class HistoryDeleteServiceTest {
     }
 
     @Test
+    public void parsesProviderScopedSingleDeletesAndRetainsLegacyIds() {
+        assertEquals("codex-session", HistoryDeleteService.parseSessionId("{\"sessionId\":\"codex-session\",\"provider\":\"codex\"}"));
+        assertEquals("legacy-session", HistoryDeleteService.parseSessionId("legacy-session"));
+        org.junit.Assert.assertNull(HistoryDeleteService.parseSessionId("{\"provider\":\"codex\"}"));
+        org.junit.Assert.assertNull(HistoryDeleteService.parseSessionId("{bad"));
+    }
+
+    @Test
+    public void explicitDeleteProviderOverridesActiveSessionAndStaleHistoryProvider() {
+        assertEquals("codex", HistoryDeleteService.resolveProvider("{\"provider\":\"codex\"}", "claude", "claude"));
+        assertEquals("claude", HistoryDeleteService.resolveProvider("{\"provider\":\"claude\"}", "codex", "codex"));
+        assertEquals("codex", HistoryDeleteService.resolveProvider("legacy-id", "codex", "claude"));
+        assertEquals("codex", HistoryDeleteService.resolveProvider("[]", null, "codex"));
+        assertEquals("claude", HistoryDeleteService.resolveProvider("legacy-id", null, null));
+    }
+
+    @Test
+    public void scopedCodexDeletesReloadCodexEvenWhenHistoryHandlerStillDefaultsToClaude() throws Exception {
+        for (boolean batch : new boolean[]{false, true}) {
+            HandlerContext context = new HandlerContext(null, null, null, null, null);
+            context.setSession(new RecordingClaudeSession("session-1", "codex") {
+                @Override
+                public CompletableFuture<Void> interrupt() {
+                    CompletableFuture<Void> failed = new CompletableFuture<>();
+                    failed.completeExceptionally(new IllegalStateException("stop test before file operations"));
+                    return failed;
+                }
+            });
+            RecordingHistoryLoadService reload = new RecordingHistoryLoadService(context);
+            HistoryDeleteService service = new HistoryDeleteService(context, null, reload);
+            if (batch) {
+                service.handleDeleteSessions("{\"sessionIds\":[\"session-1\"],\"provider\":\"codex\"}", "claude");
+            } else {
+                service.handleDeleteSession("{\"sessionId\":\"session-1\",\"provider\":\"codex\"}", "claude");
+            }
+            assertTrue(reload.awaitReload());
+            assertEquals("codex", reload.provider);
+        }
+    }
+
+    @Test
     public void cleanupSessionMetadataRemovesFavoriteAndCustomTitle() throws Exception {
         SessionMetadataBridgeFixture fixture =
                 SessionMetadataBridgeFixture.create(temporaryFolder.newFolder("metadata").toPath());
