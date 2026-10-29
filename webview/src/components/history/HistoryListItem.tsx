@@ -19,6 +19,7 @@ export interface HistoryListItemProps {
   isCopied: boolean;
   isCopyFailed: boolean;
   isActiveSession: boolean;
+  isRegeneratingTitle: boolean;
   editingTitle: string;
   searchQuery: string;
   t: TFunction;
@@ -32,6 +33,7 @@ export interface HistoryListItemProps {
   onDelete: (sessionId: string) => void;
   onFavorite: (sessionId: string) => void;
   onCopySessionId: (sessionId: string) => void;
+  onRegenerateTitle: (sessionId: string) => void;
   onConvertToCliSession: (sessionId: string) => void;
 }
 
@@ -43,6 +45,7 @@ export const HistoryListItem = memo(({
   isCopied,
   isCopyFailed,
   isActiveSession,
+  isRegeneratingTitle,
   editingTitle,
   searchQuery,
   t,
@@ -56,6 +59,7 @@ export const HistoryListItem = memo(({
   onDelete,
   onFavorite,
   onCopySessionId,
+  onRegenerateTitle,
   onConvertToCliSession,
 }: HistoryListItemProps) => {
   const handleRowClick = useCallback(() => {
@@ -91,11 +95,13 @@ export const HistoryListItem = memo(({
         {!isEditing && !isSelectionMode && (
           <HistoryItemActions
             session={session}
+            isRegeneratingTitle={isRegeneratingTitle}
             t={t}
             onEditStart={onEditStart}
             onExport={onExport}
             onDelete={onDelete}
             onFavorite={onFavorite}
+            onRegenerate={onRegenerateTitle}
           />
         )}
       </div>

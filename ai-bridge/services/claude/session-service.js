@@ -396,7 +396,7 @@ export function isInterruptionMarker(message) {
   return typeof text === 'string' && text.startsWith('[Request interrupted');
 }
 
-function extractTextContent(message) {
+export function extractTextContent(message) {
   const content = message?.message?.content;
   if (!content) {
     return '';

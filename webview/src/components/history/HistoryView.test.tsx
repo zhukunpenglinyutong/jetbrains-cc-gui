@@ -25,6 +25,13 @@ vi.mock('react-i18next', () => ({
         'history.selectSessionWithTitle': `Select ${String(options?.title ?? '')}`,
         'history.searchPlaceholder': 'Search session titles...',
         'history.deepSearchTooltip': 'Deep Search',
+        'history.regenerateTitle': 'Regenerate title from conversation',
+        'history.titleRegenerated': 'Title regenerated',
+        'history.titleRegenerateFailed.generic': 'Title regeneration failed',
+        'history.titleRegenerateFailed.emptySession': 'No conversation content',
+        'history.titleRegenerateFailed.disabled': 'AI title generation disabled',
+        'history.titleRegenerateFailed.sessionNotFound': 'Session file not found',
+        'history.titleRegenerateFailed.generationFailed': 'Title generation failed',
         'history.favoriteSession': 'Favorite session',
         'history.unfavoriteSession': 'Unfavorite session',
         'history.convertToCliSession': 'Convert to CLI session',
@@ -78,7 +85,8 @@ beforeEach(() => {
 
 describe('HistoryView native message counts', () => {
   const actions = { currentProvider: 'codex', onLoadSession: vi.fn(), onDeleteSession: vi.fn(),
-    onDeleteSessions: vi.fn(), onExportSession: vi.fn(), onToggleFavorite: vi.fn(), onUpdateTitle: vi.fn(), onConvertToCliSession: vi.fn() };
+    onDeleteSessions: vi.fn(), onExportSession: vi.fn(), onToggleFavorite: vi.fn(), onUpdateTitle: vi.fn(),
+    onRegenerateTitle: vi.fn(), regeneratingTitleSessionIds: new Set<string>(), onConvertToCliSession: vi.fn() };
 
   it('distinguishes unknown counts from zero and shows a message total only when known', () => {
     const data: HistoryData = { ...historyData, source: 'native', total: undefined,
@@ -132,6 +140,8 @@ describe('HistoryView multi-select', () => {
         onToggleFavorite={vi.fn()}
         onUpdateTitle={vi.fn()}
         onConvertToCliSession={vi.fn()}
+        onRegenerateTitle={vi.fn()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -181,6 +191,8 @@ describe('HistoryView conversion', () => {
         onToggleFavorite={vi.fn()}
         onUpdateTitle={vi.fn()}
         onConvertToCliSession={onConvertToCliSession}
+        onRegenerateTitle={vi.fn()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -218,6 +230,8 @@ describe('HistoryView conversion', () => {
         onToggleFavorite={vi.fn()}
         onUpdateTitle={vi.fn()}
         onConvertToCliSession={vi.fn()}
+        onRegenerateTitle={vi.fn()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -244,6 +258,8 @@ describe('HistoryView conversion', () => {
         onToggleFavorite={vi.fn()}
         onUpdateTitle={vi.fn()}
         onConvertToCliSession={vi.fn()}
+        onRegenerateTitle={vi.fn()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -262,6 +278,8 @@ describe('HistoryView conversion', () => {
         onToggleFavorite={vi.fn()}
         onUpdateTitle={vi.fn()}
         onConvertToCliSession={vi.fn()}
+        onRegenerateTitle={vi.fn()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -285,6 +303,8 @@ describe('HistoryView conversion', () => {
         onToggleFavorite={vi.fn()}
         onUpdateTitle={vi.fn()}
         onConvertToCliSession={vi.fn()}
+        onRegenerateTitle={vi.fn()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -315,6 +335,8 @@ describe('HistoryView favorite visibility', () => {
         onToggleFavorite={vi.fn()}
         onUpdateTitle={vi.fn()}
         onConvertToCliSession={vi.fn()}
+        onRegenerateTitle={vi.fn()}
+        regeneratingTitleSessionIds={new Set<string>()}
       />,
     );
 
@@ -323,5 +345,65 @@ describe('HistoryView favorite visibility', () => {
 
     expect(favoritedButton.closest('.history-action-buttons')?.classList.contains('has-favorite')).toBe(true);
     expect(unfavoritedButton.closest('.history-action-buttons')?.classList.contains('has-favorite')).toBe(false);
+  });
+});
+
+describe('HistoryView AI title regeneration', () => {
+  const regenerateActions = {
+    currentProvider: 'claude',
+    onLoadSession: vi.fn(),
+    onDeleteSession: vi.fn(),
+    onDeleteSessions: vi.fn(),
+    onExportSession: vi.fn(),
+    onToggleFavorite: vi.fn(),
+    onUpdateTitle: vi.fn(),
+    onConvertToCliSession: vi.fn(),
+  };
+
+  it('offers the refresh button only on Claude sessions', () => {
+    render(
+      <HistoryView
+        {...regenerateActions}
+        historyData={historyData}
+        onRegenerateTitle={vi.fn()}
+        regeneratingTitleSessionIds={new Set<string>()}
+      />,
+    );
+
+    // historyData's first session is claude, the second one codex.
+    expect(screen.getAllByRole('button', { name: 'Regenerate title from conversation' })).toHaveLength(1);
+  });
+
+  it('sends the bridge event on click and shows a disabled spinner while in flight', () => {
+    const onRegenerateTitle = vi.fn();
+    const { rerender } = render(
+      <HistoryView
+        {...regenerateActions}
+        historyData={historyData}
+        onRegenerateTitle={onRegenerateTitle}
+        regeneratingTitleSessionIds={new Set<string>()}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Regenerate title from conversation' });
+    fireEvent.click(button);
+    expect(onRegenerateTitle).toHaveBeenCalledTimes(1);
+    expect(onRegenerateTitle).toHaveBeenCalledWith('session-one');
+    expect((button as HTMLButtonElement).disabled).toBe(false); // idle state — spinner comes from shared state
+
+    // Shared spinner state (SessionContext) drives the loading UI; the result
+    // callback itself is covered by sessionTitles.test.ts.
+    rerender(
+      <HistoryView
+        {...regenerateActions}
+        historyData={historyData}
+        onRegenerateTitle={onRegenerateTitle}
+        regeneratingTitleSessionIds={new Set(['session-one'])}
+      />,
+    );
+    const loadingButton = screen.getByRole('button', { name: 'Regenerate title from conversation' });
+    expect((loadingButton as HTMLButtonElement).disabled).toBe(true);
+    expect(loadingButton.className).toContain('is-loading');
+    expect(loadingButton.closest('.history-action-buttons')?.classList.contains('has-regenerating')).toBe(true);
   });
 });

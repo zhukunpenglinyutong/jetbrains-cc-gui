@@ -1013,6 +1013,15 @@
     "cancelEditButton": "Cancelar",
     "titleTooLong": "Título demasiado largo (máximo 50 caracteres)",
     "titleUpdated": "Título actualizado",
+    "regenerateTitle": "Regenerar título a partir de la conversación",
+    "titleRegenerated": "Título regenerado",
+    "titleRegenerateFailed": {
+      "generic": "Error al regenerar el título",
+      "emptySession": "No hay contenido de conversación para generar un título",
+      "disabled": "La generación de títulos con IA está desactivada en la configuración",
+      "sessionNotFound": "No se encontró el archivo de la sesión",
+      "generationFailed": "Error al generar el título, inténtalo de nuevo más tarde"
+    },
     "copySessionId": "Copiar ID de sesión para CLI resume",
     "sessionIdCopied": "ID de sesión copiado",
     "copyFailed": "Error al copiar",

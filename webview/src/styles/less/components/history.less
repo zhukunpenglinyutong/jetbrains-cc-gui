@@ -316,9 +316,16 @@
 
 .history-item:not(:hover) .history-action-buttons.has-favorite .history-edit-btn,
 .history-item:not(:hover) .history-action-buttons.has-favorite .history-export-btn,
-.history-item:not(:hover) .history-action-buttons.has-favorite .history-delete-btn {
+.history-item:not(:hover) .history-action-buttons.has-favorite .history-delete-btn,
+.history-item:not(:hover) .history-action-buttons.has-favorite .history-regenerate-btn:not(.is-loading) {
     visibility: hidden;
     opacity: 0;
+}
+
+/* 正在重新生成标题时按钮组保持可见，loading 动画不能因鼠标移开而消失 */
+.history-action-buttons.has-regenerating {
+    visibility: visible;
+    opacity: 1;
 }
 
 .history-item:hover .history-action-buttons {
@@ -330,6 +337,7 @@
 .history-item:hover .history-export-btn,
 .history-item:hover .history-favorite-btn,
 .history-item:hover .history-edit-btn,
+.history-item:hover .history-regenerate-btn,
 .history-item:hover .history-copy-id-btn {
     opacity: 1; /* 鼠标悬停时显示 */
 }
@@ -398,6 +406,52 @@
 .history-edit-btn:active {
     transform: scale(0.92);
     background-color: rgba(10, 132, 255, 0.25);
+}
+
+/* AI 重新生成标题按钮样式 */
+.history-regenerate-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0; /* 默认隐藏 */
+    line-height: 1;
+
+    .codicon {
+        font-size: 14px;
+        pointer-events: none;
+    }
+
+    &:disabled {
+        cursor: default;
+    }
+}
+
+.history-item:hover .history-regenerate-btn {
+    opacity: 1; /* 鼠标悬停时显示 */
+}
+
+.history-regenerate-btn.is-loading {
+    opacity: 1;
+    visibility: visible;
+    color: #30d158; /* 绿色表示生成中 */
+}
+
+.history-regenerate-btn:not(:disabled):hover {
+    background-color: rgba(48, 209, 88, 0.15);
+    color: #30d158; /* 绿色表示 AI 生成操作 */
+}
+
+.history-regenerate-btn:not(:disabled):active {
+    transform: scale(0.92);
+    background-color: rgba(48, 209, 88, 0.25);
 }
 
 /* 标题编辑模式样式 */

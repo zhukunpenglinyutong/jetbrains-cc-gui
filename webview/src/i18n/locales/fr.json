@@ -1013,6 +1013,15 @@
     "cancelEditButton": "Annuler",
     "titleTooLong": "Titre trop long (maximum 50 caractères)",
     "titleUpdated": "Titre mis à jour",
+    "regenerateTitle": "Régénérer le titre à partir de la conversation",
+    "titleRegenerated": "Titre régénéré",
+    "titleRegenerateFailed": {
+      "generic": "Échec de la régénération du titre",
+      "emptySession": "Aucun contenu de conversation pour générer un titre",
+      "disabled": "La génération de titres par IA est désactivée dans les paramètres",
+      "sessionNotFound": "Fichier de session introuvable",
+      "generationFailed": "Échec de la génération du titre, réessayez plus tard"
+    },
     "copySessionId": "Copier l'ID de session pour CLI resume",
     "sessionIdCopied": "ID de session copié",
     "copyFailed": "Échec de la copie",

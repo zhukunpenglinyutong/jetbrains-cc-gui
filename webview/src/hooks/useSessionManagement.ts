@@ -14,6 +14,10 @@ type ToastType = 'info' | 'success' | 'warning' | 'error';
 const createSessionTransitionToken = () =>
   `transition-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
+// Backend title regeneration times out after 90s; this fallback clears the
+// spinner state a bit later so the UI never gets stuck without a result.
+const TITLE_REGENERATION_TIMEOUT_MS = 100000;
+
 interface UseSessionManagementOptions {
   messages: ClaudeMessage[];
   loading: boolean;
@@ -22,6 +26,8 @@ interface UseSessionManagementOptions {
   currentSessionIdRef?: React.MutableRefObject<string | null>;
   currentProvider?: string;
   setHistoryData: React.Dispatch<React.SetStateAction<HistoryData | null>>;
+  /** Shared AI-title regeneration spinners (history list + chat header refresh buttons). */
+  setRegeneratingTitleSessionIds: React.Dispatch<React.SetStateAction<Set<string>>>;
   setMessages: React.Dispatch<React.SetStateAction<ClaudeMessage[]>>;
   setCurrentView: (view: ViewMode) => void;
   setCurrentSessionId: (id: string | null) => void;
@@ -71,6 +77,9 @@ interface UseSessionManagementReturn {
   toggleFavoriteSession: (sessionId: string) => void;
   updateHistoryTitle: (sessionId: string, newTitle: string) => void;
   applyHistoryTitleLocal: (sessionId: string, newTitle: string) => void;
+  regenerateHistoryTitle: (sessionId: string) => void;
+  /** Ends an in-flight regeneration (clears spinner state + fallback timer). */
+  settleTitleRegeneration: (sessionId: string) => void;
   convertToCliSession: (sessionId: string) => void;
 }
 
@@ -85,6 +94,7 @@ export function useSessionManagement({
   currentSessionIdRef,
   currentProvider,
   setHistoryData,
+  setRegeneratingTitleSessionIds,
   setMessages,
   setCurrentView,
   setCurrentSessionId,
@@ -493,6 +503,63 @@ export function useSessionManagement({
     } : previous);
   }, [setHistoryData]);
 
+  // Request AI regeneration of a session title from its conversation content.
+  // The backend relays the outcome via window.onTitleRegenerated (registered
+  // once in sessionCallbacks), which applies the new title, clears the shared
+  // spinner state, and shows the result toast.
+  // Safety net: if the backend never answers (daemon lost, callback dropped),
+  // the fallback timer removes the spinner so it cannot spin forever. The
+  // backend timeout (90s) plus relay margin fits comfortably below it.
+  const titleRegenerationTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  useEffect(() => {
+    const timers = titleRegenerationTimeoutsRef.current;
+    return () => {
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
+      timers.clear();
+    };
+  }, []);
+
+  // Clears the in-flight bookkeeping (timeout map + spinner set) when the
+  // result callback arrives. The fallback timer calls the same cleanup, so
+  // both completion paths keep the map and set in agreement.
+  const settleTitleRegeneration = useCallback((sessionId: string) => {
+    const timer = titleRegenerationTimeoutsRef.current.get(sessionId);
+    if (timer) {
+      clearTimeout(timer);
+      titleRegenerationTimeoutsRef.current.delete(sessionId);
+    }
+    setRegeneratingTitleSessionIds(prev => {
+      if (!prev.has(sessionId)) return prev;
+      const next = new Set(prev);
+      next.delete(sessionId);
+      return next;
+    });
+  }, [setRegeneratingTitleSessionIds]);
+
+  const regenerateHistoryTitle = useCallback((sessionId: string) => {
+    // The timeout map is the source of truth for in-flight regenerations: an
+    // entry exists until the result callback (or the fallback timer) removes
+    // it, so a second trigger while one is running is a no-op.
+    if (titleRegenerationTimeoutsRef.current.has(sessionId)) return;
+
+    setRegeneratingTitleSessionIds(prev => new Set(prev).add(sessionId));
+    const timer = setTimeout(() => {
+      titleRegenerationTimeoutsRef.current.delete(sessionId);
+      setRegeneratingTitleSessionIds(prev => {
+        if (!prev.has(sessionId)) return prev;
+        const next = new Set(prev);
+        next.delete(sessionId);
+        return next;
+      });
+      addToast(t('history.titleRegenerateFailed.generic'), 'error');
+    }, TITLE_REGENERATION_TIMEOUT_MS);
+    titleRegenerationTimeoutsRef.current.set(sessionId, timer);
+
+    sendBridgeEvent('regenerate_session_title', JSON.stringify({ sessionId }));
+  }, [setRegeneratingTitleSessionIds, addToast, t]);
+
   // Convert SDK-created session to CLI-recognizable session.
   // The backend sends an onConversionResult callback with success/failure;
   // the registered handler in sessionCallbacks shows the appropriate toast
@@ -533,6 +600,8 @@ export function useSessionManagement({
     toggleFavoriteSession,
     updateHistoryTitle,
     applyHistoryTitleLocal,
+    regenerateHistoryTitle,
+    settleTitleRegeneration,
     convertToCliSession,
   };
 }

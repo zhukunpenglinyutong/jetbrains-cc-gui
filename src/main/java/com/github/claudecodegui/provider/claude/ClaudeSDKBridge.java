@@ -610,6 +610,91 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
     }
 
     /**
+     * Regenerate a session's AI title from its conversation content.
+     * Calls the daemon's claude.regenerateTitle command (read-only bypass,
+     * never queued behind an active turn) and returns its result envelope:
+     * {success, title} on success or {success:false, code} on failure.
+     *
+     * @param sessionId The session whose title should be regenerated
+     * @param cwd       Working directory used to locate the session file
+     * @return CompletableFuture with the daemon response as JsonObject
+     */
+    public CompletableFuture<JsonObject> regenerateSessionTitle(String sessionId, String cwd) {
+        DaemonBridge db = this.daemonCoordinator.getDaemonBridge();
+        if (db == null) {
+            return CompletableFuture.completedFuture(regenerationError("daemon_unavailable",
+                    "Daemon not available. Title regeneration requires daemon mode."));
+        }
+
+        JsonObject params = new JsonObject();
+        params.addProperty("sessionId", sessionId);
+        if (cwd != null && !cwd.isEmpty()) {
+            params.addProperty("cwd", cwd);
+        }
+
+        AtomicReference<JsonObject> resultRef = new AtomicReference<>();
+        CompletableFuture<JsonObject> resultFuture = new CompletableFuture<>();
+
+        DaemonBridge.DaemonOutputCallback callback = new DaemonBridge.DaemonOutputCallback() {
+            @Override
+            public void onLine(String line) {
+                try {
+                    resultRef.set(ClaudeSDKBridge.this.gson.fromJson(line, JsonObject.class));
+                } catch (Exception ignored) {
+                }
+            }
+            @Override
+            public void onStderr(String text) { }
+            @Override
+            public void onResult(JsonObject response) {
+                resultRef.set(response);
+            }
+            @Override
+            public void onError(String error) {
+                if (!resultFuture.isDone()) {
+                    resultFuture.complete(regenerationError("daemon_error", error));
+                }
+            }
+            @Override
+            public void onComplete(boolean success) {
+                if (!resultFuture.isDone()) {
+                    JsonObject result = resultRef.get();
+                    if (result != null) {
+                        resultFuture.complete(result);
+                    } else {
+                        resultFuture.complete(regenerationError("daemon_no_response",
+                                success ? "No response received" : "Title regeneration command failed"));
+                    }
+                }
+            }
+        };
+
+        try {
+            CompletableFuture<Boolean> commandFuture = db.sendCommand("claude.regenerateTitle", params, callback);
+            commandFuture.exceptionally(ex -> {
+                if (!resultFuture.isDone()) {
+                    resultFuture.complete(regenerationError("daemon_error", ex.getMessage()));
+                }
+                return false;
+            });
+        } catch (Exception e) {
+            LOG.error("[ClaudeSDKBridge] regenerateSessionTitle failed: " + e.getMessage(), e);
+            return CompletableFuture.completedFuture(regenerationError("daemon_error", e.getMessage()));
+        }
+
+        return resultFuture.orTimeout(90, TimeUnit.SECONDS).exceptionally(ex -> regenerationError(
+                "daemon_timeout", "Title regeneration timed out after 90 seconds"));
+    }
+
+    private static JsonObject regenerationError(String code, String message) {
+        JsonObject err = new JsonObject();
+        err.addProperty("success", false);
+        err.addProperty("code", code);
+        err.addProperty("error", message != null ? message : "Unknown error");
+        return err;
+    }
+
+    /**
      * Hot-swap the permission mode of the live daemon runtime mid-conversation.
      *
      * Pushes the new mode to the SDK query and the reactive state the PreToolUse

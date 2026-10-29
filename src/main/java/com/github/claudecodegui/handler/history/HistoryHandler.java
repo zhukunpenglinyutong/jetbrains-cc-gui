@@ -24,6 +24,7 @@ public class HistoryHandler extends BaseMessageHandler {
             "export_session",  // Export session
             "toggle_favorite", // Toggle favorite status
             "update_title",    // Update session title
+            "regenerate_session_title", // Regenerate AI title from session content
             "delete_title",    // Delete orphaned custom title (B-011)
             "deep_search_history", // Deep search (clear cache and reload)
             "load_subagent_session", // Load Claude Code sidechain Agent process log
@@ -119,6 +120,10 @@ public class HistoryHandler extends BaseMessageHandler {
             case "update_title":
                 LOG.info("[HistoryHandler] 处理: update_title");
                 historyMetadataService.handleUpdateTitle(content);
+                return true;
+            case "regenerate_session_title":
+                LOG.info("[HistoryHandler] 处理: regenerate_session_title");
+                historyMetadataService.handleRegenerateTitle(content);
                 return true;
             case "delete_title":
                 LOG.info("[HistoryHandler] 处理: delete_title, sessionId=" + content);

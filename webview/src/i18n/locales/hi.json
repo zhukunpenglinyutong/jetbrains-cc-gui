@@ -1013,6 +1013,15 @@
     "cancelEditButton": "रद्द करें",
     "titleTooLong": "शीर्षक बहुत लंबा (अधिकतम 50 वर्ण)",
     "titleUpdated": "शीर्षक अपडेट किया गया",
+    "regenerateTitle": "बातचीत से शीर्षक फिर से जेनरेट करें",
+    "titleRegenerated": "शीर्षक फिर से जेनरेट हुआ",
+    "titleRegenerateFailed": {
+      "generic": "शीर्षक फिर से जेनरेट करने में विफल",
+      "emptySession": "शीर्षक बनाने के लिए कोई बातचीत सामग्री नहीं है",
+      "disabled": "सेटिंग्स में AI शीर्षक जेनरेशन बंद है",
+      "sessionNotFound": "सेशन रिकॉर्ड फ़ाइल नहीं मिली",
+      "generationFailed": "शीर्षक जेनरेशन विफल, कृपया बाद में पुनः प्रयास करें"
+    },
     "copySessionId": "CLI resume के लिए सेशन ID कॉपी करें",
     "sessionIdCopied": "सेशन ID कॉपी किया गया",
     "copyFailed": "कॉपी विफल",

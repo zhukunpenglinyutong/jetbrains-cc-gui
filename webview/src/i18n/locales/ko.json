@@ -1098,6 +1098,15 @@
     "cancelEditButton": "취소",
     "titleTooLong": "제목이 너무 깁니다 (최대 50자)",
     "titleUpdated": "제목 업데이트됨",
+    "regenerateTitle": "대화 내용으로 제목 다시 생성",
+    "titleRegenerated": "제목이 다시 생성되었습니다",
+    "titleRegenerateFailed": {
+      "generic": "제목 다시 생성에 실패했습니다",
+      "emptySession": "제목 생성에 사용할 대화 내용이 없습니다",
+      "disabled": "설정에서 AI 제목 생성이 꺼져 있습니다",
+      "sessionNotFound": "세션 기록 파일을 찾을 수 없습니다",
+      "generationFailed": "제목 생성에 실패했습니다. 잠시 후 다시 시도해 주세요"
+    },
     "copySessionId": "CLI resume용 세션 ID 복사",
     "sessionIdCopied": "세션 ID 복사됨",
     "copyFailed": "복사 실패",

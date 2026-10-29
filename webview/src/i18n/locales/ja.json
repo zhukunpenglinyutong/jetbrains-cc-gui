@@ -1018,6 +1018,15 @@
     "cancelEditButton": "キャンセル",
     "titleTooLong": "タイトルが長すぎます(最大50文字)",
     "titleUpdated": "タイトルが更新されました",
+    "regenerateTitle": "会話内容からタイトルを再生成",
+    "titleRegenerated": "タイトルを再生成しました",
+    "titleRegenerateFailed": {
+      "generic": "タイトルの再生成に失敗しました",
+      "emptySession": "タイトル生成に使える会話内容がありません",
+      "disabled": "設定でAIタイトル生成が無効になっています",
+      "sessionNotFound": "セッション記録ファイルが見つかりません",
+      "generationFailed": "タイトル生成に失敗しました。後でもう一度お試しください"
+    },
     "copySessionId": "CLI resume用にセッションIDをコピー",
     "sessionIdCopied": "セッションIDをコピーしました",
     "copyFailed": "コピーに失敗しました",

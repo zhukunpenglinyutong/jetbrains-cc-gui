@@ -12,6 +12,8 @@ interface HistoryCallbacks {
   onExportSession: (sessionId: string, title: string) => void;
   onToggleFavorite: (sessionId: string) => void;
   onUpdateTitle: (sessionId: string, newTitle: string) => void;
+  onRegenerateTitle: (sessionId: string) => void;
+  regeneratingTitleSessionIds: ReadonlySet<string>;
   onConvertToCliSession: (sessionId: string) => void;
 }
 
@@ -33,6 +35,8 @@ export const AppChatArea = (props: AppChatAreaProps) => {
     onExportSession,
     onToggleFavorite,
     onUpdateTitle,
+    onRegenerateTitle,
+    regeneratingTitleSessionIds,
     onConvertToCliSession,
     ...chatScreenProps
   } = props;
@@ -59,6 +63,8 @@ export const AppChatArea = (props: AppChatAreaProps) => {
           onExportSession={onExportSession}
           onToggleFavorite={onToggleFavorite}
           onUpdateTitle={onUpdateTitle}
+          onRegenerateTitle={onRegenerateTitle}
+          regeneratingTitleSessionIds={regeneratingTitleSessionIds}
           onConvertToCliSession={onConvertToCliSession}
         />
       )}

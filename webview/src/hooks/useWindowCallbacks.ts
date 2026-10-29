@@ -136,6 +136,11 @@ export interface UseWindowCallbacksOptions {
   // AI title generation: update the displayed session title when backend generates one
   setCustomSessionTitle: React.Dispatch<React.SetStateAction<string | null>>;
 
+  /** Shared spinner state for on-demand AI title regeneration (refresh buttons). */
+  setRegeneratingTitleSessionIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  /** Ends an in-flight regeneration: clears the spinner state and its fallback timer. */
+  settleTitleRegeneration: (sessionId: string) => void;
+
   /** Stores the CLI-derived title carried by a Claude history page payload. */
   setRestoredSessionTitle: React.Dispatch<React.SetStateAction<RestoredSessionTitle | null>>;
 }

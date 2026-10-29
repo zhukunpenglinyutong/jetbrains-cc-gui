@@ -19,6 +19,13 @@ export interface ChatHeaderProps {
   onOpenSearch?: () => void;
   onTitleChange?: (newTitle: string) => void;
   titleEditable?: boolean;
+  /**
+   * Regenerate the current session's AI title from its conversation content.
+   * Only rendered when provided (Claude sessions with an active session id).
+   */
+  onRegenerateTitle?: () => void;
+  /** Spinner state of onRegenerateTitle; disables the button while in flight. */
+  isRegeneratingTitle?: boolean;
 }
 
 export function ChatHeader({
@@ -33,6 +40,8 @@ export function ChatHeader({
   onOpenSearch,
   onTitleChange,
   titleEditable = false,
+  onRegenerateTitle,
+  isRegeneratingTitle = false,
 }: ChatHeaderProps): React.ReactElement | null {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -125,6 +134,17 @@ export function ChatHeader({
             <div className="session-title">
               {sessionTitle}
             </div>
+            {onRegenerateTitle && (
+              <button
+                className={`session-title-regenerate-btn ${isRegeneratingTitle ? 'is-loading' : ''}`}
+                onClick={onRegenerateTitle}
+                disabled={isRegeneratingTitle}
+                data-tooltip={t('history.regenerateTitle')}
+                aria-label={t('history.regenerateTitle')}
+              >
+                <span className={`codicon ${isRegeneratingTitle ? 'codicon-loading codicon-modifier-spin' : 'codicon-refresh'}`} />
+              </button>
+            )}
             {titleEditable && (
               <button className="session-title-edit-btn" onClick={startEditing} aria-label="Edit session title">
                 <span className="codicon codicon-edit" />

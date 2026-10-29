@@ -661,6 +661,8 @@ interface Window {
    * @param title - The generated title text
    */
   updateSessionTitle?: (sessionId: string, title: string) => void;
+  /** Regeneration result for the history-list refresh button: {sessionId, success, title?, code?, error?}. */
+  onTitleRegenerated?: (json: string) => void;
 
   /**
    * Restore the user-set title persisted in session-titles.json after a

@@ -1460,6 +1460,15 @@
     "cancelEditButton": "取消",
     "titleTooLong": "标题过长（最多50个字符）",
     "titleUpdated": "标题已更新",
+    "regenerateTitle": "根据会话内容重新生成标题",
+    "titleRegenerated": "标题已重新生成",
+    "titleRegenerateFailed": {
+      "generic": "标题重新生成失败",
+      "emptySession": "会话没有可用的对话内容，无法生成标题",
+      "disabled": "AI 标题生成已在设置中关闭",
+      "sessionNotFound": "未找到会话记录文件",
+      "generationFailed": "标题生成失败，请稍后重试"
+    },
     "copySessionId": "复制会话ID用于CLI恢复",
     "sessionIdCopied": "会话ID已复制",
     "copyFailed": "复制失败",

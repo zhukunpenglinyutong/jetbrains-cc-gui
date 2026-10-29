@@ -7,6 +7,7 @@ describe('useSessionManagement', () => {
 
   const createMocks = () => ({
     setHistoryData: vi.fn(),
+    setRegeneratingTitleSessionIds: vi.fn(),
     setMessages: vi.fn(),
     setCurrentView: vi.fn(),
     setCurrentSessionId: vi.fn(),

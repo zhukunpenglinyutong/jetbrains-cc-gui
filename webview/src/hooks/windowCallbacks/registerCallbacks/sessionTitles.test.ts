@@ -6,9 +6,12 @@ describe('native session titles', () => {
   const restored = vi.fn();
   const custom = vi.fn();
   const local = vi.fn();
+  const settle = vi.fn();
+  const addToast = vi.fn();
   const options = { currentSessionIdRef: { current: 'root' }, currentProviderRef: { current: 'codex' },
     customSessionTitleRef: { current: null as string | null }, setRestoredSessionTitle: restored,
-    setCustomSessionTitle: custom, applyHistoryTitleLocal: local,
+    setCustomSessionTitle: custom, applyHistoryTitleLocal: local, settleTitleRegeneration: settle,
+    addToast,
   } as unknown as UseWindowCallbacksOptions;
   beforeEach(() => {
     vi.clearAllMocks();
@@ -70,6 +73,34 @@ describe('native session titles', () => {
       expect(custom).toHaveBeenCalledTimes(1);
       expect(custom).toHaveBeenCalledWith('Saved manual title');
       expect(restored).toHaveBeenLastCalledWith({ sessionId: 'root', title: 'Automatic title' });
+    });
+  });
+
+  // onTitleRegenerated serves both refresh buttons (history list + chat
+  // header); it must be usable while the history view is unmounted.
+  describe('AI title regeneration results', () => {
+    it('applies the new title and settles the spinner on success', () => {
+      window.onTitleRegenerated!(JSON.stringify({ sessionId: 'root', success: true, title: 'Fix login button' }));
+      expect(settle).toHaveBeenCalledWith('root');
+      expect(local).toHaveBeenCalledWith('root', 'Fix login button');
+      expect(addToast).toHaveBeenCalledWith('history.titleRegenerated', 'success');
+    });
+    it('maps known failure codes to a friendly toast without touching the title', () => {
+      window.onTitleRegenerated!(JSON.stringify({ sessionId: 'root', success: false, code: 'empty_session' }));
+      expect(settle).toHaveBeenCalledWith('root');
+      expect(local).not.toHaveBeenCalled();
+      expect(addToast).toHaveBeenCalledWith('history.titleRegenerateFailed.emptySession', 'error');
+    });
+    it('falls back to the generic message with the raw error for unknown codes', () => {
+      window.onTitleRegenerated!(JSON.stringify({ sessionId: 'root', success: false, code: 'daemon_timeout', error: 'timed out' }));
+      expect(addToast).toHaveBeenCalledWith('history.titleRegenerateFailed.generic: timed out', 'error');
+    });
+    it('ignores malformed payloads and results without a session id', () => {
+      window.onTitleRegenerated!('not json');
+      window.onTitleRegenerated!(JSON.stringify({ success: true, title: 'Orphan' }));
+      expect(settle).not.toHaveBeenCalled();
+      expect(local).not.toHaveBeenCalled();
+      expect(addToast).not.toHaveBeenCalled();
     });
   });
 });

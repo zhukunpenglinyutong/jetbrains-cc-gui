@@ -1455,6 +1455,15 @@
     "cancelEditButton": "Cancel",
     "titleTooLong": "Title too long (max 50 characters)",
     "titleUpdated": "Title updated",
+    "regenerateTitle": "Regenerate title from conversation",
+    "titleRegenerated": "Title regenerated",
+    "titleRegenerateFailed": {
+      "generic": "Title regeneration failed",
+      "emptySession": "No conversation content to derive a title from",
+      "disabled": "AI title generation is disabled in settings",
+      "sessionNotFound": "Session transcript file not found",
+      "generationFailed": "Title generation failed, please try again later"
+    },
     "copySessionId": "Copy session ID for CLI resume",
     "sessionIdCopied": "Session ID copied",
     "copyFailed": "Copy failed",

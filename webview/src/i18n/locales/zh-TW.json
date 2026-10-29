@@ -1054,6 +1054,15 @@
     "cancelEditButton": "取消",
     "titleTooLong": "標題過長（最多50個字元）",
     "titleUpdated": "標題已更新",
+    "regenerateTitle": "根據會話內容重新產生標題",
+    "titleRegenerated": "標題已重新產生",
+    "titleRegenerateFailed": {
+      "generic": "標題重新產生失敗",
+      "emptySession": "會話沒有可用的對話內容，無法產生標題",
+      "disabled": "AI 標題產生已在設定中關閉",
+      "sessionNotFound": "未找到會話記錄檔案",
+      "generationFailed": "標題產生失敗，請稍後再試"
+    },
     "copySessionId": "複製會話ID用於CLI恢復",
     "sessionIdCopied": "會話ID已複製",
     "copyFailed": "複製失敗",
