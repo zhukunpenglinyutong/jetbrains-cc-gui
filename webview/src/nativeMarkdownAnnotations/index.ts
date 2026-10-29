@@ -8,7 +8,7 @@ import './style.css';
 
 interface Annotation {
   completed?: boolean; sourceMissing?: boolean; id: string; revision: number; selectedText: string; comment: string;
-  start: number; end: number; status: string; precision: string;
+  start: number; end: number; status: string; precision: string; anchorText?: string;
 }
 interface NativeState {
   panelId: string; documentVersion: number; dirty: boolean; path: string; annotations: Annotation[];
@@ -38,6 +38,7 @@ function start(pipe: NativePipe) {
   let editing = false;
   let showAllComments = false;
   let showCompleted = false;
+  let relocating: Annotation | null = null;
   let popupPosition: { left: number; top: number } | null = null;
   let drag: { id: number; x: number; y: number; left: number; top: number } | null = null;
   let composing = false;
@@ -162,12 +163,29 @@ function start(pipe: NativePipe) {
     }, pending);
   }
 
+  const isLocatable = (annotation: Annotation) => !annotation.sourceMissing
+    && (annotation.status === 'attached' || annotation.status === 'changed');
+  const isTransferable = (annotation: Annotation) => !annotation.completed && !annotation.sourceMissing
+    && (annotation.status === 'attached' || annotation.status === 'changed' || annotation.status === 'ambiguous');
+  const statusText = (annotation: Annotation) => annotation.status === 'changed' ? labels.stale
+    : annotation.status === 'ambiguous' ? labels.ambiguousStatus
+    : annotation.status === 'orphaned' || annotation.sourceMissing ? labels.orphanedStatus : '';
+  const startRelocate = (annotation: Annotation) => {
+    if (pending) return;
+    relocating = annotation; activeComment = null; editing = false; showAllComments = false;
+    selection = null; popupPosition = null; message = ''; render();
+  };
+
   function annotationActions(annotation: Annotation) {
     const actions = document.createElement('div'); actions.className = 'ccgui-md-actions ccgui-md-list-actions';
     actions.append(iconButton(labels.edit, 'M16 3l5 5-12 12-6 1 1-6zM14 5l5 5', () => {
       activeComment = annotation; showAllComments = false; editing = true; draft = annotation.comment;
       popup.replaceChildren(); render(); popup.querySelector('textarea')?.focus();
-    }, pending), iconButton(labels.remove, 'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7', () => {
+    }, pending));
+    if (!isLocatable(annotation) || annotation.status === 'changed') {
+      actions.append(iconButton(labels.relocate, 'M12 2v20M2 12h20', () => startRelocate(annotation), pending));
+    }
+    actions.append(iconButton(labels.remove, 'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7', () => {
       if (pending) return;
       pending = true;
       void send('delete', { id: annotation.id, revision: annotation.revision }).then(() => { pending = false; render(); });
@@ -188,7 +206,7 @@ function start(pipe: NativePipe) {
     if (!container.isConnected) document.documentElement.append(container);
     container.hidden = !state || state.enabled === false;
     if (state?.enabled === false) {
-      selection = null; activeComment = null; editing = false; draft = '';
+      selection = null; activeComment = null; editing = false; draft = ''; relocating = null;
       popup.replaceChildren(); highlights.replaceChildren();
       return;
     }
@@ -203,27 +221,44 @@ function start(pipe: NativePipe) {
       ? brightness(foreground) > 128 : matchMedia('(prefers-color-scheme: dark)').matches;
     themeLayer.dataset.theme = dark ? 'dark' : 'light';
     controls.replaceChildren();
-    const visible = (state?.annotations ?? []).filter(item => !item.sourceMissing && item.status === 'attached' && (showCompleted || !item.completed));
-    if (activeComment && !visible.some(item => item.id === activeComment?.id)) { activeComment = null; editing = false; popup.replaceChildren(); }
-    const count = visible.length;
-    const sendCount = visible.filter(item => !item.completed).length;
+    const all = (state?.annotations ?? []).filter(item => showCompleted || !item.completed);
+    const locatable = all.filter(isLocatable);
+    const pendingItems = all.filter(item => !item.completed && statusText(item) !== '');
+    if (activeComment && !all.some(item => item.id === activeComment?.id)) { activeComment = null; editing = false; popup.replaceChildren(); }
+    if (relocating) {
+      const current = all.find(item => item.id === relocating?.id);
+      if (!current) relocating = null; else relocating = current;
+    }
+    const count = all.length;
+    const sendCount = all.filter(isTransferable).length;
     const countButton = button(count + ' ' + labels.comments, () => {
       selection = null; activeComment = null; editing = false; showAllComments = !showAllComments; popupPosition = null; render();
     });
     countButton.prepend(commentIcon());
-    controls.append(countButton, iconButton(labels.transfer, 'M22 2L9 15M22 2l-7 20-4-9-9-4z', () => {
+    controls.append(countButton);
+    if (pendingItems.length) {
+      controls.append(button(pendingItems.length + ' ' + labels.pending, () => {
+        selection = null; activeComment = null; editing = false; showAllComments = true; popupPosition = null; render();
+      }, false, 'danger'));
+    }
+    controls.append(iconButton(labels.transfer, 'M22 2L9 15M22 2l-7 20-4-9-9-4z', () => {
       pending = true; message = ''; render();
       // Transfer exactly what the user sees; the explicit list also makes a
       // timed-out retry sign the same intent instead of a moving target.
       void send('transfer', {
         documentVersion: state?.documentVersion,
-        annotationIds: visible.filter(item => !item.completed).map(item => item.id),
+        annotationIds: all.filter(isTransferable).map(item => item.id),
       }).then(() => { pending = false; render(); });
     }, pending || !sendCount, 'primary'));
     const completedToggle = iconButton(showCompleted ? labels.hideCompleted : labels.showCompleted, 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM9 12a3 3 0 1 0 6 0 3 3 0 1 0-6 0', () => { showCompleted = !showCompleted; render(); });
     completedToggle.setAttribute('aria-pressed', String(showCompleted));
     controls.append(completedToggle);
-    if (state?.dirty || message) {
+    if (relocating) {
+      const status = document.createElement('span');
+      status.className = 'ccgui-md-status'; status.setAttribute('role', 'status');
+      status.textContent = message || labels.relocateHint;
+      controls.append(status);
+    } else if (state?.dirty || message) {
       const status = document.createElement('span');
       status.className = 'ccgui-md-status'; status.setAttribute('role', 'status');
       status.textContent = state?.dirty ? labels.waiting : message;
@@ -231,19 +266,33 @@ function start(pipe: NativePipe) {
     }
 
     toolbar.replaceChildren();
-    toolbar.hidden = !selection || editing || showAllComments || !!activeComment || !!state?.dirty;
-    if (!toolbar.hidden && selection) {
-      toolbar.append(button(labels.comment, () => {
-        draft = ''; editing = true; showAllComments = false; popupPosition = null; message = ''; render();
-        popup.querySelector('textarea')?.focus();
-      }), button(labels.quote, () => {
-        if (pending || !selection) return;
-        pending = true; message = ''; render();
-        void send('quote', { ...selection, documentVersion: selectionVersion }).then(ok => {
-          pending = false; if (ok) close(); else render();
-        });
-      }));
-      position(toolbar, selection.left, selection.top);
+    toolbar.hidden = editing || showAllComments || (!!activeComment && !relocating) || !!state?.dirty || (!selection && !relocating);
+    if (!toolbar.hidden) {
+      if (relocating) {
+        toolbar.append(button(labels.cancel, () => { relocating = null; selection = null; message = ''; render(); }),
+          button(labels.relocateConfirm, () => {
+            if (pending || !selection || !relocating) return;
+            pending = true; message = '';
+            const target = relocating;
+            void send('anchor', { id: target.id, revision: target.revision, ...selection, documentVersion: selectionVersion }).then(ok => {
+              pending = false;
+              if (ok) { relocating = null; selection = null; close(); } else render();
+            });
+          }, !selection || pending, 'primary'));
+        position(toolbar, selection?.left ?? 16, selection?.top ?? 80);
+      } else if (selection) {
+        toolbar.append(button(labels.comment, () => {
+          draft = ''; editing = true; showAllComments = false; popupPosition = null; message = ''; render();
+          popup.querySelector('textarea')?.focus();
+        }), button(labels.quote, () => {
+          if (pending || !selection) return;
+          pending = true; message = ''; render();
+          void send('quote', { ...selection, documentVersion: selectionVersion }).then(ok => {
+            pending = false; if (ok) close(); else render();
+          });
+        }));
+        position(toolbar, selection.left, selection.top);
+      }
     }
 
     // Preserve the textarea node during status/geometry updates and IME composition.
@@ -262,7 +311,7 @@ function start(pipe: NativePipe) {
         if (showAllComments) {
           const list = document.createElement('ul');
           list.className = 'ccgui-md-comment-list';
-          for (const annotation of visible) {
+          for (const annotation of all) {
             const row = document.createElement('li');
             const entry = button('', () => {
               activeComment = annotation; showAllComments = false; popupPosition = null; render();
@@ -274,7 +323,15 @@ function start(pipe: NativePipe) {
             const comment = document.createElement('span'); comment.className = 'ccgui-md-list-comment';
             comment.textContent = annotation.comment;
             entry.append(id, quote, comment);
+            const badge = statusText(annotation);
+            if (badge) {
+              const state = document.createElement('small');
+              state.className = 'ccgui-md-badge' + (annotation.status === 'changed' ? ' changed' : '');
+              state.textContent = badge;
+              entry.append(state);
+            }
             row.classList.toggle('completed', !!annotation.completed);
+            row.classList.toggle('stale', !isLocatable(annotation));
             row.append(entry, annotationActions(annotation)); list.append(row);
           }
           if (!count) {
@@ -328,23 +385,28 @@ function start(pipe: NativePipe) {
           const actions = document.createElement('div'); actions.className = 'ccgui-md-actions';
           actions.append(iconButton(labels.edit, 'M16 3l5 5-12 12-6 1 1-6zM14 5l5 5', () => {
             editing = true; draft = current.comment; popup.replaceChildren(); render(); popup.querySelector('textarea')?.focus();
-          }), iconButton(labels.remove, 'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7', () => {
+          }));
+          if (!isLocatable(current) || current.status === 'changed') {
+            actions.append(iconButton(labels.relocate, 'M12 2v20M2 12h20', () => startRelocate(current), pending));
+          }
+          actions.append(iconButton(labels.remove, 'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7', () => {
             if (pending) return;
             pending = true;
             void send('delete', { id: current.id, revision: current.revision }).then(ok => {
               pending = false; if (ok) close(); else render();
             });
           }, false, 'danger'), iconButton(labels.source, 'M14 2H6v20h12V6zM14 2v6h4M9 12h6M9 16h6',
-          () => { void send('navigate', { id: current.id }); }, current.status !== 'attached'),
+          () => { void send('navigate', { id: current.id }); }, !isLocatable(current)),
           iconButton(labels.transferOne, 'M22 2L9 15M22 2l-7 20-4-9-9-4z', () => {
             if (pending) return;
             pending = true;
             void send('transfer', { annotationIds: [current.id], documentVersion: state?.documentVersion }).then(() => { pending = false; render(); });
-          }, !!current.completed, 'primary'));
+          }, !isTransferable(current), 'primary'));
           actions.append(completionButton(current));
           popup.append(body, actions);
-          if (current.status !== 'attached') {
-            const status = document.createElement('p'); status.textContent = labels.stale;
+          const badge = statusText(current);
+          if (badge) {
+            const status = document.createElement('p'); status.className = 'ccgui-md-badge'; status.textContent = badge;
             popup.append(status);
           }
         }
@@ -354,7 +416,8 @@ function start(pipe: NativePipe) {
     if (!popup.hidden) {
       const textarea = popup.querySelector('textarea');
       if (textarea) { textarea.placeholder = labels.placeholder; textarea.setAttribute('aria-label', labels.placeholder); }
-      const anchor = activeComment && root ? findSourceElement(root, activeComment.start, activeComment.end) : null;
+      const anchor = activeComment && root && isLocatable(activeComment)
+        ? findSourceElement(root, activeComment.start, activeComment.end) : null;
       const rect = anchor?.getBoundingClientRect();
       const summaryAnchor = showAllComments ? controls.getBoundingClientRect() : null;
       position(popup, popupPosition?.left ?? (summaryAnchor ? summaryAnchor.right - popup.offsetWidth : rect?.left ?? selection?.left ?? 16),
@@ -363,8 +426,7 @@ function start(pipe: NativePipe) {
     highlights.replaceChildren();
     const markerTops: number[] = [];
     if (root && !state?.dirty) {
-      for (const annotation of visible) {
-        if (annotation.status !== 'attached') continue;
+      for (const annotation of locatable) {
         const element = findSourceElement(root, annotation.start, annotation.end);
         if (!element) continue;
         const bounds = element.getBoundingClientRect();
@@ -373,10 +435,12 @@ function start(pipe: NativePipe) {
           selection = null; activeComment = annotation; editing = false; showAllComments = false; popupPosition = null; message = ''; render();
         });
         mark.append(commentIcon());
-        mark.className = 'ccgui-md-marker'; mark.title = annotation.comment;
+        mark.className = 'ccgui-md-marker' + (annotation.status === 'changed' ? ' changed' : '');
+        mark.title = annotation.comment;
         mark.setAttribute('aria-label', annotation.comment);
         mark.style.left = Math.max(0, Math.min(innerWidth - 34, bounds.right)) + 'px';
-        const rectangles = quoteRects(element, annotation.selectedText);
+        const quoteText = annotation.status === 'changed' ? (annotation.anchorText ?? annotation.selectedText) : annotation.selectedText;
+        const rectangles = quoteRects(element, quoteText);
         let markerTop = Math.max(0, rectangles[0]?.top ?? bounds.top);
         while (markerTops.some(top => Math.abs(top - markerTop) < 30)) markerTop += 30;
         markerTops.push(markerTop);
@@ -384,7 +448,7 @@ function start(pipe: NativePipe) {
         highlights.append(mark);
         for (const rect of rectangles.length ? rectangles : [bounds]) {
           const highlight = document.createElement('div');
-          highlight.className = 'ccgui-md-highlight';
+          highlight.className = 'ccgui-md-highlight' + (annotation.status === 'changed' ? ' changed' : '');
           Object.assign(highlight.style, {
             left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', height: rect.height + 'px',
           });
@@ -396,7 +460,7 @@ function start(pipe: NativePipe) {
 
   function close() {
     editing = false; composing = false; activeComment = null; selection = null; popupPosition = null; showAllComments = false;
-    draft = ''; popup.replaceChildren(); render();
+    relocating = null; draft = ''; popup.replaceChildren(); render();
   }
   const scheduleRender = () => {
     if (drag) return;
@@ -420,6 +484,9 @@ function start(pipe: NativePipe) {
             activeComment = null; selection = null; editing = false; draft = '';
             popup.replaceChildren();
           } else if (!editing) activeComment = current;
+        }
+        if (relocating) {
+          relocating = state?.annotations.find(item => item.id === relocating?.id) ?? null;
         }
         render();
         return;

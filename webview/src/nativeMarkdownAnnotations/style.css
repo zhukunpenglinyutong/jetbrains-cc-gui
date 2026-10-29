@@ -62,3 +62,8 @@
 #ccgui-markdown-review .ccgui-md-comment-list .ccgui-md-list-actions .ccgui-md-button { display: inline-flex; width: 26px; padding: 4px; }
 #ccgui-markdown-review .ccgui-md-comment-list .completed .ccgui-md-list-comment { color: var(--text-tertiary); text-decoration: line-through; }
 #ccgui-markdown-review .ccgui-md-controls [aria-pressed="true"] { color: var(--accent-primary); background: var(--bg-hover); }
+#ccgui-markdown-review .ccgui-md-badge { display: inline-block; width: fit-content; margin-top: 4px; padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--color-error) 12%, transparent); color: var(--color-error); font-size: 10px; }
+#ccgui-markdown-review .ccgui-md-badge.changed { background: color-mix(in srgb, var(--accent-primary) 12%, transparent); color: var(--accent-primary); }
+#ccgui-markdown-review .ccgui-md-comment-list .stale .ccgui-md-list-quote { text-decoration: line-through; }
+#ccgui-markdown-review .ccgui-md-marker.changed { background: var(--color-warning, #b78103); }
+#ccgui-markdown-review .ccgui-md-highlight.changed { border-bottom-style: dashed; }

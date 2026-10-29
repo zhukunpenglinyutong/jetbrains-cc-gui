@@ -265,6 +265,22 @@ public class MarkdownReviewServiceTest {
     }
 
     @Test
+    public void refusesNewDraftsWhenEveryPendingDraftHasALiveOwner() {
+        MarkdownReviewService service = new MarkdownReviewService(null);
+        service.setLiveTargetsSupplier(() -> java.util.Set.of("alive-tab"));
+        for (int index = 0; index < MarkdownReviewLimits.MAX_PENDING_BATCHES; index++) {
+            ReviewBatch batch = orphan("alive-" + index, "alive-tab");
+            batch.annotations.get(0).id = "comment-" + index;
+            service.saveBatch(batch);
+        }
+        ReviewBatch rejected = orphan("new", "alive-tab");
+        rejected.annotations.get(0).id = "comment-new";
+        ReviewRequestException error = assertThrows(ReviewRequestException.class, () -> service.saveBatch(rejected));
+        assertEquals("draftLimit", error.messageKey);
+        assertEquals(MarkdownReviewLimits.MAX_PENDING_BATCHES, service.snapshotState().batches.size());
+    }
+
+    @Test
     public void droppingARetiredTargetClearsOnlyItsUnacknowledgedDrafts() {
         MarkdownReviewService service = new MarkdownReviewService(null);
         service.saveBatch(orphan("keep", "keep-tab"));

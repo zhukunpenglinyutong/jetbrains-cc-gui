@@ -26,4 +26,40 @@ public class AnnotationAnchorResolverTest {
         assertEquals(-1, AnnotationAnchorResolver.relocate("changed", "same", 0, "", ""));
         assertEquals(-1, AnnotationAnchorResolver.relocate("changed", "", 0, "", ""));
     }
+
+    @Test
+    public void keepsTheCommentWhenAHeadOrTailFragmentSurvives() {
+        String source = "the quick brown fox jumps over the lazy dog";
+        int fragment = AnnotationAnchorResolver.FRAGMENT_CHARS;
+        String head = source.substring(0, fragment);
+        String tail = source.substring(source.length() - fragment);
+
+        var headMatch = AnnotationAnchorResolver.locate(
+                "the quick brown fox jumps over a lazy dog", source, 0, "", "");
+        assertEquals(AnnotationAnchorResolver.AnchorStatus.FRAGMENT, headMatch.status());
+        assertEquals(head, "the quick brown fox jumps over a lazy dog".substring(headMatch.start(), headMatch.end()));
+
+        var tailMatch = AnnotationAnchorResolver.locate(
+                "a quick brown fox jumps over the lazy dog", source, 0, "", "");
+        assertEquals(AnnotationAnchorResolver.AnchorStatus.FRAGMENT, tailMatch.status());
+        assertEquals(tail, "a quick brown fox jumps over the lazy dog".substring(tailMatch.start(), tailMatch.end()));
+    }
+
+    @Test
+    public void reportsAmbiguousFragmentsAndMissingAnchors() {
+        String source = "abcdefghijklmnopqrstuvwxyz0123456789";
+        String head = source.substring(0, AnnotationAnchorResolver.FRAGMENT_CHARS);
+        assertEquals(AnnotationAnchorResolver.AnchorStatus.AMBIGUOUS,
+                AnnotationAnchorResolver.locate(head + head, source, 0, "", "").status());
+        assertEquals(AnnotationAnchorResolver.AnchorStatus.MISSING,
+                AnnotationAnchorResolver.locate("nothing here", source, 0, "", "").status());
+    }
+
+    @Test
+    public void shortHeadAnchorSurvivesAnEditThatBreaksBothLongFragments() {
+        // 25 chars: the 24-char head and tail both include the edited middle char.
+        String source = "abcdefghijklmnopqrstuvwxy";
+        assertEquals(AnnotationAnchorResolver.AnchorStatus.FRAGMENT,
+                AnnotationAnchorResolver.locate("abcdefghijXlmnopqrstuvwxy", source, 0, "", "").status());
+    }
 }

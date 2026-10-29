@@ -6,7 +6,7 @@ import static org.junit.Assert.*;
 
 public class MarkdownCompletionTest {
     @Test
-    public void completionPersistsAndMissingSourceCannotBeListed() {
+    public void completionPersistsAndMissingSourceRemainsVisibleButNotTransferable() {
         var file = new LightVirtualFile("plan.md");
         var service = new MarkdownReviewService(null);
         var state = service.snapshotState();
@@ -33,8 +33,11 @@ public class MarkdownCompletionTest {
         assertFalse(restored.list(file).get(0).completed);
         state = restored.snapshotState();
         state.annotations.get(0).sourceMissing = true;
+        state.annotations.get(0).status = "orphaned";
         restored.loadState(state);
-        assertTrue(restored.list(file).isEmpty());
+        // R5: a lost anchor stays visible as an invalid entry instead of being hidden.
+        assertEquals(1, restored.list(file).size());
+        assertFalse(MarkdownReviewService.isTransferable(restored.list(file).get(0)));
         assertEquals(1, restored.snapshotState().annotations.size());
     }
 }

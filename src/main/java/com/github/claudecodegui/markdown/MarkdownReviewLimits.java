@@ -5,8 +5,8 @@ public final class MarkdownReviewLimits {
     private MarkdownReviewLimits() {
     }
 
-    /** Maximum stored handoff snapshots (pending and terminal) before the oldest is evicted. */
-    public static final int MAX_PENDING_BATCHES = 200;
+    /** Maximum stored handoff snapshots (pending and terminal) before orphan cleanup is attempted. */
+    public static final int MAX_PENDING_BATCHES = 500;
     /** Cached request responses kept for replay across preview reloads. */
     public static final int RESPONSE_CACHE = 128;
     /** Upper bound for a single bridge request, in characters. */

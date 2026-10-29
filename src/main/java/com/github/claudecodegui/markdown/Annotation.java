@@ -7,6 +7,8 @@ public final class Annotation {
     public String path;
     public String selectedText;
     public String sourceText;
+    /** Matched head/tail fragment when status is "changed"; derived and refreshed on reconcile. */
+    public String anchorText;
     public String sourceContext;
     public String prefix;
     public String suffix;

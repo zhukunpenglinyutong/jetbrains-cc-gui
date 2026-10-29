@@ -220,11 +220,24 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
     public synchronized List<Annotation> list(VirtualFile file) {
         List<Annotation> result = new ArrayList<>();
         for (Annotation annotation : state.annotations) {
-            if (file.getUrl().equals(annotation.fileUrl) && !annotation.sourceMissing && "attached".equals(annotation.status)) {
+            if (file.getUrl().equals(annotation.fileUrl)) {
                 result.add(copy(annotation, Annotation.class));
             }
         }
         return result;
+    }
+
+    /** Attached or fragment-anchored: the preview can draw it at a location. */
+    static boolean isLocatable(Annotation annotation) {
+        return !annotation.sourceMissing
+                && ("attached".equals(annotation.status) || "changed".equals(annotation.status));
+    }
+
+    /** Still a valid comment for chat handoff; truly lost entries stay out of new drafts. */
+    static boolean isTransferable(Annotation annotation) {
+        return !annotation.completed && !annotation.sourceMissing
+                && ("attached".equals(annotation.status) || "changed".equals(annotation.status)
+                || "ambiguous".equals(annotation.status));
     }
 
     public Annotation create(VirtualFile file, String path, Document document, int start, int end, String selected, String comment) {
@@ -290,10 +303,11 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
     }
 
     public void update(VirtualFile file, String id, long revision, String comment, boolean delete) {
+        boolean withdrawn = false;
         synchronized (this) {
             Annotation annotation = find(file, id);
             if (annotation.revision != revision) {
-                throw new IllegalStateException("This comment changed in another preview. Reopen it and try again.");
+                throw new ReviewRequestException("stale", "This comment changed in another preview. Reopen it and try again.");
             }
             if (delete) {
                 state.annotations.remove(annotation);
@@ -301,7 +315,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                 if (marker != null) {
                     marker.dispose();
                 }
-                withdrawAutomaticDrafts();
+                withdrawn = true;
             } else {
                 if (comment.isBlank() || comment.length() > MarkdownReviewLimits.TEXT_MAX_CHARS) {
                     throw new IllegalArgumentException("Comment cannot be empty");
@@ -310,23 +324,59 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                 annotation.revision++;
             }
         }
+        if (withdrawn) {
+            withdrawAutomaticDrafts();
+        }
         changed();
     }
 
     public void complete(VirtualFile file, String id, long revision, boolean completed) {
+        boolean withdrawn = false;
         synchronized (this) {
             Annotation annotation = find(file, id);
             if (annotation.revision != revision) {
-                throw new IllegalStateException("This comment changed. Reopen it and try again.");
+                throw new ReviewRequestException("stale", "This comment changed. Reopen it and try again.");
             }
             // Completion follows the user's persistence choice; no silent persist flip.
             annotation.completed = completed;
             annotation.revision++;
-            if (completed) {
-                withdrawAutomaticDrafts();
-            }
+            withdrawn = completed;
+        }
+        if (withdrawn) {
+            withdrawAutomaticDrafts();
         }
         changed();
+    }
+
+    /** Re-associates a changed/ambiguous comment with a fresh, user-confirmed selection (R5). */
+    public Annotation reanchor(VirtualFile file, String id, long revision, Document document,
+                               int start, int end, String selected) {
+        Annotation updated;
+        synchronized (this) {
+            Annotation annotation = find(file, id);
+            if (annotation.revision != revision) {
+                throw new ReviewRequestException("stale", "This comment changed. Reopen it and try again.");
+            }
+            Annotation fresh = snapshot(file, annotation.path, document, start, end, selected, annotation.comment);
+            annotation.selectedText = fresh.selectedText;
+            annotation.sourceText = fresh.sourceText;
+            annotation.sourceContext = fresh.sourceContext;
+            annotation.prefix = fresh.prefix;
+            annotation.suffix = fresh.suffix;
+            annotation.precision = fresh.precision;
+            annotation.start = fresh.start;
+            annotation.end = fresh.end;
+            annotation.startLine = fresh.startLine;
+            annotation.endLine = fresh.endLine;
+            annotation.status = "attached";
+            annotation.sourceMissing = false;
+            annotation.anchorText = null;
+            annotation.revision++;
+            track(annotation, document);
+            updated = copy(annotation, Annotation.class);
+        }
+        changed();
+        return updated;
     }
 
     private Annotation find(VirtualFile file, String id) {
@@ -335,44 +385,97 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                 return annotation;
             }
         }
-        throw new IllegalArgumentException("Comment no longer exists");
+        throw new ReviewRequestException("missing", "Comment no longer exists");
+    }
+
+    /**
+     * Caller must hold the monitor. Whole quote first, then a unique head/tail fragment.
+     * Returns true when the annotation has a usable range (attached or changed).
+     */
+    private boolean resolveAnchor(Annotation annotation, Document document, String text) {
+        RangeMarker marker = markers.get(annotation.id);
+        boolean markerHere = marker != null && marker.isValid() && marker.getDocument() == document;
+        if (markerHere && text.substring(marker.getStartOffset(), marker.getEndOffset()).equals(annotation.sourceText)) {
+            applyRange(annotation, document, marker.getStartOffset(), marker.getEndOffset(), "attached", null);
+            return true;
+        }
+        int hint = markerHere ? marker.getStartOffset() : annotation.start;
+        AnnotationAnchorResolver.Match match = AnnotationAnchorResolver.locate(
+                text, annotation.sourceText, hint, annotation.prefix, annotation.suffix);
+        switch (match.status()) {
+            case FULL:
+                applyRange(annotation, document, match.start(), match.start() + annotation.sourceText.length(), "attached", null);
+                return true;
+            case FRAGMENT:
+                applyRange(annotation, document, match.start(), match.end(), "changed",
+                        text.substring(match.start(), match.end()));
+                return true;
+            case AMBIGUOUS:
+                applyStatus(annotation, "ambiguous", false);
+                return false;
+            default:
+                applyStatus(annotation, "orphaned", true);
+                return false;
+        }
+    }
+
+    private void applyRange(Annotation annotation, Document document, int start, int end, String status, String anchorText) {
+        annotation.start = start;
+        annotation.end = end;
+        annotation.startLine = document.getLineNumber(start) + 1;
+        annotation.endLine = document.getLineNumber(Math.max(start, end - 1)) + 1;
+        annotation.status = status;
+        annotation.sourceMissing = false;
+        annotation.anchorText = anchorText;
+        track(annotation, document);
+    }
+
+    private static void applyStatus(Annotation annotation, String status, boolean sourceMissing) {
+        annotation.status = status;
+        annotation.sourceMissing = sourceMissing;
+        annotation.anchorText = null;
     }
 
     public void reconcile(VirtualFile file, Document document) {
         boolean modified = false;
+        boolean removed = false;
+        boolean orphanedAny = false;
         synchronized (this) {
             String text = document.getText();
+            List<Annotation> missing = new ArrayList<>();
             for (Annotation annotation : state.annotations) {
-                if (!file.getUrl().equals(annotation.fileUrl) || annotation.sourceMissing) {
+                if (!file.getUrl().equals(annotation.fileUrl)) {
                     continue;
                 }
-                RangeMarker marker = markers.get(annotation.id);
-                int offset;
-                if (marker != null && marker.isValid()) {
-                    // Do not jump to an unrelated duplicate after the live
-                    // annotated range was edited or deleted.
-                    offset = text.substring(marker.getStartOffset(), marker.getEndOffset()).equals(annotation.sourceText)
-                            ? marker.getStartOffset() : -1;
-                } else {
-                    offset = AnnotationAnchorResolver.relocate(text, annotation.sourceText,
-                            annotation.start, annotation.prefix, annotation.suffix);
+                String previousStatus = annotation.status;
+                boolean previousMissing = annotation.sourceMissing;
+                int previousStart = annotation.start;
+                boolean located = resolveAnchor(annotation, document, text);
+                boolean orphaned = !located && "orphaned".equals(annotation.status);
+                if (orphaned) {
+                    orphanedAny = true;
                 }
-                String status = offset >= 0 ? "attached" : (offset == -2 ? "ambiguous" : "orphaned");
-                if (!status.equals(annotation.status) || offset >= 0 && offset != annotation.start) {
+                if (orphaned && state.config.autoDeleteAffected && !annotation.completed) {
+                    missing.add(annotation);
+                } else if (!previousStatus.equals(annotation.status) || previousMissing != annotation.sourceMissing
+                        || previousStart != annotation.start) {
                     modified = true;
                 }
-                annotation.status = status;
-                if (offset == -1) {
-                    annotation.sourceMissing = true;
-                }
-                if (offset >= 0) {
-                    annotation.start = offset;
-                    annotation.end = offset + annotation.sourceText.length();
-                    annotation.startLine = document.getLineNumber(offset) + 1;
-                    annotation.endLine = document.getLineNumber(Math.max(offset, annotation.end - 1)) + 1;
-                    track(annotation, document);
-                }
             }
+            if (!missing.isEmpty()) {
+                for (Annotation annotation : missing) {
+                    state.annotations.remove(annotation);
+                    RangeMarker marker = markers.remove(annotation.id);
+                    if (marker != null) {
+                        marker.dispose();
+                    }
+                }
+                modified = true;
+                removed = true;
+            }
+        }
+        if (removed || orphanedAny) {
+            withdrawAutomaticDrafts();
         }
         if (modified) {
             changed();
@@ -416,53 +519,77 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                 @Override
                 public void documentChanged(@NotNull DocumentEvent event) {
                     boolean hit = !affected.isEmpty();
-                    EditImpact impact;
+                    List<Annotation> missing = new ArrayList<>();
+                    boolean orphanedAny = false;
                     synchronized (MarkdownReviewService.this) {
-                        if (hit && state.config.enabled && state.config.autoDeleteAffected) {
-                            state.annotations.removeIf(item -> {
-                                if (!affected.contains(item.id) || item.completed) {
-                                    return false;
-                                }
-                                RangeMarker removed = markers.remove(item.id);
-                                if (removed != null) {
-                                    removed.dispose();
-                                }
-                                return true;
-                            });
-                            // Edit-driven deletions withdraw their automatic drafts too.
-                            withdrawAutomaticDrafts();
-                        }
+                        Set<String> resolved = new HashSet<>(affected);
                         affected.clear();
                         if (!state.config.enabled) {
                             // Disabled: positions are reconciled by the next sync after re-enabling.
                             return;
                         }
+                        String text = document.getText();
+                        if (hit) {
+                            for (Annotation item : state.annotations) {
+                                if (!resolved.contains(item.id)) {
+                                    continue;
+                                }
+                                boolean located = resolveAnchor(item, document, text);
+                                boolean orphaned = !located && "orphaned".equals(item.status);
+                                if (orphaned) {
+                                    orphanedAny = true;
+                                }
+                                if (orphaned && state.config.autoDeleteAffected && !item.completed) {
+                                    missing.add(item);
+                                }
+                            }
+                        }
                         // Offsets are per-document: only this document's tracked
                         // annotations may drive the impact, otherwise a larger
                         // offset in another file turns NONE into a fan-out.
-                        impact = classifyImpact(trackedOn(state.annotations, trackedIds(document)), event.getOffset(), hit);
-                        if (impact == EditImpact.NONE) {
-                            // The edit is past every annotation: no refresh, no fan-out.
-                            return;
-                        }
-                        for (Annotation item : state.annotations) {
-                            if (item.sourceMissing) {
-                                continue;
-                            }
-                            RangeMarker marker = markers.get(item.id);
-                            if (marker != null && marker.getDocument() == document && marker.isValid()) {
+                        EditImpact impact = classifyImpact(trackedOn(state.annotations, trackedIds(document)), event.getOffset(), hit);
+                        if (impact != EditImpact.NONE) {
+                            for (Annotation item : state.annotations) {
+                                if (resolved.contains(item.id) || item.sourceMissing
+                                        || "ambiguous".equals(item.status) || "orphaned".equals(item.status)) {
+                                    continue;
+                                }
+                                RangeMarker marker = markers.get(item.id);
+                                if (marker == null || marker.getDocument() != document || !marker.isValid()) {
+                                    // The caught-up reconcile re-evaluates invalid markers.
+                                    continue;
+                                }
                                 item.start = marker.getStartOffset();
                                 item.end = marker.getEndOffset();
                                 item.startLine = document.getLineNumber(item.start) + 1;
                                 item.endLine = document.getLineNumber(Math.max(item.start, item.end - 1)) + 1;
-                                item.status = document.getText().substring(item.start, item.end).equals(item.sourceText) ? "attached" : "orphaned";
-                            } else if (marker != null && marker.getDocument() == document) {
-                                item.status = "orphaned";
-                            }
-                            if ("orphaned".equals(item.status)) {
-                                item.sourceMissing = true;
+                                if ("changed".equals(item.status)) {
+                                    item.anchorText = text.substring(item.start, item.end);
+                                } else {
+                                    item.status = text.substring(item.start, item.end).equals(item.sourceText) ? "attached" : "orphaned";
+                                    item.anchorText = null;
+                                }
+                                if ("orphaned".equals(item.status)) {
+                                    item.sourceMissing = true;
+                                    orphanedAny = true;
+                                    if (state.config.autoDeleteAffected && !item.completed) {
+                                        missing.add(item);
+                                    }
+                                }
                             }
                         }
+                        if (!missing.isEmpty()) {
+                            for (Annotation item : missing) {
+                                state.annotations.remove(item);
+                                RangeMarker removed = markers.remove(item.id);
+                                if (removed != null) {
+                                    removed.dispose();
+                                }
+                            }
+                        }
+                    }
+                    if (!missing.isEmpty() || orphanedAny) {
+                        withdrawAutomaticDrafts();
                     }
                     // Edit-driven refresh is answered by the preview's own
                     // caught-up sync; broadcasting here caused per-keystroke
@@ -576,9 +703,9 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
         }
         // Keep handoff snapshots for diagnosis/recovery; "queued" does not
         // mean the provider acknowledged receipt. When the bounded history is
-        // full, evict in order: the oldest terminal snapshot, the oldest
-        // pending snapshot of a retired chat target, or the oldest pending
-        // snapshot — the feature must never lock up on orphans.
+        // full, reclaim only unowned data: the oldest terminal snapshot, then
+        // the oldest pending snapshot of a retired chat target. Live drafts are
+        // never evicted silently (R3).
         while (state.batches.size() >= MarkdownReviewLimits.MAX_PENDING_BATCHES) {
             ReviewBatch victim = pickVictim();
             if (victim == null) {
@@ -587,7 +714,8 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
             state.batches.remove(victim);
         }
         if (state.batches.size() >= MarkdownReviewLimits.MAX_PENDING_BATCHES) {
-            throw new IllegalStateException("Review draft limit reached. Remove old drafts before adding more.");
+            throw new ReviewRequestException("draftLimit",
+                    "Review draft limit reached (" + MarkdownReviewLimits.MAX_PENDING_BATCHES + ").");
         }
         state.batches.add(copy(batch, ReviewBatch.class));
         return copy(batch, ReviewBatch.class);
@@ -601,7 +729,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
         liveTargets = java.util.Objects.requireNonNull(supplier);
     }
 
-    /** Caller must hold the monitor. */
+    /** Caller must hold the monitor. Returns null when every pending draft still has a live owner. */
     private ReviewBatch pickVictim() {
         Set<String> alive = liveTargets.get();
         ReviewBatch victim = state.batches.stream().filter(item -> !isPending(item)).findFirst().orElse(null);
@@ -609,9 +737,6 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
             victim = state.batches.stream()
                     .filter(item -> isPending(item) && !alive.contains(item.targetId))
                     .findFirst().orElse(null);
-        }
-        if (victim == null) {
-            victim = state.batches.stream().filter(MarkdownReviewService::isPending).findFirst().orElse(null);
         }
         return victim;
     }
@@ -646,51 +771,63 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
      * supersede snapshot — never stored — tells the live chat draft to drop it.
      * Manual transfers and quotes keep their entries.
      */
-    public synchronized void withdrawAutomaticDrafts() {
+    public void withdrawAutomaticDrafts() {
         List<ReviewBatch> pushes = new ArrayList<>();
-        for (java.util.Iterator<ReviewBatch> iterator = state.batches.iterator(); iterator.hasNext(); ) {
-            ReviewBatch batch = iterator.next();
-            if (!isPending(batch) || !batch.automatic) {
-                continue;
+        Consumer<ReviewBatch> pusher;
+        synchronized (this) {
+            for (java.util.Iterator<ReviewBatch> iterator = state.batches.iterator(); iterator.hasNext(); ) {
+                ReviewBatch batch = iterator.next();
+                if (!isPending(batch) || !batch.automatic) {
+                    continue;
+                }
+                List<Annotation> withdrawn = new ArrayList<>();
+                for (java.util.Iterator<Annotation> item = batch.annotations.iterator(); item.hasNext(); ) {
+                    Annotation snapshot = item.next();
+                    if (!isActiveAnnotation(snapshot.id)) {
+                        item.remove();
+                        withdrawn.add(snapshot);
+                    }
+                }
+                if (withdrawn.isEmpty()) {
+                    continue;
+                }
+                if (batch.annotations.isEmpty()) {
+                    iterator.remove();
+                }
+                ReviewBatch push = copy(batch, ReviewBatch.class);
+                push.id = java.util.UUID.randomUUID().toString();
+                push.annotations = withdrawn;
+                for (Annotation snapshot : withdrawn) {
+                    // The chat dedup merge drops entries it already has at this revision;
+                    // bump so the withdrawal relocates the stale copy out.
+                    snapshot.revision++;
+                    snapshot.withdrawn = true;
+                }
+                pushes.add(push);
             }
-            List<Annotation> withdrawn = new ArrayList<>();
-            for (java.util.Iterator<Annotation> item = batch.annotations.iterator(); item.hasNext(); ) {
-                Annotation snapshot = item.next();
-                if (!isActiveAnnotation(snapshot.id)) {
-                    item.remove();
-                    withdrawn.add(snapshot);
+            pusher = batchPusher;
+        }
+        if (pusher == null || pushes.isEmpty()) {
+            return;
+        }
+        Consumer<ReviewBatch> target = pusher;
+        // Child windows touch Swing; a document edit can arrive on any thread (R4).
+        runOnEdt(() -> {
+            for (ReviewBatch push : pushes) {
+                try {
+                    target.accept(push);
+                } catch (RuntimeException error) {
+                    LOG.warn("Markdown review withdrawal push failed", error);
                 }
             }
-            if (withdrawn.isEmpty()) {
-                continue;
-            }
-            if (batch.annotations.isEmpty()) {
-                iterator.remove();
-            }
-            ReviewBatch push = copy(batch, ReviewBatch.class);
-            push.id = java.util.UUID.randomUUID().toString();
-            push.annotations = withdrawn;
-            for (Annotation snapshot : withdrawn) {
-                // The chat dedup merge drops entries it already has at this revision;
-                // bump so the withdrawal relocates the stale copy out.
-                snapshot.revision++;
-                snapshot.withdrawn = true;
-            }
-            pushes.add(push);
-        }
-        Consumer<ReviewBatch> pusher = batchPusher;
-        if (pusher != null) {
-            for (ReviewBatch push : pushes) {
-                pusher.accept(push);
-            }
-        }
+        });
     }
 
     /** Caller must hold the monitor. */
     private boolean isActiveAnnotation(String annotationId) {
         for (Annotation live : state.annotations) {
             if (annotationId.equals(live.id)) {
-                return !live.completed;
+                return !live.completed && !live.sourceMissing && !"orphaned".equals(live.status);
             }
         }
         return false; // deleted or never registered in this workspace
@@ -757,13 +894,28 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
     }
 
     private void changed(EditImpact impact) {
-        for (Consumer<EditImpact> listener : listeners) {
-            try {
-                listener.accept(impact);
-            } catch (RuntimeException error) {
-                // One misbehaving preview panel must not cut off the remaining listeners.
-                LOG.warn("Markdown review listener failed", error);
+        // UI-facing listeners (preview bridges, chat windows) must run on the
+        // dispatch thread; state-only tests have no application (R4).
+        runOnEdt(() -> {
+            for (Consumer<EditImpact> listener : listeners) {
+                try {
+                    listener.accept(impact);
+                } catch (RuntimeException error) {
+                    // One misbehaving preview panel must not cut off the remaining listeners.
+                    LOG.warn("Markdown review listener failed", error);
+                }
             }
+        });
+    }
+
+    /** Runs immediately on the dispatch thread (or without an application); otherwise defers. */
+    private static void runOnEdt(Runnable action) {
+        com.intellij.openapi.application.Application application =
+                com.intellij.openapi.application.ApplicationManager.getApplication();
+        if (application == null || application.isDispatchThread()) {
+            action.run();
+        } else {
+            application.invokeLater(action);
         }
     }
 

@@ -245,6 +245,31 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                     throw new ReviewRequestException("panelChanged", "Preview changed. Select the text again.");
                 }
                 switch (action) {
+                    case "anchor":
+                        if (dirty || request.get("documentVersion").getAsLong() != document.getModificationStamp()) {
+                            throw new ReviewRequestException("documentChanged", "Document changed. Wait for the preview and select the text again.");
+                        }
+                        String anchorText = request.get("selectedText").getAsString();
+                        int anchorStart = request.get("start").getAsInt();
+                        int anchorEnd = request.get("end").getAsInt();
+                        if (anchorText.length() > MarkdownReviewLimits.TEXT_MAX_CHARS
+                                || anchorStart < 0 || anchorEnd > document.getTextLength() || anchorEnd <= anchorStart) {
+                            throw new ReviewRequestException("selectionInvalid", "Selection or comment is too large or invalid.");
+                        }
+                        if (!document.getText().substring(anchorStart, anchorEnd).contains(anchorText)
+                                && !RenderedSelectionMatcher.matchesMermaidSource(document.getText().substring(anchorStart, anchorEnd), anchorText)
+                                && !matchesRenderedSelection(request, anchorStart, anchorEnd, anchorText)) {
+                            throw new ReviewRequestException("selectionMismatch", "This selection cannot be matched to the source. Select a smaller text fragment.");
+                        }
+                        Annotation anchored = ApplicationManager.getApplication().runReadAction((Computable<Annotation>) () ->
+                                service.reanchor(file, request.get("id").getAsString(), request.get("revision").getAsLong(),
+                                        document, anchorStart, anchorEnd, anchorText));
+                        if (service.getConfig().autoAddToChat && MarkdownReviewService.isTransferable(anchored)) {
+                            transfer(requestId, List.of(anchored), "review", true);
+                            publish();
+                            return;
+                        }
+                        break;
                     case "create":
                     case "quote":
                         if (dirty || request.get("documentVersion").getAsLong() != document.getModificationStamp()) {
@@ -284,8 +309,11 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                                 request.has("comment") ? request.get("comment").getAsString() : "", "delete".equals(action));
                         if ("update".equals(action) && service.getConfig().autoAddToChat) {
                             Annotation updated = service.list(file).stream()
-                                    .filter(item -> item.id.equals(request.get("id").getAsString())).findFirst().orElseThrow();
-                            if (!updated.completed) {
+                                    .filter(item -> item.id.equals(request.get("id").getAsString())).findFirst().orElse(null);
+                            if (updated == null) {
+                                throw new ReviewRequestException("stale", "Comment is no longer available.");
+                            }
+                            if (MarkdownReviewService.isTransferable(updated)) {
                                 transfer(requestId, List.of(updated), "review", true);
                                 publish();
                                 return;
@@ -294,9 +322,12 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                         break;
                     case "navigate":
                         Annotation annotation = service.list(file).stream()
-                                .filter(item -> item.id.equals(request.get("id").getAsString())).findFirst().orElseThrow();
-                        if (!"attached".equals(annotation.status)) {
-                            throw new IllegalStateException("Original text is no longer uniquely located.");
+                                .filter(item -> item.id.equals(request.get("id").getAsString())).findFirst().orElse(null);
+                        if (annotation == null) {
+                            throw new ReviewRequestException("missing", "Comment no longer exists.");
+                        }
+                        if (!MarkdownReviewService.isLocatable(annotation)) {
+                            throw new ReviewRequestException("stale", "Original text is no longer uniquely located.");
                         }
                         new OpenFileDescriptor(project, file, annotation.start).navigate(true);
                         break;
@@ -309,7 +340,8 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                             service.reconcile(file, document);
                             return null;
                         });
-                        List<Annotation> selectedAnnotations = service.list(file).stream().filter(item -> !item.completed).toList();
+                        List<Annotation> selectedAnnotations = service.list(file).stream()
+                                .filter(MarkdownReviewService::isTransferable).toList();
                         if (request.has("annotationIds")) {
                             List<Annotation> available = selectedAnnotations;
                             List<String> ids = GSON.fromJson(request.get("annotationIds"),
