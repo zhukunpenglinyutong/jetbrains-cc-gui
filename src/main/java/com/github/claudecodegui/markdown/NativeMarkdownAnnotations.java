@@ -65,6 +65,9 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
     private volatile boolean dirty;
     /** Tracks whether the last published frame said "enabled"; disabled frames are sent once. */
     private volatile boolean lastPublishedEnabled;
+    /** Shadow copies of the last full/light frames; unchanged panels stay silent (plan §1d). */
+    private String lastFullBase;
+    private String lastLightPayload;
     private final DocumentListener documentListener = new DocumentListener() {
         @Override
         public void documentChanged(@NotNull DocumentEvent event) {
@@ -461,26 +464,49 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
         }
         lastPublishedEnabled = true;
         ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
-            JsonObject state = new JsonObject();
-            state.addProperty("kind", "state");
-            state.addProperty("panelId", panelId);
-            state.addProperty("documentVersion", document.getModificationStamp());
-            state.addProperty("dirty", dirty);
-            state.addProperty("enabled", true);
-            state.addProperty("submitShortcut", service.getConfig().submitShortcut);
-            state.addProperty("language", com.github.claudecodegui.util.LanguageConfigService.getCurrentLanguage(settings));
-            state.addProperty("path", relativePath());
-            state.add("annotations", GSON.toJsonTree(service.list(file)));
-            if (!light) {
-                state.add("diagrams", GSON.toJsonTree(RenderedSelectionMatcher.mermaidRanges(document.getText())));
+            JsonObject state = baseState();
+            String payload = GSON.toJson(state);
+            // Shadow copy (plan §1d): a panel whose state did not change stays
+            // silent, so an edit in one file cannot fan a refresh into every
+            // open preview — and an untouched panel skips the Mermaid rescan.
+            if (light) {
+                if (payload.equals(lastLightPayload) || payload.equals(lastFullBase)) {
+                    return null;
+                }
+                lastLightPayload = payload;
+                reply(state);
+                return null;
             }
+            if (payload.equals(lastFullBase)) {
+                return null;
+            }
+            lastFullBase = payload;
+            lastLightPayload = null;
+            state.add("diagrams", GSON.toJsonTree(RenderedSelectionMatcher.mermaidRanges(document.getText())));
             reply(state);
             return null;
         });
     }
 
+    private JsonObject baseState() {
+        JsonObject state = new JsonObject();
+        state.addProperty("kind", "state");
+        state.addProperty("panelId", panelId);
+        state.addProperty("documentVersion", document.getModificationStamp());
+        state.addProperty("dirty", dirty);
+        state.addProperty("enabled", true);
+        state.addProperty("submitShortcut", service.getConfig().submitShortcut);
+        state.addProperty("language", com.github.claudecodegui.util.LanguageConfigService.getCurrentLanguage(settings));
+        state.addProperty("path", relativePath());
+        state.add("annotations", GSON.toJsonTree(service.list(file)));
+        return state;
+    }
+
     /** One final frame while disabled so open overlays hide immediately; later calls are no-ops. */
     private void publishDisabledState() {
+        // Re-enabling must publish a fresh frame, so the shadow copies reset here.
+        lastFullBase = null;
+        lastLightPayload = null;
         ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
             JsonObject state = new JsonObject();
             state.addProperty("kind", "state");

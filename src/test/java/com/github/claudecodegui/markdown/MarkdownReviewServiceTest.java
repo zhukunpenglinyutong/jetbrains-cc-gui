@@ -212,6 +212,23 @@ public class MarkdownReviewServiceTest {
                 MarkdownReviewService.classifyImpact(annotations, 30, false));
     }
 
+    @Test
+    public void impactClassificationOnlySeesAnnotationsTrackedOnTheEditedDocument() {
+        Annotation own = new Annotation();
+        own.id = "own";
+        own.start = 5;
+        Annotation other = new Annotation();
+        other.id = "other";
+        other.start = 150;
+        List<Annotation> all = List.of(own, other);
+        // The edit at 100 is past this document's annotation; the other file's
+        // larger offset must not turn it into a SHIFT fan-out.
+        assertEquals(MarkdownReviewService.EditImpact.NONE,
+                MarkdownReviewService.classifyImpact(MarkdownReviewService.trackedOn(all, java.util.Set.of("own")), 100, false));
+        assertEquals(MarkdownReviewService.EditImpact.SHIFT,
+                MarkdownReviewService.classifyImpact(MarkdownReviewService.trackedOn(all, java.util.Set.of("other")), 100, false));
+    }
+
     private ReviewBatch orphan(String id, String targetId) {
         ReviewBatch batch = batch(id);
         batch.targetId = targetId;

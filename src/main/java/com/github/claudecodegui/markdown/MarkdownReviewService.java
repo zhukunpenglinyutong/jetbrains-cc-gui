@@ -433,7 +433,10 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                             // Disabled: positions are reconciled by the next sync after re-enabling.
                             return;
                         }
-                        impact = classifyImpact(state.annotations, event.getOffset(), hit);
+                        // Offsets are per-document: only this document's tracked
+                        // annotations may drive the impact, otherwise a larger
+                        // offset in another file turns NONE into a fan-out.
+                        impact = classifyImpact(trackedOn(state.annotations, trackedIds(document)), event.getOffset(), hit);
                         if (impact == EditImpact.NONE) {
                             // The edit is past every annotation: no refresh, no fan-out.
                             return;
@@ -501,6 +504,28 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
             }
         }
         return EditImpact.NONE;
+    }
+
+    /** Annotation ids whose range marker lives on the given document. Caller must hold the monitor. */
+    private Set<String> trackedIds(Document document) {
+        Set<String> ids = new HashSet<>();
+        for (Map.Entry<String, RangeMarker> entry : markers.entrySet()) {
+            if (entry.getValue().getDocument() == document) {
+                ids.add(entry.getKey());
+            }
+        }
+        return ids;
+    }
+
+    /** Pure filter for impact classification: offsets only compare within one document. */
+    static List<Annotation> trackedOn(List<Annotation> annotations, Set<String> ids) {
+        List<Annotation> result = new ArrayList<>();
+        for (Annotation item : annotations) {
+            if (ids.contains(item.id)) {
+                result.add(item);
+            }
+        }
+        return result;
     }
 
     private static int[] changedRange(int offset, CharSequence oldText, CharSequence newText) {
