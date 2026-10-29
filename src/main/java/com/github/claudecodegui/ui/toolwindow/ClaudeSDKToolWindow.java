@@ -421,6 +421,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 if (window != null) {
                     LOG.info("[TabManager] Disposing ClaudeChatWindow for removed tab: "
                         + removedContent.getDisplayName());
+                    // An explicit tab close abandons its unsent review drafts (R3);
+                    // IDE/project shutdown goes through disposeProjectChatWindows
+                    // instead, so still-open tabs keep their recoverable drafts.
+                    com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project)
+                            .dropPending(window.getReviewTargetId());
                     window.dispose();
                 }
             }
