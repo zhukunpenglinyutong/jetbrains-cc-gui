@@ -406,7 +406,14 @@ function start(pipe: NativePipe) {
     try {
       const response = JSON.parse(raw);
       if (response.kind === 'state') {
-        state = response;
+        const previous = state;
+        // A "behind" frame omits annotations/diagrams; keep the last full view
+        // so the comment count and markers do not flicker while typing.
+        state = {
+          ...(previous ?? {}),
+          ...response,
+          annotations: response.annotations ?? previous?.annotations ?? [],
+        } as NativeState;
         if (activeComment) {
           const current = state?.annotations.find(item => item.id === activeComment?.id);
           if (!current) {

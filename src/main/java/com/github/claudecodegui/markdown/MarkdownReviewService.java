@@ -396,6 +396,10 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                     affected.clear();
                     int[] range = changedRange(event.getOffset(), event.getOldFragment(), event.getNewFragment());
                     synchronized (MarkdownReviewService.this) {
+                        if (!state.config.enabled) {
+                            // Disabled: no annotation tracking work per keystroke.
+                            return;
+                        }
                         for (Annotation item : state.annotations) {
                             RangeMarker marker = markers.get(item.id);
                             if (marker != null && marker.getDocument() == document && marker.isValid()
@@ -460,7 +464,9 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                             }
                         }
                     }
-                    changed(impact);
+                    // Edit-driven refresh is answered by the preview's own
+                    // caught-up sync; broadcasting here caused per-keystroke
+                    // work in every open preview (R1).
                 }
             }, this);
         }

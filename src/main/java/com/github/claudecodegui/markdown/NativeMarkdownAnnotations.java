@@ -57,14 +57,15 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
             return receive(message);
         }
     };
-    private final Consumer<MarkdownReviewService.EditImpact> listener =
-            impact -> publish(impact != MarkdownReviewService.EditImpact.HIT);
+    private final Consumer<MarkdownReviewService.EditImpact> listener = impact -> publish(false);
     private final Map<String, JsonObject> results = new LinkedHashMap<>();
     private final Set<String> transfers = new HashSet<>();
     private volatile boolean disposed;
     private volatile boolean dirty;
     /** Tracks whether the last published frame said "enabled"; disabled frames are sent once. */
     private volatile boolean lastPublishedEnabled;
+    /** One small "behind" frame per dirty episode; the caught-up sync sends the full frame. */
+    private volatile boolean dirtyFrameSent;
     /** Shadow copies of the last full/light frames; unchanged panels stay silent (plan §1d). */
     private String lastFullBase;
     private String lastLightPayload;
@@ -202,10 +203,35 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
         try {
             String action = request.get("action").getAsString();
             if ("ready".equals(action) || "sync".equals(action)) {
+                if (!service.getConfig().enabled) {
+                    // R2: closed means no per-keystroke work at all.
+                    response.addProperty("status", "ok");
+                    remember(requestId, response);
+                    reply(response);
+                    return;
+                }
                 // The native root maps 0..Document.length (verified on 243).
                 // A delayed patch for an earlier document must not re-enable
                 // annotation creation for stale source offsets.
                 dirty = !request.has("renderedSourceLength") || request.get("renderedSourceLength").getAsLong() != document.getTextLength();
+                if ("ready".equals(action)) {
+                    // R7: a fresh page must always receive a frame, even when the
+                    // payload is identical to the previous page's.
+                    lastFullBase = null;
+                    lastLightPayload = null;
+                    dirtyFrameSent = false;
+                }
+                if (dirty) {
+                    // R1: while the native preview is still behind the document,
+                    // answer only with the "behind" state; the next caught-up sync
+                    // performs the single full refresh.
+                    response.addProperty("status", "ok");
+                    remember(requestId, response);
+                    reply(response);
+                    publishBehindState();
+                    return;
+                }
+                dirtyFrameSent = false;
                 ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
                     service.reconcile(file, document);
                     return null;
@@ -463,6 +489,7 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
             return;
         }
         lastPublishedEnabled = true;
+        dirtyFrameSent = false;
         ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
             JsonObject state = baseState();
             String payload = GSON.toJson(state);
@@ -507,6 +534,7 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
         // Re-enabling must publish a fresh frame, so the shadow copies reset here.
         lastFullBase = null;
         lastLightPayload = null;
+        dirtyFrameSent = false;
         ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
             JsonObject state = new JsonObject();
             state.addProperty("kind", "state");
@@ -514,6 +542,27 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
             state.addProperty("documentVersion", document.getModificationStamp());
             state.addProperty("dirty", dirty);
             state.addProperty("enabled", false);
+            state.addProperty("submitShortcut", service.getConfig().submitShortcut);
+            state.addProperty("language", com.github.claudecodegui.util.LanguageConfigService.getCurrentLanguage(settings));
+            state.addProperty("path", relativePath());
+            reply(state);
+            return null;
+        });
+    }
+
+    /** One small "behind" frame per dirty episode: the overlay hides details while the preview is behind. */
+    private void publishBehindState() {
+        if (dirtyFrameSent || disposed || document == null || project.isDisposed()) {
+            return;
+        }
+        dirtyFrameSent = true;
+        ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
+            JsonObject state = new JsonObject();
+            state.addProperty("kind", "state");
+            state.addProperty("panelId", panelId);
+            state.addProperty("documentVersion", document.getModificationStamp());
+            state.addProperty("dirty", true);
+            state.addProperty("enabled", true);
             state.addProperty("submitShortcut", service.getConfig().submitShortcut);
             state.addProperty("language", com.github.claudecodegui.util.LanguageConfigService.getCurrentLanguage(settings));
             state.addProperty("path", relativePath());
