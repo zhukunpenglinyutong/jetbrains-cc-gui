@@ -75,6 +75,9 @@
     "usagePercentage": "Usage: {{percentage}}",
     "planUsage": {
       "title": "Claude plan usage",
+      "balanceLabel": "Balance: ",
+      "balanceRemaining": "Balance: {{value}}",
+      "balanceDetail": "Total {{total}} · Used {{used}}",
       "loading": "Loading usage…",
       "unavailable": "Usage unavailable",
       "dash": "Usage —",

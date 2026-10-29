@@ -159,4 +159,79 @@ describe('PlanUsageIndicator', () => {
     const { container } = render(<PlanUsageIndicator status="idle" snapshot={null} />);
     expect(container.firstChild).toBeNull();
   });
+
+  it('renders the balance amount instead of the bar for prepaid vendors', async () => {
+    const { container } = render(
+      <PlanUsageIndicator
+        status="ready"
+        snapshot={{
+          present: true,
+          source: 'deepseek',
+          balance: { remaining: 42.5, total: null, used: null, unit: 'CNY' },
+        }}
+      />,
+    );
+    expect(screen.getByText('Balance: ¥42.50')).toBeTruthy();
+    expect(container.querySelector('.plan-usage-bar')).toBeNull();
+    expect(container.querySelector('.plan-usage-balance')).toBeTruthy();
+
+    fireEvent.mouseEnter(screen.getByRole('group'));
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip.textContent).toContain('Balance: ¥42.50');
+  });
+
+  it('colors an exhausted balance red and shows totals in the rendered tooltip', async () => {
+    const { container } = render(
+      <PlanUsageIndicator
+        status="ready"
+        snapshot={{
+          present: true,
+          source: 'openrouter',
+          balance: { remaining: 0, total: 100, used: 100, unit: 'USD' },
+        }}
+      />,
+    );
+    expect(screen.getByText('Balance: $0.00')).toBeTruthy();
+    expect(container.querySelector('.plan-usage.pace-red')).toBeTruthy();
+
+    fireEvent.mouseEnter(screen.getByRole('group'));
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip.textContent).toContain('Balance: $0.00');
+    expect(tooltip.textContent).toContain('Total $100.00 · Used $100.00');
+  });
+
+  it('renders Moonshot international (api.moonshot.ai) balances in USD', async () => {
+    render(
+      <PlanUsageIndicator
+        status="ready"
+        snapshot={{
+          present: true,
+          source: 'moonshot',
+          balance: { remaining: 12.5, total: null, used: null, unit: 'USD' },
+        }}
+      />,
+    );
+    expect(screen.getByText('Balance: $12.50')).toBeTruthy();
+
+    fireEvent.mouseEnter(screen.getByRole('group'));
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip.textContent).toContain('Balance: $12.50');
+    expect(tooltip.textContent).not.toContain('¥');
+  });
+
+  it('prefers windows over balance when both are present', () => {
+    const { container } = render(
+      <PlanUsageIndicator
+        status="ready"
+        snapshot={{
+          present: true,
+          capacityPct: 30,
+          windows: [{ id: '5h', usedPct: 30 }],
+          balance: { remaining: 5, unit: 'CNY' },
+        }}
+      />,
+    );
+    expect(container.querySelector('.plan-usage-bar')).toBeTruthy();
+    expect(container.querySelector('.plan-usage-balance')).toBeNull();
+  });
 });

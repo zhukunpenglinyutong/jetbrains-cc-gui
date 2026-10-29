@@ -75,6 +75,9 @@
     "usagePercentage": "上下文: {{percentage}}",
     "planUsage": {
       "title": "Claude 额度详情",
+      "balanceLabel": "余额：",
+      "balanceRemaining": "余额：{{value}}",
+      "balanceDetail": "总额 {{total}} · 已用 {{used}}",
       "loading": "正在获取额度…",
       "unavailable": "额度暂不可用",
       "dash": "额度 —",
