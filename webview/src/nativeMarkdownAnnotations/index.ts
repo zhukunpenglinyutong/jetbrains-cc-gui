@@ -85,10 +85,19 @@ function start(pipe: NativePipe) {
   toolbar.addEventListener('pointerdown', event => event.preventDefault());
   themeLayer.append(highlights, controls, popup, toolbar);
 
+  let retry: { signature: string; requestId: string } | null = null;
   const send = (action: string, payload: object = {}) => new Promise<boolean>(resolve => {
-    const requestId = 'md-' + Date.now() + '-' + requestCounter++;
+    const signature = action + '|' + JSON.stringify(payload);
+    // A retry of the timed-out intent reuses its id so the backend replays the
+    // original result instead of duplicating the transfer (plan §5 idempotency).
+    const requestId = retry?.signature === signature
+      ? retry.requestId : 'md-' + Date.now() + '-' + requestCounter++;
+    retry = null;
     const timer = setTimeout(() => {
       callbacks.delete(requestId);
+      // Housekeeping requests are cheap to repeat; only user intents reuse the
+      // id, since a cached replay of a sync would skip the real reconciliation.
+      if (action !== 'ready' && action !== 'sync') retry = { signature, requestId };
       message = labels.timeout; pending = false; render();
       resolve(false);
     }, 8000);
@@ -102,6 +111,15 @@ function start(pipe: NativePipe) {
       ...payload,
     }));
   });
+
+  /** Errors cross the bridge as keys (plan §7); the overlay owns the display language. */
+  const translate = (key: unknown) => typeof key === 'string' && Object.hasOwn(labels, key)
+    ? (labels as unknown as Record<string, string>)[key] : '';
+  const describe = (response: { messageKey?: string; reasonKey?: string; message?: string }) => {
+    const outcome = translate(response.messageKey) || response.message || '';
+    const reason = translate(response.reasonKey);
+    return reason ? (outcome ? outcome + ' ' + reason : reason) : outcome;
+  };
 
   const button = (text: string, click: () => void, disabled = false, variant = 'secondary') => {
     const element = document.createElement('button');
@@ -195,7 +213,12 @@ function start(pipe: NativePipe) {
     countButton.prepend(commentIcon());
     controls.append(countButton, iconButton(labels.transfer, 'M22 2L9 15M22 2l-7 20-4-9-9-4z', () => {
       pending = true; message = ''; render();
-      void send('transfer').then(() => { pending = false; render(); });
+      // Transfer exactly what the user sees; the explicit list also makes a
+      // timed-out retry sign the same intent instead of a moving target.
+      void send('transfer', {
+        documentVersion: state?.documentVersion,
+        annotationIds: visible.filter(item => !item.completed).map(item => item.id),
+      }).then(() => { pending = false; render(); });
     }, pending || !sendCount, 'primary'));
     const completedToggle = iconButton(showCompleted ? labels.hideCompleted : labels.showCompleted, 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM9 12a3 3 0 1 0 6 0 3 3 0 1 0-6 0', () => { showCompleted = !showCompleted; render(); });
     completedToggle.setAttribute('aria-pressed', String(showCompleted));
@@ -316,7 +339,7 @@ function start(pipe: NativePipe) {
           iconButton(labels.transferOne, 'M22 2L9 15M22 2l-7 20-4-9-9-4z', () => {
             if (pending) return;
             pending = true;
-            void send('transfer', { annotationIds: [current.id] }).then(() => { pending = false; render(); });
+            void send('transfer', { annotationIds: [current.id], documentVersion: state?.documentVersion }).then(() => { pending = false; render(); });
           }, !!current.completed, 'primary'));
           actions.append(completionButton(current));
           popup.append(body, actions);
@@ -395,13 +418,23 @@ function start(pipe: NativePipe) {
         return;
       }
       const callback = callbacks.get(response.requestId);
-      if (callback) {
-        clearTimeout(callback.timer); callbacks.delete(response.requestId);
-        message = typeof response.messageKey === 'string' && Object.hasOwn(labels, response.messageKey)
-          ? labels[response.messageKey as keyof typeof labels] : response.message ?? '';
-        callback.resolve(response.status === 'ok');
-        render();
+      if (!callback) return;
+      if (response.status === 'processing') {
+        // An interactive step (the chat chooser) is open; the fixed bound would
+        // report a false failure, so wait on a safety bound instead.
+        clearTimeout(callback.timer);
+        callback.timer = setTimeout(() => {
+          callbacks.delete(response.requestId);
+          retry = null;
+          message = labels.timeout; pending = false; render(); callback.resolve(false);
+        }, 5 * 60_000);
+        message = describe(response); render();
+        return;
       }
+      clearTimeout(callback.timer); callbacks.delete(response.requestId);
+      message = describe(response);
+      callback.resolve(response.status === 'ok');
+      render();
     } catch { message = labels.failed; render(); }
   });
   document.addEventListener('selectionchange', () => {

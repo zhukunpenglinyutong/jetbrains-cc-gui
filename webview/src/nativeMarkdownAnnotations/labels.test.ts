@@ -1,4 +1,4 @@
-import { previewLabels } from './labels';
+import { labelTranslations, previewLabels } from './labels';
 
 it('uses CC GUI language codes and falls back safely for unsupported locales', () => {
   expect(previewLabels('zh').edit).toBe('编辑');
@@ -7,4 +7,17 @@ it('uses CC GUI language codes and falls back safely for unsupported locales', (
   expect(previewLabels('pt-BR').close).toBe('Fechar');
   expect(previewLabels('en-US').source).toBe('Show source');
   expect(previewLabels('unknown').title).toBe('Markdown review');
+});
+
+it('translates every label in all ten languages, including every error key', () => {
+  const english = labelTranslations.en;
+  const gaps: string[] = [];
+  for (const [language, dictionary] of Object.entries(labelTranslations)) {
+    if (language === 'en') continue;
+    for (const key of Object.keys(english) as (keyof typeof english)[]) {
+      if (!dictionary[key]) gaps.push(`${language}.${key} (empty)`);
+      else if (dictionary[key] === english[key]) gaps.push(`${language}.${key} (English fallback)`);
+    }
+  }
+  expect(gaps).toEqual([]);
 });

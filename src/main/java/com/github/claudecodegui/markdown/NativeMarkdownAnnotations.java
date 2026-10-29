@@ -42,6 +42,8 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
     private static final String SCRIPT = "ccgui-markdown-annotations.js";
     private static final String STYLE = "ccgui-markdown-annotations.css";
     private static final Gson GSON = new Gson();
+    private static final com.intellij.openapi.diagnostic.Logger LOG =
+            com.intellij.openapi.diagnostic.Logger.getInstance(NativeMarkdownAnnotations.class);
     private final Project project;
     private final VirtualFile file;
     private final Document document;
@@ -116,23 +118,64 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
     }
 
     private boolean receive(String raw) {
-        if (disposed || project.isDisposed() || document == null || !file.isValid() || raw.length() > MarkdownReviewLimits.REQUEST_MAX_CHARS) {
+        if (disposed || project.isDisposed() || document == null || !file.isValid()) {
+            return true;
+        }
+        if (raw.length() > MarkdownReviewLimits.REQUEST_MAX_CHARS) {
+            // Reply only on a trustworthy id; either way the drop is logged so it
+            // can be reconciled instead of surfacing as an unexplained timeout.
+            reject(extractRequestId(raw), "requestTooLarge", "request exceeded " + raw.length() + " chars");
             return true;
         }
         JsonObject request;
         try {
             request = GSON.fromJson(raw, JsonObject.class);
         } catch (RuntimeException error) {
+            reject(null, "badRequest", "malformed JSON: " + error.getMessage() + " | " + sample(raw));
             return true;
         }
-        if (request == null || !request.has("action") || !request.has("requestId")
-                || !request.get("action").isJsonPrimitive() || !request.get("action").getAsJsonPrimitive().isString()
-                || !request.get("requestId").isJsonPrimitive() || !request.get("requestId").getAsJsonPrimitive().isString()
-                || request.get("requestId").getAsString().length() > MarkdownReviewLimits.REQUEST_ID_MAX_CHARS) {
+        if (request == null || !hasString(request, "action") || !hasString(request, "requestId")) {
+            reject(null, "badRequest", "missing action/requestId | " + sample(raw));
+            return true;
+        }
+        String requestId = request.get("requestId").getAsString();
+        if (requestId.length() > MarkdownReviewLimits.REQUEST_ID_MAX_CHARS) {
+            // An oversized id cannot be echoed back safely; log only.
+            reject(null, "badRequest", "requestId exceeded " + requestId.length() + " chars");
             return true;
         }
         ApplicationManager.getApplication().invokeLater(() -> handle(request), ModalityState.nonModal());
         return true;
+    }
+
+    private static boolean hasString(JsonObject request, String field) {
+        return request.has(field) && request.get(field).isJsonPrimitive()
+                && request.get(field).getAsJsonPrimitive().isString();
+    }
+
+    /** Best-effort id recovery for payloads too large to parse; null when untrustworthy. */
+    private static String extractRequestId(String raw) {
+        java.util.regex.Matcher match = java.util.regex.Pattern
+                .compile("\"requestId\"\\s*:\\s*\"([A-Za-z0-9._-]{1," + MarkdownReviewLimits.REQUEST_ID_MAX_CHARS + "})\"")
+                .matcher(raw);
+        return match.find() ? match.group(1) : null;
+    }
+
+    private static String sample(String raw) {
+        return raw.length() <= 120 ? raw : raw.substring(0, 120) + "…";
+    }
+
+    /** A rejected bridge request must never vanish: log it, and answer when it can be correlated. */
+    private void reject(@Nullable String requestId, String messageKey, String reason) {
+        LOG.warn("Dropped Markdown review bridge request: " + reason);
+        if (requestId == null) {
+            return;
+        }
+        JsonObject response = new JsonObject();
+        response.addProperty("requestId", requestId);
+        response.addProperty("status", "error");
+        response.addProperty("messageKey", messageKey);
+        reply(response);
     }
 
     private void handle(JsonObject request) {
@@ -146,6 +189,9 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
             return;
         }
         if (transfers.contains(requestId)) {
+            // The same intent is still running (e.g. the chat chooser is open);
+            // tell the retry instead of leaving it on the fixed timeout.
+            replyProcessing(requestId);
             return;
         }
         JsonObject response = new JsonObject();
@@ -164,16 +210,16 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                 response.addProperty("status", "ok");
             } else {
                 if (!service.getConfig().enabled) {
-                    throw new IllegalStateException("Markdown annotations are disabled in CC GUI settings.");
+                    throw new ReviewRequestException("disabled", "Markdown annotations are disabled in CC GUI settings.");
                 }
                 if (!request.has("panelId") || !panelId.equals(request.get("panelId").getAsString())) {
-                    throw new IllegalStateException("Preview changed. Select the text again.");
+                    throw new ReviewRequestException("panelChanged", "Preview changed. Select the text again.");
                 }
                 switch (action) {
                     case "create":
                     case "quote":
                         if (dirty || request.get("documentVersion").getAsLong() != document.getModificationStamp()) {
-                            throw new IllegalStateException("Document changed. Wait for the preview and select the text again.");
+                            throw new ReviewRequestException("documentChanged", "Document changed. Wait for the preview and select the text again.");
                         }
                         String selected = request.get("selectedText").getAsString();
                         String comment = request.has("comment") ? request.get("comment").getAsString() : "";
@@ -182,13 +228,12 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                         if (selected.length() > MarkdownReviewLimits.TEXT_MAX_CHARS
                                 || comment.length() > MarkdownReviewLimits.TEXT_MAX_CHARS
                                 || start < 0 || end > document.getTextLength() || end <= start) {
-                            throw new IllegalArgumentException("Selection or comment is too large or invalid.");
+                            throw new ReviewRequestException("selectionInvalid", "Selection or comment is too large or invalid.");
                         }
                         if (!document.getText().substring(start, end).contains(selected)
                                 && !RenderedSelectionMatcher.matchesMermaidSource(document.getText().substring(start, end), selected)
                                 && !matchesRenderedSelection(request, start, end, selected)) {
-                            response.addProperty("messageKey", "selectionMismatch");
-                            throw new IllegalStateException("This selection cannot be matched to the source. Select a smaller text fragment.");
+                            throw new ReviewRequestException("selectionMismatch", "This selection cannot be matched to the source. Select a smaller text fragment.");
                         }
                         if ("quote".equals(action)) {
                             Annotation quotation = ApplicationManager.getApplication().runReadAction((Computable<Annotation>) () ->
@@ -242,20 +287,27 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                                     new com.google.gson.reflect.TypeToken<List<String>>() {}.getType());
                             if (ids == null || ids.size() > MarkdownReviewLimits.TRANSFER_IDS_MAX
                                     || ids.stream().anyMatch(id -> available.stream().noneMatch(item -> item.id.equals(id)))) {
-                                throw new IllegalArgumentException("One of the selected comments no longer exists.");
+                                throw new ReviewRequestException("selectionMissing", "One of the selected comments no longer exists.");
                             }
                             selectedAnnotations = available.stream().filter(item -> ids.contains(item.id)).toList();
                         }
                         transfer(requestId, selectedAnnotations, "review");
                         return;
                     default:
-                        throw new IllegalArgumentException("Unsupported review action");
+                        throw new ReviewRequestException("unsupported", "Unsupported review action");
                 }
                 response.addProperty("status", "ok");
             }
         } catch (RuntimeException error) {
             response.addProperty("status", "error");
-            response.addProperty("message", error.getMessage() == null ? "Review operation failed" : error.getMessage());
+            // Errors cross layers as keys; the overlay owns the display language
+            // (plan §7), so the backend never emits display text.
+            if (error instanceof ReviewRequestException keyed) {
+                response.addProperty("messageKey", keyed.messageKey);
+            } else {
+                response.addProperty("messageKey", "failed");
+                LOG.warn("Markdown review request failed", error);
+            }
         }
         remember(requestId, response);
         reply(response);
@@ -279,6 +331,11 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
 
     private void transfer(String requestId, List<Annotation> annotations, String kind, boolean automatic) {
         transfers.add(requestId);
+        // Manual transfers may park on the modal chat chooser; acknowledge the
+        // interactive step so the overlay stops counting down its fixed bound.
+        if (!automatic) {
+            replyProcessing(requestId);
+        }
         ReviewBatch snapshot = new ReviewBatch();
         snapshot.id = UUID.randomUUID().toString();
         snapshot.kind = kind;
@@ -290,7 +347,7 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
         snapshot.annotations = annotations;
         ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CCG");
         if (toolWindow == null) {
-            failTransfer(requestId, "CC GUI tool window is unavailable.", automatic);
+            failTransfer(requestId, "chatUnavailable", "CC GUI tool window is unavailable.", automatic);
             return;
         }
         toolWindow.show(() -> {
@@ -298,12 +355,12 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                 return;
             }
             if (!service.getConfig().enabled) {
-                failTransfer(requestId, "Markdown annotations were disabled before the transfer completed.", automatic);
+                failTransfer(requestId, "disabled", "Markdown annotations were disabled before the transfer completed.", automatic);
                 return;
             }
             List<ClaudeChatWindow> windows = ClaudeSDKToolWindow.getChatWindows(project);
             if (windows.isEmpty()) {
-                failTransfer(requestId, "CC GUI is starting. Wait for the chat input, then try again.", automatic);
+                failTransfer(requestId, "chatStarting", "CC GUI is starting. Wait for the chat input, then try again.", automatic);
                 return;
             }
             ClaudeChatWindow selected = ClaudeSDKToolWindow.getSelectedChatWindow(project);
@@ -312,25 +369,25 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                 int index = Messages.showChooseDialog(project, "Choose the chat for this Markdown review", "CC GUI Markdown Review",
                         null, labels, selected == null ? labels[0] : selected.getParentContent().getDisplayName());
                 if (index < 0) {
-                    failTransfer(requestId, "Review remains saved. No chat was selected.", false);
+                    failTransfer(requestId, "chatNotSelected", "Review remains saved. No chat was selected.", false);
                     return;
                 }
                 selected = windows.get(index);
             }
             if (selected == null || selected.isDisposed() || selected.getSession() == null) {
-                failTransfer(requestId, "Target chat is no longer available.", automatic);
+                failTransfer(requestId, "chatGone", "Target chat is no longer available.", automatic);
                 return;
             }
             try {
                 ReviewBatch batch = snapshot;
                 if (batch.annotations.isEmpty()) {
-                    throw new IllegalStateException("Add at least one comment first.");
+                    throw new ReviewRequestException("empty", "Add at least one comment first.");
                 }
                 batch.targetId = selected.getReviewTargetId();
                 batch.targetEpoch = selected.getSession().getRuntimeSessionEpoch();
                 batch.targetSessionId = selected.getSession().getSessionId();
                 if (GSON.toJson(batch).length() > MarkdownReviewLimits.BATCH_MAX_CHARS) {
-                    throw new IllegalStateException("Review is too large. Add comments individually from their popup, or reduce the context before sending.");
+                    throw new ReviewRequestException("transferTooLarge", "Review is too large. Add comments individually from their popup, or reduce the context before sending.");
                 }
                 batch = service.saveBatch(batch);
                 selected.addArtifactReview(batch);
@@ -341,21 +398,24 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                 remember(requestId, response);
                 reply(response);
             } catch (RuntimeException error) {
-                failTransfer(requestId, error.getMessage(), automatic);
+                failTransfer(requestId,
+                        error instanceof ReviewRequestException keyed ? keyed.messageKey : "failed",
+                        error.getMessage(), automatic);
             }
         });
     }
 
-    private void failTransfer(String requestId, String message, boolean automatic) {
+    private void failTransfer(String requestId, String reasonKey, String detail, boolean automatic) {
         JsonObject response = new JsonObject();
         response.addProperty("requestId", requestId);
         // A failed automatic handoff must not make the editor retry creation:
         // the comment has already been saved by the native service.
         response.addProperty("status", automatic ? "ok" : "error");
         response.addProperty("messageKey", automatic ? "reviewSavedNotAdded" : "reviewNotAdded");
-        response.addProperty("detail", message);
+        response.addProperty("reasonKey", reasonKey);
         remember(requestId, response);
         reply(response);
+        LOG.warn("Markdown review transfer failed (" + reasonKey + "): " + detail);
     }
 
     private void remember(String id, JsonObject response) {
@@ -434,6 +494,15 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
             reply(state);
             return null;
         });
+    }
+
+    /** Tells the overlay an interactive step (the chat chooser) is still running. */
+    private void replyProcessing(String requestId) {
+        JsonObject response = new JsonObject();
+        response.addProperty("requestId", requestId);
+        response.addProperty("status", "processing");
+        response.addProperty("messageKey", "processing");
+        reply(response);
     }
 
     private void reply(JsonObject response) {
