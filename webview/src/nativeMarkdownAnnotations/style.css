@@ -61,9 +61,24 @@
 #ccgui-markdown-review .ccgui-md-comment-list .ccgui-md-list-actions { margin: 0; padding: 0 4px 6px; }
 #ccgui-markdown-review .ccgui-md-comment-list .ccgui-md-list-actions .ccgui-md-button { display: inline-flex; width: 26px; padding: 4px; }
 #ccgui-markdown-review .ccgui-md-comment-list .completed .ccgui-md-list-comment { color: var(--text-tertiary); text-decoration: line-through; }
+#ccgui-markdown-review .ccgui-md-comment-list li.completed { background: color-mix(in srgb, var(--color-success) 10%, transparent); }
+#ccgui-markdown-review .ccgui-md-comment-list .completed .ccgui-md-list-comment { color: var(--color-success); }
+#ccgui-markdown-review .ccgui-md-comment-list .completed .ccgui-md-list-quote { color: color-mix(in srgb, var(--color-success) 75%, var(--text-tertiary)); }
 #ccgui-markdown-review .ccgui-md-controls [aria-pressed="true"] { color: var(--accent-primary); background: var(--bg-hover); }
 #ccgui-markdown-review .ccgui-md-badge { display: inline-block; width: fit-content; margin-top: 4px; padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--color-error) 12%, transparent); color: var(--color-error); font-size: 10px; }
 #ccgui-markdown-review .ccgui-md-badge.changed { background: color-mix(in srgb, var(--accent-primary) 12%, transparent); color: var(--accent-primary); }
 #ccgui-markdown-review .ccgui-md-comment-list .stale .ccgui-md-list-quote { text-decoration: line-through; }
 #ccgui-markdown-review .ccgui-md-marker.changed { background: var(--color-warning, #b78103); }
 #ccgui-markdown-review .ccgui-md-highlight.changed { border-bottom-style: dashed; }
+#ccgui-markdown-review .ccgui-md-tooltip { position: fixed; z-index: 10; max-width: min(280px, calc(100vw - 16px)); padding: 4px 8px; border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); box-shadow: var(--shadow-md); font-size: 11px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; pointer-events: none; }
+/* The flash lands on the native preview element, outside the overlay's theme scope. */
+.ccgui-md-locate-flash { animation: ccgui-md-locate-flash 1.2s ease-out; }
+@keyframes ccgui-md-locate-flash {
+  0%, 100% { outline: 2px solid transparent; outline-offset: 2px; }
+  25%, 60% { outline: 3px solid #007fd4; outline-offset: 2px; }
+}
+@media (max-width: 359px) {
+  #ccgui-markdown-review .ccgui-md-actions { gap: 2px; }
+  #ccgui-markdown-review .ccgui-md-actions .ccgui-md-icon-button { min-height: 22px; width: 22px; height: 22px; padding: 3px; }
+  #ccgui-markdown-review .ccgui-md-actions .ccgui-md-icon-button svg { width: 14px; height: 14px; }
+}

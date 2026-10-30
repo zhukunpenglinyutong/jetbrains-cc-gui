@@ -84,7 +84,11 @@ function start(pipe: NativePipe) {
   const toolbar = document.createElement('div');
   toolbar.className = 'ccgui-md-toolbar';
   toolbar.addEventListener('pointerdown', event => event.preventDefault());
-  themeLayer.append(highlights, controls, popup, toolbar);
+  const tooltip = document.createElement('div');
+  tooltip.className = 'ccgui-md-tooltip';
+  tooltip.setAttribute('role', 'tooltip');
+  tooltip.hidden = true;
+  themeLayer.append(highlights, controls, popup, toolbar, tooltip);
 
   let retry: { signature: string; requestId: string } | null = null;
   const send = (action: string, payload: object = {}) => new Promise<boolean>(resolve => {
@@ -141,12 +145,28 @@ function start(pipe: NativePipe) {
   };
   const position = (element: HTMLElement, left: number, top: number) => {
     element.style.left = Math.max(8, Math.min(left, innerWidth - Math.min(element.offsetWidth, innerWidth - 16) - 8)) + 'px';
-    element.style.top = Math.max(8, Math.min(top + 6, innerHeight - Math.min(element.offsetHeight, innerHeight - 16) - 8)) + 'px';
+    element.style.top = Math.max(0, Math.min(top + 6, innerHeight - Math.min(element.offsetHeight, innerHeight))) + 'px';
+  };
+  const hideTooltip = () => { tooltip.hidden = true; };
+  const showTooltip = (anchor: HTMLElement, text: string) => {
+    if (!text || !anchor.isConnected) return;
+    tooltip.textContent = text;
+    tooltip.hidden = false;
+    const rect = anchor.getBoundingClientRect();
+    const left = Math.max(8, Math.min(rect.left, innerWidth - tooltip.offsetWidth - 8));
+    const above = rect.top - tooltip.offsetHeight - 6;
+    tooltip.style.left = left + 'px';
+    tooltip.style.top = (above >= 8 ? above : Math.min(innerHeight - tooltip.offsetHeight - 8, rect.bottom + 6)) + 'px';
   };
   const iconButton = (label: string, path: string, click: () => void, disabled = false, variant = 'secondary') => {
     const element = button('', click, disabled, variant);
     element.classList.add('ccgui-md-icon-button');
     element.title = label; element.setAttribute('aria-label', label);
+    element.addEventListener('pointerenter', () => showTooltip(element, label));
+    element.addEventListener('pointerleave', hideTooltip);
+    element.addEventListener('focus', () => showTooltip(element, label));
+    element.addEventListener('blur', hideTooltip);
+    element.addEventListener('click', hideTooltip);
     const svg = commentIcon(); svg.querySelector('path')!.setAttribute('d', path);
     const caption = document.createElement('span'); caption.className = 'ccgui-md-button-label'; caption.textContent = label;
     element.append(svg);
@@ -194,6 +214,7 @@ function start(pipe: NativePipe) {
   }
 
   function render() {
+    hideTooltip();
     labels = previewLabels(state?.language ?? navigator.language);
     container.lang = state?.language ?? navigator.language;
     container.setAttribute('aria-label', labels.title); popup.setAttribute('aria-label', labels.title);
@@ -397,6 +418,8 @@ function start(pipe: NativePipe) {
             });
           }, false, 'danger'), iconButton(labels.source, 'M14 2H6v20h12V6zM14 2v6h4M9 12h6M9 16h6',
           () => { void send('navigate', { id: current.id }); }, !isLocatable(current)),
+          iconButton(labels.locate, 'M12 2v4M12 18v4M2 12h4M18 12h4M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4',
+          () => revealAnnotation(current), !root || !!state?.dirty || !isLocatable(current)),
           iconButton(labels.transferOne, 'M22 2L9 15M22 2l-7 20-4-9-9-4z', () => {
             if (pending) return;
             pending = true;
@@ -438,6 +461,8 @@ function start(pipe: NativePipe) {
         mark.className = 'ccgui-md-marker' + (annotation.status === 'changed' ? ' changed' : '');
         mark.title = annotation.comment;
         mark.setAttribute('aria-label', annotation.comment);
+        mark.addEventListener('pointerenter', () => showTooltip(mark, annotation.comment));
+        mark.addEventListener('pointerleave', hideTooltip);
         mark.style.left = Math.max(0, Math.min(innerWidth - 34, bounds.right)) + 'px';
         const quoteText = annotation.status === 'changed' ? (annotation.anchorText ?? annotation.selectedText) : annotation.selectedText;
         const rectangles = quoteRects(element, quoteText);
@@ -465,6 +490,50 @@ function start(pipe: NativePipe) {
   const scheduleRender = () => {
     if (drag) return;
     if (!frame) frame = requestAnimationFrame(() => { frame = 0; render(); });
+  };
+  /** Scrolls the preview to the comment while keeping the detail popup open and clear of it. */
+  function revealAnnotation(annotation: Annotation) {
+    if (!root || state?.dirty || !isLocatable(annotation)) return;
+    const element = findSourceElement(root, annotation.start, annotation.end);
+    if (!element) return;
+    // Pin the popup where it is before re-rendering, otherwise render() would
+    // follow the anchor and land back on top of the comment.
+    const popupRect = popup.getBoundingClientRect();
+    popupPosition = { left: popupRect.left, top: popupRect.top + 6 };
+    element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
+    const target = element.getBoundingClientRect();
+    const overlaps = target.left < popupRect.right && target.right > popupRect.left
+      && target.top < popupRect.bottom && target.bottom > popupRect.top;
+    if (overlaps) {
+      const gap = 16;
+      const above = popupRect.top - gap;
+      const below = innerHeight - popupRect.bottom - gap;
+      if (above >= target.height && above >= below) {
+        window.scrollBy(0, target.bottom - above);
+      } else if (below >= target.height) {
+        window.scrollBy(0, target.top - (popupRect.bottom + gap));
+      } else {
+        window.scrollBy(0, target.top - Math.max(gap, innerHeight - target.height - gap));
+      }
+    }
+    let current = element.getBoundingClientRect();
+    const stillOverlaps = current.left < popupRect.right && current.right > popupRect.left
+      && current.top < popupRect.bottom && current.bottom > popupRect.top;
+    if (stillOverlaps) {
+      // A short, non-scrollable document cannot move the comment away from the
+      // popup. Move the popup to the free band instead, keeping it visible.
+      const height = popup.getBoundingClientRect().height;
+      const top = height <= current.top ? Math.round((current.top - height) / 2)
+        : height <= innerHeight - current.bottom ? innerHeight - height : null;
+      if (top != null) {
+        const left = popup.getBoundingClientRect().left;
+        popupPosition = { left, top: top - 6 };
+        position(popup, left, top - 6);
+      }
+    }
+    element.classList.add('ccgui-md-locate-flash');
+    window.setTimeout(() => element.classList.remove('ccgui-md-locate-flash'), 1200);
+    scheduleRender();
   };
   pipe.subscribe('ccgui.markdown.response', raw => {
     try {

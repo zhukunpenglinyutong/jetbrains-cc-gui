@@ -125,7 +125,7 @@ test('uses CC GUI language and keeps all popup actions on one row in a narrow pr
   await expect(page.locator('.ccgui-md-controls')).toContainText('批注已加入当前聊天草稿');
   const row = await page.locator('.ccgui-md-popup .ccgui-md-actions button').evaluateAll(buttons =>
     buttons.map(button => { const rect = button.getBoundingClientRect(); return { top: rect.top, right: rect.right }; }));
-  expect(row).toHaveLength(5);
+  expect(row).toHaveLength(6);
   const closeBox = await page.locator('.ccgui-md-popup-title .ccgui-md-popup-close').boundingBox();
   expect(closeBox!.y).toBeLessThan(row[0].top);
   expect(closeBox!.x + closeBox!.width).toBeLessThanOrEqual(200);
@@ -341,6 +341,8 @@ test('completes comments from the list and restores them through the visibility 
   await page.getByRole('button', { name: 'Show completed comments', exact: true }).click();
   // The completed pre-seeded "Missing review" is part of the list too.
   await expect(page.locator('.ccgui-md-list-comment')).toHaveText(['Review to finish', 'Missing review']);
+  expect(await page.locator('.ccgui-md-comment-list li.completed').first()
+    .evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
   const finished = page.locator('.ccgui-md-comment-list > li').filter({ hasText: 'Review to finish' });
   await finished.getByRole('button', { name: 'Reopen', exact: true }).click();
   await page.getByRole('button', { name: 'Hide completed comments', exact: true }).click();
@@ -359,4 +361,48 @@ test('completes comments from the list and restores them through the visibility 
   await expect(page.locator('.ccgui-md-list-comment')).toHaveText(['Missing review']);
   await rows.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(page.locator('.ccgui-md-list-empty')).toBeVisible();
+});
+
+test('locates a comment in the preview without closing its detail popup', async ({ page }) => {
+  await page.evaluate(() => {
+    const native = window as any;
+    native.__state.annotations = [
+      { id: '000a', revision: 1, start: 82, end: 120, selectedText: 'Second', comment: 'Locate me', status: 'attached' },
+    ];
+    native.__response(JSON.stringify(native.__state));
+  });
+  await page.locator('.ccgui-md-marker').click();
+  await page.getByRole('button', { name: 'Locate in preview', exact: true }).click();
+  await expect(page.locator('.ccgui-md-popup')).toBeVisible();
+  expect(await page.evaluate(() =>
+    document.querySelector('p[data-src="82..120"]')!.classList.contains('ccgui-md-locate-flash'))).toBe(true);
+  expect(await page.evaluate(() => {
+    const target = document.querySelector('p[data-src="82..120"]')!.getBoundingClientRect();
+    const popup = document.querySelector('.ccgui-md-popup')!.getBoundingClientRect();
+    const visible = target.top >= 0 && target.bottom <= innerHeight;
+    const overlaps = target.left < popup.right && target.right > popup.left
+      && target.top < popup.bottom && target.bottom > popup.top;
+    return visible && !overlaps;
+  })).toBe(true);
+});
+
+test('shows hover descriptions for icon-only controls', async ({ page }) => {
+  await page.evaluate(() => {
+    const native = window as any;
+    native.__state.annotations = [
+      { id: '000a', revision: 1, start: 82, end: 120, selectedText: 'Second', comment: 'Hover me', status: 'attached' },
+    ];
+    native.__response(JSON.stringify(native.__state));
+  });
+  await page.locator('.ccgui-md-marker').click();
+  const tooltip = page.locator('.ccgui-md-tooltip');
+  await page.getByRole('button', { name: 'Edit', exact: true }).hover();
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toHaveText('Edit');
+  await page.getByRole('button', { name: 'Open in editor', exact: true }).hover();
+  await expect(tooltip).toHaveText('Open in editor');
+  await page.getByRole('button', { name: 'Locate in preview', exact: true }).hover();
+  await expect(tooltip).toHaveText('Locate in preview');
+  await page.mouse.move(4, 4);
+  await expect(tooltip).toBeHidden();
 });
