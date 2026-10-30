@@ -106,15 +106,30 @@ describe('useModelStatePersistence — boot sync does not clobber the persisted 
       .toMatchObject({ reasoningEffort: 'ultra', claudeUltracode });
   });
 
-  it.each(['medium', null])('prefers this tab\'s effort=%s and explicit Ultracode off over another tab\'s storage', effort => {
+  it.each(['low', 'medium', 'high', 'xhigh', 'max'])('prefers this tab\'s effort=%s and explicit Ultracode off over another tab\'s storage', effort => {
     localStorage.setItem('model-selection-state', JSON.stringify({ reasoningEffort: 'ultra', claudeUltracode: true }));
     window.__INITIAL_TAB_PROVIDER__ = 'claude';
     window.__INITIAL_TAB_REASONING_EFFORT__ = effort;
     window.__INITIAL_TAB_CLAUDE_ULTRACODE__ = false;
     const options = makeOptions();
     renderHook(() => useModelStatePersistence(options));
-    expect(options.setReasoningEffort).toHaveBeenLastCalledWith(effort ?? 'high');
+    expect(options.setReasoningEffort).toHaveBeenLastCalledWith(effort);
     expect(options.setClaudeUltracode).toHaveBeenLastCalledWith(false);
+  });
+
+  it.each(['xhigh', 'max'])('inherits last-used %s when a new tab has null effort', effort => {
+    localStorage.setItem('model-selection-state', JSON.stringify({ reasoningEffort: effort }));
+    window.__INITIAL_TAB_REASONING_EFFORT__ = null;
+    const options = makeOptions();
+    renderHook(() => useModelStatePersistence(options));
+    expect(options.setReasoningEffort).toHaveBeenCalledExactlyOnceWith(effort);
+  });
+
+  it('keeps the hook default when neither the new tab nor storage has an effort', () => {
+    window.__INITIAL_TAB_REASONING_EFFORT__ = null;
+    const options = makeOptions();
+    renderHook(() => useModelStatePersistence(options));
+    expect(options.setReasoningEffort).not.toHaveBeenCalled();
   });
 
   it('restores authoritative native mode preferences without a localStorage snapshot', () => {

@@ -32,11 +32,8 @@ export async function assertUltracodeSupported(query, options = {}) {
   if (options.settings?.disableWorkflows === true || /^(1|true)$/i.test(options.env?.CLAUDE_CODE_DISABLE_WORKFLOWS || '')) {
     throw new Error('Claude Ultracode is unavailable because native dynamic workflows are disabled.');
   }
-  const modelId = options.model?.replace(/\[1m\]$/i, '');
-  const model = initialization?.models?.find(row => row.value === modelId || row.resolvedModel === modelId);
-  if (model && (model.supportsEffort === false || (Array.isArray(model.supportedEffortLevels) && !model.supportedEffortLevels.includes('xhigh')))) {
-    throw new Error(`Claude Ultracode is unavailable for ${model.displayName || modelId}: the native model must support xhigh effort.`);
-  }
+  // Effort metadata is not an Ultracode capability. The native applied setting
+  // checked below determines whether this model/session supports workflows.
 }
 
 export async function applyNativeFlagSettings(query, settings) {

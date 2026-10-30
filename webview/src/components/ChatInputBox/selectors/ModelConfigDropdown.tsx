@@ -38,10 +38,10 @@ interface ModelConfigDropdownProps {
   onLongContextChange?: (enabled: boolean) => void;
   // Function rows below the model list.
   showUltracode: boolean;
-  ultracodeSupported: boolean;
   claudeUltracode: boolean;
   onClaudeUltracodeChange?: (enabled: boolean) => void;
   supportedReasoningEfforts?: readonly string[];
+  reasoningCapabilitiesPending: boolean;
   showDivider: boolean;
   showContextRow: boolean;
   contextSupported: boolean;
@@ -88,10 +88,10 @@ export const ModelConfigDropdown = ({
   longContextEnabled,
   onLongContextChange,
   showUltracode,
-  ultracodeSupported,
   claudeUltracode,
   onClaudeUltracodeChange,
   supportedReasoningEfforts,
+  reasoningCapabilitiesPending,
   showDivider,
   showContextRow,
   contextSupported,
@@ -157,7 +157,6 @@ export const ModelConfigDropdown = ({
 
       <ModelConfigUltracodeRow
         visible={showUltracode}
-        supported={ultracodeSupported}
         enabled={claudeUltracode}
         onChange={onClaudeUltracodeChange}
         onHover={() => scheduleSubmenu('none')}
@@ -221,6 +220,7 @@ export const ModelConfigDropdown = ({
           selectedModel={selectedModel}
           currentProvider={currentProvider}
           supportedReasoningEfforts={supportedReasoningEfforts}
+          reasoningCapabilitiesPending={reasoningCapabilitiesPending}
           embedded
           triggerRef={effortTriggerRef}
           onClose={onClose}

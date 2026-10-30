@@ -106,6 +106,7 @@
     "localProject": "Local",
     "disabled": "Désactivé",
     "sdkNotInstalled": "{{provider}} SDK n'est pas installé. Veuillez installer le SDK pour commencer à discuter.",
+    "codexUltraCapabilitiesLoading": "Vérification de la disponibilité d’Ultra. Réessayez l’envoi après le chargement du modèle.",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "Préparation de l'image collée...",
     "sdkStatusUnavailable": "Impossible de vérifier l'état du SDK.",
@@ -2256,8 +2257,7 @@
   "modelConfig": {
     "ultracode": {
       "label": "Ultracode",
-      "description": "Workflow natif Claude avec délégation automatique des tâches. Conserve le niveau de raisonnement choisi.",
-      "unsupported": "Nécessite un modèle compatible XHigh et un workflow Ultracode disponible."
+      "description": "Workflow natif Claude avec délégation automatique des tâches. Conserve le niveau de raisonnement choisi."
     }
   }
 }

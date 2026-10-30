@@ -140,6 +140,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     } = useChatInputController({
       selectedModel,
       currentProvider,
+      reasoningEffort,
       attachments: externalAttachments,
       value,
       onSubmit,

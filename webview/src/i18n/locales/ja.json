@@ -106,6 +106,7 @@
     "localProject": "ローカル",
     "disabled": "無効",
     "sdkNotInstalled": "{{provider}} SDKがインストールされていません。チャットを開始するにはSDKをインストールしてください。",
+    "codexUltraCapabilitiesLoading": "Ultra が利用可能か確認中です。モデルの読み込みが完了したら、もう一度送信してください。",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "貼り付けた画像を準備中...",
     "sdkStatusUnavailable": "SDK の状態を確認できませんでした。",
@@ -2258,8 +2259,7 @@
   "modelConfig": {
     "ultracode": {
       "label": "Ultracode",
-      "description": "タスクを自動委任する Claude のネイティブワークフロー。選択した推論強度を保持します。",
-      "unsupported": "XHigh 推論対応モデルと利用可能な Ultracode ワークフローが必要です。"
+      "description": "タスクを自動委任する Claude のネイティブワークフロー。選択した推論強度を保持します。"
     }
   }
 }

@@ -476,12 +476,10 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         setCodexSandboxSource?.(restoredCodexSettings.sandboxSource);
       }
 
-      // Java restores each tab independently. These scalars override the shared
-      // localStorage preferences, including an explicit default/off selection.
-      // Older hosts omit them and retain the existing localStorage fallback.
-      if (window.__INITIAL_TAB_REASONING_EFFORT__ !== undefined) {
-        setReasoningEffort(isReasoningEffort(window.__INITIAL_TAB_REASONING_EFFORT__)
-          ? window.__INITIAL_TAB_REASONING_EFFORT__ : 'high');
+      // An explicit tab effort overrides shared preferences. A new Java tab has
+      // null effort and inherits the last-used preference (or the hook default).
+      if (isReasoningEffort(window.__INITIAL_TAB_REASONING_EFFORT__)) {
+        setReasoningEffort(window.__INITIAL_TAB_REASONING_EFFORT__);
       }
       if (typeof window.__INITIAL_TAB_CLAUDE_ULTRACODE__ === 'boolean') {
         setClaudeUltracode?.(window.__INITIAL_TAB_CLAUDE_ULTRACODE__);

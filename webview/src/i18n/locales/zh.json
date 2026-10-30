@@ -142,6 +142,7 @@
     "localProject": "本项目",
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安装，请先安装 SDK 才能开始对话",
+    "codexUltraCapabilitiesLoading": "正在确认 Ultra 是否可用。模型加载完成后请重试发送。",
     "sdkStatusLoading": "正在检查 SDK 状态...",
     "pasteImagePreparing": "正在准备粘贴的图片...",
     "sdkStatusUnavailable": "无法检查 SDK 状态。",
@@ -2340,8 +2341,7 @@
     "model": "模型",
     "ultracode": {
       "label": "Ultracode",
-      "description": "Claude 原生工作流，自动委派子任务，保留当前推理强度。",
-      "unsupported": "需要支持 XHigh 推理强度的模型和可用的 Ultracode 工作流。"
+      "description": "Claude 原生工作流，自动委派子任务，保留当前推理强度。"
     }
   },
   "modes": {

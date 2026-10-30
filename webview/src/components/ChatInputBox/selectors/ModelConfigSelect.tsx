@@ -27,6 +27,7 @@ interface ModelConfigSelectProps {
   models?: ModelInfo[];
   currentProvider?: string;
   loading?: boolean;
+  reasoningCapabilitiesPending?: boolean;
   error?: string | null;
   onRetry?: () => void;
   onAddModel?: () => void;
@@ -54,6 +55,7 @@ export const ModelConfigSelect = ({
   models = AVAILABLE_MODELS,
   currentProvider = 'claude',
   loading = false,
+  reasoningCapabilitiesPending = false,
   error = null,
   onRetry,
   onAddModel,
@@ -96,19 +98,17 @@ export const ModelConfigSelect = ({
   }, [onReasoningChange]);
 
   const currentModel = useCurrentModel(models, selectedModel, currentProvider);
-  const { isVisible: showEffort, availableLevels, currentLevel } = useReasoningEffortGuard(
+  const { isVisible: showEffort, currentLevel } = useReasoningEffortGuard(
     reasoningEffort,
     handleReasoningChange,
     selectedModel,
     currentProvider,
     currentModel?.supportedReasoningEfforts,
+    reasoningCapabilitiesPending,
   );
 
   const modelMapping = readClaudeModelMapping();
   const showUltracode = currentProvider === 'claude' && !!onClaudeUltracodeChange;
-  const ultracodeSupported = currentModel?.supportedReasoningEfforts
-    ? currentModel.supportedReasoningEfforts.includes('xhigh')
-    : showEffort && availableLevels.some(level => level.id === 'xhigh');
   const {
     show1MContext,
     showContextRow,
@@ -230,7 +230,6 @@ export const ModelConfigSelect = ({
           onLongContextChange={onLongContextChange}
           showDivider={showDivider || showUltracode}
           showUltracode={showUltracode}
-          ultracodeSupported={ultracodeSupported}
           claudeUltracode={claudeUltracode}
           onClaudeUltracodeChange={onClaudeUltracodeChange}
           showContextRow={showContextRow}
@@ -245,6 +244,7 @@ export const ModelConfigSelect = ({
           dshPresetLabel={dshPresetLabel}
           showEffortRow={showEffortRow}
           supportedReasoningEfforts={currentModel?.supportedReasoningEfforts}
+          reasoningCapabilitiesPending={reasoningCapabilitiesPending}
           reasoningEffort={reasoningEffort}
           onReasoningChange={handleReasoningChange}
           effortLabel={effortLabel}

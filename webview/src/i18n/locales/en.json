@@ -142,6 +142,7 @@
     "localProject": "Local",
     "disabled": "Disabled",
     "sdkNotInstalled": "{{provider}} SDK is not installed. Please install the SDK to start chatting.",
+    "codexUltraCapabilitiesLoading": "Checking Ultra availability. Try sending again when model loading finishes.",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "Preparing pasted image...",
     "sdkStatusUnavailable": "Could not check SDK status.",
@@ -2335,8 +2336,7 @@
     "model": "Model",
     "ultracode": {
       "label": "Ultracode",
-      "description": "Native Claude workflow with automatic task delegation. Keeps your selected effort.",
-      "unsupported": "Requires a model with XHigh effort and an available Ultracode workflow."
+      "description": "Native Claude workflow with automatic task delegation. Keeps your selected effort."
     }
   },
   "modes": {

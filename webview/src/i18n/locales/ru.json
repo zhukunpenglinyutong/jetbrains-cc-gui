@@ -106,6 +106,7 @@
     "localProject": "Локальный",
     "disabled": "Отключено",
     "sdkNotInstalled": "SDK {{provider}} не установлен. Установите SDK для начала работы.",
+    "codexUltraCapabilitiesLoading": "Проверяем доступность Ultra. Повторите отправку после загрузки модели.",
     "sdkStatusLoading": "Проверка статуса SDK...",
     "pasteImagePreparing": "Подготовка вставленного изображения...",
     "sdkStatusUnavailable": "Не удалось проверить состояние SDK.",
@@ -2283,8 +2284,7 @@
   "modelConfig": {
     "ultracode": {
       "label": "Ultracode",
-      "description": "Встроенный процесс Claude с автоматическим делегированием задач. Сохраняет выбранный уровень рассуждения.",
-      "unsupported": "Требуется модель с поддержкой XHigh и доступный процесс Ultracode."
+      "description": "Встроенный процесс Claude с автоматическим делегированием задач. Сохраняет выбранный уровень рассуждения."
     }
   }
 }

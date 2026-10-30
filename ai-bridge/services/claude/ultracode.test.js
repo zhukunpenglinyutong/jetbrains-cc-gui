@@ -25,7 +25,7 @@ test('Ultracode is an independent native setting, including explicit off', () =>
     buildRuntimeSignature({ model: 'opus', effort: 'low', settings: { ultracode: false } }));
 });
 
-test('native Ultracode validates actual CLI version, SDK capability and model support', async () => {
+test('native Ultracode validates actual CLI version, SDK capability and workflow settings', async () => {
   await assertUltracodeSupported(nativeQuery(), { model: 'opus' });
   await assertUltracodeSupported(nativeQuery({ initializationResult: async () => ({ claude_code_version: '2.1.284' }) }));
   for (const version of ['2.1.283', '2.1.203', undefined]) {
@@ -33,7 +33,16 @@ test('native Ultracode validates actual CLI version, SDK capability and model su
   }
   await assert.rejects(assertUltracodeSupported({}), /updated Claude Agent SDK/);
   await assert.rejects(assertUltracodeSupported(nativeQuery(), { env: { CLAUDE_CODE_DISABLE_WORKFLOWS: '1' } }), /workflows are disabled/);
-  await assert.rejects(assertUltracodeSupported(nativeQuery({ initializationResult: async () => ({ claude_code_version: '2.1.296', models: [{ value: 'sonnet', supportedEffortLevels: ['low', 'medium', 'high'] }] }) }), { model: 'sonnet[1m]' }), /must support xhigh/);
+});
+
+test('native applied Ultracode is authoritative even when model effort metadata lacks xhigh', async () => {
+  for (const effortMetadata of [{ supportedEffortLevels: ['low', 'medium', 'high'] }, { supportsEffort: false }]) {
+    const query = nativeQuery({ initializationResult: async () => ({
+      claude_code_version: '2.1.296', models: [{ value: 'custom-model', ...effortMetadata }],
+    }) });
+    await assertUltracodeSupported(query, { model: 'custom-model[1m]' });
+    await applyNativeFlagSettings(query, { ultracode: true, effortLevel: 'low' });
+  }
 });
 
 test('native unavailable Ultracode produces an error instead of silently submitting a normal turn', async () => {

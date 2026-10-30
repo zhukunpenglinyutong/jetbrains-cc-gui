@@ -18,8 +18,9 @@ import type { UseWindowCallbacksOptions, UseMessageSenderOptions } from './hooks
 import {
   CONTEXT_COMMANDS,
 } from './hooks/useMessageSender';
-import { parseCodexCommand } from './hooks/codexCommandDispatcher';
 import { useCodexQuestionResponses } from './hooks/useCodexQuestionResponses';
+import { isCodexEffortIndependentCommand, parseCodexCommand } from './hooks/codexCommandDispatcher';
+import { isCodexUltraCapabilityPending } from './utils/codexReasoningCapabilities';
 import { useCodexTurnActivity } from './hooks/useCodexTurnActivity';
 import { useCodexCompactionStatus } from './hooks/useCodexCompactionStatus';
 import type { Attachment, ChatInputBoxHandle, PermissionMode } from './components/ChatInputBox/types';
@@ -300,6 +301,7 @@ export const useAppChatController = ({
   const {
     handleSubmit: hookHandleSubmit,
     interruptSession,
+    reasoningCapabilitiesPending,
   } = useMessageSender({
     t, addToast,
     currentProvider, selectedModel, permissionMode, reasoningEffort, claudeUltracode, selectedAgent, codexFastMode,
@@ -328,7 +330,7 @@ export const useAppChatController = ({
     peekQueuedMessage,
     clearQueue,
     reorder: reorderMessageQueue,
-  } = useMessageQueue({ isLoading: loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending, onExecute: hookHandleSubmit });
+  } = useMessageQueue({ isLoading: loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending || reasoningCapabilitiesPending, onExecute: hookHandleSubmit });
 
   // The edit flow has to look at a queued message before it removes it.
   const queuedEditSource = useMemo(
@@ -415,13 +417,17 @@ export const useAppChatController = ({
         return;
       }
     }
-    // If loading, add to queue
-    if (loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending) {
+    // The input defers dispatch after clearing its draft. If capabilities were
+    // invalidated in that gap, preserve this submission in the paused queue.
+    const capabilitiesPending = currentProvider === 'codex'
+      && !isCodexEffortIndependentCommand(parseCodexCommand(text))
+      && isCodexUltraCapabilityPending(selectedModel, reasoningEffort);
+    if (loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending || capabilitiesPending) {
       enqueueMessage(content, attachments);
       return;
     }
     hookHandleSubmit(content, attachments);
-  }, [loading, codexTurnActive, codexPlanExecutionPending, codexCompactionPending, enqueueMessage, hookHandleSubmit, forceCreateNewSession, currentProvider, handleModeSelect, setCurrentView, addToast, t]);
+  }, [loading, codexTurnActive, codexPlanExecutionPending, codexCompactionPending, enqueueMessage, hookHandleSubmit, forceCreateNewSession, currentProvider, selectedModel, reasoningEffort, handleModeSelect, setCurrentView, addToast, t]);
 
   // ── Chat-view computations (stage 5 of TASK-P1-01) ──
   const {

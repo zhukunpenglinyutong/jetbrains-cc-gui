@@ -106,6 +106,7 @@
     "localProject": "Local",
     "disabled": "Deshabilitado",
     "sdkNotInstalled": "{{provider}} SDK no está instalado. Instala el SDK para comenzar a chatear.",
+    "codexUltraCapabilitiesLoading": "Comprobando la disponibilidad de Ultra. Vuelve a enviar cuando termine de cargar el modelo.",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "Preparando imagen pegada...",
     "sdkStatusUnavailable": "No se pudo comprobar el estado del SDK.",
@@ -2262,8 +2263,7 @@
   "modelConfig": {
     "ultracode": {
       "label": "Ultracode",
-      "description": "Flujo nativo de Claude con delegación automática de tareas. Mantiene el nivel de razonamiento elegido.",
-      "unsupported": "Requiere un modelo compatible con XHigh y un flujo Ultracode disponible."
+      "description": "Flujo nativo de Claude con delegación automática de tareas. Mantiene el nivel de razonamiento elegido."
     }
   }
 }

@@ -282,6 +282,7 @@ export function registerRuntimeSession(runtime, sessionId, callbacks) {
 }
 
 export async function disposeRuntime(runtime, callbacks) {
+  if (runtime?.disposePromise) return runtime.disposePromise;
   if (!runtime || runtime.closed) return;
   console.log('[LIFECYCLE] disposeRuntime sessionId=' + (runtime.sessionId || '(new)')
     + ' epoch=' + (runtime.runtimeSessionEpoch || '(none)')
@@ -302,14 +303,20 @@ export async function disposeRuntime(runtime, callbacks) {
     console.error('[LIFECYCLE] inputStream.done() failed:', err?.message || err);
   }
 
-  try {
-    await runtime.query?.close?.();
-  } catch (err) {
-    console.error('[LIFECYCLE] query.close() failed:', err?.message || err);
-  }
-
-  removeRuntime(runtime, callbacks?.removeSession);
-  clearActiveTurnRuntimeIf(runtime);
+  runtime.disposePromise = (async () => {
+    try {
+      await runtime.query?.close?.();
+    } catch (err) {
+      // Best-effort cleanup callers keep their existing behavior. A Stop caller
+      // must inspect this evidence before acknowledging native cancellation.
+      runtime.closeError = err;
+      console.error('[LIFECYCLE] query.close() failed:', err?.message || err);
+    } finally {
+      removeRuntime(runtime, callbacks?.removeSession);
+      clearActiveTurnRuntimeIf(runtime);
+    }
+  })();
+  return runtime.disposePromise;
 }
 
 async function createRuntime(requestContext, callbacks) {

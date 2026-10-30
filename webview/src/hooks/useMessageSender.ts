@@ -1,4 +1,4 @@
-import { useCallback, type RefObject } from 'react';
+import { useCallback, useSyncExternalStore, type RefObject } from 'react';
 import { selectedCodexSkillInputs } from '../components/ChatInputBox/providers/dollarCommandProvider';
 import type { TFunction } from 'i18next';
 import { sendBridgeEvent } from '../utils/bridge';
@@ -12,6 +12,12 @@ import type { Attachment, ChatInputBoxHandle, PermissionMode, ReasoningEffort, S
 import { expandQuoteTokens } from '../components/ChatInputBox/utils/quoteRegistry';
 import type { ViewMode } from './useModelProviderState';
 import { parseCodexCommand } from './codexCommandDispatcher';
+import {
+  codexModelReasoningEfforts,
+  getCodexReasoningCapabilities,
+  isCodexUltraCapabilityPending,
+  subscribeCodexReasoningCapabilities,
+} from '../utils/codexReasoningCapabilities';
 
 /**
  * Command sets for local handling (shared with App.tsx to avoid duplication)
@@ -118,6 +124,10 @@ export function useMessageSender({
   startCodexCompaction,
   codexCompactionPending = false,
 }: UseMessageSenderOptions) {
+  // Queued messages stay queued while a restored Ultra choice is unconfirmed.
+  const codexCapabilities = useSyncExternalStore(subscribeCodexReasoningCapabilities, getCodexReasoningCapabilities);
+  const reasoningCapabilitiesPending = currentProvider === 'codex' && reasoningEffort === 'ultra'
+    && codexCapabilities.pending && !codexCapabilities.effortsByModel.get(selectedModel)?.includes('ultra');
   /**
    * Check if the input is a new session command
    */
@@ -334,9 +344,15 @@ export function useMessageSender({
       effectiveMode: effectivePermissionMode,
     });
 
+    // Read current capabilities synchronously: a settled catalog can arrive
+    // before the picker's reconciliation effect updates the selected effort.
+    const codexEfforts = currentProvider === 'codex' ? codexModelReasoningEfforts(selectedModel) : undefined;
+    const effectiveEffort = currentProvider === 'codex' && reasoningEffort !== 'ultra'
+      ? reasoningEffort
+      : resolveCurrentReasoningLevel(reasoningEffort,
+        getAvailableReasoningLevels(currentProvider, selectedModel, codexEfforts))?.id;
     const reasoningEffortPayload = shouldSendReasoningEffort(currentProvider, selectedModel)
-      ? { reasoningEffort: currentProvider === 'codex' ? reasoningEffort
-        : resolveCurrentReasoningLevel(reasoningEffort, getAvailableReasoningLevels(currentProvider, selectedModel))?.id }
+      ? { reasoningEffort: effectiveEffort }
       : {};
 
     try {
@@ -388,6 +404,13 @@ export function useMessageSender({
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
     if (!text && !hasAttachments) return;
+
+    if (currentProvider === 'codex' && isCodexUltraCapabilityPending(selectedModel, reasoningEffort)) {
+      addToast(t('chat.codexUltraCapabilitiesLoading', {
+        defaultValue: 'Checking Ultra availability. Try sending again when model loading finishes.',
+      }), 'info');
+      return;
+    }
 
     // Native automatic review is bounded to a protected sandbox. Keep the
     // user's desired full-access value visible for correction, but never send
@@ -504,6 +527,8 @@ export function useMessageSender({
     sdkStatusLoading,
     currentSdkInstalled,
     currentProvider,
+    selectedModel,
+    reasoningEffort,
     dshPreset,
     permissionMode,
     selectedAgent,
@@ -576,5 +601,6 @@ export function useMessageSender({
     handleSubmit,
     executeMessage,
     interruptSession,
+    reasoningCapabilitiesPending,
   };
 }

@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
-import type { Attachment } from '../types.js';
+import type { Attachment, ReasoningEffort } from '../types.js';
 import type { Dispatch, SetStateAction } from 'react';
-import { parseCodexCommand } from '../../../hooks/codexCommandDispatcher';
+import { isCodexEffortIndependentCommand, parseCodexCommand } from '../../../hooks/codexCommandDispatcher';
+import { isCodexUltraCapabilityPending } from '../../../utils/codexReasoningCapabilities';
 
 interface CompletionLike {
   close: () => void;
@@ -13,6 +14,8 @@ export interface UseSubmitHandlerOptions {
   sdkStatusLoading: boolean;
   sdkInstalled: boolean;
   currentProvider: string;
+  selectedModel?: string;
+  reasoningEffort?: ReasoningEffort;
   clearInput: () => void;
   /** Invalidate text content cache to force fresh DOM read on submit */
   invalidateCache: () => void;
@@ -50,6 +53,8 @@ export function useSubmitHandler({
   sdkStatusLoading,
   sdkInstalled,
   currentProvider,
+  selectedModel = '',
+  reasoningEffort = 'high',
   clearInput,
   invalidateCache,
   externalAttachments,
@@ -107,6 +112,14 @@ export function useSubmitHandler({
 
     if (!cleanContent && attachments.length === 0) return;
 
+    if (currentProvider === 'codex' && !isCodexEffortIndependentCommand(command)
+        && isCodexUltraCapabilityPending(selectedModel, reasoningEffort)) {
+      addToast?.(t('chat.codexUltraCapabilitiesLoading', {
+        defaultValue: 'Checking Ultra availability. Try sending again when model loading finishes.',
+      }), 'info');
+      return;
+    }
+
     // Close completions
     fileCompletion.close();
     commandCompletion.close();
@@ -140,6 +153,8 @@ export function useSubmitHandler({
     sdkStatusLoading,
     sdkInstalled,
     currentProvider,
+    selectedModel,
+    reasoningEffort,
     clearInput,
     externalAttachments,
     setInternalAttachments,

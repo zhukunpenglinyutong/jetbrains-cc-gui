@@ -302,6 +302,7 @@ export const ButtonArea = ({
           models={availableModels}
           currentProvider={currentProvider}
           loading={cliModelsLoading}
+          reasoningCapabilitiesPending={cliModelsLoading || (!cliModelsLoaded && !cliModelsError)}
           error={cliModelsError}
           onRetry={() => refreshCliModels(currentProvider)}
           onAddModel={onAddModel}

@@ -69,7 +69,33 @@ describe('ModelConfigSelect', () => {
     expect(screen.queryByText('Ultra')).toBeNull();
   });
 
-  it('allows disabling Ultracode after switching to an unsupported model', () => {
+  it.each(['claude-sonnet-5', 'custom-native-model'])('defers Ultracode availability to the CLI for %s without xhigh', modelId => {
+    const onClaudeUltracodeChange = vi.fn();
+    const onReasoningChange = vi.fn();
+    render(<ModelConfigSelect selectedModel={modelId} onModelSelect={vi.fn()}
+      models={[{ id: modelId, label: modelId, supportedReasoningEfforts: ['low', 'medium', 'high'] }]}
+      currentProvider="claude" reasoningEffort="low" onReasoningChange={onReasoningChange}
+      onClaudeUltracodeChange={onClaudeUltracodeChange} />);
+    fireEvent.click(screen.getByTestId('model-config-trigger'));
+    fireEvent.click(screen.getByTestId('model-config-option-ultracode'));
+    expect(onClaudeUltracodeChange).toHaveBeenCalledWith(true);
+    expect(onReasoningChange).not.toHaveBeenCalled();
+  });
+
+  it('preserves restored Ultra through an open pending picker and reconciles a settled unknown model', () => {
+    const onReasoningChange = vi.fn();
+    const props = { selectedModel: 'custom-model', onModelSelect: vi.fn(), models: [],
+      currentProvider: 'codex', reasoningEffort: 'ultra' as const, onReasoningChange };
+    const { rerender } = render(<ModelConfigSelect {...props} reasoningCapabilitiesPending />);
+    fireEvent.click(screen.getByTestId('model-config-trigger'));
+    fireEvent.click(screen.getByTestId('model-config-option-effort'));
+    expect(onReasoningChange).not.toHaveBeenCalled();
+    rerender(<ModelConfigSelect {...props} reasoningCapabilitiesPending={false} />);
+    expect(onReasoningChange).toHaveBeenCalledWith('high');
+    expect(screen.getByTestId('model-config-trigger').textContent).not.toContain('Ultra');
+  });
+
+  it('allows disabling Ultracode after switching models', () => {
     const onClaudeUltracodeChange = vi.fn();
     render(<ModelConfigSelect selectedModel="claude-haiku-4-5" onModelSelect={vi.fn()}
       currentProvider="claude" claudeUltracode onClaudeUltracodeChange={onClaudeUltracodeChange} />);

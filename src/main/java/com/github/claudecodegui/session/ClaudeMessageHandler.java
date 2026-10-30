@@ -9,6 +9,7 @@ import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.provider.claude.ClaudePlanUsageService;
 import com.github.claudecodegui.util.TokenUsageUtils;
 import com.github.claudecodegui.util.UsageCostCalculator;
+import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -626,7 +627,7 @@ public class ClaudeMessageHandler implements MessageCallback {
                 return;
             }
 
-            String userText = messageParser.extractMessageContent(userMsg);
+            String userText = UserMessageSanitizer.sanitizeUserFacingText(messageParser.extractMessageContent(userMsg));
             if (userText == null || userText.isEmpty()) {
                 LOG.debug("User message from SDK has no text content, skipping uuid patch");
                 return;
@@ -639,7 +640,7 @@ public class ClaudeMessageHandler implements MessageCallback {
                 if (msg.type != Message.Type.USER) {
                     continue;
                 }
-                if (!userText.equals(msg.content)) {
+                if (!userText.equals(UserMessageSanitizer.sanitizeUserFacingText(msg.content))) {
                     continue;
                 }
                 if (msg.raw == null) {

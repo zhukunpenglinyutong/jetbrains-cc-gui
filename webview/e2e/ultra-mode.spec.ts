@@ -20,7 +20,7 @@ async function boot(page: Page, provider: 'claude' | 'codex') {
         'codex-sdk': { status: 'installed', meetsMinimumVersion: true },
       });
       if (message.startsWith('get_cli_models:claude')) respond('setCliModels', { provider: 'claude', success: true,
-        models: [{ id: 'claude-opus-5', label: 'Claude Opus 5', supportedReasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max'] }] });
+        models: [{ id: 'claude-opus-5', label: 'Claude Opus 5', supportedReasoningEfforts: ['low', 'medium', 'high', 'max'] }] });
       if (message.startsWith('codex_native_list_models:')) {
         const request = JSON.parse(message.slice('codex_native_list_models:'.length));
         setTimeout(() => window.dispatchEvent(new CustomEvent('codex-native-data', { detail: {
@@ -74,6 +74,9 @@ test('Claude Ultracode preserves effort and native background work stays visible
   await boot(page, 'claude');
   const trigger = page.getByTestId('model-config-trigger');
   await trigger.click();
+  await page.getByTestId('model-config-option-effort').click();
+  await page.getByTestId('reasoning-selector-dropdown').getByText('Low', { exact: true }).click();
+  await trigger.click();
   await page.getByTestId('model-config-option-ultracode').click();
   await trigger.click();
   await expect(trigger).toContainText('Ultracode');
@@ -82,7 +85,7 @@ test('Claude Ultracode preserves effort and native background work stays visible
   await expect.poll(async () => {
     const send = await latestSend(page);
     return [send?.reasoningEffort, send?.claudeUltracode];
-  }).toEqual(['high', true]);
+  }).toEqual(['low', true]);
   await page.reload();
   await page.addStyleTag({ content: '#__vconsole { display: none !important; }' });
   await expect(trigger).toContainText('Ultracode');
@@ -112,5 +115,37 @@ test('Claude Ultracode preserves effort and native background work stays visible
   await expect.poll(async () => {
     const send = await latestSend(page);
     return [send?.reasoningEffort, send?.claudeUltracode];
-  }).toEqual(['high', false]);
+  }).toEqual(['low', false]);
+});
+
+test('a new tab without an explicit effort inherits the last-used Max preference', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__INITIAL_TAB_REASONING_EFFORT__ = null;
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'codex', codexModel: 'gpt-6-astra', reasoningEffort: 'max',
+    }));
+  });
+  await boot(page, 'codex');
+  await expect(page.getByTestId('model-config-trigger')).toContainText('Max');
+  await page.locator('.input-editable').fill('Use my last effort preference');
+  await page.locator('.input-editable').press('Enter');
+  await expect.poll(async () => (await latestSend(page))?.reasoningEffort).toBe('max');
+});
+
+test('a restored Ultra preference resolves for a custom model absent from the loaded catalog', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__INITIAL_TAB_REASONING_EFFORT__ = 'ultra';
+    localStorage.setItem('codex-custom-models', JSON.stringify([{ id: 'custom-codex', label: 'Custom Codex' }]));
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'codex', codexModel: 'custom-codex', reasoningEffort: 'ultra',
+    }));
+  });
+  await boot(page, 'codex');
+  const trigger = page.getByTestId('model-config-trigger');
+  await expect(trigger).toContainText('Custom Codex');
+  await expect(trigger).toContainText('High');
+  await expect(trigger).not.toContainText('Ultra');
+  await page.locator('.input-editable').fill('Send with a supported fallback effort');
+  await page.locator('.input-editable').press('Enter');
+  await expect.poll(async () => (await latestSend(page))?.reasoningEffort).toBe('high');
 });

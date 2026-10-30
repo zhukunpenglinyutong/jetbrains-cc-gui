@@ -20,13 +20,35 @@ describe('cc-switch aggregated model effort', () => {
 
   it('preserves restored Ultra until the catalog arrives, then corrects unsupported models', () => {
     const onChange = vi.fn();
-    const { result, rerender } = renderHook(({ efforts }: { efforts?: string[] }) =>
-      useReasoningEffortGuard('ultra', onChange, 'gpt-6-luna', 'codex', efforts),
-    { initialProps: {} as { efforts?: string[] } });
+    const { result, rerender } = renderHook(({ efforts, pending }: { efforts?: string[]; pending: boolean }) =>
+      useReasoningEffortGuard('ultra', onChange, 'gpt-6-luna', 'codex', efforts, pending),
+    { initialProps: { pending: true } as { efforts?: string[]; pending: boolean } });
     expect(result.current.currentLevel?.id).toBe('ultra');
     expect(onChange).not.toHaveBeenCalled();
-    rerender({ efforts: ['medium', 'high', 'max'] });
+    rerender({ efforts: ['medium', 'high', 'max'], pending: false });
     expect(onChange).toHaveBeenCalledWith('high');
+  });
+
+  it('reconciles restored Ultra when the settled catalog has no custom model capabilities', () => {
+    const onChange = vi.fn();
+    const { result, rerender } = renderHook(({ pending }) =>
+      useReasoningEffortGuard('ultra', onChange, 'custom-model', 'codex', undefined, pending),
+    { initialProps: { pending: true } });
+    expect(result.current.currentLevel?.id).toBe('ultra');
+    expect(onChange).not.toHaveBeenCalled();
+    rerender({ pending: false });
+    expect(result.current.currentLevel?.id).toBe('high');
+    expect(onChange).toHaveBeenCalledWith('high');
+  });
+
+  it('keeps restored Ultra when the pending lookup confirms support', () => {
+    const onChange = vi.fn();
+    const { result, rerender } = renderHook(({ efforts, pending }: { efforts?: string[]; pending: boolean }) =>
+      useReasoningEffortGuard('ultra', onChange, 'native-model', 'codex', efforts, pending),
+    { initialProps: { pending: true } as { efforts?: string[]; pending: boolean } });
+    rerender({ efforts: ['high', 'ultra'], pending: false });
+    expect(result.current.currentLevel?.id).toBe('ultra');
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('corrects Ultra when switching to another provider', () => {

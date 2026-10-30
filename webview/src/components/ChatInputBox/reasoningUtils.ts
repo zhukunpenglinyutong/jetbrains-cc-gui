@@ -97,6 +97,7 @@ export function useReasoningEffortGuard(
   selectedModel?: string,
   currentProvider?: string,
   supportedReasoningEfforts?: readonly string[],
+  reasoningCapabilitiesPending = false,
 ): {
   isVisible: boolean;
   availableLevels: ReasoningInfo[];
@@ -106,10 +107,10 @@ export function useReasoningEffortGuard(
   // Mapping changes can keep the same Sonnet/Opus alias. Re-evaluate on every
   // render so switching cc-switch modes does not retain an old filtered list.
   const availableLevels = getAvailableReasoningLevels(currentProvider, selectedModel, supportedReasoningEfforts);
-  // Retain a restored Ultra preference until native metadata arrives. A
-  // temporary fallback catalog must not silently downgrade the next turn.
+  // Retain a restored Ultra preference only while the native catalog is pending.
+  // A settled catalog may omit custom models or their effort metadata entirely.
   const awaitingUltraCapability = currentProvider === 'codex'
-    && value === 'ultra' && supportedReasoningEfforts === undefined;
+    && value === 'ultra' && supportedReasoningEfforts === undefined && reasoningCapabilitiesPending;
   const currentLevel = awaitingUltraCapability
     ? REASONING_LEVELS.find(level => level.id === value)
     : resolveCurrentReasoningLevel(value, availableLevels);

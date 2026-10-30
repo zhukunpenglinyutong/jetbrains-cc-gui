@@ -106,6 +106,7 @@
     "localProject": "स्थानीय",
     "disabled": "अक्षम",
     "sdkNotInstalled": "{{provider}} SDK इंस्टॉल नहीं है। चैट शुरू करने के लिए कृपया SDK इंस्टॉल करें।",
+    "codexUltraCapabilitiesLoading": "Ultra की उपलब्धता जाँची जा रही है। मॉडल लोड होने के बाद फिर से भेजें।",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "पेस्ट की गई छवि तैयार हो रही है...",
     "sdkStatusUnavailable": "SDK स्थिति की जांच नहीं हो सकी।",
@@ -2254,8 +2255,7 @@
   "modelConfig": {
     "ultracode": {
       "label": "Ultracode",
-      "description": "स्वचालित कार्य प्रत्यायोजन वाला Claude का मूल वर्कफ़्लो। चुने गए तर्क स्तर को बनाए रखता है।",
-      "unsupported": "XHigh तर्क का समर्थन करने वाला मॉडल और उपलब्ध Ultracode वर्कफ़्लो आवश्यक है।"
+      "description": "स्वचालित कार्य प्रत्यायोजन वाला Claude का मूल वर्कफ़्लो। चुने गए तर्क स्तर को बनाए रखता है।"
     }
   }
 }
