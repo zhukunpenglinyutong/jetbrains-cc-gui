@@ -61,6 +61,9 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
 
     private static final Gson GSON = new Gson();
     private State state = new State();
+    private final Project project;
+    /** Subscribed only while the feature is enabled, so the default off state has no project listeners. */
+    private Disposable vfsRegistration;
     private final List<Consumer<EditImpact>> listeners = new CopyOnWriteArrayList<>();
     private final Map<String, RangeMarker> markers = new HashMap<>();
     /** Each registration owns the removal, so the IDE's parent disposal can never double-remove. */
@@ -69,56 +72,71 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
     private final Map<Document, EditImpact> pendingImpacts = new HashMap<>();
 
     public MarkdownReviewService(Project project) {
+        this.project = project;
+        // The persisted state (and its enabled flag) arrives in loadState.
+    }
+
+    /** Caller must hold the monitor. Keeps the VFS listener in sync with the feature switch. */
+    private void syncVfsListener() {
         if (project == null) {
-            return; // State-only unit tests do not need an IDE application.
+            return;
         }
-        project.getMessageBus().connect(this).subscribe(VirtualFileManager.VFS_CHANGES, new BulkFileListener() {
-            private final Map<VirtualFile, String> previous = new HashMap<>();
+        if (state.config.enabled) {
+            if (vfsRegistration == null) {
+                vfsRegistration = Disposer.newDisposable("CCGui Markdown review VFS listener");
+                project.getMessageBus().connect(vfsRegistration).subscribe(VirtualFileManager.VFS_CHANGES, new BulkFileListener() {
+                    private final Map<VirtualFile, String> previous = new HashMap<>();
 
-            @Override
-            public void before(@NotNull List<? extends VFileEvent> events) {
-                for (VFileEvent event : events) {
-                    VirtualFile file = event.getFile();
-                    if (file != null) {
-                        previous.put(file, file.getUrl());
-                    }
-                }
-            }
-
-            @Override
-            public void after(@NotNull List<? extends VFileEvent> events) {
-                boolean modified = false;
-                boolean orphaned = false;
-                synchronized (MarkdownReviewService.this) {
-                    for (Map.Entry<VirtualFile, String> entry : previous.entrySet()) {
-                        VirtualFile file = entry.getKey();
-                        for (Annotation annotation : state.annotations) {
-                            if (entry.getValue().equals(annotation.fileUrl)) {
-                                modified |= !file.isValid() || !annotation.fileUrl.equals(file.getUrl());
-                                annotation.fileUrl = file.getUrl();
-                                String base = project.getBasePath();
-                                annotation.path = base != null && file.getPath().startsWith(base + "/")
-                                        ? file.getPath().substring(base.length() + 1) : file.getPath();
-                                if (!file.isValid()) {
-                                    // The source is gone: drafts must stop advertising it.
-                                    annotation.status = "orphaned";
-                                    annotation.sourceMissing = true;
-                                    annotation.anchorText = null;
-                                    orphaned = true;
-                                }
+                    @Override
+                    public void before(@NotNull List<? extends VFileEvent> events) {
+                        for (VFileEvent event : events) {
+                            VirtualFile file = event.getFile();
+                            if (file != null) {
+                                previous.put(file, file.getUrl());
                             }
                         }
                     }
-                    previous.clear();
-                }
-                if (orphaned) {
-                    withdrawAutomaticDrafts();
-                }
-                if (modified) {
-                    changed();
-                }
+
+                    @Override
+                    public void after(@NotNull List<? extends VFileEvent> events) {
+                        boolean modified = false;
+                        boolean orphaned = false;
+                        synchronized (MarkdownReviewService.this) {
+                            for (Map.Entry<VirtualFile, String> entry : previous.entrySet()) {
+                                VirtualFile file = entry.getKey();
+                                for (Annotation annotation : state.annotations) {
+                                    if (entry.getValue().equals(annotation.fileUrl)) {
+                                        modified |= !file.isValid() || !annotation.fileUrl.equals(file.getUrl());
+                                        annotation.fileUrl = file.getUrl();
+                                        String base = project.getBasePath();
+                                        annotation.path = base != null && file.getPath().startsWith(base + "/")
+                                                ? file.getPath().substring(base.length() + 1) : file.getPath();
+                                        if (!file.isValid()) {
+                                            // The source is gone: drafts must stop advertising it.
+                                            annotation.status = "orphaned";
+                                            annotation.sourceMissing = true;
+                                            annotation.anchorText = null;
+                                            orphaned = true;
+                                        }
+                                    }
+                                }
+                            }
+                            previous.clear();
+                        }
+                        if (orphaned) {
+                            withdrawAutomaticDrafts();
+                        }
+                        if (modified) {
+                            changed();
+                        }
+                    }
+                });
             }
-        });
+        } else if (vfsRegistration != null) {
+            Disposable registration = vfsRegistration;
+            vfsRegistration = null;
+            Disposer.dispose(registration);
+        }
     }
 
     public static MarkdownReviewService getInstance(Project project) {
@@ -163,6 +181,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
             transientState.nextAnnotationId = saved.nextAnnotationId;
             transientState.config = copy(config, MarkdownReviewConfig.class);
             state = transientState;
+            syncVfsListener();
             return;
         }
         if (saved.encodedPayload != null) {
@@ -201,6 +220,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                 annotation.id = migratedIds.computeIfAbsent(annotation.id, ignored -> nextAnnotationId());
             }
         }
+        syncVfsListener();
     }
 
     public synchronized MarkdownReviewConfig getConfig() {
@@ -213,6 +233,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
             if (!config.persist) {
                 state.recoveryPayload = null;
             }
+            syncVfsListener();
             if (!config.enabled) {
                 detachAllListeners();
             }
@@ -987,9 +1008,14 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
     }
 
     @Override
-    public void dispose() {
+    public synchronized void dispose() {
         listeners.clear();
         detachAllListeners();
+        Disposable registration = vfsRegistration;
+        vfsRegistration = null;
+        if (registration != null) {
+            Disposer.dispose(registration);
+        }
         for (RangeMarker marker : markers.values()) {
             marker.dispose();
         }
