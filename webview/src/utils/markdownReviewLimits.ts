@@ -4,7 +4,7 @@
  * parses and previews against the same bounds instead of its own literals.
  */
 export const REVIEW_MESSAGE_MAX_CHARS = 256_000;
-export const REVIEW_BATCHES_MAX = 200;
+export const REVIEW_BATCHES_MAX = 500;
 export const REVIEW_ANNOTATIONS_MAX = 1000;
 /** Mirrors MarkdownReviewLimits.TEXT_MAX_CHARS. */
 export const REVIEW_TEXT_MAX_CHARS = 32_000;

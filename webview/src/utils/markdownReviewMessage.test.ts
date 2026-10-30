@@ -53,3 +53,24 @@ it('merges files into one batch, deduplicates by ID, and excludes internal field
     selectedText: batch.annotations[0].selectedText, comment: 'updated', startLine: 2, endLine: 3 });
   expect(encodeReviewMessage(parseReviewMessage(text)!.batches)).toBe(text);
 });
+
+it('accepts the 500-batch and 1000-annotation boundaries for versioned envelopes', () => {
+  const versioned = (batches: unknown[]) => '<ccgui-markdown-review>'
+    + JSON.stringify({ version: 1, batches }) + '</ccgui-markdown-review>';
+  const annotation = (index: number) => ({ id: 'c' + index, selectedText: 'x', comment: 'c',
+    status: 'attached', precision: 'source', startLine: 1, endLine: 1 });
+  const versionedBatch = (index: number, annotations = 1) => ({ id: 'b' + index, path: 'docs/x.md',
+    documentHash: 'h', kind: 'review',
+    annotations: Array.from({ length: annotations }, (_, item) => annotation(item)) });
+
+  const fullBatchLimit = Array.from({ length: 500 }, (_, index) => versionedBatch(index));
+  const acceptedBatches = versioned(fullBatchLimit);
+  expect(acceptedBatches.length).toBeLessThan(256_000);
+  expect(parseReviewMessage(acceptedBatches)?.batches).toHaveLength(500);
+  expect(parseReviewMessage(versioned([...fullBatchLimit, versionedBatch(500)]))).toBeNull();
+
+  const fullAnnotationLimit = versioned([versionedBatch(0, 1000)]);
+  expect(fullAnnotationLimit.length).toBeLessThan(256_000);
+  expect(parseReviewMessage(fullAnnotationLimit)?.batches[0].annotations).toHaveLength(1000);
+  expect(parseReviewMessage(versioned([versionedBatch(0, 1001)]))).toBeNull();
+});

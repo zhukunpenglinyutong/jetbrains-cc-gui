@@ -105,6 +105,8 @@ test('uses CC GUI language and keeps all popup actions on one row in a narrow pr
     const range = document.createRange(); range.selectNodeContents(document.querySelectorAll('p')[1].firstChild!);
     window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
   });
+  // The visible primary caption must name its action, not a generic "Send".
+  await expect(page.locator('.ccgui-md-controls .primary .ccgui-md-button-label')).toHaveText('Add to CC GUI');
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await page.getByRole('textbox').fill('测试中文批注');
   await page.getByRole('button', { name: 'Add comment', exact: true }).click();
@@ -118,6 +120,7 @@ test('uses CC GUI language and keeps all popup actions on one row in a narrow pr
   await expect(page.getByRole('dialog', { name: 'Markdown 批注' })).toBeVisible();
   await expect(page.getByRole('button', { name: '编辑', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '发送此批注到 CC GUI', exact: true })).toHaveAttribute('title', '发送此批注到 CC GUI');
+  await expect(page.locator('.ccgui-md-popup .ccgui-md-button-label')).toHaveText('发送此批注到 CC GUI');
   await page.getByRole('button', { name: '发送此批注到 CC GUI', exact: true }).click();
   await expect(page.locator('.ccgui-md-controls')).toContainText('批注已加入当前聊天草稿');
   const row = await page.locator('.ccgui-md-popup .ccgui-md-actions button').evaluateAll(buttons =>
@@ -336,8 +339,10 @@ test('completes comments from the list and restores them through the visibility 
   await expect(page.locator('.ccgui-md-comment-list > li')).toHaveCount(1);
   await expect(page.locator('.ccgui-md-list-empty')).toBeVisible();
   await page.getByRole('button', { name: 'Show completed comments', exact: true }).click();
-  await expect(page.locator('.ccgui-md-list-comment')).toHaveText(['Review to finish']);
-  await page.locator('.ccgui-md-comment-list').getByRole('button', { name: 'Reopen', exact: true }).click();
+  // The completed pre-seeded "Missing review" is part of the list too.
+  await expect(page.locator('.ccgui-md-list-comment')).toHaveText(['Review to finish', 'Missing review']);
+  const finished = page.locator('.ccgui-md-comment-list > li').filter({ hasText: 'Review to finish' });
+  await finished.getByRole('button', { name: 'Reopen', exact: true }).click();
   await page.getByRole('button', { name: 'Hide completed comments', exact: true }).click();
   await expect(page.locator('.ccgui-md-list-comment')).toHaveText(['Review to finish']);
   await page.locator('.ccgui-md-comment-list').getByRole('button', { name: 'Edit', exact: true }).click();
@@ -347,7 +352,11 @@ test('completes comments from the list and restores them through the visibility 
   await page.getByRole('button', { name: 'Mark completed', exact: true }).click();
   await expect(page.locator('.ccgui-md-popup')).not.toBeVisible();
   await page.getByRole('button', { name: 'Show completed comments', exact: true }).click();
-  await page.getByRole('button', { name: '1 comments', exact: true }).click();
-  await page.locator('.ccgui-md-comment-list').getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('button', { name: '2 comments', exact: true }).click();
+  const rows = page.locator('.ccgui-md-comment-list > li');
+  await rows.filter({ hasText: 'Edited review' }).getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(rows).toHaveCount(1);
+  await expect(page.locator('.ccgui-md-list-comment')).toHaveText(['Missing review']);
+  await rows.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(page.locator('.ccgui-md-list-empty')).toBeVisible();
 });

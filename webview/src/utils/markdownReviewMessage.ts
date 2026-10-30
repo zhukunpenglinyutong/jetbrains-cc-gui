@@ -49,7 +49,7 @@ export function parseReviewMessage(text: string): { batches: ArtifactReviewBatch
     if (data.version !== 1) return null;
     for (const batch of data.batches) {
       if (typeof batch.id !== 'string' || typeof batch.path !== 'string' || typeof batch.documentHash !== 'string' || !Array.isArray(batch.annotations)
-        || !['review', 'quote'].includes(batch.kind) || !batch.annotations.length || batch.annotations.length > REVIEW_BATCHES_MAX) return null;
+        || !['review', 'quote'].includes(batch.kind) || !batch.annotations.length || batch.annotations.length > REVIEW_ANNOTATIONS_MAX) return null;
       for (const item of batch.annotations) {
         if (typeof item.id !== 'string' || typeof item.selectedText !== 'string' || typeof item.comment !== 'string'
           || typeof item.status !== 'string' || typeof item.precision !== 'string'

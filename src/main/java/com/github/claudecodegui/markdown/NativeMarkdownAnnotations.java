@@ -4,6 +4,7 @@ import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
 import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.editor.Document;
@@ -13,6 +14,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.wm.ToolWindow;
@@ -57,7 +59,14 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
             return receive(message);
         }
     };
-    private final Consumer<MarkdownReviewService.EditImpact> listener = impact -> publish(false);
+    private final Consumer<MarkdownReviewService.EditImpact> listener = impact -> {
+        synchronizeDocumentListener();
+        // Annotation and settings notifications are HIT; edits are answered by
+        // their own caught-up sync, which consumes the recorded impact.
+        if (impact != MarkdownReviewService.EditImpact.NONE) {
+            publish();
+        }
+    };
     private final Map<String, JsonObject> results = new LinkedHashMap<>();
     private final Set<String> transfers = new HashSet<>();
     private volatile boolean disposed;
@@ -66,15 +75,22 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
     private volatile boolean lastPublishedEnabled;
     /** One small "behind" frame per dirty episode; the caught-up sync sends the full frame. */
     private volatile boolean dirtyFrameSent;
-    /** Shadow copies of the last full/light frames; unchanged panels stay silent (plan §1d). */
-    private String lastFullBase;
-    private String lastLightPayload;
+    /** Forces the first caught-up sync (or the sync after re-enabling) to reconcile. */
+    private volatile boolean reconcilePending = true;
+    /** Shadow copy of the last published state; unchanged panels stay silent (plan §1d). */
+    private String lastSentPayload;
+    /** Cached Mermaid fences, shifted on plain edits so typing does not rescan the document. */
+    private List<RenderedSelectionMatcher.DiagramRange> diagrams = List.of();
+    private boolean diagramsDirty = true;
+    /** Owns the document-listener removal, so it can never be unregistered twice. */
+    private volatile Disposable documentRegistration;
     private final DocumentListener documentListener = new DocumentListener() {
         @Override
         public void documentChanged(@NotNull DocumentEvent event) {
             // The preview's sync request after the next IDE render patch drives the refresh;
             // the panel only tracks staleness here for annotation-creation gating.
             dirty = true;
+            shiftDiagrams(event);
         }
     };
 
@@ -86,9 +102,124 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
         service = MarkdownReviewService.getInstance(project);
         pipe.subscribe(REQUEST, handler);
         service.subscribe(listener);
-        if (document != null) {
-            // The service owns the disposable; the deprecated no-parent overload leaks listeners.
-            document.addDocumentListener(documentListener, service);
+        attachDocumentListener();
+    }
+
+    /** Keeps the panel listener attached only while the feature is enabled at runtime. */
+    private void synchronizeDocumentListener() {
+        if (!service.getConfig().enabled) {
+            detachDocumentListener();
+            return;
+        }
+        if (documentRegistration == null) {
+            // The document may have changed while the listener was detached.
+            attachDocumentListener();
+            invalidateDiagrams();
+            reconcilePending = false;
+            if (document != null) {
+                ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
+                    service.reconcile(file, document);
+                    return null;
+                });
+            }
+        }
+        attachDocumentListener();
+    }
+
+    private void attachDocumentListener() {
+        if (document == null || documentRegistration != null) {
+            return;
+        }
+        Disposable registration = Disposer.newDisposable("CCGui Markdown annotations document listener");
+        documentRegistration = registration;
+        document.addDocumentListener(documentListener, registration);
+    }
+
+    /** The registration owns the listener removal; never remove it a second time directly. */
+    private void detachDocumentListener() {
+        Disposable registration = documentRegistration;
+        documentRegistration = null;
+        dirty = false;
+        if (registration == null || project != null && project.isDisposed()) {
+            // During project shutdown DocumentImpl is already dropping listeners;
+            // removing them again only produces a SEVERE "Can't remove" log entry.
+            return;
+        }
+        Disposer.dispose(registration);
+    }
+
+    private void shiftDiagrams(DocumentEvent event) {
+        synchronized (this) {
+            if (diagramsDirty) {
+                return;
+            }
+            List<RenderedSelectionMatcher.DiagramRange> shifted = shiftDiagrams(diagrams,
+                    event.getOffset(), event.getOldLength(), event.getNewLength(),
+                    event.getOldFragment(), event.getNewFragment());
+            if (shifted == null) {
+                diagrams = List.of();
+                diagramsDirty = true;
+            } else {
+                diagrams = shifted;
+            }
+        }
+    }
+
+    /**
+     * Shifts cached fence ranges for an edit that cannot change fences.
+     * Returns null when the edit may have changed a fence and a rescan is required.
+     */
+    static List<RenderedSelectionMatcher.DiagramRange> shiftDiagrams(
+            List<RenderedSelectionMatcher.DiagramRange> ranges, int offset, int oldLength, int newLength,
+            CharSequence removed, CharSequence inserted) {
+        if (touchesFence(removed) || touchesFence(inserted)) {
+            return null;
+        }
+        int start = offset;
+        int oldEnd = offset + oldLength;
+        int delta = newLength - oldLength;
+        List<RenderedSelectionMatcher.DiagramRange> shifted = new java.util.ArrayList<>(ranges.size());
+        for (RenderedSelectionMatcher.DiagramRange range : ranges) {
+            if (oldEnd <= range.start()) {
+                shifted.add(new RenderedSelectionMatcher.DiagramRange(
+                        range.start() + delta, range.end() + delta, range.source()));
+            } else if (start >= range.end()) {
+                // An insertion exactly at the closing edge stays outside the fence.
+                shifted.add(range);
+            } else {
+                return null;
+            }
+        }
+        return List.copyOf(shifted);
+    }
+
+    private static boolean touchesFence(CharSequence fragment) {
+        String text = fragment.toString();
+        return text.indexOf('`') >= 0 || text.indexOf('~') >= 0
+                || text.toLowerCase(java.util.Locale.ROOT).contains("mermaid");
+    }
+
+    /** Reuses shifted ranges; only a fence edit pays for the full-document scan. */
+    private List<RenderedSelectionMatcher.DiagramRange> diagrams() {
+        synchronized (this) {
+            if (!diagramsDirty) {
+                return diagrams;
+            }
+        }
+        String text = document.getText();
+        List<RenderedSelectionMatcher.DiagramRange> ranges = text.contains("mermaid")
+                ? RenderedSelectionMatcher.mermaidRanges(text) : List.of();
+        synchronized (this) {
+            diagrams = List.copyOf(ranges);
+            diagramsDirty = false;
+        }
+        return diagrams;
+    }
+
+    private void invalidateDiagrams() {
+        synchronized (this) {
+            diagrams = List.of();
+            diagramsDirty = true;
         }
     }
 
@@ -217,9 +348,10 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                 if ("ready".equals(action)) {
                     // R7: a fresh page must always receive a frame, even when the
                     // payload is identical to the previous page's.
-                    lastFullBase = null;
-                    lastLightPayload = null;
+                    lastSentPayload = null;
                     dirtyFrameSent = false;
+                    reconcilePending = true;
+                    invalidateDiagrams();
                 }
                 if (dirty) {
                     // R1: while the native preview is still behind the document,
@@ -232,10 +364,18 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                     return;
                 }
                 dirtyFrameSent = false;
-                ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
-                    service.reconcile(file, document);
-                    return null;
-                });
+                // Edits already reconciled by the document listener are answered by
+                // a state frame; only a real impact (or the first catch-up) needs
+                // the whole-document reconcile pass.
+                MarkdownReviewService.EditImpact impact = service.consumeImpact(document);
+                if ("ready".equals(action) || reconcilePending
+                        || impact != MarkdownReviewService.EditImpact.NONE) {
+                    reconcilePending = false;
+                    ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
+                        service.reconcile(file, document);
+                        return null;
+                    });
+                }
                 response.addProperty("status", "ok");
             } else {
                 if (!service.getConfig().enabled) {
@@ -503,15 +643,6 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
     }
 
     private void publish() {
-        publish(false);
-    }
-
-    /**
-     * @param light position-only refresh (the edit shifted annotations but touched none of
-     *              them): skips the full-document Mermaid rescan; the overlay blocks
-     *              annotation creation while the document is dirty anyway.
-     */
-    private void publish(boolean light) {
         if (disposed || document == null || project.isDisposed()) {
             return;
         }
@@ -526,24 +657,14 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
         dirtyFrameSent = false;
         ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
             JsonObject state = baseState();
+            // The ranges are cached across ordinary edits, so this is not a
+            // full-document Mermaid scan per keystroke (plan §1d).
+            state.add("diagrams", GSON.toJsonTree(diagrams()));
             String payload = GSON.toJson(state);
-            // Shadow copy (plan §1d): a panel whose state did not change stays
-            // silent, so an edit in one file cannot fan a refresh into every
-            // open preview — and an untouched panel skips the Mermaid rescan.
-            if (light) {
-                if (payload.equals(lastLightPayload) || payload.equals(lastFullBase)) {
-                    return null;
-                }
-                lastLightPayload = payload;
-                reply(state);
+            if (payload.equals(lastSentPayload)) {
                 return null;
             }
-            if (payload.equals(lastFullBase)) {
-                return null;
-            }
-            lastFullBase = payload;
-            lastLightPayload = null;
-            state.add("diagrams", GSON.toJsonTree(RenderedSelectionMatcher.mermaidRanges(document.getText())));
+            lastSentPayload = payload;
             reply(state);
             return null;
         });
@@ -565,9 +686,8 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
 
     /** One final frame while disabled so open overlays hide immediately; later calls are no-ops. */
     private void publishDisabledState() {
-        // Re-enabling must publish a fresh frame, so the shadow copies reset here.
-        lastFullBase = null;
-        lastLightPayload = null;
+        // Re-enabling must publish a fresh frame, so the shadow copy resets here.
+        lastSentPayload = null;
         dirtyFrameSent = false;
         ApplicationManager.getApplication().runReadAction((Computable<Object>) () -> {
             JsonObject state = new JsonObject();
@@ -625,9 +745,7 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
         disposed = true;
         pipe.removeSubscription(REQUEST, handler);
         service.unsubscribe(listener);
-        if (document != null) {
-            document.removeDocumentListener(documentListener);
-        }
+        detachDocumentListener();
         results.clear();
         transfers.clear();
     }

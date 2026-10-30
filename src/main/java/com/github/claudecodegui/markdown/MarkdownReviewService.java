@@ -12,6 +12,7 @@ import com.intellij.openapi.editor.RangeMarker;
 import com.intellij.openapi.editor.event.DocumentEvent;
 import com.intellij.openapi.editor.event.DocumentListener;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.newvfs.BulkFileListener;
@@ -62,7 +63,10 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
     private State state = new State();
     private final List<Consumer<EditImpact>> listeners = new CopyOnWriteArrayList<>();
     private final Map<String, RangeMarker> markers = new HashMap<>();
-    private final Map<Document, DocumentListener> documentListeners = new HashMap<>();
+    /** Each registration owns the removal, so the IDE's parent disposal can never double-remove. */
+    private final Map<Document, Disposable> documentListeners = new HashMap<>();
+    /** Strongest edit impact since the preview last caught up; drives reconcile skipping. */
+    private final Map<Document, EditImpact> pendingImpacts = new HashMap<>();
 
     public MarkdownReviewService(Project project) {
         if (project == null) {
@@ -84,6 +88,7 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
             @Override
             public void after(@NotNull List<? extends VFileEvent> events) {
                 boolean modified = false;
+                boolean orphaned = false;
                 synchronized (MarkdownReviewService.this) {
                     for (Map.Entry<VirtualFile, String> entry : previous.entrySet()) {
                         VirtualFile file = entry.getKey();
@@ -95,12 +100,19 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                                 annotation.path = base != null && file.getPath().startsWith(base + "/")
                                         ? file.getPath().substring(base.length() + 1) : file.getPath();
                                 if (!file.isValid()) {
+                                    // The source is gone: drafts must stop advertising it.
                                     annotation.status = "orphaned";
+                                    annotation.sourceMissing = true;
+                                    annotation.anchorText = null;
+                                    orphaned = true;
                                 }
                             }
                         }
                     }
                     previous.clear();
+                }
+                if (orphaned) {
+                    withdrawAutomaticDrafts();
                 }
                 if (modified) {
                     changed();
@@ -218,6 +230,19 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
 
     public void unsubscribe(Consumer<EditImpact> listener) {
         listeners.remove(listener);
+    }
+
+    /**
+     * Returns and clears the strongest impact recorded for this document since the
+     * preview last caught up. When it is {@link EditImpact#NONE}, a caught-up sync
+     * has nothing to reconcile.
+     */
+    public synchronized EditImpact consumeImpact(Document document) {
+        if (document == null) {
+            return EditImpact.NONE;
+        }
+        EditImpact impact = pendingImpacts.remove(document);
+        return impact == null ? EditImpact.NONE : impact;
     }
 
     public synchronized List<Annotation> list(VirtualFile file) {
@@ -555,6 +580,8 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                         // offset in another file turns NONE into a fan-out.
                         EditImpact impact = classifyImpact(trackedOn(state.annotations, trackedIds(document)), event.getOffset(), hit);
                         if (impact != EditImpact.NONE) {
+                            pendingImpacts.merge(document, impact,
+                                    (previous, next) -> previous.ordinal() >= next.ordinal() ? previous : next);
                             for (Annotation item : state.annotations) {
                                 if (resolved.contains(item.id) || item.sourceMissing
                                         || "ambiguous".equals(item.status) || "orphaned".equals(item.status)) {
@@ -603,8 +630,9 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                     // work in every open preview (R1).
                 }
             };
-            documentListeners.put(document, listener);
-            document.addDocumentListener(listener, this);
+            Disposable registration = Disposer.newDisposable("CCGui Markdown review document listener");
+            documentListeners.put(document, registration);
+            document.addDocumentListener(listener, registration);
         }
     }
 
@@ -618,18 +646,20 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                 return;
             }
         }
-        DocumentListener listener = documentListeners.remove(document);
-        if (listener != null) {
-            document.removeDocumentListener(listener);
+        Disposable registration = documentListeners.remove(document);
+        pendingImpacts.remove(document);
+        if (registration != null) {
+            Disposer.dispose(registration);
         }
     }
 
     /** Caller must hold the monitor. */
     private void detachAllListeners() {
-        for (Map.Entry<Document, DocumentListener> entry : documentListeners.entrySet()) {
-            entry.getKey().removeDocumentListener(entry.getValue());
+        for (Disposable registration : documentListeners.values()) {
+            Disposer.dispose(registration);
         }
         documentListeners.clear();
+        pendingImpacts.clear();
     }
 
     /** Trim common edges, so a whole-file save that only prepends text does not clear every review. */

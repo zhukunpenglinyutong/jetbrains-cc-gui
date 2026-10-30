@@ -201,9 +201,11 @@ test('Markdown review-only drafts preserve original context through the chat sen
   await expect.poll(() => sentMessages(page)).toHaveLength(1);
   const [text] = await sentMessages(page);
   expect(text).toContain('docs/中文 plan.md');
-  expect(text).toContain('snapshot-hash');
+  // The durable envelope carries display context only; sourceText and documentHash
+  // are internal anchor/snapshot fields (see markdownReviewMessage tests).
+  expect(text).not.toContain('snapshot-hash');
   expect(text).toContain('/clear 原文');
-  expect(text).toContain('**原文**');
+  expect(text).not.toContain('**原文**');
   expect(text).toContain('请修改这一段');
   expect(text).not.toContain('handling instructions');
   await expect(page.locator('.markdown-review-context')).toHaveCount(1);

@@ -148,7 +148,7 @@ function start(pipe: NativePipe) {
     element.classList.add('ccgui-md-icon-button');
     element.title = label; element.setAttribute('aria-label', label);
     const svg = commentIcon(); svg.querySelector('path')!.setAttribute('d', path);
-    const caption = document.createElement('span'); caption.className = 'ccgui-md-button-label'; caption.textContent = labels.send;
+    const caption = document.createElement('span'); caption.className = 'ccgui-md-button-label'; caption.textContent = label;
     element.append(svg);
     if (variant === 'primary') element.append(caption);
     return element;
@@ -521,10 +521,18 @@ function start(pipe: NativePipe) {
   window.addEventListener('scroll', scheduleRender, { passive: true });
   document.addEventListener('scroll', scheduleRender, { passive: true, capture: true });
   window.addEventListener('resize', scheduleRender);
+  // Coalesce native preview patches: every sync makes the host reconcile and
+  // republish overlay state, so sending one per patch during typing is wasteful.
+  let syncTimer: ReturnType<typeof setTimeout> | null = null;
   const afterPatch = () => {
     if (!editing) selection = null;
     render();
-    void send('sync');
+    if (state?.enabled === false) return;
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      syncTimer = null;
+      void send('sync');
+    }, 120);
   };
   nativeWindow.IncrementalDOM?.notifications?.afterPatchListeners?.push(afterPatch);
   // Mermaid renders asynchronously after the native Markdown patch.
