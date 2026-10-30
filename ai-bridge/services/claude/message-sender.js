@@ -45,6 +45,7 @@ import {
 } from './stream-delta-normalizer.js';
 import { generateSessionTitle } from '../session-title-service.js';
 import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
+import { createUltracodeQuery, withUltracodeSetting } from './ultracode.js';
 
 // ========== Internal helpers for deduplication ==========
 
@@ -74,7 +75,7 @@ function resolveThinkingConfig(settings) {
 /**
  * Build query options object shared by both send functions.
  */
-function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId, settingsEnv }) {
+function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId, settingsEnv, ultracode }) {
   const claudeCliOverride = getClaudeCliPathOverride();
   return {
     cwd: workingDirectory,
@@ -83,7 +84,7 @@ function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, max
     maxTurns: 1000,
     enableFileCheckpointing: true,
     env: buildCliEnv(),
-    settings: buildWebviewControlledSettingsOverride(modelId, settingsEnv),
+    settings: withUltracodeSetting(buildWebviewControlledSettingsOverride(modelId, settingsEnv), ultracode),
     ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
     ...(streamingEnabled && { includePartialMessages: true }),
     additionalDirectories: Array.from(
@@ -371,7 +372,7 @@ async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSes
     try {
       let result;
       try {
-        result = createQueryResult();
+        result = await createQueryResult();
       } catch (queryError) {
         if (shouldRetry(queryError, retryAttempt, state.messageCount)) {
           ({ retryAttempt, lastRetryError } = await performRetry(queryError, retryAttempt, state, resumeSessionId, workingDirectory, streamingEnabled, outerStreamState, lp));
@@ -491,7 +492,7 @@ function handleSendError(error, streamState, sdkStderrLines) {
  * @param {string} agentPrompt - Agent prompt (optional)
  * @param {boolean} streaming - Whether to enable streaming (optional, defaults to config value)
  */
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null) {
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null, ultracode = undefined) {
   console.log('[DIAG] ========== sendMessage() START ==========');
   console.log('[DIAG] params:', { msgLen: message ? message.length : 0, resumeSessionId: resumeSessionId || '(new)', cwd, permissionMode, model });
 
@@ -529,7 +530,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 
     const preToolUseHook = createPreToolUseHook(effectivePermissionMode, workingDirectory);
     const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
-    const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env });
+    const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, ultracode });
 
     if (normalizedReasoningEffort) {
       options.effort = normalizedReasoningEffort;
@@ -541,7 +542,12 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     const queryFn = await loadSdkQueryFunction('');
 
     await executeWithRetry({
-      createQueryResult: () => queryFn({ prompt: message, options }),
+      createQueryResult: () => ultracode === true
+        ? createUltracodeQuery(queryFn, new AsyncStream(), {
+          type: 'user', session_id: resumeSessionId || '', parent_tool_use_id: null,
+          message: { role: 'user', content: message },
+        }, options)
+        : queryFn({ prompt: message, options }),
       streamingEnabled,
       resumeSessionId,
       workingDirectory,
@@ -605,7 +611,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     console.log('[DEBUG] (withAttachments) Config:', { normalizedPermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort });
 
     const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
-    const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env });
+    const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, ultracode: stdinData?.ultracode });
 
     if (reasoningEffort) {
       options.effort = reasoningEffort;
@@ -620,6 +626,9 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
       createQueryResult: () => {
         // Recreate inputStream for each retry (AsyncStream can only be consumed once)
         const inputStream = new AsyncStream();
+        if (stdinData?.ultracode === true) {
+          return createUltracodeQuery(queryFn, inputStream, userMessage, options);
+        }
         inputStream.enqueue(userMessage);
         inputStream.done();
         return queryFn({ prompt: inputStream, options });

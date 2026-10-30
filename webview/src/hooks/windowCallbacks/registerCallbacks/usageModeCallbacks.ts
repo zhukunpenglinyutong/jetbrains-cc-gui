@@ -33,6 +33,7 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
     setSelectedCodexModel,
     setLongContextEnabled,
     setReasoningEffort,
+    setClaudeUltracode,
     setCodexFastMode,
     setProviderConfigVersion,
     setActiveProviderConfig,
@@ -147,9 +148,12 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
 
       updateMode(state.permissionMode as PermissionMode | undefined, provider);
 
-      const reasoningValues: ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+      const reasoningValues: ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
       if (reasoningValues.includes(state.reasoningEffort as ReasoningEffort)) {
         setReasoningEffort(state.reasoningEffort as ReasoningEffort);
+      }
+      if (typeof state.claudeUltracode === 'boolean') {
+        setClaudeUltracode?.(state.claudeUltracode);
       }
       if (state.codexFastMode === 'normal' || state.codexFastMode === 'fast') {
         setCodexFastMode(state.codexFastMode as CodexFastMode);

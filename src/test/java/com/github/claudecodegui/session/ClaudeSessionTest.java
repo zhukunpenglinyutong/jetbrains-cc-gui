@@ -75,6 +75,89 @@ public class ClaudeSessionTest {
     }
 
     @Test
+    public void interruptTargetsTheNativeClaudeRuntimeEvenBetweenForegroundTurns() throws Exception {
+        String[] target = new String[3];
+        var bridge = new com.github.claudecodegui.provider.claude.ClaudeSDKBridge() {
+            @Override
+            public void interruptChannel(String channelId, String sessionId, String epoch) {
+                target[0] = channelId;
+                target[1] = sessionId;
+                target[2] = epoch;
+            }
+
+            @Override
+            public void interruptChannel(String channelId) {
+                throw new AssertionError("A keyless abort could stop a different native runtime");
+            }
+        };
+        ClaudeSession session = new ClaudeSession(null, bridge, null, null);
+        session.setSessionInfo("workflow-session", "/workspace");
+        session.getState().setChannelId("workflow-channel");
+        String epoch = session.getRuntimeSessionEpoch();
+        SessionExecutionState.Snapshot executionBeforeStop = session.getState().getExecutionSnapshot();
+        assertFalse(session.isBusy());
+        session.interrupt().get(5, TimeUnit.SECONDS);
+        assertEquals("workflow-channel", target[0]);
+        assertEquals("workflow-session", target[1]);
+        assertEquals(epoch, target[2]);
+        assertEquals(executionBeforeStop, session.getState().getExecutionSnapshot());
+        assertFalse(session.getState().getExecutionState().hasLiveTurn());
+    }
+
+    @Test
+    public void claudeStopControlAckWaitsForTheOriginalSendCancellationResult() throws Exception {
+        BlockingClaudeBridge bridge = new BlockingClaudeBridge();
+        ClaudeSession session = new ClaudeSession(null, bridge, null, null);
+        sessions.add(session);
+        session.setSessionInfo("native-session", "/workspace");
+        session.getState().setChannelId("native-channel");
+        session.getState().beginTurn();
+        ClaudeMessageHandler handler = new ClaudeMessageHandler(null, session.getState(), new CallbackHandler(),
+                new MessageParser(), new MessageMerger(), new com.google.gson.Gson());
+
+        var stop = session.interrupt();
+        assertTrue(bridge.interruptStarted.await(5, TimeUnit.SECONDS));
+        assertEquals(SessionExecutionState.Phase.STOPPING, session.getState().getExecutionSnapshot().phase());
+        bridge.interruptRelease.countDown();
+        stop.get(5, TimeUnit.SECONDS);
+        assertEquals(SessionExecutionState.Outcome.NONE, session.getState().getExecutionSnapshot().outcome());
+        assertEquals(SessionExecutionState.Phase.UNKNOWN, session.getState().getExecutionSnapshot().phase());
+
+        SDKResult cancelled = SDKResult.error("Native turn cancelled");
+        cancelled.cancelled = true;
+        handler.onComplete(cancelled);
+        assertEquals(SessionExecutionState.Outcome.CANCELLED, session.getState().getExecutionSnapshot().outcome());
+    }
+
+    @Test
+    public void delayedIdleClaudeStopCannotSettleANewerForegroundTurn() throws Exception {
+        BlockingClaudeBridge bridge = new BlockingClaudeBridge();
+        ClaudeSession session = new ClaudeSession(null, bridge, null, null);
+        sessions.add(session);
+        session.setSessionInfo("workflow-session", "/workspace");
+        session.getState().setChannelId("workflow-channel");
+        session.getState().beginTurn();
+        ClaudeMessageHandler previous = new ClaudeMessageHandler(null, session.getState(), new CallbackHandler(),
+                new MessageParser(), new MessageMerger(), new com.google.gson.Gson());
+        previous.onComplete(SDKResult.success("Foreground complete; background workflow continues"));
+        assertFalse(session.isBusy());
+
+        var stop = session.interrupt();
+        assertTrue(bridge.interruptStarted.await(5, TimeUnit.SECONDS));
+        session.getState().beginTurn();
+        SessionExecutionState.Snapshot nextTurn = session.getState().getExecutionSnapshot();
+        bridge.interruptRelease.countDown();
+        stop.get(5, TimeUnit.SECONDS);
+        SDKResult cancelled = SDKResult.error("Old native runtime cancelled");
+        cancelled.cancelled = true;
+        previous.onComplete(cancelled);
+
+        assertEquals(nextTurn, session.getState().getExecutionSnapshot());
+        assertTrue(session.isBusy());
+        assertTrue(session.getState().isLoading());
+    }
+
+    @Test
     public void setSessionInfoNotifiesSessionIdWhenRestoringHistorySession() {
         ClaudeSession session = createSession(null);
         RecordingCallback callback = new RecordingCallback();
@@ -397,6 +480,24 @@ public class ClaudeSessionTest {
 
         @Override
         public void onSummaryReceived(String summary) {
+        }
+    }
+
+    private static class BlockingClaudeBridge extends com.github.claudecodegui.provider.claude.ClaudeSDKBridge {
+        private final CountDownLatch interruptStarted = new CountDownLatch(1);
+        private final CountDownLatch interruptRelease = new CountDownLatch(1);
+
+        @Override
+        public void interruptChannel(String channelId, String sessionId, String epoch) {
+            interruptStarted.countDown();
+            try {
+                if (!interruptRelease.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("interrupt test timed out");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("interrupt test interrupted", e);
+            }
         }
     }
 

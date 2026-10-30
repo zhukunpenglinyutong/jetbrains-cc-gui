@@ -171,9 +171,25 @@ public class HtmlLoader {
             String model,
             List<String> presetIds
     ) {
+        return injectInitialPageState(html, provider, model, presetIds, null, null);
+    }
+
+    /** Adds per-tab native effort and workflow preferences before shared-storage hydration. */
+    public String injectInitialPageState(
+            String html,
+            String provider,
+            String model,
+            List<String> presetIds,
+            String reasoningEffort,
+            Boolean claudeUltracode
+    ) {
         try {
             String safeProvider = escapeForSingleQuotedJs(provider == null ? "" : provider);
             String safeModel = escapeForSingleQuotedJs(model == null ? "" : model);
+            String nativePreferences = claudeUltracode == null ? ""
+                    : "window.__INITIAL_TAB_REASONING_EFFORT__ = "
+                    + (reasoningEffort == null ? "null" : "'" + escapeForSingleQuotedJs(reasoningEffort) + "'") + ";"
+                    + "window.__INITIAL_TAB_CLAUDE_ULTRACODE__ = " + claudeUltracode + ";";
             StringBuilder presetValues = new StringBuilder("[");
             if (presetIds != null) {
                 boolean first = true;
@@ -204,6 +220,7 @@ public class HtmlLoader {
                     + "\n    <script>"
                     + "window.__INITIAL_TAB_PROVIDER__ = '" + safeProvider + "';"
                     + "window.__INITIAL_TAB_MODEL__ = '" + safeModel + "';"
+                    + nativePreferences
                     + "</script>";
             int headIndex = html.indexOf("<head>");
             if (headIndex != -1) {

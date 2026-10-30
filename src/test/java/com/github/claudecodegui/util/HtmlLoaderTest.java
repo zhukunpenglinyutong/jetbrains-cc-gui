@@ -14,6 +14,21 @@ import static org.junit.Assert.assertTrue;
  */
 public class HtmlLoaderTest {
 
+    @Test
+    public void initialNativePreferencesPreserveFalseAndDefaultEffortBeforeBundle() {
+        HtmlLoader loader = new HtmlLoader(HtmlLoaderTest.class);
+        String html = "<html><head><script src=\"main.js\"></script></head><body></body></html>";
+        String disabled = loader.injectInitialPageState(html, "claude", "claude-sonnet-5", List.of(), null, false);
+        assertTrue(disabled.contains("window.__INITIAL_TAB_CLAUDE_ULTRACODE__ = false;"));
+        assertTrue(disabled.contains("window.__INITIAL_TAB_REASONING_EFFORT__ = null;"));
+        assertTrue(disabled.indexOf("__INITIAL_TAB_CLAUDE_ULTRACODE__") < disabled.indexOf("main.js"));
+        String enabled = loader.injectInitialPageState(html, "codex", "gpt-6-sol", List.of(), "ultra", true);
+        assertTrue(enabled.contains("window.__INITIAL_TAB_REASONING_EFFORT__ = 'ultra';"));
+        assertTrue(enabled.contains("window.__INITIAL_TAB_CLAUDE_ULTRACODE__ = true;"));
+        assertFalse(loader.injectInitialPageState(html, "claude", "model", List.of())
+                .contains("__INITIAL_TAB_CLAUDE_ULTRACODE__"));
+    }
+
     /** Verifies that theme injection ignores HTML examples embedded in the JavaScript bundle. */
     @Test
     public void injectsThemeIntoDocumentRootTags() {

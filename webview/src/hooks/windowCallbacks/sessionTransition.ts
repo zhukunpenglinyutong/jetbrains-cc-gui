@@ -8,6 +8,7 @@
 
 import type { MutableRefObject } from 'react';
 import { forceWebviewRepaint } from '../../utils/forceWebviewRepaint';
+import { resetClaudeBackgroundTasks } from '../../utils/claudeBackgroundTasks';
 
 export interface ResetTransientUiStateOptions {
   clearToasts: () => void;
@@ -47,6 +48,7 @@ export interface ResetTransientUiStateOptions {
  */
 export const buildResetTransientUiState = (opts: ResetTransientUiStateOptions) => {
   return () => {
+    resetClaudeBackgroundTasks();
     opts.clearToasts();
     opts.setStatus('');
     opts.setLoading(false);

@@ -17,7 +17,8 @@ import type { UseWindowCallbacksOptions, UseMessageSenderOptions } from './hooks
 import {
   CONTEXT_COMMANDS,
 } from './hooks/useMessageSender';
-import { parseCodexCommand } from './hooks/codexCommandDispatcher';
+import { isCodexEffortIndependentCommand, parseCodexCommand } from './hooks/codexCommandDispatcher';
+import { isCodexUltraCapabilityPending } from './utils/codexReasoningCapabilities';
 import { useCodexTurnActivity } from './hooks/useCodexTurnActivity';
 import { useCodexCompactionStatus } from './hooks/useCodexCompactionStatus';
 import type { Attachment, ChatInputBoxHandle, PermissionMode } from './components/ChatInputBox/types';
@@ -44,6 +45,7 @@ export interface ChatControllerModelSlice {
   currentSdkInstalled: UseMessageSenderOptions['currentSdkInstalled'];
   codexNativeAutoReviewAvailable: UseMessageSenderOptions['codexNativeAutoReviewAvailable'];
   reasoningEffort: UseMessageSenderOptions['reasoningEffort'];
+  claudeUltracode?: UseMessageSenderOptions['claudeUltracode'];
   codexFastMode: UseMessageSenderOptions['codexFastMode'];
   codexCollaborationMode: UseMessageSenderOptions['codexCollaborationMode'];
   codexApprovalPreset: UseMessageSenderOptions['codexApprovalPreset'];
@@ -62,6 +64,7 @@ export interface ChatControllerModelSlice {
   setSelectedCodexModel: UseWindowCallbacksOptions['setSelectedCodexModel'];
   setLongContextEnabled: UseWindowCallbacksOptions['setLongContextEnabled'];
   setReasoningEffort: UseWindowCallbacksOptions['setReasoningEffort'];
+  setClaudeUltracode?: UseWindowCallbacksOptions['setClaudeUltracode'];
   setCodexFastMode: UseWindowCallbacksOptions['setCodexFastMode'];
   setProviderConfigVersion: UseWindowCallbacksOptions['setProviderConfigVersion'];
   setActiveProviderConfig: UseWindowCallbacksOptions['setActiveProviderConfig'];
@@ -150,14 +153,14 @@ export const useAppChatController = ({
     currentProvider, selectedModel, permissionMode,
     selectedAgent, sdkStatusLoading, currentSdkInstalled,
     codexNativeAutoReviewAvailable,
-    reasoningEffort, codexFastMode, codexCollaborationMode, codexApprovalPreset,
+    reasoningEffort, claudeUltracode, codexFastMode, codexCollaborationMode, codexApprovalPreset,
     codexSandboxSelection, dshPreset, longContextEnabled,
     handleModeSelect, handleProviderSelect,
     currentProviderRef, syncActiveProviderModelMapping,
     setPermissionMode, setCurrentProvider,
     setClaudePermissionMode, setCodexPermissionMode,
     setSelectedClaudeModel, setSelectedCodexModel,
-    setLongContextEnabled, setReasoningEffort, setCodexFastMode,
+    setLongContextEnabled, setReasoningEffort, setClaudeUltracode, setCodexFastMode,
     setProviderConfigVersion, setActiveProviderConfig,
     setClaudeSettingsAlwaysThinkingEnabled, setStreamingEnabledSetting,
     setSendShortcut, setAutoOpenFileEnabled,
@@ -239,7 +242,7 @@ export const useAppChatController = ({
     setCurrentSessionId, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
     setPermissionMode, setCurrentProvider, setClaudePermissionMode, setCodexPermissionMode,
     setSelectedClaudeModel, setSelectedCodexModel,
-    setLongContextEnabled, setReasoningEffort, setCodexFastMode,
+    setLongContextEnabled, setReasoningEffort, setClaudeUltracode, setCodexFastMode,
     setProviderConfigVersion, setActiveProviderConfig,
     setClaudeSettingsAlwaysThinkingEnabled, setStreamingEnabledSetting,
     setSendShortcut, setAutoOpenFileEnabled,
@@ -288,9 +291,10 @@ export const useAppChatController = ({
   const {
     handleSubmit: hookHandleSubmit,
     interruptSession,
+    reasoningCapabilitiesPending,
   } = useMessageSender({
     t, addToast,
-    currentProvider, selectedModel, permissionMode, reasoningEffort, selectedAgent, codexFastMode,
+    currentProvider, selectedModel, permissionMode, reasoningEffort, claudeUltracode, selectedAgent, codexFastMode,
     codexCollaborationMode, codexApprovalPreset, codexSandboxSelection,
     codexNativeAutoReviewAvailable, dshPreset,
     sdkStatusLoading, currentSdkInstalled,
@@ -314,7 +318,7 @@ export const useAppChatController = ({
     dequeue: dequeueMessage,
     clearQueue,
     reorder: reorderMessageQueue,
-  } = useMessageQueue({ isLoading: loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending, onExecute: hookHandleSubmit });
+  } = useMessageQueue({ isLoading: loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending || reasoningCapabilitiesPending, onExecute: hookHandleSubmit });
 
   // Point the session-transition indirection at the real clearQueue.
   useEffect(() => {
@@ -358,13 +362,17 @@ export const useAppChatController = ({
         return;
       }
     }
-    // If loading, add to queue
-    if (loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending) {
+    // The input defers dispatch after clearing its draft. If capabilities were
+    // invalidated in that gap, preserve this submission in the paused queue.
+    const capabilitiesPending = currentProvider === 'codex'
+      && !isCodexEffortIndependentCommand(parseCodexCommand(text))
+      && isCodexUltraCapabilityPending(selectedModel, reasoningEffort);
+    if (loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending || capabilitiesPending) {
       enqueueMessage(content, attachments);
       return;
     }
     hookHandleSubmit(content, attachments);
-  }, [loading, codexTurnActive, codexPlanExecutionPending, codexCompactionPending, enqueueMessage, hookHandleSubmit, forceCreateNewSession, currentProvider, handleModeSelect, setCurrentView, addToast, t]);
+  }, [loading, codexTurnActive, codexPlanExecutionPending, codexCompactionPending, enqueueMessage, hookHandleSubmit, forceCreateNewSession, currentProvider, selectedModel, reasoningEffort, handleModeSelect, setCurrentView, addToast, t]);
 
   // ── Chat-view computations (stage 5 of TASK-P1-01) ──
   const {

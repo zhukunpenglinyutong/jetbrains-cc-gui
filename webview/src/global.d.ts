@@ -1143,6 +1143,12 @@ interface Window {
    */
   __INITIAL_TAB_MODEL__?: string;
 
+  /** Authoritative per-tab effort; null restores the provider default. */
+  __INITIAL_TAB_REASONING_EFFORT__?: string | null;
+
+  /** Native Claude workflow preference for this tab, including explicit off. */
+  __INITIAL_TAB_CLAUDE_ULTRACODE__?: boolean;
+
   /** User-installed DSH agent preset ids discovered from the DSH home. */
   __INITIAL_DSH_PRESETS__?: string[];
 

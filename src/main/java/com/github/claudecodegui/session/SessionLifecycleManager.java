@@ -96,6 +96,8 @@ public class SessionLifecycleManager {
         String previousPermissionMode = (oldSession != null) ? oldSession.getPermissionMode() : defaultSession.getPermissionMode();
         String previousProvider = (oldSession != null) ? oldSession.getProvider() : defaultSession.getProvider();
         String previousModel = (oldSession != null) ? oldSession.getModel() : defaultSession.getModel();
+        String previousEffort = oldSession != null ? oldSession.getReasoningEffort() : null;
+        boolean previousUltracode = oldSession != null && oldSession.isClaudeUltracode();
         LOG.info("Preserving session state: mode=" + previousPermissionMode
                          + ", provider=" + previousProvider + ", model=" + previousModel);
 
@@ -123,6 +125,8 @@ public class SessionLifecycleManager {
             // on restore, or an explicit custom id via set_model), so re-migrating
             // here could only rewrite a user's custom model behind their back.
             newSession.setModelVerbatim(previousModel);
+            newSession.setReasoningEffort(previousEffort);
+            newSession.setClaudeUltracode(previousUltracode);
             LOG.info("Restored session state to new session: mode=" + previousPermissionMode
                              + ", provider=" + previousProvider + ", model=" + previousModel);
 
@@ -181,6 +185,7 @@ public class SessionLifecycleManager {
             if (template.getReasoningEffort() != null) {
                 newSession.setReasoningEffort(template.getReasoningEffort());
             }
+            newSession.setClaudeUltracode(template.isClaudeUltracode());
             newSession.getState().setPsiContextEnabled(template.isPsiContextEnabled());
 
             LOG.info("Applied template settings to new session: provider=" + template.getProvider()
@@ -266,6 +271,10 @@ public class SessionLifecycleManager {
             // on custom ids and already applied retired-id migration where it is safe;
             // a fallback previousModel is a live value that was sanitized when set.
             newSession.setModelVerbatim(modelToRestore);
+            if (oldSession != null) {
+                newSession.setReasoningEffort(oldSession.getReasoningEffort());
+                newSession.setClaudeUltracode(oldSession.isClaudeUltracode());
+            }
             LOG.info("Restored session state to loaded session: mode=" + previousPermissionMode
                              + ", provider=" + newSession.getProvider() + ", model=" + modelToRestore);
 

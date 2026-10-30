@@ -304,8 +304,9 @@ class CodexAppServerRequestExecutor {
             long timeoutMs
     ) {
         AtomicReference<JsonObject> responseRef = new AtomicReference<>();
+        CompletableFuture<Boolean> future = null;
         try {
-            CompletableFuture<Boolean> future = daemon.sendCommand(method, params,
+            future = daemon.sendCommand(method, params,
                     new DaemonBridge.DaemonOutputCallback() {
                         @Override
                         public void onLine(String line) {
@@ -351,7 +352,14 @@ class CodexAppServerRequestExecutor {
             // TimeoutException carries a null message; a JsonNull here would
             // blow up consumers calling getAsString() on the error field.
             error.addProperty("error", e.getMessage() != null ? e.getMessage() : e.toString());
+            if (e instanceof TimeoutException) {
+                error.addProperty("errorCode", "timeout");
+            }
             return error;
+        } finally {
+            if (future != null && !future.isDone()) {
+                future.cancel(true);
+            }
         }
     }
 

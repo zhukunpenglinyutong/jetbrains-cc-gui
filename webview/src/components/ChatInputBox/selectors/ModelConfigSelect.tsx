@@ -27,6 +27,7 @@ interface ModelConfigSelectProps {
   models?: ModelInfo[];
   currentProvider?: string;
   loading?: boolean;
+  reasoningCapabilitiesPending?: boolean;
   error?: string | null;
   onRetry?: () => void;
   onAddModel?: () => void;
@@ -34,6 +35,8 @@ interface ModelConfigSelectProps {
   onLongContextChange?: (enabled: boolean) => void;
   reasoningEffort?: ReasoningEffort;
   onReasoningChange?: (effort: ReasoningEffort) => void;
+  claudeUltracode?: boolean;
+  onClaudeUltracodeChange?: (enabled: boolean) => void;
   codexFastMode?: CodexFastMode;
   onCodexFastModeChange?: (mode: CodexFastMode) => void;
   dshPreset?: string;
@@ -52,6 +55,7 @@ export const ModelConfigSelect = ({
   models = AVAILABLE_MODELS,
   currentProvider = 'claude',
   loading = false,
+  reasoningCapabilitiesPending = false,
   error = null,
   onRetry,
   onAddModel,
@@ -59,6 +63,8 @@ export const ModelConfigSelect = ({
   onLongContextChange,
   reasoningEffort = 'high',
   onReasoningChange,
+  claudeUltracode = false,
+  onClaudeUltracodeChange,
   codexFastMode = 'normal',
   onCodexFastModeChange,
   dshPreset = '',
@@ -91,15 +97,18 @@ export const ModelConfigSelect = ({
     onReasoningChange?.(effort);
   }, [onReasoningChange]);
 
+  const currentModel = useCurrentModel(models, selectedModel, currentProvider);
   const { isVisible: showEffort, currentLevel } = useReasoningEffortGuard(
     reasoningEffort,
     handleReasoningChange,
     selectedModel,
     currentProvider,
+    currentModel?.supportedReasoningEfforts,
+    reasoningCapabilitiesPending,
   );
 
   const modelMapping = readClaudeModelMapping();
-  const currentModel = useCurrentModel(models, selectedModel, currentProvider);
+  const showUltracode = currentProvider === 'claude' && !!onClaudeUltracodeChange;
   const {
     show1MContext,
     showContextRow,
@@ -131,11 +140,13 @@ export const ModelConfigSelect = ({
     modelMapping,
     longContextEnabled,
     codexFastMode,
+    claudeUltracode,
     dshPreset,
     show1MContext,
     showEffortRow,
     showSpeed,
     showPreset,
+    showUltracode,
     currentLevel,
   });
 
@@ -186,7 +197,7 @@ export const ModelConfigSelect = ({
       window.addEventListener('resize', mainRecalculate);
       return () => window.removeEventListener('resize', mainRecalculate);
     }
-  }, [isOpen, mainRecalculate, showEffortRow, showSpeed, showPreset, showContextRow]);
+  }, [isOpen, mainRecalculate, showEffortRow, showSpeed, showPreset, showContextRow, showUltracode]);
 
   return (
     <div style={WRAPPER_STYLE}>
@@ -217,7 +228,10 @@ export const ModelConfigSelect = ({
           onAddModel={onAddModel}
           longContextEnabled={longContextEnabled}
           onLongContextChange={onLongContextChange}
-          showDivider={showDivider}
+          showDivider={showDivider || showUltracode}
+          showUltracode={showUltracode}
+          claudeUltracode={claudeUltracode}
+          onClaudeUltracodeChange={onClaudeUltracodeChange}
           showContextRow={showContextRow}
           contextSupported={contextSupported}
           showSpeed={showSpeed}
@@ -229,6 +243,8 @@ export const ModelConfigSelect = ({
           onDshPresetChange={onDshPresetChange}
           dshPresetLabel={dshPresetLabel}
           showEffortRow={showEffortRow}
+          supportedReasoningEfforts={currentModel?.supportedReasoningEfforts}
+          reasoningCapabilitiesPending={reasoningCapabilitiesPending}
           reasoningEffort={reasoningEffort}
           onReasoningChange={handleReasoningChange}
           effortLabel={effortLabel}

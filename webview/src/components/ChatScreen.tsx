@@ -9,6 +9,7 @@ import { MessageAnchorRail } from './MessageAnchorRail';
 import { MessageList } from './MessageList';
 import { ScrollControl } from './ScrollControl';
 import { StatusPanel, StatusPanelErrorBoundary } from './StatusPanel';
+import { ClaudeBackgroundTasksPanel } from './StatusPanel/ClaudeBackgroundTasksPanel';
 import { WelcomeScreen } from './WelcomeScreen';
 import { ConversationSearch } from './ConversationSearch';
 import type { MessageListRevealHandle } from './ConversationSearch/types';
@@ -98,6 +99,8 @@ export interface ChatScreenProps {
   activeProviderConfig: ProviderState['activeProviderConfig'];
   claudeSettingsAlwaysThinkingEnabled: ProviderState['claudeSettingsAlwaysThinkingEnabled'];
   reasoningEffort: ProviderState['reasoningEffort'];
+  claudeUltracode?: boolean;
+  onClaudeUltracodeChange?: (enabled: boolean) => void;
   codexFastMode: ProviderState['codexFastMode'];
   dshPreset: ProviderState['dshPreset'];
   streamingEnabledSetting: ProviderState['streamingEnabledSetting'];
@@ -158,7 +161,7 @@ export const ChatScreen = ({
   codexNativeAutoReviewAvailable = true,
   sdkStatusLoading, sdkStatusError, onRetrySdkStatus, currentSdkInstalled,
   activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
-  reasoningEffort, codexFastMode, dshPreset, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
+  reasoningEffort, claudeUltracode, onClaudeUltracodeChange, codexFastMode, dshPreset, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
   longContextEnabled, usagePercentage, usageUsedTokens, usageMaxTokens,
   onModeSelect, onModelSelect, onAgentSelect, onReasoningChange, onCodexFastModeChange, onDshPresetChange, onToggleThinking,
   onStreamingEnabledChange,
@@ -352,6 +355,9 @@ export const ChatScreen = ({
         />
       </StatusPanelErrorBoundary>
 
+      <ClaudeBackgroundTasksPanel provider={currentProvider} sessionId={currentSessionId}
+        foregroundActive={waiting} onStop={onInterrupt} />
+
       {currentProvider === 'codex' && onExecuteCodexPlan && onContinueCodexPlan && (
         <CodexPlanActions
           plan={codexPlan}
@@ -393,6 +399,8 @@ export const ChatScreen = ({
           reasoningEffort={reasoningEffort}
           dshPreset={dshPreset}
           onReasoningChange={onReasoningChange}
+          claudeUltracode={claudeUltracode}
+          onClaudeUltracodeChange={onClaudeUltracodeChange}
           codexFastMode={codexFastMode}
           onCodexFastModeChange={onCodexFastModeChange}
           onDshPresetChange={onDshPresetChange}

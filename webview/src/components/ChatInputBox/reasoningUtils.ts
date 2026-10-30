@@ -45,10 +45,17 @@ export function isReasoningVisible(currentProvider?: string, selectedModel?: str
 export function getAvailableReasoningLevels(
   currentProvider?: string,
   selectedModel?: string,
+  supportedReasoningEfforts?: readonly string[],
 ): ReasoningInfo[] {
   const { id: claudeModel, gateway } = resolveClaudeEffortModel(selectedModel);
   const configuredEffort = gateway || (currentProvider === 'claude' && hasConfiguredClaudeMapping(selectedModel));
   return REASONING_LEVELS.filter((level) => {
+    // Ultra is a native Codex delegation effort, never a Claude effort alias.
+    // The live model catalog is authoritative (even within a model family).
+    if (currentProvider === 'codex' && supportedReasoningEfforts) {
+      return supportedReasoningEfforts.includes(level.id);
+    }
+    if (level.id === 'ultra') return false;
     if (currentProvider === 'grok') {
       return level.id === 'low' || level.id === 'medium' || level.id === 'high' || level.id === 'xhigh';
     }
@@ -89,6 +96,8 @@ export function useReasoningEffortGuard(
   onChange: (effort: ReasoningEffort) => void,
   selectedModel?: string,
   currentProvider?: string,
+  supportedReasoningEfforts?: readonly string[],
+  reasoningCapabilitiesPending = false,
 ): {
   isVisible: boolean;
   availableLevels: ReasoningInfo[];
@@ -97,17 +106,23 @@ export function useReasoningEffortGuard(
   const isVisible = isReasoningVisible(currentProvider, selectedModel);
   // Mapping changes can keep the same Sonnet/Opus alias. Re-evaluate on every
   // render so switching cc-switch modes does not retain an old filtered list.
-  const availableLevels = getAvailableReasoningLevels(currentProvider, selectedModel);
-  const currentLevel = resolveCurrentReasoningLevel(value, availableLevels);
+  const availableLevels = getAvailableReasoningLevels(currentProvider, selectedModel, supportedReasoningEfforts);
+  // Retain a restored Ultra preference only while the native catalog is pending.
+  // A settled catalog may omit custom models or their effort metadata entirely.
+  const awaitingUltraCapability = currentProvider === 'codex'
+    && value === 'ultra' && supportedReasoningEfforts === undefined && reasoningCapabilitiesPending;
+  const currentLevel = awaitingUltraCapability
+    ? REASONING_LEVELS.find(level => level.id === value)
+    : resolveCurrentReasoningLevel(value, availableLevels);
 
   useEffect(() => {
-    if (!isVisible || availableLevels.some((level) => level.id === value)) {
+    if (awaitingUltraCapability || !isVisible || availableLevels.some((level) => level.id === value)) {
       return;
     }
     if (currentLevel) {
       onChange(currentLevel.id);
     }
-  }, [availableLevels, currentLevel, isVisible, onChange, value]);
+  }, [availableLevels, awaitingUltraCapability, currentLevel, isVisible, onChange, value]);
 
   return { isVisible, availableLevels, currentLevel };
 }

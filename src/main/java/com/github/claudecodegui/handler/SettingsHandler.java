@@ -42,6 +42,7 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_model",
         "set_provider",
         "set_reasoning_effort",
+        "set_claude_ultracode",
         "set_codex_fast_mode",
         "set_dsh_preset",
         "get_node_path",
@@ -180,6 +181,9 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_reasoning_effort":
                 modelProviderHandler.handleSetReasoningEffort(content);
+                return true;
+            case "set_claude_ultracode":
+                modelProviderHandler.handleSetClaudeUltracode(content);
                 return true;
             case "set_codex_fast_mode":
                 modelProviderHandler.handleSetCodexFastMode(content);

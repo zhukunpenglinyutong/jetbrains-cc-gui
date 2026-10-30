@@ -29,6 +29,23 @@ import static org.junit.Assert.assertTrue;
 public class ClaudeSDKBridgeRefactorTest {
 
     @Test
+    public void requestBuilderKeepsWorkflowModeSeparateAndEmitsExplicitDisable() {
+        ClaudeRequestParamsBuilder builder = new ClaudeRequestParamsBuilder(new Gson());
+        JsonObject enabled = builder.buildSendParams("hello", "session", "epoch", "/workspace",
+                "default", "claude-sonnet-5", null, null, null, true, false, "max", true);
+        assertTrue(enabled.get("ultracode").getAsBoolean());
+        assertEquals("max", enabled.get("reasoningEffort").getAsString());
+        JsonObject disabled = builder.buildSendParams("next", "session", "epoch", "/workspace",
+                "default", "claude-sonnet-5", null, null, null, true, false, "high", false);
+        assertFalse(disabled.get("ultracode").getAsBoolean());
+        assertEquals("high", disabled.get("reasoningEffort").getAsString());
+        JsonObject staleCodexSelection = builder.buildSendParams("hello", "session", "epoch", "/workspace",
+                "default", "claude-sonnet-5", null, null, null, true, false, "ultra", false);
+        assertFalse(staleCodexSelection.has("reasoningEffort"));
+        assertFalse(staleCodexSelection.get("ultracode").getAsBoolean());
+    }
+
+    @Test
     public void sanitizerRedactsCommonSecretsWithoutTouchingShortValues() {
         ClaudeLogSanitizer sanitizer = new ClaudeLogSanitizer();
 

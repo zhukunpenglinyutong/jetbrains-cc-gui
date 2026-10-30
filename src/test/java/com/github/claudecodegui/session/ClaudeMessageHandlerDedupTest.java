@@ -40,6 +40,27 @@ public class ClaudeMessageHandlerDedupTest {
     }
 
     @Test
+    public void userEchoWithSeparateIdeReminderStillPatchesOptimisticMessageUuid() {
+        SessionState state = new SessionState();
+        ClaudeSession.Message optimistic = new ClaudeSession.Message(
+                ClaudeSession.Message.Type.USER, "Explain this diff", null);
+        state.addMessage(optimistic);
+        ClaudeMessageHandler handler = new ClaudeMessageHandler(null, state, callbackHandler,
+                new MessageParser(), new MessageMerger(), new Gson());
+
+        handler.onMessage("user", """
+                {"type":"user","uuid":"native-user-uuid","message":{"content":[
+                  {"type":"text","text":"Explain this diff"},
+                  {"type":"text","text":"<system-reminder>IDE context for this turn</system-reminder>"}
+                ]}}
+                """);
+
+        assertEquals("native-user-uuid", optimistic.raw.get("uuid").getAsString());
+        assertEquals("Explain this diff", optimistic.content);
+        assertEquals(1, state.getMessages().size());
+    }
+
+    @Test
     public void blockReset_startsNewThinkingBlockForIndependentAssistantTurn() {
         handler.onMessage("stream_start", "");
         handler.onMessage("thinking_delta", "first thought");

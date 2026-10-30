@@ -1,0 +1,38 @@
+.claude-background-tasks {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 12px;
+  color: var(--vscode-descriptionForeground, var(--text-color));
+  font-size: 12px;
+}
+
+.claude-background-tasks details {
+  flex: 1;
+  min-width: 0;
+}
+
+.claude-background-tasks summary {
+  cursor: pointer;
+}
+
+.claude-background-tasks ul {
+  max-height: 128px;
+  overflow-y: auto;
+  margin: 6px 0 0;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
+
+.claude-background-tasks button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--vscode-button-secondaryBackground, var(--hover-background));
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}

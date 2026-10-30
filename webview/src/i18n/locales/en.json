@@ -110,6 +110,7 @@
     "localProject": "Local",
     "disabled": "Disabled",
     "sdkNotInstalled": "{{provider}} SDK is not installed. Please install the SDK to start chatting.",
+    "codexUltraCapabilitiesLoading": "Checking Ultra availability. Try sending again when model loading finishes.",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "Preparing pasted image...",
     "sdkStatusUnavailable": "Could not check SDK status.",
@@ -176,7 +177,9 @@
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "Continue refining this plan:"
+    "continueRefiningPlan": "Continue refining this plan:",
+    "backgroundTasksRunning": "{{count}} background tasks running",
+    "stopBackgroundTasks": "Stop background tasks"
   },
   "settings": {
     "title": "Settings",
@@ -2275,7 +2278,11 @@
     "effort": "Effort",
     "speed": "Speed",
     "preset": "Preset",
-    "model": "Model"
+    "model": "Model",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Native Claude workflow with automatic task delegation. Keeps your selected effort."
+    }
   },
   "modes": {
     "default": {
@@ -2523,6 +2530,10 @@
     "max": {
       "label": "Max",
       "description": "Maximum reasoning depth"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "Maximum reasoning with automatic task delegation"
     }
   },
   "errorBoundary": {

@@ -271,6 +271,82 @@ async function asyncQuestionFixture() {
     result: { answers: { 'question-1': { answers: ['B'] }, 'question-2': { answers: ['Test comment'] } } } };
 }
 
+test('Ultra reaches the native turn unchanged and a later ordinary turn clears it without restarting', async () => {
+  const { service, dispatched } = makeService();
+  try {
+    const settings = { model: 'gpt-6-astra', effort: 'ultra', approvalPolicy: 'on-request',
+      sandbox: 'workspace-write', collaborationMode: { mode: 'default', settings: {
+        model: 'gpt-6-astra', reasoning_effort: 'ultra', developer_instructions: null,
+      } } };
+    const first = service.send({ input: [{ type: 'text', text: 'review independent modules' }], settings });
+    settings.effort = 'high';
+    settings.collaborationMode.settings.reasoning_effort = 'high';
+    const second = service.send({ input: [{ type: 'text', text: 'follow up' }], settings });
+    assert.equal((await first).outcome, 'completed');
+    assert.equal((await second).outcome, 'completed');
+    const turns = dispatched.filter(entry => entry.method === 'turn/start').map(entry => entry.params);
+    assert.deepEqual(turns.map(turn => turn.effort), ['ultra', 'high']);
+    assert.deepEqual(turns.map(turn => turn.collaborationMode.settings.reasoning_effort), ['ultra', 'high']);
+    assert.deepEqual(turns.map(turn => turn.input[0].text), ['review independent modules', 'follow up']);
+    assert.ok(turns.every(turn => turn.approvalPolicy === 'on-request' && turn.sandboxPolicy.type === 'workspaceWrite'));
+    assert.equal(dispatched.filter(entry => entry.method === 'thread/start').length, 1);
+    assert.equal(dispatched.filter(entry => entry.method === 'initialize').length, 1);
+  } finally { await service.resetRuntime(); }
+});
+
+test('Ultra fan-out exposes every native child and keeps concurrent approvals and terminals isolated', async () => {
+  const markers = [];
+  const { service, events, getPeer, dispatched } = makeService({ scenario: 'reverse-approval',
+    serviceOpts: { emitMarker: (_operation, marker) => markers.push(marker) } });
+  const childCount = 80;
+  try {
+    const pending = service.send({ input: [{ type: 'text', text: 'delegate the review' }],
+      settings: { model: 'gpt-6-astra', effort: 'ultra' } });
+    await waitFor(() => eventsOf(events, 'interactionRequested').length === 1);
+    const peer = getPeer();
+    const operation = service.operations.get(service.activeOperationId);
+    const root = service.rootThreadId;
+    peer.scenario = { ...peer.scenario, async onThreadRead(params, ctx) {
+      ctx.reply(ctx.currentId, { thread: { id: params.threadId, parentThreadId: root } });
+    } };
+    for (let index = 0; index < childCount; index += 1) {
+      const childId = `ultra-child-${index}`;
+      peer.notify({ method: 'item/started', params: { threadId: root, turnId: operation.nativeTurnId,
+        item: { id: `activity-${index}`, type: 'subAgentActivity', kind: 'started',
+          agentThreadId: childId, agentPath: `/root/reviewer_${index}`, model: 'gpt-6-astra', reasoningEffort: 'ultra' } } });
+      peer.notify({ method: 'turn/started', params: { threadId: childId, turn: { id: `child-turn-${index}` } } });
+      peer.serverRequest(`child-approval-${index}`, 'item/commandExecution/requestApproval', {
+        threadId: childId, turnId: `child-turn-${index}`, itemId: `command-${index}`, command: 'git status',
+      });
+    }
+    await waitFor(() => eventsOf(events, 'interactionRequested').length === childCount + 1);
+    const activities = markers.filter(marker => typeof marker === 'string' && marker.startsWith('[MESSAGE] '))
+      .map(marker => JSON.parse(marker.slice('[MESSAGE] '.length)))
+      .filter(message => message.codexItemType === 'subAgentActivity');
+    assert.equal(activities.length, childCount, 'started children are visible before their work completes');
+    assert.equal(new Set(activities.map(message => message.message.content[0].input.agentThreadId)).size, childCount);
+    const approvals = eventsOf(events, 'interactionRequested').filter(event => event.threadId !== root);
+    assert.equal(approvals.length, childCount);
+    assert.ok(approvals.every(event => event.rootThreadId === root && event.clientOperationId == null));
+    for (const [index, approval] of approvals.entries()) {
+      assert.equal(service.respondInteraction(approval.payload.rpcId, { decision: index % 2 ? 'accept' : 'decline' }), true);
+      peer.notify({ method: 'turn/completed', params: { threadId: approval.threadId,
+        turn: { id: approval.turnId, status: index % 2 ? 'completed' : 'interrupted' } } });
+    }
+    assert.equal(service.busy, true, 'child terminals cannot finish the root operation');
+    assert.equal(eventsOf(events, 'operationDone').length, 0);
+    service.stopOperation(operation.clientOperationId);
+    await waitFor(() => dispatched.some(entry => entry.method === 'turn/interrupt'));
+    const interrupts = dispatched.filter(entry => entry.method === 'turn/interrupt');
+    assert.deepEqual(interrupts.map(entry => entry.params), [{ threadId: root, turnId: operation.nativeTurnId }],
+      'native root interruption owns cancellation, without independent plugin orchestration');
+    peer.notify({ method: 'turn/completed', params: { threadId: root,
+      turn: { id: operation.nativeTurnId, status: 'interrupted' } } });
+    assert.equal((await pending).outcome, 'interrupted');
+    assert.equal(eventsOf(events, 'operationDone').length, 1);
+  } finally { await service.resetRuntime(); }
+});
+
 test('editor context stays operation-scoped and separate from native user input', async () => {
   let probes = 0;
   const { service, dispatched } = makeService({ clientOpts: { contextSupportProbe: async () => { probes += 1; return true; } } });

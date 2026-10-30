@@ -110,6 +110,7 @@
     "localProject": "本项目",
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安装，请先安装 SDK 才能开始对话",
+    "codexUltraCapabilitiesLoading": "正在确认 Ultra 是否可用。模型加载完成后请重试发送。",
     "sdkStatusLoading": "正在检查 SDK 状态...",
     "pasteImagePreparing": "正在准备粘贴的图片...",
     "sdkStatusUnavailable": "无法检查 SDK 状态。",
@@ -176,7 +177,9 @@
     "codexDiffUsage": "请直接使用 /diff，无需参数",
     "codexApprovalsUsage": "请直接使用 /approvals，无需参数",
     "codexSandboxConflict": "Codex 自动审查不能使用 danger-full-access 沙箱，请改用 workspace-write 或请求批准模式。",
-    "continueRefiningPlan": "继续完善此计划："
+    "continueRefiningPlan": "继续完善此计划：",
+    "backgroundTasksRunning": "{{count}} 个后台任务正在运行",
+    "stopBackgroundTasks": "停止后台任务"
   },
   "settings": {
     "title": "设置",
@@ -2280,7 +2283,11 @@
     "effort": "思考强度",
     "speed": "速度",
     "preset": "预设",
-    "model": "模型"
+    "model": "模型",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Claude 原生工作流，自动委派子任务，保留当前推理强度。"
+    }
   },
   "modes": {
     "default": {
@@ -2527,6 +2534,10 @@
     "max": {
       "label": "max",
       "description": "最大推理深度"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "最高推理深度，自动委派子任务"
     }
   },
   "errorBoundary": {

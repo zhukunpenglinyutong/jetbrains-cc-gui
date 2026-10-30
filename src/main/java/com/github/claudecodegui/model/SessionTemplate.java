@@ -10,6 +10,7 @@ public class SessionTemplate {
     private String model;
     private String permissionMode;
     private String reasoningEffort;
+    private boolean claudeUltracode;
     private String cwd;
     private boolean psiContextEnabled;
 
@@ -32,8 +33,10 @@ public class SessionTemplate {
      * Create a copy of this template.
      */
     public SessionTemplate copy() {
-        return new SessionTemplate(name, provider, model, permissionMode,
+        SessionTemplate copy = new SessionTemplate(name, provider, model, permissionMode,
                                   reasoningEffort, cwd, psiContextEnabled);
+        copy.setClaudeUltracode(claudeUltracode);
+        return copy;
     }
 
     public String getName() {
@@ -74,6 +77,14 @@ public class SessionTemplate {
 
     public void setReasoningEffort(String reasoningEffort) {
         this.reasoningEffort = reasoningEffort;
+    }
+
+    public boolean isClaudeUltracode() {
+        return claudeUltracode;
+    }
+
+    public void setClaudeUltracode(boolean enabled) {
+        claudeUltracode = enabled;
     }
 
     public String getCwd() {

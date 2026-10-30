@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { sendBridgeEvent } from '../../utils/bridge';
 import { updateClaudeModelCapabilities } from '../../utils/claudeModelCapabilities';
+import { setCodexReasoningCapabilitiesPending, updateCodexReasoningCapabilities } from '../../utils/codexReasoningCapabilities';
 import type { ModelInfo } from '../../components/ChatInputBox/types';
 import {
   CODEX_MODELS,
@@ -57,6 +58,7 @@ function subscribeRoles(listener: () => void): () => void {
 /** Test-only: clear module caches between cases. */
 export function __resetCliModelsCacheForTests() {
   updateClaudeModelCapabilities([]);
+  updateCodexReasoningCapabilities([], true);
   for (const key of Object.keys(modelsCache)) delete modelsCache[key];
   for (const key of Object.keys(defaultModelCache)) delete defaultModelCache[key];
   for (const key of Object.keys(catalogHasEntriesCache)) delete catalogHasEntriesCache[key];
@@ -145,6 +147,10 @@ export function useCliModels(currentProvider: string) {
   }, []);
 
   const beginLoad = useCallback((providerId: string) => {
+    if (pendingLoadRef.current?.provider === 'codex' && providerId !== 'codex') {
+      nativeRequestRef.current = null;
+      setCodexReasoningCapabilitiesPending(false);
+    }
     clearPendingLoad();
     setLoadingProvider(providerId);
     setErrorByProvider((prev) => {
@@ -157,6 +163,7 @@ export function useCliModels(currentProvider: string) {
     // legacy channel-manager probe may read config/auth independently and is
     // therefore kept for the other CLI providers only.
     if (providerId === 'codex') {
+      setCodexReasoningCapabilitiesPending(true);
       const requestId = `models-${crypto.randomUUID()}`;
       nativeRequestRef.current = { id: requestId, rows: [], cursors: new Set() };
       sendBridgeEvent('codex_native_list_models', JSON.stringify({ requestId }));
@@ -167,6 +174,12 @@ export function useCliModels(currentProvider: string) {
       provider: providerId,
       timer: setTimeout(() => {
         pendingLoadRef.current = null;
+        if (providerId === 'codex') {
+          nativeRequestRef.current = null;
+          // Keep the same last-known catalog the picker still displays after a
+          // refresh timeout. Unknown models are now settled, not pending forever.
+          setCodexReasoningCapabilitiesPending(false);
+        }
         // No response arrived in time — fall back to the static catalog and
         // surface the failure so the user isn't staring at a bare fallback list.
         setLoadingProvider((current) => (current === providerId ? null : current));
@@ -204,6 +217,7 @@ export function useCliModels(currentProvider: string) {
       }
       const models = normalizeModels(payload.models);
       if (provider === 'claude') updateClaudeModelCapabilities(payload.success === false ? [] : models);
+      if (provider === 'codex') updateCodexReasoningCapabilities(payload.success === false ? [] : models);
       const replaceBuiltIns = provider === 'claude' && payload.success !== false && payload.replaceBuiltInOptions === true;
       replaceBuiltInsCache[provider] = replaceBuiltIns;
       setReplaceBuiltInsByProvider((prev) => ({ ...prev, [provider]: replaceBuiltIns }));
@@ -271,7 +285,9 @@ export function useCliModels(currentProvider: string) {
           params: { cursor: detail.nextCursor } }));
         return;
       }
-      const data = pending?.rows ?? rows;
+      // A failed later page invalidates the whole catalog, including capability
+      // rows from earlier pages. Picker and send guards must use the same fallback.
+      const data = detail.error ? [] : pending?.rows ?? rows;
       nativeRequestRef.current = null;
       window.setCliModels?.(JSON.stringify({
         provider: 'codex',
@@ -307,6 +323,7 @@ export function useCliModels(currentProvider: string) {
         delete window.setCliModels;
       }
       window.removeEventListener('codex-native-data', nativeCatalogHandler);
+      if (pendingLoadRef.current?.provider === 'codex') setCodexReasoningCapabilitiesPending(false);
       clearPendingLoad();
     };
   }, [clearPendingLoad]);
@@ -354,6 +371,8 @@ export function useCliModels(currentProvider: string) {
   // and refetch when the chat is currently on codex.
   useEffect(() => {
     return subscribeActiveCodexProvider(() => {
+      nativeRequestRef.current = null;
+      updateCodexReasoningCapabilities([], true);
       delete modelsCache.codex;
       delete defaultModelCache.codex;
       delete catalogHasEntriesCache.codex;

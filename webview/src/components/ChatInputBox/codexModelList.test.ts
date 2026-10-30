@@ -22,6 +22,13 @@ describe('buildCodexModelList', () => {
     expect(merged[0].label).toBe('Custom Label');
   });
 
+  it('retains native capability restrictions when a custom label shadows the same model', () => {
+    expect(buildCodexModelList(
+      [{ id: 'gpt-6-luna', label: 'Luna', supportedReasoningEfforts: ['high', 'max'] }],
+      [{ id: 'gpt-6-luna', label: 'My Luna', supportedReasoningEfforts: ['ultra'] }],
+    )).toEqual([{ id: 'gpt-6-luna', label: 'My Luna', supportedReasoningEfforts: ['high', 'max'] }]);
+  });
+
   it('dedupes built-ins that collide with catalog (catalog wins)', () => {
     const catalogWithBuiltin: ModelInfo[] = [
       { id: 'gpt-5.5', label: 'gpt-5.5 (from config)' },

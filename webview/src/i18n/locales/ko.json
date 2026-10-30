@@ -81,6 +81,7 @@
     "localProject": "로컬",
     "disabled": "비활성화됨",
     "sdkNotInstalled": "{{provider}} SDK가 설치되어 있지 않습니다. 채팅을 시작하려면 SDK를 설치해주세요.",
+    "codexUltraCapabilitiesLoading": "Ultra 사용 가능 여부를 확인하고 있습니다. 모델 로딩이 끝나면 다시 전송해 주세요.",
     "sdkStatusLoading": "SDK 상태 확인 중...",
     "pasteImagePreparing": "붙여넣은 이미지 준비 중...",
     "sdkStatusUnavailable": "SDK 상태를 확인할 수 없습니다.",
@@ -145,7 +146,9 @@
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "이 계획 다듬기 계속하기:"
+    "continueRefiningPlan": "이 계획 다듬기 계속하기:",
+    "backgroundTasksRunning": "백그라운드 작업 {{count}}개 실행 중",
+    "stopBackgroundTasks": "백그라운드 작업 중지"
   },
   "settings": {
     "title": "설정",
@@ -2067,6 +2070,10 @@
     "xhigh": {
       "label": "최대",
       "description": "최대 추론 깊이"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "최대 추론 깊이와 자동 작업 위임"
     }
   },
   "errorBoundary": {
@@ -2294,6 +2301,12 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
+    }
+  },
+  "modelConfig": {
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "작업을 자동으로 위임하는 Claude 기본 워크플로입니다. 선택한 추론 수준을 유지합니다."
     }
   }
 }

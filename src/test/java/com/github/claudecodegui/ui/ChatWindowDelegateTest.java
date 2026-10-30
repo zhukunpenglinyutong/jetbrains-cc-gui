@@ -39,6 +39,16 @@ public class ChatWindowDelegateTest {
 
     /** Verifies that recovery serializes the complete authoritative Session selection state. */
     @Test
+    public void recoverySnapshotPreservesNativeWorkflowEnableAndDisable() {
+        for (boolean enabled : new boolean[]{true, false}) {
+            JsonObject state = JsonParser.parseString(ChatWindowDelegate.buildBackendTabStateJson(
+                    "claude", "claude-sonnet-5", "default", "high", null, enabled)).getAsJsonObject();
+            assertEquals(enabled, state.get("claudeUltracode").getAsBoolean());
+            assertEquals("high", state.get("reasoningEffort").getAsString());
+        }
+    }
+
+    @Test
     public void buildsAuthoritativeBackendTabState() {
         String json = ChatWindowDelegate.buildBackendTabStateJson(
                 "codex",

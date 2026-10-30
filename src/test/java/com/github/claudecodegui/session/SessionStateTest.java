@@ -10,6 +10,22 @@ import org.junit.Test;
 public class SessionStateTest {
 
     @Test
+    public void claudeWorkflowModeIsIndependentOfEffortAndCanBeDisabled() {
+        SessionState state = new SessionState();
+        Assert.assertFalse(state.isClaudeUltracode());
+        state.setReasoningEffort("high");
+        state.setClaudeUltracode(true);
+        Assert.assertEquals("high", state.getReasoningEffort());
+        state.setReasoningEffort("max");
+        Assert.assertTrue(state.isClaudeUltracode());
+        state.setClaudeUltracode(false);
+        Assert.assertFalse(state.isClaudeUltracode());
+        Assert.assertEquals("max", state.getReasoningEffort());
+        state.setReasoningEffort("ultra");
+        Assert.assertEquals("ultra", state.getReasoningEffort());
+    }
+
+    @Test
     public void setModelMigratesRetiredSonnet47ToSonnet5() {
         SessionState state = new SessionState();
         // Saved by versions <= 0.5.2 where sonnet-4-7 was the default model.

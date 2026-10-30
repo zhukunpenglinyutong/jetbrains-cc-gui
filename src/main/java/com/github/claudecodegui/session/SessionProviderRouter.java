@@ -127,6 +127,14 @@ public class SessionProviderRouter {
         claudeSDKBridge.interruptChannel(channelId);
     }
 
+    public void interruptChannel(String provider, String channelId, String sessionId, String runtimeSessionEpoch) {
+        if ("claude".equals(provider)) {
+            claudeSDKBridge.interruptChannel(channelId, sessionId, runtimeSessionEpoch);
+        } else {
+            interruptChannel(provider, channelId);
+        }
+    }
+
     public List<JsonObject> getSessionMessages(String provider, String sessionId, String cwd) {
         return this.getSessionMessages(provider, sessionId, cwd, null);
     }

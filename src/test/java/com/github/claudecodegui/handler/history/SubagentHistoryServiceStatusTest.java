@@ -27,6 +27,80 @@ public class SubagentHistoryServiceStatusTest {
     public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     @Test
+    public void statusFanoutIsBoundedAndOneFailureDoesNotDiscardHealthySiblings() throws Exception {
+        java.util.List<CodexSubagentHistoryLoader.StatusRequest> agents = new java.util.ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            agents.add(new CodexSubagentHistoryLoader.StatusRequest("tool-" + i, "/root/" + i, "child-" + i));
+        }
+        CountDownLatch firstWave = new CountDownLatch(8);
+        CountDownLatch release = new CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicInteger active = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger peak = new java.util.concurrent.atomic.AtomicInteger();
+        CompletableFuture<JsonArray> batch = CompletableFuture.supplyAsync(() -> {
+            try {
+                return SubagentHistoryService.loadStatusBatch(agents, agent -> {
+                    int running = active.incrementAndGet();
+                    peak.accumulateAndGet(running, Math::max);
+                    firstWave.countDown();
+                    try {
+                        release.await();
+                        if ("child-2".equals(agent.agentId())) {
+                            throw new IllegalStateException("one child failed");
+                        }
+                        JsonObject status = object("status", "completed", "agentId", agent.agentId());
+                        status.addProperty("success", true);
+                        status.addProperty("completed", true);
+                        return status;
+                    } finally {
+                        active.decrementAndGet();
+                    }
+                }, 5_000, 0);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        try {
+            assertTrue(firstWave.await(3, TimeUnit.SECONDS));
+            assertEquals(8, peak.get());
+        } finally {
+            release.countDown();
+        }
+        JsonArray statuses = batch.get(5, TimeUnit.SECONDS);
+        assertEquals(20, statuses.size());
+        assertTrue(peak.get() <= 8);
+        assertEquals("error", statuses.get(2).getAsJsonObject().get("status").getAsString());
+        assertEquals("one child failed", statuses.get(2).getAsJsonObject().get("error").getAsString());
+        assertEquals("tool-19", statuses.get(19).getAsJsonObject().get("toolUseId").getAsString());
+        assertTrue(statuses.get(19).getAsJsonObject().get("completed").getAsBoolean());
+    }
+
+    @Test
+    public void batchDeadlineRetainsPendingAndRotatesPastUnresponsiveChildren() throws Exception {
+        java.util.List<CodexSubagentHistoryLoader.StatusRequest> agents = new java.util.ArrayList<>();
+        for (int i = 0; i < 16; i++) {
+            agents.add(new CodexSubagentHistoryLoader.StatusRequest("tool-" + i, "/root/" + i, "child-" + i));
+        }
+        CountDownLatch neverCompletes = new CountDownLatch(1);
+        SubagentHistoryService.StatusReader reader = agent -> {
+            if (Integer.parseInt(agent.agentId().substring(6)) < 8) {
+                neverCompletes.await();
+            }
+            JsonObject status = object("status", "completed", "agentId", agent.agentId());
+            status.addProperty("success", true);
+            status.addProperty("completed", true);
+            return status;
+        };
+        JsonArray first = SubagentHistoryService.loadStatusBatch(agents, reader, 200, 0);
+        assertEquals(16, first.size());
+        assertEquals("running", first.get(0).getAsJsonObject().get("status").getAsString());
+        assertFalse(first.get(0).getAsJsonObject().get("completed").getAsBoolean());
+        JsonArray next = SubagentHistoryService.loadStatusBatch(agents, reader, 500, 8);
+        assertEquals("tool-8", next.get(0).getAsJsonObject().get("toolUseId").getAsString());
+        assertTrue(next.get(0).getAsJsonObject().get("completed").getAsBoolean());
+        assertTrue(next.get(7).getAsJsonObject().get("completed").getAsBoolean());
+    }
+
+    @Test
     public void returnsLightweightStatusesWithRequestMetadata() throws Exception {
         Path sessionsDir = temporaryFolder.newFolder("sessions").toPath();
         String parentId = "019fa70f-0653-73e2-a613-1fb0a9e83a2b";

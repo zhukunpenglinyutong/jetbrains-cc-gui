@@ -19,12 +19,16 @@ export function buildCodexModelList(
   customModels: ModelInfo[],
   builtInModels: ModelInfo[] = [],
 ): ModelInfo[] {
+  const catalogById = new Map(catalogModels.map(model => [model.id, model]));
   const seen = new Set<string>();
   const out: ModelInfo[] = [];
   for (const model of [...customModels, ...catalogModels, ...builtInModels]) {
     if (seen.has(model.id)) continue;
     seen.add(model.id);
-    out.push(model);
+    // Custom labels win, but cannot hide native capability restrictions for
+    // the same model id (notably Ultra availability).
+    const efforts = catalogById.get(model.id)?.supportedReasoningEfforts;
+    out.push(efforts ? { ...model, supportedReasoningEfforts: efforts } : model);
   }
   return out;
 }

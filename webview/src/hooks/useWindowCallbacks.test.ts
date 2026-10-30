@@ -4,6 +4,9 @@ import { useWindowCallbacks } from './useWindowCallbacks.js';
 import type { UseWindowCallbacksOptions } from './useWindowCallbacks.js';
 import type { ClaudeMessage } from '../types/index.js';
 import { forceWebviewRepaint } from '../utils/forceWebviewRepaint.js';
+import { CODEX_SUBAGENT_STATUS_SETTLED_EVENT, trackCodexStatusRequest, trackCodexSubagentTasks } from '../utils/codexStatusRequestTracker';
+import type { SubagentHistoryResponse } from '../types/subagent';
+import { getClaudeBackgroundTasks, resetClaudeBackgroundTasks } from '../utils/claudeBackgroundTasks';
 
 // Mock the repaint util so we can assert the session-transition path triggers it
 // without touching the real DOM (there is no #app element under jsdom).
@@ -49,6 +52,7 @@ describe('useWindowCallbacks integration', () => {
     setSelectedCodexModel: vi.fn(),
     setLongContextEnabled: vi.fn(),
     setReasoningEffort: vi.fn(),
+    setClaudeUltracode: vi.fn(),
     setCodexFastMode: vi.fn(),
     setProviderConfigVersion: vi.fn(),
     setActiveProviderConfig: vi.fn(),
@@ -112,6 +116,7 @@ describe('useWindowCallbacks integration', () => {
   });
 
   beforeEach(() => {
+    resetClaudeBackgroundTasks();
     window.__sessionTransitioning = false;
     window.__sessionTransitionToken = null;
     window.__deferredTransitionUpdateMessages = null;
@@ -160,6 +165,7 @@ describe('useWindowCallbacks integration', () => {
         model: 'claude-fable-5-1[1m]',
         permissionMode: 'default',
         reasoningEffort: 'high',
+        claudeUltracode: true,
         codexFastMode: 'normal',
       }));
     });
@@ -169,6 +175,7 @@ describe('useWindowCallbacks integration', () => {
     expect(opts.setSelectedClaudeModel).toHaveBeenCalledWith('claude-fable-5-1');
     expect(opts.setLongContextEnabled).toHaveBeenCalledWith(true);
     expect(opts.setReasoningEffort).toHaveBeenCalledWith('high');
+    expect(opts.setClaudeUltracode).toHaveBeenCalledWith(true);
     expect(opts.setCodexFastMode).toHaveBeenCalledWith('normal');
     expect(window.__CCGUI_RECOVERY_STATE_APPLIED__).toBe(true);
     expect((window.sendToJava as ReturnType<typeof vi.fn>).mock.calls.length).toBe(bridgeCallsBeforeRestore);
@@ -180,6 +187,8 @@ describe('useWindowCallbacks integration', () => {
       model: 'gpt-5.6-sol',
       permissionMode: 'default',
       codexFastMode: 'fast',
+      reasoningEffort: 'ultra',
+      claudeUltracode: false,
     });
     const opts = createOptions();
 
@@ -188,7 +197,66 @@ describe('useWindowCallbacks integration', () => {
     expect(opts.setCurrentProvider).toHaveBeenCalledWith('codex');
     expect(opts.setSelectedCodexModel).toHaveBeenCalledWith('gpt-5.6-sol');
     expect(opts.setCodexFastMode).toHaveBeenCalledWith('fast');
+    expect(opts.setReasoningEffort).toHaveBeenCalledWith('ultra');
+    expect(opts.setClaudeUltracode).toHaveBeenCalledWith(false);
     expect(window.__pendingBackendTabState).toBeUndefined();
+  });
+
+  it('merges disjoint Codex status batches in either order and rejects an older poll of the same child', () => {
+    const { result } = renderHook(() => {
+      const [histories, setSubagentHistories] = useState<Record<string, SubagentHistoryResponse>>({});
+      useWindowCallbacks(createOptions({ currentProviderRef: { current: 'codex' },
+        currentSessionIdRef: { current: 'many-agents' }, setSubagentHistories }));
+      return histories;
+    });
+    trackCodexSubagentTasks('many-agents', [{ id: 'child-a' }, { id: 'child-b' }]);
+    trackCodexStatusRequest('many-agents:1', ['child-a']);
+    trackCodexStatusRequest('many-agents:2', ['child-b']);
+    const respond = (requestId: string, toolUseId: string, status: string) => {
+      act(() => window.onSubagentStatusesLoaded?.(JSON.stringify({ sessionId: 'many-agents', provider: 'codex',
+        requestId, statuses: [{ toolUseId, status }] })));
+    };
+    respond('many-agents:2', 'child-b', 'completed');
+    respond('many-agents:1', 'child-a', 'completed');
+    expect(result.current['child-a']?.status).toBe('completed');
+    expect(result.current['child-b']?.status).toBe('completed');
+    trackCodexStatusRequest('many-agents:3', ['child-a']);
+    respond('many-agents:1', 'child-a', 'running');
+    expect(result.current['child-a']?.status).toBe('completed');
+  });
+
+  it('acknowledges a failed native status batch even without any status snapshots', () => {
+    renderHook(() => useWindowCallbacks(createOptions()));
+    const settled = vi.fn();
+    window.addEventListener(CODEX_SUBAGENT_STATUS_SETTLED_EVENT, settled);
+    try {
+      const payload = { sessionId: 'codex-session', provider: 'codex', requestId: 'request-1', error: 'Status read already running' };
+      act(() => window.onSubagentStatusesLoaded?.(JSON.stringify(payload)));
+      expect(settled).toHaveBeenCalledOnce();
+      expect((settled.mock.calls[0][0] as CustomEvent).detail).toEqual(payload);
+    } finally {
+      window.removeEventListener(CODEX_SUBAGENT_STATUS_SETTLED_EVENT, settled);
+    }
+  });
+
+  it('keeps native workflows after foreground completion and clears them on a real session switch', () => {
+    const sessionRef = { current: 'workflow-session' as string | null };
+    renderHook(() => useWindowCallbacks(createOptions({ currentSessionIdRef: sessionRef })));
+    const notify = (session_id: string) => window.onTaskEvent?.(JSON.stringify({ type: 'system',
+      subtype: 'background_tasks_changed', session_id,
+      tasks: [{ task_id: 'workflow', task_type: 'local_workflow', description: 'Review sources' }] }));
+    act(() => notify('workflow-session'));
+    expect(getClaudeBackgroundTasks().tasks).toHaveLength(1);
+    act(() => { window.onStreamEnd?.(); window.setSessionId?.('workflow-session'); });
+    expect(getClaudeBackgroundTasks().tasks).toHaveLength(1);
+    act(() => window.setSessionId?.('different-session'));
+    expect(getClaudeBackgroundTasks().tasks).toHaveLength(0);
+    act(() => notify('workflow-session'));
+    expect(getClaudeBackgroundTasks().tasks).toHaveLength(0);
+    act(() => notify('different-session'));
+    expect(getClaudeBackgroundTasks().tasks).toHaveLength(1);
+    act(() => window.clearMessages?.());
+    expect(getClaudeBackgroundTasks().tasks).toHaveLength(0);
   });
 
   it('drains the latest usage update buffered before React callback registration', () => {

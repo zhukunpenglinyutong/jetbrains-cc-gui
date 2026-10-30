@@ -796,10 +796,10 @@ export function codexModelSupportsMaxEffort(modelId: string): boolean {
  * Reasoning Effort (thinking depth)
  * Controls the depth of reasoning for AI models
  * Claude API values: low, medium, high, xhigh, max
- * Codex API values: low, medium, high, xhigh; GPT-5.6 and GPT-6 support max
+ * Codex values follow model/list capabilities, including native Ultra delegation.
  * Grok CLI values: low, medium, high, xhigh
  */
-export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
 
 /**
  * Codex execution speed mode.
@@ -853,6 +853,12 @@ export const REASONING_LEVELS: ReasoningInfo[] = [
     label: 'Max',
     icon: 'codicon-rocket',
     description: 'Maximum reasoning depth',
+  },
+  {
+    id: 'ultra',
+    label: 'Ultra',
+    icon: 'codicon-organization',
+    description: 'Maximum reasoning with automatic task delegation',
   },
 ];
 
@@ -963,6 +969,9 @@ export interface ChatInputBoxProps {
   reasoningEffort?: ReasoningEffort;
   /** Switch reasoning effort callback */
   onReasoningChange?: (effort: ReasoningEffort) => void;
+  /** Claude native workflow mode, independent of reasoning effort. */
+  claudeUltracode?: boolean;
+  onClaudeUltracodeChange?: (enabled: boolean) => void;
   /** Codex speed mode */
   codexFastMode?: CodexFastMode;
   /** DSH agent preset */
@@ -1058,6 +1067,9 @@ export interface ButtonAreaProps {
   codexNativeAutoReviewAvailable?: boolean;
   /** Current reasoning effort */
   reasoningEffort?: ReasoningEffort;
+  /** Claude native workflow mode, independent of reasoning effort. */
+  claudeUltracode?: boolean;
+  onClaudeUltracodeChange?: (enabled: boolean) => void;
   /** Codex speed mode */
   codexFastMode?: CodexFastMode;
   /** DSH agent preset */

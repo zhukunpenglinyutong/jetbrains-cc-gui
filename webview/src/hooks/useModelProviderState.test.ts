@@ -31,6 +31,18 @@ describe('Codex native auto availability', () => {
     expect(result.current.codexNativeAutoReviewAvailable).toBe(true);
   });
 
+  it('sends explicit native Ultracode changes without modifying effort', () => {
+    const { result } = renderHook(() => useModelProviderState(options));
+    act(() => result.current.handleReasoningChange('low'));
+    act(() => result.current.handleClaudeUltracodeChange(true));
+    expect(result.current.claudeUltracode).toBe(true);
+    expect(result.current.reasoningEffort).toBe('low');
+    expect(sendBridgeEvent).toHaveBeenLastCalledWith('set_claude_ultracode', 'true');
+    act(() => result.current.handleClaudeUltracodeChange(false));
+    expect(result.current.claudeUltracode).toBe(false);
+    expect(sendBridgeEvent).toHaveBeenLastCalledWith('set_claude_ultracode', 'false');
+  });
+
   it('keeps a saved auto mode with unknown dependency status', () => {
     localStorage.setItem('model-selection-state', JSON.stringify({
       provider: 'codex', codexPermissionMode: 'auto',

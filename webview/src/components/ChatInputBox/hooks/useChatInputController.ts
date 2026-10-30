@@ -33,6 +33,7 @@ interface UseChatInputControllerOptions
     | 'attachments'
     | 'value'
     | 'onSubmit'
+    | 'reasoningEffort'
     | 'onInput'
     | 'onAddAttachment'
     | 'onRemoveAttachment'
@@ -67,6 +68,7 @@ interface UseChatInputControllerOptions
 export function useChatInputController({
   selectedModel = DEFAULT_CLAUDE_MODEL_ID,
   currentProvider = 'claude',
+  reasoningEffort = 'high',
   attachments: externalAttachments,
   value,
   onSubmit,
@@ -202,6 +204,8 @@ export function useChatInputController({
     sdkInstalled,
     currentProvider,
     clearInput,
+    selectedModel,
+    reasoningEffort,
     externalAttachments,
     setInternalAttachments,
     clearAttachmentsDraft,

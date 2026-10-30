@@ -17,8 +17,9 @@ import type {
   SubagentStatusesResponse,
 } from '../../types';
 import { parseTaskNotification } from '../../utils/taskEventParser';
+import { receiveClaudeBackgroundTasks } from '../../utils/claudeBackgroundTasks';
 import { deepEqual } from '../../utils/deepEqual';
-import { isLatestCodexStatusRequest, isCurrentCodexSubagentTask } from '../../utils/codexStatusRequestTracker';
+import { CODEX_SUBAGENT_STATUS_SETTLED_EVENT, isLatestCodexStatusRequest, isCurrentCodexSubagentTask } from '../../utils/codexStatusRequestTracker';
 import {
   setupSlashCommandsCallback,
   resetSlashCommandsState,
@@ -172,23 +173,23 @@ export function registerWindowCallbacks(
 
   window.onSubagentStatusesLoaded = (json: string) => {
     try {
-      if (!options.setSubagentHistories) return;
       const result = JSON.parse(json) as SubagentStatusesResponse;
+      // Busy/error responses also finish an observation request. Acknowledge
+      // before filtering snapshots so a bounded poll can advance its cursor.
+      window.dispatchEvent(new CustomEvent(CODEX_SUBAGENT_STATUS_SETTLED_EVENT, { detail: result }));
+      if (!options.setSubagentHistories) return;
       if (!isCurrentSubagentResponse(
         result,
         options.currentSessionIdRef.current,
         options.currentProviderRef.current,
       ) || !Array.isArray(result.statuses)) return;
-      // Drop late/out-of-order poll responses: only the answer to the latest
-      // request the frontend sent may be merged.
-      if (!isLatestCodexStatusRequest(result.requestId)) return;
 
       options.setSubagentHistories((prev) => {
         let next = prev;
         for (const snapshot of result.statuses ?? []) {
           if (!isCurrentCodexSubagentTask({ ...snapshot, sessionId: result.sessionId })) continue;
           const key = snapshot.toolUseId || snapshot.agentId;
-          if (!key) continue;
+          if (!key || !isLatestCodexStatusRequest(result.requestId, key)) continue;
           const existing = next[key];
           const merged = mergeSubagentHistory(
             existing,
@@ -222,8 +223,11 @@ export function registerWindowCallbacks(
   //      update the agent it was emitted for, never mislabel another.
   window.onTaskEvent = (eventJson: string) => {
     try {
+      const raw = JSON.parse(eventJson);
+      if (options.currentProviderRef.current === 'claude'
+          && receiveClaudeBackgroundTasks(raw, options.currentSessionIdRef.current)) return;
       if (!options.setTaskEvents) return;
-      const taskEvent = parseTaskNotification(JSON.parse(eventJson));
+      const taskEvent = parseTaskNotification(raw);
       if (!taskEvent) return;
       const { toolUseId } = taskEvent;
       options.setTaskEvents((prev) => {

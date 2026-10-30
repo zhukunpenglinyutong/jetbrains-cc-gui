@@ -24,6 +24,19 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class ClaudeSDKBridge extends BaseSDKBridge {
 
+    // Native turns can wait for hours. Keep their blocking waits and Stop control
+    // off the shared ForkJoinPool so low-core hosts can always interrupt a turn.
+    private static final java.util.concurrent.ExecutorService CLAUDE_EXECUTOR =
+            java.util.concurrent.Executors.newCachedThreadPool(task -> {
+                Thread thread = new Thread(task, "ClaudeBridge-worker");
+                thread.setDaemon(true);
+                return thread;
+            });
+
+    public static java.util.concurrent.Executor claudeExecutor() {
+        return CLAUDE_EXECUTOR;
+    }
+
     private final ClaudeStreamAdapter streamAdapter;
     private final ClaudeRequestParamsBuilder requestParamsBuilder;
     private final ClaudeJsonOutputExtractor jsonOutputExtractor;
@@ -165,6 +178,30 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         }
         // Also try per-process interrupt (covers per-process fallback mode)
         super.interruptChannel(channelId);
+    }
+
+    /** Stops the captured native runtime, including workflows running between foreground turns. */
+    public void interruptChannel(String channelId, String sessionId, String runtimeSessionEpoch) {
+        DaemonBridge db = daemonCoordinator.getCurrentDaemonBridge();
+        try {
+            if (db != null && db.isAlive()) {
+                JsonObject params = new JsonObject();
+                params.addProperty("sessionId", sessionId);
+                params.addProperty("runtimeSessionEpoch", runtimeSessionEpoch);
+                Boolean stopped = db.sendCommand("claude.abortTurn", params, new DaemonBridge.DaemonOutputCallback() {
+                    @Override public void onLine(String line) { }
+                    @Override public void onStderr(String text) { }
+                    @Override public void onError(String error) { LOG.warn("[ClaudeSDKBridge] Abort failed: " + error); }
+                    @Override public void onComplete(boolean success) { }
+                }).orTimeout(10, java.util.concurrent.TimeUnit.SECONDS).join();
+                if (!Boolean.TRUE.equals(stopped)) {
+                    throw new IllegalStateException("Claude runtime could not be interrupted");
+                }
+            }
+        } finally {
+            // Per-process fallback retains its channel-scoped process ownership.
+            super.interruptChannel(channelId);
+        }
     }
 
     // ============================================================================
@@ -412,6 +449,28 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String reasoningEffort,
             MessageCallback callback
     ) {
+        return sendMessage(channelId, message, sessionId, runtimeSessionEpoch, cwd, attachments,
+                permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking,
+                reasoningEffort, false, callback);
+    }
+
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String model,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            boolean ultracode,
+            MessageCallback callback
+    ) {
         String normalizedCwd = normalizeCwdForNode(cwd);
 
         // Try daemon mode first (avoids per-request Node.js process spawning)
@@ -419,7 +478,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         if (db != null) {
             return sendMessageViaDaemon(db, channelId, message, sessionId, runtimeSessionEpoch, normalizedCwd,
                     attachments, permissionMode, model, openedFiles, agentPrompt,
-                    streaming, disableThinking, reasoningEffort, callback);
+                    streaming, disableThinking, reasoningEffort, ultracode, callback);
         }
 
         // Fallback: per-process mode (spawns a new Node.js process per request)
@@ -438,6 +497,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 streaming,
                 disableThinking,
                 reasoningEffort,
+                ultracode,
                 callback
         );
     }
@@ -729,6 +789,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
+            boolean ultracode,
             MessageCallback callback
     ) {
         return daemonRequestExecutor.sendMessageViaDaemon(
@@ -746,6 +807,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 streaming,
                 disableThinking,
                 reasoningEffort,
+                ultracode,
                 callback
         );
     }

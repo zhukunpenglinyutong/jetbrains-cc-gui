@@ -81,6 +81,7 @@
     "localProject": "स्थानीय",
     "disabled": "अक्षम",
     "sdkNotInstalled": "{{provider}} SDK इंस्टॉल नहीं है। चैट शुरू करने के लिए कृपया SDK इंस्टॉल करें।",
+    "codexUltraCapabilitiesLoading": "Ultra की उपलब्धता जाँची जा रही है। मॉडल लोड होने के बाद फिर से भेजें।",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "पेस्ट की गई छवि तैयार हो रही है...",
     "sdkStatusUnavailable": "SDK स्थिति की जांच नहीं हो सकी।",
@@ -145,7 +146,9 @@
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "इस योजना को और बेहतर बनाना जारी रखें:"
+    "continueRefiningPlan": "इस योजना को और बेहतर बनाना जारी रखें:",
+    "backgroundTasksRunning": "{{count}} पृष्ठभूमि कार्य चल रहे हैं",
+    "stopBackgroundTasks": "पृष्ठभूमि कार्य रोकें"
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -1976,6 +1979,10 @@
     "xhigh": {
       "label": "अधिकतम",
       "description": "अधिकतम तर्क गहराई"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "स्वचालित कार्य प्रत्यायोजन के साथ अधिकतम तर्क"
     }
   },
   "errorBoundary": {
@@ -2203,6 +2210,12 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
+    }
+  },
+  "modelConfig": {
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "स्वचालित कार्य प्रत्यायोजन वाला Claude का मूल वर्कफ़्लो। चुने गए तर्क स्तर को बनाए रखता है।"
     }
   }
 }

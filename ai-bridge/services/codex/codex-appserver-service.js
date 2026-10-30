@@ -1418,7 +1418,7 @@ export class CodexAppServerService extends EventEmitter {
         !candidate.settled && candidate.threadId === threadId);
     if (operation && (method === 'item/completed' || method === 'item/updated'
         || method === 'item/started' && ['reasoning', 'commandExecution', 'mcpToolCall', 'fileChange', 'contextCompaction',
-          'dynamicToolCall', 'collabAgentToolCall', 'imageView', 'imageGeneration', 'webSearch'].includes(itemType))) {
+          'dynamicToolCall', 'collabAgentToolCall', 'subAgentActivity', 'imageView', 'imageGeneration', 'webSearch'].includes(itemType))) {
       this.#emitItemMarkers(operation, this.itemSnapshots.get(this.#itemSnapshotKey(threadId, itemId)) ?? safeItem, {
         authoritative: method === 'item/completed',
       });

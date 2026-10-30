@@ -37,6 +37,9 @@ import {
   preconnectPersistent,
   shutdownPersistentRuntimes,
   abortCurrentTurn,
+  abortTurnPersistent as claudeAbortTurnPersistent,
+  matchesClaudeStopTarget,
+  validateClaudeStopTarget,
   resetRuntimePersistent,
   getContextUsagePersistent,
   getSnapshot as getClaudeRuntimeSnapshot,
@@ -495,7 +498,7 @@ async function processRequest(request) {
 
   // Save original env values for restoration after request completes
   const savedEnv = {};
-  let codexResult;
+  let providerResult;
 
   try {
     // Apply environment variables from params (with save for restore).
@@ -539,9 +542,9 @@ async function processRequest(request) {
     delete stdinData.env; // env is handled separately
 
     if (provider === 'claude' && command === 'send') {
-      await sendMessagePersistent(stdinData);
+      providerResult = await sendMessagePersistent(stdinData);
     } else if (provider === 'claude' && command === 'sendWithAttachments') {
-      await sendMessageWithAttachmentsPersistent(stdinData);
+      providerResult = await sendMessageWithAttachmentsPersistent(stdinData);
     } else if (provider === 'claude' && command === 'preconnect') {
       await preconnectPersistent(stdinData);
     } else if (provider === 'claude' && command === 'resetRuntime') {
@@ -569,13 +572,13 @@ async function processRequest(request) {
     } else if (provider === 'zcode' && command === 'getUsage') {
       await zcodeGetUsagePersistent(stdinData);
     } else if (provider === 'codex' && command === 'send') {
-      codexResult = await codexSendPersistent(stdinData);
+      providerResult = await codexSendPersistent(stdinData);
     } else if (provider === 'codex' && command === 'executePlan') {
-      codexResult = await codexExecutePlanPersistent(stdinData);
+      providerResult = await codexExecutePlanPersistent(stdinData);
     } else if (provider === 'codex' && command === 'compact') {
-      codexResult = await codexCompactPersistent(stdinData);
+      providerResult = await codexCompactPersistent(stdinData);
     } else if (provider === 'codex' && command === 'review') {
-      codexResult = await codexReviewPersistent(stdinData);
+      providerResult = await codexReviewPersistent(stdinData);
     } else if (provider === 'codex' && command === 'preconnect') {
       await codexPreconnectPersistent(stdinData);
     } else {
@@ -598,10 +601,10 @@ async function processRequest(request) {
       }
     }
 
-    const success = !codexResult?.outcome || codexResult.outcome === 'completed';
-    const aborted = ['cancelled', 'interrupted'].includes(codexResult?.outcome);
-    writeRawLine({ id, done: true, success, ...(codexResult ? { result: codexResult } : {}),
-      ...(aborted ? { aborted: true } : !success ? { error: codexResult.error || `Codex operation ${codexResult.outcome}` } : {}) });
+    const success = !providerResult?.outcome || providerResult.outcome === 'completed';
+    const aborted = ['cancelled', 'interrupted'].includes(providerResult?.outcome);
+    writeRawLine({ id, done: true, success, ...(providerResult ? { result: providerResult } : {}),
+      ...(aborted ? { aborted: true } : !success ? { error: providerResult.error || `${provider} operation ${providerResult.outcome}` } : {}) });
   } catch (error) {
     // Only send done if not already sent (e.g., by process.exit interceptor)
     if (activeRequestId !== null) {
@@ -704,6 +707,7 @@ async function runDaemonMain() {
   // Command requests must be serialized because they share `activeRequestId`
   // for stdout interception. Heartbeats/status are safe to run concurrently.
   let commandQueue = Promise.resolve();
+  const queuedClaudeSends = new Set();
   let pendingIdleShutdownToken = null;
   const deferredIdleLines = [];
 
@@ -864,6 +868,35 @@ async function runDaemonMain() {
       return;
     }
 
+    // Native workflows can outlive the send request. Stop must still reach the
+    // exact Claude session between turns and must never wait behind its work.
+    if (request.method === 'claude.abortTurn') {
+      const target = request.params || {};
+      const fail = error => writeRawLine({ id: request.id || '0', done: true, success: false, error: error.message || String(error) });
+      try {
+        validateClaudeStopTarget(target, [...queuedClaudeSends].map(send => send.request.params));
+        let cancelledQueued = 0;
+        for (const send of queuedClaudeSends) {
+          if (!matchesClaudeStopTarget(send.request.params, target)) continue;
+          send.cancelled = true;
+          queuedClaudeSends.delete(send);
+          cancelledQueued++;
+          // This send has never reached the provider. Complete its own request
+          // immediately without touching the unrelated activeRequestId.
+          writeRawLine({ id: send.request.id || '0', done: true, success: false,
+            aborted: true, result: { outcome: 'cancelled' } });
+        }
+        claudeAbortTurnPersistent(target).then(result => {
+          const stopped = result.stopped || cancelledQueued > 0;
+          writeRawLine({ id: request.id || '0', done: true, success: stopped,
+            result: { stopped }, ...(!stopped ? { error: 'No matching Claude work to stop.' } : {}) });
+        }).catch(fail);
+      } catch (error) {
+        fail(error);
+      }
+      return;
+    }
+
     // Live permission-mode switch bypasses the command queue: it targets the
     // runtime backing the in-progress turn and must apply before that turn's
     // next tool call. Queuing it behind the turn's own processRequest would
@@ -1006,9 +1039,18 @@ async function runDaemonMain() {
     }
 
     // Command requests are serialized to prevent activeRequestId conflicts
+    const queuedClaudeSend = ['claude.send', 'claude.sendWithAttachments'].includes(request.method)
+      ? { request, cancelled: false } : null;
+    if (queuedClaudeSend) queuedClaudeSends.add(queuedClaudeSend);
     pendingCommandCount++;
     commandQueue = commandQueue
-      .then(() => processRequest(request))
+      .then(() => {
+        if (queuedClaudeSend) {
+          queuedClaudeSends.delete(queuedClaudeSend);
+          if (queuedClaudeSend.cancelled) return;
+        }
+        return processRequest(request);
+      })
       .finally(() => { pendingCommandCount = Math.max(0, pendingCommandCount - 1); })
       .catch((e) => {
         _originalStderrWrite(

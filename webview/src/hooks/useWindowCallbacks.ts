@@ -53,6 +53,7 @@ export interface UseWindowCallbacksOptions {
   setSelectedCodexModel: React.Dispatch<React.SetStateAction<string>>;
   setLongContextEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setReasoningEffort: React.Dispatch<React.SetStateAction<ReasoningEffort>>;
+  setClaudeUltracode?: React.Dispatch<React.SetStateAction<boolean>>;
   setCodexFastMode: React.Dispatch<React.SetStateAction<CodexFastMode>>;
   setProviderConfigVersion: React.Dispatch<React.SetStateAction<number>>;
   setActiveProviderConfig: React.Dispatch<React.SetStateAction<ProviderConfig | null>>;

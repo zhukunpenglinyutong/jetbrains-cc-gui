@@ -6,6 +6,7 @@ import {
   cleanupStaleSessionRuntimes,
   rememberRuntime,
   resetRegistryState,
+  RUNTIME_MAX_ABSOLUTE_LIFETIME_MS,
 } from './runtime-registry.js';
 import { updateBackgroundTaskState } from './runtime-lifecycle.js';
 
@@ -78,4 +79,28 @@ test('background Agent protects runtime until its terminal notification', async 
   await cleanupStaleAnonymousRuntimes(async (item) => disposed.push(item));
 
   assert.deepEqual(disposed, [runtime]);
+});
+
+test('absolute lifetime reaps leaked legacy task edges but preserves authoritative live tasks', async () => {
+  const createdAt = Date.now() - RUNTIME_MAX_ABSOLUTE_LIFETIME_MS - 1000;
+  const legacy = staleRuntime({ createdAt, backgroundTaskIds: new Set(['lost-terminal-edge']) });
+  const authoritative = staleRuntime({ createdAt });
+  updateBackgroundTaskState(authoritative, {
+    type: 'system', subtype: 'background_tasks_changed',
+    tasks: [{ task_id: 'long-workflow', task_type: 'local_workflow' }],
+  });
+  const activeTurn = staleRuntime({ createdAt, activeTurnCount: 1, backgroundTaskIds: new Set(['legacy']) });
+  const cliBusy = staleRuntime({ createdAt, cliTurnInFlight: true, backgroundTaskIds: new Set(['legacy']) });
+  for (const [signature, runtime] of Object.entries({ legacy, authoritative, activeTurn, cliBusy })) {
+    rememberRuntime(runtime, { runtimeSignature: signature });
+  }
+  const disposed = [];
+  await cleanupStaleAnonymousRuntimes(async runtime => disposed.push(runtime));
+  assert.deepEqual(disposed, [legacy]);
+
+  // An authoritative empty snapshot releases the old runtime immediately.
+  updateBackgroundTaskState(authoritative, { type: 'system', subtype: 'background_tasks_changed', tasks: [] });
+  legacy.closed = true;
+  await cleanupStaleAnonymousRuntimes(async runtime => disposed.push(runtime));
+  assert.deepEqual(disposed, [legacy, authoritative]);
 });

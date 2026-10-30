@@ -1015,12 +1015,23 @@ public class CodexSDKBridge extends BaseSDKBridge {
         if (requestParams != null) {
             params.add("params", requestParams.deepCopy());
         }
-        boolean transcriptRead = "codex.readHistoryPage".equals(method) || "codex.readSubagent".equals(method)
-                || "codex.countThreadMessages".equals(method);
-        long timeoutMs = transcriptRead ? 120_000L : 30_000L;
+        long timeoutMs = readOnlyTimeoutMillis(method, requestParams);
         return CompletableFuture.supplyAsync(() -> this.appServerRequestExecutor
                 .sendReadOnlyCommand(daemon, method, params, timeoutMs),
                 CodexAppServerRequestExecutor.turnWaitExecutor());
+    }
+
+    static long readOnlyTimeoutMillis(String method, JsonObject requestParams) {
+        // Status polls need a short RPC deadline too: cancelling a CompletableFuture
+        // does not interrupt supplyAsync's worker waiting on the native response.
+        if ("codex.readSubagent".equals(method) && requestParams != null
+                && requestParams.has("includeHistory") && requestParams.get("includeHistory").isJsonPrimitive()
+                && !requestParams.get("includeHistory").getAsBoolean()) {
+            return 8_000L;
+        }
+        boolean transcriptRead = "codex.readHistoryPage".equals(method) || "codex.readSubagent".equals(method)
+                || "codex.countThreadMessages".equals(method);
+        return transcriptRead ? 120_000L : 30_000L;
     }
 
     /**

@@ -690,7 +690,8 @@ public class ChatWindowDelegate {
                 session.getModel(),
                 session.getPermissionMode(),
                 session.getReasoningEffort(),
-                session.getCodexServiceTier()
+                session.getCodexServiceTier(),
+                session.isClaudeUltracode()
         );
         host.callJavaScript("window.applyBackendTabState", JsUtils.escapeJs(payload));
     }
@@ -706,11 +707,24 @@ public class ChatWindowDelegate {
             String reasoningEffort,
             String codexServiceTier
     ) {
+        return buildBackendTabStateJson(provider, model, permissionMode, reasoningEffort,
+                codexServiceTier, false);
+    }
+
+    static String buildBackendTabStateJson(
+            String provider,
+            String model,
+            String permissionMode,
+            String reasoningEffort,
+            String codexServiceTier,
+            boolean claudeUltracode
+    ) {
         JsonObject state = new JsonObject();
         state.addProperty("provider", provider);
         state.addProperty("model", model);
         state.addProperty("permissionMode", permissionMode);
         state.addProperty("reasoningEffort", reasoningEffort);
+        state.addProperty("claudeUltracode", claudeUltracode);
         state.addProperty("codexFastMode", "fast".equals(codexServiceTier) ? "fast" : "normal");
         return state.toString();
     }

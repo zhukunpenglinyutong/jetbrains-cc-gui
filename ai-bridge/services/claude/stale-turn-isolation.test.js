@@ -358,6 +358,7 @@ test('abort while gated on an in-flight CLI turn fails the turn instead of hangi
   let query;
   __testing.setQueryFn((args) => {
     query = createScriptedQuery(args, [turn1]);
+    query.interrupt = async () => {};
     return query;
   });
 

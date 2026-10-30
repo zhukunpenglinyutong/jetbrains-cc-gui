@@ -43,6 +43,10 @@ class SubagentHistoryService {
     // Explicit null retires the prior followup exclusion after a newer native turn appears.
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
     private static final int MAX_JSONL_LINES = 50_000;
+    private static final int STATUS_PARALLELISM = 8;
+    private static final long STATUS_BATCH_TIMEOUT_MS = 10_000;
+    private static final java.util.concurrent.ExecutorService STATUS_EXECUTOR =
+            AppExecutorUtil.createBoundedApplicationPoolExecutor("Codex subagent status", STATUS_PARALLELISM);
     /**
      * How long a torn tail may sit unmodified before the writer is presumed gone.
      * A live writer completes a mid-append line within milliseconds; a line still
@@ -55,6 +59,7 @@ class SubagentHistoryService {
     private final CodexSubagentHistoryLoader codexLoader;
     private final Set<String> inFlightCodexRequests = ConcurrentHashMap.newKeySet();
     private final Set<String> inFlightCodexStatusSessions = ConcurrentHashMap.newKeySet();
+    private final java.util.concurrent.atomic.AtomicInteger statusBatchOffset = new java.util.concurrent.atomic.AtomicInteger();
 
     SubagentHistoryService(HandlerContext context) {
         this(context, new CodexSubagentHistoryLoader(
@@ -205,23 +210,18 @@ class SubagentHistoryService {
         }
         CompletableFuture.runAsync(() -> {
             try {
-                JsonArray statuses = new JsonArray();
-                for (CodexSubagentHistoryLoader.StatusRequest agent : agents) {
+                JsonArray statuses = loadStatusBatch(agents, agent -> {
                     if (!this.isCurrentCodexRoot(responseSessionId)) {
-                        return;
+                        return pendingStatus(agent);
                     }
                     JsonObject nativeResult = this.readNativeSubagent(responseSessionId, agent.agentId(), false,
                             previousTurns.get(agent.toolUseId()));
                     if (nativeResult != null) {
-                        nativeResult.addProperty("toolUseId", agent.toolUseId());
-                        nativeResult.addProperty("agentPath", agent.agentPath());
-                        statuses.add(nativeResult);
-                    } else {
-                        for (CodexSubagentHistoryLoader.StatusResult result : this.codexLoader.loadStatuses(responseSessionId, List.of(agent))) {
-                            statuses.add(toJson(result));
-                        }
+                        return nativeResult;
                     }
-                }
+                    var offline = this.codexLoader.loadStatuses(responseSessionId, List.of(agent));
+                    return offline.isEmpty() ? pendingStatus(agent) : toJson(offline.get(0));
+                }, STATUS_BATCH_TIMEOUT_MS, statusBatchOffset.getAndAdd(STATUS_PARALLELISM));
                 response.addProperty("success", true);
                 for (JsonElement element : statuses) {
                     JsonObject status = element.getAsJsonObject();
@@ -242,6 +242,66 @@ class SubagentHistoryService {
                 this.sendStatusesResponse(response);
             }
         }, AppExecutorUtil.getAppExecutorService());
+    }
+
+    @FunctionalInterface
+    interface StatusReader {
+        JsonObject read(CodexSubagentHistoryLoader.StatusRequest agent) throws Exception;
+    }
+
+    /** Bound RPC fanout and the whole poll, retaining healthy siblings when one read fails. */
+    static JsonArray loadStatusBatch(List<CodexSubagentHistoryLoader.StatusRequest> agents,
+                                    StatusReader reader, long timeoutMillis, int offset) throws InterruptedException {
+        JsonArray statuses = new JsonArray();
+        if (agents.isEmpty()) {
+            return statuses;
+        }
+        List<java.util.concurrent.Callable<JsonObject>> work = new ArrayList<>(agents.size());
+        // Rotate the first wave so a handful of unresponsive children cannot starve later ones.
+        int start = Math.floorMod(offset, agents.size());
+        for (int i = 0; i < agents.size(); i++) {
+            var agent = agents.get((start + i) % agents.size());
+            work.add(() -> {
+                JsonObject status;
+                try {
+                    status = reader.read(agent);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return pendingStatus(agent);
+                } catch (java.util.concurrent.TimeoutException timeout) {
+                    return pendingStatus(agent);
+                } catch (Exception error) {
+                    status = pendingStatus(agent);
+                    status.addProperty("status", "error");
+                    status.addProperty("error", error.getMessage() != null ? error.getMessage() : "Status read failed");
+                }
+                status.addProperty("toolUseId", agent.toolUseId());
+                status.addProperty("agentPath", agent.agentPath());
+                return status;
+            });
+        }
+        var results = STATUS_EXECUTOR.invokeAll(work, timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+        for (int i = 0; i < results.size(); i++) {
+            var agent = agents.get((start + i) % agents.size());
+            try {
+                statuses.add(results.get(i).get());
+            } catch (java.util.concurrent.CancellationException | java.util.concurrent.ExecutionException error) {
+                // Poll timeout is not evidence that a native agent failed or completed.
+                statuses.add(pendingStatus(agent));
+            }
+        }
+        return statuses;
+    }
+
+    private static JsonObject pendingStatus(CodexSubagentHistoryLoader.StatusRequest agent) {
+        JsonObject status = new JsonObject();
+        status.addProperty("toolUseId", agent.toolUseId());
+        status.addProperty("agentPath", agent.agentPath());
+        status.addProperty("agentId", agent.agentId());
+        status.addProperty("success", false);
+        status.addProperty("completed", false);
+        status.addProperty("status", "running");
+        return status;
     }
 
     private static List<CodexSubagentHistoryLoader.StatusRequest> parseStatusRequests(JsonArray agents) {
@@ -354,10 +414,20 @@ class SubagentHistoryService {
         if (previousTurnId != null) {
             params.addProperty("nativeTaskPreviousTurnId", previousTurnId);
         }
-        JsonObject result = bridge.readCodexNative("codex.readSubagent", session == null ? "codex" : session.getChannelId(),
-                session == null ? this.context.getProject().getBasePath() : session.getCwd(), rootThreadId, params)
-                .get(125, java.util.concurrent.TimeUnit.SECONDS);
+        CompletableFuture<JsonObject> read = bridge.readCodexNative("codex.readSubagent",
+                session == null ? "codex" : session.getChannelId(),
+                session == null ? this.context.getProject().getBasePath() : session.getCwd(), rootThreadId, params);
+        JsonObject result;
+        try {
+            result = read.get(125, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (InterruptedException | java.util.concurrent.TimeoutException error) {
+            read.cancel(true);
+            throw error;
+        }
         if (result == null || result.has("error")) {
+            if (!includeHistory && result != null && "timeout".equals(getString(result, "errorCode"))) {
+                throw new java.util.concurrent.TimeoutException("Subagent status is still pending");
+            }
             String error = result == null ? "Native subagent returned no response" : getString(result, "error");
             if (CodexNativeHistoryReader.permitsOfflineFallback(error)) {
                 return null;
@@ -537,11 +607,11 @@ class SubagentHistoryService {
      * without a HandlerContext.</p>
      *
      * @param file transcript to read
-     * @return the parsed records, capped at {@link #MAX_JSONL_LINES}
+     * @return the latest parsed records, capped at {@link #MAX_JSONL_LINES}
      * @throws IOException when the writer is still mid-append
      */
     static JsonArray readJsonl(Path file) throws IOException {
-        JsonArray messages = new JsonArray();
+        java.util.ArrayDeque<JsonElement> recentRecords = new java.util.ArrayDeque<>();
         // True while the most recent non-blank line failed to parse. A valid line
         // clears it, so this ends up describing the LAST non-blank line alone —
         // which is exactly what a torn tail is: only a malformed final line means
@@ -549,9 +619,10 @@ class SubagentHistoryService {
         // lines clears the flag and must not block reads forever, since retries
         // would re-read the same permanently damaged bytes.
         boolean tailMalformed = false;
-        int acceptedLines = 0;
-        // Streaming keeps memory flat for large subagent transcripts; every line still
-        // participates in the torn-tail check even after the accepted-lines cap.
+        // Retain the tail so long-running native workflows keep their newest output
+        // and terminal assistant message. A deque bounds memory without shifting
+        // 50,000 elements for every additional record. Every line still participates
+        // in the torn-tail check.
         // Decode with REPLACE, not Files.lines' REPORT: a mid-append read whose write
         // boundary splits a multi-byte UTF-8 character (CJK text, emoji) must degrade
         // to an unparseable last line — i.e. the torn-tail path below — instead of
@@ -567,16 +638,18 @@ class SubagentHistoryService {
                 try {
                     JsonElement parsed = JsonParser.parseString(line);
                     tailMalformed = false;
-                    if (acceptedLines < MAX_JSONL_LINES) {
-                        messages.add(parsed);
-                        acceptedLines++;
+                    if (recentRecords.size() == MAX_JSONL_LINES) {
+                        recentRecords.removeFirst();
                     }
+                    recentRecords.addLast(parsed);
                 } catch (JsonSyntaxException e) {
                     tailMalformed = true;
                     LOG.warn("Malformed JSONL line in subagent history: " + e.getMessage());
                 }
             }
         }
+        JsonArray messages = new JsonArray(recentRecords.size());
+        recentRecords.forEach(messages::add);
         if (tailMalformed) {
             // A live writer finishes its mid-append line within milliseconds. If the
             // file has not changed beyond the grace window, the writer is gone and

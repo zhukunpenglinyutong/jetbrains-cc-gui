@@ -81,6 +81,7 @@
     "localProject": "Local",
     "disabled": "Deshabilitado",
     "sdkNotInstalled": "{{provider}} SDK no está instalado. Instala el SDK para comenzar a chatear.",
+    "codexUltraCapabilitiesLoading": "Comprobando la disponibilidad de Ultra. Vuelve a enviar cuando termine de cargar el modelo.",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "Preparando imagen pegada...",
     "sdkStatusUnavailable": "No se pudo comprobar el estado del SDK.",
@@ -145,7 +146,9 @@
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "Continuar refinando este plan:"
+    "continueRefiningPlan": "Continuar refinando este plan:",
+    "backgroundTasksRunning": "{{count}} tareas en segundo plano en ejecución",
+    "stopBackgroundTasks": "Detener tareas en segundo plano"
   },
   "settings": {
     "title": "Configuración",
@@ -1984,6 +1987,10 @@
     "xhigh": {
       "label": "Máximo",
       "description": "Profundidad máxima de razonamiento"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "Razonamiento máximo con delegación automática de tareas"
     }
   },
   "errorBoundary": {
@@ -2211,6 +2218,12 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
+    }
+  },
+  "modelConfig": {
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Flujo nativo de Claude con delegación automática de tareas. Mantiene el nivel de razonamiento elegido."
     }
   }
 }

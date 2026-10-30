@@ -37,9 +37,12 @@ public class MessageJsonConverter {
             JsonObject msgObj = new JsonObject();
             msgObj.addProperty("type", msg.type.toString().toLowerCase());
             msgObj.addProperty("timestamp", msg.timestamp);
-            msgObj.addProperty("content", truncateErrorContent(msg.content != null ? msg.content : ""));
+            boolean userMessage = msg.type == ClaudeSession.Message.Type.USER;
+            String content = msg.content != null ? msg.content : "";
+            msgObj.addProperty("content", truncateErrorContent(userMessage
+                    ? UserMessageSanitizer.sanitizeUserFacingText(content) : content));
             if (msg.raw != null) {
-                msgObj.add("raw", truncateRawForTransport(msg.raw));
+                msgObj.add("raw", truncateRawForTransport(msg.raw, userMessage));
             }
             messagesArray.add(msgObj);
         }
@@ -81,7 +84,20 @@ public class MessageJsonConverter {
      * Handles tool_result and error text blocks.
      */
     public static JsonObject truncateRawForTransport(JsonObject raw) {
+        return truncateRawForTransport(raw, raw.has("type")
+                && new JsonPrimitive("user").equals(raw.get("type")));
+    }
+
+    private static JsonObject truncateRawForTransport(JsonObject raw, boolean userMessage) {
         JsonObject transport = buildTransportRaw(raw);
+        if (userMessage) {
+            // The frontend renders structured raw blocks before the display-only content.
+            // Work on the transport copy so native transcript data remains untouched.
+            sanitizeUserContent(transport);
+            if (transport.has("message") && transport.get("message").isJsonObject()) {
+                sanitizeUserContent(transport.getAsJsonObject("message"));
+            }
+        }
         JsonElement contentEl = findContentElement(transport);
 
         if (contentEl == null) {
@@ -180,6 +196,40 @@ public class MessageJsonConverter {
         }
 
         return copied;
+    }
+
+    private static void sanitizeUserContent(JsonObject message) {
+        JsonElement text = message.get("text");
+        if (text != null && text.isJsonPrimitive() && text.getAsJsonPrimitive().isString()) {
+            message.addProperty("text", UserMessageSanitizer.sanitizeUserFacingText(text.getAsString()));
+        }
+        JsonElement content = message.get("content");
+        if (content == null) {
+            return;
+        }
+        if (content.isJsonPrimitive() && content.getAsJsonPrimitive().isString()) {
+            message.addProperty("content", UserMessageSanitizer.sanitizeUserFacingText(content.getAsString()));
+        } else if (content.isJsonArray()) {
+            JsonArray visibleBlocks = new JsonArray();
+            for (JsonElement element : content.getAsJsonArray()) {
+                if (element.isJsonObject()) {
+                    JsonObject block = element.getAsJsonObject();
+                    JsonElement blockText = block.get("text");
+                    if (new JsonPrimitive("text").equals(block.get("type"))
+                            && blockText != null && blockText.isJsonPrimitive()
+                            && blockText.getAsJsonPrimitive().isString()) {
+                        String sanitized = UserMessageSanitizer.sanitizeUserFacingText(blockText.getAsString());
+                        if (sanitized.isEmpty() && !sanitized.equals(blockText.getAsString())) {
+                            continue;
+                        }
+                        block.addProperty("text", sanitized);
+                    }
+                }
+                // Images, tool results and other structured blocks retain their content.
+                visibleBlocks.add(element);
+            }
+            message.add("content", visibleBlocks);
+        }
     }
 
     private static JsonObject buildTransportRaw(JsonObject raw) {

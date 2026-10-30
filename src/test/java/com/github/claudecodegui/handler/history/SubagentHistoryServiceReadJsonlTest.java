@@ -32,6 +32,31 @@ public class SubagentHistoryServiceReadJsonlTest {
     private static final String INTERIOR_DAMAGE = "{\"type\":\"assistant\",\"uuid\":\"broken";
 
     @Test
+    public void longWorkflowKeepsTheLatestRecordsAndActualTerminalBeyondTheCap() throws IOException {
+        Path file = Files.createTempFile("cc-gui-long-subagent-", ".jsonl");
+        try {
+            try (var writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+                for (int i = 0; i < 50_001; i++) {
+                    writer.write("{\"type\":\"user\",\"index\":" + i + "}\n");
+                }
+                writer.write(VALID_ASSISTANT + "\n");
+            }
+            JsonArray messages = SubagentHistoryService.readJsonl(file);
+            assertEquals(50_000, messages.size());
+            assertEquals(2, messages.get(0).getAsJsonObject().get("index").getAsInt());
+            assertTrue(SubagentHistoryService.hasCompleted(messages));
+
+            Files.writeString(file, "{\"type\":\"assistant\",\"message\":{\"stop_reason\":\"tool_use\"}}\n",
+                    StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.APPEND);
+            JsonArray resumed = SubagentHistoryService.readJsonl(file);
+            assertEquals(50_000, resumed.size());
+            org.junit.Assert.assertFalse(SubagentHistoryService.hasCompleted(resumed));
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
     public void readsACompleteTranscript() throws IOException {
         JsonArray messages = SubagentHistoryService.readJsonl(
                 writeTranscript(VALID_USER, VALID_ASSISTANT));

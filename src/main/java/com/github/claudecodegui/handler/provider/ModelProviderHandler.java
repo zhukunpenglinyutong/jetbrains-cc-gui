@@ -356,6 +356,21 @@ public class ModelProviderHandler {
         }
     }
 
+    public void handleSetClaudeUltracode(String content) {
+        try {
+            var value = com.google.gson.JsonParser.parseString(content);
+            if (value.isJsonObject()) {
+                value = value.getAsJsonObject().get("claudeUltracode");
+            }
+            if (value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean()
+                    && context.getSession() != null) {
+                context.getSession().setClaudeUltracode(value.getAsBoolean());
+            }
+        } catch (Exception e) {
+            LOG.warn("[ModelProviderHandler] Invalid Claude ultracode setting", e);
+        }
+    }
+
     public void handleSetCodexFastMode(String content) {
         try {
             String mode = content;

@@ -2,6 +2,7 @@ package com.github.claudecodegui.provider.claude;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -13,6 +14,27 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class ClaudeSessionQueryServiceTest {
+
+    @Test
+    public void historyStripsSeparateIdeReminderBlockAndPreservesAttachmentsAndIdentity() {
+        JsonObject raw = JsonParser.parseString("""
+                {"type":"user","uuid":"user-uuid","message":{"content":[
+                  {"type":"text","text":"Explain this diff"},
+                  {"type":"image","source":{"type":"base64","data":"image-bytes"}},
+                  {"type":"text","text":"<system-reminder>IDE context for this turn</system-reminder>"}
+                ]}}
+                """).getAsJsonObject();
+        JsonObject original = raw.deepCopy();
+
+        JsonObject normalized = ClaudeSessionQueryService.normalizeClaudeHistoryMessage(raw);
+
+        JsonArray blocks = normalized.getAsJsonObject("message").getAsJsonArray("content");
+        assertEquals(2, blocks.size());
+        assertEquals("Explain this diff", blocks.get(0).getAsJsonObject().get("text").getAsString());
+        assertEquals(original.getAsJsonObject("message").getAsJsonArray("content").get(1), blocks.get(1));
+        assertEquals("user-uuid", normalized.get("uuid").getAsString());
+        assertEquals(original, raw);
+    }
 
     @Test
     public void normalizeClaudeHistoryMessageRestoresImageBlocksAndKeepsUserText() throws IOException {

@@ -3,6 +3,8 @@ import { act, renderHook } from '@testing-library/react';
 import { useMessageSender } from './useMessageSender';
 import type { UseMessageSenderOptions } from './useMessageSender';
 import { writeClaudeModelMapping } from '../utils/claudeModelMapping';
+import { updateCodexReasoningCapabilities } from '../utils/codexReasoningCapabilities';
+import { useMessageQueue } from './useMessageQueue';
 
 describe('useMessageSender - /context command', () => {
   const t = ((key: string, opts?: any) => opts?.defaultValue ?? key) as any;
@@ -50,8 +52,75 @@ describe('useMessageSender - /context command', () => {
 
   beforeEach(() => {
     updateClaudeModelCapabilities([]);
+    updateCodexReasoningCapabilities([], true);
     localStorage.clear();
     window.sendToJava = vi.fn();
+  });
+
+  it.each([false, true])('captures explicit Claude Ultracode=%s without changing effort in both send paths', claudeUltracode => {
+    for (const attachments of [undefined, [{ id: 'a', fileName: 'a.txt', mediaType: 'text/plain', data: 'aGk=' }]]) {
+      window.sendToJava = vi.fn();
+      const { result, unmount } = renderHook(() => useMessageSender(createOptions({ claudeUltracode, reasoningEffort: 'low' })));
+      act(() => result.current.handleSubmit('hello', attachments));
+      expect(getBridgePayload(attachments ? 'send_message_with_attachments' : 'send_message'))
+        .toMatchObject({ claudeUltracode, reasoningEffort: 'low' });
+      unmount();
+    }
+  });
+
+  it('sends native Ultra only to Codex even before the provider-change guard runs', () => {
+    updateCodexReasoningCapabilities([{ id: 'gpt-6-astra', supportedReasoningEfforts: ['high', 'ultra'] }]);
+    const { result, rerender } = renderHook(({ currentProvider }) => useMessageSender(createOptions({
+      currentProvider, selectedModel: currentProvider === 'codex' ? 'gpt-6-astra' : 'claude-opus-5', reasoningEffort: 'ultra',
+    })), { initialProps: { currentProvider: 'codex' } });
+    act(() => result.current.handleSubmit('hello'));
+    expect(getBridgePayload('send_message').reasoningEffort).toBe('ultra');
+    expect(getBridgePayload('send_message')).not.toHaveProperty('claudeUltracode');
+    window.sendToJava = vi.fn();
+    rerender({ currentProvider: 'claude' });
+    act(() => result.current.handleSubmit('hello'));
+    expect(getBridgePayload('send_message').reasoningEffort).toBe('high');
+  });
+
+  it.each([false, true])('uses settled native capabilities before the picker has reconciled Ultra (attachments: %s)', withAttachments => {
+    const { result } = renderHook(() => useMessageSender(createOptions({
+      currentProvider: 'codex', selectedModel: 'custom-model', reasoningEffort: 'ultra',
+    })));
+    act(() => {
+      updateCodexReasoningCapabilities([]);
+      // Deliberately use the old render's callback before any effect can run.
+      result.current.handleSubmit('keep this submission', withAttachments
+        ? [{ id: 'a', fileName: 'a.txt', mediaType: 'text/plain', data: 'aGk=' }] : undefined);
+    });
+    expect(getBridgePayload(withAttachments ? 'send_message_with_attachments' : 'send_message').reasoningEffort).toBe('high');
+  });
+
+  it('defers an unconfirmed Ultra send without starting a turn', () => {
+    const options = createOptions({ currentProvider: 'codex', selectedModel: 'native-model', reasoningEffort: 'ultra' });
+    const { result } = renderHook(() => useMessageSender(options));
+    act(() => result.current.handleSubmit('keep this submission'));
+    expect(window.sendToJava).not.toHaveBeenCalled();
+    expect(options.setMessages).not.toHaveBeenCalled();
+    expect(options.setLoading).not.toHaveBeenCalled();
+    expect(options.addToast).toHaveBeenCalledWith(expect.stringContaining('Checking Ultra availability'), 'info');
+    expect(result.current.reasoningCapabilitiesPending).toBe(true);
+  });
+
+  it('retains queued attachments while Ultra is unconfirmed, then sends after native confirmation', () => {
+    const attachments = [{ id: 'a', fileName: 'a.txt', mediaType: 'text/plain', data: 'aGk=' }];
+    const { result } = renderHook(() => {
+      const sender = useMessageSender(createOptions({ currentProvider: 'codex', selectedModel: 'native-model', reasoningEffort: 'ultra' }));
+      return useMessageQueue({ isLoading: sender.reasoningCapabilitiesPending, onExecute: sender.handleSubmit });
+    });
+    act(() => result.current.enqueue('queued submission', attachments));
+    expect(result.current.queue).toHaveLength(1);
+    expect(window.sendToJava).not.toHaveBeenCalled();
+    act(() => updateCodexReasoningCapabilities([{ id: 'native-model', supportedReasoningEfforts: ['high', 'ultra'] }]));
+    expect(result.current.queue).toHaveLength(0);
+    expect(getBridgePayload('send_message_with_attachments')).toMatchObject({
+      text: 'queued submission', reasoningEffort: 'ultra',
+      attachments: [{ fileName: 'a.txt', mediaType: 'text/plain', data: 'aGk=' }],
+    });
   });
 
   it.each([false, true])('rechecks route capability before sending (attachments: %s)', attachments => {

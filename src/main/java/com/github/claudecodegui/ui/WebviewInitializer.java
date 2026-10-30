@@ -1587,7 +1587,9 @@ public class WebviewInitializer {
                 htmlContent,
                 tabProvider,
                 tabModel,
-                SessionState.discoverUserDshPresetIds());
+                SessionState.discoverUserDshPresetIds(),
+                session != null ? session.getReasoningEffort() : null,
+                session != null ? session.isClaudeUltracode() : null);
     }
 
     /**

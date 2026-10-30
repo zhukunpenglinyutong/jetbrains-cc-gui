@@ -76,6 +76,20 @@ test('native auto review stays inside the workspace sandbox', () => {
   assert.equal(settings.sandbox, 'workspace-write');
 });
 
+test('Ultra selects native delegation in both effort fields without changing access or instructions', () => {
+  for (const permissionMode of ['default', 'plan']) {
+    const settings = buildTurnSettings({ model: 'gpt-6-astra', reasoningEffort: 'ultra', permissionMode });
+    assert.equal(settings.effort, 'ultra');
+    assert.equal(settings.collaborationMode.settings.reasoning_effort, 'ultra',
+      'native collaboration settings take precedence over the top-level effort');
+    assert.equal(settings.collaborationMode.mode, permissionMode);
+    assert.equal(settings.collaborationMode.settings.developer_instructions, null);
+    assert.equal(settings.approvalPolicy, 'on-request');
+    assert.equal(settings.sandbox, 'workspace-write');
+    assert.equal(settings.multiAgentMode, undefined, 'the deprecated native field must not replace Ultra');
+  }
+});
+
 test('an explicit per-turn sandbox selection wins over the mode mapping', () => {
   const settings = buildTurnSettings({
     permissionMode: 'default',

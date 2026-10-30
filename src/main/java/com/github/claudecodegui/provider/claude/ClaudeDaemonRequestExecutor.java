@@ -53,6 +53,29 @@ class ClaudeDaemonRequestExecutor {
             String reasoningEffort,
             MessageCallback callback
     ) {
+        return sendMessageViaDaemon(daemon, channelId, message, sessionId, runtimeSessionEpoch, cwd,
+                attachments, permissionMode, model, openedFiles, agentPrompt, streaming,
+                disableThinking, reasoningEffort, false, callback);
+    }
+
+    CompletableFuture<SDKResult> sendMessageViaDaemon(
+            DaemonBridge daemon,
+            String channelId,
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String model,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            boolean ultracode,
+            MessageCallback callback
+    ) {
         return CompletableFuture.supplyAsync(() -> {
             SDKResult result = new SDKResult();
             StringBuilder assistantContent = new StringBuilder();
@@ -74,7 +97,8 @@ class ClaudeDaemonRequestExecutor {
                         agentPrompt,
                         streaming,
                         disableThinking,
-                        reasoningEffort
+                        reasoningEffort,
+                        ultracode
                 );
 
                 boolean hasAttachments = attachments != null && !attachments.isEmpty() && params.has("attachments");
@@ -169,8 +193,8 @@ class ClaudeDaemonRequestExecutor {
                 result.messageCount = result.messages.size();
 
                 if (wasAborted.get()) {
-                    // sendAbort() detached this request without awaiting the daemon's acknowledgement.
-                    // That also settles an earlier deferred send error.
+                    // Targeted Stop reaches this callback through the original send's
+                    // native cancellation terminal, settling any earlier deferred error.
                     long elapsed = System.currentTimeMillis() - startTime;
                     log.info("[DaemonExecutor] Request was aborted by user (elapsed: " + elapsed + "ms)");
                     result.success = false;
@@ -198,9 +222,8 @@ class ClaudeDaemonRequestExecutor {
             } catch (Exception e) {
                 long elapsed = System.currentTimeMillis() - startTime;
                 if (wasAborted.get()) {
-                    // Abort arrived but future was already completed exceptionally by the
-                    // daemon's error output before sendAbort() could complete it normally.
-                    // Treat as graceful interruption, same as the wasAborted branch above.
+                    // A cancellation terminal can race an earlier exceptional completion.
+                    // Preserve its authoritative outcome just as in the normal branch.
                     log.info("[DaemonExecutor] Request was aborted by user (caught exception, elapsed: " + elapsed + "ms)");
                     result.success = false;
                     result.error = "User interrupted";
@@ -213,7 +236,7 @@ class ClaudeDaemonRequestExecutor {
                 }
                 return result;
             }
-        }).exceptionally(ex -> {
+        }, ClaudeSDKBridge.claudeExecutor()).exceptionally(ex -> {
             SDKResult errorResult = new SDKResult();
             errorResult.success = false;
             errorResult.error = outputExtractor.extractErrorMessage(ex);

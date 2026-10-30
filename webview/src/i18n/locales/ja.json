@@ -81,6 +81,7 @@
     "localProject": "ローカル",
     "disabled": "無効",
     "sdkNotInstalled": "{{provider}} SDKがインストールされていません。チャットを開始するにはSDKをインストールしてください。",
+    "codexUltraCapabilitiesLoading": "Ultra が利用可能か確認中です。モデルの読み込みが完了したら、もう一度送信してください。",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "貼り付けた画像を準備中...",
     "sdkStatusUnavailable": "SDK の状態を確認できませんでした。",
@@ -145,7 +146,9 @@
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "このプランの改善を続ける："
+    "continueRefiningPlan": "このプランの改善を続ける：",
+    "backgroundTasksRunning": "{{count}} 件のバックグラウンドタスクを実行中",
+    "stopBackgroundTasks": "バックグラウンドタスクを停止"
   },
   "settings": {
     "title": "設定",
@@ -1980,6 +1983,10 @@
     "xhigh": {
       "label": "最大",
       "description": "最大の推論深度"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "最大の推論深度と自動タスク委任"
     }
   },
   "errorBoundary": {
@@ -2207,6 +2214,12 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
+    }
+  },
+  "modelConfig": {
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "タスクを自動委任する Claude のネイティブワークフロー。選択した推論強度を保持します。"
     }
   }
 }
