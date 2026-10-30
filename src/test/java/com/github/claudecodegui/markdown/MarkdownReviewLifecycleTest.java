@@ -14,7 +14,7 @@ public class MarkdownReviewLifecycleTest {
         batch.id = id;
         batch.targetId = target;
         batch.targetEpoch = "epoch-1";
-        batch.status = status;
+        batch.state = status;
         batch.path = "doc.md";
         batch.documentHash = "hash";
         Annotation a = new Annotation();

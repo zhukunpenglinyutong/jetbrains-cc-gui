@@ -49,7 +49,7 @@ public class MarkdownSettingsUserJourneyTest {
         newConfig.autoAddToChat = true;
         newConfig.submitShortcut = "ctrlEnter";
         newConfig.persist = true;
-        service.updateConfig(newConfig);
+        service.configure(newConfig);
 
         assertTrue("Settings update must enable review", service.getConfig().enabled);
         assertTrue("Provider must now allow creation",
@@ -82,8 +82,10 @@ public class MarkdownSettingsUserJourneyTest {
         // Step 5: Chat UI acknowledges receipt
         service.acknowledge("chat-tab-1", "epoch-user-journey", "batch-journey-2", "queued",
                 List.of("ann-batch-journey-1"));
-        assertEquals(1, service.snapshotState().batches.size());
-        assertEquals("queued", service.snapshotState().batches.get(0).status);
+        // The superseded draft stays as terminal history; only the new draft is queued.
+        assertEquals(2, service.snapshotState().batches.size());
+        assertEquals("queued", service.snapshotState().batches.stream()
+                .filter(batch -> batch.id.equals("batch-journey-2")).findFirst().orElseThrow().state);
     }
 
     @Test
@@ -93,7 +95,7 @@ public class MarkdownSettingsUserJourneyTest {
         // 1. User starts with feature enabled
         MarkdownReviewConfig enabledConfig = new MarkdownReviewConfig();
         enabledConfig.enabled = true;
-        service.updateConfig(enabledConfig);
+        service.configure(enabledConfig);
         assertTrue(service.getConfig().enabled);
 
         // User has a draft in progress
@@ -104,7 +106,7 @@ public class MarkdownSettingsUserJourneyTest {
         // 2. User goes to settings and turns the feature off
         MarkdownReviewConfig disabledConfig = new MarkdownReviewConfig();
         disabledConfig.enabled = false;
-        service.updateConfig(disabledConfig);
+        service.configure(disabledConfig);
 
         assertFalse("Service must reflect disabled state", service.getConfig().enabled);
         assertFalse("Provider must refuse extension creation",
@@ -114,7 +116,7 @@ public class MarkdownSettingsUserJourneyTest {
         enabledConfig = new MarkdownReviewConfig();
         enabledConfig.enabled = true;
         enabledConfig.persist = true;
-        service.updateConfig(enabledConfig);
+        service.configure(enabledConfig);
 
         assertTrue("Feature re-enabled", service.getConfig().enabled);
         assertTrue("Provider allows creation again",
@@ -128,18 +130,25 @@ public class MarkdownSettingsUserJourneyTest {
         MarkdownReviewService service = new MarkdownReviewService(null);
         MarkdownReviewConfig config = new MarkdownReviewConfig();
         config.enabled = true;
-        service.updateConfig(config);
+        service.configure(config);
 
         // Automatic draft added to chat
         ReviewBatch autoBatch = createSampleBatch("auto-batch-10", "审查反馈：已废弃的API调用", true);
         service.saveBatch(autoBatch);
         assertEquals(1, service.pending("chat-tab-1", "epoch-user-journey", null, false).size());
 
-        // User finishes/completes the review in the preview panel
+        // User finishes/completes the review in the preview panel. Completion runs
+        // against a live annotation, so load one into the state-only service before
+        // invoking the same withdrawal sweep used by the completion path.
         Annotation completed = new Annotation();
         completed.id = "ann-auto-batch-10";
         completed.completed = true;
-        service.update(completed);
+        completed.fileUrl = "file:///docs/architecture.md";
+        MarkdownReviewService.State live = service.snapshotState();
+        live.annotations.add(completed);
+        live.config.persist = true;
+        service.loadState(live);
+        service.withdrawAutomaticDrafts();
 
         // The automatic draft must be withdrawn so stale instructions aren't sent to Claude
         List<ReviewBatch> pending = service.pending("chat-tab-1", "epoch-user-journey", null, false);

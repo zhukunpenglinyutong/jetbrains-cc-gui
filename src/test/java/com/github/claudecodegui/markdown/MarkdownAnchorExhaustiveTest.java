@@ -108,6 +108,6 @@ public class MarkdownAnchorExhaustiveTest {
         assertEquals(-1, AnnotationAnchorResolver.relocate("some doc", "target", 1000, "", ""));
 
         var locateEmpty = AnnotationAnchorResolver.locate("", "", 0, "", "");
-        assertEquals(AnnotationAnchorResolver.AnchorStatus.ORPHANED, locateEmpty.status());
+        assertEquals(AnnotationAnchorResolver.AnchorStatus.MISSING, locateEmpty.status());
     }
 }
