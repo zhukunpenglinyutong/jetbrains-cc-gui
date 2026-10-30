@@ -266,6 +266,10 @@ public class SessionLiteReader {
                 }
 
                 // Skip auto-generated patterns (IDE context, hook output, etc.)
+                String reviewSummary = com.github.claudecodegui.markdown.MarkdownReviewPrompt.displaySummary(result);
+                if (reviewSummary != null) {
+                    return reviewSummary.length() > 200 ? reviewSummary.substring(0, 200) + "\u2026" : reviewSummary;
+                }
                 if (result.startsWith("<") && result.length() > 1) {
                     char nextChar = result.charAt(1);
                     if (Character.isLowerCase(nextChar)) {

@@ -1,4 +1,51 @@
 {
+  "markdownReview": {
+    "legacyContextCard": "Contexte de revue Markdown",
+    "contextCard_one": "Revue Markdown · {{count}} élément",
+    "contextCard_other": "Revue Markdown · {{count}} éléments",
+    "contextDetails": "Instantané de la source et référence",
+    "settings": {
+      "submitShortcut": {
+        "label": "Raccourci d’envoi des commentaires Markdown",
+        "enter": "Entrée envoie, Ctrl+Entrée insère un saut de ligne",
+        "ctrlEnter": "Ctrl+Entrée envoie, Entrée insère un saut de ligne",
+        "hint": "S’applique à l’ajout et à l’enregistrement des commentaires. Maj+Entrée insère toujours un saut de ligne ; utilisez Commande sur macOS. La validation de la méthode de saisie n’envoie pas."
+      },
+      "title": "Revues Markdown (projet actuel)",
+      "on": "Activé",
+      "off": "Désactivé",
+      "error": "Impossible de mettre à jour les préférences de revue. Rouvrez les paramètres et réessayez.",
+      "enabled": {
+        "label": "Activer les annotations de l’aperçu Markdown (bêta)",
+        "hint": "Ajoute des contrôles de revue à l’aperçu Markdown natif du projet actuel. La désactivation masque immédiatement la surcouche et conserve les commentaires. Après activation, un aperçu déjà ouvert doit être rouvert une fois pour afficher les contrôles."
+      },
+      "autoAddToChat": {
+        "label": "Ajouter automatiquement les commentaires au brouillon du chat (bêta)",
+        "hint": "Désactivé par défaut. Créer ou modifier un commentaire ajoute son dernier instantané à la saisie du chat CC GUI sélectionné. Vérifiez le brouillon avant l’envoi. Terminer ou supprimer un commentaire retire aussi son brouillon ajouté automatiquement ; les commentaires ajoutés manuellement et les citations sont conservés."
+      },
+      "autoDeleteAffected": {
+        "label": "Supprimer automatiquement les commentaires introuvables (bêta)",
+        "hint": "Un commentaire est conservé avec la mention « Source modifiée » tant que le début ou la fin de la citation reste localisable ; une modification ou un saut de ligne ne le supprime pas. Il n'est supprimé que lorsqu'aucun fragment n'est localisable. Les sélections formatées peuvent couvrir tout un bloc source. Le nettoyage ne prouve pas l'achèvement : l'agent doit signaler les éléments inachevés. Les brouillons ajoutés automatiquement sont retirés avec le commentaire supprimé ; les ajouts manuels et les citations restent intacts."
+      },
+      "persist": {
+        "label": "Conserver commentaires et instantanés en attente après redémarrage (bêta)",
+        "hint": "Désactivé par défaut : les données ne sont conservées que pendant l’ouverture du projet. Activez pour enregistrer dans l’espace de travail du projet. La désactivation supprime le contenu enregistré à la prochaine sauvegarde de l’IDE et conserve les commentaires actifs. Les messages du chat utilisent leur stockage existant. Lorsque l’option est désactivée, les commentaires et brouillons non envoyés sont perdus à la fermeture du projet ou au redémarrage de l’IDE."
+      },
+      "versionRequired": "Les annotations Markdown nécessitent IntelliJ IDEA 2024.3 ou une version ultérieure."
+    },
+    "count_one": "{{count}} élément de revue",
+    "count_other": "{{count}} éléments de revue",
+    "removeBatch": "Retirer la revue du brouillon",
+    "remove": "Retirer",
+    "snapshot": "Ce brouillon est un instantané ; les modifications ultérieures des commentaires source ne l’affectent pas.",
+    "tooLarge": "Cette revue est trop volumineuse. Retirez des éléments avant l’envoi.",
+    "block": "Bloc source",
+    "source": "Texte sélectionné",
+    "quote": "Citation",
+    "attached": "Localisé",
+    "ambiguous": "Emplacements multiples possibles",
+    "orphaned": "Texte d’origine modifié"
+  },
   "common": {
     "ready": "Prêt",
     "loading": "Chargement",

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "prebuild": "node scripts/extract-version.mjs",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && npm run build:native-markdown",
+    "build:native-markdown": "vite build --config vite.native-markdown.config.ts",
     "postbuild": "node scripts/copy-dist.mjs",
     "test": "node --test scripts/copy-dist.test.mjs && vitest run && tsc -p tsconfig.test.json --noEmit",
     "pretest:e2e": "npm run build",

@@ -231,9 +231,11 @@ describe('useSubmitHandler', () => {
     expect(invalidateImagePastes).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalledTimes(5);
     expect(recordInputHistory).toHaveBeenCalledWith('hello');
-    expect(clearInput).toHaveBeenCalled();
+    // Input clearing is deferred until the target check passes now.
+    expect(clearInput).not.toHaveBeenCalled();
 
     vi.advanceTimersByTime(20);
+    expect(clearInput).toHaveBeenCalled();
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit).toHaveBeenCalledWith('hello', [createAttachment('a1')]);
     vi.useRealTimers();

@@ -61,6 +61,29 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         return instances.get(project);
     }
 
+    public static List<ClaudeChatWindow> getChatWindows(Project project) {
+        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID);
+        if (toolWindow == null) {
+            return Collections.emptyList();
+        }
+        List<ClaudeChatWindow> result = new java.util.ArrayList<>();
+        for (Content content : toolWindow.getContentManager().getContents()) {
+            ClaudeChatWindow window = contentToWindowMap.get(content);
+            if (window != null && !window.isDisposed()) {
+                result.add(window);
+            }
+        }
+        return result;
+    }
+
+    public static ClaudeChatWindow getSelectedChatWindow(Project project) {
+        ToolWindow toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID);
+        if (toolWindow == null) {
+            return null;
+        }
+        return contentToWindowMap.get(toolWindow.getContentManager().getSelectedContent());
+    }
+
     public static String getNextTabName(ToolWindow toolWindow) {
         if (toolWindow == null) {
             return TAB_NAME_PREFIX + "1";
@@ -236,6 +259,34 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
         registerShutdownHook();
 
+        // Lets the review service evict orphaned handoff drafts whose chat target no
+        // longer exists, without the storage layer depending on tool-window classes.
+        com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project).setLiveTargetsSupplier(() -> {
+            // Runs inside the service monitor during saveBatch eviction; the
+            // ToolWindow/ContentManager queries below are only valid on the EDT.
+            com.intellij.openapi.application.ApplicationManager.getApplication().assertIsDispatchThread();
+            return getChatWindows(project).stream().map(ClaudeChatWindow::getReviewTargetId)
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        });
+
+        // Routes withdrawal snapshots (their annotation was completed or deleted) to
+        // the chat that owns the automatic draft; the window rejects stale identities.
+        com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project).setBatchPusher(push -> {
+            com.intellij.openapi.application.ApplicationManager.getApplication().assertIsDispatchThread();
+            for (ClaudeChatWindow window : getChatWindows(project)) {
+                if (push.targetId.equals(window.getReviewTargetId())) {
+                    try {
+                        window.addArtifactReview(push);
+                    } catch (RuntimeException error) {
+                        // The target moved on (session switch); its webview already
+                        // discarded these drafts at the target change.
+                        LOG.warn("Markdown review withdrawal skipped: " + error.getMessage());
+                    }
+                    return;
+                }
+            }
+        });
+
         ContentFactory contentFactory = ContentFactory.getInstance();
         ContentManager contentManager = toolWindow.getContentManager();
 
@@ -365,6 +416,11 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 if (window != null) {
                     LOG.info("[TabManager] Disposing ClaudeChatWindow for removed tab: "
                         + removedContent.getDisplayName());
+                    // An explicit tab close abandons its unsent review drafts (R3);
+                    // IDE/project shutdown goes through disposeProjectChatWindows
+                    // instead, so still-open tabs keep their recoverable drafts.
+                    com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project)
+                            .dropPending(window.getReviewTargetId());
                     window.dispose();
                 }
             }

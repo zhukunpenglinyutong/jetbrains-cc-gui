@@ -5,6 +5,7 @@ import { PermissionDialogTimeoutSetting } from './PermissionDialogTimeoutSetting
 import { ToggleSettingSection } from './ToggleSettingSection';
 import { SendShortcutSection } from './SendShortcutSection';
 import { NotificationSettingsGroup } from './NotificationSettingsGroup';
+import { MarkdownReviewSettings } from './MarkdownReviewSettings';
 
 export interface BehaviorTabProps {
   sendShortcut?: 'enter' | 'cmdEnter';
@@ -141,6 +142,8 @@ const BehaviorTab = ({
       />
 
       {/* Diff expanded by default configuration */}
+      <MarkdownReviewSettings />
+
       <ToggleSettingSection
         icon="codicon-diff"
         label={t('settings.basic.diffExpanded.label')}

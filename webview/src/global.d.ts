@@ -2,6 +2,7 @@
  * Global window interface extensions for IDEA plugin communication
  */
 interface Window {
+  setMarkdownReviewConfig?: (raw: string) => void;
   /**
    * Send message to Java backend
    */
@@ -322,6 +323,9 @@ interface Window {
    * Insert an inline quote chip. Payload: JSON { text } - registered by ChatInputBox
    */
   addQuotedSnippet?: (payload: string) => void;
+  addArtifactReview?: (payload: string) => void;
+  showArtifactReviewChat?: () => void;
+    setArtifactReviewTarget?: (payload: string) => void;
 
   /**
    * Focus the chat input box - registered by ChatInputBox

@@ -1,4 +1,49 @@
 {
+  "markdownReview": {
+    "legacyContextCard": "Markdown 審閱內容",
+    "contextCard": "Markdown 審閱 · {{count}} 個項目",
+    "contextDetails": "原始碼快照與引用",
+    "settings": {
+      "submitShortcut": {
+        "label": "Markdown 註解提交快速鍵",
+        "enter": "Enter 提交，Ctrl+Enter 插入換行",
+        "ctrlEnter": "Ctrl+Enter 提交，Enter 插入換行",
+        "hint": "套用於新增與儲存註解。Shift+Enter 一律插入換行；macOS 請使用 Command。輸入法確認不會提交。"
+      },
+      "title": "Markdown 審閱（目前專案）",
+      "on": "已啟用",
+      "off": "已停用",
+      "error": "無法更新審閱偏好設定。請重新開啟設定後再試。",
+      "enabled": {
+        "label": "啟用 Markdown 預覽註解（beta）",
+        "hint": "為目前專案的 IDE 原生 Markdown 預覽加入審閱控制項。停用後互動層會立即隱藏，目前的註解會保留。啟用後，已開啟的預覽需關閉後重新開啟一次才會顯示控制項。"
+      },
+      "autoAddToChat": {
+        "label": "自動將註解加入目前聊天草稿（beta）",
+        "hint": "預設關閉。新增或編輯註解時，會將最新快照加入所選 CC GUI 聊天輸入框。傳送前請先確認草稿。完成或刪除註解時，其自動加入的草稿也會一併撤回；手動加入的註解與引用不受影響。"
+      },
+      "autoDeleteAffected": {
+        "label": "自動刪除無法再定位的註解（beta）",
+        "hint": "只要引用的開頭或結尾片段仍能定位，編輯與換行只會把註解標記為「原文已變化」，不會刪除；只有所有片段都無法定位時才會自動刪除。格式化選取可能涵蓋整個原始碼區塊。清理不代表已完成，agent 會回報未完成項目。自動加入的草稿會隨被刪除的註解一併撤回；手動加入與引用不受影響。"
+      },
+      "persist": {
+        "label": "重新啟動後保留註解與待傳送快照（beta）",
+        "hint": "預設關閉，僅在本次專案開啟期間保存。啟用後儲存至專案工作區；停用後下次 IDE 儲存會移除已保存的內容，目前的註解仍可使用。聊天訊息仍依原有方式保存。關閉狀態下，關閉專案或重新啟動 IDE 會遺失目前的註解與未傳送的草稿。"
+      },
+      "versionRequired": "Markdown 註解需要 IntelliJ IDEA 2024.3 或更新版本。"
+    },
+    "count": "{{count}} 則審閱項目",
+    "removeBatch": "從草稿移除此審閱",
+    "remove": "移除",
+    "snapshot": "此草稿為快照；之後原始碼上的註解變更不會影響它。",
+    "tooLarge": "此審閱內容過大，請先移除部分項目再傳送。",
+    "block": "原始碼區塊",
+    "source": "選取文字",
+    "quote": "引文",
+    "attached": "已定位",
+    "ambiguous": "可能位置不唯一",
+    "orphaned": "原文已變更"
+  },
   "common": {
     "ready": "就緒",
     "loading": "載入中",

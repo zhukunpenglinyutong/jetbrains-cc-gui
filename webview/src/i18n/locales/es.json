@@ -1,4 +1,51 @@
 {
+  "markdownReview": {
+    "legacyContextCard": "Contexto de revisión de Markdown",
+    "contextCard_one": "Revisión de Markdown · {{count}} elemento",
+    "contextCard_other": "Revisión de Markdown · {{count}} elementos",
+    "contextDetails": "Instantánea del origen y referencia",
+    "settings": {
+      "submitShortcut": {
+        "label": "Atajo para enviar comentarios de Markdown",
+        "enter": "Intro envía, Ctrl+Intro inserta un salto de línea",
+        "ctrlEnter": "Ctrl+Intro envía, Intro inserta un salto de línea",
+        "hint": "Se aplica al añadir y guardar comentarios. Mayús+Intro siempre inserta un salto de línea; en macOS usa Comando. La confirmación del método de entrada no envía."
+      },
+      "title": "Revisiones de Markdown (proyecto actual)",
+      "on": "Activado",
+      "off": "Desactivado",
+      "error": "No se pudieron actualizar las preferencias de revisión. Vuelve a abrir los ajustes e inténtalo de nuevo.",
+      "enabled": {
+        "label": "Activar anotaciones en la vista previa de Markdown (beta)",
+        "hint": "Añade controles de revisión a la vista previa nativa de Markdown del proyecto actual. Al desactivarlo, la capa se oculta al instante y se conservan los comentarios. Tras activarlo, una vista previa ya abierta debe volver a abrirse una vez para mostrar los controles."
+      },
+      "autoAddToChat": {
+        "label": "Añadir comentarios automáticamente al borrador del chat (beta)",
+        "hint": "Desactivado por defecto. Al crear o editar un comentario se añade su última instantánea al cuadro de chat de CC GUI seleccionado. Revisa el borrador antes de enviarlo. Al completar o eliminar un comentario también se retira su borrador añadido automáticamente; los comentarios añadidos manualmente y las citas se conservan."
+      },
+      "autoDeleteAffected": {
+        "label": "Eliminar automáticamente los comentarios que ya no se pueden ubicar (beta)",
+        "hint": "El comentario se conserva como «Origen modificado» mientras el principio o el final de la cita siga localizable; las ediciones y los saltos de línea no lo eliminan. Solo se elimina cuando no se puede localizar ningún fragmento. Las selecciones con formato pueden abarcar todo un bloque de origen. La limpieza no demuestra que se haya completado: el agente debe informar de los elementos pendientes. Los borradores añadidos automáticamente se retiran con el comentario eliminado; los envíos manuales y las citas permanecen intactos."
+      },
+      "persist": {
+        "label": "Conservar comentarios e instantáneas pendientes tras reiniciar (beta)",
+        "hint": "Desactivado por defecto: los datos solo se conservan mientras el proyecto esté abierto. Actívalo para guardarlos en el espacio de trabajo del proyecto. Al desactivarlo se elimina el contenido guardado en el próximo guardado del IDE y se conservan los comentarios actuales. Los mensajes del chat usan su almacenamiento habitual. Con la opción desactivada, los comentarios y borradores no enviados se pierden al cerrar el proyecto o reiniciar el IDE."
+      },
+      "versionRequired": "Las anotaciones de Markdown requieren IntelliJ IDEA 2024.3 o posterior."
+    },
+    "count_one": "{{count}} elemento de revisión",
+    "count_other": "{{count}} elementos de revisión",
+    "removeBatch": "Quitar la revisión del borrador",
+    "remove": "Quitar",
+    "snapshot": "Este borrador es una instantánea; los cambios posteriores en los comentarios del origen no lo modifican.",
+    "tooLarge": "Esta revisión es demasiado grande. Quita algunos elementos antes de enviarla.",
+    "block": "Bloque de origen",
+    "source": "Texto seleccionado",
+    "quote": "Cita",
+    "attached": "Localizado",
+    "ambiguous": "Varias ubicaciones posibles",
+    "orphaned": "El texto original cambió"
+  },
   "common": {
     "ready": "Listo",
     "loading": "Cargando",

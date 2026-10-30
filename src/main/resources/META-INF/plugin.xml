@@ -64,6 +64,7 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends optional="true" config-file="ccgui-markdown-features.xml">org.intellij.plugins.markdown</depends>
     <!-- Git support — optional: Commit AI (real git4idea `git diff` + commit toolbar action)
          lives in git-features.xml and only loads when Git4Idea is present.
          Git4Idea is bundled in all JetBrains IDEs that support Git. -->

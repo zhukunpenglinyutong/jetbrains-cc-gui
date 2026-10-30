@@ -1,4 +1,51 @@
 {
+  "markdownReview": {
+    "legacyContextCard": "Contexto da revisão de Markdown",
+    "contextCard_one": "Revisão de Markdown · {{count}} item",
+    "contextCard_other": "Revisão de Markdown · {{count}} itens",
+    "contextDetails": "Instantâneo da origem e referência",
+    "settings": {
+      "submitShortcut": {
+        "label": "Atalho para enviar comentários de Markdown",
+        "enter": "Enter envia, Ctrl+Enter insere uma quebra de linha",
+        "ctrlEnter": "Ctrl+Enter envia, Enter insere uma quebra de linha",
+        "hint": "Aplica-se a adicionar e salvar comentários. Shift+Enter sempre insere uma quebra de linha; use Command no macOS. A confirmação do método de entrada não envia."
+      },
+      "title": "Revisões de Markdown (projeto atual)",
+      "on": "Ativado",
+      "off": "Desativado",
+      "error": "Não foi possível atualizar as preferências de revisão. Abra as configurações novamente e tente de novo.",
+      "enabled": {
+        "label": "Ativar anotações na prévia de Markdown (beta)",
+        "hint": "Adiciona controles de revisão à prévia nativa de Markdown do projeto atual. Ao desativar, a sobreposição é ocultada imediatamente e os comentários são mantidos. Após ativar, uma prévia já aberta precisa ser reaberta uma vez para mostrar os controles."
+      },
+      "autoAddToChat": {
+        "label": "Adicionar comentários automaticamente ao rascunho do chat (beta)",
+        "hint": "Desativado por padrão. Criar ou editar um comentário adiciona o instantâneo mais recente à caixa de chat do CC GUI selecionado. Revise o rascunho antes de enviar. Concluir ou excluir um comentário também retira o rascunho adicionado automaticamente; comentários adicionados manualmente e citações são mantidos."
+      },
+      "autoDeleteAffected": {
+        "label": "Excluir automaticamente comentários que não podem mais ser localizados (beta)",
+        "hint": "O comentário é mantido como “Origem alterada” enquanto o início ou o fim da citação ainda puder ser localizado; edições e quebras de linha sozinhas não o excluem. Ele só é removido quando nenhum fragmento pode ser localizado. Seleções formatadas podem abranger um bloco inteiro da origem. A limpeza não comprova conclusão: o agente deve relatar os itens pendentes. Rascunhos adicionados automaticamente são retirados junto com o comentário removido; envios manuais e citações permanecem intactos."
+      },
+      "persist": {
+        "label": "Manter comentários e instantâneos pendentes após reiniciar (beta)",
+        "hint": "Desativado por padrão: mantém os dados apenas enquanto este projeto estiver aberto. Ative para salvar no workspace do projeto. Desativar remove o conteúdo salvo na próxima gravação do IDE e mantém os comentários atuais. As mensagens do chat continuam usando o armazenamento existente. Com a opção desativada, comentários e rascunhos não enviados são perdidos ao fechar o projeto ou reiniciar o IDE."
+      },
+      "versionRequired": "As anotações de Markdown exigem o IntelliJ IDEA 2024.3 ou mais recente."
+    },
+    "count_one": "{{count}} item de revisão",
+    "count_other": "{{count}} itens de revisão",
+    "removeBatch": "Remover a revisão do rascunho",
+    "remove": "Remover",
+    "snapshot": "Este rascunho é um instantâneo; alterações posteriores nos comentários da origem não o afetam.",
+    "tooLarge": "Esta revisão é grande demais. Remova alguns itens antes de enviar.",
+    "block": "Bloco da origem",
+    "source": "Texto selecionado",
+    "quote": "Citação",
+    "attached": "Localizado",
+    "ambiguous": "Vários locais possíveis",
+    "orphaned": "O texto original mudou"
+  },
   "common": {
     "ready": "Pronto",
     "loading": "Carregando",
