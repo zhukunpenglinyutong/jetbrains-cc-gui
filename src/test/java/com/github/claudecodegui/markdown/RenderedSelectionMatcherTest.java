@@ -96,4 +96,12 @@ public class RenderedSelectionMatcherTest {
         assertNull(NativeMarkdownAnnotations.shiftDiagrams(RANGES, 0, 0, 7, "", "Mermaid"));
         assertNull(NativeMarkdownAnnotations.shiftDiagrams(RANGES, 0, 3, 0, "```", ""));
     }
+
+    @Test
+    public void neverTreatsAnEmptyCacheAsUnchangedWhileAFenceMayBeTyped() {
+        // Typing "mermaid" one character at a time never produces a fragment that
+        // contains the full word, so an empty cache must always allow a rescan.
+        assertNull(NativeMarkdownAnnotations.shiftDiagrams(java.util.List.of(), 0, 0, 1, "", "m"));
+        assertNull(NativeMarkdownAnnotations.shiftDiagrams(java.util.List.of(), 0, 0, 1, "", "e"));
+    }
 }

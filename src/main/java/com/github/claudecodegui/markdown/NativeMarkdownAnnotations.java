@@ -123,7 +123,6 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
                 });
             }
         }
-        attachDocumentListener();
     }
 
     private void attachDocumentListener() {
@@ -135,17 +134,16 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
         document.addDocumentListener(documentListener, registration);
     }
 
-    /** The registration owns the listener removal; never remove it a second time directly. */
+    /** The registration owns the listener removal; it is the only remover, so it can never double-unregister. */
     private void detachDocumentListener() {
         Disposable registration = documentRegistration;
         documentRegistration = null;
         dirty = false;
-        if (registration == null || project != null && project.isDisposed()) {
-            // During project shutdown DocumentImpl is already dropping listeners;
-            // removing them again only produces a SEVERE "Can't remove" log entry.
-            return;
+        if (registration != null) {
+            // The document belongs to FileDocumentManager and outlives the project,
+            // so skipping this disposal would retain the panel and project forever.
+            Disposer.dispose(registration);
         }
-        Disposer.dispose(registration);
     }
 
     private void shiftDiagrams(DocumentEvent event) {
@@ -168,11 +166,13 @@ public final class NativeMarkdownAnnotations implements MarkdownBrowserPreviewEx
     /**
      * Shifts cached fence ranges for an edit that cannot change fences.
      * Returns null when the edit may have changed a fence and a rescan is required.
+     * An empty cache always requires the cheap {@code contains("mermaid")} check,
+     * because a fence can be typed one character at a time.
      */
     static List<RenderedSelectionMatcher.DiagramRange> shiftDiagrams(
             List<RenderedSelectionMatcher.DiagramRange> ranges, int offset, int oldLength, int newLength,
             CharSequence removed, CharSequence inserted) {
-        if (touchesFence(removed) || touchesFence(inserted)) {
+        if (ranges.isEmpty() || touchesFence(removed) || touchesFence(inserted)) {
             return null;
         }
         int start = offset;
