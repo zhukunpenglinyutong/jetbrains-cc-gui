@@ -1,4 +1,17 @@
 {
+  "startupHistory": {
+    "unloaded": "此還原工作階段的歷史訊息尚未載入。",
+    "loading": "正在載入工作階段歷史…",
+    "loaded_one": "已載入 {{count}} 則歷史訊息。",
+    "loaded_other": "已載入 {{count}} 則歷史訊息。",
+    "missing": "歷史記錄已不存在，已準備好新工作階段。",
+    "timeout": "歷史載入逾時，請點選「重試」重新載入。",
+    "cancelled": "已取消歷史載入，請點選「重試」重新載入。",
+    "failed": "歷史載入失敗，請點選「重試」重新載入。",
+    "load": "載入歷史",
+    "retry": "重試",
+    "cancel": "取消"
+  },
   "common": {
     "ready": "就緒",
     "loading": "載入中",
@@ -253,6 +266,17 @@
         "enabled": "已啟用",
         "disabled": "已停用",
         "hint": "開啟後，在專案樹選擇檔案時會自動將檔案路徑告訴 AI（注意：只傳遞檔案路徑，不傳檔案內容）。關閉後需要手動操作。"
+      },
+      "loadHistoryOnStartup": {
+        "label": "啟動時載入工作階段歷史",
+        "enabled": "啟用",
+        "disabled": "停用",
+        "hint": "啟用後，還原的工作階段會自動載入歷史訊息。失敗或逾時後需手動重試。"
+      },
+      "historyLoadTimeout": {
+        "label": "歷史載入逾時",
+        "unit": "秒",
+        "hint": "自動還原與手動載入共用此逾時（5–120 秒），可在對話中重試。"
       },
       "promptEnhancer": {
         "label": "增強提示詞",

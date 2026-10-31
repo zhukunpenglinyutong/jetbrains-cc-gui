@@ -5,6 +5,8 @@ import { PermissionDialogTimeoutSetting } from './PermissionDialogTimeoutSetting
 import { ToggleSettingSection } from './ToggleSettingSection';
 import { SendShortcutSection } from './SendShortcutSection';
 import { NotificationSettingsGroup } from './NotificationSettingsGroup';
+import { HistoryLoadTimeoutSetting } from './HistoryLoadTimeoutSetting';
+import { DEFAULT_HISTORY_LOAD_TIMEOUT_SECONDS } from '../../../utils/historyLoadTimeout';
 
 export interface BehaviorTabProps {
   sendShortcut?: 'enter' | 'cmdEnter';
@@ -13,6 +15,10 @@ export interface BehaviorTabProps {
   onStreamingEnabledChange?: (enabled: boolean) => void;
   autoOpenFileEnabled?: boolean;
   onAutoOpenFileEnabledChange?: (enabled: boolean) => void;
+  loadHistoryOnStartup?: boolean;
+  onLoadHistoryOnStartupChange?: (enabled: boolean) => void;
+  historyLoadTimeoutSeconds?: number;
+  onHistoryLoadTimeoutChange?: (seconds: number) => void;
   diffExpandedByDefault?: boolean;
   onDiffExpandedByDefaultChange?: (enabled: boolean) => void;
   bashGroupCollapsedByDefault?: boolean;
@@ -65,6 +71,10 @@ const BehaviorTab = ({
   onStreamingEnabledChange = () => {},
   autoOpenFileEnabled = true,
   onAutoOpenFileEnabledChange = () => {},
+  loadHistoryOnStartup = true,
+  onLoadHistoryOnStartupChange = () => {},
+  historyLoadTimeoutSeconds = DEFAULT_HISTORY_LOAD_TIMEOUT_SECONDS,
+  onHistoryLoadTimeoutChange = () => {},
   diffExpandedByDefault = false,
   onDiffExpandedByDefaultChange = () => {},
   bashGroupCollapsedByDefault = false,
@@ -138,6 +148,22 @@ const BehaviorTab = ({
         enabledLabel={t('settings.basic.autoOpenFile.enabled')}
         disabledLabel={t('settings.basic.autoOpenFile.disabled')}
         hint={t('settings.basic.autoOpenFile.hint')}
+      />
+
+      {/* Persisted session history loading configuration */}
+      <ToggleSettingSection
+        icon="codicon-history"
+        label={t('settings.basic.loadHistoryOnStartup.label')}
+        checked={loadHistoryOnStartup}
+        onChange={onLoadHistoryOnStartupChange}
+        enabledLabel={t('settings.basic.loadHistoryOnStartup.enabled')}
+        disabledLabel={t('settings.basic.loadHistoryOnStartup.disabled')}
+        hint={t('settings.basic.loadHistoryOnStartup.hint')}
+      />
+
+      <HistoryLoadTimeoutSetting
+        seconds={historyLoadTimeoutSeconds}
+        onChange={onHistoryLoadTimeoutChange}
       />
 
       {/* Diff expanded by default configuration */}

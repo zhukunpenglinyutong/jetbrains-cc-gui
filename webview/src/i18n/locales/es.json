@@ -1,4 +1,17 @@
 {
+  "startupHistory": {
+    "unloaded": "El historial de esta sesión restaurada aún no se ha cargado.",
+    "loading": "Cargando historial…",
+    "loaded_one": "Se cargó {{count}} mensaje.",
+    "loaded_other": "Se cargaron {{count}} mensajes.",
+    "missing": "El historial guardado ya no está disponible. Hay una nueva sesión lista.",
+    "timeout": "La carga agotó el tiempo de espera. Pulsa Reintentar.",
+    "cancelled": "Se canceló la carga. Pulsa Reintentar para volver a cargar.",
+    "failed": "No se pudo cargar el historial. Pulsa Reintentar.",
+    "load": "Cargar historial",
+    "retry": "Reintentar",
+    "cancel": "Cancelar"
+  },
   "common": {
     "ready": "Listo",
     "loading": "Cargando",
@@ -253,6 +266,17 @@
         "enabled": "Activado",
         "disabled": "Desactivado",
         "hint": "Al activar, seleccionar un archivo en el árbol del proyecto enviará automáticamente su ruta al AI (nota: solo se envía la ruta del archivo, no su contenido). Al desactivar, se requiere acción manual."
+      },
+      "loadHistoryOnStartup": {
+        "label": "Cargar historial al iniciar",
+        "enabled": "Activado",
+        "disabled": "Desactivado",
+        "hint": "Carga automáticamente el historial de las sesiones restauradas. Los errores y tiempos de espera requieren un reintento manual."
+      },
+      "historyLoadTimeout": {
+        "label": "Tiempo de espera del historial",
+        "unit": "segundos",
+        "hint": "La restauración automática y la carga manual comparten este límite (5–120 segundos). Puedes reintentar en la conversación."
       },
       "promptEnhancer": {
         "label": "Prompt Enhancer",

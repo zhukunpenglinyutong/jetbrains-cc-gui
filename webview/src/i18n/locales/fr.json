@@ -1,4 +1,17 @@
 {
+  "startupHistory": {
+    "unloaded": "L’historique de cette session restaurée n’a pas encore été chargé.",
+    "loading": "Chargement de l’historique…",
+    "loaded_one": "{{count}} message chargé.",
+    "loaded_other": "{{count}} messages chargés.",
+    "missing": "L’historique enregistré n’est plus disponible. Une nouvelle session est prête.",
+    "timeout": "Le chargement a expiré. Cliquez sur Réessayer.",
+    "cancelled": "Le chargement a été annulé. Cliquez sur Réessayer.",
+    "failed": "Le chargement a échoué. Cliquez sur Réessayer.",
+    "load": "Charger l’historique",
+    "retry": "Réessayer",
+    "cancel": "Annuler"
+  },
   "common": {
     "ready": "Prêt",
     "loading": "Chargement",
@@ -253,6 +266,17 @@
         "enabled": "Activé",
         "disabled": "Désactivé",
         "hint": "Lorsqu'activé, sélectionner un fichier dans l'arborescence du projet enverra automatiquement son chemin à l'AI (note : seul le chemin du fichier est envoyé, pas son contenu). Lorsque désactivé, une action manuelle est requise."
+      },
+      "loadHistoryOnStartup": {
+        "label": "Charger l’historique au démarrage",
+        "enabled": "Activé",
+        "disabled": "Désactivé",
+        "hint": "Charge automatiquement l’historique des sessions restaurées. Après un échec ou une expiration, réessayez manuellement."
+      },
+      "historyLoadTimeout": {
+        "label": "Délai de chargement de l’historique",
+        "unit": "secondes",
+        "hint": "La restauration automatique et le chargement manuel partagent ce délai (5 à 120 secondes). Vous pouvez réessayer dans la conversation."
       },
       "promptEnhancer": {
         "label": "Prompt Enhancer",

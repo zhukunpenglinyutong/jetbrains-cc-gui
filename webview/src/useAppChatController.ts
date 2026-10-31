@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -30,6 +30,7 @@ import { useSession } from './contexts/SessionContext';
 import { useUIState } from './contexts/UIStateContext';
 import { useDialogs } from './contexts/DialogContext';
 import type { ApplyHistoryModel } from './applyHistoryModel';
+import { startupHistoryStateForSession, type StartupHistoryLoadState } from './types/startupHistory';
 import { useCodexPlanState } from './hooks/useCodexPlanState';
 
 /**
@@ -148,6 +149,11 @@ export const useAppChatController = ({
   } = useUIState();
 
   const chatInputRef = useRef<ChatInputBoxHandle>(null);
+  const [startupHistoryLoadState, setStartupHistoryLoadState] = useState<StartupHistoryLoadState | null>(null);
+
+  useEffect(() => {
+    setStartupHistoryLoadState(previous => startupHistoryStateForSession(previous, currentSessionId));
+  }, [currentSessionId]);
 
   const {
     currentProvider, selectedModel, permissionMode,
@@ -271,6 +277,7 @@ export const useAppChatController = ({
     setCustomSessionTitle,
     setRestoredSessionTitle,
     setPermissionDialogTimeoutSeconds,
+    setStartupHistoryLoadState,
     clearQueuedMessages,
   });
 
@@ -467,6 +474,7 @@ export const useAppChatController = ({
     findToolResult, getToolResultRaw, subagents, allSubagents, globalTodos,
     filteredFileChanges, rewindableMessages,
     subagentHistoryCtxValue, sessionIdCtxValue,
+    startupHistoryLoadState,
     // Refs
     chatInputRef, messagesContainerRef, messagesEndRef, inputAreaRef, isAutoScrollingRef,
     // Message actions

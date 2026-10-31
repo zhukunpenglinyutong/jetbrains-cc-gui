@@ -53,6 +53,11 @@ interface BasicConfigSectionProps {
   // Auto open file configuration
   autoOpenFileEnabled?: boolean;
   onAutoOpenFileEnabledChange?: (enabled: boolean) => void;
+  // Startup history loading configuration
+  loadHistoryOnStartup?: boolean;
+  onLoadHistoryOnStartupChange?: (enabled: boolean) => void;
+  historyLoadTimeoutSeconds?: number;
+  onHistoryLoadTimeoutChange?: (seconds: number) => void;
   // Send shortcut configuration
   sendShortcut?: 'enter' | 'cmdEnter';
   onSendShortcutChange?: (shortcut: 'enter' | 'cmdEnter') => void;
@@ -175,6 +180,10 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onStreamingEnabledChange={props.onStreamingEnabledChange}
           autoOpenFileEnabled={props.autoOpenFileEnabled}
           onAutoOpenFileEnabledChange={props.onAutoOpenFileEnabledChange}
+          loadHistoryOnStartup={props.loadHistoryOnStartup}
+          onLoadHistoryOnStartupChange={props.onLoadHistoryOnStartupChange}
+          historyLoadTimeoutSeconds={props.historyLoadTimeoutSeconds}
+          onHistoryLoadTimeoutChange={props.onHistoryLoadTimeoutChange}
           diffExpandedByDefault={props.diffExpandedByDefault}
           onDiffExpandedByDefaultChange={props.onDiffExpandedByDefaultChange}
           bashGroupCollapsedByDefault={props.bashGroupCollapsedByDefault}

@@ -2,6 +2,7 @@ package com.github.claudecodegui.provider.grok;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.provider.common.HistoryPathMatcher;
+import com.github.claudecodegui.provider.common.HistoryCancellation;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -24,6 +25,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 /**
  * Reads Grok CLI session history from
@@ -266,16 +268,35 @@ public class GrokHistoryReader {
      * {@link com.github.claudecodegui.session.MessageParser}.
      */
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) throws IOException {
-        Path sessionDir = resolveSessionDir(sessionId, cwd);
+        return getSessionMessagesInternal(sessionId, cwd, () -> false, false);
+    }
+
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd,
+                                               BooleanSupplier cancellation) throws IOException {
+        return getSessionMessagesInternal(sessionId, cwd, cancellation, true);
+    }
+
+    private List<JsonObject> getSessionMessagesInternal(String sessionId, String cwd,
+                                                         BooleanSupplier cancellation, boolean failMissing) throws IOException {
+        HistoryCancellation.check(cancellation);
+        Path sessionDir = resolveSessionDir(sessionId, cwd, cancellation);
         if (sessionDir == null) {
+            if (failMissing) {
+                throw new com.github.claudecodegui.provider.common.SessionHistoryNotFoundException(sessionId, cwd);
+            }
+
             LOG.warn("[GrokHistoryReader] Session dir not found for id=" + sessionId + " cwd=" + cwd);
             return List.of();
         }
         Path chatPath = sessionDir.resolve("chat_history.jsonl");
         if (!Files.isRegularFile(chatPath)) {
+            if (failMissing) {
+                throw new com.github.claudecodegui.provider.common.SessionHistoryNotFoundException(sessionId, cwd);
+            }
+
             return List.of();
         }
-        return parseChatHistoryToMessages(chatPath);
+        return parseChatHistoryToMessages(chatPath, cancellation);
     }
 
     public boolean deleteSession(String sessionId, String projectPath) throws IOException {
@@ -307,6 +328,12 @@ public class GrokHistoryReader {
     }
 
     private Path resolveSessionDir(String sessionId, String cwd) {
+        return resolveSessionDir(sessionId, cwd, () -> false);
+    }
+
+    private Path resolveSessionDir(String sessionId, String cwd,
+                                   BooleanSupplier cancellation) {
+        HistoryCancellation.check(cancellation);
         if (sessionId == null || sessionId.trim().isEmpty()) {
             return null;
         }
@@ -318,6 +345,7 @@ public class GrokHistoryReader {
             String encoded = encodeCwd(cwd);
             String encodedCanon = encodeCwd(canonicalizePath(cwd));
             for (Path sessionsRoot : sessionsRoots) {
+                HistoryCancellation.check(cancellation);
                 Path direct = sessionsRoot.resolve(encoded).resolve(id);
                 if (Files.isDirectory(direct)) {
                     return direct;
@@ -329,16 +357,23 @@ public class GrokHistoryReader {
                 }
             }
         }
-        return findSessionDirById(id);
+        return findSessionDirById(id, cancellation);
     }
 
     private Path findSessionDirById(String sessionId) {
+        return findSessionDirById(sessionId, () -> false);
+    }
+
+    private Path findSessionDirById(String sessionId,
+                                    BooleanSupplier cancellation) {
         for (Path sessionsRoot : sessionsRoots) {
+            HistoryCancellation.check(cancellation);
             if (!Files.isDirectory(sessionsRoot)) {
                 continue;
             }
             try (DirectoryStream<Path> cwdDirs = Files.newDirectoryStream(sessionsRoot)) {
                 for (Path cwdDir : cwdDirs) {
+                    HistoryCancellation.check(cancellation);
                     if (!Files.isDirectory(cwdDir)) {
                         continue;
                     }
@@ -356,11 +391,19 @@ public class GrokHistoryReader {
     }
 
     List<JsonObject> parseChatHistoryToMessages(Path chatPath) throws IOException {
+        return parseChatHistoryToMessages(chatPath, () -> false);
+    }
+
+    private List<JsonObject> parseChatHistoryToMessages(
+            Path chatPath,
+            BooleanSupplier cancellation
+    ) throws IOException {
         List<JsonObject> messages = new ArrayList<>();
         try (BufferedReader reader = Files.newBufferedReader(chatPath, StandardCharsets.UTF_8)) {
             String line;
             int counter = 0;
             while ((line = reader.readLine()) != null) {
+                HistoryCancellation.check(cancellation);
                 line = line.trim();
                 if (line.isEmpty() || !line.contains("\"type\"")) {
                     continue;

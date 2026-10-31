@@ -1,0 +1,77 @@
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px 2px;
+  padding: 7px 10px;
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  border-radius: 6px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  color: var(--vscode-foreground);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.icon {
+  flex: 0 0 auto;
+  color: var(--vscode-descriptionForeground);
+}
+
+.message {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 2px 8px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 4px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  cursor: pointer;
+  font: inherit;
+}
+
+.button:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.loading .icon {
+  animation: history-spin 1s linear infinite;
+}
+
+.timeout .icon,
+.failed .icon {
+  color: var(--vscode-errorForeground);
+}
+
+.loaded .icon {
+  color: var(--vscode-testing-iconPassed, #3fb950);
+}
+
+@keyframes history-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 520px) {
+  .banner {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

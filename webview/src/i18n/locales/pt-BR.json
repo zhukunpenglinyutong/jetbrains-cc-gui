@@ -1,4 +1,17 @@
 {
+  "startupHistory": {
+    "unloaded": "O histórico desta sessão restaurada ainda não foi carregado.",
+    "loading": "Carregando histórico…",
+    "loaded_one": "{{count}} mensagem carregada.",
+    "loaded_other": "{{count}} mensagens carregadas.",
+    "missing": "O histórico salvo não está mais disponível. Uma nova sessão está pronta.",
+    "timeout": "O carregamento excedeu o tempo limite. Selecione Tentar novamente.",
+    "cancelled": "O carregamento foi cancelado. Selecione Tentar novamente.",
+    "failed": "Falha ao carregar o histórico. Selecione Tentar novamente.",
+    "load": "Carregar histórico",
+    "retry": "Tentar novamente",
+    "cancel": "Cancelar"
+  },
   "common": {
     "ready": "Pronto",
     "loading": "Carregando",
@@ -253,6 +266,17 @@
         "enabled": "Ativado",
         "disabled": "Desativado",
         "hint": "Quando ativado, selecionar um arquivo na árvore do projeto enviará automaticamente o caminho do arquivo para a IA (atenção: apenas o caminho é enviado, não o conteúdo). Quando desativado, é necessária ação manual."
+      },
+      "loadHistoryOnStartup": {
+        "label": "Carregar histórico ao iniciar",
+        "enabled": "Ativado",
+        "disabled": "Desativado",
+        "hint": "Carrega automaticamente o histórico das sessões restauradas. Após falha ou tempo limite, tente novamente manualmente."
+      },
+      "historyLoadTimeout": {
+        "label": "Tempo limite do histórico",
+        "unit": "segundos",
+        "hint": "A restauração automática e a carga manual usam este limite (5–120 segundos). Você pode tentar novamente na conversa."
       },
       "promptEnhancer": {
         "label": "Prompt Enhancer",
