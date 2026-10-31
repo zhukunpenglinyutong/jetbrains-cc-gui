@@ -94,6 +94,7 @@ repositories {
     // Aliyun mirror first: direct connections to repo.maven.apache.org are often TLS-reset in CN
     maven { url 'https://maven.aliyun.com/repository/public' }
     mavenCentral()
+
     intellijPlatform {
         defaultRepositories()
     }

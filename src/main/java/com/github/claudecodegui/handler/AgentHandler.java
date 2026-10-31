@@ -1,10 +1,16 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.agent.AgentDenyRules;
+import com.github.claudecodegui.agent.AgentResolver;
+import com.github.claudecodegui.agent.SubagentDiscoveryScanner;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
+import com.github.claudecodegui.util.LogSanitizer;
+import com.github.claudecodegui.watcher.AgentFileWatcher;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.model.AgentFields;
 import com.github.claudecodegui.model.ConflictStrategy;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -13,6 +19,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.LocalFileSystem;
 
@@ -35,6 +42,7 @@ public class AgentHandler extends BaseMessageHandler {
 
     private static final String[] SUPPORTED_TYPES = {
         "get_agents",
+        "get_subagents",
         "add_agent",
         "update_agent",
         "delete_agent",
@@ -47,11 +55,35 @@ public class AgentHandler extends BaseMessageHandler {
 
     private final CodemossSettingsService settingsService;
     private final Gson gson;
+    private final AgentFileWatcher fileWatcher;
 
     public AgentHandler(HandlerContext context) {
         super(context);
         this.settingsService = new CodemossSettingsService();
         this.gson = new Gson();
+
+        // An agent file edited in the IDE has to reach the open settings tab.
+        // The watcher does not rescan: it only says "a root changed", and the
+        // frontend decides whether anyone is looking. That keeps every read of a
+        // discovered file on the one path that applies the containment checks,
+        // and means a save made while Settings is closed costs nothing.
+        this.fileWatcher = new AgentFileWatcher(
+                context.getProject(),
+                context::resolveEffectiveWorkingDirectory,
+                () -> ApplicationManager.getApplication().invokeLater(() ->
+                        callJavaScript("window.agentFilesChanged", "1")));
+        this.fileWatcher.startWatching();
+    }
+
+    /**
+     * Stop watching. Called when the chat window is torn down; the project bus
+     * would dispose the subscription anyway, but doing it here makes the
+     * lifetime explicit and matches {@link PromptHandler}.
+     */
+    public void dispose() {
+        if (fileWatcher != null) {
+            fileWatcher.stopWatching();
+        }
     }
 
     @Override
@@ -63,7 +95,17 @@ public class AgentHandler extends BaseMessageHandler {
     public boolean handle(String type, String content) {
         switch (type) {
             case "get_agents":
-                handleGetAgents();
+                // The body is forwarded verbatim: it names the scopes the client
+                // asked for, and dropping it here would silently answer every
+                // request with all three.
+                // LEGACY: get_agents now returns ONLY store agents for chat-bar compatibility.
+                // Settings tab should use get_subagents for discovered agents.
+                handleGetAgents(content);
+                return true;
+            case "get_subagents":
+                // New message for discovered Claude Code subagents (Settings tab only).
+                // Returns file-backed agents from ~/.claude/agents and .claude/agents.
+                handleGetSubagents(content);
                 return true;
             case "add_agent":
                 handleAddAgent(content);
@@ -95,20 +137,164 @@ public class AgentHandler extends BaseMessageHandler {
     }
 
     /**
-     * Get all agents.
+     * Resolve the agent list and hand it to the client.
+     *
+     * <p>The body may name the scopes the client wants
+     * ({@code {"scopes":["global","local"]}}, or the singular
+     * {@code {"scope":"store"}} the prompt handler uses). An absent or
+     * unparsable body means every scope, which is what the chat-bar provider has
+     * always sent and what the settings tab sent before this contract existed —
+     * see {@link AgentResolver} for the full rule.
+     *
+     * <p>Resolution happens here and only here, on purpose: the store, the
+     * global directory and the project directory can each define the same name,
+     * and a client that resolved precedence itself would show a different agent
+     * than the one an edit would apply to.
      */
-    private void handleGetAgents() {
-        try {
-            List<JsonObject> agents = settingsService.getAgents();
-            String agentsJson = gson.toJson(agents);
+    private void handleGetAgents(String content) {
+        // Off the EDT, deliberately. Resolving the list reads every agent file
+        // under two roots and parses a YAML block from each: measured at roughly
+        // half a second for a 150-agent ~/.claude/agents. Four call sites reach
+        // this method from invokeLater, so doing the work inline froze the whole
+        // UI for that long after every create, edit and delete — and the IDE
+        // stops painting, which reads as a hang rather than as a slow list.
+        //
+        // Only the call into the webview has to be on the EDT; everything
+        // else here is file I/O and JSON. Nothing in this path touches the VFS,
+        // so no read action is needed to keep it off the EDT.
+        AppExecutorUtil.getAppExecutorService().execute(() -> resolveAndSendAgents(content));
+    }
 
+    /**
+     * Resolve the list off the EDT and hand it to the webview.
+     *
+     * <p>LEGACY BEHAVIOR: Returns ONLY store agents (prompt prefixes for the chat bar).
+     * Discovered subagents are NOT included - the Settings tab uses get_subagents for those.
+     * This maintains backward compatibility with the chat-bar # picker which only knows
+     * how to use store agents (they have prompts).
+     *
+     * <p>Split from {@link #handleGetAgents} so the thread hop is visible at the
+     * call site rather than buried inside the method the other callers invoke
+     * from {@code invokeLater}.
+     */
+    private void resolveAndSendAgents(String content) {
+        try {
+            List<String> scopes = AgentResolver.parseRequestedScopes(content);
+            List<JsonObject> storeAgents = settingsService.getAgents();
+
+            // LEGACY: Only return store agents. The chat-bar provider sends empty body
+            // which means "all scopes", but we filter to store only for compatibility.
+            // If a client explicitly requests only store scope, honor that.
+            // If they request global/local, return empty (those are for get_subagents).
+            List<String> filteredScopes;
+            if (scopes.isEmpty()) {
+                // Empty body = legacy client, return store only
+                filteredScopes = List.of(AgentFields.SCOPE_STORE);
+            } else {
+                // Explicit scopes requested - filter to store only
+                filteredScopes = scopes.stream()
+                        .filter(AgentFields.SCOPE_STORE::equals)
+                        .toList();
+            }
+
+            AgentResolver.Resolution resolution = AgentResolver.resolveStoreAgents(
+                    storeAgents, filteredScopes);
+
+            String agentsJson = gson.toJson(resolution.agents());
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateAgents", escapeJs(agentsJson));
+            });
+        } catch (IllegalArgumentException e) {
+            // A bad scope is the client's own mistake and is worth saying so:
+            // answering with an empty list would look like "you have no
+            // agents", which is a different and very confusing message.
+            // The message quotes the client's own scopes back, so it carries
+            // whatever the caller sent. The UI copy is escaped by escapeJs and
+            // rendered as text; the log copy needs its own escaping, because a
+            // scope string containing a newline would otherwise split this
+            // record in two.
+            LOG.warn("[AgentHandler] Rejected get_agents request: "
+                    + LogSanitizer.sanitize(e.getMessage()));
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject error = new JsonObject();
+                error.addProperty("success", false);
+                error.addProperty("error", e.getMessage());
+                callJavaScript("window.updateAgents", escapeJs("[]"));
+                callJavaScript("window.agentOperationResult", escapeJs(gson.toJson(error)));
             });
         } catch (Exception e) {
             LOG.error("[AgentHandler] Failed to get agents: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateAgents", escapeJs("[]"));
+            });
+        }
+    }
+
+    /**
+     * Handle get_subagents - returns discovered Claude Code subagents for the Settings tab.
+     *
+     * <p>Unlike {@link #handleGetAgents}, this returns ONLY file-backed agents from
+     * ~/.claude/agents (global) and .claude/agents (local). Store agents are NOT
+     * included, because they are a different concept (prompt prefixes for the chat bar)
+     * and the chat bar only knows how to use store agents.
+     *
+     * <p>This keeps the two concepts separate: store agents (editable, with prompts)
+     * for the chat-bar # picker, and discovered subagents (read-only, delegation targets)
+     * for the Settings tab. This fixes the issue where selecting a discovered agent
+     * in the chat bar did nothing because it had no prompt.
+     */
+    private void handleGetSubagents(String content) {
+        AppExecutorUtil.getAppExecutorService().execute(() -> resolveAndSendSubagents(content));
+    }
+
+    /**
+     * Resolve discovered subagents off the EDT and hand them to the webview.
+     *
+     * <p>Returns agents with scope "global" and "local" only. No store agents.
+     * Precedence: local > global (project overrides user). Broken files are
+     * included as non-loadable entries so the UI can show why they didn't load.
+     */
+    private void resolveAndSendSubagents(String content) {
+        try {
+            // Parse requested scopes (global, local only - no store)
+            List<String> scopes = AgentResolver.parseRequestedScopes(content);
+            // Filter out store scope if present - this endpoint is for discovered agents only
+            List<String> filteredScopes = scopes.stream()
+                    .filter(s -> !AgentFields.SCOPE_STORE.equals(s))
+                    .toList();
+
+            // The project root is the effective working directory
+            String workspaceRoot = context.resolveEffectiveWorkingDirectory();
+            SubagentDiscoveryScanner.ScanResult scan = SubagentDiscoveryScanner.scanAll(workspaceRoot);
+
+            // Resolve discovered subagents only
+            AgentResolver.Resolution resolution = AgentResolver.resolveSubagents(
+                    scan, AgentDenyRules.readForProject(workspaceRoot), filteredScopes);
+
+            if (!resolution.unmatchedDenyRules().isEmpty()) {
+                resolution.unmatchedDenyRules().forEach(rule ->
+                        LOG.info("[AgentHandler] permissions.deny names no known subagent: "
+                                + LogSanitizer.sanitize(rule)));
+            }
+
+            String agentsJson = gson.toJson(resolution.agents());
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.updateSubagents", escapeJs(agentsJson));
+            });
+        } catch (IllegalArgumentException e) {
+            LOG.warn("[AgentHandler] Rejected get_subagents request: "
+                    + LogSanitizer.sanitize(e.getMessage()));
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject error = new JsonObject();
+                error.addProperty("success", false);
+                error.addProperty("error", e.getMessage());
+                callJavaScript("window.updateSubagents", escapeJs("[]"));
+                callJavaScript("window.agentOperationResult", escapeJs(gson.toJson(error)));
+            });
+        } catch (Exception e) {
+            LOG.error("[AgentHandler] Failed to get subagents: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
+                callJavaScript("window.updateSubagents", escapeJs("[]"));
             });
         }
     }
@@ -123,7 +309,7 @@ public class AgentHandler extends BaseMessageHandler {
 
             // Refresh the list
             ApplicationManager.getApplication().invokeLater(() -> {
-                handleGetAgents();
+                handleGetAgents("");
                 callJavaScript("window.agentOperationResult", escapeJs("{\"success\":true,\"operation\":\"add\"}"));
             });
         } catch (Exception e) {
@@ -151,7 +337,7 @@ public class AgentHandler extends BaseMessageHandler {
 
             // Refresh the list
             ApplicationManager.getApplication().invokeLater(() -> {
-                handleGetAgents();
+                handleGetAgents("");
                 callJavaScript("window.agentOperationResult", escapeJs("{\"success\":true,\"operation\":\"update\"}"));
             });
         } catch (Exception e) {
@@ -191,7 +377,7 @@ public class AgentHandler extends BaseMessageHandler {
 
                 // Refresh the list
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    handleGetAgents();
+                    handleGetAgents("");
                     callJavaScript("window.agentOperationResult", escapeJs("{\"success\":true,\"operation\":\"delete\"}"));
                 });
             } else {
@@ -344,7 +530,13 @@ public class AgentHandler extends BaseMessageHandler {
 
                 JsonArray agentsArray = new JsonArray();
                 for (JsonObject agent : agents) {
-                    agentsArray.add(agent);
+                    // Strip server-computed metadata fields on export
+                    // These are forced to correct values on import anyway
+                    JsonObject exportAgent = agent.deepCopy();
+                    exportAgent.remove("scope");
+                    exportAgent.remove("source");
+                    exportAgent.remove("readOnly");
+                    agentsArray.add(exportAgent);
                 }
                 exportData.add("agents", agentsArray);
 
@@ -510,13 +702,20 @@ public class AgentHandler extends BaseMessageHandler {
 
             List<JsonObject> agentsToImport = new java.util.ArrayList<>();
             for (int i = 0; i < agentsArray.size(); i++) {
-                agentsToImport.add(agentsArray.get(i).getAsJsonObject());
+                JsonObject agent = agentsArray.get(i).getAsJsonObject();
+                // Strip server-computed metadata fields on import
+                // These are forced to correct values by storeWire
+                JsonObject importAgent = agent.deepCopy();
+                importAgent.remove("scope");
+                importAgent.remove("source");
+                importAgent.remove("readOnly");
+                agentsToImport.add(importAgent);
             }
 
             Map<String, Object> result = settingsService.getAgentManager().batchImportAgents(agentsToImport, strategy);
 
             ApplicationManager.getApplication().invokeLater(() -> {
-                handleGetAgents();
+                handleGetAgents("");
 
                 int imported = (int) result.get("imported");
                 int updated = (int) result.get("updated");
@@ -553,4 +752,5 @@ public class AgentHandler extends BaseMessageHandler {
             });
         }
     }
+
 }

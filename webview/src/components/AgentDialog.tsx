@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AgentConfig } from '../types/agent';
+import { isNonHyphenCaseName, isValidAgentName } from '../types/agent';
 
 const FOOTER_ACTIONS_STYLE: React.CSSProperties = { marginLeft: 'auto' };
 
@@ -62,9 +63,10 @@ export default function AgentDialog({
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    // Limit to 20 characters max
-    if (value.length <= 20) {
-      setName(value);
+    // No length cap: the specification documents none, and the former 20-character
+    // limit rejected 16 real agents (e.g. "seo-cannibalization-detector", 28 chars).
+    setName(value);
+    if (isValidAgentName(value.trim())) {
       setNameError('');
     }
   };
@@ -78,9 +80,15 @@ export default function AgentDialog({
   };
 
   const handleSave = () => {
-    // Validate name
+    // Validate name. Only ':' is rejected (reserved for plugin-scoped ids such
+    // as "my-plugin:reviewer"); a non-hyphen-case name is merely a warning, since
+    // legacy store entries legitimately contain spaces.
     if (!name.trim()) {
       setNameError(t('settings.agent.dialog.nameRequired'));
+      return;
+    }
+    if (!isValidAgentName(name)) {
+      setNameError(t('settings.agent.dialog.nameReservedChar'));
       return;
     }
 
@@ -118,15 +126,16 @@ export default function AgentDialog({
                 placeholder={t('settings.agent.dialog.namePlaceholder')}
                 value={name}
                 onChange={handleNameChange}
-                maxLength={20}
               />
-              <span className="char-counter">{name.length}/20</span>
             </div>
             {nameError && (
               <p className="form-error">
                 <span className="codicon codicon-error" />
                 {nameError}
               </p>
+            )}
+            {!nameError && isNonHyphenCaseName(name) && (
+              <small className="form-hint">{t('settings.agent.dialog.nameConventionHint')}</small>
             )}
           </div>
 

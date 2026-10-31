@@ -1,0 +1,697 @@
+package com.github.claudecodegui.agent;
+
+import com.github.claudecodegui.agent.AgentDenyRules.DenyIndex;
+import com.github.claudecodegui.agent.SubagentDiscoveryScanner.DiscoveredAgent;
+import com.github.claudecodegui.agent.SubagentDiscoveryScanner.ScanResult;
+import com.github.claudecodegui.model.AgentFields;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.intellij.openapi.diagnostic.Logger;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Server-side resolution of the agent list (PRD task 59, R9 / R11 / R8).
+ *
+ * <p>Three sources feed one list, and this class is the only place where they
+ * meet. The client is a renderer: it asks for scopes, it receives agents, and
+ * it never decides which definition of "code-reviewer" is the real one. That is
+ * the whole point of R11 — the same name can be defined in three places, and
+ * two clients resolving it differently would show two different agents under
+ * the same label.
+ *
+ * <h2>Sources</h2>
+ *
+ * <ul>
+ *   <li>{@code store} — the plugin's own {@code ~/.codemoss/agent.json}. These
+ *       are the only editable agents, and the only ones the plugin ever
+ *       writes.</li>
+ *   <li>{@code global} — files in {@code ~/.claude/agents}, produced by
+ *       {@link SubagentDiscoveryScanner}.</li>
+ *   <li>{@code local} — files in {@code {workspace}/.claude/agents}, likewise.</li>
+ * </ul>
+ *
+ * <h2>Precedence: local &gt; global &gt; store, and the winner wins whole</h2>
+ *
+ * <p>When one name is defined more than once, the project definition wins over
+ * the user-level one, which wins over the store. This is the same rule the
+ * skills subsystem already applies (project overrides user) and the same rule
+ * Claude Code itself applies when it loads agents: the nearest definition is
+ * the one in effect, because a project that ships its own {@code code-reviewer}
+ * means it, and showing the user-level one instead would silently run the
+ * wrong instructions.
+ *
+ * <p>The store sits last, not because it is least trustworthy but because it is
+ * the only source the plugin owns. A file in {@code .claude/agents} is written
+ * by the user, for Claude Code, with the full specification available; a store
+ * entry is a plugin-owned prompt prefix with four fields. Letting a
+ * specification-complete definition lose to a four-field one would be
+ * backwards.
+ *
+ * <p><b>The winning entry is taken whole.</b> No field of a losing source is
+ * merged into it. That is a deliberate decision, for four reasons.
+ *
+ * <ol>
+ *   <li>A subagent is one definition with one contract. Half of an agent is not
+ *       a configuration — it is a contradiction the model has to resolve at
+ *       runtime, in the user's favour or against it.</li>
+ *   <li>Merging makes provenance unrecoverable. A merged entry would have to
+ *       name, per field, which file it came from, and the plugin could then
+ *       not answer the only question that matters once the user edits
+ *       something: "which file do I change?"</li>
+ *   <li>File-backed agents are read-only (R6). A merged entry has no single
+ *       file to be written back to, so the edit path would be undefined — the
+ *       UI would have to invent a copy target per field.</li>
+ *   <li>Wholesale replacement is the only rule a user can predict. "The nearest
+ *       definition wins, entirely" needs no mental model of which fields
+ *       outrank which; "the nearest definition wins except for {@code prompt}
+ *       when it is missing" does.</li>
+ * </ol>
+ *
+ * <p>A user who wants the store entry back deletes or renames the shadowing
+ * file. That is a visible, reversible action, and it is the one the
+ * specification implies.
+ *
+ * <h2>Names are compared exactly</h2>
+ *
+ * <p>Both shadowing and deny matching key on the exact name, case included.
+ * The reason is the same as in {@link AgentDenyRules}: the only mistake this
+ * rule can make is a wrong one. Folding case would let a store entry called
+ * "New Agent" shadow a project agent called "new-agent", and two genuinely
+ * different agents would collapse into one.
+ *
+ * <h2>Request contract</h2>
+ *
+ * <p>The request body is optional and mirrors the neighbouring
+ * {@code get_prompts} / {@code get_all_skills} handlers rather than inventing a
+ * new style:
+ *
+ * <pre>
+ * get_agents:                                  → every scope (legacy clients)
+ * get_agents:{"scopes":["global","local"]}     → exactly these scopes
+ * get_agents:{"scope":"store"}                 → one scope, singular form
+ * </pre>
+ *
+ * <p>Everything that is not a recognisable scope list — absent body, empty
+ * body, unparsable body, empty array, or an array naming only scopes this build
+ * does not know — means "every scope". The chat-bar provider has been sending
+ * an empty body since before this contract existed, and a client speaking a
+ * newer dialect deserves the full list rather than an empty tab.
+ *
+ * <p>The response stays a flat JSON array of agents, exactly as it was. Adding
+ * a scope selector must not force every existing client to be rewritten, and
+ * each element already carries its own {@code scope}, so a client that asked
+ * for everything can still group the answer itself.
+ *
+ * <p>The scope filter is applied <em>after</em> precedence. Filtering first
+ * would let a shadowed store entry reappear the moment a client asked for
+ * "store" alone, and the same agent would then be visible under two different
+ * requests with two different bodies.
+ */
+public final class AgentResolver {
+
+    private static final Logger LOG = Logger.getInstance(AgentResolver.class);
+
+    /**
+     * Every scope, in the order resolution applies them: lowest priority first,
+     * so a later source overwrites an earlier one for the same name.
+     */
+    private static final List<String> SCOPE_PRIORITY = List.of(
+            AgentFields.SCOPE_STORE,
+            AgentFields.SCOPE_GLOBAL,
+            AgentFields.SCOPE_LOCAL);
+
+    /** The scopes a client may ask for. Passing this means "no filtering". */
+    public static final List<String> ALL_SCOPES = SCOPE_PRIORITY;
+
+    private static final String FIELD_SCOPES = "scopes";
+    private static final String FIELD_SCOPE = "scope";
+    private static final String FIELD_DISABLED = "disabled";
+    private static final String FIELD_DISABLED_REASON = "disabledReason";
+    private static final String FIELD_WARNING = "warning";
+    private static final String FIELD_WARNING_LINE = "warningLine";
+    private static final String FIELD_READ_ONLY = "readOnly";
+    private static final String FIELD_SOURCE = "source";
+    private static final String FIELD_PATH = "path";
+    private static final String FIELD_ID = "id";
+    private static final String FIELD_NAME = "name";
+
+    /**
+     * Key prefix for a blank name, so two nameless entries cannot shadow one
+     * another. A blank name should not occur — both the parser and
+     * {@code AgentManager} fall back to something — but collapsing every such
+     * entry into one would silently delete agents.
+     */
+    private static final String UNNAMED_KEY_PREFIX = "\0unnamed:";
+
+    private AgentResolver() {
+    }
+
+    /**
+     * What one resolution produced.
+     *
+     * @param agents             the resolved agents, ready for the client
+     * @param unmatchedDenyRules deny rules that named no known agent, so the
+     *                           UI or the log can say a rule is inert instead
+     *                           of swallowing it
+     */
+    public record Resolution(List<JsonObject> agents, List<String> unmatchedDenyRules) {
+
+        /** The empty result, shared because it is immutable. */
+        private static final Resolution EMPTY = new Resolution(List.of(), List.of());
+
+        /**
+         * The empty result.
+         *
+         * @return no agents and no unmatched rules
+         */
+        public static Resolution empty() {
+            return EMPTY;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Request parsing
+    // ------------------------------------------------------------------
+
+    /**
+     * The scopes a {@code get_agents} request asked for.
+     *
+     * <p>An absent, null, empty or unparsable body returns an empty list, which
+     * {@link #resolve} reads as "every scope". That default is the whole
+     * backward-compatibility guarantee: a client that never learned this
+     * contract still gets the full list it always got.
+     *
+     * <p>A body that <em>does</em> name scopes but names one that does not
+     * exist is a different case, and is rejected rather than widened. Silently
+     * answering a typo like {@code {"scopes":["projekt"]}} with all 150 agents
+     * would leave the caller unable to tell that its filter was ignored; the
+     * same reasoning applies to a scope spelled correctly but not yet
+     * supported, which should fail loudly until it is implemented.
+     *
+     * @param content the raw message body, possibly null or empty
+     * @return the requested scopes in the order they were written, or an empty
+     *         list to mean "all of them"
+     * @throws IllegalArgumentException when a named scope is not one of
+     *         {@code store}, {@code global} or {@code local}
+     */
+    public static List<String> parseRequestedScopes(String content) {
+        if (content == null || content.isBlank()) {
+            return List.of();
+        }
+        JsonObject request;
+        try {
+            JsonElement parsed = JsonParser.parseString(content);
+            if (!parsed.isJsonObject()) {
+                return List.of();
+            }
+            request = parsed.getAsJsonObject();
+        } catch (Exception e) {
+            // A malformed body is a client bug, not a reason to answer with an
+            // empty agent list.
+            LOG.warn("[AgentResolver] Ignoring unparsable get_agents request body");
+            return List.of();
+        }
+
+        Set<String> requested = new LinkedHashSet<>();
+        collectScopes(request.get(FIELD_SCOPES), requested);
+        // The singular form is the sibling handlers' convention (get_prompts
+        // takes {"scope": "..."}), accepted so one client can speak the same
+        // dialect everywhere.
+        collectScopes(request.get(FIELD_SCOPE), requested);
+
+        if (requested.isEmpty()) {
+            // Nothing was named at all — the ordinary "everything" request.
+            return List.of();
+        }
+        List<String> unknown =
+                requested.stream().filter(scope -> !AgentFields.isDiscoveryScope(scope)).toList();
+        if (!unknown.isEmpty()) {
+            // Something was named that this build does not know. Rejecting the
+            // whole request rather than keeping the parts that happen to parse
+            // is deliberate: a client that asked for two scopes and got one
+            // back has no way to notice that half its filter was dropped,
+            // whereas a rejected request tells it exactly what to fix.
+            throw new IllegalArgumentException(
+                    "Unknown agent scope(s) " + unknown + "; expected any of " + SCOPE_PRIORITY);
+        }
+        return List.copyOf(requested);
+    }
+
+    /**
+     * Read one scope, or an array of them, from a request node.
+     *
+     * <p>A non-string element is a contract violation and is reported, not
+     * skipped. Dropping it silently would leave {@code requested} empty for
+     * {@code {"scopes":[123,456]}}, which the caller reads as "no filter" and
+     * answers with all three scopes — the exact failure the unknown-string case
+     * is rejected for, arriving from the other direction.
+     *
+     * @throws IllegalArgumentException when an element is present but is not a
+     *         scope name
+     */
+    private static void collectScopes(JsonElement node, Set<String> into) {
+        if (node == null || node.isJsonNull()) {
+            return;
+        }
+        if (node.isJsonArray()) {
+            for (JsonElement element : node.getAsJsonArray()) {
+                if (element == null || element.isJsonNull()) {
+                    continue;
+                }
+                if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isString()) {
+                    into.add(element.getAsString().trim());
+                } else {
+                    throw new IllegalArgumentException(
+                            "Agent scope must be a string, but the request contained "
+                                    + element.getClass().getSimpleName());
+                }
+            }
+        } else if (node.isJsonPrimitive() && node.getAsJsonPrimitive().isString()) {
+            into.add(node.getAsString().trim());
+        } else {
+            throw new IllegalArgumentException(
+                    "Agent scope must be a string or an array of strings, but the request contained "
+                            + node.getClass().getSimpleName());
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Resolution
+    // ------------------------------------------------------------------
+
+    /**
+     * Resolve store agents (for {@code get_agents} message).
+     *
+     * <p>Returns only store agents (prompt prefixes for the chat bar).
+     * Deny rules are NOT applied to store agents — they are plugin prompt prefixes,
+     * not Claude Code subagents, so {@code permissions.deny} rules don't apply.
+     *
+     * <p>Absent sources are not errors: a null store resolves to an empty list.
+     * A scope that was named but is not a known one <em>is</em> an error.
+     *
+     * @param storeAgents the plugin store entries, as {@code AgentManager} read them; null for none
+     * @param requestedScopes the scopes to return (should be "store" or empty for all)
+     * @return the resolved store agents
+     * @throws IllegalArgumentException when a named scope is not one of {@code store}, {@code global} or {@code local}
+     */
+    public static Resolution resolveStoreAgents(List<JsonObject> storeAgents,
+                                                 List<String> requestedScopes) {
+        DenyIndex rules = DenyIndex.empty(); // Store agents are not subject to deny rules
+        Map<String, JsonObject> winners = new LinkedHashMap<>();
+        Set<String> resolvedNames = new LinkedHashSet<>();
+
+        // Store agents only - no precedence, just filter by scope
+        if (storeAgents != null) {
+            for (JsonObject storeAgent : storeAgents) {
+                if (storeAgent != null && storeAgent.isJsonObject()) {
+                    put(winners, resolvedNames, storeWire(storeAgent));
+                }
+            }
+        }
+
+        List<String> unmatched = unmatchedRules(rules, resolvedNames);
+        List<String> scopes = filterScopes(requestedScopes);
+
+        List<JsonObject> result = new ArrayList<>(winners.size());
+        for (JsonObject agent : winners.values()) {
+            if (!scopes.isEmpty() && !scopes.contains(agent.get(FIELD_SCOPE).getAsString())) {
+                continue;
+            }
+            // No deny marking for store agents
+            result.add(agent);
+        }
+
+        LOG.info("[AgentResolver] Resolved " + result.size() + " store agent(s) for scope(s) "
+                + (scopes.isEmpty() ? "all" : scopes));
+        return new Resolution(List.copyOf(result), List.copyOf(unmatched));
+    }
+
+    /**
+     * Resolve discovered subagents (for {@code get_subagents} message).
+     *
+     * <p>Returns only file-backed agents from {@code ~/.claude/agents} (global)
+     * and {@code {workspace}/.claude/agents} (local). Store agents are NOT included.
+     *
+     * <p>Precedence: local > global (project overrides user). Broken files are
+     * included as non-loadable entries so the UI can show why they didn't load,
+     * but they NEVER shadow a loadable agent from a higher-priority scope.
+     *
+     * <p>Absent sources are not errors: a null scan result resolves to an empty list.
+     * A scope that was named but is not a known one <em>is</em> an error.
+     *
+     * @param scanResult the file discovery result, or null for none
+     * @param deny the deny rules, or null for none
+     * @param requestedScopes the scopes to return (should be "global" and/or "local", empty for all)
+     * @return the resolved subagents and any deny rule that matched nothing
+     * @throws IllegalArgumentException when a named scope is not one of {@code store}, {@code global} or {@code local}
+     */
+    public static Resolution resolveSubagents(ScanResult scanResult,
+                                               DenyIndex deny,
+                                               List<String> requestedScopes) {
+        DenyIndex rules = deny == null ? DenyIndex.empty() : deny;
+        Map<String, JsonObject> winners = new LinkedHashMap<>();
+        Set<String> resolvedNames = new LinkedHashSet<>();
+
+        // Priority order for discovered agents: global first (lowest), then local (highest)
+        List<String> discoveredPriority = List.of(AgentFields.SCOPE_GLOBAL, AgentFields.SCOPE_LOCAL);
+
+        // 1. First pass: loadable agents from each scope in priority order (lowest first)
+        // This means local will overwrite global for the same name
+        if (scanResult != null) {
+            for (String scope : discoveredPriority) {
+                for (DiscoveredAgent entry : scanResult.loadable(scope)) {
+                    if (entry != null) {
+                        put(winners, resolvedNames, toWire(entry));
+                    }
+                }
+            }
+        }
+
+        // 2. Second pass: non-loadable files at LOWEST priority (after all loadable)
+        // This ensures a broken file NEVER shadows a loadable one from a higher-priority scope.
+        // Non-loadable entries are added alongside loadable ones with a distinct ID
+        // so the UI can show both the working agent and the broken override.
+        if (scanResult != null) {
+            for (String scope : discoveredPriority) {
+                for (DiscoveredAgent entry : scanResult.entries()) {
+                    if (entry != null && !entry.loadable() && scope.equals(entry.scope())) {
+                        String name = entry.name();
+                        // Add non-loadable entry even if a loadable one exists,
+                        // but with a distinct ID so both appear in the list
+                        putNonLoadable(winners, resolvedNames, toWire(entry), name);
+                    }
+                }
+            }
+        }
+
+        List<String> unmatched = unmatchedRules(rules, resolvedNames);
+        List<String> scopes = filterScopes(requestedScopes);
+
+        List<JsonObject> result = new ArrayList<>(winners.size());
+        for (JsonObject agent : winners.values()) {
+            if (!scopes.isEmpty() && !scopes.contains(agent.get(FIELD_SCOPE).getAsString())) {
+                continue;
+            }
+            markDenied(agent, rules);
+            result.add(agent);
+        }
+
+        LOG.info("[AgentResolver] Resolved " + result.size() + " subagent(s) for scope(s) "
+                + (scopes.isEmpty() ? "all" : scopes) + ", " + unmatched.size()
+                + " unmatched deny rule(s)");
+        return new Resolution(List.copyOf(result), List.copyOf(unmatched));
+    }
+
+    /**
+     * @deprecated Use {@link #resolveStoreAgents} or {@link #resolveSubagents} instead.
+     * This method uses a heuristic to determine the call type which can lead to
+     * incorrect precedence when both store agents and scan results are provided.
+     */
+    @Deprecated
+    public static Resolution resolve(List<JsonObject> storeAgents,
+                                     ScanResult scanResult,
+                                     DenyIndex deny,
+                                     List<String> requestedScopes) {
+        // Heuristic: if storeAgents is provided and non-empty, it's a store call
+        // If scanResult is provided and storeAgents is empty/null, it's a subagent call
+        // This is the old behavior kept for backward compatibility
+        boolean isSubagentsCall = storeAgents == null || storeAgents.isEmpty();
+
+        if (isSubagentsCall) {
+            return resolveSubagents(scanResult, deny, requestedScopes);
+        } else {
+            return resolveStoreAgents(storeAgents, requestedScopes);
+        }
+    }
+
+        // 3. Store agents (only for get_agents call)
+        if (!isSubagentsCall && storeAgents != null) {
+            for (JsonObject storeAgent : storeAgents) {
+                if (storeAgent != null && storeAgent.isJsonObject()) {
+                    put(winners, resolvedNames, storeWire(storeAgent));
+                }
+            }
+        }
+
+        List<String> unmatched = unmatchedRules(rules, resolvedNames);
+        List<String> scopes = filterScopes(requestedScopes);
+
+        List<JsonObject> result = new ArrayList<>(winners.size());
+        for (JsonObject agent : winners.values()) {
+            if (!scopes.isEmpty() && !scopes.contains(agent.get(FIELD_SCOPE).getAsString())) {
+                continue;
+            }
+            markDenied(agent, rules);
+            result.add(agent);
+        }
+
+        LOG.info("[AgentResolver] Resolved " + result.size() + " agent(s) for scope(s) "
+                + (scopes.isEmpty() ? "all" : scopes) + ", " + unmatched.size()
+                + " unmatched deny rule(s)");
+        return new Resolution(List.copyOf(result), List.copyOf(unmatched));
+    }
+
+    /**
+     * The scopes to keep, normalised: null or empty means everything.
+     *
+     * <p>An unknown scope is rejected rather than dropped, exactly as
+     * {@link #parseRequestedScopes} rejects one in a request body. Silently
+     * discarding it would answer a request naming two scopes with the one that
+     * happened to parse, and the caller — which asked for both — would have no
+     * way to tell that half its filter was ignored: the answer would look
+     * exactly like a filter that matched nothing. The check is here rather than
+     * only in the parser because {@code resolve} is public and takes the scope
+     * list directly, so a future caller can reach this without passing through
+     * the request body at all.
+     *
+     * @param requestedScopes the scopes asked for, possibly null or empty
+     * @return the same scopes, in the order they were given, or an empty list
+     *         to mean "all of them"
+     * @throws IllegalArgumentException when a named scope is not one of
+     *         {@code store}, {@code global} or {@code local}
+     */
+    private static List<String> filterScopes(List<String> requestedScopes) {
+        if (requestedScopes == null || requestedScopes.isEmpty()) {
+            return List.of();
+        }
+        // The same predicate parseRequestedScopes validates with, deliberately
+        // and not merely the merge order. Validating against SCOPE_PRIORITY
+        // would tie this to the merge list rather than to the supported set, and
+        // a scope added to AgentFields.DISCOVERY_SCOPES without also being
+        // added to the merge list would then be accepted by the parser and
+        // rejected here — the parser would promise a scope resolution refuses.
+        List<String> unknown = requestedScopes.stream()
+                .filter(scope -> !AgentFields.isDiscoveryScope(scope))
+                .toList();
+        if (!unknown.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Unknown agent scope(s) " + unknown + "; expected any of " + SCOPE_PRIORITY);
+        }
+        return requestedScopes.stream().toList();
+    }
+
+    /**
+     * Put one agent in the winner map under its name, replacing any weaker
+     * definition of the same name.
+     */
+    private static void put(Map<String, JsonObject> winners, Set<String> names,
+                            JsonObject agent) {
+        String name = nameOf(agent);
+        // A copy, so the caller's object — and, for store entries, the parsed
+        // agent.json node — is never mutated by deny marking.
+        JsonObject copy = agent.deepCopy();
+        String key = name == null || name.isBlank() ? UNNAMED_KEY_PREFIX + identityOf(copy)
+                : name;
+        winners.put(key, copy);
+        names.add(key);
+    }
+
+    /**
+     * Put a non-loadable agent in the winner map with a distinct ID so it
+     * appears alongside the loadable agent with the same name.
+     * The key includes the scope to distinguish between global and local versions.
+     */
+    private static void putNonLoadable(Map<String, JsonObject> winners, Set<String> names,
+                                       JsonObject agent, String originalName) {
+        // A copy, so the caller's object is never mutated
+        JsonObject copy = agent.deepCopy();
+        // Use a distinct key that includes the scope and a marker for non-loadable
+        String key = originalName + "-" + copy.get(FIELD_SCOPE).getAsString() + "-broken";
+        winners.put(key, copy);
+        names.add(key);
+    }
+
+    /** The agent's name, or null when it has none. */
+    private static String nameOf(JsonObject agent) {
+        JsonElement name = agent.get(FIELD_NAME);
+        if (name == null || !name.isJsonPrimitive()) {
+            return null;
+        }
+        return name.getAsString();
+    }
+
+    /** A stable-enough identity for an entry that has no name to key on. */
+    private static String identityOf(JsonObject agent) {
+        JsonElement id = agent.get(FIELD_ID);
+        if (id != null && id.isJsonPrimitive()) {
+            return id.getAsString();
+        }
+        return String.valueOf(agent.hashCode());
+    }
+
+    /**
+     * Flag an agent the user has denied.
+     *
+     * <p>The check is by name only, whatever scope the definition came from: a
+     * deny rule addresses a name, not a file, so a project copy of a denied
+     * agent is denied too. A denied agent keeps every other field — the user
+     * wants to read what they disabled, and to un-disable it by editing their
+     * own settings file.
+     *
+     * <p>The disabled reason message does not name a specific settings file
+     * because deny rules can come from multiple sources (user-level, project,
+     * .local.json, managed settings). The UI can show the full rule text
+     * which the user wrote.
+     */
+    private static void markDenied(JsonObject agent, DenyIndex rules) {
+        String rule = rules.denyRuleFor(nameOf(agent));
+        if (rule == null) {
+            return;
+        }
+        agent.addProperty(FIELD_DISABLED, true);
+        agent.addProperty(FIELD_DISABLED_REASON,
+                "Blocked by permissions.deny: " + rule);
+    }
+
+    /**
+     * The deny rules that named no agent the plugin knows about.
+     *
+     * <p>Computed against every resolved agent, not against the filtered answer,
+     * so the list does not change with the scope the client happened to ask for.
+     * The usual cause is a rule for an agent that lives in a plugin, or a typo
+     * — either way the user is better served by a note than by silence.
+     */
+    private static List<String> unmatchedRules(DenyIndex rules, Set<String> resolvedNames) {
+        if (rules.deniedNames().isEmpty()) {
+            return List.of();
+        }
+        List<String> unmatched = new ArrayList<>();
+        for (String name : rules.deniedNames()) {
+            if (!resolvedNames.contains(name)) {
+                unmatched.add("Agent(" + name + ")");
+            }
+        }
+        return unmatched;
+    }
+
+    // ------------------------------------------------------------------
+    // Wire shape
+    // ------------------------------------------------------------------
+
+    /**
+     * Normalise a store entry onto the wire shape.
+     *
+     * <p>{@code AgentManager} already stamps the discovery metadata on the
+     * entries it reads, but an entry written by a build that predates
+     * subagent support carries none of it. Such an entry is still a store
+     * entry — that is the only thing it can be — and the scope filter and the
+     * deny marker both read that field, so the default is filled in here
+     * rather than being left to a null check downstream.
+     *
+     * <p>FORCED VALUES: An imported entry with {@code "scope": "local"} or
+     * {@code "readOnly": true} would disappear from the UI (filtered out) or
+     * lose its edit/delete menu. This method forces the correct values
+     * regardless of what the JSON contains, because a store entry can ONLY
+     * be scope=store, source=store, readOnly=false. Export and import also
+     * strip these fields to prevent round-trip persistence.
+     */
+    private static JsonObject storeWire(JsonObject storeAgent) {
+        JsonObject agent = storeAgent.deepCopy();
+        // Force store metadata - these are the ONLY valid values for a store entry
+        agent.addProperty(FIELD_SCOPE, AgentFields.SCOPE_STORE);
+        agent.addProperty(FIELD_SOURCE, AgentFields.SCOPE_STORE);
+        agent.addProperty(FIELD_READ_ONLY, false);
+        return agent;
+    }
+
+    /**
+     * Turn a discovered file into the agent object the client renders.
+     *
+     * <p>The parsed frontmatter is the base, so every specification field the
+     * file declared travels under its own name and the TypeScript model can
+     * declare it directly. Unknown keys are kept for the same reason
+     * {@link AgentFields} keeps them on a store round trip: a field this build
+     * has never heard of must survive a newer Claude Code writing it.
+     *
+     * <p>Server-computed metadata fields are STRIPPED from the frontmatter
+     * because they are set by the plugin, not the file author. A project agent
+     * file can come from a cloned repository and must not be able to override
+     * fields like {@code disabled}, {@code warning}, {@code readOnly}, etc.
+     *
+     * <p>The {@code name} the scanner settled on wins over the raw frontmatter
+     * value, because that is the validated one — a file whose name breaks the
+     * specification is reported, not silently renamed.
+     *
+     * <p>No {@code prompt} is set. The parser stops at the closing frontmatter
+     * delimiter and never reads the body (R2), so a discovered agent has a
+     * description and a configuration but no text to send. That is not a gap to
+     * paper over here: filling it would mean reading every agent body on every
+     * refresh, which is the cost the parser exists to avoid. A body arrives
+     * when the agent is copied into the store, which is an explicit user action.
+     */
+    private static JsonObject toWire(DiscoveredAgent entry) {
+        JsonObject base = entry.fields() == null
+                ? new JsonObject()
+                : entry.fields().deepCopy();
+
+        // Strip server-computed metadata fields that a file author must not control.
+        // These are set by the plugin based on discovery/resolution, not by the file.
+        Set<String> strippedFields = Set.of(
+                FIELD_DISABLED,
+                FIELD_DISABLED_REASON,
+                FIELD_WARNING,
+                FIELD_WARNING_LINE,
+                FIELD_READ_ONLY,
+                FIELD_SCOPE,
+                FIELD_SOURCE,
+                FIELD_PATH,
+                FIELD_ID,
+                "prompt"
+        );
+        for (String field : strippedFields) {
+            base.remove(field);
+        }
+
+        JsonObject agent = new JsonObject();
+        // Copy remaining specification fields
+        for (Map.Entry<String, JsonElement> e : base.entrySet()) {
+            agent.add(e.getKey(), e.getValue());
+        }
+
+        agent.addProperty(FIELD_ID,
+                entry.scope() + "-" + AgentFields.toIdSegment(entry.name()));
+        agent.addProperty(FIELD_NAME, entry.name());
+        agent.addProperty(FIELD_PATH, entry.path() == null ? "" : entry.path().toString());
+        agent.addProperty(FIELD_SCOPE, entry.scope());
+        agent.addProperty(FIELD_SOURCE, entry.scope());
+        // Discovered files are the read-only ones: the plugin never writes to
+        // ~/.claude or to a project .claude directory (R6, AC6).
+        agent.addProperty(FIELD_READ_ONLY, true);
+        if (entry.warning() != null && !entry.warning().isBlank()) {
+            agent.addProperty(FIELD_WARNING, entry.warning());
+        }
+        // The line the parser blamed, so the UI can link straight to it rather
+        // than making the user count lines in a file they have to find by hand.
+        if (entry.warningLine() != null) {
+            agent.addProperty(FIELD_WARNING_LINE, entry.warningLine());
+        }
+        return agent;
+    }
+}

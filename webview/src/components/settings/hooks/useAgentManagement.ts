@@ -1,7 +1,10 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AgentConfig } from '../../../types/agent';
+import type { AgentConfig, GetAgentsMessage } from '../../../types/agent';
 import type { ImportPreviewResult, ConflictStrategy } from '../../../types/import';
+
+/** How long a quiet refresh waits before giving up on its answer. */
+const REFRESH_TIMEOUT = 3000;
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -36,14 +39,17 @@ export interface UseAgentManagementOptions {
 
 export function useAgentManagement(options: UseAgentManagementOptions = {}) {
   const { t } = useTranslation();
-  const { onSuccess } = options;
+  const { onSuccess, onError } = options;
 
-  // Timeout timer reference (using useRef to avoid global variable pollution)
+  // Timeout timer references
   const agentsLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const subagentsLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Agent list state
-  const [agents, setAgents] = useState<AgentConfig[]>([]);
+  // Agent list state - split into store agents (editable) and subagents (discovered, read-only)
+  const [storeAgents, setStoreAgents] = useState<AgentConfig[]>([]);
+  const [subagents, setSubagents] = useState<AgentConfig[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
+  const [subagentsLoading, setSubagentsLoading] = useState(false);
 
   // Agent dialog state
   const [agentDialog, setAgentDialog] = useState<AgentDialogState>({
@@ -68,47 +74,184 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
     isOpen: false,
   });
 
-  // Load agent list (with retry mechanism)
-  const loadAgents = useCallback((retryCount = 0) => {
+  // Spins on the refresh button while an explicit re-read is in flight.
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Combined agents for backward compatibility (store agents + subagents)
+  // Store agents come first so they appear at the top
+  const agents = [...storeAgents, ...subagents];
+
+  // Load store agents (editable agents for chat-bar compatibility)
+  const loadStoreAgents = useCallback((retryCount = 0) => {
     const MAX_RETRIES = 2;
-    const TIMEOUT = 3000; // 3-second timeout
+    const TIMEOUT = 3000;
 
     setAgentsLoading(true);
-    sendToJava('get_agents:');
+    // Only request store scope - chat bar and store management
+    const request: GetAgentsMessage = { scopes: ['store'] };
+    sendToJava(`get_agents:${JSON.stringify(request)}`);
 
-    // Set up timeout timer
     const timeoutId = setTimeout(() => {
       if (retryCount < MAX_RETRIES) {
-        // Retry
-        loadAgents(retryCount + 1);
+        loadStoreAgents(retryCount + 1);
       } else {
-        // Reached max retries, stop loading
         setAgentsLoading(false);
-        setAgents([]); // Show empty list, allow user to continue
+        setStoreAgents([]);
       }
     }, TIMEOUT);
 
-    // Store timeout ID in ref
     agentsLoadingTimeoutRef.current = timeoutId;
   }, []);
 
-  // Update agent list (used by window callback)
+  // Load discovered subagents (read-only, for Settings tab display)
+  const loadSubagents = useCallback((retryCount = 0) => {
+    const MAX_RETRIES = 2;
+    const TIMEOUT = 3000;
+
+    setSubagentsLoading(true);
+    // Request global and local scopes for discovered agents
+    const request: GetAgentsMessage = { scopes: ['global', 'local'] };
+    sendToJava(`get_subagents:${JSON.stringify(request)}`);
+
+    const timeoutId = setTimeout(() => {
+      if (retryCount < MAX_RETRIES) {
+        loadSubagents(retryCount + 1);
+      } else {
+        setSubagentsLoading(false);
+        setSubagents([]);
+      }
+    }, TIMEOUT);
+
+    subagentsLoadingTimeoutRef.current = timeoutId;
+  }, []);
+
+  // Load both store agents and subagents
+  const loadAgents = useCallback(() => {
+    loadStoreAgents();
+    loadSubagents();
+  }, [loadStoreAgents, loadSubagents]);
+
+  // Set up window callbacks for agents and subagents
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleUpdateAgents = (json: string) => {
+      try {
+        const parsed = JSON.parse(json);
+        if (Array.isArray(parsed)) {
+          setStoreAgents(parsed);
+        }
+        setAgentsLoading(false);
+        if (agentsLoadingTimeoutRef.current) {
+          clearTimeout(agentsLoadingTimeoutRef.current);
+          agentsLoadingTimeoutRef.current = null;
+        }
+      } catch (error) {
+        setAgentsLoading(false);
+        console.error('[useAgentManagement] Failed to parse agents:', error);
+      }
+    };
+
+    const handleUpdateSubagents = (json: string) => {
+      try {
+        const parsed = JSON.parse(json);
+        if (Array.isArray(parsed)) {
+          setSubagents(parsed);
+        }
+        setSubagentsLoading(false);
+        if (subagentsLoadingTimeoutRef.current) {
+          clearTimeout(subagentsLoadingTimeoutRef.current);
+          subagentsLoadingTimeoutRef.current = null;
+        }
+      } catch (error) {
+        setSubagentsLoading(false);
+        console.error('[useAgentManagement] Failed to parse subagents:', error);
+      }
+    };
+
+    const originalUpdateAgents = window.updateAgents;
+    window.updateAgents = (json: string) => {
+      handleUpdateAgents(json);
+      originalUpdateAgents?.(json);
+    };
+
+    const originalUpdateSubagents = window.updateSubagents;
+    window.updateSubagents = (json: string) => {
+      handleUpdateSubagents(json);
+      originalUpdateSubagents?.(json);
+    };
+
+    return () => {
+      window.updateAgents = originalUpdateAgents;
+      window.updateSubagents = originalUpdateSubagents;
+    };
+  }, []);
+
+  /**
+   * Re-read the list without flashing the loading state.
+   */
+  const refreshAgentsQuietly = useCallback(() => {
+    if (agentsLoadingTimeoutRef.current) {
+      clearTimeout(agentsLoadingTimeoutRef.current);
+    }
+    if (subagentsLoadingTimeoutRef.current) {
+      clearTimeout(subagentsLoadingTimeoutRef.current);
+    }
+    const storeRequest: GetAgentsMessage = { scopes: ['store'] };
+    sendToJava(`get_agents:${JSON.stringify(storeRequest)}`);
+    const subRequest: GetAgentsMessage = { scopes: ['global', 'local'] };
+    sendToJava(`get_subagents:${JSON.stringify(subRequest)}`);
+
+    agentsLoadingTimeoutRef.current = setTimeout(() => {
+      agentsLoadingTimeoutRef.current = null;
+      setAgentsLoading(false);
+      setRefreshing(false);
+    }, REFRESH_TIMEOUT);
+
+    subagentsLoadingTimeoutRef.current = setTimeout(() => {
+      subagentsLoadingTimeoutRef.current = null;
+      setSubagentsLoading(false);
+    }, REFRESH_TIMEOUT);
+  }, []);
+
+  /**
+   * Re-read the list at the user's request.
+   */
+  const refreshAgents = useCallback(() => {
+    setRefreshing(true);
+    refreshAgentsQuietly();
+  }, [refreshAgentsQuietly]);
+
+  // Update store agents (used by window callback)
   const updateAgents = useCallback((agentsList: AgentConfig[]) => {
-    // Clear timeout timer
+    setRefreshing(false);
     if (agentsLoadingTimeoutRef.current) {
       clearTimeout(agentsLoadingTimeoutRef.current);
       agentsLoadingTimeoutRef.current = null;
     }
-
-    setAgents(agentsList);
+    setStoreAgents(agentsList);
     setAgentsLoading(false);
   }, []);
 
-  // Clean up timeout timer
+  // Update subagents (used by window callback)
+  const updateSubagents = useCallback((agentsList: AgentConfig[]) => {
+    if (subagentsLoadingTimeoutRef.current) {
+      clearTimeout(subagentsLoadingTimeoutRef.current);
+      subagentsLoadingTimeoutRef.current = null;
+    }
+    setSubagents(agentsList);
+    setSubagentsLoading(false);
+  }, []);
+
+  // Clean up timeout timers
   const cleanupAgentsTimeout = useCallback(() => {
     if (agentsLoadingTimeoutRef.current) {
       clearTimeout(agentsLoadingTimeoutRef.current);
       agentsLoadingTimeoutRef.current = null;
+    }
+    if (subagentsLoadingTimeoutRef.current) {
+      clearTimeout(subagentsLoadingTimeoutRef.current);
+      subagentsLoadingTimeoutRef.current = null;
     }
   }, []);
 
@@ -184,16 +327,22 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
   // Handle agent operation result (used by window callback)
   const handleAgentOperationResult = useCallback(
     (result: { success: boolean; operation?: string; error?: string }) => {
-      if (result.success) {
-        const operationMessages: Record<string, string> = {
-          add: t('settings.agent.addSuccess'),
-          update: t('settings.agent.updateSuccess'),
-          delete: t('settings.agent.deleteSuccess'),
-        };
-        onSuccess?.(operationMessages[result.operation || ''] || t('settings.agent.operationSuccess'));
+      if (!result.success) {
+        // Previously a failed operation reported nothing, so the tab simply
+        // stopped responding to clicks with no explanation. The backend sends
+        // `error` for a rejected request such as an unknown scope, and that
+        // message is the only thing that tells the user what to fix.
+        onError?.(t('settings.agent.operationFailedReason', { error: result.error || '' }));
+        return;
       }
+      const operationMessages: Record<string, string> = {
+        add: t('settings.agent.addSuccess'),
+        update: t('settings.agent.updateSuccess'),
+        delete: t('settings.agent.deleteSuccess'),
+      };
+      onSuccess?.(operationMessages[result.operation || ''] || t('settings.agent.operationSuccess'));
     },
-    [onSuccess, t]
+    [onSuccess, onError, t]
   );
 
   // Open export dialog
@@ -279,16 +428,25 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
 
   return {
     // State
-    agents,
-    agentsLoading,
+    agents, // combined: storeAgents + subagents (for backward compatibility)
+    storeAgents,
+    subagents,
+    agentsLoading, // true when either storeAgents or subagents is loading
+    subagentsLoading,
     agentDialog,
     deleteAgentConfirm,
     importPreviewDialog,
     exportDialog,
+    refreshing,
 
     // Methods
     loadAgents,
+    loadStoreAgents,
+    loadSubagents,
     updateAgents,
+    updateSubagents,
+    refreshAgentsQuietly,
+    refreshAgents,
     cleanupAgentsTimeout,
     handleAddAgent,
     handleEditAgent,

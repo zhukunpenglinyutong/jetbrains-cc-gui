@@ -151,6 +151,7 @@ public class ChatWindowDelegate {
     private volatile MessageCallback pendingQuickFixCallback = null;
     // Reference to the SettingsHandler for clean theme-callback unregistration on dispose.
     private com.github.claudecodegui.handler.SettingsHandler settingsHandler;
+    private com.github.claudecodegui.handler.AgentHandler agentHandler;
     private volatile ClipboardHandler clipboardHandler;
 
     public ChatWindowDelegate(DelegateHost host) {
@@ -392,7 +393,8 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new FileExportHandler(handlerContext));
         messageDispatcher.registerHandler(new DiffHandler(handlerContext));
         messageDispatcher.registerHandler(new PromptEnhancerHandler(handlerContext));
-        messageDispatcher.registerHandler(new AgentHandler(handlerContext));
+        this.agentHandler = new AgentHandler(handlerContext);
+        messageDispatcher.registerHandler(this.agentHandler);
         messageDispatcher.registerHandler(new PromptHandler(handlerContext));
         messageDispatcher.registerHandler(new TabHandler(handlerContext));
         messageDispatcher.registerHandler(new RewindHandler(handlerContext));
@@ -860,6 +862,13 @@ public class ChatWindowDelegate {
         if (settingsHandler != null) {
             settingsHandler.dispose();
             settingsHandler = null;
+        }
+        // Stops the agent-file watcher. Its subscription also dies with the
+        // project bus, but a window closed while the project stays open would
+        // otherwise keep a listener alive for a webview nobody can see.
+        if (agentHandler != null) {
+            agentHandler.dispose();
+            agentHandler = null;
         }
     }
 }

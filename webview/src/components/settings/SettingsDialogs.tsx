@@ -145,6 +145,7 @@ const SettingsDialogs = ({
         onCancel={onCancelDeleteAgent}
       />
 
+
       {/* Note: Prompt dialogs are now rendered in PromptSection component */}
 
       {/* Codex provider add/edit dialog */}

@@ -117,13 +117,17 @@ export const CommitPanel = ({ basicActions }: SettingsTabPanelProps) => (
 
 export const AgentsPanel = ({ agentManagement }: SettingsTabPanelProps) => (
   <AgentSection
-    agents={agentManagement.agents}
-    loading={agentManagement.agentsLoading}
+    storeAgents={agentManagement.storeAgents}
+    subagents={agentManagement.subagents}
+    agentsLoading={agentManagement.agentsLoading}
+    subagentsLoading={agentManagement.subagentsLoading}
     onAdd={agentManagement.handleAddAgent}
     onEdit={agentManagement.handleEditAgent}
     onDelete={agentManagement.handleDeleteAgent}
     onExport={agentManagement.handleExportAgents}
     onImport={agentManagement.handleImportAgentsFile}
+    onRefresh={agentManagement.refreshAgents}
+    refreshing={agentManagement.refreshing}
   />
 );
 
