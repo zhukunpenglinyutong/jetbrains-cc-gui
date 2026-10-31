@@ -61,6 +61,9 @@ final class CodexExecHistoryReplay {
         if (script == null) {
             return false;
         }
+        if (containsUnparsedExpression(script)) {
+            return true;
+        }
         Matcher matcher = TOOL_CALL_TOKEN.matcher(script);
         while (matcher.find()) {
             String token = matcher.group();
@@ -198,7 +201,7 @@ final class CodexExecHistoryReplay {
 
     private static ParsedString readLiteralString(String script, int start) {
         ParsedString literal = readJavaScriptString(script, start);
-        if (literal.nextIndex <= start + 1 || script.charAt(literal.nextIndex - 1) != script.charAt(start)
+        if (!literal.valid || literal.nextIndex <= start + 1 || script.charAt(literal.nextIndex - 1) != script.charAt(start)
                 || script.charAt(start) == '`' && containsTemplateInterpolation(script, start, literal.nextIndex)) {
             return null;
         }
@@ -720,7 +723,7 @@ final class CodexExecHistoryReplay {
             if (isQuote(current)) {
                 int stringStart = cursor;
                 ParsedString parsed = readJavaScriptString(literal, cursor);
-                if (parsed.nextIndex <= stringStart + 1
+                if (!parsed.valid || parsed.nextIndex <= stringStart + 1
                         || literal.charAt(parsed.nextIndex - 1) != current
                         || (current == '`' && containsTemplateInterpolation(
                             literal,
@@ -797,6 +800,14 @@ final class CodexExecHistoryReplay {
         return findMatchingEnd(script, objectStart, '{', '}');
     }
 
+    static int findMatchingArrayEnd(String script, int arrayStart) {
+        return findMatchingEnd(script, arrayStart, '[', ']');
+    }
+
+    static int findMatchingParenthesisEnd(String script, int start) {
+        return findMatchingEnd(script, start, '(', ')');
+    }
+
     private static int findMatchingEnd(String script, int objectStart, char opening, char closing) {
         int depth = 0;
         int cursor = objectStart;
@@ -831,7 +842,8 @@ final class CodexExecHistoryReplay {
     }
 
     static int findJavaScriptToken(String script, String token, int start) {
-        int cursor = Math.max(0, start);
+        // A search offset can lie inside a string or comment; recover its lexical context from the beginning.
+        int cursor = 0;
         while (cursor < script.length()) {
             char current = script.charAt(cursor);
             if (isQuote(current)) {
@@ -848,8 +860,9 @@ final class CodexExecHistoryReplay {
                     cursor = skipBlockComment(script, cursor + 2);
                     continue;
                 }
+                return -1;
             }
-            if (script.startsWith(token, cursor)) {
+            if (cursor >= start && script.startsWith(token, cursor)) {
                 char before = cursor > 0 ? script.charAt(cursor - 1) : '\0';
                 int afterIndex = cursor + token.length();
                 char after = afterIndex < script.length() ? script.charAt(afterIndex) : '\0';
@@ -862,6 +875,26 @@ final class CodexExecHistoryReplay {
             cursor++;
         }
         return -1;
+    }
+
+    static boolean containsUnparsedExpression(String script) {
+        int cursor = 0;
+        while (cursor < script.length()) {
+            char current = script.charAt(cursor);
+            if (isQuote(current)) {
+                cursor = skipJavaScriptString(script, cursor);
+            } else if (current == '/' && cursor + 1 < script.length() && script.charAt(cursor + 1) == '/') {
+                cursor = skipLineComment(script, cursor + 2);
+            } else if (current == '/' && cursor + 1 < script.length() && script.charAt(cursor + 1) == '*') {
+                cursor = skipBlockComment(script, cursor + 2);
+            } else if (current == '/') {
+                // Unsupported regex/division syntax must not hide later calls behind quotes or brackets.
+                return true;
+            } else {
+                cursor++;
+            }
+        }
+        return false;
     }
 
     private static String firstNonBlankString(JsonObject values, String... keys) {
@@ -924,6 +957,9 @@ final class CodexExecHistoryReplay {
             if (properties.containsKey(key.value)) {
                 return Map.of();
             }
+            if (!key.valid) {
+                return Map.of();
+            }
 
             cursor = skipWhitespace(script, key.nextIndex, objectEnd);
             if (cursor >= objectEnd || script.charAt(cursor) != ':') {
@@ -941,6 +977,9 @@ final class CodexExecHistoryReplay {
             if (isQuote(current)) {
                 int literalStart = cursor;
                 ParsedString parsedValue = readJavaScriptString(script, cursor);
+                if (!parsedValue.valid) {
+                    return Map.of();
+                }
                 propertyValue = parsedValue.value;
                 cursor = parsedValue.nextIndex;
                 int next = skipTrivia(script, cursor, objectEnd);
@@ -1029,9 +1068,12 @@ final class CodexExecHistoryReplay {
         char quote = script.charAt(start);
         StringBuilder decoded = new StringBuilder();
         int cursor = start + 1;
+        boolean valid = true;
+        boolean closed = false;
         while (cursor < script.length()) {
             char current = script.charAt(cursor++);
             if (current == quote) {
+                closed = true;
                 break;
             }
             if (current != '\\' || cursor >= script.length()) {
@@ -1063,10 +1105,30 @@ final class CodexExecHistoryReplay {
                     decoded.append('\u0000');
                     break;
                 case 'x':
-                    cursor = appendHexEscape(script, cursor, 2, escaped, decoded);
+                    int hexEnd = appendHexEscape(script, cursor, 2, escaped, decoded);
+                    valid &= hexEnd != cursor;
+                    cursor = hexEnd;
                     break;
                 case 'u':
-                    cursor = appendHexEscape(script, cursor, 4, escaped, decoded);
+                    if (cursor < script.length() && script.charAt(cursor) == '{') {
+                        int brace = script.indexOf('}', cursor + 1);
+                        String digits = brace < 0 ? "" : script.substring(cursor + 1, brace);
+                        if (digits.isEmpty() || digits.length() > 6 || !digits.chars().allMatch(value -> value < 128 && Character.digit(value, 16) >= 0)) {
+                            valid = false;
+                        } else {
+                            int codePoint = Integer.parseInt(digits, 16);
+                            if (Character.isValidCodePoint(codePoint)) {
+                                decoded.appendCodePoint(codePoint);
+                                cursor = brace + 1;
+                            } else {
+                                valid = false;
+                            }
+                        }
+                    } else {
+                        int unicodeEnd = appendHexEscape(script, cursor, 4, escaped, decoded);
+                        valid &= unicodeEnd != cursor;
+                        cursor = unicodeEnd;
+                    }
                     break;
                 case '\r':
                     if (cursor < script.length() && script.charAt(cursor) == '\n') {
@@ -1080,7 +1142,7 @@ final class CodexExecHistoryReplay {
                     break;
             }
         }
-        return new ParsedString(decoded.toString(), cursor);
+        return new ParsedString(decoded.toString(), cursor, valid && closed);
     }
 
     private static int appendHexEscape(
@@ -1091,7 +1153,7 @@ final class CodexExecHistoryReplay {
             StringBuilder decoded
     ) {
         int end = start + length;
-        if (end <= script.length()) {
+        if (end <= script.length() && script.substring(start, end).chars().allMatch(value -> value < 128 && Character.digit(value, 16) >= 0)) {
             try {
                 decoded.append((char) Integer.parseInt(script.substring(start, end), 16));
                 return end;
@@ -1371,10 +1433,16 @@ final class CodexExecHistoryReplay {
     private static final class ParsedString {
         private final String value;
         private final int nextIndex;
+        private final boolean valid;
 
         private ParsedString(String value, int nextIndex) {
+            this(value, nextIndex, true);
+        }
+
+        private ParsedString(String value, int nextIndex, boolean valid) {
             this.value = value;
             this.nextIndex = nextIndex;
+            this.valid = valid;
         }
     }
 }
