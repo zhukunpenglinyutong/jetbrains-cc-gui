@@ -521,6 +521,7 @@ public class ClaudeChatWindow {
             }
 
             persistTabSessionState();
+            chatWindowDelegate.refreshUnreadBadge();
         }
     }
 
@@ -537,6 +538,24 @@ public class ClaudeChatWindow {
 
     public boolean isInitialized() {
         return initialWebviewStartup.hasStarted();
+    }
+
+    /** Let the visible tab finish restoring history before background work competes with it. */
+    boolean isReadyForBackgroundPreload() {
+        return frontendReady && (session == null || !session.isLoading());
+    }
+
+    /** Warm restored pages and disk history without selecting the tab or starting an AI turn. */
+    void preloadRestoredTab() {
+        if (disposed || project.isDisposed()) {
+            return;
+        }
+        ensureWebviewInitialized();
+        if (session != null) {
+            TabStateService.TabSessionState state = new TabStateService.TabSessionState();
+            state.sessionId = session.getSessionId();
+            loadRestoredHistoryIfNeeded(state, true);
+        }
     }
 
     private void ensureWebviewInitialized() {
@@ -677,6 +696,7 @@ public class ClaudeChatWindow {
                 return;
             }
             ensureWebviewInitialized(false);
+            chatWindowDelegate.markTabReadIfVisible();
             webviewWatchdog.markTabActivated();
             webviewInitializer.onTabActivated();
             JBCefBrowser currentBrowser = browser;
@@ -1318,6 +1338,7 @@ public class ClaudeChatWindow {
         }
         rebindSurfaceRefreshWindow();
         if (mainPanel.isShowing()) {
+            chatWindowDelegate.markTabReadIfVisible();
             ensureWebviewInitialized(false);
             resumePendingSurfaceWork("hierarchy_showing");
         }
@@ -1655,6 +1676,7 @@ public class ClaudeChatWindow {
                     + (project != null ? project.getBasePath() : null));
         }
         session.setSessionInfo(restoredSessionId, restoredCwd);
+        chatWindowDelegate.restoreUnread(sameProject && savedState.unread);
         persistTabSessionState();
 
         LOG.info("[TabRestore] Restored tab session state: provider=" + savedState.provider
@@ -1680,7 +1702,12 @@ public class ClaudeChatWindow {
     }
 
     private void loadRestoredHistoryIfNeeded(TabStateService.TabSessionState savedState) {
-        if (!TabSessionRestorePolicy.shouldStartHistoryLoad(savedState, frontendReady)
+        loadRestoredHistoryIfNeeded(savedState, false);
+    }
+
+    /** Background pages may defer rendering; their history can still be ready before activation. */
+    private void loadRestoredHistoryIfNeeded(TabStateService.TabSessionState savedState, boolean preload) {
+        if (!TabSessionRestorePolicy.shouldStartHistoryLoad(savedState, frontendReady || preload)
                 || session == null || !isNonEmpty(session.getSessionId())) {
             return;
         }
@@ -2458,6 +2485,13 @@ public class ClaudeChatWindow {
                 streamCoalescer,
                 new SessionCallbackAdapter.JsTarget() {
                     @Override
+                    public void onAssistantActivity() {
+                        if (!disposed && session == callbackSession) {
+                            chatWindowDelegate.onAssistantActivity();
+                        }
+                    }
+
+                    @Override
                     public void callJavaScript(String functionName, String... args) {
                         ClaudeChatWindow.this.callJavaScript(functionName, args);
                     }
@@ -2956,6 +2990,7 @@ public class ClaudeChatWindow {
         snapshot.model = session.getModel();
         snapshot.permissionMode = session.getPermissionMode();
         snapshot.reasoningEffort = session.getReasoningEffort();
+        snapshot.unread = chatWindowDelegate.hasUnread();
 
         TabStateService.getInstance(project).saveTabSessionState(tabIndex, snapshot);
     }

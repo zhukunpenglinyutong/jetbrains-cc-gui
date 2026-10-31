@@ -117,6 +117,7 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
     public void clearAllTabNames() {
         myState.tabNames.clear();
         myState.tabSessions.clear();
+        myState.selectedTabIndex = 0;
         LOG.info("[TabStateService] Cleared all tab names and session state");
     }
 
@@ -153,6 +154,11 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
         if (myState.tabCount > 0) {
             myState.tabCount--;
         }
+        // Keep the same conversation selected when an earlier tab is closed.
+        if (myState.selectedTabIndex > removedIndex) {
+            myState.selectedTabIndex--;
+        }
+        myState.selectedTabIndex = getSelectedTabIndex();
 
         LOG.info("[TabStateService] Updated tab indexes after removal of index: " + removedIndex
                 + ", new count: " + myState.tabCount);
@@ -175,6 +181,15 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
         return Math.max(1, myState.tabCount);
     }
 
+    /** Persist selection per project, independently of browser storage or page recreation. */
+    public void saveSelectedTabIndex(int index) {
+        myState.selectedTabIndex = Math.max(0, Math.min(index, getTabCount() - 1));
+    }
+
+    public int getSelectedTabIndex() {
+        return Math.max(0, Math.min(myState.selectedTabIndex, getTabCount() - 1));
+    }
+
     /**
      * Per-tab persisted session snapshot.
      */
@@ -189,6 +204,7 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
         public String model;
         public String permissionMode;
         public String reasoningEffort;
+        public boolean unread;
 
         public TabSessionState copy() {
             TabSessionState copy = new TabSessionState();
@@ -199,6 +215,7 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
             copy.model = this.model;
             copy.permissionMode = this.permissionMode;
             copy.reasoningEffort = this.reasoningEffort;
+            copy.unread = this.unread;
             return copy;
         }
     }
@@ -221,5 +238,6 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
          * Number of tabs.
          */
         public int tabCount = 1;
+        public int selectedTabIndex = 0;
     }
 }

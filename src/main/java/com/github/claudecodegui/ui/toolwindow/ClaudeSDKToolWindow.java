@@ -341,6 +341,8 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 }
                 ClaudeChatWindow window = contentToWindowMap.get(event.getContent());
                 if (window != null) {
+                    TabStateService.getInstance(project).saveSelectedTabIndex(
+                            contentManager.getIndexOfContent(event.getContent()));
                     window.onTabActivated();
                     window.loadRestoredHistoryIfNeeded();
                 }
@@ -360,6 +362,9 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                 int removedIndex = event.getIndex();
                 TabStateService tabStateService = TabStateService.getInstance(project);
                 tabStateService.onTabRemoved(removedIndex);
+                Content selectedContent = contentManager.getSelectedContent();
+                tabStateService.saveSelectedTabIndex(
+                        selectedContent == null ? 0 : contentManager.getIndexOfContent(selectedContent));
 
                 ClaudeChatWindow window = contentToWindowMap.get(removedContent);
                 if (window != null) {
@@ -478,9 +483,10 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
     ) {
         TabStateService tabStateService = TabStateService.getInstance(project);
         int savedTabCount = tabStateService.getTabCount();
+        int selectedIndex = tabStateService.getSelectedTabIndex();
         LOG.info("[TabManager] Restoring " + savedTabCount + " tabs from storage");
 
-        ClaudeChatWindow firstChatWindow = new ClaudeChatWindow(project, false);
+        ClaudeChatWindow firstChatWindow = new ClaudeChatWindow(project, false, false);
         String firstTabName = resolveRestoredTabName(tabStateService, 0);
         TabStateService.TabSessionState firstSavedState = tabStateService.getTabSessionState(0);
 
@@ -488,7 +494,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         loadingContent.setDisplayName(firstTabName);
         firstChatWindow.setParentContent(loadingContent);
         loadingContent.setDisposer(firstChatWindow::dispose);
-        restoreTabSessionState(firstSavedState, 0, firstChatWindow, true);
+        restoreTabSessionState(firstSavedState, 0, firstChatWindow, selectedIndex == 0);
 
         for (int i = 1; i < savedTabCount; i++) {
             ClaudeChatWindow chatWindow = new ClaudeChatWindow(project, true, false);
@@ -503,6 +509,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         updateTabCloseableState(contentManager);
+        resumeRestoredWorkspace(project, contentManager, selectedIndex);
     }
 
     private void createChatWindowContent(
@@ -512,11 +519,12 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
     ) {
         TabStateService tabStateService = TabStateService.getInstance(project);
         int savedTabCount = tabStateService.getTabCount();
+        int selectedIndex = tabStateService.getSelectedTabIndex();
         LOG.info("[TabManager] Restoring " + savedTabCount + " tabs from storage");
 
         for (int i = 0; i < savedTabCount; i++) {
             boolean isFirstTab = (i == 0);
-            ClaudeChatWindow chatWindow = new ClaudeChatWindow(project, !isFirstTab, isFirstTab);
+            ClaudeChatWindow chatWindow = new ClaudeChatWindow(project, !isFirstTab, false);
             String tabName = resolveRestoredTabName(tabStateService, i);
             TabStateService.TabSessionState savedState = tabStateService.getTabSessionState(i);
 
@@ -525,10 +533,51 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
             chatWindow.setOriginalTabName(tabName);
             content.setDisposer(chatWindow::dispose);
             contentManager.addContent(content);
-            restoreTabSessionState(savedState, i, chatWindow, isFirstTab);
+            restoreTabSessionState(savedState, i, chatWindow, i == selectedIndex);
         }
 
         updateTabCloseableState(contentManager);
+        resumeRestoredWorkspace(project, contentManager, selectedIndex);
+    }
+
+    /** Restore focus first, then stagger background allocation so saved tabs do not delay typing. */
+    private void resumeRestoredWorkspace(Project project, ContentManager manager, int selectedIndex) {
+        Content selected = manager.getContents()[selectedIndex];
+        manager.setSelectedContent(selected);
+        TabStateService.getInstance(project).saveSelectedTabIndex(selectedIndex);
+        ClaudeChatWindow selectedWindow = contentToWindowMap.get(selected);
+        if (selectedWindow != null) {
+            selectedWindow.preloadRestoredTab();
+        }
+        java.util.ArrayDeque<Content> remaining = new java.util.ArrayDeque<>(List.of(manager.getContents()));
+        remaining.remove(selected);
+        if (remaining.isEmpty()) {
+            return;
+        }
+        Timer timer = new Timer(500, event -> {
+            Timer source = (Timer) event.getSource();
+            if (project.isDisposed() || manager.getContentCount() == 0) {
+                source.stop();
+                return;
+            }
+            Content current = manager.getSelectedContent();
+            ClaudeChatWindow active = current == null ? null : contentToWindowMap.get(current);
+            if (active != null && !active.isDisposed() && !active.isReadyForBackgroundPreload()) {
+                return;
+            }
+            while (!remaining.isEmpty()) {
+                Content content = remaining.removeFirst();
+                ClaudeChatWindow window = contentToWindowMap.get(content);
+                if (window != null && !window.isDisposed() && manager.getIndexOfContent(content) >= 0) {
+                    window.preloadRestoredTab();
+                    break;
+                }
+            }
+            if (remaining.isEmpty()) {
+                source.stop();
+            }
+        });
+        timer.start();
     }
 
     private void restoreTabSessionState(

@@ -26,6 +26,7 @@ public class WebviewWatchdog {
     private static final Logger LOG = Logger.getInstance(WebviewWatchdog.class);
 
     private static final long HEARTBEAT_TIMEOUT_MS = 45_000L;
+    private static final long HEARTBEAT_RESUME_GAP_MS = 15_000L;
     private static final long WATCHDOG_INTERVAL_MS = 10_000L;
     private static final long RECOVERY_COOLDOWN_MS = 60_000L;
     private static final long STARTUP_READY_TIMEOUT_MS = 15_000L;
@@ -33,6 +34,7 @@ public class WebviewWatchdog {
     private static final int MAX_STARTUP_RECOVERY_ATTEMPTS = 2;
 
     private volatile long lastHeartbeatAtMs;
+    private volatile long lastReceivedHeartbeatAtMs;
     private volatile long lastRafAtMs;
     private volatile String lastVisibility = null;
     private volatile Boolean lastHasFocus = null;
@@ -162,6 +164,7 @@ public class WebviewWatchdog {
         this.recoveryAllowed = recoveryAllowed;
         long now = currentTimeMillis.getAsLong();
         this.lastHeartbeatAtMs = now;
+        this.lastReceivedHeartbeatAtMs = now;
         this.lastRafAtMs = now;
     }
 
@@ -194,23 +197,31 @@ public class WebviewWatchdog {
 
     /**
      * Handle a heartbeat message from the webview.
+     * @return whether communication resumed after at least three missing heartbeat intervals
      */
-    public void handleHeartbeat(String content) {
+    public boolean handleHeartbeat(String content) {
         long now = currentTimeMillis.getAsLong();
+        // Health resets on tab activation must not hide a transport gap from session recovery.
+        boolean resumed = now - lastReceivedHeartbeatAtMs >= HEARTBEAT_RESUME_GAP_MS;
+        lastReceivedHeartbeatAtMs = now;
         lastHeartbeatAtMs = now;
 
         if (content == null || content.isEmpty()) {
             lastRafAtMs = now;
             lastVisibility = null;
             lastHasFocus = null;
-            return;
+            return resumed;
         }
 
         try {
             JsonObject json = new Gson().fromJson(content, JsonObject.class);
             if (json != null) {
-                if (json.has("raf")) {
-                    lastRafAtMs = json.get("raf").getAsLong();
+                if (json.has("raf") && json.has("ts")) {
+                    // Both values come from the client; comparing its wall clock to the Host's
+                    // makes healthy remote pages look frozen when the clocks differ.
+                    long renderAgeMs = Math.max(0L,
+                            json.get("ts").getAsLong() - json.get("raf").getAsLong());
+                    lastRafAtMs = now - renderAgeMs;
                 } else {
                     lastRafAtMs = now;
                 }
@@ -225,6 +236,7 @@ public class WebviewWatchdog {
             // Non-JSON heartbeat payload (backward compatibility)
             lastRafAtMs = now;
         }
+        return resumed;
     }
 
     /**
@@ -240,6 +252,7 @@ public class WebviewWatchdog {
 
     public void markFrontendReady() {
         resetTimestamps();
+        lastReceivedHeartbeatAtMs = currentTimeMillis.getAsLong();
         resetRecoveryState();
     }
 
