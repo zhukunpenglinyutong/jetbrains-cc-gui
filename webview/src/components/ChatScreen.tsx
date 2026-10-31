@@ -125,6 +125,10 @@ export interface ChatScreenProps {
   onRemoveFromQueue: (id: string) => void;
   /** Drag-sort callback; orderedIds[0] is the next message to execute */
   onReorderQueue?: (orderedIds: string[]) => void;
+  /** Show the steer button while a capable live turn is in progress */
+  canSteer?: boolean;
+  /** Steer a queued item into the live turn */
+  onSteerFromQueue?: (id: string) => void;
 
   // Native Codex plan actions
   codexPlan?: CodexPlanItem | null;
@@ -163,7 +167,7 @@ export const ChatScreen = ({
   onModeSelect, onModelSelect, onAgentSelect, onReasoningChange, onCodexFastModeChange, onDshPresetChange, onToggleThinking,
   onStreamingEnabledChange,
   onAutoOpenFileEnabledChange, onLongContextChange,
-  messageQueue, onRemoveFromQueue, onReorderQueue,
+  messageQueue, onRemoveFromQueue, onReorderQueue, canSteer, onSteerFromQueue,
   codexPlan = null, codexPlanExecutionPending = false,
   codexCompactionPending = false,
   codexCompactionStartedAt = null,
@@ -436,6 +440,8 @@ export const ChatScreen = ({
           messageQueue={messageQueue}
           onRemoveFromQueue={onRemoveFromQueue}
           onReorderQueue={onReorderQueue}
+          canSteer={canSteer}
+          onSteerFromQueue={onSteerFromQueue}
           autoOpenFileEnabled={autoOpenFileEnabled}
           onAutoOpenFileEnabledChange={onAutoOpenFileEnabledChange}
           longContextEnabled={longContextEnabled}

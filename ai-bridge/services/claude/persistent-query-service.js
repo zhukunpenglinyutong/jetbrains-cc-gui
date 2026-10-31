@@ -66,6 +66,14 @@ import {
 } from './stream-event-processor.js';
 import { generateSessionTitle } from '../session-title-service.js';
 import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
+import {
+  dumpPendingSteersAsUndelivered,
+  emitCapabilities,
+  handleSteerResultAndMaybeContinue,
+  recordClaudeCodeVersionFromInit,
+  resetFoldedSteers,
+  tryEmitSteerFolded,
+} from './steer-service.js';
 
 const SUPPORTED_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -143,6 +151,10 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
     ...(reasoningEffort && { effort: reasoningEffort }),
     ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
     ...(streamingEnabled && { includePartialMessages: true }),
+    // Echo folded user rows on the live SDK stream so tryEmitSteerFolded can
+    // match them. Java inserts the transcript row from [STEER_FOLDED] and
+    // executeTurn consumes the replayed user message, so this does not duplicate.
+    extraArgs: { 'replay-user-messages': null },
     additionalDirectories: Array.from(
       new Set(
         [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)
@@ -165,7 +177,7 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
   };
 }
 
-async function buildUserMessage(params, withAttachments, requestedSessionId) {
+export async function buildUserMessage(params, withAttachments, requestedSessionId) {
   if (withAttachments) {
     const attachments = await loadAttachments({ attachments: params.attachments || [] });
     const contentBlocks = await buildContentBlocks(attachments, params.message || '');
@@ -276,6 +288,18 @@ _runtimeCleanupTimer.unref();
     throw err;
   }
 
+  // A second send must never touch an in-flight turn. Re-entering would
+  // overwrite runtime.turnSink (the live turn's message source) and push a
+  // plain user message onto the still-running CLI input stream, where it is
+  // never read - leaving a ghost user row in the transcript. Must throw before
+  // the try/finally below: the rejection path itself must not clear the live
+  // turn's sink or active-runtime pointer.
+  if (runtime.turnSink) {
+    const err = new Error('A turn is already in flight for this session; the message was not delivered');
+    err.code = 'turn_in_progress';
+    throw err;
+  }
+
   setActiveTurnRuntime(runtime);
   console.log('[LIFECYCLE] executeTurn sessionId=' + (requestContext.requestedSessionId || runtime.sessionId || '(new)')
     + ' epoch=' + (requestContext.runtimeSessionEpoch || runtime.runtimeSessionEpoch || '(none)'));
@@ -293,6 +317,13 @@ _runtimeCleanupTimer.unref();
     // failures (e.g. "Runtime is closed" on a disposed runtime) as a graceful
     // "User interrupted" and silently swallow the user's message.
     runtime.abortRequested = false;
+    // Fold records only matter while this turn's stream is being read: dropping
+    // them here keeps a stale prompt match from swallowing a later real user
+    // message that repeats the same text, and bounds the map.
+    resetFoldedSteers(runtime);
+    if (runtime.claudeCodeVersion) {
+      emitCapabilities(runtime);
+    }
 
     // Wait until the perpetual reader has drained the SDK pipe and parked with
     // no CLI run in flight BEFORE opening the sink or sending the user message.
@@ -344,6 +375,13 @@ _runtimeCleanupTimer.unref();
         turnState.streamStarted = true;
       }
 
+      // Fold detection must run before the parent_tool_use_id skip: a live
+      // steer arrives as a user message (not a JSONL attachment), and must not
+      // be dropped as if it belonged to a sidechain.
+      if (tryEmitSteerFolded(runtime, msg)) {
+        continue;
+      }
+
       // Subagent (sidechain) messages carry a non-null parent_tool_use_id pointing
       // at the main turn's Agent/Task tool_use. Their detailed thinking and tool
       // calls belong to the sidechain transcript, which the frontend loads
@@ -370,6 +408,10 @@ _runtimeCleanupTimer.unref();
       // reaches the frontend subagent card and the raw XML never leaks into the
       // [MESSAGE] stream (which would only render as an opaque user message).
       // The frontend also recovers these from history on its own.
+      if (recordClaudeCodeVersionFromInit(runtime, msg)) {
+        emitCapabilities(runtime);
+      }
+
       const taskNotificationXml = extractTaskNotificationXml(msg);
       if (taskNotificationXml !== null) {
         const parsed = parseTaskNotificationXml(taskNotificationXml);
@@ -389,6 +431,17 @@ _runtimeCleanupTimer.unref();
         turnState.hasStreamEvents = true;
         processStreamEvent(msg, turnState);
         continue;
+      }
+
+      // A non-error result may only close a steer sub-turn: decide whether to
+      // keep reading BEFORE emitting anything. Emitting the result first would
+      // let Java finalize the whole turn (loading, footer, usage) while more
+      // content and a second result are still coming on this request.
+      if (msg?.type === 'result' && !msg.is_error) {
+        const shouldBreak = await handleSteerResultAndMaybeContinue(runtime, msg);
+        if (!shouldBreak) {
+          continue;
+        }
       }
 
       // Preserve all existing message processing logic
@@ -423,6 +476,8 @@ _runtimeCleanupTimer.unref();
         }
         // A result belongs to the active user turn unless the SDK explicitly marks
         // it as a background task follow-up above. Result-only turns are valid.
+        // The steer keep-reading decision already ran before the emit pipeline;
+        // reaching here means this result ends the request.
         break;
       }
     }
@@ -468,6 +523,13 @@ _runtimeCleanupTimer.unref();
       }
     }
   } finally {
+    // A turn that ends abnormally (SDK error / stream cut / sink failure)
+    // never reaches handleSteerResultAndMaybeContinue: the CLI queue entries
+    // can no longer be folded, so settle them here. Otherwise the frontend
+    // bubble stays pending forever and the stale uuid would poison the next
+    // turn's cancelAsyncMessage. No-op on the normal/abort paths where the
+    // map is already empty.
+    dumpPendingSteersAsUndelivered(runtime);
     endRuntimeTurn(runtime);
     if (runtime.permissionModeState) {
       runtime.permissionModeState.executionScope = '';
@@ -773,6 +835,9 @@ export async function abortCurrentTurn() {
   const runtime = getActiveTurnRuntime();
   if (!runtime) return;
   console.log('[LIFECYCLE] abortCurrentTurn epoch=' + (runtime.runtimeSessionEpoch || '(none)'));
+
+  // Destroying the subprocess drops the CLI queue; emit undelivered before dispose.
+  dumpPendingSteersAsUndelivered(runtime);
 
   // Clear turnSink first to stop incoming messages, then fail it to unblock waiting take()
   const sinkToClose = runtime.turnSink;

@@ -73,6 +73,7 @@ const App = () => {
     chatInputRef, messagesContainerRef, messagesEndRef, inputAreaRef, isAutoScrollingRef,
     handleUndoFile, onDiscardAll, handleKeepAll,
     handleSubmit, interruptSession, messageQueue, dequeueMessage, reorderMessageQueue,
+    canSteer, handleSteerFromQueue,
     handleOpenRewindSelectDialog, handleNavigateToProviderSettings, wrappedHandleProviderSelect,
     createNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
     exportHistorySession, toggleFavoriteSession, updateHistoryTitle, convertToCliSession,
@@ -181,6 +182,8 @@ const App = () => {
           messageQueue={messageQueue}
           onRemoveFromQueue={dequeueMessage}
           onReorderQueue={reorderMessageQueue}
+          canSteer={canSteer}
+          onSteerFromQueue={handleSteerFromQueue}
           codexPlan={codexPlan}
           codexPlanExecutionPending={codexPlanExecutionPending}
           codexCompactionPending={codexCompactionPending}

@@ -48,7 +48,9 @@ class ClaudeHistoryParser {
                 if (line.trim().isEmpty()) { continue; }
 
                 try {
-                    ClaudeHistoryReader.ConversationMessage msg = this.gson.fromJson(line, ClaudeHistoryReader.ConversationMessage.class);
+                    com.google.gson.JsonObject row = this.gson.fromJson(line, com.google.gson.JsonObject.class);
+                    row = QueuedCommandHistoryRewrite.rewrite(row);
+                    ClaudeHistoryReader.ConversationMessage msg = this.gson.fromJson(row, ClaudeHistoryReader.ConversationMessage.class);
                     if (msg != null) {
                         messages.add(msg);
                     }

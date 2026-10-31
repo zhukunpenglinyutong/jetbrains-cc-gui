@@ -482,6 +482,9 @@ final class WebviewEventQueue<T> {
         classes.put("onStreamEnd", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE));
         classes.put("onBlockReset", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE));
         classes.put("onTaskEvent", EnumSet.of(EventClass.LIFECYCLE));
+        classes.put("onSteerResult", EnumSet.of(EventClass.LIFECYCLE));
+        classes.put("onSteerFolded", EnumSet.of(EventClass.LIFECYCLE));
+        classes.put("onProviderCapabilities", EnumSet.of(EventClass.LATEST_ONLY));
         // A page is meaningful only when every slice arrives. Keep its slices
         // together under backpressure, then drain them within the script limit.
         classes.put("beginCodexHistoryPage", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE));

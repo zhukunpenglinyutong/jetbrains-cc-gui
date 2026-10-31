@@ -363,8 +363,30 @@ public class ClaudeSessionTest {
         assertEquals(PermissionManager.PermissionMode.ALLOW_ALL, session.getPermissionManager().getPermissionMode());
     }
 
+    @Test
+    public void steerRejectDoesNotSetOrClearLoading() {
+        ClaudeSession session = new ClaudeSession(null, null, null, null);
+        RecordingCallback callback = new RecordingCallback();
+        session.setCallback(callback);
+
+        assertFalse(session.isLoading());
+        session.steer("steer-1", "hello", null, null, null).join();
+        assertFalse(session.isLoading());
+        assertEquals("rejected", callback.lastSteerStatus);
+        assertEquals("unsupported_provider", callback.lastSteerReason);
+        assertEquals(0, session.getMessages().size());
+
+        session.getState().setLoading(true);
+        session.steer("steer-2", "hello", null, null, null).join();
+        assertTrue(session.isLoading());
+        assertEquals("rejected", callback.lastSteerStatus);
+        assertEquals("unsupported_provider", callback.lastSteerReason);
+    }
+
     private static class RecordingCallback implements ClaudeSession.SessionCallback {
         private String lastSessionId;
+        private String lastSteerStatus;
+        private String lastSteerReason;
 
         @Override
         public void onMessageUpdate(List<ClaudeSession.Message> messages) {
@@ -397,6 +419,12 @@ public class ClaudeSessionTest {
 
         @Override
         public void onSummaryReceived(String summary) {
+        }
+
+        @Override
+        public void onSteerResult(String steerId, String status, String reason) {
+            this.lastSteerStatus = status;
+            this.lastSteerReason = reason;
         }
     }
 

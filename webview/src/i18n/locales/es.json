@@ -27,6 +27,24 @@
   },
   "chat": {
     "sendMessage": "Enviar mensaje a {{provider}}",
+    "queue": {
+      "steerNow": "Enviar ahora (insertar en el turno actual)",
+      "steering": "Insertando en el turno actual...",
+      "steered": "Insertado en el turno actual"
+    },
+    "steerRejected": {
+      "no_active_turn": "No hay un turno en curso para insertar",
+      "session_mismatch": "La sesión no coincide; no se pudo insertar",
+      "unsupported_cli_version": "Claude CLI es demasiado antiguo para insertar (requiere 2.1.220+)",
+      "runtime_closed": "El runtime se cerró antes de insertar",
+      "unsupported_provider": "Este proveedor no admite insertar en el turno actual",
+      "timeout": "La inserción en el turno actual agotó el tiempo de espera",
+      "message_too_large": "El mensaje es demasiado largo para insertarlo en el turno actual",
+      "invalid_steer_id": "La solicitud de inserción fue rechazada por formato incorrecto"
+    },
+    "steerUndelivered": "Un mensaje insertado no se entregó y se devolvió al principio de la cola",
+    "steerUnconfirmed": "El mensaje insertado fue aceptado pero el turno no lo confirmó; se ha tratado como entregado.",
+    "steerUndeliveredLost": "Un mensaje insertado no se entregó y no se pudo restaurar en la cola",
     "createNewSession": "Crear nueva sesión",
     "confirmNewSession": "La sesión actual tiene mensajes, ¿estás seguro de que quieres crear una nueva sesión?",
     "confirmInterrupt": "Hay una conversación en curso, crear una nueva sesión la interrumpirá, ¿continuar?",

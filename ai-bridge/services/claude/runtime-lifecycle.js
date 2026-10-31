@@ -331,6 +331,10 @@ async function createRuntime(requestContext, callbacks) {
     inputStream: new AsyncStream(),
     lastEmittedSessionId: null,
     titleGenerationAttempted: false,
+    // Live-steer bookkeeping: CLI version + pending/folded uuid maps.
+    claudeCodeVersion: null,
+    pendingSteers: new Map(),
+    foldedSteers: new Map(),
     // Why the runtime's stream died (reader error, EOF, or a missing resume
     // target). executeTurn / waitForReaderQuiescent / assertRuntimeOwnership
     // surface it instead of a generic "Runtime is closed", so the user sees

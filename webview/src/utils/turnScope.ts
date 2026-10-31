@@ -15,11 +15,22 @@ export function isToolResultOnlyUserMessage(message: ClaudeMessage): boolean {
   );
 }
 
+/**
+ * Steered user rows are still part of the same CLI turn, not a new turn start.
+ */
+export function isSteeredUserMessage(message: ClaudeMessage): boolean {
+  if (message.type !== 'user') return false;
+  if (message.steered === true) return true;
+  const raw = message.raw;
+  return !!raw && typeof raw === 'object' && raw.steered === true;
+}
+
 export function findLatestConversationTurnStart(messages: ClaudeMessage[]): number {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i];
     if (message.type !== 'user') continue;
     if (isToolResultOnlyUserMessage(message)) continue;
+    if (isSteeredUserMessage(message)) continue;
     return i;
   }
   return -1;
@@ -55,7 +66,7 @@ export function computeStatusScopeMessages(
 function findConversationTurnStartAt(messages: ClaudeMessage[], messageIndex: number): number {
   for (let i = Math.min(messageIndex, messages.length - 1); i >= 0; i -= 1) {
     const message = messages[i];
-    if (message.type !== 'user' || isToolResultOnlyUserMessage(message)) continue;
+    if (message.type !== 'user' || isToolResultOnlyUserMessage(message) || isSteeredUserMessage(message)) continue;
     return i;
   }
   return -1;

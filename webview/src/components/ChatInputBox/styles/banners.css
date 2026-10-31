@@ -302,6 +302,7 @@
   color: var(--text-secondary);
 }
 
+.message-queue-steer,
 .message-queue-remove {
   flex-shrink: 0;
   display: flex;
@@ -316,6 +317,26 @@
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.15s;
+}
+
+.message-queue-steer:hover {
+  background: var(--hover-bg, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary);
+}
+
+.message-queue-steer .codicon,
+.message-queue-steering-spinner .codicon {
+  font-size: 12px;
+}
+
+.message-queue-steering-spinner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
 }
 
 .message-queue-remove:hover {

@@ -96,4 +96,34 @@ public class SessionCallbackFacade {
     public void notifyClaudeHistoryPageError(String sessionId, String message) {
         callbackHandler.notifyClaudeHistoryPageError(sessionId, message);
     }
+
+    /**
+     * Forward a steer command receipt to the session callback.
+     *
+     * @param steerId frontend correlation id
+     * @param status  accepted, rejected, or undelivered
+     * @param reason  optional reject reason
+     */
+    public void notifySteerResult(String steerId, String status, String reason) {
+        callbackHandler.notifySteerResult(steerId, status, reason);
+    }
+
+    /**
+     * Forward a folded steer user message to the session callback.
+     *
+     * @param steerId frontend correlation id
+     * @param message inserted user message
+     */
+    public void notifySteerFolded(String steerId, ClaudeSession.Message message) {
+        callbackHandler.notifySteerFolded(steerId, message);
+    }
+
+    /**
+     * Forward live provider capabilities to the session callback.
+     *
+     * @param steer whether steer is available
+     */
+    public void notifyProviderCapabilities(boolean steer) {
+        callbackHandler.notifyProviderCapabilities(steer);
+    }
 }

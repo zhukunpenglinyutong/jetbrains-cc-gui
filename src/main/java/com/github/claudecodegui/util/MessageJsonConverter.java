@@ -202,6 +202,11 @@ public class MessageJsonConverter {
         copyFieldIfPresent(raw, transport, "summarizeMetadata");
         // Origin field for distinguishing human input from synthetic messages
         copyFieldIfPresent(raw, transport, "origin");
+        // Steer markers stamped by ClaudeMessageHandler.handleSteerFolded. The webview
+        // renders its run-above badge from these, so dropping them here made the badge
+        // vanish as soon as the post-fold snapshot replaced the optimistic bubble.
+        copyFieldIfPresent(raw, transport, "steered");
+        copyFieldIfPresent(raw, transport, "steerId");
         // Whole-turn aggregated usage stamped by ClaudeMessageHandler.handleResult /
         // CodexMessageHandler.handleResultMessage, for the per-turn token display.
         // Whole-turn estimated cost is calculated by the backend from the same pricing

@@ -75,6 +75,39 @@ public class MessageJsonConverterTest {
     }
 
     @Test
+    public void convertMessagesToJsonPreservesSteerMarkers() {
+        JsonObject raw = new JsonObject();
+        raw.addProperty("type", "user");
+        raw.addProperty("uuid", "uuid-steer");
+        raw.addProperty("steerId", "queue-42");
+        raw.addProperty("steered", true);
+        // Not whitelisted: only the markers above are needed by the webview badge.
+        raw.addProperty("sessionId", "session-steer");
+
+        JsonObject message = new JsonObject();
+        message.addProperty("role", "user");
+        message.addProperty("content", "steered prompt");
+        raw.add("message", message);
+
+        ClaudeSession.Message sessionMessage = new ClaudeSession.Message(
+                ClaudeSession.Message.Type.USER,
+                "steered prompt",
+                raw
+        );
+
+        JsonArray transportMessages = JsonParser.parseString(
+                MessageJsonConverter.convertMessagesToJson(List.of(sessionMessage))
+        ).getAsJsonArray();
+
+        JsonObject transportRaw = transportMessages.get(0).getAsJsonObject().getAsJsonObject("raw");
+        // The steered row carries its badge from these two fields; dropping them on a
+        // snapshot made the badge disappear as soon as the fold replaced the bubble.
+        assertEquals("queue-42", transportRaw.get("steerId").getAsString());
+        assertTrue(transportRaw.get("steered").getAsBoolean());
+        assertFalse(transportRaw.has("sessionId"));
+    }
+
+    @Test
     public void truncateRawForTransportPreservesToolResultBlocksWhileDroppingOuterMetadata() {
         JsonObject toolResult = new JsonObject();
         toolResult.addProperty("type", "tool_result");

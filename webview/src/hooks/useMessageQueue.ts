@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import type { MutableRefObject } from 'react';
 import type { Attachment } from '../components/ChatInputBox/types';
 
 export interface QueuedMessage {
@@ -6,6 +7,8 @@ export interface QueuedMessage {
   content: string;
   attachments?: Attachment[];
   queuedAt: number;
+  /** queued waits for idle send; steering is in-flight on the live turn */
+  status: 'queued' | 'steering';
 }
 
 export interface UseMessageQueueOptions {
@@ -14,6 +17,12 @@ export interface UseMessageQueueOptions {
   /** Callback to execute a message */
   onExecute: (content: string, attachments?: Attachment[]) => void;
 }
+
+/**
+ * Grace period that lets an outstanding steer receipt requeue its row at the
+ * head before the next queued message dispatches (plan B2/F2).
+ */
+const STEER_RECEIPT_DISPATCH_DELAY_MS = 2000;
 
 export interface UseMessageQueueReturn {
   /** Current queue */
@@ -24,8 +33,26 @@ export interface UseMessageQueueReturn {
   dequeue: (id: string) => void;
   /** Clear entire queue */
   clearQueue: () => void;
-  /** Reorder the queue by an ordered list of ids (index 0 executes first) */
+  /** Reorder queue by an ordered list of ids (index 0 executes first) */
   reorder: (orderedIds: string[]) => void;
+  /** Mark an item as steering after the daemon accepted it */
+  markSteering: (id: string) => void;
+  /**
+   * Whether the item is still mid-steer. `accepted` receipts are replayed
+   * against this so a late receipt cannot re-hide a row that a rejected or
+   * undelivered receipt already restored to the queue.
+   */
+  isSteering: (id: string) => boolean;
+  /**
+   * Restore a rejected item in place. When the queue row is already gone
+   * (the receipt outlived it, e.g. a session transition cleared the queue),
+   * `fallback` is requeued at the head instead of the receipt being dropped.
+   */
+  restore: (id: string, fallback?: QueuedMessage) => void;
+  /** Put an undelivered item back at the head as queued */
+  requeueAtHead: (item: QueuedMessage) => void;
+  /** Steering items retained for undelivered receipts */
+  steeringItemsRef: MutableRefObject<Map<string, QueuedMessage>>;
   /** Whether queue has items */
   hasQueuedMessages: boolean;
 }
@@ -39,12 +66,7 @@ export function useMessageQueue({
   onExecute,
 }: UseMessageQueueOptions): UseMessageQueueReturn {
   const [queue, setQueue] = useState<QueuedMessage[]>([]);
-  // Timestamp of the last dispatch. The drain effect re-runs synchronously after
-  // its own dequeue (queue state change) while `isLoading` is still false — the
-  // execute path flips it only in the next render. Without a gate the effect
-  // drained the whole queue in one idle period, overlapping multiple sends on
-  // the same Codex thread (writer-lock conflict).
-  const dispatchedAtRef = useRef<number | null>(null);
+  const steeringItemsRef = useRef<Map<string, QueuedMessage>>(new Map());
 
   // Generate unique ID
   const generateId = useCallback(() => {
@@ -58,17 +80,20 @@ export function useMessageQueue({
       content,
       attachments,
       queuedAt: Date.now(),
+      status: 'queued',
     };
     setQueue(prev => [...prev, newItem]);
   }, [generateId]);
 
   // Remove message from queue
   const dequeue = useCallback((id: string) => {
+    steeringItemsRef.current.delete(id);
     setQueue(prev => prev.filter(item => item.id !== id));
   }, []);
 
   // Clear entire queue
   const clearQueue = useCallback(() => {
+    steeringItemsRef.current.clear();
     setQueue([]);
   }, []);
 
@@ -95,35 +120,116 @@ export function useMessageQueue({
     });
   }, []);
 
-  // Auto-execute next message whenever the chat is idle. Dequeue and execute
-  // must stay atomic inside this effect: deferring the execution behind a
-  // timer let the very next re-render (the dequeue's own state update) run
-  // effect cleanup, cancel the timer, and silently drop the already-dequeued
-  // message. Checking "idle && non-empty" instead of a loading transition also
-  // covers messages enqueued while `isLoading` was already flipping to false.
+  const markSteering = useCallback((id: string) => {
+    setQueue(prev => prev.map(item => {
+      if (item.id !== id) return item;
+      const next: QueuedMessage = { ...item, status: 'steering' };
+      steeringItemsRef.current.set(id, next);
+      return next;
+    }));
+  }, []);
+
+  const isSteering = useCallback((id: string) => steeringItemsRef.current.has(id), []);
+
+  const restore = useCallback((id: string, fallback?: QueuedMessage) => {
+    steeringItemsRef.current.delete(id);
+    setQueue(prev => {
+      if (prev.some(item => item.id === id)) {
+        return prev.map(item => (
+          item.id === id ? { ...item, status: 'queued' } : item
+        ));
+      }
+      // Steer plan F1: a receipt must never silently drop its message. When
+      // the row is gone, rebuild it from the optimistic-bubble fallback.
+      if (fallback && !prev.some(item => item.id === fallback.id)) {
+        return [{ ...fallback, status: 'queued' }, ...prev];
+      }
+      return prev;
+    });
+  }, []);
+
+  const requeueAtHead = useCallback((item: QueuedMessage) => {
+    const restored: QueuedMessage = { ...item, status: 'queued' };
+    steeringItemsRef.current.delete(item.id);
+    setQueue(prev => {
+      const without = prev.filter(existing => existing.id !== item.id);
+      return [restored, ...without];
+    });
+  }, []);
+
+  // Auto-execute the next message whenever the chat is idle. Dequeue and
+  // execute must stay atomic (see 80027de2: deferring the execution behind a
+  // timer let the dequeue's own re-render cancel it and silently drop the
+  // already-dequeued message), so the dispatcher below removes the row and
+  // calls onExecute synchronously.
   //
-  // Single-flight: at most one dispatch per idle period. The drain effect
-  // re-runs synchronously after its own dequeue while `isLoading` is still
-  // false (the execute path flips it only in the next render); without the
-  // gate it drained the whole queue at once, overlapping multiple sends on
-  // the same Codex thread (thread-writer lock conflict). The gate reopens
-  // when `isLoading` turns true — i.e. the dispatched message actually
-  // started a turn. A dispatch that bails before flipping loading (e.g. SDK
-  // missing) leaves the gate closed so the queue waits instead of spamming
-  // doomed sends; any subsequent turn reopens it.
+  // Plan B2/F2: only ONE row leaves the queue per idle window. The window
+  // between handing a row to onExecute and the async send flipping isLoading
+  // back to true re-ran this effect for every remaining row and flushed the
+  // whole queue into a single turn — the second send then hit the daemon's
+  // live turn and its message was never read (ghost transcript row). The
+  // dispatchedRef latch closes that window; it resets when the next turn
+  // flips isLoading to true.
+  //
+  // While a steer receipt is still outstanding (steeringItemsRef non-empty)
+  // the dispatch waits briefly so the receipt can requeue the steered row at
+  // the head first — TC-07/TC-08 expect the undelivered row to auto-send
+  // before older rows. The row stays queued during the wait and the receipt
+  // path re-runs this effect, so cancelling the backstop never strands a
+  // message.
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
+  const onExecuteRef = useRef(onExecute);
+  onExecuteRef.current = onExecute;
+  const dispatchedRef = useRef(false);
+  const steerDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearSteerDelay = useCallback(() => {
+    if (steerDelayRef.current != null) {
+      clearTimeout(steerDelayRef.current);
+      steerDelayRef.current = null;
+    }
+  }, []);
+
+  const dispatchNextQueued = useCallback(() => {
+    clearSteerDelay();
+    if (dispatchedRef.current) {
+      return;
+    }
+    const nextMessage = queueRef.current.find(item => item.status === 'queued');
+    if (!nextMessage) {
+      return;
+    }
+    dispatchedRef.current = true;
+    setQueue(prev => prev.filter(item => item.id !== nextMessage.id));
+    onExecuteRef.current(nextMessage.content, nextMessage.attachments);
+  }, [clearSteerDelay]);
+
   useEffect(() => {
     if (isLoading) {
-      dispatchedAtRef.current = null;
-      return;
+      dispatchedRef.current = false;
+      clearSteerDelay();
+      return undefined;
     }
-    if (queue.length === 0 || dispatchedAtRef.current !== null) {
-      return;
+    if (dispatchedRef.current) {
+      return undefined;
     }
-    const nextMessage = queue[0];
-    dispatchedAtRef.current = Date.now();
-    setQueue(prev => prev.slice(1));
-    onExecute(nextMessage.content, nextMessage.attachments);
-  }, [isLoading, queue, onExecute]);
+    if (steeringItemsRef.current.size > 0) {
+      // Outstanding steer receipt: hold the dispatch inside the backstop
+      // window and let the receipt's requeue re-run this effect.
+      if (steerDelayRef.current == null) {
+        steerDelayRef.current = setTimeout(() => {
+          steerDelayRef.current = null;
+          dispatchNextQueued();
+        }, STEER_RECEIPT_DISPATCH_DELAY_MS);
+      }
+    } else {
+      dispatchNextQueued();
+    }
+    return () => {
+      clearSteerDelay();
+    };
+  }, [isLoading, queue, dispatchNextQueued, clearSteerDelay]);
 
   return {
     queue,
@@ -131,6 +237,11 @@ export function useMessageQueue({
     dequeue,
     clearQueue,
     reorder,
+    markSteering,
+    isSteering,
+    restore,
+    requeueAtHead,
+    steeringItemsRef,
     hasQueuedMessages: queue.length > 0,
   };
 }

@@ -31,9 +31,21 @@ public class SessionHandler extends BaseMessageHandler {
 
     private static final Logger LOG = Logger.getInstance(SessionHandler.class);
 
+    /** Steer prompts are copied into every transcript snapshot, so cap their size. */
+    private static final int MAX_STEER_TEXT_CHARS = 200_000;
+    /** Steering reuses the chat attachment path; keep a practical bound. */
+    private static final int MAX_STEER_ATTACHMENTS = 10;
+    /**
+     * A steerId is echoed into log lines and daemon stderr, so only an inert
+     * charset is allowed: a newline would forge a second log entry.
+     */
+    private static final java.util.regex.Pattern STEER_ID_PATTERN =
+            java.util.regex.Pattern.compile("[A-Za-z0-9._:-]{1,128}");
+
     private static final String[] SUPPORTED_TYPES = {
             "send_message",
             "send_message_with_attachments",
+            "steer_message",
             "interrupt_session",
             "restart_session"
             // Note: create_new_session should not be handled here; it should be handled by ClaudeSDKToolWindow.createNewSession()
@@ -58,6 +70,10 @@ public class SessionHandler extends BaseMessageHandler {
             case "send_message_with_attachments":
                 LOG.debug("[SessionHandler] 处理: send_message_with_attachments");
                 handleSendMessageWithAttachments(content);
+                return true;
+            case "steer_message":
+                LOG.debug("[SessionHandler] 处理: steer_message");
+                handleSteerMessage(content);
                 return true;
             case "interrupt_session":
                 LOG.debug("[SessionHandler] 处理: interrupt_session");
@@ -424,6 +440,163 @@ public class SessionHandler extends BaseMessageHandler {
                     return null;
                     });
         });
+    }
+
+    /**
+     * Inject a steer into the live turn. Does not toggle busy/loading and does not
+     * append a transcript row on accept.
+     *
+     * @param content JSON payload with text, agent, fileTags, attachments, steerId
+     */
+    private void handleSteerMessage(String content) {
+        String steerId = "";
+        try {
+            Gson gson = new Gson();
+            JsonObject payload = gson.fromJson(content, JsonObject.class);
+            String text = payload != null && payload.has("text") && !payload.get("text").isJsonNull()
+                    ? payload.get("text").getAsString()
+                    : "";
+            steerId = payload != null && payload.has("steerId") && !payload.get("steerId").isJsonNull()
+                    ? payload.get("steerId").getAsString()
+                    : "";
+
+            java.util.List<ClaudeSession.Attachment> atts = new java.util.ArrayList<>();
+            if (payload != null && payload.has("attachments") && payload.get("attachments").isJsonArray()) {
+                JsonArray arr = payload.getAsJsonArray("attachments");
+                for (int i = 0; i < arr.size(); i++) {
+                    JsonObject a = arr.get(i).getAsJsonObject();
+                    String fileName = a.has("fileName") && !a.get("fileName").isJsonNull()
+                            ? a.get("fileName").getAsString()
+                            : ("attachment-" + System.currentTimeMillis());
+                    String mediaType = a.has("mediaType") && !a.get("mediaType").isJsonNull()
+                            ? a.get("mediaType").getAsString()
+                            : "application/octet-stream";
+                    String data = a.has("data") && !a.get("data").isJsonNull()
+                            ? a.get("data").getAsString()
+                            : "";
+                    atts.add(new ClaudeSession.Attachment(fileName, mediaType, data));
+                }
+            }
+
+            String agentPrompt = null;
+            if (payload != null && payload.has("agent") && !payload.get("agent").isJsonNull()) {
+                JsonObject agent = payload.getAsJsonObject("agent");
+                if (agent.has("prompt") && !agent.get("prompt").isJsonNull()) {
+                    agentPrompt = agent.get("prompt").getAsString();
+                }
+            }
+
+            if (payload != null && payload.has("fileTags") && payload.get("fileTags").isJsonArray()) {
+                JsonArray fileTagsArray = payload.getAsJsonArray("fileTags");
+                int tagCount = 0;
+                for (int i = 0; i < fileTagsArray.size(); i++) {
+                    JsonObject fileTag = fileTagsArray.get(i).getAsJsonObject();
+                    if (fileTag.has("absolutePath") && !fileTag.get("absolutePath").isJsonNull()) {
+                        tagCount++;
+                    }
+                }
+                if (tagCount > 0) {
+                    LOG.info("[SessionHandler] Steer payload includes " + tagCount + " file tags");
+                }
+            }
+
+            String requestedReasoningEffort = extractReasoningEffort(payload);
+            // The optimistic bubble and the hidden queue row are only settled by
+            // a receipt, so every rejection below must answer with one.
+            if (!steerId.isEmpty() && !STEER_ID_PATTERN.matcher(steerId).matches()) {
+                LOG.warn("[SessionHandler] Rejecting steer with a malformed steerId (" + steerId.length() + " chars)");
+                notifySteerRejected("", "invalid_steer_id");
+                return;
+            }
+            if (text.length() > MAX_STEER_TEXT_CHARS) {
+                LOG.warn("[SessionHandler] Rejecting oversized steer (" + text.length() + " chars)");
+                notifySteerRejected(steerId, "message_too_large");
+                return;
+            }
+            if (atts.size() > MAX_STEER_ATTACHMENTS) {
+                LOG.warn("[SessionHandler] Rejecting steer with " + atts.size() + " attachments");
+                notifySteerRejected(steerId, "message_too_large");
+                return;
+            }
+            final String finalText = text;
+            final String finalSteerId = steerId;
+            final String finalAgentPrompt = agentPrompt;
+            final String finalRequestedReasoningEffort = requestedReasoningEffort;
+            final java.util.List<ClaudeSession.Attachment> finalAtts = atts.isEmpty() ? null : atts;
+
+            CompletableFuture.runAsync(() -> {
+                try {
+                    context.getSession().steer(
+                            finalSteerId,
+                            finalText,
+                            finalAtts,
+                            finalAgentPrompt,
+                            finalRequestedReasoningEffort
+                    );
+                } catch (Throwable t) {
+                    // The pool would swallow this silently and no receipt would
+                    // ever reach the webview: the bubble stays pending and the
+                    // queue row stays hidden. Always settle as rejected.
+                    LOG.error("[SessionHandler] steer dispatch failed: " + t.getMessage(), t);
+                    notifySteerRejected(finalSteerId);
+                }
+            });
+        } catch (Exception e) {
+            LOG.error("[SessionHandler] Failed to parse steer_message: " + e.getMessage(), e);
+            // The optimistic bubble is already in the transcript and the queue row
+            // is hidden; without a rejected receipt both stay stranded.
+            if (steerId == null || steerId.isEmpty()) {
+                steerId = extractSteerId(content);
+            }
+            notifySteerRejected(steerId);
+        }
+    }
+
+    /**
+     * Best-effort steerId extraction when the main parse failed mid-payload.
+     *
+     * @param content raw steer_message JSON
+     * @return steerId, or empty when unavailable
+     */
+    private static String extractSteerId(String content) {
+        if (content == null) {
+            return "";
+        }
+        try {
+            JsonObject payload = new Gson().fromJson(content, JsonObject.class);
+            if (payload != null && payload.has("steerId") && !payload.get("steerId").isJsonNull()) {
+                return payload.get("steerId").getAsString();
+            }
+        } catch (Exception ignored) {
+            // Fall through to the regex path for partially malformed JSON.
+        }
+        java.util.regex.Matcher matcher =
+                java.util.regex.Pattern.compile("\"steerId\"\\s*:\\s*\"([^\"]+)\"").matcher(content);
+        return matcher.find() ? matcher.group(1) : "";
+    }
+
+    /**
+     * Reject a steer that never reached the provider so the frontend can retract
+     * the optimistic bubble and restore the queue row.
+     *
+     * @param steerId frontend correlation id (may be empty)
+     */
+    private void notifySteerRejected(String steerId) {
+        notifySteerRejected(steerId, "runtime_closed");
+    }
+
+    /**
+     * Settle a steer as rejected with an explicit reason.
+     *
+     * @param steerId frontend correlation id, may be empty
+     * @param reason  reject reason, translated by the webview
+     */
+    private void notifySteerRejected(String steerId, String reason) {
+        JsonObject receipt = new JsonObject();
+        receipt.addProperty("steerId", steerId != null ? steerId : "");
+        receipt.addProperty("status", "rejected");
+        receipt.addProperty("reason", reason);
+        callJavaScript("onSteerResult", escapeJs(receipt.toString()));
     }
 
     /**

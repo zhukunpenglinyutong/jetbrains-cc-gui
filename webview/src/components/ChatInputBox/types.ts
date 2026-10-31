@@ -1025,6 +1025,10 @@ export interface ChatInputBoxProps {
   onRemoveFromQueue?: (id: string) => void;
   /** Reorder message queue callback (orderedIds[0] executes first) */
   onReorderQueue?: (orderedIds: string[]) => void;
+  /** Show the steer button while a capable live turn is in progress */
+  canSteer?: boolean;
+  /** Steer a queued item into the live turn */
+  onSteerFromQueue?: (id: string) => void;
 
   /** Whether auto open file is enabled */
   autoOpenFileEnabled?: boolean;
@@ -1182,4 +1186,6 @@ export interface QueuedMessage {
   attachments?: Attachment[];
   /** Timestamp when queued */
   queuedAt: number;
+  /** queued waits for idle send; steering is in-flight on the live turn */
+  status: 'queued' | 'steering';
 }

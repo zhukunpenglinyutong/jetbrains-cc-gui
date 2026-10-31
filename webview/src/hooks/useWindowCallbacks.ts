@@ -15,11 +15,34 @@ import type { AskUserQuestionRequest } from '../components/AskUserQuestionDialog
 import type { PlanApprovalRequest } from '../components/PlanApprovalDialog';
 import type { RewindRequest } from '../components/RewindDialog';
 import type { RestoredSessionTitle } from '../contexts/SessionContext';
+import type { QueuedMessage } from './useMessageQueue';
+import type { ProviderCapabilities } from './useProviderCapabilities';
 import { registerWindowCallbacks } from './windowCallbacks/registerCallbacks';
 import { sendBridgeEvent } from '../utils/bridge';
 
 // Re-export from messageSync to avoid duplicate definition
 export { OPTIMISTIC_MESSAGE_TIME_WINDOW } from './windowCallbacks/messageSync';
+
+export interface MessageQueueSteerApi {
+  markSteering: (id: string) => void;
+  /**
+   * Whether the item is still mid-steer. A late `accepted` receipt is applied
+   * only while this holds, so it cannot re-hide a row another receipt restored.
+   */
+  isSteering: (id: string) => boolean;
+  restore: (id: string, fallback?: QueuedMessage) => void;
+  requeueAtHead: (item: QueuedMessage) => void;
+  dequeue: (id: string) => void;
+  steeringItemsRef: MutableRefObject<Map<string, QueuedMessage>>;
+  /**
+   * Rebuild a QueuedMessage from the optimistic steer bubble still in the
+   * transcript: the recovery source when the steering map no longer holds the
+   * item. Returns null when nothing is recoverable.
+   */
+  findSteeredBubble: (steerId: string) => QueuedMessage | null;
+  /** Returns false when the item carried no sendable content. */
+  steerMessage: (item: QueuedMessage) => boolean;
+}
 
 export interface ContextInfo {
   file: string;
@@ -133,6 +156,12 @@ export interface UseWindowCallbacksOptions {
    * message queue hook has been created.
    */
   clearQueuedMessages?: () => void;
+  /** Reset provider capabilities on session switch (via resetTransientUiState) */
+  resetCapabilities?: () => void;
+  /** Queue steer APIs, resolved after mount because registration happens once */
+  messageQueueSteerRef?: MutableRefObject<MessageQueueSteerApi | null>;
+  /** Apply [CAPABILITIES] from the live turn */
+  applyCapabilitiesRef?: MutableRefObject<(next: ProviderCapabilities) => void>;
 
   // AI title generation: update the displayed session title when backend generates one
   setCustomSessionTitle: React.Dispatch<React.SetStateAction<string | null>>;

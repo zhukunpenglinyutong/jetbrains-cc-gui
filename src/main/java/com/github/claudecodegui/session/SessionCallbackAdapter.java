@@ -3,6 +3,7 @@ package com.github.claudecodegui.session;
 import com.github.claudecodegui.handler.PermissionHandler;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.util.JsUtils;
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -437,6 +438,50 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         payload.addProperty("sessionId", sessionId != null ? sessionId : "");
         payload.addProperty("message", message != null ? message : "Unknown error");
         this.jsTarget.callJavaScript("claudeHistoryPageError", JsUtils.escapeJs(payload.toString()));
+    }
+
+    @Override
+    public void onSteerResult(String steerId, String status, String reason) {
+        if (this.isInactive()) {
+            return;
+        }
+        JsonObject payload = new JsonObject();
+        payload.addProperty("steerId", steerId != null ? steerId : "");
+        payload.addProperty("status", status != null ? status : "");
+        if (reason != null && !reason.isEmpty()) {
+            payload.addProperty("reason", reason);
+        }
+        this.jsTarget.callJavaScript("onSteerResult", JsUtils.escapeJs(new Gson().toJson(payload)));
+    }
+
+    @Override
+    public void onSteerFolded(String steerId, ClaudeSession.Message message) {
+        if (this.isInactive()) {
+            return;
+        }
+        JsonObject payload = new JsonObject();
+        payload.addProperty("steerId", steerId != null ? steerId : "");
+        if (message != null) {
+            JsonObject msgObj = new JsonObject();
+            msgObj.addProperty("type", message.type != null ? message.type.toString().toLowerCase() : "user");
+            msgObj.addProperty("timestamp", message.timestamp);
+            msgObj.addProperty("content", message.content != null ? message.content : "");
+            if (message.raw != null) {
+                msgObj.add("raw", message.raw);
+            }
+            payload.add("message", msgObj);
+        }
+        this.jsTarget.callJavaScript("onSteerFolded", JsUtils.escapeJs(new Gson().toJson(payload)));
+    }
+
+    @Override
+    public void onProviderCapabilities(boolean steer) {
+        if (this.isInactive()) {
+            return;
+        }
+        JsonObject payload = new JsonObject();
+        payload.addProperty("steer", steer);
+        this.jsTarget.callJavaScript("onProviderCapabilities", JsUtils.escapeJs(new Gson().toJson(payload)));
     }
 
     /**
