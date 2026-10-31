@@ -5,9 +5,13 @@ import org.junit.Test;
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriter;
+import javax.imageio.spi.IIORegistry;
+import javax.imageio.spi.ImageReaderSpi;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import javax.imageio.stream.ImageOutputStream;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
 import java.util.Base64;
@@ -19,6 +23,25 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class CodexPetImageSupportTest {
+
+    @Test
+    public void decodesWebpWithoutRegisteringThePluginProviderInTheIdeRegistry() throws Exception {
+        IIORegistry registry = IIORegistry.getDefaultInstance();
+        List<ImageReaderSpi> removed = new ArrayList<>();
+        registry.getServiceProviders(ImageReaderSpi.class, true).forEachRemaining(provider -> {
+            if (Arrays.stream(provider.getFormatNames()).anyMatch(format -> "webp".equalsIgnoreCase(format))) {
+                removed.add(provider);
+            }
+        });
+        removed.forEach(registry::deregisterServiceProvider);
+        try {
+            assertFalse(ImageIO.getImageReadersByMIMEType("image/webp").hasNext());
+            bundledImageIoProviderDecodesWebp();
+            assertFalse(ImageIO.getImageReadersByMIMEType("image/webp").hasNext());
+        } finally {
+            removed.forEach(registry::registerServiceProvider);
+        }
+    }
 
     @Test
     public void readsCanonicalPetdexPngDimensions() {
@@ -76,7 +99,7 @@ public class CodexPetImageSupportTest {
         byte[] onePixelWebp = Base64.getDecoder().decode(
                 "UklGRrYAAABXRUJQVlA4IKoAAACwEACdASoAAQABPm02mUmCAoAIANiWlu4XaxHtwAABPYB77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJwoAP7/Qwv//hyp9O3sf//Ys5bAsQAAAAAAAAAAAA==");
 
-        assertNotNull(ImageIO.read(new ByteArrayInputStream(onePixelWebp)));
+        assertNotNull(CodexPetImageSupport.readImage(onePixelWebp));
     }
 
     private static byte[] pngHeader(int width, int height) {

@@ -26,7 +26,6 @@ import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
@@ -967,7 +966,7 @@ public class CodexPetHandler extends BaseMessageHandler {
                 || !CodexPetImageSupport.hasSafeFrameBudget(mimeType, bytes)) {
             throw new IOException("INVALID_LOCAL_PET_IMAGE");
         }
-        BufferedImage decodedImage = ImageIO.read(new ByteArrayInputStream(bytes));
+        BufferedImage decodedImage = CodexPetImageSupport.readImage(bytes);
         if (decodedImage == null) {
             throw new IOException("INVALID_LOCAL_PET_IMAGE");
         }

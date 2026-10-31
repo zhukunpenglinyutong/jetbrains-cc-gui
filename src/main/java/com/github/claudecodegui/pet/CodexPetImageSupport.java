@@ -1,8 +1,12 @@
 package com.github.claudecodegui.pet;
 
+import com.twelvemonkeys.imageio.plugins.webp.WebPImageReaderSpi;
+
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
+import javax.imageio.stream.MemoryCacheImageInputStream;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -26,6 +30,40 @@ public final class CodexPetImageSupport {
     };
 
     private CodexPetImageSupport() {
+    }
+
+    /** Use the plugin-owned WebP provider even when the IDE's ImageIO registry cannot discover it. */
+    private static ImageReader imageReader(ImageInputStream input, boolean webp) throws IOException {
+        if (webp) {
+            WebPImageReaderSpi provider = new WebPImageReaderSpi();
+            if (provider.canDecodeInput(input)) {
+                return provider.createReaderInstance();
+            }
+        }
+        Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
+        return readers.hasNext() ? readers.next() : null;
+    }
+
+    /** Decode the first frame without changing the host registry or retaining the plugin classloader there. */
+    public static BufferedImage readImage(byte[] bytes) throws IOException {
+        if (bytes == null || bytes.length == 0) {
+            return null;
+        }
+        try (ImageInputStream input = new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes))) {
+            ImageReader reader = imageReader(input, isWebp(bytes));
+            if (reader == null) {
+                return null;
+            }
+            try {
+                reader.setInput(input, true, true);
+                if (!hasSafeDimensions(new ImageDimensions(reader.getWidth(0), reader.getHeight(0)))) {
+                    throw new IOException("INVALID_PET_IMAGE_DIMENSIONS");
+                }
+                return reader.read(0);
+            } finally {
+                reader.dispose();
+            }
+        }
     }
 
     public static String detectMimeType(Path path, byte[] bytes) {

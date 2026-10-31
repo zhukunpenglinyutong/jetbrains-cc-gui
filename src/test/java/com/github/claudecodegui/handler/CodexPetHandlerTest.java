@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.github.claudecodegui.pet.WebpTestFixture;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -32,6 +33,18 @@ public class CodexPetHandlerTest {
 
     @Rule
     public final TemporaryFolder temporaryFolder = new TemporaryFolder();
+
+    @Test
+    public void previewsLocalWebpWithoutGlobalWebpProvider() throws Exception {
+        Path root = temporaryFolder.newFolder("webp-preview").toPath();
+        try (WebpTestFixture fixture = new WebpTestFixture()) {
+            Files.write(root.resolve("sheet.webp"), fixture.sheet());
+            JsonObject preview = CodexPetHandler.loadPetPreview(root, "sheet.webp");
+            assertTrue(preview.get("dataUrl").getAsString().startsWith("data:image/webp;base64,"));
+            assertTrue(preview.get("spriteSheet").getAsBoolean());
+            fixture.assertRegistryUnchanged();
+        }
+    }
 
     @Test
     public void loadsOnlyVerifiedImageFormatsWithinPetRoot() throws Exception {

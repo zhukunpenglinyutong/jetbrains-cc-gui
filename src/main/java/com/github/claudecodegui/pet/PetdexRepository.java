@@ -10,7 +10,6 @@ import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
 
 import javax.imageio.ImageIO;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.awt.Graphics2D;
@@ -159,7 +158,7 @@ public final class PetdexRepository {
         if (!CodexPetImageSupport.isCanonicalPetdexSheet(dimensions)) {
             throw new IOException("INVALID_PETDEX_SPRITESHEET");
         }
-        BufferedImage decodedImage = ImageIO.read(new ByteArrayInputStream(spriteBytes));
+        BufferedImage decodedImage = CodexPetImageSupport.readImage(spriteBytes);
         if (decodedImage == null
                 || decodedImage.getWidth() != dimensions.getWidth()
                 || decodedImage.getHeight() != dimensions.getHeight()) {
@@ -215,7 +214,7 @@ public final class PetdexRepository {
             if (!CodexPetImageSupport.isCanonicalPetdexSheet(dimensions)) {
                 throw new IOException("INVALID_PETDEX_SPRITESHEET");
             }
-            BufferedImage decodedImage = ImageIO.read(new ByteArrayInputStream(spriteBytes));
+            BufferedImage decodedImage = CodexPetImageSupport.readImage(spriteBytes);
             if (decodedImage == null) {
                 throw new IOException("UNDECODABLE_PETDEX_SPRITESHEET");
             }
