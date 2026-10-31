@@ -2,6 +2,9 @@ package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -17,6 +20,214 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.Assert.*;
 
 public class CodexHistoryPageIndexTest {
+    /** Appending a cross-turn wait response preserves its request's original turn in cached pages. */
+    @Test
+    public void pagedWaitKeepsItsArrivalTurnAcrossAppend() throws Exception {
+        Files.writeString(this.session, user("inspect") + """
+                {"type":"session_meta","payload":{"id":"thread"}}
+                {"type":"turn_context","payload":{"turn_id":"first-turn"}}
+                {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"yielded","input":"await tools[load('tool')](load('args'));"}}
+                {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"yielded","output":[{"type":"input_text","text":"Script running with cell ID cell-1\\nWall time 0.1 seconds\\nOutput:\\n"}]}}
+                {"type":"turn_context","payload":{"turn_id":"waiting-turn"}}
+                {"type":"response_item","payload":{"type":"function_call","name":"wait","call_id":"wait-1","arguments":"{\\"cell_id\\":\\"cell-1\\"}"}}
+                """);
+        for (boolean completed : java.util.List.of(false, true)) {
+            if (completed) {
+                Files.writeString(this.session, """
+                        {"type":"turn_context","payload":{"turn_id":"reply-turn"}}
+                        {"type":"response_item","payload":{"type":"function_call_output","call_id":"wait-1","output":[{"type":"input_text","text":"Script completed\\nWall time 0.1 seconds\\nOutput:\\n"}]}}
+                        """, StandardOpenOption.APPEND);
+            }
+            var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                    this.reader.getSessionMessagesAsJson("fixture"), JsonArray.class));
+            var waits = full.stream().filter(message -> message.toString().contains("wait-1")).toList();
+            assertEquals(completed ? 2 : 1, waits.size());
+            assertEquals("waiting-turn", HistoryMessageInjector.getStringProperty(waits.get(0).getAsJsonObject("raw"), "codexTurnId"));
+            if (completed) {
+                assertEquals("reply-turn", HistoryMessageInjector.getStringProperty(waits.get(1).getAsJsonObject("raw"), "codexTurnId"));
+            }
+            assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+            assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+        }
+    }
+
+    /** Buffered usage remains attached to the same assistant before and after a yielded cell finishes. */
+    @Test
+    public void pagedBufferedUsageKeepsItsAssistantAcrossAppend() throws Exception {
+        Files.writeString(this.session, user("inspect") + """
+                {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"yielded","input":"text(await tools.exec_command({cmd:'npm test'}));"}}
+                {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"yielded","output":[{"type":"input_text","text":"Script running with cell ID cell-1\\nWall time 0.1 seconds\\nOutput:\\n"}]}}
+                {"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":123,"output_tokens":7},"model_context_window":200000}}}
+                """);
+        for (boolean completed : java.util.List.of(false, true)) {
+            if (completed) {
+                Files.writeString(this.session, """
+                        {"type":"response_item","payload":{"type":"function_call","name":"wait","call_id":"wait-1","arguments":"{\\"cell_id\\":\\"cell-1\\"}"}}
+                        {"type":"response_item","payload":{"type":"function_call_output","call_id":"wait-1","output":[{"type":"input_text","text":"Script completed\\nWall time 0.1 seconds\\nOutput:\\n"},{"type":"input_text","text":"{\\"exit_code\\":0,\\"output\\":\\"passed\\"}"}]}}
+                        """, StandardOpenOption.APPEND);
+            }
+            var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                    this.reader.getSessionMessagesAsJson("fixture"), JsonArray.class));
+            assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+            assertEquals(1, full.stream().filter(message -> message.getAsJsonObject("raw").has("usage")).count());
+            assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+        }
+    }
+
+    /** A cross-turn background completion keeps its own outcome when an indexed continuation falls back. */
+    @Test
+    public void pagedContinuationKeepsForeignReceiptsAcrossAppend() throws Exception {
+        Files.writeString(this.session, user("inspect") + """
+                {"type":"session_meta","payload":{"id":"thread"}}
+                {"type":"turn_context","payload":{"turn_id":"first-turn"}}
+                {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"yielded","input":"await tools.exec_command({cmd:'npm test'});await tools.exec_command({cmd:'npm run build'});"}}
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"thread","turn_id":"first-turn","item":{"type":"CommandExecution","id":"first","command":"npm test","status":"completed","exit_code":0,"aggregated_output":"first passed"}}}
+                {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"yielded","output":[{"type":"input_text","text":"Script running with cell ID cell-1\\nWall time 0.1 seconds\\nOutput:\\n"}]}}
+                """);
+        this.index.read(this.reader, "fixture", null, 30, () -> true);
+        Files.writeString(this.session, """
+                {"type":"turn_context","payload":{"turn_id":"next-turn"}}
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"thread","turn_id":"next-turn","item":{"type":"CommandExecution","id":"second","command":"npm run build","status":"completed","exit_code":0,"aggregated_output":"second passed"}}}
+                """, StandardOpenOption.APPEND);
+        for (boolean completed : java.util.List.of(false, true)) {
+            if (completed) {
+                Files.writeString(this.session, """
+                        {"type":"response_item","payload":{"type":"function_call","name":"wait","call_id":"wait-1","arguments":"{\\"cell_id\\":\\"cell-1\\"}"}}
+                        {"type":"response_item","payload":{"type":"function_call_output","call_id":"wait-1","output":[{"type":"input_text","text":"Script completed\\nWall time 0.1 seconds\\nOutput:\\n"}]}}
+                        """, StandardOpenOption.APPEND);
+            }
+            var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                    this.reader.getSessionMessagesAsJson("fixture"), JsonArray.class));
+            assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+            assertTrue(full.stream().anyMatch(message -> message.toString().contains("second passed")
+                    && "next-turn".equals(HistoryMessageInjector.getStringProperty(message.getAsJsonObject("raw"), "codexTurnId"))));
+        }
+    }
+
+    /** Exactly 100 native receipts remain provisional when the appended script output later fails. */
+    @Test
+    public void pagedFullReceiptBudgetRetainsItsLaterScriptFailure() throws Exception {
+        StringBuilder source = new StringBuilder();
+        StringBuilder records = new StringBuilder(user("inspect"));
+        for (int index = 0; index < 100; index++) {
+            source.append("await tools.exec_command({cmd:'task ").append(index).append("'});");
+        }
+        JsonObject wrapper = JsonParser.parseString("""
+                {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"full-budget"}}
+                """).getAsJsonObject();
+        wrapper.getAsJsonObject("payload").addProperty("input", source + "throw new Error('boom');");
+        records.append(wrapper).append('\n');
+        for (int index = 0; index < 100; index++) {
+            JsonObject receipt = JsonParser.parseString("""
+                    {"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","status":"completed","exit_code":0}}}
+                    """).getAsJsonObject();
+            JsonObject item = receipt.getAsJsonObject("payload").getAsJsonObject("item");
+            item.addProperty("id", "native-" + index);
+            item.addProperty("command", "task " + index);
+            item.addProperty("aggregated_output", "passed " + index);
+            records.append(receipt).append('\n');
+        }
+        Files.writeString(this.session, records);
+        this.index.read(this.reader, "fixture", null, 30, () -> true);
+        Files.writeString(this.session, """
+                {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"full-budget","output":[{"type":"input_text","text":"Script failed\\nWall time 0.1 seconds\\nOutput:\\n"},{"type":"input_text","text":"Script error:\\nboom"}]}}
+                """, StandardOpenOption.APPEND);
+        var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), JsonArray.class));
+        assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+        assertTrue(full.toString().contains("\"name\":\"exec\""));
+        assertTrue(full.toString().contains("boom"));
+    }
+
+    /** Deferred reasoning keeps its recorded turn in previews and after the final wait is appended. */
+    @Test
+    public void pagedDeferredReasoningKeepsItsTurnAcrossAppend() throws Exception {
+        Files.writeString(this.session, user("inspect") + """
+                {"type":"session_meta","payload":{"id":"thread"}}
+                {"type":"turn_context","payload":{"turn_id":"first-turn"}}
+                {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"yielded","input":"await tools.exec_command({cmd:'npm test'});"}}
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"thread","turn_id":"first-turn","item":{"type":"CommandExecution","id":"native","command":"npm test","status":"completed","exit_code":0,"aggregated_output":"passed"}}}
+                {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"yielded","output":[{"type":"input_text","text":"Script running with cell ID cell-1\\nWall time 0.1 seconds\\nOutput:\\n"}]}}
+                {"type":"response_item","payload":{"type":"reasoning","summary":[{"text":"first thought"}]}}
+                {"type":"turn_context","payload":{"turn_id":"next-turn"}}
+                {"type":"response_item","payload":{"type":"reasoning","summary":[{"text":"next thought"}]}}
+                """);
+        for (boolean completed : java.util.List.of(false, true)) {
+            if (completed) {
+                Files.writeString(this.session, """
+                        {"type":"response_item","payload":{"type":"function_call","name":"wait","call_id":"wait-1","arguments":"{\\"cell_id\\":\\"cell-1\\"}"}}
+                        {"type":"response_item","payload":{"type":"function_call_output","call_id":"wait-1","output":[{"type":"input_text","text":"Script completed\\nWall time 0.1 seconds\\nOutput:\\n"}]}}
+                        """, StandardOpenOption.APPEND);
+            }
+            var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                    this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+            assertEquals(java.util.List.of("first-turn", "next-turn"), full.stream()
+                    .filter(message -> message.toString().contains(" thought"))
+                    .map(message -> message.getAsJsonObject("raw").get("codexTurnId").getAsString()).toList());
+            assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+        }
+    }
+
+    /** Partial native batch results remain visible in previews without committing them before append. */
+    @Test
+    public void pagedPartialBatchKeepsCompletedResultsAcrossAppend() throws Exception {
+        Files.writeString(this.session, user("inspect") + """
+                {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"partial","input":"const jobs=['npm test','git status'];await Promise.all(jobs.map(cmd=>tools.exec_command({cmd})));"}}
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"thread","turn_id":"turn","item":{"type":"CommandExecution","id":"first","command":"npm test","status":"completed","exit_code":0,"aggregated_output":"first passed"}}}
+                """);
+        var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+        assertTrue(full.toString().contains("first passed"));
+        assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+        Files.writeString(this.session, """
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"thread","turn_id":"turn","item":{"type":"CommandExecution","id":"second","command":"git status","status":"completed","exit_code":0,"aggregated_output":"second passed"}}}
+                {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"partial","output":[{"type":"input_text","text":"Script completed\\nWall time 0.1 seconds\\nOutput:\\n"}]}}
+                """ + assistant("done"), StandardOpenOption.APPEND);
+        full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+        assertTrue(full.toString().contains("first passed"));
+        assertTrue(full.toString().contains("second passed"));
+        assertFalse(full.toString().contains("\"name\":\"exec\""));
+        assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+    }
+
+    /** A yielded cell exposes the same wrapper, wait, reasoning and output in cached and full reads. */
+    @Test
+    public void pagedYieldedExecKeepsItsContinuationAcrossAppend() throws Exception {
+        String records = """
+                {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"yielded","input":"await tools.exec_command({cmd:'npm test'});"}}
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"thread","turn_id":"turn","item":{"type":"CommandExecution","id":"native","command":"npm test","status":"completed","exit_code":0,"aggregated_output":"passed"}}}
+                {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"yielded","output":[{"type":"input_text","text":"Script running with cell ID cell-1\\nWall time 0.1 seconds\\nOutput:\\n"},{"type":"input_text","text":"progress"}]}}
+                {"type":"response_item","payload":{"type":"reasoning","summary":[{"text":"waiting for the cell"}]}}
+                {"type":"response_item","payload":{"type":"function_call","name":"wait","call_id":"wait-1","arguments":"{\\"cell_id\\":\\"cell-1\\"}"}}
+                """;
+        Files.writeString(this.session, user("inspect") + records);
+        var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+        assertTrue(full.toString().contains("progress"));
+        assertTrue(full.toString().contains("waiting for the cell"));
+        assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+        Files.writeString(this.session, """
+                {"type":"response_item","payload":{"type":"function_call_output","call_id":"wait-1","output":[{"type":"input_text","text":"Script completed\\nWall time 0.1 seconds\\nOutput:\\n"}]}}
+                """ + assistant("done"), StandardOpenOption.APPEND);
+        full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+        assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+    }
+
+    /** Unknown source must not hide completed native calls while the wrapper's output is pending. */
+    @Test
+    public void pagedUnknownExecRetainsItsNativeReceipts() throws Exception {
+        Files.writeString(this.session, user("inspect") + """
+                {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"unknown","input":"await tools[load('tool')](load('args'));"}}
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"thread","turn_id":"turn","item":{"type":"CommandExecution","id":"native","command":"npm test","status":"completed","exit_code":0,"aggregated_output":"passed"}}}
+                """);
+        var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
+                this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
+        assertTrue(full.toString().contains("passed"));
+        assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
+    }
+
     /** Keeps a pending known call visible without committing its preview into the page cache. */
     @Test
     public void pagedKnownCommandMatchesFullHistoryAfterItsTerminalOutputIsAppended() throws Exception {
@@ -71,7 +282,7 @@ public class CodexHistoryPageIndexTest {
         }
     }
 
-    /** A record stashed inside an open exec wrapper stays visible in paged pages and keeps its transcript order after the flush. */
+    /** Interleaved activity keeps its arrival position before the wrapper's result in previews and after append. */
     @Test
     public void pagedKnownCommandKeepsInterleavedSubagentActivityAcrossItsOutput() throws Exception {
         String call = """
@@ -86,7 +297,7 @@ public class CodexHistoryPageIndexTest {
                 + com.google.gson.JsonParser.parseString(activity) + "\n");
         var full = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(new Gson().fromJson(
                 this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
-        assertTrue(full.toString().contains("bash"));
+        assertTrue(full.toString().contains("\"name\":\"exec\""));
         assertTrue(full.toString().contains("subAgentActivity"));
         assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
         Files.writeString(this.session, com.google.gson.JsonParser.parseString("""
@@ -97,8 +308,8 @@ public class CodexHistoryPageIndexTest {
                 this.reader.getSessionMessagesAsJson("fixture"), com.google.gson.JsonArray.class));
         assertEquals(full, this.index.read(this.reader, "fixture", null, 30, () -> true).messages);
         assertTrue(full.toString().contains("passed"));
-        assertTrue("the interleaved activity card must follow the wrapper's own cards",
-                full.toString().indexOf("subAgentActivity") > full.toString().indexOf("passed"));
+        assertTrue("the activity arrived before the wrapper's result",
+                full.toString().indexOf("subAgentActivity") < full.toString().indexOf("passed"));
     }
 
     /** Completed native receipts survive EOF and remain identical after append or cache-budget fallback. */

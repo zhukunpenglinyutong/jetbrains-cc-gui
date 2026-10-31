@@ -51,6 +51,7 @@ final class CodexKnownExecReplay {
     private static final int MAX_CALLS = 100;
     private static final String LOCAL_PROMISE = "Promise.resolve";
     private static final Pattern CLOCK_TIME = Pattern.compile("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} UTC");
+    private static final Pattern FAILED_SCRIPT_HEADER = Pattern.compile("^Script (?:failed|terminated)\\r?\\nWall time:? [^\\r\\n]+\\r?\\nOutput:\\r?\\n");
 
     record Action(String kind, JsonObject input, int position, int resultIndex) { }
     record IndexLabel(Pattern pattern, boolean settledReceipt) { }
@@ -76,11 +77,18 @@ final class CodexKnownExecReplay {
     private final IndexLabel resultIndexLabel;
     private final boolean settledBatch;
     private final boolean wholeSettledLocalReceipt;
+    private final Map<String, Integer> settledKeys;
+    private final boolean staticKnown;
+    private final boolean opaqueToolAccess;
+    private final boolean multipleBatches;
+    private boolean inventoryOnly;
     private boolean opaqueFallback;
+    private boolean nativeLimitExceeded;
 
     private CodexKnownExecReplay(JsonObject original, List<Action> actions, String rootThreadId, String nativeTurnId) {
         this.original = original;
-        this.actions = actions;
+        this.actions = actions == null ? List.of() : actions;
+        this.staticKnown = actions != null && !actions.isEmpty();
         this.rootThreadId = rootThreadId;
         this.lifecycleTurnId = nativeTurnId;
         // Model response metadata may carry a different turn ID from the app-server lifecycle.
@@ -88,10 +96,16 @@ final class CodexKnownExecReplay {
                 : string(object(object(original, "payload"), "internal_chat_message_metadata_passthrough"), "turn_id");
         JsonObject payload = object(original, "payload");
         String script = firstText(payload, "input", "arguments");
+        this.opaqueToolAccess = actions == null && (!Set.of("tools.update_plan").equals(readToolTokens(script))
+                || CodexExecHistoryReplay.findJavaScriptToken(script, "function", 0) >= 0
+                || CodexExecHistoryReplay.extractUpdatePlanInput(payload) == null || CodexExecHistoryReplay.containsUnsupportedToolCalls(payload));
+        this.multipleBatches = hasMultipleBatches(script);
         BatchOutput batchOutput = readBatchOutput(script);
         this.resultIndexLabel = batchOutput.indexLabel;
         this.wholeSettledLocalReceipt = batchOutput.wholeSettledReceipt;
-        this.settledBatch = CodexExecHistoryReplay.findJavaScriptToken(script, "Promise.allSettled", 0) >= 0;
+        this.settledKeys = readSettledKeys(script);
+        this.settledBatch = List.of("Promise.allSettled", "as_settled", "stream_settled").stream()
+                .anyMatch(token -> CodexExecHistoryReplay.findJavaScriptToken(script, token, 0) >= 0);
     }
 
     static CodexKnownExecReplay begin(JsonObject record, String rootThreadId) {
@@ -112,9 +126,12 @@ final class CodexKnownExecReplay {
         }
         List<Action> actions = readActions(script, payload);
         if (actions == null || actions.isEmpty()) {
-            actions = readCatalogMcpAction(script);
+            List<Action> catalogActions = readCatalogMcpAction(script);
+            if (!catalogActions.isEmpty()) {
+                actions = catalogActions;
+            }
         }
-        return actions == null || actions.isEmpty() ? null : new CodexKnownExecReplay(record, actions, rootThreadId, nativeTurnId);
+        return new CodexKnownExecReplay(record, actions, rootThreadId, nativeTurnId);
     }
 
     JsonObject original() { return this.original; }
@@ -122,6 +139,8 @@ final class CodexKnownExecReplay {
     String callId() { return string(object(this.original, "payload"), "call_id"); }
     String lifecycleTurnId() { return this.lifecycleTurnId; }
     boolean keepsOriginalWrapper() { return this.opaqueFallback; }
+    boolean hasStaticActions() { return this.staticKnown; }
+    boolean nativeLimitExceeded() { return this.nativeLimitExceeded; }
 
     List<JsonObject> snapshot(Map<String, Process> processes) {
         try {
@@ -137,7 +156,7 @@ final class CodexKnownExecReplay {
     }
 
     private JsonObject pendingMessage() {
-        if (this.opaqueFallback || this.actions.stream().anyMatch(action -> action.kind.equals("apply_patch") && !action.input.has("patch"))) {
+        if (!this.staticKnown || this.opaqueFallback || this.actions.stream().anyMatch(action -> action.kind.equals("apply_patch") && !action.input.has("patch"))) {
             // A computed patch stays reviewable until its native receipt supplies the evaluated edit.
             return HistoryMessageInjector.convertCodexMessageToFrontend(this.original);
         }
@@ -185,7 +204,7 @@ final class CodexKnownExecReplay {
         JsonObject payload = object(record, "payload");
         JsonObject item = object(payload, "item");
         if (!"event_msg".equals(string(record, "type")) || !"item_completed".equals(string(payload, "type"))
-                || !List.of("FileChange", "CommandExecution", "ImageView", "McpToolCall").contains(String.valueOf(string(item, "type")))
+                || !List.of("FileChange", "CommandExecution", "ImageView", "McpToolCall", "DynamicToolCall").contains(String.valueOf(string(item, "type")))
                 && !CodexRecordedWebSearch.isWebItem(item)
                 || string(item, "id") == null) {
             return false;
@@ -195,7 +214,7 @@ final class CodexKnownExecReplay {
         if (this.rootThreadId != null && thread != null && !this.rootThreadId.equals(thread)
                 || this.turnId != null && turn != null && !this.turnId.equals(turn)
                 && !isOwnedProcessCompletion(record, processes)) {
-            return true;
+            return false;
         }
         for (int index = 0; index < this.nativeRecords.size(); index++) {
             JsonObject previous = object(object(this.nativeRecords.get(index), "payload"), "item");
@@ -206,22 +225,76 @@ final class CodexKnownExecReplay {
         }
         if (this.nativeRecords.size() < MAX_CALLS) {
             this.nativeRecords.add(record);
+            return true;
         }
-        return true;
+        this.nativeLimitExceeded = true;
+        return false;
     }
 
     List<JsonObject> project(JsonObject outputRecord, Map<String, Process> processes) {
         this.opaqueFallback = false;
+        List<JsonObject> messages = this.projectActions(outputRecord, processes, false);
+        if (messages != null || this.inventoryOnly) {
+            return messages;
+        }
+        // A tool-only inventory cannot replace recorded local batch values or their missing evidence.
+        if (this.actions.stream().noneMatch(action -> LOCAL_PROMISE.equals(action.kind))) {
+            List<Action> inventory = this.readInventory(outputRecord);
+            if (inventory != null && !inventory.isEmpty()) {
+                CodexKnownExecReplay recorded = new CodexKnownExecReplay(this.original, inventory, this.rootThreadId, this.lifecycleTurnId);
+                recorded.inventoryOnly = true;
+                recorded.nativeRecords.addAll(this.nativeRecords);
+                List<JsonObject> projected = recorded.project(outputRecord, processes);
+                if (projected != null) {
+                    this.opaqueFallback = false;
+                    return projected;
+                }
+            }
+        }
+        return this.multipleBatches ? this.keepWrapperForReview() : null;
+    }
+
+    private List<JsonObject> projectActions(JsonObject outputRecord, Map<String, Process> processes, boolean failedPatchPrefix) {
+        if (this.settledKeys == null && !this.inventoryOnly) {
+            return this.keepWrapperForReview();
+        }
+        if (!this.staticKnown) {
+            return this.opaqueToolAccess ? this.keepWrapperForReview() : null;
+        }
         JsonObject replayScope = this.recordedScope(processes);
         if (replayScope == null) {
             return this.keepWrapperForReview();
         }
         JsonObject output = object(outputRecord, "payload");
+        if (this.inventoryOnly && this.nativeRecords.stream().anyMatch(record -> {
+            JsonObject item = object(object(record, "payload"), "item");
+            return List.of("FileChange", "McpToolCall", "DynamicToolCall").contains(String.valueOf(string(item, "type")))
+                    && !List.of("completed", "failed", "declined", "interrupted").contains(String.valueOf(string(item, "status")));
+        })) {
+            return null;
+        }
         List<String> texts = new ArrayList<>();
         CodexExecHistoryReplay.collectOutputTexts(output == null ? null : output.get("output"), texts);
+        if (this.inventoryOnly) {
+            if (texts.stream().anyMatch(text -> FAILED_SCRIPT_HEADER.matcher(text).find())) {
+                // Native outcomes describe tools, not a later exception or termination in the script.
+                return this.keepWrapperForReview();
+            }
+            texts.clear();
+        }
         List<JsonObject> stopped = this.restoreStoppedSequence(outputRecord, texts, replayScope, processes);
         if (stopped != null) {
             return stopped;
+        }
+        if (!failedPatchPrefix && texts.stream().anyMatch(text -> FAILED_SCRIPT_HEADER.matcher(text).find())
+                && (!this.nativeRecords.isEmpty() || texts.stream().anyMatch(text -> text.startsWith("Script error:"))
+                || texts.stream().anyMatch(CodexExecContinuation::hasTerminatedHeader))) {
+            // Native tools cannot account for an exception in the rest of the orchestration.
+            return this.keepWrapperForReview();
+        }
+        if (this.multipleBatches) {
+            // Numeric indices and direct print order are local to a batch; independent native outcomes must own every call.
+            texts.clear();
         }
         Map<Integer, IndexedResult> indexed = new HashMap<>();
         List<JsonObject> direct = new ArrayList<>();
@@ -264,8 +337,8 @@ final class CodexKnownExecReplay {
             }
             if (value.has("i") || value.has("index")) {
                 // Both envelopes occur in persisted wrappers; ignoring either replays native work twice.
-                Integer index = integer(value.get(value.has("i") ? "i" : "index"));
-                if (index == null || value.has("i") && value.has("index") && !index.equals(integer(value.get("index")))
+                Integer index = this.resultSlot(value.get(value.has("i") ? "i" : "index"));
+                if (index == null || value.has("i") && value.has("index") && !index.equals(this.resultSlot(value.get("index")))
                         || index < 0 || !this.hasResultIndex(index)) {
                     return this.keepWrapperForReview();
                 }
@@ -329,7 +402,6 @@ final class CodexKnownExecReplay {
         }
         List<JsonObject> messages = new ArrayList<>();
         Map<String, Process> nextProcesses = new LinkedHashMap<>(processes);
-        int patchIndex = 0;
         int directIndex = 0;
         Set<String> usedNativeIds = new HashSet<>();
         for (int index = 0; index < this.actions.size(); index++) {
@@ -382,7 +454,11 @@ final class CodexKnownExecReplay {
                 continue;
             }
             if (action.kind.equals("apply_patch")) {
-                messages.addAll(CodexRecordedFileChange.readMessages(patches.get(patchIndex++)));
+                JsonObject patch = this.findNativePatch(action, patches, usedNativeIds);
+                if (patch == null) {
+                    return this.keepWrapperForReview();
+                }
+                messages.addAll(CodexRecordedFileChange.readMessages(patch));
                 continue;
             }
             if (action.kind.equals("view_image")) {
@@ -427,6 +503,14 @@ final class CodexKnownExecReplay {
                 messages.addAll(CodexRecordedMcpToolCall.readMessages(nativeRecord));
                 continue;
             }
+            if (!List.of("exec_command", "shell_command", "write_stdin").contains(action.kind) && !isWeb(action.kind)) {
+                JsonObject dynamic = this.findNativeDynamic(action, usedNativeIds);
+                if (dynamic == null) {
+                    return null;
+                }
+                messages.addAll(CodexRecordedDynamicToolCall.readMessages(dynamic));
+                continue;
+            }
             if (isWeb(action.kind)) {
                 JsonElement webResult = indexedResult;
                 if (webResult == null && this.actions.size() == 1 && output != null) {
@@ -439,6 +523,7 @@ final class CodexKnownExecReplay {
                     List<JsonObject> nativeWeb = this.nativeRecords.stream()
                             .filter(record -> CodexRecordedWebSearch.isWebItem(object(object(record, "payload"), "item"))).toList();
                     if (this.actions.stream().filter(candidate -> isWeb(candidate.kind)).count() == 1 && nativeWeb.size() == 1) {
+                        usedNativeIds.add(string(object(object(nativeWeb.get(0), "payload"), "item"), "id"));
                         messages.addAll(CodexRecordedWebSearch.readMessages(nativeWeb.get(0)));
                         continue;
                     }
@@ -471,6 +556,10 @@ final class CodexKnownExecReplay {
                 }
                 JsonObject completion = this.findNativeProcessCompletion(sessionId, nextProcesses, usedNativeIds);
                 if (this.opaqueFallback) {
+                    return null;
+                }
+                if (this.inventoryOnly && completion == null) {
+                    // The inventory records invocation, not whether a poll produced any result.
                     return null;
                 }
                 if (completion != null) {
@@ -538,6 +627,13 @@ final class CodexKnownExecReplay {
         if (directIndex != direct.size()) {
             return this.keepWrapperForReview();
         }
+        if (this.nativeRecords.stream().anyMatch(record -> {
+            JsonObject item = object(object(record, "payload"), "item");
+            return ("DynamicToolCall".equals(string(item, "type")) || this.inventoryOnly && !"CommandExecution".equals(string(item, "type")))
+                    && !usedNativeIds.contains(string(item, "id"));
+        })) {
+            return this.keepWrapperForReview();
+        }
         for (JsonObject message : messages) {
             message.getAsJsonObject("raw").addProperty("codexReplayedCallId", this.callId());
         }
@@ -562,6 +658,119 @@ final class CodexKnownExecReplay {
             }
         });
         return messages;
+    }
+
+    private List<Action> readInventory(JsonObject outputRecord) {
+        if ((this.multipleBatches || !this.staticKnown) && firstText(object(this.original, "payload"), "input", "arguments").contains(LOCAL_PROMISE)) {
+            // Tool inventories cannot establish the ownership or presence of unproven local values.
+            return null;
+        }
+        JsonObject metadata = object(object(outputRecord, "payload"), "internal_chat_message_metadata_passthrough");
+        JsonElement complete = metadata == null ? null : metadata.get("tool_calls_complete");
+        JsonElement calls = metadata == null ? null : metadata.get("executed_tool_calls");
+        if (complete == null || !complete.isJsonPrimitive() || !complete.getAsJsonPrimitive().isBoolean() || !complete.getAsBoolean()
+                || !this.callId().equals(string(metadata, "cell_id")) || calls == null || !calls.isJsonArray() || calls.getAsJsonArray().size() > MAX_CALLS) {
+            return null;
+        }
+        List<Action> inventory = new ArrayList<>();
+        for (JsonElement entry : calls.getAsJsonArray()) {
+            JsonObject call = entry.isJsonObject() ? entry.getAsJsonObject() : null;
+            String name = string(call, "name");
+            JsonElement arguments = call == null ? null : call.get("arguments");
+            if (name == null || !name.matches("[A-Za-z_$][A-Za-z0-9_$]*") || arguments == null
+                    || arguments.toString().contains("\"_codex_executed_tool_call_truncated\"")) {
+                return null;
+            }
+            JsonObject input;
+            if (name.equals("apply_patch") && arguments.isJsonPrimitive() && arguments.getAsJsonPrimitive().isString()) {
+                input = new JsonObject();
+                input.addProperty("patch", arguments.getAsString());
+            } else if (arguments.isJsonObject()) {
+                input = arguments.getAsJsonObject().deepCopy();
+                if (List.of("exec_command", "shell_command", "write_stdin", "view_image").contains(name) && !validInput(name, input)) {
+                    return null;
+                }
+            } else {
+                return null;
+            }
+            // Inventory order is not a result index; only native outcomes may finish these cards.
+            inventory.add(new Action(name, input, inventory.size(), inventory.size()));
+        }
+        return inventory;
+    }
+
+    private JsonObject findNativeDynamic(Action action, Set<String> usedIds) {
+        List<JsonObject> matches = this.nativeRecords.stream().filter(record -> {
+            JsonObject item = object(object(record, "payload"), "item");
+            String namespace = string(item, "namespace");
+            String name = string(item, "tool");
+            String normalized = namespace == null || namespace.isBlank() || namespace.equals("functions") ? name
+                    : namespace + (namespace.endsWith("_") || name != null && name.startsWith("_") ? "" : "__") + name;
+            return "DynamicToolCall".equals(string(item, "type")) && !usedIds.contains(string(item, "id"))
+                    && action.kind.equals(normalized) && action.input.equals(item.get("arguments"))
+                    && List.of("completed", "failed", "interrupted").contains(String.valueOf(string(item, "status")));
+        }).toList();
+        if (matches.size() != 1) {
+            return null;
+        }
+        JsonObject record = matches.get(0);
+        usedIds.add(string(object(object(record, "payload"), "item"), "id"));
+        return record;
+    }
+
+    private JsonObject findNativePatch(Action action, List<JsonObject> patches, Set<String> usedIds) {
+        Set<String> paths = new HashSet<>();
+        String source = literalText(action.input, "patch");
+        if (source != null) {
+            var header = Pattern.compile("(?m)^\\*\\*\\* (?:Add|Update|Delete) File: (.+)").matcher(source);
+            while (header.find()) {
+                paths.add(patchPath(header.group(1).strip()));
+            }
+        }
+        List<JsonObject> matches = patches.stream().filter(record -> {
+            String id = string(object(object(record, "payload"), "item"), "id");
+            if (usedIds.contains(id)) {
+                return false;
+            }
+            if (paths.isEmpty()) {
+                return true;
+            }
+            List<JsonObject> messages = CodexRecordedFileChange.readMessages(record);
+            JsonArray changes = messages.get(0).getAsJsonObject("raw").getAsJsonArray("content").get(0).getAsJsonObject()
+                    .getAsJsonObject("input").getAsJsonArray("changes");
+            Set<String> received = new HashSet<>();
+            for (JsonElement change : changes) {
+                String path = string(change.isJsonObject() ? change.getAsJsonObject() : null, "path");
+                if (path != null) {
+                    received.add(patchPath(path));
+                }
+            }
+            // Independent file identities can order parallel edits; arrival order cannot.
+            if (received.size() != paths.size()) {
+                return false;
+            }
+            // Match specific suffixes first; one native path cannot account for two source files.
+            for (String path : paths.stream().sorted(Comparator.comparingInt(String::length).reversed()).toList()) {
+                String match = received.contains(path) ? path : received.stream()
+                        .filter(candidate -> !path.startsWith("/") && !path.matches("^[A-Za-z]:/.*") && candidate.endsWith("/" + path))
+                        .findFirst().orElse(null);
+                if (match == null) {
+                    return false;
+                }
+                received.remove(match);
+            }
+            return true;
+        }).toList();
+        if (matches.size() != 1) {
+            return null;
+        }
+        JsonObject match = matches.get(0);
+        usedIds.add(string(object(object(match, "payload"), "item"), "id"));
+        return match;
+    }
+
+    private static String patchPath(String path) {
+        return java.nio.file.Path.of(imagePath(path)).normalize().toString().replace('\\', '/');
     }
 
     static List<JsonObject> readNativeCommand(JsonObject record, Map<String, Process> processes) {
@@ -701,7 +910,7 @@ final class CodexKnownExecReplay {
             // A thrown edit has its own native failure; the later calls never establish outcomes.
             CodexKnownExecReplay prefix = new CodexKnownExecReplay(this.original, this.actions.subList(0, end), this.rootThreadId, this.turnId);
             prefix.nativeRecords.addAll(this.nativeRecords);
-            return prefix.project(output, processes);
+            return prefix.projectActions(output, processes, true);
         }
         String error = texts.stream().filter(text -> text.startsWith("Script error:\napply_patch verification failed:"))
                 .findFirst().orElse(null);
@@ -725,6 +934,42 @@ final class CodexKnownExecReplay {
 
     private boolean hasResultIndex(int index) {
         return this.actions.stream().anyMatch(action -> action.resultIndex == index);
+    }
+
+    private Integer resultSlot(JsonElement value) {
+        return this.settledKeys.isEmpty() ? integer(value) : value == null ? null : this.settledKeys.get(resultKey(value));
+    }
+
+    private static String resultKey(JsonElement value) {
+        Integer number = integer(value);
+        return number == null ? value.toString() : number.toString();
+    }
+
+    private static Map<String, Integer> readSettledKeys(String script) {
+        int start = groupStart(script);
+        if (start < 0 || !script.substring(0, start).matches("(?s).*\\bnew\\s+Map\\s*\\(\\s*")) {
+            return Map.of();
+        }
+        int end = containerEnd(script, start);
+        List<Integer> entries = groupEntries(script, start, end);
+        if (entries == null) {
+            return null;
+        }
+        Map<String, Integer> keys = new LinkedHashMap<>();
+        for (int index = 0; index < entries.size(); index++) {
+            int entryStart = entries.get(index);
+            int entryEnd = script.charAt(entryStart) == '[' ? containerEnd(script, entryStart) : -1;
+            if (entryEnd < entryStart || entryEnd >= end) {
+                return null;
+            }
+            List<String> pair = CodexExecLiteralReader.split(script.substring(entryStart + 1, entryEnd), ',');
+            JsonElement key = pair.size() == 2 ? CodexExecLiteralReader.read(pair.get(0), Map.of()) : null;
+            if (key == null || !key.isJsonPrimitive() || !(key.getAsJsonPrimitive().isString() || integer(key) != null)
+                    || keys.putIfAbsent(resultKey(key), index) != null) {
+                return null;
+            }
+        }
+        return keys;
     }
 
     private static BatchOutput readBatchOutput(String script) {
@@ -957,7 +1202,7 @@ final class CodexKnownExecReplay {
             // A process id keeps its receipt only when the command and thread prove the same owner.
             return "CommandExecution".equals(string(item, "type")) && id != null && !usedIds.contains(id)
                     && !isOwnedProcessCompletion(record, processes) && command.equals(nativeCommand(item))
-                    && List.of("completed", "failed", "interrupted").contains(String.valueOf(string(item, "status")));
+                    && List.of("completed", "failed", "declined", "interrupted").contains(String.valueOf(string(item, "status")));
         }).toList();
         boolean identified = false;
         if (expectedProcessId != null) {
@@ -1052,7 +1297,7 @@ final class CodexKnownExecReplay {
             String id = string(item, "id");
             return "CommandExecution".equals(string(item, "type")) && id != null && !usedIds.contains(id)
                     && nativeCommand(item) != null
-                    && List.of("completed", "failed", "interrupted").contains(String.valueOf(string(item, "status")));
+                    && List.of("completed", "failed", "declined", "interrupted").contains(String.valueOf(string(item, "status")));
         }).toList();
         List<JsonObject> matches = candidates.stream()
                 .filter(record -> processId.equals(string(object(object(record, "payload"), "item"), "process_id"))).toList();
@@ -1145,18 +1390,29 @@ final class CodexKnownExecReplay {
     }
 
     private static List<Action> readActions(String script, JsonObject payload) {
-        Set<String> tokens = new HashSet<>();
-        var matcher = TOOL_TOKEN.matcher(script);
-        while (matcher.find()) {
-            tokens.add(matcher.group());
+        if (CodexExecHistoryReplay.containsUnparsedExpression(script) || CodexExecHistoryReplay.findJavaScriptToken(script, "function", 0) >= 0) {
+            // Hoisted functions can run in a different order from their source declarations.
+            return null;
+        }
+        script = CodexExecLiteralReader.normalizeToolAccess(script);
+        payload = payload.deepCopy();
+        payload.addProperty("input", script);
+        Set<String> tokens = readToolTokens(script);
+        if (tokens == null) {
+            return null;
         }
         List<Action> actions = new ArrayList<>();
         List<String> patches = CodexExecHistoryReplay.extractPatches(payload);
         int patchCount = 0;
+        boolean multipleBatches = hasMultipleBatches(script);
+        if (multipleBatches && CodexExecHistoryReplay.findJavaScriptToken(script, LOCAL_PROMISE, 0) >= 0) {
+            return null;
+        }
         int groupStart = groupStart(script);
         int groupEnd = groupStart < 0 ? -1 : containerEnd(script, groupStart);
         List<Integer> groupEntries = groupStart < 0 ? List.of() : groupEntries(script, groupStart, groupEnd);
-        if (groupEntries == null) {
+        Map<String, Integer> settledKeys = readSettledKeys(script);
+        if (groupEntries == null || settledKeys == null) {
             return null;
         }
         for (String token : tokens) {
@@ -1170,30 +1426,47 @@ final class CodexKnownExecReplay {
                 if (paren >= script.length() || script.charAt(paren) != '(') {
                     return null;
                 }
+                if (!kind.equals("apply_patch")) {
+                    CodexMappedCommandBatch.Batch batch = CodexMappedCommandBatch.readInputs(script, token, position);
+                    if (batch != null) {
+                        if (!groupEntries.isEmpty() || actions.size() + batch.inputs().size() > MAX_CALLS) {
+                            return null;
+                        }
+                        for (int index = 0; index < batch.inputs().size(); index++) {
+                            JsonObject input = batch.inputs().get(index);
+                            if (!validInput(kind, input)) {
+                                return null;
+                            }
+                            actions.add(new Action(kind, input, position, batch.parallel() && !multipleBatches ? index : -1));
+                        }
+                        position += token.length();
+                        continue;
+                    }
+                }
+                if (!CodexExecLiteralReader.reachesCallInSourceOrder(script, position)) {
+                    return null;
+                }
                 JsonObject input;
                 if (kind.equals("apply_patch")) {
                     input = new JsonObject();
                     patchCount++;
-                } else {
-                    int start = CodexExecHistoryReplay.skipTrivia(script, paren + 1, script.length());
-                    if (start >= script.length() || script.charAt(start) != '{') {
+                    int end = CodexExecHistoryReplay.findMatchingParenthesisEnd(script, paren);
+                    if (end < paren) {
                         return null;
                     }
-                    int end = CodexExecHistoryReplay.findMatchingObjectEnd(script, start);
+                    JsonElement patch = readLiteralArgument(script, paren + 1, end);
+                    if (patch != null && patch.isJsonPrimitive() && patch.getAsJsonPrimitive().isString()) {
+                        input.addProperty("patch", patch.getAsString());
+                    }
+                } else {
+                    int start = CodexExecHistoryReplay.skipTrivia(script, paren + 1, script.length());
+                    int end = CodexExecHistoryReplay.findMatchingParenthesisEnd(script, paren);
                     if (end < start) {
                         return null;
                     }
-                    int after = CodexExecHistoryReplay.skipTrivia(script, end + 1, script.length());
-                    if (after >= script.length() || script.charAt(after) != ')') {
-                        return null;
-                    }
-                    String literal = CodexExecHistoryReplay.normalizeJavaScriptLiteralToJson(script.substring(start, end + 1));
-                    input = literal == null ? null : parseObject(literal);
-                    if (input == null || kind.equals("write_stdin") && (input.has("chars")
-                            && literalText(input, "chars") == null || string(input, "session_id") == null)
-                            || kind.equals("view_image") && string(input, "path") == null
-                            || isClock(kind) && input.size() != 0
-                            || !List.of("write_stdin", "view_image").contains(kind) && !isWeb(kind) && !isMcp(kind) && !isClock(kind) && command(input) == null) {
+                    JsonElement literal = readLiteralArgument(script, start, end);
+                    input = literal != null && literal.isJsonObject() ? literal.getAsJsonObject() : null;
+                    if (!validInput(kind, input)) {
                         return null;
                     }
                 }
@@ -1230,7 +1503,14 @@ final class CodexKnownExecReplay {
             if (!representedEntries.contains(index)) {
                 int start = groupEntries.get(index);
                 int end = index + 1 < groupEntries.size() ? groupEntries.get(index + 1) : groupEnd;
-                JsonObject input = readLocalPromiseInput(script, start, end);
+                JsonObject input;
+                if (!settledKeys.isEmpty() && script.charAt(start) == '[') {
+                    int entryEnd = containerEnd(script, start);
+                    List<String> pair = CodexExecLiteralReader.split(script.substring(start + 1, entryEnd), ',');
+                    input = pair.size() == 2 ? readLocalPromiseInput(pair.get(1), 0, pair.get(1).length()) : null;
+                } else {
+                    input = readLocalPromiseInput(script, start, end);
+                }
                 if (input == null || indexed.size() >= MAX_CALLS) {
                     return null;
                 }
@@ -1240,6 +1520,44 @@ final class CodexKnownExecReplay {
         // Local computations keep their array slots without being mistaken for shell commands.
         indexed.sort(Comparator.comparingInt(Action::position));
         return indexed;
+    }
+
+    private static JsonElement readLiteralArgument(String script, int start, int end) {
+        String expression = script.substring(start, end);
+        JsonElement literal = CodexExecLiteralReader.read(expression, Map.of());
+        // Most calls contain complete literals; unrelated declarations need no repeated binding analysis.
+        return literal != null ? literal : CodexExecLiteralReader.read(expression, CodexExecLiteralReader.readBindings(script, start, end));
+    }
+
+    private static Set<String> readToolTokens(String script) {
+        Set<String> tokens = new HashSet<>();
+        for (String namespace : List.of("tools", "functions")) {
+            int cursor = 0;
+            while ((cursor = CodexExecHistoryReplay.findJavaScriptToken(script, namespace, cursor)) >= 0) {
+                int next = CodexExecHistoryReplay.skipTrivia(script, cursor + namespace.length(), script.length());
+                String prefix = script.substring(0, cursor).stripTrailing();
+                if (next < script.length() && script.charAt(next) == ':' && (prefix.endsWith("{") || prefix.endsWith(","))) {
+                    // A literal property key does not refer to the runtime namespace.
+                    cursor += namespace.length();
+                    continue;
+                }
+                var token = TOOL_TOKEN.matcher(script);
+                token.region(cursor, script.length());
+                if (!token.lookingAt()) {
+                    // A computed access or namespace alias can hide calls beside a known command.
+                    return null;
+                }
+                tokens.add(token.group());
+                cursor = token.end();
+            }
+        }
+        return tokens;
+    }
+
+    private static boolean validInput(String kind, JsonObject input) {
+        return input != null && (kind.equals("write_stdin") ? (!input.has("chars") || literalText(input, "chars") != null) && string(input, "session_id") != null
+                : kind.equals("view_image") ? string(input, "path") != null : isClock(kind) ? input.size() == 0
+                : isWeb(kind) || isMcp(kind) || command(input) != null);
     }
 
     private static JsonObject readLocalPromiseInput(String script, int start, int end) {
@@ -1308,7 +1626,7 @@ final class CodexKnownExecReplay {
 
     private static int groupStart(String script) {
         int found = -1;
-        for (String token : List.of("Promise.allSettled", "Promise.all")) {
+        for (String token : List.of("Promise.allSettled", "Promise.all", "as_settled", "stream_settled")) {
             int position = CodexExecHistoryReplay.findJavaScriptToken(script, token, 0);
             if (position < 0) {
                 continue;
@@ -1317,12 +1635,36 @@ final class CodexKnownExecReplay {
                 return -1;
             }
             int paren = CodexExecHistoryReplay.skipTrivia(script, position + token.length(), script.length());
+            if (paren >= script.length() || script.charAt(paren) != '(') {
+                continue;
+            }
             int start = CodexExecHistoryReplay.skipTrivia(script, paren + 1, script.length());
-            if (paren < script.length() && script.charAt(paren) == '(' && start < script.length() && script.charAt(start) == '[') {
+            if (List.of("as_settled", "stream_settled").contains(token)) {
+                var map = Pattern.compile("new\\s+Map\\s*\\(\\s*(\\[)").matcher(script);
+                map.region(start, script.length());
+                if (map.lookingAt()) {
+                    start = map.start(1);
+                }
+            }
+            if (start < script.length() && script.charAt(start) == '[') {
                 found = start;
             }
         }
         return found;
+    }
+
+    private static boolean hasMultipleBatches(String script) {
+        int count = 0;
+        for (String token : List.of("Promise.allSettled", "Promise.all", "as_settled", "stream_settled")) {
+            int cursor = 0;
+            while ((cursor = CodexExecHistoryReplay.findJavaScriptToken(script, token, cursor)) >= 0) {
+                if (++count > 1) {
+                    return true;
+                }
+                cursor += token.length();
+            }
+        }
+        return false;
     }
 
     private static int containerEnd(String script, int start) {
