@@ -34,6 +34,7 @@ import com.github.claudecodegui.handler.provider.grok.GrokPlanUsageHandler;
 import com.github.claudecodegui.handler.RewindHandler;
 import com.github.claudecodegui.handler.SessionHandler;
 import com.github.claudecodegui.handler.SettingsHandler;
+import com.github.claudecodegui.handler.HookHandler;
 import com.github.claudecodegui.handler.SkillHandler;
 import com.github.claudecodegui.handler.TabHandler;
 import com.github.claudecodegui.handler.UsagePushService;
@@ -384,6 +385,7 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new CodexMcpServerHandler(handlerContext, settingsService.getCodexMcpServerManager()));
         messageDispatcher.registerHandler(new CodexPetHandler(handlerContext));
         messageDispatcher.registerHandler(new SkillHandler(handlerContext));
+        messageDispatcher.registerHandler(new HookHandler(handlerContext));
         messageDispatcher.registerHandler(new FileHandler(handlerContext));
         this.settingsHandler = new SettingsHandler(handlerContext);
         messageDispatcher.registerHandler(this.settingsHandler);

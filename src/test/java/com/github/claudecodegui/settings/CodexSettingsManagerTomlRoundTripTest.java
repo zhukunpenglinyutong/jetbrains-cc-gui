@@ -5,6 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import org.junit.After;
 import org.junit.Test;
+import org.junit.BeforeClass;
 
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
@@ -21,6 +22,12 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class CodexSettingsManagerTomlRoundTripTest {
+    @BeforeClass
+    public static void requireIsolatedNativeConfigHome() {
+        String configuredHome = System.getenv("CODEX_HOME");
+        assertTrue("Run configuration fixtures with CODEX_HOME unset or empty", configuredHome == null || configuredHome.isBlank());
+    }
+
 
     private String originalHomeDir;
     private boolean homeOverridden;

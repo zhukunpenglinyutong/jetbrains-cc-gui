@@ -1,7 +1,7 @@
 import styles from './style.module.less';
 import { useTranslation } from 'react-i18next';
 
-export type SettingsTab = 'basic' | 'providers' | 'dependencies' | 'usage' | 'permissions' | 'promptEnhancer' | 'commit' | 'mcp' | 'agents' | 'prompts' | 'skills' | 'pet' | 'other' | 'community';
+export type SettingsTab = 'basic' | 'providers' | 'dependencies' | 'usage' | 'permissions' | 'promptEnhancer' | 'commit' | 'mcp' | 'agents' | 'prompts' | 'skills' | 'hooks' | 'pet' | 'other' | 'community';
 
 interface SidebarItem {
   key: SettingsTab;
@@ -25,6 +25,7 @@ const sidebarGroups: { key: string; items: SidebarItem[] }[] = [
     { key: 'agents', icon: 'codicon-robot', labelKey: 'settings.agents' },
     { key: 'skills', icon: 'codicon-book', labelKey: 'settings.skills' },
     { key: 'mcp', icon: 'codicon-server', labelKey: 'settings.mcp' },
+    { key: 'hooks', icon: 'codicon-symbol-event', labelKey: 'settings.hooks.title' },
     { key: 'pet', icon: 'codicon-hubot', labelKey: 'settings.pet.title' },
   ] },
   { key: 'maintenance', items: [
