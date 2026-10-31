@@ -9,6 +9,14 @@ import java.util.List;
  */
 public class SDKResult {
     public boolean success;
+    /**
+     * Stop outcome reported by the transport, never inferred from error text: an interrupted process
+     * exited abnormally, Codex acknowledged a native abort, or {@code DaemonBridge.sendAbort()} detached
+     * a daemon request. The daemon case does not wait for the daemon to acknowledge the abort.
+     */
+    public boolean cancelled;
+    /** The owned process has exited; unlike a transport error, this is final lifecycle evidence. */
+    public boolean processExited;
     public String error;
     public int messageCount;
     public List<Object> messages;

@@ -10,12 +10,22 @@
  * - the normal path appends a fresh streaming bubble.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { registerStreamingCallbacks } from './streamingCallbacks';
+import { registerStreamingCallbacks, collectUnresolvedToolUseIds } from './streamingCallbacks';
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import type { ClaudeMessage } from '../../../types';
 
 type Ref<T> = { current: T };
 const ref = <T,>(value: T): Ref<T> => ({ current: value });
+
+it('never marks native async questions as denied when the originating stream ends or history finishes loading', () => {
+  const messages: ClaudeMessage[] = [{ type: 'assistant', content: '', raw: { content: [
+    { type: 'tool_use', id: 'question', name: 'codex_user_input', input: {} },
+    { type: 'tool_use', id: 'actual-missing-tool', name: 'bash', input: {} },
+  ] } }];
+  for (const scope of ['all', 'lastTurn'] as const) {
+    expect(collectUnresolvedToolUseIds(messages, scope)).toEqual(['actual-missing-tool']);
+  }
+});
 
 function createHarness(initialMessages: ClaudeMessage[], turnIdCounter: number) {
   let messages = [...initialMessages];
@@ -324,6 +334,61 @@ describe('onStreamEnd append guard for a pending backend snapshot', () => {
     // case reusing the same turn id would take the idempotency early-return.
     delete (window as any).__streamEndProcessedTurnId;
     void harness;
+  });
+
+  it('keeps a snapshot tail the delta buffer never received, including in the rendered text block', () => {
+    const streaming: ClaudeMessage = {
+      type: 'assistant',
+      content: 'лайфхак св',
+      isStreaming: true,
+      __turnId: 4,
+      raw: { message: { content: [{ type: 'text', text: 'лайфхак св' }] } },
+    } as unknown as ClaudeMessage;
+    harness = createHarness([streaming], 4);
+    harness.refs.isStreamingRef.current = true;
+    harness.refs.streamingMessageIndexRef.current = 0;
+    harness.refs.streamingTurnIdRef.current = 4;
+    harness.refs.streamingContentRef.current = 'лайфхак св';
+    harness.refs.currentProviderRef.current = 'gemini';
+    window.__pendingUpdateJson = JSON.stringify([{
+      type: 'assistant',
+      content: 'лайфхак связки с Home Assistant.',
+      raw: { message: { content: [{ type: 'text', text: 'лайфхак св' }] } },
+    }]);
+
+    window.onStreamEnd!('3');
+
+    const finalized = harness.getMessages()[0];
+    expect(finalized.content).toBe('лайфхак связки с Home Assistant.');
+    expect((finalized.raw as { message: { content: Array<{ text: string }> } }).message.content[0].text)
+      .toBe('лайфхак связки с Home Assistant.');
+  });
+
+  it('does not let a shorter snapshot chop a newer delta buffer', () => {
+    const streaming: ClaudeMessage = {
+      type: 'assistant',
+      content: 'полный',
+      isStreaming: true,
+      __turnId: 5,
+      raw: { message: { content: [{ type: 'text', text: 'полный' }] } },
+    } as unknown as ClaudeMessage;
+    harness = createHarness([streaming], 5);
+    harness.refs.isStreamingRef.current = true;
+    harness.refs.streamingMessageIndexRef.current = 0;
+    harness.refs.streamingTurnIdRef.current = 5;
+    harness.refs.streamingContentRef.current = 'полный ответ';
+    window.__pendingUpdateJson = JSON.stringify([{
+      type: 'assistant',
+      content: 'полный',
+      raw: { message: { content: [{ type: 'text', text: 'полный' }] } },
+    }]);
+
+    window.onStreamEnd!('4');
+
+    const finalized = harness.getMessages()[0];
+    expect(finalized.content).toBe('полный ответ');
+    expect((finalized.raw as { message: { content: Array<{ text: string }> } }).message.content[0].text)
+      .toBe('полный ответ');
   });
 
   it('does not overwrite another assistant at a stale but valid index', () => {

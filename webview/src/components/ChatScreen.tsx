@@ -123,6 +123,8 @@ export interface ChatScreenProps {
   // Message queue
   messageQueue: MessageQueueValue;
   onRemoveFromQueue: (id: string) => void;
+  /** Edit queued message: dequeue it and restore its draft into the input */
+  onEditFromQueue: (id: string) => void;
   /** Drag-sort callback; orderedIds[0] is the next message to execute */
   onReorderQueue?: (orderedIds: string[]) => void;
 
@@ -163,7 +165,7 @@ export const ChatScreen = ({
   onModeSelect, onModelSelect, onAgentSelect, onReasoningChange, onCodexFastModeChange, onDshPresetChange, onToggleThinking,
   onStreamingEnabledChange,
   onAutoOpenFileEnabledChange, onLongContextChange,
-  messageQueue, onRemoveFromQueue, onReorderQueue,
+  messageQueue, onRemoveFromQueue, onEditFromQueue, onReorderQueue,
   codexPlan = null, codexPlanExecutionPending = false,
   codexCompactionPending = false,
   codexCompactionStartedAt = null,
@@ -435,6 +437,7 @@ export const ChatScreen = ({
           addToast={addToast}
           messageQueue={messageQueue}
           onRemoveFromQueue={onRemoveFromQueue}
+          onEditFromQueue={onEditFromQueue}
           onReorderQueue={onReorderQueue}
           autoOpenFileEnabled={autoOpenFileEnabled}
           onAutoOpenFileEnabledChange={onAutoOpenFileEnabledChange}

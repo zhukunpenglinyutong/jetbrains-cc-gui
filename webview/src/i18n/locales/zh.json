@@ -61,6 +61,17 @@
     "currentMode": "当前模式: {{mode}}",
     "currentModel": "当前模型: {{model}}",
     "removeAttachment": "移除附件",
+    "queue": {
+      "edit": "编辑排队消息",
+      "remove": "从队列移除",
+      "editLabel": "编辑排队消息 {{position}}",
+      "removeLabel": "从队列移除消息 {{position}}",
+      "reorderLabel": "重新排序消息 {{position}}",
+      "reorderHint": "拖动可排序，聚焦后可用方向键调整",
+      "mergedIntoDraft": "排队消息已合并到当前草稿",
+      "attachmentsNotRestored": "排队消息的附件未能回填到草稿",
+      "editBlockedAttachments": "该消息的附件无法回填，已保留在队列中"
+    },
     "closePreview": "关闭预览",
     "loadingDropdown": "加载中...",
     "modelsLoadFailed": "模型列表加载失败，点击重试",
@@ -75,6 +86,8 @@
     "usagePercentage": "上下文: {{percentage}}",
     "planUsage": {
       "title": "Claude 额度详情",
+      "grokTitle": "Grok 额度详情",
+      "staleIdle": "这是上次读取的额度，下次使用 Grok 时会自动刷新",
       "loading": "正在获取额度…",
       "unavailable": "额度暂不可用",
       "dash": "额度 —",
@@ -82,7 +95,12 @@
       "tooltipReset": "重置时间：{{value}}（本地时间）",
       "clickToSwitch": "点击周期标签切换额度窗口",
       "worstHint": "圆点表示消耗节奏最紧张的窗口（{{color}}）",
-      "paceColors": { "green": "绿色", "yellow": "黄色", "red": "红色", "neutral": "未知" },
+      "paceColors": {
+        "green": "绿色",
+        "yellow": "黄色",
+        "red": "红色",
+        "neutral": "未知"
+      },
       "stale": "刷新失败，当前展示的额度可能已过期"
     },
     "noMatchingFiles": "无匹配文件",
@@ -976,6 +994,38 @@
     "wechatPay": "微信",
     "paypal": "PayPal",
     "provider": {
+      "backup": {
+        "exportInvalidConfig": "导出失败：已保存的供应商配置未通过校验，未生成备份文件。",
+        "errorProvider": "请检查第 {{index}} 条已保存的供应商（不计本地配置或 CLI 登录项）。",
+        "errorField": "字段：{{field}}。",
+        "import": "导入",
+        "export": "导出",
+        "importFile": "从 CC GUI 配置文件导入",
+        "importTitle": "导入 {{engine}} 供应商",
+        "exportTitle": "导出 {{engine}} 供应商",
+        "scope": "仅处理当前页签中已保存的供应商配置（含密钥），不包含本机 CLI 登录态或启用状态。",
+        "mergeHint": "仅导入可信文件。配置相同则跳过，有差异则新增；不覆盖、不自动启用。名称、备注、ID 和创建时间不参与去重。",
+        "selectFile": "选择配置文件",
+        "passwordOptional": "导出密码（可选）",
+        "passwordRequired": "请输入文件密码",
+        "confirmPassword": "再次输入密码",
+        "plaintextWarning": "我了解：不设置密码将明文导出 API 密钥，请妥善保管文件。",
+        "passwordHint": "设置密码时至少 8 位，建议使用长且独特的密码。密码丢失无法恢复。",
+        "passwordShort": "密码至少需要 8 位。",
+        "passwordMismatch": "两次输入的密码不一致。",
+        "working": "正在处理，请稍候…",
+        "importSuccess": "导入完成：新增 {{imported}} 条，跳过 {{skipped}} 条重复配置。",
+        "exportSuccess": "配置已导出。",
+        "exportPartial": "已导出 {{exported}} 条供应商。跳过 {{skipped}} 条未通过校验的已保存供应商：{{positions}}（编号不计本地配置和 CLI 登录项）。",
+        "invalidFile": "文件格式无效、版本不受支持或包含无效配置，未导入。",
+        "wrongEngine": "文件所属类型与当前页签不一致，请切换到对应的 Claude Code / Codex 页签。",
+        "tooLarge": "文件或配置过大（文件上限 8 MiB，最多 2000 条供应商）。",
+        "empty": "没有可处理的供应商配置。",
+        "wrongPassword": "密码错误或加密文件已损坏，未导入。",
+        "failed": "操作失败，请检查文件权限与配置文件后重试。",
+        "busy": "另一个导入/导出操作正在进行，请稍后重试。",
+        "timeout": "等待结果超时。操作可能仍在进行，请先检查列表或导出文件，再重试。"
+      },
       "currentConfig": "当前ClaudeCode配置",
       "loading": "加载中...",
       "noConfig": "未发现可用的本地配置",
@@ -1465,7 +1515,9 @@
       "minutesAgo": "分钟前",
       "secondsAgo": "秒前"
     },
-    "loadMore": "加载更多"
+    "loadMore": "加载更多",
+    "sessionInUse": "会话正在使用中，无法删除。",
+    "deleteFailed": "删除会话失败，请重试。"
   },
   "permission": {
     "dialogTitle": "权限请求",
@@ -1498,6 +1550,11 @@
     "codexDeliveryUnconfirmed": "Codex 还没有确认收到你的选择（{{error}}）。它可能仍会生效，请不要重复作答；如果对话没有继续，请点击停止后重新发送。"
   },
   "askUserQuestion": {
+    "configWarning": "Codex 部分配置可能未生效，请查看兼容提示详情。",
+    "configWarningTitle": "Codex 配置兼容提示",
+    "apiDeprecationWarning": "Codex 返回接口兼容提示，可查看详情。",
+    "apiDeprecationTitle": "Codex 接口兼容提示",
+    "warningDetails": "查看详情",
     "title": "Claude 有一些问题想问你",
     "progress": "问题 {{current}} / {{total}}",
     "multiSelectHint": "可以选择多个选项",
@@ -1511,7 +1568,11 @@
     "timeoutWarning": "请尽快回答，对话框将在 {{seconds}} 秒后自动关闭",
     "expand": "展开",
     "collapse": "收起",
-    "clickToAnswer": "点击回答"
+    "clickToAnswer": "点击回答",
+    "recordTitle": "Codex 提问",
+    "recordAnswer": "你的回答",
+    "recordSkipped": "已跳过（未作答就关闭了）",
+    "answerNotSent": "你对 Codex 提问的回答没有发出，因为当前打开的是另一个对话。请回到原来的对话，把回答重新发送一次。"
   },
   "planApproval": {
     "title": "计划已准备就绪",
@@ -1643,6 +1704,9 @@
     "errorRetry": "重试"
   },
   "mcp": {
+    "nativeToolCount": "{{count}} 个工具",
+    "nativeRuntime": {"notStarted": "尚未启动", "starting": "连接中", "connected": "已连接", "authenticationRequired": "需要认证", "failed": "连接失败", "cancelled": "已取消", "disabled": "已禁用", "unknown": "连接状态未知"},
+    "nativeAuth": {"unsupported": "OAuth 不适用", "notLoggedIn": "OAuth 尚未登录", "bearerToken": "令牌认证", "oAuth": "OAuth 已登录", "unknown": "认证状态未知"},
     "title": "MCP 服务器",
     "whatIsMcp": "什么是 MCP?",
     "refreshStatus": "刷新服务器状态",
@@ -2605,14 +2669,85 @@
     "updateClaudeSdkCustomCli": "SDK 已更新到 {{version}}，但插件运行的是自定义的 Claude CLI（{{path}}）。请按方案二更新它。",
     "updateClaudeSdkAlreadyLatest": "{{version}} 已是本插件支持的最新 SDK，而此模型需要更新的 Claude Code。请在插件发布新版本后更新插件，或换用其他模型。",
     "codexWriterConflict": {
-      "title": "Codex 线程被占用",
-      "intro": "该会话正由另一个 Codex 回合或客户端写入，本次发送未能启动。",
-      "reason": "请在正在使用该会话的客户端停止回合，确认结束后再发送。"
+      "title": "Codex 会话被占用",
+      "intro": "另一个 Codex 客户端或聊天窗口仍持有此会话的写入权。",
+      "reason": "这不表示会话已过期。插件不会自动删除写锁或停止其他客户端。",
+      "solutions": {
+        "releaseWriter": {
+          "title": "在占用会话的客户端释放它",
+          "step0": "在正在使用此会话的 Codex 客户端或聊天窗口停止任务，并关闭或释放该会话。",
+          "step1": "确认该客户端释放会话后，回到这里重新发送。不要通过删除写锁文件强行恢复。"
+        }
+      }
+    },
+    "codexThreadClosing": {
+      "title": "Codex 会话仍在关闭",
+      "intro": "Codex 尚未完成此会话的关闭流程，暂时无法恢复。",
+      "reason": "插件会在任务启动前对这一明确的关闭状态短暂重试；若仍未恢复，将保留原始错误。",
+      "solutions": {
+        "waitForClose": {
+          "title": "等待上一个会话完成关闭",
+          "step0": "等待原 Codex 客户端或聊天窗口释放此会话后，再次尝试。",
+          "step1": "若反复出现，请在原客户端释放会话后，从历史列表重新打开此会话。"
+        }
+      }
+    },
+    "codexThreadHistoryMissing": {
+      "title": "找不到 Codex 历史记录",
+      "intro": "当前 Codex 运行环境找不到此会话的原生历史记录。",
+      "reason": "历史目录变化或首次初始化未完成都可能导致此错误，不能据此判定记录已被删除。",
+      "solutions": {
+        "checkStorage": {
+          "title": "检查原历史记录所在位置",
+          "step0": "确认 Codex 使用原来的 CODEX_HOME 和宿主环境，尤其注意本机与 WSL 的区别。",
+          "step1": "恢复原历史目录或备份后，从历史列表重新打开此会话。"
+        },
+        "startNewIfMissing": {
+          "title": "仅在历史无法找回时重新开始",
+          "step0": "只有确认原始历史无法恢复时，才新建会话并重新提供必要上下文。这里显示的聊天消息不会自动恢复 Codex 的原生上下文。"
+        }
+      }
+    },
+    "codexThreadArchived": {
+      "title": "Codex 会话已归档",
+      "intro": "Codex 报告此会话已归档，无法直接继续。",
+      "reason": "归档不表示线程过期，恢复此会话不需要另建会话。",
+      "solutions": {
+        "unarchive": {
+          "title": "取消原会话的归档",
+          "step0": "在原 Codex 客户端取消归档，或按原始错误中给出的取消归档命令操作。",
+          "step1": "刷新插件的历史列表，重新打开此会话后再发送。"
+        }
+      }
+    },
+    "codexThreadResumeConfiguration": {
+      "title": "Codex 配置阻止了会话恢复",
+      "intro": "Codex 无法加载配置，或某个必需的 MCP 服务初始化失败。",
+      "reason": "新建会话无法修复同一份配置，插件也不会自动禁用必需的服务。",
+      "solutions": {
+        "repairConfiguration": {
+          "title": "修复 Codex 指出的配置问题",
+          "step0": "查看原始错误，确认失败的配置项或必需的 MCP 服务。",
+          "step1": "在 Codex、提供商或 MCP 设置中修复对应配置、凭证或连接，再重新打开会话并重试。"
+        }
+      }
     },
     "codexThreadResume": {
-      "title": "会话线程已失效",
-      "intro": "新建会话即可解决此问题。当前会话的线程 ID 在 Codex 服务端已不存在。",
-      "reason": "Codex 服务端会在一段时间后清除旧线程，继续上一次会话时可能触发此错误。"
+      "title": "无法恢复 Codex 会话",
+      "intro": "Codex 恢复此会话失败，目前尚未确认具体原因。",
+      "reason": "恢复失败不代表会话已过期。插件会保留原会话身份，不会静默替换成空白会话。",
+      "solutions": {
+        "inspectCause": {
+          "title": "先查看原始错误再重试",
+          "step0": "查看原始错误，并核对此会话使用的提供商、Codex 运行环境和历史目录。",
+          "step1": "如果已经出现回复或工具执行，请先核实结果再重新发送，避免重复执行任务。"
+        },
+        "checkCli": {
+          "title": "检查 Codex CLI 兼容性",
+          "step0": "将终端中的版本与插件 CLI 页面比较；若配置了自定义 CLI 路径，请对该程序执行 --version。",
+          "step1": "若原始错误指出 CLI 或协议版本不受支持，请按官方说明更新 Codex，然后刷新 CLI 检测。"
+        }
+      }
     },
     "sdkNativeBinaryMissing": {
       "title": "SDK 安装不完整 — 缺少 native 二进制文件",

@@ -43,6 +43,30 @@ export function pruneQuoteRegistry(activeIds: ReadonlySet<string>): void {
   }
 }
 
+/** Quote text by id, captured for a message that leaves the input (queued). */
+export type QuoteSnapshot = Readonly<Record<string, string>>;
+
+/**
+ * Capture the text behind every known quote token in `text`. A queued message
+ * is no longer in the input, so the next prune would drop its quotes; the
+ * snapshot lets them be put back when the message is sent or edited.
+ */
+export function snapshotQuotes(text: string): QuoteSnapshot | undefined {
+  if (!hasQuoteToken(text)) return undefined;
+  const entries = [...text.matchAll(quoteTokenRegex())]
+    .map(([, id]) => [id, registry.get(id)?.text] as const)
+    .filter((entry): entry is readonly [string, string] => entry[1] !== undefined);
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+/** Re-register captured quotes under their original ids so their tokens resolve again. */
+export function restoreQuotes(snapshot: QuoteSnapshot | undefined): void {
+  if (!snapshot) return;
+  for (const [id, text] of Object.entries(snapshot)) {
+    registry.set(id, { text });
+  }
+}
+
 export function makeQuoteToken(id: string): string {
   return `${TOKEN_START}${id}${TOKEN_END}`;
 }

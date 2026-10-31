@@ -115,8 +115,17 @@ const ChatInputBox = forwardRef<ChatInputBoxHandle, ChatInputBoxProps>((props, r
 
   // 4. Imperative API
   useImperativeHandle(ref, () => ({
-    getValue, setValue, focus, clear, hasContent
+    getValue, setValue, focus, clear, hasContent,
+    getFileTags,
+    getAttachments, setAttachments,   // draft attachment access (queue edit restore)
+    canApplyAttachments,              // false when the parent owns the attachments
+    hasPendingImagePastes,            // true while a pasted image is still landing
   }));
+
+  // A programmatic `setValue` writes plain text, so tag rendering (@file chips,
+  // quote chips) must run right after it or the draft would show raw text;
+  // `setValue` also retires any pending debounced `onInput` so the stale draft
+  // cannot overwrite the replacement.
 
   // 5. Render
   return (

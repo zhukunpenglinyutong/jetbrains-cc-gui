@@ -100,8 +100,8 @@ test('buildRequestContext preserves resolved model mapping for context usage run
       }),
       {
         // The exact resolved id is handed to the SDK. The 'sonnet' alias would
-        // resolve through ANTHROPIC_DEFAULT_SONNET_MODEL, which the settings
-        // override blanks - so the alias silently falls back to the CLI default.
+        // resolve through ANTHROPIC_DEFAULT_SONNET_MODEL in whichever layer the CLI
+        // honors, so the exact id keeps the main model independent of env precedence.
         sdkModelName: 'custom-sonnet-model',
         resolvedModelId: 'custom-sonnet-model',
       },
@@ -110,16 +110,16 @@ test('buildRequestContext preserves resolved model mapping for context usage run
     assert.equal(requestContext.resolvedModelId, 'custom-sonnet-model');
     assert.equal(requestContext.options.env.ANTHROPIC_MODEL, 'custom-sonnet-model');
     assert.equal(requestContext.options.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'custom-sonnet-model');
-    // The inline settings echo the user's configured tiers verbatim, all of them taken from
-    // settings.json - the current tier included, since modelId does not feed this layer. This is
-    // only a faithful read-back of the user's config: measurements show the CLI does not adopt
-    // it (see buildWebviewControlledSettingsOverride in api-config.js). The path that actually
-    // takes effect for subagent tiers is the one asserted against process.env below.
+    // The inline settings override carries the request-resolved model for ANTHROPIC_MODEL and
+    // for the tier the request owns, so on the non-managed path (CLI login, cloud providers),
+    // where the CLI honors this layer, it agrees with the child env snapshot written by
+    // setModelEnvironmentVariables(). Other tiers echo the user's settings.json mapping; the
+    // tier asserted here as 'glm-5.3-flash' is such an echo.
     assert.deepEqual(requestContext.options.settings, {
       env: {
         CLAUDE_CODE_EFFORT_LEVEL: '',
         MAX_THINKING_TOKENS: '',
-        ANTHROPIC_MODEL: '',
+        ANTHROPIC_MODEL: 'custom-sonnet-model',
         ANTHROPIC_DEFAULT_FABLE_MODEL: '',
         ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5.3-flash',
         ANTHROPIC_DEFAULT_SONNET_MODEL: 'custom-sonnet-model',
@@ -205,9 +205,8 @@ test('getContextUsagePersistent reuses runtime and calls setModel when model cha
   await __testing.acquireRuntime(requestContext);
 
   assert.equal(factory.runtimes.length, 1, 'should have 1 runtime initially');
-  // The SDK receives the exact id, not the 'opus' family alias (the alias would
-  // resolve to the CLI default because the settings override blanks
-  // ANTHROPIC_DEFAULT_OPUS_MODEL).
+  // The SDK receives the exact id, not the 'opus' family alias, so the main model
+  // does not depend on how ANTHROPIC_DEFAULT_OPUS_MODEL resolves in the CLI.
   assert.equal(factory.runtimes[0].currentModel, 'claude-opus-4-7', 'runtime should carry the exact model id');
 
   // Request context usage with a DIFFERENT model (sonnet instead of opus)
@@ -483,6 +482,41 @@ test('getContextUsagePersistent temporarily clears 1M disable override for expli
       delete process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT;
     } else {
       process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT = previousValue;
+    }
+  }
+});
+
+test('settings override keeps the [1m] suffix on the tier the request resolved', async () => {
+  // End-to-end counterpart of the api-config contract test: the tier value
+  // written by setModelEnvironmentVariables() (with its [1m] suffix) must also
+  // reach the inline settings, or the non-managed path would shadow it with a
+  // blank or settings.json entry.
+  const previousAnthropicModel = process.env.ANTHROPIC_MODEL;
+  const previousSonnetModel = process.env.ANTHROPIC_DEFAULT_SONNET_MODEL;
+
+  try {
+    const requestContext = await __testing.buildRequestContext(
+      { model: 'claude-sonnet-4-6[1m]', cwd: process.cwd() },
+      false,
+      { settings: { env: {} } },
+    );
+
+    assert.equal(process.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'claude-sonnet-4-6[1m]',
+      'the request-resolved tier carries the suffix in process.env');
+    assert.equal(requestContext.options.settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'claude-sonnet-4-6[1m]',
+      'the settings layer must mirror the suffix instead of a bare model name');
+    assert.equal(requestContext.options.settings.env.ANTHROPIC_MODEL, 'claude-sonnet-4-6[1m]');
+  } finally {
+    if (previousAnthropicModel === undefined) {
+      delete process.env.ANTHROPIC_MODEL;
+    } else {
+      process.env.ANTHROPIC_MODEL = previousAnthropicModel;
+    }
+
+    if (previousSonnetModel === undefined) {
+      delete process.env.ANTHROPIC_DEFAULT_SONNET_MODEL;
+    } else {
+      process.env.ANTHROPIC_DEFAULT_SONNET_MODEL = previousSonnetModel;
     }
   }
 });

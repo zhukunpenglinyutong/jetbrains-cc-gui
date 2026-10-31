@@ -115,6 +115,7 @@ class ClaudeProcessInvoker {
                         disableThinking,
                         reasoningEffort
                 );
+                stdinInput.addProperty("executionScope", callback.executionScope());
                 String stdinJson = gson.toJson(stdinInput);
                 String preview = logSanitizer.buildPreview(stdinJson, 500);
                 log.debug("[PROMPT] Sending to Node.js (" + stdinJson.length() + " chars):\n" + preview);
@@ -160,6 +161,7 @@ class ClaudeProcessInvoker {
                     process.waitFor();
 
                     int exitCode = process.exitValue();
+                    result.processExited = true;
                     boolean wasInterrupted = processManager.wasInterrupted(channelId);
                     log.debug("[ProcessInvoker] Process exited, exitCode=" + exitCode
                             + ", wasInterrupted=" + wasInterrupted + ", hadSendError=" + hadSendError.get());
@@ -170,6 +172,9 @@ class ClaudeProcessInvoker {
                     if (wasInterrupted) {
                         long elapsed = System.currentTimeMillis() - startTime;
                         log.info("[ProcessInvoker] Request was interrupted by user (elapsed: " + elapsed + "ms)");
+                        // A clean exit after Stop is not an abort acknowledgement. Keep success false;
+                        // processExited lets execution ownership settle the stopped turn as FAILED.
+                        result.cancelled = exitCode != 0;
                         result.error = "User interrupted";
                         callback.onComplete(result);
                     } else if (!hadSendError.get()) {

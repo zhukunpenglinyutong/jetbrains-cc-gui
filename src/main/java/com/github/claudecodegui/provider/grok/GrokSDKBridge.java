@@ -202,9 +202,13 @@ public class GrokSDKBridge extends BaseSDKBridge {
     }
 
     private String resolveApiKeyForAuth(String authMethod) {
+        return resolveApiKeyForAuth(authMethod, resolveEffectiveAuth());
+    }
+
+    private String resolveApiKeyForAuth(String authMethod, GrokLocalAuthResolver.ResolvedAuth resolved) {
         // Prefer resolved effective auth (includes config.toml fallback).
-        GrokLocalAuthResolver.ResolvedAuth resolved = resolveEffectiveAuth();
         if (authMethod != null
+                && resolved != null
                 && authMethod.equals(resolved.authMethod)
                 && resolved.apiKey != null
                 && !resolved.apiKey.isEmpty()) {
@@ -690,23 +694,7 @@ public class GrokSDKBridge extends BaseSDKBridge {
                     "Grok daemon is not running. Open a Grok chat turn first, or check Node/daemon setup."));
         }
 
-        JsonObject params = new JsonObject();
-        if (cwd != null && !cwd.isEmpty()) {
-            params.addProperty("cwd", cwd);
-        }
-        GrokLocalAuthResolver.ResolvedAuth resolvedUsage = resolveEffectiveAuth();
-        String authMethod = resolvedUsage.authMethod;
-        params.addProperty("authMethod", authMethod != null ? authMethod : "");
-        String effectiveKey = resolvedUsage.apiKey;
-        if (effectiveKey == null || effectiveKey.isEmpty()) {
-            effectiveKey = resolveApiKeyForAuth(authMethod);
-        }
-        params.addProperty("apiKey", effectiveKey != null ? effectiveKey : "");
-        String effectiveBase = resolvedUsage.baseUrl;
-        if (effectiveBase == null || effectiveBase.isEmpty()) {
-            effectiveBase = resolveEffectiveBaseUrl(authMethod);
-        }
-        params.addProperty("baseUrl", effectiveBase != null ? effectiveBase : "");
+        JsonObject params = buildAuthParams(cwd);
 
         AtomicReference<JsonObject> resultRef = new AtomicReference<>();
         CompletableFuture<JsonObject> resultFuture = new CompletableFuture<>();
@@ -764,6 +752,157 @@ public class GrokSDKBridge extends BaseSDKBridge {
         return resultFuture.orTimeout(45, TimeUnit.SECONDS).exceptionally(ex ->
                 buildUsageUnavailable("getUsage timed out: " + (ex.getMessage() != null ? ex.getMessage() : "timeout"))
         );
+    }
+
+    private JsonObject buildAuthParams(String cwd) {
+        return buildAuthParams(cwd, resolveEffectiveAuth());
+    }
+
+    private JsonObject buildAuthParams(String cwd, GrokLocalAuthResolver.ResolvedAuth resolvedUsage) {
+        JsonObject params = new JsonObject();
+        if (cwd != null && !cwd.isEmpty()) {
+            params.addProperty("cwd", cwd);
+        }
+        GrokLocalAuthResolver.ResolvedAuth effectiveAuth = resolvedUsage != null ? resolvedUsage : resolveEffectiveAuth();
+        String authMethod = effectiveAuth.authMethod;
+        params.addProperty("authMethod", authMethod != null ? authMethod : "");
+        String effectiveKey = effectiveAuth.apiKey;
+        if (effectiveKey == null || effectiveKey.isEmpty()) {
+            effectiveKey = resolveApiKeyForAuth(authMethod, effectiveAuth);
+        }
+        params.addProperty("apiKey", effectiveKey != null ? effectiveKey : "");
+        String effectiveBase = effectiveAuth.baseUrl;
+        if (effectiveBase == null || effectiveBase.isEmpty()) {
+            effectiveBase = resolveEffectiveBaseUrl(authMethod);
+        }
+        params.addProperty("baseUrl", effectiveBase != null ? effectiveBase : "");
+        return params;
+    }
+
+    /**
+     * Account credit window for the ContextBar.
+     * Uses the node daemon only while chat keeps it running. The daemon calls {@code _x.ai/billing}
+     * on the warm {@code grok agent stdio}, or a short-lived one when no chat runtime exists.
+     * A poll never starts or revives the daemon, otherwise the next poll would undo its idle exit.
+     * When effective auth is api_key, credit polling is skipped without contacting the daemon.
+     */
+    public CompletableFuture<JsonObject> getPlanUsage(String cwd) {
+        GrokLocalAuthResolver.ResolvedAuth auth = resolveEffectiveAuth();
+        if (auth != null && skipsPlanUsagePoll(auth.authMethod)) {
+            return CompletableFuture.completedFuture(planUsageApiKeySkip());
+        }
+        return getPlanUsage(cwd, daemonCoordinator.getCurrentDaemonBridge(), auth);
+    }
+
+    static boolean skipsPlanUsagePoll(String authMethod) {
+        return CodemossSettingsService.GROK_AUTH_METHOD_API_KEY.equals(authMethod);
+    }
+
+    static JsonObject planUsageApiKeySkip() {
+        JsonObject out = planUsageUnavailable("Grok usage unavailable");
+        out.addProperty("skipPolling", true);
+        return out;
+    }
+
+    /** No running daemon to ask. Not a failure: callers keep the last reading and do not back off. */
+    static JsonObject planUsageDormant() {
+        JsonObject out = planUsageUnavailable("Grok daemon is not running");
+        out.addProperty("dormant", true);
+        return out;
+    }
+
+    CompletableFuture<JsonObject> getPlanUsage(String cwd, DaemonBridge db) {
+        return getPlanUsage(cwd, db, null);
+    }
+
+    private CompletableFuture<JsonObject> getPlanUsage(
+            String cwd,
+            DaemonBridge db,
+            GrokLocalAuthResolver.ResolvedAuth resolvedAuth
+    ) {
+        if (db == null || !db.isAlive()) {
+            return CompletableFuture.completedFuture(planUsageDormant());
+        }
+
+        JsonObject params = buildAuthParams(cwd, resolvedAuth);
+        params.addProperty("ephemeral", true);
+
+        CompletableFuture<JsonObject> resultFuture = new CompletableFuture<>();
+        DaemonBridge.DaemonOutputCallback callback = createPlanUsageCallback(resultFuture);
+
+        try {
+            db.sendCommand("grok.getPlanUsage", params, callback).exceptionally(ex -> {
+                if (!resultFuture.isDone()) {
+                    resultFuture.complete(planUsageUnavailable(
+                            ex.getMessage() != null ? ex.getMessage() : "sendCommand failed"));
+                }
+                return false;
+            });
+        } catch (Exception e) {
+            return CompletableFuture.completedFuture(planUsageUnavailable(e.getMessage()));
+        }
+
+        return resultFuture.orTimeout(45, TimeUnit.SECONDS).exceptionally(ex ->
+                planUsageUnavailable("getPlanUsage timed out: " + (ex.getMessage() != null ? ex.getMessage() : "timeout"))
+        );
+    }
+
+    static DaemonBridge.DaemonOutputCallback createPlanUsageCallback(CompletableFuture<JsonObject> resultFuture) {
+        AtomicReference<JsonObject> resultRef = new AtomicReference<>();
+        return new DaemonBridge.DaemonOutputCallback() {
+            @Override
+            public void onLine(String line) {
+                // Out-of-band stdout is ignored; payload is delivered via onResult
+            }
+
+            @Override
+            public void onStderr(String text) { }
+
+            @Override
+            public void onResult(JsonObject response) {
+                if (response != null && response.has("result") && response.get("result").isJsonObject()) {
+                    JsonObject result = response.getAsJsonObject("result");
+                    if (result.has("present")
+                            && result.get("present").isJsonPrimitive()
+                            && result.get("present").getAsJsonPrimitive().isBoolean()) {
+                        resultRef.set(result.deepCopy());
+                    }
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                if (!resultFuture.isDone()) {
+                    resultFuture.complete(planUsageUnavailable(
+                            error != null && !error.trim().isEmpty() ? error : "getPlanUsage failed"));
+                }
+            }
+
+            @Override
+            public void onComplete(boolean success) {
+                if (resultFuture.isDone()) {
+                    return;
+                }
+                JsonObject result = resultRef.get();
+                if (success && result != null) {
+                    resultFuture.complete(result);
+                } else {
+                    resultFuture.complete(planUsageUnavailable(
+                            success ? "No plan-usage payload from Grok" : "getPlanUsage command failed"));
+                }
+            }
+        };
+    }
+
+    /** Top-level capacity payload. A missing {@code present} flag hides the bar. */
+    static JsonObject planUsageUnavailable(String message) {
+        JsonObject out = new JsonObject();
+        out.addProperty("present", false);
+        out.addProperty("unavailable", true);
+        out.addProperty("provider", "grok");
+        out.addProperty("source", "x.ai/billing");
+        out.addProperty("message", message != null ? message : "Grok usage unavailable");
+        return out;
     }
 
     /** Payload shape that {@code useUsageStatistics} accepts without hanging the spinner. */

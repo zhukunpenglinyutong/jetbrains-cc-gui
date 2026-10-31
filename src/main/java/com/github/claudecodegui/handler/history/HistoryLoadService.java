@@ -1,6 +1,8 @@
 package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.handler.NodeJsServiceCaller;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
@@ -119,7 +121,8 @@ class HistoryLoadService {
                 }
 
                 // Load favorite data and merge into history data
-                String enhancedJson = enhanceHistoryWithFavorites(historyJson, provider);
+                String activityJson = enhanceHistoryWithActivity(historyJson, provider, context.getSession(), context.getCodexSDKBridge());
+                String enhancedJson = enhanceHistoryWithFavorites(activityJson, provider);
                 LOG.info("[HistoryHandler] enhanceHistoryWithFavorites 完成，JSON 长度: " + enhancedJson.length());
 
                 // Load custom titles and merge into history data
@@ -213,8 +216,28 @@ class HistoryLoadService {
     }
 
     /**
-     * Enhance history data: add favorite info to each session.
+     * Mark live turns and foreign native writers before optional metadata enrichment.
      */
+    static String enhanceHistoryWithActivity(String historyJson, String provider, ClaudeSession active, CodexSDKBridge bridge) {
+        if (!"codex".equals(provider)) {
+            return historyJson;
+        }
+        try {
+            JsonObject history = new Gson().fromJson(historyJson, JsonObject.class);
+            if (history == null) {
+                return historyJson;
+            }
+            if (history.has("sessions") && history.get("sessions").isJsonArray()) {
+                CodexHistoryActivity.markRows(history.getAsJsonArray("sessions"), "sessionId", active, bridge);
+            }
+            return new Gson().toJson(history);
+        } catch (Exception e) {
+            // Activity is only a UI hint; the deletion guard still refuses protected rows.
+            LOG.warn("[HistoryHandler] Failed to mark Codex history activity: " + e.getMessage());
+            return historyJson;
+        }
+    }
+
     private String enhanceHistoryWithFavorites(String historyJson, String currentProvider) {
         try {
             // Load favorite data

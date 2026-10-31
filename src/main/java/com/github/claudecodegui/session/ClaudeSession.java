@@ -284,6 +284,10 @@ public class ClaudeSession {
 
         // Set up permission manager callback
         permissionManager.setOnPermissionRequestedCallback(request -> {
+            SessionExecutionOwnership execution = state.currentExecutionOwnership();
+            if (execution != null) {
+                execution.bindInteraction(SessionExecutionState.WaitReason.PERMISSION, request.getResultFuture());
+            }
             callbackFacade.notifyPermissionRequested(request);
         });
     }
@@ -322,6 +326,10 @@ public class ClaudeSession {
                         || !Objects.equals(epoch, this.state.getRuntimeSessionEpoch())) {
                     return false;
                 }
+                // The operation has completed, so no further evidence can arrive. A still-live turn was
+                // rejected before any callback, or Stop deferred its failure; a settled turn keeps its outcome.
+                this.state.getExecutionState().finish(this.state.executionTurnForOwner(owner),
+                        SessionExecutionState.Outcome.FAILED, true);
                 this.state.setBusy(false);
                 this.state.setLoading(false);
             }
@@ -417,7 +425,7 @@ public class ClaudeSession {
                 this.state.setError(null);
             }
             this.state.setCodexCwdExplicit(false);
-            this.state.setSessionId(sessionId);
+            this.state.setRestoredSessionId(sessionId);
             if (sessionId != null && !sessionId.trim().isEmpty()) {
                 // Restored controls already use this default route before a send exists.
                 // Keep Stop and the next send on that same runtime instead of claiming another writer.
@@ -811,6 +819,7 @@ public class ClaudeSession {
             userMessage.raw.addProperty("clientMessageId", clientMessageId);
         }
         Object turnOwner = sendService.updateSessionStateForSend(userMessage, normalizedInput);
+        SessionExecutionOwnership execution = state.executionOwnershipForOwner(turnOwner);
 
         final String finalAgentPrompt = agentPrompt;
         final List<String> finalFileTagPaths = fileTagPaths;
@@ -819,7 +828,14 @@ public class ClaudeSession {
         final String finalRequestedCodexFastMode = requestedCodexFastMode;
         final String finalRequestedDshPreset = requestedDshPreset;
 
-        return launchClaude().thenCompose(chId -> {
+        CompletableFuture<String> launch = launchClaude();
+        if (execution != null) {
+            execution.bindLifecycle(launch);
+        }
+        return launch.thenCompose(chId -> {
+            if (!state.isCurrentTurn(turnOwner)) {
+                return CompletableFuture.completedFuture(null);
+            }
             sendService.prepareContextCollector(contextCollector);
 
             return contextCollector.collectContext().thenCompose(openedFilesJson ->
@@ -835,10 +851,15 @@ public class ClaudeSession {
                             finalRequestedCodexFastMode,
                             finalRequestedDshPreset,
                             clientMessageId,
-                            nativeCodexSettings
+                            nativeCodexSettings,
+                            turnOwner
                     )
-            ).thenCompose(v -> syncUserMessageUuidsAfterSend());
+            ).thenCompose(v -> state.isCurrentTurn(turnOwner)
+                    ? syncUserMessageUuidsAfterSend() : CompletableFuture.completedFuture(null));
         }).exceptionally(ex -> {
+            if (execution != null) {
+                execution.observeFailure(ex);
+            }
             synchronized (state.getMessageStateLock()) {
                 if (state.isCurrentTurn(turnOwner)) {
                     state.setError(ex.getMessage());
@@ -861,14 +882,23 @@ public class ClaudeSession {
     public CompletableFuture<Void> interrupt() {
         // Mark this turn as manually interrupted so the stream-end handler
         // suppresses the task-completion notification sound.
-        this.manuallyInterrupted = true;
-
-        String provider = this.state.getProvider();
-        String channelId = this.state.getChannelId();
-        Object turnOwner = this.state.getTurnOwner();
-        String runtimeSessionEpoch = this.state.getRuntimeSessionEpoch();
-        if (channelId == null) {
-            return CompletableFuture.completedFuture(null);
+        String provider;
+        String channelId;
+        Object turnOwner;
+        String runtimeSessionEpoch;
+        SessionExecutionState.Turn executionTurn;
+        synchronized (state.getMessageStateLock()) {
+            manuallyInterrupted = true;
+            provider = state.getProvider();
+            channelId = state.getChannelId();
+            turnOwner = state.getTurnOwner();
+            runtimeSessionEpoch = state.getRuntimeSessionEpoch();
+            executionTurn = state.executionTurnForOwner(turnOwner);
+            if (channelId == null) {
+                state.getExecutionState().activity(executionTurn, SessionExecutionState.Phase.UNKNOWN);
+                return CompletableFuture.completedFuture(null);
+            }
+            state.getExecutionState().activity(executionTurn, SessionExecutionState.Phase.STOPPING);
         }
 
         return CompletableFuture.runAsync(() -> {
@@ -880,6 +910,8 @@ public class ClaudeSession {
                         return;
                     }
                     this.state.setError(null);
+                    // The control acknowledgement alone does not prove the provider stopped.
+                    state.getExecutionState().activity(executionTurn, SessionExecutionState.Phase.UNKNOWN);
                     this.state.setBusy(false);
                     this.state.setLoading(false);
 
@@ -891,6 +923,7 @@ public class ClaudeSession {
                 synchronized (this.state.getMessageStateLock()) {
                     if (this.isCurrentChannel(provider, channelId) && this.state.isCurrentTurn(turnOwner)
                             && Objects.equals(runtimeSessionEpoch, this.state.getRuntimeSessionEpoch())) {
+                        state.getExecutionState().stopFailed(executionTurn);
                         this.state.setError(e.getMessage());
                         this.state.setLoading(false);
                         this.callbackFacade.notifyStateChange(this.state.isBusy(), this.state.isLoading(), this.state.getError());

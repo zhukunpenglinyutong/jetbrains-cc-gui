@@ -109,3 +109,60 @@ describe('useServerData terminal MCP status handling', () => {
     hook.unmount();
   });
 });
+
+describe.each([false, true])('refreshing expanded tools (Codex=%s)', isCodexMode => {
+  function renderProvider() {
+    return renderHook(() => useServerData({
+      isCodexMode, messagePrefix: isCodexMode ? 'codex_' : '', cacheKeys, t: translate, onLog,
+    }));
+  }
+  function deliver(servers: McpServer[]) {
+    const callback = isCodexMode ? window.updateCodexMcpServers : window.updateMcpServers;
+    act(() => callback?.(JSON.stringify(servers)));
+  }
+
+  it('uses the new catalog and fetches only the expanded card once', () => {
+    const hook = renderProvider();
+    deliver([server, { ...server, id: 'closed' }]);
+    act(() => hook.result.current.setExpandedServers(new Set([server.id])));
+    sendToJavaMock.mockClear();
+    act(() => hook.result.current.loadServers(true));
+    const toolsAction = isCodexMode ? 'get_codex_mcp_server_tools' : 'get_mcp_server_tools';
+    expect(sendToJavaMock).not.toHaveBeenCalledWith(toolsAction, expect.anything());
+    deliver([{ ...server, name: 'Updated configuration' }, { ...server, id: 'newly-added' }]);
+    expect(sendToJavaMock.mock.calls.filter(([action]) => action === toolsAction)).toEqual([
+      [toolsAction, { serverId: server.id, forceRefresh: true }],
+    ]);
+    expect(onLog).toHaveBeenCalledWith(expect.any(String), 'info', undefined,
+      'Updated configuration', expect.any(String));
+    deliver([server]);
+    expect(sendToJavaMock.mock.calls.filter(([action]) => action === toolsAction)).toHaveLength(1);
+    hook.unmount();
+  });
+
+  it('keeps a pending refresh when a plain catalog load follows it', () => {
+    const hook = renderProvider();
+    deliver([server]);
+    act(() => hook.result.current.setExpandedServers(new Set([server.id])));
+    sendToJavaMock.mockClear();
+    act(() => hook.result.current.loadServers(true));
+    act(() => hook.result.current.loadServers());
+    deliver([server]);
+    const toolsAction = isCodexMode ? 'get_codex_mcp_server_tools' : 'get_mcp_server_tools';
+    expect(sendToJavaMock.mock.calls.filter(([action]) => action === toolsAction)).toEqual([
+      [toolsAction, { serverId: server.id, forceRefresh: true }],
+    ]);
+    hook.unmount();
+  });
+
+  it.each(['deleted', 'disabled'])('does not query an expanded server that is now %s', state => {
+    const hook = renderProvider();
+    deliver([server]);
+    act(() => hook.result.current.setExpandedServers(new Set([server.id])));
+    act(() => hook.result.current.loadServers(true));
+    sendToJavaMock.mockClear();
+    deliver(state === 'deleted' ? [] : [{ ...server, enabled: false, apps: { claude: false, codex: false, gemini: false } }]);
+    expect(sendToJavaMock).not.toHaveBeenCalled();
+    hook.unmount();
+  });
+});

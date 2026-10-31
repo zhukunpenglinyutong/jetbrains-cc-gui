@@ -83,7 +83,8 @@ export async function applyReasoningEffortToSession(client, sessionId, reasoning
  * These allow init+auth+session to be done once, then prompt() reused.
  */
 
-export async function initializeAndAuthenticate(client, { apiKey = '', baseUrl = '', hasApiKeyFromEnv = false, authMethod = '' } = {}) {
+export async function initializeAndAuthenticate(client, { apiKey = '', baseUrl = '', hasApiKeyFromEnv = false, authMethod = '', timeoutMs = DEFAULT_TIMEOUT_MS, quiet = false } = {}) {
+  const effectiveTimeout = typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS;
   const init = await client.request('initialize', {
     protocolVersion: 1,
     clientCapabilities: {
@@ -95,7 +96,7 @@ export async function initializeAndAuthenticate(client, { apiKey = '', baseUrl =
       name: 'codemoss-jetbrains',
       version: '0.4.6',
     },
-  });
+  }, effectiveTimeout);
 
   const authMethodList = init.authMethods ?? [];
   const authMethods = new Set(authMethodList.map((m) => m.id));
@@ -130,21 +131,28 @@ export async function initializeAndAuthenticate(client, { apiKey = '', baseUrl =
     );
   }
 
-  console.error(
-    '[GROK-ACP] authenticate methodId=' +
+  if (!quiet) {
+    const logLine =
+      '[GROK-ACP] authenticate methodId=' +
       methodId +
       ' preferred=' +
       preferred +
       ' hasApiKey=' +
       hasApiKey +
       ' authReason=' +
-      resolved.reason
-  );
+      resolved.reason +
+      '\n';
+    if (process.stderr && typeof process.stderr._originalStderrWrite === 'function') {
+      process.stderr._originalStderrWrite(logLine, 'utf8');
+    } else {
+      console.error(logLine.trimEnd());
+    }
+  }
 
   await client.request('authenticate', {
     methodId,
     _meta: { headless: true },
-  });
+  }, effectiveTimeout);
 
   client.initResult = init;
   return { init, methodId, resolvedAuth: resolved };
@@ -1118,6 +1126,24 @@ export function buildPromptBlocks({ message, agentPrompt, openedFiles, attachmen
   const blocks = [];
   let text = message || '';
 
+  const { blocks: imageBlocks, loaded, errors } = buildGrokImageBlocks(
+    Array.isArray(attachments) ? attachments : []
+  );
+  if (errors.length > 0) {
+    console.error(
+      `[Grok] image load issues: ${loaded} ok, ${errors.length} failed (${errors.join('; ')})`
+    );
+  }
+  if (loaded > 0) {
+    console.error(`[Grok] embedding ${loaded} image block(s) into ACP prompt`);
+  }
+  // Decide the image-only fallback before agent instructions, rules, and IDE
+  // context are appended so injected sections do not hide the request to look
+  // at the attached images.
+  if (!String(text).trim() && loaded > 0) {
+    text = GROK_IMAGE_ONLY_FALLBACK_TEXT;
+  }
+
   if (agentPrompt && String(agentPrompt).trim()) {
     text =
       `${text}\n\n## Agent Role and Instructions\n\n${String(agentPrompt).trim()}`;
@@ -1148,18 +1174,6 @@ export function buildPromptBlocks({ message, agentPrompt, openedFiles, attachmen
     } catch {
       // ignore
     }
-  }
-
-  const { blocks: imageBlocks, loaded, errors } = buildGrokImageBlocks(
-    Array.isArray(attachments) ? attachments : []
-  );
-  if (errors.length > 0) {
-    console.error(
-      `[Grok] image load issues: ${loaded} ok, ${errors.length} failed (${errors.join('; ')})`
-    );
-  }
-  if (loaded > 0) {
-    console.error(`[Grok] embedding ${loaded} image block(s) into ACP prompt`);
   }
 
   // Non-image attachments (or failed images): keep a text note so the agent

@@ -156,4 +156,29 @@ describe('Codex answers that never reach the runtime', () => {
     expect(addToast).toHaveBeenCalledWith(
       'permission.codexDeliveryRetry|invalid native Codex interaction result', 'error');
   });
+
+  it('still explains an answer the runtime retired as unconfirmed before its acknowledgement arrived', () => {
+    const { result, addToast } = renderDialogs();
+    const question: AskUserQuestionRequest = {
+      requestId: 'async-key',
+      toolName: 'item/agentMessage/requestUserInput',
+      questions: [],
+      provider: 'codex',
+      isBlocking: false,
+      dialogToken: 'async-token',
+      codexInteractionKey: 'async-key',
+      codexMethod: 'item/agentMessage/requestUserInput',
+    };
+    act(() => { result.current.openAskUserQuestionDialog(question); });
+    act(() => { result.current.handleAskUserQuestionSubmit('async-key', { q: 'B' }); });
+    // The bridge retires the question first, so its close event precedes the failed acknowledgement.
+    act(() => { result.current.forceCloseAskUserQuestionDialog('async-key', 'async-token'); });
+
+    acknowledge('async-key', 'Codex did not confirm the answer in time',
+      { code: 'DELIVERY_UNCONFIRMED', retryable: false, deliveryUnconfirmed: true });
+
+    expect(result.current.currentAskUserQuestionRequest).toBeNull();
+    expect(addToast).toHaveBeenCalledExactlyOnceWith(
+      'permission.codexDeliveryUnconfirmed|Codex did not confirm the answer in time', 'error');
+  });
 });

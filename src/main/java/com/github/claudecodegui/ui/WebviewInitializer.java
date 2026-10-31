@@ -90,6 +90,7 @@ public class WebviewInitializer {
         Map<String, MarkerCliBridge> getCliBridges();
         JPanel getMainPanel();
         HtmlLoader getHtmlLoader();
+        default String getDraftCacheKey() { return null; }
         HandlerContext getHandlerContext();
         JBCefBrowser getBrowser();
         JBCefOSRHandlerFactory getOsrHandlerFactory();
@@ -126,7 +127,7 @@ public class WebviewInitializer {
      * native callback handles during a watchdog recreation.
      */
     private volatile BrowserBridges bridges;
-    private boolean browserCleanupFailed;
+    private final BrowserCleanup<JBCefBrowser> browserCleanup = new BrowserCleanup<>(JBCefBrowser::dispose);
     private int pageGeneration;
     private PageLoadKind nextBrowserPageLoadKind = PageLoadKind.INITIAL_LOAD;
 
@@ -146,7 +147,7 @@ public class WebviewInitializer {
             return;
         }
         JBCefBrowser existingBrowser = this.host.getBrowser();
-        if (browserCleanupFailed) {
+        if (browserCleanup.hasPendingCleanup()) {
             showWebviewRecoveryFailedPanel();
             return;
         }
@@ -398,7 +399,7 @@ public class WebviewInitializer {
             NodeDetectionResult nodeResult,
             String htmlContent
     ) {
-        if (!isCurrentInitialization(initializationId) || host.getBrowser() != null) {
+        if (!isCurrentInitialization(initializationId) || host.getBrowser() != null || browserCleanup.hasPendingCleanup()) {
             return;
         }
         ClaudeSDKBridge claudeSDKBridge = host.getClaudeSDKBridge();
@@ -431,8 +432,8 @@ public class WebviewInitializer {
         try {
             browser = JBCefBrowserFactory.create(host.getOsrHandlerFactory());
             // Native creation may pump EDT events. Recheck ownership before publishing it.
-            if (!isCurrentInitialization(initializationId) || host.getBrowser() != null) {
-                browser.dispose();
+            if (!isCurrentInitialization(initializationId) || host.getBrowser() != null || browserCleanup.hasPendingCleanup()) {
+                disposeFailedBrowser(browser);
                 return;
             }
             JBCefBrowser createdBrowser = browser;
@@ -689,8 +690,7 @@ public class WebviewInitializer {
                     + ", pageGeneration=" + initialPageGeneration);
 
         } catch (IllegalStateException e) {
-            this.disposeFailedBrowser(browser);
-            if (!isCurrentInitialization(initializationId)) {
+            if (!finishFailedInitialization(browser, initializationId)) {
                 return;
             }
             if (e.getMessage() != null && e.getMessage().contains("JCEF")) {
@@ -701,8 +701,7 @@ public class WebviewInitializer {
                 showErrorPanel();
             }
         } catch (NullPointerException e) {
-            this.disposeFailedBrowser(browser);
-            if (!isCurrentInitialization(initializationId)) {
+            if (!finishFailedInitialization(browser, initializationId)) {
                 return;
             }
             String msg = e.getMessage();
@@ -714,15 +713,13 @@ public class WebviewInitializer {
                 showErrorPanel();
             }
         } catch (Exception e) {
-            this.disposeFailedBrowser(browser);
-            if (!isCurrentInitialization(initializationId)) {
+            if (!finishFailedInitialization(browser, initializationId)) {
                 return;
             }
             LOG.error("Failed to create UI components: " + e.getMessage(), e);
             showErrorPanel();
         } catch (LinkageError e) {
-            this.disposeFailedBrowser(browser);
-            if (!isCurrentInitialization(initializationId)) {
+            if (!finishFailedInitialization(browser, initializationId)) {
                 return;
             }
             // Platform/JBR binary mismatch (e.g. Android Studio 2026.x whose
@@ -1134,11 +1131,24 @@ public class WebviewInitializer {
         }
     }
 
+    private boolean finishFailedInitialization(JBCefBrowser browser, int initializationId) {
+        disposeFailedBrowser(browser);
+        if (!isCurrentInitialization(initializationId)) {
+            return false;
+        }
+        if (browserCleanup.hasPendingCleanup()) {
+            showWebviewRecoveryFailedPanel();
+            return false;
+        }
+        return true;
+    }
+
     private void disposeFailedBrowser(JBCefBrowser browser) {
         if (browser == null) {
             return;
         }
 
+        browserCleanup.retain(browser);
         BrowserBridges currentBridges;
         synchronized (this.bridgeLock) {
             currentBridges = this.bridges;
@@ -1148,25 +1158,33 @@ public class WebviewInitializer {
                 currentBridges = null;
             }
         }
-        if (currentBridges != null) {
-            currentBridges.dispose();
-        }
         try {
-            browser.dispose();
-        } catch (Exception | LinkageError e) {
-            browserCleanupFailed = true;
-            if (host.getBrowser() == null) {
-                host.setBrowser(browser);
+            if (host.getBrowser() == browser) {
+                // Detach before native query disposal can pump callbacks into the host.
+                host.getHandlerContext().setBrowser(null);
+                host.setBrowser(null);
+                host.setFrontendReady(false);
             }
-            LOG.warn("Failed to dispose browser after webview initialization error: " + e.getMessage(), e);
-            return;
+        } finally {
+            try {
+                if (currentBridges != null) {
+                    currentBridges.dispose();
+                }
+            } finally {
+                browserCleanup.dispose(browser);
+            }
         }
-        if (this.host.getBrowser() == browser) {
-            this.host.setBrowser(null);
-            this.host.getHandlerContext().setBrowser(null);
-        }
-        LOG.info("Incomplete webview browser disposed, initializerId=" + System.identityHashCode(this)
-                + ", browserId=" + System.identityHashCode(browser));
+    }
+
+    /** Final native cleanup also retries browsers quarantined by an earlier initialization failure. */
+    public void disposeBrowsers(JBCefBrowser currentBrowser) {
+        browserCleanup.retain(currentBrowser);
+        browserCleanup.retry();
+    }
+
+    /** Evaluated on the EDT before the watchdog spends a recovery attempt. */
+    public boolean canRecoverWebview() {
+        return !isOwnerDisposed() && !initialization.isInProgress() && !browserCleanup.hasPendingCleanup();
     }
 
     /**
@@ -1527,8 +1545,8 @@ public class WebviewInitializer {
      */
     public void reloadWebview(String reason) {
         runOnEventDispatchThread(() -> {
-            if (host.isDisposed()) { return; }
-            if (browserCleanupFailed) {
+            if (isOwnerDisposed()) { return; }
+            if (browserCleanup.hasPendingCleanup()) {
                 showWebviewRecoveryFailedPanel();
                 return;
             }
@@ -1587,7 +1605,8 @@ public class WebviewInitializer {
                 htmlContent,
                 tabProvider,
                 tabModel,
-                SessionState.discoverUserDshPresetIds());
+                SessionState.discoverUserDshPresetIds(),
+                host.getDraftCacheKey());
     }
 
     /**
@@ -1600,7 +1619,12 @@ public class WebviewInitializer {
     private void recreateWebview(String reason, boolean replacePreparation) {
         runOnEventDispatchThread(() -> {
             if (isOwnerDisposed()) { return; }
-            if (browserCleanupFailed) {
+            if (replacePreparation) {
+                // An explicit configuration retry may recover from a transient native cleanup failure.
+                browserCleanup.retry();
+                if (isOwnerDisposed()) { return; }
+            }
+            if (browserCleanup.hasPendingCleanup()) {
                 showWebviewRecoveryFailedPanel();
                 return;
             }
@@ -1623,29 +1647,16 @@ public class WebviewInitializer {
             JPanel mainPanel = host.getMainPanel();
             try {
                 if (browser != null) {
-                    try {
-                        mainPanel.remove(browser.getComponent());
-                    } catch (Exception ignored) {
-                    }
-                    // Release the JS bridges before the browser itself so the
-                    // native callback handles do not outlive the browser.
-                    this.disposeBridges();
-                    try {
-                        browser.dispose();
-                        LOG.info("Previous webview browser disposed, initializerId=" + System.identityHashCode(this)
-                                + ", browserId=" + System.identityHashCode(browser));
-                    } catch (Exception | LinkageError e) {
-                        browserCleanupFailed = true;
-                        LOG.warn("[WebviewWatchdog] Browser disposal failed; replacement cancelled", e);
+                    // Detach the host, then release queries before their owning browser.
+                    disposeFailedBrowser(browser);
+                    if (browserCleanup.hasPendingCleanup()) {
                         showWebviewRecoveryFailedPanel();
                         return;
                     }
-                    host.getHandlerContext().setBrowser(null);
-                    host.setBrowser(null);
-                    browserCleanupFailed = false;
                 }
 
                 LOG.info("[WebviewWatchdog] Recreating webview (" + reason + ")");
+                if (isOwnerDisposed()) { return; }
                 mainPanel.removeAll();
                 createUIComponents();
                 mainPanel.revalidate();

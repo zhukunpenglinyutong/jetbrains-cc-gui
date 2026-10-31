@@ -44,6 +44,17 @@
     "currentMode": "현재 모드: {{mode}}",
     "currentModel": "현재 모델: {{model}}",
     "removeAttachment": "첨부파일 제거",
+    "queue": {
+      "edit": "대기열 메시지 편집",
+      "remove": "대기열에서 제거",
+      "editLabel": "대기열 메시지 {{position}} 편집",
+      "removeLabel": "대기열 메시지 {{position}} 제거",
+      "reorderLabel": "메시지 {{position}} 순서 변경",
+      "reorderHint": "드래그로 순서 변경, 포커스 후 화살표 키로 조정",
+      "mergedIntoDraft": "대기열 메시지가 현재 초안에 병합되었습니다",
+      "attachmentsNotRestored": "대기 중인 메시지의 첨부 파일을 복원하지 못했습니다",
+      "editBlockedAttachments": "첨부 파일을 복원할 수 없어 메시지를 대기열에 그대로 둡니다"
+    },
     "closePreview": "미리보기 닫기",
     "loadingDropdown": "로딩 중...",
     "modelsLoadFailed": "모델을 불러오지 못했습니다. 클릭하여 다시 시도",
@@ -568,6 +579,38 @@
     "wechatPay": "WeChat Pay",
     "paypal": "PayPal",
     "provider": {
+      "backup": {
+        "exportInvalidConfig": "내보내기 실패: 저장된 공급자 설정이 검증을 통과하지 못했습니다. 백업 파일이 생성되지 않았습니다.",
+        "errorProvider": "저장된 공급자 중 {{index}}번째 항목을 확인하세요(로컬 설정 및 CLI 로그인 항목 제외).",
+        "errorField": "필드: {{field}}.",
+        "import": "가져오기",
+        "export": "내보내기",
+        "importFile": "CC GUI 백업에서 가져오기",
+        "importTitle": "{{engine}} 공급자 가져오기",
+        "exportTitle": "{{engine}} 공급자 내보내기",
+        "scope": "현재 탭에 저장된 공급자 설정(키 포함)만 전송합니다. 로컬 CLI 로그인 및 활성화 상태는 포함하지 않습니다.",
+        "mergeHint": "신뢰할 수 있는 파일만 가져오세요. 동일한 설정은 건너뛰고 다른 설정은 추가하며, 덮어쓰거나 자동 활성화하지 않습니다. 이름, 메모, ID 및 생성 시간은 중복 판정에서 제외됩니다.",
+        "selectFile": "설정 파일 선택",
+        "passwordOptional": "내보내기 암호(선택 사항)",
+        "passwordRequired": "파일 암호 입력",
+        "confirmPassword": "암호 확인",
+        "plaintextWarning": "확인: 암호를 설정하지 않으면 API 키가 일반 텍스트로 내보내집니다. 파일을 안전하게 보관하세요.",
+        "passwordHint": "8자 이상의 길고 고유한 암호를 권장합니다. 잊어버린 암호는 복구할 수 없습니다.",
+        "passwordShort": "암호는 8자 이상이어야 합니다.",
+        "passwordMismatch": "암호가 일치하지 않습니다.",
+        "working": "처리 중입니다. 잠시 기다려 주세요…",
+        "importSuccess": "가져오기 완료: {{imported}}개 추가, 중복 설정 {{skipped}}개 건너뜀.",
+        "exportSuccess": "설정을 내보냈습니다.",
+        "exportPartial": "공급자 {{exported}}개를 내보냈습니다. 검증을 통과하지 못한 저장된 공급자 {{skipped}}개를 건너뛰었습니다: {{positions}}(번호는 로컬 설정 및 CLI 로그인 항목 제외).",
+        "invalidFile": "잘못된 파일, 지원하지 않는 버전 또는 잘못된 설정입니다. 가져오지 않았습니다.",
+        "wrongEngine": "파일 유형이 현재 탭과 다릅니다. 해당 Claude Code / Codex 탭을 선택하세요.",
+        "tooLarge": "파일 또는 설정이 너무 큽니다(파일 최대 8 MiB, 공급자 최대 2000개).",
+        "empty": "처리할 공급자 설정이 없습니다.",
+        "wrongPassword": "암호가 틀렸거나 암호화 파일이 손상되었습니다. 가져오지 않았습니다.",
+        "failed": "작업에 실패했습니다. 파일 권한과 설정을 확인한 후 다시 시도하세요.",
+        "busy": "다른 가져오기/내보내기가 진행 중입니다. 나중에 다시 시도하세요.",
+        "timeout": "결과 대기 시간이 초과되었습니다. 작업이 진행 중일 수 있으므로 다시 시도하기 전에 목록이나 내보낸 파일을 확인하세요."
+      },
       "currentConfig": "현재 ClaudeCode 설정",
       "loading": "로딩 중...",
       "noConfig": "설정 없음",
@@ -1103,7 +1146,9 @@
       "claude-vscode": "이 세션은 VS Code 확장에서 생성되었으며 CLI에 기본적으로 표시되지 않습니다. 터미널 CLI의 /resume 목록에 표시하려면 'CLI로 변환'을 클릭하세요",
       "remote": "이 세션은 원격 Claude Code 인스턴스에서 생성되었습니다"
     },
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "sessionInUse": "사용 중인 세션은 삭제할 수 없습니다.",
+    "deleteFailed": "세션을 삭제하지 못했습니다. 다시 시도해 주세요."
   },
   "permission": {
     "dialogTitle": "권한 요청",
@@ -1149,7 +1194,11 @@
     "timeoutWarning": "곧 답변해주세요, {{seconds}}초 후 대화상자가 닫힙니다",
     "expand": "펼치기",
     "collapse": "접기",
-    "clickToAnswer": "클릭하여 답변하기"
+    "clickToAnswer": "클릭하여 답변하기",
+    "recordTitle": "Codex 질문",
+    "recordAnswer": "내 답변",
+    "recordSkipped": "건너뜀(답변하지 않고 닫음)",
+    "answerNotSent": "다른 대화가 열려 있어 Codex 질문에 대한 답변을 보내지 못했습니다. 원래 대화로 돌아가 답변을 다시 보내 주세요."
   },
   "planApproval": {
     "title": "계획 승인 대기 중",
@@ -2108,14 +2157,85 @@
     "updateClaudeSdkCustomCli": "SDK를 {{version}}(으)로 업데이트했지만 플러그인은 직접 지정한 Claude CLI({{path}})를 실행합니다. 방법 2로 업데이트하세요.",
     "updateClaudeSdkAlreadyLatest": "{{version}}은(는) 이 플러그인이 지원하는 최신 SDK이지만, 이 모델에는 더 새로운 Claude Code가 필요합니다. 새 플러그인 버전이 나오면 플러그인을 업데이트하거나 다른 모델을 선택하세요.",
     "codexWriterConflict": {
-      "title": "Codex 스레드 사용 중",
-      "intro": "다른 Codex 턴이나 클라이언트가 이 대화에 기록 중이어서 이번 전송을 시작할 수 없습니다.",
-      "reason": "이 대화를 사용하는 클라이언트에서 턴을 중지하고 종료를 확인한 뒤 다시 보내세요."
+      "title": "Codex 대화가 사용 중입니다",
+      "intro": "다른 Codex 클라이언트 또는 채팅 창이 이 대화의 쓰기 권한을 보유하고 있습니다.",
+      "reason": "대화가 만료되었다는 뜻은 아닙니다. 플러그인은 잠금을 삭제하거나 다른 클라이언트를 자동으로 중지하지 않습니다.",
+      "solutions": {
+        "releaseWriter": {
+          "title": "사용 중인 클라이언트에서 대화 해제",
+          "step0": "이 대화를 사용하는 Codex 클라이언트 또는 채팅 창에서 작업을 중지하고 대화를 닫거나 해제하세요.",
+          "step1": "해제된 것을 확인한 후 여기서 다시 보내세요. 강제로 접근하기 위해 쓰기 잠금 파일을 삭제하지 마세요."
+        }
+      }
+    },
+    "codexThreadClosing": {
+      "title": "Codex 대화를 닫는 중입니다",
+      "intro": "Codex가 이 대화를 닫는 작업을 완료하지 않아 아직 복원할 수 없습니다.",
+      "reason": "플러그인은 이 명시적인 종료 상태에 대해서만 작업 시작 전에 잠시 재시도합니다. 계속 실패하면 원래 오류를 표시합니다.",
+      "solutions": {
+        "waitForClose": {
+          "title": "이전 대화가 닫힐 때까지 대기",
+          "step0": "이전 Codex 클라이언트 또는 채팅 창에서 대화를 해제한 후 다시 시도하세요.",
+          "step1": "반복되면 이전 클라이언트가 대화를 해제한 후 기록 목록에서 대화를 다시 여세요."
+        }
+      }
+    },
+    "codexThreadHistoryMissing": {
+      "title": "Codex 기록을 찾을 수 없습니다",
+      "intro": "현재 Codex 실행 환경에서 이 대화의 원본 기록을 찾을 수 없습니다.",
+      "reason": "기록 디렉터리가 달라졌거나 첫 초기화가 완료되지 않아 발생할 수도 있습니다. 기록이 삭제되었다고 단정할 수 없습니다.",
+      "solutions": {
+        "checkStorage": {
+          "title": "원래 기록 위치 확인",
+          "step0": "Codex가 원래 CODEX_HOME과 같은 호스트 환경을 사용하는지 확인하세요. 로컬 환경과 WSL의 차이에 특히 주의하세요.",
+          "step1": "원래 기록 디렉터리 또는 백업을 복원한 후 기록 목록에서 대화를 다시 여세요."
+        },
+        "startNewIfMissing": {
+          "title": "기록을 복구할 수 없을 때만 새로 시작",
+          "step0": "원래 기록을 복구할 수 없다고 확인한 경우에만 새 대화를 만들고 필요한 맥락을 다시 제공하세요. 여기에 표시된 메시지만으로 Codex의 원본 맥락이 자동 복원되지는 않습니다."
+        }
+      }
+    },
+    "codexThreadArchived": {
+      "title": "Codex 대화가 보관되어 있습니다",
+      "intro": "Codex에서 이 대화가 보관 상태이므로 바로 재개할 수 없다고 보고했습니다.",
+      "reason": "보관 상태는 스레드 만료를 뜻하지 않습니다. 복원을 위해 새 대화를 만들 필요는 없습니다.",
+      "solutions": {
+        "unarchive": {
+          "title": "원래 대화의 보관 해제",
+          "step0": "원래 Codex 클라이언트에서 보관을 해제하거나 원래 오류에 표시된 보관 해제 명령을 따르세요.",
+          "step1": "플러그인의 기록 목록을 새로 고치고 이 대화를 다시 연 후 보내세요."
+        }
+      }
+    },
+    "codexThreadResumeConfiguration": {
+      "title": "Codex 설정으로 인해 복원할 수 없습니다",
+      "intro": "Codex가 설정을 불러오지 못했거나 필수 MCP 서버 초기화에 실패했습니다.",
+      "reason": "새 대화로 같은 설정 문제가 해결되지는 않습니다. 플러그인은 필수 서비스를 자동으로 비활성화하지 않습니다.",
+      "solutions": {
+        "repairConfiguration": {
+          "title": "Codex가 보고한 설정 문제 수정",
+          "step0": "원래 오류에서 실패한 설정 항목 또는 필수 MCP 서버를 확인하세요.",
+          "step1": "Codex, 제공업체 또는 MCP 설정에서 해당 설정, 인증 정보, 연결을 수정한 후 대화를 다시 열고 재시도하세요."
+        }
+      }
     },
     "codexThreadResume": {
-      "title": "세션 스레드가 더 이상 유효하지 않습니다",
-      "intro": "새 세션을 만들면 이 문제가 해결됩니다. 현재 세션의 스레드 ID가 Codex 서버에 더 이상 존재하지 않습니다.",
-      "reason": "Codex는 일정 시간이 지나면 오래된 스레드를 삭제하며, 이전 세션을 재개하려 할 때 이 오류가 발생할 수 있습니다."
+      "title": "Codex 대화를 복원할 수 없습니다",
+      "intro": "Codex가 이 대화 복원에 실패했습니다. 구체적인 원인은 아직 확인되지 않았습니다.",
+      "reason": "복원 실패만으로 대화 만료를 단정할 수 없습니다. 플러그인은 원래 대화를 유지하며 빈 대화로 자동 교체하지 않습니다.",
+      "solutions": {
+        "inspectCause": {
+          "title": "재시도 전 원래 오류 확인",
+          "step0": "원래 오류와 이 대화에서 사용한 제공업체, Codex 실행 환경, 기록 디렉터리를 확인하세요.",
+          "step1": "응답이나 도구 실행이 이미 표시된 경우 중복 작업을 피하도록 결과를 확인한 후 다시 보내세요."
+        },
+        "checkCli": {
+          "title": "Codex CLI 호환성 확인",
+          "step0": "터미널 버전을 플러그인의 CLI 페이지와 비교하세요. 사용자 지정 경로라면 해당 실행 파일에 --version을 지정하세요.",
+          "step1": "원래 오류가 지원되지 않는 CLI 또는 프로토콜 버전을 나타내면 공식 안내에 따라 Codex를 업데이트하고 CLI 감지를 새로 고치세요."
+        }
+      }
     },
     "sdkNativeBinaryMissing": {
       "title": "SDK 설치 불완전 — 네이티브 바이너리 누락",

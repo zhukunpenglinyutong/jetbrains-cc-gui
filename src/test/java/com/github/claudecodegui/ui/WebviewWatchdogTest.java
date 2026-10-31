@@ -4,6 +4,7 @@ import org.junit.Test;
 
 import javax.swing.JPanel;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -175,6 +176,63 @@ public class WebviewWatchdogTest {
         assertTrue(watchdog.tryAcquireRecoveryPermit(false));
         assertFalse(watchdog.tryAcquireRecoveryPermit(false));
         return watchdog;
+    }
+
+    @Test
+    public void pendingPreparationDoesNotSpendStartupBudgetOrAdvanceRecoveryStage() {
+        AtomicLong now = new AtomicLong(1_000L);
+        AtomicBoolean preparationFinished = new AtomicBoolean();
+        AtomicInteger reloads = new AtomicInteger();
+        AtomicInteger recreates = new AtomicInteger();
+        WebviewWatchdog watchdog = new WebviewWatchdog(
+                new ShowingPanel(true), () -> true, reloads::incrementAndGet, recreates::incrementAndGet,
+                () -> false, () -> false, () -> false, now::get, Runnable::run, preparationFinished::get);
+
+        for (int i = 0; i < 5; i++) {
+            now.addAndGet(1_000_000L);
+            watchdog.checkHealth();
+        }
+        assertEquals(0, reloads.get());
+        assertEquals(0, recreates.get());
+
+        preparationFinished.set(true);
+        // No additional cooldown is required after a skipped recovery.
+        watchdog.checkHealth();
+        assertEquals(1, reloads.get());
+        assertEquals(0, recreates.get());
+        now.addAndGet(1_000_000L);
+        watchdog.checkHealth();
+        assertEquals(1, recreates.get());
+        now.addAndGet(1_000_000L);
+        watchdog.checkHealth();
+        assertEquals(1, reloads.get());
+        assertEquals(1, recreates.get());
+    }
+
+    @Test
+    public void preparationBeginningAfterHealthCheckCancelsQueuedRecoveryWithoutSpendingBudget() {
+        AtomicLong now = new AtomicLong(1_000L);
+        AtomicBoolean recoveryAllowed = new AtomicBoolean(true);
+        AtomicReference<Runnable> queued = new AtomicReference<>();
+        AtomicInteger recoveries = new AtomicInteger();
+        WebviewWatchdog watchdog = new WebviewWatchdog(
+                new ShowingPanel(true), () -> false, recoveries::incrementAndGet, recoveries::incrementAndGet,
+                () -> false, () -> false, () -> false, now::get, queued::set, recoveryAllowed::get);
+        now.addAndGet(1_000_000L);
+        watchdog.checkHealth();
+        recoveryAllowed.set(false);
+
+        queued.getAndSet(null).run();
+
+        assertEquals(0, recoveries.get());
+        recoveryAllowed.set(true);
+        watchdog.checkHealth();
+        queued.getAndSet(null).run();
+        assertEquals(1, recoveries.get());
+        now.addAndGet(1_000_000L);
+        watchdog.checkHealth();
+        queued.getAndSet(null).run();
+        assertEquals(2, recoveries.get());
     }
 
     private static WebviewWatchdog createWatchdog() {

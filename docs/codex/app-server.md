@@ -66,6 +66,25 @@ STOPPED → STARTING → INITIALIZING → READY → DRAINING → STOPPED
 - `READY` 时才派发 FIFO 操作；`#drainQueue` 在非 READY 时先 `ensureRuntime` 再继续。
 - 连接意外退出（EOF/崩溃）→ `#failRuntime` 一次性收尾：所有未结算 operation 标记 failed、队列清空、thread 状态回到 `unloaded`（**thread id 保留**）、child 关闭。恢复 = 重新 initialize + `thread/resume`，绝不自动重发 `turn/start`。
 
+### 恢复失败的诊断与受限重试
+
+`thread/resume` 是恢复接口名，不是“线程过期”的错误类型。当前本机运行时依赖其有效 `CODEX_HOME` 下的原生历史，不能因恢复失败就断定远端服务定期删除了线程。原生 RPC 错误正文未必包含接口名，service 在恢复失败时补充 `thread/resume:` 来源，同时保留原始错误、RPC code、dispatch phase 与 cause，供诊断与不确定请求的清理继续使用。
+
+只有原生明确以 `RPC_ERROR` / `-32600` 拒绝 `thread/resume`，且正文为 `thread <id> is closing; retry thread/resume after the thread is closed` 时，service 才在 250ms、750ms 后重试同一恢复请求，最多三次尝试。同一次恢复保留首次请求的提供商、配置和开发者指令，等待期间的启动配置变更仍在空闲边界重建后生效。并发 preconnect 与发送共用恢复 promise、诊断来源和重试预算；等待结束后再次校验 native client 身份、存活状态及请求方是否仍需要恢复。唯一的发送被取消或运行时更换后不再重试；独立的 preconnect 仍在等待时可以继续恢复，但已取消的发送不启动任务。旧恢复的收尾只清除原 native client 的启动标记，不能解除新运行时等待原生确认的停止守卫。超时、未知写入结果、writer 占用及其他错误均不自动重试，不自动新建线程、切换历史目录或重放任务。
+
+前端先识别具体原因，再使用通用恢复失败提示兜底；原始错误始终保留。诊断卡的说明步骤只显示操作指引，不自动执行命令：
+
+| 诊断 | 识别依据与处理指引 |
+| --- | --- |
+| 会话被占用 | `active writer`、`live local writer` 或 Java 返回的 `another window` / `another chat window`；在持有者处停止任务并关闭或释放会话，确认释放后重发，不删除锁文件或停止其他客户端 |
+| 会话仍在关闭 | 原生明确返回上述 closing 拒绝；受限重试仍失败时，等待原客户端释放后从历史重新打开 |
+| 原生历史找不到 | `no rollout found for thread/conversation id`；核对原 `CODEX_HOME`、本机/WSL 宿主和备份；只有历史确实无法找回时才另建会话并重新提供上下文 |
+| 会话已归档 | 原生明确说明 session/thread 已归档；先在原客户端取消归档，或按原始错误的命令操作，再刷新历史列表 |
+| 配置或必需 MCP 初始化失败 | 原生明确指出配置加载/解析或 required MCP 失败；修正对应配置、凭证或连接，不自动禁用必需服务 |
+| 未知恢复失败 | 保留具体原因；核对运行环境，只有原始错误指出版本不兼容时才按官方指引更新 CLI；已有回复或工具执行时先核实结果再重发 |
+
+十种语言同步维护诊断与处理步骤。`errorMatcher.test.ts` 验证分类优先级、无接口名前缀的原生错误、无关错误不误判及各语言步骤完整性；消息渲染直接使用这一诊断结果，不再重复匹配占用文案。手动压缩失败也保留原始错误，交由同一消息诊断展示处理步骤；已有 native callback 报错时仍不重复插入消息。诊断卡/消息渲染和压缩状态测试验证这些入口。`codex-appserver-service.test.js` 覆盖共享重试、重试参数保持不变、耗尽预算、取消/换代、旧重试不清除新启动守卫及不可重试错误不重复派发。
+
 ### 操作与派发阶段
 
 每个 operation 依次经过 `notWritten → writtenUnconfirmed → nativeTurnKnown → terminal`：
@@ -158,6 +177,7 @@ GUI 的 env_key 查找使用实际 CODEX_HOME/config.toml，只读 TOML provider
 ## 编辑、命令、图片和 compact 的显示
 
 - `apply_patch`（直接或旧 exec 的静态实参）与 `fileChange` 共用 Claude 的编辑标题、操作栏、diff 和默认展开设置，展示全部文件、增删行和真实状态，变化类型及移动路径保留在悬停说明。真实错误为红色状态，详情收进展开区域。混合/部分动态 wrapper 中可确认的 literal 补丁也可预览；缺少单独结果时为灰色 unknown，完整 wrapper 与输出保留。历史只用于显示，不执行补丁；hunk 只在聊天中预览，不冒充完整 old/new 文件内容。
+- 原生 `fileChange` 的 `add` / `delete` 将完整正文放在 `diff`，只有 `update` 的 `diff` 是补丁；旧回执可显式提供 `content` 或 `unified_diff`。新增、删除正文按实际类型逐行展示和统计，保留字面量 `+` / `-`、独立 `\r`、空行与原始末尾换行；展示时只将 CRLF 规范化为 LF，不能把 Markdown 列表或 diff 示例误读为修改指令。工具卡片、批准预览及编辑账本使用同一解析结果，流式快照与 `apply_patch` 历史回放的增删行数保持一致。
 - `commandExecution` 的原生类型不保证提供“执行原因/summary”；已有 description/summary/title 被保留，原生批准 `reason` 与旧 `justification` 单列为批准理由。`commandActions` 的读取、列目录和搜索可形成动作摘要；legacy 历史回执的 `parsed_cmd` 沿用相同显示规则（兼容 `list_files` / `listFiles`）。缺少动作摘要时直接显示命令，历史回放不再生成 `Read last lines`、`Run node` 等通用英文标签，保证批量命令的单行展示与流式一致；旧字面量数组回放同样保留 Bash 工具类型，不再按命令文本改成 Read 或 Glob。不能把前一段思考或命令名编造成执行动机。
 - `dynamicToolCall` 使用原生 namespace/tool/arguments，文本和图片结果保留为标准结果块数组。inProgress 不显示已完成，终态和 success=false 按实际状态显示。通用卡片展开可查看已有结果正文/图片，混合 wrapper 的实际错误输出也可查看。
 - MCP 的 content 保持块数组，原生 image/data/mimeType 映射为共用图片 source，structuredContent 单独保留为可读块；实时与旧历史回执共用显示约定。网页 item/started 即可显示，在所属 operation 中断或失败后补配对终态，避免持续 pending。

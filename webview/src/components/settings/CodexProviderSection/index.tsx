@@ -204,6 +204,7 @@ const CodexProviderSection = ({
       {!codexLoading && (
         <div className={styles.providerListContainer}>
           <CodexProviderListHeader
+            addToast={addToast}
             importMenuRef={importMenuRef}
             importMenuOpen={importMenuOpen}
             onToggleImportMenu={() => setImportMenuOpen(!importMenuOpen)}

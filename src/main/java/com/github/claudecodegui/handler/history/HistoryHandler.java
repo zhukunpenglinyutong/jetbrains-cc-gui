@@ -66,6 +66,15 @@ public class HistoryHandler extends BaseMessageHandler {
         this.sessionLoadCallback = callback;
     }
 
+    /**
+     * Push a restored session's persisted custom title to the webview.
+     *
+     * @param sessionId the session whose saved title should be applied
+     */
+    public void pushCustomTitleToWebview(String sessionId) {
+        historyMetadataService.pushCustomTitle(sessionId);
+    }
+
     @Override
     public String[] getSupportedTypes() {
         return SUPPORTED_TYPES;

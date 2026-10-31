@@ -1,10 +1,17 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { Attachment } from '../components/ChatInputBox/types';
+import { restoreQuotes, snapshotQuotes } from '../components/ChatInputBox/utils/quoteRegistry';
+import type { QuoteSnapshot } from '../components/ChatInputBox/utils/quoteRegistry';
 
 export interface QueuedMessage {
   id: string;
   content: string;
   attachments?: Attachment[];
+  /**
+   * Text behind the quote chips in `content`. The input prunes quotes it no
+   * longer shows, so a queued message keeps its own copy for send and edit.
+   */
+  quotes?: QuoteSnapshot;
   queuedAt: number;
 }
 
@@ -22,12 +29,40 @@ export interface UseMessageQueueReturn {
   enqueue: (content: string, attachments?: Attachment[]) => void;
   /** Remove message from queue by id */
   dequeue: (id: string) => void;
+  /**
+   * Remove a queued message and return it so its content and attachments can be
+   * restored into the input draft for editing. Messages around it keep their
+   * order; an unknown id returns undefined and leaves the queue untouched.
+   */
+  dequeueForEdit: (id: string) => QueuedMessage | undefined;
+  /** Read a queued message without removing it */
+  peekQueuedMessage: (id: string) => QueuedMessage | undefined;
   /** Clear entire queue */
   clearQueue: () => void;
   /** Reorder the queue by an ordered list of ids (index 0 executes first) */
   reorder: (orderedIds: string[]) => void;
   /** Whether queue has items */
   hasQueuedMessages: boolean;
+}
+
+/**
+ * Rebuild the queue in the order of `orderedIds` (index 0 executes next).
+ * Kept out of the hook so the ordering rules read on their own; the hook still
+ * has to move the queue mirror with the result.
+ */
+function applyQueueOrder(queue: QueuedMessage[], orderedIds: string[]): QueuedMessage[] {
+  const byId = new Map(queue.map(item => [item.id, item]));
+  const seen = new Set<string>();
+  const ordered: QueuedMessage[] = [];
+  for (const id of orderedIds) {
+    const item = byId.get(id);
+    if (item && !seen.has(id)) {
+      ordered.push(item);
+      seen.add(id);
+    }
+  }
+  const remaining = queue.filter(item => !seen.has(item.id));
+  return [...ordered, ...remaining];
 }
 
 /**
@@ -45,6 +80,16 @@ export function useMessageQueue({
   // drained the whole queue in one idle period, overlapping multiple sends on
   // the same Codex thread (writer-lock conflict).
   const dispatchedAtRef = useRef<number | null>(null);
+  // The live queue. Every mutation moves it first and then publishes it to
+  // state, so a removal can report what it took out and the idle dispatch
+  // never sends a message an edit already took, even when either lands
+  // between a render and its effects.
+  const queueRef = useRef<QueuedMessage[]>(queue);
+
+  const commitQueue = useCallback((next: QueuedMessage[]) => {
+    queueRef.current = next;
+    setQueue(next);
+  }, []);
 
   // Generate unique ID
   const generateId = useCallback(() => {
@@ -53,24 +98,43 @@ export function useMessageQueue({
 
   // Add message to queue
   const enqueue = useCallback((content: string, attachments?: Attachment[]) => {
+    const quotes = snapshotQuotes(content);
     const newItem: QueuedMessage = {
       id: generateId(),
       content,
       attachments,
+      ...(quotes ? { quotes } : {}),
       queuedAt: Date.now(),
     };
-    setQueue(prev => [...prev, newItem]);
-  }, [generateId]);
+    commitQueue([...queueRef.current, newItem]);
+  }, [generateId, commitQueue]);
 
-  // Remove message from queue
+  // Remove a message for editing: the caller gets its payload back so the
+  // draft can be restored in the same interaction (same semantics as dequeue
+  // for the remaining items). The ref keeps repeated calls in one tick safe —
+  // a state read would hand the same message out twice.
+  const dequeueForEdit = useCallback((id: string): QueuedMessage | undefined => {
+    const removed = queueRef.current.find(item => item.id === id);
+    if (!removed) return undefined;
+    commitQueue(queueRef.current.filter(item => item.id !== id));
+    return removed;
+  }, [commitQueue]);
+
+  /** Read a queued message without removing it (used to vet an edit first) */
+  const peekQueuedMessage = useCallback(
+    (id: string): QueuedMessage | undefined => queueRef.current.find(item => item.id === id),
+    [],
+  );
+
+  // Remove message from queue (the removed payload is ignored here)
   const dequeue = useCallback((id: string) => {
-    setQueue(prev => prev.filter(item => item.id !== id));
-  }, []);
+    dequeueForEdit(id);
+  }, [dequeueForEdit]);
 
   // Clear entire queue
   const clearQueue = useCallback(() => {
-    setQueue([]);
-  }, []);
+    commitQueue([]);
+  }, [commitQueue]);
 
   /**
    * Reorder the queue by the given id sequence (orderedIds[0] executes next).
@@ -79,21 +143,8 @@ export function useMessageQueue({
    *   their original order so no message is ever dropped.
    */
   const reorder = useCallback((orderedIds: string[]) => {
-    setQueue(prev => {
-      const byId = new Map(prev.map(item => [item.id, item]));
-      const seen = new Set<string>();
-      const ordered: QueuedMessage[] = [];
-      for (const id of orderedIds) {
-        const item = byId.get(id);
-        if (item && !seen.has(id)) {
-          ordered.push(item);
-          seen.add(id);
-        }
-      }
-      const remaining = prev.filter(item => !seen.has(item.id));
-      return [...ordered, ...remaining];
-    });
-  }, []);
+    commitQueue(applyQueueOrder(queueRef.current, orderedIds));
+  }, [commitQueue]);
 
   // Auto-execute next message whenever the chat is idle. Dequeue and execute
   // must stay atomic inside this effect: deferring the execution behind a
@@ -111,24 +162,32 @@ export function useMessageQueue({
   // started a turn. A dispatch that bails before flipping loading (e.g. SDK
   // missing) leaves the gate closed so the queue waits instead of spamming
   // doomed sends; any subsequent turn reopens it.
+  //
+  // `queue` only triggers the effect; the live ref is what gets read, because
+  // a message taken for editing after this render committed is already gone
+  // from the ref while the render's `queue` still holds it.
   useEffect(() => {
     if (isLoading) {
       dispatchedAtRef.current = null;
       return;
     }
-    if (queue.length === 0 || dispatchedAtRef.current !== null) {
+    const [nextMessage, ...remaining] = queueRef.current;
+    if (!nextMessage || dispatchedAtRef.current !== null) {
       return;
     }
-    const nextMessage = queue[0];
     dispatchedAtRef.current = Date.now();
-    setQueue(prev => prev.slice(1));
+    commitQueue(remaining);
+    // The input may have pruned these while the message waited.
+    restoreQuotes(nextMessage.quotes);
     onExecute(nextMessage.content, nextMessage.attachments);
-  }, [isLoading, queue, onExecute]);
+  }, [isLoading, queue, onExecute, commitQueue]);
 
   return {
     queue,
     enqueue,
     dequeue,
+    dequeueForEdit,
+    peekQueuedMessage,
     clearQueue,
     reorder,
     hasQueuedMessages: queue.length > 0,

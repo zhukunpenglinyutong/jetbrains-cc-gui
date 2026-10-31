@@ -1,6 +1,12 @@
 package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.session.CallbackHandler;
+import com.github.claudecodegui.session.ClaudeMessageHandler;
+import com.github.claudecodegui.session.MessageMerger;
+import com.github.claudecodegui.session.MessageParser;
+import com.github.claudecodegui.session.SessionExecutionState;
+import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
@@ -12,6 +18,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -179,6 +186,7 @@ public class ClaudeSDKBridgeRefactorTest {
 
         assertTrue(hadSendError.get());
         assertFalse(result.success);
+        assertFalse(result.cancelled);
         assertEquals("boom", result.error);
         assertEquals(1, callback.errors.size());
         assertEquals("boom", callback.errors.get(0));
@@ -203,6 +211,20 @@ public class ClaudeSDKBridgeRefactorTest {
 
     @Test
     public void daemonExecutorCompletesGracefullyOnUserAbort() throws Exception {
+        assertDaemonAbortCompletesTheTurn(false, false);
+    }
+
+    @Test
+    public void daemonExecutorRecordsCancellationWhenAbortRacesAnExceptionalFuture() throws Exception {
+        assertDaemonAbortCompletesTheTurn(true, false);
+    }
+
+    @Test
+    public void daemonAbortStillSettlesCancellationAfterAnEarlierSendError() throws Exception {
+        assertDaemonAbortCompletesTheTurn(false, true);
+    }
+
+    private void assertDaemonAbortCompletesTheTurn(boolean exceptionalCompletion, boolean errorBeforeAbort) throws Exception {
         Gson gson = new Gson();
         ClaudeDaemonRequestExecutor executor = new ClaudeDaemonRequestExecutor(
                 com.intellij.openapi.diagnostic.Logger.getInstance(ClaudeDaemonRequestExecutor.class),
@@ -210,10 +232,22 @@ public class ClaudeSDKBridgeRefactorTest {
                 new ClaudeStreamAdapter(gson),
                 new ClaudeJsonOutputExtractor()
         );
-        RecordingCallback callback = new RecordingCallback();
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.beginTurn();
+        state.getExecutionState().activity(state.getExecutionState().currentTurn(), SessionExecutionState.Phase.STOPPING);
+        ClaudeMessageHandler handler = new ClaudeMessageHandler(null, state, new CallbackHandler(),
+                new MessageParser(), new MessageMerger(), gson);
+        RecordingCallback callback = new RecordingCallback() {
+            @Override
+            public void onComplete(SDKResult result) {
+                super.onComplete(result);
+                handler.onComplete(result);
+            }
+        };
 
         SDKResult result = executor.sendMessageViaDaemon(
-                new AbortingDaemonBridge(),
+                new AbortingDaemonBridge(exceptionalCompletion, errorBeforeAbort),
                 "channel-1",
                 "hello",
                 null,
@@ -228,12 +262,16 @@ public class ClaudeSDKBridgeRefactorTest {
                 null,
                 null,
                 callback
-        ).get();
+        ).get(5, TimeUnit.SECONDS);
 
         assertFalse(result.success);
+        assertTrue(result.cancelled);
         assertEquals("User interrupted", result.error);
         assertEquals(1, callback.completions.size());
-        assertTrue(callback.errors.isEmpty());
+        assertEquals(errorBeforeAbort ? 1 : 0, callback.errors.size());
+        assertEquals(SessionExecutionState.Outcome.CANCELLED, state.getExecutionSnapshot().outcome());
+        assertFalse(state.isBusy());
+        assertFalse(state.isLoading());
     }
 
     @Test
@@ -280,8 +318,13 @@ public class ClaudeSDKBridgeRefactorTest {
     }
 
     private static class AbortingDaemonBridge extends DaemonBridge {
-        AbortingDaemonBridge() {
+        private final boolean exceptionalCompletion;
+        private final boolean errorBeforeAbort;
+
+        AbortingDaemonBridge(boolean exceptionalCompletion, boolean errorBeforeAbort) {
             super(null, null, null);
+            this.exceptionalCompletion = exceptionalCompletion;
+            this.errorBeforeAbort = errorBeforeAbort;
         }
 
         @Override
@@ -290,7 +333,13 @@ public class ClaudeSDKBridgeRefactorTest {
                 JsonObject params,
                 DaemonOutputCallback callback
         ) {
+            if (errorBeforeAbort) {
+                callback.onLine("[SEND_ERROR] {\"error\":\"Transport failed before abort acknowledgement\"}");
+            }
             callback.onAbort();
+            if (exceptionalCompletion) {
+                return CompletableFuture.failedFuture(new IllegalStateException("Transport closed after abort"));
+            }
             return CompletableFuture.completedFuture(false);
         }
 

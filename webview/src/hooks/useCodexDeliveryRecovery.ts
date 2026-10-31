@@ -19,6 +19,8 @@ interface UseCodexDeliveryRecoveryOptions {
 interface DeliveryAcknowledgement {
   interactionKey: string;
   error: string | null;
+  /** The runtime retired an answer it could not confirm; its close event arrives first. */
+  retiredUnconfirmed: boolean;
   retryable: boolean;
   /** Java gave up waiting for the daemon; the answer may still take effect. */
   unconfirmed: boolean;
@@ -31,6 +33,7 @@ function readAcknowledgement(detail: unknown): DeliveryAcknowledgement | null {
     return {
       interactionKey: ack.interactionKey,
       error: typeof ack.error === 'string' && ack.error ? ack.error : null,
+      retiredUnconfirmed: ack.code === 'DELIVERY_UNCONFIRMED',
       retryable: ack.retryable !== false,
       unconfirmed: ack.deliveryUnconfirmed === true,
     };
@@ -70,8 +73,16 @@ export function useCodexDeliveryRecovery({ t, addToast, reopen }: UseCodexDelive
   useEffect(() => {
     const handleAcknowledgement = (event: Event) => {
       const ack = readAcknowledgement((event as CustomEvent).detail);
-      const submitted = ack ? submittedRef.current.get(ack.interactionKey) : undefined;
-      if (!ack || !submitted) return;
+      if (!ack) return;
+      const submitted = submittedRef.current.get(ack.interactionKey);
+      if (!submitted) {
+        // Nothing can be reopened, but the user must still learn the answer may not have arrived.
+        if (ack.error !== null && ack.retiredUnconfirmed) {
+          const { t: translate, addToast: notify } = optionsRef.current;
+          notify?.(translate('permission.codexDeliveryUnconfirmed', { error: ack.error }), 'error');
+        }
+        return;
+      }
       submittedRef.current.delete(ack.interactionKey);
       if (ack.error === null) return;
 

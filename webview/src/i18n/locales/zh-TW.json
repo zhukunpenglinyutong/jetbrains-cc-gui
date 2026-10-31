@@ -44,6 +44,17 @@
     "currentMode": "目前模式: {{mode}}",
     "currentModel": "目前模型: {{model}}",
     "removeAttachment": "移除附件",
+    "queue": {
+      "edit": "編輯排隊訊息",
+      "remove": "從佇列移除",
+      "editLabel": "編輯排隊訊息 {{position}}",
+      "removeLabel": "從佇列移除訊息 {{position}}",
+      "reorderLabel": "重新排序訊息 {{position}}",
+      "reorderHint": "拖曳可排序，聚焦後可用方向鍵調整",
+      "mergedIntoDraft": "排隊訊息已合併到目前草稿",
+      "attachmentsNotRestored": "排隊訊息的附件未能回填到草稿",
+      "editBlockedAttachments": "此訊息的附件無法回填，已保留在佇列中"
+    },
     "closePreview": "關閉預覽",
     "loadingDropdown": "載入中...",
     "modelsLoadFailed": "模型列表載入失敗，點擊重試",
@@ -571,6 +582,38 @@
     "wechatPay": "微信",
     "paypal": "PayPal",
     "provider": {
+      "backup": {
+        "exportInvalidConfig": "匯出失敗：已儲存的供應商設定未通過驗證，未產生備份檔案。",
+        "errorProvider": "請檢查第 {{index}} 筆已儲存的供應商（不含本機設定或 CLI 登入項目）。",
+        "errorField": "欄位：{{field}}。",
+        "import": "匯入",
+        "export": "匯出",
+        "importFile": "從 CC GUI 設定檔匯入",
+        "importTitle": "匯入 {{engine}} 供應商",
+        "exportTitle": "匯出 {{engine}} 供應商",
+        "scope": "僅處理目前分頁中已儲存的供應商設定（含金鑰），不包含本機 CLI 登入狀態或啟用狀態。",
+        "mergeHint": "僅匯入可信任的檔案。相同設定會略過，不同設定會新增；不覆寫、不自動啟用。名稱、備註、ID 和建立時間不參與去重。",
+        "selectFile": "選擇設定檔",
+        "passwordOptional": "匯出密碼（選填）",
+        "passwordRequired": "請輸入檔案密碼",
+        "confirmPassword": "再次輸入密碼",
+        "plaintextWarning": "我了解：不設定密碼將以明文匯出 API 金鑰，請妥善保管檔案。",
+        "passwordHint": "密碼至少 8 個字元，建議使用長且獨特的密碼。遺失密碼無法復原。",
+        "passwordShort": "密碼至少需要 8 個字元。",
+        "passwordMismatch": "兩次輸入的密碼不一致。",
+        "working": "正在處理，請稍候…",
+        "importSuccess": "匯入完成：新增 {{imported}} 筆，略過 {{skipped}} 筆重複設定。",
+        "exportSuccess": "設定已匯出。",
+        "exportPartial": "已匯出 {{exported}} 筆供應商。略過 {{skipped}} 筆未通過驗證的已儲存供應商：{{positions}}（編號不含本機設定或 CLI 登入項目）。",
+        "invalidFile": "檔案格式無效、版本不支援或包含無效設定，未匯入。",
+        "wrongEngine": "檔案類型與目前分頁不符，請切換至對應的 Claude Code / Codex 分頁。",
+        "tooLarge": "檔案或設定過大（檔案上限 8 MiB，最多 2000 筆供應商）。",
+        "empty": "沒有可處理的供應商設定。",
+        "wrongPassword": "密碼錯誤或加密檔案已損壞，未匯入。",
+        "failed": "操作失敗，請檢查檔案權限與設定後重試。",
+        "busy": "另一個匯入／匯出操作正在進行，請稍後重試。",
+        "timeout": "等待結果逾時。操作可能仍在進行，請先檢查清單或匯出檔案，再重試。"
+      },
       "currentConfig": "目前ClaudeCode配置",
       "loading": "載入中...",
       "noConfig": "暫無配置資訊",
@@ -1059,7 +1102,9 @@
       "claude-vscode": "此會話由 VS Code 插件創建，CLI 默認不顯示。點擊「轉為CLI」可使其出現在終端 CLI 的 /resume 列表中",
       "remote": "此會話由遠程 Claude Code 實例創建"
     },
-    "loadMore": "載入更多"
+    "loadMore": "載入更多",
+    "sessionInUse": "會話正在使用中，無法刪除。",
+    "deleteFailed": "刪除會話失敗，請重試。"
   },
   "permission": {
     "dialogTitle": "權限請求",
@@ -1105,7 +1150,11 @@
     "timeoutWarning": "請儘快回答，對話框將在 {{seconds}} 秒後自動關閉",
     "expand": "展開",
     "collapse": "收起",
-    "clickToAnswer": "點擊回答"
+    "clickToAnswer": "點擊回答",
+    "recordTitle": "Codex 提問",
+    "recordAnswer": "你的回答",
+    "recordSkipped": "已略過（未作答就關閉了）",
+    "answerNotSent": "你對 Codex 提問的回答沒有送出，因為目前開啟的是另一個對話。請回到原來的對話，把回答重新傳送一次。"
   },
   "planApproval": {
     "title": "Plan Ready for Approval",
@@ -2124,14 +2173,85 @@
     "updateClaudeSdkCustomCli": "SDK 已更新至 {{version}}，但外掛執行的是自訂的 Claude CLI（{{path}}）。請按方案二更新它。",
     "updateClaudeSdkAlreadyLatest": "{{version}} 已是本外掛支援的最新 SDK，而此模型需要更新的 Claude Code。請在外掛發布新版本後更新外掛，或改用其他模型。",
     "codexWriterConflict": {
-      "title": "Codex 執行緒被佔用",
-      "intro": "此會話正由另一個 Codex 回合或用戶端寫入，本次傳送未能啟動。",
-      "reason": "請在正在使用此會話的用戶端停止回合，確認結束後再傳送。"
+      "title": "Codex 會話被佔用",
+      "intro": "另一個 Codex 用戶端或聊天視窗仍持有此會話的寫入權。",
+      "reason": "這不表示會話已過期。外掛不會自動刪除寫入鎖或停止其他用戶端。",
+      "solutions": {
+        "releaseWriter": {
+          "title": "在佔用會話的用戶端釋放它",
+          "step0": "在正在使用此會話的 Codex 用戶端或聊天視窗停止任務，並關閉或釋放該會話。",
+          "step1": "確認該用戶端釋放會話後，回到這裡重新傳送。請勿透過刪除寫入鎖檔案強制恢復。"
+        }
+      }
+    },
+    "codexThreadClosing": {
+      "title": "Codex 會話仍在關閉",
+      "intro": "Codex 尚未完成此會話的關閉流程，暫時無法恢復。",
+      "reason": "外掛會在任務啟動前針對這個明確的關閉狀態短暫重試；若仍未恢復，將保留原始錯誤。",
+      "solutions": {
+        "waitForClose": {
+          "title": "等待上一個會話完成關閉",
+          "step0": "等待原 Codex 用戶端或聊天視窗釋放此會話後，再次嘗試。",
+          "step1": "若反覆出現，請在原用戶端釋放會話後，從歷史清單重新開啟此會話。"
+        }
+      }
+    },
+    "codexThreadHistoryMissing": {
+      "title": "找不到 Codex 歷史記錄",
+      "intro": "目前的 Codex 執行環境找不到此會話的原生歷史記錄。",
+      "reason": "歷史目錄變更或首次初始化未完成都可能導致此錯誤，不能據此判定記錄已被刪除。",
+      "solutions": {
+        "checkStorage": {
+          "title": "檢查原歷史記錄的位置",
+          "step0": "確認 Codex 使用原來的 CODEX_HOME 與主機環境，尤其注意本機與 WSL 的差異。",
+          "step1": "恢復原歷史目錄或備份後，從歷史清單重新開啟此會話。"
+        },
+        "startNewIfMissing": {
+          "title": "僅在歷史無法找回時重新開始",
+          "step0": "只有確認原始歷史無法恢復時，才新建會話並重新提供必要的上下文。這裡顯示的聊天訊息不會自動恢復 Codex 的原生上下文。"
+        }
+      }
+    },
+    "codexThreadArchived": {
+      "title": "Codex 會話已封存",
+      "intro": "Codex 回報此會話已封存，無法直接繼續。",
+      "reason": "封存不表示執行緒過期，恢復此會話不需要另建會話。",
+      "solutions": {
+        "unarchive": {
+          "title": "取消原會話的封存",
+          "step0": "在原 Codex 用戶端取消封存，或依原始錯誤中提供的取消封存命令操作。",
+          "step1": "重新整理外掛的歷史清單，重新開啟此會話後再傳送。"
+        }
+      }
+    },
+    "codexThreadResumeConfiguration": {
+      "title": "Codex 設定阻止了會話恢復",
+      "intro": "Codex 無法載入設定，或某個必要的 MCP 服務初始化失敗。",
+      "reason": "新建會話無法修復同一份設定，外掛也不會自動停用必要的服務。",
+      "solutions": {
+        "repairConfiguration": {
+          "title": "修復 Codex 指出的設定問題",
+          "step0": "查看原始錯誤，確認失敗的設定項目或必要的 MCP 服務。",
+          "step1": "在 Codex、供應商或 MCP 設定中修復對應的設定、憑證或連線，再重新開啟會話並重試。"
+        }
+      }
     },
     "codexThreadResume": {
-      "title": "工作階段執行緒已失效",
-      "intro": "新建工作階段即可解決此問題。目前工作階段的執行緒 ID 在 Codex 伺服器端已不存在。",
-      "reason": "Codex 服務端會在一段時間後清除舊執行緒，繼續上一次工作階段時可能觸發此錯誤。"
+      "title": "無法恢復 Codex 會話",
+      "intro": "Codex 恢復此會話失敗，目前尚未確認具體原因。",
+      "reason": "恢復失敗不代表會話已過期。外掛會保留原會話身分，不會靜默替換成空白會話。",
+      "solutions": {
+        "inspectCause": {
+          "title": "先查看原始錯誤再重試",
+          "step0": "查看原始錯誤，並核對此會話使用的供應商、Codex 執行環境與歷史目錄。",
+          "step1": "如果已經出現回覆或工具執行，請先確認結果再重新傳送，避免重複執行任務。"
+        },
+        "checkCli": {
+          "title": "檢查 Codex CLI 相容性",
+          "step0": "比較終端機中的版本與外掛 CLI 頁面；若設定了自訂 CLI 路徑，請對該程式執行 --version。",
+          "step1": "若原始錯誤指出 CLI 或協定版本不受支援，請依官方說明更新 Codex，然後重新整理 CLI 偵測。"
+        }
+      }
     },
     "sdkNativeBinaryMissing": {
       "title": "SDK 安裝不完整 — 缺少 native 二進位檔",

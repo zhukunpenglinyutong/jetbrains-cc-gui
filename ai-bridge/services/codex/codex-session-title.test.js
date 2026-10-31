@@ -1,6 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { settleCodexSessionTitle } from './codex-session-title.js';
+import { settleCodexSessionTitle, applyCodexCustomTitles } from './codex-session-title.js';
+
+test('manual titles survive native page refreshes after continued turns without changing native thread names', () => {
+  const titles = { thread: { customTitle: 'Manual name' }, blank: { customTitle: ' ' } };
+  for (const updatedAt of [1, 2, 3]) {
+    const rows = [{ id: 'thread', name: 'First prompt', updatedAt }, { id: 'blank', name: 'Native name' }];
+    const projected = applyCodexCustomTitles(rows, titles);
+    assert.equal(projected[0].customTitle, 'Manual name');
+    assert.equal(projected[0].name, 'First prompt');
+    assert.equal(rows[0].customTitle, undefined);
+    assert.equal(projected[1], rows[1]);
+  }
+});
 
 function harness({ enabled = true, name = null, customTitle = null, generateText = async () => '{"title":"修复命令卡片"}' } = {}) {
   let active = true;
@@ -9,7 +21,7 @@ function harness({ enabled = true, name = null, customTitle = null, generateText
   const service = {
     async readOnly(method, params) {
       assert.equal(method, 'thread/read');
-      assert.deepEqual(params, { threadId: 'root', includeTurns: false });
+      assert.deepEqual(params, { threadId: 'root', includeTurns: false, excludeTurns: true });
       return { thread: { id: 'root', name } };
     },
     async setThreadName(threadId, title) { names.push({ threadId, title }); return true; },

@@ -182,6 +182,7 @@ export default function ProviderList({
       />
 
       <ProviderListHeader
+        addToast={addToast}
         importMenuOpen={importMenuOpen}
         importMenuRef={importMenuRef}
         onToggleImportMenu={() => setImportMenuOpen(!importMenuOpen)}

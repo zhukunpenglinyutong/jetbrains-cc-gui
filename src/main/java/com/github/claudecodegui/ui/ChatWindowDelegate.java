@@ -30,6 +30,7 @@ import com.github.claudecodegui.handler.provider.CustomModelPricingHandler;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.handler.provider.ProviderHandler;
 import com.github.claudecodegui.handler.provider.claude.ClaudePlanUsageHandler;
+import com.github.claudecodegui.handler.provider.grok.GrokPlanUsageHandler;
 import com.github.claudecodegui.handler.RewindHandler;
 import com.github.claudecodegui.handler.SessionHandler;
 import com.github.claudecodegui.handler.SettingsHandler;
@@ -117,6 +118,7 @@ public class ChatWindowDelegate {
         void setMessageDispatcher(MessageDispatcher d);
         void setPermissionHandler(PermissionHandler h);
         void setHistoryHandler(HistoryHandler h);
+        HistoryHandler getHistoryHandler();
         SessionLifecycleManager getSessionLifecycleManager();
         StreamMessageCoalescer getStreamCoalescer();
         WebviewWatchdog getWebviewWatchdog();
@@ -374,6 +376,7 @@ public class ChatWindowDelegate {
 
         messageDispatcher.registerHandler(new ProviderHandler(handlerContext));
         messageDispatcher.registerHandler(new ClaudePlanUsageHandler(handlerContext));
+        messageDispatcher.registerHandler(new GrokPlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new CustomModelPricingHandler(handlerContext, settingsService));
         messageDispatcher.registerHandler(new McpServerHandler(handlerContext));
         messageDispatcher.registerHandler(new McpMarketplaceHandler(handlerContext));
@@ -730,6 +733,7 @@ public class ChatWindowDelegate {
         usagePushService.pushCurrentUsageIfAvailable(resolveModelContextLimitForRecovery(
                 session.getProvider(),
                 session.getModel(),
+                session.getCwd(),
                 context.getSettingsService()
         ));
         usagePushService.refreshContextBar();
@@ -742,14 +746,16 @@ public class ChatWindowDelegate {
     static int resolveModelContextLimitForRecovery(
             String provider,
             String model,
+            String cwd,
             CodemossSettingsService settingsService
     ) {
         if ("codex".equalsIgnoreCase(provider)) {
             return SettingsHandler.getModelContextLimit(provider, model);
         }
 
+        boolean isClaude = "claude".equalsIgnoreCase(provider);
         String resolvedModel = model;
-        if (settingsService != null) {
+        if (isClaude && settingsService != null) {
             try {
                 JsonObject settings = settingsService.readClaudeSettings();
                 if (settings != null && settings.has("env") && settings.get("env").isJsonObject()) {
@@ -763,7 +769,9 @@ public class ChatWindowDelegate {
                         + e.getMessage());
             }
         }
-        return SettingsHandler.getModelContextLimit(resolvedModel);
+        return isClaude
+                ? ModelProviderHandler.getClaudeContextLimit(resolvedModel, cwd)
+                : SettingsHandler.getModelContextLimit(resolvedModel);
     }
 
     private void replayCurrentSessionStateToFrontend() {
@@ -777,6 +785,13 @@ public class ChatWindowDelegate {
             String sessionId = session.getSessionId();
             if (sessionId != null && !sessionId.trim().isEmpty()) {
                 host.callJavaScript("setSessionId", JsUtils.escapeJs(sessionId));
+                // Transcript replay only restores the CLI-derived title. Re-apply
+                // the user-set title saved in session-titles.json so a webview
+                // restart or watchdog reload does not fall back to the AI title.
+                HistoryHandler historyHandler = host.getHistoryHandler();
+                if (historyHandler != null) {
+                    historyHandler.pushCustomTitleToWebview(sessionId);
+                }
             }
 
             List<ClaudeSession.Message> messages = session.getMessagesSnapshot();

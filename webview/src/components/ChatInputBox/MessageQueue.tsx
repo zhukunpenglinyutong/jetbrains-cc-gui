@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react';
 import type { KeyboardEvent } from 'react';
+import type { TFunction } from 'i18next';
 import type { QueuedMessage } from '../../hooks/useMessageQueue';
 import { createEdgeInsertResolver, useDragSort } from '../settings/hooks/useDragSort';
 import { useDragAutoScroll } from './hooks/useDragAutoScroll.js';
@@ -9,18 +10,26 @@ export interface MessageQueueProps {
   queue: QueuedMessage[];
   /** Remove item callback */
   onRemove: (id: string) => void;
+  /**
+   * Edit item callback: the caller removes the message from the queue and
+   * restores its content and attachments into the input draft. The edit action
+   * is only rendered when a handler is provided.
+   */
+  onEdit?: (id: string) => void;
   /** Reorder callback (orderedIds[0] executes first); drag is disabled when absent */
   onReorder?: (orderedIds: string[]) => void;
+  /** Translation function */
+  t: TFunction;
 }
 
 /**
  * MessageQueue - Displays queued messages above input box
- * Shows numbered list with drag handle, message preview and close button.
+ * Shows numbered list with drag handle, message preview, edit and close buttons.
  * Items render in reverse order so the next message to execute (queue[0]) is at the bottom.
  * Drag is initiated only from the gripper handle (pointer-based), so text in the
  * row stays selectable and other controls are unaffected.
  */
-export function MessageQueue({ queue, onRemove, onReorder }: MessageQueueProps) {
+export function MessageQueue({ queue, onRemove, onEdit, onReorder, t }: MessageQueueProps) {
   /**
    * Sort callback fired when a drag completes.
    * useDragSort emits orderedIds in real queue order (not display order), so
@@ -98,8 +107,8 @@ export function MessageQueue({ queue, onRemove, onReorder }: MessageQueueProps) 
                 data-drag-sort-handle
                 role="button"
                 tabIndex={0}
-                aria-label={`Reorder message ${queuePosition}`}
-                title="Drag to reorder, or focus and use arrow keys"
+                aria-label={t('chat.queue.reorderLabel', { position: queuePosition })}
+                title={t('chat.queue.reorderHint')}
                 onKeyDown={(e) => handleReorderKeyDown(e, item.id)}
                 onPointerDown={(e) => handlePointerDown(e, item.id, e.currentTarget.closest<HTMLElement>('[data-drag-sort-id]'))}
               >
@@ -110,12 +119,25 @@ export function MessageQueue({ queue, onRemove, onReorder }: MessageQueueProps) 
             <span className="message-queue-content" title={item.content}>
               {item.content}
             </span>
+            {onEdit && (
+              <button
+                type="button"
+                className="message-queue-edit"
+                aria-label={t('chat.queue.editLabel', { position: queuePosition })}
+                title={t('chat.queue.edit')}
+                onClick={() => onEdit(item.id)}
+              >
+                <span className="codicon codicon-edit" aria-hidden="true" />
+              </button>
+            )}
             <button
+              type="button"
               className="message-queue-remove"
+              aria-label={t('chat.queue.removeLabel', { position: queuePosition })}
+              title={t('chat.queue.remove')}
               onClick={() => onRemove(item.id)}
-              title="Remove from queue"
             >
-              <span className="codicon codicon-close" />
+              <span className="codicon codicon-close" aria-hidden="true" />
             </button>
           </div>
         );

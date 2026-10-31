@@ -1,6 +1,6 @@
 package com.github.claudecodegui.session;
 
-import com.github.claudecodegui.handler.SettingsHandler;
+import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.common.SessionHistoryIncompleteException;
 import com.github.claudecodegui.provider.common.SessionHistoryNotFoundException;
@@ -1036,8 +1036,8 @@ public class SessionMessageOrchestrator {
             }
 
             int usedTokens = TokenUsageUtils.extractContextTokens(lastUsage, state.getProvider());
-            int fallbackMaxTokens = SettingsHandler.getModelContextLimit(
-                    state.getProvider(), state.getModel());
+            int fallbackMaxTokens = ModelProviderHandler.resolveContextLimit(
+                    state.getProvider(), state.getModel(), state.getCwd());
             int maxTokens = TokenUsageUtils.extractMaxTokens(lastUsage, fallbackMaxTokens);
             usageDisplay.show(usedTokens, maxTokens);
             LOG.debug("Restored token usage from history: " + usedTokens + " / " + maxTokens);

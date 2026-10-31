@@ -33,6 +33,8 @@ export interface PlanUsageSnapshot {
   level?: string;
   /** True when the payload is a cached copy served after a failed refresh probe. */
   stale?: boolean;
+  /** True when nothing could be asked (Grok daemon not running); not a failure. */
+  dormant?: boolean;
 }
 
 export const PLAN_USAGE_WINDOW_STORAGE_KEY = 'ccgui.planUsage.windowId';
@@ -267,6 +269,7 @@ export function parseCapacityPayload(data: unknown): PlanUsageSnapshot {
     source: typeof o.source === 'string' ? o.source : 'gateway',
     level: typeof o.level === 'string' ? o.level : undefined,
     stale: o.stale === true ? true : undefined,
+    dormant: o.dormant === true ? true : undefined,
   };
 }
 

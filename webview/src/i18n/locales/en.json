@@ -61,6 +61,17 @@
     "currentMode": "Current mode: {{mode}}",
     "currentModel": "Current model: {{model}}",
     "removeAttachment": "Remove attachment",
+    "queue": {
+      "edit": "Edit queued message",
+      "remove": "Remove from queue",
+      "editLabel": "Edit queued message {{position}}",
+      "removeLabel": "Remove queued message {{position}}",
+      "reorderLabel": "Reorder message {{position}}",
+      "reorderHint": "Drag to reorder, or focus and use arrow keys",
+      "mergedIntoDraft": "Queued message added to the current draft",
+      "attachmentsNotRestored": "Attachments from the queued message were not restored",
+      "editBlockedAttachments": "Its attachments cannot be restored here, so the message stays in the queue"
+    },
     "closePreview": "Close preview",
     "loadingDropdown": "Loading...",
     "modelsLoadFailed": "Failed to load models. Click to retry",
@@ -75,6 +86,8 @@
     "usagePercentage": "Usage: {{percentage}}",
     "planUsage": {
       "title": "Claude plan usage",
+      "grokTitle": "Grok plan usage",
+      "staleIdle": "Last reading. It refreshes the next time you use Grok",
       "loading": "Loading usage…",
       "unavailable": "Usage unavailable",
       "dash": "Usage —",
@@ -82,7 +95,12 @@
       "tooltipReset": "Resets: {{value}} (local time)",
       "clickToSwitch": "Click period label to switch window",
       "worstHint": "Dot shows worst window ({{color}})",
-      "paceColors": { "green": "green", "yellow": "yellow", "red": "red", "neutral": "unknown" },
+      "paceColors": {
+        "green": "green",
+        "yellow": "yellow",
+        "red": "red",
+        "neutral": "unknown"
+      },
       "stale": "Data may be outdated (refresh failed)"
     },
     "noMatchingFiles": "No matching files",
@@ -971,6 +989,38 @@
     "wechatPay": "WeChat Pay",
     "paypal": "PayPal",
     "provider": {
+      "backup": {
+        "exportInvalidConfig": "Export failed: a saved provider configuration did not pass validation. No backup file was created.",
+        "errorProvider": "Check saved provider #{{index}} (excluding local settings and CLI login entries).",
+        "errorField": "Field: {{field}}.",
+        "import": "Import",
+        "export": "Export",
+        "importFile": "Import from CC GUI backup",
+        "importTitle": "Import {{engine}} providers",
+        "exportTitle": "Export {{engine}} providers",
+        "scope": "Only saved providers in this tab (including keys) are transferred. Local CLI login sessions and active status are excluded.",
+        "mergeHint": "Import trusted files only. Identical configurations are skipped; different ones are added without overwriting or activating. Names, notes, IDs and timestamps do not affect deduplication.",
+        "selectFile": "Select backup file",
+        "passwordOptional": "Export password (optional)",
+        "passwordRequired": "Enter the file password",
+        "confirmPassword": "Confirm password",
+        "plaintextWarning": "I understand: without a password, API keys will be exported in plain text. Keep the file secure.",
+        "passwordHint": "Use at least 8 characters; a long, unique password is recommended. Lost passwords cannot be recovered.",
+        "passwordShort": "The password must contain at least 8 characters.",
+        "passwordMismatch": "The passwords do not match.",
+        "working": "Working, please wait…",
+        "importSuccess": "Import complete: {{imported}} added, {{skipped}} duplicate configurations skipped.",
+        "exportSuccess": "Configuration exported.",
+        "exportPartial": "Providers exported: {{exported}}. Skipped because they failed validation: {{skipped}} ({{positions}}; numbering excludes local settings and CLI login entries).",
+        "invalidFile": "Invalid file, unsupported version or invalid provider configuration. Nothing was imported.",
+        "wrongEngine": "This file belongs to a different tab. Select the matching Claude Code / Codex tab.",
+        "tooLarge": "File or configuration too large (8 MiB per file, up to 2000 providers).",
+        "empty": "No provider configurations to process.",
+        "wrongPassword": "Incorrect password or damaged encrypted file. Nothing was imported.",
+        "failed": "Operation failed. Check file permissions and configuration, then retry.",
+        "busy": "Another import/export operation is in progress. Please retry later.",
+        "timeout": "Timed out waiting for the result. The operation may still be running; check the list or exported file before retrying."
+      },
       "currentConfig": "Current ClaudeCode Configuration",
       "loading": "Loading...",
       "noConfig": "No local configuration found",
@@ -1460,7 +1510,9 @@
       "minutesAgo": "minutes ago",
       "secondsAgo": "seconds ago"
     },
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "sessionInUse": "In-use sessions cannot be deleted.",
+    "deleteFailed": "Failed to delete the session. Please try again."
   },
   "permission": {
     "dialogTitle": "Permission Request",
@@ -1493,6 +1545,11 @@
     "codexDeliveryUnconfirmed": "Codex has not confirmed your choice yet ({{error}}). It may still take effect, so do not answer again; if the conversation does not continue, click Stop and send your message again."
   },
   "askUserQuestion": {
+    "configWarning": "Codex reported a configuration warning. Review the details.",
+    "configWarningTitle": "Codex configuration warning",
+    "apiDeprecationWarning": "Codex reported an API compatibility notice. Review the details.",
+    "apiDeprecationTitle": "Codex API compatibility notice",
+    "warningDetails": "View details",
     "title": "Claude has some questions for you",
     "progress": "Question {{current}} / {{total}}",
     "multiSelectHint": "You can select multiple options",
@@ -1506,7 +1563,11 @@
     "timeoutWarning": "Please answer soon, dialog will close in {{seconds}} seconds",
     "expand": "Expand",
     "collapse": "Collapse",
-    "clickToAnswer": "Click to answer"
+    "clickToAnswer": "Click to answer",
+    "recordTitle": "Codex questions",
+    "recordAnswer": "Your answer",
+    "recordSkipped": "Skipped (closed without an answer)",
+    "answerNotSent": "Your answer to the Codex question was not sent because another chat is open now. Return to that chat and send the answer again."
   },
   "planApproval": {
     "title": "Plan Ready for Approval",
@@ -1638,6 +1699,9 @@
     "errorRetry": "Retry"
   },
   "mcp": {
+    "nativeToolCount": "{{count}} tools",
+    "nativeRuntime": {"notStarted": "Not started", "starting": "Connecting", "connected": "Connected", "authenticationRequired": "Authentication required", "failed": "Connection failed", "cancelled": "Cancelled", "disabled": "Disabled", "unknown": "Connection status unknown"},
+    "nativeAuth": {"unsupported": "OAuth not applicable", "notLoggedIn": "OAuth not logged in", "bearerToken": "Token authentication", "oAuth": "OAuth logged in", "unknown": "Authentication status unknown"},
     "title": "MCP Servers",
     "whatIsMcp": "What is MCP?",
     "refreshStatus": "Refresh server status",
@@ -2601,14 +2665,85 @@
     "updateClaudeSdkCustomCli": "SDK updated to {{version}}, but the plugin runs your custom Claude CLI ({{path}}). Update it with Option 2.",
     "updateClaudeSdkAlreadyLatest": "{{version}} is already the newest SDK this plugin supports, and this model needs a newer Claude Code. Update the plugin when a new release is out, or choose another model.",
     "codexWriterConflict": {
-      "title": "Codex thread is busy",
-      "intro": "Another Codex turn or client is writing to this conversation. This send could not start.",
-      "reason": "Stop the turn in the client using this conversation, then send again after it has ended."
+      "title": "Codex conversation is in use",
+      "intro": "Another Codex client or chat window owns this conversation’s writer.",
+      "reason": "This does not mean the conversation expired. The plugin does not delete locks or stop other clients automatically.",
+      "solutions": {
+        "releaseWriter": {
+          "title": "Release the conversation in its current client",
+          "step0": "Stop the task and close or release this conversation in the Codex client or chat window using it.",
+          "step1": "After that client releases the conversation, return here and send again. Do not delete writer lock files to force access."
+        }
+      }
+    },
+    "codexThreadClosing": {
+      "title": "Codex conversation is still closing",
+      "intro": "Codex has not finished closing this conversation, so it cannot restore it yet.",
+      "reason": "The plugin briefly retries this explicit closing error before starting your task. If it persists, the original error remains visible.",
+      "solutions": {
+        "waitForClose": {
+          "title": "Wait for the previous conversation to close",
+          "step0": "Wait until the previous Codex client or chat window finishes releasing the conversation, then retry.",
+          "step1": "If this repeats, reopen the conversation from history after the previous client has released it."
+        }
+      }
+    },
+    "codexThreadHistoryMissing": {
+      "title": "Codex history could not be found",
+      "intro": "The current Codex runtime cannot find this conversation’s native history.",
+      "reason": "A different history directory or an incomplete first initialization can cause this. It does not prove the history was deleted.",
+      "solutions": {
+        "checkStorage": {
+          "title": "Check the original history location",
+          "step0": "Check that Codex uses the original CODEX_HOME and the same host environment, including local versus WSL.",
+          "step1": "After restoring the original history directory or backup, reopen the conversation from history."
+        },
+        "startNewIfMissing": {
+          "title": "Start again only if the history cannot be recovered",
+          "step0": "Create a new conversation and provide the needed context again only if the original history is unrecoverable. Messages displayed here do not automatically restore Codex’s native context."
+        }
+      }
+    },
+    "codexThreadArchived": {
+      "title": "Codex conversation is archived",
+      "intro": "Codex reports that this conversation is archived and cannot be resumed directly.",
+      "reason": "Archived history is not an expired thread. Creating a new conversation is not required to recover it.",
+      "solutions": {
+        "unarchive": {
+          "title": "Unarchive the original conversation",
+          "step0": "Unarchive it in the original Codex client, or follow the unarchive command shown in the original error.",
+          "step1": "Refresh the plugin’s history list, reopen this conversation, and send again."
+        }
+      }
+    },
+    "codexThreadResumeConfiguration": {
+      "title": "Codex configuration blocked recovery",
+      "intro": "Codex could not load its configuration or initialize a required MCP server.",
+      "reason": "A new conversation will not repair the same configuration. The plugin does not disable required services automatically.",
+      "solutions": {
+        "repairConfiguration": {
+          "title": "Repair the configuration reported by Codex",
+          "step0": "Read the original error to identify the configuration entry or required MCP server that failed.",
+          "step1": "Fix the corresponding configuration, credentials, or connection in Codex, provider, or MCP settings, then reopen the conversation and retry."
+        }
+      }
     },
     "codexThreadResume": {
-      "title": "Session thread is no longer valid",
-      "intro": "Creating a new session will resolve this issue. The thread ID for the current session no longer exists on the Codex server.",
-      "reason": "Codex clears old threads after a period of time, which can trigger this error when resuming a previous session."
+      "title": "Could not restore the Codex conversation",
+      "intro": "Codex failed to restore this conversation. The cause has not been identified.",
+      "reason": "A recovery failure does not establish that the conversation expired. The plugin keeps its identity instead of silently replacing it with an empty conversation.",
+      "solutions": {
+        "inspectCause": {
+          "title": "Check the original error before retrying",
+          "step0": "Review the original error and check the provider, Codex runtime, and history directory used by this conversation.",
+          "step1": "If a response or tool execution already appeared, check its result before resending to avoid repeating the task."
+        },
+        "checkCli": {
+          "title": "Check Codex CLI compatibility",
+          "step0": "Compare this terminal version with the plugin’s CLI page. For a custom CLI path, run that executable with --version.",
+          "step1": "If the original error indicates an unsupported CLI or protocol version, update Codex using the official instructions, then refresh CLI detection."
+        }
+      }
     },
     "sdkNativeBinaryMissing": {
       "title": "SDK installation incomplete — native binary missing",

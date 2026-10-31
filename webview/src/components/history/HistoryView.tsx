@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { HistoryData, HistorySessionSummary } from '../../types';
 import { sendBridgeEvent } from '../../utils/bridge';
@@ -24,6 +24,7 @@ interface HistoryViewProps {
   historyData: HistoryData | null;
   currentProvider?: string; // Current provider (claude or codex)
   currentSessionId?: string | null; // Active session ID; its row must not offer conversion
+  currentSessionBusy?: boolean;
   onLoadSession: (sessionId: string, provider?: string, model?: string, agent?: string) => void;
   onDeleteSession: (sessionId: string) => void; // Delete session callback
   onDeleteSessions: (sessionIds: string[]) => void; // Batch delete sessions callback
@@ -33,7 +34,7 @@ interface HistoryViewProps {
   onConvertToCliSession: (sessionId: string) => void; // Convert sidechain session to CLI session callback
 }
 
-const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSession, onDeleteSession, onDeleteSessions, onExportSession, onToggleFavorite, onUpdateTitle, onConvertToCliSession }: HistoryViewProps) => {
+const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSessionBusy, onLoadSession, onDeleteSession, onDeleteSessions, onExportSession, onToggleFavorite, onUpdateTitle, onConvertToCliSession }: HistoryViewProps) => {
   const { t } = useTranslation();
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // Session ID pending deletion
@@ -48,7 +49,13 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSes
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null); // Track which session ID was copied
   const [copyFailedSessionId, setCopyFailedSessionId] = useState<string | null>(null); // Track which session ID copy failed
 
-  const { sessions, infoBar } = useHistorySessions(historyData, searchQuery, t);
+  const { sessions: listedSessions, infoBar } = useHistorySessions(historyData, searchQuery, t);
+  const sessions = useMemo(() => listedSessions.map(session => {
+    if (currentProvider !== 'codex' || session.sessionId !== currentSessionId) return session;
+    // This window tracks its own turn live; a listed snapshot can outlive it.
+    const running = Boolean(currentSessionBusy) || session.ownedElsewhere === true;
+    return Boolean(session.running) === running ? session : { ...session, running };
+  }), [listedSessions, currentProvider, currentSessionId, currentSessionBusy]);
   const {
     isSelectionMode,
     selectedSessionIds,
@@ -104,8 +111,9 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSes
   }, [historyData?.success, historyData?.total, historyData?.sessions]);
 
   const handleDeleteRequest = useCallback((sessionId: string) => {
+    if (sessions.some(session => session.sessionId === sessionId && session.running)) return;
     setDeletingSessionId(sessionId);
-  }, []);
+  }, [sessions]);
 
   const handleExportRequest = useCallback((sessionId: string, title: string) => {
     onExportSession(sessionId, title);
@@ -116,11 +124,17 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSes
   }, [onToggleFavorite]);
 
   const confirmDelete = useCallback(() => {
-    if (deletingSessionId) {
+    if (deletingSessionId && !sessions.some(session => session.sessionId === deletingSessionId && session.running)) {
       onDeleteSession(deletingSessionId);
       setDeletingSessionId(null);
     }
-  }, [deletingSessionId, onDeleteSession]);
+  }, [deletingSessionId, sessions, onDeleteSession]);
+
+  useEffect(() => {
+    if (deletingSessionId && sessions.some(session => session.sessionId === deletingSessionId && session.running)) {
+      setDeletingSessionId(null);
+    }
+  }, [deletingSessionId, sessions]);
 
   const cancelDelete = useCallback(() => {
     setDeletingSessionId(null);

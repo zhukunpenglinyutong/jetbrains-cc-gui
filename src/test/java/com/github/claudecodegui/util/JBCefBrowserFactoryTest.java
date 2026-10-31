@@ -442,4 +442,17 @@ public class JBCefBrowserFactoryTest {
 
         Assert.assertEquals(JBCefBrowserFactory.JcefSupportStatus.SUPPORTED, status);
     }
+
+    /** Verifies that only Gateway's backend proxy skips the local OSR frame fence. */
+    @Test
+    public void detectsOnlyTheRemoteDevelopmentBackendBrowser() {
+        Assert.assertTrue(JBCefBrowserFactory.isRemoteDevelopmentBrowserClass(
+                "com.jetbrains.rdserver.cef.BackendCefBrowser"));
+        Assert.assertFalse(JBCefBrowserFactory.isRemoteDevelopmentBrowserClass(
+                "org.cef.browser.CefBrowserOsr"));
+        Assert.assertFalse(JBCefBrowserFactory.isRemoteDevelopmentBrowserClass(
+                "com.jetbrains.cef.remote.RemoteBrowser"));
+        Assert.assertFalse(JBCefBrowserFactory.isRemoteDevelopmentBrowserClass(null));
+        Assert.assertFalse(JBCefBrowserFactory.isRemoteDevelopmentBrowser(null));
+    }
 }

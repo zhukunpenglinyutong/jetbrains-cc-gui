@@ -1,9 +1,21 @@
 package com.github.claudecodegui.ui.toolwindow;
 
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.session.CallbackHandler;
+import com.github.claudecodegui.session.ClaudeMessageHandler;
+import com.github.claudecodegui.session.MessageMerger;
+import com.github.claudecodegui.session.MessageParser;
+import com.github.claudecodegui.session.SessionExecutionState;
 import com.github.claudecodegui.session.SessionState;
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.application.Application;
+import com.intellij.openapi.application.ApplicationManager;
 import org.junit.Test;
+
+import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -22,6 +34,54 @@ import static org.junit.Assert.assertTrue;
 public class ClaudeChatWindowExposedSessionIdTest {
 
     private static final String PERMISSION_KEY = "permission-key-uuid";
+
+    @Test
+    public void expiredResumeErrorStillEndsTheStreamAndReleasesTheTurn() {
+        Application previousApplication = ApplicationManager.getApplication();
+        Application application = (Application) Proxy.newProxyInstance(Application.class.getClassLoader(),
+                new Class<?>[]{Application.class}, (proxy, method, arguments) -> method.getReturnType() == boolean.class ? false : null);
+        ApplicationManager.setApplication(application);
+        try {
+            SessionState state = resumedState("claude", "expired-epoch");
+            Object turnOwner = state.beginTurn();
+            List<String> notifications = new ArrayList<>();
+            CallbackHandler callbacks = new CallbackHandler() {
+                @Override
+                public void notifyStreamEnd() {
+                    notifications.add("stream-end");
+                }
+
+                @Override
+                public void notifyMessageUpdate(List<ClaudeSession.Message> messages) {
+                    assertTrue(messages.stream().anyMatch(message -> message.type == ClaudeSession.Message.Type.ERROR));
+                    notifications.add("messages");
+                }
+
+                @Override
+                public void notifyStateChange(boolean busy, boolean loading, String error) {
+                    assertFalse(busy);
+                    assertFalse(loading);
+                    assertEquals("No conversation found with session ID: expired-session", error);
+                    notifications.add("state");
+                }
+            };
+            ClaudeMessageHandler handler = new ClaudeMessageHandler(null, state, callbacks,
+                    new MessageParser(), new MessageMerger(), new Gson());
+
+            assertTrue(ClaudeChatWindow.retireExpiredClaudeResume(state, "expired-session", "expired-epoch"));
+            assertTrue(state.isCurrentTurn(turnOwner));
+            handler.onError("No conversation found with session ID: expired-session");
+
+            assertNull(state.getSessionId());
+            assertEquals("No conversation found with session ID: expired-session", state.getError());
+            assertEquals(SessionExecutionState.Outcome.FAILED, state.getExecutionSnapshot().outcome());
+            assertFalse(state.isBusy());
+            assertFalse(state.isLoading());
+            assertEquals(List.of("stream-end", "messages", "state"), notifications);
+        } finally {
+            ApplicationManager.setApplication(previousApplication);
+        }
+    }
 
     @Test
     public void freshSessionFallsBackToPermissionServiceKey() {

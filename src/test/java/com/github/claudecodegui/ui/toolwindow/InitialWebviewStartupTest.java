@@ -12,7 +12,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
-/** First activation and remote work share one deferred browser startup. */
+/** First activation and forced requests share one deferred browser startup. */
 public class InitialWebviewStartupTest {
     @Test
     public void inactiveRestoredTabsAllocateNothingUntilRequested() {
@@ -32,7 +32,7 @@ public class InitialWebviewStartupTest {
     }
 
     @Test
-    public void activationHierarchyAndRemoteWorkShareOneStartup() {
+    public void activationHierarchyAndForcedRequestsShareOneStartup() {
         ClaudeChatWindow.InitialWebviewStartup startup = new ClaudeChatWindow.InitialWebviewStartup();
         List<Runnable> queued = new ArrayList<>();
         AtomicInteger allocations = new AtomicInteger();

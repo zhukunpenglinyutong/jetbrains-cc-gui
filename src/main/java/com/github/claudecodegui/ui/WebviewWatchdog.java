@@ -84,6 +84,7 @@ public class WebviewWatchdog {
     private final ReadyCheck readyCheck;
     private final LongSupplier currentTimeMillis;
     private final Consumer<Runnable> recoveryExecutor;
+    private final BooleanSupplier recoveryAllowed;
 
     public WebviewWatchdog(
             JPanel mainPanel,
@@ -94,6 +95,20 @@ public class WebviewWatchdog {
             StreamActiveCheck streamActiveCheck,
             ReadyCheck readyCheck
     ) {
+        this(mainPanel, browserProvider, onReloadWebview, onRecreateWebview,
+                disposedCheck, streamActiveCheck, readyCheck, () -> true);
+    }
+
+    public WebviewWatchdog(
+            JPanel mainPanel,
+            BrowserProvider browserProvider,
+            Runnable onReloadWebview,
+            Runnable onRecreateWebview,
+            DisposedCheck disposedCheck,
+            StreamActiveCheck streamActiveCheck,
+            ReadyCheck readyCheck,
+            BooleanSupplier recoveryAllowed
+    ) {
         this(
                 mainPanel,
                 () -> browserProvider.getBrowser() != null,
@@ -103,7 +118,8 @@ public class WebviewWatchdog {
                 streamActiveCheck,
                 readyCheck,
                 System::currentTimeMillis,
-                runnable -> ApplicationManager.getApplication().invokeLater(runnable)
+                runnable -> ApplicationManager.getApplication().invokeLater(runnable),
+                recoveryAllowed
         );
     }
 
@@ -118,6 +134,22 @@ public class WebviewWatchdog {
             LongSupplier currentTimeMillis,
             Consumer<Runnable> recoveryExecutor
     ) {
+        this(mainPanel, browserAvailableCheck, onReloadWebview, onRecreateWebview,
+                disposedCheck, streamActiveCheck, readyCheck, currentTimeMillis, recoveryExecutor, () -> true);
+    }
+
+    WebviewWatchdog(
+            JPanel mainPanel,
+            BooleanSupplier browserAvailableCheck,
+            Runnable onReloadWebview,
+            Runnable onRecreateWebview,
+            DisposedCheck disposedCheck,
+            StreamActiveCheck streamActiveCheck,
+            ReadyCheck readyCheck,
+            LongSupplier currentTimeMillis,
+            Consumer<Runnable> recoveryExecutor,
+            BooleanSupplier recoveryAllowed
+    ) {
         this.mainPanel = mainPanel;
         this.browserAvailableCheck = browserAvailableCheck;
         this.onReloadWebview = onReloadWebview;
@@ -127,6 +159,7 @@ public class WebviewWatchdog {
         this.readyCheck = readyCheck;
         this.currentTimeMillis = currentTimeMillis;
         this.recoveryExecutor = recoveryExecutor;
+        this.recoveryAllowed = recoveryAllowed;
         long now = currentTimeMillis.getAsLong();
         this.lastHeartbeatAtMs = now;
         this.lastRafAtMs = now;
@@ -335,7 +368,9 @@ public class WebviewWatchdog {
             stallCount = 0;
             return;
         }
-        if (!tryAcquireRecoveryPermit(frontendReady)) { return; }
+        // Preparing or quarantined browsers cannot be recreated. A skipped request must
+        // leave the startup budget, escalation stage and cooldown untouched.
+        if (!recoveryAllowed.getAsBoolean() || !tryAcquireRecoveryPermit(frontendReady)) { return; }
 
         stallCount += 1;
         String reason = "frontendReady=" + frontendReady

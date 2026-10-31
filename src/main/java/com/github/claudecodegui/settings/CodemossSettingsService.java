@@ -1,6 +1,7 @@
 package com.github.claudecodegui.settings;
 
 import com.github.claudecodegui.util.FontConfigService;
+import com.github.claudecodegui.util.SafeJsonFileOps;
 import com.github.claudecodegui.cli.CliStatusDetector;
 import com.github.claudecodegui.cli.CliToolStatus;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
@@ -35,6 +36,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * Codemoss configuration service (Facade pattern).
@@ -81,15 +83,17 @@ public class CodemossSettingsService {
     }
 
     public void setGrokAuthMethod(String method) throws IOException {
-        String normalized = normalizeGrokAuthMethod(method);
-        JsonObject config = readConfig();
-        JsonObject grok = config.has("grok") && !config.get("grok").isJsonNull()
-                ? config.getAsJsonObject("grok")
-                : new JsonObject();
-        grok.addProperty("authMethod", normalized);
-        config.add("grok", grok);
-        writeConfig(config);
-        LOG.info("[CodemossSettingsService] Set grok.authMethod=" + normalized);
+        runConfigTransaction(() -> {
+            String normalized = normalizeGrokAuthMethod(method);
+            JsonObject config = readConfig();
+            JsonObject grok = config.has("grok") && !config.get("grok").isJsonNull()
+                    ? config.getAsJsonObject("grok")
+                    : new JsonObject();
+            grok.addProperty("authMethod", normalized);
+            config.add("grok", grok);
+            writeConfig(config);
+            LOG.info("[CodemossSettingsService] Set grok.authMethod=" + normalized);
+        });
     }
 
     public String getGrokApiKey() throws IOException {
@@ -105,19 +109,21 @@ public class CodemossSettingsService {
     }
 
     public void setGrokApiKey(String apiKey) throws IOException {
-        JsonObject config = readConfig();
-        JsonObject grok = config.has("grok") && !config.get("grok").isJsonNull()
-                ? config.getAsJsonObject("grok")
-                : new JsonObject();
-        String value = apiKey != null ? apiKey.trim() : "";
-        if (value.isEmpty()) {
-            grok.remove("apiKey");
-        } else {
-            grok.addProperty("apiKey", value);
-        }
-        config.add("grok", grok);
-        writeConfig(config);
-        LOG.info("[CodemossSettingsService] Updated grok.apiKey (present=" + !value.isEmpty() + ")");
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            JsonObject grok = config.has("grok") && !config.get("grok").isJsonNull()
+                    ? config.getAsJsonObject("grok")
+                    : new JsonObject();
+            String value = apiKey != null ? apiKey.trim() : "";
+            if (value.isEmpty()) {
+                grok.remove("apiKey");
+            } else {
+                grok.addProperty("apiKey", value);
+            }
+            config.add("grok", grok);
+            writeConfig(config);
+            LOG.info("[CodemossSettingsService] Updated grok.apiKey (present=" + !value.isEmpty() + ")");
+        });
     }
 
     public static String normalizeGrokAuthMethod(String method) {
@@ -168,17 +174,19 @@ public class CodemossSettingsService {
     }
 
     public void setGrokEnv(JsonObject env) throws IOException {
-        JsonObject config = readConfig();
-        JsonObject grok = config.has("grok") && !config.get("grok").isJsonNull()
-                ? config.getAsJsonObject("grok")
-                : new JsonObject();
-        if (env == null || env.size() == 0) {
-            grok.remove("env");
-        } else {
-            grok.add("env", env);
-        }
-        config.add("grok", grok);
-        writeConfig(config);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            JsonObject grok = config.has("grok") && !config.get("grok").isJsonNull()
+                    ? config.getAsJsonObject("grok")
+                    : new JsonObject();
+            if (env == null || env.size() == 0) {
+                grok.remove("env");
+            } else {
+                grok.add("env", env);
+            }
+            config.add("grok", grok);
+            writeConfig(config);
+        });
     }
 
     public String getGrokGatewayOrigin() throws IOException {
@@ -221,18 +229,20 @@ public class CodemossSettingsService {
     }
 
     private void setGrokStringSetting(String field, String value) throws IOException {
-        JsonObject config = readConfig();
-        JsonObject grok = config.has("grok") && !config.get("grok").isJsonNull()
-                ? config.getAsJsonObject("grok")
-                : new JsonObject();
-        String v = value != null ? value.trim() : "";
-        if (v.isEmpty()) {
-            grok.remove(field);
-        } else {
-            grok.addProperty(field, v);
-        }
-        config.add("grok", grok);
-        writeConfig(config);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            JsonObject grok = config.has("grok") && !config.get("grok").isJsonNull()
+                    ? config.getAsJsonObject("grok")
+                    : new JsonObject();
+            String v = value != null ? value.trim() : "";
+            if (v.isEmpty()) {
+                grok.remove(field);
+            } else {
+                grok.addProperty(field, v);
+            }
+            config.add("grok", grok);
+            writeConfig(config);
+        });
     }
 
     private String redactUrl(String url) {
@@ -287,17 +297,19 @@ public class CodemossSettingsService {
     }
 
     public void setDshPort(int port) throws IOException {
-        JsonObject config = readConfig();
-        JsonObject dsh = config.has(DSH_SECTION_KEY) && !config.get(DSH_SECTION_KEY).isJsonNull()
-                ? config.getAsJsonObject(DSH_SECTION_KEY)
-                : new JsonObject();
-        if (port > 0 && port <= 65535 && port != DSH_DEFAULT_PORT) {
-            dsh.addProperty("port", port);
-        } else {
-            dsh.remove("port");
-        }
-        config.add(DSH_SECTION_KEY, dsh);
-        writeConfig(config);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            JsonObject dsh = config.has(DSH_SECTION_KEY) && !config.get(DSH_SECTION_KEY).isJsonNull()
+                    ? config.getAsJsonObject(DSH_SECTION_KEY)
+                    : new JsonObject();
+            if (port > 0 && port <= 65535 && port != DSH_DEFAULT_PORT) {
+                dsh.addProperty("port", port);
+            } else {
+                dsh.remove("port");
+            }
+            config.add(DSH_SECTION_KEY, dsh);
+            writeConfig(config);
+        });
     }
 
     public boolean getDshAutoStart() throws IOException {
@@ -317,17 +329,19 @@ public class CodemossSettingsService {
     }
 
     public void setDshAutoStart(boolean autoStart) throws IOException {
-        JsonObject config = readConfig();
-        JsonObject dsh = config.has(DSH_SECTION_KEY) && !config.get(DSH_SECTION_KEY).isJsonNull()
-                ? config.getAsJsonObject(DSH_SECTION_KEY)
-                : new JsonObject();
-        if (autoStart) {
-            dsh.remove("autoStart");
-        } else {
-            dsh.addProperty("autoStart", false);
-        }
-        config.add(DSH_SECTION_KEY, dsh);
-        writeConfig(config);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            JsonObject dsh = config.has(DSH_SECTION_KEY) && !config.get(DSH_SECTION_KEY).isJsonNull()
+                    ? config.getAsJsonObject(DSH_SECTION_KEY)
+                    : new JsonObject();
+            if (autoStart) {
+                dsh.remove("autoStart");
+            } else {
+                dsh.addProperty("autoStart", false);
+            }
+            config.add(DSH_SECTION_KEY, dsh);
+            writeConfig(config);
+        });
     }
 
     private String getDshStringSetting(String field) throws IOException {
@@ -343,18 +357,20 @@ public class CodemossSettingsService {
     }
 
     private void setDshStringSetting(String field, String value) throws IOException {
-        JsonObject config = readConfig();
-        JsonObject dsh = config.has(DSH_SECTION_KEY) && !config.get(DSH_SECTION_KEY).isJsonNull()
-                ? config.getAsJsonObject(DSH_SECTION_KEY)
-                : new JsonObject();
-        String v = value != null ? value.trim() : "";
-        if (v.isEmpty()) {
-            dsh.remove(field);
-        } else {
-            dsh.addProperty(field, v);
-        }
-        config.add(DSH_SECTION_KEY, dsh);
-        writeConfig(config);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            JsonObject dsh = config.has(DSH_SECTION_KEY) && !config.get(DSH_SECTION_KEY).isJsonNull()
+                    ? config.getAsJsonObject(DSH_SECTION_KEY)
+                    : new JsonObject();
+            String v = value != null ? value.trim() : "";
+            if (v.isEmpty()) {
+                dsh.remove(field);
+            } else {
+                dsh.addProperty(field, v);
+            }
+            config.add(DSH_SECTION_KEY, dsh);
+            writeConfig(config);
+        });
     }
     private static final String COMMIT_AI_KEY = "commitAi";
     private static final String PROMPT_ENHANCER_KEY = "promptEnhancer";
@@ -544,11 +560,46 @@ public class CodemossSettingsService {
         return pathManager.getConfigPath();
     }
 
+    private void runConfigTransaction(SafeJsonFileOps.IORunnable operation) throws IOException {
+        ConfigFileTransaction.run(Path.of(getConfigPath()), operation);
+    }
+
+    private <T> T withConfigTransaction(ConfigFileTransaction.Operation<T> operation) throws IOException {
+        return ConfigFileTransaction.call(Path.of(getConfigPath()), operation);
+    }
+
+    /** Update the latest config under the shared lock, never write back a caller's stale snapshot. */
+    public void updateConfig(Consumer<JsonObject> update) throws IOException {
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            JsonObject before = config.deepCopy();
+            update.accept(config);
+            if (!config.equals(before)) {
+                writeConfig(config);
+            }
+        });
+    }
+
+    /**
+     * Add-only provider backup import through the same locked, pretty-printed and backed-up
+     * write path as every other setting. A duplicate-only import leaves the file untouched.
+     */
+    public ProviderBackupService.MergeResult importProviderBackup(String engine, JsonObject payload) throws IOException {
+        return withConfigTransaction(() -> {
+            ProviderBackupService.MergeResult result = ProviderBackupService.merge(readConfig(), engine, payload);
+            if (result.imported() > 0) {
+                writeConfig(result.config());
+            }
+            return result;
+        });
+    }
+
     /**
      * Read the config file.
      */
     public JsonObject readConfig() throws IOException {
-        return this.readConfig(true);
+        // Read-only callers may use defaults; a transaction must never overwrite unreadable data.
+        return this.readConfig(!ConfigFileTransaction.isActive());
     }
 
     private JsonObject readConfig(boolean useDefaultsOnFailure) throws IOException {
@@ -578,7 +629,10 @@ public class CodemossSettingsService {
     /**
      * Write the config file.
      */
-    public void writeConfig(JsonObject config) throws IOException {
+    private void writeConfig(JsonObject config) throws IOException {
+        if (!ConfigFileTransaction.isActive()) {
+            throw new IOException("Config writes require a read-modify-write transaction");
+        }
         pathManager.ensureConfigDirectory();
 
         // Back up existing config
@@ -680,20 +734,24 @@ public class CodemossSettingsService {
      * @param language supported UI language code
      */
     public void setUserLanguage(String language) throws IOException {
-        JsonObject config = readConfig();
-        config.addProperty(USER_LANGUAGE_CONFIG_KEY, language);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set user language: " + language);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            config.addProperty(USER_LANGUAGE_CONFIG_KEY, language);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set user language: " + language);
+        });
     }
 
     /**
      * Clear the manual UI language override so the webview follows the IDE language.
      */
     public void clearUserLanguage() throws IOException {
-        JsonObject config = readConfig();
-        config.remove(USER_LANGUAGE_CONFIG_KEY);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Cleared user language override");
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            config.remove(USER_LANGUAGE_CONFIG_KEY);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Cleared user language override");
+        });
     }
 
     // ==================== Claude Settings Management ====================
@@ -739,7 +797,7 @@ public class CodemossSettingsService {
     }
 
     public boolean setAlwaysThinkingEnabledInActiveProvider(boolean enabled) throws IOException {
-        return providerManager.setAlwaysThinkingEnabledInActiveProvider(enabled);
+        return withConfigTransaction(() -> providerManager.setAlwaysThinkingEnabledInActiveProvider(enabled));
     }
 
     /**
@@ -777,7 +835,7 @@ public class CodemossSettingsService {
     }
 
     public void applyActiveProviderToClaudeSettings() throws IOException {
-        providerManager.applyActiveProviderToClaudeSettings();
+        runConfigTransaction(() -> providerManager.applyActiveProviderToClaudeSettings());
     }
 
     /**
@@ -786,7 +844,7 @@ public class CodemossSettingsService {
      * values. See {@link ProviderManager#repairActiveProviderToClaudeSettings()}.
      */
     public boolean repairActiveProviderToClaudeSettings() throws IOException {
-        return providerManager.repairActiveProviderToClaudeSettings();
+        return withConfigTransaction(() -> providerManager.repairActiveProviderToClaudeSettings());
     }
 
     // ==================== Working Directory Management ====================
@@ -796,7 +854,7 @@ public class CodemossSettingsService {
     }
 
     public void setCustomWorkingDirectory(String projectPath, String customWorkingDir) throws IOException {
-        workingDirectoryManager.setCustomWorkingDirectory(projectPath, customWorkingDir);
+        runConfigTransaction(() -> workingDirectoryManager.setCustomWorkingDirectory(projectPath, customWorkingDir));
     }
 
     /**
@@ -837,13 +895,15 @@ public class CodemossSettingsService {
      * @param prompt commit prompt
      */
     public void setCommitPrompt(String prompt) throws IOException {
-        JsonObject config = readConfig();
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
 
-        // Save config
-        config.addProperty("commitPrompt", prompt);
+            // Save config
+            config.addProperty("commitPrompt", prompt);
 
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set commit prompt: " + prompt);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set commit prompt: " + prompt);
+        });
     }
 
     /**
@@ -873,20 +933,22 @@ public class CodemossSettingsService {
      * @param prompt commit prompt
      */
     public void setProjectCommitPrompt(String projectPath, String prompt) throws IOException {
-        if (projectPath == null) {
-            return;
-        }
-        JsonObject config = readConfig();
-        JsonObject projectPrompts;
-        if (config.has("projectCommitPrompt")) {
-            projectPrompts = config.getAsJsonObject("projectCommitPrompt");
-        } else {
-            projectPrompts = new JsonObject();
-            config.add("projectCommitPrompt", projectPrompts);
-        }
-        projectPrompts.addProperty(projectPath, prompt);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set project commit prompt for project: " + projectPath);
+        runConfigTransaction(() -> {
+            if (projectPath == null) {
+                return;
+            }
+            JsonObject config = readConfig();
+            JsonObject projectPrompts;
+            if (config.has("projectCommitPrompt")) {
+                projectPrompts = config.getAsJsonObject("projectCommitPrompt");
+            } else {
+                projectPrompts = new JsonObject();
+                config.add("projectCommitPrompt", projectPrompts);
+            }
+            projectPrompts.addProperty(projectPath, prompt);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set project commit prompt for project: " + projectPath);
+        });
     }
 
     // ==================== UI Font Config Management ====================
@@ -918,12 +980,14 @@ public class CodemossSettingsService {
      * @throws IOException if configuration cannot be saved
      */
     public void setFontSizeLevel(int level) throws IOException {
-        if (level < 1 || level > 6) {
-            throw new IllegalArgumentException("Font size level must be between 1 and 6");
-        }
-        JsonObject config = this.readConfig(false);
-        config.addProperty("fontSizeLevel", level);
-        this.writeConfig(config);
+        runConfigTransaction(() -> {
+            if (level < 1 || level > 6) {
+                throw new IllegalArgumentException("Font size level must be between 1 and 6");
+            }
+            JsonObject config = this.readConfig(false);
+            config.addProperty("fontSizeLevel", level);
+            this.writeConfig(config);
+        });
     }
 
     /**
@@ -946,11 +1010,13 @@ public class CodemossSettingsService {
      * @param customFontPath custom font path for custom file mode
      */
     public void setUiFontConfig(String mode, String customFontPath) throws IOException {
-        JsonObject config = readConfig();
-        config.add(UI_FONT_CONFIG_KEY, createUiFontConfig(mode, customFontPath));
-        writeConfig(config);
-        LOG.debug("[CodemossSettings] Set UI font config: mode=" + mode
-                + ", customFontPath=" + customFontPath);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            config.add(UI_FONT_CONFIG_KEY, createUiFontConfig(mode, customFontPath));
+            writeConfig(config);
+            LOG.debug("[CodemossSettings] Set UI font config: mode=" + mode
+                    + ", customFontPath=" + customFontPath);
+        });
     }
 
     /**
@@ -973,11 +1039,13 @@ public class CodemossSettingsService {
      * @param customFontPath custom font path for custom file mode
      */
     public void setCodeFontConfig(String mode, String customFontPath) throws IOException {
-        JsonObject config = readConfig();
-        config.add(CODE_FONT_CONFIG_KEY, createCodeFontConfig(mode, customFontPath));
-        writeConfig(config);
-        LOG.debug("[CodemossSettings] Set code font config: mode=" + mode
-                + ", customFontPath=" + customFontPath);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            config.add(CODE_FONT_CONFIG_KEY, createCodeFontConfig(mode, customFontPath));
+            writeConfig(config);
+            LOG.debug("[CodemossSettings] Set code font config: mode=" + mode
+                    + ", customFontPath=" + customFontPath);
+        });
     }
 
     // ==================== Permission Dialog Timeout Config Management ====================
@@ -1112,25 +1180,27 @@ public class CodemossSettingsService {
      * @param enabled     whether to enable
      */
     public void setStreamingEnabled(String projectPath, boolean enabled) throws IOException {
-        JsonObject config = readConfig();
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
 
-        // Ensure streaming object exists
-        JsonObject streaming;
-        if (config.has("streaming")) {
-            streaming = config.getAsJsonObject("streaming");
-        } else {
-            streaming = new JsonObject();
-            config.add("streaming", streaming);
-        }
+            // Ensure streaming object exists
+            JsonObject streaming;
+            if (config.has("streaming")) {
+                streaming = config.getAsJsonObject("streaming");
+            } else {
+                streaming = new JsonObject();
+                config.add("streaming", streaming);
+            }
 
-        // Save project-specific config (also serves as default)
-        if (projectPath != null) {
-            streaming.addProperty(projectPath, enabled);
-        }
-        streaming.addProperty("default", enabled);
+            // Save project-specific config (also serves as default)
+            if (projectPath != null) {
+                streaming.addProperty(projectPath, enabled);
+            }
+            streaming.addProperty("default", enabled);
 
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set streaming enabled to " + enabled + " for project: " + projectPath);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set streaming enabled to " + enabled + " for project: " + projectPath);
+        });
     }
 
     // ==================== Auto Open File Config Management ====================
@@ -1171,25 +1241,27 @@ public class CodemossSettingsService {
      * @param enabled     whether to enable
      */
     public void setAutoOpenFileEnabled(String projectPath, boolean enabled) throws IOException {
-        JsonObject config = readConfig();
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
 
-        // Ensure autoOpenFile object exists
-        JsonObject autoOpenFile;
-        if (config.has("autoOpenFile")) {
-            autoOpenFile = config.getAsJsonObject("autoOpenFile");
-        } else {
-            autoOpenFile = new JsonObject();
-            config.add("autoOpenFile", autoOpenFile);
-        }
+            // Ensure autoOpenFile object exists
+            JsonObject autoOpenFile;
+            if (config.has("autoOpenFile")) {
+                autoOpenFile = config.getAsJsonObject("autoOpenFile");
+            } else {
+                autoOpenFile = new JsonObject();
+                config.add("autoOpenFile", autoOpenFile);
+            }
 
-        // Save project-specific config (also serves as default)
-        if (projectPath != null) {
-            autoOpenFile.addProperty(projectPath, enabled);
-        }
-        autoOpenFile.addProperty("default", enabled);
+            // Save project-specific config (also serves as default)
+            if (projectPath != null) {
+                autoOpenFile.addProperty(projectPath, enabled);
+            }
+            autoOpenFile.addProperty("default", enabled);
 
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set auto open file enabled to " + enabled + " for project: " + projectPath);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set auto open file enabled to " + enabled + " for project: " + projectPath);
+        });
     }
 
     // ==================== Codex Sandbox Mode Config Management ====================
@@ -1230,27 +1302,29 @@ public class CodemossSettingsService {
      * @param sandboxMode sandbox mode (workspace-write or danger-full-access)
      */
     public void setCodexSandboxMode(String projectPath, String sandboxMode) throws IOException {
-        if (!isValidCodexSandboxMode(sandboxMode)) {
-            throw new IllegalArgumentException("Invalid Codex sandbox mode: " + sandboxMode);
-        }
+        runConfigTransaction(() -> {
+            if (!isValidCodexSandboxMode(sandboxMode)) {
+                throw new IllegalArgumentException("Invalid Codex sandbox mode: " + sandboxMode);
+            }
 
-        JsonObject config = readConfig();
+            JsonObject config = readConfig();
 
-        JsonObject sandboxConfig;
-        if (config.has("codexSandboxMode")) {
-            sandboxConfig = config.getAsJsonObject("codexSandboxMode");
-        } else {
-            sandboxConfig = new JsonObject();
-            config.add("codexSandboxMode", sandboxConfig);
-        }
+            JsonObject sandboxConfig;
+            if (config.has("codexSandboxMode")) {
+                sandboxConfig = config.getAsJsonObject("codexSandboxMode");
+            } else {
+                sandboxConfig = new JsonObject();
+                config.add("codexSandboxMode", sandboxConfig);
+            }
 
-        if (projectPath != null) {
-            sandboxConfig.addProperty(projectPath, sandboxMode);
-        }
-        sandboxConfig.addProperty("default", sandboxMode);
+            if (projectPath != null) {
+                sandboxConfig.addProperty(projectPath, sandboxMode);
+            }
+            sandboxConfig.addProperty("default", sandboxMode);
 
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set Codex sandbox mode to " + sandboxMode + " for project: " + projectPath);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set Codex sandbox mode to " + sandboxMode + " for project: " + projectPath);
+        });
     }
 
     private boolean isValidCodexSandboxMode(String mode) {
@@ -1273,27 +1347,31 @@ public class CodemossSettingsService {
     // ==================== Provider Management ====================
 
     public List<JsonObject> getClaudeProviders() throws IOException {
-        return providerManager.getClaudeProviders();
+        return withConfigTransaction(() -> providerManager.getClaudeProviders());
     }
 
     public JsonObject getActiveClaudeProvider() throws IOException {
-        return providerManager.getActiveClaudeProvider();
+        return withConfigTransaction(() -> providerManager.getActiveClaudeProvider());
     }
 
     public void addClaudeProvider(JsonObject provider) throws IOException {
-        providerManager.addClaudeProvider(provider);
+        runConfigTransaction(() -> providerManager.addClaudeProvider(provider));
     }
 
     public void saveClaudeProvider(JsonObject provider) throws IOException {
-        providerManager.saveClaudeProvider(provider);
+        runConfigTransaction(() -> providerManager.saveClaudeProvider(provider));
     }
 
     public void updateClaudeProvider(String id, JsonObject updates) throws IOException {
-        providerManager.updateClaudeProvider(id, updates);
+        runConfigTransaction(() -> providerManager.updateClaudeProvider(id, updates));
     }
 
     public DeleteResult deleteClaudeProvider(String id) {
-        return providerManager.deleteClaudeProvider(id);
+        try {
+            return withConfigTransaction(() -> providerManager.deleteClaudeProvider(id));
+        } catch (IOException e) {
+            return DeleteResult.fromException(e, getConfigPath());
+        }
     }
 
     @Deprecated
@@ -1305,11 +1383,11 @@ public class CodemossSettingsService {
     }
 
     public void switchClaudeProvider(String id) throws IOException {
-        providerManager.switchClaudeProvider(id);
+        runConfigTransaction(() -> providerManager.switchClaudeProvider(id));
     }
 
     public void deactivateClaudeProvider() throws IOException {
-        providerManager.deactivateClaudeProvider();
+        runConfigTransaction(() -> providerManager.deactivateClaudeProvider());
     }
 
     public List<JsonObject> parseProvidersFromCcSwitchDb(String dbPath) throws IOException {
@@ -1324,11 +1402,11 @@ public class CodemossSettingsService {
     }
 
     public int saveProviders(List<JsonObject> providers) throws IOException {
-        return providerManager.saveProviders(providers);
+        return withConfigTransaction(() -> providerManager.saveProviders(providers));
     }
 
     public void saveProviderOrder(List<String> orderedIds) throws IOException {
-        providerManager.saveProviderOrder(orderedIds);
+        runConfigTransaction(() -> providerManager.saveProviderOrder(orderedIds));
     }
 
     public boolean isLocalProviderActive() {
@@ -1346,15 +1424,15 @@ public class CodemossSettingsService {
     }
 
     public void upsertMcpServer(JsonObject server) throws IOException {
-        mcpServerManager.upsertMcpServer(server);
+        runConfigTransaction(() -> mcpServerManager.upsertMcpServer(server));
     }
 
     public void upsertMcpServer(JsonObject server, String projectPath) throws IOException {
-        mcpServerManager.upsertMcpServer(server, projectPath);
+        runConfigTransaction(() -> mcpServerManager.upsertMcpServer(server, projectPath));
     }
 
     public boolean deleteMcpServer(String serverId) throws IOException {
-        return mcpServerManager.deleteMcpServer(serverId);
+        return withConfigTransaction(() -> mcpServerManager.deleteMcpServer(serverId));
     }
 
     public Map<String, Object> validateMcpServer(JsonObject server) {
@@ -1390,11 +1468,11 @@ public class CodemossSettingsService {
     }
 
     public void upsertSkill(JsonObject skill) throws IOException {
-        skillManager.upsertSkill(skill);
+        runConfigTransaction(() -> skillManager.upsertSkill(skill));
     }
 
     public boolean deleteSkill(String id) throws IOException {
-        return skillManager.deleteSkill(id);
+        return withConfigTransaction(() -> skillManager.deleteSkill(id));
     }
 
     public Map<String, Object> validateSkill(JsonObject skill) {
@@ -1819,19 +1897,21 @@ public class CodemossSettingsService {
      * @param enabled whether to enable
      */
     public void setSoundNotificationEnabled(boolean enabled) throws IOException {
-        JsonObject config = readConfig();
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
 
-        JsonObject soundConfig;
-        if (config.has("soundNotification")) {
-            soundConfig = config.getAsJsonObject("soundNotification");
-        } else {
-            soundConfig = new JsonObject();
-            config.add("soundNotification", soundConfig);
-        }
+            JsonObject soundConfig;
+            if (config.has("soundNotification")) {
+                soundConfig = config.getAsJsonObject("soundNotification");
+            } else {
+                soundConfig = new JsonObject();
+                config.add("soundNotification", soundConfig);
+            }
 
-        soundConfig.addProperty("enabled", enabled);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set sound notification enabled: " + enabled);
+            soundConfig.addProperty("enabled", enabled);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set sound notification enabled: " + enabled);
+        });
     }
 
     /**
@@ -1860,24 +1940,26 @@ public class CodemossSettingsService {
      * @param path file path, null means use default sound
      */
     public void setCustomSoundPath(String path) throws IOException {
-        JsonObject config = readConfig();
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
 
-        JsonObject soundConfig;
-        if (config.has("soundNotification")) {
-            soundConfig = config.getAsJsonObject("soundNotification");
-        } else {
-            soundConfig = new JsonObject();
-            config.add("soundNotification", soundConfig);
-        }
+            JsonObject soundConfig;
+            if (config.has("soundNotification")) {
+                soundConfig = config.getAsJsonObject("soundNotification");
+            } else {
+                soundConfig = new JsonObject();
+                config.add("soundNotification", soundConfig);
+            }
 
-        if (path == null || path.isEmpty()) {
-            soundConfig.remove("customSoundPath");
-        } else {
-            soundConfig.addProperty("customSoundPath", path);
-        }
+            if (path == null || path.isEmpty()) {
+                soundConfig.remove("customSoundPath");
+            } else {
+                soundConfig.addProperty("customSoundPath", path);
+            }
 
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set custom sound path: " + path);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set custom sound path: " + path);
+        });
     }
 
     /**
@@ -1906,19 +1988,21 @@ public class CodemossSettingsService {
      * @param enabled whether to enable
      */
     public void setSoundOnlyWhenUnfocused(boolean enabled) throws IOException {
-        JsonObject config = readConfig();
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
 
-        JsonObject soundConfig;
-        if (config.has("soundNotification")) {
-            soundConfig = config.getAsJsonObject("soundNotification");
-        } else {
-            soundConfig = new JsonObject();
-            config.add("soundNotification", soundConfig);
-        }
+            JsonObject soundConfig;
+            if (config.has("soundNotification")) {
+                soundConfig = config.getAsJsonObject("soundNotification");
+            } else {
+                soundConfig = new JsonObject();
+                config.add("soundNotification", soundConfig);
+            }
 
-        soundConfig.addProperty("onlyWhenUnfocused", enabled);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set sound only when unfocused: " + enabled);
+            soundConfig.addProperty("onlyWhenUnfocused", enabled);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set sound only when unfocused: " + enabled);
+        });
     }
 
     /**
@@ -1947,19 +2031,21 @@ public class CodemossSettingsService {
      * @param soundId sound ID, null or empty means "default"
      */
     public void setSelectedSound(String soundId) throws IOException {
-        JsonObject config = readConfig();
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
 
-        JsonObject soundConfig;
-        if (config.has("soundNotification")) {
-            soundConfig = config.getAsJsonObject("soundNotification");
-        } else {
-            soundConfig = new JsonObject();
-            config.add("soundNotification", soundConfig);
-        }
+            JsonObject soundConfig;
+            if (config.has("soundNotification")) {
+                soundConfig = config.getAsJsonObject("soundNotification");
+            } else {
+                soundConfig = new JsonObject();
+                config.add("soundNotification", soundConfig);
+            }
 
-        soundConfig.addProperty("selectedSound", (soundId == null || soundId.isEmpty()) ? "default" : soundId);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set selected sound: " + soundId);
+            soundConfig.addProperty("selectedSound", (soundId == null || soundId.isEmpty()) ? "default" : soundId);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set selected sound: " + soundId);
+        });
     }
 
     // ==================== Task Completion Notification Management ====================
@@ -1985,10 +2071,12 @@ public class CodemossSettingsService {
      * @param enabled whether to enable
      */
     public void setTaskCompletionNotificationEnabled(boolean enabled) throws IOException {
-        JsonObject config = readConfig();
-        config.addProperty("taskCompletionNotificationEnabled", enabled);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set task completion notification enabled: " + enabled);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            config.addProperty("taskCompletionNotificationEnabled", enabled);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set task completion notification enabled: " + enabled);
+        });
     }
 
     // ==================== Ask User Question Notification Management ====================
@@ -2014,10 +2102,12 @@ public class CodemossSettingsService {
      * @param enabled whether to enable
      */
     public void setAskUserQuestionNotificationEnabled(boolean enabled) throws IOException {
-        JsonObject config = readConfig();
-        config.addProperty("askUserQuestionNotificationEnabled", enabled);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set ask user question notification enabled: " + enabled);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            config.addProperty("askUserQuestionNotificationEnabled", enabled);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set ask user question notification enabled: " + enabled);
+        });
     }
 
     /**
@@ -2042,10 +2132,12 @@ public class CodemossSettingsService {
      * @param enabled whether to enable
      */
     public void setAskUserQuestionSoundNotificationEnabled(boolean enabled) throws IOException {
-        JsonObject config = readConfig();
-        config.addProperty("askUserQuestionSoundNotificationEnabled", enabled);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set ask user question sound notification enabled: " + enabled);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            config.addProperty("askUserQuestionSoundNotificationEnabled", enabled);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set ask user question sound notification enabled: " + enabled);
+        });
     }
 
     /**
@@ -2070,10 +2162,12 @@ public class CodemossSettingsService {
      * @param enabled whether to enable
      */
     public void setSystemNotificationOnlyWhenUnfocused(boolean enabled) throws IOException {
-        JsonObject config = readConfig();
-        config.addProperty("systemNotificationOnlyWhenUnfocused", enabled);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set system notification only when unfocused: " + enabled);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            config.addProperty("systemNotificationOnlyWhenUnfocused", enabled);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set system notification only when unfocused: " + enabled);
+        });
     }
 
     // ==================== AI Feature Toggle Management ====================
@@ -2099,10 +2193,12 @@ public class CodemossSettingsService {
      * @param enabled whether to enable
      */
     public void setCommitGenerationEnabled(boolean enabled) throws IOException {
-        JsonObject config = readConfig();
-        config.addProperty("commitGenerationEnabled", enabled);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set commit generation enabled: " + enabled);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            config.addProperty("commitGenerationEnabled", enabled);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set commit generation enabled: " + enabled);
+        });
     }
 
     /**
@@ -2126,10 +2222,12 @@ public class CodemossSettingsService {
      * @param enabled whether to enable
      */
     public void setStatusBarWidgetEnabled(boolean enabled) throws IOException {
-        JsonObject config = readConfig();
-        config.addProperty("statusBarWidgetEnabled", enabled);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set status bar widget enabled: " + enabled);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            config.addProperty("statusBarWidgetEnabled", enabled);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set status bar widget enabled: " + enabled);
+        });
     }
 
     /**
@@ -2153,10 +2251,12 @@ public class CodemossSettingsService {
      * @param enabled whether to enable
      */
     public void setAiTitleGenerationEnabled(boolean enabled) throws IOException {
-        JsonObject config = readConfig();
-        config.addProperty("aiTitleGenerationEnabled", enabled);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set AI title generation enabled: " + enabled);
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            config.addProperty("aiTitleGenerationEnabled", enabled);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set AI title generation enabled: " + enabled);
+        });
     }
 
     // ==================== Prompt Enhancer Config Management ====================
@@ -2324,33 +2424,35 @@ public class CodemossSettingsService {
             String defaultCodexModel,
             String featureLabel
     ) throws IOException {
-        JsonObject config = readConfig();
-        JsonObject featureConfig = getAiFeatureRootObject(config, featureKey);
-        String normalizedProvider = normalizeAiFeatureProvider(provider);
-        if (normalizedProvider == null) {
-            featureConfig.add(AI_FEATURE_PROVIDER_KEY, JsonNull.INSTANCE);
-        } else {
-            featureConfig.addProperty(AI_FEATURE_PROVIDER_KEY, normalizedProvider);
-        }
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            JsonObject featureConfig = getAiFeatureRootObject(config, featureKey);
+            String normalizedProvider = normalizeAiFeatureProvider(provider);
+            if (normalizedProvider == null) {
+                featureConfig.add(AI_FEATURE_PROVIDER_KEY, JsonNull.INSTANCE);
+            } else {
+                featureConfig.addProperty(AI_FEATURE_PROVIDER_KEY, normalizedProvider);
+            }
 
-        // Start from previously saved models (so partial updates don't wipe CLI models),
-        // then overlay the incoming map, then fill defaults for any missing keys.
-        JsonObject merged = getNormalizedAiFeatureModels(featureConfig, defaultClaudeModel, defaultCodexModel);
-        if (incomingModels != null) {
-            for (String key : AI_FEATURE_PROVIDERS) {
-                if (incomingModels.has(key) && !incomingModels.get(key).isJsonNull()) {
-                    JsonElement el = incomingModels.get(key);
-                    if (el.isJsonPrimitive()) {
-                        merged.addProperty(key, normalizeAiFeatureModel(el.getAsString(), defaultModelForProvider(key, defaultClaudeModel, defaultCodexModel)));
+            // Start from previously saved models (so partial updates don't wipe CLI models),
+            // then overlay the incoming map, then fill defaults for any missing keys.
+            JsonObject merged = getNormalizedAiFeatureModels(featureConfig, defaultClaudeModel, defaultCodexModel);
+            if (incomingModels != null) {
+                for (String key : AI_FEATURE_PROVIDERS) {
+                    if (incomingModels.has(key) && !incomingModels.get(key).isJsonNull()) {
+                        JsonElement el = incomingModels.get(key);
+                        if (el.isJsonPrimitive()) {
+                            merged.addProperty(key, normalizeAiFeatureModel(el.getAsString(), defaultModelForProvider(key, defaultClaudeModel, defaultCodexModel)));
+                        }
                     }
                 }
             }
-        }
-        featureConfig.add(AI_FEATURE_MODELS_KEY, merged);
+            featureConfig.add(AI_FEATURE_MODELS_KEY, merged);
 
-        config.add(featureKey, featureConfig);
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set " + featureLabel + " config: provider=" + normalizedProvider);
+            config.add(featureKey, featureConfig);
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set " + featureLabel + " config: provider=" + normalizedProvider);
+        });
     }
 
     private JsonObject getAiFeatureRootObject(JsonObject rootConfig, String featureKey) {
@@ -2560,31 +2662,35 @@ public class CodemossSettingsService {
     }
 
     public void addCodexProvider(JsonObject provider) throws IOException {
-        codexProviderManager.addCodexProvider(provider);
+        runConfigTransaction(() -> codexProviderManager.addCodexProvider(provider));
     }
 
     public void saveCodexProvider(JsonObject provider) throws IOException {
-        codexProviderManager.saveCodexProvider(provider);
+        runConfigTransaction(() -> codexProviderManager.saveCodexProvider(provider));
     }
 
     public void updateCodexProvider(String id, JsonObject updates) throws IOException {
-        codexProviderManager.updateCodexProvider(id, updates);
+        runConfigTransaction(() -> codexProviderManager.updateCodexProvider(id, updates));
     }
 
     public DeleteResult deleteCodexProvider(String id) {
-        return codexProviderManager.deleteCodexProvider(id);
+        try {
+            return withConfigTransaction(() -> codexProviderManager.deleteCodexProvider(id));
+        } catch (IOException e) {
+            return DeleteResult.fromException(e, getConfigPath());
+        }
     }
 
     public void switchCodexProvider(String id) throws IOException {
-        codexProviderManager.switchCodexProvider(id);
+        runConfigTransaction(() -> codexProviderManager.switchCodexProvider(id));
     }
 
     public void switchToCodexCliLogin() throws IOException {
-        codexProviderManager.switchToCodexCliLogin();
+        runConfigTransaction(() -> codexProviderManager.switchToCodexCliLogin());
     }
 
     public JsonObject getCurrentCodexConfig() throws IOException {
-        if (!isCodexLocalConfigAuthorized() && !codexProviderManager.isManagedProviderReady()) {
+        if (!isCodexLocalConfigAuthorized() && !isManagedCodexProviderReady()) {
             return new JsonObject();
         }
         return codexProviderManager.getCurrentCodexConfig();
@@ -2639,7 +2745,7 @@ public class CodemossSettingsService {
     }
 
     public void setCodexLocalConfigAuthorized(boolean authorized) throws IOException {
-        codexProviderManager.setLocalConfigAuthorized(authorized);
+        runConfigTransaction(() -> codexProviderManager.setLocalConfigAuthorized(authorized));
     }
 
     public String getCodexRuntimeAccessMode() throws IOException {
@@ -2659,19 +2765,28 @@ public class CodemossSettingsService {
                     : CODEX_RUNTIME_ACCESS_INACTIVE;
         }
 
-        if (!currentId.isEmpty() && codexProviderManager.isManagedProviderReady()) {
+        if (!currentId.isEmpty() && isManagedCodexProviderReady()) {
             return CODEX_RUNTIME_ACCESS_MANAGED;
         }
 
         return CODEX_RUNTIME_ACCESS_INACTIVE;
     }
 
+    private boolean isManagedCodexProviderReady() throws IOException {
+        // Access guards can already hold Codex's config lock. In that branch the manager
+        // only checks readiness, without migrating state; do not invert the lock order.
+        if (codexSettingsManager.isConfigLockHeldByCurrentThread()) {
+            return codexProviderManager.isManagedProviderReady();
+        }
+        return withConfigTransaction(codexProviderManager::isManagedProviderReady);
+    }
+
     public int saveCodexProviders(List<JsonObject> providers) throws IOException {
-        return codexProviderManager.saveProviders(providers);
+        return withConfigTransaction(() -> codexProviderManager.saveProviders(providers));
     }
 
     public void saveCodexProviderOrder(List<String> orderedIds) throws IOException {
-        codexProviderManager.saveProviderOrder(orderedIds);
+        runConfigTransaction(() -> codexProviderManager.saveProviderOrder(orderedIds));
     }
 
     // ==================== User Model Metadata Management ====================
@@ -2683,69 +2798,73 @@ public class CodemossSettingsService {
      * @param pricing  map of model ID → pricing; empty or null clears the provider entry
      */
     public void setCustomModelPricing(String provider, Map<String, ModelPricing> pricing) throws IOException {
-        JsonObject config = readConfig();
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
 
-        JsonObject root;
-        if (config.has("customModelPricing") && config.get("customModelPricing").isJsonObject()) {
-            root = config.getAsJsonObject("customModelPricing");
-        } else {
-            root = new JsonObject();
-            config.add("customModelPricing", root);
-        }
-
-        if (pricing == null || pricing.isEmpty()) {
-            root.remove(provider);
-        } else {
-            JsonObject providerNode = new JsonObject();
-            for (Map.Entry<String, ModelPricing> entry : pricing.entrySet()) {
-                providerNode.add(entry.getKey(), serializeModelPricing(entry.getValue()));
+            JsonObject root;
+            if (config.has("customModelPricing") && config.get("customModelPricing").isJsonObject()) {
+                root = config.getAsJsonObject("customModelPricing");
+            } else {
+                root = new JsonObject();
+                config.add("customModelPricing", root);
             }
-            root.add(provider, providerNode);
-        }
 
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set user model pricing for " + provider
-                + ": " + (pricing == null ? 0 : pricing.size()) + " models");
+            if (pricing == null || pricing.isEmpty()) {
+                root.remove(provider);
+            } else {
+                JsonObject providerNode = new JsonObject();
+                for (Map.Entry<String, ModelPricing> entry : pricing.entrySet()) {
+                    providerNode.add(entry.getKey(), serializeModelPricing(entry.getValue()));
+                }
+                root.add(provider, providerNode);
+            }
+
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set user model pricing for " + provider
+                    + ": " + (pricing == null ? 0 : pricing.size()) + " models");
+        });
     }
 
     /**
      * Persist user-configured Codex model context windows, replacing the whole map.
      */
     public void setCustomModelContextWindows(String provider, Map<String, Integer> contextWindows) throws IOException {
-        if (!"codex".equalsIgnoreCase(provider)) {
-            LOG.warn("[CodemossSettings] Ignored custom context windows for unsupported provider: " + provider);
-            return;
-        }
-        JsonObject config = readConfig();
-
-        JsonObject root;
-        if (config.has("customModelContextWindows") && config.get("customModelContextWindows").isJsonObject()) {
-            root = config.getAsJsonObject("customModelContextWindows");
-        } else {
-            root = new JsonObject();
-            config.add("customModelContextWindows", root);
-        }
-
-        if (contextWindows == null || contextWindows.isEmpty()) {
-            root.remove("codex");
-        } else {
-            JsonObject providerNode = new JsonObject();
-            for (Map.Entry<String, Integer> entry : contextWindows.entrySet()) {
-                Integer value = entry.getValue();
-                if (value != null && value >= 1_000 && value % 1_000 == 0) {
-                    providerNode.addProperty(entry.getKey(), value);
-                }
+        runConfigTransaction(() -> {
+            if (!"codex".equalsIgnoreCase(provider)) {
+                LOG.warn("[CodemossSettings] Ignored custom context windows for unsupported provider: " + provider);
+                return;
             }
-            if (providerNode.size() == 0) {
+            JsonObject config = readConfig();
+
+            JsonObject root;
+            if (config.has("customModelContextWindows") && config.get("customModelContextWindows").isJsonObject()) {
+                root = config.getAsJsonObject("customModelContextWindows");
+            } else {
+                root = new JsonObject();
+                config.add("customModelContextWindows", root);
+            }
+
+            if (contextWindows == null || contextWindows.isEmpty()) {
                 root.remove("codex");
             } else {
-                root.add("codex", providerNode);
+                JsonObject providerNode = new JsonObject();
+                for (Map.Entry<String, Integer> entry : contextWindows.entrySet()) {
+                    Integer value = entry.getValue();
+                    if (value != null && value >= 1_000 && value % 1_000 == 0) {
+                        providerNode.addProperty(entry.getKey(), value);
+                    }
+                }
+                if (providerNode.size() == 0) {
+                    root.remove("codex");
+                } else {
+                    root.add("codex", providerNode);
+                }
             }
-        }
 
-        writeConfig(config);
-        LOG.info("[CodemossSettings] Set user model context windows for codex"
-                + ": " + (contextWindows == null ? 0 : contextWindows.size()) + " models");
+            writeConfig(config);
+            LOG.info("[CodemossSettings] Set user model context windows for codex"
+                    + ": " + (contextWindows == null ? 0 : contextWindows.size()) + " models");
+        });
     }
 
     private JsonObject serializeModelPricing(ModelPricing pricing) {

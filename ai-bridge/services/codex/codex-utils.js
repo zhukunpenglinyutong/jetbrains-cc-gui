@@ -1,6 +1,6 @@
 /**
  * Codex utility functions.
- * Logging, environment config, reconnect helpers, and error handling.
+ * Logging, environment config, permission compatibility, and reconnect helpers.
  */
 
 // ========== Debug Logging Configuration ==========
@@ -210,88 +210,3 @@ export const AGENTS_FILE_NAMES = ['AGENTS.override.md', 'AGENTS.md', 'CLAUDE.md'
 export const SESSION_PATCH_SCAN_MAX_LINES = 2000;
 export const SESSION_PATCH_SCAN_MAX_FILES = 5000;
 export const SESSION_CONTEXT_SCAN_MAX_LINES = 1200;
-
-/**
- * Build error response with helpful diagnostics
- *
- * @param {Error} error - The error object
- * @returns {object} Structured error payload
- */
-export function buildErrorPayload(error) {
-  const rawError = error?.message || String(error);
-  const errorName = error?.name || 'Error';
-
-  // Detect common error types
-  const isAuthError = rawError.includes('API key') ||
-                      rawError.includes('authentication') ||
-                      rawError.includes('unauthorized') ||
-                      rawError.includes('401') ||
-                      rawError.includes('Missing environment variable') ||
-                      rawError.includes('CODEX_API_KEY');
-
-  const isNetworkError = rawError.includes('ECONNREFUSED') ||
-                         rawError.includes('ETIMEDOUT') ||
-                         rawError.includes('network') ||
-                         rawError.includes('fetch failed');
-
-  // Codex holds a persistent per-thread writer lock while a turn runs. This
-  // error means another live Codex process was still writing the thread when
-  // this turn tried to resume it — a local process overlap, NOT an expired
-  // server-side thread. It must not be reported as "create a new session".
-  const isThreadWriterConflict = rawError.includes('already has an active writer');
-
-  let userMessage;
-
-  if (isThreadWriterConflict) {
-    userMessage = [
-      'Codex thread is busy:',
-      `- Error message: ${rawError}`,
-      '',
-      'Another Codex process was still writing this thread when this turn started.',
-      'The plugin now stops the previous turn automatically before sending.',
-      'Please wait a few seconds and resend this message.',
-      'You do NOT need to create a new session.'
-    ].join('\n');
-  } else if (isAuthError) {
-    userMessage = [
-      'Codex authentication error:',
-      `- Error message: ${rawError}`,
-      '',
-      'Please check the following:',
-      '1. Is the Codex API Key in plugin settings correct',
-      '2. Does the API Key have sufficient permissions',
-      '3. If using a custom Base URL, please confirm the address is correct',
-      '',
-      'Tip: Codex requires a valid OpenAI API Key'
-    ].join('\n');
-  } else if (isNetworkError) {
-    userMessage = [
-      'Codex network error:',
-      `- Error message: ${rawError}`,
-      '',
-      'Please check:',
-      '1. Is the network connection working',
-      '2. If using a proxy, please confirm proxy configuration',
-      '3. Is the firewall blocking the connection'
-    ].join('\n');
-  } else {
-    userMessage = [
-      'Codex error:',
-      `- Error message: ${rawError}`,
-      '',
-      'Please check network connection and Codex configuration'
-    ].join('\n');
-  }
-
-  return {
-    success: false,
-    error: userMessage,
-    details: {
-      rawError,
-      errorName,
-      isAuthError,
-      isNetworkError,
-      isThreadWriterConflict
-    }
-  };
-}

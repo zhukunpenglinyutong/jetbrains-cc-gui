@@ -4,6 +4,7 @@ import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.handler.PermissionHandler;
 import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.provider.ClaudeContextWindowOverrideProvider;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
 import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.session.ClaudeSession;
@@ -17,6 +18,8 @@ import javax.swing.JPanel;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -59,10 +62,43 @@ public class ChatWindowDelegateTest {
         int limit = ChatWindowDelegate.resolveModelContextLimitForRecovery(
                 "codex",
                 "gpt-5.6-sol",
+                null,
                 null
         );
 
         assertEquals(SettingsHandler.getModelContextLimit("codex", "gpt-5.6-sol"), limit);
+    }
+
+    /**
+     * CLAUDE_CODE_MAX_CONTEXT_TOKENS is a Claude-only override. Recovery for other
+     * providers (here Grok) must keep the static model table.
+     */
+    @Test
+    public void nonClaudeRecoveryLimitIgnoresClaudeContextOverride() throws Exception {
+        Path settings = Files.createTempFile("claude-settings", ".json");
+        Files.writeString(settings, """
+                {
+                  "env": {
+                    "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "128000"
+                  }
+                }
+                """);
+        ClaudeContextWindowOverrideProvider.setInstanceForTests(
+                ClaudeContextWindowOverrideProvider.createForTests(settings)
+        );
+
+        try {
+            int limit = ChatWindowDelegate.resolveModelContextLimitForRecovery(
+                    "grok",
+                    "grok-build",
+                    null,
+                    null
+            );
+
+            assertEquals(500_000, limit);
+        } finally {
+            ClaudeContextWindowOverrideProvider.setInstanceForTests(null);
+        }
     }
 
     /**

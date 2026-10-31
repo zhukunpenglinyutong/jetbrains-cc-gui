@@ -6,6 +6,7 @@ interface ProgressRowProps {
   total: number;
   remainingSeconds: number;
   isTimeWarning: boolean;
+  showCountdown?: boolean;
 }
 
 const ProgressRow = ({
@@ -13,6 +14,7 @@ const ProgressRow = ({
   total,
   remainingSeconds,
   isTimeWarning,
+  showCountdown = true,
 }: ProgressRowProps) => {
   const { t } = useTranslation();
 
@@ -25,10 +27,10 @@ const ProgressRow = ({
         })}
       </span>
       {/* Countdown display */}
-      <span className={`countdown-timer ${isTimeWarning ? 'warning' : ''}`}>
+      {showCountdown && <span className={`countdown-timer ${isTimeWarning ? 'warning' : ''}`}>
         <span className="codicon codicon-clock" />
         <span className="countdown-time">{formatCountdown(remainingSeconds)}</span>
-      </span>
+      </span>}
     </div>
   );
 };

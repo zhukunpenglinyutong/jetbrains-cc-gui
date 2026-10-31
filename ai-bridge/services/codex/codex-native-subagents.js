@@ -9,7 +9,7 @@ export async function readNativeSubagent(read, { rootThreadId, agentId, includeH
   while (ancestorId !== rootThreadId) {
     if (seen.has(ancestorId) || seen.size > 32) throw new Error('Native subagent ancestry is cyclic or too deep');
     seen.add(ancestorId);
-    const metadata = await read('thread/read', { threadId: ancestorId, includeTurns: false });
+    const metadata = await read('thread/read', { threadId: ancestorId, includeTurns: false, excludeTurns: true });
     if (metadata.thread?.id !== ancestorId) throw new Error('Native subagent returned a different thread');
     child ??= metadata.thread;
     ancestorId = metadata.thread.parentThreadId;

@@ -32,6 +32,7 @@ export function ChatInputBoxHeader({
   onToggleStatusPanel,
   messageQueue,
   onRemoveFromQueue,
+  onEditFromQueue,
   onReorderQueue,
   showOpenSourceBanner,
   onDismissOpenSourceBanner,
@@ -63,6 +64,7 @@ export function ChatInputBoxHeader({
   onToggleStatusPanel?: () => void;
   messageQueue?: QueuedMessage[];
   onRemoveFromQueue?: (id: string) => void;
+  onEditFromQueue?: (id: string) => void;
   onReorderQueue?: (orderedIds: string[]) => void;
   showOpenSourceBanner?: boolean;
   onDismissOpenSourceBanner?: () => void;
@@ -94,7 +96,9 @@ export function ChatInputBoxHeader({
         <MessageQueue
           queue={messageQueue}
           onRemove={onRemoveFromQueue ?? (() => {})}
+          onEdit={onEditFromQueue}
           onReorder={onReorderQueue}
+          t={t}
         />
       )}
 

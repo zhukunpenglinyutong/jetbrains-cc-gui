@@ -7,6 +7,7 @@ import {
   ENV_VAR_VALUE_MAX_LENGTH,
   OFFICIAL_CODEX_CONFIG_TOML,
   OFFICIAL_CODEX_PROVIDER_NAME,
+  normalizeEnvVarEntries,
   validateEnvVarEntries,
 } from '../../types/provider';
 import { OFFICIAL_DIRECT_PRESET_ID } from './PresetSections';
@@ -166,8 +167,8 @@ export function useCodexProviderForm({
       createdAt: provider?.createdAt,
       configToml: configTomlJson.trim(),
       authJson: authJson.trim(),
-      messageEnvVars: messageEnvVars.filter(e => e.key.trim() !== ''),
-      mcpEnvVars: mcpEnvVars.filter(e => e.key.trim() !== ''),
+      messageEnvVars: normalizeEnvVarEntries(messageEnvVars),
+      mcpEnvVars: normalizeEnvVarEntries(mcpEnvVars),
     };
 
     onSave(providerData);

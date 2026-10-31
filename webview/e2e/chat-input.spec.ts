@@ -223,6 +223,124 @@ test('leaving the chat before debounce preserves the latest draft', async ({ pag
   expect(await sentMessages(page)).toEqual([]);
 });
 
+test('client drafts survive offline edits, reload, and a replacement page without leaking across tabs', async ({ page, context }, testInfo) => {
+  await page.addInitScript(() => {
+    window.__CCGUI_DRAFT_CACHE_KEY__ = new URL(location.href).searchParams.get('draftWindow') ?? 'draft-a';
+  });
+  await page.goto('/?draftWindow=draft-a');
+  const input = page.locator('.input-editable');
+  await expect(input).toBeVisible();
+  await input.fill('中文草稿 and English');
+  await context.setOffline(true);
+  await input.press('End');
+  await page.keyboard.insertText(' 离线编辑');
+  await expect.poll(() => page.evaluate(async () => {
+    const cache = await caches.open('ccgui-drafts-v1');
+    const response = await cache.match('https://cc-gui-webview.local/drafts/draft-a');
+    return response ? (await response.json()).text : '';
+  })).toBe('中文草稿 and English 离线编辑');
+  await context.setOffline(false);
+  await page.reload();
+  await expect(input).toHaveText('中文草稿 and English 离线编辑');
+  await page.screenshot({ path: testInfo.outputPath('client-draft-restored.png') });
+
+  await page.goto('/?draftWindow=draft-b');
+  await expect(input).toBeEmpty();
+  await input.fill('independent tab');
+  await page.goto('/?draftWindow=draft-a');
+  await expect(input).toHaveText('中文草稿 and English 离线编辑');
+
+  // A newly created browser document still resolves the Java window's stable draft key.
+  const replacement = await context.newPage();
+  await replacement.addInitScript(() => {
+    window.__CCGUI_DRAFT_CACHE_KEY__ = 'draft-a';
+    window.sendToJava = () => {};
+  });
+  await replacement.goto('/?draftWindow=draft-a');
+  await expect(replacement.locator('.input-editable')).toHaveText('中文草稿 and English 离线编辑');
+  await replacement.close();
+
+  await input.fill('');
+  await expect.poll(() => page.evaluate(async () => Boolean(await (await caches.open('ccgui-drafts-v1'))
+    .match('https://cc-gui-webview.local/drafts/draft-a')))).toBe(false);
+  await page.reload();
+  await expect(input).toBeEmpty();
+});
+
+test('denied client draft storage does not prevent typing or sending', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__CCGUI_DRAFT_CACHE_KEY__ = 'storage-denied';
+    const open = caches.open.bind(caches);
+    caches.open = (name) => name === 'ccgui-drafts-v1'
+      ? Promise.reject(new DOMException('Storage denied', 'SecurityError')) : open(name);
+  });
+  await page.reload();
+  const input = page.locator('.input-editable');
+  await input.fill('still editable');
+  await input.press('Enter');
+  await expect.poll(() => sentMessages(page)).toEqual(['still editable']);
+  await expect(input).toBeEmpty();
+});
+
+test('a reload right after typing keeps the latest draft and a cleared draft stays cleared', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__CCGUI_DRAFT_CACHE_KEY__ = 'fast-reload';
+  });
+  await page.reload();
+  const input = page.locator('.input-editable');
+  await input.fill('typed just before reload');
+  // No wait: the debounced Cache Storage write cannot finish before the document unloads.
+  await page.reload();
+  await expect(input).toHaveText('typed just before reload');
+
+  await input.fill('');
+  await page.reload();
+  await expect(input).toBeEmpty();
+});
+
+test('a stalled draft store does not keep the chat blank', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__CCGUI_DRAFT_CACHE_KEY__ = 'storage-stalled';
+    const open = caches.open.bind(caches);
+    caches.open = (name) => name === 'ccgui-drafts-v1' ? new Promise(() => {}) : open(name);
+  });
+  await page.reload();
+  const input = page.locator('.input-editable');
+  await input.fill('typed after the restore timeout');
+  await input.press('Enter');
+  await expect.poll(() => sentMessages(page)).toEqual(['typed after the restore timeout']);
+});
+
+test('remote tab repaint preserves input selection and IME composition without changing zoom', async ({ page }) => {
+  const input = page.locator('.input-editable');
+  await input.fill('中文 English');
+  const initial = await input.evaluate((element) => {
+    element.focus();
+    const selection = getSelection()!;
+    const range = document.createRange();
+    range.setStart(element.firstChild!, 2);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    const app = document.getElementById('app')!;
+    const snapshot = { text: element.textContent, zoom: app.style.zoom, offset: selection.anchorOffset };
+    for (let count = 0; count < 5; count++) window.onTabActivated?.(true);
+    return snapshot;
+  });
+  await expect(page.locator('#ccgui-remote-repaint')).toHaveCount(0);
+  expect(await input.evaluate((element) => ({
+    text: element.textContent,
+    zoom: document.getElementById('app')!.style.zoom,
+    offset: getSelection()!.anchorOffset,
+  }))).toEqual(initial);
+  await expect(input).toBeFocused();
+  await input.dispatchEvent('compositionend', { data: '中文' });
+  await page.keyboard.insertText('测试');
+  await expect(input).toHaveText('中文测试 English');
+  expect(await sentMessages(page)).toEqual([]);
+});
+
 test('Codex compact waits like a message and releases queued input only at its terminal', async ({ page }) => {
   await switchToCodex(page);
 

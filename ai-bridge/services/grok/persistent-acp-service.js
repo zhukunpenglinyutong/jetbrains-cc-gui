@@ -44,6 +44,7 @@ import {
   isAskUserQuestionRequestMethod,
   handleAskUserQuestionServerRequest,
 } from './grok-question-bridge.js';
+import { billingToCapacity } from './grok-billing.js';
 
 export { buildGrokContextUsagePayload, extractUsedTokens };
 
@@ -132,6 +133,9 @@ export function getRuntimeSnapshot() {
   return {
     runtimeCount: all.filter((runtime) => runtime && !runtime.closed).length,
     activeTurnCount: all.reduce((total, runtime) => total + (runtime?.activeTurnCount || 0), 0),
+    // A pending poll would make Java cancel the idle exit and restart the 3-minute clock.
+    // The reaper waits for it instead; the poll itself never counts as activity.
+    planUsageInFlight: planUsageInflight !== null,
   };
 }
 
@@ -762,6 +766,147 @@ export async function getUsagePersistent(params = {}) {
   return payload;
 }
 
+const BILLING_RPC_TIMEOUT_MS = 20_000;
+
+/** Live ACP client, preferring the active turn. Skips closed or unhealthy agents. */
+function pickBillingClient() {
+  const ordered = [];
+  if (activeTurnRuntime && !activeTurnRuntime.closed) {
+    ordered.push(activeTurnRuntime);
+  }
+  for (const rt of getAllRuntimes()) {
+    if (rt && !rt.closed && !ordered.includes(rt)) {
+      ordered.push(rt);
+    }
+  }
+  for (const rt of ordered) {
+    const client = rt.client;
+    if (!client || typeof client.request !== 'function') continue;
+    if (client.closed || client.unhealthy) continue;
+    if (typeof client.isUnhealthy === 'function' && client.isUnhealthy()) continue;
+    return client;
+  }
+  return null;
+}
+
+export const EPHEMERAL_HANDSHAKE_TIMEOUT_MS = 10_000;
+
+/**
+ * One-shot `grok agent stdio` used only when no chat runtime is warm.
+ * initialize + authenticate + `_x.ai/billing`, then the process exits.
+ * Does not open a chat session.
+ */
+async function fetchBillingEphemeral(params = {}) {
+  const resolvedAuth = resolveEffectiveGrokAuth({
+    preferredAuth: params.authMethod || process.env.GROK_AUTH_METHOD || '',
+    apiKey: params.apiKey || '',
+    baseUrl: params.baseUrl || '',
+  });
+  const env = buildGrokEnv(
+    process.env,
+    resolvedAuth.apiKey,
+    resolvedAuth.baseUrl,
+    resolvedAuth.authMethod,
+    false
+  );
+  env.GROK_NO_AUTO_UPDATE = '1';
+  env.CI = env.CI || '1';
+  const cwd = (typeof params.cwd === 'string' ? params.cwd : process.cwd()).trim() || process.cwd();
+  const ClientClass = typeof params.clientFactory === 'function' ? null : GrokAcpClient;
+  const client = typeof params.clientFactory === 'function'
+    ? params.clientFactory({ env, cwd, onServerRequest: async () => false })
+    : new ClientClass({
+      env,
+      cwd,
+      onServerRequest: async () => false,
+    });
+  try {
+    client.start();
+    const preferredAuth = String(resolvedAuth.authMethod || 'oauth').toLowerCase();
+    const hasApiKeyFromEnv = preferredAuth === 'oauth'
+      ? false
+      : !!(resolvedAuth.apiKey || env.XAI_API_KEY || env.GROK_API_KEY);
+    const rawTimeout = Number(params.handshakeTimeoutMs);
+    const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0
+      ? Math.min(rawTimeout, 2147483647)
+      : EPHEMERAL_HANDSHAKE_TIMEOUT_MS;
+    await initializeAndAuthenticate(client, {
+      apiKey: resolvedAuth.apiKey,
+      baseUrl: resolvedAuth.baseUrl,
+      hasApiKeyFromEnv,
+      authMethod: preferredAuth,
+      timeoutMs,
+      quiet: true,
+    });
+    return await client.request('_x.ai/billing', {}, BILLING_RPC_TIMEOUT_MS, {
+      recycleOnTimeout: false,
+    });
+  } finally {
+    try {
+      await client.close();
+    } catch {
+      // Ignore close errors so they do not mask the billing response or handshake error
+    }
+  }
+}
+
+let planUsageInflight = null;
+let planUsageInflightEphemeral = false;
+
+/**
+ * Account credit usage for the ContextBar.
+ * Prefers the already-running `grok agent stdio` (`_x.ai/billing`).
+ * A slow reply must not recycle that chat process (`recycleOnTimeout: false`).
+ * With `ephemeral: true` and no warm runtime, starts a short-lived stdio agent.
+ */
+export async function getPlanUsagePersistent(params = {}) {
+  const wantsEphemeral = params.ephemeral === true;
+  if (!planUsageInflight || (wantsEphemeral && !planUsageInflightEphemeral)) {
+    planUsageInflightEphemeral = wantsEphemeral;
+    const inflight = resolvePlanUsage(params).finally(() => {
+      if (planUsageInflight === inflight) {
+        planUsageInflight = null;
+        planUsageInflightEphemeral = false;
+      }
+    });
+    planUsageInflight = inflight;
+  }
+  const payload = await planUsageInflight;
+  return payload;
+}
+
+async function resolvePlanUsage(params = {}) {
+  try {
+    const live = pickBillingClient();
+    const raw = live
+      ? await live.request('_x.ai/billing', {}, BILLING_RPC_TIMEOUT_MS, {
+        recycleOnTimeout: false,
+      })
+      : params.ephemeral === true
+        ? await fetchBillingEphemeral(params)
+        : null;
+    if (raw == null) {
+      return {
+        present: false,
+        unavailable: true,
+        provider: 'grok',
+        source: 'x.ai/billing',
+        message: 'Grok agent is not running',
+      };
+    }
+    return billingToCapacity(raw);
+  } catch (e) {
+    process.stderr?._originalStderrWrite?.('[GROK-DAEMON] getPlanUsage failed: ' + (e?.message || e) + '\n', 'utf8');
+    return {
+      present: false,
+      unavailable: true,
+      provider: 'grok',
+      source: 'x.ai/billing',
+      message: e?.message ? String(e.message) : 'Grok usage unavailable',
+    };
+  }
+}
+
 // For daemon introspection / tests
 export const __testing = {
   getRuntimes: () => getAllRuntimes(),
@@ -770,9 +915,12 @@ export const __testing = {
   getActiveTurnRuntimeInternal: () => activeTurnRuntime,
   makeRuntimeKey,
   normalizePermissionMode,
+  fetchBillingEphemeral,
   resetRegistry: () => {
     runtimes.clear();
     activeTurnRuntime = null;
+    planUsageInflight = null;
+    planUsageInflightEphemeral = false;
   },
   /**
    * Lightweight fake runtime for unit tests (no real Grok CLI).

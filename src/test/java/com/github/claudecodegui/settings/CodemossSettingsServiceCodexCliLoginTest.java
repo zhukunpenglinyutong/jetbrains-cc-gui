@@ -5,12 +5,14 @@ import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.JsonObject;
 import org.junit.After;
 import org.junit.Test;
+import org.junit.BeforeClass;
 
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -19,6 +21,12 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class CodemossSettingsServiceCodexCliLoginTest {
+    @BeforeClass
+    public static void requireIsolatedNativeConfigHome() {
+        String configuredHome = System.getenv("CODEX_HOME");
+        assertTrue("Run configuration fixtures with CODEX_HOME unset or empty", configuredHome == null || configuredHome.isBlank());
+    }
+
     private String originalHomeDir;
 
     @After
@@ -211,9 +219,7 @@ public class CodemossSettingsServiceCodexCliLoginTest {
         provider.addProperty("name", "Legacy Provider");
         provider.addProperty("configToml", "model = \"legacy-model\"\n");
         service.addCodexProvider(provider);
-        JsonObject config = service.readConfig();
-        config.getAsJsonObject("codex").addProperty("current", "legacy-provider");
-        service.writeConfig(config);
+        service.updateConfig(config -> config.getAsJsonObject("codex").addProperty("current", "legacy-provider"));
 
         assertEquals(CodemossSettingsService.CODEX_RUNTIME_ACCESS_MANAGED, service.getCodexRuntimeAccessMode());
         JsonObject migrated = service.readConfig().getAsJsonObject("codex");
@@ -234,9 +240,7 @@ public class CodemossSettingsServiceCodexCliLoginTest {
         provider.addProperty("name", "Legacy Provider");
         provider.addProperty("configToml", "model = \"legacy-model\"\n");
         service.addCodexProvider(provider);
-        JsonObject config = service.readConfig();
-        config.getAsJsonObject("codex").addProperty("current", "legacy-provider");
-        service.writeConfig(config);
+        service.updateConfig(config -> config.getAsJsonObject("codex").addProperty("current", "legacy-provider"));
 
         assertEquals(CodemossSettingsService.CODEX_RUNTIME_ACCESS_INACTIVE, service.getCodexRuntimeAccessMode());
         JsonObject unchanged = service.readConfig().getAsJsonObject("codex");
@@ -270,6 +274,97 @@ public class CodemossSettingsServiceCodexCliLoginTest {
 
         assertTrue(result.get("success").getAsBoolean());
         assertFalse(Files.exists(skillDir));
+    }
+
+    @Test
+    public void shouldDeleteNativeAncestorSkillBeyondThreeLevels() throws Exception {
+        Path tempHome = Files.createTempDirectory("codex-ancestor-skill-delete-home");
+        useTemporaryHomeDirectory(tempHome);
+        Path repo = Files.createDirectories(tempHome.resolve("repository"));
+        Files.createDirectory(repo.resolve(".git"));
+        Path ancestor = Files.createDirectory(repo.resolve("module"));
+        Path cwd = Files.createDirectories(ancestor.resolve("a/b/c/d/e"));
+        Path skillDir = Files.createDirectories(ancestor.resolve(".agents/skills/example"));
+        Path skillFile = Files.writeString(skillDir.resolve("SKILL.md"), "# Example");
+
+        JsonObject result = CodexSkillService.deleteSkill("example", "repo", skillFile.toString(), cwd.toString());
+
+        assertTrue(result.toString(), result.get("success").getAsBoolean());
+        assertFalse(Files.exists(skillDir));
+        assertTrue(Files.isDirectory(cwd));
+    }
+
+    @Test
+    public void shouldDeleteWorktreeSkillButKeepSkillsAboveItsBoundary() throws Exception {
+        Path tempHome = Files.createTempDirectory("codex-worktree-skill-delete-home");
+        useTemporaryHomeDirectory(tempHome);
+        Path outer = Files.createDirectory(tempHome.resolve("outer"));
+        Files.createDirectory(outer.resolve(".git"));
+        Path linked = Files.createDirectory(outer.resolve("linked"));
+        Files.writeString(linked.resolve(".git"), "gitdir: ../.git/worktrees/linked\n");
+        Path cwd = Files.createDirectories(linked.resolve("a/b/c/d"));
+        Path skillDir = Files.createDirectories(linked.resolve(".agents/skills/example"));
+        Path skillFile = Files.writeString(skillDir.resolve("SKILL.md"), "# Example");
+        Path outside = Files.createDirectories(outer.resolve(".agents/skills/outside")).resolve("SKILL.md");
+        Files.writeString(outside, "# Outside");
+
+        assertFalse(CodexSkillService.deleteSkill("outside", "repo", outside.toString(), cwd.toString()).get("success").getAsBoolean());
+        assertTrue(Files.exists(outside));
+        JsonObject result = CodexSkillService.deleteSkill("example", "repo", skillFile.toString(), cwd.toString());
+        assertTrue(result.toString(), result.get("success").getAsBoolean());
+        assertFalse(Files.exists(skillDir));
+    }
+
+    @Test
+    public void shouldResolveWorkspaceAliasesWithoutFollowingSkillLinksDuringDeletion() throws Exception {
+        Path tempHome = Files.createTempDirectory("codex-linked-skill-delete-home");
+        useTemporaryHomeDirectory(tempHome);
+        Path repo = Files.createDirectories(tempHome.resolve("repository"));
+        Files.createDirectory(repo.resolve(".git"));
+        Path skillDir = Files.createDirectories(repo.resolve(".agents/skills/example"));
+        Files.writeString(skillDir.resolve("SKILL.md"), "# Example");
+        Path alias = tempHome.resolve("workspace-alias");
+        createDirectoryAlias(alias, repo);
+        try {
+            JsonObject result = CodexSkillService.deleteSkill("example", "repo", null, alias.toString());
+            assertTrue(result.toString(), result.get("success").getAsBoolean());
+            assertFalse(Files.exists(skillDir));
+
+            Path outside = Files.createDirectories(tempHome.resolve("outside/victim"));
+            Path protectedFile = Files.writeString(outside.resolve("SKILL.md"), "# Protected");
+            Path linkedSkill = repo.resolve(".agents/skills/linked");
+            createDirectoryAlias(linkedSkill, outside.getParent());
+            try {
+                Path escaped = linkedSkill.resolve("victim/SKILL.md");
+                assertFalse(CodexSkillService.deleteSkill("victim", "repo", escaped.toString(), repo.toString()).get("success").getAsBoolean());
+                assertTrue(Files.exists(protectedFile));
+                JsonObject removed = CodexSkillService.deleteSkill("linked", "repo", null, repo.toString());
+                assertTrue(removed.toString(), removed.get("success").getAsBoolean());
+                assertTrue(Files.exists(protectedFile));
+
+                Files.createDirectories(skillDir);
+                Files.writeString(skillDir.resolve("SKILL.md"), "# Nested link");
+                createDirectoryAlias(skillDir.resolve("nested"), outside.getParent());
+                JsonObject nested = CodexSkillService.deleteSkill("example", "repo", null, repo.toString());
+                assertTrue(nested.toString(), nested.get("success").getAsBoolean());
+                assertFalse(Files.exists(skillDir));
+                assertTrue(Files.exists(protectedFile));
+            } finally {
+                Files.deleteIfExists(linkedSkill);
+            }
+        } finally {
+            Files.delete(alias);
+        }
+    }
+
+    private void createDirectoryAlias(Path alias, Path target) throws Exception {
+        if (System.getProperty("os.name", "").startsWith("Windows")) {
+            Process process = new ProcessBuilder("cmd.exe", "/c", "mklink", "/J", alias.toString(), target.toString()).start();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue());
+        } else {
+            Files.createSymbolicLink(alias, target);
+        }
     }
 
     private void useTemporaryHomeDirectory(Path tempHome) throws Exception {

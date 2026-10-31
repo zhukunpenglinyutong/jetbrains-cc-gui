@@ -57,4 +57,15 @@ public class CodexSDKBridgeCommandTest {
         // A late delivery is still possible, so the request may yet be resolved by Codex.
         assertFalse(CodexSDKBridge.endsInteraction(unconfirmed));
     }
+
+    @Test
+    public void anAnswerTheDaemonRetiredAsUnconfirmedEndsTheRegisteredRequest() {
+        JsonObject retired = new JsonObject();
+        retired.addProperty("error", "Codex did not confirm the answer in time");
+        retired.addProperty("code", "DELIVERY_UNCONFIRMED");
+        retired.addProperty("deliveryUnconfirmed", true);
+
+        // The daemon no longer holds the question, so a replayed dialog could never be answered.
+        assertTrue(CodexSDKBridge.endsInteraction(retired));
+    }
 }

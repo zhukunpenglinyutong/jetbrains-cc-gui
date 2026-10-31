@@ -18,6 +18,7 @@ import java.lang.reflect.Method;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -45,6 +46,9 @@ public final class JBCefBrowserFactory {
      */
     private static final String JCEF_OUT_OF_PROCESS_REGISTRY_KEY = "ide.browser.jcef.out-of-process.enabled";
     private static final ConcurrentMap<Class<?>, Optional<Method>> IS_CLOSED_METHODS = new ConcurrentHashMap<>();
+    /** Gateway/JetBrains Client backend proxy for a browser that paints on the client. */
+    private static final String REMOTE_DEVELOPMENT_BROWSER_CLASS = "com.jetbrains.rdserver.cef.BackendCefBrowser";
+    private static final AtomicBoolean REMOTE_DEVELOPMENT_BROWSER_LOGGED = new AtomicBoolean();
 
     /**
      * First platform baseline version (2026.1) whose JBCefApp initialization
@@ -67,6 +71,22 @@ public final class JBCefBrowserFactory {
 
     private JBCefBrowserFactory() {
         // Utility class, do not instantiate
+    }
+
+    /** Gateway's backend proxy has no local paint callbacks; out-of-process JCEF still does. */
+    public static boolean isRemoteDevelopmentBrowser(CefBrowser browser) {
+        if (browser == null || !isRemoteDevelopmentBrowserClass(browser.getClass().getName())) {
+            return false;
+        }
+        // Without this line a renamed platform class would silently fall back to the local OSR path.
+        if (REMOTE_DEVELOPMENT_BROWSER_LOGGED.compareAndSet(false, true)) {
+            LOG.info("Remote Development browser detected; client-side surface repaint is active");
+        }
+        return true;
+    }
+
+    static boolean isRemoteDevelopmentBrowserClass(String className) {
+        return REMOTE_DEVELOPMENT_BROWSER_CLASS.equals(className);
     }
 
     /**

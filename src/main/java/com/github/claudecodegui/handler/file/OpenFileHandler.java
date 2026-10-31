@@ -3,15 +3,18 @@ package com.github.claudecodegui.handler.file;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
+import com.github.claudecodegui.ui.toolwindow.ToolWindowLifecycleDisposableService;
 
 import com.github.claudecodegui.util.EditorFileUtils;
 import com.github.claudecodegui.util.PathUtils;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.ide.BrowserUtil;
+import com.intellij.ide.FileSelectInContext;
+import com.intellij.ide.SelectInTarget;
 import com.intellij.ide.projectView.ProjectView;
-import com.intellij.ide.projectView.impl.ProjectViewPane;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.ScrollType;
@@ -601,33 +604,56 @@ class OpenFileHandler {
                     return;
                 }
                 ProjectView view = ProjectView.getInstance(project);
-                if (view == null || view.getProjectViewPaneById(ProjectViewPane.ID) == null) {
+                if (view == null) {
                     selected.complete(false);
                     return;
                 }
-                Runnable select = () -> {
-                    try {
-                        view.selectCB(null, virtualFile, true)
-                                .doWhenDone(() -> selected.complete(true))
-                                .doWhenRejected(() -> selected.complete(false));
-                    } catch (RuntimeException error) {
-                        selected.completeExceptionally(error);
-                        OpenFileNavigation.letCancellationEscape(error);
-                    }
-                };
-                // The Packages pane cannot reveal archives; switch to the physical project tree.
-                if (ProjectViewPane.ID.equals(view.getCurrentViewId())) {
-                    select.run();
-                } else {
-                    view.changeViewCB(ProjectViewPane.ID, null).doWhenDone(select)
-                            .doWhenRejected(() -> selected.complete(false));
-                }
+                Collection<SelectInTarget> targets = view.getSelectInTargets();
+                String currentViewId = view.getCurrentViewId();
+                FileSelectInContext selectInContext = new FileSelectInContext(project, virtualFile, null);
+                // Target checks can load PSI; keep them off the EDT and use the IDE's registered panes for Rider compatibility.
+                // A plugin-owned parent also cancels pending checks on dynamic unload.
+                ReadAction.nonBlocking(() -> OpenFileNavigation.findProjectViewId(targets, currentViewId, selectInContext))
+                        .expireWith(ToolWindowLifecycleDisposableService.getInstance(project))
+                        .expireWhen(this.context::isDisposed)
+                        .finishOnUiThread(ModalityState.nonModal(), viewId -> this.selectInProjectTree(view, virtualFile, viewId, selected))
+                        .submit(AppExecutorUtil.getAppExecutorService())
+                        .onError(selected::completeExceptionally);
             } catch (RuntimeException error) {
                 selected.completeExceptionally(error);
                 OpenFileNavigation.letCancellationEscape(error);
             }
         });
         return selected;
+    }
+
+    /** SelectInTarget.selectIn is fire-and-forget; these callbacks preserve the actual navigation outcome. */
+    private void selectInProjectTree(ProjectView view, VirtualFile virtualFile, String viewId, CompletableFuture<Boolean> selected) {
+        try {
+            if (viewId == null || !virtualFile.isValid()) {
+                selected.complete(false);
+                return;
+            }
+            Runnable select = () -> {
+                try {
+                    view.selectCB(null, virtualFile, true)
+                            .doWhenDone(() -> selected.complete(true))
+                            .doWhenRejected(() -> selected.complete(false));
+                } catch (RuntimeException error) {
+                    selected.completeExceptionally(error);
+                    OpenFileNavigation.letCancellationEscape(error);
+                }
+            };
+            if (viewId.equals(view.getCurrentViewId())) {
+                select.run();
+            } else {
+                view.changeViewCB(viewId, null).doWhenDone(select)
+                        .doWhenRejected(() -> selected.complete(false));
+            }
+        } catch (RuntimeException error) {
+            selected.completeExceptionally(error);
+            OpenFileNavigation.letCancellationEscape(error);
+        }
     }
 
     private void reportNavigationFailure(String path) {

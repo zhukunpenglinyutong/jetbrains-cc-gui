@@ -20,6 +20,21 @@ import java.util.regex.Pattern;
 /** Replaces known wrappers only when each visible action has its own recorded outcome. */
 final class CodexKnownExecReplay {
     private static final Pattern TOOL_TOKEN = Pattern.compile("(?:tools|functions)\\.[A-Za-z_][A-Za-z0-9_]*");
+    private static final String JS_IDENTIFIER = "[A-Za-z_$][A-Za-z0-9_$]*";
+    private static final String CATALOG_NAME = "[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*";
+    private static final Set<String> CATALOG_RESERVED_BINDINGS = Set.of("tools", "ALL_TOOLS", "text");
+    private static final Pattern CATALOG_MCP_PREFIX = Pattern.compile(
+            "\\A\\s*const\\s+(?<selected>" + JS_IDENTIFIER + ")\\s*=\\s*ALL_TOOLS\\.find\\(\\s*"
+                    + "(?<candidate>" + JS_IDENTIFIER + ")\\s*=>\\s*/\\(\\?:\\^\\|__\\)(?<tool>" + CATALOG_NAME + ")\\$/"
+                    + "\\.test\\(\\s*\\k<candidate>\\.name\\s*\\)\\s*&&\\s*\\k<candidate>\\.name\\.includes\\(\\s*"
+                    + "(?<quote>['\"])(?<server>" + CATALOG_NAME + ")\\k<quote>\\s*\\)\\s*\\)\\s*;\\s*"
+                    + "const\\s+(?<result>" + JS_IDENTIFIER + ")\\s*=\\s*await\\s+tools\\[\\s*\\k<selected>\\.name\\s*\\]\\(\\s*");
+    private static final Pattern CATALOG_MCP_ENDSWITH_PREFIX = Pattern.compile(
+            "\\A\\s*const\\s+(?<selected>" + JS_IDENTIFIER + ")\\s*=\\s*ALL_TOOLS\\.find\\(\\s*"
+                    + "(?<candidate>" + JS_IDENTIFIER + ")\\s*=>\\s*\\k<candidate>\\.name\\.endsWith\\(\\s*"
+                    + "(?<toolQuote>['\"])(?<tool>" + CATALOG_NAME + ")\\k<toolQuote>\\s*\\)\\s*&&\\s*"
+                    + "\\k<candidate>\\.name\\.includes\\(\\s*(?<quote>['\"])(?<server>" + CATALOG_NAME + ")\\k<quote>\\s*\\)\\s*\\)\\s*;\\s*"
+                    + "const\\s+(?<result>" + JS_IDENTIFIER + ")\\s*=\\s*await\\s+tools\\[\\s*\\k<selected>\\.name\\s*\\]\\(\\s*");
     private static final Pattern BATCH_VARIABLE = Pattern.compile(
             "(?:const|let|var)\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*=\\s*await\\s+Promise\\.all(?:Settled)?\\s*\\(\\s*$");
     private static final Pattern BATCH_CALLBACK = Pattern.compile(
@@ -56,17 +71,21 @@ final class CodexKnownExecReplay {
     private final List<Action> actions;
     private final List<JsonObject> nativeRecords = new ArrayList<>();
     private final String rootThreadId;
+    private final String lifecycleTurnId;
     private final String turnId;
     private final IndexLabel resultIndexLabel;
     private final boolean settledBatch;
     private final boolean wholeSettledLocalReceipt;
     private boolean opaqueFallback;
 
-    private CodexKnownExecReplay(JsonObject original, List<Action> actions, String rootThreadId) {
+    private CodexKnownExecReplay(JsonObject original, List<Action> actions, String rootThreadId, String nativeTurnId) {
         this.original = original;
         this.actions = actions;
         this.rootThreadId = rootThreadId;
-        this.turnId = string(object(object(original, "payload"), "internal_chat_message_metadata_passthrough"), "turn_id");
+        this.lifecycleTurnId = nativeTurnId;
+        // Model response metadata may carry a different turn ID from the app-server lifecycle.
+        this.turnId = nativeTurnId != null ? nativeTurnId
+                : string(object(object(original, "payload"), "internal_chat_message_metadata_passthrough"), "turn_id");
         JsonObject payload = object(original, "payload");
         String script = firstText(payload, "input", "arguments");
         BatchOutput batchOutput = readBatchOutput(script);
@@ -76,6 +95,10 @@ final class CodexKnownExecReplay {
     }
 
     static CodexKnownExecReplay begin(JsonObject record, String rootThreadId) {
+        return begin(record, rootThreadId, null);
+    }
+
+    static CodexKnownExecReplay begin(JsonObject record, String rootThreadId, String nativeTurnId) {
         JsonObject payload = object(record, "payload");
         if (!CodexExecHistoryReplay.isExecCall(payload) || string(payload, "call_id") == null) {
             return null;
@@ -88,12 +111,16 @@ final class CodexKnownExecReplay {
             return null;
         }
         List<Action> actions = readActions(script, payload);
-        return actions == null || actions.isEmpty() ? null : new CodexKnownExecReplay(record, actions, rootThreadId);
+        if (actions == null || actions.isEmpty()) {
+            actions = readCatalogMcpAction(script);
+        }
+        return actions == null || actions.isEmpty() ? null : new CodexKnownExecReplay(record, actions, rootThreadId, nativeTurnId);
     }
 
     JsonObject original() { return this.original; }
     List<JsonObject> nativeRecords() { return this.nativeRecords; }
     String callId() { return string(object(this.original, "payload"), "call_id"); }
+    String lifecycleTurnId() { return this.lifecycleTurnId; }
     boolean keepsOriginalWrapper() { return this.opaqueFallback; }
 
     List<JsonObject> snapshot(Map<String, Process> processes) {
@@ -295,6 +322,10 @@ final class CodexKnownExecReplay {
         if (this.actions.stream().filter(action -> isMcp(action.kind) && !isRejected(indexed.get(action.resultIndex))).count() != this.nativeRecords.stream()
                 .filter(record -> "McpToolCall".equals(string(object(object(record, "payload"), "item"), "type"))).count()) {
             return null;
+        }
+        if (hasOuterScriptFailure(texts) && this.actions.stream().allMatch(action -> isMcp(action.kind))) {
+            // Each MCP receipt owns only its own call; a later throw belongs to the wrapper, however many calls preceded it.
+            return this.keepWrapperForReview();
         }
         List<JsonObject> messages = new ArrayList<>();
         Map<String, Process> nextProcesses = new LinkedHashMap<>(processes);
@@ -668,7 +699,7 @@ final class CodexKnownExecReplay {
         if (patches.size() == 1 && patches.get(0) == this.nativeRecords.get(this.nativeRecords.size() - 1)
                 && "failed".equals(string(object(object(patches.get(0), "payload"), "item"), "status"))) {
             // A thrown edit has its own native failure; the later calls never establish outcomes.
-            CodexKnownExecReplay prefix = new CodexKnownExecReplay(this.original, this.actions.subList(0, end), this.rootThreadId);
+            CodexKnownExecReplay prefix = new CodexKnownExecReplay(this.original, this.actions.subList(0, end), this.rootThreadId, this.turnId);
             prefix.nativeRecords.addAll(this.nativeRecords);
             return prefix.project(output, processes);
         }
@@ -1058,6 +1089,59 @@ final class CodexKnownExecReplay {
         JsonObject completion = matches.get(0);
         usedIds.add(string(object(object(completion, "payload"), "item"), "id"));
         return completion;
+    }
+
+    private static List<Action> readCatalogMcpAction(String script) {
+        // Accept only the complete, side-effect-free catalog wrapper. Native scope, arguments and uniqueness still own the result.
+        // Restricted literal names also keep the canonical server/tool separator unambiguous.
+        var prefix = CATALOG_MCP_PREFIX.matcher(script);
+        if (!prefix.find()) {
+            prefix = CATALOG_MCP_ENDSWITH_PREFIX.matcher(script);
+            if (!prefix.find()) {
+                return List.of();
+            }
+        }
+        String selected = prefix.group("selected");
+        String result = prefix.group("result");
+        if (selected.equals(result) || CATALOG_RESERVED_BINDINGS.contains(selected) || CATALOG_RESERVED_BINDINGS.contains(result)) {
+            return List.of();
+        }
+        int start = prefix.end();
+        if (start >= script.length() || script.charAt(start) != '{') {
+            return List.of();
+        }
+        int end = CodexExecHistoryReplay.findMatchingObjectEnd(script, start);
+        if (end < start) {
+            return List.of();
+        }
+        if (!isCatalogMcpOutput(script.substring(end + 1), result)) {
+            return List.of();
+        }
+        String literal = CodexExecHistoryReplay.normalizeJavaScriptLiteralToJson(script.substring(start, end + 1));
+        JsonObject input = literal == null ? null : parseObject(literal);
+        return input == null ? List.of()
+                : List.of(new Action("mcp__" + prefix.group("server") + "__" + prefix.group("tool"), input, prefix.start(), -1));
+    }
+
+    private static boolean isCatalogMcpOutput(String suffix, String result) {
+        String quotedResult = Pattern.quote(result);
+        if (suffix.matches("\\s*\\)\\s*;\\s*text\\(\\s*" + quotedResult + "\\s*\\)\\s*;?\\s*")) {
+            return true;
+        }
+        var contentLoop = Pattern.compile("\\s*\\)\\s*;\\s*for\\s*\\(\\s*const\\s+(?<block>" + JS_IDENTIFIER + ")\\s+of\\s+"
+                + quotedResult + "\\.content\\s*\\?\\?\\s*\\[\\s*\\]\\s*\\)\\s*\\{\\s*if\\s*\\(\\s*\\k<block>\\.type\\s*===\\s*"
+                + "(?<quote>['\"])text\\k<quote>\\s*\\)\\s*text\\(\\s*\\k<block>\\.text\\s*\\)\\s*;?\\s*\\}\\s*;?\\s*")
+                .matcher(suffix);
+        return contentLoop.matches() && !"text".equals(contentLoop.group("block")) && !result.equals(contentLoop.group("block"));
+    }
+
+    private static boolean hasOuterScriptFailure(List<String> texts) {
+        if (texts.isEmpty()) {
+            return false;
+        }
+        // Only the engine's first header owns the wrapper outcome; MCP content can independently report an error.
+        String header = texts.get(0).stripLeading().lines().findFirst().orElse("");
+        return "Script failed".equals(header) || header.startsWith("Script error:");
     }
 
     private static List<Action> readActions(String script, JsonObject payload) {

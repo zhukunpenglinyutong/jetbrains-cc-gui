@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useCodexCompactionStatus } from './useCodexCompactionStatus';
+import { matchErrorPattern } from '../utils/errorMatcher';
 
 describe('Codex manual compaction waiting state', () => {
   const t = ((key: string) => key) as TFunction;
@@ -108,19 +109,23 @@ describe('Codex manual compaction waiting state', () => {
     expect(opts.setMessages).not.toHaveBeenCalled();
   });
 
-  it.each(['an active writer', 'a live local writer'])('shows writer occupancy inside the conversation: %s', writer => {
+  it.each([
+    'java.lang.RuntimeException: thread root already has an active writer',
+    'java.lang.RuntimeException: thread root already has a live local writer',
+    'Codex thread is already owned by another window',
+    'Codex thread is already owned by another chat window',
+  ])('preserves writer errors so the conversation can offer recovery instructions: %s', error => {
     const opts = options();
     const { result } = renderHook(() => useCodexCompactionStatus(opts));
     act(() => result.current.startCompaction());
-    const response = { ...submitted(), requestType: 'codex_compact', success: false,
-      error: `java.lang.RuntimeException: thread root already has ${writer}` };
+    const response = { ...submitted(), requestType: 'codex_compact', success: false, error };
     emit(response); emit(response);
     expect(result.current.pending).toBe(false);
     expect(opts.setMessages).toHaveBeenCalledOnce();
-    expect(opts.setMessages.mock.calls[0][0]([])).toEqual([
-      expect.objectContaining({ type: 'error',
-        content: 'chat.compactSummary.nativeFailed: chat.compactSummary.writerOccupied' }),
-    ]);
+    const [message] = opts.setMessages.mock.calls[0][0]([]);
+    expect(message.type).toBe('error');
+    expect(message.content).toBe(`chat.compactSummary.nativeFailed: ${error}`);
+    expect(matchErrorPattern(message.content)?.code).toBe('codexWriterConflict');
   });
 
   it('does not duplicate an error already delivered through the native callback', () => {

@@ -44,6 +44,17 @@
     "currentMode": "Modo actual: {{mode}}",
     "currentModel": "Modelo actual: {{model}}",
     "removeAttachment": "Eliminar adjunto",
+    "queue": {
+      "edit": "Editar mensaje en cola",
+      "remove": "Quitar de la cola",
+      "editLabel": "Editar mensaje {{position}} en cola",
+      "removeLabel": "Quitar mensaje {{position}} de la cola",
+      "reorderLabel": "Reordenar mensaje {{position}}",
+      "reorderHint": "Arrastra para reordenar, o usa las flechas tras enfocar",
+      "mergedIntoDraft": "El mensaje en cola se añadió al borrador actual",
+      "attachmentsNotRestored": "Los archivos adjuntos del mensaje en cola no se restauraron",
+      "editBlockedAttachments": "Sus archivos adjuntos no se pueden restaurar aquí, el mensaje se queda en la cola"
+    },
     "closePreview": "Cerrar vista previa",
     "loadingDropdown": "Cargando...",
     "modelsLoadFailed": "Error al cargar los modelos. Haz clic para reintentar",
@@ -554,6 +565,38 @@
     "wechatPay": "WeChat Pay",
     "paypal": "PayPal",
     "provider": {
+      "backup": {
+        "exportInvalidConfig": "Error de exportación: una configuración de proveedor guardada no superó la validación. No se creó ningún archivo de copia de seguridad.",
+        "errorProvider": "Revise el proveedor guardado n.º {{index}} (sin contar los ajustes locales ni las entradas de inicio de sesión de CLI).",
+        "errorField": "Campo: {{field}}.",
+        "import": "Importar",
+        "export": "Exportar",
+        "importFile": "Importar copia de CC GUI",
+        "importTitle": "Importar proveedores de {{engine}}",
+        "exportTitle": "Exportar proveedores de {{engine}}",
+        "scope": "Solo se transfieren los proveedores guardados en esta pestaña, incluidas las claves. Se excluyen las sesiones locales de CLI y el estado activo.",
+        "mergeHint": "Importe solo archivos de confianza. Las configuraciones idénticas se omiten; las diferentes se añaden sin sobrescribir ni activar. Nombres, notas, ID y fechas no afectan a la detección de duplicados.",
+        "selectFile": "Seleccionar archivo",
+        "passwordOptional": "Contraseña de exportación (opcional)",
+        "passwordRequired": "Introduzca la contraseña del archivo",
+        "confirmPassword": "Confirmar contraseña",
+        "plaintextWarning": "Entiendo que, sin contraseña, las claves API se exportan en texto sin cifrar. Guardaré el archivo de forma segura.",
+        "passwordHint": "Use al menos 8 caracteres; se recomienda una contraseña larga y única. Las contraseñas perdidas no se pueden recuperar.",
+        "passwordShort": "La contraseña debe tener al menos 8 caracteres.",
+        "passwordMismatch": "Las contraseñas no coinciden.",
+        "working": "Procesando, espere…",
+        "importSuccess": "Importación completada: {{imported}} añadidas, {{skipped}} configuraciones duplicadas omitidas.",
+        "exportSuccess": "Configuración exportada.",
+        "exportPartial": "Proveedores exportados: {{exported}}. Omitidos por no superar la validación: {{skipped}} ({{positions}}; la numeración no cuenta los ajustes locales ni las entradas de inicio de sesión de CLI).",
+        "invalidFile": "Archivo, versión o configuración no válidos. No se ha importado nada.",
+        "wrongEngine": "El archivo corresponde a otra pestaña. Seleccione Claude Code o Codex según corresponda.",
+        "tooLarge": "Archivo o configuración demasiado grandes (máximo 8 MiB y 2000 proveedores).",
+        "empty": "No hay configuraciones de proveedores para procesar.",
+        "wrongPassword": "Contraseña incorrecta o archivo cifrado dañado. No se ha importado nada.",
+        "failed": "La operación falló. Revise los permisos y la configuración del archivo e inténtelo de nuevo.",
+        "busy": "Hay otra importación/exportación en curso. Inténtelo más tarde.",
+        "timeout": "Se agotó el tiempo de espera. La operación podría continuar; revise la lista o el archivo exportado antes de reintentar."
+      },
       "currentConfig": "Configuración actual de ClaudeCode",
       "loading": "Cargando...",
       "noConfig": "Sin información de configuración",
@@ -1018,7 +1061,9 @@
       "claude-vscode": "Esta sesión fue creada por la extensión de VS Code y no se muestra en CLI por defecto. Haz clic en 'Convertir a CLI' para que aparezca en la lista /resume del CLI del terminal",
       "remote": "Esta sesión fue creada por una instancia remota de Claude Code"
     },
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "sessionInUse": "No se pueden eliminar las sesiones en uso.",
+    "deleteFailed": "No se pudo eliminar la sesión. Inténtalo de nuevo."
   },
   "permission": {
     "dialogTitle": "Solicitud de permiso",
@@ -1064,7 +1109,11 @@
     "timeoutWarning": "Por favor responde pronto, el diálogo se cerrará en {{seconds}} segundos",
     "expand": "Expandir",
     "collapse": "Contraer",
-    "clickToAnswer": "Haz clic para responder"
+    "clickToAnswer": "Haz clic para responder",
+    "recordTitle": "Preguntas de Codex",
+    "recordAnswer": "Tu respuesta",
+    "recordSkipped": "Omitida (cerrada sin responder)",
+    "answerNotSent": "Tu respuesta a la pregunta de Codex no se envió porque ahora hay otro chat abierto. Vuelve a ese chat y envía la respuesta de nuevo."
   },
   "planApproval": {
     "title": "Plan Ready for Approval",
@@ -2025,14 +2074,85 @@
     "updateClaudeSdkCustomCli": "SDK actualizado a {{version}}, pero el plugin ejecuta tu CLI de Claude personalizado ({{path}}). Actualízalo con la opción 2.",
     "updateClaudeSdkAlreadyLatest": "{{version}} ya es el SDK más reciente que admite este plugin, y este modelo necesita un Claude Code más nuevo. Actualiza el plugin cuando salga una nueva versión o elige otro modelo.",
     "codexWriterConflict": {
-      "title": "Hilo de Codex ocupado",
-      "intro": "Otro turno o cliente de Codex está escribiendo en esta conversación. No se pudo iniciar este envío.",
-      "reason": "Detenga el turno en el cliente que usa esta conversación y vuelva a enviar cuando haya terminado."
+      "title": "La conversación de Codex está en uso",
+      "intro": "Otro cliente de Codex o ventana de chat conserva el permiso de escritura de esta conversación.",
+      "reason": "Esto no significa que la conversación haya caducado. El complemento no elimina bloqueos ni detiene otros clientes automáticamente.",
+      "solutions": {
+        "releaseWriter": {
+          "title": "Liberar la conversación en el cliente que la usa",
+          "step0": "Detén la tarea y cierra o libera esta conversación en el cliente de Codex o la ventana que la está usando.",
+          "step1": "Cuando ese cliente la libere, vuelve aquí y envía de nuevo. No elimines archivos de bloqueo para forzar el acceso."
+        }
+      }
+    },
+    "codexThreadClosing": {
+      "title": "La conversación de Codex aún se está cerrando",
+      "intro": "Codex no ha terminado de cerrar esta conversación y todavía no puede restaurarla.",
+      "reason": "El complemento reintenta brevemente este estado de cierre explícito antes de iniciar la tarea. Si persiste, muestra el error original.",
+      "solutions": {
+        "waitForClose": {
+          "title": "Esperar a que termine el cierre anterior",
+          "step0": "Espera a que el cliente de Codex o la ventana anterior libere la conversación y vuelve a intentarlo.",
+          "step1": "Si se repite, abre de nuevo la conversación desde el historial después de que el cliente anterior la libere."
+        }
+      }
+    },
+    "codexThreadHistoryMissing": {
+      "title": "No se encuentra el historial de Codex",
+      "intro": "El entorno actual de Codex no encuentra el historial nativo de esta conversación.",
+      "reason": "Puede deberse a un directorio de historial distinto o a una primera inicialización incompleta. No demuestra que el historial se haya eliminado.",
+      "solutions": {
+        "checkStorage": {
+          "title": "Comprobar la ubicación original del historial",
+          "step0": "Comprueba que Codex use el CODEX_HOME original y el mismo entorno anfitrión, especialmente local frente a WSL.",
+          "step1": "Tras restaurar el directorio original o una copia de seguridad, abre de nuevo la conversación desde el historial."
+        },
+        "startNewIfMissing": {
+          "title": "Empezar de nuevo solo si el historial es irrecuperable",
+          "step0": "Crea una conversación nueva y aporta el contexto necesario solo si no puedes recuperar el historial original. Los mensajes que se muestran aquí no restauran automáticamente el contexto nativo de Codex."
+        }
+      }
+    },
+    "codexThreadArchived": {
+      "title": "La conversación de Codex está archivada",
+      "intro": "Codex indica que esta conversación está archivada y no se puede reanudar directamente.",
+      "reason": "Estar archivada no significa que haya caducado. No necesitas crear una conversación nueva para recuperarla.",
+      "solutions": {
+        "unarchive": {
+          "title": "Desarchivar la conversación original",
+          "step0": "Desarchívala en el cliente de Codex original o sigue el comando de desarchivado que aparece en el error original.",
+          "step1": "Actualiza el historial del complemento, abre de nuevo esta conversación y envía otra vez."
+        }
+      }
+    },
+    "codexThreadResumeConfiguration": {
+      "title": "La configuración de Codex impide la restauración",
+      "intro": "Codex no pudo cargar su configuración o inicializar un servidor MCP obligatorio.",
+      "reason": "Una conversación nueva no reparará la misma configuración. El complemento no desactiva automáticamente los servicios obligatorios.",
+      "solutions": {
+        "repairConfiguration": {
+          "title": "Corregir la configuración indicada por Codex",
+          "step0": "Consulta el error original para identificar la entrada de configuración o el servidor MCP obligatorio que ha fallado.",
+          "step1": "Corrige la configuración, las credenciales o la conexión en los ajustes de Codex, del proveedor o de MCP, y vuelve a abrir la conversación para intentarlo de nuevo."
+        }
+      }
     },
     "codexThreadResume": {
-      "title": "El hilo de sesión ya no es válido",
-      "intro": "Crear una nueva sesión resolverá este problema. El ID de hilo de la sesión actual ya no existe en el servidor de Codex.",
-      "reason": "Codex elimina los hilos antiguos después de un tiempo, lo que puede provocar este error al reanudar una sesión anterior."
+      "title": "No se pudo restaurar la conversación de Codex",
+      "intro": "Codex no pudo restaurar esta conversación. La causa aún no se ha identificado.",
+      "reason": "Un fallo de restauración no demuestra que haya caducado. El complemento mantiene la conversación original y no la sustituye silenciosamente por una vacía.",
+      "solutions": {
+        "inspectCause": {
+          "title": "Revisar el error original antes de reintentar",
+          "step0": "Revisa el error original y comprueba el proveedor, el entorno de Codex y el directorio de historial de esta conversación.",
+          "step1": "Si ya apareció una respuesta o una ejecución de herramienta, comprueba su resultado antes de reenviar para evitar repetir la tarea."
+        },
+        "checkCli": {
+          "title": "Comprobar la compatibilidad de Codex CLI",
+          "step0": "Compara la versión del terminal con la página CLI del complemento. Si hay una ruta personalizada, ejecuta ese programa con --version.",
+          "step1": "Si el error indica una versión de CLI o protocolo no compatible, actualiza Codex según las instrucciones oficiales y actualiza la detección de CLI."
+        }
+      }
     },
     "sdkNativeBinaryMissing": {
       "title": "Instalación del SDK incompleta — falta el binario nativo",

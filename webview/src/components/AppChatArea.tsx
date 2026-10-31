@@ -3,6 +3,7 @@ import { ChatScreen } from './ChatScreen';
 import type { ChatScreenProps } from './ChatScreen';
 import { useSession } from '../contexts/SessionContext';
 import { useUIState } from '../contexts/UIStateContext';
+import { useMessages } from '../contexts/MessagesContext';
 
 /** HistoryView callbacks (HistoryViewProps is not exported; mirrored here). */
 interface HistoryCallbacks {
@@ -15,7 +16,10 @@ interface HistoryCallbacks {
   onConvertToCliSession: (sessionId: string) => void;
 }
 
-interface AppChatAreaProps extends ChatScreenProps, HistoryCallbacks {}
+interface AppChatAreaProps extends ChatScreenProps, HistoryCallbacks {
+  /** A native Codex turn is still active after the visible stream ended. */
+  codexTurnActive?: boolean;
+}
 
 /**
  * Main chat area extracted from App.tsx — the chat screen (kept mounted while
@@ -26,6 +30,7 @@ interface AppChatAreaProps extends ChatScreenProps, HistoryCallbacks {}
 export const AppChatArea = (props: AppChatAreaProps) => {
   const { currentView } = useUIState();
   const { historyData, currentSessionId } = useSession();
+  const { loading, streamingActive } = useMessages();
   const {
     onLoadSession,
     onDeleteSession,
@@ -34,8 +39,12 @@ export const AppChatArea = (props: AppChatAreaProps) => {
     onToggleFavorite,
     onUpdateTitle,
     onConvertToCliSession,
+    codexTurnActive,
     ...chatScreenProps
   } = props;
+  // Same notion of busy as the send queue: deleting must wait for every native phase.
+  const currentSessionBusy = loading || streamingActive || Boolean(codexTurnActive)
+    || Boolean(props.codexPlanExecutionPending) || Boolean(props.codexCompactionPending);
 
   return (
     <>
@@ -53,6 +62,7 @@ export const AppChatArea = (props: AppChatAreaProps) => {
           historyData={historyData}
           currentProvider={props.currentProvider}
           currentSessionId={currentSessionId}
+          currentSessionBusy={currentSessionBusy}
           onLoadSession={onLoadSession}
           onDeleteSession={onDeleteSession}
           onDeleteSessions={onDeleteSessions}

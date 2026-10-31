@@ -16,7 +16,7 @@ import { applyLinkifyCapabilitiesPayload } from './utils/linkifyCapabilities';
 import { installRuntimeProviderDispatchers } from './utils/runtimeProviderCapabilities';
 import { sendBridgeEvent } from './utils/bridge';
 import { debugLog } from './utils/debug';
-import { forceWebviewRepaint } from './utils/forceWebviewRepaint';
+import { forceWebviewRepaint, repaintRemoteWebview } from './utils/forceWebviewRepaint';
 import { fontSizeLevelToScale } from './utils/fontScale';
 import {
   advanceSurfaceDamagePulse,
@@ -643,6 +643,14 @@ if (typeof window !== 'undefined' && !window.onUsageUpdate) {
   };
 }
 
+// Java restores a session's persisted custom title right after frontend_ready.
+// Keep it until React's callback effect mounts.
+if (typeof window !== 'undefined' && !window.restoreSessionTitle) {
+  window.restoreSessionTitle = (sessionId: string, title: string) => {
+    window.__pendingRestoreSessionTitle = { sessionId, title };
+  };
+}
+
 // Java can answer frontend_ready before React's callback effect mounts. Keep
 // the authoritative recovery snapshot until the real callback is registered.
 if (typeof window !== 'undefined' && !window.applyBackendTabState) {
@@ -711,8 +719,9 @@ if (typeof window !== 'undefined') {
   window.updateLinkifyCapabilities = (json: string) => {
     applyLinkifyCapabilitiesPayload(json);
   };
-  window.onTabActivated = () => {
-    forceWebviewRepaint('tab-activated');
+  window.onTabActivated = (remote) => {
+    if (remote === true || remote === 'true') repaintRemoteWebview();
+    else forceWebviewRepaint('tab-activated');
   };
 }
 

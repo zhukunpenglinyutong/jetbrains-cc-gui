@@ -8,6 +8,8 @@ import com.github.claudecodegui.util.UsageCostCalculator;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.HashMap;
@@ -33,6 +35,14 @@ public class CodexMessageHandler implements MessageCallback {
     private final SessionState state;
     private final Object turnOwner;
     private final String runtimeSessionEpoch;
+    private final String executionBindingEpoch;
+    private final SessionExecutionState.Turn executionTurn;
+    private final Map<String, SessionExecutionState.Interaction> executionInteractions = new HashMap<>();
+
+    @Override
+    public String executionScope() {
+        return executionTurn == null ? "" : executionTurn.bindingEpoch() + "/" + executionTurn.turnId();
+    }
     /**
      * callback handler.
      */
@@ -90,11 +100,17 @@ public class CodexMessageHandler implements MessageCallback {
         this(state, callbackHandler, true, clientMessageId, state.getTurnOwner());
     }
 
+    CodexMessageHandler(SessionState state, CallbackHandler callbackHandler, String clientMessageId, Object expectedTurnOwner) {
+        this(state, callbackHandler, true, clientMessageId, expectedTurnOwner);
+    }
+
     private CodexMessageHandler(SessionState state, CallbackHandler callbackHandler,
                                 boolean reportStateErrors, String clientMessageId, Object turnOwner) {
         this.state = state;
         this.turnOwner = turnOwner;
         this.runtimeSessionEpoch = state.getRuntimeSessionEpoch();
+        this.executionBindingEpoch = state.getExecutionSnapshot().bindingEpoch();
+        this.executionTurn = state.executionTurnForOwner(turnOwner);
         this.callbackHandler = callbackHandler;
         this.reportStateErrors = reportStateErrors;
         this.clientMessageId = clientMessageId;
@@ -110,10 +126,11 @@ public class CodexMessageHandler implements MessageCallback {
     @Override
     public void onMessage(String type, String content) {
         synchronized (state.getMessageStateLock()) {
-            if (!ownsCurrentTurn()) {
+            if (!ownsBindingAndTurn()) {
                 return;
             }
             // [FIX] Handle multiple message types
+            observeExecution(type);
             // Codex message-service.js sends:
             // - type='assistant': contains thinking, tool_use, text
             // - type='user': contains tool_result
@@ -151,17 +168,7 @@ public class CodexMessageHandler implements MessageCallback {
             } else if ("message_end".equals(type)) {
                 handleMessageEnd();
             } else if ("codex_runtime_event".equals(type)) {
-                JsonObject event = new com.google.gson.Gson().fromJson(content, JsonObject.class);
-                if (event != null && event.has("kind") && "thread/settings/updated".equals(event.get("kind").getAsString())
-                        && event.has("threadId") && !event.get("threadId").isJsonNull()
-                        && event.get("threadId").getAsString().equals(this.state.getSessionId())
-                        && event.has("payload") && event.get("payload").isJsonObject()) {
-                    JsonObject settings = event.getAsJsonObject("payload");
-                    if (!this.state.isCodexCwdExplicit() && settings.has("cwd") && settings.get("cwd").isJsonPrimitive()) {
-                        this.state.setCwd(settings.get("cwd").getAsString());
-                    }
-                }
-                callbackHandler.notifyCodexRuntimeEvent(content);
+                handleRuntimeEvent(content);
             } else {
                 LOG.debug("CodexMessageHandler: Unhandled message type: " + type);
             }
@@ -177,9 +184,11 @@ public class CodexMessageHandler implements MessageCallback {
     @Override
     public void onError(String error) {
         synchronized (state.getMessageStateLock()) {
-            if (!ownsCurrentTurn()) {
+            if (!ownsBindingAndTurn()) {
                 return;
             }
+            state.getExecutionState().finish(executionTurn, SessionExecutionState.Outcome.FAILED);
+            clearNativeInteractions();
             isStreaming = false;
             streamEndedThisTurn = false;
             state.setError(error);
@@ -220,9 +229,18 @@ public class CodexMessageHandler implements MessageCallback {
     @Override
     public void onComplete(SDKResult result) {
         synchronized (state.getMessageStateLock()) {
-            if (!ownsCurrentTurn()) {
+            if (!ownsBindingAndTurn()) {
                 return;
             }
+            if (result == null) {
+                state.getExecutionState().activity(executionTurn, SessionExecutionState.Phase.UNKNOWN);
+            } else {
+                state.getExecutionState().finish(executionTurn,
+                        result.cancelled ? SessionExecutionState.Outcome.CANCELLED
+                                : result.success ? SessionExecutionState.Outcome.SUCCEEDED : SessionExecutionState.Outcome.FAILED,
+                        result.processExited);
+            }
+            clearNativeInteractions();
             boolean streamEndedBeforeComplete = streamEndedThisTurn;
             boolean wasStreaming = isStreaming;
 
@@ -245,10 +263,94 @@ public class CodexMessageHandler implements MessageCallback {
 
     // ===== Private methods =====
 
-    private boolean ownsCurrentTurn() {
-        return this.state.isCurrentTurn(this.turnOwner)
-                && this.runtimeSessionEpoch.equals(this.state.getRuntimeSessionEpoch());
+    private boolean ownsBindingAndTurn() {
+        return state.isCurrentTurn(turnOwner) && runtimeSessionEpoch.equals(state.getRuntimeSessionEpoch())
+                && state.getExecutionState().isCurrentBinding(executionBindingEpoch);
     }
+
+    private void observeExecution(String type) {
+        SessionExecutionState.Phase phase = switch (type) {
+            case "thinking_delta" -> SessionExecutionState.Phase.THINKING;
+            case "assistant", "content", "content_delta", "user", "stream_start" -> SessionExecutionState.Phase.RUNNING;
+            case "stream_end" -> SessionExecutionState.Phase.UNKNOWN;
+            default -> null;
+        };
+        if (phase != null) {
+            state.getExecutionState().activity(executionTurn, phase);
+        }
+    }
+
+    private void handleRuntimeEvent(String content) {
+        if (content == null || content.isBlank()) {
+            return;
+        }
+        JsonElement parsed;
+        try {
+            parsed = JsonParser.parseString(content);
+        } catch (JsonParseException e) {
+            LOG.debug("Ignoring malformed Codex runtime event");
+            return;
+        }
+        if (!parsed.isJsonObject()) {
+            return;
+        }
+        JsonObject event = parsed.getAsJsonObject();
+        observeNativeInteraction(event);
+        if ("thread/settings/updated".equals(stringProperty(event, "kind"))
+                && state.getSessionId() != null && state.getSessionId().equals(stringProperty(event, "threadId"))
+                && event.has("payload") && event.get("payload").isJsonObject()) {
+            String cwd = stringProperty(event.getAsJsonObject("payload"), "cwd");
+            if (!state.isCodexCwdExplicit() && cwd != null && !cwd.isBlank()) {
+                state.setCwd(cwd);
+            }
+        }
+        callbackHandler.notifyCodexRuntimeEvent(content);
+    }
+
+    private static String stringProperty(JsonObject object, String name) {
+        JsonElement value = object.get(name);
+        return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString() ? value.getAsString() : null;
+    }
+
+    private void clearNativeInteractions() {
+        for (SessionExecutionState.Interaction interaction : executionInteractions.values()) {
+            state.getExecutionState().endInteraction(interaction);
+        }
+        executionInteractions.clear();
+    }
+
+    /** Blocking native requests contribute to the execution wait state; async questions do not. */
+    private void observeNativeInteraction(JsonObject event) {
+        String key = stringProperty(event, "interactionKey");
+        String kind = stringProperty(event, "kind");
+        if (key == null || key.isBlank() || kind == null) {
+            return;
+        }
+        if ("interactionResolved".equals(kind)) {
+            state.getExecutionState().endInteraction(executionInteractions.remove(key));
+        } else if ("interactionRequested".equals(kind) && !executionInteractions.containsKey(key)
+                && event.has("payload") && event.get("payload").isJsonObject()) {
+            JsonObject payload = event.getAsJsonObject("payload");
+            String method = stringProperty(payload, "method");
+            if (method == null || method.isBlank()) {
+                return;
+            }
+            JsonObject params = payload.has("params") && payload.get("params").isJsonObject()
+                    ? payload.getAsJsonObject("params") : null;
+            if (params != null && params.has("isBlocking") && params.get("isBlocking").isJsonPrimitive()
+                    && params.get("isBlocking").getAsJsonPrimitive().isBoolean()
+                    && !params.get("isBlocking").getAsBoolean()) {
+                return;
+            }
+            SessionExecutionState.WaitReason reason = method.endsWith("requestUserInput")
+                    ? SessionExecutionState.WaitReason.QUESTION : SessionExecutionState.WaitReason.PERMISSION;
+            SessionExecutionState.Interaction interaction = state.getExecutionState().beginInteraction(executionTurn, reason);
+            if (interaction != null) {
+                executionInteractions.put(key, interaction);
+            }
+        }
+    }
+
 
     /**
      * Handle a complete assistant message in JSON format.
