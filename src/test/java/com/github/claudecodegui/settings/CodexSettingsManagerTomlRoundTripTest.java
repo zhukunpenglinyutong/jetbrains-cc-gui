@@ -5,6 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import org.junit.After;
 import org.junit.Test;
+import org.junit.BeforeClass;
 
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
@@ -21,6 +22,12 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class CodexSettingsManagerTomlRoundTripTest {
+    @BeforeClass
+    public static void requireIsolatedNativeConfigHome() {
+        String configuredHome = System.getenv("CODEX_HOME");
+        assertTrue("Run configuration fixtures with CODEX_HOME unset or empty", configuredHome == null || configuredHome.isBlank());
+    }
+
 
     private String originalHomeDir;
     private boolean homeOverridden;
@@ -58,7 +65,8 @@ public class CodexSettingsManagerTomlRoundTripTest {
 
         String writtenConfig = Files.readString(codexDir.resolve("config.toml"), StandardCharsets.UTF_8);
         assertTrue(writtenConfig.contains("\"provider.name\" = \"proxy\""));
-        assertTrue(writtenConfig.contains("\"gpt-5.4\" = \"vendor/gpt-5.4\""));
+        assertFalse(writtenConfig.contains("model_aliases"));
+        assertEquals("vendor/gpt-5.4", manager.resolveModelAlias("gpt-5.4"));
         assertTrue(writtenConfig.contains("[mcp_servers.codegraph]"));
         assertTrue(writtenConfig.contains("command = \"uvx\""));
     }

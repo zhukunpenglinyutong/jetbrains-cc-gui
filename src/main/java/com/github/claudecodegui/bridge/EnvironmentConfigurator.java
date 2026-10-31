@@ -2,6 +2,7 @@
 package com.github.claudecodegui.bridge;
 
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.util.CodexHomeResolver;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.ShellExecutor;
 import com.intellij.openapi.diagnostic.Logger;
@@ -212,7 +213,7 @@ public class EnvironmentConfigurator {
         return windowsPath != null ? windowsPath : path;
     }
 
-    static String convertWslMountPathToWindowsPath(String path) {
+    public static String convertWslMountPathToWindowsPath(String path) {
         if (!PlatformUtils.isWindows() || path == null || path.isEmpty()) {
             return null;
         }
@@ -554,18 +555,16 @@ public class EnvironmentConfigurator {
     }
 
     /**
-     * Parse ~/.codex/config.toml to extract all env_key values.
+     * Parse the active Codex home's config.toml to extract all env_key values.
      *
      * @return Set of environment variable names referenced by env_key
      */
     private Set<String> parseCodexConfigEnvKeys() {
-        Set<String> envKeys = new HashSet<>();
-        String home = NodeDetector.resolveHomeForFileOps();
-        if (home == null || home.isEmpty()) {
-            return envKeys;
-        }
+        return parseCodexConfigEnvKeys(CodexHomeResolver.resolve().resolve("config.toml"));
+    }
 
-        Path configPath = Paths.get(home, ".codex", "config.toml");
+    static Set<String> parseCodexConfigEnvKeys(Path configPath) {
+        Set<String> envKeys = new HashSet<>();
         if (!Files.exists(configPath)) {
             LOG.debug("[Codex] config.toml not found: " + configPath);
             return envKeys;
