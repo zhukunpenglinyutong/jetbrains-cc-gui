@@ -24,18 +24,45 @@ public class AiDataRuntimeReviewRegressionTest {
     public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     @Test
-    public void coordinationIoFailureDisablesRelocationWithoutDisablingAiSessions() throws Exception {
+    public void coordinationIoFailureBlocksAdmissionUntilTheDirectoryRecovers() throws Exception {
         var blocked = temporaryFolder.newFile("blocked-parent").toPath().resolve("coordination");
         var gate = new AiDataProcessGate(new AiDataMigrationCoordinator(blocked));
-        try (var session = gate.acquireProcessPermit()) {
-            assertNotNull(session);
-            assertFalse(gate.isCoordinationAvailable());
-            assertNull(gate.tryAcquireMigrationPermit());
-            assertThrows(IllegalStateException.class, gate::tryAcquireMaintenancePermit);
-            assertThrows(IllegalStateException.class, gate::tryAcquireReadPermit);
+        assertThrows(IllegalStateException.class, gate::acquireProcessPermit);
+        assertFalse(gate.isCoordinationAvailable());
+        assertNull(gate.tryAcquireMigrationPermit());
+        assertThrows(IllegalStateException.class, gate::tryAcquireMaintenancePermit);
+        assertThrows(IllegalStateException.class, gate::tryAcquireReadPermit);
+
+        Path blockedParent = blocked.getParent();
+        Files.delete(blockedParent);
+        Files.createDirectory(blockedParent);
+        AiDataProcessGate.ProcessPermit session = null;
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+        while (session == null && System.nanoTime() < deadline) {
+            try {
+                session = gate.acquireProcessPermit();
+            } catch (IllegalStateException error) {
+                assertEquals("AI_DATA_COORDINATION_UNAVAILABLE", error.getMessage());
+                Thread.sleep(25L);
+            }
         }
-        try (var session = gate.acquireProcessPermit()) {
-            assertNotNull(session);
+        assertNotNull(session);
+        try (AiDataProcessGate.ProcessPermit admitted = session) {
+            assertTrue(gate.isCoordinationAvailable());
+        }
+    }
+
+    @Test
+    public void coordinatedMigrationAlwaysUsesTheGateOwnedCoordinator() throws Exception {
+        Path gatePath = temporaryFolder.getRoot().toPath().resolve("gate-coordination");
+        Path callerPath = temporaryFolder.getRoot().toPath().resolve("caller-coordination");
+        var gateCoordinator = new AiDataMigrationCoordinator(gatePath);
+        var callerCoordinator = new AiDataMigrationCoordinator(callerPath);
+        var owner = new AiDataProcessGate(gateCoordinator);
+        var contender = new AiDataProcessGate(gateCoordinator);
+        try (var migration = owner.tryAcquireMigrationPermit()) {
+            assertNotNull(migration);
+            assertNull(contender.tryAcquireCoordinatedMigrationPermit(callerCoordinator, "migrate"));
         }
     }
 

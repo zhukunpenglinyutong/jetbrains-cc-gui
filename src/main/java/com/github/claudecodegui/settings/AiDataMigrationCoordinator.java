@@ -100,7 +100,7 @@ public final class AiDataMigrationCoordinator {
         return tryAcquireSharedLock();
     }
 
-    /** Maintenance may resume its own pending journal while keeping directory migration excluded. */
+    /** Maintenance reads share the process lock while keeping directory migration excluded. */
     public ProcessLock tryAcquireMaintenanceReadLock() throws IOException {
         return tryAcquireSharedLock();
     }
@@ -195,14 +195,66 @@ public final class AiDataMigrationCoordinator {
     }
 
     /** A waiting IDE requests rollback of the current owner, never of a later migration. */
-    public void requestMigrationCancellation() throws IOException {
+    public String requestMigrationCancellation() throws IOException {
+        return requestMigrationCancellation(null);
+    }
+
+    /**
+     * Requests rollback and tags the request with the waiting caller. The caller tag lets a
+     * timed-out waiter clean up only its own request when another waiter has already replaced it.
+     */
+    public String requestMigrationCancellation(String requesterId) throws IOException {
         JsonObject owner = readActiveOwner();
         if (owner == null || owner.has("committed") && owner.get("committed").getAsBoolean()) {
-            return;
+            return null;
         }
         JsonObject request = new JsonObject();
-        request.addProperty("ownerId", owner.get("ownerId").getAsString());
+        String ownerId = owner.get("ownerId").getAsString();
+        request.addProperty("ownerId", ownerId);
+        if (requesterId != null && !requesterId.isBlank()) {
+            request.addProperty("requesterId", requesterId);
+        }
         writeJson(coordinationDirectory.resolve(CANCEL_FILE), request);
+        return ownerId;
+    }
+
+    /**
+     * Removes a cancellation request only while it still belongs to the supplied owner and
+     * requester. A later migration or a different waiter is never affected.
+     */
+    public void clearMigrationCancellation(String ownerId, String requesterId) throws IOException {
+        if (ownerId == null || ownerId.isBlank()) {
+            return;
+        }
+        Path requestPath = coordinationDirectory.resolve(CANCEL_FILE);
+        if (!Files.isRegularFile(requestPath, LinkOption.NOFOLLOW_LINKS) || Files.size(requestPath) > 4096L) {
+            return;
+        }
+        JsonElement value;
+        try {
+            value = JsonParser.parseString(Files.readString(requestPath, StandardCharsets.UTF_8));
+        } catch (RuntimeException error) {
+            throw new IOException("AI_DATA_COORDINATION_UNAVAILABLE", error);
+        }
+        if (!value.isJsonObject()) {
+            return;
+        }
+        JsonObject request = value.getAsJsonObject();
+        try {
+            if (!request.has("ownerId") || !ownerId.equals(request.get("ownerId").getAsString())) {
+                return;
+            }
+            if (requesterId != null && (!request.has("requesterId")
+                    || !requesterId.equals(request.get("requesterId").getAsString()))) {
+                return;
+            }
+        } catch (RuntimeException error) {
+            throw new IOException("AI_DATA_COORDINATION_UNAVAILABLE", error);
+        }
+        JsonObject owner = readOwner();
+        if (owner != null && ownerId.equals(owner.get("ownerId").getAsString())) {
+            Files.deleteIfExists(requestPath);
+        }
     }
 
     private void writeOwner(String ownerId, String operation) throws IOException {
