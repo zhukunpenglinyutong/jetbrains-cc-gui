@@ -29,6 +29,8 @@ public class SessionSendService {
 
     private static final Logger LOG = Logger.getInstance(SessionSendService.class);
     public static final String CODEX_FAST_SERVICE_TIER = "fast";
+    private static final String PROVIDER_GROK = "grok";
+    private static final String PROVIDER_ZCODE = "zcode";
 
     private final Project project;
     private final SessionState state;
@@ -232,6 +234,24 @@ public class SessionSendService {
                 null, null, expectedTurnOwner);
     }
 
+    /**
+     * Routes a user turn to the active provider while verifying turn ownership.
+     *
+     * @param channelId Chat host identifier
+     * @param input Normalized user input
+     * @param attachments User attachments
+     * @param openedFilesJson Editor context
+     * @param externalAgentPrompt Selected role instructions
+     * @param fileTagPaths Selected file references
+     * @param requestedPermissionMode Requested permission mode
+     * @param requestedReasoningEffort Requested reasoning effort
+     * @param requestedCodexFastMode Requested Codex service tier
+     * @param requestedDshPreset Requested DSH preset
+     * @param clientMessageId Stable optimistic-message identity
+     * @param nativeCodexSettings Filtered native Codex settings
+     * @param expectedTurnOwner Turn ownership marker expected to remain active
+     * @return future completed after the provider turn has finished
+     */
     public CompletableFuture<Void> sendMessageToProvider(
             String channelId, String input, List<ClaudeSession.Attachment> attachments, JsonObject openedFilesJson,
             String externalAgentPrompt, List<String> fileTagPaths, String requestedPermissionMode,
@@ -288,7 +308,7 @@ public class SessionSendService {
             );
         }
 
-        if ("grok".equals(currentProvider) && grokSDKBridge != null) {
+        if (PROVIDER_GROK.equals(currentProvider) && grokSDKBridge != null) {
             return sendToGrok(
                     channelId,
                     input,
@@ -301,7 +321,7 @@ public class SessionSendService {
                     expectedTurnOwner
             );
         }
-        if ("zcode".equals(currentProvider) && zcodeSDKBridge != null) {
+        if (PROVIDER_ZCODE.equals(currentProvider) && zcodeSDKBridge != null) {
             return sendToZcode(
                     channelId,
                     input,
@@ -315,7 +335,7 @@ public class SessionSendService {
             );
         }
 
-        if (cliBridges.containsKey(currentProvider) && !"grok".equals(currentProvider)) {
+        if (cliBridges.containsKey(currentProvider) && !isDedicatedSdkProvider(currentProvider)) {
             if ("dsh".equals(currentProvider) && requestedDshPreset != null) {
                 state.setDshPreset(requestedDshPreset);
             }
@@ -335,9 +355,9 @@ public class SessionSendService {
 
         // Registered CLI tool whose bridge is not registered: fail loudly via
         // the channel error path instead of silently routing the turn to the
-        // Claude SDK. Grok keeps its historic fallthrough when its bridge is
-        // missing.
-        CliToolId cliTool = !"grok".equals(currentProvider)
+        // Claude SDK. Grok and ZCode keep their historic fallthrough when their
+        // bridges are missing.
+        CliToolId cliTool = !isDedicatedSdkProvider(currentProvider)
                 ? CliToolId.fromId(currentProvider)
                 : null;
         if (cliTool != null && !cliBridges.containsKey(currentProvider)) {
@@ -353,6 +373,10 @@ public class SessionSendService {
 
         return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt,
                 effectivePermissionMode, normalizedRequestedEffort, expectedTurnOwner);
+    }
+
+    private static boolean isDedicatedSdkProvider(String provider) {
+        return PROVIDER_GROK.equals(provider) || PROVIDER_ZCODE.equals(provider);
     }
 
     public static String normalizeRequestedReasoningEffort(String effort) {

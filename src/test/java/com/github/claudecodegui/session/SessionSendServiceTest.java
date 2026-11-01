@@ -1,11 +1,16 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.provider.zcode.ZcodeSDKBridge;
+import com.google.gson.JsonObject;
 import com.intellij.openapi.project.Project;
 import org.junit.Test;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,6 +22,7 @@ import java.util.concurrent.CompletableFuture;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 public class SessionSendServiceTest {
@@ -474,5 +480,121 @@ public class SessionSendServiceTest {
         assertEquals(outside, bridge.cwd);
         assertNull(bridge.requestedCwd);
         assertEquals("the clamp must not touch sibling session state", outside, state.getCwd());
+    }
+
+    private static final class CapturingZcodeBridge extends ZcodeSDKBridge {
+        boolean sendCalled = false;
+
+        @Override
+        public CompletableFuture<SDKResult> sendMessage(
+                String channelId,
+                String message,
+                String sessionId,
+                String runtimeSessionEpoch,
+                String cwd,
+                List<ClaudeSession.Attachment> attachments,
+                String permissionMode,
+                String model,
+                JsonObject openedFiles,
+                String agentPrompt,
+                Boolean streaming,
+                boolean disableThinking,
+                String reasoningEffort,
+                MessageCallback callback
+        ) {
+            this.sendCalled = true;
+            return CompletableFuture.completedFuture(new SDKResult());
+        }
+    }
+
+    private static final class CapturingClaudeBridge extends ClaudeSDKBridge {
+        boolean sendCalled = false;
+
+        @Override
+        public CompletableFuture<SDKResult> sendMessage(
+                String channelId,
+                String message,
+                String sessionId,
+                String runtimeSessionEpoch,
+                String cwd,
+                List<ClaudeSession.Attachment> attachments,
+                String permissionMode,
+                String model,
+                JsonObject openedFiles,
+                String agentPrompt,
+                Boolean streaming,
+                Boolean disableThinking,
+                String reasoningEffort,
+                MessageCallback callback
+        ) {
+            this.sendCalled = true;
+            return CompletableFuture.completedFuture(new SDKResult());
+        }
+    }
+
+    private static SessionLifecycleManager.SessionHost hostWithZcode(Project project, ZcodeSDKBridge zcodeBridge) {
+        return (SessionLifecycleManager.SessionHost) Proxy.newProxyInstance(
+                SessionLifecycleManager.SessionHost.class.getClassLoader(),
+                new Class<?>[]{SessionLifecycleManager.SessionHost.class},
+                (proxy, method, args) -> {
+                    String name = method.getName();
+                    if ("getProject".equals(name)) return project;
+                    if ("getZcodeSDKBridge".equals(name)) return zcodeBridge;
+                    if ("getCliBridges".equals(name)) return Map.of();
+                    Class<?> rt = method.getReturnType();
+                    if (rt == boolean.class) return false;
+                    if (rt == int.class) return 0;
+                    if (rt == long.class) return 0L;
+                    return null;
+                }
+        );
+    }
+
+    @Test
+    public void createDefaultSessionPreservesZcodeBridge() throws Exception {
+        CapturingZcodeBridge zcodeBridge = new CapturingZcodeBridge();
+        Project project = projectWithBase(tmpdir());
+        SessionLifecycleManager.SessionHost host = hostWithZcode(project, zcodeBridge);
+        SessionLifecycleManager lifecycleManager = new SessionLifecycleManager(host);
+
+        Method m = SessionLifecycleManager.class.getDeclaredMethod("createDefaultSession");
+        m.setAccessible(true);
+        ClaudeSession session = (ClaudeSession) m.invoke(lifecycleManager);
+
+        Field field = ClaudeSession.class.getDeclaredField("zcodeSDKBridge");
+        field.setAccessible(true);
+        Object bridgeInSession = field.get(session);
+
+        assertSame(zcodeBridge, bridgeInSession);
+    }
+
+    @Test
+    public void zcodeWithoutBridgeDoesNotTriggerCliProviderNotImplementedError() throws Exception {
+        SessionState state = new SessionState();
+        state.setProvider("zcode");
+        CapturingClaudeBridge claudeBridge = new CapturingClaudeBridge();
+        Project project = projectWithBase(tmpdir());
+
+        SessionSendService service = new SessionSendService(
+                project,
+                state,
+                new SessionCallbackFacade(project),
+                null,
+                null,
+                null,
+                claudeBridge,
+                null,
+                Map.of(),
+                new SessionContextService(project),
+                null,
+                null
+        );
+
+        service.sendMessageToProvider(
+                "channel-1", "hello", null, null, null, null, null, null, null, null
+        ).get(5, java.util.concurrent.TimeUnit.SECONDS);
+
+        assertNull(state.getError());
+        assertTrue(claudeBridge.sendCalled);
     }
 }
