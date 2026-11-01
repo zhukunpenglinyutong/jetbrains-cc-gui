@@ -41,8 +41,17 @@ public final class PermissionDialogTimeoutSettings {
             LOG.warn("[CodemossSettings] Invalid permissionDialogTimeoutSeconds value, rewriting default to disk; errorClass="
                     + e.getClass().getSimpleName());
             try {
-                config.addProperty("permissionDialogTimeoutSeconds", DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS);
-                service.writeConfig(config);
+                service.updateConfig(current -> {
+                    // A concurrent user edit may already have repaired or removed this value.
+                    if (!current.has("permissionDialogTimeoutSeconds")) {
+                        return;
+                    }
+                    try {
+                        current.get("permissionDialogTimeoutSeconds").getAsInt();
+                    } catch (RuntimeException invalid) {
+                        current.addProperty("permissionDialogTimeoutSeconds", DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS);
+                    }
+                });
             } catch (IOException rewriteError) {
                 LOG.warn("[CodemossSettings] Failed to self-heal permissionDialogTimeoutSeconds; errorClass="
                         + rewriteError.getClass().getSimpleName());
@@ -53,8 +62,6 @@ public final class PermissionDialogTimeoutSettings {
 
     public static void setPermissionDialogTimeoutSeconds(CodemossSettingsService service, int seconds) throws IOException {
         int clamped = clampPermissionDialogTimeoutSeconds(seconds);
-        JsonObject config = service.readConfig();
-        config.addProperty("permissionDialogTimeoutSeconds", clamped);
-        service.writeConfig(config);
+        service.updateConfig(config -> config.addProperty("permissionDialogTimeoutSeconds", clamped));
     }
 }

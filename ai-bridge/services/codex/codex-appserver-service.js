@@ -30,10 +30,16 @@
  */
 
 import { EventEmitter } from 'node:events';
+import { setTimeout as pause } from 'node:timers/promises';
 import { dressContextForTurn } from './codex-ide-context.js';
 import { projectCodexItemMessages } from './codex-item-projection.js';
+import { ASYNC_QUESTION_METHOD, normalizeAsyncQuestions, asyncQuestionAnswer, asyncQuestionDismissal }
+  from './codex-async-questions.js';
 import { CodexAppServerClient, ClassifiedError } from './codex-appserver-client.js';
 import { buildProjectDocFallbackConfig } from './codex-native-runtime-config.js';
+
+// Only an explicit closing rejection proves that retrying resume replays no work.
+const THREAD_RESUME_RETRY_DELAYS_MS = [250, 750];
 
 export const SERVICE_STATES = Object.freeze([
   'stopped',
@@ -64,6 +70,9 @@ export const STOP_CONFIRMATION_BUDGET_MS = 10_000;
  */
 export const COMPACT_ANNOUNCEMENT_BUDGET_MS = 60_000;
 
+/** How long an async answer waits for Codex to accept it into the running turn. */
+export const ASYNC_QUESTION_STEER_TIMEOUT_MS = 5_000;
+
 const TERMINAL_TURN_STATUSES = new Set(['completed', 'failed', 'interrupted']);
 
 export class CodexAppServerService extends EventEmitter {
@@ -78,6 +87,7 @@ export class CodexAppServerService extends EventEmitter {
    *        computeCodexRuntimeFingerprint.
    * @param {string} [opts.runtimeFingerprint] precomputed fingerprint.
    * @param {number} [opts.stopBudgetMs]
+   * @param {number} [opts.asyncQuestionSteerTimeoutMs] wait for Codex to accept an async answer.
    * @param {number} [opts.startupAttempts] bounded runtime-start attempts; >1 lets
    *        the daemon fall back to the next resolved CLI when the chosen binary
    *        dies before READY (nothing was dispatched, so a retry replays nothing).
@@ -95,6 +105,7 @@ export class CodexAppServerService extends EventEmitter {
     privacyIndex = null,
     stopBudgetMs = STOP_CONFIRMATION_BUDGET_MS,
     compactAnnouncementBudgetMs = COMPACT_ANNOUNCEMENT_BUDGET_MS,
+    asyncQuestionSteerTimeoutMs = ASYNC_QUESTION_STEER_TIMEOUT_MS,
     startupAttempts = 1,
   } = {}) {
     super();
@@ -118,6 +129,7 @@ export class CodexAppServerService extends EventEmitter {
     this.startupFailures = [];
 
     this.state = 'stopped';
+    this.idleReleaseInProgress = false;
     this.runtimeGeneration = 0;
     this.client = null;
     this.runtimeResetPromise = null;
@@ -141,6 +153,7 @@ export class CodexAppServerService extends EventEmitter {
     // Keeping the method beside the opaque RPC id allows response validation
     // without trusting a browser supplied method name.
     this.pendingInteractions = new Map();
+    this.seenAsyncQuestions = new Set();
     // Session FIFO: at most one active send/compact/review operation.
     this.queue = [];
     this.activeOperationId = null;
@@ -160,6 +173,7 @@ export class CodexAppServerService extends EventEmitter {
     // 10s contract; tests may shorten it for deterministic coverage.
     this.stopBudgetMs = stopBudgetMs;
     this.compactAnnouncementBudgetMs = compactAnnouncementBudgetMs;
+    this.asyncQuestionSteerTimeoutMs = asyncQuestionSteerTimeoutMs;
 
     // Bootstrap bookkeeping: resume/start in flight whose outcome is unknown.
     this.bootstrapInFlight = false;
@@ -183,6 +197,9 @@ export class CodexAppServerService extends EventEmitter {
 
   /** Lazily start the runtime and perform the handshake. Idempotent. */
   async ensureRuntime() {
+    if (this.idleReleaseInProgress) {
+      throw new ClassifiedError('THREAD_RELEASING', 'Codex thread is being released for deletion');
+    }
     if (this.state === 'ready' && this.client?.alive) {
       return;
     }
@@ -522,14 +539,15 @@ export class CodexAppServerService extends EventEmitter {
     return response;
   }
 
-  /** Resume an existing thread. Never re-sends any user task. */
-  async #resumeThread(threadId, { bootstrap = false } = {}) {
+  /** Resume an existing thread, briefly waiting for an explicitly closing writer. */
+  async #resumeThread(threadId, { bootstrap = false, operation = null } = {}) {
     if (this.#isThreadLoaded(threadId)) {
       return;
     }
     const client = this.client;
     const pending = this.threadResumes.get(threadId);
     if (pending?.client === client) {
+      pending.consumers.add(operation);
       return await pending.promise;
     }
     const thread = this.#recordThreadRelation(threadId);
@@ -539,13 +557,38 @@ export class CodexAppServerService extends EventEmitter {
     }
     // Preconnect and FIFO operations can arrive together while history loads.
     // Sharing the resume prevents two native requests from claiming one writer.
+    const entry = { client, consumers: new Set([operation]), promise: null };
+    // Launch changes belong to the idle rebuild, not to an in-flight recovery.
+    const params = {
+      threadId,
+      excludeTurns: true,
+      config: this.launchOptions?.nativeConfig ?? undefined,
+      modelProvider: this.launchOptions?.modelProvider ?? undefined,
+      developerInstructions: this.launchOptions?.developerInstructions ?? undefined,
+    };
     const promise = (async () => {
-      const response = await client.request('thread/resume', {
-        threadId,
-        config: this.launchOptions?.nativeConfig ?? undefined,
-        modelProvider: this.launchOptions?.modelProvider ?? undefined,
-        developerInstructions: this.launchOptions?.developerInstructions ?? undefined,
-      });
+      let response;
+      for (let attempt = 0; ; attempt += 1) {
+        if (this.client !== client || !client.alive) {
+          throw new ClassifiedError('RUNTIME_RESET', 'Codex runtime changed while resuming the thread');
+        }
+        // An independent preconnect can still need recovery after a joined send is cancelled.
+        if (![...entry.consumers].some(consumer => !consumer || (!consumer.cancelRequested && !consumer.settled))) {
+          throw new ClassifiedError('CANCELLED', 'cancelled while waiting to resume the thread');
+        }
+        try {
+          response = await client.request('thread/resume', params);
+          break;
+        } catch (error) {
+          const delay = THREAD_RESUME_RETRY_DELAYS_MS[attempt];
+          if (delay === undefined || error?.code !== 'RPC_ERROR' || error?.rpcCode !== -32600
+              || error?.method !== 'thread/resume'
+              || !/\bis closing;\s*retry thread\/resume after the thread is closed\b/i.test(error.message)) {
+            throw error;
+          }
+          await pause(delay);
+        }
+      }
       if (this.client !== client || !client.alive) {
         throw new ClassifiedError('RUNTIME_RESET', 'Codex runtime changed while resuming the thread');
       }
@@ -560,8 +603,13 @@ export class CodexAppServerService extends EventEmitter {
         payload: this.#redactNativeProjection({ thread: response?.thread ?? null }, { threadId }),
       }));
       this.#rememberThreadSettings(threadId, response);
-    })();
-    const entry = { client, promise };
+    })().catch(error => {
+      // Shared callers must receive the RPC origin even when the native text omits it.
+      throw new ClassifiedError(error?.code || 'THREAD_RESUME_FAILED', `thread/resume: ${error?.message || String(error)}`, {
+        method: 'thread/resume', rpcCode: error?.rpcCode, phase: error?.phase, cause: error,
+      });
+    });
+    entry.promise = promise;
     this.threadResumes.set(threadId, entry);
     try {
       await promise;
@@ -570,7 +618,7 @@ export class CodexAppServerService extends EventEmitter {
       throw error;
     } finally {
       if (this.threadResumes.get(threadId) === entry) this.threadResumes.delete(threadId);
-      if (bootstrap) {
+      if (bootstrap && this.client === client) {
         this.bootstrapInFlight = false;
       }
     }
@@ -662,6 +710,9 @@ export class CodexAppServerService extends EventEmitter {
    * outcome exactly once at the native terminal.
    */
   enqueueOperation({ kind, threadId, clientMessageId = null, settings = undefined, markerPayload = null }) {
+    if (this.idleReleaseInProgress) {
+      throw new ClassifiedError('THREAD_RELEASING', 'Codex thread is being released for deletion');
+    }
     if (!OPERATION_KINDS.includes(kind)) {
       throw new Error(`unknown operation kind: ${kind}`);
     }
@@ -747,13 +798,14 @@ export class CodexAppServerService extends EventEmitter {
         operation.turnInput = dressContextForTurn(operation.markerPayload.input ?? [], operation.markerPayload.additionalContext, supported);
       }
       // Thread bootstrap: start or resume BEFORE the operation RPC.
+      const bootstrapClient = this.client;
       this.bootstrapInFlight = true;
       let threadId = operation.threadId || this.rootThreadId || this.desiredThreadId;
       operation.threadId = threadId;
       try {
         if (!threadId || !this.#isThreadLoaded(threadId)) {
           if (threadId) {
-            await this.#resumeThread(threadId);
+            await this.#resumeThread(threadId, { operation });
             if (operation.frozenSettings && !operation.frozenSettings.cwdExplicit && this.effectiveSettings?.cwd) {
               operation.frozenSettings.cwd = this.effectiveSettings.cwd;
             }
@@ -765,7 +817,8 @@ export class CodexAppServerService extends EventEmitter {
           }
         }
       } finally {
-        this.bootstrapInFlight = false;
+        // A retired retry can finish after the replacement has begun its own bootstrap.
+        if (this.client === bootstrapClient) this.bootstrapInFlight = false;
       }
 
       if (operation.settled || operation.cancelRequested) {
@@ -810,6 +863,10 @@ export class CodexAppServerService extends EventEmitter {
       // (written-but-unconfirmed) never lands here because request() threw
       // only after the write was refused.
       const phase = operation.dispatchPhase;
+      if (phase === 'notWritten' && err?.code === 'CANCELLED' && operation.cancelRequested) {
+        this.#settleOperation(operation, { outcome: 'cancelled', error: err.message });
+        return;
+      }
       if (phase === 'notWritten' && err?.phase === 'writtenUnconfirmed') {
         // The child state is unconfirmed, so no queued operation may write
         // before the reset: block settle's queue dispatch via the draining
@@ -1023,6 +1080,7 @@ export class CodexAppServerService extends EventEmitter {
       }
     }
     operation.settled = true;
+    if (outcome !== 'completed') this.#closeAsyncQuestions(operation.threadId, operation.nativeTurnId);
     operation.outcome = outcome;
     operation.dispatchPhase = 'terminal';
     for (const [key, item] of this.itemSnapshots) {
@@ -1146,6 +1204,17 @@ export class CodexAppServerService extends EventEmitter {
         // The native turn terminal, rather than a retry notice, releases its writer.
         break;
       }
+      case 'warning':
+      case 'configWarning':
+      case 'guardianWarning':
+      case 'deprecationNotice': {
+        const message = [params?.message ?? params?.summary, params?.details]
+          .filter(value => typeof value === 'string' && value.trim()).join('\n');
+        if (message) this.emit('codex_event', this.#envelope({ kind: 'nativeWarning',
+          threadId: params?.threadId ?? null, turnId: params?.turnId ?? null,
+          payload: { method, message: this.client?.sanitizeDiagnostic?.(message) ?? message } }));
+        break;
+      }
       case 'turn/started':
         this.#handleTurnStarted(params);
         break;
@@ -1237,6 +1306,11 @@ export class CodexAppServerService extends EventEmitter {
     // Native started is the explicit boundary for a new turn. Test peers may
     // recycle ids; a terminal alone can never establish that boundary.
     this.completedTurns.delete(`${threadId}:${turnId}`);
+    // A new user turn supersedes unanswered questions from the preceding turn.
+    for (const [id, interaction] of this.pendingInteractions) {
+      if (interaction.method === ASYNC_QUESTION_METHOD && interaction.threadId === threadId
+          && interaction.turnId !== turnId) this.#resolveAsyncQuestion(id, interaction);
+    }
     for (const [key, item] of this.planItems) {
       if (item.threadId === threadId && item.turnId !== turnId) this.planItems.delete(key);
     }
@@ -1369,6 +1443,10 @@ export class CodexAppServerService extends EventEmitter {
       ? this.#bindOperationByTurn(threadId, turnId)
       : [...this.operations.values()].find((candidate) =>
         !candidate.settled && candidate.threadId === threadId);
+    if (operation && !operation.settled && !operation.cancelRequested
+        && ['item/completed', 'item/updated'].includes(method)) {
+      this.#publishAsyncQuestions(threadId, turnId, safeItem);
+    }
     if (operation && (method === 'item/completed' || method === 'item/updated'
         || method === 'item/started' && ['reasoning', 'commandExecution', 'mcpToolCall', 'fileChange', 'contextCompaction',
           'dynamicToolCall', 'collabAgentToolCall', 'imageView', 'imageGeneration', 'webSearch'].includes(itemType))) {
@@ -1979,7 +2057,7 @@ export class CodexAppServerService extends EventEmitter {
       while (current !== root) {
         if (!current || seen.has(current) || seen.size >= 32 || Date.now() >= deadline) return false;
         seen.add(current);
-        const response = await client.request('thread/read', { threadId: current },
+        const response = await client.request('thread/read', { threadId: current, includeTurns: false, excludeTurns: true },
           { timeoutMs: Math.max(1, deadline - Date.now()) });
         if (this.client !== client || !client.alive || this.state === 'draining') return false;
         const nativeThread = response?.thread;
@@ -2013,6 +2091,7 @@ export class CodexAppServerService extends EventEmitter {
   respondInteraction(rpcId, result) {
     const interaction = this.pendingInteractions.get(rpcId);
     if (!interaction || !this.client?.alive) return false;
+    if (interaction.method === ASYNC_QUESTION_METHOD) return this.#answerAsyncQuestion(rpcId, interaction, result);
     const validation = validateInteractionResult(interaction?.method, result);
     if (!validation.valid) {
       // Local validation leaves the native request pending for one corrected answer.
@@ -2026,9 +2105,111 @@ export class CodexAppServerService extends EventEmitter {
   /** Typed error reply for a verified interaction. */
   respondInteractionError(rpcId, code, message) {
     if (!this.pendingInteractions.has(rpcId) || !this.client?.alive) return false;
+    const interaction = this.pendingInteractions.get(rpcId);
+    if (interaction.method === ASYNC_QUESTION_METHOD) {
+      this.#cancelAsyncQuestion(rpcId, interaction);
+      return true;
+    }
     this.client?.replyServerError(rpcId, code, message);
     this.pendingInteractions.delete(rpcId);
     return true;
+  }
+
+  #publishAsyncQuestions(threadId, turnId, item) {
+    const questions = normalizeAsyncQuestions(item);
+    if (!item?.id || questions.length === 0) return;
+    const id = `async-question:${this.runtimeGeneration}:${threadId}:${turnId}:${item.id}`;
+    if (this.seenAsyncQuestions.has(id)) return;
+    this.seenAsyncQuestions.add(id);
+    if (this.seenAsyncQuestions.size > 512) this.seenAsyncQuestions.delete(this.seenAsyncQuestions.values().next().value);
+    // Keep unanswered question state bounded independently of transcript size.
+    const pending = [...this.pendingInteractions].filter(([, value]) => value.method === ASYNC_QUESTION_METHOD);
+    if (pending.length >= 32) this.#resolveAsyncQuestion(...pending[0]);
+    const operation = [...this.operations.values()].find(candidate => !candidate.settled
+      && candidate.threadId === threadId && candidate.nativeTurnId === turnId);
+    this.pendingInteractions.set(id, { method: ASYNC_QUESTION_METHOD, threadId, turnId, itemId: item.id,
+      questions, generation: this.runtimeGeneration, clientOperationId: operation?.clientOperationId ?? null });
+    this.emit('codex_event', this.#envelope({ kind: 'interactionRequested', threadId, turnId, itemId: item.id,
+      payload: { rpcId: id, method: ASYNC_QUESTION_METHOD,
+        params: { threadId, turnId, itemId: item.id, questions, isBlocking: false } } }));
+  }
+
+  #resolveAsyncQuestion(id, interaction) {
+    if (this.pendingInteractions.get(id) !== interaction) return;
+    this.pendingInteractions.delete(id);
+    this.emit('codex_event', this.#envelope({ kind: 'interactionResolved', threadId: interaction.threadId,
+      turnId: interaction.turnId, itemId: interaction.itemId, payload: { rpcId: id, method: interaction.method } }));
+  }
+
+  #cancelAsyncQuestion(id, interaction) {
+    if (this.pendingInteractions.get(id) !== interaction) return;
+    this.#resolveAsyncQuestion(id, interaction);
+    // A typed error (thread release, expiry) retires the question for good, so the agent
+    // must not keep waiting for it. Cancel only that tracked turn; an older completed
+    // question must never stop a newer send.
+    const operation = this.operations.get(interaction.clientOperationId);
+    if (operation && !operation.settled && !operation.cancelRequested
+        && operation.threadId === interaction.threadId && operation.nativeTurnId === interaction.turnId) {
+      this.stopOperation(operation.clientOperationId);
+    }
+  }
+
+  #closeAsyncQuestions(threadId, turnId) {
+    for (const [id, interaction] of this.pendingInteractions) {
+      if (interaction.method === ASYNC_QUESTION_METHOD && interaction.threadId === threadId
+          && interaction.turnId === turnId) this.#resolveAsyncQuestion(id, interaction);
+    }
+  }
+
+  async #answerAsyncQuestion(id, interaction, result) {
+    const answer = asyncQuestionAnswer(interaction.questions, result, interaction.itemId);
+    if (answer === null || interaction.answering) return false;
+    // An empty answer set closes the dialog. The agent is told so it stops waiting;
+    // its turn may still be doing other work, so it is never interrupted.
+    const dismissed = answer === '';
+    const text = dismissed ? asyncQuestionDismissal(interaction.questions, interaction.itemId) : answer;
+    interaction.answering = true;
+    try {
+      // Steer only the operation that published the question; a later turn may reuse its native id.
+      const owner = this.operations.get(interaction.clientOperationId);
+      const active = owner && !owner.settled && !owner.cancelRequested
+        && owner.threadId === interaction.threadId && owner.nativeTurnId === interaction.turnId;
+      if (active) {
+        try {
+          await this.client.request('turn/steer', { threadId: interaction.threadId,
+            expectedTurnId: interaction.turnId, input: [{ type: 'text', text }] },
+          { timeoutMs: this.asyncQuestionSteerTimeoutMs });
+          // Codex accepted the answer, even if the turn ended while it was in flight.
+          this.#resolveAsyncQuestion(id, interaction);
+          return { replied: true };
+        } catch (error) {
+          if (dismissed) {
+            // Closing the question is what the user asked for. A turn that definitively refused
+            // the notice may still wait for an answer, so it is stopped instead (a notice that
+            // timed out may still land and leaves the turn running).
+            if (error?.code === 'RPC_ERROR') this.#cancelAsyncQuestion(id, interaction);
+            else this.#resolveAsyncQuestion(id, interaction);
+            return { replied: true };
+          }
+          if (error?.code === 'RPC_TIMEOUT' && error.phase !== 'notWritten') {
+            // A written steer may still be accepted. Retire the question so the page
+            // cannot ask again and steer a second, possibly different, answer.
+            this.#resolveAsyncQuestion(id, interaction);
+            throw new ClassifiedError('DELIVERY_UNCONFIRMED',
+              'Codex did not confirm the answer in time; it may still take effect');
+          }
+          // Only a definitive rejection after a terminal can start a new turn.
+          if (error?.code !== 'RPC_ERROR' || !this.completedTurns.has(`${interaction.threadId}:${interaction.turnId}`)) throw error;
+        }
+      }
+      const current = this.pendingInteractions.get(id) === interaction
+        && this.runtimeGeneration === interaction.generation && this.client?.alive;
+      if (!current && !dismissed) return false;
+      this.#resolveAsyncQuestion(id, interaction);
+      return dismissed ? { replied: true } : { replied: true, followUp: { threadId: interaction.threadId, text } };
+    } finally {
+      interaction.answering = false;
+    }
   }
 
   // ==========================================================================
@@ -2069,6 +2250,11 @@ export class CodexAppServerService extends EventEmitter {
     ]);
     if (!allowed.has(method)) {
       throw new ClassifiedError('UNSUPPORTED', `unsupported Codex read-only method: ${method}`);
+    }
+    if (method === 'thread/read' && params.includeTurns !== true && params.excludeTurns === undefined) {
+      // New paginated CLIs require an explicit metadata-only read. Older CLIs
+      // still use includeTurns; retain it until full native reads are retired.
+      params = { ...params, includeTurns: false, excludeTurns: true };
     }
     await this.ensureRuntime();
     const response = await this.client.request(method, params, { timeoutMs: 30_000 });
@@ -2145,11 +2331,27 @@ export class CodexAppServerService extends EventEmitter {
     return await operation.promise;
   }
 
-  /**
-   * Release a thread and drain its relation set (D1): pending operations are
-   * cancelled, descendants unloaded, and the lease freed after confirmation.
-   */
-  async releaseThread(threadId = null) {
+  /** Refuse deletion while any work still belongs to this channel runtime. */
+  assertIdleForRelease() {
+    // Native descendants do not own FIFO operations. Their turns and resumes
+    // must finish before a release can retire the entire channel runtime.
+    if (this.busy || this.bootstrapInFlight || this.pendingInteractions.size > 0
+        || this.threadResumes.size > 0
+        || [...this.threads.values()].some(thread => thread.state === 'running' || thread.state === 'loading')
+        || this.queue.some(operation => !operation.settled)
+        || [...this.operations.values()].some(operation => !operation.settled)
+        || !['ready', 'stopped', 'failed'].includes(this.state) || this.idleReleaseInProgress) {
+      throw new ClassifiedError('SESSION_RUNNING', 'Codex session has pending work and cannot be deleted');
+    }
+  }
+
+  /** Release the relation set after native exit; deletion may require an idle owner. */
+  async releaseThread(threadId = null, { onlyIfIdle = false } = {}) {
+    if (onlyIfIdle) {
+      this.assertIdleForRelease();
+      // Set before yielding: a concurrent send must never revive this retiring owner.
+      this.idleReleaseInProgress = true;
+    }
     const target = threadId ?? this.rootThreadId;
     this.#setState('draining');
     try {
@@ -2240,6 +2442,7 @@ export class CodexAppServerService extends EventEmitter {
     this.planItems.clear();
     this.busy = false;
     this.activeOperationId = null;
+    this.bootstrapInFlight = false;
     this.#setState('stopped');
     this.emit('codex_event', this.#envelope({ kind: 'runtimeReset', payload: { reason } }));
   }

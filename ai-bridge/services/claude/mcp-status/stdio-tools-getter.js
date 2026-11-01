@@ -6,9 +6,10 @@
 import { spawn } from 'child_process';
 import { MCP_TOOLS_TIMEOUT, createSafeEnv, STDIO_TOOLS_MAX_LINE_LENGTH } from './config.js';
 import { log } from './logger.js';
-import { validateCommand, hasUnsafeShellMetacharacters } from './command-validator.js';
+import { validateCommand } from './command-validator.js';
 import { safeKillProcess } from './process-manager.js';
 import { MCP_PROTOCOL_VERSION, MCP_CLIENT_INFO } from './mcp-protocol.js';
+import { prepareStdioLaunch, resolveWindowsCommand } from './process-launcher.js';
 
 /**
  * Retrieve the tool list from an STDIO-based server
@@ -18,6 +19,8 @@ import { MCP_PROTOCOL_VERSION, MCP_CLIENT_INFO } from './mcp-protocol.js';
  * @returns {Promise<Object>} Tools list response
  */
 export async function getStdioServerTools(serverName, serverConfig) {
+  const env = createSafeEnv(serverConfig.env);
+  const launch = await resolveWindowsCommand(serverConfig.command, env);
   return new Promise((resolve) => {
     let resolved = false;
     let child = null;
@@ -31,7 +34,6 @@ export async function getStdioServerTools(serverName, serverConfig) {
 
     const command = serverConfig.command;
     const args = serverConfig.args || [];
-    const env = createSafeEnv(serverConfig.env);
 
     if (!command) {
       result.error = 'No command specified';
@@ -78,11 +80,8 @@ export async function getStdioServerTools(serverName, serverConfig) {
     }, MCP_TOOLS_TIMEOUT);
 
     try {
-      // Some commands on Windows require a shell
-      const useShell = process.platform === 'win32' &&
-                      (command.endsWith('.cmd') || command.endsWith('.bat') ||
-                       command === 'npx' || command === 'npm' ||
-                       command === 'pnpm' || command === 'yarn');
+      const prepared = prepareStdioLaunch(launch, args);
+      const useShell = launch.useShell;
 
       const spawnOptions = {
         env,
@@ -93,20 +92,11 @@ export async function getStdioServerTools(serverName, serverConfig) {
       };
 
       if (useShell) {
-        // Security (G): with shell:true Node concatenates command+args into one string that
-        // cmd.exe re-parses, so a metacharacter in any externally-sourced arg becomes command
-        // injection. Refuse to launch when that risk is present instead of executing it.
-        const unsafe = [command, ...args].find(hasUnsafeShellMetacharacters);
-        if (unsafe) {
-          log('warn', `[MCP Tools] Refusing shell launch for ${serverName}: command/args contain shell metacharacters`);
-          finalize(null, 'Command or args contain unsafe shell metacharacters');
-          return;
-        }
         spawnOptions.shell = true;
         log('debug', '[MCP Tools] Using shell for command:', command);
       }
 
-      child = spawn(command, args, spawnOptions);
+      child = spawn(prepared.command, prepared.args, spawnOptions);
       log('info', '[MCP Tools] Spawned process PID:', child.pid);
     } catch (spawnError) {
       finalize(null, 'Failed to spawn process: ' + spawnError.message);

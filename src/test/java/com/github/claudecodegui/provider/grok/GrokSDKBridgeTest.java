@@ -125,4 +125,129 @@ public class GrokSDKBridgeTest {
         assertEquals(500000, com.github.claudecodegui.handler.provider.ModelProviderHandler.getModelContextLimit("grok-4.6"));
         assertEquals(500000, com.github.claudecodegui.handler.provider.ModelProviderHandler.getModelContextLimit("grok-build"));
     }
+
+    @Test
+    public void testCreatePlanUsageCallbackReadsResultAndIgnoresLines() {
+        CompletableFuture<JsonObject> future = new CompletableFuture<>();
+        com.github.claudecodegui.provider.common.DaemonBridge.DaemonOutputCallback callback =
+                GrokSDKBridge.createPlanUsageCallback(future);
+
+        // onLine should be ignored even if it looks like a usage payload
+        callback.onLine("{\"present\":false,\"message\":\"fake line\"}");
+
+        // onResult carries the real payload from the pre-queue handler
+        JsonObject payload = new JsonObject();
+        payload.addProperty("present", true);
+        payload.addProperty("capacity_pct", 75.0);
+
+        JsonObject response = new JsonObject();
+        response.addProperty("id", "123");
+        response.addProperty("done", true);
+        response.addProperty("success", true);
+        response.add("result", payload);
+
+        callback.onResult(response);
+        callback.onComplete(true);
+
+        assertTrue(future.isDone());
+        JsonObject actual = future.join();
+        assertNotNull(actual);
+        assertTrue(actual.get("present").getAsBoolean());
+        assertEquals(75.0, actual.get("capacity_pct").getAsDouble(), 0.001);
+    }
+
+    @Test
+    public void testCreatePlanUsageCallbackIgnoresLineOnlyAndFailsGracefully() {
+        CompletableFuture<JsonObject> future = new CompletableFuture<>();
+        com.github.claudecodegui.provider.common.DaemonBridge.DaemonOutputCallback callback =
+                GrokSDKBridge.createPlanUsageCallback(future);
+
+        // Only onLine is invoked, no onResult
+        callback.onLine("{\"present\":true,\"capacity_pct\":99.0}");
+        callback.onComplete(true);
+
+        assertTrue(future.isDone());
+        JsonObject actual = future.join();
+        assertNotNull(actual);
+        assertFalse(actual.get("present").getAsBoolean());
+        assertTrue(actual.get("unavailable").getAsBoolean());
+    }
+
+    @Test
+    public void testGetPlanUsageReturnsUnavailableWhenNoDaemon() {
+        GrokSDKBridge bridge = new GrokSDKBridge();
+        JsonObject result = bridge.getPlanUsage("/tmp", null).join();
+        assertNotNull(result);
+        assertFalse(result.get("present").getAsBoolean());
+        assertTrue(result.get("unavailable").getAsBoolean());
+        assertEquals("grok", result.get("provider").getAsString());
+        assertEquals("x.ai/billing", result.get("source").getAsString());
+        assertEquals("Grok daemon is not running", result.get("message").getAsString());
+        assertTrue(result.get("dormant").getAsBoolean());
+    }
+
+    @Test
+    public void testGetPlanUsageNeverStartsTheDaemon() {
+        GrokSDKBridge bridge = new GrokSDKBridge();
+        JsonObject result = bridge.getPlanUsage("/tmp").join();
+        assertNotNull(result);
+        assertFalse(result.get("present").getAsBoolean());
+        // api_key auth skips; any other auth finds no running daemon. Neither starts one.
+        assertTrue(result.has("skipPolling") || result.get("dormant").getAsBoolean());
+        assertNull(bridge.getCurrentDaemonBridgeForInspection());
+    }
+
+    @Test
+    public void testCreatePlanUsageCallbackHandlesOnErrorAndNonBooleanPresent() {
+        CompletableFuture<JsonObject> errorFuture = new CompletableFuture<>();
+        com.github.claudecodegui.provider.common.DaemonBridge.DaemonOutputCallback errorCallback =
+                GrokSDKBridge.createPlanUsageCallback(errorFuture);
+
+        errorCallback.onError("billing rpc failed");
+        errorCallback.onComplete(false);
+
+        assertTrue(errorFuture.isDone());
+        JsonObject errorResult = errorFuture.join();
+        assertFalse(errorResult.get("present").getAsBoolean());
+        assertTrue(errorResult.get("unavailable").getAsBoolean());
+        assertEquals("billing rpc failed", errorResult.get("message").getAsString());
+
+        // Non-boolean 'present' (e.g. JsonNull or string) must be rejected
+        CompletableFuture<JsonObject> malformedFuture = new CompletableFuture<>();
+        com.github.claudecodegui.provider.common.DaemonBridge.DaemonOutputCallback malformedCallback =
+                GrokSDKBridge.createPlanUsageCallback(malformedFuture);
+
+        JsonObject badPayload = new JsonObject();
+        badPayload.add("present", com.google.gson.JsonNull.INSTANCE);
+        JsonObject response = new JsonObject();
+        response.add("result", badPayload);
+
+        malformedCallback.onResult(response);
+        malformedCallback.onComplete(true);
+
+        JsonObject malformedResult = malformedFuture.join();
+        assertFalse(malformedResult.get("present").getAsBoolean());
+        assertTrue(malformedResult.get("unavailable").getAsBoolean());
+    }
+
+    @Test
+    public void testSkipsPlanUsagePoll() {
+        assertTrue(GrokSDKBridge.skipsPlanUsagePoll("api_key"));
+        assertFalse(GrokSDKBridge.skipsPlanUsagePoll("oauth"));
+        assertFalse(GrokSDKBridge.skipsPlanUsagePoll("auto"));
+        assertFalse(GrokSDKBridge.skipsPlanUsagePoll(null));
+        assertFalse(GrokSDKBridge.skipsPlanUsagePoll(""));
+    }
+
+    @Test
+    public void testPlanUsageApiKeySkip() {
+        JsonObject result = GrokSDKBridge.planUsageApiKeySkip();
+        assertNotNull(result);
+        assertFalse(result.get("present").getAsBoolean());
+        assertTrue(result.get("unavailable").getAsBoolean());
+        assertTrue(result.get("skipPolling").getAsBoolean());
+        assertEquals("grok", result.get("provider").getAsString());
+        assertEquals("x.ai/billing", result.get("source").getAsString());
+        assertEquals("Grok usage unavailable", result.get("message").getAsString());
+    }
 }

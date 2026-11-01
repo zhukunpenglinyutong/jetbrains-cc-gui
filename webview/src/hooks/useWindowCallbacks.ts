@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
+import type { ToastAction } from '../components/Toast';
 import type { MutableRefObject, RefObject } from 'react';
 import type { ClaudeMessage, ClaudeRawMessage, HistoryData, SubagentHistoryResponse, TaskEventMap } from '../types';
 import type {
@@ -16,6 +17,7 @@ import type { RewindRequest } from '../components/RewindDialog';
 import type { RestoredSessionTitle } from '../contexts/SessionContext';
 import { registerWindowCallbacks } from './windowCallbacks/registerCallbacks';
 import { sendBridgeEvent } from '../utils/bridge';
+import type { StartupHistoryLoadState } from '../types/startupHistory';
 
 // Re-export from messageSync to avoid duplicate definition
 export { OPTIMISTIC_MESSAGE_TIME_WINDOW } from './windowCallbacks/messageSync';
@@ -29,7 +31,7 @@ export interface ContextInfo {
 
 export interface UseWindowCallbacksOptions {
   t: TFunction;
-  addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
+  addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error', action?: ToastAction) => void;
   clearToasts: () => void;
 
   // State setters
@@ -61,6 +63,7 @@ export interface UseWindowCallbacksOptions {
   setSendShortcut: React.Dispatch<React.SetStateAction<'enter' | 'cmdEnter'>>;
   setAutoOpenFileEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setPermissionDialogTimeoutSeconds: React.Dispatch<React.SetStateAction<number>>;
+  setStartupHistoryLoadState: React.Dispatch<React.SetStateAction<StartupHistoryLoadState | null>>;
   setSdkStatus: React.Dispatch<React.SetStateAction<Record<string, { installed?: boolean; status?: string }>>>;
   setSdkStatusLoaded: React.Dispatch<React.SetStateAction<boolean>>;
   setSdkStatusError: React.Dispatch<React.SetStateAction<string | null>>;

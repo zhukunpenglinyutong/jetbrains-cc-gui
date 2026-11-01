@@ -2,9 +2,9 @@ package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.CodexMessageConverter;
-import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.handler.UsagePushService;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexNativeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
@@ -89,6 +89,15 @@ public class HistoryMessageInjector {
         }
     }
 
+    /** Codex rebinds the current session in place, so no session swap retires a pending restore for it. */
+    private volatile Runnable codexSessionSelectionListener = () -> {
+    };
+
+    void setCodexSessionSelectionListener(Runnable listener) {
+        this.codexSessionSelectionListener = listener != null ? listener : () -> {
+        };
+    }
+
     /**
      * Load a history session.
      */
@@ -117,6 +126,9 @@ public class HistoryMessageInjector {
             }
         } catch (Exception ignored) {
             // Backward compatible: legacy payload is the raw sessionId string.
+        }
+        if ("codex".equals(provider)) {
+            codexSessionSelectionListener.run();
         }
 
         String rawPath = context.resolveEffectiveWorkingDirectory();
@@ -449,8 +461,8 @@ public class HistoryMessageInjector {
         if (session == null) {
             return;
         }
-        int fallbackMaxTokens = SettingsHandler.getModelContextLimit(
-                session.getProvider(), session.getModel());
+        int fallbackMaxTokens = ModelProviderHandler.resolveContextLimit(
+                session.getProvider(), session.getModel(), session.getCwd());
         new UsagePushService(context).pushCurrentUsageIfAvailable(fallbackMaxTokens);
     }
 
@@ -773,6 +785,8 @@ public class HistoryMessageInjector {
         private final Set<String> recordedPatchItemIds = new HashSet<>();
         private CodexKnownExecReplay knownExec;
         private String rootThreadId;
+        private String nativeTurnId;
+        private final Set<String> questionCalls = new HashSet<>();
         private final Map<String, CodexKnownExecReplay.Process> processCalls = new java.util.LinkedHashMap<>();
         private final CodexRecordedImageGeneration.Lifecycle generatedImages = new CodexRecordedImageGeneration.Lifecycle();
 
@@ -792,6 +806,13 @@ public class HistoryMessageInjector {
                 this.rootThreadId = getStringProperty(rawMessage.getAsJsonObject("payload"), "id");
             }
             JsonObject payload = getResponseItemPayload(rawMessage);
+            String recordType = getStringProperty(rawMessage, "type");
+            JsonObject lifecycle = rawMessage.has("payload") && rawMessage.get("payload").isJsonObject()
+                    ? rawMessage.getAsJsonObject("payload") : null;
+            if ("turn_context".equals(recordType)
+                    || "event_msg".equals(recordType) && "task_started".equals(getStringProperty(lifecycle, "type"))) {
+                this.nativeTurnId = getStringProperty(lifecycle, "turn_id");
+            }
             String callId = getStringProperty(payload, "call_id");
             String payloadType = getStringProperty(payload, "type");
             if (this.knownExec != null) {
@@ -813,7 +834,7 @@ public class HistoryMessageInjector {
                 }
             }
             if ("custom_tool_call".equals(payloadType) || "function_call".equals(payloadType)) {
-                CodexKnownExecReplay candidate = CodexKnownExecReplay.begin(rawMessage, this.rootThreadId);
+                CodexKnownExecReplay candidate = CodexKnownExecReplay.begin(rawMessage, this.rootThreadId, this.nativeTurnId);
                 if (candidate != null && this.retainedBytes() + candidate.retainedBytes() <= MAX_REPLAY_BYTES) {
                     this.emitPending();
                     this.recordedPatchCallId = null;
@@ -849,6 +870,18 @@ public class HistoryMessageInjector {
                 this.acceptConverted(stashed);
                 return;
             }
+            // A wrapper can close after the next turn has started; its fallback cards keep the turn that opened it.
+            String currentTurnId = this.nativeTurnId;
+            this.nativeTurnId = replay.lifecycleTurnId();
+            try {
+                this.acceptReplayFallback(replay, output);
+            } finally {
+                this.nativeTurnId = currentTurnId;
+            }
+            this.acceptConverted(stashed);
+        }
+
+        private void acceptReplayFallback(CodexKnownExecReplay replay, JsonObject output) {
             if (replay.keepsOriginalWrapper()) {
                 // A rejected ownership/index mapping must not be retried by looser legacy heuristics.
                 this.acceptOpaqueExecRecord(replay.original(), replay.callId(), false);
@@ -870,7 +903,6 @@ public class HistoryMessageInjector {
                     this.acceptLegacy(output);
                 }
             }
-            this.acceptConverted(stashed);
         }
 
         private void acceptOpaqueExecRecord(JsonObject record, String callId, boolean result) {
@@ -882,6 +914,26 @@ public class HistoryMessageInjector {
         }
 
         private void acceptLegacy(JsonObject rawMessage) {
+            JsonObject question = CodexRecordedQuestion.readMessage(rawMessage);
+            if (question != null) {
+                this.carryRecordedScope(question, rawMessage);
+                String id = getStringProperty(question.getAsJsonObject("raw"), "codexItemId");
+                boolean repeated = !this.questionCalls.add(id);
+                if (repeated) {
+                    if (this.pending != null && id.equals(getStringProperty(this.pending.getAsJsonObject("raw"), "codexItemId"))) {
+                        this.pending = question;
+                        this.rememberLatestAssistant(question);
+                    }
+                } else {
+                    this.acceptConverted(question);
+                }
+                return;
+            }
+            JsonObject recordedPayload = getResponseItemPayload(rawMessage);
+            if (isToolOutputPayload(recordedPayload) && this.questionCalls.contains(getStringProperty(recordedPayload, "call_id"))) {
+                // The async tool's acknowledgement is not the user's answer.
+                return;
+            }
             List<JsonObject> recordedCommands = CodexKnownExecReplay.readNativeCommand(rawMessage, this.processCalls);
             if (!recordedCommands.isEmpty()) {
                 recordedCommands.forEach(this::acceptConverted);
@@ -1017,6 +1069,11 @@ public class HistoryMessageInjector {
             JsonObject raw = incoming.getAsJsonObject("raw");
             if (raw != null) {
                 this.carryRecordedScope(incoming, rawMessage);
+                String content = getStringProperty(incoming, "content");
+                if (isUserMessage(incoming) && !this.questionCalls.isEmpty() && content != null
+                        && (content.startsWith("Answers to your questions (request: ") || content.startsWith("Answers to your questions:\n\n"))) {
+                    raw.addProperty("codexItemType", "userMessage");
+                }
                 String nativeId = getStringProperty(payload, "id");
                 String identity = nativeId != null ? nativeId : callId != null ? callId
                         : (timestamp == null ? "record" : timestamp) + ":" + this.recordNumber;
@@ -1088,7 +1145,8 @@ public class HistoryMessageInjector {
                 return;
             }
             JsonObject raw = incoming.getAsJsonObject("raw");
-            JsonObject payload = getResponseItemPayload(record);
+            JsonObject payload = record != null && record.has("payload") && record.get("payload").isJsonObject()
+                    ? record.getAsJsonObject("payload") : null;
             if (payload == null) {
                 return;
             }
@@ -1097,7 +1155,7 @@ public class HistoryMessageInjector {
                     ? payload.getAsJsonObject("internal_chat_message_metadata_passthrough") : null;
             String turnId = getStringProperty(payload, "turn_id");
             if (turnId == null) {
-                turnId = getStringProperty(metadata, "turn_id");
+                turnId = this.nativeTurnId != null ? this.nativeTurnId : getStringProperty(metadata, "turn_id");
             }
             String threadId = getStringProperty(payload, "thread_id");
             if (threadId == null) {
@@ -1192,6 +1250,9 @@ public class HistoryMessageInjector {
             }
             for (String itemId : this.recordedPatchItemIds) {
                 bytes += 3L * itemId.length();
+            }
+            for (String callId : this.questionCalls) {
+                bytes += 3L * callId.length();
             }
             return bytes;
         }

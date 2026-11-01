@@ -1,0 +1,11 @@
+.codex-question-record {
+  min-width: 0;
+}
+
+.codex-question-record-item + .codex-question-record-item { margin-top: 16px; }
+
+.codex-question-record-answer {
+  margin-top: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -36,6 +36,19 @@ public final class TokenUsageUtils {
                 ? usage.get("cache_creation_input_tokens").getAsInt() : 0;
         int cacheRead = usage.has("cache_read_input_tokens")
                 ? usage.get("cache_read_input_tokens").getAsInt() : 0;
+        if ("opencode".equals(provider)) {
+            if (usage.has("total_tokens") && !usage.get("total_tokens").isJsonNull()) {
+                try {
+                    int total = usage.get("total_tokens").getAsInt();
+                    if (total > 0) {
+                        return total;
+                    }
+                } catch (RuntimeException ignored) {
+                }
+            }
+            int output = usage.has("output_tokens") ? usage.get("output_tokens").getAsInt() : 0;
+            return input + cacheCreation + cacheRead + output;
+        }
         return input + cacheCreation + cacheRead;
     }
 

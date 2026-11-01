@@ -43,6 +43,10 @@ public class GrokMessageHandler implements MessageCallback {
     private boolean isStreaming = false;
     private boolean streamEndedThisTurn = false;
     private boolean isThinking = false;
+    /** False after a tool boundary so the next thought opens its own raw block. */
+    private boolean thinkingSegmentActive = false;
+    /** False after a tool boundary so the next text delta opens its own raw block. */
+    private boolean textSegmentActive = false;
 
     public GrokMessageHandler(SessionState state, CallbackHandler callbackHandler) {
         this.state = state;
@@ -311,9 +315,14 @@ public class GrokMessageHandler implements MessageCallback {
     }
 
     private void handleBlockReset() {
+        if (assistantContent.length() > 0 && !textSegmentActive) {
+            appendTextToRaw(assistantContent.toString());
+        }
         // New structural segment after tools — clear delta accumulator for next text block
         assistantContent.setLength(0);
         currentAssistantMessage = null;
+        thinkingSegmentActive = false;
+        textSegmentActive = false;
         try {
             callbackHandler.notifyBlockReset();
         } catch (Exception e) {
@@ -333,6 +342,7 @@ public class GrokMessageHandler implements MessageCallback {
 
         Message target = resolveAssistantMessageForStream();
         target.content = assistantContent.toString();
+        appendTextToRaw(content);
         callbackHandler.notifyContentDelta(content);
         if (!isStreaming) {
             callbackHandler.notifyMessageUpdate(state.getMessages());
@@ -596,6 +606,21 @@ public class GrokMessageHandler implements MessageCallback {
     }
 
     private void appendThinkingToRaw(String delta) {
+        appendStreamDeltaToRaw("thinking", "thinking", delta, thinkingSegmentActive);
+        thinkingSegmentActive = true;
+    }
+
+    private void appendTextToRaw(String delta) {
+        appendStreamDeltaToRaw("text", "text", delta, textSegmentActive);
+        textSegmentActive = true;
+    }
+
+    /**
+     * Grow the latest raw block of {@code type} with a streamed delta, or open a new
+     * block when the segment has not started yet (first delta after stream start or
+     * after a block reset), so each segment keeps its own block.
+     */
+    private void appendStreamDeltaToRaw(String type, String field, String delta, boolean segmentActive) {
         ensureAssistantRaw();
         JsonObject raw = currentAssistantMessage.raw;
         JsonObject message = raw.has("message") && raw.get("message").isJsonObject()
@@ -605,31 +630,36 @@ public class GrokMessageHandler implements MessageCallback {
                 ? message.getAsJsonArray("content")
                 : new JsonArray();
 
-        JsonObject thinkingBlock = null;
-        for (int i = content.size() - 1; i >= 0; i--) {
-            com.google.gson.JsonElement el = content.get(i);
-            if (el.isJsonObject() && el.getAsJsonObject().has("type")
-                    && "thinking".equals(el.getAsJsonObject().get("type").getAsString())) {
-                thinkingBlock = el.getAsJsonObject();
-                break;
-            }
-        }
-        if (thinkingBlock == null) {
-            thinkingBlock = new JsonObject();
-            thinkingBlock.addProperty("type", "thinking");
-            thinkingBlock.addProperty("thinking", delta);
-            content.add(thinkingBlock);
+        JsonObject block = segmentActive ? findLastBlockOfType(content, type) : null;
+        if (block == null) {
+            block = new JsonObject();
+            block.addProperty("type", type);
+            block.addProperty(field, delta);
+            content.add(block);
         } else {
-            String prev = thinkingBlock.has("thinking") ? thinkingBlock.get("thinking").getAsString() : "";
-            thinkingBlock.addProperty("thinking", prev + delta);
+            String prev = block.has(field) ? block.get(field).getAsString() : "";
+            block.addProperty(field, prev + delta);
         }
         message.add("content", content);
         raw.add("message", message);
+    }
+
+    private static JsonObject findLastBlockOfType(JsonArray content, String type) {
+        for (int i = content.size() - 1; i >= 0; i--) {
+            com.google.gson.JsonElement el = content.get(i);
+            if (el.isJsonObject() && el.getAsJsonObject().has("type")
+                    && type.equals(el.getAsJsonObject().get("type").getAsString())) {
+                return el.getAsJsonObject();
+            }
+        }
+        return null;
     }
 
     private void resetStreamingAccumulator() {
         assistantContent.setLength(0);
         currentAssistantMessage = null;
         assistantMessageForCurrentStream = null;
+        thinkingSegmentActive = false;
+        textSegmentActive = false;
     }
 }

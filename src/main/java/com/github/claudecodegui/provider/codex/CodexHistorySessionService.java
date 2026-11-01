@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonStreamParser;
+import com.github.claudecodegui.provider.common.HistoryCancellation;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
@@ -57,7 +58,7 @@ class CodexHistorySessionService {
         }
 
         try {
-            readSessionFile(sessionFile, messages::add);
+            readSessionFile(sessionFile, () -> false, messages::add);
             return gson.toJson(messages);
         } catch (Exception e) {
             LOG.error("[CodexHistoryReader] Failed to read session messages: " + e.getMessage(), e);
@@ -67,19 +68,26 @@ class CodexHistorySessionService {
 
     int forEachSessionMessage(String sessionId,
                               Consumer<CodexHistoryReader.CodexMessage> consumer) throws IOException {
-        Path sessionFile = findSessionFile(sessionId);
-        if (sessionFile == null) {
-            throw new IOException("Codex session file not found: " + sessionId);
-        }
-        return readSessionFile(sessionFile, consumer);
+        return forEachSessionMessage(sessionId, () -> false, consumer);
     }
 
-    private int readSessionFile(Path sessionFile,
+    int forEachSessionMessage(String sessionId, BooleanSupplier cancellation,
+                              Consumer<CodexHistoryReader.CodexMessage> consumer) throws IOException {
+        checkCancellation(cancellation);
+        Path sessionFile = findSessionFile(sessionId, cancellation);
+        if (sessionFile == null) {
+            throw new java.nio.file.NoSuchFileException(sessionId);
+        }
+        return readSessionFile(sessionFile, cancellation, consumer);
+    }
+
+    private int readSessionFile(Path sessionFile, BooleanSupplier cancellation,
                                 Consumer<CodexHistoryReader.CodexMessage> consumer) throws IOException {
         int messageCount = 0;
         try (BufferedReader reader = Files.newBufferedReader(sessionFile, StandardCharsets.UTF_8)) {
             String line;
             while ((line = reader.readLine()) != null) {
+                checkCancellation(cancellation);
                 if (line.trim().isEmpty()) {
                     continue;
                 }
@@ -87,6 +95,7 @@ class CodexHistorySessionService {
                 try {
                     JsonStreamParser lineParser = new JsonStreamParser(line);
                     while (lineParser.hasNext()) {
+                        checkCancellation(cancellation);
                         JsonElement element = lineParser.next();
                         CodexHistoryReader.CodexMessage message = gson.fromJson(
                                 element, CodexHistoryReader.CodexMessage.class);
@@ -95,6 +104,8 @@ class CodexHistorySessionService {
                             messageCount++;
                         }
                     }
+                } catch (CancellationException e) {
+                    throw e;
                 } catch (Exception e) {
                     LOG.debug("[CodexHistoryReader] Failed to parse message: " + e.getMessage());
                 }
@@ -175,6 +186,10 @@ class CodexHistorySessionService {
     }
 
     Path findSessionFile(String sessionId) throws IOException {
+        return findSessionFile(sessionId, () -> false);
+    }
+
+    private Path findSessionFile(String sessionId, BooleanSupplier cancellation) throws IOException {
         if (!Files.exists(sessionsDir)) {
             return null;
         }
@@ -184,12 +199,17 @@ class CodexHistorySessionService {
             // and full filename-based IDs. The Codex SDK thread ID (UUID) is embedded
             // in the filename (e.g., rollout-2026-04-01T14-57-29-<UUID>.jsonl).
             return paths
+                    .peek(path -> checkCancellation(cancellation))
                     .filter(Files::isRegularFile)
                     .filter(path -> path.toString().endsWith(".jsonl"))
                     .filter(path -> path.getFileName().toString().contains(sessionId))
                     .findFirst()
                     .orElse(null);
         }
+    }
+
+    private static void checkCancellation(BooleanSupplier cancellation) {
+        HistoryCancellation.check(cancellation);
     }
 
     private CodexHistoryReader.CodexMessage transformFunctionCall(CodexHistoryReader.CodexMessage msg) {

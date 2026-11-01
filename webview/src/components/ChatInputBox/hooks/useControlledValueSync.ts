@@ -12,6 +12,12 @@ export interface UseControlledValueSyncOptions {
   cancelPendingInput: () => void;
   /** External draft replacement retires the old clipboard work. */
   invalidateImagePastes?: () => void;
+  /**
+   * Renders the rich references (@file chips, quote chips) inside the input.
+   * The external value is written as plain text, so this has to run afterwards
+   * or the draft would show raw `@path` text instead of the rendered chips.
+   */
+  renderTags?: () => void;
 }
 
 /**
@@ -37,6 +43,7 @@ export function useControlledValueSync({
   invalidateCache,
   cancelPendingInput,
   invalidateImagePastes,
+  renderTags,
 }: UseControlledValueSyncOptions): void {
   useEffect(() => {
     if (value === undefined) return;
@@ -58,6 +65,9 @@ export function useControlledValueSync({
       editableRef.current.innerText = value;
       setHasContent(!!value.trim());
       adjustHeight();
+      // The value was written as plain text: re-render the rich references it
+      // carries so the draft keeps the look the user saw before.
+      renderTags?.();
 
       if (value) {
         const range = document.createRange();
@@ -82,5 +92,6 @@ export function useControlledValueSync({
     invalidateCache,
     cancelPendingInput,
     invalidateImagePastes,
+    renderTags,
   ]);
 }

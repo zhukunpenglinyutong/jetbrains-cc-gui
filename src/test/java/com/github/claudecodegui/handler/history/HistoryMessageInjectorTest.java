@@ -33,6 +33,34 @@ import static org.junit.Assert.assertTrue;
  * Unit tests for provider-aware history loading, pagination, and frontend conversion.
  */
 public class HistoryMessageInjectorTest {
+    @Test
+    public void restoresAsyncQuestionOnceAndPreservesAnswerCorrelationAcrossDifferentModelTurnIds() {
+        JsonArray records = com.google.gson.JsonParser.parseString("""
+                [
+                {"type":"session_meta","payload":{"id":"root"}},
+                {"type":"turn_context","payload":{"turn_id":"native-turn"}},
+                {"type":"response_item","payload":{"type":"function_call","name":"request_user_input_async",
+                "call_id":"question-call","arguments":"{\\"questions\\":[{\\"title\\":\\"Pick one.\\",\\"options\\":[\\"A\\",\\"B\\"]}]}",
+                "internal_chat_message_metadata_passthrough":{"turn_id":"model-turn"}}},
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"root","turn_id":"native-turn",
+                "item":{"type":"AgentMessage","id":"question-call","delivery":"async",
+                "questions":[{"title":"Pick one.","options":["A","B"]}]}}},
+                {"type":"response_item","payload":{"type":"function_call_output","call_id":"question-call","output":"{\\"accepted\\":true}"}},
+                {"type":"event_msg","payload":{"type":"user_message","message":"Answers to your questions (request: question-call):\\n\\nPick one.\\nB"}}
+                ]
+                """).getAsJsonArray();
+        List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        assertEquals(2, messages.size());
+        JsonObject raw = messages.get(0).getAsJsonObject().getAsJsonObject("raw");
+        JsonObject question = raw.getAsJsonArray("content").get(0).getAsJsonObject();
+        assertEquals("codex_user_input", question.get("name").getAsString());
+        assertEquals("question-call", question.get("id").getAsString());
+        assertEquals("native-turn", raw.get("codexTurnId").getAsString());
+        assertEquals(2, question.getAsJsonObject("input").getAsJsonArray("questions").get(0)
+                .getAsJsonObject().getAsJsonArray("options").size());
+        assertEquals("userMessage", messages.get(1).getAsJsonObject().getAsJsonObject("raw").get("codexItemType").getAsString());
+        assertFalse(messages.toString().contains("Request User Input Async"));
+    }
     /** Earlier pages must follow the selected session's directory rather than the IDE project root. */
     @Test
     public void delegatesEarlierClaudePagesWithTheSessionsCustomDirectory() throws Exception {

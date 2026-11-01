@@ -163,6 +163,7 @@ class GrokDaemonRequestExecutor {
                         long elapsed = System.currentTimeMillis() - startTime;
                         log.info("[GrokDaemonExecutor] aborted by user (" + elapsed + "ms)");
                         result.error = "User interrupted";
+                        result.cancelled = true;
                         callback.onComplete(result);
                     } else {
                         String errorMsg = "Grok daemon command failed";
@@ -176,11 +177,15 @@ class GrokDaemonRequestExecutor {
                         callback.onError(result.error);
                     }
                 } else {
+                    // Same Stop contract as Claude: sendAbort() detached this request, so a
+                    // send error around Stop still settles as cancelled. The UI keeps its error.
+                    result.cancelled = wasAborted.get();
                     callback.onError(result.error != null ? result.error : "Grok send error");
                 }
 
                 return result;
             } catch (Exception e) {
+                result.cancelled = wasAborted.get();
                 if (!hadSendError.get()) {
                     result.success = false;
                     result.error = e.getMessage();

@@ -1,6 +1,7 @@
 import { useCallback, useContext, useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import type {
+  Attachment,
   ChatInputBoxHandle,
   ChatInputBoxProps,
   PermissionMode,
@@ -103,6 +104,21 @@ export function useChatInputController({
     onAddAttachment,
     onRemoveAttachment,
   });
+
+  // Imperative draft-attachment access used when a queued message is restored
+  // for editing. Controlled attachments stay owned by the parent, so replacing
+  // them through the imperative handle is a no-op there.
+  const getDraftAttachments = useCallback(() => attachments, [attachments]);
+  const setDraftAttachments = useCallback((next: Attachment[]): boolean => {
+    if (externalAttachments !== undefined) return false;
+    setInternalAttachments(next);
+    return true;
+  }, [externalAttachments, setInternalAttachments]);
+  // Lets a caller vet a restore before it removes anything from the queue.
+  const canApplyDraftAttachments = useCallback(
+    () => externalAttachments === undefined,
+    [externalAttachments],
+  );
 
   // Reset draft attachments + clear JCEF ghosting when the session changes, so
   // attachments don't drift into a new conversation and leave stale thumbnails.
@@ -273,6 +289,11 @@ export function useChatInputController({
     clearInput,
     hasContent,
     extractFileTags,
+    getAttachments: getDraftAttachments,
+    setAttachments: setDraftAttachments,
+    canApplyAttachments: canApplyDraftAttachments,
+    hasPendingImagePastes,
+    renderTags: renderTagsNowIfSafe,
     inlineCompletion,
     handleInput,
     ctxMenu,
@@ -310,6 +331,7 @@ export function useChatInputController({
     invalidateCache,
     cancelPendingInput,
     invalidateImagePastes,
+    renderTags: renderTagsNowIfSafe,
   });
 
   useNativeEventCapture({

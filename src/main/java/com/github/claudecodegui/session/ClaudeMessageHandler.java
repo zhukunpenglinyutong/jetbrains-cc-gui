@@ -1,7 +1,6 @@
 package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.session.ClaudeSession.Message;
-import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.common.MessageCallback;
@@ -31,6 +30,10 @@ public class ClaudeMessageHandler implements MessageCallback {
     private static final Logger LOG = Logger.getInstance(ClaudeMessageHandler.class);
     private final Project project;
     private final SessionState state;
+    private final Object turnOwner;
+    private final String runtimeSessionEpoch;
+    private final String executionBindingEpoch;
+    private final SessionExecutionState.Turn executionTurn;
     private final CallbackHandler callbackHandler;
     private final MessageParser messageParser;
     private final MessageMerger messageMerger;
@@ -94,14 +97,28 @@ public class ClaudeMessageHandler implements MessageCallback {
             Gson gson,
             CodemossSettingsService settingsService
     ) {
+        this(project, state, callbackHandler, messageParser, messageMerger, gson, settingsService, state.getTurnOwner());
+    }
+
+    ClaudeMessageHandler(Project project, SessionState state, CallbackHandler callbackHandler,
+                         MessageParser messageParser, MessageMerger messageMerger, Gson gson,
+                         CodemossSettingsService settingsService, Object expectedTurnOwner) {
         this.project = project;
         this.state = state;
+        this.turnOwner = expectedTurnOwner;
+        this.runtimeSessionEpoch = state.getRuntimeSessionEpoch();
+        this.executionBindingEpoch = state.getExecutionSnapshot().bindingEpoch();
+        this.executionTurn = state.executionTurnForOwner(expectedTurnOwner);
         this.callbackHandler = callbackHandler;
         this.messageParser = messageParser;
         this.messageMerger = messageMerger;
         this.gson = gson;
         this.settingsService = settingsService != null ? settingsService : new CodemossSettingsService();
-        state.setMessageMaterializer(this::flushPendingDelta);
+        synchronized (state.getMessageStateLock()) {
+            if (ownsCurrentTurn()) {
+                state.setMessageMaterializer(this::flushPendingDelta);
+            }
+        }
     }
 
     /**
@@ -119,6 +136,9 @@ public class ClaudeMessageHandler implements MessageCallback {
      */
     @Override
     public void onMessage(String type, String content) {
+        if (!ownsCurrentTurn()) {
+            return;
+        }
         // These branches never read or mutate the message list, so they run
         // without the message lock: taking it would queue the transport snapshot
         // and every EDT reader sharing it behind work that cannot race them.
@@ -145,6 +165,9 @@ public class ClaudeMessageHandler implements MessageCallback {
                 break;
         }
         synchronized (state.getMessageStateLock()) {
+            if (!ownsCurrentTurn()) {
+                return;
+            }
             if (!type.equals(pendingDeltaType)) {
                 flushPendingDeltaAndNotify();
             }
@@ -157,6 +180,7 @@ public class ClaudeMessageHandler implements MessageCallback {
             // notifyStateChange, ...) may reach that queue, so nothing may call back
             // into SessionState while holding it.
             // Route to the appropriate handler based on message type
+            observeExecution(type);
             switch (type) {
                 case "user":
                     handleUserMessage(content);
@@ -214,6 +238,10 @@ public class ClaudeMessageHandler implements MessageCallback {
     @Override
     public void onError(String error) {
         synchronized (state.getMessageStateLock()) {
+            if (!ownsCurrentTurn()) {
+                return;
+            }
+            state.getExecutionState().finish(executionTurn, SessionExecutionState.Outcome.FAILED);
             flushPendingDelta();
             if (errorReportedThisTurn && error != null && error.equals(lastReportedError)) {
                 LOG.debug("Suppressing duplicate error for current Claude turn");
@@ -266,6 +294,17 @@ public class ClaudeMessageHandler implements MessageCallback {
     @Override
     public void onComplete(SDKResult result) {
         synchronized (state.getMessageStateLock()) {
+            if (!ownsCurrentTurn()) {
+                return;
+            }
+            if (result == null) {
+                state.getExecutionState().activity(executionTurn, SessionExecutionState.Phase.UNKNOWN);
+            } else {
+                state.getExecutionState().finish(executionTurn,
+                        result.cancelled ? SessionExecutionState.Outcome.CANCELLED
+                                : result.success ? SessionExecutionState.Outcome.SUCCEEDED : SessionExecutionState.Outcome.FAILED,
+                        result.processExited);
+            }
             flushPendingDelta();
             if (streamEndedThisTurn) {
                 streamEndedThisTurn = false;
@@ -315,6 +354,28 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     // ===== Private methods: handle different message types =====
+
+    private boolean ownsCurrentTurn() {
+        return state.isCurrentTurn(turnOwner) && runtimeSessionEpoch.equals(state.getRuntimeSessionEpoch())
+                && state.getExecutionState().isCurrentBinding(executionBindingEpoch);
+    }
+
+    @Override
+    public String executionScope() {
+        return executionTurn == null ? "" : executionTurn.bindingEpoch() + "/" + executionTurn.turnId();
+    }
+
+    private void observeExecution(String type) {
+        SessionExecutionState.Phase phase = switch (type) {
+            case "thinking", "thinking_delta" -> SessionExecutionState.Phase.THINKING;
+            case "assistant", "content", "content_delta", "tool_result", "stream_start" -> SessionExecutionState.Phase.RUNNING;
+            case "stream_end" -> SessionExecutionState.Phase.UNKNOWN;
+            default -> null;
+        };
+        if (phase != null) {
+            state.getExecutionState().activity(executionTurn, phase);
+        }
+    }
 
     /**
      * Handle an assistant message in full JSON format.
@@ -427,7 +488,7 @@ public class ClaudeMessageHandler implements MessageCallback {
                 if (messageObj.has("usage") && messageObj.get("usage").isJsonObject()) {
                     JsonObject usage = messageObj.getAsJsonObject("usage");
                     int usedTokens = TokenUsageUtils.extractContextTokens(usage, state.getProvider());
-                    int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
+                    int maxTokens = currentContextLimit();
                     ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
                     callbackHandler.notifyUsageUpdate(usedTokens, maxTokens);
                     LOG.debug("Updated token usage from assistant message: " + usedTokens);
@@ -654,15 +715,22 @@ public class ClaudeMessageHandler implements MessageCallback {
     }
 
     /**
-     * Resolve the model that should be billed for this turn.
+     * Context window for the current turn, computed for the model the CLI actually receives.
+     */
+    private int currentContextLimit() {
+        return ModelProviderHandler.getClaudeContextLimit(resolveMappedModel(state.getModel()), state.getCwd());
+    }
+
+    /**
+     * Resolve the real model behind the selected Claude slot for pricing and the context window.
      *
      * <p>The chat UI selects Claude slot IDs (e.g. {@code claude-sonnet-4-6[1m]}), which the
      * active provider's env maps to real model IDs (e.g. {@code deepseek-v4-flash}) before the
      * request reaches the API. Pricing must use the real ID — otherwise a custom price configured
-     * for the mapped model is never matched and the turn is billed at built-in Claude rates
-     * (same resolution used for the context limit at {@link ModelProviderHandler}).
+     * for the mapped model is never matched and the turn is billed at built-in Claude rates.
+     * The context window must use it too, because the CLI picks the window from the real ID.</p>
      */
-    private String resolvePricingModel(String model) {
+    private String resolveMappedModel(String model) {
         try {
             JsonObject claudeSettings = settingsService.readClaudeSettings();
             if (claudeSettings != null && claudeSettings.has("env") && claudeSettings.get("env").isJsonObject()) {
@@ -688,6 +756,11 @@ public class ClaudeMessageHandler implements MessageCallback {
         try {
             JsonObject resultJson = gson.fromJson(content, JsonObject.class);
             LOG.debug("Result message received");
+            if (resultJson != null && resultJson.has("is_error") && resultJson.get("is_error").isJsonPrimitive()
+                    && resultJson.get("is_error").getAsJsonPrimitive().isBoolean()) {
+                state.getExecutionState().finish(executionTurn, resultJson.get("is_error").getAsBoolean()
+                        ? SessionExecutionState.Outcome.FAILED : SessionExecutionState.Outcome.SUCCEEDED);
+            }
             if (!resultJson.has("usage") || !resultJson.get("usage").isJsonObject()) {
                 return;
             }
@@ -701,8 +774,11 @@ public class ClaudeMessageHandler implements MessageCallback {
             // before taking the message lock, which the transport snapshot and
             // every EDT reader queue on: a disk read inside it would stall the
             // streaming pipeline for the duration of the file access.
-            String pricingModel = resolvePricingModel(state.getModel());
+            String pricingModel = resolveMappedModel(state.getModel());
             synchronized (state.getMessageStateLock()) {
+                if (!ownsCurrentTurn()) {
+                    return;
+                }
                 flushPendingDelta();
                 if (currentAssistantMessage == null || currentAssistantMessage.raw == null) {
                     return;
@@ -728,7 +804,7 @@ public class ClaudeMessageHandler implements MessageCallback {
                         msg.add("usage", usageJson);
                     }
                     int usedTokens = TokenUsageUtils.extractContextTokens(usageJson, state.getProvider());
-                    int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
+                    int maxTokens = currentContextLimit();
                     ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
                     callbackHandler.notifyUsageUpdate(usedTokens, maxTokens);
                     LOG.debug("Fallback: updated token usage from result message: " + usedTokens);
@@ -1122,7 +1198,7 @@ public class ClaudeMessageHandler implements MessageCallback {
         try {
             JsonObject usageJson = gson.fromJson(content, JsonObject.class);
             int usedTokens = TokenUsageUtils.extractContextTokens(usageJson, state.getProvider());
-            int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
+            int maxTokens = currentContextLimit();
             ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
             // Notify webview of usage update
             callbackHandler.notifyUsageUpdate(usedTokens, maxTokens);

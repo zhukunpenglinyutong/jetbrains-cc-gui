@@ -172,14 +172,43 @@ export function registerSessionAndSdkCallbacks(
     // Only apply the title if it matches the current session to prevent
     // stale events from overwriting the wrong session's title.
     if (currentSessionIdRef.current !== sessionId) return;
-    if (options.currentProviderRef.current === 'codex') {
-      options.setRestoredSessionTitle({ sessionId, title: title.trim() });
-      if (!customSessionTitleRef.current) applyHistoryTitleLocal(sessionId, title.trim());
-      return;
-    }
-    setCustomSessionTitle(title.trim());
-    applyHistoryTitleLocal(sessionId, title.trim());
+    const trimmed = title.trim();
+    // Automatic titles go to restoredSessionTitle, never to
+    // customSessionTitle: that slot is reserved for manual edits and the
+    // persisted custom title. Keeping the two apart means a later AI title can
+    // never overwrite a manual title, and restoreSessionTitle never mistakes an
+    // AI title for a manual edit.
+    options.setRestoredSessionTitle({ sessionId, title: trimmed });
+    if (!customSessionTitleRef.current) applyHistoryTitleLocal(sessionId, trimmed);
   };
+
+  // =========================================================================
+  // Persisted Custom Title Callback
+  // =========================================================================
+
+  /**
+   * Applies the user-set title saved in session-titles.json after a webview
+   * restart. A restored transcript only carries the CLI-derived title, so the
+   * header would otherwise show the old AI title until the session is reopened
+   * from the history list.
+   */
+  window.restoreSessionTitle = (sessionId: string, title: string) => {
+    if (!title || !title.trim() || !sessionId) return;
+    // Only a title keyed to the session on screen may show; a stale push for a
+    // previously opened session must not retitle the current one.
+    if (currentSessionIdRef.current !== sessionId) return;
+    // customSessionTitle carries only manual edits and persisted titles, so a
+    // nonempty value is a newer manual edit that must win over this restore.
+    if (customSessionTitleRef.current) return;
+    setCustomSessionTitle(title.trim());
+  };
+
+  // Apply a title that arrived before this effect mounted (see main.tsx).
+  if (window.__pendingRestoreSessionTitle) {
+    const pending = window.__pendingRestoreSessionTitle;
+    delete window.__pendingRestoreSessionTitle;
+    window.restoreSessionTitle?.(pending.sessionId, pending.title);
+  }
 
   // =========================================================================
   // SDK-to-CLI Session Conversion Result Callback

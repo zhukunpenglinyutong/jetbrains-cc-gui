@@ -9,6 +9,7 @@ interface ExpandedContentProps {
   total: number;
   remainingSeconds: number;
   isTimeWarning: boolean;
+  showCountdown?: boolean;
   question: Question;
   selectedLabels: Set<string>;
   customInput: string;
@@ -26,6 +27,7 @@ const ExpandedContent = ({
   total,
   remainingSeconds,
   isTimeWarning,
+  showCountdown = true,
   question,
   selectedLabels,
   customInput,
@@ -44,6 +46,7 @@ const ExpandedContent = ({
         total={total}
         remainingSeconds={remainingSeconds}
         isTimeWarning={isTimeWarning}
+        showCountdown={showCountdown}
       />
 
       {/* Question area */}

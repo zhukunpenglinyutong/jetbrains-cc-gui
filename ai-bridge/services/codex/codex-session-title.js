@@ -3,13 +3,25 @@ import { join } from 'node:path';
 import { getCodemossDir } from '../../utils/path-utils.js';
 import { isTitleGenerationEnabled, SESSION_TITLE_PROMPT } from '../session-title-service.js';
 
-async function readCustomTitle(threadId) {
+export async function readCodexCustomTitles() {
   try {
     const titles = JSON.parse(await readFile(join(getCodemossDir(), 'session-titles.json'), 'utf8'));
-    return titles?.[threadId]?.customTitle || null;
+    return titles && typeof titles === 'object' && !Array.isArray(titles) ? titles : {};
   } catch {
-    return null;
+    return {};
   }
+}
+
+async function readCustomTitle(threadId) {
+  return (await readCodexCustomTitles())[threadId]?.customTitle || null;
+}
+
+/** Apply explicit local names on every native page, including after resumed turns. */
+export function applyCodexCustomTitles(threads, titles) {
+  return threads.map(thread => {
+    const title = Object.hasOwn(titles, thread.id) ? titles[thread.id]?.customTitle : null;
+    return typeof title === 'string' && title.trim() ? { ...thread, customTitle: title } : thread;
+  });
 }
 
 /** Name only an unnamed, still-owned thread; title failures never fail the user turn. */
@@ -21,7 +33,7 @@ export async function settleCodexSessionTitle({
     if (!canApply() || await customTitle(threadId)) return;
     const unnamed = async () => {
       if (!canApply()) return false;
-      const result = await service.readOnly('thread/read', { threadId, includeTurns: false });
+      const result = await service.readOnly('thread/read', { threadId, includeTurns: false, excludeTurns: true });
       return canApply() && result.thread?.id === threadId && !result.thread?.name?.trim();
     };
     if (!await unnamed()) return;

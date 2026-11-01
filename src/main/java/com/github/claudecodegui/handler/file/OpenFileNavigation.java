@@ -1,7 +1,10 @@
 package com.github.claudecodegui.handler.file;
 
+import com.intellij.ide.SelectInContext;
+import com.intellij.ide.SelectInTarget;
 import com.intellij.openapi.progress.ProcessCanceledException;
 
+import java.util.Collection;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -12,6 +15,22 @@ import java.util.function.Supplier;
 /** Keeps an unavailable editor from preventing navigation to the same file in the project tree. */
 final class OpenFileNavigation {
     private OpenFileNavigation() { }
+
+    /** Prefer the current pane when possible without assuming IDEA-specific view IDs. */
+    static String findProjectViewId(Collection<SelectInTarget> targets, String currentViewId, SelectInContext context) {
+        for (SelectInTarget target : targets) {
+            if (currentViewId != null && currentViewId.equals(target.getMinorViewId()) && target.canSelect(context)) {
+                return currentViewId;
+            }
+        }
+        for (SelectInTarget target : targets) {
+            String viewId = target.getMinorViewId();
+            if (viewId != null && !viewId.equals(currentViewId) && target.canSelect(context)) {
+                return viewId;
+            }
+        }
+        return null;
+    }
 
     static CompletableFuture<Boolean> openOrReveal(BooleanSupplier open, Supplier<CompletableFuture<Boolean>> reveal) {
         try {

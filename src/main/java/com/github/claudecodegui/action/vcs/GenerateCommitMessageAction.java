@@ -5,8 +5,6 @@ import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.service.GitCommitMessageService;
 import com.github.claudecodegui.service.commit.CommitMessageCallback;
 import com.github.claudecodegui.settings.CodemossSettingsService;
-import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
-import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -29,7 +27,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.WeakHashMap;
 
 /**
@@ -37,8 +34,8 @@ import java.util.WeakHashMap;
  *
  * <p>Streams the generated message into the commit box (without clobbering the
  * user's draft until tokens arrive), restores the draft on error, cancels any
- * in-flight generation on re-trigger, and prewarms the shared daemon when the
- * commit dialog opens.
+ * in-flight generation on re-trigger. Provider processes are started only when
+ * generation is requested.
  */
 public class GenerateCommitMessageAction extends AnAction implements DumbAware {
 
@@ -47,9 +44,6 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
     /** Active generation per project (for cancel + double-click guard). */
     private static final Map<Project, GitCommitMessageService> ACTIVE =
             Collections.synchronizedMap(new WeakHashMap<>());
-
-    /** Projects whose shared daemon has already been prewarmed from this action. */
-    private static final Set<Project> PREWARMED = Collections.newSetFromMap(new WeakHashMap<>());
 
     public GenerateCommitMessageAction() {
         super();
@@ -289,6 +283,7 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
 
     @Override
     public void update(@NotNull AnActionEvent e) {
+        // UI refreshes invoke update without a click; do not start provider processes here.
         Project project = e.getProject();
         boolean enabled = project != null;
 
@@ -300,35 +295,9 @@ public class GenerateCommitMessageAction extends AnAction implements DumbAware {
             }
         }
 
-        // Prewarm the shared daemon once, while the user is still selecting files,
-        // so the first generation is fast.
-        prewarmOnce(project);
-
         e.getPresentation().setText(ClaudeCodeGuiBundle.message("action.generateCommitMessage.text"));
         e.getPresentation().setDescription(ClaudeCodeGuiBundle.message("action.generateCommitMessage.description"));
         e.getPresentation().setEnabledAndVisible(enabled);
     }
 
-    /**
-     * Prewarm the chat window's shared Claude daemon once per project when the
-     * commit dialog (and thus this action) becomes visible. Retries until the
-     * chat window exists.
-     */
-    private void prewarmOnce(@Nullable Project project) {
-        if (project == null || PREWARMED.contains(project)) {
-            return;
-        }
-        try {
-            ClaudeChatWindow chatWindow = ClaudeSDKToolWindow.getChatWindow(project);
-            if (chatWindow != null) {
-                PREWARMED.add(project);
-                String basePath = project.getBasePath();
-                if (basePath != null) {
-                    chatWindow.getClaudeSDKBridge().prewarmDaemonAsync(basePath);
-                }
-            }
-        } catch (Throwable t) {
-            LOG.debug("Commit prewarm failed: " + t.getMessage());
-        }
-    }
 }

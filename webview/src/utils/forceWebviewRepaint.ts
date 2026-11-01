@@ -14,6 +14,23 @@ import {
 let repaintScheduled = false;
 let pendingCallbacks: Array<() => void> = [];
 
+/** Damage the client's viewport without changing editor geometry, focus, or IME selection. */
+export function repaintRemoteWebview(): void {
+  if (document.getElementById('ccgui-remote-repaint')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'ccgui-remote-repaint';
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483646;background:rgba(0,0,0,0.004)';
+  document.body.appendChild(overlay);
+  const remove = () => overlay.remove();
+  // The timer also releases the overlay if a backgrounded renderer suspends animation frames.
+  const fallback = window.setTimeout(remove, 150);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    window.clearTimeout(fallback);
+    remove();
+  }));
+}
+
 export function forceWebviewRepaint(_reason?: string, onRepaint?: () => void): void {
   if (onRepaint) {
     pendingCallbacks.push(onRepaint);

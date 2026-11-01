@@ -5,6 +5,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {
   buildGrokImageBlocks,
   buildKimiPromptWithImages,
@@ -65,7 +66,8 @@ describe('buildGrokImageBlocks', () => {
 });
 
 describe('buildPromptBlocks multimodal', () => {
-  it('embeds image blocks alongside text', () => {
+  it('embeds image blocks alongside text', (t) => {
+    t.mock.method(fs, 'existsSync', () => false);
     const blocks = buildPromptBlocks({
       message: 'What is in this image?',
       attachments: [
@@ -78,7 +80,8 @@ describe('buildPromptBlocks multimodal', () => {
     assert.equal(images[0].mimeType, 'image/png');
   });
 
-  it('injects fallback text for image-only turns', () => {
+  it('injects fallback text for image-only turns', (t) => {
+    t.mock.method(fs, 'existsSync', () => false);
     const blocks = buildPromptBlocks({
       message: '',
       attachments: [
@@ -91,7 +94,109 @@ describe('buildPromptBlocks multimodal', () => {
     assert.equal(blocks.filter((b) => b.type === 'image').length, 1);
   });
 
-  it('does not only list attachment names when image data is present', () => {
+  it('prepends fallback text before global rules on image-only turns', (t) => {
+    t.mock.method(fs, 'existsSync', (filePath) => String(filePath).endsWith('grok-rules.md'));
+    t.mock.method(fs, 'readFileSync', (filePath) =>
+      String(filePath).endsWith('grok-rules.md') ? 'Follow repository conventions.\n' : ''
+    );
+
+    for (const message of ['', '   ']) {
+      const blocks = buildPromptBlocks({
+        message,
+        attachments: [
+          { fileName: 'dot.png', mediaType: 'image/png', data: TINY_PNG_B64 },
+        ],
+      });
+      assert.equal(blocks.length, 2);
+      assert.equal(blocks[0].type, 'text');
+      assert.ok(blocks[0].text.startsWith(GROK_IMAGE_ONLY_FALLBACK_TEXT));
+      assert.ok(blocks[0].text.includes('## Global Grok Rules (~/.grok/grok-rules.md)'));
+      assert.ok(blocks[0].text.includes('Follow repository conventions.'));
+      assert.equal(blocks[1].type, 'image');
+    }
+  });
+
+  it('prepends fallback text before openedFiles context on image-only turns', (t) => {
+    t.mock.method(fs, 'existsSync', () => false);
+
+    for (const message of ['', '   ']) {
+      const blocks = buildPromptBlocks({
+        message,
+        openedFiles: { active: 'src/App.tsx' },
+        attachments: [
+          { fileName: 'dot.png', mediaType: 'image/png', data: TINY_PNG_B64 },
+        ],
+      });
+      assert.equal(blocks.length, 2);
+      assert.equal(blocks[0].type, 'text');
+      assert.ok(blocks[0].text.startsWith(GROK_IMAGE_ONLY_FALLBACK_TEXT));
+      assert.ok(blocks[0].text.includes('## IDE Context (opened files)'));
+      assert.ok(blocks[0].text.includes('src/App.tsx'));
+      assert.equal(blocks[1].type, 'image');
+    }
+  });
+
+  it('prepends fallback text before agentPrompt, global rules, and openedFiles on image-only turns', (t) => {
+    t.mock.method(fs, 'existsSync', (filePath) => String(filePath).endsWith('grok-rules.md'));
+    t.mock.method(fs, 'readFileSync', (filePath) =>
+      String(filePath).endsWith('grok-rules.md') ? 'Follow repository conventions.\n' : ''
+    );
+
+    for (const message of ['', '   ']) {
+      const blocks = buildPromptBlocks({
+        message,
+        agentPrompt: 'You are a meticulous reviewer.',
+        openedFiles: { active: 'src/App.tsx' },
+        attachments: [
+          { fileName: 'dot.png', mediaType: 'image/png', data: TINY_PNG_B64 },
+        ],
+      });
+      assert.equal(blocks.length, 2);
+      assert.equal(blocks[0].type, 'text');
+      assert.ok(blocks[0].text.startsWith(GROK_IMAGE_ONLY_FALLBACK_TEXT));
+      const agentIdx = blocks[0].text.indexOf('## Agent Role and Instructions');
+      const rulesIdx = blocks[0].text.indexOf('## Global Grok Rules (~/.grok/grok-rules.md)');
+      const ideIdx = blocks[0].text.indexOf('## IDE Context (opened files)');
+      assert.ok(agentIdx > 0);
+      assert.ok(blocks[0].text.includes('You are a meticulous reviewer.'));
+      assert.ok(rulesIdx > agentIdx);
+      assert.ok(blocks[0].text.includes('Follow repository conventions.'));
+      assert.ok(ideIdx > rulesIdx);
+      assert.ok(blocks[0].text.includes('src/App.tsx'));
+      assert.equal(blocks[1].type, 'image');
+    }
+  });
+
+  it('keeps non-empty user message without fallback when agentPrompt, rules, and openedFiles are present', (t) => {
+    t.mock.method(fs, 'existsSync', (filePath) => String(filePath).endsWith('grok-rules.md'));
+    t.mock.method(fs, 'readFileSync', (filePath) =>
+      String(filePath).endsWith('grok-rules.md') ? 'Follow repository conventions.\n' : ''
+    );
+
+    const blocks = buildPromptBlocks({
+      message: 'What is in this image?',
+      agentPrompt: 'You are a meticulous reviewer.',
+      openedFiles: { active: 'src/App.tsx' },
+      attachments: [
+        { fileName: 'dot.png', mediaType: 'image/png', data: TINY_PNG_B64 },
+      ],
+    });
+    assert.equal(blocks.length, 2);
+    assert.equal(blocks[0].type, 'text');
+    assert.ok(blocks[0].text.startsWith('What is in this image?'));
+    assert.equal(blocks[0].text.includes(GROK_IMAGE_ONLY_FALLBACK_TEXT), false);
+    const agentIdx = blocks[0].text.indexOf('## Agent Role and Instructions');
+    const rulesIdx = blocks[0].text.indexOf('## Global Grok Rules (~/.grok/grok-rules.md)');
+    const ideIdx = blocks[0].text.indexOf('## IDE Context (opened files)');
+    assert.ok(agentIdx > 0);
+    assert.ok(rulesIdx > agentIdx);
+    assert.ok(ideIdx > rulesIdx);
+    assert.equal(blocks[0].text.includes('## Attachments'), false);
+    assert.equal(blocks[1].type, 'image');
+  });
+
+  it('does not only list attachment names when image data is present', (t) => {
+    t.mock.method(fs, 'existsSync', () => false);
     const blocks = buildPromptBlocks({
       message: 'see',
       attachments: [

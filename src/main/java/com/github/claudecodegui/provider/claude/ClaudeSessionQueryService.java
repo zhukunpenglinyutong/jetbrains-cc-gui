@@ -19,6 +19,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.function.Supplier;
@@ -78,8 +80,13 @@ class ClaudeSessionQueryService {
     }
 
     List<JsonObject> getSessionMessages(String sessionId, String cwd) {
+        return getSessionMessages(sessionId, cwd, () -> false);
+    }
+
+    List<JsonObject> getSessionMessages(String sessionId, String cwd, BooleanSupplier cancellation) {
         try {
-            JsonObject jsonResult = runSessionQuery("getSession", sessionId, cwd, "getSessionMessages");
+            JsonObject jsonResult = runSessionQuery(
+                    "getSession", sessionId, cwd, "getSessionMessages", cancellation);
 
             if (jsonResult.has("missing") && jsonResult.get("missing").getAsBoolean()) {
                 throw new SessionHistoryNotFoundException(sessionId, cwd);
@@ -90,6 +97,7 @@ class ClaudeSessionQueryService {
                 if (jsonResult.has("messages")) {
                     JsonArray messagesArray = jsonResult.getAsJsonArray("messages");
                     for (var msg : messagesArray) {
+                        checkCancellation(cancellation);
                         messages.add(normalizeClaudeHistoryMessage(msg.getAsJsonObject()));
                     }
                 }
@@ -130,9 +138,14 @@ class ClaudeSessionQueryService {
      * @throws SessionHistoryNotFoundException when the transcript is missing
      */
     JsonObject getSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit) {
+        return getSessionMessagesPage(sessionId, cwd, beforeTurn, limit, () -> false);
+    }
+
+    JsonObject getSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit,
+                                      BooleanSupplier cancellation) {
         try {
             JsonObject jsonResult = runSessionQuery("getSessionPage", sessionId, cwd, "getSessionMessagesPage",
-                    beforeTurn == null ? "" : String.valueOf(beforeTurn), String.valueOf(limit));
+                    cancellation, beforeTurn == null ? "" : String.valueOf(beforeTurn), String.valueOf(limit));
 
             // Missing history must clear the stale ID without another bridge read.
             if (jsonResult.has("missing") && jsonResult.get("missing").getAsBoolean()) {
@@ -144,6 +157,7 @@ class ClaudeSessionQueryService {
                 if (jsonResult.has("messages")) {
                     JsonArray messagesArray = jsonResult.getAsJsonArray("messages");
                     for (int i = 0; i < messagesArray.size(); i++) {
+                        checkCancellation(cancellation);
                         messagesArray.set(i, normalizeClaudeHistoryMessage(messagesArray.get(i).getAsJsonObject()));
                     }
                 }
@@ -155,7 +169,7 @@ class ClaudeSessionQueryService {
                     : "Unknown error";
             log.warn("[getSessionMessagesPage] Page query failed: " + errorMsg);
             return null;
-        } catch (SessionHistoryNotFoundException e) {
+        } catch (CancellationException | SessionHistoryNotFoundException e) {
             throw e;
         } catch (Exception e) {
             log.warn("[getSessionMessagesPage] Page query error: " + e.getMessage(), e);
@@ -186,10 +200,31 @@ class ClaudeSessionQueryService {
     }
 
     private JsonObject runSessionQuery(String commandName, String sessionId, String cwd, String logPrefix) throws Exception {
-        return runSessionQuery(commandName, sessionId, cwd, logPrefix, new String[0]);
+        return runSessionQuery(commandName, sessionId, cwd, logPrefix, () -> false, new String[0]);
     }
 
     private JsonObject runSessionQuery(String commandName, String sessionId, String cwd, String logPrefix, String... extraArgs) throws Exception {
+        return runSessionQuery(commandName, sessionId, cwd, logPrefix, () -> false, extraArgs);
+    }
+
+    private JsonObject runSessionQuery(
+            String commandName,
+            String sessionId,
+            String cwd,
+            String logPrefix,
+            BooleanSupplier cancellation
+    ) throws Exception {
+        return runSessionQuery(commandName, sessionId, cwd, logPrefix, cancellation, new String[0]);
+    }
+
+    private JsonObject runSessionQuery(
+            String commandName,
+            String sessionId,
+            String cwd,
+            String logPrefix,
+            BooleanSupplier cancellation,
+            String... extraArgs
+    ) throws Exception {
         if (sessionId == null || !VALID_SESSION_ID.matcher(sessionId).matches()) {
             throw new IllegalArgumentException("Invalid sessionId: " + sessionId);
         }
@@ -223,9 +258,8 @@ class ClaudeSessionQueryService {
         envConfigurator.updateProcessEnvironment(pb, node);
 
         // L5 fix: register with ProcessManager so cleanupAllProcesses sees this child.
-        // NodeProcessRunner fails rather than returning stdout it has not read to EOF.
         NodeProcessRunner.Result result = NodeProcessRunner.run(
-                pb, processManager, "claude-session-query", null, processTimeoutSeconds);
+                prepareProcessBuilder(pb), processManager, "claude-session-query", null, processTimeoutSeconds, cancellation);
 
         String outputStr = result.output().trim();
         log.debug("[" + logPrefix + "] Raw output length: " + outputStr.length());
@@ -259,6 +293,16 @@ class ClaudeSessionQueryService {
         log.debug("[" + logPrefix + "] JSON parsed successfully, success="
                 + (jsonResult.has("success") ? jsonResult.get("success").getAsBoolean() : "null"));
         return jsonResult;
+    }
+
+    ProcessBuilder prepareProcessBuilder(ProcessBuilder configured) {
+        return configured;
+    }
+
+    private void checkCancellation(BooleanSupplier cancellation) {
+        if (cancellation != null && cancellation.getAsBoolean()) {
+            throw new CancellationException("Claude session query was cancelled");
+        }
     }
 
     static JsonObject normalizeClaudeHistoryMessage(JsonObject originalMessage) {

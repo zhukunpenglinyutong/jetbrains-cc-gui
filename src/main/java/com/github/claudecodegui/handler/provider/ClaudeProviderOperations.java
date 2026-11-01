@@ -299,15 +299,15 @@ public class ClaudeProviderOperations {
                     return;
                 }
 
-                JsonObject config = context.getSettingsService().readConfig();
-                if (!config.has("claude")) {
-                    JsonObject claude = new JsonObject();
-                    claude.add("providers", new JsonObject());
-                    claude.addProperty("current", "");
-                    config.add("claude", claude);
-                }
-                config.getAsJsonObject("claude").addProperty("current", id);
-                context.getSettingsService().writeConfig(config);
+                context.getSettingsService().updateConfig(config -> {
+                    if (!config.has("claude")) {
+                        JsonObject claude = new JsonObject();
+                        claude.add("providers", new JsonObject());
+                        claude.addProperty("current", "");
+                        config.add("claude", claude);
+                    }
+                    config.getAsJsonObject("claude").addProperty("current", id);
+                });
 
                 LOG.info("[ProviderHandler] Switched to LOCAL settings.json provider");
 
@@ -325,15 +325,15 @@ public class ClaudeProviderOperations {
                 context.getSettingsService().applyCliLoginToClaudeSettings();
 
                 // Update config.json to set CLI login as current provider
-                JsonObject config = context.getSettingsService().readConfig();
-                if (!config.has("claude")) {
-                    JsonObject claude = new JsonObject();
-                    claude.add("providers", new JsonObject());
-                    claude.addProperty("current", "");
-                    config.add("claude", claude);
-                }
-                config.getAsJsonObject("claude").addProperty("current", id);
-                context.getSettingsService().writeConfig(config);
+                context.getSettingsService().updateConfig(config -> {
+                    if (!config.has("claude")) {
+                        JsonObject claude = new JsonObject();
+                        claude.add("providers", new JsonObject());
+                        claude.addProperty("current", "");
+                        config.add("claude", claude);
+                    }
+                    config.getAsJsonObject("claude").addProperty("current", id);
+                });
 
                 LOG.info("[ProviderHandler] Switched to CLI login provider");
 

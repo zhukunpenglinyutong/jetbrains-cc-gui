@@ -86,6 +86,103 @@ describe('MarkdownBlock linkify integration', () => {
     expect(writeText).toHaveBeenCalledTimes(2);
   });
 
+  it('restores copy focus after a scheduled highlight and copies the latest code with the keyboard', async () => {
+    vi.useFakeTimers();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    const view = render(<MarkdownBlock content={'```js\nconst first = 1;'} isStreaming />);
+    const button = view.container.querySelector<HTMLButtonElement>('.copy-code-btn')!;
+    button.focus();
+    expect(document.activeElement).toBe(button);
+    view.rerender(<MarkdownBlock content={'```js\nconst first = 1;\nconst latest = 2;'} isStreaming />);
+    expect(document.activeElement).toBe(button);
+
+    act(() => vi.advanceTimersByTime(150));
+
+    const replacement = view.container.querySelector<HTMLButtonElement>('.copy-code-btn')!;
+    expect(replacement).not.toBe(button);
+    expect(document.activeElement).toBe(replacement);
+    view.rerender(<MarkdownBlock content={'```js\nconst first = 1;\nconst latest = 2;\nconst next = 3;'} isStreaming />);
+    fireEvent.keyDown(replacement, { key: 'Enter' });
+    await act(async () => {});
+    expect(writeText).toHaveBeenLastCalledWith('const first = 1;\nconst latest = 2;\nconst next = 3;\n');
+  });
+
+  it('restores copy focus when a fence closes and when streaming completes', () => {
+    vi.useFakeTimers();
+    const view = render(<MarkdownBlock content={'```js\nconst first = 1;'} isStreaming />);
+    view.container.querySelector<HTMLButtonElement>('.copy-code-btn')!.focus();
+
+    view.rerender(<MarkdownBlock content={'```js\nconst first = 1;\n```'} isStreaming />);
+    expect(document.activeElement).toBe(view.container.querySelector('.copy-code-btn'));
+
+    view.rerender(<MarkdownBlock content={'```js\nconst first = 1;\nconst final = 2;\n```'} isStreaming={false} />);
+    expect(document.activeElement).toBe(view.container.querySelector('.copy-code-btn'));
+  });
+
+  it('keeps focus on a stable code block when only the streaming tail changes', () => {
+    vi.useFakeTimers();
+    const stable = '```js\nconst stable = 1;\n```\n\n';
+    const view = render(<MarkdownBlock content={`${stable}\`\`\`js\nconst tail = 1;`} isStreaming />);
+    const button = view.container.querySelector<HTMLButtonElement>('.copy-code-btn')!;
+    button.focus();
+    view.rerender(<MarkdownBlock content={`${stable}\`\`\`js\nconst tail = 12;`} isStreaming />);
+
+    act(() => vi.advanceTimersByTime(150));
+
+    expect(view.container.querySelector('.copy-code-btn')).toBe(button);
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('does not reclaim copy focus after the user moves away or explicitly blurs it', () => {
+    vi.useFakeTimers();
+    const view = render(<><button>Outside</button><MarkdownBlock content={'```js\nfirst'} isStreaming /></>);
+    const outside = screen.getByRole('button', { name: 'Outside' });
+    view.container.querySelector<HTMLButtonElement>('.copy-code-btn')!.focus();
+    view.rerender(<><button>Outside</button><MarkdownBlock content={'```js\nfirst\nsecond'} isStreaming /></>);
+    outside.focus();
+    act(() => vi.advanceTimersByTime(150));
+    expect(document.activeElement).toBe(outside);
+
+    const copy = view.container.querySelector<HTMLButtonElement>('.copy-code-btn')!;
+    copy.focus();
+    copy.blur();
+    view.rerender(<><button>Outside</button><MarkdownBlock content={'```js\nfirst\nsecond\nthird'} isStreaming /></>);
+    act(() => vi.advanceTimersByTime(150));
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('restores copy focus when the browser fires blur while removing the old button', () => {
+    vi.useFakeTimers();
+    const view = render(<MarkdownBlock content={'```js\nfirst'} isStreaming />);
+    const section = view.container.querySelector<HTMLDivElement>('.md-block')!;
+    // Chromium dispatches blur/focusout on a focused node that innerHTML
+    // removes; jsdom does not, so replay that before the real rewrite.
+    const innerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML')!;
+    let firedBlur = false;
+    Object.defineProperty(section, 'innerHTML', {
+      configurable: true,
+      get(this: HTMLDivElement) {
+        return innerHTML.get!.call(this);
+      },
+      set(this: HTMLDivElement, value: string) {
+        const focused = document.activeElement;
+        if (focused instanceof HTMLButtonElement && this.contains(focused)) {
+          firedBlur = true;
+          focused.dispatchEvent(new FocusEvent('blur'));
+          focused.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+        }
+        innerHTML.set!.call(this, value);
+      },
+    });
+    section.querySelector<HTMLButtonElement>('.copy-code-btn')!.focus();
+
+    view.rerender(<MarkdownBlock content={'```js\nfirst\nsecond'} isStreaming />);
+    act(() => vi.advanceTimersByTime(150));
+
+    expect(firedBlur).toBe(true);
+    expect(document.activeElement).toBe(section.querySelector('.copy-code-btn'));
+  });
+
   it('cancels stale highlights on replacement and unmount while prose updates immediately', () => {
     vi.useFakeTimers();
     const highlight = vi.spyOn(hljs, 'highlight');
