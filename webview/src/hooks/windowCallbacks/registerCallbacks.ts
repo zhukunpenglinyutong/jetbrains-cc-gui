@@ -225,8 +225,10 @@ export function registerWindowCallbacks(
   window.onTaskEvent = (eventJson: string) => {
     try {
       const raw = JSON.parse(eventJson);
-      if (options.currentProviderRef.current === 'claude'
-          && receiveClaudeBackgroundTasks(raw, options.currentSessionIdRef.current)) return;
+      // A selected provider controls visibility, not the lifetime of Claude's
+      // work. In particular, keep the final empty snapshot while another
+      // provider is selected so old tasks cannot reappear on switching back.
+      if (receiveClaudeBackgroundTasks(raw, options.currentSessionIdRef.current)) return;
       if (!options.setTaskEvents) return;
       const taskEvent = parseTaskNotification(raw);
       if (!taskEvent) return;

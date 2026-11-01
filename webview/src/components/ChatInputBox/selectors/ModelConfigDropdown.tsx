@@ -41,7 +41,7 @@ interface ModelConfigDropdownProps {
   claudeUltracode: boolean;
   onClaudeUltracodeChange?: (enabled: boolean) => void;
   supportedReasoningEfforts?: readonly string[];
-  reasoningCapabilitiesPending: boolean;
+  reasoningCapabilitiesUnconfirmed: boolean;
   showDivider: boolean;
   showContextRow: boolean;
   contextSupported: boolean;
@@ -91,7 +91,7 @@ export const ModelConfigDropdown = ({
   claudeUltracode,
   onClaudeUltracodeChange,
   supportedReasoningEfforts,
-  reasoningCapabilitiesPending,
+  reasoningCapabilitiesUnconfirmed,
   showDivider,
   showContextRow,
   contextSupported,
@@ -220,7 +220,7 @@ export const ModelConfigDropdown = ({
           selectedModel={selectedModel}
           currentProvider={currentProvider}
           supportedReasoningEfforts={supportedReasoningEfforts}
-          reasoningCapabilitiesPending={reasoningCapabilitiesPending}
+          reasoningCapabilitiesUnconfirmed={reasoningCapabilitiesUnconfirmed}
           embedded
           triggerRef={effortTriggerRef}
           onClose={onClose}

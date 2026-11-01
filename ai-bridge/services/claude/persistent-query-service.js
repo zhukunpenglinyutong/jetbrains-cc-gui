@@ -18,7 +18,7 @@ import {
 } from '../../utils/model-utils.js';
 import { canUseTool } from '../../permission-handler.js';
 import { buildContentBlocks, loadAttachments } from './attachment-service.js';
-import { buildIDEContextPrompt } from '../system-prompts.js';
+import { buildIDEContextPrompt, buildTurnIDEContextPrompt } from '../system-prompts.js';
 import { buildQuickFixPrompt } from '../quickfix-prompts.js';
 import { registerActiveQueryResult, removeSession } from './message-service.js';
 import { normalizePermissionMode } from './permission-mode.js';
@@ -87,7 +87,8 @@ export function validateClaudeStopTarget(params = {}, queuedParams = []) {
   }
   if (typeof params.runtimeSessionEpoch === 'string' && params.runtimeSessionEpoch.trim()) return;
   const matching = [...pendingSends, ...getAllRuntimes(), ...queuedParams]
-    .filter(candidate => !candidate.closed && matchesClaudeStopTarget(candidate, params));
+    .filter(candidate => (!candidate.closed || candidate.abortPromise || candidate.disposePromise)
+      && matchesClaudeStopTarget(candidate, params));
   const epochs = new Set(matching.map(candidate => candidate.runtimeSessionEpoch || ''));
   if (epochs.size > 1) {
     throw new Error('Claude stop is ambiguous across session generations. Specify the runtime session epoch.');
@@ -146,7 +147,7 @@ function appendTurnContext(contentBlocks, params) {
   if (!params.openedFiles || typeof params.openedFiles !== 'object') return contentBlocks;
   const context = params.openedFiles.isQuickFix
     ? buildQuickFixPrompt(params.openedFiles, params.message || '')
-    : buildIDEContextPrompt(params.openedFiles);
+    : buildTurnIDEContextPrompt(params.openedFiles);
   // Keep the wrapper well-formed even if selected source contains these tags.
   // Java strips this internal block from both live echoes and history replay.
   const escapedContext = context.replace(/<\/?system-reminder>/g, tag => tag.replace('<', '&lt;').replace('>', '&gt;'));
@@ -857,7 +858,7 @@ export async function abortTurnPersistent(params = {}) {
   validateClaudeStopTarget(params);
   const matchingSends = [...pendingSends].filter(send => matchesClaudeStopTarget(send, params));
   for (const send of matchingSends) send.cancelled = true;
-  const runtime = [...getAllRuntimes()].find(candidate => (!candidate.closed || candidate.abortPromise)
+  const runtime = [...getAllRuntimes()].find(candidate => (!candidate.closed || candidate.abortPromise || candidate.disposePromise)
     && matchesClaudeStopTarget(candidate, params));
   // An unsent request is cancellable locally: its token prevents input from
   // ever reaching the SDK. Submitted work still needs native acknowledgement.

@@ -57,6 +57,30 @@ public class SubagentHistoryServiceReadJsonlTest {
     }
 
     @Test
+    public void boundedHistoryPreservesOriginalTaskPromptAndReportsOmittedMiddleRecords() throws IOException {
+        Path file = Files.createTempFile("cc-gui-bounded-subagent-", ".jsonl");
+        try {
+            try (var writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+                writer.write(VALID_USER + "\n");
+                for (int i = 1; i <= 50_004; i++) {
+                    writer.write("{\"type\":\"assistant\",\"index\":" + i + "}\n");
+                }
+                writer.write(VALID_ASSISTANT + "\n");
+            }
+            SubagentHistoryService.TranscriptRead transcript = SubagentHistoryService.readTranscript(file);
+            JsonArray messages = transcript.messages();
+            assertEquals(50_000, messages.size());
+            assertEquals(6, transcript.omittedRecords());
+            assertEquals("go", messages.get(0).getAsJsonObject().getAsJsonObject("message").get("content").getAsString());
+            assertEquals(7, messages.get(1).getAsJsonObject().get("index").getAsInt());
+            assertTrue(SubagentHistoryService.hasCompleted(messages));
+            assertEquals(0, SubagentHistoryService.readTranscript(writeTranscript(VALID_USER, VALID_ASSISTANT)).omittedRecords());
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
     public void readsACompleteTranscript() throws IOException {
         JsonArray messages = SubagentHistoryService.readJsonl(
                 writeTranscript(VALID_USER, VALID_ASSISTANT));

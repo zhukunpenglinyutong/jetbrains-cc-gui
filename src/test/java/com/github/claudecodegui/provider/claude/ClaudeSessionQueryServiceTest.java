@@ -21,7 +21,7 @@ public class ClaudeSessionQueryServiceTest {
                 {"type":"user","uuid":"user-uuid","message":{"content":[
                   {"type":"text","text":"Explain this diff"},
                   {"type":"image","source":{"type":"base64","data":"image-bytes"}},
-                  {"type":"text","text":"<system-reminder>IDE context for this turn</system-reminder>"}
+                  {"type":"text","text":"<system-reminder>\\nThe following IDE context applies only to this user message.\\nIDE context for this turn\\n</system-reminder>"}
                 ]}}
                 """).getAsJsonObject();
         JsonObject original = raw.deepCopy();

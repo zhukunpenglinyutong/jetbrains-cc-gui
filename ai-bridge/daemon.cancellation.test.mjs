@@ -11,7 +11,7 @@ import { once } from 'node:events';
 const daemonPath = fileURLToPath(new URL('./daemon.js', import.meta.url));
 const fakeQueryUrl = new URL('./services/claude/testing/scripted-query.js', import.meta.url).href;
 
-for (const [mode, method] of [['success', 'claude.send'], ['success', 'claude.sendWithAttachments'], ['interrupt-failure', 'claude.send'], ['close-failure', 'claude.send'], ['queued', 'claude.send']]) {
+for (const [mode, method] of [['success', 'claude.send'], ['success', 'claude.sendWithAttachments'], ['interrupt-failure', 'claude.send'], ['close-failure', 'claude.send'], ['queued', 'claude.send'], ['no-runtime', 'claude.send']]) {
   test(`daemon ${method} reports ${mode} on the original request, separately from Stop`, { timeout: 10_000 }, async () => {
     const fixtureHome = mkdtempSync(join(tmpdir(), 'cc-gui-daemon-cancel-'));
     const packageDir = join(fixtureHome, '.codemoss/dependencies/claude-sdk/node_modules/@anthropic-ai/claude-agent-sdk');
@@ -73,6 +73,19 @@ for (const [mode, method] of [['success', 'claude.send'], ['success', 'claude.se
     }
     try {
       await waitFor(message => message.type === 'daemon' && message.event === 'ready');
+      if (mode === 'no-runtime') {
+        const owner = { sessionId: 'already-reaped', runtimeSessionEpoch: 'old-epoch' };
+        for (const id of ['stop', 'stop-again']) {
+          child.stdin.write(JSON.stringify({ id, method: 'claude.abortTurn', params: owner }) + '\n');
+          const response = await waitFor(message => message.id === id && message.done);
+          assert.equal(response.success, true);
+          assert.deepEqual(response.result, { stopped: false });
+          assert.equal(response.error, undefined);
+        }
+        child.stdin.write(JSON.stringify({ id: 'missing-target', method: 'claude.abortTurn', params: {} }) + '\n');
+        assert.equal((await waitFor(message => message.id === 'missing-target' && message.done)).success, false);
+        return;
+      }
       if (mode === 'queued') {
         const write = (...requests) => child.stdin.write(requests.map(request => JSON.stringify(request)).join('\n') + '\n');
         const owner = { cwd: fixtureHome, sessionId: 'cancel-session', runtimeSessionEpoch: 'cancel-epoch' };
@@ -84,9 +97,9 @@ for (const [mode, method] of [['success', 'claude.send'], ['success', 'claude.se
           { id: 'wrong-stop', method: 'claude.abortTurn', params: { ...owner, runtimeSessionEpoch: 'stale' } },
         );
         const wrongStop = await waitFor(message => message.id === 'wrong-stop' && message.done);
-        assert.equal(wrongStop.success, false);
+        assert.equal(wrongStop.success, true);
         assert.deepEqual(wrongStop.result, { stopped: false });
-        assert.match(wrongStop.error, /No matching Claude work/);
+        assert.equal(wrongStop.error, undefined);
         assert.equal(messages.some(message => message.id === 'queued' && message.done), false);
         write(
           { id: 'queued-stop', method: 'claude.abortTurn', params: owner },

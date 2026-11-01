@@ -1,5 +1,6 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.util.PluginIdeContext;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -217,6 +218,9 @@ public class MessageParser {
      * Extract the message content.
      */
     public String extractMessageContent(JsonObject msg) {
+        if (msg.has("type") && "user".equals(msg.get("type").getAsString())) {
+            msg = PluginIdeContext.visibleMessage(msg);
+        }
         if (!msg.has("message")) {
             if (msg.has("content")) {
                 return extractContentFromElement(msg.get("content"));

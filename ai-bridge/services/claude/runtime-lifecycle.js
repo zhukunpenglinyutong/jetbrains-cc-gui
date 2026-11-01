@@ -11,6 +11,7 @@ import {
   clearActiveTurnRuntimeIf,
   endRuntimeTurn,
   findRuntimeForRequest,
+  getAllRuntimes,
   rememberRuntime,
   promoteRuntimeToSession,
   removeRuntime,
@@ -293,6 +294,7 @@ export async function disposeRuntime(runtime, callbacks) {
   if (runtime.sessionId && (runtime.hasBackgroundTaskSnapshot || (runtime.backgroundTaskIds?.size || 0) > 0)) {
     emitTaskEvent(runtime.sessionId, {
       type: 'system', subtype: 'background_tasks_changed', tasks: [], session_id: runtime.sessionId,
+      ...(!runtime.hasBackgroundTaskSnapshot ? { source: 'legacy' } : {}),
     }, runtime.runtimeSessionEpoch);
   }
   runtime.backgroundTaskIds?.clear();
@@ -312,6 +314,7 @@ export async function disposeRuntime(runtime, callbacks) {
       runtime.closeError = err;
       console.error('[LIFECYCLE] query.close() failed:', err?.message || err);
     } finally {
+      runtime.disposeSettled = true;
       removeRuntime(runtime, callbacks?.removeSession);
       clearActiveTurnRuntimeIf(runtime);
     }
@@ -491,35 +494,74 @@ export function updateBackgroundTaskState(runtime, msg) {
     // task_* edges. Once available, do not re-add tasks from a late bookend.
     runtime.hasBackgroundTaskSnapshot = true;
     runtime.backgroundTaskIds = new Set(msg.tasks.filter(task => !task.ambient).map(task => task.task_id).filter(Boolean));
+    runtime.legacyTaskDescriptions?.clear();
+    runtime.legacyTaskAliases?.clear();
     return;
   }
   if (runtime.hasBackgroundTaskSnapshot) return;
+
+  // Older CLIs expose only edges. Present those known tasks with the same Stop
+  // affordance, without claiming their set is an authoritative native snapshot
+  // (in particular, it must not disable the six-hour legacy backstop).
+  const descriptions = runtime.legacyTaskDescriptions ||= new Map();
+  const aliases = runtime.legacyTaskAliases ||= new Map();
+  let changed = false;
+  const add = (id, description, taskId) => {
+    if (!id) return;
+    id = aliases.get(id) || id;
+    if (taskId && taskId !== id) {
+      aliases.set(taskId, id);
+      if (runtime.backgroundTaskIds.delete(taskId)) changed = true;
+      descriptions.delete(taskId);
+    }
+    if (!runtime.backgroundTaskIds.has(id)) changed = true;
+    runtime.backgroundTaskIds.add(id);
+    if (typeof description === 'string' && description.trim() && descriptions.get(id) !== description.trim()) {
+      descriptions.set(id, description.trim());
+      changed = true;
+    }
+  };
+  const remove = id => {
+    if (!id) return;
+    const canonical = aliases.get(id) || id;
+    if (runtime.backgroundTaskIds.delete(canonical)) changed = true;
+    descriptions.delete(canonical);
+    for (const [alias, task] of aliases) if (task === canonical) aliases.delete(alias);
+  };
 
   const content = msg?.message?.content ?? msg?.content;
   if (Array.isArray(content)) {
     for (const block of content) {
       if (block?.type !== 'tool_use' || block?.input?.run_in_background !== true) continue;
       const taskId = block.id || block.tool_use_id;
-      if (taskId) runtime.backgroundTaskIds.add(taskId);
+      add(taskId, block.input.description || block.input.command || block.name);
     }
   }
 
   if (msg?.type === 'system' && typeof msg.subtype === 'string') {
     const taskId = msg.tool_use_id || msg.task_id;
     if ((msg.subtype === 'task_started' || msg.subtype === 'task_progress') && taskId) {
-      runtime.backgroundTaskIds.add(taskId);
+      add(taskId, msg.description, msg.task_id);
     } else if (msg.subtype === 'task_notification') {
-      if (msg.tool_use_id) runtime.backgroundTaskIds.delete(msg.tool_use_id);
-      if (msg.task_id) runtime.backgroundTaskIds.delete(msg.task_id);
+      remove(msg.tool_use_id);
+      remove(msg.task_id);
     }
   }
 
   const taskNotificationXml = extractTaskNotificationXml(msg);
   if (taskNotificationXml !== null) {
     const parsed = parseTaskNotificationXml(taskNotificationXml);
-    if (parsed?.toolUseId) runtime.backgroundTaskIds.delete(parsed.toolUseId);
-    if (parsed?.taskId) runtime.backgroundTaskIds.delete(parsed.taskId);
+    remove(parsed?.toolUseId);
+    remove(parsed?.taskId);
   }
+  if (!changed) return;
+  return {
+    type: 'system', subtype: 'background_tasks_changed', source: 'legacy',
+    session_id: runtime.sessionId,
+    tasks: [...runtime.backgroundTaskIds].map(task_id => ({
+      task_id, task_type: 'legacy_task', description: descriptions.get(task_id) || task_id,
+    })),
+  };
 }
 
 /**
@@ -600,7 +642,11 @@ export function startPerpetualReader(runtime, callbacks) {
         // also checks active turns, CLI activity, and tracked background tasks, so a
         // long-running sidechain is not terminated between progress notifications.
         touchRuntime(runtime);
-        updateBackgroundTaskState(runtime, msg);
+        const legacySnapshot = updateBackgroundTaskState(runtime, msg);
+        if (legacySnapshot) {
+          if (runtime.sessionId) emitTaskEvent(runtime.sessionId, legacySnapshot, runtime.runtimeSessionEpoch);
+          else (runtime.pendingTaskEvents ||= []).push(legacySnapshot);
+        }
 
         // CLI turn accounting for executeTurn's quiescence gate. Substantive
         // output (assistant / user / stream_event) means a CLI run is in flight;
@@ -851,8 +897,11 @@ async function canUpdateRuntimeSignature(runtime, signature) {
 }
 
 async function acquireRuntimeUnlocked(requestContext, callbacks) {
-  await cleanupAnonymousFromRegistry((runtime) => disposeRuntime(runtime, callbacks));
-  await cleanupSessionsFromRegistry((runtime) => disposeRuntime(runtime, callbacks));
+  // Scheduling cleanup closes input synchronously and leaves the owner in the
+  // registry until transport disposal settles. A hung unrelated cleanup must
+  // not hold this request; its own retiring runtime is fenced below.
+  await cleanupAnonymousFromRegistry((runtime) => disposeRuntime(runtime, callbacks), { waitForDisposal: false });
+  await cleanupSessionsFromRegistry((runtime) => disposeRuntime(runtime, callbacks), { waitForDisposal: false });
 
   let runtime = findRuntimeForRequest(requestContext);
 
@@ -860,19 +909,22 @@ async function acquireRuntimeUnlocked(requestContext, callbacks) {
   // finishes. A fast follow-up must wait for that retirement, never enqueue
   // into the query that the preceding Stop is about to close.
   if (runtime?.abortPromise) {
-    await runtime.abortPromise;
+    // A previous turn's failed interrupt belongs to that Stop/send, not to
+    // this new request. Retirement is the separate prerequisite for reuse.
+    try { await runtime.abortPromise; } catch { /* checked independently below */ }
+    if (!runtime.closed || getAllRuntimes().has(runtime)) {
+      throw new Error('Claude is still closing the previous runtime. Retry after cleanup finishes.');
+    }
     runtime = null;
   }
 
-  // Never reuse a runtime that is closed but somehow still registered. If it
-  // reached acquireRuntime, executeTurn would immediately throw "Runtime is
-  // closed", and the prior abort left abortRequested=true on it, so sendInternal
-  // would swallow that failure as a graceful "User interrupted" — silently
-  // eating the message the user just sent. Evict it from the registry and treat
-  // it as absent so a fresh runtime is created instead. (disposeRuntime removes
-  // the runtime from the registry synchronously, so this branch is a defensive
-  // invariant, not a common path.)
+  // Input closure precedes asynchronous transport disposal. Never reuse that
+  // runtime or erase its ownership fence while cleanup is still pending.
+  // A stale closed entry with no pending cleanup is safe to evict.
   if (runtime && runtime.closed) {
+    if (runtime.disposePromise && !runtime.disposeSettled) {
+      throw new Error('Claude is still closing the previous runtime. Retry after cleanup finishes.');
+    }
     console.log('[LIFECYCLE] discardClosedRuntime sessionId=' + (runtime.sessionId || '(new)')
       + ' epoch=' + (runtime.runtimeSessionEpoch || '(none)'));
     removeRuntime(runtime, callbacks?.removeSession);
@@ -930,11 +982,11 @@ export async function acquireRuntime(requestContext, callbacks) {
 }
 
 export async function cleanupStaleAnonymousRuntimes(callbacks) {
-  return cleanupAnonymousFromRegistry((runtime) => disposeRuntime(runtime, callbacks));
+  return cleanupAnonymousFromRegistry((runtime) => disposeRuntime(runtime, callbacks), { waitForDisposal: false });
 }
 
 export async function cleanupStaleSessionRuntimes(callbacks) {
-  return cleanupSessionsFromRegistry((runtime) => disposeRuntime(runtime, callbacks));
+  return cleanupSessionsFromRegistry((runtime) => disposeRuntime(runtime, callbacks), { waitForDisposal: false });
 }
 
 export { beginRuntimeTurn, endRuntimeTurn, touchRuntime, applyDynamicControls };

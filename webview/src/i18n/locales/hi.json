@@ -107,6 +107,8 @@
     "disabled": "अक्षम",
     "sdkNotInstalled": "{{provider}} SDK इंस्टॉल नहीं है। चैट शुरू करने के लिए कृपया SDK इंस्टॉल करें।",
     "codexUltraCapabilitiesLoading": "Ultra की उपलब्धता जाँची जा रही है। मॉडल लोड होने के बाद फिर से भेजें।",
+    "codexUltraCapabilitiesUnavailable": "Ultra की उपलब्धता की पुष्टि नहीं हो सकी। मॉडल दोबारा लोड करें या दूसरा प्रयास स्तर चुनें।",
+    "sessionTransitionTakingLonger": "सत्र बदलने में अपेक्षा से अधिक समय लग रहा है। आप इसे फिर से खोलने का प्रयास कर सकते हैं; कतार के संदेश रुके हुए हैं।",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "पेस्ट की गई छवि तैयार हो रही है...",
     "sdkStatusUnavailable": "SDK स्थिति की जांच नहीं हो सकी।",
@@ -173,6 +175,8 @@
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
     "continueRefiningPlan": "इस योजना को और बेहतर बनाना जारी रखें:",
     "backgroundTasksRunning": "{{count}} पृष्ठभूमि कार्य चल रहे हैं",
+    "backgroundTasksRunning_one": "{{count}} पृष्ठभूमि कार्य चल रहा है",
+    "backgroundTasksRunning_other": "{{count}} पृष्ठभूमि कार्य चल रहे हैं",
     "stopBackgroundTasks": "पृष्ठभूमि कार्य रोकें"
   },
   "settings": {
@@ -1558,6 +1562,7 @@
       "loading": "एजेंट प्रक्रिया लोड हो रही है…",
       "unavailable": "जब तक सत्र का id नहीं है, प्रक्रिया लॉग उपलब्ध नहीं है।",
       "reportGenerated": "संरचित विश्लेषण रिपोर्ट तैयार की गई",
+      "historyTruncated": "इतिहास छोटा किया गया: {{count}} रिकॉर्ड छोड़े गए। शुरुआती कार्य और हाल की गतिविधि रखी गई है।",
       "unitMs": "मि॰से॰",
       "unitS": "से॰",
       "unitTools": "उपकरण",

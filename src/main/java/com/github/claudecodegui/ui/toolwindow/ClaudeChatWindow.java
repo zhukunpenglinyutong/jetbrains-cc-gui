@@ -447,6 +447,13 @@ public class ClaudeChatWindow {
             }
 
             @Override
+            public void invalidatePendingHistoryLoads() {
+                if (historyHandler != null) {
+                    historyHandler.invalidatePendingLoads();
+                }
+            }
+
+            @Override
             public void setSlashCommandsFetched(boolean fetched) {
                 slashCommandsFetched = fetched;
             }
@@ -2745,10 +2752,15 @@ public class ClaudeChatWindow {
             /** Keeps window identity and persisted tabs aligned with the bound session. */
             @Override
             public void onSessionIdReceived(String newSessionId) {
+                onSessionIdReceived(newSessionId, null);
+            }
+
+            @Override
+            public void onSessionIdReceived(String newSessionId, String transitionToken) {
                 if (newSessionId == null || ClaudeChatWindow.this.session != callbackSession) {
                     return;
                 }
-                super.onSessionIdReceived(newSessionId);
+                super.onSessionIdReceived(newSessionId, transitionToken);
                 String exposedSessionId = resolveExposedSessionId(newSessionId, ClaudeChatWindow.this.permissionServiceKey);
                 if (exposedSessionId.equals(ClaudeChatWindow.this.sessionId)) {
                     return;

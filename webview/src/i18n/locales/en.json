@@ -143,6 +143,8 @@
     "disabled": "Disabled",
     "sdkNotInstalled": "{{provider}} SDK is not installed. Please install the SDK to start chatting.",
     "codexUltraCapabilitiesLoading": "Checking Ultra availability. Try sending again when model loading finishes.",
+    "codexUltraCapabilitiesUnavailable": "Could not verify Ultra availability. Retry loading models or choose another effort.",
+    "sessionTransitionTakingLonger": "The session change is taking longer than expected. You can try opening it again; queued messages are paused.",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "Preparing pasted image...",
     "sdkStatusUnavailable": "Could not check SDK status.",
@@ -211,6 +213,8 @@
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
     "continueRefiningPlan": "Continue refining this plan:",
     "backgroundTasksRunning": "{{count}} background tasks running",
+    "backgroundTasksRunning_one": "{{count}} background task running",
+    "backgroundTasksRunning_other": "{{count}} background tasks running",
     "stopBackgroundTasks": "Stop background tasks"
   },
   "settings": {
@@ -2024,6 +2028,7 @@
       "loading": "Loading Agent process…",
       "unavailable": "Process log is unavailable until this session has an id.",
       "reportGenerated": "Structured analysis report generated",
+      "historyTruncated": "History shortened: {{count}} records omitted. The initial task and recent activity are retained.",
       "unitMs": "ms",
       "unitS": "s",
       "unitTools": "tools",

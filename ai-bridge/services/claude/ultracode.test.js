@@ -50,6 +50,22 @@ test('native unavailable Ultracode produces an error instead of silently submitt
   await assert.rejects(applyNativeFlagSettings(nativeQuery({ getSettings: async () => ({}) }), { ultracode: true }), /could not confirm/);
 });
 
+test('rejected Ultracode explains the explicit recovery choice without sending or silently disabling it', async () => {
+  const input = new AsyncStream();
+  const settings = [];
+  let closed = false;
+  const query = nativeQuery({
+    applyFlagSettings: async patch => settings.push(patch),
+    getSettings: async () => ({ applied: { ultracode: false, ultracodeAvailable: false } }),
+    close: () => { closed = true; },
+  });
+  await assert.rejects(createUltracodeQuery(() => query, input,
+    { type: 'user', message: { role: 'user', content: 'Use workflows' } }, { settings: { ultracode: true } }), /Turn off Ultracode in the model menu.*retry/);
+  assert.deepEqual(settings, [{ ultracode: true }]);
+  assert.equal((await input.next()).done, true, 'unavailable workflows must not silently become a paid normal turn');
+  assert.equal(closed, true);
+});
+
 test('one-shot Ultracode validates before submitting user input and closes unsupported runtimes', async () => {
   const stream = new AsyncStream();
   const calls = [];

@@ -189,13 +189,15 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 JsonObject params = new JsonObject();
                 params.addProperty("sessionId", sessionId);
                 params.addProperty("runtimeSessionEpoch", runtimeSessionEpoch);
-                Boolean stopped = db.sendCommand("claude.abortTurn", params, new DaemonBridge.DaemonOutputCallback() {
+                Boolean acknowledged = db.sendCommand("claude.abortTurn", params, new DaemonBridge.DaemonOutputCallback() {
                     @Override public void onLine(String line) { }
                     @Override public void onStderr(String text) { }
                     @Override public void onError(String error) { LOG.warn("[ClaudeSDKBridge] Abort failed: " + error); }
                     @Override public void onComplete(boolean success) { }
                 }).orTimeout(10, java.util.concurrent.TimeUnit.SECONDS).join();
-                if (!Boolean.TRUE.equals(stopped)) {
+                // An already-retired runtime is a successful control no-op. The original
+                // send's terminal event, not this control Boolean, proves cancellation.
+                if (!Boolean.TRUE.equals(acknowledged)) {
                     throw new IllegalStateException("Claude runtime could not be interrupted");
                 }
             }

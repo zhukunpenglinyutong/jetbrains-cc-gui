@@ -25,7 +25,7 @@ interface ReasoningSelectProps {
   selectedModel?: string;
   currentProvider?: string;
   supportedReasoningEfforts?: readonly string[];
-  reasoningCapabilitiesPending?: boolean;
+  reasoningCapabilitiesUnconfirmed?: boolean;
   embedded?: boolean;
   triggerRef?: React.RefObject<HTMLElement | null>;
   onClose?: () => void;
@@ -48,7 +48,7 @@ export const ReasoningSelect = ({
   selectedModel,
   currentProvider,
   supportedReasoningEfforts,
-  reasoningCapabilitiesPending = false,
+  reasoningCapabilitiesUnconfirmed = false,
   embedded = false,
   triggerRef,
   onClose,
@@ -75,7 +75,7 @@ export const ReasoningSelect = ({
     selectedModel,
     currentProvider,
     supportedReasoningEfforts,
-    reasoningCapabilitiesPending,
+    reasoningCapabilitiesUnconfirmed,
   );
 
   /**

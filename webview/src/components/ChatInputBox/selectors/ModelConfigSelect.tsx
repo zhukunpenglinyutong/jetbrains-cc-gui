@@ -27,7 +27,7 @@ interface ModelConfigSelectProps {
   models?: ModelInfo[];
   currentProvider?: string;
   loading?: boolean;
-  reasoningCapabilitiesPending?: boolean;
+  reasoningCapabilitiesUnconfirmed?: boolean;
   error?: string | null;
   onRetry?: () => void;
   onAddModel?: () => void;
@@ -55,7 +55,7 @@ export const ModelConfigSelect = ({
   models = AVAILABLE_MODELS,
   currentProvider = 'claude',
   loading = false,
-  reasoningCapabilitiesPending = false,
+  reasoningCapabilitiesUnconfirmed = false,
   error = null,
   onRetry,
   onAddModel,
@@ -104,7 +104,7 @@ export const ModelConfigSelect = ({
     selectedModel,
     currentProvider,
     currentModel?.supportedReasoningEfforts,
-    reasoningCapabilitiesPending,
+    reasoningCapabilitiesUnconfirmed,
   );
 
   const modelMapping = readClaudeModelMapping();
@@ -244,7 +244,7 @@ export const ModelConfigSelect = ({
           dshPresetLabel={dshPresetLabel}
           showEffortRow={showEffortRow}
           supportedReasoningEfforts={currentModel?.supportedReasoningEfforts}
-          reasoningCapabilitiesPending={reasoningCapabilitiesPending}
+          reasoningCapabilitiesUnconfirmed={reasoningCapabilitiesUnconfirmed}
           reasoningEffort={reasoningEffort}
           onReasoningChange={handleReasoningChange}
           effortLabel={effortLabel}

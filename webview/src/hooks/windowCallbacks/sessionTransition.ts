@@ -10,6 +10,7 @@ import type { MutableRefObject } from 'react';
 import type { StartupHistoryLoadState } from '../../types/startupHistory';
 import { forceWebviewRepaint } from '../../utils/forceWebviewRepaint';
 import { resetClaudeBackgroundTasks } from '../../utils/claudeBackgroundTasks';
+import { finishSessionTransition, isCurrentSessionTransitionCallback, isSessionTransitionPreparing } from '../../utils/sessionTransitionState';
 
 export interface ResetTransientUiStateOptions {
   clearToasts: () => void;
@@ -109,14 +110,17 @@ export const buildResetTransientUiState = (opts: ResetTransientUiStateOptions) =
  * (useSessionManagement). Flushes any history snapshot that arrived while the
  * guard was active so updateMessages racing the transition is not lost.
  */
-export const releaseSessionTransition = (): void => {
+export const releaseSessionTransition = (accepted = true, token?: string): boolean => {
+  if (!isCurrentSessionTransitionCallback(token) || accepted && isSessionTransitionPreparing()) return false;
   if (window.__sessionTransitioning) {
     window.__sessionTransitioning = false;
   }
   window.__sessionTransitionToken = null;
+  finishSessionTransition();
   if (typeof window.__flushDeferredTransitionUpdateMessages === 'function') {
     window.__flushDeferredTransitionUpdateMessages();
   }
+  return true;
 };
 
 /** Drop a deferred transition snapshot (new transition / clearMessages). */

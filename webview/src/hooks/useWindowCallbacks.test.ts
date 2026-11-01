@@ -303,6 +303,20 @@ describe('useWindowCallbacks integration', () => {
     expect(getClaudeBackgroundTasks().tasks).toHaveLength(0);
   });
 
+  it('accepts a final empty Claude task snapshot while another provider is selected', () => {
+    const providerRef = { current: 'claude' };
+    renderHook(() => useWindowCallbacks(createOptions({ currentProviderRef: providerRef,
+      currentSessionIdRef: { current: 'workflow-session' } })));
+    const event = (tasks: unknown[]) => JSON.stringify({ type: 'system', subtype: 'background_tasks_changed',
+      session_id: 'workflow-session', tasks });
+    act(() => window.onTaskEvent?.(event([{ task_id: 'legacy-tool', task_type: 'legacy_task', description: 'Dev server' }])));
+    expect(getClaudeBackgroundTasks().tasks).toHaveLength(1);
+    providerRef.current = 'codex';
+    act(() => window.onTaskEvent?.(event([])));
+    providerRef.current = 'claude';
+    expect(getClaudeBackgroundTasks().tasks).toHaveLength(0);
+  });
+
   it('drains the latest usage update buffered before React callback registration', () => {
     window.__pendingUsageUpdate = JSON.stringify({
       percentage: 19,

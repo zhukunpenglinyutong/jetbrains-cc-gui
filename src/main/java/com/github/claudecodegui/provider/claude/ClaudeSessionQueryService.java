@@ -7,6 +7,7 @@ import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.provider.common.SessionHistoryIncompleteException;
 import com.github.claudecodegui.provider.common.SessionHistoryNotFoundException;
 import com.github.claudecodegui.util.UserMessageSanitizer;
+import com.github.claudecodegui.util.PluginIdeContext;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -314,6 +315,7 @@ class ClaudeSessionQueryService {
             return originalMessage;
         }
 
+        originalMessage = PluginIdeContext.visibleMessage(originalMessage);
         JsonObject message = originalMessage.getAsJsonObject("message");
         if (!message.has("content") || message.get("content").isJsonNull()) {
             return originalMessage;
@@ -428,7 +430,7 @@ class ClaudeSessionQueryService {
         String normalized = text.replace("\r\n", "\n");
         normalized = normalized.replace("\r", "\n");
         normalized = normalized.replace(IMAGE_ATTACHMENT_HINT, "");
-        normalized = UserMessageSanitizer.sanitizeUserFacingText(normalized);
+        normalized = UserMessageSanitizer.sanitizeClaudeUserFacingText(normalized);
         normalized = normalized.replaceAll("(?m)^[ \\t]+$", "");
         normalized = normalized.replaceAll("\n{3,}", "\n\n");
         normalized = normalized.replaceAll("^(?:\\s*\\n)+", "");

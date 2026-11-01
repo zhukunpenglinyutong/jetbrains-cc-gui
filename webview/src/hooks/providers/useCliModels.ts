@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { sendBridgeEvent } from '../../utils/bridge';
 import { updateClaudeModelCapabilities } from '../../utils/claudeModelCapabilities';
-import { setCodexReasoningCapabilitiesPending, updateCodexReasoningCapabilities } from '../../utils/codexReasoningCapabilities';
+import { failCodexReasoningCapabilities, getCodexReasoningCapabilities, subscribeCodexReasoningCapabilities,
+  beginCodexReasoningCapabilitiesLoad, updateCodexReasoningCapabilities } from '../../utils/codexReasoningCapabilities';
 import type { ModelInfo } from '../../components/ChatInputBox/types';
 import {
   CODEX_MODELS,
@@ -33,6 +34,7 @@ const modelsCache: CliModelsByProvider = {};
 const defaultModelCache: Record<string, string> = {};
 const catalogHasEntriesCache: Record<string, boolean> = {};
 const replaceBuiltInsCache: Record<string, boolean> = {};
+const errorsCache: Record<string, string> = {};
 
 /**
  * Dynamic model roles from the listModels payload (`roles: [{id,label,description}]`,
@@ -63,6 +65,7 @@ export function __resetCliModelsCacheForTests() {
   for (const key of Object.keys(defaultModelCache)) delete defaultModelCache[key];
   for (const key of Object.keys(catalogHasEntriesCache)) delete catalogHasEntriesCache[key];
   for (const key of Object.keys(replaceBuiltInsCache)) delete replaceBuiltInsCache[key];
+  for (const key of Object.keys(errorsCache)) delete errorsCache[key];
   for (const key of Object.keys(rolesCache)) delete rolesCache[key];
 }
 
@@ -122,6 +125,7 @@ function normalizeModels(raw: unknown): ModelInfo[] {
  * via channel-manager `listModels`. Falls back to static defaults until loaded.
  */
 export function useCliModels(currentProvider: string) {
+  const codexCapabilities = useSyncExternalStore(subscribeCodexReasoningCapabilities, getCodexReasoningCapabilities);
   // Seed from module cache so history→chat remounts keep the last catalog.
   const [modelsByProvider, setModelsByProvider] = useState<CliModelsByProvider>(() => ({ ...modelsCache }));
   const [defaultModelByProvider, setDefaultModelByProvider] = useState<Record<string, string>>(
@@ -135,7 +139,7 @@ export function useCliModels(currentProvider: string) {
   const [replaceBuiltInsByProvider, setReplaceBuiltInsByProvider] = useState<Record<string, boolean>>(
     () => ({ ...replaceBuiltInsCache }),
   );
-  const [errorByProvider, setErrorByProvider] = useState<Record<string, string>>({});
+  const [errorByProvider, setErrorByProvider] = useState<Record<string, string>>(() => ({ ...errorsCache }));
   const pendingLoadRef = useRef<{ provider: string; timer: ReturnType<typeof setTimeout> } | null>(null);
   const nativeRequestRef = useRef<{ id: string; rows: unknown[]; cursors: Set<unknown> } | null>(null);
 
@@ -149,10 +153,11 @@ export function useCliModels(currentProvider: string) {
   const beginLoad = useCallback((providerId: string) => {
     if (pendingLoadRef.current?.provider === 'codex' && providerId !== 'codex') {
       nativeRequestRef.current = null;
-      setCodexReasoningCapabilitiesPending(false);
+      failCodexReasoningCapabilities();
     }
     clearPendingLoad();
     setLoadingProvider(providerId);
+    delete errorsCache[providerId];
     setErrorByProvider((prev) => {
       if (!(providerId in prev)) return prev;
       const next = { ...prev };
@@ -163,7 +168,7 @@ export function useCliModels(currentProvider: string) {
     // legacy channel-manager probe may read config/auth independently and is
     // therefore kept for the other CLI providers only.
     if (providerId === 'codex') {
-      setCodexReasoningCapabilitiesPending(true);
+      beginCodexReasoningCapabilitiesLoad();
       const requestId = `models-${crypto.randomUUID()}`;
       nativeRequestRef.current = { id: requestId, rows: [], cursors: new Set() };
       sendBridgeEvent('codex_native_list_models', JSON.stringify({ requestId }));
@@ -177,12 +182,13 @@ export function useCliModels(currentProvider: string) {
         if (providerId === 'codex') {
           nativeRequestRef.current = null;
           // Keep the same last-known catalog the picker still displays after a
-          // refresh timeout. Unknown models are now settled, not pending forever.
-          setCodexReasoningCapabilitiesPending(false);
+          // refresh timeout. Failed discovery cannot disprove a saved Ultra choice.
+          failCodexReasoningCapabilities();
         }
         // No response arrived in time — fall back to the static catalog and
         // surface the failure so the user isn't staring at a bare fallback list.
         setLoadingProvider((current) => (current === providerId ? null : current));
+        errorsCache[providerId] = 'timeout';
         setErrorByProvider((prev) => ({ ...prev, [providerId]: 'timeout' }));
       }, CLI_MODELS_TIMEOUT_MS),
     };
@@ -217,7 +223,10 @@ export function useCliModels(currentProvider: string) {
       }
       const models = normalizeModels(payload.models);
       if (provider === 'claude') updateClaudeModelCapabilities(payload.success === false ? [] : models);
-      if (provider === 'codex') updateCodexReasoningCapabilities(payload.success === false ? [] : models);
+      if (provider === 'codex') {
+        if (payload.success === false) failCodexReasoningCapabilities(true);
+        else updateCodexReasoningCapabilities(models);
+      }
       const replaceBuiltIns = provider === 'claude' && payload.success !== false && payload.replaceBuiltInOptions === true;
       replaceBuiltInsCache[provider] = replaceBuiltIns;
       setReplaceBuiltInsByProvider((prev) => ({ ...prev, [provider]: replaceBuiltIns }));
@@ -256,8 +265,10 @@ export function useCliModels(currentProvider: string) {
         const message = typeof payload.error === 'string' && payload.error.trim()
           ? payload.error.trim()
           : 'unknown error';
+        errorsCache[provider] = message;
         setErrorByProvider((prev) => ({ ...prev, [provider]: message }));
       } else {
+        delete errorsCache[provider];
         setErrorByProvider((prev) => {
           if (!(provider in prev)) return prev;
           const next = { ...prev };
@@ -323,7 +334,7 @@ export function useCliModels(currentProvider: string) {
         delete window.setCliModels;
       }
       window.removeEventListener('codex-native-data', nativeCatalogHandler);
-      if (pendingLoadRef.current?.provider === 'codex') setCodexReasoningCapabilitiesPending(false);
+      if (pendingLoadRef.current?.provider === 'codex') failCodexReasoningCapabilities();
       clearPendingLoad();
     };
   }, [clearPendingLoad]);
@@ -417,6 +428,7 @@ export function useCliModels(currentProvider: string) {
     cliCatalogHasEntries: catalogHasEntriesByProvider[currentProvider] ?? false,
     cliModelsReplaceBuiltIns: replaceBuiltInsByProvider[currentProvider] ?? false,
     cliModelsLoaded: currentProvider in modelsByProvider,
+    cliReasoningCapabilitiesUnconfirmed: currentProvider === 'codex' && codexCapabilities.status !== 'ready',
     refreshCliModels,
     modelsByProvider,
   };

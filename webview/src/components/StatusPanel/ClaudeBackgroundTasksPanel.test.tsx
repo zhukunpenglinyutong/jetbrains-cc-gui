@@ -1,10 +1,13 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import i18next from 'i18next';
+import english from '../../i18n/locales/en.json';
 import { ClaudeBackgroundTasksPanel } from './ClaudeBackgroundTasksPanel';
 import { getClaudeBackgroundTasks, receiveClaudeBackgroundTasks, resetClaudeBackgroundTasks } from '../../utils/claudeBackgroundTasks';
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, options: { count?: number }) =>
-  key === 'chat.backgroundTasksRunning' ? `${options.count} background tasks running` : 'Stop background tasks' }) }));
+const translations = i18next.createInstance();
+beforeAll(() => translations.init({ lng: 'en', resources: { en: { translation: english } } }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: translations.t.bind(translations) }) }));
 
 const task = (index: number) => ({ task_id: `task-${index}`, task_type: 'local_workflow',
   description: `Review module ${index}`, run_id: `run-${index}` });
@@ -14,6 +17,19 @@ const snapshot = (tasks: unknown[], session_id = 'claude-session') => ({
 
 describe('Claude native background work', () => {
   beforeEach(resetClaudeBackgroundTasks);
+
+  it('shows one legacy background task with a Stop control between turns', () => {
+    const onStop = vi.fn();
+    receiveClaudeBackgroundTasks({ ...snapshot([{ task_id: 'toolu-dev', task_type: 'legacy_task',
+      description: 'npm run dev' }]), source: 'legacy' }, 'claude-session');
+    render(<ClaudeBackgroundTasksPanel provider="claude" sessionId="claude-session" foregroundActive={false} onStop={onStop} />);
+    expect(screen.getByText('1 background task running')).toBeTruthy();
+    expect(screen.getByText('npm run dev')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop background tasks' }));
+    expect(onStop).toHaveBeenCalledOnce();
+    act(() => { receiveClaudeBackgroundTasks({ ...snapshot([]), source: 'legacy' }, 'claude-session'); });
+    expect(screen.queryByText('1 background task running')).toBeNull();
+  });
 
   it('keeps a full multi-agent snapshot and an actionable Stop after the foreground answer', () => {
     const onStop = vi.fn();
@@ -54,11 +70,11 @@ describe('Claude native background work', () => {
   it('hides another session/provider, retains the first bound identity and clears on reset', () => {
     receiveClaudeBackgroundTasks(snapshot([task(1)]), null);
     const view = render(<ClaudeBackgroundTasksPanel provider="claude" sessionId="claude-session" foregroundActive={false} onStop={vi.fn()} />);
-    expect(screen.getByText('1 background tasks running')).toBeTruthy();
+    expect(screen.getByText('1 background task running')).toBeTruthy();
     view.rerender(<ClaudeBackgroundTasksPanel provider="codex" sessionId="claude-session" foregroundActive={false} onStop={vi.fn()} />);
-    expect(screen.queryByText('1 background tasks running')).toBeNull();
+    expect(screen.queryByText('1 background task running')).toBeNull();
     view.rerender(<ClaudeBackgroundTasksPanel provider="claude" sessionId="another-session" foregroundActive={false} onStop={vi.fn()} />);
-    expect(screen.queryByText('1 background tasks running')).toBeNull();
+    expect(screen.queryByText('1 background task running')).toBeNull();
     act(resetClaudeBackgroundTasks);
     expect(getClaudeBackgroundTasks().tasks).toHaveLength(0);
   });

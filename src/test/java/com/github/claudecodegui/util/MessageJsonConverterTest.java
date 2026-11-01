@@ -21,12 +21,12 @@ public class MessageJsonConverterTest {
                   {"type":"text","text":"Explain this diff"},
                   {"type":"image","source":{"type":"base64","data":"image-bytes"}},
                   {"type":"tool_result","tool_use_id":"tool-1","content":"<system-reminder>tool output</system-reminder>"},
-                  {"type":"text","text":"<system-reminder>IDE context for this turn</system-reminder>"}
+                  {"type":"text","text":"<system-reminder>\\nThe following IDE context applies only to this user message.\\nIDE context for this turn\\n</system-reminder>"}
                 ]}}
                 """).getAsJsonObject();
         JsonObject original = raw.deepCopy();
         ClaudeSession.Message message = new ClaudeSession.Message(ClaudeSession.Message.Type.USER,
-                "Explain this diff\n<system-reminder>IDE context for this turn</system-reminder>", raw);
+                "Explain this diff\n<system-reminder>\nThe following IDE context applies only to this user message.\nIDE context for this turn\n</system-reminder>", raw);
 
         JsonObject transport = JsonParser.parseString(MessageJsonConverter.convertMessagesToJson(List.of(message)))
                 .getAsJsonArray().get(0).getAsJsonObject();
@@ -43,7 +43,7 @@ public class MessageJsonConverterTest {
     }
 
     @Test
-    public void userTransportSanitizesBothStringEnvelopesButPreservesAssistantExamples() {
+    public void userAndAssistantTransportPreserveLiteralTagsInStringContent() {
         String text = "Request\n<system-reminder>IDE context</system-reminder>";
         JsonObject raw = new JsonObject();
         raw.addProperty("type", "user");
@@ -53,9 +53,9 @@ public class MessageJsonConverterTest {
         nested.addProperty("content", text);
         raw.add("message", nested);
         JsonObject sanitized = MessageJsonConverter.truncateRawForTransport(raw);
-        assertEquals("Request", sanitized.get("content").getAsString());
-        assertEquals("Request", sanitized.get("text").getAsString());
-        assertEquals("Request", sanitized.getAsJsonObject("message").get("content").getAsString());
+        assertEquals(text, sanitized.get("content").getAsString());
+        assertEquals(text, sanitized.get("text").getAsString());
+        assertEquals(text, sanitized.getAsJsonObject("message").get("content").getAsString());
 
         raw.addProperty("type", "assistant");
         JsonObject assistant = JsonParser.parseString(MessageJsonConverter.convertMessagesToJson(List.of(

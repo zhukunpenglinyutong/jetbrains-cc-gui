@@ -107,6 +107,8 @@
     "disabled": "Отключено",
     "sdkNotInstalled": "SDK {{provider}} не установлен. Установите SDK для начала работы.",
     "codexUltraCapabilitiesLoading": "Проверяем доступность Ultra. Повторите отправку после загрузки модели.",
+    "codexUltraCapabilitiesUnavailable": "Не удалось проверить доступность Ultra. Повторите загрузку моделей или выберите другой уровень усилий.",
+    "sessionTransitionTakingLonger": "Смена сеанса занимает больше времени, чем ожидалось. Попробуйте открыть его снова; сообщения в очереди приостановлены.",
     "sdkStatusLoading": "Проверка статуса SDK...",
     "pasteImagePreparing": "Подготовка вставленного изображения...",
     "sdkStatusUnavailable": "Не удалось проверить состояние SDK.",
@@ -173,6 +175,8 @@
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
     "continueRefiningPlan": "Продолжить доработку этого плана:",
     "backgroundTasksRunning": "Фоновых задач выполняется: {{count}}",
+    "backgroundTasksRunning_one": "Выполняется {{count}} фоновая задача",
+    "backgroundTasksRunning_other": "Фоновых задач выполняется: {{count}}",
     "stopBackgroundTasks": "Остановить фоновые задачи"
   },
   "settings": {
@@ -1585,6 +1589,7 @@
       "loading": "Загрузка процесса агента…",
       "unavailable": "Журнал процесса недоступен, пока у сессии нет id.",
       "reportGenerated": "Сформирован структурированный аналитический отчёт",
+      "historyTruncated": "История сокращена: пропущено записей — {{count}}. Исходная задача и последние действия сохранены.",
       "unitMs": "мс",
       "unitS": "с",
       "unitTools": "инструментов",

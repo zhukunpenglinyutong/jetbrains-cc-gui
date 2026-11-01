@@ -86,11 +86,11 @@ describe('ModelConfigSelect', () => {
     const onReasoningChange = vi.fn();
     const props = { selectedModel: 'custom-model', onModelSelect: vi.fn(), models: [],
       currentProvider: 'codex', reasoningEffort: 'ultra' as const, onReasoningChange };
-    const { rerender } = render(<ModelConfigSelect {...props} reasoningCapabilitiesPending />);
+    const { rerender } = render(<ModelConfigSelect {...props} reasoningCapabilitiesUnconfirmed />);
     fireEvent.click(screen.getByTestId('model-config-trigger'));
     fireEvent.click(screen.getByTestId('model-config-option-effort'));
     expect(onReasoningChange).not.toHaveBeenCalled();
-    rerender(<ModelConfigSelect {...props} reasoningCapabilitiesPending={false} />);
+    rerender(<ModelConfigSelect {...props} reasoningCapabilitiesUnconfirmed={false} />);
     expect(onReasoningChange).toHaveBeenCalledWith('high');
     expect(screen.getByTestId('model-config-trigger').textContent).not.toContain('Ultra');
   });

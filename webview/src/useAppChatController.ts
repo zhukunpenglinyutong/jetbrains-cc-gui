@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { getSessionTransitionPending, subscribeSessionTransition } from './utils/sessionTransitionState';
 import type { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -20,7 +21,7 @@ import {
 } from './hooks/useMessageSender';
 import { useCodexQuestionResponses } from './hooks/useCodexQuestionResponses';
 import { isCodexEffortIndependentCommand, parseCodexCommand } from './hooks/codexCommandDispatcher';
-import { isCodexUltraCapabilityPending } from './utils/codexReasoningCapabilities';
+import { isCodexUltraCapabilityUnconfirmed } from './utils/codexReasoningCapabilities';
 import { useCodexTurnActivity } from './hooks/useCodexTurnActivity';
 import { useCodexCompactionStatus } from './hooks/useCodexCompactionStatus';
 import type { Attachment, ChatInputBoxHandle, PermissionMode } from './components/ChatInputBox/types';
@@ -293,15 +294,17 @@ export const useAppChatController = ({
   // ── Message sender ──
   // Wrap handleProviderSelect to also clear messages and input (like creating a new session)
   const wrappedHandleProviderSelect = useCallback((providerId: string) => {
-    chatInputRef.current?.clear();
-    handleProviderSelect(providerId);
-    forceCreateNewSessionWithProvider(providerId);
+    forceCreateNewSessionWithProvider(providerId, () => {
+      chatInputRef.current?.clear();
+      handleProviderSelect(providerId);
+    });
   }, [forceCreateNewSessionWithProvider, handleProviderSelect]);
 
   const {
     handleSubmit: hookHandleSubmit,
     interruptSession,
-    reasoningCapabilitiesPending,
+    reasoningCapabilitiesUnconfirmed,
+    queueRetryKey,
   } = useMessageSender({
     t, addToast,
     currentProvider, selectedModel, permissionMode, reasoningEffort, claudeUltracode, selectedAgent, codexFastMode,
@@ -322,6 +325,7 @@ export const useAppChatController = ({
   });
 
   // ── Message queue ──
+  const sessionTransitionPending = useSyncExternalStore(subscribeSessionTransition, getSessionTransitionPending);
   const {
     queue: messageQueue,
     enqueue: enqueueMessage,
@@ -330,7 +334,8 @@ export const useAppChatController = ({
     peekQueuedMessage,
     clearQueue,
     reorder: reorderMessageQueue,
-  } = useMessageQueue({ isLoading: loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending || reasoningCapabilitiesPending, onExecute: hookHandleSubmit });
+  } = useMessageQueue({ isLoading: loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending || reasoningCapabilitiesUnconfirmed || sessionTransitionPending,
+    onExecute: hookHandleSubmit, retryKey: queueRetryKey });
 
   // The edit flow has to look at a queued message before it removes it.
   const queuedEditSource = useMemo(
@@ -385,14 +390,19 @@ export const useAppChatController = ({
     const text = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
     if (!text && !hasAttachments) return;
+    // A timed-out swap can be explicitly retried; /new is a lifecycle action
+    // and must not become a queued model message behind that same swap.
+    if (parseCodexCommand(text)?.kind === 'new') {
+      forceCreateNewSession();
+      return;
+    }
+    if (getSessionTransitionPending()) {
+      enqueueMessage(content, attachments);
+      return;
+    }
     // Local commands work even while loading
     if (text.startsWith('/')) {
       const parsedCommand = parseCodexCommand(text);
-      // New session commands
-      if (parsedCommand?.kind === 'new') {
-        forceCreateNewSession();
-        return;
-      }
       // /resume - open history view
       if (parsedCommand?.kind === 'resume') {
         setCurrentView('history');
@@ -421,12 +431,12 @@ export const useAppChatController = ({
     // invalidated in that gap, preserve this submission in the paused queue.
     const capabilitiesPending = currentProvider === 'codex'
       && !isCodexEffortIndependentCommand(parseCodexCommand(text))
-      && isCodexUltraCapabilityPending(selectedModel, reasoningEffort);
+      && isCodexUltraCapabilityUnconfirmed(selectedModel, reasoningEffort);
     if (loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending || capabilitiesPending) {
       enqueueMessage(content, attachments);
       return;
     }
-    hookHandleSubmit(content, attachments);
+    if (hookHandleSubmit(content, attachments) === 'blocked') enqueueMessage(content, attachments);
   }, [loading, codexTurnActive, codexPlanExecutionPending, codexCompactionPending, enqueueMessage, hookHandleSubmit, forceCreateNewSession, currentProvider, selectedModel, reasoningEffort, handleModeSelect, setCurrentView, addToast, t]);
 
   // ── Chat-view computations (stage 5 of TASK-P1-01) ──

@@ -124,7 +124,10 @@ class SubagentHistoryService {
             String resolvedAgentId = extractAgentId(file);
             response.addProperty("agentId", resolvedAgentId);
 
-            JsonArray messages = readJsonl(file);
+            TranscriptRead transcript = readTranscript(file);
+            JsonArray messages = transcript.messages();
+            response.addProperty("truncated", transcript.omittedRecords() > 0);
+            response.addProperty("omittedRecords", transcript.omittedRecords());
             response.addProperty("success", true);
             response.addProperty("completed", hasCompleted(messages));
             response.addProperty("status", hasCompleted(messages) ? "completed" : "running");
@@ -607,11 +610,21 @@ class SubagentHistoryService {
      * without a HandlerContext.</p>
      *
      * @param file transcript to read
-     * @return the latest parsed records, capped at {@link #MAX_JSONL_LINES}
+     * @return the initial task prompt and latest records, capped at {@link #MAX_JSONL_LINES}
      * @throws IOException when the writer is still mid-append
      */
     static JsonArray readJsonl(Path file) throws IOException {
+        return readTranscript(file).messages();
+    }
+
+    /** A bounded transcript retains the original Task prompt and identifies omitted middle records. */
+    record TranscriptRead(JsonArray messages, long omittedRecords) { }
+
+    static TranscriptRead readTranscript(Path file) throws IOException {
         java.util.ArrayDeque<JsonElement> recentRecords = new java.util.ArrayDeque<>();
+        JsonElement initialPrompt = null;
+        long initialPromptIndex = -1;
+        long parsedRecords = 0;
         // True while the most recent non-blank line failed to parse. A valid line
         // clears it, so this ends up describing the LAST non-blank line alone —
         // which is exactly what a torn tail is: only a malformed final line means
@@ -638,6 +651,11 @@ class SubagentHistoryService {
                 try {
                     JsonElement parsed = JsonParser.parseString(line);
                     tailMalformed = false;
+                    if (initialPrompt == null && isInitialTaskPrompt(parsed)) {
+                        initialPrompt = parsed;
+                        initialPromptIndex = parsedRecords;
+                    }
+                    parsedRecords++;
                     if (recentRecords.size() == MAX_JSONL_LINES) {
                         recentRecords.removeFirst();
                     }
@@ -648,8 +666,16 @@ class SubagentHistoryService {
                 }
             }
         }
+        boolean restoreInitialPrompt = initialPrompt != null && initialPromptIndex < parsedRecords - recentRecords.size();
+        if (restoreInitialPrompt && recentRecords.size() == MAX_JSONL_LINES) {
+            recentRecords.removeFirst();
+        }
         JsonArray messages = new JsonArray(recentRecords.size());
+        if (restoreInitialPrompt) {
+            messages.add(initialPrompt);
+        }
         recentRecords.forEach(messages::add);
+        TranscriptRead transcript = new TranscriptRead(messages, parsedRecords - messages.size());
         if (tailMalformed) {
             // A live writer finishes its mid-append line within milliseconds. If the
             // file has not changed beyond the grace window, the writer is gone and
@@ -657,12 +683,45 @@ class SubagentHistoryService {
             // corruption policy) instead of reporting "running" forever.
             if (isStaleTornTail(file)) {
                 LOG.warn("Serving subagent history with a permanently torn tail (writer inactive): " + file);
-                return messages;
+                return transcript;
             }
             throw new TranscriptIncompleteException(
                     "Subagent history is incomplete; retry after the history writer finishes");
         }
-        return messages;
+        return transcript;
+    }
+
+    private static boolean isInitialTaskPrompt(JsonElement record) {
+        if (!record.isJsonObject()) {
+            return false;
+        }
+        JsonObject object = record.getAsJsonObject();
+        if (!object.has("type") || !object.get("type").isJsonPrimitive()
+                || !"user".equals(object.get("type").getAsString())
+                || object.has("isMeta") && object.get("isMeta").isJsonPrimitive() && object.get("isMeta").getAsBoolean()
+                || !object.has("message") || !object.get("message").isJsonObject()) {
+            return false;
+        }
+        JsonElement content = object.getAsJsonObject("message").get("content");
+        if (content == null) {
+            return false;
+        }
+        if (content.isJsonPrimitive()) {
+            return content.getAsJsonPrimitive().isString() && !content.getAsString().isBlank();
+        }
+        if (content.isJsonArray()) {
+            for (JsonElement element : content.getAsJsonArray()) {
+                if (element.isJsonObject()) {
+                    JsonObject block = element.getAsJsonObject();
+                    if (block.has("type") && block.get("type").isJsonPrimitive()
+                            && "text".equals(block.get("type").getAsString()) && block.has("text")
+                            && block.get("text").isJsonPrimitive() && !block.get("text").getAsString().isBlank()) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /**

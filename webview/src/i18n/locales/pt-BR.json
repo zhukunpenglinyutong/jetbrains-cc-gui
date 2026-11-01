@@ -107,6 +107,8 @@
     "disabled": "Desativado",
     "sdkNotInstalled": "O SDK de {{provider}} não está instalado. Por favor, instale o SDK para iniciar o chat.",
     "codexUltraCapabilitiesLoading": "Verificando a disponibilidade do Ultra. Tente enviar novamente após o carregamento do modelo.",
+    "codexUltraCapabilitiesUnavailable": "Não foi possível verificar a disponibilidade do Ultra. Recarregue os modelos ou escolha outro nível de esforço.",
+    "sessionTransitionTakingLonger": "A mudança de sessão está demorando mais que o esperado. Você pode tentar abri-la novamente; as mensagens na fila estão pausadas.",
     "sdkStatusLoading": "Verificando status do SDK...",
     "pasteImagePreparing": "Preparando imagem colada...",
     "sdkStatusUnavailable": "Não foi possível verificar o status do SDK.",
@@ -173,6 +175,8 @@
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
     "continueRefiningPlan": "Continuar refinando este plano:",
     "backgroundTasksRunning": "{{count}} tarefas em segundo plano em execução",
+    "backgroundTasksRunning_one": "{{count}} tarefa em segundo plano em execução",
+    "backgroundTasksRunning_other": "{{count}} tarefas em segundo plano em execução",
     "stopBackgroundTasks": "Parar tarefas em segundo plano"
   },
   "settings": {
@@ -1700,6 +1704,7 @@
       "loading": "Carregando processo do agente…",
       "unavailable": "O log do processo não está disponível até que a sessão tenha um id.",
       "reportGenerated": "Relatório de análise estruturada gerado",
+      "historyTruncated": "Histórico reduzido: {{count}} registros omitidos. A tarefa inicial e a atividade recente foram mantidas.",
       "unitMs": "ms",
       "unitS": "s",
       "unitTools": "ferramentas",

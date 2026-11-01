@@ -24,6 +24,15 @@ const history: SubagentHistoryResponse = {
 afterEach(() => cleanup());
 
 describe('SubagentProcessDetails', () => {
+  it('discloses bounded history while continuing to show the task and recent activity', () => {
+    const { container, rerender } = render(<SubagentProcessDetails prompt="initial task"
+      history={{ ...history, truncated: true, omittedRecords: 600 }} canLoad />);
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('subagent.process.historyTruncated');
+    expect(container.textContent).toContain('initial task');
+    expect(container.textContent).toContain('first reasoning step');
+    rerender(<SubagentProcessDetails prompt="initial task" history={{ ...history, truncated: false, omittedRecords: 0 }} canLoad />);
+    expect(container.querySelector('.subagent-history-truncated')).toBeNull();
+  });
   it('renders the prompt section above the thought section', () => {
     const { container } = render(
       <SubagentProcessDetails prompt="investigate the bug" history={history} canLoad />,

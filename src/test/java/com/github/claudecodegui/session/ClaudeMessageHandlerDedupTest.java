@@ -40,23 +40,23 @@ public class ClaudeMessageHandlerDedupTest {
     }
 
     @Test
-    public void userEchoWithSeparateIdeReminderStillPatchesOptimisticMessageUuid() {
+    public void literalUserTagsAndSeparateIdeContextStillMatchTheOptimisticMessageExactly() {
         SessionState state = new SessionState();
         ClaudeSession.Message optimistic = new ClaudeSession.Message(
-                ClaudeSession.Message.Type.USER, "Explain this diff", null);
+                ClaudeSession.Message.Type.USER, "Explain <skill>this diff</skill>", null);
         state.addMessage(optimistic);
         ClaudeMessageHandler handler = new ClaudeMessageHandler(null, state, callbackHandler,
                 new MessageParser(), new MessageMerger(), new Gson());
 
         handler.onMessage("user", """
                 {"type":"user","uuid":"native-user-uuid","message":{"content":[
-                  {"type":"text","text":"Explain this diff"},
-                  {"type":"text","text":"<system-reminder>IDE context for this turn</system-reminder>"}
+                  {"type":"text","text":"Explain <skill>this diff</skill>"},
+                  {"type":"text","text":"<system-reminder>\\nThe following IDE context applies only to this user message.\\nIDE context for this turn\\n</system-reminder>"}
                 ]}}
                 """);
 
         assertEquals("native-user-uuid", optimistic.raw.get("uuid").getAsString());
-        assertEquals("Explain this diff", optimistic.content);
+        assertEquals("Explain <skill>this diff</skill>", optimistic.content);
         assertEquals(1, state.getMessages().size());
     }
 

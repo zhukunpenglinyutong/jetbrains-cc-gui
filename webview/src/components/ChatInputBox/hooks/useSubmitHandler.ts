@@ -2,7 +2,8 @@ import { useCallback } from 'react';
 import type { Attachment, ReasoningEffort } from '../types.js';
 import type { Dispatch, SetStateAction } from 'react';
 import { isCodexEffortIndependentCommand, parseCodexCommand } from '../../../hooks/codexCommandDispatcher';
-import { isCodexUltraCapabilityPending } from '../../../utils/codexReasoningCapabilities';
+import { getCodexReasoningCapabilities, isCodexUltraCapabilityUnconfirmed } from '../../../utils/codexReasoningCapabilities';
+import { getSessionTransitionPending } from '../../../utils/sessionTransitionState';
 
 interface CompletionLike {
   close: () => void;
@@ -111,11 +112,17 @@ export function useSubmitHandler({
     }
 
     if (!cleanContent && attachments.length === 0) return;
+    // A session swap is not accepted until Java has stopped/released the old
+    // session. Keep the draft intact during that decision.
+    if (getSessionTransitionPending()) return;
 
     if (currentProvider === 'codex' && !isCodexEffortIndependentCommand(command)
-        && isCodexUltraCapabilityPending(selectedModel, reasoningEffort)) {
-      addToast?.(t('chat.codexUltraCapabilitiesLoading', {
-        defaultValue: 'Checking Ultra availability. Try sending again when model loading finishes.',
+        && isCodexUltraCapabilityUnconfirmed(selectedModel, reasoningEffort)) {
+      addToast?.(t(getCodexReasoningCapabilities().status === 'unavailable'
+        ? 'chat.codexUltraCapabilitiesUnavailable' : 'chat.codexUltraCapabilitiesLoading', {
+        defaultValue: getCodexReasoningCapabilities().status === 'unavailable'
+          ? 'Could not verify Ultra availability. Retry loading models or choose another effort.'
+          : 'Checking Ultra availability. Try sending again when model loading finishes.',
       }), 'info');
       return;
     }

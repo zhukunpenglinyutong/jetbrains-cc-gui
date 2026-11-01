@@ -117,6 +117,10 @@ public class ClaudeSession {
         /** Publishes an identity, or an empty string when a missing transcript retires it. */
         void onSessionIdReceived(String sessionId);
 
+        default void onSessionIdReceived(String sessionId, String transitionToken) {
+            onSessionIdReceived(sessionId);
+        }
+
         void onPermissionRequested(PermissionRequest request);
 
         void onThinkingStatusChanged(boolean isThinking);
@@ -436,6 +440,11 @@ public class ClaudeSession {
      * @param cwd restored working directory
      */
     public void setSessionInfo(String sessionId, String cwd) {
+        setSessionInfo(sessionId, cwd, null);
+    }
+
+    /** Correlates restored identity with the history transition that accepted it. */
+    public void setSessionInfo(String sessionId, String cwd, String transitionToken) {
         synchronized (this.state.getMessageStateLock()) {
             if ("codex".equals(this.state.getProvider())
                     && !Objects.equals(sessionId, this.state.getSessionId())) {
@@ -456,7 +465,7 @@ public class ClaudeSession {
                 if ("codex".equals(this.state.getProvider()) && this.state.getChannelId() == null) {
                     this.state.setChannelId("codex");
                 }
-                this.callbackFacade.notifySessionIdReceived(sessionId);
+                this.callbackFacade.notifySessionIdReceived(sessionId, transitionToken);
             }
             if (cwd != null) {
                 this.setCwd(cwd);

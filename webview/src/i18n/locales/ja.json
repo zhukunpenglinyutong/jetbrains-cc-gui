@@ -107,6 +107,8 @@
     "disabled": "無効",
     "sdkNotInstalled": "{{provider}} SDKがインストールされていません。チャットを開始するにはSDKをインストールしてください。",
     "codexUltraCapabilitiesLoading": "Ultra が利用可能か確認中です。モデルの読み込みが完了したら、もう一度送信してください。",
+    "codexUltraCapabilitiesUnavailable": "Ultra の利用可否を確認できませんでした。モデルを再読み込みするか、別の推論レベルを選択してください。",
+    "sessionTransitionTakingLonger": "セッションの切り替えに時間がかかっています。もう一度開くことができます。待機中のメッセージの送信は一時停止しています。",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "貼り付けた画像を準備中...",
     "sdkStatusUnavailable": "SDK の状態を確認できませんでした。",
@@ -173,6 +175,8 @@
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
     "continueRefiningPlan": "このプランの改善を続ける：",
     "backgroundTasksRunning": "{{count}} 件のバックグラウンドタスクを実行中",
+    "backgroundTasksRunning_one": "{{count}} 件のバックグラウンドタスクを実行中",
+    "backgroundTasksRunning_other": "{{count}} 件のバックグラウンドタスクを実行中",
     "stopBackgroundTasks": "バックグラウンドタスクを停止"
   },
   "settings": {
@@ -1564,6 +1568,7 @@
       "loading": "エージェントプロセスを読み込み中…",
       "unavailable": "セッションに id ができるまでプロセスログは利用できません。",
       "reportGenerated": "構造化分析レポートを生成しました",
+      "historyTruncated": "履歴を短縮し、{{count}} 件の記録を省略しました。最初のタスクと最近のアクティビティは保持されています。",
       "unitMs": "ミリ秒",
       "unitS": "秒",
       "unitTools": "ツール",

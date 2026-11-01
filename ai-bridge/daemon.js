@@ -908,8 +908,10 @@ async function runDaemonMain() {
         }
         claudeAbortTurnPersistent(target).then(result => {
           const stopped = result.stopped || cancelledQueued > 0;
-          writeRawLine({ id: request.id || '0', done: true, success: stopped,
-            result: { stopped }, ...(!stopped ? { error: 'No matching Claude work to stop.' } : {}) });
+          // Command success means the requested owner is quiescent, including
+          // an already-reaped runtime. It does not fabricate cancellation of an
+          // original send: that request retains its own terminal outcome.
+          writeRawLine({ id: request.id || '0', done: true, success: true, result: { stopped } });
         }).catch(fail);
       } catch (error) {
         fail(error);

@@ -107,6 +107,8 @@
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安裝，請先安裝 SDK 才能開始對話",
     "codexUltraCapabilitiesLoading": "正在確認 Ultra 是否可用。模型載入完成後請重試傳送。",
+    "codexUltraCapabilitiesUnavailable": "無法確認 Ultra 是否可用。請重新載入模型或選擇其他推理強度。",
+    "sessionTransitionTakingLonger": "切換對話耗時較長。您可以再次嘗試開啟；排隊的訊息已暫停傳送。",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "正在準備貼上的圖片...",
     "sdkStatusUnavailable": "無法檢查 SDK 狀態。",
@@ -173,6 +175,8 @@
     "codexSandboxConflict": "Codex 自動審查不能使用 danger-full-access 沙箱，請改用 workspace-write 或請求批准模式。",
     "continueRefiningPlan": "繼續完善此計畫：",
     "backgroundTasksRunning": "{{count}} 個背景工作正在執行",
+    "backgroundTasksRunning_one": "{{count}} 個背景工作正在執行",
+    "backgroundTasksRunning_other": "{{count}} 個背景工作正在執行",
     "stopBackgroundTasks": "停止背景工作"
   },
   "settings": {
@@ -1603,6 +1607,7 @@
       "loading": "正在載入 Agent 程序…",
       "unavailable": "本次工作階段未產生程序記錄（需要工作階段 ID）。",
       "reportGenerated": "已產生結構化分析報告",
+      "historyTruncated": "歷史記錄已縮短，省略了 {{count}} 筆記錄。初始任務與最近活動仍保留。",
       "unitMs": "毫秒",
       "unitS": "秒",
       "unitTools": "個工具",

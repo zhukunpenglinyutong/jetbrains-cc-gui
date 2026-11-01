@@ -30,7 +30,7 @@ export async function assertUltracodeSupported(query, options = {}) {
     throw new Error(`Claude Ultracode requires Claude Code ${MIN_ULTRACODE_CLI_VERSION} or later; the running CLI reports ${initialization?.claude_code_version || 'an unknown version'}. Update Claude in Settings > Dependencies or your configured CLI executable.`);
   }
   if (options.settings?.disableWorkflows === true || /^(1|true)$/i.test(options.env?.CLAUDE_CODE_DISABLE_WORKFLOWS || '')) {
-    throw new Error('Claude Ultracode is unavailable because native dynamic workflows are disabled.');
+    throw new Error('Claude Ultracode is unavailable because native dynamic workflows are disabled. Turn off Ultracode in the model menu to send without workflows, then retry.');
   }
   // Effort metadata is not an Ultracode capability. The native applied setting
   // checked below determines whether this model/session supports workflows.
@@ -45,8 +45,8 @@ export async function applyNativeFlagSettings(query, settings) {
     const applied = (await query.getSettings())?.applied;
     if (applied?.ultracode !== true) {
       throw new Error(applied?.ultracodeAvailable === false
-        ? 'Claude Ultracode is unavailable for this session: native dynamic workflows are disabled or the model does not support them.'
-        : 'The running Claude SDK could not confirm native Ultracode is enabled. Update Claude in Settings > Dependencies.');
+        ? 'Claude Ultracode is unavailable for this session: native dynamic workflows are disabled or the model does not support them. Turn off Ultracode in the model menu, or choose a supported model, then retry.'
+        : 'The running Claude SDK could not confirm native Ultracode is enabled. Update Claude in Settings > Dependencies, or turn off Ultracode in the model menu, then retry.');
     }
   }
 }

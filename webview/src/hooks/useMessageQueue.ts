@@ -15,11 +15,16 @@ export interface QueuedMessage {
   queuedAt: number;
 }
 
+/** A refusal leaves ownership with the queue; only accepted work can be removed. */
+export type MessageDispatchResult = 'started' | 'handled' | 'blocked';
+
 export interface UseMessageQueueOptions {
   /** Whether AI is currently processing */
   isLoading: boolean;
-  /** Callback to execute a message */
-  onExecute: (content: string, attachments?: Attachment[]) => void;
+  /** Synchronous handoff: started a turn, handled locally, or refused the message. */
+  onExecute: (content: string, attachments?: Attachment[]) => MessageDispatchResult;
+  /** Changes only when a condition that refused dispatch can have changed. */
+  retryKey?: unknown;
 }
 
 export interface UseMessageQueueReturn {
@@ -72,6 +77,7 @@ function applyQueueOrder(queue: QueuedMessage[], orderedIds: string[]): QueuedMe
 export function useMessageQueue({
   isLoading,
   onExecute,
+  retryKey,
 }: UseMessageQueueOptions): UseMessageQueueReturn {
   const [queue, setQueue] = useState<QueuedMessage[]>([]);
   // Timestamp of the last dispatch. The drain effect re-runs synchronously after
@@ -80,6 +86,7 @@ export function useMessageQueue({
   // drained the whole queue in one idle period, overlapping multiple sends on
   // the same Codex thread (writer-lock conflict).
   const dispatchedAtRef = useRef<number | null>(null);
+  const refusedRef = useRef<{ id: string; retryKey: unknown } | null>(null);
   // The live queue. Every mutation moves it first and then publishes it to
   // state, so a removal can report what it took out and the idle dispatch
   // never sends a message an edit already took, even when either lands
@@ -146,41 +153,35 @@ export function useMessageQueue({
     commitQueue(applyQueueOrder(queueRef.current, orderedIds));
   }, [commitQueue]);
 
-  // Auto-execute next message whenever the chat is idle. Dequeue and execute
-  // must stay atomic inside this effect: deferring the execution behind a
-  // timer let the very next re-render (the dequeue's own state update) run
-  // effect cleanup, cancel the timer, and silently drop the already-dequeued
-  // message. Checking "idle && non-empty" instead of a loading transition also
-  // covers messages enqueued while `isLoading` was already flipping to false.
-  //
-  // Single-flight: at most one dispatch per idle period. The drain effect
-  // re-runs synchronously after its own dequeue while `isLoading` is still
-  // false (the execute path flips it only in the next render); without the
-  // gate it drained the whole queue at once, overlapping multiple sends on
-  // the same Codex thread (thread-writer lock conflict). The gate reopens
-  // when `isLoading` turns true — i.e. the dispatched message actually
-  // started a turn. A dispatch that bails before flipping loading (e.g. SDK
-  // missing) leaves the gate closed so the queue waits instead of spamming
-  // doomed sends; any subsequent turn reopens it.
-  //
-  // `queue` only triggers the effect; the live ref is what gets read, because
-  // a message taken for editing after this render committed is already gone
-  // from the ref while the render's `queue` still holds it.
+  // Read the live queue so an edit between render and effects cannot be sent.
+  // Ownership transfers only after synchronous acceptance. Refused items keep
+  // their ID, attachments, quotes and position, and retry when readiness changes.
+  // Accepted model turns retain the single-flight gate until loading cycles;
+  // locally handled commands can drain without waiting for a nonexistent turn.
   useEffect(() => {
     if (isLoading) {
       dispatchedAtRef.current = null;
+      refusedRef.current = null;
       return;
     }
-    const [nextMessage, ...remaining] = queueRef.current;
+    const [nextMessage] = queueRef.current;
     if (!nextMessage || dispatchedAtRef.current !== null) {
       return;
     }
-    dispatchedAtRef.current = Date.now();
-    commitQueue(remaining);
+    if (refusedRef.current?.id === nextMessage.id && Object.is(refusedRef.current.retryKey, retryKey)) return;
     // The input may have pruned these while the message waited.
     restoreQuotes(nextMessage.quotes);
-    onExecute(nextMessage.content, nextMessage.attachments);
-  }, [isLoading, queue, onExecute, commitQueue]);
+    const result = onExecute(nextMessage.content, nextMessage.attachments);
+    if (result !== 'started' && result !== 'handled') {
+      refusedRef.current = { id: nextMessage.id, retryKey };
+      return;
+    }
+    refusedRef.current = null;
+    if (result === 'started') dispatchedAtRef.current = Date.now();
+    // The callback can itself change session/queue state. Never restore the
+    // captured remainder over those mutations or remove a different item.
+    commitQueue(queueRef.current.filter(item => item.id !== nextMessage.id));
+  }, [isLoading, queue, onExecute, commitQueue, retryKey]);
 
   return {
     queue,

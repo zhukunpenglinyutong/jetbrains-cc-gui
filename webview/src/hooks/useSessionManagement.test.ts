@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { useSessionManagement } from './useSessionManagement.js';
+import { commitPendingSessionTransition, finishSessionTransition } from '../utils/sessionTransitionState';
 import type { HistoryData } from '../types/index.js';
 
 describe('useSessionManagement', () => {
@@ -24,6 +25,7 @@ describe('useSessionManagement', () => {
   });
 
   beforeEach(() => {
+    finishSessionTransition();
     window.__sessionTransitioning = false;
     window.__sessionTransitionToken = null;
     window.__pendingSessionTransitionToast = undefined;
@@ -32,6 +34,11 @@ describe('useSessionManagement', () => {
     // that exercise the localStorage path can't leak into ones that don't.
     localStorage.removeItem('skipNewSessionConfirm');
   });
+
+  const sentTransition = (type: 'create_new_session' | 'load_session') => {
+    const line = vi.mocked(window.sendToJava!).mock.calls.map(([value]) => value).filter(value => value.startsWith(`${type}:`)).at(-1);
+    return line ? JSON.parse(line.slice(type.length + 1)) : undefined;
+  };
 
   /** Delete payloads now carry provider and requestId alongside the targets. */
   const sentRequests = (type: 'delete_session' | 'delete_sessions') => vi.mocked(window.sendToJava!).mock.calls
@@ -60,6 +67,8 @@ describe('useSessionManagement', () => {
 
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBeTruthy();
+    // Java accepts the transition only after stopping/releasing the old runtime.
+    act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
     expect(mocks.clearToasts).toHaveBeenCalledTimes(1);
     expect(mocks.setStatus).toHaveBeenCalledWith('');
     expect(mocks.setLoading).toHaveBeenCalledWith(false);
@@ -70,7 +79,7 @@ describe('useSessionManagement', () => {
     expect(mocks.setCustomSessionTitle).toHaveBeenCalledWith(null);
     expect(mocks.setUsagePercentage).toHaveBeenCalledWith(0);
     expect(mocks.setUsageUsedTokens).toHaveBeenCalledWith(undefined);
-    expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+    expect(window.sendToJava).toHaveBeenCalledWith(expect.stringMatching(/^create_new_session:/));
   });
 
   it('discards queued messages when the session transitions', () => {
@@ -95,10 +104,12 @@ describe('useSessionManagement', () => {
 
     // Queued messages belong to the outgoing session; the transition must
     // drop them before the next session's queue-auto-execute can see them.
+    // Java accepts the transition only after stopping/releasing the old runtime.
+    act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
     expect(clearQueuedMessages).toHaveBeenCalledTimes(1);
   });
 
-  it('clears stale ui state before loading history', () => {
+  it('clears stale ui state once the history transition is accepted', () => {
     const historyData = {
       success: true,
       sessions: [
@@ -131,15 +142,14 @@ describe('useSessionManagement', () => {
       result.current.loadHistorySession('history-1');
     });
 
-    expect(window.sendToJava).toHaveBeenNthCalledWith(1, 'interrupt_session:');
+    expect(window.sendToJava).not.toHaveBeenCalledWith('interrupt_session:');
     // The payload model is normalized webview-side: the retired sonnet-4-6 is
     // mapped to its live replacement before Java stores it verbatim.
-    expect(window.sendToJava).toHaveBeenNthCalledWith(
-      2,
-      'load_session:{"sessionId":"history-1","provider":"claude","model":"claude-sonnet-5"}'
-    );
+    expect(sentTransition('load_session')).toMatchObject({"sessionId":"history-1","provider":"claude","model":"claude-sonnet-5"});
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBeTruthy();
+    // Java accepts the transition only after stopping/releasing the old runtime.
+    act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
     expect(mocks.clearToasts).toHaveBeenCalledTimes(1);
     expect(mocks.setMessages).toHaveBeenCalledWith([]);
     expect(mocks.setCurrentSessionId).toHaveBeenCalledWith('history-1');
@@ -381,7 +391,7 @@ describe('useSessionManagement', () => {
     });
 
     expect(sentRequest('delete_sessions').sessionIds).toEqual(['history-1', 'history-2']);
-    expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+    expect(window.sendToJava).toHaveBeenCalledWith(expect.stringMatching(/^create_new_session:/));
     expect(mocks.addToast).not.toHaveBeenCalledWith('history.sessionDeleted', 'success');
     expect(window.__pendingSessionTransitionToast).toEqual({
       message: 'history.sessionDeleted',
@@ -424,14 +434,14 @@ describe('useSessionManagement', () => {
 
       const request = sentRequest('delete_session');
       expect(request).toMatchObject({ sessionId: 'history-2', provider: 'codex' });
-      expect(window.sendToJava).not.toHaveBeenCalledWith('create_new_session:');
-      expect(window.__sessionTransitioning).toBe(false);
+      expect(window.sendToJava).not.toHaveBeenCalledWith(expect.stringMatching(/^create_new_session:/));
+      expect(window.__sessionTransitioning).toBe(true);
       expect(mocks.addToast).not.toHaveBeenCalled();
 
       deliverResult({ requestId: request.requestId, provider: 'codex', sessionIds: ['history-2'],
         deletedSessionIds: ['history-2'], success: true });
 
-      expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+      expect(window.sendToJava).toHaveBeenCalledWith(expect.stringMatching(/^create_new_session:/));
       expect(window.__sessionTransitioning).toBe(true);
       expect(window.__pendingSessionTransitionToast).toEqual({ message: 'history.sessionDeleted', type: 'success' });
     });
@@ -443,7 +453,7 @@ describe('useSessionManagement', () => {
       deliverResult({ requestId: sentRequest('delete_sessions').requestId, provider: 'codex',
         sessionIds: ['history-1', 'history-2'], deletedSessionIds: [], success: false, errorCode: 'SESSION_RUNNING' });
 
-      expect(window.sendToJava).not.toHaveBeenCalledWith('create_new_session:');
+      expect(window.sendToJava).not.toHaveBeenCalledWith(expect.stringMatching(/^create_new_session:/));
       expect(window.__sessionTransitioning).toBe(false);
       expect(mocks.addToast).toHaveBeenCalledWith('history.sessionInUse', 'warning');
       expect(mocks.addToast).not.toHaveBeenCalledWith('history.sessionDeleted', 'success');
@@ -456,7 +466,7 @@ describe('useSessionManagement', () => {
       deliverResult({ requestId: sentRequest('delete_sessions').requestId, provider: 'codex',
         sessionIds: ['history-1', 'history-2'], deletedSessionIds: ['history-1'], success: false, errorCode: 'DELETE_FAILED' });
 
-      expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+      expect(window.sendToJava).toHaveBeenCalledWith(expect.stringMatching(/^create_new_session:/));
       expect(window.__pendingSessionTransitionToast).toEqual({ message: 'history.deleteFailed', type: 'error' });
       expect(mocks.addToast).not.toHaveBeenCalled();
     });
@@ -468,7 +478,7 @@ describe('useSessionManagement', () => {
       deliverResult({ requestId: sentRequest('delete_session').requestId, provider: 'codex',
         sessionIds: ['history-1'], deletedSessionIds: [], success: false, errorCode: 'DELETE_FAILED' });
 
-      expect(window.sendToJava).not.toHaveBeenCalledWith('create_new_session:');
+      expect(window.sendToJava).not.toHaveBeenCalledWith(expect.stringMatching(/^create_new_session:/));
       expect(mocks.addToast).toHaveBeenCalledWith('history.deleteFailed', 'error');
     });
 
@@ -479,7 +489,7 @@ describe('useSessionManagement', () => {
       deliverResult({ requestId: sentRequest('delete_sessions').requestId, provider: 'codex',
         sessionIds: ['history-2'], deletedSessionIds: ['history-2'], success: true });
 
-      expect(window.sendToJava).not.toHaveBeenCalledWith('create_new_session:');
+      expect(window.sendToJava).not.toHaveBeenCalledWith(expect.stringMatching(/^create_new_session:/));
       expect(mocks.addToast).toHaveBeenCalledWith('history.sessionDeleted', 'success');
     });
 
@@ -491,12 +501,12 @@ describe('useSessionManagement', () => {
         sessionIds: ['history-1'], deletedSessionIds: ['history-1'], success: true };
       act(() => { window.onHistoryDeleteResult?.('not json'); });
       deliverResult({ ...outcome, requestId: 'delete-from-another-request' });
-      expect(window.sendToJava).not.toHaveBeenCalledWith('create_new_session:');
+      expect(window.sendToJava).not.toHaveBeenCalledWith(expect.stringMatching(/^create_new_session:/));
 
       deliverResult(outcome);
       deliverResult(outcome);
 
-      expect(vi.mocked(window.sendToJava!).mock.calls.filter(([payload]) => payload === 'create_new_session:'))
+      expect(vi.mocked(window.sendToJava!).mock.calls.filter(([payload]) => String(payload).startsWith('create_new_session:')))
         .toHaveLength(1);
       expect(mocks.addToast).not.toHaveBeenCalled();
     });
@@ -558,10 +568,12 @@ describe('useSessionManagement', () => {
       result.current.forceCreateNewSession();
     });
 
-    expect(window.sendToJava).toHaveBeenCalledWith('interrupt_session:');
-    expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+    expect(window.sendToJava).not.toHaveBeenCalledWith('interrupt_session:');
+    expect(window.sendToJava).toHaveBeenCalledWith(expect.stringMatching(/^create_new_session:/));
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBeTruthy();
+    // Java accepts the transition only after stopping/releasing the old runtime.
+    act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
     expect(mocks.clearToasts).toHaveBeenCalledTimes(1);
     expect(mocks.setMessages).toHaveBeenCalledWith([]);
     expect(mocks.setCurrentSessionId).toHaveBeenCalledWith(null);
@@ -587,9 +599,11 @@ describe('useSessionManagement', () => {
       result.current.forceCreateNewSessionWithProvider('codex');
     });
 
-    expect(window.sendToJava).toHaveBeenNthCalledWith(1, 'set_provider:codex');
-    expect(window.sendToJava).toHaveBeenNthCalledWith(2, 'create_new_session:');
+    expect(window.sendToJava).not.toHaveBeenCalledWith('set_provider:codex');
+    expect(sentTransition('create_new_session')).toMatchObject({ provider: 'codex', transitionToken: window.__sessionTransitionToken });
     expect(window.__sessionTransitioning).toBe(true);
+    // Java accepts the transition only after stopping/releasing the old runtime.
+    act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
     expect(mocks.setMessages).toHaveBeenCalledWith([]);
     expect(mocks.setCurrentSessionId).toHaveBeenCalledWith(null);
   });
@@ -643,8 +657,10 @@ describe('useSessionManagement', () => {
     expect(result.current.showNewSessionConfirm).toBe(false);
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBeTruthy();
+    // Java accepts the transition only after stopping/releasing the old runtime.
+    act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
     expect(mocks.setMessages).toHaveBeenCalledWith([]);
-    expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+    expect(window.sendToJava).toHaveBeenCalledWith(expect.stringMatching(/^create_new_session:/));
   });
 
   it('still shows the interrupt dialog while loading even if skipNewSessionConfirm is enabled', () => {
@@ -673,7 +689,7 @@ describe('useSessionManagement', () => {
     expect(result.current.showNewSessionConfirm).toBe(false);
     expect(window.__sessionTransitioning).toBe(false);
     expect(mocks.setMessages).not.toHaveBeenCalled();
-    expect(window.sendToJava).not.toHaveBeenCalledWith('create_new_session:');
+    expect(window.sendToJava).not.toHaveBeenCalledWith(expect.stringMatching(/^create_new_session:/));
   });
 
   it('handleConfirmInterrupt completes interrupt+transition even with skipNewSessionConfirm enabled', () => {
@@ -710,13 +726,15 @@ describe('useSessionManagement', () => {
     expect(result.current.showInterruptConfirm).toBe(false);
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBeTruthy();
+    // Java accepts the transition only after stopping/releasing the old runtime.
+    act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
     expect(mocks.setMessages).toHaveBeenCalledWith([]);
 
     const calls = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls.map(
       (c: unknown[]) => c[0]
     );
-    expect(calls.filter((c) => c === 'interrupt_session:')).toHaveLength(1);
-    expect(calls.filter((c) => c === 'create_new_session:')).toHaveLength(1);
+    expect(calls.filter((c) => c === 'interrupt_session:')).toHaveLength(0);
+    expect(calls.filter((c) => String(c).startsWith('create_new_session:'))).toHaveLength(1);
   });
 
   it('handleConfirmNewSession cleans state and creates new session', () => {
@@ -745,10 +763,12 @@ describe('useSessionManagement', () => {
 
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBeTruthy();
+    // Java accepts the transition only after stopping/releasing the old runtime.
+    act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
     expect(mocks.clearToasts).toHaveBeenCalledTimes(1);
     expect(mocks.setMessages).toHaveBeenCalledWith([]);
     expect(mocks.setCurrentSessionId).toHaveBeenCalledWith(null);
-    expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+    expect(window.sendToJava).toHaveBeenCalledWith(expect.stringMatching(/^create_new_session:/));
     expect(result.current.showNewSessionConfirm).toBe(false);
   });
 
@@ -776,10 +796,12 @@ describe('useSessionManagement', () => {
       result.current.handleConfirmInterrupt();
     });
 
-    expect(window.sendToJava).toHaveBeenCalledWith('interrupt_session:');
-    expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+    expect(window.sendToJava).not.toHaveBeenCalledWith('interrupt_session:');
+    expect(window.sendToJava).toHaveBeenCalledWith(expect.stringMatching(/^create_new_session:/));
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBeTruthy();
+    // Java accepts the transition only after stopping/releasing the old runtime.
+    act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
     expect(mocks.clearToasts).toHaveBeenCalledTimes(1);
     expect(mocks.setMessages).toHaveBeenCalledWith([]);
     expect(mocks.setCurrentSessionId).toHaveBeenCalledWith(null);
@@ -822,13 +844,13 @@ describe('useSessionManagement', () => {
     const calls = (window.sendToJava as any).mock.calls.map((c: any) => c[0]);
     expect(calls).not.toContain('interrupt_session:');
     // The retired sonnet-4-6 is normalized to its live replacement in the payload.
-    expect(calls).toContain(
-      'load_session:{"sessionId":"hist-2","provider":"claude","model":"claude-sonnet-5"}',
-    );
+    expect(sentTransition('load_session')).toMatchObject({"sessionId":"hist-2","provider":"claude","model":"claude-sonnet-5"});
 
     // But should still set transition guard
     expect(window.__sessionTransitioning).toBe(true);
     expect(window.__sessionTransitionToken).toBeTruthy();
+    // Java accepts the transition only after stopping/releasing the old runtime.
+    act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
     expect(mocks.clearToasts).toHaveBeenCalledTimes(1);
     expect(mocks.setMessages).toHaveBeenCalledWith([]);
     expect(mocks.setCurrentSessionId).toHaveBeenCalledWith('hist-2');
@@ -868,9 +890,7 @@ describe('useSessionManagement', () => {
       result.current.loadHistorySession('hist-codex', 'codex');
     });
 
-    expect(window.sendToJava).toHaveBeenCalledWith(
-      'load_session:{"sessionId":"hist-codex","provider":"codex","model":"gpt-5.4"}'
-    );
+    expect(sentTransition('load_session')).toMatchObject({"sessionId":"hist-codex","provider":"codex","model":"gpt-5.4"});
   });
 
   it('loadHistorySession falls back to current provider when history item has no provider', () => {
@@ -905,9 +925,7 @@ describe('useSessionManagement', () => {
       result.current.loadHistorySession('hist-codex-missing-provider');
     });
 
-    expect(window.sendToJava).toHaveBeenCalledWith(
-      'load_session:{"sessionId":"hist-codex-missing-provider","provider":"codex"}'
-    );
+    expect(sentTransition('load_session')).toMatchObject({"sessionId":"hist-codex-missing-provider","provider":"codex"});
   });
 
   it('all transition paths reset usage tokens', () => {
@@ -929,12 +947,14 @@ describe('useSessionManagement', () => {
       result.current.forceCreateNewSession();
     });
 
+    // Java accepts the transition only after stopping/releasing the old runtime.
+    act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
     expect(mocks.setUsagePercentage).toHaveBeenCalledWith(0);
     expect(mocks.setUsageUsedTokens).toHaveBeenCalledWith(undefined);
     expect(mocks.setUsageMaxTokens).toHaveBeenCalledWith(undefined);
   });
 
-  it('beginSessionTransition clears all transient UI states synchronously', () => {
+  it('accepted session transition clears all transient UI states synchronously', () => {
     const mocks = createMocks();
 
     const { result } = renderHook(() =>
@@ -953,6 +973,8 @@ describe('useSessionManagement', () => {
     });
 
     // All transient UI states must be synchronously cleared
+    // Java accepts the transition only after stopping/releasing the old runtime.
+    act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
     expect(mocks.setStatus).toHaveBeenCalledWith('');
     expect(mocks.setLoading).toHaveBeenCalledWith(false);
     expect(mocks.setIsThinking).toHaveBeenCalledWith(false);
