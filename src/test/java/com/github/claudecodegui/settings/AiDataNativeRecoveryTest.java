@@ -120,8 +120,9 @@ public class AiDataNativeRecoveryTest {
 
     private static AiDataDirectoryManager manager(Path root, AiDataDirectoryManager.DirectoryLinkCreator creator) {
         Path coordination = root.resolve("coordination");
+        AiDataMigrationCoordinator coordinator = new AiDataMigrationCoordinator(coordination);
         return new AiDataDirectoryManager(root.resolve("home"), coordination.resolve("state"),
-                PlatformUtils.getPlatformType(), false, creator, new AiDataProcessGate(),
+                PlatformUtils.getPlatformType(), false, creator, new AiDataProcessGate(coordinator),
                 AiDataDirectoryManager::deleteWritablePath, coordination, root.resolve("legacy-state"));
     }
 

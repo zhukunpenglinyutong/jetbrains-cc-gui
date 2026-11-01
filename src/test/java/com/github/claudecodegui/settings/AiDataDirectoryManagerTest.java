@@ -414,7 +414,7 @@ public class AiDataDirectoryManagerTest {
         try (AiDataMigrationCoordinator.LockHandle ignored = coordinator.tryAcquire("migrate")) {
             AiDataDirectoryManager manager = new AiDataDirectoryManager(
                     home, state, PlatformUtils.PlatformType.WINDOWS, false,
-                    AiDataDirectoryManagerTest::createDirectoryLink, new AiDataProcessGate(),
+                    AiDataDirectoryManagerTest::createDirectoryLink, new AiDataProcessGate(coordinator),
                     AiDataDirectoryManager::deleteWritablePath, coordination);
 
             AiDataDirectoryManager.AiDataDirectoryException error = assertThrows(
@@ -432,13 +432,13 @@ public class AiDataDirectoryManagerTest {
         Path root = temporaryFolder.getRoot().toPath();
         Path home = Files.createDirectory(root.resolve("status-home"));
         Path coordination = root.resolve("coordination");
+        AiDataMigrationCoordinator coordinator = new AiDataMigrationCoordinator(coordination);
         AiDataDirectoryManager manager = new AiDataDirectoryManager(
                 home, coordination.resolve("state"), PlatformUtils.PlatformType.WINDOWS, false,
-                AiDataDirectoryManagerTest::createDirectoryLink, new AiDataProcessGate(),
+                AiDataDirectoryManagerTest::createDirectoryLink, new AiDataProcessGate(coordinator),
                 AiDataDirectoryManager::deleteWritablePath, coordination, root.resolve("legacy"));
 
-        try (AiDataMigrationCoordinator.ProcessLock ignored = new AiDataMigrationCoordinator(coordination)
-                .tryAcquireProcessLock()) {
+        try (AiDataMigrationCoordinator.ProcessLock ignored = coordinator.tryAcquireProcessLock()) {
             JsonObject status = manager.snapshot();
             assertFalse(status.has("error"));
             assertFalse(status.has("migrationInProgress"));
@@ -454,7 +454,7 @@ public class AiDataDirectoryManagerTest {
         AiDataMigrationCoordinator coordinator = new AiDataMigrationCoordinator(coordination);
         AiDataDirectoryManager manager = new AiDataDirectoryManager(
                 home, coordination.resolve("state"), PlatformUtils.PlatformType.WINDOWS, false,
-                AiDataDirectoryManagerTest::createDirectoryLink, new AiDataProcessGate(),
+                AiDataDirectoryManagerTest::createDirectoryLink, new AiDataProcessGate(coordinator),
                 AiDataDirectoryManager::deleteWritablePath, coordination, root.resolve("legacy"));
 
         try (AiDataMigrationCoordinator.ProcessLock ignored = coordinator.tryAcquireProcessLock()) {
