@@ -28,6 +28,7 @@ export interface ApplyHistoryModelDeps {
   setSelectedOpenCodeModel: (model: string) => void;
   setSelectedPiModel: (model: string) => void;
   setSelectedDshModel: (model: string) => void;
+  setSelectedGeminiModel: (model: string) => void;
   setSelectedOmpModel: (model: string) => void;
   setOmpPermissionMode: (mode: PermissionMode) => void;
 }
@@ -62,6 +63,7 @@ export const createApplyHistoryModel = ({
     setSelectedOpenCodeModel,
     setSelectedPiModel,
     setSelectedDshModel,
+    setSelectedGeminiModel,
     setSelectedOmpModel,
     setOmpPermissionMode,
   } = modelState;
@@ -107,6 +109,13 @@ export const createApplyHistoryModel = ({
         }
       } else if (provider === 'dsh') {
         setSelectedDshModel(model);
+        sendBridgeEvent('set_model', model);
+      } else if (provider === 'gemini') {
+        // Gemini model ids are full catalog slugs (family+effort is ONE slug):
+        // they pass through UNCHANGED — no claude normalization, no [1m]
+        // handling. A slug absent from the live CLI model list is auto-corrected
+        // by ButtonArea's vanished-selection effect, not here.
+        setSelectedGeminiModel(model);
         sendBridgeEvent('set_model', model);
       } else {
         // claude (or unrecognized): apply the claude model directly —

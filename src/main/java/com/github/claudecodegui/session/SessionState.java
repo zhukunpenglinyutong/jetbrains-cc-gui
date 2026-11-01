@@ -32,6 +32,9 @@ public class SessionState {
         // webview for the omp provider, but validated here so set_mode accepts them.
         modes.add("smol");
         modes.add("slow");
+        // gemini sandbox posture (`agy --sandbox`); only offered by the webview
+        // for the gemini provider, but validated here so set_mode accepts it.
+        modes.add("sandbox");
         VALID_PERMISSION_MODES = Collections.unmodifiableSet(modes);
     }
 

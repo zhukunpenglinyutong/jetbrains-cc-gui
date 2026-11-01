@@ -23,16 +23,21 @@ export function extractResultText(result?: ToolResultBlock | null): string | und
 /** A spawn receipt names the child; only its later report belongs in the result panel. */
 export function extractAgentResultText(result?: ToolResultBlock | null, toolName?: string): string | undefined {
   const text = extractResultText(result);
-  if (toolName?.split('.').at(-1) !== 'spawn_agent' || !text) return text;
-  try {
-    const value = JSON.parse(text) as Record<string, unknown>;
-    const identityKeys = ['task_name', 'taskName', 'agent_id', 'agentId', 'agent_path', 'agentPath'];
-    const metadataKeys = [...identityKeys, 'nickname', 'name', 'model', 'reasoning_effort', 'reasoningEffort', 'description'];
-    if (value && !Array.isArray(value) && typeof value === 'object'
-      && identityKeys.some(key => typeof value[key] === 'string')
-      && Object.keys(value).every(key => metadataKeys.includes(key))) return undefined;
-  } catch {
-    // Plain text and structured reports remain available unchanged.
+  const baseName = toolName?.split('.').at(-1);
+  if (baseName === 'spawn_agent' && text) {
+    try {
+      const value = JSON.parse(text) as Record<string, unknown>;
+      const identityKeys = ['task_name', 'taskName', 'agent_id', 'agentId', 'agent_path', 'agentPath'];
+      const metadataKeys = [...identityKeys, 'nickname', 'name', 'model', 'reasoning_effort', 'reasoningEffort', 'description'];
+      if (value && !Array.isArray(value) && typeof value === 'object'
+        && identityKeys.some(key => typeof value[key] === 'string')
+        && Object.keys(value).every(key => metadataKeys.includes(key))) return undefined;
+    } catch {
+      // Plain text and structured reports remain available unchanged.
+    }
+  }
+  if (baseName === 'invoke_subagent' && text) {
+    if (/Created the following subagents/i.test(text)) return undefined;
   }
   return text;
 }
@@ -83,7 +88,8 @@ export function isAsyncAgentInput(
   result?: ToolResultBlock | null,
   toolUseStatus?: unknown,
 ): boolean {
-  if (normalizedToolName?.split('.').at(-1) === 'spawn_agent') return true;
+  const baseName = normalizedToolName?.split('.').at(-1);
+  if (baseName === 'spawn_agent' || baseName === 'invoke_subagent') return true;
   if (!input || typeof input !== 'object') {
     // Even a stripped input still betrays an async launch via its ack text or
     // tool-use status, so do not fall through to "sync" just because input is
@@ -203,6 +209,26 @@ export function parseSpawnAgentMeta(
     ...(model && { model }),
     ...(reasoningEffort && { reasoningEffort }),
   };
+}
+
+export interface GeminiSubagentState {
+  conversationId: string;
+  state: string;
+  role?: string;
+}
+
+/** manage_subagents lists each child as one flat JSON object with conversationId and state. */
+export function parseGeminiSubagentStates(text: string | undefined): GeminiSubagentState[] {
+  if (!text) return [];
+  const states: GeminiSubagentState[] = [];
+  for (const match of text.matchAll(/\{[^{}]*"conversationId"\s*:\s*"([0-9a-fA-F-]{36})"[^{}]*\}/g)) {
+    const body = match[0];
+    const state = body.match(/"state"\s*:\s*"([^"]+)"/)?.[1];
+    if (!state) continue;
+    const role = body.match(/"role"\s*:\s*"([^"]+)"/)?.[1];
+    states.push({ conversationId: match[1], state, ...(role ? { role } : {}) });
+  }
+  return states;
 }
 
 /** True only when a full sidechain transcript has been loaded. */

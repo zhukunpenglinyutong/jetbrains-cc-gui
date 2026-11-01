@@ -1,0 +1,3 @@
+{"event": "init", "conversation_id": "2ac96d6e-db37-4187-b143-6f64975415c8", "init": {"cwd": "<TMP>", "tools": ["ask_permission", "read_url_content", "run_command", "grep_search", "list_dir", "view_file", "write_to_file"], "permission_mode": "request-review"}}
+{"event": "step_update", "step_update": {"conversation_id": "2ac96d6e-db37-4187-b143-6f64975415c8", "step_index": 0, "state": "DONE", "step_type": "user_input"}}
+{"event": "result", "result": {"conversation_id": "2ac96d6e-db37-4187-b143-6f64975415c8", "status": "ERROR", "response": "", "error": "timeout waiting for response", "duration_seconds": 0, "num_turns": 1, "usage": {"input_tokens": 0, "output_tokens": 0, "thinking_tokens": 0, "cache_read_tokens": 0, "total_tokens": 0}}}

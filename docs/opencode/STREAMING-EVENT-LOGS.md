@@ -186,6 +186,26 @@ Useful metadata to preserve:
 - permission/question request ID
 - child session ID for task/subagent runs
 
+## Gemini-Specific Notes
+
+Gemini (agy) streams NDJSON stream-json events on stdout in print mode, and its
+fixtures live next to the service that parses them:
+`ai-bridge/services/gemini/fixtures/*.jsonl` (plus `models-catalog.tsv` for the
+model list). Fixtures are LIVE-CLI captures (recorded from real `agy -p ...
+--output-format stream-json` runs, sanitized: `/Users/<user>` -> `<HOME>`,
+`/tmp/<dir>` -> `<TMP>`, `tools[]` truncated) or synthetic replays built from
+live-verified shapes when a scenario cannot be reproduced on demand (e.g. auth
+failures, which would disturb the developer's CLI credentials).
+
+Unlike the capture-utility flow above, gemini fixtures are replayed directly
+through the production path: `message-service.test.js` points `GEMINI_BIN` at a
+generated fake CLI that emits the fixture's NDJSON lines and exits with the
+recorded code, then drives `sendMessage` and asserts on the marker-protocol
+output — the same channel dispatcher contract the real bridge speaks. Each new
+gemini stream behavior (new event type, new result status, new usage field)
+should add one captured fixture plus one replay test; provenance (capture date,
+CLI version, live vs synthetic) is documented in the test file header.
+
 ## Acceptance Checks
 
 - A shared capture envelope schema is documented and versioned.

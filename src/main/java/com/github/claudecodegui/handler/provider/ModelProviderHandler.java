@@ -519,7 +519,14 @@ public class ModelProviderHandler {
             return suffixLimit;
         }
 
-        return MODEL_CONTEXT_LIMITS.getOrDefault(model, 200_000);
+        Integer mapped = MODEL_CONTEXT_LIMITS.get(model);
+        if (mapped != null) {
+            return mapped;
+        }
+        if (model.trim().toLowerCase(Locale.ROOT).startsWith("gemini-")) {
+            return 1_000_000;
+        }
+        return 200_000;
     }
 
     /**
@@ -567,7 +574,12 @@ public class ModelProviderHandler {
         }
         return CustomModelContextWindowProvider.getInstance()
                 .getContextWindow(provider, model)
-                .orElseGet(() -> getModelContextLimit(model));
+                .orElseGet(() -> {
+                    if ("gemini".equalsIgnoreCase(provider) && (model == null || model.trim().isEmpty())) {
+                        return 1_000_000;
+                    }
+                    return getModelContextLimit(model);
+                });
     }
 
     /**

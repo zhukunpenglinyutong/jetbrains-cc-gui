@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.gemini.GeminiSubagentHistoryLoader;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.project.Project;
@@ -175,6 +176,111 @@ public class SubagentHistoryServiceStatusTest {
         assertEquals("onSubagentStatusesLoaded", callback.functionName);
         assertTrue(callback.payload.contains("Too many agents"));
         assertTrue(callback.payload.contains("\\\"success\\\":false"));
+    }
+
+    @Test
+    public void loadsGeminiSubagentStatusesFromParentStep101() throws Exception {
+        Path geminiHome = temporaryFolder.newFolder("gemini-status-test").toPath();
+        Path conversations = geminiHome.resolve("conversations");
+        Files.createDirectories(conversations);
+        String parentId = "019fa70f-0653-73e2-a613-1fb0a9e83a2b";
+        String childId = "019fb0fe-c344-7da0-9d10-20659f884100";
+        createGeminiDb(conversations.resolve(parentId + ".db"),
+                101, "[Message] timestamp=2026-10-12T20:10:00Z sender=" + childId + " priority=HIGH content=Analysis complete");
+        createGeminiDb(conversations.resolve(childId + ".db"), 14, "task prompt");
+
+        CapturingJsCallback callback = new CapturingJsCallback();
+        SubagentHistoryService service = new SubagentHistoryService(
+                createContext(callback),
+                new CodexSubagentHistoryLoader(temporaryFolder.newFolder("empty-codex").toPath()),
+                new GeminiSubagentHistoryLoader(geminiHome));
+
+        JsonObject request = new JsonObject();
+        request.addProperty("sessionId", parentId);
+        request.addProperty("provider", "gemini");
+        request.addProperty("requestId", parentId + ":gem-1");
+        JsonObject agent = new JsonObject();
+        agent.addProperty("toolUseId", "call-gemini-1");
+        agent.addProperty("agentId", childId);
+        JsonArray agents = new JsonArray();
+        agents.add(agent);
+        request.add("agents", agents);
+
+        service.handleLoadSubagentStatuses(request.toString());
+
+        assertTrue(callback.await());
+        assertEquals("onSubagentStatusesLoaded", callback.functionName);
+        assertTrue(callback.payload.contains("Analysis complete"));
+        assertTrue(callback.payload.contains("completed"));
+        assertTrue(callback.payload.contains(childId));
+    }
+
+    @Test
+    public void loadsGeminiSubagentSessionWithCompletionStatus() throws Exception {
+        Path geminiHome = temporaryFolder.newFolder("gemini-session-test").toPath();
+        Path conversations = geminiHome.resolve("conversations");
+        Files.createDirectories(conversations);
+        String parentId = "019fa70f-0653-73e2-a613-1fb0a9e83a2b";
+        String childId = "019fb0fe-c344-7da0-9d10-20659f884100";
+        createGeminiDb(conversations.resolve(parentId + ".db"),
+                101, "[Message] timestamp=2026-10-12T20:10:00Z sender=" + childId + " priority=HIGH content=Task result");
+        createGeminiDb(conversations.resolve(childId + ".db"), 14, "prompt");
+
+        CapturingJsCallback callback = new CapturingJsCallback();
+        SubagentHistoryService service = new SubagentHistoryService(
+                createContext(callback),
+                new CodexSubagentHistoryLoader(temporaryFolder.newFolder("empty-codex-2").toPath()),
+                new GeminiSubagentHistoryLoader(geminiHome));
+
+        JsonObject request = new JsonObject();
+        request.addProperty("sessionId", parentId);
+        request.addProperty("provider", "gemini");
+        request.addProperty("toolUseId", "call-gemini-1");
+        request.addProperty("agentId", childId);
+
+        service.handleLoadSubagentSession(request.toString());
+
+        assertTrue(callback.await());
+        assertEquals("onSubagentHistoryLoaded", callback.functionName);
+        assertTrue(callback.payload.contains("completed"));
+        assertTrue(callback.payload.contains("Task result"));
+        assertTrue(callback.payload.contains(childId));
+    }
+
+    @Test
+    public void rejectsInvalidProviderForSubagentStatuses() throws Exception {
+        CapturingJsCallback callback = new CapturingJsCallback();
+        SubagentHistoryService service = new SubagentHistoryService(
+                createContext(callback),
+                new CodexSubagentHistoryLoader(temporaryFolder.newFolder("empty-codex-3").toPath()),
+                new GeminiSubagentHistoryLoader(temporaryFolder.newFolder("empty-gemini-3").toPath()));
+
+        JsonObject request = new JsonObject();
+        request.addProperty("sessionId", "019fa70f-0653-73e2-a613-1fb0a9e83a2b");
+        request.addProperty("provider", "unsupported_provider");
+        request.addProperty("requestId", "req-1");
+        request.add("agents", new JsonArray());
+
+        service.handleLoadSubagentStatuses(request.toString());
+
+        assertTrue(callback.await());
+        assertEquals("onSubagentStatusesLoaded", callback.functionName);
+        assertTrue(callback.payload.contains("Invalid provider"));
+        assertTrue(callback.payload.contains("\\\"success\\\":false"));
+    }
+
+    private static void createGeminiDb(Path db, int stepType, String text) throws Exception {
+        Files.createDirectories(db.getParent());
+        try (java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:sqlite:" + db.toAbsolutePath());
+             java.sql.Statement statement = conn.createStatement()) {
+            statement.execute("CREATE TABLE steps (idx INTEGER PRIMARY KEY, step_type INTEGER, status INTEGER, step_payload BLOB)");
+            try (java.sql.PreparedStatement insert = conn.prepareStatement(
+                    "INSERT INTO steps (idx, step_type, status, step_payload) VALUES (1, ?, 3, ?)")) {
+                insert.setInt(1, stepType);
+                insert.setBytes(2, text.getBytes(StandardCharsets.UTF_8));
+                insert.executeUpdate();
+            }
+        }
     }
 
     private static HandlerContext createContext(CapturingJsCallback callback) {

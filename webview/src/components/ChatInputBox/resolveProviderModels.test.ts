@@ -99,6 +99,13 @@ describe('resolveProviderModels', () => {
         cliCatalogHasEntries: true,
       }),
     ).toEqual(models);
+    expect(
+      resolveProviderModels({
+        provider: 'gemini',
+        cliModels: models,
+        cliCatalogHasEntries: true,
+      }),
+    ).toEqual(models);
   });
 
   it('prepends OMP Auto and appends the catalog for OMP', () => {

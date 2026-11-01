@@ -10,6 +10,19 @@ const AI_BRIDGE_MESSAGE_KEYS = new Map([
   ['Codex authentication error:', 'aiBridge.codexAuthError'],
   ['Codex network error:', 'aiBridge.codexNetworkError'],
   ['Codex error:', 'aiBridge.codexError'],
+  // Gemini CLI error remedies (formatGeminiError / buildIdleReapMessage in
+  // ai-bridge/services/gemini/message-service.js). The STATIC lines of both
+  // blocks map verbatim; the dynamic lines are handled below (the reap
+  // headline regex, the '- Error details:' label replace). localizationUtils
+  // .test.ts pins every literal against the service source.
+  ['Gemini CLI authentication required:', 'aiBridge.geminiAuthRequired'],
+  ['- Cause: The Gemini CLI (agy) is not logged in or credentials have expired.', 'aiBridge.geminiAuthCause'],
+  ["- Resolution: Run 'agy' in an external terminal and complete the interactive Google Sign-In flow.", 'aiBridge.geminiAuthResolution'],
+  ['- Note: This plugin does not manage Google credentials or perform Google login in-plugin.', 'aiBridge.geminiAuthNote'],
+  ['- Likely cause: the CLI process was alive but silent — it is likely stuck at an interactive prompt (most commonly authentication) or stalled on the backend/network.', 'aiBridge.geminiIdleReapCauseAlive'],
+  ['- Likely cause: the CLI process had already exited without delivering a result.', 'aiBridge.geminiIdleReapCauseExited'],
+  ["- What to do: run 'agy' in an external terminal to check your login, then cancel and retry; if the turn was legitimately silent (e.g. a long build), raise the window.", 'aiBridge.geminiIdleReapWhatToDo'],
+  ['- This limit is configurable: set gemini.idleReapMinutes in the Gemini plugin settings (0 disables automatic stopping).', 'aiBridge.geminiIdleReapSetting'],
   ['User did not provide answers', 'aiBridge.userDidNotProvideAnswers'],
   ['Missing database file path argument', 'aiBridge.dbMissingPath'],
   ['Database file does not exist', 'aiBridge.dbFileNotExist'],
@@ -21,6 +34,89 @@ const AI_BRIDGE_MESSAGE_KEYS = new Map([
   ['[Empty message]', 'aiBridge.emptyMessage'],
   ['[Uploaded attachment(s)]', 'aiBridge.uploadedAttachments'],
 ]);
+
+/**
+ * The closed set of English substitution reasons the bridge's
+ * `classifyWorkspaceSubstitutionReason` (ai-bridge/services/gemini/
+ * message-service.js) can emit. The notice regex below anchors its reason
+ * group on exactly these literals, so an UNKNOWN reason never matches: the
+ * raw English text is left untouched instead of being interpolated into a
+ * localized template (NFR8). Keep this list in lockstep with the service —
+ * localizationUtils.test.ts pins the literals against the service source.
+ */
+export const WORKSPACE_SUBSTITUTION_REASONS = [
+  'unsafe working directory',
+  'plugin-internal directory',
+  'directory does not exist',
+  'not a directory',
+  'temporary directory',
+] as const;
+
+/** Reason literal → i18n key. Total over WORKSPACE_SUBSTITUTION_REASONS. */
+const WORKSPACE_REASON_KEY: Record<(typeof WORKSPACE_SUBSTITUTION_REASONS)[number], string> = {
+  'unsafe working directory': 'aiBridge.workspaceReasonUnsafe',
+  'plugin-internal directory': 'aiBridge.workspaceReasonPluginInternal',
+  'directory does not exist': 'aiBridge.workspaceReasonMissing',
+  'not a directory': 'aiBridge.workspaceReasonNotADirectory',
+  'temporary directory': 'aiBridge.workspaceReasonTemporary',
+};
+
+// The reason literals are plain words/spaces/hyphens — no regex metacharacters.
+const WORKSPACE_REASON_ALTERNATION = WORKSPACE_SUBSTITUTION_REASONS.join('|');
+
+// Match "[Notice] Working directory substituted: requested \"...\", using \"...\" (...).\n\n"
+// Path groups use [\s\S]+? so paths containing quotes or parentheses still
+// parse; the reason group only matches the closed English set above.
+const WORKSPACE_SUBSTITUTED_RE = new RegExp(
+  '\\[Notice\\] Working directory substituted: requested "([\\s\\S]+?)", using "([\\s\\S]+?)"'
+  + ` \\((${WORKSPACE_REASON_ALTERNATION})\\)\\.(\\n\\n)?`
+);
+
+/**
+ * The closed set of English rejection reasons the bridge's attachment notice
+ * layer (ai-bridge/services/gemini/message-service.js,
+ * collectAttachmentRejections) can emit. Same design as the workspace set:
+ * the notice regex anchors its reason group on exactly these literals, so an
+ * UNKNOWN reason never matches — the raw English text is left untouched
+ * instead of being interpolated into a localized template (NFR8). Keep this
+ * list in lockstep with the service — localizationUtils.test.ts pins the
+ * literals against the service source.
+ */
+export const ATTACHMENT_NOT_DELIVERED_REASONS = [
+  'only image attachments are supported',
+  'image exceeds the 2 MB per-image limit',
+  'image data is missing or unreadable',
+] as const;
+
+/** Reason literal → i18n key. Total over ATTACHMENT_NOT_DELIVERED_REASONS. */
+const ATTACHMENT_REASON_KEY: Record<(typeof ATTACHMENT_NOT_DELIVERED_REASONS)[number], string> = {
+  'only image attachments are supported': 'aiBridge.attachmentNotDelivered.nonImage',
+  'image exceeds the 2 MB per-image limit': 'aiBridge.attachmentNotDelivered.tooLarge',
+  'image data is missing or unreadable': 'aiBridge.attachmentNotDelivered.invalid',
+};
+
+// Reason literals are plain words/spaces/hyphens — no regex metacharacters.
+const ATTACHMENT_REASON_ALTERNATION = ATTACHMENT_NOT_DELIVERED_REASONS.join('|');
+
+// Match "[Notice] Attachment not delivered: \"...\" (...).\n\n" — GLOBALLY:
+// a turn concatenates one notice per rejected attachment, so every occurrence
+// must localize, not just the first. The name group uses [\s\S]+? so file
+// names containing quotes or parentheses still parse; the reason group only
+// matches the closed English set above.
+const ATTACHMENT_NOT_DELIVERED_RE = new RegExp(
+  '\\[Notice\\] Attachment not delivered: "([\\s\\S]+?)"'
+  + ` \\((${ATTACHMENT_REASON_ALTERNATION})\\)\\.(\\n\\n)?`,
+  'g'
+);
+
+// Match the gemini idle-reap headline (buildIdleReapMessage in
+// ai-bridge/services/gemini/message-service.js): "…for <window>." — the
+// captured window is the only dynamic part ("30 minutes", "1.5 minutes",
+// "45 seconds"). The lazy group plus the $-anchored period keep a fractional
+// window ("1.5") intact. The block's remaining lines are STATIC and map
+// through exact-match entries in aiBridgeMessageMap below.
+const GEMINI_IDLE_REAP_STOPPED_RE =
+  /^Gemini turn stopped automatically: no output from the Gemini CLI \(agy\) for ([^\n]+?)\.$/m;
 
 /**
  * Create a localization function for AI bridge messages
@@ -41,6 +137,52 @@ export function createLocalizeMessage(t: TFunction): (text: string) => string {
     }
 
     // Handle messages with parameters
+    const workspaceSubstitutedMatch = result.match(WORKSPACE_SUBSTITUTED_RE);
+    if (workspaceSubstitutedMatch) {
+      const [, requestedDir, effectiveDir, reason, trailingNewlines] = workspaceSubstitutedMatch;
+      // Replacer FUNCTION, not a replacement string: the replacement embeds
+      // user-controlled directory names, and a plain string would interpret
+      // $& / $' / $` / $1 sequences inside them.
+      result = result.replace(
+        workspaceSubstitutedMatch[0],
+        () => t('aiBridge.workspaceSubstituted', {
+          requested: requestedDir,
+          effective: effectiveDir,
+          // The regex only matches known reasons, so this lookup is total.
+          reason: t(WORKSPACE_REASON_KEY[reason as (typeof WORKSPACE_SUBSTITUTION_REASONS)[number]]),
+        }) + (trailingNewlines ?? '')
+      );
+    }
+
+    // Match "[Notice] Attachment not delivered: \"...\" (...).\n\n" — ALL
+    // occurrences (the regex carries the g flag): localizing only the first
+    // would leave notices 2..N of a multi-rejection turn as raw English.
+    result = result.replace(
+      ATTACHMENT_NOT_DELIVERED_RE,
+      // Replacer FUNCTION, not a replacement string: the replacement embeds a
+      // user-controlled file name, and a plain string would interpret $& / $'
+      // / $` / $1 sequences inside it.
+      (_whole: string, fileName: string, reason: string, trailingNewlines?: string) =>
+        t('aiBridge.attachmentNotDelivered.notice', {
+          name: fileName,
+          // The regex only matches known reasons, so this lookup is total.
+          reason: t(ATTACHMENT_REASON_KEY[reason as (typeof ATTACHMENT_NOT_DELIVERED_REASONS)[number]]),
+        }) + (trailingNewlines ?? '')
+    );
+
+    // Match the gemini idle-reap headline (dynamic silence window). Replacer
+    // FUNCTION, not a replacement string: same $-sequence safety rule as the
+    // workspace notice — the window is a number the bridge formatted, but the
+    // rule is kept uniform.
+    const idleReapStoppedMatch = result.match(GEMINI_IDLE_REAP_STOPPED_RE);
+    if (idleReapStoppedMatch) {
+      const [, silenceWindow] = idleReapStoppedMatch;
+      result = result.replace(
+        idleReapStoppedMatch[0],
+        () => t('aiBridge.geminiIdleReapStopped', { window: silenceWindow })
+      );
+    }
+
     // Match "User denied permission for XXX tool"
     const permissionDeniedMatch = result.match(/User denied permission for (.+) tool/);
     if (permissionDeniedMatch) {
@@ -81,6 +223,9 @@ export function createLocalizeMessage(t: TFunction): (text: string) => string {
     // Handle labels in multi-line error messages
     result = result
       .replace(/- Error message:/g, () => `- ${t('aiBridge.errorMessage')}:`)
+      // Gemini auth remedy tail: only the LABEL localizes — the details after
+      // it are the CLI's own (untranslateable) error text.
+      .replace(/- Error details:/g, () => `- ${t('aiBridge.geminiErrorDetails')}:`)
       .replace(/- Current API Key source:/g, () => `- ${t('aiBridge.currentApiKeySource')}:`)
       .replace(/- Current API Key preview:/g, () => `- ${t('aiBridge.currentApiKeyPreview')}:`)
       .replace(/- Current Base URL:/g, () => `- ${t('aiBridge.currentBaseUrl')}:`)

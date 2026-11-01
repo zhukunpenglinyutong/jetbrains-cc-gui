@@ -18,6 +18,29 @@ interface AgentGroupContentProps {
   findToolResult: (toolId: string | undefined, messageIndex: number) => ToolResultBlock | null | undefined;
 }
 
+function singleChildPrompt(
+  toolName: string,
+  input: Record<string, unknown> | undefined,
+  result: ToolResultBlock | null | undefined,
+  statePrompt: string | undefined,
+): string | undefined {
+  if (toolName === 'spawn_agent') {
+    return parseSpawnAgentMeta(input ?? {}, result).prompt;
+  }
+  if (typeof statePrompt === 'string' && statePrompt) {
+    return statePrompt;
+  }
+  const subagents = Array.isArray(input?.Subagents)
+    ? (input.Subagents as Array<Record<string, unknown>>)
+    : Array.isArray(input?.subagents)
+      ? (input.subagents as Array<Record<string, unknown>>)
+      : [];
+  const first = subagents[0];
+  if (typeof first?.Prompt === 'string') return first.Prompt;
+  if (typeof first?.prompt === 'string') return first.prompt;
+  return typeof input?.prompt === 'string' ? input.prompt : undefined;
+}
+
 function AgentGroupContent({
   derived,
   canLoad,
@@ -50,8 +73,7 @@ function AgentGroupContent({
         totalTokens={(isAsync ? taskEvent?.totalTokens : undefined) ?? agentToolMeta.totalTokens}
         totalToolUseCount={(isAsync ? taskEvent?.totalToolUseCount : undefined) ?? agentToolMeta.totalToolUseCount}
         resultText={(isAsync ? taskEvent?.summary : undefined) ?? derived.states[0]?.resultText ?? extractAgentResultText(result, toolName)}
-        prompt={toolName === 'spawn_agent' ? parseSpawnAgentMeta(input ?? {}, result).prompt
-          : typeof input?.prompt === 'string' ? input.prompt : undefined}
+        prompt={singleChildPrompt(toolName, input, result, derived.states[0]?.prompt)}
         history={history}
         canLoad={canLoad}
       />}

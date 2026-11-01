@@ -279,7 +279,8 @@ public final class CliStatusDetector {
         return dirs;
     }
 
-    private static List<String> homeBinDirs(CliToolId tool, String home) {
+    // Package-private for CliStatusDetectorTest (same seam as selectWindowsWhereMatch).
+    static List<String> homeBinDirs(CliToolId tool, String home) {
         List<String> dirs = new ArrayList<>();
         if (home == null || home.isBlank()) {
             return dirs;
@@ -328,6 +329,7 @@ public final class CliStatusDetector {
             case MINIMAX:
                 dirs.add(join(home, ".minimax", "bin"));
                 dirs.add(join(home, ".minimax-code"));
+            case GEMINI:
                 dirs.add(join(home, ".local", "bin"));
                 break;
             default:
@@ -429,7 +431,7 @@ public final class CliStatusDetector {
         return b.compareTo(a);
     }
 
-    private static String[] envKeysFor(CliToolId tool) {
+    static String[] envKeysFor(CliToolId tool) {
         return switch (tool) {
             case CODEX -> new String[]{"CODEX_BIN", "CODEX_PATH", "CODEX_CLI_PATH"};
             case GROK -> new String[]{"GROK_BIN", "GROK_PATH", "GROK_CLI_PATH"};
@@ -440,6 +442,7 @@ public final class CliStatusDetector {
             case DSH -> new String[]{"DSH_BIN", "DSH_PATH", "DSH_CLI_PATH"};
             case MINIMAX -> new String[]{"MINIMAX_BIN", "MINIMAX_PATH", "MINIMAX_CLI_PATH", "MCODE_BIN"};
             case ZCODE -> new String[]{"ZCODE_CLI_PATH", "ZCODE_PATH"};
+            case GEMINI -> new String[]{"GEMINI_BIN", "GEMINI_PATH", "GEMINI_CLI_PATH"};
         };
     }
     /**

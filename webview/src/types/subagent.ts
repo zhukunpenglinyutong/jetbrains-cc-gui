@@ -54,6 +54,7 @@ export interface SubagentHistoryResponse {
   sessionId?: string;
   provider?: string;
   status?: SubagentStatus;
+  resultText?: string;
   error?: string;
   messages?: unknown[];
 }
@@ -70,7 +71,9 @@ export interface SubagentStatusSnapshot {
   agentId?: string;
   agentPath?: string;
   status?: SubagentStatus;
+  resultText?: string;
   error?: string;
+  messages?: unknown[];
 }
 
 /** Batched response for restoring Codex subagent lifecycle state. */

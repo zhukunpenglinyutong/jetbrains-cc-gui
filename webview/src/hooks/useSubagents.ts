@@ -4,11 +4,14 @@ import { normalizeToolInput } from '../utils/toolInputNormalization';
 import { normalizeToolName } from '../utils/toolConstants';
 import {
   extractAgentResultText,
+  extractResultText,
   isAsyncAgentInput,
   isSpawnAgentArgumentFailureNoise,
   parseSpawnAgentMeta,
+  parseGeminiSubagentStates,
   readToolUseStatus,
   isSubagentHistoryCurrent,
+  type GeminiSubagentState,
 } from '../utils/subagentResult';
 import { useTaskEvents } from '../contexts/SubagentContext';
 
@@ -102,6 +105,7 @@ export function extractSubagentsFromMessages(
   taskEvents: TaskEventMap = {},
 ): SubagentInfo[] {
   const subagents: SubagentInfo[] = [];
+  const geminiStatusUpdates: GeminiSubagentState[] = [];
   const nativeStates = new Map<string, { status?: string; resultText?: string; agentPath?: string; messageIndex?: number; nativeTaskId?: string }>();
   const followups = new Set(messages.flatMap(message => getContentBlocks(message)
     .filter(block => block.type === 'tool_use' && normalizeToolName(block.name ?? '') === 'followup_task')
@@ -116,6 +120,13 @@ export function extractSubagentsFromMessages(
       if (block.type !== 'tool_use') return;
 
       const toolName = normalizeToolName(block.name ?? '');
+      // Live agy reports child state through manage_subagents. The singular
+      // name is accepted so an older payload still updates the same rows.
+      if (toolName === 'manage_subagent' || toolName === 'manage_subagents') {
+        const resultText = extractResultText(findToolResult(block.id ?? '', messageIndex)) ?? '';
+        geminiStatusUpdates.push(...parseGeminiSubagentStates(resultText));
+        return;
+      }
       const rawInput = block.input as Record<string, unknown> | undefined;
       if (!rawInput) return;
       const nativeType = message.raw && typeof message.raw === 'object' ? message.raw.codexItemType : undefined;
@@ -149,7 +160,76 @@ export function extractSubagentsFromMessages(
       }
 
       // Only process task/agent-style subagent tool calls.
-      if (toolName !== 'task' && toolName !== 'agent' && toolName !== 'spawn_agent') return;
+      if (toolName !== 'task' && toolName !== 'agent' && toolName !== 'spawn_agent' && toolName !== 'invoke_subagent') return;
+
+      if (toolName === 'invoke_subagent') {
+        const id = String(block.id ?? `task-${messageIndex}-${subagents.length}`);
+        const toolUseId = block.id ?? '';
+        const result = findToolResult(toolUseId, messageIndex);
+        const resultText = extractResultText(result) ?? '';
+        const conversationIds = [
+          ...resultText.matchAll(
+            /(?:conversationId|conversation_id)["']?\s*[:=]\s*["']?([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/gi
+          ),
+        ].map((m) => m[1]);
+
+        const subagentsList: Array<Record<string, unknown>> = Array.isArray(rawInput.Subagents)
+          ? (rawInput.Subagents as Array<Record<string, unknown>>)
+          : Array.isArray(rawInput.subagents)
+            ? (rawInput.subagents as Array<Record<string, unknown>>)
+            : [];
+
+        const count = Math.max(subagentsList.length, conversationIds.length, 1);
+        const isError = Boolean(
+          result?.is_error ||
+          (result as any)?.isError ||
+          (block as any).state === 'ERROR' ||
+          (block as any).isError ||
+          rawInput.state === 'ERROR' ||
+          rawInput.isError
+        );
+        const status: SubagentStatus = isError ? 'error' : 'running';
+        const isAsync = true;
+        const description = String(
+          (rawInput.toolSummary as string) ||
+          (rawInput.tool_summary as string) ||
+          (rawInput.toolAction as string) ||
+          (rawInput.tool_action as string) ||
+          ''
+        );
+
+        for (let i = 0; i < count; i++) {
+          const subagentItem = subagentsList[i];
+          const subagentType = String(
+            subagentItem?.Role ??
+            subagentItem?.role ??
+            subagentItem?.TypeName ??
+            subagentItem?.typeName ??
+            'Unknown'
+          );
+          const prompt = typeof subagentItem?.Prompt === 'string'
+            ? subagentItem.Prompt
+            : typeof subagentItem?.prompt === 'string'
+              ? subagentItem.prompt
+              : undefined;
+          const agentId = conversationIds[i];
+          const rowId = count > 1 ? `${id}--${i}` : id;
+
+          subagents.push({
+            id: rowId,
+            ...(count > 1 ? { toolUseId: id } : {}),
+            type: subagentType,
+            description,
+            prompt,
+            status,
+            isAsync,
+            messageIndex,
+            ...(agentId ? { agentId } : {}),
+            ...(isError && result ? { resultText: extractResultText(result) } : {}),
+          });
+        }
+        return;
+      }
 
       const input = normalizeToolInput(block.name, rawInput) as Record<string, unknown> | undefined;
       if (!input) return;
@@ -201,6 +281,16 @@ export function extractSubagentsFromMessages(
       }));
     });
   });
+
+  for (const update of geminiStatusUpdates) {
+    const row = subagents.find((agent) => agent.agentId === update.conversationId)
+      ?? (update.role ? subagents.find((agent) => agent.type === update.role) : undefined);
+    if (!row) continue;
+    row.agentId = update.conversationId;
+    if (update.state === 'idle') {
+      row.status = 'completed';
+    }
+  }
 
   const paths = new Map<string, string[]>();
   for (const [agentId, state] of nativeStates) {
@@ -257,7 +347,9 @@ export function applySubagentHistoryCompletion(
     if (history?.status === 'error' && history.success === true) {
       return { ...currentSubagent, status: 'error' as const };
     }
-    return history?.completed ? { ...currentSubagent, status: 'completed' as const } : currentSubagent;
+    return history?.completed
+      ? { ...currentSubagent, status: 'completed' as const, ...(history.resultText ? { resultText: history.resultText } : {}) }
+      : currentSubagent;
   });
 }
 

@@ -40,7 +40,7 @@ jobs:
         run: npm ci
 
       - name: Run ai-bridge tests
-        run: node --test "ai-bridge/**/*.test.js" "ai-bridge/**/*.test.mjs"
+        run: node --experimental-sqlite --test "ai-bridge/**/*.test.js" "ai-bridge/**/*.test.mjs"
 
   # webview unit tests: vitest run plus a typecheck of the test sources.
   # No build step is needed — the vitest suite operates against source, not dist.

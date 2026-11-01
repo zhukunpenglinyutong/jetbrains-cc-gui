@@ -66,6 +66,20 @@ describe('groupBlocks – agent group absorption', () => {
     expect(grouped[1]).toMatchObject({ type: 'single' });
   });
 
+  it('groups invoke_subagent as an agent tool and absorbs a following edit', () => {
+    const blocks = [tool('s1', 'invoke_subagent'), tool('e1', 'Edit'), text('done')];
+    const grouped = groupBlocks(blocks);
+
+    expect(grouped).toHaveLength(2);
+    const agent = grouped[0];
+    expect(agent.type).toBe('agent_group');
+    if (agent.type === 'agent_group') {
+      expect(agent.agentBlock).toBe(blocks[0]);
+      expect(agent.followingBlocks).toEqual([blocks[1]]);
+    }
+    expect(grouped[1]).toMatchObject({ type: 'single' });
+  });
+
   it('produces identical groups for the full snapshot regardless of completion state (live vs history-reload parity)', () => {
     // groupBlocks is now a pure function of `blocks` only. The previous frozen-count
     // logic depended on streaming-observed state, so reloaded agent groups dropped all
