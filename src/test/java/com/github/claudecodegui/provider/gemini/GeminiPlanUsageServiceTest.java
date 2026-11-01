@@ -1,10 +1,23 @@
 package com.github.claudecodegui.provider.gemini;
 
+import com.github.claudecodegui.cli.CliStatusDetector;
+import com.github.claudecodegui.cli.CliToolId;
+import com.github.claudecodegui.cli.CliToolStatus;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.After;
 import org.junit.Test;
+
+import java.io.File;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -129,6 +142,30 @@ public class GeminiPlanUsageServiceTest {
         GeminiPlanUsageService.setAgyTransportForTests(null);
         GeminiPlanUsageService.setCliVersionForTests(null);
         GeminiPlanUsageService.resetCacheForTests();
+        resetCliDetectorCacheForTests();
+    }
+
+    private static void setGeminiCliForTests(String binaryPath) throws Exception {
+        Map<String, CliToolStatus> map = new HashMap<>();
+        map.put(CliToolId.GEMINI.getId(), CliToolStatus.installed(CliToolId.GEMINI, "1.1.26", binaryPath));
+        Class<?> cachedClass = Class.forName("com.github.claudecodegui.cli.CliStatusDetector$CachedDetection");
+        Constructor<?> ctor = cachedClass.getDeclaredConstructor(Map.class, long.class);
+        ctor.setAccessible(true);
+        Object cached = ctor.newInstance(Collections.unmodifiableMap(map), System.currentTimeMillis() + 3_600_000L);
+
+        Field field = CliStatusDetector.class.getDeclaredField("detectAllCache");
+        field.setAccessible(true);
+        field.set(null, cached);
+    }
+
+    private static void resetCliDetectorCacheForTests() {
+        try {
+            Field field = CliStatusDetector.class.getDeclaredField("detectAllCache");
+            field.setAccessible(true);
+            field.set(null, null);
+        } catch (Exception ignored) {
+            // Private detector cache is a test seam; a missing field must not fail unrelated cases.
+        }
     }
 
     // ===== family + bucket mapping (AC1, AC2, NFR9) =====
@@ -325,7 +362,7 @@ public class GeminiPlanUsageServiceTest {
 
         // Next poll within TTL → negative cache answers, ZERO new probes
         JsonObject second = GeminiPlanUsageService.resolvePlanUsagePayload(
-                "gemini-3.7-flash-high", t0 + GeminiPlanUsageService.CACHE_TTL_MS - 1);
+                "gemini-3.7-flash-high", t0 + GeminiPlanUsageService.OLD_CLI_NEGATIVE_TTL_MS - 1);
         assertFalse(second.get("present").getAsBoolean());
         assertTrue("cached negative must still carry the upgrade hint",
                 second.get("message").getAsString().contains("agy update"));
@@ -334,8 +371,54 @@ public class GeminiPlanUsageServiceTest {
 
         // TTL expired → exactly one re-probe (upgrade window), outcome re-cached
         GeminiPlanUsageService.resolvePlanUsagePayload(
-                "gemini-3.7-flash-high", t0 + GeminiPlanUsageService.CACHE_TTL_MS + 1);
+                "gemini-3.7-flash-high", t0 + GeminiPlanUsageService.OLD_CLI_NEGATIVE_TTL_MS + 1);
         assertEquals(2, calls[0]);
+    }
+
+    @Test
+    public void oldCliNegativeCacheSurvivesPast120SecondPollInterval() throws Exception {
+        // AC-1 & AC-2: Single-tool Gemini CLI status lookup and old-CLI negative
+        // response at t = 0 must both survive past the 120s poll interval (10-min TTL).
+        setGeminiCliForTests("/mock/agy");
+        long t0 = 1_000_000L;
+        CliToolStatus cachedCliAtT0 = GeminiPlanUsageService.geminiCliStatus(t0);
+        assertNotNull(cachedCliAtT0);
+        assertEquals("1.1.26", cachedCliAtT0.getVersion());
+        // Wipe CliStatusDetector's cache so subsequent lookups prove GeminiPlanUsageService's 10m cache
+        resetCliDetectorCacheForTests();
+        CliToolStatus cachedCliAt125s = GeminiPlanUsageService.geminiCliStatus(t0 + 125_000L);
+        assertNotNull(cachedCliAt125s);
+        assertEquals("/mock/agy", cachedCliAt125s.getPath());
+
+        int[] calls = {0};
+        GeminiPlanUsageService.setCliVersionForTests("1.1.26");
+        GeminiPlanUsageService.setAgyTransportForTests(() -> {
+            calls[0]++;
+            return payload(OLD_CLI_PAYLOAD);
+        });
+
+        JsonObject first = GeminiPlanUsageService.resolvePlanUsagePayload(
+                "gemini-3.7-flash-high", t0);
+        assertFalse(first.get("present").getAsBoolean());
+        assertEquals(1, calls[0]);
+
+        // At t = 125s (past the 115s normal CACHE_TTL_MS and past the 120s poll interval):
+        // Negative cache must still be active and prevent re-probing.
+        JsonObject second = GeminiPlanUsageService.resolvePlanUsagePayload(
+                "gemini-3.7-flash-high", t0 + 125_000L);
+        assertFalse(second.get("present").getAsBoolean());
+        assertEquals("old-CLI negative cache must survive past 120s poll interval without re-spawning",
+                1, calls[0]);
+
+        // Within the 10-minute window (e.g. at 9 minutes): negative cache remains active
+        GeminiPlanUsageService.resolvePlanUsagePayload(
+                "gemini-3.7-flash-high", t0 + 9 * 60_000L);
+        assertEquals("negative cache must stay active throughout the 10-minute window", 1, calls[0]);
+
+        // After 10 minutes (600_000 ms), negative cache expires and allows re-probe
+        GeminiPlanUsageService.resolvePlanUsagePayload(
+                "gemini-3.7-flash-high", t0 + 10 * 60_000L + 1L);
+        assertEquals("re-probe allowed after 10-minute negative TTL expires", 2, calls[0]);
     }
 
     @Test
@@ -510,5 +593,47 @@ public class GeminiPlanUsageServiceTest {
         assertFalse(out.get("present").getAsBoolean());
         assertTrue(out.get("unavailable").getAsBoolean());
         assertEquals("gemini", out.get("provider").getAsString());
+    }
+
+    @Test(timeout = 6000)
+    public void runUsageProbeDrainsLargeStdoutWithoutBlockingWaitFor() throws Exception {
+        Path scriptPath = Files.createTempFile("mock-agy", PlatformUtils.isWindows() ? ".bat" : ".sh");
+        File scriptFile = scriptPath.toFile();
+        scriptFile.deleteOnExit();
+        scriptFile.setReadable(true);
+        scriptFile.setExecutable(true);
+
+        // Child outputs a valid JSON answer followed by large diagnostic padding (>64KB pipe buffer)
+        if (PlatformUtils.isWindows()) {
+            Files.writeString(scriptPath, """
+                    @echo off
+                    echo {"status":"SUCCESS","command":{"name":"usage","data":{"groups":[]}}}
+                    for /L %%i in (1,1,800) do echo # comment 123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+                    """);
+        } else {
+            Files.writeString(scriptPath, """
+                    #!/bin/sh
+                    printf '{"status":"SUCCESS","command":{"name":"usage","data":{"groups":[]}}}\\n'
+                    i=0
+                    while [ $i -lt 800 ]; do
+                      printf "%-100s\\n" "# comment"
+                      i=$((i+1))
+                    done
+                    """);
+        }
+
+        setGeminiCliForTests(scriptFile.getAbsolutePath());
+        try {
+            JsonObject parsed = GeminiPlanUsageService.runUsageProbeViaCli();
+            assertNotNull("probe must return parsed JSON without deadlocking on large stdout", parsed);
+            assertEquals("SUCCESS", parsed.get("status").getAsString());
+        } finally {
+            resetCliDetectorCacheForTests();
+            try {
+                Files.deleteIfExists(scriptPath);
+            } catch (Exception ignored) {
+                // Best-effort removal of the temp CLI script.
+            }
+        }
     }
 }

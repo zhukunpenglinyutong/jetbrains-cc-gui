@@ -27,40 +27,75 @@ public class GeminiPlanUsageHandler extends BaseMessageHandler {
      */
     static final String GEMINI_PLAN_USAGE_CALLBACK = "window.updateGeminiPlanUsage";
 
+    private static final String ERROR_KEY = "error";
+
     private static final String[] SUPPORTED_TYPES = {
             DISPATCH_TYPE
     };
 
+    /**
+     * Creates a new Gemini plan-usage message handler bound to the given context.
+     *
+     * @param context Active handler context providing webview callback and disposal state
+     */
     public GeminiPlanUsageHandler(HandlerContext context) {
         super(context);
     }
 
+    /**
+     * Returns the message dispatch types handled by this handler.
+     *
+     * @return supported message dispatch type identifiers
+     */
     @Override
     public String[] getSupportedTypes() {
         return SUPPORTED_TYPES;
     }
 
+    /**
+     * Handles a {@code get_gemini_plan_usage} request asynchronously and pushes the snapshot to the webview.
+     *
+     * @param type Message dispatch type
+     * @param content Selected model slug payload
+     * @return {@code true} when the message type is handled by this handler
+     */
     @Override
     public boolean handle(String type, String content) {
-        if (DISPATCH_TYPE.equals(type)) {
-            String selectedModelSlug = content != null ? content.trim() : "";
-            ApplicationManager.getApplication().executeOnPooledThread(() -> {
-                try {
-                    JsonObject usage = GeminiPlanUsageService.resolvePlanUsagePayload(selectedModelSlug);
-                    if (usage == null) {
-                        usage = new JsonObject();
-                        usage.addProperty("error", true);
-                    }
+        if (!DISPATCH_TYPE.equals(type)) {
+            return false;
+        }
+        if (isContextDisposed()) {
+            return true;
+        }
+        String selectedModelSlug = content != null ? content.trim() : "";
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            if (isContextDisposed()) {
+                return;
+            }
+            try {
+                JsonObject usage = GeminiPlanUsageService.resolvePlanUsagePayload(selectedModelSlug);
+                if (usage == null) {
+                    usage = new JsonObject();
+                    usage.addProperty(ERROR_KEY, true);
+                }
+                if (!isContextDisposed()) {
                     context.callJavaScript(GEMINI_PLAN_USAGE_CALLBACK, context.escapeJs(usage.toString()));
-                } catch (Exception e) {
+                }
+            } catch (Exception e) {
+                if (!isContextDisposed()) {
                     JsonObject error = new JsonObject();
-                    error.addProperty("error", true);
+                    error.addProperty(ERROR_KEY, true);
                     error.addProperty("message", e.getMessage());
                     context.callJavaScript(GEMINI_PLAN_USAGE_CALLBACK, context.escapeJs(error.toString()));
                 }
-            });
-            return true;
-        }
-        return false;
+            }
+        });
+        return true;
+    }
+
+    private boolean isContextDisposed() {
+        return context == null
+                || context.isDisposed()
+                || (context.getProject() != null && context.getProject().isDisposed());
     }
 }

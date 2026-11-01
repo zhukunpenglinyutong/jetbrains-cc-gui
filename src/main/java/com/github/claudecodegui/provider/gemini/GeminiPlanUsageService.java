@@ -3,6 +3,7 @@ package com.github.claudecodegui.provider.gemini;
 import com.github.claudecodegui.cli.CliStatusDetector;
 import com.github.claudecodegui.cli.CliToolId;
 import com.github.claudecodegui.cli.CliToolStatus;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -11,6 +12,7 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
@@ -55,9 +57,19 @@ public final class GeminiPlanUsageService {
      * single probe; a regular 120s poll always re-probes.
      */
     static final long CACHE_TTL_MS = 115_000L;
+    /**
+     * Negative-cache TTL for old-CLI responses that lack the structural
+     * {@code command} object. Must be strictly longer than the 120s poll
+     * interval so an old CLI is not re-spawned (burning model tokens) on the
+     * very next poll.
+     */
+    static final long OLD_CLI_NEGATIVE_TTL_MS = 10 * 60_000L;
+    /** TTL for cached Gemini CLI binary/version detection across 120s polls. */
+    static final long CLI_STATUS_TTL_MS = 10 * 60_000L;
     /** Max age for serving a stale cached payload after repeated probe failures. */
     static final long STALE_MAX_MS = 30 * 60_000L;
     private static final long PROBE_TIMEOUT_SECONDS = 15L;
+    private static final long READER_JOIN_TIMEOUT_MS = 1_000L;
     private static final int MAX_OUTPUT_CHARS = 65_536;
 
     private static final String FAMILY_GEMINI = "gemini";
@@ -67,6 +79,9 @@ public final class GeminiPlanUsageService {
 
     /** Per-family cached snapshot: fresh for the TTL, stale-servable up to the cap. */
     private static final Map<String, FamilyCache> CACHE = new ConcurrentHashMap<>();
+
+    /** Cached single-tool Gemini CLI detection so 120s polls do not re-detect on every tick. */
+    private static volatile CachedCliStatus cachedCliStatus;
 
     /** Test-only seam replacing the real CLI spawn. */
     private static volatile AgyTransport transportOverride;
@@ -88,6 +103,12 @@ public final class GeminiPlanUsageService {
 
     // ===== resolver pipeline =====
 
+    /**
+     * Resolves the current Gemini plan-usage snapshot for the billing family of the selected model.
+     *
+     * @param selectedModelSlug Active model identifier used to select the billing family
+     * @return JSON payload describing quota windows or an unavailable marker
+     */
     public static JsonObject resolvePlanUsagePayload(String selectedModelSlug) {
         return resolvePlanUsagePayload(selectedModelSlug, System.currentTimeMillis());
     }
@@ -97,14 +118,14 @@ public final class GeminiPlanUsageService {
         // the hazard, so not even a cached payload's refresh may spawn it.
         // The test override short-circuits BEFORE the detector so unit tests
         // never spawn real `--version` processes.
-        String version = cliVersionOverrideSet ? cliVersionOverride : detectedCliVersion();
+        String version = cliVersionOverrideSet ? cliVersionOverride : detectedCliVersion(nowMs);
         if (!cliMeetsProductFloor(version)) {
             return unavailable(upgradeHint(version));
         }
 
         String family = familyOf(selectedModelSlug);
         FamilyCache cached = CACHE.get(family);
-        if (cached != null && nowMs - cached.atMs < CACHE_TTL_MS) {
+        if (cached != null && nowMs - cached.atMs < cached.ttlMs) {
             return cached.payload.deepCopy();
         }
 
@@ -112,7 +133,7 @@ public final class GeminiPlanUsageService {
             JsonObject raw = transport().runUsageProbe();
             JsonObject parsed = parseUsagePayload(raw, selectedModelSlug);
             if (parsed != null) {
-                CACHE.put(family, new FamilyCache(nowMs, parsed));
+                CACHE.put(family, new FamilyCache(nowMs, CACHE_TTL_MS, parsed));
                 return parsed.deepCopy();
             }
             // The probe answered but not with usable quota data. A SUCCESS
@@ -123,7 +144,7 @@ public final class GeminiPlanUsageService {
             // to re-probe and self-healing, so they stay uncached.
             if (isOldCliMarker(raw)) {
                 JsonObject negative = unavailable(outcomeMessage(raw));
-                CACHE.put(family, new FamilyCache(nowMs, negative));
+                CACHE.put(family, new FamilyCache(nowMs, OLD_CLI_NEGATIVE_TTL_MS, negative));
                 return negative.deepCopy();
             }
             return unavailable(outcomeMessage(raw));
@@ -272,8 +293,8 @@ public final class GeminiPlanUsageService {
 
     // ===== version gate =====
 
-    private static String detectedCliVersion() {
-        CliToolStatus cli = geminiCliStatus();
+    private static String detectedCliVersion(long nowMs) {
+        CliToolStatus cli = geminiCliStatus(nowMs);
         return cli != null && cli.isInstalled() ? cli.getVersion() : null;
     }
 
@@ -373,11 +394,23 @@ public final class GeminiPlanUsageService {
     // ===== CLI resolution + real probe =====
 
     private static CliToolStatus geminiCliStatus() {
+        return geminiCliStatus(System.currentTimeMillis());
+    }
+
+    static CliToolStatus geminiCliStatus(long nowMs) {
+        CachedCliStatus cached = cachedCliStatus;
+        if (cached != null && nowMs - cached.atMs < CLI_STATUS_TTL_MS) {
+            return cached.status;
+        }
         try {
-            return CliStatusDetector.detectAllStaleWhileRevalidate().get(CliToolId.GEMINI.getId());
+            CliToolStatus detected = CliStatusDetector.detectSingle(CliToolId.GEMINI);
+            if (detected != null) {
+                cachedCliStatus = new CachedCliStatus(nowMs, detected);
+            }
+            return detected;
         } catch (Exception e) {
             LOG.debug("Gemini CLI status unavailable: " + e.getMessage());
-            return null;
+            return cached != null ? cached.status : null;
         }
     }
 
@@ -409,30 +442,44 @@ public final class GeminiPlanUsageService {
         Process process = pb.start();
         try {
             process.getOutputStream().close();
-            // Bound the wait first so a hung child cannot block the poll thread:
-            // the answer is a single small JSON line that will not fill the OS
-            // pipe buffer before exit, so draining after waitFor is safe.
+            ProbeStdout output = new ProbeStdout();
+            Thread readerThread = startOutputDrainThread(process, output);
+
             if (!process.waitFor(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 throw new IllegalStateException("agy /usage probe timed out after "
                         + PROBE_TIMEOUT_SECONDS + "s");
             }
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null && output.length() < MAX_OUTPUT_CHARS) {
-                    output.append(line).append('\n');
-                }
-            }
-            JsonObject answer = lastJsonObject(output.toString());
+            readerThread.join(READER_JOIN_TIMEOUT_MS);
+            JsonObject answer = lastJsonObject(output.snapshot());
             if (answer == null) {
                 throw new IllegalStateException("agy /usage produced no JSON answer");
             }
             return answer;
         } finally {
             if (process.isAlive()) {
-                process.destroyForcibly();
+                PlatformUtils.terminateProcess(process);
             }
+        }
+    }
+
+    private static Thread startOutputDrainThread(Process process, ProbeStdout output) {
+        Thread readerThread = new Thread(
+                () -> drainProcessOutput(process, output),
+                "gemini-usage-probe-reader");
+        readerThread.setDaemon(true);
+        readerThread.start();
+        return readerThread;
+    }
+
+    private static void drainProcessOutput(Process process, ProbeStdout output) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.appendLine(line);
+            }
+        } catch (IOException ignored) {
+            // Stream closed on process termination or timeout
         }
     }
 
@@ -490,6 +537,7 @@ public final class GeminiPlanUsageService {
     /** Test-only: drop all cached family payloads. */
     static void resetCacheForTests() {
         CACHE.clear();
+        cachedCliStatus = null;
     }
 
     // ===== helpers =====
@@ -521,11 +569,43 @@ public final class GeminiPlanUsageService {
 
     private static final class FamilyCache {
         final long atMs;
+        final long ttlMs;
         final JsonObject payload;
 
-        FamilyCache(long atMs, JsonObject payload) {
+        FamilyCache(long atMs, long ttlMs, JsonObject payload) {
             this.atMs = atMs;
+            this.ttlMs = ttlMs;
             this.payload = payload;
+        }
+    }
+
+    private static final class CachedCliStatus {
+        final long atMs;
+        final CliToolStatus status;
+
+        CachedCliStatus(long atMs, CliToolStatus status) {
+            this.atMs = atMs;
+            this.status = status;
+        }
+    }
+
+    /** Bounded stdout buffer shared by the probe reader thread and the caller. */
+    private static final class ProbeStdout {
+        private final StringBuilder output = new StringBuilder();
+        private final Object lock = new Object();
+
+        void appendLine(String line) {
+            synchronized (lock) {
+                if (output.length() < MAX_OUTPUT_CHARS) {
+                    output.append(line).append('\n');
+                }
+            }
+        }
+
+        String snapshot() {
+            synchronized (lock) {
+                return output.toString();
+            }
         }
     }
 }

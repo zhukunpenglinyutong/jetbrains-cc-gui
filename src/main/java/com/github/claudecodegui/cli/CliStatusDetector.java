@@ -127,6 +127,26 @@ public final class CliStatusDetector {
         }
     }
 
+    /**
+     * Probes a single CLI tool without triggering a full {@link #detectAll()} scan across all tools.
+     *
+     * @param tool Target CLI tool identifier
+     * @return detected status for the requested tool, or {@code null} when {@code tool} is {@code null}
+     */
+    public static CliToolStatus detectSingle(CliToolId tool) {
+        if (tool == null) {
+            return null;
+        }
+        CachedDetection cached = detectAllCache;
+        if (cached != null && System.currentTimeMillis() - cached.timestampMillis < CACHE_TTL_MILLIS) {
+            CliToolStatus fromAll = cached.result.get(tool.getId());
+            if (fromAll != null) {
+                return fromAll;
+            }
+        }
+        return detect(tool);
+    }
+
     /** Probes a CLI without loading its account configuration or starting a model turn. */
     public static CliToolStatus detect(CliToolId tool) {
         try {
