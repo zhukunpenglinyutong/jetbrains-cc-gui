@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import GeminiIdleReapCard from './GeminiIdleReapCard';
+import { clampGeminiIdleReapMinutes } from '../../../utils/geminiIdleReap';
 
 const translations: Record<string, string> = {
   'settings.gemini.idleReapLabel': 'Stop silent turns automatically',
@@ -170,5 +171,27 @@ describe('GeminiIdleReapCard', () => {
 
     pushMinutes(60);
     expect(input.value).toBe('60');
+  });
+
+  it('clampGeminiIdleReapMinutes rounds positive fractional values in (0, 1) up to 1', () => {
+    expect(clampGeminiIdleReapMinutes(0.5)).toBe(1);
+    expect(clampGeminiIdleReapMinutes('0.5')).toBe(1);
+    expect(clampGeminiIdleReapMinutes(0.01)).toBe(1);
+    expect(clampGeminiIdleReapMinutes('0.99')).toBe(1);
+    expect(clampGeminiIdleReapMinutes(0)).toBe(0);
+    expect(clampGeminiIdleReapMinutes(-0.5)).toBe(0);
+  });
+
+  it('rounds positive fractional input in (0, 1) up to 1 instead of truncating to 0 (disabled)', () => {
+    render(<GeminiIdleReapCard />);
+    pushMinutes(30);
+
+    const input = screen.getByRole('spinbutton') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '0.5' } });
+    fireEvent.blur(input);
+
+    expect(commitSets()).toEqual(['set_gemini_idle_reap_minutes:{"geminiIdleReapMinutes":1}']);
+    expect(input.value).toBe('1');
+    expect(screen.queryByText('Disabled')).toBeNull();
   });
 });

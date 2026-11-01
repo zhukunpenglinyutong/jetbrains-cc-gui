@@ -412,6 +412,26 @@ export function normalizeGeminiModelId(value) {
 // via GEMINI_IDLE_REAP_MINUTES on every send; 0 (and, fail-safe, any
 // unparseable value) disables the automatic kill entirely.
 const DEFAULT_IDLE_REAP_MINUTES = 30;
+export const MAX_IDLE_REAP_MINUTES = 1440;
+
+/**
+ * Resolves and clamps the idle reap silence window into `[0, 1440]` minutes,
+ * rounding positive fractional values in `(0, 1)` up to `1` unless sub-minute
+ * test fractions are explicitly allowed.
+ *
+ * @param {unknown} raw Raw idle reap window configuration value.
+ * @param {{ allowSubMinuteFractions?: boolean }} [options] Optional parsing behavior flags.
+ * @returns {number} resolved idle reap window in minutes (0 = disabled)
+ */
+export function resolveIdleReapMinutes(raw, { allowSubMinuteFractions = false } = {}) {
+  if (raw === undefined || raw === null) return DEFAULT_IDLE_REAP_MINUTES;
+  const text = String(raw).trim();
+  if (!text) return DEFAULT_IDLE_REAP_MINUTES;
+  const value = Number(text);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (value < 1 && !allowSubMinuteFractions) return 1;
+  return Math.min(MAX_IDLE_REAP_MINUTES, value);
+}
 
 /**
  * Window in minutes; fractions allowed so the real spawn→timer→tree-kill
@@ -423,12 +443,7 @@ const DEFAULT_IDLE_REAP_MINUTES = 30;
  * @returns {number} minutes (0 = disabled)
  */
 function parseIdleReapMinutes(raw) {
-  if (raw === undefined || raw === null) return DEFAULT_IDLE_REAP_MINUTES;
-  const text = String(raw).trim();
-  if (!text) return DEFAULT_IDLE_REAP_MINUTES;
-  const value = Number(text);
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  return value;
+  return resolveIdleReapMinutes(raw, { allowSubMinuteFractions: true });
 }
 
 /**

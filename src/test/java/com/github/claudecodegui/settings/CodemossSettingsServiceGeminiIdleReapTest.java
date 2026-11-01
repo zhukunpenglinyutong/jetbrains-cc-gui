@@ -139,6 +139,58 @@ public class CodemossSettingsServiceGeminiIdleReapTest {
                 30, invokeGetGeminiIdleReapMinutes(service));
     }
 
+    @Test
+    public void shouldExposeMaxGeminiIdleReapMinutesConstant() throws Exception {
+        Field field = CodemossSettingsService.class.getField("MAX_GEMINI_IDLE_REAP_MINUTES");
+        assertEquals("MAX_GEMINI_IDLE_REAP_MINUTES should be 1440", 1440, field.getInt(null));
+    }
+
+    @Test
+    public void shouldClampSetterValuesAboveMaxTo1440() throws Exception {
+        Path tempHome = Files.createTempDirectory("gemini-reap-setter-max-home");
+        useTemporaryHomeDirectory(tempHome);
+
+        CodemossSettingsService service = new CodemossSettingsService();
+        invokeSetGeminiIdleReapMinutes(service, 50000);
+        assertEquals("values above 1440 must clamp to 1440 in getter", 1440,
+                invokeGetGeminiIdleReapMinutes(service));
+
+        String raw = Files.readString(Path.of(service.getConfigPath()));
+        boolean carriesClampedMax = raw.contains("\"idleReapMinutes\": 1440")
+                || raw.contains("\"idleReapMinutes\":1440");
+        org.junit.Assert.assertTrue(
+                "config.json must store clamped 1440, not 50000",
+                carriesClampedMax && !raw.contains("50000"));
+    }
+
+    @Test
+    public void shouldClampHandEditedValuesAboveMaxTo1440() throws Exception {
+        Path tempHome = Files.createTempDirectory("gemini-reap-hand-edited-max-home");
+        useTemporaryHomeDirectory(tempHome);
+
+        CodemossSettingsService service = new CodemossSettingsService();
+        Files.writeString(Path.of(service.getConfigPath()),
+                "{\"gemini\":{\"idleReapMinutes\":50000}}");
+        assertEquals("hand-edited values above 1440 must clamp to 1440",
+                1440, invokeGetGeminiIdleReapMinutes(service));
+    }
+
+    @Test
+    public void shouldHandleNonJsonObjectGeminiFieldSafely() throws Exception {
+        Path tempHome = Files.createTempDirectory("gemini-reap-non-object-home");
+        useTemporaryHomeDirectory(tempHome);
+
+        CodemossSettingsService service = new CodemossSettingsService();
+        Files.writeString(Path.of(service.getConfigPath()),
+                "{\"gemini\":\"not-an-object\"}");
+        assertEquals("non-object gemini field must return default 30",
+                30, invokeGetGeminiIdleReapMinutes(service));
+
+        invokeSetGeminiIdleReapMinutes(service, 45);
+        assertEquals("setting minutes overwrites non-object safely",
+                45, invokeGetGeminiIdleReapMinutes(service));
+    }
+
     private int invokeGetGeminiIdleReapMinutes(CodemossSettingsService service) throws Exception {
         Method method;
         try {

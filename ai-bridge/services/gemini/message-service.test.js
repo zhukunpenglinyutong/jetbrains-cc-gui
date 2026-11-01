@@ -4030,4 +4030,43 @@ test('Story 006 AC-4: pollStoredThinking skips copying .db when .db and .db-wal 
   }
 });
 
+test('Story 007 AC-3: resolveIdleReapMinutes clamps values above 1440 and rounds fractions in (0, 1) up to 1', async () => {
+  const messageService = await import('./message-service.js');
+  assert.equal(
+    typeof messageService.resolveIdleReapMinutes,
+    'function',
+    'message-service must export resolveIdleReapMinutes(raw)'
+  );
+  const { resolveIdleReapMinutes } = messageService;
+
+  assert.equal(resolveIdleReapMinutes(1440), 1440, '1440 remains 1440');
+  assert.equal(resolveIdleReapMinutes('1440'), 1440, 'string 1440 remains 1440');
+  assert.equal(resolveIdleReapMinutes(50000), 1440, 'values above 1440 clamp to 1440');
+  assert.equal(resolveIdleReapMinutes('50000'), 1440, 'string values above 1440 clamp to 1440');
+  assert.equal(resolveIdleReapMinutes(0.5), 1, 'fractions in (0, 1) round up to 1');
+  assert.equal(resolveIdleReapMinutes('0.5'), 1, 'string fractions in (0, 1) round up to 1');
+  assert.equal(resolveIdleReapMinutes(0.01), 1, 'small positive fractions round up to 1');
+  assert.equal(resolveIdleReapMinutes(0), 0, '0 disables watchdog');
+  assert.equal(resolveIdleReapMinutes('0'), 0, 'string 0 disables watchdog');
+  assert.equal(resolveIdleReapMinutes(-10), 0, 'negative numbers clamp to 0 (disabled)');
+  assert.equal(resolveIdleReapMinutes('-10'), 0, 'negative strings clamp to 0 (disabled)');
+  assert.equal(resolveIdleReapMinutes(undefined), 30, 'undefined yields default 30');
+  assert.equal(resolveIdleReapMinutes(null), 30, 'null yields default 30');
+  assert.equal(resolveIdleReapMinutes(''), 30, 'empty string yields default 30');
+  assert.equal(resolveIdleReapMinutes('not-a-number'), 0, 'unparseable string yields disabled (0)');
+});
+
+test('Story 007 AC-3: idleReapMinutes > 35791 does not overflow 32-bit timer limit or reap valid turn prematurely', async () => {
+  const { stdout, timedOut } = await runService({
+    fixture: 'success-text-turn.jsonl',
+    extraEnv: { GEMINI_IDLE_REAP_MINUTES: '50000' },
+    timeoutMs: 15000,
+  });
+
+  assert.equal(timedOut, false, 'the turn must complete on its own without timing out');
+  assert.equal(markers(stdout, 'SEND_ERROR').length, 0, 'a huge idle reap window (50000 min) must not overflow Node timer and trigger immediate reap');
+  assert.equal(finalPayload(stdout).success, true, 'the turn completed normally');
+});
+
+
 

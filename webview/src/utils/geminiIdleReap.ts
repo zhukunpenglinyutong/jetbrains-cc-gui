@@ -17,10 +17,12 @@ export const MAX_GEMINI_IDLE_REAP_MINUTES = 1440;
  * abandoned edit would be a kill-direction regression; Escape/blank must
  * revert, not commit.
  *
- * Numeric input is truncated and clamped into [0, 1440]: negatives disable
- * (matching the Java setter's normalization), anything above the max clamps
- * to it (see MAX above for why the cap exists).
+ * Numeric input is clamped into [0, 1440]: negatives disable (matching the
+ * Java setter's normalization), positive fractions in (0, 1) round up to 1
+ * so a fractional draft never silently disables the watchdog, and anything
+ * above the max clamps to it (see MAX above for why the cap exists).
  *
+ * @param raw Raw user input draft or numeric value.
  * @returns the clamped minutes, or null when the draft carries no commitable
  *   value (blank / non-numeric / non-finite).
  */
@@ -33,6 +35,9 @@ export function clampGeminiIdleReapMinutes(raw: unknown): number | null {
         : Number.NaN;
   if (!Number.isFinite(parsed)) {
     return null;
+  }
+  if (parsed > 0 && parsed < 1) {
+    return 1;
   }
   return Math.max(
     MIN_GEMINI_IDLE_REAP_MINUTES,

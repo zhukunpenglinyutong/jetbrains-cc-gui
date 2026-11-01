@@ -365,6 +365,12 @@ public class ProjectConfigHandler {
             "Failed to get Gemini idle reap window");
     }
 
+    /**
+     * Parses, clamps to {@code [0, 1440]} (rounding fractions in {@code (0, 1)} up to {@code 1}),
+     * persists, and echoes the Gemini idle reap silence window.
+     *
+     * @param content JSON payload containing {@code geminiIdleReapMinutes}
+     */
     public void handleSetGeminiIdleReapMinutes(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
@@ -376,7 +382,7 @@ public class ProjectConfigHandler {
                 if (element != null
                         && element.isJsonPrimitive()
                         && element.getAsJsonPrimitive().isNumber()) {
-                    minutes = element.getAsInt();
+                    minutes = CodemossSettingsService.clampGeminiIdleReapMinutes(element.getAsDouble());
                 }
             }
             settingsService.setGeminiIdleReapMinutes(minutes);
