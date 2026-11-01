@@ -46,6 +46,25 @@ public class AiDataMigrationCoordinatorTest {
     }
 
     @Test
+    public void cancellationCleanupIsScopedToTheOwnerAndWaitingCaller() throws Exception {
+        Path coordinationDirectory = temporaryFolder.getRoot().toPath().resolve("coordination-cancel");
+        AiDataMigrationCoordinator ownerCoordinator = new AiDataMigrationCoordinator(coordinationDirectory);
+        AiDataMigrationCoordinator waiterCoordinator = new AiDataMigrationCoordinator(coordinationDirectory);
+
+        try (AiDataMigrationCoordinator.LockHandle owner = ownerCoordinator.tryAcquire("migrate")) {
+            assertNotNull(owner);
+            String ownerId = waiterCoordinator.requestMigrationCancellation("waiter-a");
+            assertNotNull(ownerId);
+            assertTrue(owner.isCancellationRequested());
+
+            waiterCoordinator.clearMigrationCancellation(ownerId, "waiter-b");
+            assertTrue(owner.isCancellationRequested());
+            waiterCoordinator.clearMigrationCancellation(ownerId, "waiter-a");
+            assertFalse(owner.isCancellationRequested());
+        }
+    }
+
+    @Test
     public void pendingMigrationBlocksNewSharedAdmissionUntilRecoveryClearsItsJournal() throws Exception {
         Path coordination = temporaryFolder.getRoot().toPath().resolve("coordination");
         Path state = Files.createDirectories(coordination.resolve("state"));

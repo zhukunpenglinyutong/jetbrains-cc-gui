@@ -53,10 +53,12 @@ public class ManagedProcessTreeTest {
                 assertTrue(permit.terminateProcessTree(5000L));
                 assertFalse(parent.isAlive());
                 assertFalse(child.isAlive());
+                assertFalse(permit.hasLiveDescendants());
             } else {
                 parent.destroyForcibly();
                 assertTrue(parent.waitFor(5, TimeUnit.SECONDS));
                 assertTrue(child.isAlive());
+                assertTrue(permit.hasLiveDescendants());
                 permit.close();
                 assertNull("An orphaned managed child still excludes migration", gate.tryAcquireMigrationPermit());
                 child.destroyForcibly();

@@ -62,8 +62,18 @@ public class AiDataReadPermitTest {
         assertFalse(gate.isCoordinationAvailable());
         assertThrows(IllegalStateException.class, gate::tryAcquireReadPermit);
         assertThrows(IllegalStateException.class, gate::tryAcquireMaintenancePermit);
-        try (var ordinarySession = gate.acquireProcessPermit()) {
-            assertNotNull(ordinarySession);
+        assertThrows(IllegalStateException.class, gate::acquireProcessPermit);
+    }
+
+    @Test public void maintenanceAdmissionUsesTheSharedCoordinationLock() throws Exception {
+        Path root = temporary.newFolder("maintenance-coordination").toPath();
+        AiDataProcessGate gate = new AiDataProcessGate(new AiDataMigrationCoordinator(root));
+        try (var maintenance = gate.tryAcquireMaintenancePermit()) {
+            assertNotNull(maintenance);
+            assertNull(gate.tryAcquireMigrationPermit());
+        }
+        try (var migration = gate.tryAcquireMigrationPermit()) {
+            assertNotNull(migration);
         }
     }
 }
