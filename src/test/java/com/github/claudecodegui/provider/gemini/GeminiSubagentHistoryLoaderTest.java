@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -46,6 +47,16 @@ public class GeminiSubagentHistoryLoaderTest {
         assertNotNull(multiMsg);
         assertEquals(CHILD_B_ID, multiMsg.sender());
         assertEquals("Line 1", multiMsg.content());
+    }
+
+    @Test
+    public void parseCompletionEnvelopePreservesMultiLineContent() {
+        String payload = "[Message] timestamp=2026-10-12T22:12:54Z sender=" + CHILD_A_ID
+                + " priority=MESSAGE_PRIORITY_HIGH content=Line 1\nLine 2\nLine 3";
+        GeminiSubagentHistoryLoader.CompletionMessage msg = GeminiSubagentHistoryLoader.parseCompletionEnvelope(payload);
+        assertNotNull(msg);
+        assertEquals(CHILD_A_ID, msg.sender());
+        assertEquals("Line 1\nLine 2\nLine 3", msg.content());
     }
 
     @Test
@@ -200,8 +211,56 @@ public class GeminiSubagentHistoryLoaderTest {
         assertEquals("running", res.status());
         assertFalse(res.completed());
         assertNull(res.resultText());
-        assertEquals(1, res.messages().size());
-        assertEquals("Still working", textOf(res.messages().get(0)));
+        assertTrue("Status poll must omit child messages", res.messages() == null || res.messages().isEmpty());
+    }
+
+    @Test
+    public void loadStatusesOmitsChildMessagesOnStatusTick() throws Exception {
+        Path home = temporaryFolder.newFolder("gemini-no-child-messages").toPath();
+        Path conversationsDir = home.resolve("conversations");
+        Files.createDirectories(conversationsDir);
+
+        Path childDb = conversationsDir.resolve(CHILD_A_ID + ".db");
+        createDbWithBlobs(childDb,
+                blobStep(1, 14, protoMessage(19, protoField(2, "Expensive transcript text")))
+        );
+
+        GeminiSubagentHistoryLoader loader = new GeminiSubagentHistoryLoader(home);
+        List<GeminiSubagentHistoryLoader.StatusResult> results = loader.loadStatuses(PARENT_ID, List.of(
+                new GeminiSubagentHistoryLoader.StatusRequest("call-a", CHILD_A_ID)
+        ));
+
+        assertEquals(1, results.size());
+        GeminiSubagentHistoryLoader.StatusResult res = results.get(0);
+        assertTrue("Lightweight status poll must omit child messages array",
+                res.messages() == null || res.messages().isEmpty());
+    }
+
+    @Test
+    public void loadStatusesMarksStaleUncompletedChildAsFinished() throws Exception {
+        Path home = temporaryFolder.newFolder("gemini-stale-child").toPath();
+        Path conversationsDir = home.resolve("conversations");
+        Files.createDirectories(conversationsDir);
+
+        Path childDb = conversationsDir.resolve(CHILD_A_ID + ".db");
+        createDbWithBlobs(childDb,
+                blobStep(1, 14, protoMessage(19, protoField(2, "Subagent crashed mid-task")))
+        );
+
+        // Age the child DB past the staleness threshold (e.g. 10 minutes ago)
+        long staleMtime = System.currentTimeMillis() - 10 * 60 * 1000L;
+        Files.setLastModifiedTime(childDb, FileTime.fromMillis(staleMtime));
+
+        GeminiSubagentHistoryLoader loader = new GeminiSubagentHistoryLoader(home);
+        List<GeminiSubagentHistoryLoader.StatusResult> results = loader.loadStatuses(PARENT_ID, List.of(
+                new GeminiSubagentHistoryLoader.StatusRequest("call-stale", CHILD_A_ID)
+        ));
+
+        assertEquals(1, results.size());
+        GeminiSubagentHistoryLoader.StatusResult res = results.get(0);
+        assertTrue("Stale child without parent step 101 should be marked completed instead of running forever",
+                res.completed());
+        assertEquals("completed", res.status());
     }
 
     @Test

@@ -14,9 +14,11 @@ import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -245,6 +247,67 @@ public class SubagentHistoryServiceStatusTest {
         assertTrue(callback.payload.contains("completed"));
         assertTrue(callback.payload.contains("Task result"));
         assertTrue(callback.payload.contains(childId));
+    }
+
+    @Test
+    public void rejectsConcurrentGeminiSubagentStatusRequests() throws Exception {
+        Path geminiHome = temporaryFolder.newFolder("gemini-inflight").toPath();
+        CountDownLatch inLoad = new CountDownLatch(1);
+        CountDownLatch unblock = new CountDownLatch(1);
+        AtomicInteger callCount = new AtomicInteger();
+
+        GeminiSubagentHistoryLoader blockingLoader = new GeminiSubagentHistoryLoader(geminiHome) {
+            @Override
+            public List<StatusResult> loadStatuses(String parentSessionId, List<StatusRequest> requests) {
+                callCount.incrementAndGet();
+                inLoad.countDown();
+                try {
+                    unblock.await(5, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return List.of(new StatusResult("call-1", "019fb0fe-c344-7da0-9d10-20659f884100",
+                        true, "running", false, null, null, List.of()));
+            }
+        };
+
+        CapturingJsCallback callback = new CapturingJsCallback();
+        SubagentHistoryService service = new SubagentHistoryService(
+                createContext(callback),
+                new CodexSubagentHistoryLoader(temporaryFolder.newFolder("empty-codex-inflight").toPath()),
+                blockingLoader);
+
+        String parentId = "019fa70f-0653-73e2-a613-1fb0a9e83a2b";
+        JsonObject request1 = new JsonObject();
+        request1.addProperty("sessionId", parentId);
+        request1.addProperty("provider", "gemini");
+        request1.addProperty("requestId", parentId + ":gem-req1");
+        JsonArray agents = new JsonArray();
+        JsonObject agent = new JsonObject();
+        agent.addProperty("toolUseId", "call-1");
+        agent.addProperty("agentId", "019fb0fe-c344-7da0-9d10-20659f884100");
+        agents.add(agent);
+        request1.add("agents", agents);
+
+        service.handleLoadSubagentStatuses(request1.toString());
+        assertTrue("First request should invoke loader", inLoad.await(5, TimeUnit.SECONDS));
+
+        JsonObject request2 = new JsonObject();
+        request2.addProperty("sessionId", parentId);
+        request2.addProperty("provider", "gemini");
+        request2.addProperty("requestId", parentId + ":gem-req2");
+        request2.add("agents", agents);
+
+        try {
+            service.handleLoadSubagentStatuses(request2.toString());
+
+            assertTrue("Concurrent request should receive immediate rejection callback", callback.await());
+            assertTrue(callback.payload.contains("already in progress"));
+            assertTrue(callback.payload.contains("\\\"success\\\":false"));
+            assertEquals("Loader should not be called concurrently for same session", 1, callCount.get());
+        } finally {
+            unblock.countDown();
+        }
     }
 
     @Test

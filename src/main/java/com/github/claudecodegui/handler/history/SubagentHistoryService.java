@@ -58,6 +58,7 @@ class SubagentHistoryService {
     private final GeminiSubagentHistoryLoader geminiLoader;
     private final Set<String> inFlightCodexRequests = ConcurrentHashMap.newKeySet();
     private final Set<String> inFlightCodexStatusSessions = ConcurrentHashMap.newKeySet();
+    private final Set<String> inFlightGeminiStatusSessions = ConcurrentHashMap.newKeySet();
 
     SubagentHistoryService(HandlerContext context) {
         this(context, new CodexSubagentHistoryLoader(
@@ -243,6 +244,12 @@ class SubagentHistoryService {
 
         String responseSessionId = sessionId;
         if ("gemini".equals(provider)) {
+            if (!this.inFlightGeminiStatusSessions.add(responseSessionId)) {
+                response.addProperty("success", false);
+                response.addProperty("error", "Gemini subagent status request already in progress");
+                sendStatusesResponse(response);
+                return;
+            }
             List<GeminiSubagentHistoryLoader.StatusRequest> geminiRequests = new ArrayList<>();
             for (JsonElement element : agentArray) {
                 if (element.isJsonObject()) {
@@ -270,13 +277,6 @@ class SubagentHistoryService {
                         if (res.error() != null) {
                             st.addProperty("error", res.error());
                         }
-                        if (res.success() && res.messages() != null) {
-                            JsonArray messagesArray = new JsonArray();
-                            for (JsonObject msg : res.messages()) {
-                                messagesArray.add(msg);
-                            }
-                            st.add("messages", messagesArray);
-                        }
                         statuses.add(st);
                     }
                     response.addProperty("success", true);
@@ -285,6 +285,8 @@ class SubagentHistoryService {
                     LOG.warn("[SubagentHistory] Failed to load Gemini subagent statuses: " + e.getMessage());
                     response.addProperty("success", false);
                     response.addProperty("error", e.getMessage() != null ? e.getMessage() : "Unknown error");
+                } finally {
+                    this.inFlightGeminiStatusSessions.remove(responseSessionId);
                 }
                 this.sendStatusesResponse(response);
             }, AppExecutorUtil.getAppExecutorService());

@@ -684,6 +684,90 @@ describe('extractSubagentsFromMessages', () => {
       });
     });
 
+    it('does not overwrite an already-assigned agentId when a second subagent shares the same role', () => {
+      const messages: ClaudeMessage[] = [
+        {
+          type: 'assistant',
+          content: '',
+          raw: {
+            message: {
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'call_same_role',
+                  name: 'invoke_subagent',
+                  input: {
+                    Subagents: [
+                      { Model: 'inherit', Prompt: 'First task', Role: 'Researcher', TypeName: 'research' },
+                      { Model: 'inherit', Prompt: 'Second task', Role: 'Researcher', TypeName: 'research' },
+                    ],
+                    toolSummary: 'Launch 2 researchers',
+                  },
+                },
+              ],
+            },
+          },
+        },
+        {
+          type: 'user',
+          content: '',
+          raw: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'call_same_role',
+                content: 'Launched 2 subagents successfully.',
+              },
+            ],
+          },
+        },
+        {
+          type: 'assistant',
+          content: '',
+          raw: {
+            message: {
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'call_manage',
+                  name: 'manage_subagents',
+                  input: { toolSummary: 'Check state' },
+                },
+              ],
+            },
+          },
+        },
+        {
+          type: 'user',
+          content: '',
+          raw: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'call_manage',
+                content: 'You have 2 active subagent(s):\n'
+                  + '[{"role":"Researcher","type":"research","conversationId":"11111111-1111-1111-1111-111111111111","state":"running"},'
+                  + '{"role":"Researcher","type":"research","conversationId":"22222222-2222-2222-2222-222222222222","state":"idle"}]',
+              },
+            ],
+          },
+        },
+      ];
+
+      const subagents = extractSubagentsFromMessages(
+        messages,
+        getContentBlocks,
+        findToolResult(messages),
+        getToolResultRaw(messages),
+      );
+
+      expect(subagents).toHaveLength(2);
+      expect(subagents[0].agentId).toBe('11111111-1111-1111-1111-111111111111');
+      expect(subagents[0].status).toBe('running');
+      expect(subagents[1].agentId).toBe('22222222-2222-2222-2222-222222222222');
+      expect(subagents[1].status).toBe('completed');
+    });
+
     it('AC2: zips multiple subagents and conversationId UUIDs by index', () => {
       const messages: ClaudeMessage[] = [
         {

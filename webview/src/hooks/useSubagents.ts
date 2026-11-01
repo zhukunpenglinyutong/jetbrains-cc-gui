@@ -284,7 +284,7 @@ export function extractSubagentsFromMessages(
 
   for (const update of geminiStatusUpdates) {
     const row = subagents.find((agent) => agent.agentId === update.conversationId)
-      ?? (update.role ? subagents.find((agent) => agent.type === update.role) : undefined);
+      ?? (update.role ? subagents.find((agent) => !agent.agentId && agent.type === update.role) : undefined);
     if (!row) continue;
     row.agentId = update.conversationId;
     if (update.state === 'idle') {
