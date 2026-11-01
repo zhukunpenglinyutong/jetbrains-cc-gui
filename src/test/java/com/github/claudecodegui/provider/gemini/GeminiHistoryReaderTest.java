@@ -9,6 +9,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.ByteArrayOutputStream;
+import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -18,12 +19,14 @@ import java.nio.file.attribute.FileTime;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -984,6 +987,194 @@ public class GeminiHistoryReaderTest {
         assertEquals(130, turnUsage.get("output_tokens").getAsInt());
         assertEquals(4500, turnUsage.get("cache_read_input_tokens").getAsInt());
         assertEquals(40, turnUsage.get("thinking_tokens").getAsInt());
+    }
+
+    // ------------------------------------------------------------------
+    // STORY-003: newline tool results, lazy query fallback, step error status, deleteOnExit
+    // ------------------------------------------------------------------
+
+    @Test
+    public void toolResultStartingWithNewlineIsNotTruncatedAsProtobufWrapper() throws Exception {
+        // AC-1: A plain UTF-8 tool output starting with '\n' (0x0A) must not be
+        // truncated by misinterpreting 0x0A as a protobuf field-1 length-delimited tag.
+        String gitStatusOutput = """
+
+        # On branch main
+        # Changes to be committed:
+        #   (use "git restore --staged <file>..." to unstage)
+        #\tnew file:   src/main/App.java
+        #
+        # Untracked files:
+        #\tnotes.txt
+        # padding!
+        """;
+        assertEquals(175, gitStatusOutput.length());
+
+        Path home = cliHome();
+        byte[] call = concat(
+                protoField(1, "call_git_status"),
+                protoField(2, "run_command"),
+                protoField(3, "{\"CommandLine\":\"git status\"}"));
+
+        createLiveConversationDb(home, UUID_A,
+                liveStep(15, protoMessage(20, protoMessage(7, call))),
+                liveStep(132, concat(
+                        protoMessage(5, protoMessage(4, call)),
+                        protoMessage(140, concat(
+                                protoMessage(1, concat(
+                                        protoField(1, "toolSummary"),
+                                        protoField(2, "git status"))),
+                                protoField(2, gitStatusOutput))))));
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+        List<JsonObject> messages = reader.getSessionMessages(UUID_A, PROJECT);
+
+        JsonObject toolResult = findBlock(messages, "tool_result");
+        assertEquals(gitStatusOutput, toolResult.get("content").getAsString());
+    }
+
+    @Test
+    public void multiFieldToolResultKeepsField1TextIncludingLeadingNewline() throws Exception {
+        // Live 140.2 blobs are a complete protobuf (field 1 text plus fields 3/6/7),
+        // not a single field-1 frame. Field 1 must survive, including a leading newline.
+        String result = "\nfull tool output that must survive trailing fields";
+        Path home = cliHome();
+        byte[] call = concat(
+                protoField(1, "call_multi"),
+                protoField(2, "run_command"),
+                protoField(3, "{\"CommandLine\":\"true\"}"));
+        createLiveConversationDb(home, UUID_A,
+                liveStep(15, protoMessage(20, protoMessage(7, call))),
+                liveStep(132, concat(
+                        protoMessage(5, protoMessage(4, call)),
+                        protoMessage(140, concat(
+                                protoMessage(1, concat(
+                                        protoField(1, "toolSummary"),
+                                        protoField(2, "summary"))),
+                                protoMessage(2, concat(
+                                        protoField(1, result),
+                                        protoField(3, "meta"),
+                                        protoField(6, "tail"))))))));
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+        List<JsonObject> messages = reader.getSessionMessages(UUID_A, PROJECT);
+
+        JsonObject toolResult = findBlock(messages, "tool_result");
+        assertEquals(result, toolResult.get("content").getAsString());
+        assertFalse(toolResult.get("is_error").getAsBoolean());
+    }
+
+    @Test
+    public void getSessionMessagesRetriesOnTempCopyWhenLazyQueryThrowsSqlException() throws Exception {
+        // AC-2: getSessionMessages wraps both openReadOnlyConnection and readStepsIntoEnvelopes
+        // in the fallback try/catch, so lazy SQLite query failures fall back to copyWithSidecarsToTemp.
+        Path home = cliHome();
+        createConversationDb(home, UUID_A, userStep("hello from copy"));
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson()) {
+            private boolean firstCall = true;
+
+            @Override
+            Connection openReadOnlyConnection(Path database) throws SQLException {
+                Connection real = super.openReadOnlyConnection(database);
+                if (firstCall) {
+                    firstCall = false;
+                    return (Connection) Proxy.newProxyInstance(
+                            getClass().getClassLoader(),
+                            new Class<?>[]{Connection.class},
+                            (proxy, method, args) -> {
+                                if ("createStatement".equals(method.getName())) {
+                                    Statement realStmt = (Statement) method.invoke(real, args);
+                                    return Proxy.newProxyInstance(
+                                            getClass().getClassLoader(),
+                                            new Class<?>[]{Statement.class},
+                                            (sProxy, sMethod, sArgs) -> {
+                                                if ("executeQuery".equals(sMethod.getName())) {
+                                                    throw new SQLException("Simulated lazy SQLite locked query failure");
+                                                }
+                                                return sMethod.invoke(realStmt, sArgs);
+                                            });
+                                }
+                                return method.invoke(real, args);
+                            });
+                }
+                return real;
+            }
+        };
+
+        List<JsonObject> messages = reader.getSessionMessages(UUID_A, PROJECT);
+        assertFalse("Messages should be loaded from fallback temp copy when primary query fails", messages.isEmpty());
+        assertEquals("hello from copy", textOf(messages.get(0)));
+    }
+
+    @Test
+    public void failedToolStepSetsIsErrorAndCleansTempFilesWithoutDeleteOnExit() throws Exception {
+        // AC-3 & AC-4: steps.status error value propagates is_error = true onto tool_result,
+        // and copyWithSidecarsToTemp / deleteTempCopy cleans up temp files.
+        Path home = cliHome();
+        Path db = home.resolve("conversations").resolve(UUID_A + ".db");
+        Files.createDirectories(db.getParent());
+
+        byte[] call = concat(
+                protoField(1, "call_failing_cmd"),
+                protoField(2, "run_command"),
+                protoField(3, "{\"CommandLine\":\"exit 1\"}"));
+        byte[] toolPayload = concat(
+                protoMessage(5, protoMessage(4, call)),
+                protoMessage(140, concat(
+                        protoMessage(1, concat(
+                                protoField(1, "toolSummary"),
+                                protoField(2, "exit 1"))),
+                        protoField(2, "Process exited with status 1"))));
+
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + db.toAbsolutePath());
+             Statement statement = conn.createStatement()) {
+            statement.execute("CREATE TABLE steps (idx INTEGER PRIMARY KEY, step_type INTEGER, "
+                    + "status INTEGER, step_payload BLOB)");
+            try (PreparedStatement insert = conn.prepareStatement(
+                    "INSERT INTO steps (idx, step_type, status, step_payload) VALUES (?, ?, ?, ?)")) {
+                // Step 0: agent initiating the call (status = 3 completed)
+                insert.setInt(1, 0);
+                insert.setInt(2, 15);
+                insert.setInt(3, 3);
+                insert.setBytes(4, protoMessage(20, protoMessage(7, call)));
+                insert.executeUpdate();
+
+                // Step 1: executed tool with error status = 4
+                insert.setInt(1, 1);
+                insert.setInt(2, 132);
+                insert.setInt(3, 4);
+                insert.setBytes(4, toolPayload);
+                insert.executeUpdate();
+            }
+        }
+
+        Files.writeString(home.resolve("conversations").resolve(UUID_A + ".db-wal"), "wal-data", StandardCharsets.UTF_8);
+        Files.writeString(home.resolve("conversations").resolve(UUID_A + ".db-shm"), "shm-data", StandardCharsets.UTF_8);
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+
+        // Verify temp copy creation with sidecars and cleanup
+        Path tempCopy = reader.copyWithSidecarsToTemp(db);
+        assertNotNull(tempCopy);
+        assertTrue(Files.exists(tempCopy));
+        Path tempDir = tempCopy.getParent();
+        assertTrue(Files.exists(tempDir.resolve(UUID_A + ".db-wal")));
+        assertTrue(Files.exists(tempDir.resolve(UUID_A + ".db-shm")));
+
+        GeminiHistoryReader.deleteTempCopy(tempCopy);
+        assertFalse(Files.exists(tempCopy));
+        assertFalse(Files.exists(tempDir.resolve(UUID_A + ".db-wal")));
+        assertFalse(Files.exists(tempDir.resolve(UUID_A + ".db-shm")));
+        assertFalse(Files.exists(tempDir));
+
+        // Verify session loading propagates is_error = true on tool_result
+        List<JsonObject> messages = reader.getSessionMessages(UUID_A, PROJECT);
+        assertFalse(messages.isEmpty());
+        JsonObject toolResult = findBlock(messages, "tool_result");
+        assertNotNull(toolResult);
+        assertTrue("Failed tool step with status=4 must set is_error: true",
+                toolResult.get("is_error").getAsBoolean());
     }
 
     private static void insertStepRow(

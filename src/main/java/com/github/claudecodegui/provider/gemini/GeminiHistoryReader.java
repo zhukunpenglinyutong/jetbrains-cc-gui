@@ -89,6 +89,10 @@ public class GeminiHistoryReader {
 
     private final Gson gson;
     private final Path cliHome;
+    /** Guards {@link #currentStepIsError} for the duration of one {@link #decodeStep} call. */
+    private final Object stepDecodeLock = new Object();
+    /** Error/cancel flag for the step {@link #decodeStep} is decoding. */
+    private boolean currentStepIsError;
 
     public GeminiHistoryReader() {
         this(defaultCliHome(), new Gson());
@@ -464,12 +468,7 @@ public class GeminiHistoryReader {
             LOG.debug("[GeminiHistoryReader] Scan metadata unreadable for "
                     + db.getFileName() + ": " + e.getMessage());
         } finally {
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException ignored) {
-                }
-            }
+            closeQuietly(conn);
         }
         return meta;
     }
@@ -646,6 +645,14 @@ public class GeminiHistoryReader {
 
     // ── Content loading ──────────────────────────────────────────────────────
 
+    /**
+     * Loads and decodes conversation steps for the given session id, falling back to a temporary database copy on SQLite read failure.
+     *
+     * @param sessionId Identifier of the conversation session to load
+     * @param cwd Working directory associated with the session
+     * @return decoded message envelopes in step order
+     * @throws IOException when the database cannot be copied into a temporary directory
+     */
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) throws IOException {
         if (!isSafeSessionId(sessionId)) {
             LOG.warn("[GeminiHistoryReader] Refusing session id outside the shared whitelist: "
@@ -661,28 +668,36 @@ public class GeminiHistoryReader {
         try {
             try {
                 conn = openReadOnlyConnection(db);
+                return readStepsIntoEnvelopes(conn);
             } catch (SQLException e) {
-                // A live -wal sidecar can defeat mode=ro; fall back to reading a copy.
+                // A live -wal sidecar can defeat mode=ro on open or lazy query; fall back to reading a copy.
+                closeQuietly(conn);
+                conn = null;
                 tempCopy = copyWithSidecarsToTemp(db);
                 if (tempCopy == null) {
                     throw e;
                 }
                 conn = openReadOnlyConnection(tempCopy);
+                return readStepsIntoEnvelopes(conn);
             }
-            return readStepsIntoEnvelopes(conn);
         } catch (SQLException e) {
             LOG.warn("[GeminiHistoryReader] Failed to load conversation " + sessionId + ": "
                     + e.getMessage());
             return List.of();
         } finally {
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException ignored) {
-                }
-            }
+            closeQuietly(conn);
             if (tempCopy != null) {
                 deleteTempCopy(tempCopy);
+            }
+        }
+    }
+
+    private static void closeQuietly(Connection conn) {
+        if (conn != null) {
+            try {
+                conn.close();
+            } catch (SQLException ignored) {
+                // Best-effort close on read-only SQLite connection.
             }
         }
     }
@@ -693,6 +708,7 @@ public class GeminiHistoryReader {
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
             boolean hasMetadataColumn = hasColumn(rs, "metadata");
+            boolean hasStatusColumn = hasColumn(rs, "status");
             GeminiHistoryUsage historyUsage = new GeminiHistoryUsage();
             int counter = 0;
             Set<String> emittedToolUseIds = new HashSet<>();
@@ -712,7 +728,9 @@ public class GeminiHistoryReader {
                     continue;
                 }
                 byte[] payload = rs.getBytes("step_payload");
-                List<JsonObject> envelopes = decodeStep(role, payload, ++counter, emittedToolUseIds);
+                boolean stepIsError = hasStatusColumn && isErrorStepStatus(rs.getObject("status"));
+                List<JsonObject> envelopes = decodeCurrentStep(
+                        role, payload, ++counter, emittedToolUseIds, stepIsError);
                 JsonObject stepUsage = (role == StepRole.AGENT && hasMetadataColumn)
                         ? decodeStepUsage(rs.getBytes("metadata"))
                         : null;
@@ -826,6 +844,36 @@ public class GeminiHistoryReader {
             }
         }
         return null;
+    }
+
+    private static boolean isErrorStepStatus(Object rawStatus) {
+        if (rawStatus instanceof Number number) {
+            return number.intValue() >= 4;
+        }
+        if (rawStatus instanceof String text) {
+            String normalized = text.trim().toLowerCase(Locale.ROOT);
+            return normalized.contains("error")
+                    || normalized.contains("fail")
+                    || normalized.contains("cancel");
+        }
+        return false;
+    }
+
+    /**
+     * Decodes one step while {@link #currentStepIsError} is visible to
+     * {@link #buildToolResultMessage}. The flag is cleared before this returns,
+     * including when decoding throws.
+     */
+    private List<JsonObject> decodeCurrentStep(StepRole role, byte[] payload, int counter,
+                                                Set<String> emittedToolUseIds, boolean stepIsError) {
+        synchronized (stepDecodeLock) {
+            currentStepIsError = stepIsError;
+            try {
+                return decodeStep(role, payload, counter, emittedToolUseIds);
+            } finally {
+                currentStepIsError = false;
+            }
+        }
     }
 
     /**
@@ -1170,10 +1218,11 @@ public class GeminiHistoryReader {
     }
 
     /**
-     * Field 140.2 is a UTF-8 result on the flat live shape. On invoke_subagent and
-     * manage_subagents it is a nested message whose field 1 holds the ack or the
-     * status JSON. That wrapper starts with the field-1 tag (0x0A); decoding the
-     * wrapper itself is not the result text.
+     * Field 140.2 is raw UTF-8 on the flat shape, including tool output that starts
+     * with a newline. On the live shape it is a protobuf message whose field 1 is
+     * the result text and whose later fields (3, 6, 7, …) are metadata. That
+     * message starts with the field-1 tag (0x0A). A newline-prefixed string is not
+     * a complete protobuf message, so it is returned unchanged.
      */
     private static String toolResultBody(ProtoFields render) {
         String direct = null;
@@ -1181,8 +1230,8 @@ public class GeminiHistoryReader {
             if (blob == null || blob.length == 0) {
                 continue;
             }
-            String nested = ProtoFields.parse(blob).string(1);
-            if ((blob[0] & 0xFF) == 0x0A && nested != null && !nested.isBlank()) {
+            String nested = unwrapToolResultField1(blob);
+            if (nested != null && !nested.isBlank()) {
                 return nested;
             }
             if (direct == null) {
@@ -1193,6 +1242,66 @@ public class GeminiHistoryReader {
             }
         }
         return direct;
+    }
+
+    /**
+     * Field 1 text of a 140.2 blob that is itself a complete protobuf message.
+     * A raw UTF-8 result that merely starts with {@code 0x0A} ({@code '\\n'}) does
+     * not parse to the end, so this returns null and the caller keeps the raw text.
+     */
+    private static String unwrapToolResultField1(byte[] blob) {
+        if (blob.length < 2 || (blob[0] & 0xFF) != 0x0A || !consumesEntireMessage(blob)) {
+            return null;
+        }
+        return ProtoFields.parse(blob).string(1);
+    }
+
+    /** True when {@code data} is one protobuf message and every byte belongs to a field. */
+    private static boolean consumesEntireMessage(byte[] data) {
+        int offset = 0;
+        try {
+            while (offset < data.length) {
+                offset = nextFieldOffset(data, offset);
+                if (offset < 0) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (IndexOutOfBoundsException e) {
+            return false;
+        }
+    }
+
+    /** Index just after the field at {@code offset}, or {@code -1} when it is not a field. */
+    private static int nextFieldOffset(byte[] data, int offset) {
+        long tag = readVarint(data, offset);
+        int afterTag = varintEnd(data, offset);
+        if ((int) (tag >>> 3) <= 0) {
+            return -1;
+        }
+        return skipWirePayload(data, afterTag, tag & 0x7);
+    }
+
+    private static int skipWirePayload(byte[] data, int offset, long wire) {
+        if (wire == 0) {
+            readVarint(data, offset);
+            return varintEnd(data, offset);
+        }
+        if (wire == 1) {
+            return offset <= data.length - 8 ? offset + 8 : -1;
+        }
+        if (wire == 5) {
+            return offset <= data.length - 4 ? offset + 4 : -1;
+        }
+        if (wire != 2) {
+            return -1;
+        }
+        long len = readVarint(data, offset);
+        int start = varintEnd(data, offset);
+        if (len < 0 || len > data.length - start) {
+            return -1;
+        }
+        return start + (int) len;
     }
 
     /**
@@ -1293,7 +1402,7 @@ public class GeminiHistoryReader {
         return root;
     }
 
-    private static JsonObject buildToolResultMessage(String toolUseId, String contentText) {
+    private JsonObject buildToolResultMessage(String toolUseId, String contentText) {
         JsonObject root = new JsonObject();
         root.addProperty("type", "user");
         JsonObject message = new JsonObject();
@@ -1302,7 +1411,7 @@ public class GeminiHistoryReader {
         JsonObject block = new JsonObject();
         block.addProperty("type", "tool_result");
         block.addProperty("tool_use_id", toolUseId);
-        block.addProperty("is_error", false);
+        block.addProperty("is_error", currentStepIsError);
         block.addProperty("content", contentText != null ? contentText : "");
         content.add(block);
         message.add("content", content);
@@ -1362,18 +1471,16 @@ public class GeminiHistoryReader {
             LOG.debug("[GeminiHistoryReader] Temp dir creation failed: " + e.getMessage());
             return null;
         }
-        tempDir.toFile().deleteOnExit();
         try {
             Path target = tempDir.resolve(db.getFileName().toString());
             Files.copy(db, target, StandardCopyOption.REPLACE_EXISTING);
-            for (String sidecar : new String[]{".db-shm", ".db-wal"}) {
+            for (String sidecar : new String[]{"-shm", "-wal"}) {
                 Path source = db.resolveSibling(db.getFileName() + sidecar);
                 if (Files.isRegularFile(source)) {
                     Files.copy(source, tempDir.resolve(source.getFileName().toString()),
                             StandardCopyOption.REPLACE_EXISTING);
                 }
             }
-            target.toFile().deleteOnExit();
             return target;
         } catch (IOException e) {
             LOG.debug("[GeminiHistoryReader] Temp copy failed: " + e.getMessage());
@@ -1386,32 +1493,34 @@ public class GeminiHistoryReader {
     private static void deleteTempDir(Path dir) {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
             for (Path leftover : stream) {
-                Files.deleteIfExists(leftover);
+                deleteOrDefer(leftover);
             }
         } catch (IOException ignored) {
+            // Best-effort directory listing before removing the directory itself.
         }
-        try {
-            Files.deleteIfExists(dir);
-        } catch (IOException ignored) {
-            dir.toFile().deleteOnExit();
-        }
+        deleteOrDefer(dir);
     }
 
     static void deleteTempCopy(Path db) {
         Path parent = db.getParent();
-        try {
-            Files.deleteIfExists(db);
-            if (parent != null && Files.isDirectory(parent)) {
-                try (DirectoryStream<Path> stream = Files.newDirectoryStream(parent)) {
-                    for (Path leftover : stream) {
-                        Files.deleteIfExists(leftover);
-                        leftover.toFile().deleteOnExit();
-                    }
+        deleteOrDefer(db);
+        if (parent != null && Files.isDirectory(parent)) {
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(parent)) {
+                for (Path leftover : stream) {
+                    deleteOrDefer(leftover);
                 }
-                Files.deleteIfExists(parent);
+            } catch (IOException ignored) {
+                // Best-effort sidecar cleanup before removing the temp directory.
             }
+            deleteOrDefer(parent);
+        }
+    }
+
+    private static void deleteOrDefer(Path path) {
+        try {
+            Files.deleteIfExists(path);
         } catch (IOException ignored) {
-            db.toFile().deleteOnExit();
+            path.toFile().deleteOnExit();
         }
     }
 
