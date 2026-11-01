@@ -31,9 +31,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Reads Gemini CLI (agy) conversation history from the CLI-owned storage at
@@ -72,6 +76,16 @@ public class GeminiHistoryReader {
     private static final int STEP_TYPE_USER = 14;
     private static final int STEP_TYPE_AGENT = 15;
     private static final int STEP_TYPE_TOOL = 132;
+
+    private static final int MAX_SCAN_CACHE_ENTRIES = 2048;
+    private static final Map<Path, CachedScanMeta> SCAN_META_CACHE = new ConcurrentHashMap<>();
+    // Sender runs to whitespace. Truncating at '/' would treat sender=<id>/task-N as <id>
+    // and hide the parent session. task- and <id>/task- senders are background tasks,
+    // the same exclusion GeminiSubagentHistoryLoader uses.
+    private static final Pattern STEP101_SENDER_PATTERN =
+            Pattern.compile("\\[Message\\]\\s+timestamp=\\S+\\s+sender=(\\S+)");
+    private static final Pattern SUBAGENT_CONVERSATION_ID_PATTERN =
+            Pattern.compile("\"conversationId\"\\s*:\\s*\"([A-Za-z0-9._-]+)\"");
 
     private final Gson gson;
     private final Path cliHome;
@@ -148,22 +162,57 @@ public class GeminiHistoryReader {
         return filtered;
     }
 
+    /**
+     * Scans conversation databases on disk and merges metadata cache entries by session id.
+     *
+     * @return all non-internal top-level sessions sorted by last timestamp descending
+     * @throws IOException если не удалось прочитать каталог сессий
+     */
     public List<SessionInfo> listAllSessions() throws IOException {
+        List<SessionInfo> scanned = listSessionsByScanningDatabases();
         Path cache = metadataCachePath();
-        if (Files.isRegularFile(cache)) {
-            List<SessionInfo> fromCache = listSessionsFromMetadataCache(cache);
-            if (!fromCache.isEmpty()) {
-                return fromCache;
-            }
-            // Every cache entry was a ghost (no backing database) — the scan is
-            // the effective listing source on a stale cache (live 2026-09-04).
+        if (!Files.isRegularFile(cache)) {
+            return scanned;
+        }
+        Set<String> internalIds = new HashSet<>();
+        List<SessionInfo> fromCache = listSessionsFromMetadataCache(cache, internalIds);
+        if (fromCache.isEmpty() && internalIds.isEmpty()) {
             LOG.debug("[GeminiHistoryReader] Metadata cache yielded no sessions with an "
                     + "existing conversation database, scanning conversations/");
+            return scanned;
         }
-        return listSessionsByScanningDatabases();
+        Map<String, SessionInfo> mergedById = new LinkedHashMap<>();
+        for (SessionInfo session : scanned) {
+            if (!internalIds.contains(session.sessionId.toLowerCase(Locale.ROOT))) {
+                mergedById.put(session.sessionId, session);
+            }
+        }
+        for (SessionInfo cached : fromCache) {
+            SessionInfo target = mergedById.get(cached.sessionId);
+            if (target == null) {
+                continue;
+            }
+            if (cached.title != null && !cached.title.isBlank()) {
+                target.title = cached.title;
+            }
+            if (cached.messageCount > 0) {
+                target.messageCount = cached.messageCount;
+            }
+            if (cached.lastTimestamp > 0) {
+                target.lastTimestamp = cached.lastTimestamp;
+                target.firstTimestamp = cached.firstTimestamp;
+            }
+            if (cached.workspaces != null && !cached.workspaces.isEmpty()) {
+                target.workspaces = cached.workspaces;
+                target.cwd = cached.cwd;
+            }
+        }
+        List<SessionInfo> merged = new ArrayList<>(mergedById.values());
+        merged.sort(Comparator.comparingLong((SessionInfo s) -> s.lastTimestamp).reversed());
+        return merged;
     }
 
-    private List<SessionInfo> listSessionsFromMetadataCache(Path cache) {
+    private List<SessionInfo> listSessionsFromMetadataCache(Path cache, Set<String> internalIds) {
         List<SessionInfo> sessions = new ArrayList<>();
         JsonObject root;
         try {
@@ -183,7 +232,7 @@ public class GeminiHistoryReader {
         int skipped = 0;
         for (Map.Entry<String, JsonElement> entry : conversations.entrySet()) {
             try {
-                SessionInfo info = sessionFromCacheEntry(entry.getKey(), entry.getValue());
+                SessionInfo info = sessionFromCacheEntry(entry.getKey(), entry.getValue(), internalIds);
                 if (info != null) {
                     sessions.add(info);
                 } else {
@@ -205,13 +254,14 @@ public class GeminiHistoryReader {
         return sessions;
     }
 
-    private SessionInfo sessionFromCacheEntry(String key, JsonElement element) {
+    private SessionInfo sessionFromCacheEntry(String key, JsonElement element, Set<String> internalIds) {
         if (element == null || !element.isJsonObject()) {
             return null;
         }
         JsonObject entry = element.getAsJsonObject();
         if (entry.has("is_internal") && entry.get("is_internal").isJsonPrimitive()
                 && entry.get("is_internal").getAsBoolean()) {
+            rememberInternalIds(key, entry, internalIds);
             return null;
         }
         JsonElement summaryElement = entry.get("summary");
@@ -235,30 +285,56 @@ public class GeminiHistoryReader {
         String preview = stringField(summary, "Preview");
         info.title = resolveSessionTitle(title, preview, info.sessionId);
         info.messageCount = intField(summary, "NumSteps");
-        info.lastTimestamp = parseTimestamp(stringField(summary, "UpdatedAt"));
-        if (info.lastTimestamp <= 0) {
-            info.lastTimestamp = parseTimestamp(stringField(entry, "last_modified_time"));
-        }
-        if (info.lastTimestamp <= 0) {
-            info.lastTimestamp = fileMtime(conversationDbPath(info.sessionId));
-        }
+        info.lastTimestamp = resolveCacheLastTimestamp(entry, summary, info.sessionId);
         info.firstTimestamp = info.lastTimestamp;
         info.workspaces = decodeWorkspaceUris(summary);
         info.cwd = info.workspaces != null && !info.workspaces.isEmpty() ? info.workspaces.get(0) : null;
-        if (info.lastTimestamp <= 0) {
-            info.lastTimestamp = System.currentTimeMillis();
-            info.firstTimestamp = info.lastTimestamp;
-        }
         return info;
     }
 
+    private static void rememberInternalIds(String key, JsonObject entry, Set<String> internalIds) {
+        if (key != null && !key.isBlank()) {
+            internalIds.add(key.trim().toLowerCase(Locale.ROOT));
+        }
+        JsonElement summaryEl = entry.get("summary");
+        if (summaryEl != null && summaryEl.isJsonObject()) {
+            String summaryId = stringField(summaryEl.getAsJsonObject(), "ID");
+            if (summaryId != null && !summaryId.isBlank()) {
+                internalIds.add(summaryId.trim().toLowerCase(Locale.ROOT));
+            }
+        }
+    }
+
+    private long resolveCacheLastTimestamp(JsonObject entry, JsonObject summary, String sessionId) {
+        long lastTimestamp = parseTimestamp(stringField(summary, "UpdatedAt"));
+        if (lastTimestamp <= 0) {
+            lastTimestamp = parseTimestamp(stringField(entry, "last_modified_time"));
+        }
+        if (lastTimestamp <= 0) {
+            lastTimestamp = fileMtime(conversationDbPath(sessionId));
+        }
+        if (lastTimestamp <= 0) {
+            lastTimestamp = System.currentTimeMillis();
+        }
+        return lastTimestamp;
+    }
+
+    private static final class ScannedDbEntry {
+        private final String sessionId;
+        private final long mtime;
+        private final ScanMeta meta;
+
+        private ScannedDbEntry(String sessionId, long mtime, ScanMeta meta) {
+            this.sessionId = sessionId;
+            this.mtime = mtime;
+            this.meta = meta;
+        }
+    }
+
     /**
-     * Fallback when the metadata cache is missing, unreadable, or stale (no entry
-     * backed by an existing database — the effective listing source on a current
-     * CLI install): scan the per-conversation databases directly. Titles come from
-     * the CLI's summaries database when it can be opened (best-effort — it is
-     * equally stale on current installs); otherwise the session id doubles as the
-     * title.
+     * Scan the per-conversation databases directly. Titles come from the CLI's
+     * summaries database when it can be opened (best-effort — it is equally stale
+     * on current installs); otherwise the first user prompt or session id is used.
      */
     private List<SessionInfo> listSessionsByScanningDatabases() throws IOException {
         Map<String, String[]> summaries = loadConversationSummaries();
@@ -267,6 +343,8 @@ public class GeminiHistoryReader {
         if (!Files.isDirectory(conversationsDir)) {
             return sessions;
         }
+        List<ScannedDbEntry> entries = new ArrayList<>();
+        Set<String> subagentChildIds = new HashSet<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(conversationsDir, "*.db")) {
             for (Path db : stream) {
                 String fileName = db.getFileName().toString();
@@ -274,25 +352,37 @@ public class GeminiHistoryReader {
                 if (!isSafeSessionId(id)) {
                     continue;
                 }
-                SessionInfo info = new SessionInfo();
-                info.sessionId = id;
-                ScanMeta meta = readScanMeta(db);
-                String[] summary = summaries.get(id);
-                if (summary != null) {
-                    info.title = resolveSessionTitle(summary[0], summary[1], id);
-                } else if (meta.firstUserText != null && !meta.firstUserText.isBlank()) {
-                    info.title = resolveSessionTitle(meta.firstUserText, null, id);
-                } else {
-                    info.title = id;
+                long mtime = fileMtime(db);
+                ScanMeta meta = readScanMeta(db, mtime);
+                if (meta.childSessionIds != null && !meta.childSessionIds.isEmpty()) {
+                    subagentChildIds.addAll(meta.childSessionIds);
                 }
-                info.lastTimestamp = fileMtime(db);
-                info.firstTimestamp = info.lastTimestamp;
-                info.messageCount = 0;
-                info.workspaces = meta.workspaces;
-                info.cwd = meta.workspaces != null && !meta.workspaces.isEmpty()
-                        ? meta.workspaces.get(0) : null;
-                sessions.add(info);
+                entries.add(new ScannedDbEntry(id, mtime, meta));
             }
+        }
+        for (ScannedDbEntry entry : entries) {
+            String id = entry.sessionId;
+            if (subagentChildIds.contains(id.toLowerCase(Locale.ROOT))) {
+                continue;
+            }
+            ScanMeta meta = entry.meta;
+            SessionInfo info = new SessionInfo();
+            info.sessionId = id;
+            String[] summary = summaries.get(id);
+            if (summary != null) {
+                info.title = resolveSessionTitle(summary[0], summary[1], id);
+            } else if (meta.firstUserText != null && !meta.firstUserText.isBlank()) {
+                info.title = resolveSessionTitle(meta.firstUserText, null, id);
+            } else {
+                info.title = id;
+            }
+            info.lastTimestamp = entry.mtime;
+            info.firstTimestamp = info.lastTimestamp;
+            info.messageCount = meta.messageCount;
+            info.workspaces = meta.workspaces;
+            info.cwd = meta.workspaces != null && !meta.workspaces.isEmpty()
+                    ? meta.workspaces.get(0) : null;
+            sessions.add(info);
         }
         sessions.sort(Comparator.comparingLong((SessionInfo s) -> s.lastTimestamp).reversed());
         return sessions;
@@ -325,24 +415,51 @@ public class GeminiHistoryReader {
         return out;
     }
 
-    /** Workspace paths and the first user prompt, read while scanning one database. */
+    /** Workspace paths, first user prompt, step count, and subagent child ids from one database. */
     private static final class ScanMeta {
         private List<String> workspaces;
         private String firstUserText;
+        private int messageCount;
+        private Set<String> childSessionIds = Set.of();
+    }
+
+    private static final class CachedScanMeta {
+        private final long mtime;
+        private final ScanMeta meta;
+
+        private CachedScanMeta(long mtime, ScanMeta meta) {
+            this.mtime = mtime;
+            this.meta = meta;
+        }
     }
 
     /**
-     * Best-effort metadata from one conversation database. A missing table or a
-     * locked live file leaves the fields empty; the session stays listable through
-     * {@code last_conversations.json}.
+     * Best-effort metadata from one conversation database, cached by {@code (path, mtime)}.
+     * A missing table or a locked live file leaves the fields empty; the session stays
+     * listable through {@code last_conversations.json}.
      */
-    private ScanMeta readScanMeta(Path db) {
+    private ScanMeta readScanMeta(Path db, long mtime) {
+        Path key = db.toAbsolutePath().normalize();
+        if (mtime > 0L) {
+            CachedScanMeta cached = SCAN_META_CACHE.get(key);
+            if (cached != null && cached.mtime == mtime) {
+                return cached.meta;
+            }
+        }
         ScanMeta meta = new ScanMeta();
         Connection conn = null;
         try {
             conn = openReadOnlyConnection(db);
             meta.workspaces = readWorkspaces(conn);
             meta.firstUserText = readFirstUserText(conn);
+            meta.messageCount = readMessageCount(conn);
+            meta.childSessionIds = readChildSessionIds(conn);
+            if (mtime > 0L) {
+                if (SCAN_META_CACHE.size() >= MAX_SCAN_CACHE_ENTRIES) {
+                    SCAN_META_CACHE.clear();
+                }
+                SCAN_META_CACHE.put(key, new CachedScanMeta(mtime, meta));
+            }
         } catch (SQLException e) {
             LOG.debug("[GeminiHistoryReader] Scan metadata unreadable for "
                     + db.getFileName() + ": " + e.getMessage());
@@ -355,6 +472,63 @@ public class GeminiHistoryReader {
             }
         }
         return meta;
+    }
+
+    private int readMessageCount(Connection conn) {
+        String sql = "SELECT COUNT(*) FROM steps "
+                + "WHERE step_type IN (14, 15, '14', '15', 'user', 'agent')";
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            if (rs.next()) {
+                return Math.max(0, rs.getInt(1));
+            }
+        } catch (SQLException e) {
+            return 0;
+        }
+        return 0;
+    }
+
+    private Set<String> readChildSessionIds(Connection conn) {
+        Set<String> childIds = new HashSet<>();
+        String sql = "SELECT step_payload FROM steps "
+                + "WHERE step_type IN (101, 132, '101', '132', 'tool')";
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                byte[] payload = rs.getBytes(1);
+                if (payload == null || payload.length == 0) {
+                    continue;
+                }
+                collectChildSessionIds(new String(payload, StandardCharsets.UTF_8), childIds);
+            }
+        } catch (SQLException ignored) {
+            // Missing steps table or a locked read: no child ids, session stays listable.
+        }
+        return childIds.isEmpty() ? Set.of() : childIds;
+    }
+
+    private static void collectChildSessionIds(String text, Set<String> childIds) {
+        Matcher senderMatcher = STEP101_SENDER_PATTERN.matcher(text);
+        while (senderMatcher.find()) {
+            String sender = senderMatcher.group(1);
+            if (isSubagentChildSender(sender)) {
+                childIds.add(sender.toLowerCase(Locale.ROOT));
+            }
+        }
+        Matcher convIdMatcher = SUBAGENT_CONVERSATION_ID_PATTERN.matcher(text);
+        while (convIdMatcher.find()) {
+            String convId = convIdMatcher.group(1);
+            if (isSafeSessionId(convId)) {
+                childIds.add(convId.trim().toLowerCase(Locale.ROOT));
+            }
+        }
+    }
+
+    private static boolean isSubagentChildSender(String sender) {
+        if (sender == null || sender.isBlank() || sender.startsWith("task-") || sender.contains("/task-")) {
+            return false;
+        }
+        return isSafeSessionId(sender);
     }
 
     private List<String> readWorkspaces(Connection conn) {
@@ -1319,7 +1493,7 @@ public class GeminiHistoryReader {
         try {
             String path = new URI(trimmed).getPath();
             if (path != null && !path.isEmpty()) {
-                return path;
+                return stripWindowsDriveLeadingSlash(path);
             }
         } catch (Exception ignored) {
             // Not a parseable URI — fall through to manual decoding.
@@ -1327,12 +1501,20 @@ public class GeminiHistoryReader {
         if (trimmed.startsWith("file://")) {
             String raw = trimmed.substring("file://".length());
             try {
-                return URLDecoder.decode(raw, StandardCharsets.UTF_8);
+                return stripWindowsDriveLeadingSlash(URLDecoder.decode(raw, StandardCharsets.UTF_8));
             } catch (Exception e) {
-                return raw;
+                return stripWindowsDriveLeadingSlash(raw);
             }
         }
-        return trimmed.startsWith("/") ? trimmed : null;
+        return trimmed.startsWith("/") ? stripWindowsDriveLeadingSlash(trimmed) : null;
+    }
+
+    private static String stripWindowsDriveLeadingSlash(String path) {
+        if (path != null && path.length() >= 3 && path.charAt(0) == '/'
+                && Character.isLetter(path.charAt(1)) && path.charAt(2) == ':') {
+            return path.substring(1);
+        }
+        return path;
     }
 
     static String normalizePath(String path) {

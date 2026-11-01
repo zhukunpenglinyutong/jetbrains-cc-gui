@@ -14,6 +14,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.FileTime;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -290,6 +291,166 @@ public class GeminiHistoryReaderTest {
         assertEquals(UUID_A, session.get("sessionId").getAsString());
         assertEquals("Cache Title", session.get("title").getAsString());
         assertEquals(5, session.get("messageCount").getAsInt());
+    }
+
+    // ------------------------------------------------------------------
+    // STORY-002 — Scan databases and merge with metadata cache
+    // ------------------------------------------------------------------
+
+    @Test
+    public void listAllSessionsMergesCacheWithNewerUncachedDatabases() throws Exception {
+        Path home = cliHome();
+        // UUID_A is in metadata cache with cached title, preview, and messageCount=5
+        writeCache(home, cacheWith(
+                sessionEntry(UUID_A, "Cached Session A", "preview A", 5, T_OLD, PROJECT_URI)));
+        createConversationDb(home, UUID_A, userStep("cached db prompt"));
+
+        // UUID_B exists only as a database on disk (not in metadata cache) with a newer mtime
+        createConversationDb(home, UUID_B, userStep("Uncached session B prompt"));
+        Path dbB = home.resolve("conversations").resolve(UUID_B + ".db");
+        Files.setLastModifiedTime(dbB, FileTime.from(Instant.parse(T_NEW)));
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+        List<GeminiHistoryReader.SessionInfo> sessions = reader.listAllSessions();
+
+        // Must return both sessions (cached + discovered from db scan)
+        assertEquals(2, sessions.size());
+
+        // Sorted by lastTimestamp descending: UUID_B (T_NEW) before UUID_A (T_OLD)
+        GeminiHistoryReader.SessionInfo sessionB = sessions.get(0);
+        assertEquals(UUID_B, sessionB.sessionId);
+        assertEquals("Uncached session B prompt", sessionB.title);
+
+        GeminiHistoryReader.SessionInfo sessionA = sessions.get(1);
+        assertEquals(UUID_A, sessionA.sessionId);
+        assertEquals("Cached Session A", sessionA.title);
+        assertEquals(5, sessionA.messageCount);
+    }
+
+    @Test
+    public void matchesProjectOnWindowsFileUriWithLeadingSlash() throws Exception {
+        Path home = cliHome();
+        String winWorkspaceUri = "file:///C:/Users/me/proj";
+        String winProjectPath = "C:\\Users\\me\\proj";
+
+        // Session carrying a Windows file URI with leading slash /C:/...
+        writeCache(home, cacheWith(
+                sessionEntry(UUID_A, "Windows Session", "preview", 3, T_NEW, winWorkspaceUri)));
+        createConversationDb(home, UUID_A, userStep("hello windows"));
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+        List<GeminiHistoryReader.SessionInfo> sessions = reader.listSessionsForProject(winProjectPath);
+
+        assertEquals(1, sessions.size());
+        GeminiHistoryReader.SessionInfo session = sessions.get(0);
+        assertEquals(UUID_A, session.sessionId);
+        assertEquals("C:/Users/me/proj", session.cwd);
+
+        // Also verify JSON envelope output
+        JsonObject envelope = parse(reader.getSessionsForProjectAsJson(winProjectPath));
+        assertEquals(1, envelope.get("sessionCount").getAsInt());
+        JsonObject jsonSession = envelope.getAsJsonArray("sessions").get(0).getAsJsonObject();
+        assertEquals(UUID_A, jsonSession.get("sessionId").getAsString());
+        assertEquals("C:/Users/me/proj", jsonSession.get("cwd").getAsString());
+    }
+
+    @Test
+    public void scanPopulatesMessageCountFiltersSubagentsAndCachesByMtime() throws Exception {
+        Path home = cliHome();
+
+        // 1. Parent session UUID_A with step 101 referencing subagent child UUID_B
+        createConversationDb(home, UUID_A,
+                new Step(0, "user", protoField(1, "Main parent prompt")),
+                new Step(1, "agent", protoField(2, "Delegating to subagent")),
+                new Step(2, "101", ("[Message] timestamp=2026-11-01T12:00:00Z sender="
+                        + UUID_B + " priority=HIGH content=Done").getBytes(StandardCharsets.UTF_8)));
+
+        // 2. Child subagent session UUID_B
+        createConversationDb(home, UUID_B,
+                new Step(0, "user", protoField(1, "Subagent task prompt")),
+                new Step(1, "agent", protoField(2, "Subagent task reply")));
+
+        // 3. Normal session UUID_C with 2 user/agent steps
+        createConversationDb(home, UUID_C,
+                new Step(0, "user", protoField(1, "Normal query")),
+                new Step(1, "agent", protoField(2, "Normal reply")));
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+        List<GeminiHistoryReader.SessionInfo> sessions = reader.listAllSessions();
+
+        // Subagent child UUID_B must be excluded from top-level session history
+        assertFalse("Subagent child DB must not be listed in session history",
+                sessions.stream().anyMatch(s -> UUID_B.equals(s.sessionId)));
+
+        // UUID_A and UUID_C must be listed
+        assertTrue("Parent session must be listed",
+                sessions.stream().anyMatch(s -> UUID_A.equals(s.sessionId)));
+
+        GeminiHistoryReader.SessionInfo sessionC = sessions.stream()
+                .filter(s -> UUID_C.equals(s.sessionId))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Session C not found"));
+
+        // Message count must be populated from user/agent step count (not 0)
+        assertEquals(2, sessionC.messageCount);
+        assertEquals("Normal query", sessionC.title);
+
+        // 4. Verify ScanMeta caching by (path, mtime):
+        Path dbC = home.resolve("conversations").resolve(UUID_C + ".db");
+        long mtimeC = Files.getLastModifiedTime(dbC).toMillis();
+
+        // Alter database contents on disk without updating mtime
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + dbC.toAbsolutePath());
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("UPDATE steps SET step_payload = X'' WHERE idx = 0");
+        }
+        Files.setLastModifiedTime(dbC, FileTime.fromMillis(mtimeC));
+
+        // Re-read: should return cached ScanMeta because mtime was unchanged
+        List<GeminiHistoryReader.SessionInfo> cachedRun = reader.listAllSessions();
+        GeminiHistoryReader.SessionInfo sessionCAfter = cachedRun.stream()
+                .filter(s -> UUID_C.equals(s.sessionId))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Session C not found in cached run"));
+        assertEquals("Cached ScanMeta should be reused when mtime is unchanged",
+                "Normal query", sessionCAfter.title);
+        assertEquals("Cached ScanMeta messageCount should be preserved",
+                2, sessionCAfter.messageCount);
+
+        // Bump mtime: cache must be invalidated and DB re-read
+        Files.setLastModifiedTime(dbC, FileTime.fromMillis(mtimeC + 5000));
+        List<GeminiHistoryReader.SessionInfo> invalidatedRun = reader.listAllSessions();
+        GeminiHistoryReader.SessionInfo sessionCInvalidated = invalidatedRun.stream()
+                .filter(s -> UUID_C.equals(s.sessionId))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Session C not found in invalidated run"));
+        // Since payload was cleared to empty blob, firstUserText is null and title falls back to UUID_C
+        assertEquals(UUID_C, sessionCInvalidated.title);
+    }
+
+    @Test
+    public void scanKeepsParentWhenStep101SenderIsTaskPath() throws Exception {
+        Path home = cliHome();
+        String taskNotice = """
+                [Message] timestamp=2026-11-01T12:00:00Z sender=%s/task-1 priority=HIGH content=Task done"""
+                .formatted(UUID_A);
+        String childNotice = """
+                [Message] timestamp=2026-11-01T12:00:01Z sender=%s priority=HIGH content=Child done"""
+                .formatted(UUID_B);
+        createConversationDb(home, UUID_A,
+                new Step(0, "user", protoField(1, "Parent prompt")),
+                new Step(1, "101", taskNotice.getBytes(StandardCharsets.UTF_8)),
+                new Step(2, "101", childNotice.getBytes(StandardCharsets.UTF_8)));
+        createConversationDb(home, UUID_B,
+                new Step(0, "user", protoField(1, "Child prompt")));
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+        List<GeminiHistoryReader.SessionInfo> sessions = reader.listAllSessions();
+
+        assertTrue("Parent with sender=<id>/task-N must stay listed",
+                sessions.stream().anyMatch(s -> UUID_A.equals(s.sessionId)));
+        assertFalse("Referenced child sender must stay excluded",
+                sessions.stream().anyMatch(s -> UUID_B.equals(s.sessionId)));
     }
 
     // ------------------------------------------------------------------
