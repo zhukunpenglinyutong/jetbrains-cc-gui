@@ -64,6 +64,7 @@ import {
   missingStoredSuffix,
   thinkingEnabled,
   thinkingSummaryDelta,
+  GEMINI_PRINT_MODE_CLOSE_ERROR,
 } from './message-service.js';
 
 const SERVICE_DIR = fileURLToPath(new URL('.', import.meta.url));
@@ -3627,3 +3628,168 @@ test('Story 1.11 AC9: an ERROR invoke_subagent result that names a live child po
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+// Story 004 tests: Multi-step text tracking, response reconciliation, and thinking isolation
+
+test('Story 004 AC-2: replays live multi-step turn with prose before and after tool call from fixture', async () => {
+  const { stdout } = await runService({ fixture: 'multi-step-prose-tool-prose.jsonl', exitCode: 0 });
+  const deltas = markers(stdout, 'CONTENT_DELTA').map(decodeStringMarker);
+  assert.deepEqual(deltas, [
+    'Checking directory contents:\n',
+    'Found alpha.txt and beta.txt in the workspace.',
+  ]);
+  assert.equal(markers(stdout, 'STREAM_END').length, 1);
+  assert.equal(finalPayload(stdout).success, true);
+});
+
+test('Story 004 AC-1: reconciles final step response suffix when step 1 streamed prose, tool ran, and step 2 streamed partial prefix', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'gemini-004-suffix-'));
+  try {
+    const convId = 'c0040000-0000-4000-8000-000000000001';
+    const fixturePath = writeTempFixture(tempDir, 'step-suffix.jsonl', [
+      { event: 'init', conversation_id: convId, init: { cwd: '/tmp', tools: ['run_command'], permission_mode: 'always-proceed' } },
+      { event: 'step_update', step_update: { conversation_id: convId, step_index: 0, state: 'DONE', step_type: 'user_input' } },
+      { event: 'step_update', step_update: { conversation_id: convId, step_index: 1, state: 'DONE', step_type: 'agent_response', text_delta: 'Inspecting repository:\n' } },
+      { event: 'step_update', step_update: { conversation_id: convId, step_index: 2, state: 'ACTIVE', step_type: 'tool', tool_name: 'run_command', tool_info: { name: 'run_command', parameters: { CommandLine: 'ls' } } } },
+      { event: 'step_update', step_update: { conversation_id: convId, step_index: 2, state: 'DONE', step_type: 'tool', tool_name: 'run_command', tool_info: { name: 'run_command', parameters: { CommandLine: 'ls' }, output: 'build.gradle\n' } } },
+      { event: 'step_update', step_update: { conversation_id: convId, step_index: 3, state: 'DONE', step_type: 'agent_response', text_delta: 'Repository has build' } },
+      { event: 'result', result: { conversation_id: convId, status: 'SUCCESS', response: 'Repository has build.gradle.', duration_seconds: 2, num_turns: 1 } },
+    ]);
+
+    const { stdout } = await runService({ fixture: fixturePath, exitCode: 0 });
+    const deltas = markers(stdout, 'CONTENT_DELTA').map(decodeStringMarker);
+    assert.deepEqual(deltas, [
+      'Inspecting repository:\n',
+      'Repository has build',
+      '.gradle.',
+    ]);
+    assert.equal(markers(stdout, 'STREAM_END').length, 1);
+    assert.equal(finalPayload(stdout).success, true);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('Story 004 AC-1: isDeliveredPrintModeClose accepts response delivered in multi-step turn with post-tool text', () => {
+  // Whole-turn streamedText is "Pre-tool prose\n", but final step response was delivered with empty post-tool text
+  assert.equal(
+    isDeliveredPrintModeClose('ERROR', GEMINI_PRINT_MODE_CLOSE_ERROR, 'Final answer.', 'Pre-tool prose\n', ''),
+    true,
+  );
+  // Post-tool text was partial prefix
+  assert.equal(
+    isDeliveredPrintModeClose('ERROR', GEMINI_PRINT_MODE_CLOSE_ERROR, 'Final answer.', 'Pre-tool prose\nFinal ', 'Final '),
+    true,
+  );
+});
+
+test('Story 004 AC-3: readLatestStoredAgentReply ignores step_type=15 rows before the latest user step (step_type=14)', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'gemini-004-ac3-'));
+  try {
+    const convId = 'c0040000-0000-4000-8000-000000000003';
+    // Turn 1: user step (idx 1) + agent step (idx 2)
+    // Turn 2: user step (idx 3) - but no agent step in DB yet
+    createConversationDbRows(tempDir, convId, [
+      { idx: 1, stepType: 14, payload: Buffer.from([0x08, 0x01]) },
+      {
+        idx: 2,
+        stepType: 15,
+        payload: buildStepPayload({
+          field1: 'Turn 1 answer with extra trailing details that belong only to turn 1.',
+        }),
+      },
+      { idx: 3, stepType: 14, payload: Buffer.from([0x08, 0x02]) },
+    ]);
+
+    // Current turn (Turn 2) streams 'Turn 1 answer' which happens to be a prefix of Turn 1's reply
+    const fixturePath = writeTempFixture(tempDir, 'ac3.jsonl', [
+      { event: 'init', conversation_id: convId, init: { cwd: '/tmp', tools: [], permission_mode: 'default' } },
+      { event: 'step_update', step_update: { conversation_id: convId, step_index: 1, state: 'DONE', step_type: 'agent_response', text_delta: 'Turn 1 answer' } },
+      { event: 'result', result: { conversation_id: convId, status: 'SUCCESS', response: 'Turn 1 answer', duration_seconds: 1, num_turns: 1 } },
+    ]);
+
+    const { stdout, stderr } = await runService({
+      fixture: fixturePath,
+      cliHome: tempDir,
+      sessionId: convId,
+      exitCode: 0,
+    });
+
+    const deltas = markers(stdout, 'CONTENT_DELTA').map(decodeStringMarker);
+    assert.deepEqual(deltas, ['Turn 1 answer']);
+    assert.doesNotMatch(stderr, /stored reply extends streamed text/);
+    assert.equal(finalPayload(stdout).success, true);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('Story 004 AC-4: pollStoredThinking does not suppress thinking summaries at the same step idx after switching conversation_id', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'gemini-004-ac4-'));
+  try {
+    const convId1 = 'c0040000-0000-4000-8000-000000000010';
+    const convId2 = 'c0040000-0000-4000-8000-000000000020';
+
+    // Prior session convId1 has thinking in step idx 2
+    createConversationDbRows(tempDir, convId1, [
+      { idx: 1, stepType: 14, payload: Buffer.from([0x08, 0x01]) },
+      {
+        idx: 2,
+        stepType: 15,
+        payload: buildStepPayload({
+          field1: 'Answer 1.',
+          field3: 'Thinking analysis for query 1.',
+          field8: 'Answer 1.',
+        }),
+      },
+    ]);
+
+    // New session convId2 also has thinking in step idx 2 with the same summary text
+    createConversationDbRows(tempDir, convId2, [
+      { idx: 1, stepType: 14, payload: Buffer.from([0x08, 0x01]) },
+      {
+        idx: 2,
+        stepType: 15,
+        payload: buildStepPayload({
+          field1: 'Answer 2.',
+          field3: 'Thinking analysis for query 1.',
+          field8: 'Answer 2.',
+        }),
+      },
+    ]);
+
+    // Pre-seeded with sessionId = convId1, but the turn starts a new conversation convId2
+    const fixturePath = writeTempFixture(tempDir, 'ac4.jsonl', [
+      { event: 'init', conversation_id: convId2, init: { cwd: '/tmp', tools: [], permission_mode: 'default' } },
+      {
+        event: 'step_update',
+        step_update: {
+          conversation_id: convId2,
+          step_index: 1,
+          state: 'DONE',
+          step_type: 'agent_response',
+          text_delta: 'Answer 2.',
+        },
+      },
+      { event: 'result', result: { conversation_id: convId2, status: 'SUCCESS', response: 'Answer 2.', duration_seconds: 1, num_turns: 1 } },
+    ]);
+
+    const { stdout } = await runService({
+      fixture: fixturePath,
+      cliHome: tempDir,
+      sessionId: convId1,
+      exitCode: 0,
+      thinking: true,
+    });
+
+    const thinkingDeltas = markers(stdout, 'THINKING_DELTA').map(decodeStringMarker);
+    assert.ok(
+      thinkingDeltas.some((t) => t.includes('Thinking analysis for query 1.')),
+      `thinking summary in new conversation must not be suppressed by prior conversation: ${JSON.stringify(thinkingDeltas)}`
+    );
+    assert.equal(finalPayload(stdout).success, true);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+

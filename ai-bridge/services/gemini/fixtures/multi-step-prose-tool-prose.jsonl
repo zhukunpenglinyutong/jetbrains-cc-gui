@@ -1,0 +1,8 @@
+{"event":"init","conversation_id":"3d8f1e2a-7b4c-4e89-9a12-5f6e7d8c9b01","init":{"cwd":"<TMP>","tools":["run_command","read_file"],"permission_mode":"always-proceed"}}
+{"event":"step_update","step_update":{"conversation_id":"3d8f1e2a-7b4c-4e89-9a12-5f6e7d8c9b01","step_index":0,"state":"DONE","step_type":"user_input"}}
+{"event":"step_update","step_update":{"conversation_id":"3d8f1e2a-7b4c-4e89-9a12-5f6e7d8c9b01","step_index":1,"state":"ACTIVE","step_type":"agent_response","text_delta":"Checking directory contents:\n"}}
+{"event":"step_update","step_update":{"conversation_id":"3d8f1e2a-7b4c-4e89-9a12-5f6e7d8c9b01","step_index":1,"state":"DONE","step_type":"agent_response","duration_seconds":1.2}}
+{"event":"step_update","step_update":{"conversation_id":"3d8f1e2a-7b4c-4e89-9a12-5f6e7d8c9b01","step_index":2,"state":"ACTIVE","step_type":"tool","tool_name":"run_command","tool_info":{"name":"run_command","parameters":{"CommandLine":"ls"}}}}
+{"event":"step_update","step_update":{"conversation_id":"3d8f1e2a-7b4c-4e89-9a12-5f6e7d8c9b01","step_index":2,"state":"DONE","step_type":"tool","tool_name":"run_command","duration_seconds":0.04,"tool_info":{"name":"run_command","parameters":{"CommandLine":"ls"},"output":"alpha.txt\nbeta.txt\n"}}}
+{"event":"step_update","step_update":{"conversation_id":"3d8f1e2a-7b4c-4e89-9a12-5f6e7d8c9b01","step_index":3,"state":"DONE","step_type":"agent_response","duration_seconds":0.6}}
+{"event":"result","result":{"conversation_id":"3d8f1e2a-7b4c-4e89-9a12-5f6e7d8c9b01","duration_seconds":2.1,"num_turns":1,"usage":{"input_tokens":140,"output_tokens":45,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":185},"status":"SUCCESS","response":"Found alpha.txt and beta.txt in the workspace.","error":null}}

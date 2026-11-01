@@ -290,20 +290,59 @@ export const GEMINI_PRINT_MODE_CLOSE_ERROR =
  * already holds the answer. The same sentence with an empty response is a
  * real interrupt and must still fail the turn. Divergent streamed text and
  * response text stay a failure too: the close did not confirm the answer.
- * @param {unknown} status
- * @param {unknown} errorText
- * @param {unknown} responseText
- * @param {unknown} streamedText
- * @returns {boolean}
+ * @param {unknown} status Result status string from the CLI.
+ * @param {unknown} errorText Result error message from the CLI.
+ * @param {unknown} responseText Result response text from the CLI.
+ * @param {unknown} streamedText Total agent text streamed across the turn.
+ * @param {unknown} [lastStepStreamedText] Agent text streamed in the final step.
+ * @returns {boolean} true if the turn delivered a valid response despite the print-mode close error
  */
-export function isDeliveredPrintModeClose(status, errorText, responseText, streamedText) {
+export function isDeliveredPrintModeClose(status, errorText, responseText, streamedText, lastStepStreamedText) {
   if (status === 'SUCCESS') return false;
   if (String(errorText || '').trim() !== GEMINI_PRINT_MODE_CLOSE_ERROR) return false;
   const response = responseText == null ? '' : String(responseText);
   const streamed = streamedText == null ? '' : String(streamedText);
   if (!response.trim()) return false;
   if (!streamed) return true;
-  return response.startsWith(streamed) || streamed.startsWith(response);
+  if (response.startsWith(streamed) || streamed.startsWith(response)) return true;
+  if (lastStepStreamedText !== undefined && lastStepStreamedText !== null) {
+    const lastStep = String(lastStepStreamedText);
+    if (!lastStep) return true;
+    return response.startsWith(lastStep) || lastStep.startsWith(response);
+  }
+  return false;
+}
+
+/**
+ * Reconciles the final `result.response` text against the text already streamed
+ * across the turn and in the final agent step.
+ * @param {unknown} responseText Final response text reported in the result event.
+ * @param {unknown} totalStreamedText Total agent text streamed across the turn.
+ * @param {unknown} [lastStepStreamedText] Agent text streamed in the final (post-tool) step.
+ * @returns {{ textToEmit: string, isSuffix: boolean }} reconciliation delta to emit and whether it is a missing suffix
+ */
+export function reconcileFinalResponseText(responseText, totalStreamedText, lastStepStreamedText) {
+  const response = responseText == null ? '' : String(responseText);
+  if (!response.trim()) {
+    return { textToEmit: '', isSuffix: false };
+  }
+  const total = totalStreamedText == null ? '' : String(totalStreamedText);
+  const hasLastStep = lastStepStreamedText !== undefined && lastStepStreamedText !== null;
+  const lastStep = hasLastStep ? String(lastStepStreamedText) : total;
+
+  if (!total) {
+    return { textToEmit: response, isSuffix: false };
+  }
+  if (response.length > total.length && response.startsWith(total)) {
+    return { textToEmit: response.slice(total.length), isSuffix: true };
+  }
+  if (hasLastStep && lastStep && response.length > lastStep.length && response.startsWith(lastStep)) {
+    return { textToEmit: response.slice(lastStep.length), isSuffix: true };
+  }
+  if (hasLastStep && !lastStep && response !== total && !total.endsWith(response)) {
+    return { textToEmit: response, isSuffix: false };
+  }
+  return { textToEmit: '', isSuffix: false };
 }
 
 /**
@@ -881,10 +920,16 @@ function withConversationSnapshot(convId, cliHome, purpose, read) {
 
 function readLatestStoredAgentReply(convId, cliHome) {
   const row = withConversationSnapshot(convId, cliHome, 'failed to read stored reply', (db) => {
+    const userBoundary = db.prepare(
+      'SELECT MAX(idx) AS maxUserIdx FROM steps WHERE step_type = 14'
+    ).get();
+    const minIdx = userBoundary && typeof userBoundary.maxUserIdx === 'number'
+      ? userBoundary.maxUserIdx
+      : -1;
     const stmt = db.prepare(
-      'SELECT step_payload FROM steps WHERE step_type = 15 ORDER BY idx DESC LIMIT 1'
+      'SELECT step_payload FROM steps WHERE step_type = 15 AND idx > ? ORDER BY idx DESC LIMIT 1'
     );
-    return stmt.get() || null;
+    return stmt.get(minIdx) || null;
   });
   if (!row || !row.step_payload) return null;
   return agentDisplayText(row.step_payload);
@@ -1172,6 +1217,9 @@ export async function sendMessage({
   // CLI starts are not part of result.response, so they must not be included
   // when checking whether that response still has an undelivered tail.
   let emittedAgentText = '';
+  const emittedTextByStep = new Map();
+  let lastAgentStepIndex = null;
+  let lastAgentStepText = '';
   // Print mode writes the soft-deny explanation only on stderr, then reports
   // SUCCESS with an empty response. Hold that tail until the result (or the
   // process close, if the notice arrives after the result line).
@@ -1417,7 +1465,7 @@ export async function sendMessage({
       const stored = readStoredThinkingSteps(convId, cliHome);
       if (!stored || !stored.hasUserSteps) return;
       for (const step of stored.steps) {
-        emittedThinkingByIdx.set(step.idx, summarizeStoredStep(step, ''));
+        emittedThinkingByIdx.set(`${convId}:${step.idx}`, summarizeStoredStep(step, ''));
       }
     };
 
@@ -1440,15 +1488,16 @@ export async function sendMessage({
       lastThinkingPollStamp = stamp;
       const streamed = typeof streamedAnswer === 'string' ? streamedAnswer.trim() : '';
       for (const step of stored.steps) {
+        const stepKey = `${convId}:${step.idx}`;
         const full = summarizeStoredStep(step, streamed);
-        const prev = emittedThinkingByIdx.get(step.idx) || '';
+        const prev = emittedThinkingByIdx.get(stepKey) || '';
         if (full === prev) continue;
         if (!prev && full && emittedThinkingNorm.includes(full)) {
-          emittedThinkingByIdx.set(step.idx, full);
+          emittedThinkingByIdx.set(stepKey, full);
           continue;
         }
         const novel = thinkingSummaryDelta(prev, full);
-        emittedThinkingByIdx.set(step.idx, full);
+        emittedThinkingByIdx.set(stepKey, full);
         if (!novel) continue;
         const piece = prev
           ? novel
@@ -1661,9 +1710,18 @@ export async function sendMessage({
           }
 
           if (step.step_type === 'agent_response') {
+            const hasStepIndex = step.step_index !== undefined && step.step_index !== null;
+            if (hasStepIndex && step.step_index !== lastAgentStepIndex) {
+              lastAgentStepIndex = step.step_index;
+              lastAgentStepText = emittedTextByStep.get(step.step_index) || '';
+            }
             if (typeof step.text_delta === 'string' && step.text_delta) {
               emittedDeltaCount += 1;
               emittedAgentText += step.text_delta;
+              lastAgentStepText += step.text_delta;
+              if (hasStepIndex) {
+                emittedTextByStep.set(step.step_index, lastAgentStepText);
+              }
               emitJsonStringMarker('[CONTENT_DELTA]', step.text_delta);
             }
             if (step.usage && typeof step.usage === 'object') {
@@ -1676,6 +1734,8 @@ export async function sendMessage({
               }
             }
           } else if (step.step_type === 'tool') {
+            lastAgentStepIndex = null;
+            lastAgentStepText = '';
             // Live-verified shapes (agy 1.1.24, fixtures/):
             //   ACTIVE: { step_index, state:"ACTIVE", step_type:"tool", tool_name, tool_info:{ name, parameters } }
             //   DONE:   ... tool_info:{ name, parameters, output: "<string>" }
@@ -1812,6 +1872,7 @@ export async function sendMessage({
             res.error,
             responseText,
             emittedAgentText,
+            lastAgentStepText,
           );
           if (res.status === 'SUCCESS' || deliveredDespiteClose) {
             if (deliveredDespiteClose) {
@@ -1823,36 +1884,39 @@ export async function sendMessage({
             // render empty — fall back to the result's own response text.
             // When deltas did arrive but stop short of result.response (agy
             // closes the turn before the last drip flush reaches stdout), emit
-            // only the missing suffix. Appending the whole response would
-            // duplicate a turn whose deltas already equal it.
+            // only the missing suffix. In multi-step turns, reconcile against
+            // both the whole-turn text and the final agent step's text.
             let shown = emittedAgentText;
-            if (emittedDeltaCount === 0 && responseText.trim()) {
-              emitJsonStringMarker('[CONTENT_DELTA]', responseText);
-              shown = responseText;
-            } else if (
-              emittedAgentText
-              && responseText.length > emittedAgentText.length
-              && responseText.startsWith(emittedAgentText)
-            ) {
-              const missingTail = responseText.slice(emittedAgentText.length);
-              console.error(
-                `[gemini] result.response extends streamed text by ${missingTail.length} chars; emitting the missing suffix`
-              );
-              emitJsonStringMarker('[CONTENT_DELTA]', missingTail);
-              shown = emittedAgentText + missingTail;
+            let lastStepShown = lastAgentStepText;
+            const reconciled = reconcileFinalResponseText(
+              responseText,
+              emittedAgentText,
+              lastAgentStepText,
+            );
+            if (reconciled.textToEmit) {
+              if (reconciled.isSuffix) {
+                console.error(
+                  `[gemini] result.response extends streamed text by ${reconciled.textToEmit.length} chars; emitting the missing suffix`
+                );
+              }
+              emitJsonStringMarker('[CONTENT_DELTA]', reconciled.textToEmit);
+              shown += reconciled.textToEmit;
+              lastStepShown += reconciled.textToEmit;
             }
 
             if (shown) {
               const convId = normalizeConversationId(res.conversation_id || currentSessionId);
               if (convId) {
                 const storedText = readLatestStoredAgentReply(convId, cliHome);
-                const storedSuffix = missingStoredSuffix(shown, storedText);
+                const storedSuffix = missingStoredSuffix(lastStepShown || shown, storedText)
+                  || missingStoredSuffix(shown, storedText);
                 if (storedSuffix) {
                   console.error(
                     `[gemini] stored reply extends streamed text by ${storedSuffix.length} chars; emitting the missing suffix`
                   );
                   emitJsonStringMarker('[CONTENT_DELTA]', storedSuffix);
                   shown += storedSuffix;
+                  lastStepShown += storedSuffix;
                 }
               }
             }
