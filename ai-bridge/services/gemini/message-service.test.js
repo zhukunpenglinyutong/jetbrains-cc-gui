@@ -158,6 +158,15 @@ if (mode) {
         await write(typeof line === 'string' ? line : JSON.stringify(line));
       }
     }
+    if (process.env.FAKE_SIGTERM_LINES) {
+      const sigtermLines = JSON.parse(process.env.FAKE_SIGTERM_LINES);
+      process.on('SIGTERM', async () => {
+        for (const line of sigtermLines) {
+          await write(typeof line === 'string' ? line : JSON.stringify(line));
+        }
+        process.exit(0);
+      });
+    }
     if (mode === 'hang-with-grandchild' && process.env.FAKE_GC_PID_FILE) {
       const gcCode = "import fs from 'node:fs';fs.writeFileSync(process.env.FAKE_GC_PID_FILE, String(process.pid));setInterval(() => {}, 1000000);setTimeout(() => process.exit(0), Number(process.env.FAKE_LIFETIME_MS || '15000'));";
       spawnChild(process.execPath, ['--input-type=module', '-e', gcCode], { stdio: 'ignore' });
@@ -236,6 +245,9 @@ const sendOptions = {
 if (process.env.SVC_THINKING) {
   sendOptions.thinking = process.env.SVC_THINKING;
 }
+if (process.env.SVC_POST_RESULT_KILL_DELAY_MS) {
+  sendOptions.postResultKillDelayMs = Number(process.env.SVC_POST_RESULT_KILL_DELAY_MS);
+}
 await sendMessage(sendOptions);
 `;
 
@@ -276,6 +288,8 @@ function runService({
   lifetimeMs = '',
   timeoutMs = 0,
   customLines = null,
+  sigtermLines = null,
+  postResultKillDelayMs,
 }) {
   const fakeCli = globalThis.__geminiFakeCli;
   const env = { ...process.env };
@@ -321,6 +335,12 @@ function runService({
   env.FAKE_LIFETIME_MS = lifetimeMs;
   if (customLines) {
     env.FAKE_CUSTOM_LINES = JSON.stringify(customLines);
+  }
+  if (sigtermLines) {
+    env.FAKE_SIGTERM_LINES = JSON.stringify(sigtermLines);
+  }
+  if (postResultKillDelayMs !== undefined && postResultKillDelayMs !== null) {
+    env.SVC_POST_RESULT_KILL_DELAY_MS = String(postResultKillDelayMs);
   }
 
   return new Promise((resolve, reject) => {
@@ -3791,5 +3811,115 @@ test('Story 004 AC-4: pollStoredThinking does not suppress thinking summaries at
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+// ── Story 005: Lingering agy process termination, late output suppression, bounded subagent reaper ──
+
+test('Story 005 AC-1: kills lingering agy child process shortly after a handled result even when idleReapMinutes is 0', async () => {
+  const convId = '00500000-0000-4000-8000-000000000001';
+  const customLines = [
+    { event: 'init', conversation_id: convId, init: { cwd: '/tmp', tools: [], permission_mode: 'default' } },
+    { event: 'step_update', step_update: { conversation_id: convId, step_index: 1, state: 'ACTIVE', step_type: 'agent_response', text_delta: 'Prompt response.' } },
+    { event: 'result', result: { conversation_id: convId, status: 'SUCCESS', response: 'Prompt response.', duration_seconds: 1, num_turns: 1 } },
+  ];
+
+  const started = Date.now();
+  const { stdout, timedOut } = await runService({
+    mode: 'custom-hang',
+    customLines,
+    postResultKillDelayMs: 200,
+    extraEnv: { GEMINI_IDLE_REAP_MINUTES: '0' },
+    timeoutMs: 4000,
+  });
+  const elapsedMs = Date.now() - started;
+
+  assert.equal(timedOut, false, 'post-result kill grace timer must terminate lingering child before harness timeout');
+  assert.ok(elapsedMs < 3000, `process must terminate shortly after result (elapsed: ${elapsedMs}ms)`);
+  assert.equal(markers(stdout, 'STREAM_END').length, 1);
+  const footers = protocolLines(stdout).filter((l) => l.startsWith('{"success"'));
+  assert.equal(footers.length, 1);
+  assert.deepEqual(JSON.parse(footers[0]), { success: true, sessionId: convId });
+});
+
+test('Story 005 AC-2: ignores late result and content_delta lines arriving after idle reap has already emitted failure', async () => {
+  const convId = '00500000-0000-4000-8000-000000000002';
+  const sigtermLines = [
+    {
+      event: 'step_update',
+      step_update: {
+        conversation_id: convId,
+        step_index: 2,
+        state: 'ACTIVE',
+        step_type: 'agent_response',
+        text_delta: 'Late ghost delta that should be ignored.',
+      },
+    },
+    {
+      event: 'result',
+      result: {
+        conversation_id: convId,
+        status: 'SUCCESS',
+        response: 'Late ghost response that should be ignored.',
+        duration_seconds: 1,
+        num_turns: 1,
+      },
+    },
+  ];
+
+  const { stdout, timedOut } = await runService({
+    mode: 'silent-hang',
+    hangInit: true,
+    sigtermLines,
+    extraEnv: { GEMINI_IDLE_REAP_MINUTES: '0.05' }, // 3s idle window
+    timeoutMs: 6000,
+  });
+
+  assert.equal(timedOut, false, 'the turn must end by idle reap, not harness timeout');
+  const sendErrors = markers(stdout, 'SEND_ERROR');
+  assert.equal(sendErrors.length, 1, 'idle reap emits exactly one SEND_ERROR');
+  assert.match(JSON.parse(sendErrors[0].slice('[SEND_ERROR]'.length)).error, /no output|silent|silence/i);
+
+  // AC-2 assertion: late content deltas arriving after failureEmitted must be dropped
+  const deltas = markers(stdout, 'CONTENT_DELTA');
+  assert.equal(deltas.length, 0, `no CONTENT_DELTA may be emitted after failureEmitted, got: ${JSON.stringify(deltas)}`);
+
+  // AC-2 assertion: late result arriving after failureEmitted must not emit a SUCCESS footer
+  const footers = protocolLines(stdout).filter((l) => l.startsWith('{"success"'));
+  assert.equal(footers.length, 1, `only the initial failure footer may be emitted, got: ${JSON.stringify(footers)}`);
+  assert.equal(JSON.parse(footers[0]).success, false, 'terminal footer must be the failure footer');
+  assert.equal(markers(stdout, 'STREAM_END').length, 1, 'STREAM_END must be emitted only once');
+});
+
+test('Story 005 AC-3: reaps hung turn when invoke_subagent never updates a child database within the silence window', async () => {
+  const convId = '00500000-0000-4000-8000-000000000003';
+  const customLines = [
+    { event: 'init', conversation_id: convId, init: { cwd: '/tmp', tools: [], permission_mode: 'default' } },
+    {
+      event: 'step_update',
+      step_update: {
+        conversation_id: convId,
+        step_index: 1,
+        step_type: 'tool',
+        state: 'ACTIVE',
+        tool_name: 'invoke_subagent',
+        tool_info: { name: 'invoke_subagent', parameters: {} },
+      },
+    },
+  ];
+
+  const { stdout, timedOut } = await runService({
+    mode: 'custom-hang',
+    customLines,
+    extraEnv: { GEMINI_IDLE_REAP_MINUTES: '0.05' }, // 3s idle window
+    timeoutMs: 9000,
+  });
+
+  assert.equal(timedOut, false, 'reaper must terminate the hung turn rather than deferring indefinitely without child db activity');
+  const reapErrors = markers(stdout, 'SEND_ERROR').filter((l) => /no output|silent|silence/i.test(l));
+  assert.equal(reapErrors.length, 1, `reap error must be emitted once bounded deferral expires, got: ${JSON.stringify(reapErrors)}`);
+  assert.equal(markers(stdout, 'STREAM_END').length, 1);
+  const footers = protocolLines(stdout).filter((l) => l.startsWith('{"success"'));
+  assert.equal(footers.length, 1);
+  assert.equal(JSON.parse(footers[0]).success, false);
 });
 

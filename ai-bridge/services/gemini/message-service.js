@@ -1187,6 +1187,8 @@ function copyConversationDbToTemp(dbPath) {
  * @param {unknown} [options.thinking] plugin Thinking flag. false/"false"/0/"0"
  *   suppresses summaries. Omitted or null stays enabled, matching
  *   MarkerCliBridge. Not an agy CLI flag.
+ * @param {number} [options.postResultKillDelayMs] grace period in ms after
+ *   handling a terminal result before terminating a lingering CLI child
  */
 export async function sendMessage({
   message,
@@ -1199,6 +1201,7 @@ export async function sendMessage({
   permissionMode = '',
   cliHome = '',
   thinking,
+  postResultKillDelayMs,
 } = {}) {
   beginStream();
   const showThinking = thinkingEnabled(thinking);
@@ -1262,6 +1265,11 @@ export async function sendMessage({
   // spawn (onSpawn), reset by every parsed stdout line, and cleared in the
   // finally below — a reap timer firing on a finished turn is a defect.
   const idleReapMinutes = parseIdleReapMinutes(process.env.GEMINI_IDLE_REAP_MINUTES);
+  const POST_RESULT_KILL_DELAY_MS = 2000;
+  const parsedKillDelay = Number(postResultKillDelayMs);
+  const resolvedPostResultKillDelayMs = Number.isFinite(parsedKillDelay) && parsedKillDelay >= 0
+    ? parsedKillDelay
+    : POST_RESULT_KILL_DELAY_MS;
   let reapChild = null;
   let reapTimer = null;
   const clearIdleReapTimer = () => {
@@ -1269,6 +1277,28 @@ export async function sendMessage({
       clearTimeout(reapTimer);
       reapTimer = null;
     }
+  };
+  let postResultKillTimer = null;
+  const clearPostResultKillTimer = () => {
+    if (postResultKillTimer !== null) {
+      clearTimeout(postResultKillTimer);
+      postResultKillTimer = null;
+    }
+  };
+  const schedulePostResultKill = () => {
+    clearPostResultKillTimer();
+    postResultKillTimer = setTimeout(() => {
+      postResultKillTimer = null;
+      const alive = Boolean(reapChild && reapChild.exitCode === null && reapChild.signalCode === null);
+      if (alive) {
+        console.error('[gemini] post-result idle reap (process terminated; result already handled)');
+        killChildTree(reapChild, 'gemini');
+      }
+      if (!emptyAnswerPending) {
+        emitStreamEndOnce();
+      }
+    }, resolvedPostResultKillDelayMs);
+    postResultKillTimer.unref?.();
   };
   // Declared beside the reap timer so the finally block can stop it. A const
   // inside the try is not visible there, and a leftover interval exits the
@@ -1346,6 +1376,8 @@ export async function sendMessage({
     // DONE A, ERROR B) pair in start order, not "most recent wins".
     const pendingUnnamedToolIds = [];
     const activeInvokeSubagentCalls = new Set();
+    const subagentStartTimes = new Map();
+    const deferredInvokeSubagentCalls = new Set();
     const trackedSubagentConversationIds = new Set();
     // Per agent-step idx, the summary text already emitted. A later poll of
     // the same row emits only the grown suffix, so a narration can appear
@@ -1548,6 +1580,8 @@ export async function sendMessage({
         emitToolResultMessage({ toolUseId: id, content, isError: true });
       }
       activeInvokeSubagentCalls.clear();
+      subagentStartTimes.clear();
+      deferredInvokeSubagentCalls.clear();
     };
 
     // Reap decision: no parsed stream line arrived within the window. Kill
@@ -1558,12 +1592,23 @@ export async function sendMessage({
       clearIdleReapTimer();
       stopThinkingPoll();
       if (!hadResult && !failureEmitted) {
-        let hasLiveChild = activeInvokeSubagentCalls.size > 0;
-        if (!hasLiveChild && trackedSubagentConversationIds.size > 0) {
+        let hasLiveChild = false;
+        if (trackedSubagentConversationIds.size > 0) {
           for (const childId of trackedSubagentConversationIds) {
             if (isSubagentChildLive(childId, cliHome, idleReapMinutes)) {
               hasLiveChild = true;
               break;
+            }
+          }
+        }
+        if (!hasLiveChild && activeInvokeSubagentCalls.size > 0) {
+          const now = Date.now();
+          const maxUnverifiedDeferralMs = idleReapMinutes * 60 * 1000 * 1.5;
+          for (const toolIndex of activeInvokeSubagentCalls) {
+            const startedAt = subagentStartTimes.get(toolIndex) ?? now;
+            if (!deferredInvokeSubagentCalls.has(toolIndex) && (now - startedAt) < maxUnverifiedDeferralMs) {
+              deferredInvokeSubagentCalls.add(toolIndex);
+              hasLiveChild = true;
             }
           }
         }
@@ -1637,6 +1682,7 @@ export async function sendMessage({
         emitJsonStringMarker('[CONTENT_DELTA]', notice);
         emitStreamEndOnce();
         emitSuccessFooter();
+        schedulePostResultKill();
       },
       onCloseBeforeEnd: () => {
         flushUnresolvedTools();
@@ -1655,6 +1701,7 @@ export async function sendMessage({
         emitStreamEndOnce();
       },
       onLine: (line) => {
+        if (hadResult || failureEmitted) return;
         if (!line || !line.trim()) return;
         let event;
         try {
@@ -1776,14 +1823,20 @@ export async function sendMessage({
             if (normalizedToolName === 'invoke_subagent') {
               if (step.state === 'ACTIVE') {
                 activeInvokeSubagentCalls.add(toolIndex);
+                subagentStartTimes.set(toolIndex, Date.now());
+                deferredInvokeSubagentCalls.delete(toolIndex);
               } else if (step.state === 'DONE') {
                 activeInvokeSubagentCalls.delete(toolIndex);
+                subagentStartTimes.delete(toolIndex);
+                deferredInvokeSubagentCalls.delete(toolIndex);
                 const outputText = extractToolResultText(step.tool_info?.output);
                 for (const cid of extractSubagentConversationIds(outputText)) {
                   trackedSubagentConversationIds.add(cid);
                 }
               } else if (step.state === 'ERROR') {
                 activeInvokeSubagentCalls.delete(toolIndex);
+                subagentStartTimes.delete(toolIndex);
+                deferredInvokeSubagentCalls.delete(toolIndex);
                 const err = step.tool_info?.error;
                 const errorText = [
                   extractToolResultText(step.tool_info?.output),
@@ -1834,7 +1887,7 @@ export async function sendMessage({
           emitStreamThinking(step);
         } else if (event.event === 'result') {
           // Re-entry guard: exactly one terminal branch per turn.
-          if (hadResult) return;
+          if (hadResult || failureEmitted) return;
           hadResult = true;
           stopThinkingPoll();
           // Tools still without a terminal state when the result arrives are
@@ -1933,11 +1986,13 @@ export async function sendMessage({
               emitJsonStringMarker('[CONTENT_DELTA]', denyNotice);
               emitStreamEndOnce();
               emitSuccessFooter();
+              schedulePostResultKill();
             } else if (!shown) {
               emptyAnswerPending = true;
             } else {
               emitStreamEndOnce();
               emitSuccessFooter();
+              schedulePostResultKill();
             }
           } else {
             pollStoredThinking(res.conversation_id || currentSessionId, emittedAgentText, true);
@@ -1956,6 +2011,7 @@ export async function sendMessage({
               error: formatted,
               details: { status: res.status, rawError },
             }));
+            schedulePostResultKill();
           }
         } else {
           console.error(`[gemini] unknown event: ${String(event.event)}`);
@@ -1972,6 +2028,7 @@ export async function sendMessage({
     }
   } finally {
     clearIdleReapTimer();
+    clearPostResultKillTimer();
     stopThinkingPoll();
     emitStreamEndOnce();
     await cleanupMaterializedImagePaths(imagePaths);
