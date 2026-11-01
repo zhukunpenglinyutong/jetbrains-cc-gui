@@ -447,6 +447,13 @@ public class ClaudeChatWindow {
             }
 
             @Override
+            public void invalidatePendingHistoryLoads() {
+                if (historyHandler != null) {
+                    historyHandler.invalidatePendingLoads();
+                }
+            }
+
+            @Override
             public void setSlashCommandsFetched(boolean fetched) {
                 slashCommandsFetched = fetched;
             }
@@ -1634,6 +1641,7 @@ public class ClaudeChatWindow {
         target.setModel(source.getModel());
         target.setPermissionMode(source.getPermissionMode());
         target.setReasoningEffort(source.getReasoningEffort());
+        target.setClaudeUltracode(source.isClaudeUltracode());
     }
 
     public SessionLifecycleManager getSessionLifecycleManager() {
@@ -1675,6 +1683,7 @@ public class ClaudeChatWindow {
         if (savedState.reasoningEffort != null && !savedState.reasoningEffort.trim().isEmpty()) {
             session.setReasoningEffort(savedState.reasoningEffort);
         }
+        session.setClaudeUltracode(savedState.claudeUltracode);
 
         boolean sameProject = TabSessionRestorePolicy.matchesProjectIdentity(
                 savedState,
@@ -2693,6 +2702,14 @@ public class ClaudeChatWindow {
             return;
         }
         if (dispatcher.dispatch(type, content)) {
+            if ("set_claude_ultracode".equals(type) || "set_reasoning_effort".equals(type)) {
+                ClaudeSession configuredSession = this.session;
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (!this.disposed && this.session == configuredSession) {
+                        this.persistTabSessionState();
+                    }
+                });
+            }
             return;
         }
 
@@ -2735,10 +2752,15 @@ public class ClaudeChatWindow {
             /** Keeps window identity and persisted tabs aligned with the bound session. */
             @Override
             public void onSessionIdReceived(String newSessionId) {
+                onSessionIdReceived(newSessionId, null);
+            }
+
+            @Override
+            public void onSessionIdReceived(String newSessionId, String transitionToken) {
                 if (newSessionId == null || ClaudeChatWindow.this.session != callbackSession) {
                     return;
                 }
-                super.onSessionIdReceived(newSessionId);
+                super.onSessionIdReceived(newSessionId, transitionToken);
                 String exposedSessionId = resolveExposedSessionId(newSessionId, ClaudeChatWindow.this.permissionServiceKey);
                 if (exposedSessionId.equals(ClaudeChatWindow.this.sessionId)) {
                     return;
@@ -2873,6 +2895,11 @@ public class ClaudeChatWindow {
                     var adapter = sessionCallbackAdapter;
                     String currentSessionId = session != null ? session.getSessionId() : null;
                     if (currentSessionId == null || !currentSessionId.equals(taskSessionId)) {
+                        return;
+                    }
+                    String taskEpoch = data.has("runtimeSessionEpoch") && data.get("runtimeSessionEpoch").isJsonPrimitive()
+                            ? data.get("runtimeSessionEpoch").getAsString() : null;
+                    if (taskEpoch != null && !taskEpoch.equals(session.getRuntimeSessionEpoch())) {
                         return;
                     }
                     if (adapter != null && data.has("taskEvent") && !data.get("taskEvent").isJsonNull()) {
@@ -3230,6 +3257,7 @@ public class ClaudeChatWindow {
         snapshot.permissionMode = session.getPermissionMode();
         snapshot.reasoningEffort = session.getReasoningEffort();
         snapshot.unread = chatWindowDelegate.hasUnread();
+        snapshot.claudeUltracode = session.isClaudeUltracode();
 
         TabStateService.getInstance(project).saveTabSessionState(tabIndex, snapshot);
     }

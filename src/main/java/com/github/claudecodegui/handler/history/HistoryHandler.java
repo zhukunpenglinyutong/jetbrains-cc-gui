@@ -39,6 +39,10 @@ public class HistoryHandler extends BaseMessageHandler {
          * @param model optional model id from the history row; null/blank keeps previous UI model
          */
         void onLoadSession(String sessionId, String projectPath, String provider, String model);
+
+        default void onLoadSession(String sessionId, String projectPath, String provider, String model, String transitionToken) {
+            onLoadSession(sessionId, projectPath, provider, model);
+        }
     }
 
     public interface RestoredHistoryCallback {
@@ -77,6 +81,11 @@ public class HistoryHandler extends BaseMessageHandler {
 
     public void setSessionLoadCallback(SessionLoadCallback callback) {
         this.sessionLoadCallback = callback;
+    }
+
+    /** Prevent a delayed history reader from publishing into a newer session transition. */
+    public void invalidatePendingLoads() {
+        historyMessageInjector.invalidateCodexHistory();
     }
 
     public void setRestoredHistoryCallback(RestoredHistoryCallback callback) {

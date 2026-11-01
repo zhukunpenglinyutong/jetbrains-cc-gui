@@ -526,6 +526,20 @@ public class ChatWindowDelegate {
             @Override public void onCreateNewSession() {
                 host.getSessionLifecycleManager().createNewSession();
             }
+            @Override public void onCreateNewSession(String transitionToken) {
+                if (transitionToken == null) {
+                    onCreateNewSession();
+                } else {
+                    host.getSessionLifecycleManager().createNewSession(transitionToken);
+                }
+            }
+            @Override public void onCreateNewSession(String transitionToken, String provider) {
+                if (provider == null) {
+                    onCreateNewSession(transitionToken);
+                } else {
+                    host.getSessionLifecycleManager().createNewSession(transitionToken, provider);
+                }
+            }
             @Override public void onFrontendReady() { handleFrontendReady(); }
             @Override public void onHistoryRenderComplete(long commitEpoch) {
                 host.onHistoryRenderComplete(commitEpoch);
@@ -548,14 +562,19 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(permissionHandler);
 
         HistoryHandler historyHandler = new HistoryHandler(handlerContext);
-        historyHandler.setSessionLoadCallback((sessionId, projectPath, provider, model) -> {
+        historyHandler.setSessionLoadCallback(new HistoryHandler.SessionLoadCallback() {
+            @Override public void onLoadSession(String sessionId, String projectPath, String provider, String model) {
+                onLoadSession(sessionId, projectPath, provider, model, null);
+            }
+
+            @Override public void onLoadSession(String sessionId, String projectPath, String provider, String model, String transitionToken) {
             ClaudeSession current = host.getSession();
             boolean sameSession = current != null
                     && sessionId != null
                     && sessionId.equals(current.getSessionId())
                     && (provider == null || provider.trim().isEmpty()
                                 || provider.equals(current.getProvider()));
-            if (sameSession) {
+            if (sameSession && transitionToken == null) {
                 // Re-opening the very session already active: soft-reload its transcript
                 // instead of interrupting the in-flight turn.
                 LOG.info("[HistoryHandler] Same-session resume, soft-reloading transcript: " + sessionId);
@@ -566,7 +585,12 @@ public class ChatWindowDelegate {
                 }
                 host.reloadActiveSessionMessages();
             } else {
-                host.getSessionLifecycleManager().loadHistorySession(sessionId, projectPath, provider, model);
+                if (transitionToken == null) {
+                    host.getSessionLifecycleManager().loadHistorySession(sessionId, projectPath, provider, model);
+                } else {
+                    host.getSessionLifecycleManager().loadHistorySession(sessionId, projectPath, provider, model, transitionToken);
+                }
+            }
             }
         });
         historyHandler.setRestoredHistoryCallback(new HistoryHandler.RestoredHistoryCallback() {
@@ -582,6 +606,7 @@ public class ChatWindowDelegate {
 
             @Override
             public void onCodexSessionSelected() {
+                host.getSessionLifecycleManager().invalidatePendingTransition();
                 host.retireRestoredHistory();
             }
         });
@@ -836,7 +861,8 @@ public class ChatWindowDelegate {
                 session.getModel(),
                 session.getPermissionMode(),
                 session.getReasoningEffort(),
-                session.getCodexServiceTier()
+                session.getCodexServiceTier(),
+                session.isClaudeUltracode()
         );
         host.callJavaScript("window.applyBackendTabState", JsUtils.escapeJs(payload));
     }
@@ -852,11 +878,24 @@ public class ChatWindowDelegate {
             String reasoningEffort,
             String codexServiceTier
     ) {
+        return buildBackendTabStateJson(provider, model, permissionMode, reasoningEffort,
+                codexServiceTier, false);
+    }
+
+    static String buildBackendTabStateJson(
+            String provider,
+            String model,
+            String permissionMode,
+            String reasoningEffort,
+            String codexServiceTier,
+            boolean claudeUltracode
+    ) {
         JsonObject state = new JsonObject();
         state.addProperty("provider", provider);
         state.addProperty("model", model);
         state.addProperty("permissionMode", permissionMode);
         state.addProperty("reasoningEffort", reasoningEffort);
+        state.addProperty("claudeUltracode", claudeUltracode);
         state.addProperty("codexFastMode", "fast".equals(codexServiceTier) ? "fast" : "normal");
         return state.toString();
     }

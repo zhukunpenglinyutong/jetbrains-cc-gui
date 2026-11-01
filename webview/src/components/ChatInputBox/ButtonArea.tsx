@@ -51,6 +51,8 @@ export const ButtonArea = ({
   codexNativeAutoReviewAvailable = true,
   reasoningEffort = 'high',
   dshPreset = '',
+  claudeUltracode = false,
+  onClaudeUltracodeChange,
   codexFastMode = 'normal',
   onSubmit,
   onStop,
@@ -75,7 +77,8 @@ export const ButtonArea = ({
 }: ButtonAreaProps) => {
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
-  const { cliModels, cliModelsLoading, cliModelsError, cliDefaultModel, cliCatalogHasEntries, cliModelsReplaceBuiltIns, cliModelsLoaded, refreshCliModels } = useCliModels(currentProvider);
+  const { cliModels, cliModelsLoading, cliModelsError, cliDefaultModel, cliCatalogHasEntries, cliModelsReplaceBuiltIns,
+    cliModelsLoaded, cliReasoningCapabilitiesUnconfirmed, refreshCliModels } = useCliModels(currentProvider);
   // Dynamic omp roles (static smol/slow/plan fallback until loaded).
   const ompRoles = useOmpRoles();
 
@@ -251,6 +254,7 @@ export const ButtonArea = ({
     selectedModel,
     permissionMode,
     reasoningEffort,
+    claudeUltracode,
     codexFastMode,
     dshPreset,
     selectedAgent?.id ?? '',
@@ -299,6 +303,7 @@ export const ButtonArea = ({
           models={availableModels}
           currentProvider={currentProvider}
           loading={cliModelsLoading}
+          reasoningCapabilitiesUnconfirmed={cliReasoningCapabilitiesUnconfirmed}
           error={cliModelsError}
           onRetry={() => refreshCliModels(currentProvider)}
           onAddModel={onAddModel}
@@ -306,6 +311,8 @@ export const ButtonArea = ({
           onLongContextChange={onLongContextChange}
           reasoningEffort={reasoningEffort}
           onReasoningChange={handleReasoningChange}
+          claudeUltracode={claudeUltracode}
+          onClaudeUltracodeChange={onClaudeUltracodeChange}
           codexFastMode={codexFastMode}
           onCodexFastModeChange={handleCodexFastModeChange}
           dshPreset={dshPreset}

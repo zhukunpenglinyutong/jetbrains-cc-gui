@@ -28,6 +28,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Unit tests for provider-aware history loading, pagination, and frontend conversion.
@@ -607,6 +608,144 @@ public class HistoryMessageInjectorTest {
         assertEquals(0, publications.get());
         injector.publishIfCurrent(current, publications::incrementAndGet);
         assertEquals(1, publications.get());
+    }
+
+    @Test
+    public void queuedCodexSelectionCannotInterruptANewerGenerationOrBinding() {
+        HandlerContext context = new HandlerContext(null, null, null, null, null);
+        java.util.concurrent.atomic.AtomicInteger stops = new java.util.concurrent.atomic.AtomicInteger();
+        ClaudeSession oldSession = new ClaudeSession(null, null, null, null) {
+            @Override public CompletableFuture<Void> interrupt() {
+                stops.incrementAndGet();
+                return CompletableFuture.completedFuture(null);
+            }
+        };
+        context.setSession(oldSession);
+        HistoryMessageInjector injector = new HistoryMessageInjector(context);
+        long stale = injector.invalidateCodexHistory();
+        long current = injector.invalidateCodexHistory();
+        assertFalse(injector.quiesceForCodexHistory(stale, oldSession, "target").join());
+        context.setSession(new ClaudeSession(null, null, null, null));
+        assertFalse(injector.quiesceForCodexHistory(current, oldSession, "target").join());
+        assertEquals(0, stops.get());
+    }
+
+    @Test
+    public void codexSelectionWaitsForOldClaudeQuiescenceAndPreservesFailures() {
+        for (boolean failed : List.of(false, true)) {
+            HandlerContext context = new HandlerContext(null, null, null, null, null);
+            CompletableFuture<Void> stopped = new CompletableFuture<>();
+            ClaudeSession session = new ClaudeSession(null, null, null, null) {
+                @Override public CompletableFuture<Void> interrupt() { return stopped; }
+            };
+            session.setProvider("claude");
+            context.setSession(session);
+            HistoryMessageInjector injector = new HistoryMessageInjector(context);
+            CompletableFuture<Boolean> quiesced = injector.quiesceForCodexHistory(
+                    injector.invalidateCodexHistory(), session, "target");
+            assertFalse(quiesced.isDone());
+            if (failed) {
+                stopped.completeExceptionally(new IllegalStateException("Writer still active"));
+                assertTrue(quiesced.isCompletedExceptionally());
+            } else {
+                stopped.complete(null);
+                assertTrue(quiesced.join());
+            }
+            assertEquals(session, context.getSession());
+        }
+    }
+
+    @Test
+    public void historyRequestsRetainTheirTokensAcrossProviderDispatch() {
+        RecordingHistoryMessageInjector injector = new RecordingHistoryMessageInjector(createContext("D:/project/demo"));
+        injector.handleLoadSession("{\"sessionId\":\"hist-codex\",\"provider\":\"codex\",\"transitionToken\":\"request-C\"}",
+                "claude", null);
+        assertEquals("hist-codex", injector.loadedCodexSessionId);
+        assertEquals("request-C", injector.loadedTransitionToken);
+        String[] received = new String[1];
+        injector.handleLoadSession("{\"sessionId\":\"hist-claude\",\"provider\":\"claude\",\"transitionToken\":\"request-D\"}",
+                "codex", new HistoryHandler.SessionLoadCallback() {
+                    @Override public void onLoadSession(String id, String path, String provider, String model) {
+                        fail("The correlated callback must retain its token");
+                    }
+                    @Override public void onLoadSession(String id, String path, String provider, String model, String token) {
+                        received[0] = token;
+                    }
+                });
+        assertEquals("request-D", received[0]);
+    }
+
+    @Test
+    public void filenameAliasRestoresCanonicalIdentityAndMatchingHistoryPageMetadata() throws Exception {
+        Path directory = Files.createTempDirectory("codex-canonical-history");
+        String canonicalId = "97fdcbf7-b811-409b-9435-a83b50b9f7d3";
+        String filenameAlias = "rollout-2026-10-31T10-00-00-" + canonicalId;
+        Path transcript = directory.resolve(filenameAlias + ".jsonl");
+        var previousApplication = com.intellij.openapi.application.ApplicationManager.getApplication();
+        com.intellij.openapi.application.ApplicationManager.setApplication(
+                (com.intellij.openapi.application.Application) Proxy.newProxyInstance(
+                        com.intellij.openapi.application.Application.class.getClassLoader(),
+                        new Class<?>[]{com.intellij.openapi.application.Application.class}, (proxy, method, arguments) -> {
+                            if (method.getName().equals("invokeLater") && arguments[0] instanceof Runnable task) task.run();
+                            return method.getReturnType() == boolean.class ? false : null;
+                        }));
+        try (CodexHistoryPageIndex index = new CodexHistoryPageIndex()) {
+            Files.writeString(transcript, "{\"type\":\"session_meta\",\"payload\":{\"id\":\"" + canonicalId
+                    + "\",\"cwd\":\"/fixture\"}}\n"
+                    + eventUserMessage("2026-10-31T10:00:00Z", "Keep this history") + "\n");
+            var constructor = CodexHistoryReader.class.getDeclaredConstructor(Path.class, com.google.gson.Gson.class);
+            constructor.setAccessible(true);
+            CodexHistoryReader reader = constructor.newInstance(directory, new com.google.gson.Gson());
+            List<String> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+            List<JsonObject> pageMetadata = new java.util.concurrent.CopyOnWriteArrayList<>();
+            AtomicReference<List<String>> identity = new AtomicReference<>();
+            CountDownLatch finished = new CountDownLatch(1);
+            HandlerContext context = new HandlerContext(null, null, null, null, new HandlerContext.JsCallback() {
+                @Override public void callJavaScript(String name, String... args) {
+                    events.add(name);
+                    if (name.equals("beginCodexHistoryPage") || name.equals("completeCodexHistoryPage")) {
+                        pageMetadata.add(com.google.gson.JsonParser.parseString(args[0]).getAsJsonObject());
+                    }
+                    if (name.equals("historyLoadComplete") || name.equals("sessionTransitionFailed")) finished.countDown();
+                }
+                @Override public String escapeJs(String value) { return value; }
+                @Override public void executeJavaScript(String script) {
+                    if (script.contains("window.clearMessages")) events.add("clearMessages");
+                }
+            });
+            ClaudeSession session = new ClaudeSession(null, null, null, null);
+            context.setSession(session);
+            session.setCallback((ClaudeSession.SessionCallback) Proxy.newProxyInstance(
+                    ClaudeSession.SessionCallback.class.getClassLoader(), new Class<?>[]{ClaudeSession.SessionCallback.class},
+                    (proxy, method, args) -> {
+                        if (method.getName().equals("onSessionIdReceived")) {
+                            events.add("setSessionId");
+                            identity.set(List.of((String) args[0], (String) args[1]));
+                        }
+                        return null;
+                    }));
+            HistoryMessageInjector injector = new HistoryMessageInjector(context) {
+                @Override CodexHistoryPage readInitialCodexHistory(CodexHistoryReader ignored, String id, long generation) throws Exception {
+                    return index.read(reader, id, null, HISTORY_USER_TURN_LIMIT, () -> true);
+                }
+            };
+            injector.loadCodexSession(filenameAlias, null, "alias-request");
+            assertTrue("History load must settle", finished.await(10, TimeUnit.SECONDS));
+            assertFalse(events.toString(), events.contains("sessionTransitionFailed"));
+            assertEquals(List.of(canonicalId, "alias-request"), identity.get());
+            assertEquals(canonicalId, session.getSessionId());
+            assertTrue(events.indexOf("clearMessages") < events.indexOf("setSessionId"));
+            assertEquals(2, pageMetadata.size());
+            for (JsonObject metadata : pageMetadata) {
+                assertEquals(canonicalId, metadata.get("sessionId").getAsString());
+                assertEquals("alias-request", metadata.get("transitionToken").getAsString());
+            }
+            assertTrue(session.getMessages().stream().anyMatch(message -> message.content.contains("Keep this history")));
+        } finally {
+            com.intellij.openapi.application.ApplicationManager.setApplication(previousApplication);
+            Files.deleteIfExists(transcript);
+            Files.deleteIfExists(directory);
+        }
     }
 
     @Test
@@ -1537,6 +1676,7 @@ public class HistoryMessageInjectorTest {
 
     private static final class RecordingHistoryMessageInjector extends HistoryMessageInjector {
         private String loadedCodexSessionId;
+        private String loadedTransitionToken;
         private int historyLoadCompleteCount;
 
         private RecordingHistoryMessageInjector(HandlerContext context) {
@@ -1551,6 +1691,12 @@ public class HistoryMessageInjectorTest {
         @Override
         void loadCodexSession(String sessionId, String model) {
             this.loadedCodexSessionId = sessionId;
+        }
+
+        @Override
+        void loadCodexSession(String sessionId, String model, String transitionToken) {
+            this.loadedCodexSessionId = sessionId;
+            this.loadedTransitionToken = transitionToken;
         }
 
         @Override

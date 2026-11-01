@@ -161,6 +161,8 @@ const App = () => {
           activeProviderConfig={model.activeProviderConfig}
           claudeSettingsAlwaysThinkingEnabled={model.claudeSettingsAlwaysThinkingEnabled}
           reasoningEffort={model.reasoningEffort}
+          claudeUltracode={model.claudeUltracode}
+          onClaudeUltracodeChange={model.handleClaudeUltracodeChange}
           codexFastMode={model.codexFastMode}
           dshPreset={model.dshPreset}
           streamingEnabledSetting={model.streamingEnabledSetting}

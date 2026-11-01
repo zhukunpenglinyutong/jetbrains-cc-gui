@@ -97,6 +97,8 @@ interface UseModelConfigSummaryInput {
   currentProvider: string;
   modelMapping: ClaudeModelMapping;
   longContextEnabled: boolean;
+  claudeUltracode: boolean;
+  showUltracode: boolean;
   codexFastMode: CodexFastMode;
   dshPreset: string;
   show1MContext: boolean;
@@ -117,6 +119,8 @@ export const useModelConfigSummary = ({
   currentProvider,
   modelMapping,
   longContextEnabled,
+  claudeUltracode,
+  showUltracode,
   codexFastMode,
   dshPreset,
   show1MContext,
@@ -149,6 +153,7 @@ export const useModelConfigSummary = ({
   const summaryParts = [
     modelLabel,
     show1MContext ? t('models.longContext.label', { defaultValue: '1M' }) : '',
+    showUltracode && claudeUltracode ? t('modelConfig.ultracode.label', { defaultValue: 'Ultracode' }) : '',
     showEffortRow ? effortLabel : '',
     showSpeed && codexFastMode === 'fast' ? speedLabel : '',
     showPreset && dshPreset ? dshPresetLabel : '',

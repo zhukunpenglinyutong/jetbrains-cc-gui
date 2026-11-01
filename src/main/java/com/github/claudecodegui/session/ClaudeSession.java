@@ -117,6 +117,10 @@ public class ClaudeSession {
         /** Publishes an identity, or an empty string when a missing transcript retires it. */
         void onSessionIdReceived(String sessionId);
 
+        default void onSessionIdReceived(String sessionId, String transitionToken) {
+            onSessionIdReceived(sessionId);
+        }
+
         void onPermissionRequested(PermissionRequest request);
 
         void onThinkingStatusChanged(boolean isThinking);
@@ -436,6 +440,11 @@ public class ClaudeSession {
      * @param cwd restored working directory
      */
     public void setSessionInfo(String sessionId, String cwd) {
+        setSessionInfo(sessionId, cwd, null);
+    }
+
+    /** Correlates restored identity with the history transition that accepted it. */
+    public void setSessionInfo(String sessionId, String cwd, String transitionToken) {
         synchronized (this.state.getMessageStateLock()) {
             if ("codex".equals(this.state.getProvider())
                     && !Objects.equals(sessionId, this.state.getSessionId())) {
@@ -456,7 +465,7 @@ public class ClaudeSession {
                 if ("codex".equals(this.state.getProvider()) && this.state.getChannelId() == null) {
                     this.state.setChannelId("codex");
                 }
-                this.callbackFacade.notifySessionIdReceived(sessionId);
+                this.callbackFacade.notifySessionIdReceived(sessionId, transitionToken);
             }
             if (cwd != null) {
                 this.setCwd(cwd);
@@ -687,6 +696,17 @@ public class ClaudeSession {
                 clientMessageId, nativeCodexSettings);
     }
 
+    public CompletableFuture<Void> send(
+            String input, String agentPrompt, List<String> fileTagPaths,
+            String requestedPermissionMode, String requestedReasoningEffort,
+            String requestedCodexFastMode, String requestedDshPreset, String clientMessageId,
+            JsonObject nativeCodexSettings, Boolean requestedClaudeUltracode
+    ) {
+        return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode,
+                requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
+                clientMessageId, nativeCodexSettings, requestedClaudeUltracode);
+    }
+
     /**
      * Send a message with attachments using global agent settings.
      *
@@ -831,6 +851,25 @@ public class ClaudeSession {
             String requestedClientMessageId,
             JsonObject nativeCodexSettings
     ) {
+        return send(input, attachments, agentPrompt, fileTagPaths, requestedPermissionMode,
+                requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
+                requestedClientMessageId, nativeCodexSettings, null);
+    }
+
+    /** Sends a turn with the Claude workflow mode captured at submission time. */
+    public CompletableFuture<Void> send(
+            String input,
+            List<Attachment> attachments,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String requestedPermissionMode,
+            String requestedReasoningEffort,
+            String requestedCodexFastMode,
+            String requestedDshPreset,
+            String requestedClientMessageId,
+            JsonObject nativeCodexSettings,
+            Boolean requestedClaudeUltracode
+    ) {
         lastTurnStartedAtMillis = System.currentTimeMillis();
         // Reset the manual-interrupt flag at the start of a new turn so that
         // a fresh send is not mistaken for a user-initiated stop.
@@ -851,6 +890,8 @@ public class ClaudeSession {
         final String finalRequestedReasoningEffort = requestedReasoningEffort;
         final String finalRequestedCodexFastMode = requestedCodexFastMode;
         final String finalRequestedDshPreset = requestedDshPreset;
+        final boolean finalClaudeUltracode = requestedClaudeUltracode != null
+                ? requestedClaudeUltracode : state.isClaudeUltracode();
 
         CompletableFuture<String> launch = launchClaude();
         if (execution != null) {
@@ -876,6 +917,7 @@ public class ClaudeSession {
                             finalRequestedDshPreset,
                             clientMessageId,
                             nativeCodexSettings,
+                            finalClaudeUltracode,
                             turnOwner
                     )
             ).thenCompose(v -> state.isCurrentTurn(turnOwner)
@@ -910,6 +952,7 @@ public class ClaudeSession {
         String channelId;
         Object turnOwner;
         String runtimeSessionEpoch;
+        String sessionId;
         SessionExecutionState.Turn executionTurn;
         synchronized (state.getMessageStateLock()) {
             manuallyInterrupted = true;
@@ -917,6 +960,7 @@ public class ClaudeSession {
             channelId = state.getChannelId();
             turnOwner = state.getTurnOwner();
             runtimeSessionEpoch = state.getRuntimeSessionEpoch();
+            sessionId = state.getSessionId();
             executionTurn = state.executionTurnForOwner(turnOwner);
             if (channelId == null) {
                 state.getExecutionState().activity(executionTurn, SessionExecutionState.Phase.UNKNOWN);
@@ -927,7 +971,7 @@ public class ClaudeSession {
 
         return CompletableFuture.runAsync(() -> {
             try {
-                this.providerRouter.interruptChannel(provider, channelId);
+                this.providerRouter.interruptChannel(provider, channelId, sessionId, runtimeSessionEpoch);
                 synchronized (this.state.getMessageStateLock()) {
                     if (!this.isCurrentChannel(provider, channelId) || !this.state.isCurrentTurn(turnOwner)
                             || !Objects.equals(runtimeSessionEpoch, this.state.getRuntimeSessionEpoch())) {
@@ -955,7 +999,9 @@ public class ClaudeSession {
                 }
                 throw new CompletionException(e);
             }
-        }, "codex".equals(provider) ? CodexSDKBridge.codexControlExecutor() : java.util.concurrent.ForkJoinPool.commonPool());
+        }, "codex".equals(provider) ? CodexSDKBridge.codexControlExecutor()
+                : "claude".equals(provider) ? ClaudeSDKBridge.claudeExecutor()
+                : java.util.concurrent.ForkJoinPool.commonPool());
     }
 
     private boolean isCurrentChannel(String provider, String channelId) {
@@ -1134,6 +1180,14 @@ public class ClaudeSession {
      */
     public String getReasoningEffort() {
         return state.getReasoningEffort();
+    }
+
+    public boolean isClaudeUltracode() {
+        return state.isClaudeUltracode();
+    }
+
+    public void setClaudeUltracode(boolean enabled) {
+        state.setClaudeUltracode(enabled);
     }
 
     /**

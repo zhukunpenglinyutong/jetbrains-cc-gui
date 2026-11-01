@@ -43,7 +43,7 @@ public class SessionState {
     }
 
     /**
-     * Canonical whitelist of valid Claude/Codex reasoning effort levels.
+     * Union of native effort levels; provider dispatch keeps Codex-only ultra out of Claude.
      */
     public static final Set<String> VALID_REASONING_EFFORTS;
     static {
@@ -53,6 +53,7 @@ public class SessionState {
         efforts.add("high");
         efforts.add("xhigh");
         efforts.add("max");
+        efforts.add("ultra");
         VALID_REASONING_EFFORTS = Collections.unmodifiableSet(efforts);
     }
 
@@ -157,6 +158,8 @@ public class SessionState {
     private volatile String provider = "claude";
     // Reasoning effort (thinking depth). Null means "do not override SDK/settings".
     private volatile String reasoningEffort = null;
+    // Claude's native workflow mode is independent of reasoning effort.
+    private volatile boolean claudeUltracode = false;
     // Codex service tier: null = use Codex defaults, "fast" = Codex /fast.
     private volatile String codexServiceTier = null;
     private volatile String dshPreset = "";
@@ -316,6 +319,14 @@ public class SessionState {
 
     public String getReasoningEffort() {
         return reasoningEffort;
+    }
+
+    public boolean isClaudeUltracode() {
+        return claudeUltracode;
+    }
+
+    public void setClaudeUltracode(boolean enabled) {
+        this.claudeUltracode = enabled;
     }
 
     public String getCodexServiceTier() {

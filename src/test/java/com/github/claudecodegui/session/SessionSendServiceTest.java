@@ -9,6 +9,94 @@ import static org.junit.Assert.assertTrue;
 public class SessionSendServiceTest {
 
     @Test
+    public void workflowSnapshotKeepsItsExecutionOwnerAcrossOverlappingTurnSettlement() {
+        java.util.List<Boolean> selections = new java.util.ArrayList<>();
+        var firstResult = new java.util.concurrent.CompletableFuture<com.github.claudecodegui.provider.common.SDKResult>();
+        var nextResult = new java.util.concurrent.CompletableFuture<com.github.claudecodegui.provider.common.SDKResult>();
+        var bridge = new com.github.claudecodegui.provider.claude.ClaudeSDKBridge() {
+            @Override
+            public java.util.concurrent.CompletableFuture<com.github.claudecodegui.provider.common.SDKResult> sendMessage(
+                    String channelId, String message, String sessionId, String epoch, String cwd,
+                    java.util.List<ClaudeSession.Attachment> attachments, String permissionMode, String model,
+                    com.google.gson.JsonObject openedFiles, String agentPrompt, Boolean streaming,
+                    Boolean disableThinking, String effort, boolean ultracode,
+                    com.github.claudecodegui.provider.common.MessageCallback callback) {
+                selections.add(ultracode);
+                return selections.size() == 1 ? firstResult : nextResult;
+            }
+        };
+        SessionState state = new SessionState();
+        SessionSendService service = new SessionSendService(null, state, new SessionCallbackFacade(null),
+                new MessageParser(), new MessageMerger(), new com.google.gson.Gson(), bridge, null, null, null);
+        Object firstOwner = state.beginTurn();
+        SessionExecutionOwnership firstExecution = state.currentExecutionOwnership();
+        state.setClaudeUltracode(false);
+        var firstSend = service.sendMessageToProvider("channel", "first", null, null, "", null,
+                "default", "high", null, null, "first", null, true, firstOwner);
+
+        Object nextOwner = state.beginTurn();
+        state.setClaudeUltracode(true);
+        service.sendMessageToProvider("channel", "stale launch", null, null, "", null,
+                "default", "high", null, null, "stale", null, true, firstOwner).join();
+        var nextSend = service.sendMessageToProvider("channel", "next", null, null, "", null,
+                "default", "high", null, null, "next", null, false, nextOwner);
+        assertEquals(java.util.List.of(true, false), selections);
+        SessionExecutionState.Snapshot pendingNextTurn = state.getExecutionSnapshot();
+
+        var cancelled = com.github.claudecodegui.provider.common.SDKResult.error("Native cancellation confirmed");
+        cancelled.cancelled = true;
+        firstResult.complete(cancelled);
+        firstSend.join();
+        assertEquals(SessionExecutionState.Outcome.CANCELLED, firstExecution.state().snapshot().outcome());
+        assertEquals(pendingNextTurn, state.getExecutionSnapshot());
+        nextResult.complete(com.github.claudecodegui.provider.common.SDKResult.success("Next reply"));
+        nextSend.join();
+        assertEquals(SessionExecutionState.Outcome.SUCCEEDED, state.getExecutionSnapshot().outcome());
+    }
+
+    @Test
+    public void explicitWorkflowSelectionWinsOverMutableSessionForBothEnableAndDisable() {
+        java.util.List<Boolean> selections = new java.util.ArrayList<>();
+        java.util.List<String> efforts = new java.util.ArrayList<>();
+        var bridge = new com.github.claudecodegui.provider.claude.ClaudeSDKBridge() {
+            @Override
+            public java.util.concurrent.CompletableFuture<com.github.claudecodegui.provider.common.SDKResult> sendMessage(
+                    String channelId, String message, String sessionId, String epoch, String cwd,
+                    java.util.List<ClaudeSession.Attachment> attachments, String permissionMode, String model,
+                    com.google.gson.JsonObject openedFiles, String agentPrompt, Boolean streaming,
+                    Boolean disableThinking, String effort, boolean ultracode,
+                    com.github.claudecodegui.provider.common.MessageCallback callback) {
+                selections.add(ultracode);
+                efforts.add(effort);
+                return java.util.concurrent.CompletableFuture.completedFuture(new com.github.claudecodegui.provider.common.SDKResult());
+            }
+        };
+        SessionState state = new SessionState();
+        SessionSendService service = new SessionSendService(null, state, new SessionCallbackFacade(null),
+                new MessageParser(), new MessageMerger(), new com.google.gson.Gson(), bridge, null, null, null);
+        state.setClaudeUltracode(false);
+        service.sendMessageToProvider("channel", "first", null, null, "", null,
+                "default", "high", null, null, "first", null, true).join();
+        state.setClaudeUltracode(true);
+        service.sendMessageToProvider("channel", "next", null, null, "", null,
+                "default", "max", null, null, "next", null, false).join();
+        assertEquals(java.util.List.of(true, false), selections);
+        assertEquals(java.util.List.of("high", "max"), efforts);
+    }
+
+    @Test
+    public void ultraIsNativeCodexEffortAndCannotLeakToOtherProviders() {
+        assertEquals("ultra", SessionSendService.normalizeRequestedReasoningEffort(" ultra "));
+        assertEquals("ultra", SessionSendService.resolveEffectiveReasoningEffort("codex", "ultra", "high"));
+        assertEquals("ultra", SessionSendService.resolveEffectiveReasoningEffort("codex", null, "ultra"));
+        for (String provider : new String[]{"claude", "grok", "zcode", "kimi"}) {
+            assertNull(SessionSendService.resolveEffectiveReasoningEffort(provider, "ultra", "high"));
+            assertNull(SessionSendService.resolveEffectiveReasoningEffort(provider, null, "ultra"));
+            assertEquals("high", SessionSendService.resolveEffectiveReasoningEffort(provider, "high", "ultra"));
+        }
+    }
+
+    @Test
     public void normalizeRequestedPermissionModeRejectsBlankAndUnknownValues() {
         assertNull(SessionSendService.normalizeRequestedPermissionMode(null));
         assertNull(SessionSendService.normalizeRequestedPermissionMode(" "));

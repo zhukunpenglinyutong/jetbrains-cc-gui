@@ -106,6 +106,9 @@
     "localProject": "Local",
     "disabled": "Deshabilitado",
     "sdkNotInstalled": "{{provider}} SDK no está instalado. Instala el SDK para comenzar a chatear.",
+    "codexUltraCapabilitiesLoading": "Comprobando la disponibilidad de Ultra. Vuelve a enviar cuando termine de cargar el modelo.",
+    "codexUltraCapabilitiesUnavailable": "No se pudo verificar la disponibilidad de Ultra. Vuelve a cargar los modelos o elige otro nivel de esfuerzo.",
+    "sessionTransitionTakingLonger": "El cambio de sesión está tardando más de lo esperado. Puedes intentar abrirla de nuevo; los mensajes en cola están pausados.",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "Preparando imagen pegada...",
     "sdkStatusUnavailable": "No se pudo comprobar el estado del SDK.",
@@ -170,7 +173,11 @@
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "Continuar refinando este plan:"
+    "continueRefiningPlan": "Continuar refinando este plan:",
+    "backgroundTasksRunning": "{{count}} tareas en segundo plano en ejecución",
+    "backgroundTasksRunning_one": "{{count}} tarea en segundo plano en ejecución",
+    "backgroundTasksRunning_other": "{{count}} tareas en segundo plano en ejecución",
+    "stopBackgroundTasks": "Detener tareas en segundo plano"
   },
   "settings": {
     "title": "Configuración",
@@ -1556,6 +1563,7 @@
       "loading": "Cargando proceso del agente…",
       "unavailable": "El registro del proceso no está disponible hasta que la sesión tenga un id.",
       "reportGenerated": "Informe de análisis estructurado generado",
+      "historyTruncated": "Historial abreviado: se omitieron {{count}} registros. Se conservan la tarea inicial y la actividad reciente.",
       "unitMs": "ms",
       "unitS": "s",
       "unitTools": "herramientas",
@@ -2024,6 +2032,10 @@
     "xhigh": {
       "label": "Máximo",
       "description": "Profundidad máxima de razonamiento"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "Razonamiento máximo con delegación automática de tareas"
     }
   },
   "errorBoundary": {
@@ -2251,6 +2263,12 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
+    }
+  },
+  "modelConfig": {
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Flujo nativo de Claude con delegación automática de tareas. Mantiene el nivel de razonamiento elegido."
     }
   }
 }

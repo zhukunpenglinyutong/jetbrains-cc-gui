@@ -67,7 +67,7 @@ export function useCodexCompactionStatus({
   }, [provider, threadId, t, finish]);
 
   const startCompaction = useCallback(() => {
-    if (provider !== 'codex' || pendingRequest.current) return;
+    if (provider !== 'codex' || pendingRequest.current) return false;
     const requestId = `compact-${crypto.randomUUID()}`;
     pendingRequest.current = requestId;
     const startTime = Date.now();
@@ -77,7 +77,9 @@ export function useCodexCompactionStatus({
     // Install ownership before dispatch: an immediate rejection is terminal too.
     if (!sendBridgeEvent('codex_compact', JSON.stringify({ requestId, threadId }))) {
       finish(t('chat.bridgeUnavailable', { defaultValue: 'Bridge is not available right now' }));
+      return false;
     }
+    return true;
   }, [provider, threadId, t, finish, setLoading, setLoadingStartTime]);
 
   return { pending, startedAt, startCompaction };

@@ -14,6 +14,8 @@ import type { ContextUsageData } from '../../../components/ContextUsageDialog';
 import { isStartupHistoryLoadState } from '../../../types/startupHistory';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import { debugError } from '../../../utils/debug';
+import { commitPendingSessionTransition, deferSessionTransitionCompletion, flushSessionTransitionCompletion,
+  getSessionTransitionPending, isCurrentSessionTransitionCallback, isSessionTransitionPreparing } from '../../../utils/sessionTransitionState';
 import { clearPendingStreamStart, isPendingStreamStartActive } from '../../../utils/streamLifecycle';
 import {
   appendOptimisticMessageIfMissing,
@@ -772,7 +774,7 @@ export function registerMessageCallbacks(
     // must not reset the loading state the newly dispatched turn just
     // claimed, or the queue drain dispatches the next item while the
     // previous send is still booting (overlapping turns on one Codex thread).
-    if (!isLoading && isPendingStreamStartActive()) {
+    if (!isLoading && isPendingStreamStartActive() && !isSessionTransitionPreparing()) {
       return;
     }
     if (!isLoading) clearPendingStreamStart();
@@ -883,7 +885,10 @@ export function registerMessageCallbacks(
     });
   };
 
-  window.clearMessages = (barrierSequenceArg) => {
+  window.clearMessages = (barrierSequenceArg, transitionToken) => {
+    if (!isCurrentSessionTransitionCallback(transitionToken)) return;
+    if (getSessionTransitionPending() && !isSessionTransitionPreparing()) return;
+    const committedTransition = commitPendingSessionTransition(transitionToken);
     // Advance the sequence barrier so any updateMessages still in flight from
     // the previous session are rejected. Such a snapshot may already have been
     // dispatched to JS and be sitting in the JCEF IPC channel, so neither the
@@ -935,9 +940,10 @@ export function registerMessageCallbacks(
     window.__lastAcceptedMessageCount = undefined;
     window.__pendingHistoryRefreshMessageCount = undefined;
     window.__historySurfaceRefreshEpoch = (window.__historySurfaceRefreshEpoch ?? 0) + 1;
-    resetTransientUiState();
+    if (!committedTransition) resetTransientUiState();
     closeContextUsageDialog();
     setMessages([]);
+    flushSessionTransitionCompletion();
   };
 
   window.addErrorMessage = (message) => {
@@ -980,7 +986,9 @@ export function registerMessageCallbacks(
         pageId?: string;
         sessionId?: string;
         mode?: 'replace' | 'prepend';
+        transitionToken?: string;
       };
+      if (!isCurrentSessionTransitionCallback(info.transitionToken) || isSessionTransitionPreparing()) return;
       if (!info.pageId || !info.sessionId || (info.mode !== 'replace' && info.mode !== 'prepend')) {
         failCodexHistoryPage(info.pageId, 'Invalid Codex history page metadata');
         return;
@@ -1032,6 +1040,11 @@ export function registerMessageCallbacks(
       const info = JSON.parse(json) as CodexHistoryPageInfo;
       const pending = pendingCodexHistoryPages.get(info.pageId);
       if (!pending || pending.sessionId !== info.sessionId) return;
+      if (!isCurrentSessionTransitionCallback(info.transitionToken) || isSessionTransitionPreparing()) {
+        clearTimeout(pending.timeoutId);
+        pendingCodexHistoryPages.delete(info.pageId);
+        return;
+      }
 
       // Ignore a page that arrives after the user selected a different session.
       if (currentSessionIdRef.current !== info.sessionId) {
@@ -1192,8 +1205,10 @@ export function registerMessageCallbacks(
 
   window.codexHistoryPageRenderComplete = refreshLoadedHistoryMessages;
 
-  window.historyLoadComplete = (expectedMessageCountArg) => {
-    releaseSessionTransition();
+  window.historyLoadComplete = (expectedMessageCountArg, transitionToken) => {
+    if (deferSessionTransitionCompletion(transitionToken,
+      () => window.historyLoadComplete?.(expectedMessageCountArg, transitionToken))) return;
+    if (!releaseSessionTransition(true, transitionToken)) return;
     const pendingToast = window.__pendingSessionTransitionToast;
     if (pendingToast) {
       window.__pendingSessionTransitionToast = undefined;
@@ -1224,7 +1239,7 @@ export function registerMessageCallbacks(
   const pendingHistoryLoadComplete = window.__pendingHistoryLoadComplete;
   if (pendingHistoryLoadComplete) {
     window.__pendingHistoryLoadComplete = undefined;
-    window.historyLoadComplete(pendingHistoryLoadComplete.expectedMessageCount);
+    window.historyLoadComplete(pendingHistoryLoadComplete.expectedMessageCount, pendingHistoryLoadComplete.transitionToken);
   }
 
   window.addUserMessage = (content: string) => {

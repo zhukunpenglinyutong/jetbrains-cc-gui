@@ -143,6 +143,13 @@ export function createPreToolUseHook(permissionModeState, cwd = null, onModeChan
 
     debugLog('PERMISSION_HOOK', `Called for tool: ${toolName}, mode: ${currentPermissionMode}, subagent: ${isSubagent}`);
 
+    // Native Workflow enforces plan-mode launch rules and asks the host when
+    // approval is needed. Do not classify an entire workflow as a forbidden
+    // write or grant it blanket permission; its workers keep native checks.
+    if (toolName === 'Workflow' && currentPermissionMode === 'plan') {
+      return YIELD_TO_SDK;
+    }
+
     // Native planning tools own worker-local transitions (and reject unsupported
     // ones). A worker must never call setPermissionMode on the parent Query.
     if (isSubagent && (toolName === 'EnterPlanMode' || toolName === 'ExitPlanMode')) {
@@ -367,7 +374,7 @@ export function createPreToolUseHook(permissionModeState, cwd = null, onModeChan
     // launches (Agent) must still be confirmed and must NOT be auto-approved by a project
     // allow-rule, so route them through canUseTool via 'ask'. Edits fall through to the
     // SDK's native acceptEdits handling below.
-    if (currentPermissionMode === 'acceptEdits' && EXECUTION_TOOLS.has(toolName)) {
+    if (currentPermissionMode === 'acceptEdits' && (EXECUTION_TOOLS.has(toolName) || toolName === 'Workflow')) {
       return {
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
