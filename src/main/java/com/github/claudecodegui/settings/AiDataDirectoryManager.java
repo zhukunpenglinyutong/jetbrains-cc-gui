@@ -513,7 +513,7 @@ public final class AiDataDirectoryManager {
     }
 
     private AiDataProcessGate.MigrationPermit acquireMigrationPermit(String operation) throws IOException {
-        AiDataProcessGate.MigrationPermit permit = processGate.tryAcquireCoordinatedMigrationPermit(migrationCoordinator, operation);
+        AiDataProcessGate.MigrationPermit permit = processGate.tryAcquireCoordinatedMigrationPermit(operation);
         if (permit == null) {
             if (!processGate.isCoordinationAvailable()) {
                 throw new AiDataDirectoryException("AI_DATA_COORDINATION_UNAVAILABLE");
