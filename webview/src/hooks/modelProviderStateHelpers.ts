@@ -226,7 +226,7 @@ export function resolveProviderPermissionMode(
     case 'omp': return normalizeCliPermissionMode(modes.omp, providerId);
     case 'dsh': return normalizeCliPermissionMode(modes.dsh, providerId);
     case 'gemini': return normalizeCliPermissionMode(modes.gemini, providerId);
-    default: return modes.claude;
+    default: return modes.claude === 'sandbox' ? 'default' : modes.claude;
   }
 }
 

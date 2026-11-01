@@ -123,11 +123,10 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * Handle a received message by dispatching to the appropriate handler based on type.
+     * Dispatches a received stream message to the appropriate handler based on type.
      *
-     * @param type type
-     * @param content content
-     * @since 1.0.0
+     * @param type Message type identifier
+     * @param content Message payload content
      */
     @Override
     public void onMessage(String type, String content) {
@@ -156,7 +155,7 @@ public class CodexMessageHandler implements MessageCallback {
                 handleSessionId(content);
             } else if ("usage".equals(type)) {
                 // Whole-turn usage from the shared [USAGE] marker (MarkerCliBridge).
-                // Gated to the gemini bridge: only its payload shape is vetted;
+                // Gated to the gemini and opencode bridges: only their payload shape is vetted;
                 // markers from other CLI bridges (dsh/omp/pi) are dropped.
                 handleUsage(content);
             } else if ("event_msg".equals(type)) {
@@ -694,10 +693,6 @@ public class CodexMessageHandler implements MessageCallback {
             // content_delta later in the same turn then fills this message.
             ensureCurrentAssistantMessageExists();
             Message target = currentAssistantMessage;
-            if (target.raw == null) {
-                target.raw = new com.google.gson.JsonObject();
-                target.raw.addProperty("type", "assistant");
-            }
             assistantMessageObject(target.raw).add("usage", usage.deepCopy());
             stampStepIntoTurnUsage(target, usage);
             notifyContextUsageFromStep(usage);

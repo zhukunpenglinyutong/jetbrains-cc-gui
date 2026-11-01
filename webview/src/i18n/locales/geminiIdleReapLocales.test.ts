@@ -58,3 +58,15 @@ describe('gemini idle-reap settings i18n (Story 1.10, NFR8)', () => {
     });
   }
 });
+
+describe('modes.sandbox.shortLabel i18n (Story 010, AC-4)', () => {
+  for (const [locale, dict] of Object.entries(LOCALES)) {
+    it(`${locale}: carries modes.sandbox.shortLabel string`, () => {
+      const value = pick(dict, ['modes', 'sandbox', 'shortLabel']);
+      expect(
+        typeof value === 'string' && value.length > 0,
+        `modes.sandbox.shortLabel must be a non-empty localized string in ${locale}.json`,
+      ).toBe(true);
+    });
+  }
+});

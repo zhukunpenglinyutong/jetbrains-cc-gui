@@ -957,7 +957,7 @@ public class CodexMessageHandlerTest {
         assertEquals(1, callback.usageUpdates.size());
         assertEquals(18814, callback.usageUpdates.get(0)[0]);
         int expectedMax = com.github.claudecodegui.handler.provider.ModelProviderHandler
-                .getModelContextLimit(state.getModel());
+                .resolveContextLimit(state.getProvider(), state.getModel(), state.getCwd());
         assertEquals(expectedMax, callback.usageUpdates.get(0)[1]);
     }
 

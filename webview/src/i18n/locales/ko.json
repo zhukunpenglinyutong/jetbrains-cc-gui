@@ -1969,6 +1969,7 @@
     },
     "sandbox": {
       "label": "샌드박스 모드",
+      "shortLabel": "샌드박스",
       "tooltip": "샌드박스에서 실행(Gemini CLI 전용)",
       "description": "터미널 제한이 활성화된 샌드박스에서 실행합니다(Gemini CLI)"
     }

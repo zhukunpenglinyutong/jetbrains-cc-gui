@@ -7,6 +7,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 public class CliStatusDetectorTest {
 
@@ -52,6 +53,25 @@ public class CliStatusDetectorTest {
         String expected = new File(new File(home, ".local"), "bin").getAbsolutePath();
         assertEquals(expected, dirs.get(0));
         assertEquals(true, dirs.contains(expected));
+    }
+
+    @Test
+    public void homeBinDirs_minimaxAndGeminiAreIsolated() {
+        String home = "/home/test-user";
+        List<String> minimaxDirs = CliStatusDetector.homeBinDirs(CliToolId.MINIMAX, home);
+        List<String> geminiDirs = CliStatusDetector.homeBinDirs(CliToolId.GEMINI, home);
+
+        String localBin = new File(new File(home, ".local"), "bin").getAbsolutePath();
+        String minimaxBin = new File(new File(home, ".minimax"), "bin").getAbsolutePath();
+        String minimaxCode = new File(home, ".minimax-code").getAbsolutePath();
+
+        assertEquals(minimaxBin, minimaxDirs.get(0));
+        assertEquals(minimaxCode, minimaxDirs.get(1));
+        assertEquals(localBin, minimaxDirs.get(2));
+
+        assertEquals(localBin, geminiDirs.get(0));
+        assertFalse(geminiDirs.contains(minimaxBin));
+        assertFalse(geminiDirs.contains(minimaxCode));
     }
 
     @Test

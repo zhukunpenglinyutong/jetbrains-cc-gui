@@ -307,22 +307,25 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   // the CLI itself and capability decisions come from the native runtime.
   const claudeSdkMeetsMinimum = sdkStatus?.['claude-sdk']?.meetsMinimumVersion;
   const handleModeSelect = useCallback((mode: PermissionMode) => {
+    const normalizedMode: PermissionMode = mode === 'sandbox' && currentProvider !== 'gemini'
+      ? 'default'
+      : mode;
     if (currentProvider === 'codex') {
       // Codex exposes plan as a native collaboration mode while approval
       // policy remains an independent setting carried by the next turn.
-      setPermissionMode(mode);
-      setCodexPermissionMode(mode);
-      const collaborationMode: CodexCollaborationMode = mode === 'plan' ? 'plan' : 'default';
+      setPermissionMode(normalizedMode);
+      setCodexPermissionMode(normalizedMode);
+      const collaborationMode: CodexCollaborationMode = normalizedMode === 'plan' ? 'plan' : 'default';
       setCodexCollaborationMode(collaborationMode);
       sendBridgeEvent('set_codex_collaboration_mode', collaborationMode);
-      const approvalPreset: CodexApprovalPreset = mode === 'plan'
-          || (mode === 'default' && codexCollaborationMode === 'plan') ? codexApprovalPreset : mode === 'auto'
+      const approvalPreset: CodexApprovalPreset = normalizedMode === 'plan'
+          || (normalizedMode === 'default' && codexCollaborationMode === 'plan') ? codexApprovalPreset : normalizedMode === 'auto'
         ? 'auto'
-        : mode === 'bypassPermissions' ? 'full-access' : 'request';
+        : normalizedMode === 'bypassPermissions' ? 'full-access' : 'request';
       setCodexApprovalPreset(approvalPreset);
       setCodexSettingsPending(true);
       sendBridgeEvent('set_codex_approval_preset', approvalPreset);
-      if (mode === 'bypassPermissions') {
+      if (normalizedMode === 'bypassPermissions') {
         setCodexSandboxSelection('danger-full-access');
         setCodexSandboxSource('user');
         sendBridgeEvent('set_codex_sandbox_selection', JSON.stringify({
@@ -343,11 +346,11 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
           source: 'user',
         }));
       }
-      sendBridgeEvent('set_mode', mode);
+      sendBridgeEvent('set_mode', normalizedMode);
       return;
     }
     if (isCliOnlyProvider(currentProvider)) {
-      applyCliModeSelect(currentProvider, mode, {
+      applyCliModeSelect(currentProvider, normalizedMode, {
         setPermissionMode,
         setGrokPermissionMode,
         setKimiPermissionMode,
@@ -362,9 +365,9 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       });
       return;
     }
-    setPermissionMode(mode);
-    setClaudePermissionMode(mode);
-    sendBridgeEvent('set_mode', mode);
+    setPermissionMode(normalizedMode);
+    setClaudePermissionMode(normalizedMode);
+    sendBridgeEvent('set_mode', normalizedMode);
   }, [
     currentProvider,
     codexCollaborationMode,

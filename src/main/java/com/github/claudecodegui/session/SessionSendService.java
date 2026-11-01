@@ -31,6 +31,7 @@ public class SessionSendService {
     public static final String CODEX_FAST_SERVICE_TIER = "fast";
     private static final String PROVIDER_GROK = "grok";
     private static final String PROVIDER_ZCODE = "zcode";
+    private static final String PROVIDER_GEMINI = "gemini";
 
     private final Project project;
     private final SessionState state;
@@ -412,6 +413,14 @@ public class SessionSendService {
         return null;
     }
 
+    /**
+     * Resolves the effective permission mode for a turn, normalizing modes unsupported by the target provider.
+     *
+     * @param provider Active provider identifier
+     * @param requestedMode Explicitly requested permission mode for the turn, or null
+     * @param sessionMode Current session permission mode fallback, or null
+     * @return effective permission mode for the provider turn
+     */
     public static String resolveEffectivePermissionMode(String provider, String requestedMode, String sessionMode) {
         String resolvedMode = requestedMode;
         if (resolvedMode == null) {
@@ -420,11 +429,14 @@ public class SessionSendService {
         if (resolvedMode == null) {
             resolvedMode = "default";
         }
+        if ("sandbox".equals(resolvedMode) && !PROVIDER_GEMINI.equals(provider)) {
+            return "default";
+        }
 
         boolean isProviderWithoutPlanMode = "grok".equals(provider)
                 || "zcode".equals(provider)
                 || (SessionProviderRouter.isCliProvider(provider)
-                        && !"omp".equals(provider) && !"gemini".equals(provider));
+                        && !"omp".equals(provider) && !PROVIDER_GEMINI.equals(provider));
         boolean isCliProviderWithoutNativeAuto = SessionProviderRouter.isCliProvider(provider);
         // Grok and ZCode run as full SDK bridges (not MarkerCli providers, so they
         // are absent from CLI_PROVIDER_IDS), but like the headless CLI providers
@@ -736,7 +748,7 @@ public class SessionSendService {
         // their behavior silently. A family-wide clamp is a separate follow-up
         // (one fix per PR).
         String projectBase = project != null ? project.getBasePath() : null;
-        boolean cwdGuardApplies = "gemini".equals(provider);
+        boolean cwdGuardApplies = PROVIDER_GEMINI.equals(provider);
         String requestedCwd = cwdGuardApplies ? state.getCwd() : null;
         String guardedCwd = cwdGuardApplies ? resolveCliSendCwd(requestedCwd, projectBase) : state.getCwd();
         if (cwdGuardApplies) {
@@ -866,7 +878,7 @@ public class SessionSendService {
         // claude-opus-4-6-thinking, gpt-oss-120b-medium) the user can really
         // pick — stripping them would silently run the CLI default instead of
         // the selected model.
-        boolean isGemini = "gemini".equals(provider);
+        boolean isGemini = PROVIDER_GEMINI.equals(provider);
         if ((lower.startsWith("claude-") && !isGemini)
                 || (lower.startsWith("gpt-") && !"opencode".equals(provider) && !isGemini)) {
             LOG.warn("[" + provider + "] Ignoring non-provider model leftover for CLI: " + trimmed);

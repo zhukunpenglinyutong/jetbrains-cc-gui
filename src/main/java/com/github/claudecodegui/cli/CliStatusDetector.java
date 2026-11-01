@@ -349,6 +349,8 @@ public final class CliStatusDetector {
             case MINIMAX:
                 dirs.add(join(home, ".minimax", "bin"));
                 dirs.add(join(home, ".minimax-code"));
+                dirs.add(join(home, ".local", "bin"));
+                break;
             case GEMINI:
                 dirs.add(join(home, ".local", "bin"));
                 break;

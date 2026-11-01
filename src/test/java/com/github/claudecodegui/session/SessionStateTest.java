@@ -135,4 +135,22 @@ public class SessionStateTest {
         Assert.assertFalse(SessionState.isValidPermissionMode(null));
         Assert.assertFalse(SessionState.isValidPermissionMode("bogus"));
     }
+
+    @Test
+    public void normalizesSandboxModeToDefaultForNonGeminiProviders() {
+        SessionState geminiState = new SessionState();
+        geminiState.setProvider("gemini");
+        geminiState.setPermissionMode("sandbox");
+        Assert.assertEquals("sandbox", geminiState.getPermissionMode());
+
+        SessionState claudeState = new SessionState();
+        claudeState.setProvider("claude");
+        claudeState.setPermissionMode("sandbox");
+        Assert.assertEquals("default", claudeState.getPermissionMode());
+
+        SessionState codexState = new SessionState();
+        codexState.setProvider("codex");
+        codexState.setPermissionMode("sandbox");
+        Assert.assertEquals("default", codexState.getPermissionMode());
+    }
 }

@@ -1883,6 +1883,7 @@
     },
     "sandbox": {
       "label": "Mode Sandbox",
+      "shortLabel": "Sandbox",
       "tooltip": "Exécution en sandbox (Gemini CLI uniquement)",
       "description": "S'exécute dans un sandbox avec des restrictions de terminal activées (Gemini CLI)"
     }

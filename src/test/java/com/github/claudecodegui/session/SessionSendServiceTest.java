@@ -143,11 +143,11 @@ public class SessionSendServiceTest {
 
     @Test
     public void resolveEffectivePermissionModeNeverCoercesSandboxForAnyProvider() {
-        // The sandbox posture has no legacy downgrade path anywhere.
+        // The sandbox posture is only supported by gemini; non-gemini providers normalize it to default.
         for (String provider : new String[] {"gemini", "kimi", "opencode", "pi", "dsh", "omp", "codex", "grok", "claude"}) {
             assertEquals(
                     "sandbox for " + provider,
-                    "sandbox",
+                    "gemini".equals(provider) ? "sandbox" : "default",
                     SessionSendService.resolveEffectivePermissionMode(provider, "sandbox", "default")
             );
         }
@@ -179,6 +179,14 @@ public class SessionSendServiceTest {
                 "acceptEdits",
                 SessionSendService.resolveEffectivePermissionMode("grok", "acceptEdits", null)
         );
+    }
+
+    @Test
+    public void resolveEffectivePermissionModeNormalizesSandboxToDefaultForNonGemini() {
+        assertEquals("sandbox", SessionSendService.resolveEffectivePermissionMode("gemini", "sandbox", null));
+        assertEquals("default", SessionSendService.resolveEffectivePermissionMode("claude", "sandbox", null));
+        assertEquals("default", SessionSendService.resolveEffectivePermissionMode("codex", "sandbox", null));
+        assertEquals("default", SessionSendService.resolveEffectivePermissionMode("grok", "sandbox", null));
     }
 
     @Test

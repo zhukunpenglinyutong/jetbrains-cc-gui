@@ -1888,6 +1888,7 @@
     },
     "sandbox": {
       "label": "サンドボックスモード",
+      "shortLabel": "サンドボックス",
       "tooltip": "サンドボックスで実行（Gemini CLI のみ）",
       "description": "ターミナル制限を有効にしたサンドボックスで実行します（Gemini CLI）"
     }

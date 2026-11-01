@@ -145,6 +145,26 @@ public class ChatWindowDelegateTest {
     }
 
     /**
+     * Gemini recovery must use the provider-scoped resolver. The model-only lookup
+     * no longer treats a {@code gemini-*} id as 1M.
+     */
+    @Test
+    public void geminiRecoveryLimitKeepsPrefixOnlyForGeminiProvider() {
+        assertEquals(1_000_000, ChatWindowDelegate.resolveModelContextLimitForRecovery(
+                "gemini",
+                "gemini-2.5-pro",
+                null,
+                null
+        ));
+        assertEquals(200_000, ChatWindowDelegate.resolveModelContextLimitForRecovery(
+                "claude",
+                "gemini-2.5-pro",
+                null,
+                null
+        ));
+    }
+
+    /**
      * Verifies that initial load and pre-ready startup retry keep frontend ownership and do not
      * receive the Java-authoritative runtime recovery snapshot.
      */

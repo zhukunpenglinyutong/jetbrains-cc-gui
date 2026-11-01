@@ -447,6 +447,11 @@ public class SessionState {
         this.cwd = cwd;
     }
 
+    /**
+     * Updates the active permission mode after normalizing provider-specific and legacy aliases.
+     *
+     * @param permissionMode Permission mode identifier, or null to clear
+     */
     public void setPermissionMode(String permissionMode) {
         if (permissionMode == null) {
             this.permissionMode = null;
@@ -455,6 +460,9 @@ public class SessionState {
         String normalizedMode = permissionMode.trim();
         if ("autoEdit".equals(normalizedMode)) {
             normalizedMode = "acceptEdits";
+        }
+        if ("sandbox".equals(normalizedMode) && !"gemini".equals(this.provider)) {
+            normalizedMode = "default";
         }
         if (!VALID_PERMISSION_MODES.contains(normalizedMode)) {
             // Reject unrecognized modes silently to prevent injection of arbitrary strings
@@ -528,11 +536,19 @@ public class SessionState {
         return oneM ? base + "[1m]" : base;
     }
 
+    /**
+     * Updates the active provider, rebinding execution state and normalizing incompatible permission modes.
+     *
+     * @param provider Provider identifier
+     */
     public void setProvider(String provider) {
         synchronized (messageStateLock) {
             if (!java.util.Objects.equals(this.provider, provider)) {
                 rebindExecution();
                 this.provider = provider;
+                if (!"gemini".equals(provider) && "sandbox".equals(this.permissionMode)) {
+                    this.permissionMode = "default";
+                }
             }
         }
     }

@@ -76,4 +76,12 @@ describe('useModelProviderState gemini permission-mode slot (Story 1.5)', () => 
     act(() => result.current.handleProviderSelect('gemini'));
     expect(modeEvents()).toEqual(['set_mode:plan', 'set_mode:default', 'set_mode:plan']);
   });
+
+  it('normalizes sandbox mode to default for non-gemini providers', () => {
+    const { result } = setup();
+
+    act(() => result.current.setCurrentProvider('claude'));
+    act(() => result.current.handleModeSelect('sandbox'));
+    expect(modeEvents()).toEqual(['set_mode:default']);
+  });
 });
