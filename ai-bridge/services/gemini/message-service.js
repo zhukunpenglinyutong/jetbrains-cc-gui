@@ -68,7 +68,7 @@ import { homedir, tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { resolveGeminiCliPath, enrichPathWithBinDirs, commonCliBinDirs } from '../../utils/cli-path.js';
 import { killChildTree, runCliStreaming } from '../../utils/cli-spawn.js';
-import { PermissionMapperFactory } from '../../utils/permission-mapper.js';
+import { GeminiPermissionMapper } from './permission-mapper.js';
 import {
   beginStream,
   emitJsonStringMarker,
@@ -549,6 +549,12 @@ export function isSubagentChildLive(id, cliHome, idleReapMinutes, now = Date.now
   return false;
 }
 
+/**
+ * Builds the CLI argument list for a headless Antigravity print-mode turn.
+ *
+ * @param {{ sessionId?: string, model?: string, permissionMode?: string }} options Turn spawn options.
+ * @returns {string[]} cli argument vector for spawning agy
+ */
 export function buildGeminiArgs({ sessionId, model, permissionMode = '' }) {
   // NO prompt token ever rides argv: the CLI reads the turn's prompt from
   // stdin as one NDJSON user message (buildGeminiStdinPayload). An argv
@@ -579,7 +585,7 @@ export function buildGeminiArgs({ sessionId, model, permissionMode = '' }) {
   // The unified permission mode becomes the CLI posture flags (--mode plan,
   // --dangerously-skip-permissions, ...). Unknown/blank modes map to no flags
   // — deny-by-default is what the CLI does outside a posture anyway.
-  args.push(...PermissionMapperFactory.toProvider('gemini', permissionMode).args);
+  args.push(...GeminiPermissionMapper.toProvider(permissionMode).args);
   return args;
 }
 
@@ -871,14 +877,74 @@ export function missingStoredSuffix(shown, stored) {
   return stored.slice(shown.length);
 }
 
-function withConversationSnapshot(convId, cliHome, purpose, read) {
-  let DatabaseSync;
+let sqliteResolved = false;
+let cachedDatabaseSync = null;
+let forceSqliteUnavailable = false;
+
+/**
+ * Resets the cached `node:sqlite` resolution state for testing.
+ *
+ * @param {{ unavailable?: boolean }} [options] Optional test override to simulate missing `node:sqlite`.
+ */
+export function _resetSqliteCache(options = {}) {
+  sqliteResolved = false;
+  cachedDatabaseSync = null;
+  forceSqliteUnavailable = Boolean(options && options.unavailable);
+}
+export { _resetSqliteCache as resetSqliteCache };
+
+function resolveDatabaseSync(convId) {
+  if (sqliteResolved) {
+    return cachedDatabaseSync;
+  }
+  sqliteResolved = true;
   try {
-    ({ DatabaseSync } = require('node:sqlite'));
+    if (forceSqliteUnavailable) {
+      const err = new Error("Cannot find module 'node:sqlite'");
+      err.code = 'ERR_MODULE_NOT_FOUND';
+      throw err;
+    }
+    ({ DatabaseSync: cachedDatabaseSync } = require('node:sqlite'));
   } catch (err) {
+    cachedDatabaseSync = null;
     console.error(
       `[gemini] failed to import node:sqlite (${err?.code || err?.name || 'Error'}): ${convId}`
     );
+  }
+  return cachedDatabaseSync;
+}
+
+/**
+ * Computes a change-detection signature from the `(mtimeMs, size)` of `<convId>.db` and `<convId>.db-wal`.
+ *
+ * @param {string} convId Conversation UUID.
+ * @param {string} [cliHome] Optional home directory override.
+ * @returns {string|null} signature string when the database exists, or null when missing
+ */
+export function getConversationDbSignature(convId, cliHome) {
+  const normalizedId = normalizeConversationId(convId);
+  if (!normalizedId) return null;
+  const baseHome = cliHome || homedir();
+  const dbPath = join(baseHome, '.gemini', 'antigravity-cli', 'conversations', `${normalizedId}.db`);
+  let dbStat;
+  try {
+    dbStat = fs.statSync(dbPath);
+  } catch {
+    return null;
+  }
+  let walPart = '-';
+  try {
+    const walStat = fs.statSync(`${dbPath}-wal`);
+    walPart = `${walStat.mtimeMs}:${walStat.size}`;
+  } catch {
+    // -wal sidecar is optional
+  }
+  return `${dbStat.mtimeMs}:${dbStat.size}|${walPart}`;
+}
+
+function withConversationSnapshot(convId, cliHome, purpose, read) {
+  const DatabaseSync = resolveDatabaseSync(convId);
+  if (!DatabaseSync) {
     return null;
   }
 
@@ -1042,7 +1108,14 @@ function readTurnStoredAgentUsages(convId, cliHome) {
   }) || [];
 }
 
-function readStoredThinkingSteps(convId, cliHome) {
+/**
+ * Reads agent thinking steps and user step presence from a conversation SQLite snapshot.
+ *
+ * @param {string} convId Conversation UUID.
+ * @param {string} [cliHome] Optional home directory override.
+ * @returns {{ steps: Array<{ idx: number, answer: string|null, summaries: string[] }>, hasUserSteps: boolean }|null} stored thinking steps or null when unavailable
+ */
+export function readStoredThinkingSteps(convId, cliHome) {
   return withConversationSnapshot(convId, cliHome, 'thinking summaries unavailable', (db) => {
     const userBoundary = db.prepare(
       'SELECT MAX(idx) AS maxUserIdx FROM steps WHERE step_type = 14'
@@ -1420,11 +1493,6 @@ export async function sendMessage({
       'conversations',
     );
 
-    const conversationDbPath = (convId) => join(
-      conversationsDir(),
-      `${convId}.db`,
-    );
-
     const discoverTurnConversationId = () => {
       try {
         const dir = conversationsDir();
@@ -1462,19 +1530,6 @@ export async function sendMessage({
       }
     };
 
-    const conversationStamp = (dbPath) => {
-      const parts = [];
-      for (const suffix of ['', '-wal', '-shm']) {
-        try {
-          const st = fs.statSync(suffix ? `${dbPath}${suffix}` : dbPath);
-          parts.push(`${st.mtimeMs}:${st.ctimeMs}:${st.size}`);
-        } catch {
-          parts.push('-');
-        }
-      }
-      return parts.join('|');
-    };
-
     const summarizeStoredStep = (step, streamed) => {
       const answer = typeof step.answer === 'string' ? step.answer.trim() : '';
       const parts = [];
@@ -1492,10 +1547,11 @@ export async function sendMessage({
       if (!showThinking) return;
       const convId = normalizeConversationId(convIdRaw);
       if (!convId) return;
-      const rawStamp = conversationStamp(conversationDbPath(convId));
-      if (rawStamp.startsWith('-')) return;
+      const rawSig = getConversationDbSignature(convId, cliHome);
+      if (!rawSig) return;
       const stored = readStoredThinkingSteps(convId, cliHome);
       if (!stored || !stored.hasUserSteps) return;
+      lastThinkingPollStamp = `${convId}|${rawSig}`;
       for (const step of stored.steps) {
         emittedThinkingByIdx.set(`${convId}:${step.idx}`, summarizeStoredStep(step, ''));
       }
@@ -1511,9 +1567,9 @@ export async function sendMessage({
       if (!showThinking) return;
       const convId = normalizeConversationId(convIdRaw);
       if (!convId) return;
-      const rawStamp = conversationStamp(conversationDbPath(convId));
-      if (rawStamp.startsWith('-')) return;
-      const stamp = `${convId}|${rawStamp}`;
+      const rawSig = getConversationDbSignature(convId, cliHome);
+      if (!rawSig) return;
+      const stamp = `${convId}|${rawSig}`;
       if (!force && stamp === lastThinkingPollStamp) return;
       const stored = readStoredThinkingSteps(convId, cliHome);
       if (!stored) return;

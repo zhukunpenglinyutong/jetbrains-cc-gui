@@ -17,7 +17,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GeminiPermissionMapper } from '../utils/permission-mapper.js';
+import { GeminiPermissionMapper } from '../services/gemini/permission-mapper.js';
 
 const bridgeDir = dirname(fileURLToPath(import.meta.url));
 const channelManager = join(bridgeDir, '..', 'channel-manager.js');

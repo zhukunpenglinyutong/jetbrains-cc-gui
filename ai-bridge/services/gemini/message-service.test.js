@@ -49,7 +49,7 @@ import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { getRealHomeDir } from '../../utils/path-utils.js';
-import { GeminiPermissionMapper } from '../../utils/permission-mapper.js';
+import { GeminiPermissionMapper } from './permission-mapper.js';
 import { GROK_MAX_IMAGE_BYTES } from '../../utils/cli-image-input.js';
 import {
   agentDisplayText,
@@ -3922,4 +3922,112 @@ test('Story 005 AC-3: reaps hung turn when invoke_subagent never updates a child
   assert.equal(footers.length, 1);
   assert.equal(JSON.parse(footers[0]).success, false);
 });
+
+// Story 006 tests: Cache node:sqlite and throttle 200ms DB snapshot copies
+
+test('Story 006 AC-3: caches node:sqlite resolution once per process and logs a single warning when unavailable', async () => {
+  const messageService = await import('./message-service.js');
+  const resetFn = messageService._resetSqliteCache || messageService.resetSqliteCache;
+  assert.equal(
+    typeof resetFn,
+    'function',
+    'message-service must export a reset helper (_resetSqliteCache or resetSqliteCache) for cached node:sqlite resolution'
+  );
+
+  const logs = [];
+  const origError = console.error;
+  console.error = (...args) => logs.push(args.join(' '));
+  try {
+    resetFn({ unavailable: true });
+    const convId = '00600000-0000-4000-8000-000000000003';
+    if (typeof messageService.readStoredThinkingSteps === 'function') {
+      messageService.readStoredThinkingSteps(convId);
+      messageService.readStoredThinkingSteps(convId);
+      messageService.readStoredThinkingSteps(convId);
+    }
+    const sqliteLogs = logs.filter((l) => /node:sqlite/i.test(l));
+    assert.equal(sqliteLogs.length, 1, `only one warning may be logged when node:sqlite is unavailable, got: ${JSON.stringify(sqliteLogs)}`);
+  } finally {
+    console.error = origError;
+    resetFn();
+  }
+});
+
+test('Story 006 AC-4: getConversationDbSignature returns (mtimeMs, size) signature of .db and .db-wal and detects changes', async () => {
+  const messageService = await import('./message-service.js');
+  assert.equal(
+    typeof messageService.getConversationDbSignature,
+    'function',
+    'message-service must export getConversationDbSignature(convId, cliHome)'
+  );
+
+  const tempHome = mkdtempSync(join(tmpdir(), 'gemini-sig-test-'));
+  try {
+    const convId = '00600000-0000-4000-8000-000000000004';
+    const convDir = join(tempHome, '.gemini', 'antigravity-cli', 'conversations');
+    mkdirSync(convDir, { recursive: true });
+    const dbFile = join(convDir, `${convId}.db`);
+    const walFile = join(convDir, `${convId}.db-wal`);
+    writeFileSync(dbFile, 'db-init');
+    writeFileSync(walFile, 'wal-init');
+
+    const sig1 = messageService.getConversationDbSignature(convId, tempHome);
+    assert.ok(sig1 && typeof sig1 === 'string', 'signature must be a non-empty string');
+
+    const sig2 = messageService.getConversationDbSignature(convId, tempHome);
+    assert.equal(sig1, sig2, 'signature must be identical when files are unchanged');
+
+    writeFileSync(walFile, 'wal-init-extended-data');
+    const sig3 = messageService.getConversationDbSignature(convId, tempHome);
+    assert.notEqual(sig1, sig3, 'signature must change when .db-wal size changes');
+  } finally {
+    rmSync(tempHome, { recursive: true, force: true });
+  }
+});
+
+test('Story 006 AC-4: pollStoredThinking skips copying .db when .db and .db-wal signatures are unchanged between ticks', async () => {
+  const messageService = await import('./message-service.js');
+  assert.equal(
+    typeof messageService.getConversationDbSignature,
+    'function',
+    'message-service must export getConversationDbSignature(convId, cliHome)'
+  );
+
+  const tempHome = mkdtempSync(join(tmpdir(), 'gemini-throttle-'));
+  try {
+    const convId = '00600000-0000-4000-8000-000000000005';
+    createConversationDb(tempHome, convId, buildStepPayload({
+      field3: 'Static thought that stays unchanged.',
+    }));
+
+    const customLines = [
+      { event: 'init', conversation_id: convId, init: { cwd: '/tmp', tools: [], permission_mode: 'default' } },
+      {
+        event: 'step_update',
+        step_update: {
+          conversation_id: convId,
+          step_index: 1,
+          state: 'ACTIVE',
+          step_type: 'agent_response',
+          text_delta: 'Working...',
+        },
+      },
+      { event: 'result', result: { conversation_id: convId, status: 'SUCCESS', response: 'Done.', duration_seconds: 1, num_turns: 1 } },
+    ];
+
+    const { stdout } = await runService({
+      mode: 'custom-hang',
+      customLines,
+      cliHome: tempHome,
+      sessionId: convId,
+      thinking: true,
+      timeoutMs: 5000,
+    });
+
+    assert.equal(finalPayload(stdout).success, true);
+  } finally {
+    rmSync(tempHome, { recursive: true, force: true });
+  }
+});
+
 
