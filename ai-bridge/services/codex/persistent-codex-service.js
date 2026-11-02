@@ -1,3 +1,5 @@
+import favoritesService from '../favorites-service.cjs';
+import { applyCodexFavorites, readFavoriteCodexThreads } from './codex-history-metadata.js';
 /**
  * Persistent Codex runtime service (daemon mode).
  *
@@ -629,7 +631,7 @@ async function codexReadOnlyPersistent(method, stdinData = {}) {
   return await service.readOnly(method, params);
 }
 
-export async function codexListThreadsPersistent(stdinData) {
+export async function codexListThreadsPersistent(stdinData, { loadFavorites = favoritesService.loadFavorites } = {}) {
   const projectPath = stdinData?.params?.projectPath ?? stdinData?.cwd;
   const params = {
     cwd: null,
@@ -640,7 +642,19 @@ export async function codexListThreadsPersistent(stdinData) {
   };
   delete params.projectPath;
   const result = await codexReadOnlyPersistent('thread/list', { ...stdinData, params });
-  return { ...result, data: applyCodexCustomTitles(filterCodexProjectThreads(result.data, projectPath), await readCodexCustomTitles()) };
+  const favorites = loadFavorites();
+  const { service } = ensureSessionService(stdinData);
+  const cursor = params.cursor ?? stdinData.cursor;
+  const saved = cursor == null ? await readFavoriteCodexThreads({
+    owner: service,
+    scope: JSON.stringify({ projectPath, generation: service.runtimeGeneration, params: { ...params, cursor: undefined } }),
+    firstPage: result, favorites,
+    matchProject: rows => filterCodexProjectThreads(rows, projectPath),
+    readPage: cursor => codexReadOnlyPersistent('thread/list', { ...stdinData, params: { ...params, cursor } }),
+  }) : [];
+  const threads = [...new Map([...saved, ...(result.data ?? [])].map(thread => [thread.id, thread])).values()];
+  return { ...result, data: applyCodexCustomTitles(applyCodexFavorites(
+    filterCodexProjectThreads(threads, projectPath), favorites), await readCodexCustomTitles()) };
 }
 
 /** Counts history independently so listing metadata never waits for full transcripts. */

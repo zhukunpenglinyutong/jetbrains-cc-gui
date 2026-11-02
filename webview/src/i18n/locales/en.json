@@ -591,6 +591,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, shows the 'AI Generate Commit Message' button in the commit dialog. When disabled, the button is hidden."
       },
+      "sessionGitRepositoryMatching": {
+        "label": "Match sessions by Git remote repository",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "Include Codex and Claude Code history from other directories with the same normalized remote host, owner, and repository. When Git information is unavailable, match by working directory."
+      },
       "statusBarWidget": {
         "label": "Status Bar Info Display",
         "enabled": "Enabled",
@@ -1459,6 +1465,9 @@
     }
   },
   "history": {
+    "confirmDirectoryTitle": "Open session in another directory?",
+    "confirmDirectoryMessage": "Commands and file changes will run in the directory shown below.",
+    "executionDirectory": "Run in",
     "title": "History",
     "sessionDeleted": "Session deleted",
     "confirmDelete": "Confirm Delete",
