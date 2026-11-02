@@ -116,16 +116,23 @@ class HistoryMetadataService {
      */
     void handleRegenerateTitle(String content) {
         CompletableFuture.runAsync(() -> {
+            // Parsed before the guarded block so the catch below can still
+            // address the frontend's spinner via the session id; a null id
+            // payload is ignored by the webview and would leave the button
+            // spinning until its timeout fallback fires.
+            String sessionId = null;
             try {
                 LOG.info("[HistoryHandler] ========== 重新生成会话标题 ==========");
 
                 JsonObject request = new Gson().fromJson(content, JsonObject.class);
-                String sessionId = request.has("sessionId") && !request.get("sessionId").isJsonNull()
+                sessionId = request.has("sessionId") && !request.get("sessionId").isJsonNull()
                         ? request.get("sessionId").getAsString() : null;
                 if (sessionId == null || sessionId.isEmpty()) {
                     notifyTitleRegenerated(sessionId, false, null, "invalid_session", null);
                     return;
                 }
+                // Effectively-final copy for the nested async callbacks below.
+                final String sessionKey = sessionId;
 
                 // Resolve the project path the same way as history loading so
                 // the daemon locates the session file under the same key.
@@ -133,11 +140,17 @@ class HistoryMetadataService {
                 String nodePath = NodeDetector.getInstance().getCachedNodePath();
                 String projectPath = NodeDetector.isWslPath(nodePath)
                         ? NodeDetector.convertToWslPath(rawPath) : rawPath;
+                if (projectPath == null) {
+                    LOG.warn("[HistoryHandler] Project base path is null");
+                    notifyTitleRegenerated(sessionId, false, null, "backend_error",
+                            "project path unavailable");
+                    return;
+                }
 
-                LOG.info("[HistoryHandler] SessionId: " + sessionId + ", projectPath: " + projectPath);
+                LOG.info("[HistoryHandler] SessionId: " + sessionKey + ", projectPath: " + projectPath);
 
                 context.getClaudeSDKBridge()
-                        .regenerateSessionTitle(sessionId, projectPath)
+                        .regenerateSessionTitle(sessionKey, projectPath)
                         .thenAccept(result -> {
                             boolean success = result.has("success") && result.get("success").getAsBoolean();
                             String title = result.has("title") && !result.get("title").isJsonNull()
@@ -146,17 +159,17 @@ class HistoryMetadataService {
                                     ? result.get("code").getAsString() : null;
                             String error = result.has("error") && !result.get("error").isJsonNull()
                                     ? result.get("error").getAsString() : null;
-                            notifyTitleRegenerated(sessionId, success, title, code, error);
+                            notifyTitleRegenerated(sessionKey, success, title, code, error);
                         })
                         .exceptionally(ex -> {
                             LOG.error("[HistoryHandler] 重新生成标题失败: " + ex.getMessage(), ex);
-                            notifyTitleRegenerated(sessionId, false, null, "backend_error",
+                            notifyTitleRegenerated(sessionKey, false, null, "backend_error",
                                     ex.getMessage() != null ? ex.getMessage() : "Unknown error");
                             return null;
                         });
             } catch (Exception e) {
                 LOG.error("[HistoryHandler] 重新生成标题失败: " + e.getMessage(), e);
-                notifyTitleRegenerated(null, false, null, "backend_error",
+                notifyTitleRegenerated(sessionId, false, null, "backend_error",
                         e.getMessage() != null ? e.getMessage() : "未知错误");
             }
         });

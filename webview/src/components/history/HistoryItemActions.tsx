@@ -52,7 +52,10 @@ export const HistoryItemActions = ({
 
   return (
     <div className={`history-action-buttons ${session.isFavorited ? 'has-favorite' : ''} ${isRegeneratingTitle ? 'has-regenerating' : ''}`}>
-      {session.provider === 'claude' && (
+      {/* A manual title wins over the AI title (customTitle > aiTitle), so a
+          regeneration would pay for a Haiku call yet never show its result —
+          hide the button instead of reporting a success that cannot stick. */}
+      {session.provider === 'claude' && !session.hasCustomTitle && (
         <button
           className={`history-regenerate-btn ${isRegeneratingTitle ? 'is-loading' : ''}`}
           onClick={handleRegenerate}

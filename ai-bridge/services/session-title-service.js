@@ -5,11 +5,11 @@
  */
 
 import { appendFile, mkdir, access, open as fsOpen, stat as fsStat, readFile } from 'fs/promises';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync } from 'fs';
 import { join } from 'path';
 import { setupApiKey, loadClaudeSettings, getCliUserAgent } from '../config/api-config.js';
 import { ensureAnthropicSdk, ensureBedrockSdk } from './claude/message-utils.js';
-import { extractTextContent, isInterruptionMarker } from './claude/session-service.js';
+import { extractTextContent, isInterruptionMarker, forEachJsonlLineSync } from './claude/session-service.js';
 import { resolveModelFromSettings } from '../utils/model-utils.js';
 import { getExistingClaudeProjectSessionFilePath, getCodemossDir } from '../utils/path-utils.js';
 
@@ -414,41 +414,6 @@ function truncateByCodePoints(text, maxCodePoints) {
     : text;
 }
 
-/** Parse a session JSONL file into rows, skipping blank and malformed lines. */
-function readSessionRows(sessionFile) {
-  return readFileSync(sessionFile, 'utf8')
-    .split('\n')
-    .flatMap((line) => {
-      const trimmed = line.trim();
-      if (!trimmed) return [];
-      try {
-        return [JSON.parse(trimmed)];
-      } catch {
-        return [];
-      }
-    });
-}
-
-/**
- * Collect the user prompts that define a session's topic, mirroring the CLI's
- * firstPrompt scan: meta rows, interruption markers, tool-result carriers
- * (no text blocks), and XML-wrapped CLI plumbing (<command-name> etc.) are
- * not real user input and must not shape the title.
- * Exposed for tests.
- */
-export function collectSessionUserPrompts(rows) {
-  const prompts = [];
-  for (const row of rows) {
-    if (!row || typeof row !== 'object' || row.type !== 'user') continue;
-    if (row.isMeta === true) continue;
-    if (isInterruptionMarker(row)) continue;
-    const text = extractTextContent(row).trim();
-    if (!text || text.startsWith('<')) continue;
-    prompts.push(text);
-  }
-  return prompts;
-}
-
 /**
  * Number of recent prompts (beyond the first one) that feed a regeneration.
  * The first prompt anchors the session's topic; recent prompts let the title
@@ -456,10 +421,83 @@ export function collectSessionUserPrompts(rows) {
  */
 const REGENERATE_RECENT_PROMPTS = 4;
 
+// Per-prompt truncation budgets (code points) for the regeneration input.
+// They sum to MAX_CONVERSATION_TEXT (400 + 4 × 150) and are applied per prompt
+// BEFORE joining: tail-truncating the joined text instead (old behaviour) kept
+// only the last 1000 code points, so one long recent prompt (a pasted stack
+// trace is enough) evicted the anchoring first prompt entirely.
+const FIRST_PROMPT_CODE_POINT_BUDGET = 400;
+const RECENT_PROMPT_CODE_POINT_BUDGET = 150;
+
+/**
+ * Extract the user prompt a row contributes to a session's topic, mirroring
+ * the CLI's firstPrompt scan. Returns null for anything that is not real user
+ * input: meta rows, interruption markers, tool-result carriers (no text
+ * blocks), XML-wrapped CLI plumbing (<command-name> etc.), compaction
+ * summaries (/compact writes its summary as a type:"user" row with
+ * isCompactSummary — up to tens of thousands of CLI-generated characters that
+ * would drown out what the user actually wrote), transcript-only rows and
+ * sidechain rows.
+ */
+function userPromptFromRow(row) {
+  if (!row || typeof row !== 'object' || row.type !== 'user') return null;
+  if (row.isMeta === true) return null;
+  if (row.isCompactSummary === true || row.isVisibleInTranscriptOnly === true || row.isSidechain === true) return null;
+  if (isInterruptionMarker(row)) return null;
+  const text = extractTextContent(row).trim();
+  if (!text || text.startsWith('<')) return null;
+  return text;
+}
+
+/**
+ * Collect the user prompts that define a session's topic.
+ * Exposed for tests.
+ */
+export function collectSessionUserPrompts(rows) {
+  const prompts = [];
+  for (const row of rows) {
+    const prompt = userPromptFromRow(row);
+    if (prompt !== null) prompts.push(prompt);
+  }
+  return prompts;
+}
+
+/**
+ * Collect the prompts a regeneration needs by streaming the session JSONL
+ * line by line: never materializing the whole file (long sessions grow past
+ * V8's maximum string length, which is why session-service.js reads this way
+ * too) and keeping only what the input builder consumes — the first prompt
+ * plus a rolling window of the last `recentLimit` ones.
+ */
+function collectRegenerationPrompts(sessionFile, recentLimit = REGENERATE_RECENT_PROMPTS) {
+  let first = null;
+  const recent = [];
+  forEachJsonlLineSync(sessionFile, (line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    let row;
+    try {
+      row = JSON.parse(trimmed);
+    } catch {
+      return; // Skip blank and malformed lines.
+    }
+    const prompt = userPromptFromRow(row);
+    if (prompt === null) return;
+    if (first === null) {
+      first = prompt;
+      return;
+    }
+    recent.push(prompt);
+    if (recent.length > recentLimit) recent.shift();
+  });
+  return first === null ? [] : [first, ...recent];
+}
+
 /**
  * Build the title-generation input from a session's user prompts: the first
- * prompt plus the most recent ones. Returns null when there is no prompt at
- * all (nothing to derive a title from).
+ * prompt plus the most recent ones, each truncated to its own budget so every
+ * selected prompt is guaranteed room within the overall ceiling. Returns null
+ * when there is no prompt at all (nothing to derive a title from).
  * Exposed for tests.
  */
 export function buildRegenerationInput(prompts) {
@@ -469,7 +507,12 @@ export function buildRegenerationInput(prompts) {
   const selected = prompts.length <= 1 + REGENERATE_RECENT_PROMPTS
     ? prompts
     : [prompts[0], ...prompts.slice(-REGENERATE_RECENT_PROMPTS)];
-  return selected.join('\n\n');
+  return selected
+    .map((prompt, index) => truncateByCodePoints(
+      prompt,
+      index === 0 ? FIRST_PROMPT_CODE_POINT_BUDGET : RECENT_PROMPT_CODE_POINT_BUDGET,
+    ))
+    .join('\n\n');
 }
 
 /**
@@ -497,7 +540,7 @@ export async function regenerateSessionTitle(sessionId, cwd, dependencies = {}) 
   const {
     isEnabled = isTitleGenerationEnabled,
     resolveSessionFile = () => getSessionFilePath(sessionId, cwd),
-    readRows = (sessionFile) => readSessionRows(sessionFile),
+    readPrompts = (sessionFile) => collectRegenerationPrompts(sessionFile),
     generateTitle = (input) => callHaikuApi(input, sessionId),
     saveTitle = (title) => saveAiTitle(sessionId, title, cwd),
   } = dependencies;
@@ -519,9 +562,9 @@ export async function regenerateSessionTitle(sessionId, cwd, dependencies = {}) 
 
   let input;
   try {
-    input = buildRegenerationInput(collectSessionUserPrompts(readRows(sessionFile)));
+    input = buildRegenerationInput(readPrompts(sessionFile));
   } catch (e) {
-    logTitleEvent('warn', 'Regenerate failed to read session rows: ' + e.message);
+    logTitleEvent('warn', 'Regenerate failed to read session prompts: ' + e.message);
     return { success: false, code: 'unreadable_session' };
   }
   if (!input) {
@@ -530,7 +573,9 @@ export async function regenerateSessionTitle(sessionId, cwd, dependencies = {}) 
   }
 
   try {
-    const title = await generateTitle(truncateByCodePoints(input, MAX_CONVERSATION_TEXT));
+    // The input is already bounded by the per-prompt budgets in
+    // buildRegenerationInput (they sum to MAX_CONVERSATION_TEXT).
+    const title = await generateTitle(input);
     if (!title) {
       // callHaikuApi returns null for permanent skips (cli_login, missing key,
       // unparseable response) — nothing transient to retry at this layer.

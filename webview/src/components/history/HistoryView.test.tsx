@@ -126,7 +126,8 @@ describe('HistoryView native message counts', () => {
 describe('HistoryView running session protection', () => {
   const actions = { currentProvider: 'codex', currentSessionId: 'session-two', onLoadSession: vi.fn(),
     onDeleteSession: vi.fn(), onDeleteSessions: vi.fn(), onExportSession: vi.fn(), onToggleFavorite: vi.fn(),
-    onUpdateTitle: vi.fn(), onConvertToCliSession: vi.fn() };
+    onUpdateTitle: vi.fn(), onConvertToCliSession: vi.fn(),
+    onRegenerateTitle: vi.fn(), regeneratingTitleSessionIds: new Set<string>() };
 
   it('disables deletion and excludes both active and foreign owned sessions from selection', () => {
     const data = { ...historyData, sessions: historyData.sessions!.map(session => ({ ...session, running: true })) };
@@ -433,6 +434,28 @@ describe('HistoryView AI title regeneration', () => {
     );
 
     // historyData's first session is claude, the second one codex.
+    expect(screen.getAllByRole('button', { name: 'Regenerate title from conversation' })).toHaveLength(1);
+  });
+
+  // A manual title (session-titles.json) wins over the AI title, so a
+  // regeneration would report success while the title it produces can never
+  // stick — the button is hidden for such sessions instead.
+  it('hides the refresh button on sessions with a manual title', () => {
+    render(
+      <HistoryView
+        {...regenerateActions}
+        historyData={{
+          ...historyData,
+          sessions: [
+            { ...historyData.sessions![0] },
+            { ...historyData.sessions![0], sessionId: 'session-renamed', hasCustomTitle: true },
+          ],
+        }}
+        onRegenerateTitle={vi.fn()}
+        regeneratingTitleSessionIds={new Set<string>()}
+      />,
+    );
+
     expect(screen.getAllByRole('button', { name: 'Regenerate title from conversation' })).toHaveLength(1);
   });
 

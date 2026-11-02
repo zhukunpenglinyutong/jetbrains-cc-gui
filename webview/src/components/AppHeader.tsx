@@ -26,11 +26,13 @@ export const AppHeader = ({ sessionTitle, onNewSession, onUpdateHistoryTitle, on
     setSettingsInitialTab, setSettingsProviderSubTab,
     setSearchOpen,
   } = useUIState();
-  const { currentSessionId, setCustomSessionTitle } = useSession();
+  const { currentSessionId, customSessionTitle, setCustomSessionTitle } = useSession();
 
   // The chat-header refresh button only exists for Claude sessions with an
-  // active id; the spinner reflects the shared per-session regeneration state.
-  const handleRegenerateTitle = canRegenerateTitle && currentSessionId
+  // active id and no manual title (a manual title wins over the AI title, so
+  // a regeneration would never show its result); the spinner reflects the
+  // shared per-session regeneration state.
+  const handleRegenerateTitle = canRegenerateTitle && currentSessionId && !customSessionTitle
     ? () => onRegenerateTitle(currentSessionId)
     : undefined;
 
