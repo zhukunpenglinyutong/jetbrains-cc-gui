@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +35,7 @@ const {
   filterCodexProjectThreads,
   projectThreadFileChanges,
   codexReadThreadPersistent,
+  codexListThreadsPersistent,
   codexCountThreadMessagesPersistent,
   setCodexPristineBaseEnv,
   buildTurnSettings,
@@ -797,4 +798,45 @@ test('resetRuntime drains and disposes the session entry', async () => {
   });
   assert.equal(result.reset, true);
   assert.equal(getCodexRuntimeSnapshot().sessionCount, 0);
+});
+
+test('deleted rollout index rows stay absent after reopening history', async () => {
+  const original = CodexAppServerService.prototype.readOnly;
+  const path = join(testCwd, 'deleted-rollout.jsonl');
+  const thread = { id: 'deleted-rollout', cwd: testCwd, path };
+  writeFileSync(path, '{}');
+  CodexAppServerService.prototype.readOnly = async () => ({ data: [thread], nextCursor: null });
+  try {
+    const data = { channelId: 'deleted-rollout', cwd: testCwd,
+      codexCommandPrefix: peerCommandPrefix('early-notification'), params: { projectPath: [] } };
+    assert.equal((await codexListThreadsPersistent(data)).data.length, 1);
+    unlinkSync(path);
+    assert.deepEqual((await codexListThreadsPersistent(data)).data, []);
+    assert.deepEqual((await codexListThreadsPersistent(data)).data, []);
+  } finally {
+    CodexAppServerService.prototype.readOnly = original;
+  }
+});
+
+test('stale-only pages advance the native cursor and cursor cycles terminate', async () => {
+  const original = CodexAppServerService.prototype.readOnly;
+  for (const cycle of [false, true]) {
+    const cursors = [];
+    CodexAppServerService.prototype.readOnly = async (method, params) => {
+      assert.equal(method, 'thread/list');
+      cursors.push(params.cursor);
+      return params.cursor === 'next' && !cycle
+        ? { data: [{ id: 'exists', cwd: testCwd }], nextCursor: 'last' }
+        : { data: [{ id: 'missing', path: join(testCwd, 'missing.jsonl') }], nextCursor: 'next' };
+    };
+    try {
+      const result = await codexListThreadsPersistent({ channelId: `stale-page-${cycle}`, cwd: testCwd,
+        codexCommandPrefix: peerCommandPrefix('early-notification'), params: { projectPath: [] } });
+      assert.deepEqual(result.data.map(thread => thread.id), cycle ? [] : ['exists']);
+      assert.equal(result.nextCursor, cycle ? 'next' : 'last');
+      assert.deepEqual(cursors, [undefined, 'next']);
+    } finally {
+      CodexAppServerService.prototype.readOnly = original;
+    }
+  }
 });

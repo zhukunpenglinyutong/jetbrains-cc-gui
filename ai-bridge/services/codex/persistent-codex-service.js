@@ -1,3 +1,4 @@
+import { filterAvailableCodexThreads } from './codex-history-availability.js';
 /**
  * Persistent Codex runtime service (daemon mode).
  *
@@ -639,8 +640,17 @@ export async function codexListThreadsPersistent(stdinData) {
     ...stdinData?.params,
   };
   delete params.projectPath;
-  const result = await codexReadOnlyPersistent('thread/list', { ...stdinData, params });
-  return { ...result, data: applyCodexCustomTitles(filterCodexProjectThreads(result.data, projectPath), await readCodexCustomTitles()) };
+  let result;
+  let threads;
+  const visited = new Set();
+  do {
+    result = await codexReadOnlyPersistent('thread/list', { ...stdinData, params });
+    threads = await filterAvailableCodexThreads(result.data ?? []);
+    if (threads.length > 0 || result.nextCursor == null || visited.has(result.nextCursor)) break;
+    visited.add(result.nextCursor);
+    params.cursor = result.nextCursor;
+  } while (true);
+  return { ...result, data: applyCodexCustomTitles(filterCodexProjectThreads(threads, projectPath), await readCodexCustomTitles()) };
 }
 
 /** Counts history independently so listing metadata never waits for full transcripts. */
