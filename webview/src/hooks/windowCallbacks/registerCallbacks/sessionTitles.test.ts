@@ -12,7 +12,7 @@ describe('native session titles', () => {
     customSessionTitleRef: { current: null as string | null }, setRestoredSessionTitle: restored,
     setCustomSessionTitle: custom, applyHistoryTitleLocal: local, settleTitleRegeneration: settle,
     addToast,
-    historyDataRef: { current: null as { sessions?: Array<{ sessionId: string; hasCustomTitle?: boolean }> | null } },
+    historyDataRef: { current: null },
   } as unknown as UseWindowCallbacksOptions;
   beforeEach(() => {
     vi.clearAllMocks();
@@ -97,7 +97,7 @@ describe('native session titles', () => {
     });
 
     it('does not touch the header when the session has a manual title', () => {
-      options.historyDataRef.current = { sessions: [{ sessionId: 'root', hasCustomTitle: true }] };
+      options.historyDataRef.current = { success: true, sessions: [{ sessionId: 'root', title: 'Manual title', hasCustomTitle: true }] };
       window.onTitleRegenerated!(JSON.stringify({ sessionId: 'root', success: true, title: 'Fix login button' }));
       expect(custom).not.toHaveBeenCalled();
     });
