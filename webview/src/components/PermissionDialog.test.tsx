@@ -171,7 +171,7 @@ describe('PermissionDialog', () => {
           codexMethod: 'item/fileChange/requestApproval',
           inputs: {
             proposedChanges: {
-              'src/new.ts': { kind: 'add', diff: '+export const added = true;' },
+              'src/new.ts': { kind: 'add', diff: 'export const added = true;\n- literal text\n' },
               'src/old.ts': {
                 kind: { type: 'update', movePath: 'src/renamed.ts' },
                 diff: '@@ -1 +1 @@\n-export const oldName = true;\n+export const newName = true;',
@@ -188,6 +188,7 @@ describe('PermissionDialog', () => {
     expect(screen.getByTestId('codex-file-preview').textContent).toContain('src/new.ts');
     expect(screen.getByTestId('codex-file-preview').textContent).toContain('src/old.ts');
     expect(screen.getByTestId('codex-file-preview').textContent).toContain('src/renamed.ts');
+    expect(screen.getByText('- literal text', { selector: 'pre' })).toBeTruthy();
     expect(screen.getByTestId('codex-file-preview').textContent).toContain('export const oldName = true;');
     expect(screen.getByTestId('codex-file-preview').textContent).toContain('export const newName = true;');
     expect(screen.getByTestId('codex-file-preview').querySelectorAll('.task-details')).toHaveLength(2);

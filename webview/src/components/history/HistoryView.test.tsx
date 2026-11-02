@@ -115,6 +115,68 @@ describe('HistoryView native message counts', () => {
   });
 });
 
+describe('HistoryView running session protection', () => {
+  const actions = { currentProvider: 'codex', currentSessionId: 'session-two', onLoadSession: vi.fn(),
+    onDeleteSession: vi.fn(), onDeleteSessions: vi.fn(), onExportSession: vi.fn(), onToggleFavorite: vi.fn(),
+    onUpdateTitle: vi.fn(), onConvertToCliSession: vi.fn() };
+
+  it('disables deletion and excludes both active and foreign owned sessions from selection', () => {
+    const data = { ...historyData, sessions: historyData.sessions!.map(session => ({ ...session, running: true })) };
+    render(<HistoryView {...actions} historyData={data} currentSessionBusy />);
+    for (const button of screen.getAllByRole('button', { name: 'history.deleteSession' })) {
+      expect(button.hasAttribute('disabled')).toBe(true);
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
+    expect(screen.getByRole('checkbox', { name: 'Select First session' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('checkbox', { name: 'Select Second session' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText('0 selected')).toBeTruthy();
+  });
+
+  it('cancels an open confirmation when the current session starts a turn', () => {
+    const { rerender } = render(<HistoryView {...actions} historyData={historyData} currentSessionBusy={false} />);
+    const row = screen.getByText('Second session').closest('.history-item') as HTMLElement;
+    fireEvent.click(within(row).getByRole('button', { name: 'history.deleteSession' }));
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
+    rerender(<HistoryView {...actions} historyData={historyData} currentSessionBusy />);
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(actions.onDeleteSession).not.toHaveBeenCalled();
+  });
+
+  it('removes newly running rows from a pending batch before confirmation', () => {
+    const { rerender } = render(<HistoryView {...actions} historyData={historyData} currentSessionBusy={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }));
+    rerender(<HistoryView {...actions} historyData={historyData} currentSessionBusy />);
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }));
+    expect(actions.onDeleteSessions).toHaveBeenCalledWith(['session-one']);
+  });
+
+  it('keeps host ownership protection when the local current session reports idle', () => {
+    const data = { ...historyData, sessions: historyData.sessions!.map(session => ({
+      ...session, running: true, ownedElsewhere: true })) };
+    render(<HistoryView {...actions} historyData={data} currentSessionBusy={false} />);
+    const current = screen.getByText('Second session').closest('.history-item') as HTMLElement;
+    const foreign = screen.getByText('First session').closest('.history-item') as HTMLElement;
+    expect(within(current).getByRole('button', { name: 'history.deleteSession' }).hasAttribute('disabled')).toBe(true);
+    expect(within(foreign).getByRole('button', { name: 'history.deleteSession' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('re-enables the current session once its turn ends, even if the list was captured mid-turn', () => {
+    const data = { ...historyData, sessions: historyData.sessions!.map(session => ({ ...session, running: true })) };
+    const { rerender } = render(<HistoryView {...actions} historyData={data} currentSessionBusy />);
+    const deleteButton = (title: string) => within(screen.getByText(title).closest('.history-item') as HTMLElement)
+      .getByRole('button', { name: 'history.deleteSession' });
+    expect(deleteButton('Second session').hasAttribute('disabled')).toBe(true);
+
+    rerender(<HistoryView {...actions} historyData={data} currentSessionBusy={false} />);
+
+    expect(deleteButton('Second session').hasAttribute('disabled')).toBe(false);
+    expect(deleteButton('First session').hasAttribute('disabled')).toBe(true);
+  });
+});
+
 describe('HistoryView multi-select', () => {
   it('deletes selected sessions after confirmation without loading them', () => {
     const onLoadSession = vi.fn();

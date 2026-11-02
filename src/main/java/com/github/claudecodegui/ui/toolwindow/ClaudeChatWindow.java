@@ -28,7 +28,9 @@ import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.TabStateService;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import com.github.claudecodegui.ui.ChatWindowDelegate;
+import com.github.claudecodegui.ui.DraftCacheKeys;
 import com.github.claudecodegui.ui.EditorContextTracker;
 import com.github.claudecodegui.ui.SurfaceFrameFence;
 import com.github.claudecodegui.ui.WebviewInitializer;
@@ -36,6 +38,7 @@ import com.github.claudecodegui.ui.WebviewWatchdog;
 import com.github.claudecodegui.ui.detached.DetachedChatFrame;
 import com.github.claudecodegui.ui.detached.DetachedWindowManager;
 import com.github.claudecodegui.util.HtmlLoader;
+import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.github.claudecodegui.util.JsUtils;
 import com.github.claudecodegui.util.ThemeConfigService;
 import com.google.gson.Gson;
@@ -65,6 +68,10 @@ import java.awt.event.WindowEvent;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -100,6 +107,8 @@ public class ClaudeChatWindow {
     // clearPermissionDecisionMemory(), both of which must reach the instance
     // the bridges actually route permission requests to.
     private String permissionServiceKey = null;
+    private boolean permissionServiceDisposed = false;
+    private String draftCacheKey = null;
 
     private volatile JBCefBrowser browser;
     // volatile: read from the daemon reader thread by the session_updated listener
@@ -111,6 +120,7 @@ public class ClaudeChatWindow {
 
     private volatile boolean disposed = false;
     private final InitialWebviewStartup initialWebviewStartup = new InitialWebviewStartup();
+    private final PendingSelectionContext pendingSelectionContext = new PendingSelectionContext();
     private volatile boolean frontendReady = false;
     private final FrontendReadyTransitionTracker frontendReadyTransitions =
             new FrontendReadyTransitionTracker();
@@ -160,7 +170,11 @@ public class ClaudeChatWindow {
     private final PendingFileReferencesBuffer pendingFileReferencesBuffer =
             new PendingFileReferencesBuffer();
     private volatile boolean slashCommandsFetched = false;
-    private final AtomicBoolean restoredHistoryLoadStarted = new AtomicBoolean(false);
+    private final AtomicLong restoredHistoryLoadGeneration = new AtomicLong();
+    private final AtomicReference<RestoredHistoryLoadRequest> activeRestoredHistoryLoad =
+            new AtomicReference<>();
+    private final RestoredHistorySession<ClaudeSession> restoredHistory = new RestoredHistorySession<>();
+    private volatile JsonObject restoredHistoryLoadState;
 
     // Shared serializer for structured bridges (Gson instances are thread-safe).
     private static final Gson GSON = new Gson();
@@ -232,7 +246,7 @@ public class ClaudeChatWindow {
         this(project, skipRegister, true);
     }
 
-    /** Restore inactive tabs without allocating a browser until activation or remote work. */
+    /** Restore inactive tabs without allocating a browser until activation or an explicit startup request. */
     public ClaudeChatWindow(Project project, boolean skipRegister, boolean initializeWebview) {
         this.project = project;
         this.claudeSDKBridge = new ClaudeSDKBridge();
@@ -308,7 +322,8 @@ public class ClaudeChatWindow {
                 () -> webviewInitializer.recreateWebview("watchdog_recreate"),
                 () -> disposed,
                 () -> streamCoalescer.isStreamActive(),
-                () -> frontendReady
+                () -> frontendReady,
+                () -> webviewInitializer != null && webviewInitializer.canRecoverWebview()
         );
 
         this.session = new ClaudeSession(
@@ -321,6 +336,17 @@ public class ClaudeChatWindow {
         chatWindowDelegate.initializeHandlers();
         this.permissionServiceKey = chatWindowDelegate.setupPermissionService();
         this.sessionId = this.permissionServiceKey;
+        java.lang.ref.WeakReference<ClaudeChatWindow> executionOwner = new java.lang.ref.WeakReference<>(this);
+        PermissionService.getInstance(project, permissionServiceKey).setExecutionOwnerSupplier(() -> {
+            ClaudeChatWindow current = executionOwner.get();
+            if (current == null || current.disposed || current.project.isDisposed()) {
+                return null;
+            }
+            ClaudeSession owner = current.session;
+            return owner == null ? null : owner.getState().currentExecutionOwnership();
+        });
+        this.draftCacheKey = DraftCacheKeys.getInstance().register(
+                project.getLocationHash(), permissionServiceKey, this::requestClosedDraftPrune);
 
         this.sessionLifecycleManager = new SessionLifecycleManager(new SessionLifecycleManager.SessionHost() {
             @Override
@@ -416,6 +442,8 @@ public class ClaudeChatWindow {
                 if (sessionCallbackAdapter != null) {
                     sessionCallbackAdapter.deactivate();
                 }
+                // Every session swap starts here; the frontend drops the banner on the following clearMessages.
+                ClaudeChatWindow.this.retireRestoredHistory();
             }
 
             @Override
@@ -432,12 +460,14 @@ public class ClaudeChatWindow {
         this.editorContextTracker = new EditorContextTracker(project, new EditorContextTracker.ContextCallback() {
             @Override
             public void addSelectionInfo(String info) {
-                callJavaScript("addSelectionInfo", info);
+                pendingSelectionContext.update(info);
+                flushPendingSelectionContext();
             }
 
             @Override
             public void clearSelectionInfo() {
-                callJavaScript("clearSelectionInfo");
+                pendingSelectionContext.update(null);
+                flushPendingSelectionContext();
             }
         });
         editorContextTracker.registerListeners();
@@ -506,6 +536,7 @@ public class ClaudeChatWindow {
             }
 
             persistTabSessionState();
+            chatWindowDelegate.refreshUnreadBadge();
         }
     }
 
@@ -522,6 +553,23 @@ public class ClaudeChatWindow {
 
     public boolean isInitialized() {
         return initialWebviewStartup.hasStarted();
+    }
+
+    /** Let the visible tab finish restoring history before background work competes with it. */
+    boolean isReadyForBackgroundPreload() {
+        return frontendReady && (session == null || !session.isLoading());
+    }
+
+    /**
+     * Warm a restored page without selecting the tab or starting an AI turn. Its history loads when
+     * the page reports ready, which honours the startup-history setting and shows the load state.
+     */
+    void preloadRestoredTab() {
+        if (disposed || project.isDisposed()) {
+            return;
+        }
+        ensureWebviewInitialized();
+        loadRestoredHistoryIfNeeded();
     }
 
     private void ensureWebviewInitialized() {
@@ -542,7 +590,7 @@ public class ClaudeChatWindow {
                 });
     }
 
-    /** Coalesce activation, hierarchy and remote-work requests before the first EDT startup. */
+    /** Coalesce activation, hierarchy and forced startup requests before the first EDT startup. */
     static final class InitialWebviewStartup {
         private boolean requested;
         private boolean forced;
@@ -662,12 +710,13 @@ public class ClaudeChatWindow {
                 return;
             }
             ensureWebviewInitialized(false);
+            chatWindowDelegate.markTabReadIfVisible();
             webviewWatchdog.markTabActivated();
             webviewInitializer.onTabActivated();
             JBCefBrowser currentBrowser = browser;
             TabActivationSurfaceAction action = decideTabActivationSurfaceAction(
                     currentBrowser != null,
-                    currentBrowser != null && currentBrowser.isOffScreenRendering(),
+                    usesLocalOsrSurface(currentBrowser),
                     hasCurrentUnpublishedPublication());
             switch (action) {
                 case PUBLISH_PENDING:
@@ -681,7 +730,9 @@ public class ClaudeChatWindow {
                     // Windowed JCEF keeps the established activation repaint path. It does not
                     // participate in the OSR publication fence or its sentinel pulse.
                     requestCurrentWindowedSurfaceRefresh("tab_activated");
-                    callJavaScript("window.onTabActivated");
+                    if (!JBCefBrowserFactory.isRemoteDevelopmentBrowser(currentBrowser.getCefBrowser())) {
+                        callJavaScript("window.onTabActivated");
+                    }
                     break;
                 default:
                     break;
@@ -711,17 +762,26 @@ public class ClaudeChatWindow {
                 : TabActivationSurfaceAction.PRESENT_CACHED;
     }
 
+    /** The remote frontend owns its raster backing image and cannot acknowledge backend fences. */
+    private static boolean usesLocalOsrSurface(JBCefBrowser browser) {
+        return browser != null && browser.isOffScreenRendering()
+                && !JBCefBrowserFactory.isRemoteDevelopmentBrowser(browser.getCefBrowser());
+    }
+
     private boolean refreshCurrentWebviewSurface(JBCefBrowser expectedBrowser) {
         if (expectedBrowser == null || browser != expectedBrowser) {
             return false;
         }
 
         try {
+            if (JBCefBrowserFactory.isRemoteDevelopmentBrowser(expectedBrowser.getCefBrowser())) {
+                return callJavaScript("window.onTabActivated", "true");
+            }
             return refreshActivatedWebview(
                     mainPanel,
                     expectedBrowser.getComponent(),
                     expectedBrowser.getCefBrowser(),
-                    expectedBrowser.isOffScreenRendering(),
+                    usesLocalOsrSurface(expectedBrowser),
                     () -> { }
             );
         } catch (Exception | LinkageError e) {
@@ -743,7 +803,7 @@ public class ClaudeChatWindow {
         if (expectedBrowser == null) {
             return;
         }
-        if (expectedBrowser.isOffScreenRendering()) {
+        if (usesLocalOsrSurface(expectedBrowser)) {
             surfaceFrameFence.request(
                     expectedBrowser,
                     expectedBrowser.getCefBrowser(),
@@ -759,7 +819,7 @@ public class ClaudeChatWindow {
     private void requestCurrentWindowedSurfaceRefresh(String reason) {
         JBCefBrowser currentBrowser = browser;
         if (disposed || !frontendReady || currentBrowser == null
-                || currentBrowser.isOffScreenRendering()) {
+                || usesLocalOsrSurface(currentBrowser)) {
             return;
         }
         requestSurfaceRefresh(
@@ -789,7 +849,7 @@ public class ClaudeChatWindow {
         rebindSurfaceRefreshWindow();
         JBCefBrowser currentBrowser = browser;
         long currentReadyEpoch = frontendReadyTransitions.currentEpoch();
-        if (currentBrowser != null && currentBrowser.isOffScreenRendering()) {
+        if (usesLocalOsrSurface(currentBrowser)) {
             return tryArmOsrSurfaceRefresh(
                     currentBrowser, currentReadyEpoch, trigger, replacementSource);
         }
@@ -821,7 +881,7 @@ public class ClaudeChatWindow {
             return false;
         }
         long readyEpoch = frontendReadyTransitions.currentEpoch();
-        if (currentBrowser.isOffScreenRendering()) {
+        if (usesLocalOsrSurface(currentBrowser)) {
             try {
                 return surfaceFrameFence.hasUnpublishedFor(
                         currentBrowser,
@@ -837,7 +897,7 @@ public class ClaudeChatWindow {
 
     private void requestCachedSurfacePresentation(JBCefBrowser expectedBrowser) {
         if (disposed || !frontendReady || expectedBrowser == null
-                || browser != expectedBrowser || !expectedBrowser.isOffScreenRendering()) {
+                || browser != expectedBrowser || !usesLocalOsrSurface(expectedBrowser)) {
             return;
         }
         try {
@@ -862,7 +922,7 @@ public class ClaudeChatWindow {
             return false;
         }
         JBCefBrowser currentBrowser = browser;
-        if (currentBrowser == null || !currentBrowser.isOffScreenRendering()) {
+        if (currentBrowser == null || !usesLocalOsrSurface(currentBrowser)) {
             return false;
         }
         CefBrowser currentCefBrowser;
@@ -1292,6 +1352,7 @@ public class ClaudeChatWindow {
         }
         rebindSurfaceRefreshWindow();
         if (mainPanel.isShowing()) {
+            chatWindowDelegate.markTabReadIfVisible();
             ensureWebviewInitialized(false);
             resumePendingSurfaceWork("hierarchy_showing");
         }
@@ -1315,6 +1376,8 @@ public class ClaudeChatWindow {
         if (browser == nextBrowser) {
             return;
         }
+        // Fence surface callbacks before listener/query cleanup can pump native events.
+        browser = nextBrowser;
         if (observedBrowserComponent != null) {
             observedBrowserComponent.removeComponentListener(surfaceRefreshComponentListener);
         }
@@ -1322,7 +1385,6 @@ public class ClaudeChatWindow {
         rebindNativeSurfaceComponent(null);
         cancelScheduledOsrSurfaceRefresh();
         surfaceRefreshCoordinator.invalidate();
-        browser = nextBrowser;
         webviewEventQueue.browserChanged();
         streamCoalescer.resetDeliveryBaseline();
         if (nextBrowser != null) {
@@ -1628,6 +1690,9 @@ public class ClaudeChatWindow {
                     + (project != null ? project.getBasePath() : null));
         }
         session.setSessionInfo(restoredSessionId, restoredCwd);
+        restoredHistory.bind(session, restoredSessionId);
+        restoredHistoryLoadState = null;
+        chatWindowDelegate.restoreUnread(sameProject && savedState.unread);
         persistTabSessionState();
 
         LOG.info("[TabRestore] Restored tab session state: provider=" + savedState.provider
@@ -1637,51 +1702,265 @@ public class ClaudeChatWindow {
     public void restorePersistedTabSessionState(TabStateService.TabSessionState savedState, boolean loadImmediately) {
         restorePersistedTabSessionState(savedState);
         if (session != null && isNonEmpty(session.getSessionId())
-                && TabSessionRestorePolicy.shouldLoadImmediately(savedState, loadImmediately)) {
+                && TabSessionRestorePolicy.shouldLoadImmediately(
+                        savedState, loadImmediately, settingsService.isLoadHistoryOnStartup())) {
             loadRestoredHistoryIfNeeded(savedState);
         }
     }
 
-    public void loadRestoredHistoryIfNeeded() {
-        if (session == null || !frontendReady) {
+    public synchronized void loadRestoredHistoryIfNeeded() {
+        if (!isRestoredHistorySessionCurrent() || !frontendReady) {
             return;
         }
-
-        TabStateService.TabSessionState currentState = new TabStateService.TabSessionState();
-        currentState.sessionId = session.getSessionId();
-        loadRestoredHistoryIfNeeded(currentState);
+        RestoredHistoryLoadRequest active = activeRestoredHistoryLoad.get();
+        if (active != null) {
+            publishRestoredHistoryState("loading", active, null, null, 0, false);
+            return;
+        }
+        if (restoredHistory.wasAttempted()) {
+            // Activation or a reloaded webview may replay an outcome, but retry
+            // remains an explicit user action after failure, timeout or cancel.
+            JsonObject previous = restoredHistoryLoadState;
+            if (previous != null) {
+                callJavaScript("updateStartupHistoryLoadState", JsUtils.escapeJs(previous.toString()));
+            }
+            return;
+        }
+        if (!settingsService.isLoadHistoryOnStartup()) {
+            publishRestoredHistoryState("unloaded", null, null, null, 0, true);
+            return;
+        }
+        startRestoredHistoryLoad();
     }
 
     private void loadRestoredHistoryIfNeeded(TabStateService.TabSessionState savedState) {
-        if (!TabSessionRestorePolicy.shouldStartHistoryLoad(savedState, frontendReady)
+        if (!TabSessionRestorePolicy.shouldStartHistoryLoad(savedState, frontendReady, settingsService.isLoadHistoryOnStartup())
                 || session == null || !isNonEmpty(session.getSessionId())) {
             return;
         }
-        if (!restoredHistoryLoadStarted.compareAndSet(false, true)) {
+        loadRestoredHistoryIfNeeded();
+    }
+
+    public void loadRestoredHistoryManually() {
+        if (!frontendReady || !isRestoredHistorySessionCurrent()) {
+            publishRestoredHistoryState("failed", null, "HISTORY_LOAD_SESSION_CHANGED",
+                    "The restored session is no longer active", 0, false);
             return;
         }
+        startRestoredHistoryLoad();
+    }
 
+    public void cancelRestoredHistoryLoad(String requestId) {
+        RestoredHistoryLoadRequest request = activeRestoredHistoryLoad.get();
+        if (request == null || requestId == null || !request.requestId().equals(requestId.trim())) {
+            return;
+        }
+        if (request.cancel(RestoredHistoryLoadRequest.CANCELLED)) {
+            request.completeExceptionally(
+                    new java.util.concurrent.CancellationException("History loading was cancelled"));
+        }
+    }
+
+    private synchronized void startRestoredHistoryLoad() {
         ClaudeSession restoringSession = session;
-        restoringSession.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
-            if (!disposed && session == restoringSession) {
-                if (!isNonEmpty(restoringSession.getSessionId())) {
-                    sessionId = resolveExposedSessionId(null, permissionServiceKey);
-                    persistTabSessionState();
-                }
-                callJavaScript("historyLoadComplete",
-                        String.valueOf(restoringSession.getMessages().size()));
+        if (restoringSession == null || !isRestoredHistorySessionCurrent()) {
+            return;
+        }
+        String restoringSessionId = restoringSession.getSessionId();
+        long generation = restoredHistoryLoadGeneration.get() + 1;
+        RestoredHistoryLoadRequest request = new RestoredHistoryLoadRequest(generation,
+                () -> isRestoredHistoryRequestCurrent(generation, restoringSession, restoringSessionId));
+        if (!activeRestoredHistoryLoad.compareAndSet(null, request)) {
+            RestoredHistoryLoadRequest active = activeRestoredHistoryLoad.get();
+            if (active != null) {
+                publishRestoredHistoryState("loading", active, null, null, 0, false);
             }
-        })).exceptionally(ex -> {
-            LOG.warn("[TabRestore] Failed to load persisted tab history: " + ex.getMessage(), ex);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                if (!disposed) {
-                    callJavaScript("historyLoadComplete");
-                    callJavaScript("addErrorMessage",
-                            JsUtils.escapeJs("Failed to restore session history: " + ex.getMessage()));
-                }
-            });
-            return null;
+            return;
+        }
+        restoredHistoryLoadGeneration.set(generation);
+        restoredHistory.markAttempted();
+
+        publishRestoredHistoryState("loading", request, null, null, 0, false);
+        long loadStartedNanos = System.nanoTime();
+        CompletableFuture<Void> loadFuture;
+        try {
+            loadFuture = restoringSession.loadFromServer(request);
+        } catch (RuntimeException error) {
+            completeRestoredHistoryLoad(request, restoringSession, restoringSessionId, error, loadStartedNanos);
+            return;
+        }
+        int timeoutSeconds = settingsService.getHistoryLoadTimeoutSeconds();
+        request.bind(loadFuture, AppExecutorUtil.getAppScheduledExecutorService(), timeoutSeconds);
+        loadFuture.whenComplete((ignored, error) -> {
+            completeRestoredHistoryLoad(request, restoringSession, restoringSessionId, error, loadStartedNanos);
         });
+    }
+
+    private synchronized void completeRestoredHistoryLoad(RestoredHistoryLoadRequest request, ClaudeSession restoringSession,
+                                             String restoringSessionId, Throwable error, long loadStartedNanos) {
+        if (!activeRestoredHistoryLoad.compareAndSet(request, null)) {
+            return;
+        }
+        if (request.wasCommitted()) {
+            restoredHistory.markCommitted(restoringSession, restoringSessionId);
+        }
+        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - loadStartedNanos);
+        ApplicationManager.getApplication().invokeLater(() -> onRestoredHistoryLoadFinished(
+                request, restoringSession, restoringSessionId, error, elapsedMillis));
+    }
+
+    private void onRestoredHistoryLoadFinished(RestoredHistoryLoadRequest request, ClaudeSession restoringSession,
+                                              String restoringSessionId, Throwable error, long elapsedMillis) {
+        if (disposed || session != restoringSession || activeRestoredHistoryLoad.get() != null
+                || restoredHistoryLoadGeneration.get() != request.generation()) {
+            return;
+        }
+        if (request.wasCommitted() && !isNonEmpty(restoringSession.getSessionId())) {
+            sessionId = resolveExposedSessionId(null, permissionServiceKey);
+            persistTabSessionState();
+            callJavaScript("historyLoadComplete", "0");
+            publishRestoredHistoryState("missing", request, "HISTORY_LOAD_NOT_FOUND",
+                    "The session history no longer exists. A new session is ready.", 0, false);
+            restoredHistory.complete(restoringSession, restoringSessionId);
+            return;
+        }
+        if (!restoringSessionId.equals(restoringSession.getSessionId())) {
+            return;
+        }
+        if (request.wasCommitted()) {
+            int messageCount = restoringSession.getMessages().size();
+            LOG.info("[TabRestore] Restored history load completed: provider="
+                    + restoringSession.getProvider() + ", status=loaded, elapsedMs=" + elapsedMillis);
+            callJavaScript("historyLoadComplete", String.valueOf(messageCount));
+            publishRestoredHistoryState("loaded", request, null, null, messageCount, false);
+            restoredHistory.complete(restoringSession, restoringSessionId);
+            return;
+        }
+        String errorCode = request.cancellationCode();
+        if (errorCode == null) {
+            errorCode = error == null ? RestoredHistoryLoadRequest.SUPERSEDED : historyLoadErrorCode(error);
+        }
+        String message = error != null ? errorMessage(error) : "History was not committed; retry loading";
+        String status = (RestoredHistoryLoadRequest.TIMEOUT.equals(errorCode)
+                || "HISTORY_LOAD_PROVIDER_TIMEOUT".equals(errorCode)) ? "timeout"
+                : RestoredHistoryLoadRequest.CANCELLED.equals(errorCode) ? "cancelled" : "failed";
+        LOG.warn("[TabRestore] Restored history load ended: provider="
+                + restoringSession.getProvider() + ", status=" + status
+                + ", errorCode=" + errorCode + ", elapsedMs=" + elapsedMillis, error);
+        callJavaScript("historyLoadComplete");
+        publishRestoredHistoryState(status, request, errorCode, message, 0, true);
+    }
+
+    /** A session swap supersedes the restore, so neither its late outcome nor a replay reaches the new session. */
+    private synchronized void retireRestoredHistory() {
+        RestoredHistoryLoadRequest active = activeRestoredHistoryLoad.getAndSet(null);
+        if (active != null) {
+            active.cancel(RestoredHistoryLoadRequest.SUPERSEDED);
+        }
+        restoredHistoryLoadGeneration.incrementAndGet();
+        restoredHistory.retire();
+        restoredHistoryLoadState = null;
+    }
+
+    /** Settles a pending restore once an ordinary reload of the same session committed its transcript. */
+    private void settleRestoredHistoryIfCommitted(ClaudeSession reloaded, long committedBefore) {
+        if (reloaded.getCommittedHistoryLoadCount() > committedBefore) {
+            settleRestoredHistoryAfterOrdinaryLoad(reloaded);
+        }
+    }
+
+    /** A committed same-session reload fulfils the pending restore and replaces its stale banner. */
+    private synchronized void settleRestoredHistoryAfterOrdinaryLoad(ClaudeSession loadedSession) {
+        String loadedSessionId = loadedSession.getSessionId();
+        if (session != loadedSession || !restoredHistory.settleByOrdinaryLoad(loadedSession, loadedSessionId)) {
+            return;
+        }
+        RestoredHistoryLoadRequest active = activeRestoredHistoryLoad.getAndSet(null);
+        if (active != null) {
+            active.cancel(RestoredHistoryLoadRequest.SUPERSEDED);
+        }
+        restoredHistoryLoadGeneration.incrementAndGet();
+        publishRestoredHistoryState("loaded", null, null, null, loadedSession.getMessages().size(), false);
+        restoredHistory.complete(loadedSession, loadedSessionId);
+    }
+
+    private boolean isRestoredHistoryRequestCurrent(long generation, ClaudeSession expectedSession,
+                                                    String expectedSessionId) {
+        RestoredHistoryLoadRequest active = activeRestoredHistoryLoad.get();
+        return !disposed && active != null && active.generation() == generation
+                && session == expectedSession && expectedSessionId.equals(expectedSession.getSessionId());
+    }
+
+    private boolean isRestoredHistorySessionCurrent() {
+        ClaudeSession current = session;
+        return current != null && restoredHistory.isCurrent(current, current.getSessionId());
+    }
+
+    private void publishRestoredHistoryState(String status, RestoredHistoryLoadRequest request,
+                                             String errorCode, String message, int messageCount,
+                                             boolean retryable) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("status", status);
+        payload.addProperty("sessionId", restoredHistory.sessionId());
+        payload.addProperty("requestId", request != null ? request.requestId() : "");
+        payload.addProperty("generation", request != null ? request.generation() : restoredHistoryLoadGeneration.get());
+        payload.addProperty("messageCount", messageCount);
+        payload.addProperty("retryable", retryable);
+        if (errorCode != null) {
+            payload.addProperty("errorCode", errorCode);
+        }
+        if (message != null) {
+            payload.addProperty("message", message);
+        }
+        restoredHistoryLoadState = payload;
+        callJavaScript("updateStartupHistoryLoadState", JsUtils.escapeJs(payload.toString()));
+    }
+
+    private String errorMessage(Throwable error) {
+        Throwable current = error;
+        while (current.getCause() != null
+                && (current instanceof java.util.concurrent.CompletionException
+                || current instanceof java.util.concurrent.ExecutionException)) {
+            current = current.getCause();
+        }
+        return current.getMessage() != null ? current.getMessage() : current.getClass().getSimpleName();
+    }
+
+    static String historyLoadErrorCode(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            if (current instanceof com.github.claudecodegui.session.SessionMessageOrchestrator.HistoryLoadNotCommittedException) {
+                return RestoredHistoryLoadRequest.SUPERSEDED;
+            }
+            if (current instanceof java.util.concurrent.TimeoutException) {
+                return "HISTORY_LOAD_PROVIDER_TIMEOUT";
+            }
+            if (current instanceof java.nio.file.AccessDeniedException || current instanceof SecurityException) {
+                return "HISTORY_LOAD_PERMISSION_DENIED";
+            }
+            if (current instanceof java.nio.file.NoSuchFileException) {
+                return "HISTORY_LOAD_NOT_FOUND";
+            }
+            if (current instanceof com.google.gson.JsonParseException) {
+                return "HISTORY_LOAD_INVALID_DATA";
+            }
+            if (current instanceof java.io.IOException) {
+                String ioMessage = current.getMessage();
+                if (ioMessage != null && ioMessage.toLowerCase(java.util.Locale.ROOT).contains("not found")) {
+                    return "HISTORY_LOAD_NOT_FOUND";
+                }
+                return "HISTORY_LOAD_IO_ERROR";
+            }
+            String detail = current.getMessage();
+            if (detail != null) {
+                String normalized = detail.toLowerCase(java.util.Locale.ROOT);
+                if (normalized.contains("timed out") || normalized.contains("timeout")) {
+                    return "HISTORY_LOAD_PROVIDER_TIMEOUT";
+                }
+            }
+            current = current.getCause();
+        }
+        return "HISTORY_LOAD_PROVIDER_ERROR";
     }
 
     public void addCodeSnippetFromExternal(String selectionInfo) {
@@ -1732,6 +2011,12 @@ public class ClaudeChatWindow {
         LOG.debug("[WebviewTransport] Requested full transcript replay: reason=" + reason);
     }
 
+    /** Lets this page delete persisted drafts of closed windows; false if it cannot run now. */
+    private boolean requestClosedDraftPrune(String openWindowsJson) {
+        return !disposed && frontendReady
+                && callJavaScript("window.pruneClosedDrafts", JsUtils.escapeJs(openWindowsJson));
+    }
+
     private void updateFrontendReadyState(boolean ready) {
         FrontendReadyTransition transition = frontendReadyTransitions.update(ready);
         frontendReady = ready;
@@ -1742,6 +2027,8 @@ public class ClaudeChatWindow {
         }
         hasEverBeenFrontendReady = true;
         webviewEventQueue.readyChanged();
+        requestClosedDraftPrune(DraftCacheKeys.getInstance().openWindowsJson());
+        flushPendingSelectionContext();
         flushPendingCodeSnippet();
         flushPendingFileReferences();
         // No transcript replay here: the only caller that passes true is
@@ -2270,6 +2557,36 @@ public class ClaudeChatWindow {
         webviewEventQueue.enqueueRaw(jsCode);
     }
 
+    private void flushPendingSelectionContext() {
+        if (disposed || !frontendReady) {
+            return;
+        }
+        pendingSelectionContext.replay(info -> {
+            if (info == null) {
+                callJavaScript("clearSelectionInfo");
+            } else {
+                callJavaScript("addSelectionInfo", info);
+            }
+        });
+    }
+
+    /** Editor context is latest state, so inactive tabs retain one value without creating JCEF. */
+    static final class PendingSelectionContext {
+        private boolean known;
+        private String selection;
+
+        synchronized void update(String info) {
+            known = true;
+            selection = info;
+        }
+
+        synchronized void replay(Consumer<String> sender) {
+            if (known) {
+                sender.accept(selection);
+            }
+        }
+    }
+
     /** Keep an IDE action's captured clipboard image while its draft claims ownership. */
     public void offerClipboardImage(Image image) {
         this.chatWindowDelegate.offerClipboardImage(image);
@@ -2399,6 +2716,13 @@ public class ClaudeChatWindow {
         this.sessionCallbackAdapter = new SessionCallbackAdapter(
                 streamCoalescer,
                 new SessionCallbackAdapter.JsTarget() {
+                    @Override
+                    public void onAssistantActivity() {
+                        if (!disposed && session == callbackSession) {
+                            chatWindowDelegate.onAssistantActivity();
+                        }
+                    }
+
                     @Override
                     public void callJavaScript(String functionName, String... args) {
                         ClaudeChatWindow.this.callJavaScript(functionName, args);
@@ -2745,9 +3069,16 @@ public class ClaudeChatWindow {
         // isSessionActive() check in the continuation additionally blocks any
         // follow-up reload. Two independent guards; neither alone is sufficient.
         ClaudeSession current = session;
+        long committedBefore = current.getCommittedHistoryLoadCount();
         current.loadFromServer().whenComplete((v, ex) -> {
             if (ex != null) {
                 LOG.warn("[ClaudeChatWindow] session reload failed", ex);
+            } else {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (!disposed) {
+                        settleRestoredHistoryIfCommitted(current, committedBefore);
+                    }
+                });
             }
             boolean runAgain;
             synchronized (sessionReloadLock) {
@@ -2898,6 +3229,7 @@ public class ClaudeChatWindow {
         snapshot.model = session.getModel();
         snapshot.permissionMode = session.getPermissionMode();
         snapshot.reasoningEffort = session.getReasoningEffort();
+        snapshot.unread = chatWindowDelegate.hasUnread();
 
         TabStateService.getInstance(project).saveTabSessionState(tabIndex, snapshot);
     }
@@ -3008,6 +3340,13 @@ public class ClaudeChatWindow {
                 handlerContext.setDisposed(true);
                 handlerContext.setBrowser(null);
             }
+            disposePermissionService();
+            try {
+                // Other pages may now delete this window's persisted draft.
+                DraftCacheKeys.getInstance().unregister(this.draftCacheKey);
+            } catch (Exception | LinkageError error) {
+                LOG.warn("Failed to release the draft cache key", error);
+            }
             try {
                 webviewWatchdog.stop();
             } catch (Exception | LinkageError error) {
@@ -3021,10 +3360,10 @@ public class ClaudeChatWindow {
                 LOG.warn("Failed to finish webview bridge cleanup", error);
             }
             try {
-                if (targetBrowser != null) {
+                if (webviewInitializer != null) {
+                    webviewInitializer.disposeBrowsers(targetBrowser);
+                } else if (targetBrowser != null) {
                     targetBrowser.dispose();
-                    LOG.info("Window browser disposal completed, windowId=" + System.identityHashCode(this)
-                            + ", browserId=" + System.identityHashCode(targetBrowser));
                 }
             } catch (Exception | LinkageError error) {
                 LOG.warn("Failed to clean up browser", error);
@@ -3033,6 +3372,14 @@ public class ClaudeChatWindow {
     }
 
     private void disposeWindowResources() {
+        RestoredHistoryLoadRequest historyRequest = activeRestoredHistoryLoad.getAndSet(null);
+        if (historyRequest != null) {
+            try {
+                historyRequest.cancel(RestoredHistoryLoadRequest.CANCELLED);
+            } catch (Exception | LinkageError error) {
+                LOG.warn("Failed to cancel restored history loading", error);
+            }
+        }
         this.webviewEventQueue.dispose();
         cancelScheduledOsrSurfaceRefresh();
         surfaceRefreshCoordinator.invalidate();
@@ -3085,18 +3432,7 @@ public class ClaudeChatWindow {
             titleEventListener = null;
         }
 
-        try {
-            if (this.permissionServiceKey != null && !this.permissionServiceKey.isEmpty()) {
-                PermissionService permissionService = PermissionService.getInstance(project, this.permissionServiceKey);
-                permissionService.unregisterDialogShower(project);
-                permissionService.unregisterAskUserQuestionDialogShower(project);
-                permissionService.unregisterPlanApprovalDialogShower(project);
-                PermissionService.removeInstance(this.permissionServiceKey);
-                LOG.info("Removed PermissionService instance for key: " + this.permissionServiceKey);
-            }
-        } catch (Exception e) {
-            LOG.warn("Failed to unregister dialog showers or remove session instance: " + e.getMessage());
-        }
+        disposePermissionService();
 
         LOG.info("Starting window resource cleanup, project: " + project.getName());
 
@@ -3167,6 +3503,31 @@ public class ClaudeChatWindow {
         LOG.info("Window service cleanup completed, project: " + project.getName());
     }
 
+    private void disposePermissionService() {
+        if (this.permissionServiceDisposed) {
+            return;
+        }
+        this.permissionServiceDisposed = true;
+        if (this.permissionServiceKey == null || this.permissionServiceKey.isEmpty()) {
+            return;
+        }
+        try {
+            PermissionService permissionService = PermissionService.getInstance(project, this.permissionServiceKey);
+            permissionService.unregisterDialogShower(project);
+            permissionService.unregisterAskUserQuestionDialogShower(project);
+            permissionService.unregisterPlanApprovalDialogShower(project);
+        } catch (Exception | LinkageError e) {
+            LOG.warn("Failed to unregister dialog showers: " + e.getMessage());
+        } finally {
+            try {
+                PermissionService.removeInstance(this.permissionServiceKey);
+                LOG.info("Removed PermissionService instance for key: " + this.permissionServiceKey);
+            } catch (Exception | LinkageError e) {
+                LOG.warn("Failed to remove session instance: " + e.getMessage());
+            }
+        }
+    }
+
     // ==================== Host Interface Factories ====================
 
     private WebviewInitializer.WebviewHost createWebviewHost() {
@@ -3194,6 +3555,11 @@ public class ClaudeChatWindow {
             @Override
             public JPanel getMainPanel() {
                 return mainPanel;
+            }
+
+            @Override
+            public String getDraftCacheKey() {
+                return draftCacheKey;
             }
 
             @Override
@@ -3315,11 +3681,13 @@ public class ClaudeChatWindow {
             // Do not only requestSessionReload: that path never signals historyLoadComplete,
             // so a frontend that cleared the list under __sessionTransitioning stays blank.
             ClaudeSession restoring = current;
+            long committedBefore = restoring.getCommittedHistoryLoadCount();
             restoring.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
                 if (disposed || session != restoring) {
                     callJavaScript("historyLoadComplete", "0");
                     return;
                 }
+                settleRestoredHistoryIfCommitted(restoring, committedBefore);
                 int count = restoring.getMessages().size();
                 if (streamCoalescer != null) {
                     // Same lock contract as enqueue: the flush may deep-copy live messages.
@@ -3542,6 +3910,21 @@ public class ClaudeChatWindow {
             @Override
             public void persistTabSessionState() {
                 ClaudeChatWindow.this.persistTabSessionState();
+            }
+
+            @Override
+            public void loadRestoredHistoryManually() {
+                ClaudeChatWindow.this.loadRestoredHistoryManually();
+            }
+
+            @Override
+            public void cancelRestoredHistoryLoad(String requestId) {
+                ClaudeChatWindow.this.cancelRestoredHistoryLoad(requestId);
+            }
+
+            @Override
+            public void retireRestoredHistory() {
+                ClaudeChatWindow.this.retireRestoredHistory();
             }
 
             @Override

@@ -10,6 +10,8 @@ import {
   createQuoteChipElement,
   expandQuoteTokens,
   pruneQuoteRegistry,
+  restoreQuotes,
+  snapshotQuotes,
 } from './quoteRegistry';
 
 describe('quoteRegistry token round-trip', () => {
@@ -78,5 +80,38 @@ describe('createQuoteChipElement', () => {
     expect(chip.getAttribute('data-quote-id')).toBe(id);
     expect(chip.querySelector('.quote-tag-text')?.textContent).toBe('the quoted body');
     expect(chip.querySelector('.quote-tag-close')?.textContent).toBe('×');
+  });
+});
+
+describe('quote snapshots', () => {
+  it('captures the text behind every known token in a message', () => {
+    const first = registerQuote('first quote');
+    const second = registerQuote('second quote');
+    const text = `${makeQuoteToken(first)} and ${makeQuoteToken(second)} ${makeQuoteToken('gone')}`;
+
+    // Unknown tokens have nothing to capture and are left out.
+    expect(snapshotQuotes(text)).toEqual({ [first]: 'first quote', [second]: 'second quote' });
+  });
+
+  it('captures nothing for a message without known quotes', () => {
+    expect(snapshotQuotes('plain text')).toBeUndefined();
+    expect(snapshotQuotes(makeQuoteToken('gone'))).toBeUndefined();
+  });
+
+  it('puts pruned quotes back under their original ids', () => {
+    const id = registerQuote('kept text');
+    const token = makeQuoteToken(id);
+    const snapshot = snapshotQuotes(token);
+    pruneQuoteRegistry(new Set());
+    expect(getQuote(id)).toBeUndefined();
+
+    restoreQuotes(snapshot);
+
+    expect(getQuote(id)).toEqual({ text: 'kept text' });
+    expect(expandQuoteTokens(token)).toBe('> kept text\n');
+  });
+
+  it('ignores a missing snapshot', () => {
+    expect(() => restoreQuotes(undefined)).not.toThrow();
   });
 });

@@ -500,6 +500,56 @@ const setRawBlocks = (
   return { ...raw, content: blocks };
 };
 
+/**
+ * Pick the assistant text to keep when a stream ends.
+ *
+ * The local delta buffer is preferred when it is ahead of, or unrelated to,
+ * the backend snapshot — a stale snapshot must not chop a newer suffix.
+ * When the snapshot is the same text plus a tail the buffer never received,
+ * the snapshot is the complete answer and wins.
+ */
+export const chooseEndedStreamingContent = (
+  streamed: string,
+  snapshot: string | undefined,
+): string => {
+  const pending = snapshot ?? '';
+  if (!streamed) return pending;
+  if (pending.startsWith(streamed) && pending.length > streamed.length) return pending;
+  return streamed;
+};
+
+/**
+ * Make the rendered text blocks show `fullContent` when they already are a
+ * prefix of it. Markdown renders from raw blocks, so a longer `.content`
+ * string alone stays invisible while a short text block is still there.
+ * Divergent text is left untouched.
+ */
+export const ensureRawTextCovers = (raw: unknown, fullContent: string): unknown => {
+  if (!fullContent) return raw;
+  const parsed = parseRawMessage(raw);
+  if (!parsed) {
+    return { message: { content: [{ type: 'text', text: fullContent }] } };
+  }
+  const blocks = getRawBlocks(parsed).map((block) => (
+    block && typeof block === 'object' ? { ...(block as Record<string, unknown>) } : block
+  ));
+  const joined = blocks
+    .filter((block): block is Record<string, unknown> => (
+      Boolean(block) && typeof block === 'object' && (block as Record<string, unknown>).type === 'text'
+    ))
+    .map((block) => (typeof block.text === 'string' ? block.text : ''))
+    .join('');
+  if (!fullContent.startsWith(joined) || fullContent.length === joined.length) return raw;
+  const suffix = fullContent.slice(joined.length);
+  const last = blocks[blocks.length - 1] as Record<string, unknown> | undefined;
+  if (last && last.type === 'text' && typeof last.text === 'string') {
+    blocks[blocks.length - 1] = { ...last, text: last.text + suffix };
+  } else {
+    blocks.push({ type: 'text', text: suffix });
+  }
+  return setRawBlocks(parsed, blocks);
+};
+
 export const mergeRawBlocksForFinalization = (
   prevRaw: unknown,
   backendRaw: unknown,

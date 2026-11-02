@@ -1,3 +1,5 @@
+import { withExecutionScope } from '../utils/execution-scope.js';
+
 /**
  * Codex channel command handler – keeps Codex specific logic separated.
  */
@@ -11,7 +13,11 @@ import { codexSendPersistent, codexShutdownPersistentRuntimes } from '../service
  * @param {string[]} args
  * @param {object|null} stdinData
  */
-export async function handleCodexCommand(command, args, stdinData) {
+export function handleCodexCommand(command, args, stdinData) {
+  return withExecutionScope(stdinData?.executionScope, () => handleScopedCodexCommand(command, args, stdinData));
+}
+
+async function handleScopedCodexCommand(command, args, stdinData) {
   switch (command) {
     case 'send': {
       try {

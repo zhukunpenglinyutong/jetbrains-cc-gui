@@ -4,6 +4,7 @@ import org.junit.Test;
 
 import javax.swing.JPanel;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -16,6 +17,90 @@ import static org.junit.Assert.assertTrue;
  * Unit tests for startup/runtime watchdog timing, visibility gating, and recovery budgets.
  */
 public class WebviewWatchdogTest {
+
+    /** Tab activation resets health timers but must still reconcile a disconnected transport. */
+    @Test
+    public void reportsOneResumePerHeartbeatGapEvenAfterActivation() {
+        AtomicLong now = new AtomicLong(1_000L);
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, new AtomicInteger(), new AtomicInteger(), Runnable::run);
+        assertFalse(watchdog.handleHeartbeat(null));
+        now.addAndGet(20_000L);
+        watchdog.markTabActivated();
+
+        assertTrue(watchdog.handleHeartbeat(null));
+        assertFalse(watchdog.handleHeartbeat(null));
+        now.addAndGet(20_000L);
+        watchdog.markFrontendReady();
+        assertFalse(watchdog.handleHeartbeat(null));
+    }
+
+    /** A hidden page's throttled timers must not replay the transcript on every heartbeat. */
+    @Test
+    public void defersHiddenPageResumeUntilVisible() {
+        AtomicLong now = new AtomicLong(1_000L);
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, new AtomicInteger(), new AtomicInteger(), Runnable::run);
+        for (int minute = 0; minute < 3; minute++) {
+            now.addAndGet(60_000L);
+            assertFalse(watchdog.handleHeartbeat("{\"visibility\":\"hidden\"}"));
+        }
+
+        now.addAndGet(5_000L);
+        assertTrue(watchdog.handleHeartbeat("{\"visibility\":\"visible\"}"));
+        now.addAndGet(5_000L);
+        assertFalse(watchdog.handleHeartbeat("{\"visibility\":\"visible\"}"));
+    }
+
+    /** Gaps on a congested transport share one replay per interval, and the last is not lost. */
+    @Test
+    public void reconcilesRepeatedGapsAtMostOncePerInterval() {
+        AtomicLong now = new AtomicLong(1_000L);
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, new AtomicInteger(), new AtomicInteger(), Runnable::run);
+        now.set(21_000L);
+        assertTrue(watchdog.handleHeartbeat(null));
+        now.set(41_000L);
+        assertFalse(watchdog.handleHeartbeat(null));
+        for (long time = 46_000L; time < 81_000L; time += 5_000L) {
+            now.set(time);
+            assertFalse(watchdog.handleHeartbeat(null));
+        }
+
+        now.set(81_000L);
+        assertTrue(watchdog.handleHeartbeat(null));
+        now.set(86_000L);
+        assertFalse(watchdog.handleHeartbeat(null));
+    }
+
+    /** Client clocks must not make a healthy remote renderer look stalled. */
+    @Test
+    public void measuresRenderAgeOnTheClientClock() {
+        AtomicLong now = new AtomicLong(1_000_000L);
+        AtomicInteger reloads = new AtomicInteger();
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, reloads, new AtomicInteger(), Runnable::run);
+        watchdog.handleHeartbeat("{\"ts\":100000,\"raf\":100000,\"visibility\":\"visible\"}");
+        now.addAndGet(5_000L);
+
+        watchdog.checkHealth();
+
+        assertEquals(0, reloads.get());
+    }
+
+    /** A client clock ahead of the Host must not hide a genuinely frozen renderer. */
+    @Test
+    public void detectsStalledRenderEvenWhenClientClockIsAhead() {
+        AtomicLong now = new AtomicLong(1_000_000L);
+        AtomicInteger reloads = new AtomicInteger();
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, reloads, new AtomicInteger(), Runnable::run);
+        watchdog.handleHeartbeat("{\"ts\":2000000,\"raf\":1900000,\"visibility\":\"visible\"}");
+
+        watchdog.checkHealth();
+
+        assertEquals(1, reloads.get());
+    }
 
     /** Verifies that an unready frontend uses the bounded startup timeout. */
     @Test
@@ -175,6 +260,63 @@ public class WebviewWatchdogTest {
         assertTrue(watchdog.tryAcquireRecoveryPermit(false));
         assertFalse(watchdog.tryAcquireRecoveryPermit(false));
         return watchdog;
+    }
+
+    @Test
+    public void pendingPreparationDoesNotSpendStartupBudgetOrAdvanceRecoveryStage() {
+        AtomicLong now = new AtomicLong(1_000L);
+        AtomicBoolean preparationFinished = new AtomicBoolean();
+        AtomicInteger reloads = new AtomicInteger();
+        AtomicInteger recreates = new AtomicInteger();
+        WebviewWatchdog watchdog = new WebviewWatchdog(
+                new ShowingPanel(true), () -> true, reloads::incrementAndGet, recreates::incrementAndGet,
+                () -> false, () -> false, () -> false, now::get, Runnable::run, preparationFinished::get);
+
+        for (int i = 0; i < 5; i++) {
+            now.addAndGet(1_000_000L);
+            watchdog.checkHealth();
+        }
+        assertEquals(0, reloads.get());
+        assertEquals(0, recreates.get());
+
+        preparationFinished.set(true);
+        // No additional cooldown is required after a skipped recovery.
+        watchdog.checkHealth();
+        assertEquals(1, reloads.get());
+        assertEquals(0, recreates.get());
+        now.addAndGet(1_000_000L);
+        watchdog.checkHealth();
+        assertEquals(1, recreates.get());
+        now.addAndGet(1_000_000L);
+        watchdog.checkHealth();
+        assertEquals(1, reloads.get());
+        assertEquals(1, recreates.get());
+    }
+
+    @Test
+    public void preparationBeginningAfterHealthCheckCancelsQueuedRecoveryWithoutSpendingBudget() {
+        AtomicLong now = new AtomicLong(1_000L);
+        AtomicBoolean recoveryAllowed = new AtomicBoolean(true);
+        AtomicReference<Runnable> queued = new AtomicReference<>();
+        AtomicInteger recoveries = new AtomicInteger();
+        WebviewWatchdog watchdog = new WebviewWatchdog(
+                new ShowingPanel(true), () -> false, recoveries::incrementAndGet, recoveries::incrementAndGet,
+                () -> false, () -> false, () -> false, now::get, queued::set, recoveryAllowed::get);
+        now.addAndGet(1_000_000L);
+        watchdog.checkHealth();
+        recoveryAllowed.set(false);
+
+        queued.getAndSet(null).run();
+
+        assertEquals(0, recoveries.get());
+        recoveryAllowed.set(true);
+        watchdog.checkHealth();
+        queued.getAndSet(null).run();
+        assertEquals(1, recoveries.get());
+        now.addAndGet(1_000_000L);
+        watchdog.checkHealth();
+        queued.getAndSet(null).run();
+        assertEquals(2, recoveries.get());
     }
 
     private static WebviewWatchdog createWatchdog() {

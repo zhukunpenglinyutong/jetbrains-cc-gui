@@ -306,4 +306,139 @@ public class GrokMessageHandlerTest {
         }
         assertTrue("tool_result user message must remain", hasToolResult);
     }
+
+    @Test
+    public void blockResetStartsNewThinkingBlock() {
+        SessionState state = new SessionState();
+        state.addMessage(new Message(Message.Type.USER, "q"));
+
+        GrokMessageHandler handler = newHandler(state);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("thinking_delta", "Thinking about step 1");
+        handler.onMessage("thinking_delta", " continues");
+        handler.onMessage("block_reset", "");
+        handler.onMessage("thinking_delta", "Reflecting on step 2");
+        handler.onMessage("thinking_delta", " more");
+
+        com.google.gson.JsonArray streamed = state.getMessages().get(1).raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals(2, streamed.size());
+        assertEquals("Thinking about step 1 continues", streamed.get(0).getAsJsonObject().get("thinking").getAsString());
+        assertEquals("Reflecting on step 2 more", streamed.get(1).getAsJsonObject().get("thinking").getAsString());
+
+        handler.onMessage(
+                "message",
+                "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":["
+                        + "{\"type\":\"thinking\",\"thinking\":\"Thinking about step 1 continues\"},"
+                        + "{\"type\":\"thinking\",\"thinking\":\"Reflecting on step 2 more\"}"
+                        + "]}}"
+        );
+
+        com.google.gson.JsonArray merged = state.getMessages().get(1).raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals("final snapshot must not glue the thoughts or repeat the second one", 2, merged.size());
+        assertEquals("Thinking about step 1 continues", merged.get(0).getAsJsonObject().get("thinking").getAsString());
+        assertEquals("Reflecting on step 2 more", merged.get(1).getAsJsonObject().get("thinking").getAsString());
+    }
+
+    @Test
+    public void blockResetKeepsPreToolTextBeforeToolCardOnFinalMerge() {
+        SessionState state = new SessionState();
+        state.addMessage(new Message(Message.Type.USER, "q"));
+
+        GrokMessageHandler handler = newHandler(state);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "Checking config");
+        handler.onMessage("content_delta", " first.");
+        handler.onMessage("block_reset", "");
+        handler.onMessage(
+                "message",
+                "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{"
+                        + "\"type\":\"tool_use\",\"id\":\"call-grep-1\",\"name\":\"grep\","
+                        + "\"input\":{\"pattern\":\"nbns\"}}]}}"
+        );
+        handler.onMessage("content_delta", "Config is clean");
+        handler.onMessage("content_delta", " now.");
+
+        handler.onMessage(
+                "message",
+                "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":["
+                        + "{\"type\":\"text\",\"text\":\"Checking config first.\"},"
+                        + "{\"type\":\"text\",\"text\":\"Config is clean now.\"}"
+                        + "]}}"
+        );
+        handler.onMessage("stream_end", "");
+
+        com.google.gson.JsonArray merged = state.getMessages().get(1).raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals("pre-tool text, tool_use, and post-tool text must remain 3 ordered blocks", 3, merged.size());
+        assertEquals("text", merged.get(0).getAsJsonObject().get("type").getAsString());
+        assertEquals("Checking config first.", merged.get(0).getAsJsonObject().get("text").getAsString());
+        assertEquals("tool_use", merged.get(1).getAsJsonObject().get("type").getAsString());
+        assertEquals("call-grep-1", merged.get(1).getAsJsonObject().get("id").getAsString());
+        assertEquals("text", merged.get(2).getAsJsonObject().get("type").getAsString());
+        assertEquals("Config is clean now.", merged.get(2).getAsJsonObject().get("text").getAsString());
+    }
+
+    @Test
+    public void proseSaidWhileToolRunsStaysAboveLateToolCard() {
+        SessionState state = new SessionState();
+        state.addMessage(new Message(Message.Type.USER, "q"));
+
+        GrokMessageHandler handler = newHandler(state);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "Before.");
+        // Tool announced: the normalizer seals the open segment.
+        handler.onMessage("block_reset", "");
+        handler.onMessage("content_delta", "While running.");
+        // Tool card emitted late: the prose said while it ran is sealed first.
+        handler.onMessage("block_reset", "");
+        handler.onMessage(
+                "message",
+                "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{"
+                        + "\"type\":\"tool_use\",\"id\":\"call-slow\",\"name\":\"grep\",\"input\":{}}]}}"
+        );
+        handler.onMessage("content_delta", "After.");
+        handler.onMessage(
+                "message",
+                "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":["
+                        + "{\"type\":\"text\",\"text\":\"Before.\"},"
+                        + "{\"type\":\"text\",\"text\":\"While running.\"},"
+                        + "{\"type\":\"text\",\"text\":\"After.\"}"
+                        + "]}}"
+        );
+        handler.onMessage("stream_end", "");
+
+        com.google.gson.JsonArray merged = state.getMessages().get(1).raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals("each segment keeps its own block around the tool card", 4, merged.size());
+        assertEquals("Before.", merged.get(0).getAsJsonObject().get("text").getAsString());
+        assertEquals("While running.", merged.get(1).getAsJsonObject().get("text").getAsString());
+        assertEquals("tool_use", merged.get(2).getAsJsonObject().get("type").getAsString());
+        assertEquals("After.", merged.get(3).getAsJsonObject().get("text").getAsString());
+    }
+
+    @Test
+    public void textAndThinkingInOneSegmentEachGrowOneBlock() {
+        SessionState state = new SessionState();
+        state.addMessage(new Message(Message.Type.USER, "q"));
+
+        GrokMessageHandler handler = newHandler(state);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("thinking_delta", "Plan");
+        handler.onMessage("content_delta", "Ans");
+        handler.onMessage("thinking_delta", " more");
+        handler.onMessage("content_delta", "wer");
+
+        com.google.gson.JsonArray streamed = state.getMessages().get(1).raw
+                .getAsJsonObject("message")
+                .getAsJsonArray("content");
+        assertEquals(2, streamed.size());
+        assertEquals("Plan more", streamed.get(0).getAsJsonObject().get("thinking").getAsString());
+        assertEquals("Answer", streamed.get(1).getAsJsonObject().get("text").getAsString());
+    }
 }

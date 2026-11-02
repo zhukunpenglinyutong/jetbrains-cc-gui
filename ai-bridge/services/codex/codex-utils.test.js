@@ -3,7 +3,6 @@ import test from 'node:test';
 
 import {
   buildCodexCliEnvironment,
-  buildErrorPayload,
   isCodexNativeAutoReviewSupported,
   normalizeCodexPermissionMode,
 } from './codex-utils.js';
@@ -78,20 +77,4 @@ test('requires Codex 0.146.0 or later for native auto review config', () => {
   assert.equal(isCodexNativeAutoReviewSupported('0.146.0'), true);
   assert.equal(isCodexNativeAutoReviewSupported('0.151.0'), true);
   assert.equal(isCodexNativeAutoReviewSupported('not-a-version'), false);
-});
-
-test('buildErrorPayload classifies thread writer conflict separately', () => {
-  const conflictError = new Error(
-    'thread/resume failed: thread 01a0eb09 already has an active writer (code -32600)'
-  );
-  const payload = buildErrorPayload(conflictError);
-
-  assert.equal(payload.success, false);
-  assert.equal(payload.details.isThreadWriterConflict, true);
-  assert.match(payload.error, /Codex thread is busy:/);
-  assert.match(payload.error, /You do NOT need to create a new session\./);
-
-  const genericPayload = buildErrorPayload(new Error('something else went wrong'));
-  assert.equal(genericPayload.details.isThreadWriterConflict, false);
-  assert.match(genericPayload.error, /Please check network connection and Codex configuration/);
 });

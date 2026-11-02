@@ -21,11 +21,31 @@ describe('file ledger work budget', () => {
     findToolResult: makeFindToolResult(messages),
   });
 
+  it('keeps native added-file statistics and contents identical to the apply_patch history', () => {
+    const lines = Array.from({ length: 312 }, (_, index) => index < 13 ? `- item ${index}` : `line ${index}`);
+    const content = `${lines.join('\n')}\n`;
+    const nativeMessages = (status: string) => [assistantWithTools([{ id: 'native', name: 'file_change', input: {
+      status, changes: [{ path: '/plan.md', kind: { type: 'add' }, diff: content }],
+    } }])];
+    const { result, rerender } = renderHook(useFileChanges, { initialProps: snapshot(nativeMessages('inProgress')) });
+    expect(result.current).toEqual([]);
+    rerender(snapshot(nativeMessages('completed')));
+    expect(result.current[0]).toMatchObject({ status: 'A', additions: 312, deletions: 0 });
+    expect(result.current[0].operations[0].newString).toBe(content);
+    const nativeStats = result.current.map(({ filePath, status, additions, deletions }) => ({ filePath, status, additions, deletions }));
+    const history = [assistantWithTools([{ id: 'patch', name: 'apply_patch', input: { patch:
+      ['*** Begin Patch', '*** Add File: /plan.md', ...lines.map(line => `+${line}`), '*** End Patch'].join('\n'),
+    } }]), userWithResults([{ toolUseId: 'patch' }])];
+    rerender(snapshot(history));
+    expect(result.current.map(({ filePath, status, additions, deletions }) => ({ filePath, status, additions, deletions }))).toEqual(nativeStats);
+    expect(result.current[0].operations[0].newString).toBe(content);
+  });
+
   it('collects every completed native patch file without requiring a separate result', () => {
     const messages = [assistantWithTools([{ id: 'native', name: 'file_change', input: { status: 'completed', changes: [
-      { path: '/added.ts', kind: 'add', diff: '+created\n' },
+      { path: '/added.ts', kind: 'add', diff: 'created\n' },
       { path: '/old.ts', kind: { type: 'update', movePath: '/moved.ts' }, diff: '@@ -1 +1 @@\n-before\n+after\n' },
-      { path: '/gone.ts', kind: 'delete', diff: '-removed\n' },
+      { path: '/gone.ts', kind: 'delete', diff: 'removed\n' },
     ] } }])];
     const { result } = renderHook(useFileChanges, { initialProps: snapshot(messages) });
     expect(result.current.map(file => file.filePath).sort()).toEqual(['/added.ts', '/gone.ts', '/moved.ts']);
@@ -39,7 +59,7 @@ describe('file ledger work budget', () => {
     const patch = '*** Begin Patch\n*** Update File: /session.ts\n@@\n-before\n+after\n*** End Patch';
     const messages = [assistantWithTools([{ id: 'first', name: 'functions.apply_patch', input: { patch } }]),
       userWithResults([{ toolUseId: 'first' }]), { type: 'user', content: 'next turn' } as ClaudeMessage,
-      assistantWithTools([{ id: 'failed', name: 'file_change', input: { changes: [{ path: '/failed.ts', kind: 'add', diff: '+failed' }], status: 'failed' } },
+      assistantWithTools([{ id: 'failed', name: 'file_change', input: { changes: [{ path: '/failed.ts', kind: 'add', diff: 'failed\n' }], status: 'failed' } },
         { id: 'unknown', name: 'apply_patch', input: { patch, status: 'unknown' } }])];
     const { result, rerender } = renderHook(useFileChanges, { initialProps: snapshot(messages) });
     expect(result.current.map(file => file.filePath)).toEqual(['/session.ts']);

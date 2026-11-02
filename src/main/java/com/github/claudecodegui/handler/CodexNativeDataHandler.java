@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.handler.history.CodexHistoryActivity;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.Gson;
@@ -81,9 +82,28 @@ public class CodexNativeDataHandler extends BaseMessageHandler {
                 output.addProperty("error", failure.getMessage() == null
                         ? "Native Codex request failed" : failure.getMessage());
             }
+            if ("codex.listThreads".equals(method)) {
+                this.markThreadActivity(output, bridge);
+            }
             publish(type, output);
         });
         return true;
+    }
+
+    /**
+     * Native thread status only covers this window's app-server. Writers held by
+     * other windows come from the shared owner registry, as in legacy history.
+     */
+    private void markThreadActivity(JsonObject output, CodexSDKBridge bridge) {
+        if (!output.has("data") || !output.get("data").isJsonArray()) {
+            return;
+        }
+        try {
+            CodexHistoryActivity.markRows(output.getAsJsonArray("data"), "id", this.context.getSession(), bridge);
+        } catch (Exception e) {
+            // Activity is only a UI hint; the deletion guard still refuses protected rows.
+            LOG.debug("[CodexNativeData] Failed to mark thread activity: " + e.getMessage());
+        }
     }
 
     private void publish(String requestType, JsonObject response) {

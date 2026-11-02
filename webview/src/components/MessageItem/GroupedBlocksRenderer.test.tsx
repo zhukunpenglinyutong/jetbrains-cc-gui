@@ -5,6 +5,7 @@ import type { TFunction } from 'i18next';
 import type { ClaudeContentBlock } from '../../types';
 import { GroupedBlocksRenderer } from './GroupedBlocksRenderer';
 import { groupBlocks } from './groupBlocks';
+import { matchErrorPattern } from '../../utils/errorMatcher';
 import {
   BASH_GROUP_COLLAPSED_KEY,
   bashGroupCollapsePreference,
@@ -27,7 +28,7 @@ vi.mock('../../hooks/useResolvedFileLinkTooltip', () => ({
   useResolvedFileLinkTooltip: (filePath: string) => ({ title: filePath }),
 }));
 
-function renderGroups(provider: string, blocks: ClaudeContentBlock[]) {
+function renderGroups(provider: string, blocks: ClaudeContentBlock[], overrides: Partial<ComponentProps<typeof GroupedBlocksRenderer>> = {}) {
   const props: ComponentProps<typeof GroupedBlocksRenderer> = {
     message: { type: 'assistant', raw: { content: blocks } },
     messageIndex: 0,
@@ -46,9 +47,27 @@ function renderGroups(provider: string, blocks: ClaudeContentBlock[]) {
     isLast: true,
     isThinkingExpanded: () => false,
     onToggleThinking: vi.fn(),
+    ...overrides,
   };
   return render(<GroupedBlocksRenderer {...props} />);
 }
+
+describe('GroupedBlocksRenderer recovery diagnostics', () => {
+  it.each([
+    'thread saved already has an active writer',
+    'thread saved already has a live local writer',
+    'Codex thread is already owned by another window',
+    'Codex thread is already owned by another chat window',
+  ])('shows release instructions alongside the original writer error: %s', (error) => {
+    const { getByText } = renderGroups('codex', [], {
+      message: { type: 'error', content: error },
+      getMessageText: () => error,
+      errorDiagnosticPattern: matchErrorPattern(error),
+    });
+    expect(getByText(error)).toBeTruthy();
+    expect(getByText('errorDiagnostic.codexWriterConflict.solutions.releaseWriter.step0')).toBeTruthy();
+  });
+});
 
 describe('GroupedBlocksRenderer shared CLI collapse preferences', () => {
   beforeEach(() => {

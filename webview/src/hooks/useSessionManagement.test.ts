@@ -33,6 +33,13 @@ describe('useSessionManagement', () => {
     localStorage.removeItem('skipNewSessionConfirm');
   });
 
+  /** Delete payloads now carry provider and requestId alongside the targets. */
+  const sentRequests = (type: 'delete_session' | 'delete_sessions') => vi.mocked(window.sendToJava!).mock.calls
+    .map(([payload]) => String(payload))
+    .filter(payload => payload.startsWith(`${type}:`))
+    .map(payload => JSON.parse(payload.slice(type.length + 1)) as Record<string, unknown>);
+  const sentRequest = (type: 'delete_session' | 'delete_sessions') => sentRequests(type).at(-1)!;
+
   it('starts a clean session transition for a direct new session', () => {
     const mocks = createMocks();
 
@@ -187,8 +194,7 @@ describe('useSessionManagement', () => {
 
     expect(historyData.sessions).toEqual([]);
     expect(historyData.total).toBe(0);
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_session:history-1');
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_session:history-2');
+    expect(sentRequests('delete_session').map(request => request.sessionId)).toEqual(['history-1', 'history-2']);
   });
 
   it('sends one backend request when deleting multiple history sessions', () => {
@@ -238,7 +244,7 @@ describe('useSessionManagement', () => {
     expect(historyData.sessions).toEqual([]);
     expect(historyData.total).toBe(0);
     expect(window.sendToJava).toHaveBeenCalledTimes(1);
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:["history-1","history-2"]');
+    expect(sentRequest('delete_sessions').sessionIds).toEqual(['history-1', 'history-2']);
     expect(mocks.addToast).toHaveBeenCalledWith('history.sessionDeleted', 'success');
   });
 
@@ -260,7 +266,7 @@ describe('useSessionManagement', () => {
       result.current.deleteHistorySessions(['history-1', 'history-2', 'history-1']);
     });
 
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:["history-1","history-2"]');
+    expect(sentRequest('delete_sessions').sessionIds).toEqual(['history-1', 'history-2']);
     expect(mocks.addToast).toHaveBeenCalledWith('history.sessionDeleted', 'success');
   });
 
@@ -374,12 +380,163 @@ describe('useSessionManagement', () => {
       result.current.deleteHistorySessions(['history-1', 'history-2']);
     });
 
-    expect(window.sendToJava).toHaveBeenCalledWith('delete_sessions:["history-1","history-2"]');
+    expect(sentRequest('delete_sessions').sessionIds).toEqual(['history-1', 'history-2']);
     expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
     expect(mocks.addToast).not.toHaveBeenCalledWith('history.sessionDeleted', 'success');
     expect(window.__pendingSessionTransitionToast).toEqual({
       message: 'history.sessionDeleted',
       type: 'success',
+    });
+  });
+
+  describe('Codex deletion waits for the backend outcome', () => {
+    const codexHistory = () => ({
+      success: true,
+      sessions: [
+        { sessionId: 'history-1', title: 'History One', provider: 'codex', messageCount: 3, lastTimestamp: Date.now() },
+        { sessionId: 'history-2', title: 'History Two', provider: 'codex', messageCount: 5, lastTimestamp: Date.now() },
+      ],
+      total: 8,
+    } as unknown as HistoryData);
+
+    const renderCodex = (currentSessionId: string | null) => {
+      const mocks = createMocks();
+      const hook = renderHook(() => useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData: codexHistory(),
+        currentSessionId,
+        currentProvider: 'codex',
+        ...mocks,
+        t,
+      }));
+      return { ...hook, mocks };
+    };
+
+    const deliverResult = (result: Record<string, unknown>) => act(() => {
+      window.onHistoryDeleteResult?.(JSON.stringify(result));
+    });
+
+    it('keeps the current session open until its files are confirmed deleted', () => {
+      const { result, mocks } = renderCodex('history-2');
+
+      act(() => { result.current.deleteHistorySession('history-2'); });
+
+      const request = sentRequest('delete_session');
+      expect(request).toMatchObject({ sessionId: 'history-2', provider: 'codex' });
+      expect(window.sendToJava).not.toHaveBeenCalledWith('create_new_session:');
+      expect(window.__sessionTransitioning).toBe(false);
+      expect(mocks.addToast).not.toHaveBeenCalled();
+
+      deliverResult({ requestId: request.requestId, provider: 'codex', sessionIds: ['history-2'],
+        deletedSessionIds: ['history-2'], success: true });
+
+      expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+      expect(window.__sessionTransitioning).toBe(true);
+      expect(window.__pendingSessionTransitionToast).toEqual({ message: 'history.sessionDeleted', type: 'success' });
+    });
+
+    it('explains a refusal and never force-releases the protected session', () => {
+      const { result, mocks } = renderCodex('history-1');
+
+      act(() => { result.current.deleteHistorySessions(['history-1', 'history-2']); });
+      deliverResult({ requestId: sentRequest('delete_sessions').requestId, provider: 'codex',
+        sessionIds: ['history-1', 'history-2'], deletedSessionIds: [], success: false, errorCode: 'SESSION_RUNNING' });
+
+      expect(window.sendToJava).not.toHaveBeenCalledWith('create_new_session:');
+      expect(window.__sessionTransitioning).toBe(false);
+      expect(mocks.addToast).toHaveBeenCalledWith('history.sessionInUse', 'warning');
+      expect(mocks.addToast).not.toHaveBeenCalledWith('history.sessionDeleted', 'success');
+    });
+
+    it('leaves a current session whose files are gone even when another target failed', () => {
+      const { result, mocks } = renderCodex('history-1');
+
+      act(() => { result.current.deleteHistorySessions(['history-1', 'history-2']); });
+      deliverResult({ requestId: sentRequest('delete_sessions').requestId, provider: 'codex',
+        sessionIds: ['history-1', 'history-2'], deletedSessionIds: ['history-1'], success: false, errorCode: 'DELETE_FAILED' });
+
+      expect(window.sendToJava).toHaveBeenCalledWith('create_new_session:');
+      expect(window.__pendingSessionTransitionToast).toEqual({ message: 'history.deleteFailed', type: 'error' });
+      expect(mocks.addToast).not.toHaveBeenCalled();
+    });
+
+    it('stays on the current session when its own files could not be deleted', () => {
+      const { result, mocks } = renderCodex('history-1');
+
+      act(() => { result.current.deleteHistorySession('history-1'); });
+      deliverResult({ requestId: sentRequest('delete_session').requestId, provider: 'codex',
+        sessionIds: ['history-1'], deletedSessionIds: [], success: false, errorCode: 'DELETE_FAILED' });
+
+      expect(window.sendToJava).not.toHaveBeenCalledWith('create_new_session:');
+      expect(mocks.addToast).toHaveBeenCalledWith('history.deleteFailed', 'error');
+    });
+
+    it('announces a confirmed deletion of another session without leaving the current one', () => {
+      const { result, mocks } = renderCodex('history-1');
+
+      act(() => { result.current.deleteHistorySessions(['history-2']); });
+      deliverResult({ requestId: sentRequest('delete_sessions').requestId, provider: 'codex',
+        sessionIds: ['history-2'], deletedSessionIds: ['history-2'], success: true });
+
+      expect(window.sendToJava).not.toHaveBeenCalledWith('create_new_session:');
+      expect(mocks.addToast).toHaveBeenCalledWith('history.sessionDeleted', 'success');
+    });
+
+    it('ignores unreadable, foreign and repeated results', () => {
+      const { result, mocks } = renderCodex('history-1');
+
+      act(() => { result.current.deleteHistorySession('history-1'); });
+      const outcome = { requestId: sentRequest('delete_session').requestId, provider: 'codex',
+        sessionIds: ['history-1'], deletedSessionIds: ['history-1'], success: true };
+      act(() => { window.onHistoryDeleteResult?.('not json'); });
+      deliverResult({ ...outcome, requestId: 'delete-from-another-request' });
+      expect(window.sendToJava).not.toHaveBeenCalledWith('create_new_session:');
+
+      deliverResult(outcome);
+      deliverResult(outcome);
+
+      expect(vi.mocked(window.sendToJava!).mock.calls.filter(([payload]) => payload === 'create_new_session:'))
+        .toHaveLength(1);
+      expect(mocks.addToast).not.toHaveBeenCalled();
+    });
+
+    it('does not remove rows when the bridge refuses the request', () => {
+      const { result, mocks } = renderCodex('history-1');
+      window.sendToJava = vi.fn(() => { throw new Error('page replaced'); });
+
+      act(() => { result.current.deleteHistorySession('history-2'); });
+
+      expect(mocks.setHistoryData).not.toHaveBeenCalled();
+      expect(mocks.addToast).toHaveBeenCalledWith('history.deleteFailed', 'error');
+    });
+
+    it('does not announce non-Codex deletions twice but still reports their failures', () => {
+      const mocks = createMocks();
+      const { result } = renderHook(() => useSessionManagement({
+        messages: [], loading: false, historyData: null, currentSessionId: 'claude-1',
+        currentProvider: 'claude', ...mocks, t,
+      }));
+
+      act(() => { result.current.deleteHistorySession('claude-1'); });
+      expect(sentRequest('delete_session')).toMatchObject({ sessionId: 'claude-1', provider: 'claude' });
+      mocks.addToast.mockClear();
+      deliverResult({ requestId: sentRequest('delete_session').requestId, provider: 'claude',
+        sessionIds: ['claude-1'], deletedSessionIds: ['claude-1'], success: true });
+      expect(mocks.addToast).not.toHaveBeenCalled();
+
+      act(() => { result.current.deleteHistorySession('claude-2'); });
+      mocks.addToast.mockClear();
+      deliverResult({ requestId: sentRequest('delete_session').requestId, provider: 'claude',
+        sessionIds: ['claude-2'], deletedSessionIds: [], success: false, errorCode: 'DELETE_FAILED' });
+      expect(mocks.addToast).toHaveBeenCalledWith('history.deleteFailed', 'error');
+    });
+
+    it('unregisters its result callback on unmount', () => {
+      const { unmount } = renderCodex('history-1');
+      expect(window.onHistoryDeleteResult).toBeTypeOf('function');
+      unmount();
+      expect(window.onHistoryDeleteResult).toBeUndefined();
     });
   });
 

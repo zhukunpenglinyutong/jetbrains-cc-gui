@@ -62,8 +62,10 @@ Codex CLI（0.150.1，SDK 内 vendored）在回合运行期间对每个 thread �
 
 `webview/src/data/errorPatterns.json` 的 `codexThreadResume` 模式（regex `thread/resume`）把两类不同故障混为一谈：
 
-1. **线程真的过期**（服务端清除旧线程）→ "新建会话"是正确建议；
+1. **原生历史找不到**（例如历史目录变化、首次初始化未完成或记录已删除）→ 先检查原生历史与宿主环境；不能据此推断服务端定期清理线程，只有历史确实无法恢复时才建议新建会话；
 2. **active-writer 冲突**（本地进程重叠）→ 线程完好，稍候重发即可，"新建会话"是误导（丢失整个会话上下文）。
+
+当前版本已迁移到常驻 app-server；writer 也可能由空闲客户端继续持有，须等待持有者关闭或释放会话。恢复错误的细分、关闭状态的受限重试和处理指引以 `docs/codex/app-server.md` 为准，下文的逐轮 exec 实现仅记录当时的修复。
 
 ## 4. 已实施修复
 
@@ -79,7 +81,7 @@ Codex CLI（0.150.1，SDK 内 vendored）在回合运行期间对每个 thread �
 - 若派发后 loading 始终未翻转（执行路径早退），50ms 后重开门并 `gateTick` 触发 effect 重跑——队列永不卡死（保留 80027de2 的"不静默丢弃"语义）。
 
 ### F3（daemon + webview，P1）——错误独立分类
-- `ai-bridge/services/codex/codex-utils.js` `buildErrorPayload`：识别 `already has an active writer` → 专属文案（"线程被占用…插件现在会自动停止上一回合…无需新建会话"），`details.isThreadWriterConflict` 结构化标记。
+- `ai-bridge/services/codex/codex-utils.js` `buildErrorPayload`：识别 `already has an active writer` → 专属文案（"线程被占用…插件现在会自动停止上一回合…无需新建会话"），`details.isThreadWriterConflict` 结构化标记。（该函数无生产调用者，已移除；当前占用分类统一由前端 `errorPatterns.json` 承担，`useCodexCompactionStatus` 保留原始错误交给消息渲染。）
 - `errorPatterns.json`：新增 `codexWriterConflict` 模式（regex `already has an active writer`），**置于** `codexThreadResume` 之前（首个匹配生效）。
 - 10 个语言文件新增 `errorDiagnostic.codexWriterConflict.{title,intro,reason}`。
 

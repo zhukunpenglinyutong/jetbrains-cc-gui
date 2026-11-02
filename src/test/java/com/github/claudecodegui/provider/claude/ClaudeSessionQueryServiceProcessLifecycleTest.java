@@ -13,6 +13,9 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -94,4 +97,43 @@ public class ClaudeSessionQueryServiceProcessLifecycleTest {
         assertFalse("child must not outlive the call",
                 processManager.registeredProcess.get().isAlive());
     }
+
+    @Test
+    public void cancelledSessionQueryTerminatesProcessWhileStdoutIsOpen() throws Exception {
+        TrackingProcessManager blockingManager = new TrackingProcessManager();
+        Files.writeString(new File(workDir, "channel-manager.js").toPath(), "setInterval(() => {}, 60000);\n");
+        Field cache = NodeDetector.class.getDeclaredField("cachedNodeExecutable");
+        cache.setAccessible(true);
+        cache.set(node, "node");
+        ClaudeSessionQueryService service = new ClaudeSessionQueryService(
+                Logger.getInstance(ClaudeSessionQueryServiceProcessLifecycleTest.class),
+                new Gson(), node, () -> workDir, blockingManager,
+                new EnvironmentConfigurator(), new ClaudeJsonOutputExtractor());
+        AtomicBoolean cancelled = new AtomicBoolean();
+
+        CompletableFuture<Void> query = CompletableFuture.runAsync(() -> {
+            try {
+                service.getSessionMessages("test-session-id", workDir.getAbsolutePath(), cancelled::get);
+                org.junit.Assert.fail("cancelled query must not return history");
+            } catch (java.util.concurrent.CancellationException expected) {
+                // Expected: cancellation is observed while the child stdout is still open.
+            }
+        });
+
+        long waitDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3L);
+        while (blockingManager.registeredProcess.get() == null && System.nanoTime() < waitDeadline) {
+            Thread.sleep(10L);
+        }
+        assertNotNull("query must register its child before reading stdout",
+                blockingManager.registeredProcess.get());
+
+        cancelled.set(true);
+        query.get(5L, TimeUnit.SECONDS);
+
+        assertFalse("cancellation must terminate the child process",
+                blockingManager.registeredProcess.get().isAlive());
+        assertEquals(0, blockingManager.getActiveProcessCount());
+        assertEquals(1, blockingManager.unregisterCalls.get());
+    }
+
 }

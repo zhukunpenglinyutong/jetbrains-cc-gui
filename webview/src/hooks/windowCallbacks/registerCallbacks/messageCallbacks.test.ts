@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { registerMessageCallbacks } from './messageCallbacks';
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
+import type { StartupHistoryLoadState } from '../../../types/startupHistory';
 import type { ClaudeMessage } from '../../../types';
 
 const ref = <T,>(value: T) => ({ current: value });
@@ -22,6 +23,7 @@ interface StoredTitle {
 
 function createHarness(currentSessionId: string | null) {
   const storedTitles: Array<StoredTitle | null> = [];
+  const startupHistoryUpdates: unknown[] = [];
   let messages: ClaudeMessage[] = [];
 
   const options = {
@@ -49,6 +51,7 @@ function createHarness(currentSessionId: string | null) {
     updateContextUsageData: () => {},
     closeContextUsageDialog: () => {},
     currentSessionIdRef: ref(currentSessionId),
+    setStartupHistoryLoadState: (updater: unknown) => startupHistoryUpdates.push(updater),
     // Mirrors React's functional-update contract so the no-op identity branch
     // can be asserted through reference equality.
     setRestoredSessionTitle: (updater: unknown) => {
@@ -63,7 +66,7 @@ function createHarness(currentSessionId: string | null) {
   registerMessageCallbacks(options, () => {}, () => {});
   const dispatch = window.claudeHistoryPageInfo;
   if (!dispatch) throw new Error('claudeHistoryPageInfo was not registered');
-  return { storedTitles, dispatch, getMessages: () => messages };
+  return { storedTitles, startupHistoryUpdates, dispatch, getMessages: () => messages };
 }
 
 const pageInfo = (overrides: Record<string, unknown> = {}) => JSON.stringify({
@@ -79,6 +82,39 @@ const pageInfo = (overrides: Record<string, unknown> = {}) => JSON.stringify({
 describe('claudeHistoryPageInfo', () => {
   beforeEach(() => {
     delete (window as unknown as Record<string, unknown>).__claudeHistoryPageInfo;
+    delete (window as unknown as Record<string, unknown>).__pendingStartupHistoryLoadState;
+    delete (window as unknown as Record<string, unknown>).updateStartupHistoryLoadState;
+  });
+
+  it('drains a startup history state received before callbacks are registered', () => {
+    const pending: StartupHistoryLoadState = {
+      status: 'unloaded',
+      sessionId: 's1',
+      requestId: '',
+      generation: 1,
+      messageCount: 0,
+      retryable: true,
+    };
+    window.__pendingStartupHistoryLoadState = JSON.stringify(pending);
+
+    const harness = createHarness('s1');
+
+    expect(window.__pendingStartupHistoryLoadState).toBeUndefined();
+    expect(harness.startupHistoryUpdates).toHaveLength(1);
+    const update = harness.startupHistoryUpdates[0] as (
+      previous: StartupHistoryLoadState | null
+    ) => StartupHistoryLoadState | null;
+    expect(update(null)).toEqual(pending);
+  });
+
+  it.each(['unloaded', 'loading', 'failed'] as const)('keeps committed history when a same-generation %s arrives', status => {
+    const harness = createHarness('s1');
+    const committed: StartupHistoryLoadState = {
+      status: 'loaded', sessionId: 's1', requestId: 'completed', generation: 2, messageCount: 5, retryable: false,
+    };
+    window.updateStartupHistoryLoadState?.(JSON.stringify({ ...committed, status, retryable: true }));
+    const update = harness.startupHistoryUpdates[0] as (previous: StartupHistoryLoadState | null) => StartupHistoryLoadState | null;
+    expect(update(committed)).toBe(committed);
   });
 
   it('stores the CLI title even when the session id is not synced yet', () => {
@@ -88,6 +124,16 @@ describe('claudeHistoryPageInfo', () => {
     expect(harness.storedTitles.at(-1)).toEqual({ sessionId: 's1', title: 'CLI title' });
     // Pagination state still waits for the session to be on screen.
     expect(window.__claudeHistoryPageInfo).toBeUndefined();
+  });
+
+  it('keeps manual loading and its cancel action when activation republishes unloaded in the same generation', () => {
+    const harness = createHarness('s1');
+    const loading: StartupHistoryLoadState = {
+      status: 'loading', sessionId: 's1', requestId: 'manual', generation: 2, messageCount: 0, retryable: false,
+    };
+    window.updateStartupHistoryLoadState?.(JSON.stringify({ ...loading, status: 'unloaded', requestId: '', retryable: true }));
+    const update = harness.startupHistoryUpdates[0] as (previous: StartupHistoryLoadState | null) => StartupHistoryLoadState | null;
+    expect(update(loading)).toBe(loading);
   });
 
   it('caches pagination state and notifies listeners for the on-screen session', () => {

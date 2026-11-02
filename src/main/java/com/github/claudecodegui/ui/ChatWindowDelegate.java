@@ -30,6 +30,7 @@ import com.github.claudecodegui.handler.provider.CustomModelPricingHandler;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.handler.provider.ProviderHandler;
 import com.github.claudecodegui.handler.provider.claude.ClaudePlanUsageHandler;
+import com.github.claudecodegui.handler.provider.grok.GrokPlanUsageHandler;
 import com.github.claudecodegui.handler.RewindHandler;
 import com.github.claudecodegui.handler.SessionHandler;
 import com.github.claudecodegui.handler.SettingsHandler;
@@ -50,12 +51,15 @@ import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.session.SessionLifecycleManager;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
+import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.IconLoader;
+import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.util.concurrency.AppExecutorUtil;
@@ -64,6 +68,8 @@ import javax.swing.*;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 /**
  * Delegates for initialization setup and runtime operations:
@@ -131,6 +137,9 @@ public class ChatWindowDelegate {
         void setSlashCommandsFetched(boolean fetched);
         void setFetchedSlashCommandsCount(int count);
         void persistTabSessionState();
+        void loadRestoredHistoryManually();
+        void cancelRestoredHistoryLoad(String requestId);
+        void retireRestoredHistory();
 
         /**
          * Soft-reload the currently active session's transcript without interrupting
@@ -144,6 +153,13 @@ public class ChatWindowDelegate {
     }
 
     private final DelegateHost host;
+    private final Consumer<Runnable> unreadUiScheduler;
+    private final AtomicBoolean unreadUpdateQueued = new AtomicBoolean();
+    private volatile boolean unread;
+    private Content unreadBadgeContent;
+    private Icon previousTabIcon;
+    private Boolean previousIconVisibility;
+    private Icon unreadIcon;
     private TabAnswerStatus currentTabStatus = TabAnswerStatus.IDLE;
     private ScheduledFuture<?> statusResetTask;
     private volatile String pendingQuickFixPrompt = null;
@@ -153,7 +169,89 @@ public class ChatWindowDelegate {
     private volatile ClipboardHandler clipboardHandler;
 
     public ChatWindowDelegate(DelegateHost host) {
+        this(host, runnable -> ApplicationManager.getApplication().invokeLater(runnable));
+    }
+
+    ChatWindowDelegate(DelegateHost host, Consumer<Runnable> unreadUiScheduler) {
         this.host = host;
+        this.unreadUiScheduler = unreadUiScheduler;
+    }
+
+    public boolean hasUnread() {
+        return unread;
+    }
+
+    /** Coalesce streaming notifications; already-unread tabs do no additional EDT work. */
+    public void onAssistantActivity() {
+        if (host.isDisposed() || unread || !unreadUpdateQueued.compareAndSet(false, true)) {
+            return;
+        }
+        unreadUiScheduler.accept(() -> {
+            unreadUpdateQueued.set(false);
+            if (host.isDisposed() || isChatVisibleForReading() || unread) {
+                return;
+            }
+            unread = true;
+            renderUnreadBadge();
+            host.persistTabSessionState();
+        });
+    }
+
+    private boolean isChatVisibleForReading() {
+        return host.isFrontendReady() && host.isActiveContent() && host.getMainPanel().isShowing();
+    }
+
+    /** Selection alone is insufficient while a hidden or reloading page cannot show the reply. */
+    public void markTabReadIfVisible() {
+        if (!unread) {
+            return;
+        }
+        unreadUiScheduler.accept(() -> {
+            if (!host.isDisposed() && unread && isChatVisibleForReading()) {
+                unread = false;
+                renderUnreadBadge();
+                host.persistTabSessionState();
+            }
+        });
+    }
+
+    public void restoreUnread(boolean savedUnread) {
+        unread = savedUnread;
+        refreshUnreadBadge();
+    }
+
+    public void refreshUnreadBadge() {
+        unreadUiScheduler.accept(() -> {
+            if (!host.isDisposed()) {
+                renderUnreadBadge();
+            }
+        });
+    }
+
+    /**
+     * Restore the original icon on read and transfer the badge when Content is reattached.
+     * The tab label repaints on setIcon and reads SHOW_CONTENT_ICON only then, so the flag is
+     * always written first.
+     */
+    private void renderUnreadBadge() {
+        Content content = host.getParentContent();
+        if (unreadBadgeContent != null && (!unread || unreadBadgeContent != content)) {
+            if (unreadBadgeContent.getIcon() == unreadIcon) {
+                unreadBadgeContent.putUserData(ToolWindow.SHOW_CONTENT_ICON, previousIconVisibility);
+                unreadBadgeContent.setIcon(previousTabIcon);
+            }
+            unreadBadgeContent = null;
+        }
+        if (unread && content != null && unreadBadgeContent == null) {
+            if (unreadIcon == null) {
+                unreadIcon = IconLoader.getIcon("/icons/unread-dot.svg", ChatWindowDelegate.class);
+            }
+            previousTabIcon = content.getIcon();
+            previousIconVisibility = content.getUserData(ToolWindow.SHOW_CONTENT_ICON);
+            unreadBadgeContent = content;
+            content.putUserData(ToolWindow.SHOW_CONTENT_ICON, true);
+            content.setIcon(unreadIcon);
+        }
     }
 
     private void applyNodePathToBridges(String path) {
@@ -375,6 +473,7 @@ public class ChatWindowDelegate {
 
         messageDispatcher.registerHandler(new ProviderHandler(handlerContext));
         messageDispatcher.registerHandler(new ClaudePlanUsageHandler(handlerContext));
+        messageDispatcher.registerHandler(new GrokPlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new CustomModelPricingHandler(handlerContext, settingsService));
         messageDispatcher.registerHandler(new McpServerHandler(handlerContext));
         messageDispatcher.registerHandler(new McpMarketplaceHandler(handlerContext));
@@ -407,7 +506,7 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new CodexWorkspaceDiffHandler(handlerContext));
 
         messageDispatcher.registerHandler(new WindowEventHandler(handlerContext, new WindowEventHandler.Callback() {
-            @Override public void onHeartbeat(String content) { host.getWebviewWatchdog().handleHeartbeat(content); }
+            @Override public void onHeartbeat(String content) { handleHeartbeat(content); }
             @Override public void onTabLoadingChanged(boolean loading) { updateTabLoadingState(loading); }
             @Override public void onTabStatusChanged(String statusStr) {
                 TabAnswerStatus status;
@@ -468,6 +567,22 @@ public class ChatWindowDelegate {
                 host.reloadActiveSessionMessages();
             } else {
                 host.getSessionLifecycleManager().loadHistorySession(sessionId, projectPath, provider, model);
+            }
+        });
+        historyHandler.setRestoredHistoryCallback(new HistoryHandler.RestoredHistoryCallback() {
+            @Override
+            public void onLoad() {
+                host.loadRestoredHistoryManually();
+            }
+
+            @Override
+            public void onCancel(String requestId) {
+                host.cancelRestoredHistoryLoad(requestId);
+            }
+
+            @Override
+            public void onCodexSessionSelected() {
+                host.retireRestoredHistory();
             }
         });
         host.setHistoryHandler(historyHandler);
@@ -626,6 +741,36 @@ public class ChatWindowDelegate {
         });
     }
 
+    /** A resumed Gateway transport may have lost its last transcript or turn-terminal event. */
+    void handleHeartbeat(String content) {
+        boolean resumed = host.getWebviewWatchdog().handleHeartbeat(content);
+        if (!resumed || host.isDisposed() || !host.isFrontendReady()) {
+            return;
+        }
+        JBCefBrowser browser = host.getBrowser();
+        if (browser != null && JBCefBrowserFactory.isRemoteDevelopmentBrowser(browser.getCefBrowser())) {
+            handleRemoteTransportResumed();
+        }
+    }
+
+    /** Reconcile backend state in the existing page so focus, IME composition and drafts survive. */
+    void handleRemoteTransportResumed() {
+        if (host.isDisposed() || !host.isFrontendReady()) {
+            return;
+        }
+        LOG.info("[WebviewTransport] Remote heartbeats resumed; replaying current session state");
+        pushCurrentTabStateToFrontend();
+        host.getPermissionHandler().replayPendingDialogsToWebview();
+        ClaudeSession session = host.getSession();
+        // End an already completed turn before replay: onStreamEnd cancels buffered message
+        // updates in the client. A turn still waiting for its first token must remain loading.
+        if (session != null && !session.isLoading() && !host.getStreamCoalescer().isStreamActive()) {
+            host.callJavaScript("onStreamEnd");
+        }
+        replayCurrentSessionStateToFrontend();
+        host.callJavaScript("window.onTabActivated", "true");
+    }
+
     public void handleFrontendReady() {
         LOG.info("Received frontend_ready signal, frontend is now ready to receive data");
         // The webview sends frontend_ready once per document. A repeat while Java still holds
@@ -634,6 +779,7 @@ public class ChatWindowDelegate {
         boolean runtimeRecovery = host.isRuntimeRecoveryPage() || host.isFrontendReady();
         host.setFrontendReady(true);
         host.getWebviewWatchdog().markFrontendReady();
+        markTabReadIfVisible();
 
         host.callJavaScript(
             "window.updateLinkifyCapabilities",
@@ -731,6 +877,7 @@ public class ChatWindowDelegate {
         usagePushService.pushCurrentUsageIfAvailable(resolveModelContextLimitForRecovery(
                 session.getProvider(),
                 session.getModel(),
+                session.getCwd(),
                 context.getSettingsService()
         ));
         usagePushService.refreshContextBar();
@@ -743,14 +890,16 @@ public class ChatWindowDelegate {
     static int resolveModelContextLimitForRecovery(
             String provider,
             String model,
+            String cwd,
             CodemossSettingsService settingsService
     ) {
         if ("codex".equalsIgnoreCase(provider)) {
             return SettingsHandler.getModelContextLimit(provider, model);
         }
 
+        boolean isClaude = "claude".equalsIgnoreCase(provider);
         String resolvedModel = model;
-        if (settingsService != null) {
+        if (isClaude && settingsService != null) {
             try {
                 JsonObject settings = settingsService.readClaudeSettings();
                 if (settings != null && settings.has("env") && settings.get("env").isJsonObject()) {
@@ -764,7 +913,9 @@ public class ChatWindowDelegate {
                         + e.getMessage());
             }
         }
-        return SettingsHandler.getModelContextLimit(resolvedModel);
+        return isClaude
+                ? ModelProviderHandler.getClaudeContextLimit(resolvedModel, cwd)
+                : SettingsHandler.getModelContextLimit(resolvedModel);
     }
 
     private void replayCurrentSessionStateToFrontend() {

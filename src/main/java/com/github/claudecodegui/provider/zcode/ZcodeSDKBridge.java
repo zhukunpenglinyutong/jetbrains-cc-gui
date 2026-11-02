@@ -803,4 +803,9 @@ public class ZcodeSDKBridge extends BaseSDKBridge {
             return java.util.Collections.emptyList();
         }
     }
+
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd,
+                                               java.util.function.BooleanSupplier cancellation) {
+        return new ZcodeHistoryReader().getSessionMessages(sessionId, cwd, cancellation);
+    }
 }

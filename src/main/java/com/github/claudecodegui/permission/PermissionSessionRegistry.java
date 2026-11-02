@@ -73,13 +73,25 @@ class PermissionSessionRegistry {
 
         lastCleanupTime = now;
         List<String> sessionsToRemove = new ArrayList<>();
+        int keptLiveSessions = 0;
         for (Map.Entry<String, PermissionService> entry : INSTANCES_BY_SESSION_ID.entrySet()) {
             PermissionService service = entry.getValue();
-            if (now - service.getLastActivityTime() > SESSION_MAX_IDLE_TIME_MS) {
-                LOG.info(String.format("Marking stale session for cleanup: %s (idle for %d hours)",
-                        entry.getKey(), (now - service.getLastActivityTime()) / TimeUnit.HOURS.toMillis(1)));
-                sessionsToRemove.add(entry.getKey());
+            long idleMs = now - service.getLastActivityTime();
+            boolean dialogStillRegistered = service.hasRegisteredDialogShowers();
+            if (!shouldReapIdleSession(dialogStillRegistered, idleMs)) {
+                if (dialogStillRegistered && idleMs > SESSION_MAX_IDLE_TIME_MS) {
+                    keptLiveSessions++;
+                }
+                continue;
             }
+            LOG.info(String.format("Marking stale session for cleanup: %s (idle for %d hours)",
+                    entry.getKey(), idleMs / TimeUnit.HOURS.toMillis(1)));
+            sessionsToRemove.add(entry.getKey());
+        }
+        if (keptLiveSessions > 0) {
+            LOG.info(String.format(
+                    "Kept %d permission session(s) past the idle limit because a chat dialog is still registered",
+                    keptLiveSessions));
         }
 
         for (String staleSessionId : sessionsToRemove) {
@@ -97,5 +109,35 @@ class PermissionSessionRegistry {
 
     static String newLegacySessionId() {
         return UUID.randomUUID().toString();
+    }
+
+    static synchronized void rememberForTest(String sessionId, PermissionService service) {
+        INSTANCES_BY_SESSION_ID.put(sessionId, service);
+    }
+
+    static synchronized boolean isRememberedForTest(String sessionId) {
+        return INSTANCES_BY_SESSION_ID.containsKey(sessionId);
+    }
+
+    /** Runs one idle pass immediately, ignoring the hourly gate. */
+    static synchronized void forceCleanupForTest() {
+        lastCleanupTime = 0L;
+        cleanupStaleInstancesIfNeeded();
+    }
+
+    static synchronized void pauseCleanupForTest() {
+        lastCleanupTime = System.currentTimeMillis();
+    }
+
+    /**
+     * A session with a registered chat dialog is still the user's window.
+     * Reaping it leaves the bridge writing ask-user-question files that
+     * nobody polls, so the question never appears and the turn hangs.
+     */
+    static boolean shouldReapIdleSession(boolean dialogStillRegistered, long idleMs) {
+        if (dialogStillRegistered) {
+            return false;
+        }
+        return idleMs > SESSION_MAX_IDLE_TIME_MS;
     }
 }

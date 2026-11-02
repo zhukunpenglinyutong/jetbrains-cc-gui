@@ -893,6 +893,24 @@ export interface ChatInputBoxHandle {
   hasContent: () => boolean;
   /** Get file tags from input (for Codex context injection) */
   getFileTags: () => FileTagInfo[];
+  /** Get the draft attachments currently staged on the input */
+  getAttachments: () => Attachment[];
+  /**
+   * Replace the draft attachments (used to restore a queued message for
+   * editing). Returns false when attachments are externally controlled, so the
+   * caller can tell the user that nothing was restored.
+   */
+  setAttachments: (attachments: Attachment[]) => boolean;
+  /**
+   * Whether `setAttachments` can take attachments at all — false when the
+   * parent owns them. Lets a caller vet a restore before it removes anything.
+   */
+  canApplyAttachments: () => boolean;
+  /**
+   * Whether a pasted image is still on its way into the draft. `setValue`
+   * cancels such a paste, so a caller that merges into the draft waits first.
+   */
+  hasPendingImagePastes: () => boolean;
 }
 
 // ============================================================
@@ -1023,6 +1041,11 @@ export interface ChatInputBoxProps {
   messageQueue?: QueuedMessage[];
   /** Remove message from queue callback */
   onRemoveFromQueue?: (id: string) => void;
+  /**
+   * Edit queued message callback: removes the message from the queue and
+   * restores its content and attachments into the input draft.
+   */
+  onEditFromQueue?: (id: string) => void;
   /** Reorder message queue callback (orderedIds[0] executes first) */
   onReorderQueue?: (orderedIds: string[]) => void;
 
