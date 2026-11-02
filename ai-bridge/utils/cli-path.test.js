@@ -438,25 +438,38 @@ test('isDeadCmdShim ignores quoted paths outside the %* delegation line', () => 
   const root = mkdtempSync(join(tmpdir(), 'cc-gui-deleg-shim-'));
   // A working shim with a trailing REM quoting a REMOVED path: the delegation
   // line targets an existing file, so the shim is alive — the last quoted
-  // path of the whole script would have called it dead.
+  // path of the whole script would have called it dead. (On POSIX the
+  // /tmp-style target never matches the drive-letter regex, so "no candidate"
+  // also lands on alive.)
   const target = join(root, 'mcode.cmd');
   writeFileSync(target, '@echo off\r\n');
   const withRem = join(root, 'rem-trailing.cmd');
   writeFileSync(withRem, `@echo off\r\n"${target}" %*\r\nREM migrated from "X:\\old-install\\mcode.cmd"\r\n`);
   assert.equal(isDeadCmdShim(withRem, { forceWindows: true }), false);
-  // An if/else fallback chain quotes a target in BOTH branches (%* in each):
-  // which one runs is statically unknowable, so the shim stays alive.
+  // Control: when the single %* delegation line itself targets a missing
+  // file, the shim is still dead — the trailing REM must not mask that.
+  const dead = join(root, 'dead.cmd');
+  writeFileSync(dead, '@echo off\r\n"X:\\gone\\mcode.cmd" %*\r\nREM migrated from "X:\\old-install\\mcode.cmd"\r\n');
+  assert.equal(isDeadCmdShim(dead, { forceWindows: true }), true);
+});
+
+test('isDeadCmdShim stays alive for an if/else fallback chain (win32 paths)', () => {
+  // Windows-only: the good branch must quote a path the drive-letter regex
+  // can see AND that exists — on POSIX no such path can be built, so the
+  // sample there would degenerate to "one resolvable candidate, missing".
+  if (process.platform !== 'win32') return;
+  const root = mkdtempSync(join(tmpdir(), 'cc-gui-deleg-ifelse-'));
+  const target = join(root, 'mcode.cmd');
+  writeFileSync(target, '@echo off\r\n');
   const withFallback = join(root, 'if-exist.cmd');
   writeFileSync(
     withFallback,
     '@echo off\r\n'
     + `if exist "${target}" (\r\n  "${target}" %*\r\n) else (\r\n  "X:\\removed\\mcode.cmd" %*\r\n)\r\n`,
   );
+  // TWO %* delegation lines: which branch runs is statically unknowable, so
+  // the shim is assumed alive even though one branch targets a missing file.
   assert.equal(isDeadCmdShim(withFallback, { forceWindows: true }), false);
-  // Control: when the %* line itself targets a missing file, it is still dead.
-  const dead = join(root, 'dead.cmd');
-  writeFileSync(dead, '@echo off\r\n"X:\\gone\\mcode.cmd" %*\r\nREM migrated from "X:\\old-install\\mcode.cmd"\r\n');
-  assert.equal(isDeadCmdShim(dead, { forceWindows: true }), true);
 });
 
 test('isDeadCmdShim cannot-verify cases stay alive', () => {
