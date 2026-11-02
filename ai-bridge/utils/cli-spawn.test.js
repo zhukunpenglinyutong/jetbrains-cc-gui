@@ -156,3 +156,35 @@ test('posixTreeKillEscalate falls back to the handle kill for the SIGKILL escala
     'SIGTERM fell back to the handle; the escalation must fall back the same way',
   );
 });
+
+test('Story 012 AC-1: posixTreeKillEscalate catches EPERM/ESRCH from both killFn(-pid) and child.kill fallback on SIGTERM and SIGKILL', () => {
+  const { child, calls, timers, deps } = makeEscalationHarness({
+    killFn: () => {
+      const err = new Error('kill ESRCH');
+      err.code = 'ESRCH';
+      throw err;
+    },
+  });
+  child.kill = (signal) => {
+    calls.push(`handle-fail:${signal}`);
+    const err = new Error('kill EPERM');
+    err.code = 'EPERM';
+    throw err;
+  };
+
+  // 1. Initial SIGTERM: when both killFn(-pid) and child.kill throw, posixTreeKillEscalate must NOT throw synchronously.
+  assert.doesNotThrow(() => {
+    posixTreeKillEscalate(child, deps);
+  }, 'initial SIGTERM must swallow errors from both killFn and child.kill');
+
+  assert.deepEqual(calls, ['handle-fail:SIGTERM']);
+  assert.equal(timers.length, 1);
+
+  // 2. Delayed SIGKILL: when the timer fires and child is still alive, and both throw, the timer callback must NOT throw.
+  assert.doesNotThrow(() => {
+    timers[0].fn();
+  }, 'escalation SIGKILL callback must swallow errors from both killFn and child.kill');
+
+  assert.deepEqual(calls, ['handle-fail:SIGTERM', 'handle-fail:SIGKILL']);
+});
+

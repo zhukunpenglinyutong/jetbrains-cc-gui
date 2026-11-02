@@ -62,6 +62,7 @@
  * closed and matched verbatim by the webview for localization.
  */
 
+import { execFileSync } from 'node:child_process';
 import fs from 'fs';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'os';
@@ -81,6 +82,7 @@ import {
   isNonEmptySessionId,
 } from '../../utils/marker-protocol.js';
 import {
+  getRealHomeDir,
   isBridgeDirectory,
   isTempDirectory,
   normalizePathForComparison,
@@ -523,11 +525,11 @@ export function extractSubagentConversationIds(text) {
 /**
  * Checks whether a subagent child conversation's database or WAL sidecar was
  * modified within the idle reap window (mtime >= now - idleReapMinutes).
- * @param {string} id child conversation UUID
- * @param {string} cliHome optional home directory override
- * @param {number} idleReapMinutes window in minutes
- * @param {number} [now] current timestamp in ms (defaults to Date.now())
- * @returns {boolean}
+ * @param {string} id Child conversation UUID.
+ * @param {string} cliHome Optional home directory override.
+ * @param {number} idleReapMinutes Window in minutes.
+ * @param {number} [now] Current timestamp in ms (defaults to Date.now()).
+ * @returns {boolean} true if the child conversation database or WAL was modified within the window
  */
 export function isSubagentChildLive(id, cliHome, idleReapMinutes, now = Date.now()) {
   if (!id || typeof id !== 'string') return false;
@@ -561,6 +563,282 @@ export function isSubagentChildLive(id, cliHome, idleReapMinutes, now = Date.now
       // ignore stat errors
     }
   }
+  return false;
+}
+
+const SAFE_SESSION_ID_RE = /^[A-Za-z0-9._-]+$/;
+const IGNORED_WORK_CWD_DIRS = new Set([
+  '.git',
+  '.gemini',
+  '.claude',
+  '.gradle',
+  '.idea',
+  '.vscode',
+  '.sparc',
+  '.swarm',
+  'node_modules',
+  'build',
+  'target',
+  'dist',
+  'out',
+]);
+const MAX_WORK_CWD_SCAN_DEPTH = 2;
+const MAX_WORK_CWD_SCAN_ENTRIES = 500;
+const GIT_STATUS_TIMEOUT_MS = 1500;
+const MAX_GIT_STATUS_PATHS = 500;
+
+function gitCommandEnv() {
+  const gitEnv = { ...process.env, GIT_OPTIONAL_LOCKS: '0' };
+  delete gitEnv.GIT_DIR;
+  delete gitEnv.GIT_WORK_TREE;
+  delete gitEnv.GIT_INDEX_FILE;
+  return gitEnv;
+}
+
+function runGitInWorkCwd(workCwd, args) {
+  return execFileSync('git', ['-C', workCwd, ...args], {
+    timeout: GIT_STATUS_TIMEOUT_MS,
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'ignore'],
+    windowsHide: true,
+    env: gitCommandEnv(),
+  });
+}
+
+function parseGitStatusPaths(porcelain) {
+  const records = String(porcelain || '').split('\0');
+  const paths = [];
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
+    if (!record || record.length < 4) continue;
+    const status = record.slice(0, 2);
+    const path = record.slice(3);
+    if (path && path !== '.git' && !path.startsWith('.git/')) {
+      paths.push(path);
+    }
+    if (status.includes('R') || status.includes('C')) {
+      index += 1;
+      const renamedTo = records[index];
+      if (renamedTo && renamedTo !== '.git' && !renamedTo.startsWith('.git/')) {
+        paths.push(renamedTo);
+      }
+    }
+  }
+  paths.sort();
+  if (paths.length > MAX_GIT_STATUS_PATHS) {
+    return paths.slice(0, MAX_GIT_STATUS_PATHS);
+  }
+  return paths;
+}
+
+function turnMtimeFloor(state) {
+  return state && typeof state.turnStartedAt === 'number' ? state.turnStartedAt : 0;
+}
+
+function consumeWorkCwdSignature(state, newSig, checkActivity) {
+  if (!state || typeof state !== 'object') return false;
+  const previous = state.lastWorkCwdSig;
+  const changed = checkActivity
+    && state.initialized === true
+    && previous !== null
+    && previous !== undefined
+    && previous !== newSig;
+  state.lastWorkCwdSig = newSig;
+  return changed;
+}
+
+function consumeConversationDbSignature(state, normalizedId, baseHome, checkActivity) {
+  if (!state || typeof state !== 'object') return false;
+  const nextSig = getConversationDbSignature(normalizedId, baseHome);
+  const previous = state.lastDbSig;
+  state.lastDbSig = nextSig;
+  if (!checkActivity || state.initialized !== true) return false;
+  return nextSig !== previous;
+}
+
+/**
+ * Git work-tree snapshot of dirty and untracked files.
+ * @returns {boolean|null} null when workCwd is not a git work tree or git could not be queried
+ */
+function gitWorkCwdActivity(workCwd, cutoff, state, checkActivity) {
+  let inside = '';
+  try {
+    inside = runGitInWorkCwd(workCwd, ['rev-parse', '--is-inside-work-tree']).trim();
+  } catch {
+    return null;
+  }
+  if (inside !== 'true') return null;
+  let porcelain = '';
+  try {
+    porcelain = runGitInWorkCwd(workCwd, [
+      '--no-optional-locks',
+      'status',
+      '--porcelain',
+      '-z',
+      '--untracked-files=normal',
+      '--',
+      '.',
+    ]);
+  } catch {
+    return null;
+  }
+  const minTurnMtime = turnMtimeFloor(state);
+  const sigParts = [];
+  let recentModified = false;
+  for (const relPath of parseGitStatusPaths(porcelain)) {
+    let stat;
+    try {
+      stat = fs.statSync(join(workCwd, relPath));
+    } catch {
+      sigParts.push(`${relPath}:missing`);
+      continue;
+    }
+    if (checkActivity && stat.mtimeMs >= cutoff && stat.mtimeMs > minTurnMtime) {
+      recentModified = true;
+    }
+    sigParts.push(`${relPath}:${Math.trunc(stat.mtimeMs)}:${stat.size}`);
+  }
+  const sigChanged = consumeWorkCwdSignature(state, sigParts.join('|'), checkActivity);
+  return checkActivity && (recentModified || sigChanged);
+}
+
+function computeWorkCwdActivity(workCwd, cutoff, state, checkActivity) {
+  if (!workCwd || typeof workCwd !== 'string' || !workCwd.trim()) return false;
+  try {
+    const rootStat = fs.statSync(workCwd);
+    if (!rootStat.isDirectory()) return false;
+  } catch {
+    return false;
+  }
+
+  const gitActivity = gitWorkCwdActivity(workCwd, cutoff, state, checkActivity);
+  if (gitActivity !== null) return gitActivity;
+
+  const minTurnMtime = turnMtimeFloor(state);
+  let scanned = 0;
+  let recentModified = false;
+  const sigParts = [];
+
+  const walk = (dirPath, relPrefix, depth) => {
+    if (scanned >= MAX_WORK_CWD_SCAN_ENTRIES) return;
+    let names;
+    try {
+      names = fs.readdirSync(dirPath);
+    } catch {
+      return;
+    }
+    names.sort();
+    for (const name of names) {
+      if (scanned >= MAX_WORK_CWD_SCAN_ENTRIES) break;
+      if (!name || name.startsWith('.') || IGNORED_WORK_CWD_DIRS.has(name)) continue;
+      scanned += 1;
+      const fullPath = join(dirPath, name);
+      const relPath = relPrefix ? `${relPrefix}/${name}` : name;
+      let stat;
+      try {
+        stat = fs.statSync(fullPath);
+      } catch {
+        continue;
+      }
+      if (checkActivity && stat.mtimeMs >= cutoff && stat.mtimeMs > minTurnMtime) {
+        recentModified = true;
+      }
+      sigParts.push(`${relPath}:${Math.trunc(stat.mtimeMs)}:${stat.size}`);
+      if (stat.isDirectory() && depth < MAX_WORK_CWD_SCAN_DEPTH) {
+        walk(fullPath, relPath, depth + 1);
+      }
+    }
+  };
+
+  walk(workCwd, '', 1);
+  const sigChanged = consumeWorkCwdSignature(state, sigParts.join('|'), checkActivity);
+  return checkActivity && (recentModified || sigChanged);
+}
+
+/**
+ * Checks whether the current Gemini turn shows recent file activity in the conversation database, brain logs/tasks, or working directory within the silence window.
+ * @param {object} [options] Activity check parameters.
+ * @param {string} [options.sessionId] Active conversation UUID.
+ * @param {string} [options.cliHome] Optional home directory override.
+ * @param {string} [options.workCwd] Active workspace directory path.
+ * @param {number} [options.silenceMs] Silence window duration in milliseconds.
+ * @param {number} [options.now] Current timestamp in milliseconds.
+ * @param {{ turnStartedAt?: number, lastDbSig?: string|null, lastWorkCwdSig?: string|null, initialized?: boolean }|null} [options.state] Mutable per-turn activity snapshot state.
+ * @returns {boolean} true if recent turn activity was detected within the silence window
+ */
+export function isTurnActivityLive({
+  sessionId = '',
+  cliHome = getRealHomeDir(),
+  workCwd = '',
+  silenceMs = DEFAULT_IDLE_REAP_MINUTES * 60_000,
+  now = Date.now(),
+  state = null,
+} = {}) {
+  const hasRawSession = sessionId !== undefined && sessionId !== null && String(sessionId).trim() !== '';
+  let normalizedId = '';
+  if (hasRawSession) {
+    const candidate = normalizeConversationId(sessionId);
+    if (!candidate || !SAFE_SESSION_ID_RE.test(candidate)) {
+      return false;
+    }
+    normalizedId = candidate;
+  }
+
+  const checkActivity = typeof silenceMs === 'number' && Number.isFinite(silenceMs) && silenceMs > 0;
+  const cutoff = checkActivity ? now - silenceMs : now;
+  const minTurnMtime = turnMtimeFloor(state);
+  const baseHome = cliHome || getRealHomeDir();
+
+  if (normalizedId) {
+    const convDir = join(baseHome, '.gemini', 'antigravity-cli', 'conversations');
+    const dbPath = join(convDir, `${normalizedId}.db`);
+    const walPath = join(convDir, `${normalizedId}.db-wal`);
+    let dbActive = false;
+    for (const candidatePath of [dbPath, walPath]) {
+      try {
+        const stat = fs.statSync(candidatePath);
+        if (checkActivity && stat.mtimeMs >= cutoff && stat.mtimeMs > minTurnMtime) {
+          dbActive = true;
+        }
+      } catch {
+        // ignore missing or inaccessible file
+      }
+    }
+    const dbSignatureChanged = consumeConversationDbSignature(state, normalizedId, baseHome, checkActivity);
+    if (dbActive || dbSignatureChanged) {
+      return true;
+    }
+
+    if (checkActivity) {
+      const brainBase = join(baseHome, '.gemini', 'antigravity-cli', 'brain', normalizedId, '.system_generated');
+      for (const sub of ['logs', 'tasks']) {
+        const dirPath = join(brainBase, sub);
+        let names;
+        try {
+          names = fs.readdirSync(dirPath);
+        } catch {
+          continue;
+        }
+        for (const name of names) {
+          if (!name || name.startsWith('.')) continue;
+          try {
+            const stat = fs.statSync(join(dirPath, name));
+            if (stat.mtimeMs >= cutoff && stat.mtimeMs > minTurnMtime) {
+              return true;
+            }
+          } catch {
+            // ignore stat error
+          }
+        }
+      }
+    }
+  }
+
+  if (computeWorkCwdActivity(workCwd, cutoff, state, checkActivity)) {
+    return true;
+  }
+
   return false;
 }
 
@@ -1256,27 +1534,20 @@ function copyConversationDbToTemp(dbPath) {
 }
 
 /**
- * Run one gemini turn. Named options — the eight positional parameters this
- * used to take were one transposition away from silently swapping cwd/model/
- * sessionId in a new caller.
- * @param {object} options
- * @param {string} options.message
- * @param {string} [options.sessionId]
- * @param {string} [options.cwd]
- * @param {string} [options.model] full catalog slug (family+effort is ONE slug)
- * @param {string} [options.reasoningEffort] accepted for caller
- *   compatibility, never forwarded: the effort tier is baked into the full
- *   model slug and some slugs reject a separate --effort flag
- * @param {Array} [options.attachments] image attachments (fileName/mediaType/data)
- * @param {string} [options.requestedCwd] cwd as requested BEFORE Java's clamp (see header)
- * @param {string} [options.permissionMode] unified mode id; mapped onto the CLI
- *   posture flags (--mode plan, --sandbox, ...) for THIS turn
- * @param {string} [options.cliHome] optional home directory override (defaults to os.homedir())
- * @param {unknown} [options.thinking] plugin Thinking flag. false/"false"/0/"0"
- *   suppresses summaries. Omitted or null stays enabled, matching
- *   MarkerCliBridge. Not an agy CLI flag.
- * @param {number} [options.postResultKillDelayMs] grace period in ms after
- *   handling a terminal result before terminating a lingering CLI child
+ * Runs one Gemini CLI turn, streaming NDJSON events onto the bridge marker protocol with idle-silence reaping and activity checks.
+ * @param {object} [options] Turn configuration options.
+ * @param {string} options.message Prompt text for the turn.
+ * @param {string} [options.sessionId] Existing conversation UUID to resume.
+ * @param {string} [options.cwd] Clamped working directory path.
+ * @param {string} [options.model] Full catalog model slug.
+ * @param {string} [options.reasoningEffort] Reasoning effort tier (accepted for compatibility).
+ * @param {Array} [options.attachments] Image attachments to materialize.
+ * @param {string} [options.requestedCwd] Working directory requested before clamping.
+ * @param {string} [options.permissionMode] Unified permission mode identifier.
+ * @param {string} [options.cliHome] Optional home directory override.
+ * @param {unknown} [options.thinking] Plugin Thinking flag.
+ * @param {number} [options.postResultKillDelayMs] Grace period in ms after terminal result before killing a lingering child.
+ * @returns {Promise<void>} completion promise when the turn stream closes
  */
 export async function sendMessage({
   message,
@@ -1476,10 +1747,43 @@ export async function sendMessage({
     let lastThinkingPollStamp = '';
     const THINKING_POLL_MS = 200;
     const turnStartMs = Date.now();
+    const trackedWorkCwd = (normalizeSentinelPath(cwd) || process.env.IDEA_PROJECT_PATH || process.env.PROJECT_PATH)
+      ? workCwd
+      : '';
+    const turnActivityState = {
+      turnStartedAt: turnStartMs,
+      lastDbSig: null,
+      lastWorkCwdSig: null,
+      initialized: false,
+    };
+    isTurnActivityLive({
+      sessionId: currentSessionId,
+      cliHome,
+      workCwd: trackedWorkCwd,
+      silenceMs: 0,
+      now: turnStartMs,
+      state: turnActivityState,
+    });
+    turnActivityState.initialized = true;
+
+    const armIdleReapTimer = () => {
+      clearIdleReapTimer();
+      if (idleReapMinutes <= 0) return;
+      reapTimer = setTimeout(reapHungTurn, idleReapMinutes * 60 * 1000);
+      // The child's pipes keep the loop alive while the turn runs; unref only
+      // stops an armed timer from delaying a runner that is done otherwise.
+      reapTimer.unref?.();
+    };
+    const resetIdleReapTimer = () => {
+      if (reapTimer !== null) {
+        armIdleReapTimer();
+      }
+    };
 
     const emitThinking = (text) => {
       if (!text) return;
       emittedThinkingNorm += text;
+      resetIdleReapTimer();
       emitJsonStringMarker('[THINKING_DELTA]', text);
     };
 
@@ -1588,7 +1892,12 @@ export async function sendMessage({
       if (!force && stamp === lastThinkingPollStamp) return;
       const stored = readStoredThinkingSteps(convId, cliHome);
       if (!stored) return;
+      const hadPriorStamp = Boolean(lastThinkingPollStamp);
+      const stampChanged = stamp !== lastThinkingPollStamp;
       lastThinkingPollStamp = stamp;
+      if (hadPriorStamp && stampChanged) {
+        resetIdleReapTimer();
+      }
       const streamed = typeof streamedAnswer === 'string' ? streamedAnswer.trim() : '';
       for (const step of stored.steps) {
         const stepKey = `${convId}:${step.idx}`;
@@ -1659,35 +1968,45 @@ export async function sendMessage({
     // the detached process group FIRST (the close event that follows lands
     // on an already-failing stream), then exactly one actionable error, then
     // close dangling tool bubbles and end the stream exactly once.
-    const reapHungTurn = () => {
+    function reapHungTurn() {
       clearIdleReapTimer();
-      stopThinkingPoll();
       if (!hadResult && !failureEmitted) {
-        let hasLiveChild = false;
-        if (trackedSubagentConversationIds.size > 0) {
+        const now = Date.now();
+        const silenceMs = idleReapMinutes * 60 * 1000;
+        const activeSessionId = polledSessionId || currentSessionId || discoverTurnConversationId();
+        let hasLiveActivity = isTurnActivityLive({
+          sessionId: activeSessionId,
+          cliHome,
+          workCwd: trackedWorkCwd,
+          silenceMs,
+          now,
+          state: turnActivityState,
+        });
+        if (!hasLiveActivity && trackedSubagentConversationIds.size > 0) {
           for (const childId of trackedSubagentConversationIds) {
-            if (isSubagentChildLive(childId, cliHome, idleReapMinutes)) {
-              hasLiveChild = true;
+            if (isSubagentChildLive(childId, cliHome, idleReapMinutes, now)) {
+              hasLiveActivity = true;
               break;
             }
           }
         }
-        if (!hasLiveChild && activeInvokeSubagentCalls.size > 0) {
-          const now = Date.now();
+        if (!hasLiveActivity && activeInvokeSubagentCalls.size > 0) {
           const maxUnverifiedDeferralMs = idleReapMinutes * 60 * 1000 * 1.5;
           for (const toolIndex of activeInvokeSubagentCalls) {
             const startedAt = subagentStartTimes.get(toolIndex) ?? now;
             if (!deferredInvokeSubagentCalls.has(toolIndex) && (now - startedAt) < maxUnverifiedDeferralMs) {
               deferredInvokeSubagentCalls.add(toolIndex);
-              hasLiveChild = true;
+              hasLiveActivity = true;
             }
           }
         }
-        if (hasLiveChild) {
+        if (hasLiveActivity) {
+          turnActivityState.turnStartedAt = now;
           armIdleReapTimer();
           return;
         }
       }
+      stopThinkingPoll();
       const alive = Boolean(reapChild && reapChild.exitCode === null && reapChild.signalCode === null);
       killChildTree(reapChild, 'gemini');
       if (hadResult || failureEmitted) {
@@ -1702,20 +2021,7 @@ export async function sendMessage({
       emitFailure(buildIdleReapMessage(idleReapMinutes, alive), { status: 'IDLE_REAP', idleMinutes: idleReapMinutes });
       flushUnresolvedTools();
       emitStreamEndOnce();
-    };
-    const armIdleReapTimer = () => {
-      clearIdleReapTimer();
-      if (idleReapMinutes <= 0) return;
-      reapTimer = setTimeout(reapHungTurn, idleReapMinutes * 60 * 1000);
-      // The child's pipes keep the loop alive while the turn runs; unref only
-      // stops an armed timer from delaying a runner that is done otherwise.
-      reapTimer.unref?.();
-    };
-    const resetIdleReapTimer = () => {
-      if (reapTimer !== null) {
-        armIdleReapTimer();
-      }
-    };
+    }
 
     await runCliStreaming({
       bin,
@@ -1745,6 +2051,9 @@ export async function sendMessage({
         emitFailure(msg, { status: 'CLI_ERROR' });
       },
       onStderr: (text) => {
+        if (text) {
+          resetIdleReapTimer();
+        }
         stderrText = (stderrText + text).slice(-8000);
         if (!emptyAnswerPending) return;
         const notice = extractHeadlessDenyNotice(stderrText);
@@ -1795,6 +2104,7 @@ export async function sendMessage({
           const initConvId = normalizeConversationId(event.conversation_id);
           if (initConvId) {
             polledSessionId = initConvId;
+            turnActivityState.lastDbSig = getConversationDbSignature(initConvId, cliHome);
           }
           if (
             typeof event.conversation_id === 'string'

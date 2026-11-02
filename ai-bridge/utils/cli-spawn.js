@@ -40,19 +40,13 @@ function isChildProcessDone(child) {
 }
 
 /**
- * POSIX half of killChildTree, extracted with injectable kill/timer seams so
- * the SIGTERM→SIGKILL escalation is unit-testable on every platform (same
- * pattern as win32TreeKillArgs). Sends SIGTERM to the process group —
- * falling back to the direct handle kill when the group is already gone —
- * then, unless the child has been reaped within the window, escalates to
- * SIGKILL the same way. The timer is unref'd so a pending escalation never
- * keeps the event loop (or process exit) waiting.
- * @param {import('child_process').ChildProcess} child
- * @param {object} [options]
- * @param {number} [options.escalateAfterMs] SIGTERM → SIGKILL window
- * @param {(pid: number, signal: NodeJS.Signals) => void} [options.killFn]
- * @param {(fn: () => void, ms: number) => unknown} [options.setTimeoutFn]
- * @param {(timer: unknown) => void} [options.clearTimeoutFn]
+ * Sends SIGTERM to the POSIX process group with fallback to the child handle, escalating to SIGKILL after the grace window if the child has not exited.
+ * @param {import('child_process').ChildProcess} child Child process handle to terminate.
+ * @param {object} [options] Optional escalation configuration and test seams.
+ * @param {number} [options.escalateAfterMs] SIGTERM to SIGKILL grace window in milliseconds.
+ * @param {(pid: number, signal: NodeJS.Signals) => void} [options.killFn] Process signaling function.
+ * @param {(fn: () => void, ms: number) => unknown} [options.setTimeoutFn] Timer scheduling function.
+ * @param {(timer: unknown) => void} [options.clearTimeoutFn] Timer cancellation function.
  * @returns {() => void} disarmer cancelling a still-pending escalation
  */
 export function posixTreeKillEscalate(child, {
@@ -64,8 +58,14 @@ export function posixTreeKillEscalate(child, {
   const killGroup = (signal) => {
     try {
       killFn(-child.pid, signal);
+      return;
     } catch {
+      // PGID may not exist (ESRCH) or may not be signalable (EPERM); fall back to direct child handle.
+    }
+    try {
       child.kill(signal);
+    } catch {
+      // Child may have already exited or thrown EPERM/ESRCH; ignore safely.
     }
   };
   killGroup('SIGTERM');

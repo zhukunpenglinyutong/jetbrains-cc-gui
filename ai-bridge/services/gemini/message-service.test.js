@@ -40,7 +40,7 @@
  * disturb the developer's CLI credentials, per Story 1.2 Task 1d) — the auth
  * classifier is exercised against a synthetic best-effort stderr string.
  */
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { chmodSync, closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, truncateSync, utimesSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
@@ -201,6 +201,28 @@ if (mode) {
     if (delayInit) await write(init);
     await write(JSON.stringify({ event: 'step_update', step_update: { conversation_id: conv, step_index: 1, state: 'DONE', step_type: 'agent_response', text_delta: 'Done.' } }));
     await write(JSON.stringify({ event: 'result', result: { conversation_id: conv, status: 'SUCCESS', response: 'Done.', duration_seconds: 1, num_turns: 1, usage: { input_tokens: 10, output_tokens: 5, thinking_tokens: 0, cache_read_tokens: 0, total_tokens: 15 }, error: null } }));
+    process.exit(0);
+  } else if (mode === 'tool-cwd-activity') {
+    const conv = process.env.FAKE_CONV_ID || CONV;
+    const init = JSON.stringify({ event: 'init', conversation_id: conv, init: { cwd: process.cwd(), tools: [{ name: 'execute_command' }], permission_mode: 'default' } });
+    const toolActive = JSON.stringify({ event: 'step_update', step_update: { conversation_id: conv, step_index: 1, state: 'ACTIVE', step_type: 'tool', tool_call: { name: 'execute_command', id: 'c1' } } });
+    const result = JSON.stringify({ event: 'result', result: { conversation_id: conv, status: 'SUCCESS', response: 'Done.', duration_seconds: 4, num_turns: 1, usage: { input_tokens: 10, output_tokens: 5, thinking_tokens: 0, cache_read_tokens: 0, total_tokens: 15 }, error: null } });
+    await write(init);
+    await write(toolActive);
+    await new Promise((res) => setTimeout(res, 1800));
+    fs.writeFileSync('work-activity-indicator.txt', 'touch from active tool');
+    await new Promise((res) => setTimeout(res, 1700));
+    await write(result);
+    process.exit(0);
+  } else if (mode === 'stderr-reset-reap') {
+    const conv = process.env.FAKE_CONV_ID || CONV;
+    const init = JSON.stringify({ event: 'init', conversation_id: conv, init: { cwd: process.cwd(), tools: [], permission_mode: 'default' } });
+    const result = JSON.stringify({ event: 'result', result: { conversation_id: conv, status: 'SUCCESS', response: 'Done.', duration_seconds: 4, num_turns: 1, usage: { input_tokens: 10, output_tokens: 5, thinking_tokens: 0, cache_read_tokens: 0, total_tokens: 15 }, error: null } });
+    await write(init);
+    await new Promise((res) => setTimeout(res, 1800));
+    process.stderr.write('compilation progress on stderr\\n');
+    await new Promise((res) => setTimeout(res, 1700));
+    await write(result);
     process.exit(0);
   } else {
     process.exit(43); // unknown mode: visible in the exit code, never a silent hang
@@ -4067,6 +4089,240 @@ test('Story 007 AC-3: idleReapMinutes > 35791 does not overflow 32-bit timer lim
   assert.equal(markers(stdout, 'SEND_ERROR').length, 0, 'a huge idle reap window (50000 min) must not overflow Node timer and trigger immediate reap');
   assert.equal(finalPayload(stdout).success, true, 'the turn completed normally');
 });
+
+// ── Story 012: Idle reaper activity checks & safe process termination ──
+
+test('Story 012 AC-2: isTurnActivityLive detects parent DB/WAL, brain transcript/task logs, and workCwd file modifications within silenceMs', async () => {
+  const messageService = await import('./message-service.js');
+  assert.equal(
+    typeof messageService.isTurnActivityLive,
+    'function',
+    'message-service must export isTurnActivityLive({ sessionId, cliHome, workCwd, silenceMs, now, state })'
+  );
+  const { isTurnActivityLive } = messageService;
+
+  const tempCliHome = mkdtempSync(join(tmpdir(), 'gemini-turn-activity-home-'));
+  const tempWorkCwd = mkdtempSync(join(tmpdir(), 'gemini-turn-activity-work-'));
+  const convId = '12345678-1234-4234-8234-123456789012';
+
+  try {
+    const convDir = join(tempCliHome, '.gemini', 'antigravity-cli', 'conversations');
+    const brainLogsDir = join(tempCliHome, '.gemini', 'antigravity-cli', 'brain', convId, '.system_generated', 'logs');
+    const brainTasksDir = join(tempCliHome, '.gemini', 'antigravity-cli', 'brain', convId, '.system_generated', 'tasks');
+    mkdirSync(convDir, { recursive: true });
+    mkdirSync(brainLogsDir, { recursive: true });
+    mkdirSync(brainTasksDir, { recursive: true });
+
+    const now = 1_000_000;
+    const silenceMs = 30_000; // 30s window, cutoff = 970000
+    const state = { turnStartedAt: 950_000, lastDbSig: null, lastWorkCwdSig: null, initialized: true };
+
+    // Baseline: no active files -> returns false
+    assert.equal(
+      isTurnActivityLive({ sessionId: convId, cliHome: tempCliHome, workCwd: tempWorkCwd, silenceMs, now, state }),
+      false,
+      'returns false when no activity in DB, brain logs, or workCwd'
+    );
+
+    // 1. Parent DB activity: .db file updated within silenceMs
+    const dbPath = join(convDir, `${convId}.db`);
+    writeFileSync(dbPath, 'db content');
+    utimesSync(dbPath, (now - 10_000) / 1000, (now - 10_000) / 1000);
+    assert.equal(
+      isTurnActivityLive({ sessionId: convId, cliHome: tempCliHome, workCwd: tempWorkCwd, silenceMs, now, state }),
+      true,
+      'returns true when parent conversation DB was modified within silenceMs'
+    );
+    utimesSync(dbPath, (now - 50_000) / 1000, (now - 50_000) / 1000);
+
+    // 2. Parent WAL activity: .db-wal updated within silenceMs
+    const walPath = join(convDir, `${convId}.db-wal`);
+    writeFileSync(walPath, 'wal content');
+    utimesSync(walPath, (now - 5_000) / 1000, (now - 5_000) / 1000);
+    assert.equal(
+      isTurnActivityLive({ sessionId: convId, cliHome: tempCliHome, workCwd: tempWorkCwd, silenceMs, now, state }),
+      true,
+      'returns true when parent conversation .db-wal was modified within silenceMs'
+    );
+    utimesSync(walPath, (now - 50_000) / 1000, (now - 50_000) / 1000);
+
+    // 3. Brain transcript log activity: transcript.jsonl updated within silenceMs
+    const transcriptPath = join(brainLogsDir, 'transcript.jsonl');
+    writeFileSync(transcriptPath, '{"step": 1}\n');
+    utimesSync(transcriptPath, (now - 8_000) / 1000, (now - 8_000) / 1000);
+    assert.equal(
+      isTurnActivityLive({ sessionId: convId, cliHome: tempCliHome, workCwd: tempWorkCwd, silenceMs, now, state }),
+      true,
+      'returns true when brain transcript log was modified within silenceMs'
+    );
+    utimesSync(transcriptPath, (now - 60_000) / 1000, (now - 60_000) / 1000);
+
+    // 4. Brain tasks activity: task file updated within silenceMs
+    const taskLogPath = join(brainTasksDir, 'task-1.log');
+    writeFileSync(taskLogPath, 'running command output...\n');
+    utimesSync(taskLogPath, (now - 12_000) / 1000, (now - 12_000) / 1000);
+    assert.equal(
+      isTurnActivityLive({ sessionId: convId, cliHome: tempCliHome, workCwd: tempWorkCwd, silenceMs, now, state }),
+      true,
+      'returns true when background task log was modified within silenceMs'
+    );
+    utimesSync(taskLogPath, (now - 60_000) / 1000, (now - 60_000) / 1000);
+
+    // 5. Working directory (workCwd) activity: source file modified within silenceMs
+    const srcFile = join(tempWorkCwd, 'index.js');
+    writeFileSync(srcFile, 'console.log("hello");');
+    utimesSync(srcFile, (now - 15_000) / 1000, (now - 15_000) / 1000);
+    assert.equal(
+      isTurnActivityLive({ sessionId: convId, cliHome: tempCliHome, workCwd: tempWorkCwd, silenceMs, now, state }),
+      true,
+      'returns true when a project file in workCwd was modified within silenceMs'
+    );
+
+    // 6. Parent DB signature change counts even when mtime is outside the silence window.
+    const sigId = 'sig01200-0000-4000-8000-000000000012';
+    const sigDb = join(convDir, `${sigId}.db`);
+    const sigState = { turnStartedAt: 950_000, lastDbSig: null, lastWorkCwdSig: null, initialized: false };
+    isTurnActivityLive({
+      sessionId: sigId, cliHome: tempCliHome, workCwd: '', silenceMs: 0, now, state: sigState,
+    });
+    sigState.initialized = true;
+    writeFileSync(sigDb, 'late row');
+    utimesSync(sigDb, (now - 90_000) / 1000, (now - 90_000) / 1000);
+    assert.equal(
+      isTurnActivityLive({
+        sessionId: sigId, cliHome: tempCliHome, workCwd: '', silenceMs, now, state: sigState,
+      }),
+      true,
+      'parent DB signature change counts when mtime is outside silenceMs'
+    );
+
+    // 7. Git status sees a nested source edit that the depth-2 scan cannot.
+    const gitRoot = mkdtempSync(join(tmpdir(), 'gemini-turn-activity-git-'));
+    const gitSession = 'git01200-0000-4000-8000-000000000012';
+    try {
+      execFileSync('git', ['init'], { cwd: gitRoot, stdio: 'ignore' });
+      execFileSync('git', ['config', 'user.email', 'story012@example.com'], { cwd: gitRoot, stdio: 'ignore' });
+      execFileSync('git', ['config', 'user.name', 'story012'], { cwd: gitRoot, stdio: 'ignore' });
+      const nestedDir = join(gitRoot, 'src', 'main', 'java');
+      mkdirSync(nestedDir, { recursive: true });
+      const nestedFile = join(nestedDir, 'App.java');
+      writeFileSync(nestedFile, 'class App {}\n');
+      execFileSync('git', ['add', '.'], { cwd: gitRoot, stdio: 'ignore' });
+      execFileSync('git', ['commit', '-m', 'init'], { cwd: gitRoot, stdio: 'ignore' });
+      const gitNow = Date.now();
+      const oldSeconds = (gitNow - 90_000) / 1000;
+      for (const path of [join(gitRoot, 'src'), join(gitRoot, 'src', 'main'), nestedDir, nestedFile]) {
+        utimesSync(path, oldSeconds, oldSeconds);
+      }
+      const gitState = {
+        turnStartedAt: gitNow - 120_000,
+        lastDbSig: null,
+        lastWorkCwdSig: null,
+        initialized: false,
+      };
+      isTurnActivityLive({
+        sessionId: gitSession,
+        cliHome: tempCliHome,
+        workCwd: gitRoot,
+        silenceMs: 0,
+        now: gitNow,
+        state: gitState,
+      });
+      gitState.initialized = true;
+      writeFileSync(nestedFile, 'class App { int x; }\n');
+      utimesSync(nestedFile, (gitNow - 5_000) / 1000, (gitNow - 5_000) / 1000);
+      assert.equal(
+        isTurnActivityLive({
+          sessionId: gitSession,
+          cliHome: tempCliHome,
+          workCwd: gitRoot,
+          silenceMs: 30_000,
+          now: gitNow,
+          state: gitState,
+        }),
+        true,
+        'git status sees a nested source edit below the depth-2 workCwd scan'
+      );
+    } finally {
+      rmSync(gitRoot, { recursive: true, force: true });
+    }
+
+    // 8. Security & resilience: path traversal in sessionId is rejected
+    assert.equal(
+      isTurnActivityLive({ sessionId: '../../etc/passwd', cliHome: tempCliHome, workCwd: tempWorkCwd, silenceMs, now }),
+      false,
+      'rejects invalid sessionId path traversal attempts'
+    );
+  } finally {
+    rmSync(tempCliHome, { recursive: true, force: true });
+    rmSync(tempWorkCwd, { recursive: true, force: true });
+  }
+});
+
+test('Story 012 AC-2: reapHungTurn defers killing agy when workCwd files are modified during a silent tool turn', async () => {
+  const tempWorkDir = mkdtempSync(join(tmpdir(), 'gemini-work-cwd-'));
+  try {
+    const { stdout, timedOut } = await runService({
+      mode: 'tool-cwd-activity',
+      cwd: tempWorkDir,
+      extraEnv: { GEMINI_IDLE_REAP_MINUTES: '0.05' }, // 3.0s window
+      timeoutMs: 8000,
+    });
+
+    assert.equal(timedOut, false, 'the turn must complete on its own without being reaped');
+    assert.equal(markers(stdout, 'SEND_ERROR').length, 0, 'no reap error when workCwd has active file modifications');
+    assert.equal(finalPayload(stdout).success, true, 'tool activity in workCwd must postpone idle reap so turn finishes successfully');
+  } finally {
+    rmSync(tempWorkDir, { recursive: true, force: true });
+  }
+});
+
+test('Story 012 AC-3: pollStoredThinking and stderr activity reset the idle reap timer', async () => {
+  // 1. Diagnostic stderr output resets the silence window
+  const stderrRes = await runService({
+    mode: 'stderr-reset-reap',
+    extraEnv: { GEMINI_IDLE_REAP_MINUTES: '0.05' }, // 3.0s window; stderr arrives at 1.8s, result at 3.5s
+    timeoutMs: 8000,
+  });
+
+  assert.equal(stderrRes.timedOut, false, 'the turn must complete on its own');
+  assert.equal(markers(stderrRes.stdout, 'SEND_ERROR').length, 0, 'stderr output must reset the idle reap timer');
+  assert.equal(finalPayload(stderrRes.stdout).success, true, 'stderr activity postpones reap and turn finishes');
+
+  // 2. SQLite thinking DB update resets the silence window
+  const tempHome = mkdtempSync(join(tmpdir(), 'gemini-think-reset-reap-'));
+  try {
+    const convId = 'c0120000-0000-4000-8000-000000000012';
+    createConversationDb(tempHome, convId, buildStepPayload({
+      field3: 'Initial thought.',
+    }));
+    const nextPayload = buildStepPayload({
+      field1: 'Done.',
+      field3: 'Initial thought.\nSecond thought.',
+    });
+
+    const thinkingRes = await runService({
+      mode: 'think-grow',
+      cliHome: tempHome,
+      sessionId: convId,
+      thinking: true,
+      extraEnv: {
+        FAKE_CONV_ID: convId,
+        FAKE_GROW_DELAY_MS: '1800', // 1.8s delay before DB update, 1.8s delay before result -> total 3.6s > 3.0s window
+        FAKE_NEXT_PAYLOAD_B64: nextPayload.toString('base64'),
+        GEMINI_IDLE_REAP_MINUTES: '0.05',
+      },
+      timeoutMs: 8000,
+    });
+
+    assert.equal(thinkingRes.timedOut, false, 'the turn must complete on its own');
+    assert.equal(markers(thinkingRes.stdout, 'SEND_ERROR').length, 0, 'thinking DB progress must reset the idle reap timer');
+    assert.equal(finalPayload(thinkingRes.stdout).success, true, 'thinking DB progress postpones reap and turn finishes');
+  } finally {
+    rmSync(tempHome, { recursive: true, force: true });
+  }
+});
+
 
 
 
