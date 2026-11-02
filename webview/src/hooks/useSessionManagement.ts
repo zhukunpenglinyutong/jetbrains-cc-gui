@@ -573,11 +573,15 @@ export function useSessionManagement({
       setCustomSessionTitle(newTitle);
     }
 
-    // Immediately update frontend state
+    // Immediately update frontend state. Marking hasCustomTitle here hides the
+    // refresh-title buttons right away (a manual title now wins over any AI
+    // title), matching what HistoryLoadService reports after the next reload.
     if (historyData && historyData.sessions) {
       setHistoryData(previous => previous?.sessions ? {
         ...previous,
-        sessions: previous.sessions.map(session => session.sessionId === sessionId ? { ...session, title: newTitle } : session),
+        sessions: previous.sessions.map(session => session.sessionId === sessionId
+          ? { ...session, title: newTitle, hasCustomTitle: true }
+          : session),
       } : previous);
 
       // Show success toast

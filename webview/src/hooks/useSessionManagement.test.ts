@@ -319,6 +319,9 @@ describe('useSessionManagement', () => {
     act(() => { result.current.updateHistoryTitle('open', 'New title'); });
     expect(mocks.setCustomSessionTitle).toHaveBeenCalledWith('New title');
     expect(historyData.sessions?.[0].title).toBe('New title');
+    // A manual rename makes the manual title win over AI titles — flag it so
+    // the refresh-title buttons hide immediately (matches the next reload).
+    expect(historyData.sessions?.[0].hasCustomTitle).toBe(true);
   });
 
   it('leaves the open session title alone when another session is edited', () => {

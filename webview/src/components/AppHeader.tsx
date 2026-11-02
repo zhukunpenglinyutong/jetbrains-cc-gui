@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChatHeader } from './ChatHeader';
 import { sendBridgeEvent } from '../utils/bridge';
@@ -26,13 +27,25 @@ export const AppHeader = ({ sessionTitle, onNewSession, onUpdateHistoryTitle, on
     setSettingsInitialTab, setSettingsProviderSubTab,
     setSearchOpen,
   } = useUIState();
-  const { currentSessionId, customSessionTitle, setCustomSessionTitle } = useSession();
+  const { currentSessionId, historyData, setCustomSessionTitle } = useSession();
+
+  // Manual-title detection mirrors the history rows: hasCustomTitle comes from
+  // session-titles.json via HistoryLoadService. customSessionTitle is NOT a
+  // usable signal here — loading any history session seeds it with the
+  // displayed title (AI titles included), which hid the button on every
+  // session switch.
+  const hasManualTitle = useMemo(
+    () => Boolean(currentSessionId && historyData?.sessions?.some(
+      session => session.sessionId === currentSessionId && session.hasCustomTitle === true,
+    )),
+    [currentSessionId, historyData],
+  );
 
   // The chat-header refresh button only exists for Claude sessions with an
   // active id and no manual title (a manual title wins over the AI title, so
   // a regeneration would never show its result); the spinner reflects the
   // shared per-session regeneration state.
-  const handleRegenerateTitle = canRegenerateTitle && currentSessionId && !customSessionTitle
+  const handleRegenerateTitle = canRegenerateTitle && currentSessionId && !hasManualTitle
     ? () => onRegenerateTitle(currentSessionId)
     : undefined;
 
