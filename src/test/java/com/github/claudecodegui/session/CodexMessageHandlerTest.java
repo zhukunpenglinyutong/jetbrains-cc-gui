@@ -112,7 +112,12 @@ public class CodexMessageHandlerTest {
 
         @Override
         public void onUsageUpdate(int usedTokens, int maxTokens) {
+            // Merged from both sides of the upstream merge: the PR's list-based
+            // recording and upstream's counter/last-value recording.
             usageUpdates.add(new int[]{usedTokens, maxTokens});
+            usageUpdateCount++;
+            lastUsedTokens = usedTokens;
+            lastMaxTokens = maxTokens;
         }
 
         @Override
@@ -166,13 +171,6 @@ public class CodexMessageHandlerTest {
         @Override
         public void onThinkingDelta(String delta) {
             thinkingDeltas.add(delta);
-        }
-
-        @Override
-        public void onUsageUpdate(int usedTokens, int maxTokens) {
-            usageUpdateCount++;
-            lastUsedTokens = usedTokens;
-            lastMaxTokens = maxTokens;
         }
     }
 
