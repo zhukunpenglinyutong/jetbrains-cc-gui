@@ -184,13 +184,35 @@ export function writeTempScript(commandLine) {
   return scriptPath;
 }
 
+function killTerminalProcess(child, signal) {
+  if (!child) return;
+  if (process.platform !== 'win32' && typeof child.pid === 'number' && child.pid > 0) {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch {
+      // EPERM / ESRCH: fall back to direct child.kill
+    }
+  }
+  try {
+    child.kill(signal);
+  } catch {
+    // ignore EPERM / ESRCH
+  }
+}
+
+/**
+ * Host for ACP terminal/* lifecycle commands and child process execution.
+ */
 export class AcpTerminalHost {
   /**
-   * @param {object} opts
-   * @param {string} [opts.defaultCwd]
-   * @param {NodeJS.ProcessEnv} [opts.env]
-   * @param {(event: string, data?: any) => void} [opts.onEvent]
-   * @param {(info: {command:string,args:string[],cwd:string,sessionId:string}) => Promise<boolean>} [opts.authorizeCreate]
+   * Creates an ACP terminal host instance.
+   *
+   * @param {object} [opts] Host configuration options
+   * @param {string} [opts.defaultCwd] Default working directory for spawned commands
+   * @param {NodeJS.ProcessEnv} [opts.env] Base environment variables for spawned commands
+   * @param {(event: string, data?: any) => void} [opts.onEvent] Event listener callback
+   * @param {(info: {command:string,args:string[],cwd:string,sessionId:string}) => Promise<boolean>} [opts.authorizeCreate] Authorization callback before spawning
    */
   constructor({ defaultCwd = process.cwd(), env = process.env, onEvent, authorizeCreate } = {}) {
     this.defaultCwd = defaultCwd || process.cwd();
@@ -201,8 +223,27 @@ export class AcpTerminalHost {
     this.terminals = new Map();
   }
 
+  /**
+   * Returns the number of tracked terminals.
+   *
+   * @return {number} count of active or retained terminal entries
+   */
   size() {
     return this.terminals.size;
+  }
+
+  /**
+   * Checks whether any spawned terminal command is still running and unreleased.
+   *
+   * @return {boolean} true if at least one terminal has not exited or been released
+   */
+  hasRunningTerminals() {
+    for (const state of this.terminals.values()) {
+      if (state && !state.exited && !state.released) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -229,6 +270,12 @@ export class AcpTerminalHost {
     }
   }
 
+  /**
+   * Spawns a new terminal command after checking authorization and registers its output stream.
+   *
+   * @param {object} [params] Terminal creation parameters
+   * @return {Promise<{terminalId: string}>} created terminal identifier object
+   */
   async create(params = {}) {
     const command = params.command;
     if (!command || !String(command).trim()) {
@@ -306,8 +353,14 @@ export class AcpTerminalHost {
       });
     }
 
+    const directExec =
+      process.platform !== 'win32' &&
+      args.length > 0 &&
+      !isShellExecutable(command) &&
+      path.isAbsolute(String(command));
+
     let scriptPath = null;
-    if (process.platform !== 'win32' && needsFileExecution(commandLine)) {
+    if (!directExec && process.platform !== 'win32' && needsFileExecution(commandLine)) {
       // Complex payload (shebang / heredoc / ! / heavy quoting) — write to temp script.
       // This bypasses the outer wrapper mangling that corrupts heredoc, bang, nested quotes.
       scriptPath = writeTempScript(commandLine);
@@ -328,6 +381,13 @@ export class AcpTerminalHost {
           windowsVerbatimArguments: true,
         });
       }
+    } else if (directExec) {
+      child = spawn(String(command), args, {
+        cwd,
+        env: cleanEnv,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: true,
+      });
     } else if (scriptPath) {
       // Execute the temp script directly via the login shell as a file, not via -c.
       // This bypasses the outer ACP wrapper entirely and avoids treating the path as code.
@@ -406,11 +466,24 @@ export class AcpTerminalHost {
       });
     });
 
+    let resolveFirstActivity;
+    const firstActivityPromise = new Promise((resolve) => {
+      resolveFirstActivity = resolve;
+    });
+
     const onData = (buf) => {
-      this.#append(state, buf.toString('utf8'));
+      const text = buf.toString('utf8');
+      this.#append(state, text);
+      try {
+        this.onEvent('output', { terminalId, byteLength: state.byteLength });
+      } catch {
+        // ignore listener errors
+      }
+      resolveFirstActivity();
     };
     child.stdout?.on('data', onData);
     child.stderr?.on('data', onData);
+    state.exitPromise.then(() => resolveFirstActivity(), () => resolveFirstActivity());
 
     this.terminals.set(terminalId, state);
     this.onEvent('create', {
@@ -420,6 +493,11 @@ export class AcpTerminalHost {
       cwd,
       sessionId,
     });
+
+    await Promise.race([
+      firstActivityPromise,
+      new Promise((r) => setTimeout(r, 60)),
+    ]);
 
     return { terminalId };
   }
@@ -476,22 +554,20 @@ export class AcpTerminalHost {
     };
   }
 
+  /**
+   * Terminates a running terminal process (and its process group on POSIX).
+   *
+   * @param {object} [params] Kill parameters containing terminalId
+   * @return {Promise<object>} empty JSON-RPC result object
+   */
   async kill(params = {}) {
     const state = this.#get(params.terminalId || params.terminal_id);
-    if (!state.exited && state.child && !state.child.killed) {
-      try {
-        state.child.kill('SIGTERM');
-      } catch {
-        // ignore
-      }
+    if (!state.exited && state.child) {
+      killTerminalProcess(state.child, 'SIGTERM');
       // Force kill shortly after if still running
       setTimeout(() => {
-        if (!state.exited && state.child && !state.child.killed) {
-          try {
-            state.child.kill('SIGKILL');
-          } catch {
-            // ignore
-          }
+        if (!state.exited && state.child) {
+          killTerminalProcess(state.child, 'SIGKILL');
         }
       }, 500).unref?.();
     }
@@ -514,6 +590,12 @@ export class AcpTerminalHost {
     return {};
   }
 
+  /**
+   * Releases a terminal entry and terminates its process if still running.
+   *
+   * @param {object} [params] Release parameters containing terminalId
+   * @return {Promise<object>} empty JSON-RPC result object
+   */
   async release(params = {}) {
     const id = params.terminalId || params.terminal_id;
     const state = this.terminals.get(id);
@@ -521,17 +603,9 @@ export class AcpTerminalHost {
       // Idempotent release
       return {};
     }
-    if (!state.exited && state.child && !state.child.killed) {
-      try {
-        state.child.kill('SIGTERM');
-      } catch {
-        // ignore
-      }
-      try {
-        state.child.kill('SIGKILL');
-      } catch {
-        // ignore
-      }
+    if (!state.exited && state.child) {
+      killTerminalProcess(state.child, 'SIGTERM');
+      killTerminalProcess(state.child, 'SIGKILL');
     }
     state.released = true;
     // Best-effort cleanup of any temp script
