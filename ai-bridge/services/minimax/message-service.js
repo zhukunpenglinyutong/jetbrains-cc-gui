@@ -6,7 +6,13 @@
  *
  * CLI:
  *   minimax exec --output-format stream-json --cwd <dir> --permission <policy>
- *        [--model <provider/model>] [--session <id>] "<prompt>"
+ *        [--model <provider/model>] [--session <id>]
+ *        [--file <image> ...] ("<prompt>" | --input - --input-format text)
+ *
+ * The prompt rides stdin (`--input - --input-format text`) on Windows — the
+ * cmd.exe shim chain cannot carry newlines, caps at 8191 chars and re-parses
+ * `%` — and the argv positional everywhere else. Images attach natively via
+ * repeatable `--file` flags.
  *
  * Two NDJSON schemas are supported: the CLI changed its event contract between
  * releases, so the bridge must understand both to stay version-agnostic.
@@ -51,14 +57,15 @@
  *
  *   Assumed (unverified): turn.failed is NOT a terminal event — 0.5.5 is
  *   believed to still send exec.completed after it, so termination stays with
- *   exec.completed / exec.result and turn.failed would only contribute status +
- *   error text. Source: the bundle's emit order. The capture contains no
- *   turn.failed line at all, so this is an inference, not an observation, and
- *   it is pending real-sampling verification. Because the assumption is
- *   load-bearing, turn.failed is also treated as non-terminal state: if a run
- *   never produces a result event, sendMessage's finally block surfaces the
- *   reason as [SEND_ERROR] (createMiniMaxEventHandler) instead of leaving the
- *   UI with no output. That orphan case is asserted from a constructed sample.
+ *   exec.completed / exec.result and turn.failed only contributes the reason.
+ *   Source: the bundle's emit order. The capture contains no turn.failed line
+ *   at all, so this is an inference, not an observation, and it is pending
+ *   real-sampling verification. Because that assumption must never silence a
+ *   failure, turn.failed surfaces its reason as [SEND_ERROR] immediately —
+ *   whether or not anything was streamed before it — and the result line only
+ *   adds its own error when none was reported yet (deduplicated per run). That
+ *   also covers a run whose stream ends without a result event at all: the
+ *   error is already out, so no post-stream fallback is needed.
  *
  *   Verified: toolCall.status is an Int32 in the capture — 4/5 rows carry
  *   neither input nor output, 1 attaches input, 2 attaches output.content[].
@@ -359,9 +366,14 @@ function buildMiniMaxResultEvent(payload) {
   const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId.trim() : '';
   const status = typeof payload.status === 'string' ? payload.status : '';
   const errorMessage = extractErrorText(payload);
-  // The envelope may carry the full answer text; kept so a run that streamed
-  // nothing can still publish it once (see createResultKindHandler).
-  const answer = typeof payload.answer === 'string' ? payload.answer : '';
+  // The envelope may carry the full answer text: schema B (0.2.x–0.4.x) names
+  // it `answer`, schema A (0.5.x) `output` — both captures of 0.5.5 put the
+  // text in `output`, so reading only `answer` never fired there. Kept so a
+  // run that streamed nothing can still publish it once
+  // (see createResultKindHandler).
+  const answer = typeof payload.answer === 'string' && payload.answer
+    ? payload.answer
+    : (typeof payload.output === 'string' ? payload.output : '');
   // Anything other than an explicit success counts as failure: the stream
   // is terminated on this line, so a failed run must not end in silence.
   const failed = status !== '' && status.toLowerCase() !== 'succeeded';
@@ -665,28 +677,29 @@ export function isMiniMaxTerminalLine(line) {
 }
 
 /**
- * Prompts longer than this ride stdin even without newlines: the Windows
- * command line caps near 32k chars including the whole argv and quoteCmdArg's
- * doubling, so stay an order of magnitude below it.
- */
-const STDIN_PROMPT_ARG_THRESHOLD = 12000;
-
-/**
  * Decide whether the prompt must be piped via stdin (`mcode exec --input -`)
  * instead of riding argv.
  *
- * Windows cmd.exe command lines cannot carry a newline (everything after the
- * first line never reaches the CLI — pasted logs arrived as one line) and are
- * capped near 32k chars including quoting, so oversized prompts fail the spawn
- * outright. Short single-line prompts keep the plain argv positional.
+ * Windows: always. The shim chain runs through `cmd.exe /d /s /c`, whose
+ * command line cannot carry a newline (everything after the first line never
+ * reaches the CLI — pasted logs arrived as one line), is capped at 8191
+ * characters — far below the ~32k CreateProcess limit, and the cap also
+ * applies to %* expansion inside the npm shim chain — and re-parses `%` on the
+ * command line, where quoteCmdArg's `%` → `%%` doubling is not an escape in a
+ * `cmd /c` context, so a prompt like "raise coverage to 80%" could arrive as
+ * "80%%". A single stdin pipe sidesteps all three limits.
+ *
+ * macOS/Linux: never. execve passes argv verbatim — multi-line prompts ride
+ * argv fine and legacy mcode 0.2.x–0.4.x may not accept `--input`, so those
+ * versions keep the plain positional prompt this bridge always used there.
  *
  * @param {string} text
+ * @param {string} [platform] defaults to process.platform (test hook)
  * @returns {boolean}
  */
-export function shouldUseStdinPrompt(text) {
+export function shouldUseStdinPrompt(text, platform = process.platform) {
   if (typeof text !== 'string') return false;
-  if (/[\r\n]/.test(text)) return true;
-  return text.length > STDIN_PROMPT_ARG_THRESHOLD;
+  return platform === 'win32';
 }
 
 export function buildMiniMaxArgs({ message, sessionId, model, permissionMode, cwd, imagePaths, promptViaStdin }) {
@@ -725,24 +738,6 @@ export function buildMiniMaxArgs({ message, sessionId, model, permissionMode, cw
 }
 
 /**
- * The orphan-failure net, as a pure policy so it is testable without spawning
- * the CLI: a run that reported turn.failed but never produced a result event
- * must still tell the user why, because nothing else in the pipeline will
- * (shouldTerminate never fired, so runCliStreaming's non-zero-exit fallback
- * never fires either, and a 0-exit run is silent by definition).
- *
- * Returns the reason to surface, or '' when there is nothing to report: a run
- * that reached a result event has already been handled (and reporting again
- * would double up), and a run with no recorded reason has no text to invent.
- *
- * @param {{sawResult: boolean, turnFailureMessage: string}} streamState
- */
-export function resolveUnterminatedFailureReason(streamState) {
-  if (!streamState || streamState.sawResult) return '';
-  return typeof streamState.turnFailureMessage === 'string' ? streamState.turnFailureMessage : '';
-}
-
-/**
  * Bind the event handler to the real marker protocol.
  *
  * This is the single place the production marker functions are named, so a
@@ -770,7 +765,8 @@ function createMarkerEmitter() {
  * independent sets on purpose: a reasoning item and an agent_message item may
  * carry the same id, and only a replay of each stream's own id may be dropped.
  * `emittedSessionId` seeds with the id this run already emitted, which is what
- * makes [SESSION_ID] once-per-run.
+ * makes [SESSION_ID] once-per-run. `failureReported` makes the failure error
+ * once-per-run no matter which of turn.failed / the result event carries it.
  */
 function createDedupState(initialSessionId = '') {
   return {
@@ -779,7 +775,7 @@ function createDedupState(initialSessionId = '') {
     streamedContentMessageIds: new Set(),
     streamedThinkingMessageIds: new Set(),
     emittedSessionId: initialSessionId,
-    turnFailureMessage: '',
+    failureReported: false,
     sawResult: false,
   };
 }
@@ -890,14 +886,15 @@ function createResultKindHandler(state, publish) {
       publish.content(event.answer);
     }
     // shouldTerminate kills the CLI on this line and suppresses the
-    // non-zero exit code, so a failed run with no streamed output would
-    // otherwise end the stream in silence — surface it explicitly.
-    const nothingStreamed = state.streamedContentMessageIds.size === 0
-      && state.streamedThinkingMessageIds.size === 0
-      && state.seenToolUseIds.size === 0;
-    if (event.failed && nothingStreamed) {
+    // non-zero exit code, so a failed run must surface its error here no
+    // matter what was streamed before it — a truncated answer with no error
+    // at all is worse than either alone. Deduplicated against an earlier
+    // turn.failed error (state.failureReported) so the user sees one error,
+    // not two.
+    if (event.failed && !state.failureReported) {
+      state.failureReported = true;
       publish.sendError(
-        event.errorMessage || state.turnFailureMessage
+        event.errorMessage
           || `MiniMax CLI run failed (status: ${event.status})`,
       );
     }
@@ -923,11 +920,18 @@ function createKindHandlers(state, publish) {
     ...Object.entries(createToolKindHandlers(state, publish)),
     ['usage', createUsageKindHandler(state, publish)],
     // Assumed non-terminal (exec.completed is believed to follow) and never a
-    // usage source; only remember the reason, so the result line can surface
-    // it when the CLI leaves the reason only here — and so sendMessage can
-    // still surface it if no result line ever arrives.
+    // usage source — but the reason is surfaced immediately, not remembered:
+    // a run that already streamed text or tool calls and then hits a rate
+    // limit / quota / dropped connection must not end the stream in silence
+    // with a truncated answer. Whether or not the result event ever follows,
+    // the error is out at this point; the result line only adds its own error
+    // when none was reported yet (state.failureReported dedupes).
     ['turn_failed', (event) => {
-      state.turnFailureMessage = event.errorMessage || '';
+      if (state.failureReported) return;
+      state.failureReported = true;
+      publish.sendError(
+        event.errorMessage || `MiniMax CLI turn failed (status: ${event.status || 'failed'})`,
+      );
     }],
     ['result', createResultKindHandler(state, publish)],
   ]);
@@ -944,9 +948,9 @@ function createKindHandlers(state, publish) {
  * @param {object} [emitter] defaults to the real marker protocol
  * @param {string} [initialSessionId] session id already emitted for this run
  * @returns {{handleEvent: (event: object) => void, sawResult: boolean,
- *   turnFailureMessage: string}} `sawResult` and `turnFailureMessage` are live
- *   getters: sendMessage reads them in its finally block to surface a run that
- *   failed without ever producing a result event.
+ *   failureReported: boolean}} `sawResult` and `failureReported` are live
+ *   getters for tests: the latter is true once a failure error was emitted
+ *   (from turn.failed or from the result event, whichever came first).
  */
 export function createMiniMaxEventHandler(
   emitter = createMarkerEmitter(),
@@ -972,9 +976,9 @@ export function createMiniMaxEventHandler(
     get sawResult() {
       return state.sawResult;
     },
-    /** Reason carried by the last turn.failed; '' when none was seen. */
-    get turnFailureMessage() {
-      return state.turnFailureMessage;
+    /** True once a failure error was emitted for this run. */
+    get failureReported() {
+      return state.failureReported;
     },
   };
 }
@@ -999,8 +1003,9 @@ export async function sendMessage(
 ) {
   beginStream();
 
-  // Headless exec has no multimodal prompt payload; materialize images to
-  // temp files and append path instructions (same approach as Kimi bridge).
+  // Images ride the CLI natively: materialize attachments to temp files and
+  // attach them with `mcode exec --file <path>` (repeatable) — the model sees
+  // the image itself, not a path instruction.
   let promptText = message || '';
   let imagePaths = [];
   try {
@@ -1013,8 +1018,9 @@ export async function sendMessage(
   }
 
   const bin = resolveMiniMaxCliPath();
-  // Multi-line/oversized prompts ride stdin — cmd.exe argv cannot carry
-  // newlines and caps near 32k chars (see shouldUseStdinPrompt).
+  // On Windows every prompt rides stdin — the cmd.exe shim chain cannot carry
+  // newlines, caps at 8191 chars and re-parses `%` (see shouldUseStdinPrompt);
+  // macOS/Linux keep the plain argv positional for legacy-mcode compatibility.
   const promptViaStdin = shouldUseStdinPrompt(promptText);
   const args = buildMiniMaxArgs({
     message: promptText,
@@ -1063,16 +1069,10 @@ export async function sendMessage(
     await cleanupMaterializedImagePaths(imagePaths);
     // Report what the run left unhandled (stderr only) so a 0.5.6 protocol
     // change surfaces as a top-N summary instead of silently missing output.
+    // Failure reporting needs no post-stream net here: turn.failed and the
+    // result event both surface their error while the stream is still open
+    // (see createKindHandlers), so emitting after endStream would only
+    // duplicate it.
     flushMiniMaxUnknownTypeCounts();
-    // Orphan-failure net: turn.failed is only *believed* to be followed by
-    // exec.completed (see the file header). If a run reports the failure, exits
-    // 0 — so runCliStreaming's non-zero-exit fallback never fires — and never
-    // produces a result event, the reason would be dropped and the UI would end
-    // the run with no output at all: the exact failure mode this bridge exists
-    // to remove. Normal runs all set sawResult, so this stays silent.
-    const orphanFailure = resolveUnterminatedFailureReason(stream);
-    if (orphanFailure) {
-      emitSendError(orphanFailure, 'MiniMax');
-    }
   }
 }

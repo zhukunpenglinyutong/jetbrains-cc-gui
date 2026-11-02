@@ -5,6 +5,7 @@
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { createInterface } from 'readline';
+import { StringDecoder } from 'string_decoder';
 import { emitSendError, endStream } from './marker-protocol.js';
 import { resolveCliSpawn, decodeCliOutput, stripOuterQuotes } from './cli-path.js';
 
@@ -142,8 +143,16 @@ export function runCliStreaming({
     process.once('SIGHUP', onParentSignal);
 
     const stdoutRl = createInterface({ input: child.stdout });
-    // Rolling tail only — never accumulate the child's full stderr.
-    let stderrTail = '';
+    // Rolling tail only — never accumulate the child's full stderr. Kept as
+    // RAW bytes: the win32 GBK fallback needs a complete buffer (a multi-byte
+    // character split across chunk boundaries is not GBK, and re-decoding
+    // such chunks as GBK garbles healthy UTF-8), so it re-decodes this tail
+    // once at close instead of each chunk as it arrives.
+    const STDERR_TAIL_MAX_BYTES = 16384;
+    let stderrTailBytes = Buffer.alloc(0);
+    // Incremental UTF-8 decode for the live echo: buffers partial multi-byte
+    // sequences so a character split across chunks survives.
+    const stderrDecoder = new StringDecoder('utf8');
 
     stdoutRl.on('line', (line) => {
       try {
@@ -166,10 +175,11 @@ export function runCliStreaming({
     });
 
     child.stderr.on('data', (chunk) => {
-      // cmd.exe emits localized messages in the OEM codepage (GBK on Chinese
-      // Windows); decode so the surfaced error is readable, not U+FFFD soup.
-      const text = decodeCliOutput(chunk);
-      stderrTail = (stderrTail + text).slice(-4000);
+      const text = stderrDecoder.write(chunk);
+      const merged = stderrTailBytes.length + chunk.length > STDERR_TAIL_MAX_BYTES
+        ? Buffer.concat([stderrTailBytes, chunk]).subarray(-STDERR_TAIL_MAX_BYTES)
+        : Buffer.concat([stderrTailBytes, chunk]);
+      stderrTailBytes = merged;
       process.stderr.write(text);
     });
 
@@ -194,7 +204,10 @@ export function runCliStreaming({
         && code !== 0
         && signal !== 'SIGTERM'
         && signal !== 'SIGINT') {
-        const tail = stderrTail.trim().slice(-800);
+        // Decode the complete tail once: UTF-8 first, GBK retry on win32 only
+        // (cmd.exe emits localized messages in the OEM codepage — GBK on
+        // Chinese Windows — which a forced UTF-8 read turns into U+FFFD).
+        const tail = decodeCliOutput(stderrTailBytes).trim().slice(-800);
         reportError(
           `${label} CLI exited with code ${code}${signal ? ` (signal ${signal})` : ''}`
           + (tail ? `\n${tail}` : '')

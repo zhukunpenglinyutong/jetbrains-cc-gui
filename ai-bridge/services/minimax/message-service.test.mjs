@@ -12,7 +12,6 @@ import {
   normalizeToolStatus,
   parseMiniMaxStreamLine,
   resetMiniMaxUnknownTypeCounts,
-  resolveUnterminatedFailureReason,
   shouldUseStdinPrompt,
 } from './message-service.js';
 
@@ -200,6 +199,19 @@ test('exec.result failure falls back to the message field', () => {
   const event = parseMiniMaxStreamLine(line);
   assert.equal(event.failed, true);
   assert.equal(event.errorMessage, 'aborted by user');
+});
+
+test('a result envelope carrying its text in output (0.5.x) publishes it', () => {
+  // 0.5.5 capture: exec.completed.result has `output`, never `answer` — a
+  // run that streamed nothing must still publish the envelope text once.
+  const line = JSON.stringify({
+    type: 'exec.completed',
+    result: { type: 'exec.result', sessionId: 'mvs_o', status: 'succeeded', output: 'the whole answer' },
+  });
+  const emitter = createFakeEmitter();
+  createMiniMaxEventHandler(emitter).handleEvent(parseMiniMaxStreamLine(line));
+  assert.deepEqual(emitter.emitted.content, ['the whole answer']);
+  assert.equal(emitter.emitted.errors.length, 0);
 });
 
 test('exec.result without a status is not treated as failure', () => {
@@ -419,7 +431,10 @@ test('real exec.completed result maps to a result event read from the nested res
     status: result.status,
     failed: result.status.toLowerCase() !== 'succeeded',
     errorMessage: '',
-    answer: typeof result.answer === 'string' ? result.answer : '',
+    // The 0.5.5 envelope carries its text in `output` (no `answer` field).
+    answer: typeof result.answer === 'string' && result.answer
+      ? result.answer
+      : (typeof result.output === 'string' ? result.output : ''),
   });
 });
 
@@ -450,7 +465,12 @@ test('legacy exec.result and 0.5.5 exec.completed produce isomorphic result even
     status: result.status,
     failed: result.status.toLowerCase() !== 'succeeded',
     errorMessage: '',
-    answer: typeof result.answer === 'string' ? result.answer : '',
+    // 0.5.x carries the envelope text in `output` (the capture has no
+    // `answer` field at all), which buildMiniMaxResultEvent reads as the
+    // unified `answer`.
+    answer: typeof result.answer === 'string' && result.answer
+      ? result.answer
+      : (typeof result.output === 'string' ? result.output : ''),
   });
 
   // Both shapes reach the same handler branch, so the session marker is
@@ -684,7 +704,9 @@ test('turn.failed emits no usage marker', () => {
   })));
   assert.equal(emitter.emitted.usage.length, 0);
   assert.equal(emitter.emitted.content.length, 0);
-  assert.equal(emitter.emitted.errors.length, 0, 'the reason is surfaced by the result line, not here');
+  // The failure itself IS surfaced here — immediately, whether or not anything
+  // streamed before it and whether or not a result event ever follows.
+  assert.deepEqual(emitter.emitted.errors, ['boom']);
   // [/0.5.5-ALLOWED]
 });
 
@@ -715,45 +737,62 @@ test('a failure reason carried only by turn.failed reaches the user', () => {
   // [/0.5.5-ALLOWED]
 });
 
-test('turn.failed with no result event still produces a [SEND_ERROR]', () => {
-  // [0.5.5-ALLOWED] W6: this is the branch the capture cannot produce — the
-  // orphan run. The failure mode it removes: the CLI reports turn.failed,
+test('turn.failed surfaces its error immediately, with or without a result event', () => {
+  // [0.5.5-ALLOWED] W6: this is the branch the capture cannot produce — a
+  // failed turn. The failure mode it removes: the CLI reports turn.failed,
   // never sends exec.completed and exits 0, so shouldTerminate never fires and
-  // runCliStreaming's non-zero-exit fallback never fires either. Without the
-  // finally-block net, turnFailureMessage is written and never read and the UI
-  // ends the run with no output at all.
+  // runCliStreaming's non-zero-exit fallback never fires either. The error is
+  // emitted the moment turn.failed is handled — mid-stream, before any
+  // [STREAM_END] — so the orphan case needs no post-stream net.
   const orphan = JSON.stringify({
     type: 'turn.failed', status: 'failed',
     error: { category: 'runtime', code: 'E6', message: 'quota exhausted', retryable: false },
   });
 
-  // State the handler leaves behind after an orphan turn.failed — the exact
-  // input the finally-block net evaluates.
   const emitter = createFakeEmitter();
   const stream = createMiniMaxEventHandler(emitter);
   stream.handleEvent(parseMiniMaxStreamLine(orphan));
   assert.equal(stream.sawResult, false, 'no result event was seen');
-  assert.equal(stream.turnFailureMessage, 'quota exhausted');
-  assert.deepEqual(emitter.emitted.errors, [], 'nothing is reported mid-run, only at the end');
+  assert.equal(stream.failureReported, true);
+  assert.deepEqual(emitter.emitted.errors, ['quota exhausted']);
 
-  // The net itself, evaluated on that state.
-  assert.equal(resolveUnterminatedFailureReason(stream), 'quota exhausted');
-
-  // ...and the two states in which it must stay silent: a normal run (the
-  // result line already reported the reason — exactly one error overall) and a
-  // run that never recorded a reason (nothing to invent).
-  const normal = createFakeEmitter();
-  const normalStream = createMiniMaxEventHandler(normal);
-  normalStream.handleEvent(parseMiniMaxStreamLine(orphan));
-  normalStream.handleEvent(parseMiniMaxStreamLine(JSON.stringify({
+  // A result event that repeats the failure must not produce a second error.
+  stream.handleEvent(parseMiniMaxStreamLine(JSON.stringify({
     type: 'exec.completed', result: { type: 'exec.result', status: 'failed' },
   })));
-  assert.equal(normalStream.sawResult, true);
-  assert.equal(resolveUnterminatedFailureReason(normalStream), '', 'must not double-report');
-  assert.deepEqual(normal.emitted.errors, ['quota exhausted'], 'the result line reported it once');
+  assert.equal(stream.sawResult, true);
+  assert.deepEqual(emitter.emitted.errors, ['quota exhausted'], 'exactly one error per run');
+  // [/0.5.5-ALLOWED]
+});
 
-  assert.equal(resolveUnterminatedFailureReason({ sawResult: false, turnFailureMessage: '' }), '');
-  assert.equal(resolveUnterminatedFailureReason({ sawResult: true, turnFailureMessage: 'x' }), '');
+test('partial output, then failure still surfaces the error (429 mid-run)', () => {
+  // [0.5.5-ALLOWED] W6: regression guard for the review finding — a run that
+  // streams some text and then fails (rate limit, quota, dropped connection)
+  // used to end with a truncated answer and no error at all, because the
+  // result handler only reported failures when NOTHING had streamed. The
+  // error must surface whether turn.failed or the failed result carries it.
+  const lines = [
+    { type: 'exec.started', sessionId: 'mvs_x' },
+    { type: 'item.started', item: { id: 'm1', type: 'agent_message', contentDelta: 'Starting to refactor...' } },
+    { type: 'turn.failed', status: 'failed', error: { category: 'api', code: 'rate_limited', message: '429 Too Many Requests', retryable: true } },
+    { type: 'exec.completed', result: { type: 'exec.result', sessionId: 'mvs_x', status: 'failed', error: { message: '429 Too Many Requests' } } },
+  ];
+
+  // Via turn.failed (deduplicated against the failed result below).
+  const emitter = createFakeEmitter();
+  const { handleEvent } = createMiniMaxEventHandler(emitter);
+  for (const line of lines) handleEvent(parseMiniMaxStreamLine(JSON.stringify(line)));
+  assert.deepEqual(emitter.emitted.content, ['Starting to refactor...']);
+  assert.deepEqual(emitter.emitted.errors, ['429 Too Many Requests']);
+
+  // Same shape without turn.failed: the failed result alone must still report.
+  const resultOnly = createFakeEmitter();
+  const resultStream = createMiniMaxEventHandler(resultOnly);
+  for (const line of lines.filter((l) => l.type !== 'turn.failed')) {
+    resultStream.handleEvent(parseMiniMaxStreamLine(JSON.stringify(line)));
+  }
+  assert.deepEqual(resultOnly.emitted.content, ['Starting to refactor...']);
+  assert.deepEqual(resultOnly.emitted.errors, ['429 Too Many Requests']);
   // [/0.5.5-ALLOWED]
 });
 
@@ -1397,19 +1436,30 @@ test('buildMiniMaxArgs without images has no --file and ignores falsy entries', 
 });
 
 // ---------------------------------------------------------------------------
-// Multi-line/oversized prompts ride stdin (--input -), not argv
+// Prompts ride stdin (--input -) on Windows, argv positional elsewhere
 // ---------------------------------------------------------------------------
 
-test('shouldUseStdinPrompt flags newlines and oversized single lines', () => {
-  assert.equal(shouldUseStdinPrompt('one line'), false);
-  assert.equal(shouldUseStdinPrompt('line1\nline2'), true);
-  assert.equal(shouldUseStdinPrompt('line1\rline2'), true);
-  assert.equal(shouldUseStdinPrompt('with trailing newline\n'), true);
-  assert.equal(shouldUseStdinPrompt('a'.repeat(12001)), true);
-  assert.equal(shouldUseStdinPrompt('a'.repeat(12000)), false);
-  assert.equal(shouldUseStdinPrompt(''), false);
-  assert.equal(shouldUseStdinPrompt(null), false);
-  assert.equal(shouldUseStdinPrompt(undefined), false);
+test('shouldUseStdinPrompt is true for every prompt on win32 and false elsewhere', () => {
+  // Windows: cmd.exe caps the command line at 8191 chars, cannot carry a
+  // newline at all and re-parses `%` — so even a short single-line prompt
+  // rides stdin there, not just multi-line/oversized ones.
+  assert.equal(shouldUseStdinPrompt('one line', 'win32'), true);
+  assert.equal(shouldUseStdinPrompt('line1\nline2', 'win32'), true);
+  assert.equal(shouldUseStdinPrompt('with trailing newline\n', 'win32'), true);
+  assert.equal(shouldUseStdinPrompt('a'.repeat(20000), 'win32'), true, 'a 20k-char single line stays far under no cmd limit on stdin');
+  assert.equal(shouldUseStdinPrompt('', 'win32'), true);
+  assert.equal(shouldUseStdinPrompt('80% of the suite', 'win32'), true, 'literal percents ride stdin, no %% doubling');
+
+  // macOS/Linux: execve passes argv verbatim and legacy mcode 0.2.x–0.4.x may
+  // not accept --input, so every prompt keeps the plain positional there —
+  // including multi-line, which POSIX argv carries fine.
+  assert.equal(shouldUseStdinPrompt('one line', 'linux'), false);
+  assert.equal(shouldUseStdinPrompt('line1\nline2', 'darwin'), false);
+  assert.equal(shouldUseStdinPrompt('a'.repeat(20000), 'linux'), false);
+
+  // Non-string input never routes to stdin (defensive, mirrors the old guard).
+  assert.equal(shouldUseStdinPrompt(null, 'win32'), false);
+  assert.equal(shouldUseStdinPrompt(undefined, 'win32'), false);
 });
 
 test('buildMiniMaxArgs stdin mode uses --input - and drops the prompt positional', () => {

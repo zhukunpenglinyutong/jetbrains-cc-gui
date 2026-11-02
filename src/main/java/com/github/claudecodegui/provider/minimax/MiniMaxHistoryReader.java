@@ -387,7 +387,13 @@ public class MiniMaxHistoryReader {
         JsonObject targetUsage = null;
         int targetAssistantIndex = -1;
         for (int i = 0; i < displayMessages.size(); i++) {
-            JsonObject msg = displayMessages.get(i).getAsJsonObject();
+            JsonElement el = displayMessages.get(i);
+            if (!el.isJsonObject()) {
+                // One malformed entry must not fail the whole snapshot (which
+                // would fall back to display.jsonl) — skip it, like the loop below.
+                continue;
+            }
+            JsonObject msg = el.getAsJsonObject();
             if ("assistant".equals(text(msg, "role")) && msg.has("usage") && msg.get("usage").isJsonObject()) {
                 targetUsage = msg.getAsJsonObject("usage");
                 targetAssistantIndex = i;

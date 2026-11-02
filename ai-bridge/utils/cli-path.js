@@ -49,9 +49,14 @@ export function isWindowsCmdShim(bin) {
  * cmd.exe print a localized "file not found" and exit 1, which surfaces as an
  * opaque send error, so CLI discovery skips these candidates.
  *
- * Only a confident answer counts as dead: the LAST quoted absolute path in
- * the script is taken as the delegation target (installers append the real
- * invocation last; earlier quoted paths are `set "VAR=..."` assignments).
+ * Only a confident answer counts as dead: when the script has exactly ONE
+ * delegation line (a line that forwards `%*`) carrying a quoted absolute
+ * path, that path is the delegation target — installers append the real
+ * invocation last. Restricting the scan to `%*` lines keeps a trailing REM
+ * comment from making a working shim look dead, and requiring exactly one
+ * such line keeps an `if exist "new" (...) else ("old" ...)` fallback chain
+ * (two `%*` lines, conditionally dispatched) unjudgeable — statically you
+ * cannot know which branch runs, so the shim is assumed alive.
  * `%~dp0` resolves against the shim's own directory; any other unresolved
  * `%VAR%` means the target cannot be verified statically, so the shim is
  * assumed alive. Scripts without a quoted absolute target are alive too.
@@ -74,11 +79,19 @@ export function isDeadCmdShim(bin, { forceWindows = process.platform === 'win32'
     // silently dropping the candidate.
     return false;
   }
-  const quoted = content.match(/"((?:[A-Za-z]:\\|%~dp0)[^"\r\n]+)"/g) || [];
-  const last = quoted[quoted.length - 1];
-  if (!last) return false;
+  let quotedTarget = null;
+  let delegationLines = 0;
+  for (const line of content.split(/\r?\n/)) {
+    if (!line.includes('%*')) continue;
+    const quoted = line.match(/"((?:[A-Za-z]:\\|%~dp0)[^"\r\n]+)"/g) || [];
+    if (quoted.length === 0) continue;
+    delegationLines += 1;
+    if (delegationLines > 1) break; // conditional dispatch — unjudgeable
+    quotedTarget = quoted[quoted.length - 1];
+  }
+  if (!quotedTarget || delegationLines !== 1) return false;
   const shimDir = pathWin32.dirname(trimmed);
-  let target = last.slice(1, -1).replace(/%~dp0/gi, shimDir.endsWith('\\') ? shimDir : `${shimDir}\\`);
+  const target = quotedTarget.slice(1, -1).replace(/%~dp0/gi, shimDir.endsWith('\\') ? shimDir : `${shimDir}\\`);
   if (/%[^%]*%/.test(target)) return false;
   return !pathExists(target);
 }
@@ -180,15 +193,25 @@ export function resolveCliSpawn(
 /**
  * Decode CLI stdout/stderr. Windows `cmd` often emits GBK/CP936, which Node
  * turns into U+FFFD replacement characters when forced to UTF-8.
+ *
+ * The GBK retry is win32-only: a U+FFFD elsewhere is genuine broken output
+ * (binary, truncation), and re-decoding it as GBK garbles correct UTF-8. It
+ * also must only run on a COMPLETE buffer — a multi-byte character split
+ * across stream chunk boundaries makes every chunk contain U+FFFD, so the
+ * per-chunk retry would mis-decode healthy UTF-8 streams (see runCliStreaming,
+ * which feeds the decoder whole tails, not chunks).
+ *
  * @param {string|Buffer|null|undefined} value
+ * @param {object} [options]
+ * @param {boolean} [options.forceWindows] - test hook; defaults to win32
  * @returns {string}
  */
-export function decodeCliOutput(value) {
+export function decodeCliOutput(value, { forceWindows = process.platform === 'win32' } = {}) {
   if (value == null) return '';
   if (typeof value === 'string') return value;
   const buf = Buffer.isBuffer(value) ? value : Buffer.from(value);
   const utf8 = buf.toString('utf8');
-  if (!utf8.includes('\uFFFD')) return utf8;
+  if (!forceWindows || !utf8.includes('\uFFFD')) return utf8;
   for (const label of ['gbk', 'gb18030']) {
     try {
       return new TextDecoder(label).decode(buf);

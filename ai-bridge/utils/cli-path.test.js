@@ -235,9 +235,16 @@ test('quoteCmdArg wraps and escapes cmd metacharacters', () => {
   assert.equal(quoteCmdArg('%PATH%'), '"%%PATH%%"');
 });
 
-test('decodeCliOutput keeps valid UTF-8 and recovers GBK stderr', () => {
+test('decodeCliOutput keeps valid UTF-8 and recovers GBK stderr (win32 only)', () => {
   assert.equal(decodeCliOutput('opencode/big-pickle'), 'opencode/big-pickle');
   assert.equal(decodeCliOutput(Buffer.from('opencode/big-pickle')), 'opencode/big-pickle');
+  // Healthy UTF-8 passes through untouched on every platform, win32 included.
+  const utf8 = Buffer.from('错误：找不到会话文件，请重新登录', 'utf8');
+  assert.equal(decodeCliOutput(utf8, { forceWindows: true }), '错误：找不到会话文件，请重新登录');
+  // Off win32 the GBK retry never runs: a broken byte stays broken instead of
+  // being garbled into GBK-mojibake.
+  const broken = Buffer.from([0xFF, 0xFE, 0xB2, 0xBB]);
+  assert.equal(decodeCliOutput(broken, { forceWindows: false }).includes('\uFFFD'), true);
   let gbkSupported = false;
   for (const label of ['gbk', 'gb18030']) {
     try {
@@ -252,7 +259,7 @@ test('decodeCliOutput keeps valid UTF-8 and recovers GBK stderr', () => {
   if (!gbkSupported) return;
   // GBK for 不是内部或外部命令 — the cmd.exe message after `'C:\\Program'`.
   const gbk = Buffer.from([0xB2, 0xBB, 0xCA, 0xC7, 0xC4, 0xDA, 0xB2, 0xBF, 0xBB, 0xF2, 0xCD, 0xE2, 0xB2, 0xBF, 0xC3, 0xFC, 0xC1, 0xEE]);
-  const decoded = decodeCliOutput(gbk);
+  const decoded = decodeCliOutput(gbk, { forceWindows: true });
   assert.equal(decoded.includes('\uFFFD'), false);
   assert.match(decoded, /命令/);
 });
@@ -427,6 +434,31 @@ test('isDeadCmdShim keeps a shim whose last quoted target exists', () => {
   assert.equal(isDeadCmdShim(alive, { forceWindows: true }), false);
 });
 
+test('isDeadCmdShim ignores quoted paths outside the %* delegation line', () => {
+  const root = mkdtempSync(join(tmpdir(), 'cc-gui-deleg-shim-'));
+  // A working shim with a trailing REM quoting a REMOVED path: the delegation
+  // line targets an existing file, so the shim is alive — the last quoted
+  // path of the whole script would have called it dead.
+  const target = join(root, 'mcode.cmd');
+  writeFileSync(target, '@echo off\r\n');
+  const withRem = join(root, 'rem-trailing.cmd');
+  writeFileSync(withRem, `@echo off\r\n"${target}" %*\r\nREM migrated from "X:\\old-install\\mcode.cmd"\r\n`);
+  assert.equal(isDeadCmdShim(withRem, { forceWindows: true }), false);
+  // An if/else fallback chain quotes a target in BOTH branches (%* in each):
+  // which one runs is statically unknowable, so the shim stays alive.
+  const withFallback = join(root, 'if-exist.cmd');
+  writeFileSync(
+    withFallback,
+    '@echo off\r\n'
+    + `if exist "${target}" (\r\n  "${target}" %*\r\n) else (\r\n  "X:\\removed\\mcode.cmd" %*\r\n)\r\n`,
+  );
+  assert.equal(isDeadCmdShim(withFallback, { forceWindows: true }), false);
+  // Control: when the %* line itself targets a missing file, it is still dead.
+  const dead = join(root, 'dead.cmd');
+  writeFileSync(dead, '@echo off\r\n"X:\\gone\\mcode.cmd" %*\r\nREM migrated from "X:\\old-install\\mcode.cmd"\r\n');
+  assert.equal(isDeadCmdShim(dead, { forceWindows: true }), true);
+});
+
 test('isDeadCmdShim cannot-verify cases stay alive', () => {
   const root = mkdtempSync(join(tmpdir(), 'cc-gui-unverif-shim-'));
   // Unresolved %VAR% in the target: statically unknowable.
@@ -440,10 +472,13 @@ test('isDeadCmdShim cannot-verify cases stay alive', () => {
   // Missing file and non-shim extensions.
   assert.equal(isDeadCmdShim(join(root, 'missing.cmd'), { forceWindows: true }), false);
   assert.equal(isDeadCmdShim(join(root, 'minimax.exe'), { forceWindows: true }), false);
-  // %~dp0-relative target that is genuinely missing (win32 semantics).
+  // %~dp0-relative target that is genuinely missing. True on every platform:
+  // forceWindows simulates win32 semantics, and on POSIX the backslash just
+  // becomes part of the (equally missing) filename — the target is gone either
+  // way, so the shim is provably dead.
   const dp0Dead = join(root, 'dp0-dead.cmd');
   writeFileSync(dp0Dead, '@echo off\r\n"%~dp0gone\\target.cmd" %*\r\n');
-  assert.equal(isDeadCmdShim(dp0Dead, { forceWindows: true }), process.platform === 'win32' ? true : false);
+  assert.equal(isDeadCmdShim(dp0Dead, { forceWindows: true }), true);
 });
 
 test('isDeadCmdShim honors %~dp0 targets that exist next to the shim', () => {
