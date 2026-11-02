@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as grokUtils from './grok-utils.js';
 import {
   buildGrokContextUsagePayload,
   extractUsedTokens,
@@ -190,3 +191,140 @@ test('getUsagePersistent returns structured unavailable on failure (does not thr
     assert.ok(payload.data.raw || payload.output || payload.data.config);
   }
 });
+
+test('normalizeGrokTurnUsage converts camelCase and snake_case Grok usage into Claude turnUsage schema', () => {
+  assert.equal(typeof grokUtils.normalizeGrokTurnUsage, 'function', 'normalizeGrokTurnUsage must be exported');
+  // camelCase with cachedReadTokens (cache-inclusive inputTokens)
+  const fromCamel = grokUtils.normalizeGrokTurnUsage({
+    totalTokens: 47330,
+    inputTokens: 46915,
+    cachedReadTokens: 24960,
+    outputTokens: 415,
+    reasoningTokens: 361,
+  });
+  assert.deepEqual(fromCamel, {
+    input_tokens: 21955,
+    cache_read_input_tokens: 24960,
+    cache_creation_input_tokens: 0,
+    output_tokens: 415,
+    thinking_tokens: 361,
+    total_tokens: 47330,
+  });
+
+  // snake_case (already cache-exclusive)
+  const fromSnake = grokUtils.normalizeGrokTurnUsage({
+    input_tokens: 554,
+    cache_read_input_tokens: 23168,
+    output_tokens: 356,
+    total_tokens: 24086,
+  });
+  assert.deepEqual(fromSnake, {
+    input_tokens: 554,
+    cache_read_input_tokens: 23168,
+    cache_creation_input_tokens: 0,
+    output_tokens: 356,
+    thinking_tokens: 0,
+    total_tokens: 24086,
+  });
+});
+
+test('multi-step turn (modelCalls > 1) keeps context ring at latest step occupancy and emits Claude-schema turnUsage on [RESULT]', async () => {
+  const { GrokEventNormalizer } = await import('./grok-event-normalizer.js');
+  const lines = [];
+  const n = new GrokEventNormalizer({
+    log: (s) => lines.push(String(s)),
+    error: (s) => lines.push(String(s)),
+  });
+  n.begin();
+
+  // Step 1: initial tool-calling step
+  n.handleAcpEvent('notification', {
+    method: '_x.ai/session_notification',
+    params: {
+      sessionId: 's1',
+      update: {
+        sessionUpdate: 'response_completed',
+        usage: {
+          input_tokens: 500,
+          cache_read_input_tokens: 20000,
+          output_tokens: 200,
+          total_tokens: 20700,
+        },
+      },
+    },
+  });
+
+  // Step 2: final reply step
+  n.handleAcpEvent('notification', {
+    method: '_x.ai/session_notification',
+    params: {
+      sessionId: 's1',
+      update: {
+        sessionUpdate: 'response_completed',
+        usage: {
+          input_tokens: 554,
+          cache_read_input_tokens: 23168,
+          output_tokens: 356,
+          total_tokens: 24086,
+        },
+      },
+    },
+  });
+
+  // Turn completed: multi-call cumulative usage
+  n.handleAcpEvent('notification', {
+    method: '_x.ai/session_notification',
+    params: {
+      sessionId: 's1',
+      update: {
+        sessionUpdate: 'turn_completed',
+        usage: {
+          totalTokens: 47330,
+          inputTokens: 46915,
+          cachedReadTokens: 24960,
+          outputTokens: 415,
+          reasoningTokens: 361,
+          modelCalls: 2,
+        },
+      },
+    },
+  });
+
+  // Prompt result with top-level latest step _meta and multi-call _meta.usage
+  n.handleAcpEvent('prompt_result', {
+    stopReason: 'end_turn',
+    _meta: {
+      totalTokens: 24086,
+      inputTokens: 23722,
+      outputTokens: 356,
+      cachedReadTokens: 23168,
+      usage: {
+        totalTokens: 47330,
+        inputTokens: 46915,
+        cachedReadTokens: 24960,
+        outputTokens: 415,
+        reasoningTokens: 361,
+        modelCalls: 2,
+      },
+    },
+  });
+
+  n.finishSuccess('sid-1', 'multi-step done');
+
+  // 1. Context ring usage snapshot on [MESSAGE] must reflect the latest step occupancy (24086), NOT 47330
+  const msgLine = lines.filter((l) => l.startsWith('[MESSAGE] ')).pop();
+  assert.ok(msgLine, 'expected final [MESSAGE]');
+  const msg = JSON.parse(msgLine.slice('[MESSAGE] '.length));
+  assert.equal(msg.message.usage.total_tokens, 24086);
+
+  // 2. Whole-turn token accounting on [RESULT] must carry the normalized turnUsage
+  const resLine = lines.find((l) => l.startsWith('[RESULT] '));
+  assert.ok(resLine, 'expected [RESULT]');
+  const res = JSON.parse(resLine.slice('[RESULT] '.length));
+  assert.equal(res.usage.total_tokens, 47330);
+  assert.equal(res.usage.cache_read_input_tokens, 24960);
+  assert.equal(res.usage.input_tokens, 21955);
+  assert.equal(res.usage.output_tokens, 415);
+  assert.equal(res.usage.thinking_tokens, 361);
+});
+

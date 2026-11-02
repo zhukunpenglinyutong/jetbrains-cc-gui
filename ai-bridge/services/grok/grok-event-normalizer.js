@@ -9,7 +9,12 @@
  * consumers can treat OpenAI shape as primary; camelCase ACP is normalized here.
  */
 
-import { extractUsageFromAcpEnvelope, normalizeUsageToSnakeCase } from './grok-utils.js';
+import {
+  extractTurnUsageFromPromptResult,
+  extractUsageFromAcpEnvelope,
+  normalizeGrokTurnUsage,
+  normalizeUsageToSnakeCase,
+} from './grok-utils.js';
 
 /** Paragraph break between reply segments in the plain-text success result. */
 const REPLY_SEGMENT_SEPARATOR = '\n\n';
@@ -35,8 +40,12 @@ export class GrokEventNormalizer {
      */
     this.toolCalls = new Map();
     this.editSeq = 0;
-    /** Last normalized snake_case usage for this turn (attached to final [MESSAGE]). */
+    /** Last normalized snake_case context usage for this turn (attached to final [MESSAGE]). */
     this.lastUsage = null;
+    /** Whole-turn usage normalized to Claude turnUsage schema (emitted on [RESULT]). */
+    this.lastTurnUsage = null;
+    /** True when step-level context occupancy (response_completed / _meta.totalTokens) was observed. */
+    this.hasStepContextUsage = false;
   }
 
   begin() {
@@ -47,6 +56,9 @@ export class GrokEventNormalizer {
     this.closedToolIds = new Set();
     this.assistantText = '';
     this.thinkingText = '';
+    this.lastUsage = null;
+    this.lastTurnUsage = null;
+    this.hasStepContextUsage = false;
     this.#emit('[MESSAGE_START]');
     this.messageStarted = true;
     this.#emit('[STREAM_START]');
@@ -115,6 +127,11 @@ export class GrokEventNormalizer {
       this.#emit(`[USAGE] ${JSON.stringify(this.lastUsage)}`);
     }
     this.#emit(`[MESSAGE] ${JSON.stringify(assistantMessage)}`);
+    const turnUsage =
+      this.lastTurnUsage || (this.lastUsage ? normalizeGrokTurnUsage(this.lastUsage) : null);
+    if (turnUsage) {
+      this.#emit(`[RESULT] ${JSON.stringify({ usage: turnUsage })}`);
+    }
 
     this.#emitStreamEndOnce();
     this.#emitMessageEndOnce();
@@ -163,20 +180,57 @@ export class GrokEventNormalizer {
   }
 
   #handleNotification(method, params) {
-    // Grok CLI 0.2.x: usage arrives on _x.ai/session_notification (turn_completed),
-    // not on classic sessionUpdate=usage_update.
-    const fromEnvelope = extractUsageFromAcpEnvelope(method, params);
-    if (fromEnvelope) {
-      this.#emitUsage(fromEnvelope);
+    const update = params?.update || params;
+    const kind = update?.sessionUpdate || update?.type || '';
+    const isVendorNotif =
+      method === '_x.ai/session_notification' ||
+      method === 'x.ai/session_notification' ||
+      (typeof method === 'string' && method.endsWith('/session_notification'));
+
+    if (isVendorNotif && update) {
+      if (kind === 'response_completed' && update.usage) {
+        this.hasStepContextUsage = true;
+        this.#emitUsage(update.usage);
+      } else if (kind === 'turn_completed') {
+        const rawTurnUsage =
+          update.usage || (update.totalTokens || update.inputTokens ? update : null);
+        if (rawTurnUsage) {
+          this.lastTurnUsage = normalizeGrokTurnUsage(rawTurnUsage) || this.lastTurnUsage;
+          const isMultiCall = Number(rawTurnUsage.modelCalls) > 1;
+          if ((!isMultiCall && !this.hasStepContextUsage) || !this.lastUsage) {
+            this.#emitUsage(rawTurnUsage);
+          }
+        }
+      } else {
+        const fromEnvelope = extractUsageFromAcpEnvelope(method, params);
+        if (fromEnvelope) {
+          this.#emitUsage(fromEnvelope);
+        }
+      }
+    } else {
+      const meta = params?._meta || update?._meta;
+      if (meta && (meta.totalTokens || meta.total_tokens)) {
+        this.hasStepContextUsage = true;
+        this.#emitUsage(meta);
+      }
+      const fromEnvelope = extractUsageFromAcpEnvelope(method, params);
+      if (fromEnvelope) {
+        if (kind === 'turn_completed') {
+          this.lastTurnUsage = normalizeGrokTurnUsage(fromEnvelope) || this.lastTurnUsage;
+          const isMultiCall = Number(fromEnvelope.modelCalls) > 1;
+          if ((!isMultiCall && !this.hasStepContextUsage) || !this.lastUsage) {
+            this.#emitUsage(fromEnvelope);
+          }
+        } else {
+          this.#emitUsage(fromEnvelope);
+        }
+      }
     }
 
     if (method !== 'session/update') {
       return;
     }
-    const update = params?.update || params;
     if (!update) return;
-
-    const kind = update.sessionUpdate || update.type || '';
 
     switch (kind) {
       case 'agent_message_chunk': {
@@ -550,11 +604,22 @@ export class GrokEventNormalizer {
   }
 
   #handlePromptResult(result) {
-    // session/prompt result: usage is usually under result._meta.usage (Grok CLI 0.2.x),
-    // sometimes result.usage, sometimes flat _meta.totalTokens.
+    // Whole-turn usage from _meta.usage / result.usage for [RESULT]
+    const turnUsage = extractTurnUsageFromPromptResult(result);
+    if (turnUsage) {
+      this.lastTurnUsage = turnUsage;
+    }
+    // Context window snapshot: prefer top-level _meta (latest step) over multi-call _meta.usage
+    const meta = result?._meta || result?.meta;
+    const hasTopLevelStepMeta = Boolean(
+      meta && (meta.totalTokens || meta.inputTokens || meta.total_tokens),
+    );
     const raw = extractUsageFromAcpEnvelope(result);
     if (raw) {
-      this.#emitUsage(raw);
+      const isMultiCall = Number(raw.modelCalls) > 1;
+      if (hasTopLevelStepMeta || (!isMultiCall && !this.hasStepContextUsage) || !this.lastUsage) {
+        this.#emitUsage(raw);
+      }
     }
     if (result?.stopReason || result?.stop_reason) {
       // optional

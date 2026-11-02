@@ -116,6 +116,59 @@ public class TokenUsageUtilsTest {
         assertTrue(raw.has("turnCostUsd"));
     }
 
+    /**
+     * Verifies grok context and used tokens delegate to GrokContextUsageBuilder and extract
+     * accurately from total_tokens-only snapshots.
+     */
+    @Test
+    public void grokExtractContextTokensAndExtractUsedTokensDelegateToGrokBuilder() {
+        JsonObject usage = new JsonObject();
+        usage.addProperty("total_tokens", 24086);
+        assertEquals(24086, TokenUsageUtils.extractContextTokens(usage, "grok"));
+        assertEquals(24086, TokenUsageUtils.extractUsedTokens(usage, "grok"));
+    }
+
+    /**
+     * Verifies grok context tokens do not double-count cached input tokens when component fields are present.
+     */
+    @Test
+    public void grokContextTokensDoNotDoubleCountCacheReadTokens() {
+        JsonObject usage = new JsonObject();
+        usage.addProperty("input_tokens", 24086);
+        usage.addProperty("cache_read_input_tokens", 23168);
+        usage.addProperty("output_tokens", 356);
+        assertEquals(24086, TokenUsageUtils.extractContextTokens(usage, "grok"));
+    }
+
+    /**
+     * Verifies GrokContextUsageBuilder normalizes whole-turn Grok usage into the canonical Claude schema.
+     */
+    @Test
+    public void grokContextUsageBuilderNormalizesTurnUsageToClaudeSchema() throws Exception {
+        JsonObject raw = new JsonObject();
+        raw.addProperty("inputTokens", 46915);
+        raw.addProperty("cachedReadTokens", 24960);
+        raw.addProperty("outputTokens", 415);
+        raw.addProperty("reasoningTokens", 361);
+        raw.addProperty("totalTokens", 47330);
+
+        JsonObject normalized;
+        try {
+            java.lang.reflect.Method m = Class.forName("com.github.claudecodegui.provider.grok.GrokContextUsageBuilder")
+                    .getMethod("normalizeTurnUsage", JsonObject.class);
+            normalized = (JsonObject) m.invoke(null, raw);
+        } catch (NoSuchMethodException e) {
+            throw new AssertionError("GrokContextUsageBuilder.normalizeTurnUsage is not implemented yet", e);
+        }
+
+        assertEquals(21955, normalized.get("input_tokens").getAsInt());
+        assertEquals(24960, normalized.get("cache_read_input_tokens").getAsInt());
+        assertEquals(0, normalized.get("cache_creation_input_tokens").getAsInt());
+        assertEquals(415, normalized.get("output_tokens").getAsInt());
+        assertEquals(361, normalized.get("thinking_tokens").getAsInt());
+        assertEquals(47330, normalized.get("total_tokens").getAsInt());
+    }
+
     private static JsonObject usage(int inputTokens) {
         JsonObject usage = new JsonObject();
         usage.addProperty("input_tokens", inputTokens);

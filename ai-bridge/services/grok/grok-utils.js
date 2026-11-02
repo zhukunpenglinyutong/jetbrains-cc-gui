@@ -562,14 +562,24 @@ export function normalizeUsageToSnakeCase(usage) {
     src,
     'thought_tokens',
     'thoughtTokens',
+    'thinking_tokens',
+    'thinkingTokens',
     'reasoning_tokens',
     'reasoningTokens',
   );
-  const cachedWrite = firstPositiveNumber(src, 'cached_write_tokens', 'cachedWriteTokens');
+  const cachedWrite = firstPositiveNumber(
+    src,
+    'cached_write_tokens',
+    'cachedWriteTokens',
+    'cache_creation_input_tokens',
+    'cacheCreationInputTokens',
+  );
   const cachedRead = firstPositiveNumber(
     src,
     'cached_read_tokens',
     'cachedReadTokens',
+    'cache_read_input_tokens',
+    'cacheReadInputTokens',
     'cached_tokens',
     'cachedTokens',
   );
@@ -588,6 +598,86 @@ export function normalizeUsageToSnakeCase(usage) {
   out.total_tokens =
     total > 0 ? total : input + output + thought + cachedWrite + cachedRead;
   return out;
+}
+
+/**
+ * Normalize whole-turn Grok usage into the canonical Claude turnUsage schema
+ * expected by MessageDurationFooter.tsx:
+ * { input_tokens, cache_read_input_tokens, cache_creation_input_tokens, output_tokens, thinking_tokens, total_tokens }.
+ *
+ * When camelCase `inputTokens` is provided alongside `cachedReadTokens` (as in
+ * `turn_completed.usage` and `promptResult._meta.usage`), `inputTokens` is
+ * cache-inclusive, so `input_tokens` is computed as `Math.max(0, inputTokens - cachedReadTokens - cachedWriteTokens)`.
+ *
+ * @param {unknown} usage
+ * @returns {Record<string, number>|null}
+ */
+export function normalizeGrokTurnUsage(usage) {
+  if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return null;
+  const src = /** @type {Record<string, unknown>} */ (usage);
+  if (
+    src.usage &&
+    typeof src.usage === 'object' &&
+    !Array.isArray(src.usage) &&
+    !firstPositiveNumber(src, 'total_tokens', 'totalTokens', 'input_tokens', 'inputTokens')
+  ) {
+    const nested = normalizeGrokTurnUsage(src.usage);
+    if (nested) return nested;
+  }
+
+  const total = firstPositiveNumber(src, 'total_tokens', 'totalTokens');
+  const rawInput = firstPositiveNumber(src, 'input_tokens', 'inputTokens', 'prompt_tokens', 'promptTokens');
+  const output = firstPositiveNumber(src, 'output_tokens', 'outputTokens', 'completion_tokens', 'completionTokens');
+  const thinking = firstPositiveNumber(
+    src,
+    'thinking_tokens',
+    'thinkingTokens',
+    'thought_tokens',
+    'thoughtTokens',
+    'reasoning_tokens',
+    'reasoningTokens',
+  );
+  const cacheRead = firstPositiveNumber(
+    src,
+    'cache_read_input_tokens',
+    'cacheReadInputTokens',
+    'cached_read_tokens',
+    'cachedReadTokens',
+    'cached_tokens',
+    'cachedTokens',
+  );
+  const cacheWrite = firstPositiveNumber(
+    src,
+    'cache_creation_input_tokens',
+    'cacheCreationInputTokens',
+    'cached_write_tokens',
+    'cachedWriteTokens',
+  );
+
+  if (total <= 0 && rawInput <= 0 && output <= 0 && thinking <= 0 && cacheRead <= 0 && cacheWrite <= 0) {
+    return null;
+  }
+
+  const hasSnakeInput = firstPositiveNumber(src, 'input_tokens') > 0;
+  const hasClaudeCacheField = firstPositiveNumber(src, 'cache_read_input_tokens', 'cache_creation_input_tokens') > 0;
+  const inputIncludesCache =
+    !hasSnakeInput ||
+    (!hasClaudeCacheField && (cacheRead > 0 || cacheWrite > 0) && total > 0 && rawInput + output === total);
+
+  const nonCacheInput = inputIncludesCache
+    ? Math.max(0, rawInput - cacheRead - cacheWrite)
+    : rawInput;
+  const resolvedTotal =
+    total > 0 ? total : nonCacheInput + cacheRead + cacheWrite + output;
+
+  return {
+    input_tokens: nonCacheInput,
+    cache_read_input_tokens: cacheRead,
+    cache_creation_input_tokens: cacheWrite,
+    output_tokens: output,
+    thinking_tokens: thinking,
+    total_tokens: resolvedTotal,
+  };
 }
 
 /**
@@ -643,16 +733,52 @@ export function extractUsageFromAcpEnvelope(methodOrPayload, params) {
   // Prompt-result form: object
   const result = methodOrPayload;
   if (!result || typeof result !== 'object') return null;
-  if (result.usage && typeof result.usage === 'object') return result.usage;
   const meta = result._meta || result.meta;
   if (meta && typeof meta === 'object') {
+    // Top-level _meta carries the final step's context window occupancy
+    // whereas _meta.usage carries the multi-call cumulative sum when modelCalls > 1.
+    if (meta.totalTokens || meta.inputTokens || meta.total_tokens) {
+      return {
+        totalTokens: meta.totalTokens,
+        total_tokens: meta.total_tokens,
+        inputTokens: meta.inputTokens,
+        outputTokens: meta.outputTokens,
+        cachedReadTokens: meta.cachedReadTokens,
+        cachedWriteTokens: meta.cachedWriteTokens,
+        reasoningTokens: meta.reasoningTokens,
+      };
+    }
     if (meta.usage && typeof meta.usage === 'object') return meta.usage;
-    // Flatten meta totals when usage object missing
-    if (meta.totalTokens || meta.inputTokens || meta.total_tokens) return meta;
   }
+  if (result.usage && typeof result.usage === 'object') return result.usage;
   // Top-level totals on some envelopes
   if (result.totalTokens || result.inputTokens || result.total_tokens) return result;
   return null;
+}
+
+/**
+ * Extract whole-turn usage (normalized to Claude turnUsage schema) from a prompt result envelope.
+ * Prefers `result._meta.usage` / `result.usage` over top-level step totals.
+ *
+ * @param {unknown} promptResult
+ * @returns {Record<string, number>|null}
+ */
+export function extractTurnUsageFromPromptResult(promptResult) {
+  if (!promptResult || typeof promptResult !== 'object') return null;
+  const meta = promptResult._meta || promptResult.meta;
+  if (meta && typeof meta === 'object' && meta.usage && typeof meta.usage === 'object') {
+    const normalized = normalizeGrokTurnUsage(meta.usage);
+    if (normalized) return normalized;
+  }
+  if (promptResult.usage && typeof promptResult.usage === 'object') {
+    const normalized = normalizeGrokTurnUsage(promptResult.usage);
+    if (normalized) return normalized;
+  }
+  if (meta && typeof meta === 'object') {
+    const normalized = normalizeGrokTurnUsage(meta);
+    if (normalized) return normalized;
+  }
+  return normalizeGrokTurnUsage(promptResult);
 }
 
 /**
