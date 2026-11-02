@@ -216,6 +216,41 @@ public class CodexConfigCompatibilityTest {
     }
 
     @Test
+    public void sidecarAliasesRemainReadableAndWritableWithoutNativeConfig() throws Exception {
+        Path home = temporary.newFolder().toPath();
+        Path sidecar = home.resolve(CodexSettingsManager.PLUGIN_CONFIG_FILE_NAME);
+        Files.writeString(sidecar, "[model_aliases]\nlegacy = \"vendor/legacy-model\"\n");
+        CodexSettingsManager manager = new CodexSettingsManager(new Gson(), home);
+
+        assertEquals("vendor/legacy-model", manager.resolveModelAlias("legacy"));
+        manager.updateConfigToml(config -> { config.put("model", "created-config"); return true; });
+
+        assertEquals("vendor/legacy-model", manager.resolveModelAlias("legacy"));
+        assertEquals("vendor/legacy-model", Toml.parse(Files.readString(sidecar)).getString("model_aliases.legacy"));
+        assertEquals("created-config", Toml.parse(Files.readString(manager.getConfigTomlPath())).getString("model"));
+    }
+
+    @Test
+    public void nativeAndSidecarAliasesAreMergedWithNativeEntriesTakingPrecedence() throws Exception {
+        CodexSettingsManager manager = manager("[model_aliases]\nnative_only = \"native-target\"\n"
+                + "shared = \"native-version\"\n");
+        Path sidecar = sibling(manager, CodexSettingsManager.PLUGIN_CONFIG_FILE_NAME);
+        Files.writeString(sidecar, "[model_aliases]\nsidecar_only = \"sidecar-target\"\n"
+                + "shared = \"sidecar-version\"\n");
+
+        assertEquals("native-target", manager.resolveModelAlias("native_only"));
+        assertEquals("sidecar-target", manager.resolveModelAlias("sidecar_only"));
+        assertEquals("native-version", manager.resolveModelAlias("shared"));
+        manager.updateConfigToml(config -> { config.put("model", "merged-config"); return true; });
+
+        var mergedSidecar = Toml.parse(Files.readString(sidecar));
+        assertEquals("native-target", mergedSidecar.getString("model_aliases.native_only"));
+        assertEquals("sidecar-target", mergedSidecar.getString("model_aliases.sidecar_only"));
+        assertEquals("native-version", mergedSidecar.getString("model_aliases.shared"));
+        assertFalse(Files.readString(manager.getConfigTomlPath()).contains("model_aliases"));
+    }
+
+    @Test
     public void directWritesKeepInputUnchangedAndOnlyNativeFieldsReachConfigToml() throws Exception {
         CodexSettingsManager manager = manager("");
         Map<String, Object> input = new java.util.LinkedHashMap<>();
