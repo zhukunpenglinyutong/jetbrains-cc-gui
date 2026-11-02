@@ -289,7 +289,7 @@ async function createRuntime(params, { log } = {}) {
       authMethod: preferredAuth,
     });
 
-    await ensureSession(client, {
+    const sessionInfo = await ensureSession(client, {
       sessionId: params.sessionId || '',
       cwd: workCwd,
       model: params.model || '',
@@ -312,6 +312,8 @@ async function createRuntime(params, { log } = {}) {
       _livePermission: live,
       /** Last ACP [USAGE] total — used by getContextUsage when Java has no snapshot. */
       lastUsedTokens: 0,
+      /** True once ~/.grok/grok-rules.md has been injected (or session was resumed). */
+      globalRulesInjected: Boolean(sessionInfo?.resumed),
       createdAt: Date.now(),
       lastUsedAt: Date.now(),
       activeTurnCount: 0,
@@ -379,6 +381,7 @@ async function executeTurn(runtime, params, normalizer) {
       });
       sid = sess.sessionId;
       runtime.sessionId = sid;
+      runtime.globalRulesInjected = Boolean(sess?.resumed);
     }
 
     // Inside the turn queue, before installing stream handlers: config updates
@@ -387,11 +390,13 @@ async function executeTurn(runtime, params, normalizer) {
     normalizer.begin();
     emit('session_id', sid);
 
+    const includeGlobalRules = !runtime.globalRulesInjected;
     const promptBlocks = buildPromptBlocks({
       message: params.message || '',
       agentPrompt: params.agentPrompt || '',
       openedFiles: params.openedFiles || null,
       attachments: params.attachments || [],
+      includeGlobalRules,
     });
 
     // Wire notifications / permission / fs writes into the turn normalizer.
@@ -455,6 +460,7 @@ async function executeTurn(runtime, params, normalizer) {
 
     try {
       const result = await runtime.client.prompt(sid, promptBlocks, TURN_PROMPT_TIMEOUT_MS);
+      runtime.globalRulesInjected = true;
 
       // Keep turn notification handler until after prompt_result is normalized —
       // late turn_completed must not be dropped by restoring the previous handler early.

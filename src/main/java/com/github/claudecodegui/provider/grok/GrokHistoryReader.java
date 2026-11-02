@@ -3,6 +3,7 @@ package com.github.claudecodegui.provider.grok;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.provider.common.HistoryPathMatcher;
 import com.github.claudecodegui.provider.common.HistoryCancellation;
+import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -740,10 +741,11 @@ public class GrokHistoryReader {
         // Prefer <user_query> body when present
         int start = text.indexOf("<user_query>");
         int end = text.indexOf("</user_query>");
-        if (start >= 0 && end > start) {
-            return text.substring(start + "<user_query>".length(), end).trim();
-        }
-        return text;
+        String body = (start >= 0 && end > start)
+                ? text.substring(start + "<user_query>".length(), end).trim()
+                : text;
+        String sanitized = UserMessageSanitizer.sanitizeUserFacingText(body);
+        return sanitized != null ? sanitized : "";
     }
 
     private static boolean isRuntimeContextUserText(String raw) {
