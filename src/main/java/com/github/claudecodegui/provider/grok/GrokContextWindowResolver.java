@@ -32,9 +32,12 @@ public final class GrokContextWindowResolver {
     private static final int MAX_CACHED_HOMES = 16;
 
     private static final String SECTION_MODELS = "models";
-    private static final String KEY_HIDDEN = "hidden";
     private static final String KEY_INFO = "info";
 
+    /** Window keys in preference order; {@code max_input_tokens} appears in OpenAI-style catalogs. */
+    private static final String[] WINDOW_KEYS = {
+        "context_window", "contextWindow", "max_context_tokens", "max_input_tokens", "maxInputTokens"
+    };
 
     private static final Set<String> SENTINEL_MODELS = Set.of(
             "grok", "default", "(default)", "auto",
@@ -86,12 +89,11 @@ public final class GrokContextWindowResolver {
             return null;
         }
 
+        // A sentinel such as "default" means the CLI's configured default model. Without one,
+        // the model the CLI picks is unknown, so leave it to the static fallback table.
         String effective = normalizeRequestedModel(model);
         if (effective == null) {
             effective = data.defaultModel();
-            if (effective == null || effective.isEmpty()) {
-                effective = data.firstModelId();
-            }
         }
         if (effective == null || effective.isEmpty()) {
             return null;
@@ -172,9 +174,9 @@ public final class GrokContextWindowResolver {
         ParsedConfig parsedConfig = configStamp.exists()
                 ? parseConfigToml(configPath)
                 : new ParsedConfig("", Map.of());
-        ParsedModelsCache parsedCache = cacheStamp.exists()
+        Map<String, Integer> modelWindows = cacheStamp.exists()
                 ? parseModelsCache(cachePath)
-                : new ParsedModelsCache(Map.of(), "");
+                : Map.of();
 
         if (CACHE.size() >= MAX_CACHED_HOMES) {
             CACHE.clear();
@@ -185,8 +187,7 @@ public final class GrokContextWindowResolver {
                 cacheStamp,
                 parsedConfig.defaultModel(),
                 parsedConfig.profileToModel(),
-                parsedCache.modelContextWindows(),
-                parsedCache.firstModelId()
+                modelWindows
         );
         CACHE.put(normalizedHome, fresh);
         return fresh;
@@ -205,8 +206,15 @@ public final class GrokContextWindowResolver {
         }
     }
 
+    /**
+     * Mirrors ai-bridge {@code parseGrokProfilesFromToml}: the first {@code default} of the
+     * {@code [models]} section wins; a top-level {@code default} only applies when the file
+     * has no {@code [models]} section at all.
+     */
     private static ParsedConfig parseConfigLines(String[] lines) {
-        String defaultModel = "";
+        String modelsDefault = "";
+        String topLevelDefault = "";
+        boolean hasModelsSection = false;
         String currentSection = "";
         Map<String, String> profileToModel = new LinkedHashMap<>();
         for (String line : lines) {
@@ -214,24 +222,28 @@ public final class GrokContextWindowResolver {
             Matcher section = SECTION_HEADER.matcher(stripped);
             if (section.matches()) {
                 currentSection = section.group(1).trim();
+                hasModelsSection |= SECTION_MODELS.equals(currentSection);
                 continue;
             }
-            defaultModel = applyConfigLine(currentSection, stripped, defaultModel, profileToModel);
+            if (currentSection.isEmpty()) {
+                topLevelDefault = readDefault(stripped, topLevelDefault);
+            } else if (SECTION_MODELS.equals(currentSection)) {
+                modelsDefault = readDefault(stripped, modelsDefault);
+            } else {
+                recordProfileModel(currentSection, stripped, profileToModel);
+            }
         }
+        String defaultModel = hasModelsSection ? modelsDefault : topLevelDefault;
         return new ParsedConfig(defaultModel, Map.copyOf(profileToModel));
     }
 
-    private static String applyConfigLine(
+    private static void recordProfileModel(
             String currentSection,
             String stripped,
-            String defaultModel,
             Map<String, String> profileToModel) {
-        if (SECTION_MODELS.equals(currentSection) || currentSection.isEmpty()) {
-            return readModelsDefault(currentSection, stripped, defaultModel);
-        }
         String profileName = extractProfileSectionName(currentSection);
         if (profileName == null) {
-            return defaultModel;
+            return;
         }
         String upstreamModel = extractTomlString(stripped, "model");
         if (upstreamModel == null) {
@@ -240,45 +252,37 @@ public final class GrokContextWindowResolver {
         if (upstreamModel != null && !upstreamModel.isEmpty()) {
             profileToModel.put(profileName, upstreamModel);
         }
-        return defaultModel;
     }
 
-    private static String readModelsDefault(String currentSection, String stripped, String defaultModel) {
-        if (!SECTION_MODELS.equals(currentSection)) {
-            return defaultModel;
+    /** Keeps the first {@code default} of a scope, like the JS regex match. */
+    private static String readDefault(String stripped, String current) {
+        if (!current.isEmpty()) {
+            return current;
         }
         Matcher def = DEFAULT_MODEL.matcher(stripped);
-        if (def.matches()) {
-            return def.group(1).trim();
-        }
-        return defaultModel;
+        return def.matches() ? def.group(1).trim() : current;
     }
 
-    private static ParsedModelsCache parseModelsCache(Path cachePath) {
+    private static Map<String, Integer> parseModelsCache(Path cachePath) {
         try {
             String raw = Files.readString(cachePath, StandardCharsets.UTF_8);
             JsonElement parsed = JsonParser.parseString(raw);
             if (parsed == null || !parsed.isJsonObject()) {
-                return new ParsedModelsCache(Map.of(), "");
+                return Map.of();
             }
             return indexModelWindows(parsed.getAsJsonObject());
         } catch (Exception e) {
             LOG.debug("[GrokContextWindowResolver] Failed to parse " + cachePath + ": " + e.getMessage());
-            return new ParsedModelsCache(Map.of(), "");
+            return Map.of();
         }
     }
 
-    private static ParsedModelsCache indexModelWindows(JsonObject root) {
-        JsonObject modelsObj = modelsObject(root);
+    private static Map<String, Integer> indexModelWindows(JsonObject root) {
         Map<String, Integer> windows = new LinkedHashMap<>();
-        String firstModelId = "";
-        for (Map.Entry<String, JsonElement> entry : modelsObj.entrySet()) {
-            firstModelId = considerModelEntry(entry, windows, firstModelId);
+        for (Map.Entry<String, JsonElement> entry : modelsObject(root).entrySet()) {
+            recordModelWindow(entry, windows);
         }
-        if (firstModelId.isEmpty() && !windows.isEmpty()) {
-            firstModelId = windows.keySet().iterator().next();
-        }
-        return new ParsedModelsCache(Map.copyOf(windows), firstModelId);
+        return Map.copyOf(windows);
     }
 
     private static JsonObject modelsObject(JsonObject root) {
@@ -288,32 +292,23 @@ public final class GrokContextWindowResolver {
         return root;
     }
 
-    private static String considerModelEntry(
-            Map.Entry<String, JsonElement> entry,
-            Map<String, Integer> windows,
-            String firstModelId) {
+    private static void recordModelWindow(Map.Entry<String, JsonElement> entry, Map<String, Integer> windows) {
         String id = entry.getKey();
         JsonElement value = entry.getValue();
         if (id == null || id.isBlank() || value == null || !value.isJsonObject()) {
-            return firstModelId;
+            return;
         }
         int window = contextWindowOf(value.getAsJsonObject());
-        if (window <= 0) {
-            return firstModelId;
+        if (window > 0) {
+            windows.put(id.trim(), window);
         }
-        String modelId = id.trim();
-        windows.put(modelId, window);
-        if (firstModelId.isEmpty() && !isHiddenModel(value.getAsJsonObject())) {
-            return modelId;
-        }
-        return firstModelId;
     }
 
     private static int contextWindowOf(JsonObject modelObj) {
         JsonObject infoObj = infoObject(modelObj);
-        int window = readPositiveInt(infoObj, "context_window", "contextWindow", "max_context_tokens");
+        int window = readPositiveInt(infoObj, WINDOW_KEYS);
         if (window <= 0 && infoObj != modelObj) {
-            return readPositiveInt(modelObj, "context_window", "contextWindow", "max_context_tokens");
+            return readPositiveInt(modelObj, WINDOW_KEYS);
         }
         return window;
     }
@@ -323,13 +318,6 @@ public final class GrokContextWindowResolver {
             return modelObj.getAsJsonObject(KEY_INFO);
         }
         return modelObj;
-    }
-
-    private static boolean isHiddenModel(JsonObject modelObj) {
-        JsonObject infoObj = infoObject(modelObj);
-        return infoObj.has(KEY_HIDDEN)
-                && infoObj.get(KEY_HIDDEN).isJsonPrimitive()
-                && infoObj.get(KEY_HIDDEN).getAsBoolean();
     }
 
     private static int readPositiveInt(JsonObject obj, String... keys) {
@@ -419,16 +407,12 @@ public final class GrokContextWindowResolver {
     private record ParsedConfig(String defaultModel, Map<String, String> profileToModel) {
     }
 
-    private record ParsedModelsCache(Map<String, Integer> modelContextWindows, String firstModelId) {
-    }
-
     private record CachedHomeData(
             FileStamp configStamp,
             FileStamp cacheStamp,
             String defaultModel,
             Map<String, String> profileToModel,
-            Map<String, Integer> modelContextWindows,
-            String firstModelId
+            Map<String, Integer> modelContextWindows
     ) {
     }
 }

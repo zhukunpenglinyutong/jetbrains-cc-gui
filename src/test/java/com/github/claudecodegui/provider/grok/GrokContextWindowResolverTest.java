@@ -92,6 +92,101 @@ public class GrokContextWindowResolverTest {
     }
 
     @Test
+    public void defaultModelWithoutConfiguredDefaultDoesNotGuessFromCacheOrder() throws Exception {
+        Path grokHome = temporary.newFolder(".grok-no-default").toPath();
+        String modelsCache = """
+                {
+                  "models": {
+                    "grok-small": { "context_window": 100000 },
+                    "grok-large": { "context_window": 300000 }
+                  }
+                }
+                """;
+        Files.writeString(grokHome.resolve("models_cache.json"), modelsCache, StandardCharsets.UTF_8);
+
+        assertNull(resolveViaReflection("default", grokHome));
+        assertNull(resolveViaReflection("grok", grokHome));
+        assertEquals(Integer.valueOf(300000), resolveViaReflection("grok-large", grokHome));
+    }
+
+    @Test
+    public void topLevelDefaultIsUsedWhenConfigHasNoModelsSection() throws Exception {
+        Path grokHome = temporary.newFolder(".grok-top-level-default").toPath();
+        String modelsCache = """
+                {
+                  "models": {
+                    "grok-small": { "context_window": 100000 },
+                    "grok-large": { "context_window": 300000 }
+                  }
+                }
+                """;
+        Files.writeString(grokHome.resolve("models_cache.json"), modelsCache, StandardCharsets.UTF_8);
+        Files.writeString(grokHome.resolve("config.toml"), """
+                default = "grok-large"
+
+                [model."custom"]
+                model = "grok-small"
+                """, StandardCharsets.UTF_8);
+
+        assertEquals(Integer.valueOf(300000), resolveViaReflection("default", grokHome));
+        assertEquals(Integer.valueOf(100000), resolveViaReflection("custom", grokHome));
+    }
+
+    @Test
+    public void topLevelDefaultIsIgnoredOnceAModelsSectionExists() throws Exception {
+        Path grokHome = writeSmallLargeCache(".grok-models-section-no-default");
+        Files.writeString(grokHome.resolve("config.toml"), """
+                default = "grok-large"
+
+                [models]
+                picker = "compact"
+                """, StandardCharsets.UTF_8);
+
+        assertNull(resolveViaReflection("default", grokHome));
+    }
+
+    @Test
+    public void modelsSectionDefaultWinsAndTheFirstDefaultCounts() throws Exception {
+        Path grokHome = writeSmallLargeCache(".grok-models-section-default");
+        Files.writeString(grokHome.resolve("config.toml"), """
+                default = "grok-large"
+
+                [models]
+                default = "grok-small"
+                default = "grok-large"
+                """, StandardCharsets.UTF_8);
+
+        assertEquals(Integer.valueOf(100000), resolveViaReflection("default", grokHome));
+    }
+
+    private Path writeSmallLargeCache(String folder) throws Exception {
+        Path grokHome = temporary.newFolder(folder).toPath();
+        Files.writeString(grokHome.resolve("models_cache.json"), """
+                {
+                  "models": {
+                    "grok-small": { "context_window": 100000 },
+                    "grok-large": { "context_window": 300000 }
+                  }
+                }
+                """, StandardCharsets.UTF_8);
+        return grokHome;
+    }
+
+    @Test
+    public void readsMaxInputTokensWhenContextWindowIsAbsent() throws Exception {
+        Path grokHome = temporary.newFolder(".grok-max-input").toPath();
+        Files.writeString(grokHome.resolve("models_cache.json"), """
+                {
+                  "models": {
+                    "grok-catalog": { "info": { "max_input_tokens": 131072 } }
+                  }
+                }
+                """, StandardCharsets.UTF_8);
+
+        assertEquals(Integer.valueOf(131072), resolveViaReflection("grok-catalog", grokHome));
+    }
+
+    @Test
     public void modelContextLimitsContainsStaticEntriesForGrok47() {
         assertEquals(256_000, ModelProviderHandler.getModelContextLimit("grok-4.7"));
         assertEquals(256_000, ModelProviderHandler.getModelContextLimit("grok-4.7-build-fast"));

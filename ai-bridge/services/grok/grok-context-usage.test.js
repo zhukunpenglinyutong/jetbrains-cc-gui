@@ -22,7 +22,9 @@ test('extractUsedTokens mirrors Java GrokContextUsageBuilder', () => {
   assert.equal(extractUsedTokens({}), 0);
   // Grok ACP usage_update uses camelCase (fallback → normalized snake_case)
   assert.equal(extractUsedTokens({ totalTokens: 99, inputTokens: 1 }), 99);
-  assert.equal(extractUsedTokens({ inputTokens: 10, outputTokens: 5, thoughtTokens: 2 }), 17);
+  // Reasoning is part of output (Grok: totalTokens = inputTokens + outputTokens), so it is not added again
+  assert.equal(extractUsedTokens({ inputTokens: 10, outputTokens: 5, thoughtTokens: 2 }), 15);
+  assert.equal(extractUsedTokens({ thoughtTokens: 7 }), 7);
 });
 
 test('normalizeUsageToSnakeCase maps camelCase and prefers snake_case', () => {
@@ -328,3 +330,58 @@ test('multi-step turn (modelCalls > 1) keeps context ring at latest step occupan
   assert.equal(res.usage.thinking_tokens, 361);
 });
 
+test('usage without a total does not count cache-inclusive input twice', () => {
+  // camelCase inputTokens already includes cachedReadTokens.
+  const camel = { inputTokens: 46915, cachedReadTokens: 24960, outputTokens: 415 };
+  assert.equal(normalizeUsageToSnakeCase(camel).total_tokens, 47330);
+  assert.equal(extractUsedTokens(camel), 47330);
+
+  // Claude-style input_tokens excludes cache_read_input_tokens.
+  const claudeStyle = { input_tokens: 554, cache_read_input_tokens: 23168, output_tokens: 356 };
+  assert.equal(normalizeUsageToSnakeCase(claudeStyle).total_tokens, 24078);
+  assert.equal(extractUsedTokens(claudeStyle), 24078);
+});
+
+test('normalized [USAGE] snapshots keep cache-inclusive input so turn usage can split it again', () => {
+  // A step whose total is not exactly input + output must still be split correctly.
+  const step = normalizeUsageToSnakeCase({
+    input_tokens: 554,
+    cache_read_input_tokens: 23168,
+    output_tokens: 356,
+    total_tokens: 24086,
+  });
+  assert.equal(step.input_tokens, 23722);
+  assert.equal(step.cached_read_tokens, 23168);
+
+  const fromMeta = normalizeUsageToSnakeCase({
+    totalTokens: 24086,
+    inputTokens: 23722,
+    cachedReadTokens: 23168,
+    outputTokens: 356,
+  });
+  for (const snapshot of [step, fromMeta]) {
+    const turn = grokUtils.normalizeGrokTurnUsage(snapshot);
+    assert.equal(turn.input_tokens, 554);
+    assert.equal(turn.cache_read_input_tokens, 23168);
+    assert.equal(turn.total_tokens, 24086);
+  }
+});
+
+test('normalizeGrokTurnUsage reads the cacheReadTokens / cacheWriteTokens aliases used by usage.json', () => {
+  const turn = grokUtils.normalizeGrokTurnUsage({
+    totalTokens: 23686,
+    inputTokens: 20000,
+    outputTokens: 3686,
+    cacheReadTokens: 1000,
+    cacheWriteTokens: 500,
+  });
+  assert.equal(turn.input_tokens, 18500);
+  assert.equal(turn.cache_read_input_tokens, 1000);
+  assert.equal(turn.cache_creation_input_tokens, 500);
+});
+
+test('a usage without a total matches the whole-turn total, reasoning included', () => {
+  const usage = { inputTokens: 46915, cachedReadTokens: 24960, outputTokens: 415, reasoningTokens: 361 };
+  assert.equal(extractUsedTokens(usage), 47330);
+  assert.equal(grokUtils.normalizeGrokTurnUsage(usage).total_tokens, 47330);
+});

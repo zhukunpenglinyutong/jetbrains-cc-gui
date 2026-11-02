@@ -156,7 +156,7 @@ public final class GrokUsageAggregator {
                 s.cost = 0;
                 s.usage = new UsageData();
 
-                GrokHistoryReader.SessionUsageTotals diskTotals =
+                GrokSessionCompanionFiles.SessionUsageTotals diskTotals =
                         historyReader.readSessionUsageTotals(info.sessionId, info.cwd);
                 GrokUsageLedger.SessionTotals lt = ledgerBySession.get(info.sessionId);
                 if (diskTotals != null && diskTotals.totalTokens > 0) {
@@ -171,6 +171,8 @@ public final class GrokUsageAggregator {
                     }
                 } else if (lt != null) {
                     s.usage.inputTokens = lt.inputTokens;
+                    s.usage.cacheReadTokens = lt.cacheReadTokens;
+                    s.usage.cacheWriteTokens = lt.cacheWriteTokens;
                     s.usage.outputTokens = lt.outputTokens;
                     s.usage.totalTokens = lt.totalTokens > 0
                             ? lt.totalTokens
@@ -210,6 +212,8 @@ public final class GrokUsageAggregator {
                 s.cost = 0;
                 s.usage = new UsageData();
                 s.usage.inputTokens = lt.inputTokens;
+                s.usage.cacheReadTokens = lt.cacheReadTokens;
+                s.usage.cacheWriteTokens = lt.cacheWriteTokens;
                 s.usage.outputTokens = lt.outputTokens;
                 s.usage.totalTokens = lt.totalTokens > 0 ? lt.totalTokens : (lt.inputTokens + lt.outputTokens);
                 if (s.usage.totalTokens > 0) {

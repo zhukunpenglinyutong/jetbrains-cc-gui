@@ -535,4 +535,69 @@ public class GrokMessageHandlerTest {
             Files.deleteIfExists(tempLedger);
         }
     }
+
+    @Test
+    public void ledgerRecordsCacheExclusiveInputFromTurnResult() throws Exception {
+        Path tempLedger = Files.createTempFile("grok-ledger-result", ".jsonl");
+        try {
+            GrokMessageHandler handler = newLedgerHandler(newLedgerState(), tempLedger);
+            handler.onMessage("stream_start", "");
+            handler.onMessage("content_delta", "Answer");
+            handler.onMessage("result", "{\"usage\":{\"totalTokens\":47330,\"inputTokens\":46915,"
+                    + "\"cachedReadTokens\":24960,\"outputTokens\":415}}");
+            handler.onMessage("stream_end", "");
+
+            JsonObject entry = singleLedgerEntry(tempLedger);
+            assertEquals(21955, entry.get("inputTokens").getAsLong());
+            assertEquals(24960, entry.get("cacheReadTokens").getAsLong());
+            assertEquals(415, entry.get("outputTokens").getAsLong());
+            assertEquals(47330, entry.get("totalTokens").getAsLong());
+        } finally {
+            Files.deleteIfExists(tempLedger);
+        }
+    }
+
+    @Test
+    public void ledgerFallbackAtStreamEndSplitsCacheOutOfTheContextSnapshot() throws Exception {
+        Path tempLedger = Files.createTempFile("grok-ledger-fallback", ".jsonl");
+        try {
+            GrokMessageHandler handler = newLedgerHandler(newLedgerState(), tempLedger);
+            handler.onMessage("stream_start", "");
+            handler.onMessage("content_delta", "Answer");
+            // The total is not exactly input + output; the split must not depend on that.
+            handler.onMessage("usage", "{\"totalTokens\":24086,\"inputTokens\":23722,"
+                    + "\"cachedReadTokens\":23168,\"outputTokens\":356}");
+            handler.onMessage("stream_end", "");
+
+            JsonObject entry = singleLedgerEntry(tempLedger);
+            assertEquals(554, entry.get("inputTokens").getAsLong());
+            assertEquals(23168, entry.get("cacheReadTokens").getAsLong());
+            assertEquals(24086, entry.get("totalTokens").getAsLong());
+        } finally {
+            Files.deleteIfExists(tempLedger);
+        }
+    }
+
+    private static SessionState newLedgerState() {
+        SessionState state = new SessionState();
+        state.setSessionId("ledger-session");
+        state.setModel("grok-4.7");
+        state.setCwd("/test/cwd/project");
+        state.addMessage(new Message(Message.Type.USER, "Prompt"));
+        return state;
+    }
+
+    private static GrokMessageHandler newLedgerHandler(SessionState state, Path ledgerPath) throws Exception {
+        Constructor<GrokUsageLedger> ledgerCtor = GrokUsageLedger.class.getDeclaredConstructor(Path.class);
+        ledgerCtor.setAccessible(true);
+        CallbackHandler callbacks = new CallbackHandler();
+        callbacks.setCallback(new RecordingCallback());
+        return new GrokMessageHandler(state, callbacks, ledgerCtor.newInstance(ledgerPath));
+    }
+
+    private static JsonObject singleLedgerEntry(Path ledgerPath) throws Exception {
+        List<String> lines = Files.readAllLines(ledgerPath);
+        assertEquals("Exactly one ledger entry per turn", 1, lines.size());
+        return com.google.gson.JsonParser.parseString(lines.get(0)).getAsJsonObject();
+    }
 }

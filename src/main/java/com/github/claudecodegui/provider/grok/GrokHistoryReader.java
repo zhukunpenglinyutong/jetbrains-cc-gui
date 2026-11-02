@@ -1,7 +1,6 @@
 package com.github.claudecodegui.provider.grok;
 
 import com.github.claudecodegui.bridge.NodeDetector;
-import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.provider.common.HistoryPathMatcher;
 import com.github.claudecodegui.provider.common.HistoryCancellation;
 import com.google.gson.Gson;
@@ -43,19 +42,7 @@ public class GrokHistoryReader {
     private static final String KEY_TOOL_USE_ID = "tool_use_id";
     private static final String KEY_GROK_TOOL_PREFIX = "grok-tool-";
     private static final String KEY_CONTENT = "content";
-    private static final String KEY_TOTAL_TOKENS_CAMEL = "totalTokens";
-    private static final String KEY_TOTAL_TOKENS = "total_tokens";
-    private static final String KEY_INPUT_TOKENS = "input_tokens";
-    private static final String KEY_TURNS = "turns";
-    private static final String KEY_USAGE = "usage";
-    private static final String KEY_TURN_ID = "turnId";
-    private static final String KEY_TURN_ID_SNAKE = "turn_id";
-    private static final String KEY_UPDATE = "update";
-    private static final String KEY_DURATION_MS = "durationMs";
-    private static final String KEY_META = "_meta";
-    private static final String KEY_TURN_USAGE = "turnUsage";
     private static final String KEY_MESSAGE = "message";
-
 
     private final Gson gson;
     /** Ordered session roots (primary GROK_HOME first, then fallbacks). */
@@ -103,15 +90,6 @@ public class GrokHistoryReader {
         public String provider = "grok";
         /** Model id used by this session when known (e.g. grok-4.6). */
         public String model;
-    }
-
-    static final class SessionUsageTotals {
-        String model;
-        long inputTokens;
-        long outputTokens;
-        long cacheReadTokens;
-        long cacheWriteTokens;
-        long totalTokens;
     }
 
     /**
@@ -262,7 +240,8 @@ public class GrokHistoryReader {
         }
 
         if (info.model == null || info.model.isBlank()) {
-            SessionUsageTotals usageTotals = readUsageJsonFromDir(sessionDir);
+            GrokSessionCompanionFiles.SessionUsageTotals usageTotals =
+                    GrokSessionCompanionFiles.readUsageTotals(sessionDir);
             if (usageTotals != null && usageTotals.model != null && !usageTotals.model.isBlank()) {
                 info.model = usageTotals.model;
             }
@@ -462,9 +441,7 @@ public class GrokHistoryReader {
                 } catch (Exception e) {
                     continue;
                 }
-                String type = value.has("type") && !value.get("type").isJsonNull()
-                        ? value.get("type").getAsString()
-                        : "";
+                String type = primitiveString(value, "type", "");
                 switch (type) {
                     case "user" -> {
                         if (value.has("synthetic_reason")) {
@@ -473,18 +450,17 @@ public class GrokHistoryReader {
                         JsonElement contentEl = resolveMessageContent(value);
                         if (containsToolResultBlock(contentEl)) {
                             for (JsonElement el : contentEl.getAsJsonArray()) {
-                                if (!el.isJsonObject()) {
+                                if (!isToolResultBlock(el)) {
                                     continue;
                                 }
                                 JsonObject block = el.getAsJsonObject();
-                                if (block.has("type") && KEY_TOOL_RESULT.equals(block.get("type").getAsString())) {
-                                    String callId = block.has(KEY_TOOL_USE_ID) && !block.get(KEY_TOOL_USE_ID).isJsonNull()
-                                            ? block.get(KEY_TOOL_USE_ID).getAsString()
-                                            : (KEY_GROK_TOOL_PREFIX + (++counter));
-                                    String content = truncate(stringifyContent(block.get(KEY_CONTENT)), MAX_TOOL_RESULT_CHARS);
-                                    if (!content.isBlank()) {
-                                        messages.add(buildToolResultMessage(callId, content));
-                                    }
+                                String callId = primitiveString(block, KEY_TOOL_USE_ID, null);
+                                if (callId == null) {
+                                    callId = KEY_GROK_TOOL_PREFIX + (++counter);
+                                }
+                                String content = truncate(stringifyContent(block.get(KEY_CONTENT)), MAX_TOOL_RESULT_CHARS);
+                                if (!content.isBlank()) {
+                                    messages.add(buildToolResultMessage(callId, content));
                                 }
                             }
                             continue;
@@ -522,18 +498,20 @@ public class GrokHistoryReader {
                                 }
                                 JsonObject call = el.getAsJsonObject();
                                 String toolName = resolveToolName(call);
-                                String callId = call.has("id") && !call.get("id").isJsonNull()
-                                        ? call.get("id").getAsString()
-                                        : (KEY_GROK_TOOL_PREFIX + (++counter));
+                                String callId = primitiveString(call, "id", null);
+                                if (callId == null) {
+                                    callId = KEY_GROK_TOOL_PREFIX + (++counter);
+                                }
                                 JsonObject input = resolveToolArguments(call);
                                 messages.add(buildToolUseMessage(callId, toolName, input));
                             }
                         }
                     }
                     case KEY_TOOL_RESULT -> {
-                        String callId = value.has("tool_call_id") && !value.get("tool_call_id").isJsonNull()
-                                ? value.get("tool_call_id").getAsString()
-                                : (KEY_GROK_TOOL_PREFIX + (++counter));
+                        String callId = primitiveString(value, "tool_call_id", null);
+                        if (callId == null) {
+                            callId = KEY_GROK_TOOL_PREFIX + (++counter);
+                        }
                         String content = truncate(stringifyContent(resolveMessageContent(value)), MAX_TOOL_RESULT_CHARS);
                         if (content.isBlank()) {
                             continue;
@@ -546,443 +524,14 @@ public class GrokHistoryReader {
                 }
             }
         }
-        enrichMessagesWithCompanionData(chatPath.getParent(), messages);
+        GrokSessionCompanionFiles.restoreSessionContext(chatPath.getParent(), messages, cancellation);
         return messages;
     }
 
-    SessionUsageTotals readSessionUsageTotals(String sessionId, String cwd) {
-        Path sessionDir = resolveSessionDir(sessionId, cwd);
-        return readUsageJsonFromDir(sessionDir);
+    GrokSessionCompanionFiles.SessionUsageTotals readSessionUsageTotals(String sessionId, String cwd) {
+        return GrokSessionCompanionFiles.readUsageTotals(resolveSessionDir(sessionId, cwd));
     }
 
-    private static SessionUsageTotals readUsageJsonFromDir(Path sessionDir) {
-        if (sessionDir == null) {
-            return null;
-        }
-        Path usagePath = sessionDir.resolve("usage.json");
-        if (!Files.isRegularFile(usagePath)) {
-            return null;
-        }
-        try {
-            JsonElement parsed = JsonParser.parseString(Files.readString(usagePath, StandardCharsets.UTF_8));
-            if (parsed == null || !parsed.isJsonObject()) {
-                return null;
-            }
-            return sessionTotalsFromUsageRoot(parsed.getAsJsonObject());
-        } catch (Exception e) {
-            LOG.debug("[GrokHistoryReader] Failed to read usage.json in " + sessionDir + ": " + e.getMessage());
-            return null;
-        }
-    }
-
-    private static SessionUsageTotals sessionTotalsFromUsageRoot(JsonObject obj) {
-        SessionUsageTotals totals = new SessionUsageTotals();
-        totals.model = firstNonBlankString(obj, "primaryModelId", "modelId", "model");
-        totals.totalTokens = firstPositiveLong(obj, KEY_TOTAL_TOKENS_CAMEL, KEY_TOTAL_TOKENS);
-        totals.inputTokens = firstPositiveLong(obj, "inputTokens", KEY_INPUT_TOKENS);
-        totals.outputTokens = firstPositiveLong(obj, "outputTokens", "output_tokens");
-        totals.cacheReadTokens = firstPositiveLong(
-                obj, "cacheReadTokens", "cachedReadTokens", "cache_read_input_tokens", "cached_read_tokens");
-        totals.cacheWriteTokens = firstPositiveLong(
-                obj, "cacheWriteTokens", "cachedWriteTokens", "cache_creation_input_tokens", "cached_write_tokens");
-        if (totals.totalTokens <= 0) {
-            accumulateTurnTotals(obj, totals);
-        }
-        return totals;
-    }
-
-    private static void accumulateTurnTotals(JsonObject obj, SessionUsageTotals totals) {
-        if (!obj.has(KEY_TURNS) || !obj.get(KEY_TURNS).isJsonArray()) {
-            return;
-        }
-        for (JsonElement turnEl : obj.getAsJsonArray(KEY_TURNS)) {
-            if (!turnEl.isJsonObject()) {
-                continue;
-            }
-            JsonObject usage = usageObject(turnEl.getAsJsonObject());
-            totals.inputTokens += firstPositiveLong(usage, "inputTokens", KEY_INPUT_TOKENS);
-            totals.outputTokens += firstPositiveLong(usage, "outputTokens", "output_tokens");
-            totals.cacheReadTokens += firstPositiveLong(
-                    usage, "cacheReadTokens", "cachedReadTokens", "cache_read_input_tokens", "cached_read_tokens");
-            totals.cacheWriteTokens += firstPositiveLong(
-                    usage, "cacheWriteTokens", "cachedWriteTokens", "cache_creation_input_tokens", "cached_write_tokens");
-            totals.totalTokens += firstPositiveLong(usage, KEY_TOTAL_TOKENS_CAMEL, KEY_TOTAL_TOKENS);
-        }
-    }
-
-    private static void enrichMessagesWithCompanionData(Path sessionDir, List<JsonObject> messages) {
-        if (sessionDir == null || messages == null || messages.isEmpty()) {
-            return;
-        }
-        List<JsonObject> turnAssistants = new ArrayList<>();
-        JsonObject lastSessionAssistant = collectTurnAssistants(messages, turnAssistants);
-        if (lastSessionAssistant == null) {
-            return;
-        }
-        Map<Integer, JsonObject> turnUsageByIndex = new HashMap<>();
-        String sessionModel = loadUsageTurns(sessionDir, turnUsageByIndex);
-        Map<Integer, Long> turnDurationByIndex = new HashMap<>();
-        int lastStepContextTokens = loadUpdates(sessionDir, turnUsageByIndex, turnDurationByIndex);
-        stampTurnMetadata(turnAssistants, turnUsageByIndex, turnDurationByIndex);
-        stampSessionContext(lastSessionAssistant, sessionDir, sessionModel, lastStepContextTokens);
-    }
-
-    private static JsonObject collectTurnAssistants(List<JsonObject> messages, List<JsonObject> turnAssistants) {
-        TurnGroup group = new TurnGroup();
-        for (JsonObject msg : messages) {
-            acceptTurnMessage(group, turnAssistants, msg);
-        }
-        if (group.inTurn) {
-            turnAssistants.add(group.currentTurnLastAssistant);
-        }
-        return group.lastSessionAssistant;
-    }
-
-    private static void acceptTurnMessage(TurnGroup group, List<JsonObject> turnAssistants, JsonObject msg) {
-        if (!isTypedMessage(msg)) {
-            return;
-        }
-        String type = msg.get("type").getAsString();
-        if ("user".equals(type) && !isToolResultEnvelope(msg)) {
-            startTurn(group, turnAssistants);
-            return;
-        }
-        if ("assistant".equals(type)) {
-            rememberAssistant(group, msg);
-        }
-    }
-
-    private static boolean isTypedMessage(JsonObject msg) {
-        return msg != null && msg.has("type") && !msg.get("type").isJsonNull();
-    }
-
-    private static void startTurn(TurnGroup group, List<JsonObject> turnAssistants) {
-        if (group.inTurn) {
-            turnAssistants.add(group.currentTurnLastAssistant);
-        }
-        group.inTurn = true;
-        group.currentTurnLastAssistant = null;
-    }
-
-    private static void rememberAssistant(TurnGroup group, JsonObject msg) {
-        if (!group.inTurn) {
-            group.inTurn = true;
-        }
-        group.currentTurnLastAssistant = msg;
-        group.lastSessionAssistant = msg;
-    }
-
-    private static String loadUsageTurns(Path sessionDir, Map<Integer, JsonObject> turnUsageByIndex) {
-        Path usagePath = sessionDir.resolve("usage.json");
-        if (!Files.isRegularFile(usagePath)) {
-            return null;
-        }
-        try {
-            JsonElement parsed = JsonParser.parseString(Files.readString(usagePath, StandardCharsets.UTF_8));
-            if (parsed == null || !parsed.isJsonObject()) {
-                return null;
-            }
-            return indexUsageTurns(parsed.getAsJsonObject(), turnUsageByIndex);
-        } catch (Exception e) {
-            LOG.debug("[GrokHistoryReader] Failed to parse companion usage.json: " + e.getMessage());
-            return null;
-        }
-    }
-
-    private static String indexUsageTurns(JsonObject usageRoot, Map<Integer, JsonObject> turnUsageByIndex) {
-        String sessionModel = firstNonBlankString(usageRoot, "primaryModelId", "modelId", "model");
-        if (!usageRoot.has(KEY_TURNS) || !usageRoot.get(KEY_TURNS).isJsonArray()) {
-            return sessionModel;
-        }
-        JsonArray turns = usageRoot.getAsJsonArray(KEY_TURNS);
-        for (int i = 0; i < turns.size(); i++) {
-            indexOneUsageTurn(turns.get(i), i, turnUsageByIndex);
-        }
-        return sessionModel;
-    }
-
-    private static void indexOneUsageTurn(JsonElement element, int index, Map<Integer, JsonObject> turnUsageByIndex) {
-        if (!element.isJsonObject()) {
-            return;
-        }
-        JsonObject turnObj = element.getAsJsonObject();
-        int turnIdx = (int) firstPositiveLong(turnObj, KEY_TURN_ID, "turn", KEY_TURN_ID_SNAKE) - 1;
-        if (turnIdx < 0) {
-            turnIdx = index;
-        }
-        JsonObject normalized = GrokContextUsageBuilder.normalizeTurnUsage(usageObject(turnObj));
-        if (normalized != null) {
-            turnUsageByIndex.put(turnIdx, normalized);
-        }
-    }
-
-    private static JsonObject usageObject(JsonObject parent) {
-        if (parent.has(KEY_USAGE) && parent.get(KEY_USAGE).isJsonObject()) {
-            return parent.getAsJsonObject(KEY_USAGE);
-        }
-        return parent;
-    }
-
-    private static int loadUpdates(
-            Path sessionDir,
-            Map<Integer, JsonObject> turnUsageByIndex,
-            Map<Integer, Long> turnDurationByIndex) {
-        Path updatesPath = sessionDir.resolve("updates.jsonl");
-        if (!Files.isRegularFile(updatesPath)) {
-            return 0;
-        }
-        UpdateScan scan = new UpdateScan();
-        try (BufferedReader reader = Files.newBufferedReader(updatesPath, StandardCharsets.UTF_8)) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                acceptUpdateLine(line, scan, turnUsageByIndex, turnDurationByIndex);
-            }
-        } catch (Exception e) {
-            LOG.debug("[GrokHistoryReader] Failed to parse companion updates.jsonl: " + e.getMessage());
-        }
-        return scan.lastStepContextTokens;
-    }
-
-    private static void acceptUpdateLine(
-            String line,
-            UpdateScan scan,
-            Map<Integer, JsonObject> turnUsageByIndex,
-            Map<Integer, Long> turnDurationByIndex) {
-        String trimmed = line.trim();
-        if (trimmed.isEmpty() || !trimmed.startsWith("{")) {
-            return;
-        }
-        try {
-            applyUpdateObject(
-                    JsonParser.parseString(trimmed).getAsJsonObject(),
-                    scan,
-                    turnUsageByIndex,
-                    turnDurationByIndex);
-        } catch (Exception ignored) {
-            // Skip one malformed updates.jsonl line and keep reading the rest.
-        }
-    }
-
-    private static void applyUpdateObject(
-            JsonObject obj,
-            UpdateScan scan,
-            Map<Integer, JsonObject> turnUsageByIndex,
-            Map<Integer, Long> turnDurationByIndex) {
-        JsonObject update = nestedObjectOrSelf(obj, KEY_UPDATE);
-        recordElapsed(obj, update, scan, turnDurationByIndex);
-        recordTurnUsageFromUpdate(update, scan, turnUsageByIndex);
-        recordStepContext(obj, update, scan);
-    }
-
-    private static JsonObject nestedObjectOrSelf(JsonObject obj, String key) {
-        if (obj.has(key) && obj.get(key).isJsonObject()) {
-            return obj.getAsJsonObject(key);
-        }
-        return obj;
-    }
-
-    private static void recordElapsed(
-            JsonObject obj,
-            JsonObject update,
-            UpdateScan scan,
-            Map<Integer, Long> turnDurationByIndex) {
-        long elapsed = elapsedMillis(update);
-        if (elapsed <= 0 && update != obj) {
-            elapsed = elapsedMillis(obj);
-        }
-        if (elapsed <= 0) {
-            return;
-        }
-        long explicitTurn = explicitTurnId(update);
-        if (explicitTurn <= 0 && update != obj) {
-            explicitTurn = explicitTurnId(obj);
-        }
-        int idx = explicitTurn > 0 ? (int) (explicitTurn - 1) : scan.sequentialDurationIdx++;
-        turnDurationByIndex.put(idx, elapsed);
-    }
-
-    private static long elapsedMillis(JsonObject obj) {
-        return firstPositiveLong(obj, "elapsed_ms", "elapsedMs", "duration_ms", KEY_DURATION_MS);
-    }
-
-    private static long explicitTurnId(JsonObject obj) {
-        return firstPositiveLong(obj, "turn", KEY_TURN_ID, KEY_TURN_ID_SNAKE);
-    }
-
-    private static void recordTurnUsageFromUpdate(
-            JsonObject update,
-            UpdateScan scan,
-            Map<Integer, JsonObject> turnUsageByIndex) {
-        String kind = firstNonBlankString(update, "sessionUpdate", "type");
-        if ("turn_completed".equals(kind)) {
-            rememberTurnCompletedUsage(update, scan, turnUsageByIndex);
-            return;
-        }
-        if ("response_completed".equals(kind)) {
-            rememberResponseCompleted(update, scan);
-        }
-    }
-
-    private static void rememberTurnCompletedUsage(
-            JsonObject update,
-            UpdateScan scan,
-            Map<Integer, JsonObject> turnUsageByIndex) {
-        if (!update.has(KEY_USAGE) || !update.get(KEY_USAGE).isJsonObject()) {
-            return;
-        }
-        int idx = scan.sequentialTurnUsageIdx++;
-        long explicitTurn = explicitTurnId(update);
-        if (explicitTurn > 0) {
-            idx = (int) (explicitTurn - 1);
-        }
-        if (turnUsageByIndex.containsKey(idx)) {
-            return;
-        }
-        JsonObject normalized = GrokContextUsageBuilder.normalizeTurnUsage(update.getAsJsonObject(KEY_USAGE));
-        if (normalized != null) {
-            turnUsageByIndex.put(idx, normalized);
-        }
-    }
-
-    private static void rememberResponseCompleted(JsonObject update, UpdateScan scan) {
-        if (!update.has(KEY_USAGE) || !update.get(KEY_USAGE).isJsonObject()) {
-            return;
-        }
-        int stepTokens = GrokContextUsageBuilder.extractUsedTokens(update.getAsJsonObject(KEY_USAGE));
-        if (stepTokens > 0) {
-            scan.lastStepContextTokens = stepTokens;
-        }
-    }
-
-    private static void recordStepContext(JsonObject obj, JsonObject update, UpdateScan scan) {
-        JsonObject meta = metaObject(obj, update);
-        if (meta == null) {
-            return;
-        }
-        int metaTokens = (int) firstPositiveLong(meta, KEY_TOTAL_TOKENS_CAMEL, KEY_TOTAL_TOKENS);
-        if (metaTokens > 0) {
-            scan.lastStepContextTokens = metaTokens;
-        }
-    }
-
-    private static JsonObject metaObject(JsonObject obj, JsonObject update) {
-        if (obj.has(KEY_META) && obj.get(KEY_META).isJsonObject()) {
-            return obj.getAsJsonObject(KEY_META);
-        }
-        if (update.has(KEY_META) && update.get(KEY_META).isJsonObject()) {
-            return update.getAsJsonObject(KEY_META);
-        }
-        return null;
-    }
-
-    private static void stampTurnMetadata(
-            List<JsonObject> turnAssistants,
-            Map<Integer, JsonObject> turnUsageByIndex,
-            Map<Integer, Long> turnDurationByIndex) {
-        for (int turn = 0; turn < turnAssistants.size(); turn++) {
-            JsonObject assistant = turnAssistants.get(turn);
-            if (assistant == null) {
-                continue;
-            }
-            JsonObject turnUsage = turnUsageByIndex.get(turn);
-            if (turnUsage != null) {
-                assistant.add(KEY_TURN_USAGE, turnUsage.deepCopy());
-            }
-            Long durationMs = turnDurationByIndex.get(turn);
-            if (durationMs != null && durationMs > 0) {
-                assistant.addProperty(KEY_DURATION_MS, durationMs);
-            }
-        }
-    }
-
-    private static void stampSessionContext(
-            JsonObject lastSessionAssistant,
-            Path sessionDir,
-            String sessionModel,
-            int lastStepContextTokens) {
-        SignalSnapshot signals = readSignals(sessionDir);
-        int resolvedContextUsed = signals.contextUsed() > 0 ? signals.contextUsed() : lastStepContextTokens;
-        if (resolvedContextUsed <= 0 && lastSessionAssistant.has(KEY_TURN_USAGE)) {
-            JsonObject lastTurnUsage = lastSessionAssistant.getAsJsonObject(KEY_TURN_USAGE);
-            resolvedContextUsed = (int) firstPositiveLong(lastTurnUsage, KEY_TOTAL_TOKENS);
-        }
-        int resolvedContextWindow = signals.contextWindow() > 0
-                ? signals.contextWindow()
-                : resolveHistoryContextWindow(sessionModel);
-        if (resolvedContextUsed > 0 || resolvedContextWindow > 0) {
-            attachSessionUsage(lastSessionAssistant, resolvedContextUsed, resolvedContextWindow);
-        }
-    }
-
-    private static SignalSnapshot readSignals(Path sessionDir) {
-        Path signalsPath = sessionDir.resolve("signals.json");
-        if (!Files.isRegularFile(signalsPath)) {
-            return new SignalSnapshot(0, 0);
-        }
-        try {
-            JsonElement parsed = JsonParser.parseString(Files.readString(signalsPath, StandardCharsets.UTF_8));
-            if (parsed == null || !parsed.isJsonObject()) {
-                return new SignalSnapshot(0, 0);
-            }
-            JsonObject signals = parsed.getAsJsonObject();
-            int used = (int) firstPositiveLong(signals, "contextTokensUsed", "context_tokens_used");
-            int window = (int) firstPositiveLong(signals, "contextWindowTokens", "context_window_tokens");
-            return new SignalSnapshot(used, window);
-        } catch (Exception e) {
-            LOG.debug("[GrokHistoryReader] Failed to parse companion signals.json: " + e.getMessage());
-            return new SignalSnapshot(0, 0);
-        }
-    }
-
-    private static int resolveHistoryContextWindow(String sessionModel) {
-        Integer fromResolver = GrokContextWindowResolver.resolve(sessionModel);
-        if (fromResolver != null && fromResolver > 0) {
-            return fromResolver;
-        }
-        if (sessionModel != null && !sessionModel.isBlank()) {
-            return ModelProviderHandler.resolveContextLimit("grok", sessionModel, null);
-        }
-        return 0;
-    }
-
-    private static void attachSessionUsage(
-            JsonObject lastSessionAssistant,
-            int resolvedContextUsed,
-            int resolvedContextWindow) {
-        JsonObject message = jsonObjectField(lastSessionAssistant, KEY_MESSAGE);
-        JsonObject usage = jsonObjectField(message, KEY_USAGE);
-        if (resolvedContextUsed > 0) {
-            usage.addProperty(KEY_TOTAL_TOKENS, resolvedContextUsed);
-            usage.addProperty(KEY_INPUT_TOKENS, resolvedContextUsed);
-        }
-        if (resolvedContextWindow > 0) {
-            usage.addProperty("model_context_window", resolvedContextWindow);
-        }
-        message.add(KEY_USAGE, usage);
-        lastSessionAssistant.add(KEY_MESSAGE, message);
-    }
-
-    private static JsonObject jsonObjectField(JsonObject parent, String key) {
-        if (parent.has(key) && parent.get(key).isJsonObject()) {
-            return parent.getAsJsonObject(key);
-        }
-        return new JsonObject();
-    }
-
-    private static final class TurnGroup {
-        private boolean inTurn;
-        private JsonObject currentTurnLastAssistant;
-        private JsonObject lastSessionAssistant;
-    }
-
-    private static final class UpdateScan {
-        private int sequentialDurationIdx;
-        private int sequentialTurnUsageIdx;
-        private int lastStepContextTokens;
-    }
-
-    private record SignalSnapshot(int contextUsed, int contextWindow) {
-    }
     private static JsonElement resolveMessageContent(JsonObject value) {
         if (value == null) {
             return null;
@@ -1004,62 +553,25 @@ public class GrokHistoryReader {
             return false;
         }
         for (JsonElement el : content.getAsJsonArray()) {
-            if (el.isJsonObject()) {
-                JsonObject block = el.getAsJsonObject();
-                if (block.has("type") && KEY_TOOL_RESULT.equals(block.get("type").getAsString())) {
-                    return true;
-                }
+            if (isToolResultBlock(el)) {
+                return true;
             }
         }
         return false;
     }
 
-    private static boolean isToolResultEnvelope(JsonObject msg) {
-        if (msg == null || !msg.has(KEY_MESSAGE) || !msg.get(KEY_MESSAGE).isJsonObject()) {
-            return false;
-        }
-        JsonObject inner = msg.getAsJsonObject(KEY_MESSAGE);
-        return containsToolResultBlock(inner.get(KEY_CONTENT));
+    private static boolean isToolResultBlock(JsonElement el) {
+        return el != null && el.isJsonObject()
+                && KEY_TOOL_RESULT.equals(primitiveString(el.getAsJsonObject(), "type", null));
     }
 
-    private static long firstPositiveLong(JsonObject obj, String... keys) {
-        if (obj == null || keys == null) {
-            return 0L;
-        }
-        for (String key : keys) {
-            if (key == null || !obj.has(key) || obj.get(key).isJsonNull()) {
-                continue;
-            }
-            try {
-                long val = obj.get(key).getAsLong();
-                if (val > 0L) {
-                    return val;
-                }
-            } catch (Exception ignored) {
-                // Ignore a non-numeric value and try the next key.
-            }
-        }
-        return 0L;
-    }
-
-    private static String firstNonBlankString(JsonObject obj, String... keys) {
-        if (obj == null || keys == null) {
-            return null;
-        }
-        for (String key : keys) {
-            if (key == null || !obj.has(key) || obj.get(key).isJsonNull()) {
-                continue;
-            }
-            try {
-                String val = obj.get(key).getAsString();
-                if (val != null && !val.isBlank()) {
-                    return val.trim();
-                }
-            } catch (Exception ignored) {
-                // Ignore a non-string value and try the next key.
-            }
-        }
-        return null;
+    /**
+     * Reads a string-like field. A value that is null, an array or an object yields the
+     * fallback, so one malformed transcript line cannot abort the whole history load.
+     */
+    private static String primitiveString(JsonObject obj, String key, String fallback) {
+        JsonElement value = obj.get(key);
+        return value != null && value.isJsonPrimitive() ? value.getAsString() : fallback;
     }
 
     private static JsonObject buildUserTextMessage(String text, String uuid) {

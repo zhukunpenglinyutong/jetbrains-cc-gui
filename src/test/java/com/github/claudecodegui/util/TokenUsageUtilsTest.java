@@ -1,5 +1,6 @@
 package com.github.claudecodegui.util;
 
+import com.github.claudecodegui.provider.grok.GrokContextUsageBuilder;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.JsonObject;
 import org.junit.Test;
@@ -129,15 +130,55 @@ public class TokenUsageUtilsTest {
     }
 
     /**
-     * Verifies grok context tokens do not double-count cached input tokens when component fields are present.
+     * Verifies grok context tokens count cached input exactly once when no total is reported:
+     * Claude-style input_tokens excludes cache_read_input_tokens, camelCase inputTokens includes cachedReadTokens.
      */
     @Test
     public void grokContextTokensDoNotDoubleCountCacheReadTokens() {
-        JsonObject usage = new JsonObject();
-        usage.addProperty("input_tokens", 24086);
-        usage.addProperty("cache_read_input_tokens", 23168);
-        usage.addProperty("output_tokens", 356);
-        assertEquals(24086, TokenUsageUtils.extractContextTokens(usage, "grok"));
+        JsonObject claudeStyle = new JsonObject();
+        claudeStyle.addProperty("input_tokens", 554);
+        claudeStyle.addProperty("cache_read_input_tokens", 23168);
+        claudeStyle.addProperty("output_tokens", 356);
+        assertEquals(24078, TokenUsageUtils.extractContextTokens(claudeStyle, "grok"));
+        assertEquals(24078, TokenUsageUtils.extractUsedTokens(claudeStyle, "grok"));
+
+        JsonObject camelCase = new JsonObject();
+        camelCase.addProperty("inputTokens", 23722);
+        camelCase.addProperty("cachedReadTokens", 23168);
+        camelCase.addProperty("outputTokens", 356);
+        assertEquals(24078, TokenUsageUtils.extractContextTokens(camelCase, "grok"));
+        assertEquals(24078, TokenUsageUtils.extractUsedTokens(camelCase, "grok"));
+
+        // Reasoning is part of output (totalTokens = inputTokens + outputTokens), so it is not added again.
+        JsonObject withReasoning = new JsonObject();
+        withReasoning.addProperty("inputTokens", 46915);
+        withReasoning.addProperty("cachedReadTokens", 24960);
+        withReasoning.addProperty("outputTokens", 415);
+        withReasoning.addProperty("reasoningTokens", 361);
+        assertEquals(47330, TokenUsageUtils.extractContextTokens(withReasoning, "grok"));
+        assertEquals(47330, GrokContextUsageBuilder.normalizeTurnUsage(withReasoning).get("total_tokens").getAsInt());
+    }
+
+    /**
+     * Verifies normalized snapshots keep cache-inclusive input so whole-turn usage can split it again,
+     * even when the reported total is not exactly input plus output.
+     */
+    @Test
+    public void grokNormalizedSnapshotKeepsCacheInclusiveInput() {
+        JsonObject step = new JsonObject();
+        step.addProperty("input_tokens", 554);
+        step.addProperty("cache_read_input_tokens", 23168);
+        step.addProperty("output_tokens", 356);
+        step.addProperty("total_tokens", 24086);
+
+        JsonObject snapshot = GrokContextUsageBuilder.normalizeUsageToSnakeCase(step);
+        assertEquals(23722, snapshot.get("input_tokens").getAsInt());
+        assertEquals(23168, snapshot.get("cached_read_tokens").getAsInt());
+
+        JsonObject turn = GrokContextUsageBuilder.normalizeTurnUsage(snapshot);
+        assertEquals(554, turn.get("input_tokens").getAsInt());
+        assertEquals(23168, turn.get("cache_read_input_tokens").getAsInt());
+        assertEquals(24086, turn.get("total_tokens").getAsInt());
     }
 
     /**

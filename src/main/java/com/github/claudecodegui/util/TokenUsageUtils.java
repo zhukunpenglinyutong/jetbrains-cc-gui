@@ -38,15 +38,14 @@ public final class TokenUsageUtils {
         if (usage == null) {
             return 0;
         }
+        if ("grok".equals(provider)) {
+            // Grok mixes cache-inclusive camelCase and Claude-layout snake_case input; the
+            // builder knows which is which, so never read input_tokens on its own here.
+            return GrokContextUsageBuilder.extractUsedTokens(usage);
+        }
         int input = usage.has("input_tokens") ? usage.get("input_tokens").getAsInt() : 0;
         if ("codex".equals(provider)) {
             return input;
-        }
-        if ("grok".equals(provider)) {
-            if (usage.has(KEY_TOTAL_TOKENS) || usage.has("totalTokens")) {
-                return GrokContextUsageBuilder.extractUsedTokens(usage);
-            }
-            return input > 0 ? input : GrokContextUsageBuilder.extractUsedTokens(usage);
         }
         int cacheCreation = usage.has("cache_creation_input_tokens")
                 ? usage.get("cache_creation_input_tokens").getAsInt() : 0;
