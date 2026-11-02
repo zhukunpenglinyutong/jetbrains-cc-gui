@@ -12,11 +12,13 @@ describe('native session titles', () => {
     customSessionTitleRef: { current: null as string | null }, setRestoredSessionTitle: restored,
     setCustomSessionTitle: custom, applyHistoryTitleLocal: local, settleTitleRegeneration: settle,
     addToast,
+    historyDataRef: { current: null as { sessions?: Array<{ sessionId: string; hasCustomTitle?: boolean }> | null } },
   } as unknown as UseWindowCallbacksOptions;
   beforeEach(() => {
     vi.clearAllMocks();
     options.customSessionTitleRef.current = null;
     options.currentProviderRef.current = 'claude';
+    options.historyDataRef.current = null;
     registerSessionAndSdkCallbacks(options, { current: ((key: string) => key) as UseWindowCallbacksOptions['t'] });
   });
   it('keeps automatic titles separate from manual overrides', () => {
@@ -85,6 +87,26 @@ describe('native session titles', () => {
       expect(local).toHaveBeenCalledWith('root', 'Fix login button');
       expect(addToast).toHaveBeenCalledWith('history.titleRegenerated', 'success');
     });
+
+    // Regression: loading a history session seeds customSessionTitle with the
+    // displayed (AI) title and deriveSessionTitle prefers it, so the header
+    // only shows the regenerated title if the result pushes it there.
+    it('pushes the regenerated title to the on-screen header of the current session', () => {
+      window.onTitleRegenerated!(JSON.stringify({ sessionId: 'root', success: true, title: 'Fix login button' }));
+      expect(custom).toHaveBeenCalledWith('Fix login button');
+    });
+
+    it('does not touch the header when the session has a manual title', () => {
+      options.historyDataRef.current = { sessions: [{ sessionId: 'root', hasCustomTitle: true }] };
+      window.onTitleRegenerated!(JSON.stringify({ sessionId: 'root', success: true, title: 'Fix login button' }));
+      expect(custom).not.toHaveBeenCalled();
+    });
+
+    it('does not touch the header when the regenerated session is not on screen', () => {
+      window.onTitleRegenerated!(JSON.stringify({ sessionId: 'other-session', success: true, title: 'Other title' }));
+      expect(custom).not.toHaveBeenCalled();
+    });
+
     it('maps known failure codes to a friendly toast without touching the title', () => {
       window.onTitleRegenerated!(JSON.stringify({ sessionId: 'root', success: false, code: 'empty_session' }));
       expect(settle).toHaveBeenCalledWith('root');
