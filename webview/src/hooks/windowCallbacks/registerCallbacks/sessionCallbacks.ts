@@ -44,6 +44,7 @@ export function registerSessionAndSdkCallbacks(
     setCurrentRewindRequest,
     customSessionTitleRef,
     currentSessionIdRef,
+    historyDataRef,
     updateHistoryTitle,
     applyHistoryTitleLocal,
     setCustomSessionTitle,
@@ -241,6 +242,16 @@ export function registerSessionAndSdkCallbacks(
 
     if (payload.success && payload.title) {
       applyHistoryTitleLocal(sessionId, payload.title);
+      // Live-update the on-screen header too. deriveSessionTitle prefers
+      // customSessionTitle, and loading a history session seeds it with the
+      // displayed (AI) title — without this push the header keeps showing
+      // the old title until the next session switch re-seeds it.
+      const session = historyDataRef.current?.sessions?.find(
+        (entry) => entry.sessionId === sessionId,
+      );
+      if (currentSessionIdRef.current === sessionId && session?.hasCustomTitle !== true) {
+        setCustomSessionTitle(payload.title);
+      }
       addToast(tRef.current('history.titleRegenerated'), 'success');
       return;
     }

@@ -24,6 +24,8 @@ export interface SessionContextValue {
   currentSessionIdRef: React.RefObject<string | null>;
   /** Stale-closure guard: always reflects latest customSessionTitle without triggering re-render. */
   customSessionTitleRef: React.RefObject<string | null>;
+  /** Stale-closure guard: always reflects latest historyData without triggering re-render. */
+  historyDataRef: React.RefObject<HistoryData | null>;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -47,6 +49,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const customSessionTitleRef = useRef<string | null>(customSessionTitle);
   useEffect(() => { customSessionTitleRef.current = customSessionTitle; }, [customSessionTitle]);
 
+  const historyDataRef = useRef<HistoryData | null>(historyData);
+  useEffect(() => { historyDataRef.current = historyData; }, [historyData]);
+
   const value = useMemo<SessionContextValue>(
     () => ({
       currentSessionId,
@@ -61,6 +66,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setRegeneratingTitleSessionIds,
       currentSessionIdRef,
       customSessionTitleRef,
+      historyDataRef,
     }),
     [currentSessionId, customSessionTitle, restoredSessionTitle, historyData, regeneratingTitleSessionIds],
   );

@@ -124,6 +124,8 @@ export interface UseWindowCallbacksOptions {
   // B-011: Title migration on session ID change
   customSessionTitleRef: MutableRefObject<string | null>;
   currentSessionIdRef: MutableRefObject<string | null>;
+  /** Latest history snapshot without re-registering callbacks (manual-title checks). */
+  historyDataRef: MutableRefObject<HistoryData | null>;
   updateHistoryTitle: (sessionId: string, newTitle: string) => void;
   applyHistoryTitleLocal: (sessionId: string, newTitle: string) => void;
 

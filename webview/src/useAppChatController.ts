@@ -137,7 +137,7 @@ export const useAppChatController = ({
     restoredSessionTitle, setRestoredSessionTitle,
     historyData, setHistoryData,
     regeneratingTitleSessionIds, setRegeneratingTitleSessionIds,
-    currentSessionIdRef, customSessionTitleRef,
+    currentSessionIdRef, customSessionTitleRef, historyDataRef,
   } = useSession();
 
   // ── UI state (UIStateContext) ──
@@ -275,7 +275,7 @@ export const useAppChatController = ({
     forceClosePermissionDialog, forceCloseAskUserQuestionDialog, forceClosePlanApprovalDialog,
     openContextUsageDialog, updateContextUsageData,
     closeContextUsageDialog,
-    customSessionTitleRef, currentSessionIdRef, updateHistoryTitle, applyHistoryTitleLocal,
+    customSessionTitleRef, currentSessionIdRef, historyDataRef, updateHistoryTitle, applyHistoryTitleLocal,
     setCustomSessionTitle,
     setRegeneratingTitleSessionIds, settleTitleRegeneration,
     setRestoredSessionTitle,
