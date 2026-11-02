@@ -3,7 +3,6 @@ package com.github.claudecodegui.util;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -153,12 +152,25 @@ public final class WslPathUtil {
         }
         try {
             // Use canonical path to resolve symlinks, "..", encoded chars on native local paths.
-            String canonicalFile = new File(filePath).getCanonicalPath();
-            String canonicalBase = new File(basePath).getCanonicalPath();
-            return canonicalFile.startsWith(canonicalBase + File.separator) || canonicalFile.equals(canonicalBase);
+            java.nio.file.Path canonicalFile = canonicalLocalPath(filePath);
+            java.nio.file.Path canonicalBase = canonicalLocalPath(basePath);
+            return canonicalFile.startsWith(canonicalBase);
         } catch (IOException e) {
             return false;
         }
+    }
+
+    /** Resolve links/junctions in the deepest existing ancestor, including for new files. */
+    private static java.nio.file.Path canonicalLocalPath(String value) throws IOException {
+        java.nio.file.Path path = java.nio.file.Path.of(value).toAbsolutePath();
+        java.nio.file.Path ancestor = path;
+        while (ancestor != null && !java.nio.file.Files.exists(ancestor, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            ancestor = ancestor.getParent();
+        }
+        if (ancestor == null) {
+            throw new IOException("No existing filesystem ancestor");
+        }
+        return ancestor.toRealPath().resolve(ancestor.relativize(path)).normalize();
     }
 
     /** Resolves "." and ".." in an absolute POSIX path. Returns {@code null} if the path escapes above root. */

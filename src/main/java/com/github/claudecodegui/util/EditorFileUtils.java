@@ -214,19 +214,24 @@ public class EditorFileUtils {
      */
     public static void refreshAndFindFileAsync(File file, Consumer<VirtualFile> onSuccess, Runnable onFailure) {
         try {
+            final String originalPath = normalizeVfsPath(file.toPath().toAbsolutePath().normalize().toString());
             final String canonicalPath = file.getCanonicalPath();
 
             // Step 1: Refresh file system on UI thread (not under read lock)
             ApplicationManager.getApplication().invokeLater(() -> {
                 try {
                     // Async refresh - this doesn't block and doesn't require read lock
+                    LocalFileSystem.getInstance().refreshAndFindFileByPath(originalPath);
                     LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
 
                     // Step 2: Find the file in a non-blocking read action
                     ReadAction
                             .nonBlocking(() -> {
                                 // Only perform find operations, no refresh
-                                VirtualFile vf = LocalFileSystem.getInstance().findFileByPath(canonicalPath.replace('\\', '/'));
+                                VirtualFile vf = LocalFileSystem.getInstance().findFileByPath(originalPath);
+                                if (vf == null) {
+                                    vf = LocalFileSystem.getInstance().findFileByPath(normalizeVfsPath(canonicalPath));
+                                }
                                 if (vf == null) {
                                     // Fallback to finding by File object
                                     vf = LocalFileSystem.getInstance().findFileByIoFile(file);
@@ -238,7 +243,10 @@ public class EditorFileUtils {
                                 if (virtualFile == null) {
                                     LOG.warn("Could not find virtual file: " + file.getAbsolutePath() + ", retrying with sync refresh...");
                                     // Retry: sync refresh and find (already on UI thread, not under read lock)
-                                    VirtualFile retryVf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
+                                    VirtualFile retryVf = LocalFileSystem.getInstance().refreshAndFindFileByPath(originalPath);
+                                    if (retryVf == null) {
+                                        retryVf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
+                                    }
                                     if (retryVf != null) {
                                         onSuccess.accept(retryVf);
                                     } else {
@@ -303,8 +311,12 @@ public class EditorFileUtils {
      */
     public static VirtualFile refreshAndFindFileSync(File file) {
         try {
+            String originalPath = normalizeVfsPath(file.toPath().toAbsolutePath().normalize().toString());
             String canonicalPath = file.getCanonicalPath();
-            VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(canonicalPath.replace('\\', '/'));
+            VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(originalPath);
+            if (vf == null) {
+                vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(normalizeVfsPath(canonicalPath));
+            }
             if (vf == null) {
                 vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
             }
@@ -313,5 +325,9 @@ public class EditorFileUtils {
             LOG.error("Failed to refresh and find file: " + file.getAbsolutePath(), e);
             return null;
         }
+    }
+
+    private static String normalizeVfsPath(String path) {
+        return path == null ? null : path.replace('\\', '/');
     }
 }

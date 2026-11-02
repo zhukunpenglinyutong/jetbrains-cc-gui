@@ -5,6 +5,7 @@ import {
   isMarkdownFileNavigationHref,
   linkifyHtml,
   linkifyPlainTextSegment,
+  normalizeFileLinkHref,
   normalizeFileNavigationTarget,
   parseFileLinkTarget,
 } from './linkify';
@@ -35,6 +36,30 @@ describe('linkify', () => {
     expect(isMarkdownFileNavigationHref('/Users/demo/my%20file.ts')).toBe(true);
     expect(isMarkdownFileNavigationHref('file:///tmp/demo.txt')).toBe(true);
     expect(isMarkdownFileNavigationHref('https://example.com/docs')).toBe(false);
+  });
+
+  it('normalizes markdown-style file hrefs with GitHub line fragments', () => {
+    expect(normalizeFileLinkHref('Assets/GameScripts/Foo.cs')).toBe('Assets/GameScripts/Foo.cs');
+    expect(normalizeFileLinkHref('Assets/GameScripts/Foo.cs:42')).toBe('Assets/GameScripts/Foo.cs:42');
+    expect(normalizeFileLinkHref('Assets/GameScripts/Foo.cs#L42')).toBe('Assets/GameScripts/Foo.cs:42');
+    expect(normalizeFileLinkHref('Assets/GameScripts/Foo.cs#L42-L50')).toBe('Assets/GameScripts/Foo.cs:42-50');
+    expect(normalizeFileLinkHref('https://example.com/Foo.cs')).toBeNull();
+    expect(normalizeFileLinkHref('javascript:1')).toBeNull();
+  });
+
+  it.each([
+    'javascript:payload.cs',
+    'javascript%3Apayload.cs',
+    'javascript%253Apayload.cs',
+    'data:text/html,payload.ts',
+    'command:payload.ts',
+  ])('does not classify custom protocols as file paths: %s', (href) => {
+    expect(normalizeFileLinkHref(href)).toBeNull();
+  });
+
+  it('keeps encoded line targets and file URIs navigable', () => {
+    expect(normalizeFileLinkHref('Foo.cs%3A12')).toBe('Foo.cs:12');
+    expect(normalizeFileLinkHref('file:///C:/Project/Foo.cs')).toBe('file:///C:/Project/Foo.cs');
   });
 
   it('decorates markdown file links with file-link metadata', () => {
@@ -171,6 +196,18 @@ describe('linkify', () => {
 
     expect(root.querySelector('a.url-link')?.textContent).toBe('docs');
     expect(root.querySelector('a.file-link')?.textContent).toBe('src/components/App.tsx');
+  });
+
+  it('decorates existing markdown anchors that target local files', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<p><a href="Assets/GameScripts/Foo.cs#L12">Foo.cs</a></p>';
+
+    decorateExistingAnchors(root);
+
+    const link = root.querySelector('a')!;
+    expect(link.classList.contains('file-link')).toBe(true);
+    expect(link.getAttribute('data-linkify')).toBe('file');
+    expect(link.getAttribute('data-file-path')).toBe('Assets/GameScripts/Foo.cs:12');
   });
 
   it('keeps class links disabled when capability is off', () => {
