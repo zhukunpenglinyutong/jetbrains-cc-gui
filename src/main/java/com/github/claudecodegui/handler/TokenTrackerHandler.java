@@ -52,7 +52,7 @@ public class TokenTrackerHandler {
      * Pinned npm package spec for the CLI install. The version is locked to
      * guard against supply-chain attacks; bump it manually when upgrading.
      */
-    private static final String TT_CLI_PACKAGE = "tokentracker-cli@0.87.3";
+    private static final String TT_CLI_PACKAGE = "tokentracker-cli@1.5.4";
     /** Default port used by `tokentracker serve`. */
     private static final int TT_DEFAULT_PORT = 7680;
     /** Ports scanned when looking for a running server. */
