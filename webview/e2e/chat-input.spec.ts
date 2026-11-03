@@ -142,6 +142,21 @@ async function submitCodexCompact(page: Page) {
   await editable.press('Enter');
 }
 
+test('opening a chat never auto-opens release notes and the version tag still opens them', async ({ page }, testInfo) => {
+  await page.addInitScript(() => localStorage.setItem('lastSeenChangelogVersion', '0.0.1'));
+  await page.reload();
+  await expect(page.locator('.input-editable')).toBeVisible();
+  await expect(page.locator('.changelog-overlay')).toHaveCount(0);
+  await page.locator('.version-tag').click();
+  await expect(page.locator('.changelog-dialog')).toBeVisible();
+  await page.locator('.changelog-close-btn').click();
+  await expect(page.locator('.changelog-overlay')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('.input-editable')).toBeVisible();
+  await expect(page.locator('.changelog-overlay')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('chat-without-release-notes.png') });
+});
+
 test('Enter sends once and a held key cannot submit the next draft', async ({ page }) => {
   const editable = page.locator('.input-editable');
   await editable.fill('first message');
@@ -339,6 +354,50 @@ test('remote tab repaint preserves input selection and IME composition without c
   await page.keyboard.insertText('测试');
   await expect(input).toHaveText('中文测试 English');
   expect(await sentMessages(page)).toEqual([]);
+});
+
+test('remote session reconciliation repairs a missed terminal while keeping the input document', async ({ page, context }, testInfo) => {
+  await page.evaluate(() => {
+    window.setSessionId?.('remote-reconnect-fixture');
+    window.showLoading?.('true');
+    window.onStreamStart?.();
+    window.updateMessages?.(JSON.stringify([
+      { type: 'assistant', content: 'before disconnect', raw: { uuid: 'remote-answer' } },
+    ]), 100);
+  });
+  await expect(page.locator('.stop-button')).toBeVisible();
+  const input = page.locator('.input-editable');
+  await input.fill('中文草稿 keep editing');
+  const originalInput = await input.elementHandle();
+  await input.evaluate((element) => {
+    element.focus();
+    const range = document.createRange();
+    range.setStart(element.firstChild!, 2);
+    range.collapse(true);
+    getSelection()!.removeAllRanges();
+    getSelection()!.addRange(range);
+  });
+  await context.setOffline(true);
+  // The backend finishes while its callbacks cannot reach the client. On resume Java
+  // replays this authoritative snapshot into the same page, rather than reloading it.
+  await context.setOffline(false);
+  await page.evaluate(() => {
+    window.onStreamEnd?.();
+    window.showLoading?.('false');
+    window.updateMessages?.(JSON.stringify([
+      { type: 'assistant', content: 'completed while disconnected', raw: { uuid: 'remote-answer' } },
+    ]), 101);
+    window.onTabActivated?.(true);
+  });
+  await expect(page.locator('.messages-container')).toContainText('completed while disconnected');
+  await expect(page.locator('.stop-button')).toHaveCount(0);
+  await expect(input).toHaveText('中文草稿 keep editing');
+  await expect(input).toBeFocused();
+  expect(await originalInput!.evaluate((element) => element === document.querySelector('.input-editable'))).toBe(true);
+  expect(await input.evaluate(() => getSelection()!.anchorOffset)).toBe(2);
+  await expect.poll(() => page.evaluate(() => (window as InputTestWindow).__bridgeMessages
+    .filter((message) => message.startsWith('frontend_ready:')).length)).toBe(1);
+  await page.screenshot({ path: testInfo.outputPath('remote-state-reconciled.png') });
 });
 
 test('Codex compact waits like a message and releases queued input only at its terminal', async ({ page }) => {

@@ -37,6 +37,49 @@ import static org.junit.Assert.assertTrue;
  */
 public class ChatWindowDelegateTest {
 
+    /** Reconnect must repair a missed terminal without replacing the user's input document. */
+    @Test
+    public void remoteResumeReplaysStateAndFinishesAnAlreadyCompletedTurn() {
+        List<String> calls = new ArrayList<>();
+        ChatWindowDelegate delegate = createFrontendReadyDelegate(false, true, calls);
+
+        delegate.handleRemoteTransportResumed();
+
+        assertBackendTabStateAppliedOnceBeforeReplay(calls);
+        assertTrue(calls.contains("onStreamEnd"));
+        assertTrue(calls.indexOf("onStreamEnd") < calls.indexOf("showLoading"));
+        assertTrue(calls.contains("window.onTabActivated"));
+        assertFalse(calls.contains("setFrontendReady"));
+    }
+
+    /** Reconciliation must preserve a turn that is still streaming on the backend. */
+    @Test
+    public void remoteResumeRestoresAnActiveStreamWithoutEndingIt() {
+        List<String> calls = new ArrayList<>();
+        ChatWindowDelegate delegate = createFrontendReadyDelegate(false, true, calls, true, true);
+
+        delegate.handleRemoteTransportResumed();
+
+        assertTrue(calls.contains("onStreamStart"));
+        assertFalse(calls.contains("onStreamEnd"));
+    }
+
+    /** A pending SDK start is loading even before the first streaming event arrives. */
+    @Test
+    public void remoteResumeDoesNotEndATurnWaitingForItsFirstToken() {
+        List<String> calls = new ArrayList<>();
+        createFrontendReadyDelegate(false, true, calls, false, true).handleRemoteTransportResumed();
+        assertFalse(calls.contains("onStreamEnd"));
+    }
+
+    /** An unready page is restored by frontend_ready, not by an old transport heartbeat. */
+    @Test
+    public void remoteResumeDoesNotPublishIntoAnUnreadyPage() {
+        List<String> calls = new ArrayList<>();
+        createFrontendReadyDelegate(false, false, calls).handleRemoteTransportResumed();
+        assertTrue(calls.isEmpty());
+    }
+
     /** Verifies that recovery serializes the complete authoritative Session selection state. */
     @Test
     public void buildsAuthoritativeBackendTabState() {
@@ -191,9 +234,20 @@ public class ChatWindowDelegateTest {
             boolean frontendAlreadyReady,
             List<String> javaScriptCalls
     ) {
+        return createFrontendReadyDelegate(runtimeRecovery, frontendAlreadyReady, javaScriptCalls, false, false);
+    }
+
+    private static ChatWindowDelegate createFrontendReadyDelegate(
+            boolean runtimeRecovery,
+            boolean frontendAlreadyReady,
+            List<String> javaScriptCalls,
+            boolean streaming,
+            boolean loading
+    ) {
         ClaudeSession session = new ClaudeSession(null, null, null, null);
         session.setProvider("codex");
         session.setModel("gpt-5.6-sol");
+        session.getState().setLoading(loading);
 
         WebviewWatchdog watchdog = new WebviewWatchdog(
                 new JPanel(),
@@ -223,6 +277,9 @@ public class ChatWindowDelegateTest {
                         }
                 );
         StreamMessageCoalescer coalescer = new StreamMessageCoalescer(coalescerTarget);
+        if (streaming) {
+            coalescer.onStreamStart();
+        }
         // handleFrontendReady replays pending dialogs through the host's permission
         // handler, so the double needs a real (empty) one rather than a null.
         PermissionHandler permissionHandler = new PermissionHandler(new HandlerContext(
@@ -257,6 +314,9 @@ public class ChatWindowDelegateTest {
                                     return runtimeRecovery;
                                 case "isFrontendReady":
                                     return frontendAlreadyReady;
+                                case "setFrontendReady":
+                                    javaScriptCalls.add("setFrontendReady");
+                                    return null;
                                 case "callJavaScript":
                                     javaScriptCalls.add((String) args[0]);
                                     return null;

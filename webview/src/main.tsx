@@ -3,7 +3,8 @@ import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { MessagesProvider } from './contexts/MessagesContext';
 import { SessionProvider } from './contexts/SessionContext';
-import { UIStateProvider } from './contexts/UIStateContext';
+import { chatMounted, UIStateProvider } from './contexts/UIStateContext';
+import { pruneClosedDrafts } from './contexts/draftStorage';
 import { DialogProvider } from './contexts/DialogContext';
 import { TaskEventProvider } from './contexts/SubagentContext';
 import './codicon.css';
@@ -103,6 +104,8 @@ function createBridgeHeartbeatStarter() {
 }
 
 const startBridgeHeartbeat = createBridgeHeartbeatStarter();
+/** Upper bound on waiting for the chat tree; the draft restore itself gives up after 1 s. */
+const FRONTEND_READY_FALLBACK_MS = 5000;
 // vConsole debugging tool
 const enableVConsole =
   import.meta.env.DEV || import.meta.env.VITE_ENABLE_VCONSOLE === 'true';
@@ -659,6 +662,15 @@ if (typeof window !== 'undefined' && !window.applyBackendTabState) {
   };
 }
 
+// Restored-history state can be pushed immediately after frontend_ready. Buffer
+// the latest generation until the React callback is mounted so manual loading
+// remains available when automatic startup loading is disabled.
+if (typeof window !== 'undefined' && !window.updateStartupHistoryLoadState) {
+  window.updateStartupHistoryLoadState = (json: string) => {
+    window.__pendingStartupHistoryLoadState = json;
+  };
+}
+
 // Show and close share a FIFO so bootstrap replay preserves the original request order.
 if (typeof window !== 'undefined' && !window.showPermissionDialog) {
   window.showPermissionDialog = (payload) => {
@@ -719,6 +731,7 @@ if (typeof window !== 'undefined') {
   window.updateLinkifyCapabilities = (json: string) => {
     applyLinkifyCapabilitiesPayload(json);
   };
+  window.pruneClosedDrafts = pruneClosedDrafts;
   window.onTabActivated = (remote) => {
     if (remote === true || remote === 'true') repaintRemoteWebview();
     else forceWebviewRepaint('tab-activated');
@@ -754,8 +767,17 @@ waitForBridge(() => {
   setupDollarCommandsCallback();
   startBridgeHeartbeat();
 
-  debugLog('[Main] Sending frontend_ready signal');
-  sendBridgeEvent('frontend_ready');
+  // Java replays the session on frontend_ready, so wait for the chat callbacks to mount. A tree
+  // that failed to render must still report readiness, as it did before the draft restore.
+  let frontendReadySent = false;
+  const sendFrontendReady = () => {
+    if (frontendReadySent) return;
+    frontendReadySent = true;
+    debugLog('[Main] Sending frontend_ready signal');
+    sendBridgeEvent('frontend_ready');
+  };
+  void chatMounted.then(sendFrontendReady);
+  window.setTimeout(sendFrontendReady, FRONTEND_READY_FALLBACK_MS);
 
   debugLog('[Main] Sending refresh_slash_commands request');
   sendBridgeEvent('refresh_slash_commands');

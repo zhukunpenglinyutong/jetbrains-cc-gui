@@ -22,11 +22,7 @@ import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.util.concurrency.AppExecutorUtil;
 
-import javax.imageio.ImageIO;
-import javax.imageio.ImageReader;
-import javax.imageio.stream.ImageInputStream;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
@@ -967,7 +963,7 @@ public class CodexPetHandler extends BaseMessageHandler {
                 || !CodexPetImageSupport.hasSafeFrameBudget(mimeType, bytes)) {
             throw new IOException("INVALID_LOCAL_PET_IMAGE");
         }
-        BufferedImage decodedImage = ImageIO.read(new ByteArrayInputStream(bytes));
+        BufferedImage decodedImage = CodexPetImageSupport.readImage(bytes);
         if (decodedImage == null) {
             throw new IOException("INVALID_LOCAL_PET_IMAGE");
         }
@@ -992,22 +988,12 @@ public class CodexPetHandler extends BaseMessageHandler {
             Path path,
             CodexPetImageSupport.ImageDimensions expectedDimensions
     ) {
-        try (ImageInputStream input = ImageIO.createImageInputStream(path.toFile())) {
-            if (input == null) {
-                return false;
-            }
-            Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
-            if (!readers.hasNext()) {
-                return false;
-            }
-            ImageReader reader = readers.next();
-            try {
-                reader.setInput(input, true, true);
-                return reader.getWidth(0) == expectedDimensions.getWidth()
-                        && reader.getHeight(0) == expectedDimensions.getHeight();
-            } finally {
-                reader.dispose();
-            }
+        try {
+            // Share the decoder fallback with previews so WebP pets stay listed without an IDE WebP reader.
+            CodexPetImageSupport.ImageDimensions decoded = CodexPetImageSupport.readDecodedDimensions(path);
+            return decoded != null
+                    && decoded.getWidth() == expectedDimensions.getWidth()
+                    && decoded.getHeight() == expectedDimensions.getHeight();
         } catch (IOException | RuntimeException e) {
             return false;
         }

@@ -448,6 +448,10 @@ public class JBCefBrowserFactoryTest {
     public void detectsOnlyTheRemoteDevelopmentBackendBrowser() {
         Assert.assertTrue(JBCefBrowserFactory.isRemoteDevelopmentBrowserClass(
                 "com.jetbrains.rdserver.cef.BackendCefBrowser"));
+        Assert.assertTrue(JBCefBrowserFactory.isRemoteDevelopmentBrowserClass(
+                "com.jetbrains.rdserver.jcef.RenamedBackendBrowser"));
+        Assert.assertFalse(JBCefBrowserFactory.isRemoteDevelopmentBrowserClass(
+                "com.jetbrains.rdserverx.cef.BackendCefBrowser"));
         Assert.assertFalse(JBCefBrowserFactory.isRemoteDevelopmentBrowserClass(
                 "org.cef.browser.CefBrowserOsr"));
         Assert.assertFalse(JBCefBrowserFactory.isRemoteDevelopmentBrowserClass(

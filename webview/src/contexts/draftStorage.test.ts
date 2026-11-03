@@ -4,8 +4,10 @@ import {
   DRAFT_MAX_AGE_MS,
   DRAFT_MAX_ENTRIES,
   mirrorDraft,
+  pruneClosedDrafts,
   pruneDrafts,
   readDraft,
+  readSessionDraft,
   writeDraft,
 } from './draftStorage';
 
@@ -124,6 +126,44 @@ describe('draftStorage', () => {
     expect(fake.entries().size).toBe(DRAFT_MAX_ENTRIES);
     expect(fake.entries().has(urlFor('project:w0'))).toBe(true);
     expect(fake.entries().has(urlFor(`project:w${DRAFT_MAX_ENTRIES + 2}`))).toBe(false);
+  });
+
+  it('deletes drafts of closed windows in its own scope only', async () => {
+    window.__CCGUI_DRAFT_CACHE_KEY__ = 'host-a:project:own';
+    const now = Date.now();
+    for (const key of ['host-a:project:own', 'host-a:project:open', 'host-a:project:closed',
+      'host-a:other:closed', 'host-b:project:closed']) {
+      fake.seed(key, `draft of ${key}`, now);
+    }
+
+    // The page's own window is kept even if Java's list raced with its registration.
+    pruneClosedDrafts(JSON.stringify({ scope: 'host-a:', open: ['host-a:project:open', 42] }));
+    await pruneDrafts();
+
+    expect([...fake.entries().keys()].sort()).toEqual([
+      urlFor('host-a:project:open'),
+      urlFor('host-a:project:own'),
+      urlFor('host-b:project:closed'),
+    ].sort());
+  });
+
+  it('ignores a malformed open-window list instead of deleting every draft', async () => {
+    fake.seed('host-a:project:closed', 'closed draft', Date.now());
+    for (const json of ['not json', 'null', '{"scope":"","open":[]}', '{"scope":"host-a:"}']) {
+      pruneClosedDrafts(json);
+    }
+    await pruneDrafts();
+
+    expect(fake.entries().has(urlFor('host-a:project:closed'))).toBe(true);
+  });
+
+  it('reads the reload copy alone for a stalled cache', () => {
+    mirrorDraft('typed before reload');
+    expect(readSessionDraft()).toBe('typed before reload');
+    mirrorDraft('');
+    expect(readSessionDraft()).toBe('');
+    delete window.__CCGUI_DRAFT_CACHE_KEY__;
+    expect(readSessionDraft()).toBe('');
   });
 
   it('keeps working when browser storage is denied', async () => {

@@ -9,9 +9,11 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BooleanSupplier;
 
 /**
  * Runs a short-lived Node.js child under {@link ProcessManager} supervision with
@@ -85,6 +87,19 @@ public final class NodeProcessRunner {
             String stdinData,
             long timeoutSeconds
     ) throws IOException, InterruptedException, TimeoutException {
+        return run(pb, processManager, label, stdinData, timeoutSeconds, () -> false);
+    }
+
+    /** Preserves the process deadline and complete-output contract while allowing owned cancellation. */
+    public static Result run(
+            ProcessBuilder pb,
+            ProcessManager processManager,
+            String label,
+            String stdinData,
+            long timeoutSeconds,
+            BooleanSupplier cancellation
+    ) throws IOException, InterruptedException, TimeoutException {
+        checkCancellation(cancellation);
         String channelId = ProcessManager.newChannelId(label);
         Process process = null;
         try {
@@ -95,10 +110,22 @@ public final class NodeProcessRunner {
                 startStdinWriter(process, stdinData, label);
             }
 
-            if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
-                PlatformUtils.terminateProcess(process);
-                throw new TimeoutException("Node.js process timed out after " + timeoutSeconds + " seconds");
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds);
+            while (true) {
+                checkCancellation(cancellation);
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0L) {
+                    if (process.isAlive()) {
+                        PlatformUtils.terminateProcess(process);
+                        throw new TimeoutException("Node.js process timed out after " + timeoutSeconds + " seconds");
+                    }
+                    break;
+                }
+                if (process.waitFor(Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(100L)), TimeUnit.NANOSECONDS)) {
+                    break;
+                }
             }
+            checkCancellation(cancellation);
             return new Result(process.exitValue(), awaitOutput(stdout));
         } finally {
             if (process != null) {
@@ -107,6 +134,12 @@ public final class NodeProcessRunner {
                 }
                 processManager.unregisterProcess(channelId, process);
             }
+        }
+    }
+
+    private static void checkCancellation(BooleanSupplier cancellation) {
+        if (cancellation != null && cancellation.getAsBoolean()) {
+            throw new CancellationException("Node.js process was cancelled");
         }
     }
 

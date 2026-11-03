@@ -3,15 +3,24 @@ import type { ToastAction, ToastMessage } from '../components/Toast';
 import type { SettingsTab } from '../components/settings/SettingsSidebar';
 import type { ProviderManageTab } from '../components/settings/ProviderTabSection';
 import type { ContextInfo, ViewMode } from '../hooks';
-import { APP_VERSION } from '../version/version';
 import { DEFAULT_STATUS } from './MessagesContext';
 import { forceWebviewRepaint } from '../utils/forceWebviewRepaint';
-import { draftCacheKey, mirrorDraft, pruneDrafts, readDraft, writeDraft } from './draftStorage';
+import {
+  draftCacheKey, mirrorDraft, pruneDrafts, readDraft, readSessionDraft, writeDraft,
+} from './draftStorage';
 
-const LAST_SEEN_VERSION_KEY = 'lastSeenChangelogVersion';
 const DRAFT_SAVE_DEBOUNCE_MS = 200;
 /** A stalled browser storage backend must not keep the whole chat blank. */
 const DRAFT_RESTORE_TIMEOUT_MS = 1000;
+
+let resolveChatMounted: () => void = () => {};
+/**
+ * Resolves after the chat tree, which waits for the draft restore, has mounted. Java replays the
+ * session on frontend_ready, and some of its callbacks (stream start) have no pre-mount buffer.
+ */
+export const chatMounted = new Promise<void>((resolve) => {
+  resolveChatMounted = resolve;
+});
 
 export interface UIStateContextValue {
   // Navigation
@@ -63,10 +72,8 @@ export function UIStateProvider({ children }: { children: ReactNode }) {
   const [settingsProviderSubTab, setSettingsProviderSubTab] = useState<ProviderManageTab | undefined>(undefined);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [addModelDialogOpen, setAddModelDialogOpen] = useState<boolean>(false);
-  const [showChangelogDialog, setShowChangelogDialog] = useState<boolean>(() => {
-    const lastSeen = localStorage.getItem(LAST_SEEN_VERSION_KEY);
-    return lastSeen !== APP_VERSION;
-  });
+  // Opening a chat should resume work; release notes remain available from the version tag.
+  const [showChangelogDialog, setShowChangelogDialog] = useState(false);
   const [contextInfo, setContextInfo] = useState<ContextInfo | null>(null);
   const [draftInput, updateDraftInput] = useState<string>('');
   const [draftReady, setDraftReady] = useState(() => !draftCacheKey());
@@ -98,7 +105,7 @@ export function UIStateProvider({ children }: { children: ReactNode }) {
       }
       setDraftReady(true);
     };
-    timer = window.setTimeout(() => finish(''), DRAFT_RESTORE_TIMEOUT_MS);
+    timer = window.setTimeout(() => finish(readSessionDraft()), DRAFT_RESTORE_TIMEOUT_MS);
     void readDraft().then(finish);
     void pruneDrafts();
     return () => {
@@ -106,6 +113,10 @@ export function UIStateProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(timer);
     };
   }, []);
+  useEffect(() => {
+    // Child effects of the same commit, including the Java callbacks, have already run.
+    if (draftReady) resolveChatMounted();
+  }, [draftReady]);
   useEffect(() => {
     if (!draftReady || !draftDirtyRef.current) return;
     const timer = window.setTimeout(() => void writeDraft(draftInput), DRAFT_SAVE_DEBOUNCE_MS);
@@ -133,7 +144,6 @@ export function UIStateProvider({ children }: { children: ReactNode }) {
   const clearToasts = useCallback(() => { setToasts([]); }, []);
 
   const closeChangelogDialog = useCallback(() => {
-    localStorage.setItem(LAST_SEEN_VERSION_KEY, APP_VERSION);
     setShowChangelogDialog(false);
     // The fixed-position fullscreen overlay can leave ghosting after unmount on macOS JCEF.
     forceWebviewRepaint('changelog-dialog-close');

@@ -89,6 +89,15 @@ public class HistoryMessageInjector {
         }
     }
 
+    /** Codex rebinds the current session in place, so no session swap retires a pending restore for it. */
+    private volatile Runnable codexSessionSelectionListener = () -> {
+    };
+
+    void setCodexSessionSelectionListener(Runnable listener) {
+        this.codexSessionSelectionListener = listener != null ? listener : () -> {
+        };
+    }
+
     /**
      * Load a history session.
      */
@@ -117,6 +126,9 @@ public class HistoryMessageInjector {
             }
         } catch (Exception ignored) {
             // Backward compatible: legacy payload is the raw sessionId string.
+        }
+        if ("codex".equals(provider)) {
+            codexSessionSelectionListener.run();
         }
 
         String rawPath = context.resolveEffectiveWorkingDirectory();

@@ -8,6 +8,8 @@ import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.provider.ClaudeContextWindowOverrideProvider;
 import com.github.claudecodegui.provider.CustomModelContextWindowProvider;
+import com.github.claudecodegui.provider.grok.GrokContextWindowResolver;
+import com.github.claudecodegui.provider.opencode.OpenCodeContextWindowResolver;
 import com.github.claudecodegui.util.EditorFileUtils;
 import com.github.claudecodegui.util.TokenUsageUtils;
 import com.google.gson.Gson;
@@ -93,6 +95,9 @@ public class ModelProviderHandler {
         MODEL_CONTEXT_LIMITS.put("grok-beta", 128_000);
         MODEL_CONTEXT_LIMITS.put("grok", 500_000);
         MODEL_CONTEXT_LIMITS.put("grok-1.5", 128_000);
+        MODEL_CONTEXT_LIMITS.put("grok-4.7", 256_000);
+        MODEL_CONTEXT_LIMITS.put("grok-4.7-build-fast", 256_000);
+        MODEL_CONTEXT_LIMITS.put("grok-4.7-build", 256_000);
         MODEL_CONTEXT_LIMITS.put("grok-4.6", 500_000);
         MODEL_CONTEXT_LIMITS.put("grok-4.5", 500_000); // legacy alias
         MODEL_CONTEXT_LIMITS.put("grok-4", 500_000);
@@ -164,7 +169,7 @@ public class ModelProviderHandler {
                     : model;
             int newMaxTokens = isClaude
                     ? getClaudeContextLimit(resolvedModelForUsage, sessionCwd(context))
-                    : getModelContextLimit(provider, model);
+                    : providerContextLimit(provider, model, sessionCwd(context));
             LOG.info("[ModelProviderHandler] Model context limit: " + newMaxTokens
                     + " tokens for selected model: " + model
                     + ", resolved model: " + resolvedModelForUsage);
@@ -550,6 +555,26 @@ public class ModelProviderHandler {
     }
 
     public static int getModelContextLimit(String provider, String model) {
+        return providerContextLimit(provider, model, null);
+    }
+
+    /**
+     * Non-Claude context window: OpenCode's own {@code limit.context} (project config
+     * when {@code cwd} is known), then the custom window table, then the static table.
+     */
+    private static int providerContextLimit(String provider, String model, String cwd) {
+        if ("opencode".equalsIgnoreCase(provider)) {
+            Integer declared = OpenCodeContextWindowResolver.resolve(model, cwd);
+            if (declared != null) {
+                return declared;
+            }
+        }
+        if ("grok".equalsIgnoreCase(provider)) {
+            Integer declared = GrokContextWindowResolver.resolve(model);
+            if (declared != null && declared > 0) {
+                return declared;
+            }
+        }
         return CustomModelContextWindowProvider.getInstance()
                 .getContextWindow(provider, model)
                 .orElseGet(() -> getModelContextLimit(model));
@@ -607,7 +632,7 @@ public class ModelProviderHandler {
      */
     public static int resolveContextLimit(String provider, String selectedModel, String cwd) {
         if (!"claude".equalsIgnoreCase(provider)) {
-            return getModelContextLimit(provider, selectedModel);
+            return providerContextLimit(provider, selectedModel, cwd);
         }
         JsonObject env = ClaudeContextWindowOverrideProvider.getInstance().getUserSettingsEnv();
         String cliModel = env == null ? selectedModel : resolveConfiguredClaudeModel(selectedModel, env);

@@ -26,6 +26,9 @@ public class WebviewWatchdog {
     private static final Logger LOG = Logger.getInstance(WebviewWatchdog.class);
 
     private static final long HEARTBEAT_TIMEOUT_MS = 45_000L;
+    private static final long HEARTBEAT_RESUME_GAP_MS = 15_000L;
+    /** A resume replays the whole transcript; repeated gaps share one replay per interval. */
+    private static final long MIN_RESUME_INTERVAL_MS = 60_000L;
     private static final long WATCHDOG_INTERVAL_MS = 10_000L;
     private static final long RECOVERY_COOLDOWN_MS = 60_000L;
     private static final long STARTUP_READY_TIMEOUT_MS = 15_000L;
@@ -33,6 +36,9 @@ public class WebviewWatchdog {
     private static final int MAX_STARTUP_RECOVERY_ATTEMPTS = 2;
 
     private volatile long lastHeartbeatAtMs;
+    private volatile long lastReceivedHeartbeatAtMs;
+    private volatile boolean resumePending;
+    private volatile long lastResumeAtMs;
     private volatile long lastRafAtMs;
     private volatile String lastVisibility = null;
     private volatile Boolean lastHasFocus = null;
@@ -162,6 +168,8 @@ public class WebviewWatchdog {
         this.recoveryAllowed = recoveryAllowed;
         long now = currentTimeMillis.getAsLong();
         this.lastHeartbeatAtMs = now;
+        this.lastReceivedHeartbeatAtMs = now;
+        this.lastResumeAtMs = now - MIN_RESUME_INTERVAL_MS;
         this.lastRafAtMs = now;
     }
 
@@ -194,23 +202,34 @@ public class WebviewWatchdog {
 
     /**
      * Handle a heartbeat message from the webview.
+     * @return whether the caller should reconcile a transport gap of at least three missing
+     *         heartbeat intervals now; see {@link #takePendingResume(long)}
      */
-    public void handleHeartbeat(String content) {
+    public boolean handleHeartbeat(String content) {
         long now = currentTimeMillis.getAsLong();
+        // Health resets on tab activation must not hide a transport gap from session recovery.
+        if (now - lastReceivedHeartbeatAtMs >= HEARTBEAT_RESUME_GAP_MS) {
+            resumePending = true;
+        }
+        lastReceivedHeartbeatAtMs = now;
         lastHeartbeatAtMs = now;
 
         if (content == null || content.isEmpty()) {
             lastRafAtMs = now;
             lastVisibility = null;
             lastHasFocus = null;
-            return;
+            return takePendingResume(now);
         }
 
         try {
             JsonObject json = new Gson().fromJson(content, JsonObject.class);
             if (json != null) {
-                if (json.has("raf")) {
-                    lastRafAtMs = json.get("raf").getAsLong();
+                if (json.has("raf") && json.has("ts")) {
+                    // Both values come from the client; comparing its wall clock to the Host's
+                    // makes healthy remote pages look frozen when the clocks differ.
+                    long renderAgeMs = Math.max(0L,
+                            json.get("ts").getAsLong() - json.get("raf").getAsLong());
+                    lastRafAtMs = now - renderAgeMs;
                 } else {
                     lastRafAtMs = now;
                 }
@@ -225,6 +244,22 @@ public class WebviewWatchdog {
             // Non-JSON heartbeat payload (backward compatibility)
             lastRafAtMs = now;
         }
+        return takePendingResume(now);
+    }
+
+    /**
+     * Chromium wakes a page hidden for minutes about once a minute, so a hidden page's gaps are
+     * throttling rather than outages: the gap stays pending until a visible heartbeat. Gaps
+     * during the interval after a resume are reconciled together when it ends.
+     */
+    private boolean takePendingResume(long now) {
+        boolean visible = lastVisibility == null || "visible".equals(lastVisibility);
+        if (!resumePending || !visible || now - lastResumeAtMs < MIN_RESUME_INTERVAL_MS) {
+            return false;
+        }
+        resumePending = false;
+        lastResumeAtMs = now;
+        return true;
     }
 
     /**
@@ -240,6 +275,9 @@ public class WebviewWatchdog {
 
     public void markFrontendReady() {
         resetTimestamps();
+        lastReceivedHeartbeatAtMs = currentTimeMillis.getAsLong();
+        // frontend_ready replays the whole session into the new page.
+        resumePending = false;
         resetRecoveryState();
     }
 

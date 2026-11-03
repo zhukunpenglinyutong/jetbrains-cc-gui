@@ -60,6 +60,12 @@ async function readCacheSnapshot(key: string, now: number): Promise<DraftSnapsho
   }
 }
 
+/** The reload copy alone, for when Cache Storage does not answer in time. */
+export function readSessionDraft(): string {
+  const key = draftCacheKey();
+  return key ? readSessionSnapshot(key, Date.now())?.text ?? '' : '';
+}
+
 /** Resolves the newest unexpired draft for the current window; never rejects. */
 export async function readDraft(): Promise<string> {
   const key = draftCacheKey();
@@ -116,22 +122,56 @@ export function writeDraft(text: string): Promise<void> {
 }
 
 /**
- * Window keys are not reused after a tab closes or the IDE restarts, so their drafts are never
- * read again. Drop every expired or unreadable entry, then keep only the newest entries.
+ * The windows Java has open in one installation scope. Keys are `scope + project + window`, and a
+ * window id is never reused, so a scoped draft of any other window can never be read again.
  */
-export function pruneDrafts(): Promise<void> {
+export interface OpenDraftWindows {
+  scope: string;
+  open: string[];
+}
+
+/** Java's open-window list, or null if malformed; an empty scope would match every host's drafts. */
+export function parseOpenDraftWindows(json: string): OpenDraftWindows | null {
+  try {
+    const value = JSON.parse(json) as Partial<OpenDraftWindows> | null;
+    if (typeof value?.scope !== 'string' || !value.scope || !Array.isArray(value.open)) return null;
+    const open = value.open.filter((key): key is string => typeof key === 'string');
+    return { scope: value.scope, open };
+  } catch {
+    return null;
+  }
+}
+
+/** Other hosts sharing this client's storage use other scopes and keep their drafts. */
+function closedWindowMatcher(windows?: OpenDraftWindows): (url: string) => boolean {
+  if (!windows) return () => false;
+  const scopeUrl = draftUrl(windows.scope);
+  const ownKey = draftCacheKey();
+  const openUrls = new Set([...windows.open, ...(ownKey ? [ownKey] : [])].map(draftUrl));
+  return (url) => url.startsWith(scopeUrl) && !openUrls.has(url);
+}
+
+async function readEntry(cache: Cache, request: Request, now: number): Promise<DraftSnapshot | null> {
+  try {
+    const response = await cache.match(request);
+    return response ? toSnapshot(await response.json(), now) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Drops expired or unreadable drafts and, given Java's open windows, every draft of a closed window
+ * in that scope, then keeps only the newest entries.
+ */
+export function pruneDrafts(windows?: OpenDraftWindows): Promise<void> {
+  const isClosedWindow = closedWindowMatcher(windows);
   draftWrites = draftWrites.then(async () => {
     const cache = await caches.open(DRAFT_CACHE_NAME);
     const now = Date.now();
     const live: Array<{ request: Request; savedAt: number }> = [];
     for (const request of await cache.keys()) {
-      let snapshot: DraftSnapshot | null = null;
-      try {
-        const response = await cache.match(request);
-        snapshot = response ? toSnapshot(await response.json(), now) : null;
-      } catch {
-        snapshot = null;
-      }
+      const snapshot = isClosedWindow(request.url) ? null : await readEntry(cache, request, now);
       if (snapshot) live.push({ request, savedAt: snapshot.savedAt });
       else await cache.delete(request);
     }
@@ -141,4 +181,10 @@ export function pruneDrafts(): Promise<void> {
     await Promise.all(overflow.map(({ request }) => cache.delete(request)));
   }).catch(() => {});
   return draftWrites;
+}
+
+/** Bridge entry point: Java sends its open windows when a page is ready or a window closes. */
+export function pruneClosedDrafts(json: string): void {
+  const windows = parseOpenDraftWindows(json);
+  if (windows) void pruneDrafts(windows);
 }

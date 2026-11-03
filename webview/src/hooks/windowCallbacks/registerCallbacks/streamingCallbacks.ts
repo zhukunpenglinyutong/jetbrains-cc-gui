@@ -269,8 +269,11 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     window.__lastStreamEndedAt = undefined;
     // Clear idempotency guard for the new turn
     window.__streamEndProcessedTurnId = undefined;
-    // Record turn start time for duration calculation in onStreamEnd
-    window.__turnStartedAt = Date.now();
+    // Record turn start time for duration calculation in onStreamEnd. A replay into a page that is
+    // still streaming (remote reconnect) continues the same turn, so keep its original start.
+    if (!(isReplayStart && isStreamingRef.current && window.__turnStartedAt)) {
+      window.__turnStartedAt = Date.now();
+    }
     window.__streamingDeltaRenderDeferred = false;
     streamingContentRef.current = '';
     streamingThinkingRef.current = '';

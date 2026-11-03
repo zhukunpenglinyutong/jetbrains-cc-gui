@@ -660,4 +660,16 @@ public class ModelProviderHandlerTest {
         // to avoid spurious 5–10s daemon restarts.
         assertFalse(ModelProviderHandler.shouldShutdownClaudeDaemonOnProviderSwitch("claude", ""));
     }
+
+    @Test
+    public void resolveContextLimitUsesOpenCodeProjectConfigOnlyWhenTheCwdIsKnown() throws Exception {
+        Path project = Files.createTempDirectory("oc-project-limit");
+        Files.writeString(project.resolve("opencode.jsonc"),
+                "{ \"provider\": { \"lmstudio\": { \"models\": { \"qwen-project-only\": "
+                        + "{ \"limit\": { \"context\": 32768, }, }, }, }, }, }");
+
+        assertEquals(32_768, ModelProviderHandler.resolveContextLimit("opencode", "lmstudio/qwen-project-only",
+                project.toString()));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("opencode", "lmstudio/qwen-project-only"));
+    }
 }

@@ -91,6 +91,7 @@ export function registerWindowCallbacks(
     thinkingUpdateTimeoutRef: options.thinkingUpdateTimeoutRef,
     streamingTurnIdRef: options.streamingTurnIdRef,
     clearQueuedMessages: options.clearQueuedMessages,
+    setStartupHistoryLoadState: options.setStartupHistoryLoadState,
   });
 
   // Expose as single entry point for session transition cleanup.
