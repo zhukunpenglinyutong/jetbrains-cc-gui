@@ -1209,6 +1209,9 @@ export interface QueuedMessage {
   attachments?: Attachment[];
   /** Timestamp when queued */
   queuedAt: number;
-  /** queued waits for idle send; steering is in-flight on the live turn */
-  status: 'queued' | 'steering';
+  /**
+   * queued waits for idle send; steering is in-flight on the live turn.
+   * Absent means `queued`, so existing constructions stay valid.
+   */
+  status?: 'queued' | 'steering';
 }

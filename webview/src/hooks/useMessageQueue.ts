@@ -14,8 +14,11 @@ export interface QueuedMessage {
    */
   quotes?: QuoteSnapshot;
   queuedAt: number;
-  /** queued waits for idle send; steering is in-flight on the live turn */
-  status: 'queued' | 'steering';
+  /**
+   * queued waits for idle send; steering is in-flight on the live turn.
+   * Absent means `queued`, so existing constructions stay valid.
+   */
+  status?: 'queued' | 'steering';
 }
 
 export interface UseMessageQueueOptions {
@@ -260,7 +263,9 @@ export function useMessageQueue({
     if (dispatchedAtRef.current !== null) {
       return;
     }
-    const nextMessage = queueRef.current.find(item => item.status === 'queued');
+    // Absent status means `queued`: only rows explicitly marked `steering`
+    // are in the live turn and must wait for a receipt.
+    const nextMessage = queueRef.current.find(item => item.status !== 'steering');
     if (!nextMessage) {
       return;
     }
