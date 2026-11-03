@@ -34,6 +34,8 @@ export function ChatInputBoxHeader({
   onRemoveFromQueue,
   onEditFromQueue,
   onReorderQueue,
+  canSteer,
+  onSteer,
   showOpenSourceBanner,
   onDismissOpenSourceBanner,
   autoOpenFileEnabled,
@@ -66,6 +68,8 @@ export function ChatInputBoxHeader({
   onRemoveFromQueue?: (id: string) => void;
   onEditFromQueue?: (id: string) => void;
   onReorderQueue?: (orderedIds: string[]) => void;
+  canSteer?: boolean;
+  onSteer?: (id: string) => void;
   showOpenSourceBanner?: boolean;
   onDismissOpenSourceBanner?: () => void;
   autoOpenFileEnabled?: boolean;
@@ -98,6 +102,8 @@ export function ChatInputBoxHeader({
           onRemove={onRemoveFromQueue ?? (() => {})}
           onEdit={onEditFromQueue}
           onReorder={onReorderQueue}
+          canSteer={canSteer}
+          onSteer={onSteer}
           t={t}
         />
       )}

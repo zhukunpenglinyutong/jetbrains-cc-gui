@@ -111,6 +111,28 @@
     margin-bottom: 2px;
 }
 
+.message-steered-badge {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-muted);
+    line-height: 1;
+}
+
+.message-steered-badge .codicon {
+    font-size: 12px;
+}
+
+// Inserted into the transcript but not folded by the CLI yet: the model has
+// not read this message, so the badge keeps a spinner until the fold receipt.
+.message-steered-badge.pending {
+    gap: 4px;
+    color: var(--text-tertiary);
+}
+
+.message-steered-pending-spinner {
+    font-size: 11px;
+}
+
 .message-timestamp-header {
     font-size: 11px;
     color: var(--text-tertiary);

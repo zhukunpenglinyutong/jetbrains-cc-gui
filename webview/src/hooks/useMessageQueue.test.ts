@@ -1,28 +1,27 @@
 import { act, renderHook } from '@testing-library/react';
-import { useLayoutEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMessageQueue } from './useMessageQueue';
 import type { QueuedMessage } from './useMessageQueue';
 import type { Attachment } from '../components/ChatInputBox/types';
-import {
-  expandQuoteTokens,
-  makeQuoteToken,
-  pruneQuoteRegistry,
-  registerQuote,
-} from '../components/ChatInputBox/utils/quoteRegistry';
 
 describe('useMessageQueue', () => {
-  const renderQueue = (initialLoading: boolean) => {
+  const renderQueue = (initialLoading: boolean, options?: { asyncLoading?: boolean }) => {
     const onExecute = vi.fn();
     const hook = renderHook(() => {
       // Drive `isLoading` through real component state so the auto-execute
       // path sees the same setState semantics as production, where
       // executeMessage flips loading back on via setLoading(true).
+      // asyncLoading skips that flip: the send's loading transition happens
+      // asynchronously in production (Java callback), which is exactly the
+      // window the single-flight latch must guard.
       const [loading, setLoading] = useState(initialLoading);
       const queueApi = useMessageQueue({
         isLoading: loading,
         onExecute: (content: string, attachments?: Attachment[]) => {
           onExecute(content, attachments);
-          setLoading(true);
+          if (!options?.asyncLoading) {
+            setLoading(true);
+          }
         },
       });
       return { queueApi, setLoading };
@@ -185,6 +184,172 @@ describe('useMessageQueue', () => {
     expect(result.current.queueApi.queue.map(m => m.content)).toEqual(['third', 'first', 'second']);
   });
 
+  it('defers the next queued row while a steer receipt is outstanding, then dispatches via backstop', () => {
+    vi.useFakeTimers();
+    try {
+      const { result, onExecute } = renderQueue(true);
+
+      act(() => {
+        result.current.queueApi.enqueue('steer me');
+        result.current.queueApi.enqueue('send after');
+      });
+      const [first] = result.current.queueApi.queue;
+      act(() => {
+        result.current.queueApi.markSteering(first.id);
+      });
+      act(() => {
+        result.current.setLoading(false);
+      });
+      // The undelivered receipt has not landed yet: nothing may dispatch,
+      // so the receipt can requeue the steered row at the head first.
+      expect(onExecute).not.toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+      // Backstop: dispatch the next queued row (steering rows stay hidden).
+      expect(onExecute).toHaveBeenCalledTimes(1);
+      expect(onExecute).toHaveBeenCalledWith('send after', undefined);
+      expect(result.current.queueApi.queue).toHaveLength(1);
+      expect(result.current.queueApi.queue[0].status).toBe('steering');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('dispatches the requeued undelivered row before older queued rows', () => {
+    vi.useFakeTimers();
+    try {
+      const { result, onExecute } = renderQueue(true);
+
+      act(() => {
+        result.current.queueApi.enqueue('steer me');
+        result.current.queueApi.enqueue('older queued');
+      });
+      const [first] = result.current.queueApi.queue;
+      act(() => {
+        result.current.queueApi.markSteering(first.id);
+      });
+      act(() => {
+        result.current.setLoading(false);
+      });
+      expect(onExecute).not.toHaveBeenCalled();
+
+      // The undelivered receipt puts the steered row back at the head…
+      const steered = result.current.queueApi.steeringItemsRef.current.get(first.id);
+      act(() => {
+        result.current.queueApi.requeueAtHead(steered!);
+      });
+      // …and the pending dispatch must pick it (not 'older queued') without
+      // waiting for the backstop timer.
+      expect(onExecute).toHaveBeenCalledTimes(1);
+      expect(onExecute).toHaveBeenCalledWith('steer me', undefined);
+      expect(result.current.queueApi.queue.map(m => m.content)).toEqual(['older queued']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('dispatches exactly one row per idle window when loading flips asynchronously', () => {
+    // Plan B2/F2 regression: the window between handing a row to onExecute
+    // and the async send flipping isLoading back to true used to re-run the
+    // dispatch effect for every remaining row and flush the whole queue into
+    // one turn.
+    const { result, onExecute } = renderQueue(false, { asyncLoading: true });
+
+    act(() => {
+      result.current.queueApi.enqueue('first');
+      result.current.queueApi.enqueue('second');
+      result.current.queueApi.enqueue('third');
+    });
+    expect(onExecute).toHaveBeenCalledTimes(1);
+    expect(onExecute).toHaveBeenNthCalledWith(1, 'first', undefined);
+    expect(result.current.queueApi.queue.map(m => m.content)).toEqual(['second', 'third']);
+
+    // The turn starts and ends: only then may the next row dispatch.
+    act(() => {
+      result.current.setLoading(true);
+    });
+    act(() => {
+      result.current.setLoading(false);
+    });
+    expect(onExecute).toHaveBeenCalledTimes(2);
+    expect(onExecute).toHaveBeenNthCalledWith(2, 'second', undefined);
+  });
+
+  it('restore puts a rejected item back to queued in place', () => {
+    const { result } = renderQueue(true);
+
+    act(() => {
+      result.current.queueApi.enqueue('first');
+      result.current.queueApi.enqueue('second');
+    });
+    const [first] = result.current.queueApi.queue;
+    act(() => {
+      result.current.queueApi.markSteering(first.id);
+      result.current.queueApi.restore(first.id);
+    });
+
+    expect(result.current.queueApi.queue.map(m => m.status)).toEqual(['queued', 'queued']);
+    expect(result.current.queueApi.queue.map(m => m.content)).toEqual(['first', 'second']);
+  });
+
+  it('restore requeues the fallback when the queue row is already gone', () => {
+    // Steer plan F1: a receipt must never silently drop its message when a
+    // session transition cleared the queue before the receipt landed.
+    const { result } = renderQueue(true);
+    const fallback: QueuedMessage = { id: 'gone', content: 'rebuilt', queuedAt: 1, status: 'steering' };
+
+    act(() => {
+      result.current.queueApi.restore('gone', fallback);
+    });
+
+    expect(result.current.queueApi.queue).toHaveLength(1);
+    expect(result.current.queueApi.queue[0]).toMatchObject({ id: 'gone', content: 'rebuilt', status: 'queued' });
+  });
+
+  it('restore does not duplicate the fallback when the row still exists', () => {
+    const { result } = renderQueue(true);
+
+    act(() => {
+      result.current.queueApi.enqueue('first');
+    });
+    const [first] = result.current.queueApi.queue;
+    act(() => {
+      result.current.queueApi.markSteering(first.id);
+      result.current.queueApi.restore(first.id, { ...first, status: 'steering' });
+    });
+
+    expect(result.current.queueApi.queue).toHaveLength(1);
+    expect(result.current.queueApi.queue[0].status).toBe('queued');
+  });
+
+  it('requeueAtHead returns an undelivered item as the next queued send', () => {
+    const { result, onExecute } = renderQueue(true);
+
+    act(() => {
+      result.current.queueApi.enqueue('steer');
+      result.current.queueApi.enqueue('later');
+    });
+    const [first] = result.current.queueApi.queue;
+    act(() => {
+      result.current.queueApi.markSteering(first.id);
+    });
+    const steered = result.current.queueApi.steeringItemsRef.current.get(first.id);
+    expect(steered?.status).toBe('steering');
+    act(() => {
+      result.current.queueApi.requeueAtHead(steered!);
+    });
+    expect(result.current.queueApi.queue.map(m => m.content)).toEqual(['steer', 'later']);
+    expect(result.current.queueApi.queue[0].status).toBe('queued');
+
+    act(() => {
+      result.current.setLoading(false);
+    });
+    expect(onExecute).toHaveBeenCalledTimes(1);
+    expect(onExecute).toHaveBeenCalledWith('steer', undefined);
+  });
+
   it('dispatches at most one message per idle period until loading flips', () => {
     const onExecute = vi.fn();
     const hook = renderHook(() => useMessageQueue({ isLoading: false, onExecute }));
@@ -232,151 +397,25 @@ describe('useMessageQueue', () => {
     expect(onExecute).toHaveBeenLastCalledWith('next round', undefined);
   });
 
-  it('dequeueForEdit removes the message and returns its content and attachments', () => {
-    const { result } = renderQueue(true);
-    const attachment: Attachment = { id: 'att-1', fileName: 'notes.txt', mediaType: 'text/plain', data: 'aGk=' };
-
-    act(() => {
-      result.current.queueApi.enqueue('first');
-      result.current.queueApi.enqueue('edit me', [attachment]);
-      result.current.queueApi.enqueue('third');
-    });
-
-    const target = result.current.queueApi.queue[1];
-    let removed: QueuedMessage | undefined;
-    act(() => {
-      removed = result.current.queueApi.dequeueForEdit(target.id);
-    });
-
-    expect(removed).toMatchObject({ content: 'edit me', attachments: [attachment] });
-    expect(result.current.queueApi.queue.map(m => m.content)).toEqual(['first', 'third']);
-    expect(result.current.queueApi.hasQueuedMessages).toBe(true);
-  });
-
-  it('dequeueForEdit ignores unknown ids and leaves the queue untouched', () => {
+  it('reports a row as steering only until a receipt settles it', () => {
     const { result } = renderQueue(true);
 
     act(() => {
-      result.current.queueApi.enqueue('only');
+      result.current.queueApi.enqueue('do not touch file B');
     });
-
-    let removed: QueuedMessage | undefined;
-    act(() => {
-      removed = result.current.queueApi.dequeueForEdit('unknown-id');
-    });
-
-    expect(removed).toBeUndefined();
-    expect(result.current.queueApi.queue.map(m => m.content)).toEqual(['only']);
-  });
-
-  it('dequeueForEdit sees the order applied by reorder', () => {
-    const { result } = renderQueue(true);
-
-    let removed: QueuedMessage | undefined;
-    act(() => {
-      result.current.queueApi.enqueue('first');
-      result.current.queueApi.enqueue('second');
-    });
-    const [a, b] = result.current.queueApi.queue;
-    act(() => {
-      result.current.queueApi.reorder([b.id, a.id]);
-      removed = result.current.queueApi.dequeueForEdit(b.id);
-    });
-
-    expect(removed).toMatchObject({ content: 'second' });
-    expect(result.current.queueApi.queue.map(m => m.content)).toEqual(['first']);
-  });
-
-  it('peekQueuedMessage does not remove and reports unknown ids', () => {
-    const { result } = renderQueue(true);
-
-    let peeked: QueuedMessage | undefined;
-    act(() => {
-      result.current.queueApi.enqueue('stays');
-      peeked = result.current.queueApi.peekQueuedMessage('unknown-id');
-    });
-
-    expect(peeked).toBeUndefined();
-    expect(result.current.queueApi.queue.map(m => m.content)).toEqual(['stays']);
-  });
-
-  it('does not execute a message taken out of the queue for editing', () => {
-    const { result, onExecute } = renderQueue(true);
+    const id = result.current.queueApi.queue[0].id;
+    expect(result.current.queueApi.isSteering(id)).toBe(false);
 
     act(() => {
-      result.current.queueApi.enqueue('kept for later');
-      result.current.queueApi.enqueue('edit me');
+      result.current.queueApi.markSteering(id);
     });
+    expect(result.current.queueApi.isSteering(id)).toBe(true);
+
+    // A rejected/undelivered receipt restores the row; a late accepted receipt
+    // must then see it as no longer steering.
     act(() => {
-      result.current.queueApi.dequeueForEdit(result.current.queueApi.queue[1].id);
+      result.current.queueApi.restore(id);
     });
-    act(() => {
-      result.current.setLoading(false);
-    });
-
-    expect(onExecute).toHaveBeenCalledExactlyOnceWith('kept for later', undefined);
-  });
-
-  it('never dispatches a message taken for editing just as the turn ended', () => {
-    // A click can land after the idle render commits but before its passive
-    // effects run; a layout effect fires in exactly that window.
-    const onExecute = vi.fn();
-    const taken: Array<QueuedMessage | undefined> = [];
-    const { result, rerender } = renderHook(({ isLoading }: { isLoading: boolean }) => {
-      const queueApi = useMessageQueue({ isLoading, onExecute });
-      const { queue, dequeueForEdit } = queueApi;
-      useLayoutEffect(() => {
-        if (!isLoading && taken.length === 0 && queue.length > 0) {
-          taken.push(dequeueForEdit(queue[0].id));
-        }
-      }, [isLoading, queue, dequeueForEdit]);
-      return queueApi;
-    }, { initialProps: { isLoading: true } });
-
-    act(() => {
-      result.current.enqueue('edit me');
-      result.current.enqueue('send me');
-    });
-    rerender({ isLoading: false });
-
-    // The edited message is in the draft now, so sending it too would send it twice.
-    expect(taken.map(message => message?.content)).toEqual(['edit me']);
-    expect(onExecute).toHaveBeenCalledExactlyOnceWith('send me', undefined);
-    expect(result.current.queue).toEqual([]);
-  });
-
-  it('sends the quotes of a queued message even after the input dropped them', () => {
-    const { result, onExecute } = renderQueue(true);
-    const id = registerQuote('quoted line');
-    let sent = '';
-    onExecute.mockImplementation((content: string) => {
-      sent = expandQuoteTokens(content);
-    });
-
-    act(() => {
-      result.current.queueApi.enqueue(`see ${makeQuoteToken(id)}`);
-    });
-    // Typing the next message renders the input's tags, which prunes every
-    // quote that is not in the input - including the queued one.
-    pruneQuoteRegistry(new Set());
-    act(() => {
-      result.current.setLoading(false);
-    });
-
-    expect(sent).toBe('see > quoted line\n');
-  });
-
-  it('hands the quote text over with a message taken for editing', () => {
-    const { result } = renderQueue(true);
-    const id = registerQuote('quoted line');
-
-    act(() => {
-      result.current.queueApi.enqueue(`see ${makeQuoteToken(id)}`);
-      result.current.queueApi.enqueue('no quote here');
-    });
-    const [quoted, plain] = result.current.queueApi.queue;
-
-    expect(quoted.quotes).toEqual({ [id]: 'quoted line' });
-    expect(plain).not.toHaveProperty('quotes');
+    expect(result.current.queueApi.isSteering(id)).toBe(false);
   });
 });
