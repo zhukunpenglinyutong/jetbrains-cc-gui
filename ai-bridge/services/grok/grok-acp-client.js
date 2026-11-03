@@ -162,6 +162,7 @@ export async function ensureSession(client, { sessionId = '', cwd = '', model = 
   const workCwd = cwd && cwd.trim() ? cwd.trim() : process.cwd();
   let activeSessionId = sessionId && String(sessionId).trim() ? String(sessionId).trim() : '';
   let sessionMeta = null;
+  let resumed = false;
 
   const canLoad = !!activeSessionId && client && true; // assume capability check if exposed
 
@@ -172,6 +173,7 @@ export async function ensureSession(client, { sessionId = '', cwd = '', model = 
         cwd: workCwd,
         mcpServers: [],
       });
+      resumed = true;
     } catch (e) {
       // fall through to new
       activeSessionId = '';
@@ -210,7 +212,7 @@ export async function ensureSession(client, { sessionId = '', cwd = '', model = 
     }
   }
 
-  return { sessionId: activeSessionId, sessionMeta };
+  return { sessionId: activeSessionId, sessionMeta, resumed };
 }
 
 /**
@@ -814,6 +816,7 @@ export async function runAcpTurn({
       agentPrompt,
       openedFiles,
       attachments,
+      includeGlobalRules: !sessionInfo.resumed,
     });
 
     // Signal the normalizer to open [STREAM_START] only for the user turn.
@@ -1122,7 +1125,13 @@ export function isAutoApproveMode(permissionMode) {
  * When the user only attaches images with empty text, inject
  * GROK_IMAGE_ONLY_FALLBACK_TEXT so the payload stays valid.
  */
-export function buildPromptBlocks({ message, agentPrompt, openedFiles, attachments }) {
+export function buildPromptBlocks({
+  message,
+  agentPrompt,
+  openedFiles,
+  attachments,
+  includeGlobalRules = true,
+}) {
   const blocks = [];
   let text = message || '';
 
@@ -1150,19 +1159,22 @@ export function buildPromptBlocks({ message, agentPrompt, openedFiles, attachmen
   }
 
   // Load user-global rules for Grok from ~/.grok/grok-rules.md (if exists).
-  // This allows persistent, user-level instructions without hardcoding in the plugin.
-  try {
-    const rulesPath = path.join(homedir(), '.grok', 'grok-rules.md');
-    if (fs.existsSync(rulesPath)) {
-      const rulesContent = fs.readFileSync(rulesPath, 'utf8').trim();
-      if (rulesContent) {
-        console.log('[Grok] Loaded global rules from ~/.grok/grok-rules.md (' + rulesContent.length + ' chars)');
-        text += `\n\n## Global Grok Rules (~/.grok/grok-rules.md)\n\n${rulesContent}`;
+  // Inject once on the first turn of a new session so multi-turn transcripts
+  // do not repeat the global rules block in every subsequent prompt.
+  if (includeGlobalRules !== false) {
+    try {
+      const rulesPath = path.join(homedir(), '.grok', 'grok-rules.md');
+      if (fs.existsSync(rulesPath)) {
+        const rulesContent = fs.readFileSync(rulesPath, 'utf8').trim();
+        if (rulesContent) {
+          console.log('[Grok] Loaded global rules from ~/.grok/grok-rules.md (' + rulesContent.length + ' chars)');
+          text += `\n\n## Global Grok Rules (~/.grok/grok-rules.md)\n\n${rulesContent}`;
+        }
       }
+    } catch (err) {
+      // Non-fatal: don't break prompt building if the file is unreadable
+      console.error('[Grok] Failed to read ~/.grok/grok-rules.md:', err?.message || err);
     }
-  } catch (err) {
-    // Non-fatal: don't break prompt building if the file is unreadable
-    console.error('[Grok] Failed to read ~/.grok/grok-rules.md:', err?.message || err);
   }
 
   if (openedFiles && typeof openedFiles === 'object') {
