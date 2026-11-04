@@ -537,7 +537,7 @@ function renderFullMarkdownHtml(
       typeof parsed === 'string' ? parsed : String(parsed),
       {
         ...MARKDOWN_LINK_SANITIZE_OPTIONS,
-        ADD_ATTR: ['class', 'data-lang', 'data-copy-success', 'data-copy-title', 'data-file-path'],
+        ADD_ATTR: ['class', 'data-lang', 'data-copy-success', 'data-copy-title'],
       }
     );
     const rawHtml = sanitized.trim();

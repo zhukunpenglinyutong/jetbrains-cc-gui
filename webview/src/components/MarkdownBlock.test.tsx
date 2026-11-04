@@ -332,6 +332,36 @@ describe('MarkdownBlock linkify integration', () => {
     expect(bridgeMocks.openFile).toHaveBeenCalledWith('Assets/GameScripts/Foo.cs:12');
   });
 
+  it('opens line fragments on paths with spaces and non-ASCII names', () => {
+    render(
+      <MarkdownBlock content={'[a.ts](/Users/me/CCGUI%20%E9%A1%B9%E7%9B%AE/src/a.ts#L12) [Foo.cs](Assets/%E8%84%9A%E6%9C%AC/Foo.cs#L3-L9)'} />,
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: 'a.ts' }));
+    expect(bridgeMocks.openFile).toHaveBeenLastCalledWith('/Users/me/CCGUI%20%E9%A1%B9%E7%9B%AE/src/a.ts:12');
+
+    const relativeLink = screen.getByRole('link', { name: 'Foo.cs' });
+    expect(relativeLink.classList.contains('file-link')).toBe(true);
+    fireEvent.click(relativeLink);
+    expect(bridgeMocks.openFile).toHaveBeenLastCalledWith('Assets/%E8%84%9A%E6%9C%AC/Foo.cs:3-9');
+  });
+
+  it('strips the href of a custom protocol even with a line fragment', () => {
+    const { container } = render(
+      <MarkdownBlock content={'[run](javascript:alert(1)//x.cs#L1)'} />,
+    );
+
+    expect(container.querySelector('a[href^="javascript"]')).toBeNull();
+  });
+
+  it('escapes raw anchors, so message text cannot author data-file-path', () => {
+    const { container } = render(
+      <MarkdownBlock content={'<a href="#top" data-file-path="/etc/hosts">harmless</a>'} />,
+    );
+
+    expect(container.querySelector('a')).toBeNull();
+  });
+
   it('preserves standalone markdown file links with colon line suffixes', () => {
     render(
       <MarkdownBlock content={'Open [Foo.cs](Foo.cs:12)'} />,

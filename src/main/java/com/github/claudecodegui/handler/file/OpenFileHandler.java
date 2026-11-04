@@ -33,6 +33,7 @@ import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.util.concurrency.AppExecutorUtil;
 
 import java.io.File;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -530,23 +531,28 @@ class OpenFileHandler {
             return null;
         }
 
-        File directory = new File(NodeDetector.toVfsPath(path)).toPath().toAbsolutePath().normalize().toFile();
-        if (!directory.exists() || !directory.isDirectory()) {
+        File directory = toNormalizedFile(path);
+        if (directory == null || !directory.isDirectory()) {
             return null;
         }
         return ProjectPathResolver.preferProjectPath(context.getProject(), directory);
     }
 
     private File normalizeExistingFile(File candidate) {
-        File absoluteFile = new File(NodeDetector.toVfsPath(candidate.getPath()))
-                .toPath()
-                .toAbsolutePath()
-                .normalize()
-                .toFile();
-        if (!absoluteFile.exists() || !absoluteFile.isFile()) {
+        File absoluteFile = toNormalizedFile(candidate.getPath());
+        if (absoluteFile == null || !absoluteFile.isFile()) {
             return null;
         }
         return ProjectPathResolver.preferProjectPath(context.getProject(), absoluteFile);
+    }
+
+    private static File toNormalizedFile(String path) {
+        try {
+            return ProjectPathResolver.normalizeDotSegments(new File(NodeDetector.toVfsPath(path)).toPath()).toFile();
+        } catch (InvalidPathException e) {
+            LOG.debug("Invalid file path: " + path);
+            return null;
+        }
     }
 
     /**
@@ -871,8 +877,8 @@ class OpenFileHandler {
                 }
             }
 
-            Path displayPath = baseDirectory.resolve(relativePath).normalize();
-            return ProjectPathResolver.toProjectRelativeOrAbsolute(project, displayPath.toString());
+            // Not normalized here: ".." after a link has to be folded against the filesystem.
+            return ProjectPathResolver.toProjectRelativeOrAbsolute(project, baseDirectory.resolve(relativePath).toString());
         } catch (Exception e) {
             LOG.debug("Failed to build fallback tooltip path: " + e.getMessage());
             return null;

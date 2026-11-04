@@ -137,7 +137,7 @@ public final class WslPathUtil {
         // Only WSL Linux paths on a Windows JVM (e.g. "/home/x", or "//wsl$/..." which
         // convertToWslPath folds to it) need the lexical fallback: getCanonicalPath would
         // misread "/home/x" as a drive-relative path there. Every other path — native POSIX
-        // paths on macOS/Linux, and Windows drive/UNC paths — MUST go through getCanonicalPath
+        // paths on macOS/Linux, and Windows drive/UNC paths — MUST go through canonicalLocalPath
         // so symlinks, "..", and encoded chars are resolved before the project-boundary check.
         // Using foldPosix for native POSIX paths silently strips symlink resolution and lets a
         // symlink inside the project escape the boundary, weakening the auto-approve gate.
@@ -155,7 +155,7 @@ public final class WslPathUtil {
             java.nio.file.Path canonicalFile = canonicalLocalPath(filePath);
             java.nio.file.Path canonicalBase = canonicalLocalPath(basePath);
             return canonicalFile.startsWith(canonicalBase);
-        } catch (IOException e) {
+        } catch (IOException | java.nio.file.InvalidPathException e) {
             return false;
         }
     }

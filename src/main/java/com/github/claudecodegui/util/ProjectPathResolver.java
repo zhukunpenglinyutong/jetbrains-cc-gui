@@ -5,13 +5,13 @@ import com.intellij.openapi.project.Project;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.FileVisitResult;
+import java.nio.file.DirectoryIteratorException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Resolves physical file-system paths back to the path shape visible inside the IDE project.
@@ -30,6 +29,7 @@ public final class ProjectPathResolver {
     private static final int MAX_LINK_SCAN_DEPTH = 4;
     private static final int MAX_LINK_SCAN_ENTRIES = 5000;
     private static final long LINK_SCAN_CACHE_TTL_MS = 30000L;
+    private static final int MAX_RESOLVABLE_PATH_LENGTH = 4096;
 
     private static final Set<String> SKIPPED_DIRECTORY_NAMES = Set.of(
             ".git",
@@ -48,6 +48,48 @@ public final class ProjectPathResolver {
             new ConcurrentHashMap<>();
 
     private ProjectPathResolver() {
+    }
+
+    /**
+     * Makes a path absolute and folds "." and ".." the way the filesystem would. Lexical folding
+     * alone picks the wrong file when a link precedes "..": the filesystem walks up from the
+     * link's target. A link path is kept whenever it still names the same directory.
+     */
+    public static Path normalizeDotSegments(Path path) {
+        Path absolute = path.toAbsolutePath();
+        Path lexical = absolute.normalize();
+        // Win32 folds ".." before reaching the disk, and paths this long cannot resolve at all.
+        if (lexical.equals(absolute) || PlatformUtils.isWindows()
+                || absolute.toString().length() > MAX_RESOLVABLE_PATH_LENGTH) {
+            return lexical;
+        }
+
+        Path current = absolute.getRoot();
+        for (Path segment : absolute) {
+            String name = segment.toString();
+            if ("..".equals(name)) {
+                current = parentOnDisk(current);
+            } else if (!".".equals(name)) {
+                current = current.resolve(segment);
+            }
+        }
+        return current;
+    }
+
+    private static Path parentOnDisk(Path path) {
+        Path lexicalParent = path.getParent();
+        if (lexicalParent == null) {
+            return path;
+        }
+
+        try {
+            Path real = path.toRealPath();
+            Path realParent = real.getParent() != null ? real.getParent() : real;
+            return Files.isSameFile(lexicalParent, realParent) ? lexicalParent : realParent;
+        } catch (IOException | SecurityException e) {
+            // A missing directory has no target to walk up from.
+            return lexicalParent;
+        }
     }
 
     public static File preferProjectPath(Project project, File candidate) {
@@ -125,7 +167,7 @@ public final class ProjectPathResolver {
             return null;
         }
 
-        Path candidatePath = rawPath.toAbsolutePath().normalize();
+        Path candidatePath = normalizeDotSegments(rawPath);
         if (startsWithPath(candidatePath, projectRoot)) {
             return candidatePath;
         }
@@ -179,15 +221,11 @@ public final class ProjectPathResolver {
         try {
             Path path = Paths.get(filePath);
             if (path.isAbsolute()) {
-                return path.toAbsolutePath().normalize();
+                return normalizeDotSegments(path);
             }
 
             Path projectRoot = getProjectRoot(project);
-            if (projectRoot != null) {
-                return projectRoot.resolve(path).normalize();
-            }
-
-            return path.toAbsolutePath().normalize();
+            return normalizeDotSegments(projectRoot != null ? projectRoot.resolve(path) : path);
         } catch (InvalidPathException e) {
             LOG.debug("Invalid file path: " + filePath);
             return null;
@@ -196,7 +234,7 @@ public final class ProjectPathResolver {
 
     private static Path toAbsoluteNormalizedPath(File file) {
         try {
-            return file.toPath().toAbsolutePath().normalize();
+            return normalizeDotSegments(file.toPath());
         } catch (InvalidPathException e) {
             LOG.debug("Invalid file path: " + file.getPath());
             return null;
@@ -255,60 +293,52 @@ public final class ProjectPathResolver {
         return linkedRoots;
     }
 
+    /**
+     * Breadth-first, because links usually sit near the root: a large sibling tree must not use
+     * up the budget before they are reached.
+     */
     private static List<LinkedRoot> scanLinkedRoots(Path projectRoot) {
         List<LinkedRoot> linkedRoots = new ArrayList<>();
         if (!Files.isDirectory(projectRoot)) {
             return linkedRoots;
         }
 
-        AtomicInteger visitedEntries = new AtomicInteger();
-        try {
-            Files.walkFileTree(projectRoot, Set.of(), MAX_LINK_SCAN_DEPTH, new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                    if (visitedEntries.incrementAndGet() > MAX_LINK_SCAN_ENTRIES) {
-                        return FileVisitResult.TERMINATE;
+        Deque<ScanDirectory> pending = new ArrayDeque<>();
+        pending.add(new ScanDirectory(projectRoot, 0));
+        int visitedEntries = 0;
+        while (!pending.isEmpty()) {
+            ScanDirectory current = pending.poll();
+            try (DirectoryStream<Path> entries = Files.newDirectoryStream(current.path())) {
+                for (Path entry : entries) {
+                    visitedEntries++;
+                    if (visitedEntries > MAX_LINK_SCAN_ENTRIES) {
+                        LOG.info("Stopped scanning for project links after " + MAX_LINK_SCAN_ENTRIES
+                                + " entries; deeper links in " + projectRoot + " open by their physical path");
+                        return linkedRoots;
                     }
-
-                    if (samePath(dir, projectRoot)) {
-                        return FileVisitResult.CONTINUE;
-                    }
-
-                    LinkedRoot linkedRoot = toLinkedRoot(dir);
-                    if (linkedRoot != null) {
-                        linkedRoots.add(linkedRoot);
-                        return FileVisitResult.SKIP_SUBTREE;
-                    }
-
-                    return shouldSkipDirectory(dir)
-                            ? FileVisitResult.SKIP_SUBTREE
-                            : FileVisitResult.CONTINUE;
+                    visitScanEntry(entry, current.depth() + 1, linkedRoots, pending);
                 }
-
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                    if (visitedEntries.incrementAndGet() > MAX_LINK_SCAN_ENTRIES) {
-                        return FileVisitResult.TERMINATE;
-                    }
-                    if (attrs.isSymbolicLink()) {
-                        LinkedRoot linkedRoot = toLinkedRoot(file);
-                        if (linkedRoot != null) {
-                            linkedRoots.add(linkedRoot);
-                        }
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult visitFileFailed(Path file, IOException exc) {
-                    return FileVisitResult.CONTINUE;
-                }
-            });
-        } catch (IOException e) {
-            LOG.debug("Failed to scan project linked roots: " + e.getMessage());
+            } catch (IOException | DirectoryIteratorException | SecurityException e) {
+                LOG.debug("Failed to scan project directory " + current.path() + ": " + e.getMessage());
+            }
         }
 
         return linkedRoots;
+    }
+
+    private static void visitScanEntry(Path entry, int depth, List<LinkedRoot> linkedRoots, Deque<ScanDirectory> pending) {
+        // Windows junctions report as directories here, so directories need the link check as well.
+        boolean directory = Files.isDirectory(entry, LinkOption.NOFOLLOW_LINKS);
+        if (!directory && !Files.isSymbolicLink(entry)) {
+            return;
+        }
+
+        LinkedRoot linkedRoot = toLinkedRoot(entry);
+        if (linkedRoot != null) {
+            linkedRoots.add(linkedRoot);
+        } else if (directory && depth < MAX_LINK_SCAN_DEPTH && !shouldSkipDirectory(entry)) {
+            pending.add(new ScanDirectory(entry, depth));
+        }
     }
 
     private static LinkedRoot toLinkedRoot(Path projectPath) {
@@ -411,6 +441,9 @@ public final class ProjectPathResolver {
     }
 
     private record LinkedRoot(Path projectPath, Path realPath) {
+    }
+
+    private record ScanDirectory(Path path, int depth) {
     }
 
     private record LinkScanCache(long createdAtMs, List<LinkedRoot> linkedRoots) {

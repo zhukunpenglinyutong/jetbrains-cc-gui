@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -418,6 +419,156 @@ public class OpenFileHandlerTest {
         var scan = ProjectPathResolver.class.getDeclaredMethod("scanLinkedRoots", Path.class);
         scan.setAccessible(true);
         assertTrue(((List<?>) scan.invoke(null, parentLink.resolve("project"))).isEmpty());
+    }
+
+    @Test
+    public void resolveFile_followsTheFilesystemForDotDotAfterALink() throws Exception {
+        Assume.assumeFalse("Win32 folds .. before reaching the filesystem", PlatformUtils.isWindows());
+        SymlinkProject linked = createProjectWithLinkedAssets();
+        // <project>/Assets/.. is the link target's parent on disk, not <project>.
+        Path physicalParent = linked.projectRoot().getParent();
+        Path expected = Files.writeString(physicalParent.resolve("shared.cs"), "class Physical {}\n");
+        Files.writeString(linked.projectRoot().resolve("shared.cs"), "class WrongFile {}\n");
+        Files.writeString(linked.projectRoot().resolve("lexical-only.cs"), "class LexicalOnly {}\n");
+        OpenFileHandler handler = new OpenFileHandler(createContext(linked.projectRoot()));
+
+        OpenFileHandler.FileResolutionResult result = resolveFile(handler, linked.projectRoot() + "/Assets/../shared.cs");
+        assertNotNull(result);
+        assertTrue(Files.isSameFile(expected, result.file().toPath()));
+
+        assertNull(resolveFile(handler, linked.projectRoot() + "/Assets/../lexical-only.cs"));
+    }
+
+    @Test
+    public void normalizeDotSegments_foldsAgainstTheLinkTargetPastAMissingDirectory() throws Exception {
+        Assume.assumeFalse("Win32 folds .. before reaching the filesystem", PlatformUtils.isWindows());
+        SymlinkProject linked = createProjectWithLinkedAssets();
+        Path physical = Files.writeString(linked.projectRoot().getParent().resolve("shared.cs"), "class Physical {}\n");
+        Files.writeString(linked.projectRoot().resolve("shared.cs"), "class WrongFile {}\n");
+
+        for (String relative : List.of("Assets/missing/../../shared.cs", "Assets/GameScripts/../missing/../../shared.cs")) {
+            Path normalized = ProjectPathResolver.normalizeDotSegments(linked.projectRoot().resolve(relative));
+            assertTrue(relative, Files.isSameFile(physical, normalized));
+        }
+    }
+
+    @Test
+    public void normalizeDotSegments_walksUpFromALinkToTheFilesystemRoot() throws Exception {
+        Assume.assumeFalse("Win32 folds .. before reaching the filesystem", PlatformUtils.isWindows());
+        Path root = Files.createTempDirectory("ccg-root-link-");
+        Path rootLink = root.resolve("rootlink");
+        createDirectorySymlinkOrSkip(rootLink, Path.of("/"));
+
+        assertEquals(Path.of("/tmp"), ProjectPathResolver.normalizeDotSegments(rootLink.resolve("../tmp")));
+        assertEquals(Path.of("/tmp"), ProjectPathResolver.normalizeDotSegments(Path.of("/../tmp")));
+    }
+
+    @Test(timeout = 5000)
+    public void normalizeDotSegments_foldsVeryLongPathsLexically() throws Exception {
+        Path root = Files.createTempDirectory("ccg-long-path-").toRealPath();
+        String link = "m/../".repeat(15_000) + "x.ts";
+
+        Path normalized = ProjectPathResolver.normalizeDotSegments(root.resolve(link));
+
+        assertEquals(root.resolve("x.ts"), normalized);
+    }
+
+    @Test
+    public void resolveFile_keepsTheLinkedPathWhenDotDotStaysInsideTheLink() throws Exception {
+        SymlinkProject linked = createProjectWithLinkedAssets();
+        OpenFileHandler handler = new OpenFileHandler(createContext(linked.projectRoot()));
+
+        OpenFileHandler.FileResolutionResult result = resolveFile(
+                handler, linked.projectRoot() + "/Assets/GameScripts/../GameScripts/abc.cs");
+
+        assertNotNull(result);
+        assertEquals(linked.projectFile(), result.file().toPath());
+    }
+
+    @Test
+    public void resolveDisplayPath_followsTheFilesystemForDotDotAfterALink() throws Exception {
+        Assume.assumeFalse("Win32 folds .. before reaching the filesystem", PlatformUtils.isWindows());
+        SymlinkProject linked = createProjectWithLinkedAssets();
+        Path physical = Files.writeString(linked.projectRoot().getParent().resolve("shared.cs"), "class Physical {}\n");
+        OpenFileHandler handler = new OpenFileHandler(createContext(linked.projectRoot()));
+        String expected = physical.toRealPath().toString().replace('\\', '/');
+
+        assertEquals(expected, handler.resolveDisplayPath(linked.projectRoot() + "/Assets/../shared.cs"));
+        assertEquals(expected, handler.resolveDisplayPath(linked.projectRoot() + "/Assets/../shared.cs:3"));
+    }
+
+    @Test
+    public void resolveFile_returnsNullForInvalidAbsolutePath() throws Exception {
+        Path projectRoot = Files.createTempDirectory("ccg-invalid-path");
+        OpenFileHandler handler = new OpenFileHandler(createContext(projectRoot));
+
+        assertNull(resolveFile(handler, projectRoot + "/a\u0000.cs"));
+    }
+
+    @Test
+    public void linkScan_findsShallowLinksBeforeALargeTreeUsesUpTheBudget() throws Exception {
+        Path root = Files.createTempDirectory("ccg-link-budget-").toRealPath();
+        try {
+            Path project = Files.createDirectory(root.resolve("project"));
+            Path outside = Files.createDirectory(root.resolve("outside"));
+            Path big = Files.createDirectory(project.resolve("big"));
+            for (int i = 0; i < 5100; i++) {
+                Files.createFile(big.resolve("file-" + i + ".txt"));
+            }
+            for (int i = 0; i < 8; i++) {
+                createDirectorySymlinkOrSkip(project.resolve("link-" + i), outside);
+            }
+
+            assertEquals(8, scanLinkedRoots(project).size());
+        } finally {
+            deleteRecursively(root);
+        }
+    }
+
+    @Test
+    public void linkScan_respectsDepthLimitAndSkippedDirectories() throws Exception {
+        Path root = Files.createTempDirectory("ccg-link-depth-").toRealPath();
+        try {
+            Path project = Files.createDirectory(root.resolve("project"));
+            Path outside = Files.createDirectory(root.resolve("outside"));
+            Path atLimit = Files.createDirectories(project.resolve("a/b/c")).resolve("at-limit");
+            Path tooDeep = Files.createDirectories(project.resolve("a/b/c/d")).resolve("too-deep");
+            Path insideSkipped = Files.createDirectories(project.resolve("node_modules")).resolve("skipped");
+            Path namedLikeSkipped = project.resolve("Library");
+            for (Path link : List.of(atLimit, tooDeep, insideSkipped, namedLikeSkipped)) {
+                createDirectorySymlinkOrSkip(link, outside);
+            }
+
+            String found = scanLinkedRoots(project).toString();
+
+            assertTrue(found, found.contains("at-limit"));
+            assertTrue(found, found.contains("Library"));
+            assertFalse(found, found.contains("too-deep"));
+            assertFalse(found, found.contains("skipped"));
+        } finally {
+            deleteRecursively(root);
+        }
+    }
+
+    private static OpenFileHandler.FileResolutionResult resolveFile(OpenFileHandler handler, String path) throws Exception {
+        var resolver = OpenFileHandler.class.getDeclaredMethod("resolveFile", String.class);
+        resolver.setAccessible(true);
+        return (OpenFileHandler.FileResolutionResult) resolver.invoke(handler, path);
+    }
+
+    private static List<?> scanLinkedRoots(Path project) throws Exception {
+        var scan = ProjectPathResolver.class.getDeclaredMethod("scanLinkedRoots", Path.class);
+        scan.setAccessible(true);
+        return (List<?>) scan.invoke(null, project);
+    }
+
+    private static void deleteRecursively(Path root) throws IOException {
+        // Files.walk does not follow symlinks, so links are removed as links.
+        try (var paths = Files.walk(root)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
+        }
     }
 
     private static HandlerContext createContext(Path projectRoot) {
