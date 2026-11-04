@@ -118,7 +118,7 @@ describe('HistoryView native message counts', () => {
 describe('HistoryView running session protection', () => {
   const actions = { currentProvider: 'codex', currentSessionId: 'session-two', onLoadSession: vi.fn(),
     onDeleteSession: vi.fn(), onDeleteSessions: vi.fn(), onExportSession: vi.fn(), onToggleFavorite: vi.fn(),
-    onUpdateTitle: vi.fn(), onConvertToCliSession: vi.fn() };
+    onUpdateTitle: vi.fn(), onConvertToCliSession: vi.fn(), onForkSession: vi.fn() };
 
   it('disables deletion and excludes both active and foreign owned sessions from selection', () => {
     const data = { ...historyData, sessions: historyData.sessions!.map(session => ({ ...session, running: true })) };
