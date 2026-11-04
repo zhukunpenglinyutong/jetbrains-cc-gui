@@ -17,5 +17,6 @@ export function describeClaudeLaunchFailure(message, platform = process.platform
   }
   return 'Claude Code could not start: Windows reported 0xC0000139 (a required system API was not found). '
     + 'Newer Claude Code versions need Windows 10 version 1809 or later (ClosePseudoConsole). '
-    + 'Update Windows, or select Claude Agent SDK 2.0.x in Settings → Dependencies.';
+    + 'Update Windows, or select an older Claude Agent SDK (0.1.x, which bundles Claude Code 2.0.x) '
+    + 'in Settings → Dependencies.';
 }

@@ -9,7 +9,8 @@ test('exit code 3221225785 (0xC0000139) on Windows is explained as a missing sys
   assert.match(hint, /0xC0000139/);
   assert.match(hint, /Windows 10/);
   assert.match(hint, /1809/);
-  assert.match(hint, /2\.0/);
+  assert.match(hint, /0\.1\.x/);
+  assert.match(hint, /Claude Code 2\.0\.x/);
 });
 
 test('the same status reported as a signed 32-bit exit code is explained too', () => {
