@@ -31,6 +31,28 @@ const dashboardSlugs = async () => {
   return slugs;
 };
 
+const HOST_ENV_KEYS = ['PATH', 'PATHEXT', 'SystemRoot', 'SystemDrive', 'windir', 'ComSpec'];
+
+const isolatedEnv = (home, tmp) => ({
+  ...Object.fromEntries(HOST_ENV_KEYS.filter((key) => process.env[key] !== undefined).map((key) => [key, process.env[key]])),
+  HOME: home,
+  USERPROFILE: home,
+  APPDATA: path.join(home, 'AppData', 'Roaming'),
+  LOCALAPPDATA: path.join(home, 'AppData', 'Local'),
+  TMPDIR: tmp,
+  TEMP: tmp,
+  TMP: tmp,
+  TOKENTRACKER_NO_TELEMETRY: '1',
+  TOKENTRACKER_PROXY_ENV_APPLIED: '1',
+});
+
+const SUMMARY_TOTAL_FIELDS = [
+  'total_tokens', 'billable_total_tokens', 'total_cost_usd',
+  'input_tokens', 'cached_input_tokens', 'cache_creation_input_tokens',
+];
+
+const yesterday = () => new Date(Date.now() - DAY_MS).toISOString().slice(0, 10);
+
 const USAGE = { input_tokens: 1000, output_tokens: 500, cache_creation_input_tokens: 2000, cache_read_input_tokens: 4000 };
 const TOKENS_PER_ENTRY = Object.values(USAGE).reduce((a, b) => a + b, 0);
 
@@ -109,39 +131,41 @@ describe('pinned tokentracker-cli contract', { skip: enabled ? false : 'set TOKE
   before(async () => {
     workDir = await mkdtemp(path.join(os.tmpdir(), 'ccgui-tokentracker-'));
     home = path.join(workDir, 'home');
-    const cliDir = path.join(workDir, 'cli');
-    await mkdir(cliDir, { recursive: true });
-    await writeFile(path.join(cliDir, 'package.json'), '{"private":true}');
+    const tmp = path.join(workDir, 'tmp');
+    const prefix = path.join(workDir, 'npm-global');
+    await mkdir(tmp, { recursive: true });
 
     const spec = await pinnedPackage();
     assert.match(spec, /^tokentracker-cli@[\w.-]+$/, `unexpected package spec: ${spec}`);
-    const install = spawnSync(`npm install ${spec} --ignore-scripts --no-audit --no-fund`, {
-      cwd: cliDir, encoding: 'utf8', shell: true,
+    const install = spawnSync(`npm install -g --prefix "${prefix}" ${spec} --no-audit --no-fund`, {
+      encoding: 'utf8', shell: true,
     });
-    assert.equal(install.status, 0, `npm install failed: ${install.stdout}${install.stderr}`);
+    assert.equal(install.status, 0, `npm install -g failed: ${install.stdout}${install.stderr}`);
+    const globalRoot = process.platform === 'win32' ? path.join(prefix, 'node_modules') : path.join(prefix, 'lib', 'node_modules');
 
     primaryTokens = await writeClaudeSessions(path.join(home, '.claude'), 'primary-project', 'primary', 'claude-sonnet-4-5', 6);
 
     const port = await freePort();
     base = `http://127.0.0.1:${port}`;
-    const env = { ...process.env, HOME: home, USERPROFILE: home, TOKENTRACKER_NO_TELEMETRY: '1' };
-    delete env.CLAUDE_CONFIG_DIR;
     server = spawn(process.execPath, [
-      path.join(cliDir, 'node_modules/tokentracker-cli/bin/tracker.js'), 'serve', '--no-open', '--port', String(port),
-    ], { env, stdio: 'ignore' });
+      path.join(globalRoot, 'tokentracker-cli/bin/tracker.js'), 'serve', '--no-open', '--port', String(port),
+    ], { env: isolatedEnv(home, tmp), stdio: 'ignore' });
     await eventually(async () => {
       assert.equal((await fetch(`${base}/functions/tokentracker-user-status`)).status, 200);
     }, { timeout: 60_000 });
   });
 
   after(async () => {
-    server?.kill();
+    if (server && server.exitCode === null) {
+      const exited = new Promise((resolve) => server.once('exit', resolve));
+      server.kill();
+      await exited;
+    }
     if (workDir) await rm(workDir, { recursive: true, force: true }).catch(() => {});
   });
 
   it('serves every endpoint the dashboard requests', async () => {
     await syncUntilTotal(primaryTokens);
-    const { body: summary } = await getJson('tokentracker-usage-summary');
     const projectKey = (await getJson('tokentracker-project-usage-summary')).body?.entries?.[0]?.project_key;
     for (const slug of await dashboardSlugs()) {
       if (slug === 'tokentracker-local-sync') {
@@ -156,7 +180,51 @@ describe('pinned tokentracker-cli contract', { skip: enabled ? false : 'set TOKE
       assert.equal(typeof body, 'object', slug);
       assert.notEqual(body, null, slug);
     }
-    assert.ok(summary.totals, 'usage-summary must expose totals');
+  });
+
+  it('returns the fields the dashboard reads', async () => {
+    await syncUntilTotal(primaryTokens);
+
+    const { body: summary } = await getJson('tokentracker-usage-summary');
+    for (const key of SUMMARY_TOTAL_FIELDS) assert.ok(key in summary.totals, `usage-summary totals.${key}`);
+
+    const { body: daily } = await getJson('tokentracker-usage-daily');
+    assert.ok(daily.data.length > 0, 'usage-daily data');
+    assert.ok(daily.data.every((row) => typeof row.day === 'string'), 'usage-daily data[].day');
+
+    const { body: hourly } = await getJson('tokentracker-usage-hourly', { day: yesterday(), tz: 'UTC', tz_offset_minutes: '0' });
+    assert.ok(hourly.data.some((row) => typeof row.hour === 'string'), 'usage-hourly data[].hour');
+
+    const { body: monthly } = await getJson('tokentracker-usage-monthly');
+    assert.ok(monthly.data.some((row) => typeof row.month === 'string'), 'usage-monthly data[].month');
+
+    const { body: heatmap } = await getJson('tokentracker-usage-heatmap');
+    assert.ok(heatmap.weeks.flat().some((cell) => typeof cell?.day === 'string'), 'usage-heatmap weeks[][].day');
+
+    const { body: breakdown } = await getJson('tokentracker-usage-model-breakdown');
+    const source = breakdown.sources.find((entry) => entry.source === 'claude');
+    assert.ok(source, 'usage-model-breakdown sources[].source');
+    for (const key of SUMMARY_TOTAL_FIELDS) assert.ok(key in source.totals, `usage-model-breakdown sources[].totals.${key}`);
+    assert.ok(source.models.some((model) => model.model === 'claude-sonnet-4-5' && 'total_tokens' in model.totals),
+      'usage-model-breakdown sources[].models[].model / totals');
+
+    const { body: projects } = await getJson('tokentracker-project-usage-summary');
+    const project = projects.entries.find((entry) => typeof entry.project_key === 'string');
+    assert.ok(project, 'project-usage-summary entries[].project_key');
+
+    const { body: detail } = await getJson('tokentracker-project-usage-detail', { ...range(), project_key: project.project_key });
+    for (const key of ['total_tokens', 'billable_total_tokens', 'input_tokens', 'cached_input_tokens']) {
+      assert.ok(key in detail.totals, `project-usage-detail totals.${key}`);
+    }
+    assert.ok('days_active' in detail, 'project-usage-detail days_active');
+    assert.ok('range_total_tokens' in detail, 'project-usage-detail range_total_tokens');
+    assert.ok(Array.isArray(detail.sources), 'project-usage-detail sources');
+    assert.ok(Array.isArray(detail.daily) && detail.daily.every((row) => typeof row.day === 'string'), 'project-usage-detail daily[].day');
+
+    const { body: status } = await getJson('tokentracker-user-status', {});
+    if (status.subscriptions !== undefined) {
+      assert.ok(Array.isArray(status.subscriptions.items), 'user-status subscriptions.items');
+    }
   });
 
   it('reports the sum of the four usage fields as the token total', async () => {
@@ -168,12 +236,13 @@ describe('pinned tokentracker-cli contract', { skip: enabled ? false : 'set TOKE
     const workTokens = await writeClaudeSessions(workClaude, 'work-project', 'work', 'claude-haiku-4-5', 4);
 
     const configFile = path.join(home, '.tokentracker/tracker/config.json');
-    const config = JSON.parse(await readFile(configFile, 'utf8'));
+    await mkdir(path.dirname(configFile), { recursive: true });
+    const config = JSON.parse(await readFile(configFile, 'utf8').catch(() => '{}'));
     await writeFile(configFile, JSON.stringify({ ...config, scanRoots: { claude: [workClaude] } }, null, 2));
 
     await syncUntilTotal(primaryTokens + workTokens);
     const { body } = await getJson('tokentracker-usage-model-breakdown');
-    const models = (body.sources ?? []).flatMap((source) => (source.models ?? []).map((m) => m.model ?? m.id ?? m.name));
+    const models = (body.sources ?? []).flatMap((source) => (source.models ?? []).map((m) => m.model));
     assert.ok(models.includes('claude-haiku-4-5'), `work model missing from ${JSON.stringify(models)}`);
   });
 });
