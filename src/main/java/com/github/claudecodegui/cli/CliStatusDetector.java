@@ -1,5 +1,6 @@
 package com.github.claudecodegui.cli;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.dependency.DependencyManager;
 import com.intellij.openapi.application.ApplicationManager;
@@ -138,6 +139,15 @@ public final class CliStatusDetector {
                         return probe.ok ? CliToolStatus.installed(tool, probe.version, probe.resolvedPath)
                                 : CliToolStatus.error(tool, "Configured Codex CLI cannot be executed: " + override);
                     }
+                }
+            }
+            if (tool == CliToolId.CODEX && NodeDetector.isWslPath(NodeDetector.getInstance().getCachedNodePath())) {
+                CliToolStatus inWsl = detectCodexInWsl(command -> {
+                    ProcessResult result = run(command);
+                    return result.exitCode == 0 ? result.stdout : null;
+                });
+                if (inWsl != null) {
+                    return inWsl;
                 }
             }
             if (tool == CliToolId.ZCODE) {
@@ -496,6 +506,37 @@ public final class CliStatusDetector {
         }
         String path = resolveWhichLike(candidate);
         return new ProbeResult(true, version, path != null ? path : candidate);
+    }
+
+    // wsl.exe re-parses its arguments and drops quote characters, so the script must not rely on any.
+    private static final String WSL_CODEX_PROBE_SCRIPT =
+            "for c in codex $HOME/.local/bin/codex ${CODEX_HOME:-$HOME/.codex}/bin/codex"
+                    + " ${CODEX_HOME:-$HOME/.codex}/packages/standalone/current/bin/codex $HOME/.cargo/bin/codex; do"
+                    + " p=$(command -v $c 2>/dev/null) || continue;"
+                    + " v=$($p --version 2>/dev/null) || continue;"
+                    + " echo $p; echo $v; exit 0; done; exit 1";
+
+    /**
+     * Probes Codex inside WSL, where the bridge runs it when node is a WSL binary and the Windows-side
+     * lookup cannot see it. Returns null when WSL has no working Codex so the caller falls through.
+     *
+     * @param runner runs the command and returns its stdout, or null on failure
+     */
+    static CliToolStatus detectCodexInWsl(java.util.function.Function<List<String>, String> runner) {
+        String stdout = runner.apply(List.of("wsl", "-e", "sh", "-lc", WSL_CODEX_PROBE_SCRIPT));
+        if (stdout == null) {
+            return null;
+        }
+        Matcher matcher = CODEX_VERSION_LINE.matcher(stdout);
+        if (!matcher.find()) {
+            return null;
+        }
+        String before = stdout.substring(0, matcher.start()).stripTrailing();
+        String path = before.substring(before.lastIndexOf('\n') + 1).trim();
+        if (!path.startsWith("/")) {
+            return null;
+        }
+        return CliToolStatus.installed(CliToolId.CODEX, matcher.group(1), path);
     }
 
     /** A half-installed npm launcher can still be executable; only real version output proves Codex can start. */
