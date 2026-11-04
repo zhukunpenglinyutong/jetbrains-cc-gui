@@ -273,17 +273,6 @@ function McpProviderPanel({ currentProvider }: { currentProvider: McpProvider })
         onToolHover={handleToolHover}
       />
       {isCodexMode && nativeCatalog.error && <div role="alert">{nativeCatalog.error}</div>}
-      {isCodexMode && nativeCatalog.mcpServers.length > 0 && (
-        <div className="mcp-native-catalog" data-testid="codex-native-mcp-status">
-          <small>{t('mcp.nativeStatus', { defaultValue: 'Native Codex MCP status' })}</small>
-          {nativeCatalog.mcpServers.map((server, index) => (
-            <div key={String(server.name ?? server.id ?? index)}>
-              {String(server.name ?? server.id ?? 'server')}: {String(server.runtimeStatus ?? 'unknown')}
-              {' · '}{String(server.authStatus ?? 'unknown')}
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Dialogs */}
       <McpDialogs

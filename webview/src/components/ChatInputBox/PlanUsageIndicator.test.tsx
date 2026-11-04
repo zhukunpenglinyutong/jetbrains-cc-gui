@@ -135,6 +135,25 @@ describe('PlanUsageIndicator', () => {
     expect(tooltip.textContent).not.toContain('Invalid Date');
   });
 
+  it('titles a Grok reading and explains a dormant one without calling it a failure', async () => {
+    render(<PlanUsageIndicator status="ready" snapshot={{
+      present: true,
+      capacityPct: 42,
+      periodType: 'USAGE_PERIOD_TYPE_WEEKLY',
+      provider: 'grok',
+      stale: true,
+      dormant: true,
+    }} />);
+
+    fireEvent.mouseEnter(screen.getByRole('group'));
+    const tooltip = await screen.findByRole('tooltip');
+
+    expect(tooltip.textContent).toContain('Grok plan usage');
+    expect(tooltip.textContent).not.toContain('Claude');
+    expect(tooltip.textContent).toContain('refreshes the next time you use Grok');
+    expect(tooltip.textContent).not.toContain('refresh failed');
+  });
+
   it('applies pace color class from TP vs TT', () => {
     // end far future, start far past → TT high → TP low → green
     const far = new Date();

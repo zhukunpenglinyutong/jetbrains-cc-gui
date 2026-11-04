@@ -171,6 +171,24 @@ public class HtmlLoader {
             String model,
             List<String> presetIds
     ) {
+        return injectInitialPageState(html, provider, model, presetIds, null);
+    }
+
+    /**
+     * Same as {@link #injectInitialPageState(String, String, String, List)}, plus the chat
+     * window's draft cache key. The key survives renderer/browser recreation and keeps each
+     * tab's unsent draft isolated; {@code null} leaves draft persistence disabled.
+     *
+     * @param draftCacheKey the stable chat-window draft key, or {@code null}.
+     * @return the HTML with all page-start state injected.
+     */
+    public String injectInitialPageState(
+            String html,
+            String provider,
+            String model,
+            List<String> presetIds,
+            String draftCacheKey
+    ) {
         try {
             String safeProvider = escapeForSingleQuotedJs(provider == null ? "" : provider);
             String safeModel = escapeForSingleQuotedJs(model == null ? "" : model);
@@ -205,6 +223,10 @@ public class HtmlLoader {
                     + "window.__INITIAL_TAB_PROVIDER__ = '" + safeProvider + "';"
                     + "window.__INITIAL_TAB_MODEL__ = '" + safeModel + "';"
                     + "</script>";
+            if (draftCacheKey != null && !draftCacheKey.isBlank()) {
+                scriptInjection += "\n    <script>window.__CCGUI_DRAFT_CACHE_KEY__ = '"
+                        + escapeForSingleQuotedJs(draftCacheKey) + "';</script>";
+            }
             int headIndex = html.indexOf("<head>");
             if (headIndex != -1) {
                 int insertPos = headIndex + "<head>".length();

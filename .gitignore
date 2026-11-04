@@ -54,6 +54,8 @@ node_modules/
 webview/dist/
 webview/test-results/
 webview/playwright-report/
+/test-results/
+*.tsbuildinfo
 
 src/main/resources/html/*
 src/main/resources/webview/assets/

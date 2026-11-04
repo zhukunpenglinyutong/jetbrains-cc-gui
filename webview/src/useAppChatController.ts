@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -9,6 +9,7 @@ import {
   useRewindHandlers,
   useHistoryLoader,
   useMessageQueue,
+  takeQueuedMessageForEdit,
   useMessageProcessing,
   useMessageSender,
   useChatComputations,
@@ -18,6 +19,7 @@ import {
   CONTEXT_COMMANDS,
 } from './hooks/useMessageSender';
 import { parseCodexCommand } from './hooks/codexCommandDispatcher';
+import { useCodexQuestionResponses } from './hooks/useCodexQuestionResponses';
 import { useCodexTurnActivity } from './hooks/useCodexTurnActivity';
 import { useCodexCompactionStatus } from './hooks/useCodexCompactionStatus';
 import type { Attachment, ChatInputBoxHandle, PermissionMode } from './components/ChatInputBox/types';
@@ -28,6 +30,7 @@ import { useSession } from './contexts/SessionContext';
 import { useUIState } from './contexts/UIStateContext';
 import { useDialogs } from './contexts/DialogContext';
 import type { ApplyHistoryModel } from './applyHistoryModel';
+import { startupHistoryStateForSession, type StartupHistoryLoadState } from './types/startupHistory';
 import { useCodexPlanState } from './hooks/useCodexPlanState';
 
 /**
@@ -142,9 +145,15 @@ export const useAppChatController = ({
     setSettingsInitialTab,
     addToast, clearToasts,
     setContextInfo,
+    setDraftInput,
   } = useUIState();
 
   const chatInputRef = useRef<ChatInputBoxHandle>(null);
+  const [startupHistoryLoadState, setStartupHistoryLoadState] = useState<StartupHistoryLoadState | null>(null);
+
+  useEffect(() => {
+    setStartupHistoryLoadState(previous => startupHistoryStateForSession(previous, currentSessionId));
+  }, [currentSessionId]);
 
   const {
     currentProvider, selectedModel, permissionMode,
@@ -268,6 +277,7 @@ export const useAppChatController = ({
     setCustomSessionTitle,
     setRestoredSessionTitle,
     setPermissionDialogTimeoutSeconds,
+    setStartupHistoryLoadState,
     clearQueuedMessages,
   });
 
@@ -312,9 +322,54 @@ export const useAppChatController = ({
     queue: messageQueue,
     enqueue: enqueueMessage,
     dequeue: dequeueMessage,
+    dequeueForEdit: dequeueQueuedMessageForEdit,
+    peekQueuedMessage,
     clearQueue,
     reorder: reorderMessageQueue,
   } = useMessageQueue({ isLoading: loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending, onExecute: hookHandleSubmit });
+
+  // The edit flow has to look at a queued message before it removes it.
+  const queuedEditSource = useMemo(
+    () => ({ peek: peekQueuedMessage, take: dequeueQueuedMessageForEdit }),
+    [peekQueuedMessage, dequeueQueuedMessageForEdit],
+  );
+
+  /**
+   * Edit a queued message: dequeue it and restore its content and attachments
+   * into the input draft as if it had never been sent. An unsent draft that is
+   * still in the input is never overwritten — the queued message is appended
+   * after it and its attachments are merged in, with a toast explaining the
+   * merge. Nothing is removed while the restore could still fail.
+   */
+  const handleEditQueuedMessage = useCallback((id: string) => {
+    const outcome = takeQueuedMessageForEdit(chatInputRef.current, queuedEditSource, id);
+    if (outcome.status === 'attachments-blocked') {
+      // The message keeps its place: restoring it here would drop its files.
+      addToast(t('chat.queue.editBlockedAttachments'), 'warning');
+      return;
+    }
+    if (outcome.status === 'images-pending') {
+      // Same wait as submit: writing the draft now would cancel the paste.
+      addToast(t('chat.pasteImagePreparing'), 'info');
+      return;
+    }
+    if (outcome.status !== 'restored') return;
+    const restored = outcome.write;
+    setDraftInput(restored.content);
+    if (!restored.attachmentsApplied && restored.queuedAttachmentCount > 0) {
+      addToast(t('chat.queue.attachmentsNotRestored'), 'warning');
+    }
+    if (restored.merged) {
+      addToast(t('chat.queue.mergedIntoDraft'), 'info');
+    }
+  }, [queuedEditSource, addToast, setDraftInput, t]);
+
+  const onCodexAnswerUndelivered = useCallback(() => addToast(t('askUserQuestion.answerNotSent', {
+    defaultValue: 'Your answer to the Codex question was not sent because another chat is open now. '
+      + 'Return to that chat and send the answer again.',
+  }), 'error'), [addToast, t]);
+  useCodexQuestionResponses({ provider: currentProvider, threadId: currentSessionId,
+    enqueue: enqueueMessage, onUndelivered: onCodexAnswerUndelivered });
 
   // Point the session-transition indirection at the real clearQueue.
   useEffect(() => {
@@ -419,14 +474,16 @@ export const useAppChatController = ({
     findToolResult, getToolResultRaw, subagents, allSubagents, globalTodos,
     filteredFileChanges, rewindableMessages,
     subagentHistoryCtxValue, sessionIdCtxValue,
+    startupHistoryLoadState,
     // Refs
     chatInputRef, messagesContainerRef, messagesEndRef, inputAreaRef, isAutoScrollingRef,
     // Message actions
     handleUndoFile, onDiscardAll, handleKeepAll,
-    handleSubmit, interruptSession, messageQueue, dequeueMessage, reorderMessageQueue,
+    handleSubmit, interruptSession, messageQueue, dequeueMessage, handleEditQueuedMessage, reorderMessageQueue,
     handleOpenRewindSelectDialog, handleNavigateToProviderSettings, wrappedHandleProviderSelect,
     codexPlan, codexPlanExecutionPending,
     codexCompactionPending,
+    codexTurnActive,
     onExecuteCodexPlan: executeCodexPlan,
     codexCompactionStartedAt,
     onContinueCodexPlan: handleContinueCodexPlan,

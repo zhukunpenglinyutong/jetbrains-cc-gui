@@ -13,6 +13,19 @@ afterEach(() => {
 });
 
 describe('ErrorDiagnosticCard', () => {
+  it('renders recovery instructions without sending a command or replacing the conversation', () => {
+    window.sendToJava = vi.fn();
+    const pattern = matchErrorPattern('no rollout found for thread id saved');
+    expect(pattern).not.toBeNull();
+    render(<ErrorDiagnosticCard t={t} pattern={pattern!} />);
+
+    expect(screen.getByText('errorDiagnostic.codexThreadHistoryMissing.solutions.checkStorage.step0')).toBeTruthy();
+    expect(screen.getByText('errorDiagnostic.codexThreadHistoryMissing.solutions.checkStorage.step1')).toBeTruthy();
+    expect(screen.getByText('errorDiagnostic.codexThreadHistoryMissing.solutions.startNewIfMissing.step0')).toBeTruthy();
+    expect(window.sendToJava).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
   it('opens the official platform install instructions without running installation commands', () => {
     window.sendToJava = vi.fn();
     const pattern = matchErrorPattern('codex app-server exited (code=1, signal=null)\nCodex CLI check');

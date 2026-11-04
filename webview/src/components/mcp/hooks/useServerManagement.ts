@@ -14,7 +14,7 @@ export interface UseServerManagementOptions {
   messagePrefix: string;
   cacheKeys: CacheKeys;
   setServerTools: React.Dispatch<React.SetStateAction<ServerToolsState>>;
-  loadServers: () => void;
+  loadServers: (refreshExpandedTools?: boolean) => void;
   loadServerStatus: () => void;
   loadServerTools: (server: McpServer, forceRefresh?: boolean) => void;
   onLog: (message: string, type: RefreshLog['type'], details?: string, serverName?: string, requestInfo?: string, errorReason?: string) => void;
@@ -62,7 +62,8 @@ export function useServerManagement({
     clearAllToolsCache(cacheKeys);
     // Clear current tools state
     setServerTools({});
-    loadServers();
+    // Defer the expanded card request until the refreshed catalog arrives.
+    loadServers(true);
     loadServerStatus();
   }, [cacheKeys, setServerTools, loadServers, loadServerStatus, t, onLog]);
 

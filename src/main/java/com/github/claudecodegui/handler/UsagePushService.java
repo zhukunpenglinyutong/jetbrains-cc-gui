@@ -68,6 +68,9 @@ public class UsagePushService {
 
             // Send update
             sendUsageUpdate(usedTokens, newMaxTokens);
+            if (context.getProject() != null) {
+                ClaudeNotifier.setTokenUsage(context.getProject(), usedTokens, newMaxTokens);
+            }
 
         } catch (Exception e) {
             LOG.error("[UsagePushService] Failed to push usage update after model change: " + e.getMessage(), e);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,12 +35,45 @@ const {
   filterCodexProjectThreads,
   projectThreadFileChanges,
   codexReadThreadPersistent,
+  codexListThreadsPersistent,
   codexCountThreadMessagesPersistent,
   setCodexPristineBaseEnv,
   buildTurnSettings,
 } = await import('./persistent-codex-service.js');
 
 setCodexPristineBaseEnv({ ...process.env, CODEX_HOME: join(testCwd, 'native-home') });
+
+test('async question responses traverse daemon controls during a running send and after completion', async () => {
+  for (const completed of [false, true]) {
+    const data = { channelId: `async-question-${completed}`, cwd: testCwd,
+      codexCommandPrefix: peerCommandPrefix(completed ? 'async-question-completed' : 'async-question'),
+      message: 'Ask a question', clientMessageId: `async-message-${completed}` };
+    const dependencies = { titleDependencies: { enabled: async () => false } };
+    const send = codexSendPersistent(data, dependencies);
+    let interaction;
+    for (let i = 0; i < 200 && !interaction; i += 1) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      interaction = codexEvents().find(event => event.kind === 'interactionRequested' && event.channelId === data.channelId);
+    }
+    assert.ok(interaction, 'async message becomes a routed dialog');
+    if (completed) assert.equal((await send).outcome, 'completed');
+    const reply = await codexRespondInteractionPersistent({ ...data, rpcId: interaction.payload.rpcId,
+      result: { answers: { 'question-1': { answers: ['B'] } } } });
+    assert.equal(reply.replied, true);
+    if (completed) {
+      assert.ok(reply.followUp?.text.includes('\nB'));
+      assert.equal((await codexSendPersistent({ ...data, threadId: reply.followUp.threadId,
+        message: reply.followUp.text, clientMessageId: 'async-follow-up' }, dependencies)).outcome, 'completed');
+    } else {
+      assert.equal(reply.followUp, undefined);
+      assert.equal((await send).outcome, 'completed');
+    }
+    const answer = codexEvents().find(event => event.channelId === data.channelId && event.kind === 'itemCompleted'
+      && event.payload.item.id === 'async-answer');
+    assert.ok(answer.payload.item.text.includes('\nB'));
+    await codexResetRuntimePersistent({ ...data, dispose: true });
+  }
+});
 
 test('daemon sends keep changing editor context separate without rebuilding the runtime', async () => {
   const channelId = 'editor-context';
@@ -263,13 +296,16 @@ test('an authoritative completed plan remains executable and rejects substituted
   assert.equal(codexEvents().filter(entry => entry.kind === 'turnStarted').length, 2);
 });
 
-test('the edit-only native response contains all turns without copying command transcripts', async () => {
+test('the edit-only response reads every native page even when an older webview requests full hydration', async () => {
   const result = await codexReadThreadPersistent({ channelId: 'whole-session', cwd: testCwd,
     threadId: 'whole-session', codexCommandPrefix: peerCommandPrefix('whole-session-edits'),
     params: { includeTurns: true, fileChangesOnly: true } });
   assert.deepEqual(result.thread, { id: 'whole-session' });
   assert.equal(result.fileChangeMessages.length, 40);
   assert.equal(result.fileChangeMessages[0].codexTurnId, 'turn-0');
+  assert.equal(result.fileChangeMessages.at(-1).codexTurnId, 'turn-39');
+  assert.equal(JSON.stringify(result).includes('large output'), false);
+  assert.equal(codexEvents().some(event => event.kind === 'nativeWarning'), false);
 });
 
 test('executing a plan rechecks its native body and the latest turn before dispatch', async () => {
@@ -505,9 +541,12 @@ test('a release drain never answers a late count by cold-starting its retired ru
   }
 });
 
-test('an in-flight count fails instead of paging a runtime that a release retired', async () => {
+for (const operation of [
+  { name: 'count', read: codexCountThreadMessagesPersistent, params: { updatedAt: 1 } },
+  { name: 'edit ledger', read: codexReadThreadPersistent, params: { fileChangesOnly: true } },
+]) test(`an in-flight ${operation.name} fails instead of paging a runtime that a release retired`, async () => {
   const data = { channelId: 'history-count-release-race', cwd: testCwd, threadId: 'th-test-root-0001',
-    codexCommandPrefix: peerCommandPrefix('early-notification'), params: { updatedAt: 1 } };
+    codexCommandPrefix: peerCommandPrefix('early-notification'), params: operation.params };
   const originalRead = CodexAppServerService.prototype.readOnly;
   const originalEnsureRuntime = CodexAppServerService.prototype.ensureRuntime;
   let announceRead;
@@ -530,9 +569,9 @@ test('an in-flight count fails instead of paging a runtime that a release retire
     return await originalEnsureRuntime.apply(this, args);
   };
   try {
-    // The paused read belongs to the only count this session ever issues, so no
+    // The paused read belongs to the only traversal this session ever issues, so no
     // warm cache can satisfy it; the release below must retire its runtime.
-    const obsolete = assert.rejects(codexCountThreadMessagesPersistent(data), /runtime changed/);
+    const obsolete = assert.rejects(operation.read(data), /runtime changed/);
     await readStarted;
     await codexReleaseThreadPersistent(data);
     runtimeResurrected = true;
@@ -550,6 +589,34 @@ test('an in-flight count fails instead of paging a runtime that a release retire
 function peerCommandPrefix(scenario) {
   return [process.execPath, peerScript, '--scenario', scenario];
 }
+
+test('a refused idle deletion keeps the persistent owner and its question answerable', async () => {
+  const data = { channelId: 'idle-delete-active-owner', cwd: testCwd,
+    codexCommandPrefix: peerCommandPrefix('reverse-approval'), message: 'keep this turn alive' };
+  const sending = codexSendPersistent(data, { titleDependencies: { enabled: async () => false } });
+  let request;
+  const deadline = Date.now() + 5000;
+  while (!request && Date.now() < deadline) {
+    request = codexEvents().find(event => event.channelId === data.channelId && event.kind === 'interactionRequested');
+    if (!request) await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.ok(request, 'native question reached the persistent channel');
+  const before = getCodexRuntimeSnapshot().sessions[0];
+  assert.ok(before);
+  await assert.rejects(codexReleaseThreadPersistent({ ...data, threadId: request.threadId, onlyIfIdle: true }),
+    { code: 'SESSION_RUNNING' });
+  const after = getCodexRuntimeSnapshot().sessions[0];
+  assert.ok(after, 'a busy refusal must not retire the registered owner');
+  assert.equal(after.sessionKey, before.sessionKey);
+  assert.equal(after.runtimePid, before.runtimePid);
+  assert.equal(after.runtimeGeneration, before.runtimeGeneration);
+  const response = await codexRespondInteractionPersistent({ ...data, rpcId: request.payload.rpcId,
+    result: { decision: 'accept' } });
+  assert.equal(response.replied, true);
+  assert.equal((await sending).outcome, 'completed');
+  await codexReleaseThreadPersistent({ ...data, threadId: request.threadId, onlyIfIdle: true });
+  assert.equal(getCodexRuntimeSnapshot().sessionCount, 0);
+});
 
 function codexEvents() {
   return processLevelLines
@@ -731,4 +798,45 @@ test('resetRuntime drains and disposes the session entry', async () => {
   });
   assert.equal(result.reset, true);
   assert.equal(getCodexRuntimeSnapshot().sessionCount, 0);
+});
+
+test('deleted rollout index rows stay absent after reopening history', async () => {
+  const original = CodexAppServerService.prototype.readOnly;
+  const path = join(testCwd, 'deleted-rollout.jsonl');
+  const thread = { id: 'deleted-rollout', cwd: testCwd, path };
+  writeFileSync(path, '{}');
+  CodexAppServerService.prototype.readOnly = async () => ({ data: [thread], nextCursor: null });
+  try {
+    const data = { channelId: 'deleted-rollout', cwd: testCwd,
+      codexCommandPrefix: peerCommandPrefix('early-notification'), params: { projectPath: [] } };
+    assert.equal((await codexListThreadsPersistent(data)).data.length, 1);
+    unlinkSync(path);
+    assert.deepEqual((await codexListThreadsPersistent(data)).data, []);
+    assert.deepEqual((await codexListThreadsPersistent(data)).data, []);
+  } finally {
+    CodexAppServerService.prototype.readOnly = original;
+  }
+});
+
+test('stale-only pages advance the native cursor and cursor cycles terminate', async () => {
+  const original = CodexAppServerService.prototype.readOnly;
+  for (const cycle of [false, true]) {
+    const cursors = [];
+    CodexAppServerService.prototype.readOnly = async (method, params) => {
+      assert.equal(method, 'thread/list');
+      cursors.push(params.cursor);
+      return params.cursor === 'next' && !cycle
+        ? { data: [{ id: 'exists', cwd: testCwd }], nextCursor: 'last' }
+        : { data: [{ id: 'missing', path: join(testCwd, 'missing.jsonl') }], nextCursor: 'next' };
+    };
+    try {
+      const result = await codexListThreadsPersistent({ channelId: `stale-page-${cycle}`, cwd: testCwd,
+        codexCommandPrefix: peerCommandPrefix('early-notification'), params: { projectPath: [] } });
+      assert.deepEqual(result.data.map(thread => thread.id), cycle ? [] : ['exists']);
+      assert.equal(result.nextCursor, cycle ? 'next' : 'last');
+      assert.deepEqual(cursors, [undefined, 'next']);
+    } finally {
+      CodexAppServerService.prototype.readOnly = original;
+    }
+  }
 });

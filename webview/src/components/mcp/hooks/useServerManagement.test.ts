@@ -91,4 +91,28 @@ describe('useServerManagement tool cache invalidation', () => {
     expect(loadServers).not.toHaveBeenCalled();
     expect(loadServerStatus).not.toHaveBeenCalled();
   });
+
+  it('waits for the refreshed catalog before loading expanded tools', () => {
+    const loadServerTools = vi.fn();
+    const loadServers = vi.fn();
+    const hook = renderHook(() => useServerManagement({
+      isCodexMode: true,
+      messagePrefix: 'codex_',
+      cacheKeys,
+      setServerTools: vi.fn() as unknown as React.Dispatch<React.SetStateAction<ServerToolsState>>,
+      loadServers,
+      loadServerStatus: vi.fn(),
+      loadServerTools,
+      onLog: vi.fn(),
+      onToast: vi.fn(),
+      t: (key) => key,
+    }));
+
+    act(() => {
+      hook.result.current.handleRefresh();
+    });
+
+    expect(loadServers).toHaveBeenCalledWith(true);
+    expect(loadServerTools).not.toHaveBeenCalled();
+  });
 });

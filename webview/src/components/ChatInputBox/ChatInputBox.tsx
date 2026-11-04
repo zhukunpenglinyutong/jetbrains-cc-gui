@@ -80,6 +80,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       addToast,
       messageQueue,
       onRemoveFromQueue,
+      onEditFromQueue,
       onReorderQueue,
       autoOpenFileEnabled,
       onAutoOpenFileEnabledChange,
@@ -208,6 +209,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           onToggleStatusPanel={onToggleStatusPanel}
           messageQueue={messageQueue}
           onRemoveFromQueue={onRemoveFromQueue}
+          onEditFromQueue={onEditFromQueue}
           onReorderQueue={onReorderQueue}
           showOpenSourceBanner={showOpenSourceBanner}
           onDismissOpenSourceBanner={handleDismissOpenSourceBanner}

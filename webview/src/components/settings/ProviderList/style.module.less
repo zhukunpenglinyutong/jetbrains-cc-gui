@@ -7,6 +7,8 @@
 
 .header {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
@@ -19,6 +21,7 @@
 
   .actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
   }
 }
@@ -76,6 +79,10 @@
 }
 
 .importMenuItem {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
   padding: 8px 12px;
   cursor: pointer;
   font-size: 13px;

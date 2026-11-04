@@ -11,7 +11,11 @@ test('native display page loads items, preserves identities and never resumes a 
   const calls = [];
   const read = async (method, params) => {
     calls.push({ method, params });
-    if (method === 'thread/read') return { thread: { id: 'thread', cwd: '/saved', createdAt: 1 } };
+    if (method === 'thread/read') {
+      assert.equal(params.includeTurns, false);
+      assert.equal(params.excludeTurns, true, 'metadata reads must not hydrate paginated history');
+      return { thread: { id: 'thread', cwd: '/saved', createdAt: 1 } };
+    }
     if (method === 'thread/turns/list') return { data: [{ id: 'turn', itemsView: 'notLoaded', items: [] }], nextCursor: 'opaque:old' };
     return { data: [
       { turnId: 'turn', item: { id: 'user', type: 'userMessage', clientId: 'client', content: [{ type: 'text', text: 'same' }] } },
@@ -29,6 +33,47 @@ test('native display page loads items, preserves identities and never resumes a 
   assert.equal(page.messages[3].raw.message.content[0].content, 'clean');
   assert.equal(page.messages[2].raw.uuid, 'codex:thread:turn:command');
   assert.deepEqual(calls.map((call) => call.method), ['thread/read', 'thread/turns/list', 'thread/items/list']);
+});
+
+test('MCP tool errors keep their identity and failure receipt in paginated and full history', async () => {
+  for (const readMode of ['paged', 'full']) {
+    for (const isError of [true, false]) {
+      const turn = { id: 'turn', status: 'completed', items: [
+        { id: 'mcp', type: 'mcpToolCall', tool: 'inspect', server: 'fixture', status: 'completed',
+          arguments: { target: 'owned-fixture' }, result: { isError, content: [{ type: 'text', text: 'Tool response' }] } },
+      ] };
+      const page = await readNativeHistoryPage(async method => method === 'thread/read'
+        ? { thread: { id: 'thread', turns: [turn] } } : { data: [turn], nextCursor: null }, { threadId: 'thread', readMode });
+      assert.equal(page.messages.length, 2);
+      assert.deepEqual(page.messages[0].raw.message.content[0], { type: 'tool_use', id: 'mcp', name: 'inspect',
+        input: { server: 'fixture', arguments: { target: 'owned-fixture' } } });
+      assert.deepEqual(page.messages[1].raw.message.content[0], { type: 'tool_result', tool_use_id: 'mcp',
+        is_error: isError, content: [{ type: 'text', text: 'Tool response' }] });
+      assert.equal(page.messages[1].raw.codexThreadId, 'thread');
+      assert.equal(page.messages[1].raw.codexTurnId, 'turn');
+    }
+  }
+});
+
+test('only an explicit unmaterialized thread response represents an empty native history', async () => {
+  const message = 'thread thread is not materialized yet; thread/turns/list is unavailable before first user message';
+  const calls = [];
+  const read = async (method, params) => {
+    calls.push({ method, params });
+    if (method === 'thread/read') return { thread: { id: 'thread', turns: [] } };
+    throw Object.assign(new Error(message), { rpcCode: -32600 });
+  };
+  const page = await readNativeHistoryPage(read, { threadId: 'thread' });
+  assert.equal(page.complete, true);
+  assert.deepEqual(page.messages, []);
+  assert.equal(calls.length, 2, 'empty native threads must not resume or hydrate a writer');
+  for (const error of [Object.assign(new Error(message), { rpcCode: -32001 }),
+    Object.assign(new Error(message.replace('thread thread ', 'thread another ')), { rpcCode: -32600 })]) {
+    await assert.rejects(readNativeHistoryPage(async method => {
+      if (method === 'thread/read') return { thread: { id: 'thread' } };
+      throw error;
+    }, { threadId: 'thread' }), value => value === error);
+  }
 });
 
 test('only explicit pagination capability errors select a fixed full native read', async () => {

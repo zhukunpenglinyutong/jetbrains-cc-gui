@@ -30,6 +30,7 @@ const PET_ERROR_TRANSLATIONS: Record<string, string> = {
   INVALID_PETDEX_SPRITESHEET: 'settings.pet.invalidPackage',
   UNDECODABLE_PETDEX_SPRITESHEET: 'settings.pet.invalidPackage',
   UNSUPPORTED_PETDEX_IMAGE: 'settings.pet.invalidPackage',
+  INVALID_PET_IMAGE_DIMENSIONS: 'settings.pet.invalidPackage',
   PETDEX_PREVIEW_ENCODING_FAILED: 'settings.pet.invalidPackage',
 };
 

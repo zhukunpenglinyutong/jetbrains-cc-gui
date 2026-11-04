@@ -130,6 +130,111 @@ describe('turn-end flush guarantees final edit stats data', () => {
     assert.match(uses[0], /"name":"Write"/);
     assert.match(uses[0], /only-fs\.txt/);
   });
+
+  it('seals the open text segment when permission emits tool_use before any tool_call', () => {
+    const lines = [];
+    const n = new GrokEventNormalizer({
+      log: (line) => lines.push(String(line)),
+      error: () => {},
+    });
+    n.begin();
+    n.handleAcpEvent('notification', {
+      method: 'session/update',
+      params: {
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: 'Before the edit.',
+        },
+      },
+    });
+    n.handleAcpEvent('server_request', {
+      method: 'session/request_permission',
+      params: {
+        toolCall: {
+          toolCallId: 'perm-seg',
+          title: 'Edit',
+          kind: 'edit',
+          rawInput: { path: '/proj/a.txt', content: 'x' },
+        },
+      },
+    });
+    n.handleAcpEvent('notification', {
+      method: 'session/update',
+      params: {
+        update: {
+          sessionUpdate: 'tool_call_update',
+          toolCallId: 'perm-seg',
+          status: 'completed',
+        },
+      },
+    });
+    n.handleAcpEvent('notification', {
+      method: 'session/update',
+      params: {
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: 'After the edit.',
+        },
+      },
+    });
+    n.finishSuccess('sess-perm-seg');
+
+    assert.equal(lines.filter((l) => l === '[BLOCK_RESET]').length, 1);
+    assert.equal(lines.join('\n').includes('Before the edit.After the edit.'), false);
+
+    const msgLines = lines
+      .filter((l) => l.startsWith('[MESSAGE] '))
+      .map((l) => JSON.parse(l.slice('[MESSAGE] '.length)));
+    const withText = msgLines.filter((m) =>
+      (m.message?.content || []).some((b) => b.type === 'text'),
+    );
+    const finalMsg = withText[withText.length - 1];
+    assert.deepEqual(finalMsg.message.content, [
+      { type: 'text', text: 'Before the edit.' },
+      { type: 'text', text: 'After the edit.' },
+    ]);
+  });
+
+  it('seals the open text segment when fs_write is the first tool event', () => {
+    const lines = [];
+    const n = new GrokEventNormalizer({
+      log: (line) => lines.push(String(line)),
+      error: () => {},
+    });
+    n.begin();
+    n.handleAcpEvent('notification', {
+      method: 'session/update',
+      params: {
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: 'Before the write.',
+        },
+      },
+    });
+    n.handleAcpEvent('fs_write', { path: '/proj/only-fs.txt', content: 'hi\n' });
+    n.handleAcpEvent('notification', {
+      method: 'session/update',
+      params: {
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: 'After the write.',
+        },
+      },
+    });
+    n.finishSuccess('sess-fs-seg');
+
+    assert.equal(lines.filter((l) => l === '[BLOCK_RESET]').length, 1);
+    const msgLines = lines
+      .filter((l) => l.startsWith('[MESSAGE] '))
+      .map((l) => JSON.parse(l.slice('[MESSAGE] '.length)));
+    const withText = msgLines.filter((m) =>
+      (m.message?.content || []).some((b) => b.type === 'text'),
+    );
+    assert.deepEqual(withText[withText.length - 1].message.content, [
+      { type: 'text', text: 'Before the write.' },
+      { type: 'text', text: 'After the write.' },
+    ]);
+  });
 });
 
 describe('finishError flush settles only edits with execution evidence', () => {

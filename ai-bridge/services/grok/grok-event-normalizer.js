@@ -9,7 +9,15 @@
  * consumers can treat OpenAI shape as primary; camelCase ACP is normalized here.
  */
 
-import { extractUsageFromAcpEnvelope, normalizeUsageToSnakeCase } from './grok-utils.js';
+import {
+  extractTurnUsageFromPromptResult,
+  extractUsageFromAcpEnvelope,
+  normalizeGrokTurnUsage,
+  normalizeUsageToSnakeCase,
+} from './grok-utils.js';
+
+/** Paragraph break between reply segments in the plain-text success result. */
+const REPLY_SEGMENT_SEPARATOR = '\n\n';
 
 export class GrokEventNormalizer {
   constructor({ log = console.log, error = console.error } = {}) {
@@ -17,6 +25,9 @@ export class GrokEventNormalizer {
     this.error = error;
     this.assistantText = '';
     this.thinkingText = '';
+    this.textSegments = [];
+    this.thinkingSegments = [];
+    this.closedToolIds = new Set();
     this.streamStarted = false;
     this.messageStarted = false;
     this.streamEnded = false;
@@ -29,13 +40,25 @@ export class GrokEventNormalizer {
      */
     this.toolCalls = new Map();
     this.editSeq = 0;
-    /** Last normalized snake_case usage for this turn (attached to final [MESSAGE]). */
+    /** Last normalized snake_case context usage for this turn (attached to final [MESSAGE]). */
     this.lastUsage = null;
+    /** Whole-turn usage normalized to Claude turnUsage schema (emitted on [RESULT]). */
+    this.lastTurnUsage = null;
+    /** True when step-level context occupancy (response_completed / _meta.totalTokens) was observed. */
+    this.hasStepContextUsage = false;
   }
 
   begin() {
     this.toolCalls.clear();
     this.editSeq = 0;
+    this.textSegments = [];
+    this.thinkingSegments = [];
+    this.closedToolIds = new Set();
+    this.assistantText = '';
+    this.thinkingText = '';
+    this.lastUsage = null;
+    this.lastTurnUsage = null;
+    this.hasStepContextUsage = false;
     this.#emit('[MESSAGE_START]');
     this.messageStarted = true;
     this.#emit('[STREAM_START]');
@@ -84,9 +107,9 @@ export class GrokEventNormalizer {
     // This is what makes StatusPanel "编辑 +N -M" correct after Grok turns.
     this.#flushFileEditLedger({ assumeSuccess: true });
 
-    const text = (resultText != null && String(resultText).length > 0)
-      ? String(resultText)
-      : this.assistantText;
+    const text = this.textSegments.length > 0
+      ? this.assistantText
+      : ((resultText != null && String(resultText).length > 0) ? String(resultText) : this.assistantText);
 
     // Final assistant message block for history (Claude-like).
     // Attach lastUsage so Java message.usage survives even if a mid-turn [USAGE]
@@ -104,6 +127,11 @@ export class GrokEventNormalizer {
       this.#emit(`[USAGE] ${JSON.stringify(this.lastUsage)}`);
     }
     this.#emit(`[MESSAGE] ${JSON.stringify(assistantMessage)}`);
+    const turnUsage =
+      this.lastTurnUsage || (this.lastUsage ? normalizeGrokTurnUsage(this.lastUsage) : null);
+    if (turnUsage) {
+      this.#emit(`[RESULT] ${JSON.stringify({ usage: turnUsage })}`);
+    }
 
     this.#emitStreamEndOnce();
     this.#emitMessageEndOnce();
@@ -112,7 +140,11 @@ export class GrokEventNormalizer {
       JSON.stringify({
         success: true,
         sessionId: finalSessionId,
-        result: text,
+        // The whole reply rather than only its last segment, with the segments
+        // kept apart the way the final message keeps them in separate blocks.
+        result: [...this.textSegments, text]
+          .filter((segment) => segment.trim())
+          .join(REPLY_SEGMENT_SEPARATOR),
       })
     );
   }
@@ -148,20 +180,57 @@ export class GrokEventNormalizer {
   }
 
   #handleNotification(method, params) {
-    // Grok CLI 0.2.x: usage arrives on _x.ai/session_notification (turn_completed),
-    // not on classic sessionUpdate=usage_update.
-    const fromEnvelope = extractUsageFromAcpEnvelope(method, params);
-    if (fromEnvelope) {
-      this.#emitUsage(fromEnvelope);
+    const update = params?.update || params;
+    const kind = update?.sessionUpdate || update?.type || '';
+    const isVendorNotif =
+      method === '_x.ai/session_notification' ||
+      method === 'x.ai/session_notification' ||
+      (typeof method === 'string' && method.endsWith('/session_notification'));
+
+    if (isVendorNotif && update) {
+      if (kind === 'response_completed' && update.usage) {
+        this.hasStepContextUsage = true;
+        this.#emitUsage(update.usage);
+      } else if (kind === 'turn_completed') {
+        const rawTurnUsage =
+          update.usage || (update.totalTokens || update.inputTokens ? update : null);
+        if (rawTurnUsage) {
+          this.lastTurnUsage = normalizeGrokTurnUsage(rawTurnUsage) || this.lastTurnUsage;
+          const isMultiCall = Number(rawTurnUsage.modelCalls) > 1;
+          if ((!isMultiCall && !this.hasStepContextUsage) || !this.lastUsage) {
+            this.#emitUsage(rawTurnUsage);
+          }
+        }
+      } else {
+        const fromEnvelope = extractUsageFromAcpEnvelope(method, params);
+        if (fromEnvelope) {
+          this.#emitUsage(fromEnvelope);
+        }
+      }
+    } else {
+      const meta = params?._meta || update?._meta;
+      if (meta && (meta.totalTokens || meta.total_tokens)) {
+        this.hasStepContextUsage = true;
+        this.#emitUsage(meta);
+      }
+      const fromEnvelope = extractUsageFromAcpEnvelope(method, params);
+      if (fromEnvelope) {
+        if (kind === 'turn_completed') {
+          this.lastTurnUsage = normalizeGrokTurnUsage(fromEnvelope) || this.lastTurnUsage;
+          const isMultiCall = Number(fromEnvelope.modelCalls) > 1;
+          if ((!isMultiCall && !this.hasStepContextUsage) || !this.lastUsage) {
+            this.#emitUsage(fromEnvelope);
+          }
+        } else {
+          this.#emitUsage(fromEnvelope);
+        }
+      }
     }
 
     if (method !== 'session/update') {
       return;
     }
-    const update = params?.update || params;
     if (!update) return;
-
-    const kind = update.sessionUpdate || update.type || '';
 
     switch (kind) {
       case 'agent_message_chunk': {
@@ -240,6 +309,26 @@ export class GrokEventNormalizer {
     }
   }
 
+  #closeSegmentsForTool(toolCallId) {
+    if (!toolCallId || this.closedToolIds.has(toolCallId)) {
+      return;
+    }
+    this.closedToolIds.add(toolCallId);
+    this.#sealOpenSegments();
+  }
+
+  #sealOpenSegments() {
+    if (this.assistantText) {
+      this.textSegments.push(this.assistantText);
+      this.assistantText = '';
+    }
+    if (this.thinkingText) {
+      this.thinkingSegments.push(this.thinkingText);
+      this.thinkingText = '';
+    }
+    this.#emit('[BLOCK_RESET]');
+  }
+
   #handleToolUpdate(update) {
     const toolCallId =
       update.toolCallId ||
@@ -247,6 +336,7 @@ export class GrokEventNormalizer {
       update.id ||
       update.toolUseId ||
       `tool-${Date.now()}`;
+    this.#closeSegmentsForTool(toolCallId);
     const title = update.title || '';
     const kind = String(update.kind || update.toolKind || '').toLowerCase();
     const status = String(update.status || '').toLowerCase();
@@ -467,6 +557,16 @@ export class GrokEventNormalizer {
   }
 
   #emitToolUse(toolCallId, name, input) {
+    // Seal the open segment before the tool card. Permission and fs_write reach
+    // here with no prior tool_call, so this may be the id's first event. For a
+    // tool announced earlier, only prose that arrived since then (while it ran,
+    // or before the turn-end ledger flush) is sealed: it belongs above the card,
+    // and the reply that follows the tool result starts a segment of its own.
+    if (this.closedToolIds.has(toolCallId) && (this.assistantText || this.thinkingText)) {
+      this.#sealOpenSegments();
+    } else {
+      this.#closeSegmentsForTool(toolCallId);
+    }
     this.#emit(
       `[MESSAGE] ${JSON.stringify({
         type: 'assistant',
@@ -483,7 +583,6 @@ export class GrokEventNormalizer {
         },
       })}`,
     );
-    this.#emit('[BLOCK_RESET]');
   }
 
   #emitLegacyToolIfNeeded(toolCallId, tc, forceResult) {
@@ -505,24 +604,45 @@ export class GrokEventNormalizer {
   }
 
   #handlePromptResult(result) {
-    // session/prompt result: usage is usually under result._meta.usage (Grok CLI 0.2.x),
-    // sometimes result.usage, sometimes flat _meta.totalTokens.
+    // Whole-turn usage from _meta.usage / result.usage for [RESULT]
+    const turnUsage = extractTurnUsageFromPromptResult(result);
+    if (turnUsage) {
+      this.lastTurnUsage = turnUsage;
+    }
+    // Context window snapshot: prefer top-level _meta (latest step) over multi-call _meta.usage
+    const meta = result?._meta || result?.meta;
+    const hasTopLevelStepMeta = Boolean(
+      meta && (meta.totalTokens || meta.inputTokens || meta.total_tokens),
+    );
     const raw = extractUsageFromAcpEnvelope(result);
     if (raw) {
-      this.#emitUsage(raw);
+      const isMultiCall = Number(raw.modelCalls) > 1;
+      if (hasTopLevelStepMeta || (!isMultiCall && !this.hasStepContextUsage) || !this.lastUsage) {
+        this.#emitUsage(raw);
+      }
     }
     if (result?.stopReason || result?.stop_reason) {
       // optional
     }
   }
 
-  #buildContentBlocks(text) {
+  #buildContentBlocks(openText) {
     const blocks = [];
+    for (const thinking of this.thinkingSegments) {
+      if (thinking) {
+        blocks.push({ type: 'thinking', thinking });
+      }
+    }
     if (this.thinkingText) {
       blocks.push({ type: 'thinking', thinking: this.thinkingText });
     }
-    if (text) {
-      blocks.push({ type: 'text', text });
+    for (const text of this.textSegments) {
+      if (text) {
+        blocks.push({ type: 'text', text });
+      }
+    }
+    if (openText) {
+      blocks.push({ type: 'text', text: openText });
     }
     return blocks.length ? blocks : [{ type: 'text', text: '' }];
   }

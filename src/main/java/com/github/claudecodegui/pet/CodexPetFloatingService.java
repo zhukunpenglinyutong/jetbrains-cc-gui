@@ -21,7 +21,6 @@ import com.intellij.util.concurrency.AppExecutorUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
@@ -51,7 +50,6 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -814,7 +812,7 @@ public final class CodexPetFloatingService
             }
             Image image = "image/gif".equals(mimeType)
                     ? new ImageIcon(bytes).getImage()
-                    : ImageIO.read(new ByteArrayInputStream(bytes));
+                    : CodexPetImageSupport.readImage(bytes);
             if (image == null) {
                 return null;
             }

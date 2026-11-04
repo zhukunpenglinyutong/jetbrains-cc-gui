@@ -146,6 +146,19 @@ class PermissionDialogRouter {
         return bestMatch;
     }
 
+    boolean hasRegisteredDialogShowers() {
+        evictDisposedProjects(permissionDialogShowers);
+        evictDisposedProjects(askUserQuestionDialogShowers);
+        evictDisposedProjects(planApprovalDialogShowers);
+        return !permissionDialogShowers.isEmpty()
+                || !askUserQuestionDialogShowers.isEmpty()
+                || !planApprovalDialogShowers.isEmpty();
+    }
+
+    private static void evictDisposedProjects(Map<Project, ?> showers) {
+        showers.keySet().removeIf(Project::isDisposed);
+    }
+
     int getPermissionDialogCount() {
         return permissionDialogShowers.size();
     }

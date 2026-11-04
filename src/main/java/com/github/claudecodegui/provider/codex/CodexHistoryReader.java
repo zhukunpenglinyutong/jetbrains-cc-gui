@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 /**
@@ -221,9 +222,14 @@ public class CodexHistoryReader {
      * @return number of parsed top-level Codex records
      */
     public int forEachSessionMessage(String sessionId, Consumer<JsonObject> consumer) throws IOException {
+        return forEachSessionMessage(sessionId, () -> false, consumer);
+    }
+
+    public int forEachSessionMessage(String sessionId, BooleanSupplier cancellation,
+                                     Consumer<JsonObject> consumer) throws IOException {
         logSessionAccessWithoutLocalConfigAuthorization();
         CodexHistoryPrivacy privacy = new CodexHistoryPrivacy(sessionId);
-        return this.sessionService.forEachSessionMessage(sessionId, message -> {
+        return this.sessionService.forEachSessionMessage(sessionId, cancellation, message -> {
             JsonObject raw = this.gson.toJsonTree(message).getAsJsonObject();
             consumer.accept(privacy.protect(raw));
         });

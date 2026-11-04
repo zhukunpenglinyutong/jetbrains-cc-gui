@@ -1,3 +1,5 @@
+import { normalizeAsyncQuestions } from './codex-async-questions.js';
+
 /** Shared native item projection for live streaming and persisted history. */
 export function projectCodexItemMessages(item, { threadId = null, turnId = null, authoritative = false, kind = null } = {}) {
   const messages = [];
@@ -40,6 +42,9 @@ export function projectCodexItemMessages(item, { threadId = null, turnId = null,
         },
       })}`);
     };
+    // Native clock waits are orchestration, without a tool result or failure status.
+    // Exposing them as generic tools leaves a false unfinished/error receipt.
+    if (type === 'sleep' || type === 'Extension' && item.kind === 'clock.sleep') return messages;
     if (type === 'userMessage' || type === 'user_message') {
       emit( `[MESSAGE] ${JSON.stringify({
         type: 'user',
@@ -53,6 +58,11 @@ export function projectCodexItemMessages(item, { threadId = null, turnId = null,
       return messages;
     }
     if (type === 'agentMessage' || type === 'agent_message') {
+      const questions = normalizeAsyncQuestions(item);
+      if (questions.length > 0) {
+        emitAssistant([{ type: 'tool_use', id: itemId, name: 'codex_user_input', input: { questions } }]);
+        return messages;
+      }
       // Some persisted turns carry the body as a plain `content` string while
       // others use `text`; both must render, an unrecognised shape collapses
       // into an empty authoritative message and erases the reply on reload.
@@ -139,7 +149,7 @@ export function projectCodexItemMessages(item, { threadId = null, turnId = null,
       }]);
       if (isTerminalTool(item, authoritative) || !item.status && (item.result != null || item.error != null)) {
         emitToolResult(toolId, item.error?.message ?? projectMcpResult(item.result) ?? '',
-          Boolean(item.error) || ['failed', 'declined', 'interrupted'].includes(item.status));
+          Boolean(item.error) || item.result?.isError === true || ['failed', 'declined', 'interrupted'].includes(item.status));
       }
       return messages;
     }
@@ -170,17 +180,22 @@ export function projectCodexItemMessages(item, { threadId = null, turnId = null,
     }
     if (type === 'fileChange' || type === 'file_change') {
       const changes = normalizeFileChanges(item.changes ?? item.fileChanges ?? item.files);
+      const toolId = itemId ?? `codex-file-change-${Date.now()}`;
+      const status = item.status ?? (authoritative && !item.proposed ? 'completed' : null);
       emitAssistant([{
         type: 'tool_use',
-        id: itemId ?? `codex-file-change-${Date.now()}`,
+        id: toolId,
         name: 'file_change',
         input: {
           changes,
-          status: item.status ?? (authoritative && !item.proposed ? 'completed' : null),
+          status,
           proposed: item.proposed ?? item.status === 'proposed',
           authoritative,
         },
       }]);
+      if (['completed', 'failed', 'declined', 'interrupted'].includes(status)) {
+        emitToolResult(toolId, [item.stdout, item.stderr].filter(Boolean).join('\n'), status !== 'completed');
+      }
       return messages;
     }
     if (type === 'functionCallOutput' || type === 'function_call_output') {

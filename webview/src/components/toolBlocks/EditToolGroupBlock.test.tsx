@@ -58,7 +58,7 @@ describe('shared edit batches', () => {
 
   it('shows a batch for a single native change containing multiple files', () => {
     const { container } = render(<EditToolBlock items={[{ name: 'file_change', input: { status: 'completed', changes: [
-      { path: 'a.ts', kind: 'add', diff: '+native a' }, { path: 'b.ts', kind: 'delete', diff: '-native b' },
+      { path: 'a.ts', kind: 'add', diff: 'native a\n' }, { path: 'b.ts', kind: 'delete', diff: 'native b\n' },
     ] } }]} />);
     expect(screen.getByText('tools.editBatchTitle')).toBeTruthy();
     expect(container.querySelectorAll('.file-list-item')).toHaveLength(2);

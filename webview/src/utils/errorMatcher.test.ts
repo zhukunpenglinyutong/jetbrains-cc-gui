@@ -1,9 +1,64 @@
 import { describe, expect, it } from 'vitest';
 import { matchErrorPattern } from './errorMatcher';
+import patternsData from '../data/errorPatterns.json';
 
 describe('matchErrorPattern', () => {
   it('returns null for empty input', () => {
     expect(matchErrorPattern('')).toBeNull();
+  });
+
+  it.each([
+    ['thread/resume: thread saved already has an active writer', 'codexWriterConflict'],
+    ['thread saved already has a live local writer', 'codexWriterConflict'],
+    ['Codex thread is already owned by another window', 'codexWriterConflict'],
+    ['Codex thread is already owned by another chat window', 'codexWriterConflict'],
+    ['thread/resume: thread saved is closing; retry thread/resume after the thread is closed', 'codexThreadClosing'],
+    ['no rollout found for thread id saved', 'codexThreadHistoryMissing'],
+    ['thread/resume: no rollout found for conversation id saved', 'codexThreadHistoryMissing'],
+    ['thread/resume: session saved is archived; unarchive it first', 'codexThreadArchived'],
+    ['thread/resume: required MCP servers failed to initialize: required_broken', 'codexThreadResumeConfiguration'],
+    ['required MCP servers failed to initialize: required_broken', 'codexThreadResumeConfiguration'],
+    ['thread/resume: failed to load configuration: invalid TOML', 'codexThreadResumeConfiguration'],
+    ['thread/resume: RPC timed out', 'codexThreadResume'],
+    ['thread/resume failed: unexpected native error', 'codexThreadResume'],
+  ])('diagnoses the actual Codex recovery failure: %s', (text, code) => {
+    expect(matchErrorPattern(text)?.code).toBe(code);
+  });
+
+  it.each([
+    'failed to load configuration: invalid TOML',
+    'thread discussion failed',
+    'network request failed',
+    'session title was archived yesterday',
+  ])('does not diagnose unrelated errors as Codex recovery failures: %s', (text) => {
+    expect(matchErrorPattern(text)).toBeNull();
+  });
+
+  it('provides localized recovery instructions in every supported language', () => {
+    const locales = import.meta.glob<{ errorDiagnostic: Record<string, unknown> }>('../i18n/locales/*.json', {
+      eager: true, import: 'default',
+    });
+    const recoveryPatterns = patternsData.patterns.filter(pattern =>
+      pattern.code === 'codexWriterConflict' || pattern.code.startsWith('codexThread'));
+    expect(Object.keys(locales)).toHaveLength(10);
+    for (const [locale, { errorDiagnostic }] of Object.entries(locales)) {
+      for (const pattern of recoveryPatterns) {
+        const diagnostic = errorDiagnostic[pattern.code] as {
+          title: string; intro: string; reason: string;
+          solutions: Record<string, Record<string, string>>;
+        };
+        for (const field of ['title', 'intro', 'reason'] as const) {
+          expect(diagnostic?.[field], `${locale}: ${pattern.code}.${field}`).toBeTruthy();
+        }
+        for (const solution of pattern.solutions) {
+          const translated = diagnostic?.solutions?.[solution.key];
+          expect(translated?.title, `${locale}: ${pattern.code}.${solution.key}`).toBeTruthy();
+          solution.steps.forEach((_, index) => {
+            expect(translated?.[`step${index}`], `${locale}: ${pattern.code}.${solution.key}.step${index}`).toBeTruthy();
+          });
+        }
+      }
+    }
   });
 
   it('matches when regex and all keywords are present', () => {

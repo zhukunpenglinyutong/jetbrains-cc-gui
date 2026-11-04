@@ -19,6 +19,7 @@ import {
   emitSessionId,
   emitToolResultMessage,
   emitToolUseMessage,
+  emitUsage,
   isNonEmptySessionId,
   safePromptArg,
 } from '../../utils/marker-protocol.js';
@@ -27,6 +28,8 @@ import {
   cleanupMaterializedImagePaths,
   materializeImageAttachments,
 } from '../../utils/cli-image-input.js';
+import { resolveModelFlag, resolveOpenCodeContextWindow } from './config.js';
+import { extractOpenCodeUsage } from './usage.js';
 
 function logDebug(...args) {
   console.error('[DEBUG][OpenCode]', ...args);
@@ -203,8 +206,8 @@ export function parseOpenCodeEvent(line) {
   }
 
   // OpenCode 1.x wraps content in event.part and types it there (text /
-  // reasoning / tool). part.type is authoritative when present; the legacy
-  // top-level matching further down stays as a fallback for older shapes.
+  // reasoning / tool / step-finish). part.type is authoritative when present;
+  // the legacy top-level matching further down stays as a fallback for older shapes.
   const part = event.part && typeof event.part === 'object' ? event.part : null;
   const partType = typeof part?.type === 'string' ? part.type.toLowerCase() : '';
 
@@ -218,6 +221,19 @@ export function parseOpenCodeEvent(line) {
   }
   if (partType === 'tool') {
     return parseToolPart(part, sessionId);
+  }
+  if (
+    partType === 'step-finish'
+    || partType === 'step_finish'
+    || lower === 'step_finish'
+    || lower === 'step-finish'
+    || lower === 'usage'
+  ) {
+    const usage = extractOpenCodeUsage(event);
+    if (usage) {
+      return { kind: 'usage', usage, sessionId };
+    }
+    return sessionId ? { kind: 'session', sessionId } : { kind: 'other' };
   }
 
   if (
@@ -294,6 +310,11 @@ export function parseOpenCodeEvent(line) {
     };
   }
 
+  const fallbackUsage = extractOpenCodeUsage(event);
+  if (fallbackUsage) {
+    return { kind: 'usage', usage: fallbackUsage, sessionId };
+  }
+
   if (sessionId) {
     return { kind: 'session', sessionId };
   }
@@ -322,7 +343,7 @@ function novelDelta(stateMap, partId, fullText) {
  * two-phase kinds (tool_use / tool_result) keep their old behavior; the
  * started-dedup makes both shapes converge on one tool_use per id.
  *
- * @param {object} sink marker emitters: contentDelta/thinkingDelta/toolUse/toolResult/sendError
+ * @param {object} sink marker emitters: contentDelta/thinkingDelta/toolUse/toolResult/usage/sendError
  * @returns {(event: object) => void} dispatcher over parseOpenCodeEvent output
  */
 export function createOpenCodeEventDispatcher(sink) {
@@ -365,6 +386,9 @@ export function createOpenCodeEventDispatcher(sink) {
       case 'tool_result':
         sink.toolResult({ toolUseId: event.toolCallId, content: event.content, isError: event.isError });
         break;
+      case 'usage':
+        sink.usage?.(event.usage);
+        break;
       case 'error':
         sink.sendError(event.message);
         break;
@@ -372,26 +396,6 @@ export function createOpenCodeEventDispatcher(sink) {
         break;
     }
   };
-}
-
-function resolveModelFlag(model) {
-  if (model == null) return null;
-  const trimmed = String(model).trim();
-  if (!trimmed) return null;
-  const lower = trimmed.toLowerCase();
-  if (
-    lower === '__config_default__'
-    || lower === 'auto'
-    || lower === 'default'
-    || lower === '(default)'
-    || lower === 'config-default'
-    || lower === 'config_default'
-    || lower === 'opencode default'
-    || lower === 'opencode-default'
-  ) {
-    return null;
-  }
-  return trimmed;
 }
 
 /**
@@ -500,11 +504,19 @@ export async function sendMessage(
   enrichPathWithBinDirs(env, commonCliBinDirs(home));
 
   const workCwd = cwd && cwd !== 'undefined' && cwd !== 'null' ? cwd : process.cwd();
+  const modelContextWindow = resolveOpenCodeContextWindow(model, workCwd, home);
   const dispatch = createOpenCodeEventDispatcher({
     contentDelta: (text) => emitJsonStringMarker('[CONTENT_DELTA]', text),
     thinkingDelta: (text) => emitJsonStringMarker('[THINKING_DELTA]', text),
     toolUse: emitToolUseMessage,
     toolResult: emitToolResultMessage,
+    usage: (usage) => {
+      if (!usage || typeof usage !== 'object') return;
+      const payload = modelContextWindow && modelContextWindow > 0 && !usage.model_context_window
+        ? { ...usage, model_context_window: modelContextWindow }
+        : usage;
+      emitUsage(payload);
+    },
     sendError: (errorMessage) =>
       console.log(`[SEND_ERROR] ${JSON.stringify({ error: errorMessage })}`),
   });

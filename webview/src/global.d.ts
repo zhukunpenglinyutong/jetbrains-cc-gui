@@ -8,7 +8,10 @@ interface Window {
   sendToJava?: (message: string) => void;
 
   /** Legacy windowed-JCEF repaint requested after its IntelliJ content tab is activated. */
-  onTabActivated?: () => void;
+  onTabActivated?: (remote?: boolean | string) => void;
+  __CCGUI_DRAFT_CACHE_KEY__?: string;
+  /** Java's open chat windows; deletes persisted drafts of closed windows in the same scope. */
+  pruneClosedDrafts?: (json: string) => void;
 
   /** Strict two-frame OSR damage pulse, owned by a Java frame-fence attempt token. */
   __ccguiSurfaceDamagePhaseA?: (token: string) => boolean;
@@ -154,6 +157,8 @@ interface Window {
    * Triggers Markdown re-rendering to fix incorrect rendering on first history load.
    */
   historyLoadComplete?: (expectedMessageCount?: string | number) => void;
+  updateStartupHistoryLoadState?: (json: string) => void;
+  __pendingStartupHistoryLoadState?: string;
   /** Early history completion buffered before React installs the real callback. */
   __pendingHistoryLoadComplete?: { expectedMessageCount?: string | number };
   /** Number of messages in the latest full backend snapshot accepted by this page. */
@@ -202,6 +207,16 @@ interface Window {
   onConversionResult?: (json: string) => void;
 
   /**
+   * History deletion outcome, sent once per delete request after the backend
+   * quiesced (or refused) the targets.
+   * Payload: { requestId?: string, provider: string, sessionIds: string[],
+   * deletedSessionIds: string[], success: boolean, errorCode?: string }.
+   * requestId echoes the delete request; deletedSessionIds lists requested ids whose files are gone.
+   * errorCode is SESSION_RUNNING, SELECTED_DATA_CHANGED or DELETE_FAILED.
+   */
+  onHistoryDeleteResult?: (json: string) => void;
+
+  /**
    * Add user message to chat (used for external Quick Fix feature)
    * Immediately shows the user's message in the chat UI before AI response
    */
@@ -233,6 +248,9 @@ interface Window {
 
   /** Buffers the latest usage update received before React callbacks mount. */
   __pendingUsageUpdate?: string;
+
+  /** Custom title pushed before React registered restoreSessionTitle. */
+  __pendingRestoreSessionTitle?: { sessionId: string; title: string };
 
   /**
    * Mode changed callback
@@ -406,6 +424,10 @@ interface Window {
    * Update streaming enabled setting
    */
   updateStreamingEnabled?: (json: string) => void;
+
+  /** Update application-level startup history loading preference. */
+  updateLoadHistoryOnStartup?: (json: string) => void;
+  updateHistoryLoadTimeout?: (json: string) => void;
 
   /**
    * Update Codex sandbox mode setting
@@ -658,6 +680,14 @@ interface Window {
    * @param title - The generated title text
    */
   updateSessionTitle?: (sessionId: string, title: string) => void;
+
+  /**
+   * Restore the user-set title persisted in session-titles.json after a
+   * webview restart.
+   * @param sessionId - The session ID the title belongs to
+   * @param title - The persisted custom title text
+   */
+  restoreSessionTitle?: (sessionId: string, title: string) => void;
 
   /**
    * Editor font config received callback - receives IDEA editor font configuration
