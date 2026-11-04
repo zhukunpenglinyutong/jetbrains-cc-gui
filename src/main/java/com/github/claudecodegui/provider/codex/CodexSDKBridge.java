@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.history.HistoryMessageInjector;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
@@ -556,6 +557,19 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 nativeSettings);
     }
 
+    /**
+     * Converts a Windows or WSL UNC cwd to a Linux path when the active node executable runs in WSL,
+     * so the Codex child process can chdir into it. No-op for a native node.
+     */
+    private String normalizeCwdForNode(String cwd) {
+        if (cwd == null || cwd.isEmpty()) {
+            return cwd;
+        }
+        String nodePath = this.nodeDetector.getCachedNodePath();
+        boolean isWsl = nodePath != null && NodeDetector.isWslPath(nodePath);
+        return isWsl ? NodeDetector.convertToWslPath(cwd) : cwd;
+    }
+
     private CompletableFuture<SDKResult> sendMessageViaAppServer(
             String channelId,
             String message,
@@ -626,7 +640,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                                 ? UUID.randomUUID().toString() : clientMessageId,
                         message == null ? "" : message,
                         threadId,
-                        cwd,
+                        normalizeCwdForNode(cwd),
                         permissionMode,
                         model,
                         reasoningEffort,
@@ -928,7 +942,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 ? "codex" : channelId.trim();
         JsonObject params = new JsonObject();
         params.addProperty("channelId", safeChannelId);
-        params.addProperty("cwd", cwd == null ? "" : cwd);
+        params.addProperty("cwd", cwd == null ? "" : normalizeCwdForNode(cwd));
         params.addProperty("threadId", threadId == null ? "" : threadId);
         params.addProperty("planItemId", planItemId == null ? "" : planItemId);
         params.addProperty("planText", planText == null ? "" : planText);
@@ -1030,7 +1044,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 ? "codex" : channelId.trim();
         JsonObject params = new JsonObject();
         params.addProperty("channelId", safeChannelId);
-        params.addProperty("cwd", cwd == null ? "" : cwd);
+        params.addProperty("cwd", cwd == null ? "" : normalizeCwdForNode(cwd));
         params.addProperty("threadId", threadId == null ? "" : threadId);
         params.addProperty("sessionEpoch", this.runtimeSessionEpochs.computeIfAbsent(
                 safeChannelId, ignored -> UUID.randomUUID().toString()));
@@ -1175,7 +1189,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 ? "codex" : channelId.trim();
         JsonObject params = new JsonObject();
         params.addProperty("channelId", safeChannelId);
-        params.addProperty("cwd", cwd == null ? "" : cwd);
+        params.addProperty("cwd", cwd == null ? "" : normalizeCwdForNode(cwd));
         params.addProperty("threadId", threadId == null ? "" : threadId);
         if (releasing && onlyIfIdle) {
             params.addProperty("onlyIfIdle", true);
@@ -1237,7 +1251,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 ? "codex" : channelId.trim();
         JsonObject params = new JsonObject();
         params.addProperty("channelId", safeChannelId);
-        params.addProperty("cwd", cwd == null ? "" : cwd);
+        params.addProperty("cwd", cwd == null ? "" : normalizeCwdForNode(cwd));
         params.addProperty("threadId", threadId == null ? "" : threadId);
         params.addProperty("sessionEpoch", this.runtimeSessionEpochs.computeIfAbsent(
                 safeChannelId, ignored -> UUID.randomUUID().toString()));
@@ -1292,7 +1306,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 ? "codex" : channelId.trim();
         JsonObject params = new JsonObject();
         params.addProperty("channelId", safeChannelId);
-        params.addProperty("cwd", cwd == null ? "" : cwd);
+        params.addProperty("cwd", cwd == null ? "" : normalizeCwdForNode(cwd));
         String sessionEpoch = this.runtimeSessionEpochs.computeIfAbsent(
                 safeChannelId, ignored -> UUID.randomUUID().toString());
         params.addProperty("sessionEpoch", sessionEpoch);
