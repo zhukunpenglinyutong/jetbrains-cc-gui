@@ -34,13 +34,14 @@ import {
 const DEFAULT_TIMEOUT_MS = 120_000;
 
 /**
- * User-turn session/prompt budget. Long agentic runs (tools + terminal) routinely
- * exceed 5 minutes; 300s was killing healthy turns with ACP timeout.
+ * User-turn session/prompt silence window (sliding on ACP stdout/stderr activity).
+ * Long agentic runs (tools + terminal) routinely exceed 5 minutes; 300s was killing
+ * healthy turns with ACP timeout. Total request duration is capped at MAX_TURN_PROMPT_TIMEOUT_MS.
  * Override: GROK_ACP_TURN_TIMEOUT_MS (clamped 5m … 4h).
  */
 const DEFAULT_TURN_PROMPT_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes
 const MIN_TURN_PROMPT_TIMEOUT_MS = 5 * 60 * 1000;
-const MAX_TURN_PROMPT_TIMEOUT_MS = 4 * 60 * 60 * 1000;
+export const MAX_TURN_PROMPT_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 
 export function resolveTurnPromptTimeoutMs(env = process.env) {
   const raw = env?.GROK_ACP_TURN_TIMEOUT_MS;
@@ -291,39 +292,23 @@ export class GrokAcpClient {
     this.closed = false;
     this.stderrBuf = '';
     this.activeServerRequests = 0;
-    this.lastActivityAt = Date.now();
-
-    if (this.terminalHost && typeof this.terminalHost.onEvent === 'function') {
-      const prevOnEvent = this.terminalHost.onEvent;
-      this.terminalHost.onEvent = (event, data) => {
-        this.touchActivity();
-        return prevOnEvent.call(this.terminalHost, event, data);
-      };
-    }
   }
 
   /**
-   * Checks whether a server-to-client request or an ACP terminal command is currently active.
+   * Checks whether a server-to-client request (such as permission/question UI or
+   * `terminal/wait_for_exit`) is currently active.
    *
-   * @return {boolean} true if a server request or terminal command is still running
+   * @return {boolean} true if a server request is in flight
    */
   hasActiveWork() {
-    if (this.activeServerRequests > 0) return true;
-    if (this.terminalHost && typeof this.terminalHost.hasRunningTerminals === 'function') {
-      try {
-        if (this.terminalHost.hasRunningTerminals()) return true;
-      } catch {
-        // ignore
-      }
-    }
-    return false;
+    return this.activeServerRequests > 0;
   }
 
   /**
-   * Records live ACP or terminal activity and refreshes the timeout deadline for all pending requests.
+   * Records live ACP activity and refreshes the inactivity deadline for pending
+   * requests that allow sliding timeouts.
    */
   touchActivity() {
-    this.lastActivityAt = Date.now();
     for (const [, p] of this.pending) {
       p.refreshTimeout?.();
     }
@@ -391,12 +376,14 @@ export class GrokAcpClient {
   }
 
   /**
-   * Sends a JSON-RPC request over ACP stdio with an activity-sliding timeout.
+   * Sends a JSON-RPC request over ACP stdio with an activity-sliding timeout
+   * (bounded by a hard cap on total duration) or a fixed deadline when
+   * `recycleOnTimeout` is false.
    *
    * @param {string} method JSON-RPC method name
    * @param {object} [params] JSON-RPC request parameters
-   * @param {number} [timeoutMs] Inactivity timeout window in milliseconds
-   * @param {{ recycleOnTimeout?: boolean }} [options] Request timeout options
+   * @param {number} [timeoutMs] Inactivity timeout window in milliseconds (or fixed deadline when recycleOnTimeout is false)
+   * @param {{ recycleOnTimeout?: boolean, maxTimeoutMs?: number, maxDurationMs?: number }} [options] Request timeout options
    * @return {Promise<any>} resolved JSON-RPC result payload
    */
   async request(method, params = {}, timeoutMs = DEFAULT_TIMEOUT_MS, options = {}) {
@@ -404,6 +391,18 @@ export class GrokAcpClient {
       throw new Error('ACP client is not running');
     }
     const recycleOnTimeout = options.recycleOnTimeout !== false;
+    const rawMaxTimeout =
+      options.maxTimeoutMs ??
+      options.maxDurationMs ??
+      this.env?.GROK_ACP_MAX_TURN_TIMEOUT_MS ??
+      process.env?.GROK_ACP_MAX_TURN_TIMEOUT_MS;
+    const parsedMaxTimeout = Number(rawMaxTimeout);
+    const maxTimeoutMs =
+      Number.isFinite(parsedMaxTimeout) && parsedMaxTimeout > 0
+        ? Math.floor(parsedMaxTimeout)
+        : Math.max(timeoutMs, MAX_TURN_PROMPT_TIMEOUT_MS);
+    const deadlineAt = Date.now() + (recycleOnTimeout ? maxTimeoutMs : timeoutMs);
+
     const id = this.nextId++;
     const payload = { jsonrpc: '2.0', id, method, params };
 
@@ -411,9 +410,14 @@ export class GrokAcpClient {
       let timer = null;
       const onTimeout = () => {
         if (!this.pending.has(id)) return;
-        if (this.hasActiveWork()) {
+        const hardExpired = Date.now() >= deadlineAt;
+        if (recycleOnTimeout && !hardExpired && this.hasActiveWork()) {
           armTimer();
           return;
+        }
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
         }
         const err = new Error(`ACP timeout waiting for ${method}`);
         err.code = 'ACP_TIMEOUT';
@@ -424,17 +428,28 @@ export class GrokAcpClient {
           // Abandoning a user-turn RPC leaves the agent busy → recycle.
           this.markUnhealthy(err.message, { killProcess: true });
         }
-        // Soft timeout: leave client alive (control-plane /always-approve).
+        // Soft timeout: leave client alive (control-plane /always-approve, _x.ai/billing).
         reject(err);
       };
       const armTimer = () => {
+        if (!this.pending.has(id) && timer !== null) return;
+        if (!recycleOnTimeout) {
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(onTimeout, timeoutMs);
+          return;
+        }
+        const remainingHardMs = deadlineAt - Date.now();
+        if (remainingHardMs <= 0) {
+          onTimeout();
+          return;
+        }
+        const delayMs = Math.min(timeoutMs, remainingHardMs);
         if (timer) clearTimeout(timer);
-        timer = setTimeout(onTimeout, timeoutMs);
+        timer = setTimeout(onTimeout, delayMs);
       };
-      armTimer();
 
       this.pending.set(id, {
-        refreshTimeout: armTimer,
+        refreshTimeout: recycleOnTimeout ? armTimer : null,
         resolve: (result) => {
           if (timer) clearTimeout(timer);
           this.pending.delete(id);
@@ -446,6 +461,7 @@ export class GrokAcpClient {
           reject(error);
         },
       });
+      armTimer();
 
       this.proc.stdin.write(JSON.stringify(payload) + '\n');
     });
