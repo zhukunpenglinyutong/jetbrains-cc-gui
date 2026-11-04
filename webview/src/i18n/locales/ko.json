@@ -41,11 +41,6 @@
   },
   "chat": {
     "sendMessage": "{{provider}}에게 메시지 보내기",
-    "queue": {
-      "steerNow": "지금 보내기(현재 턴에 삽입)",
-      "steering": "현재 턴에 삽입하는 중...",
-      "steered": "현재 턴에 삽입됨"
-    },
     "steerRejected": {
       "no_active_turn": "삽입할 진행 중인 턴이 없습니다",
       "session_mismatch": "세션이 일치하지 않아 삽입하지 못했습니다",
@@ -85,7 +80,10 @@
       "reorderHint": "드래그로 순서 변경, 포커스 후 화살표 키로 조정",
       "mergedIntoDraft": "대기열 메시지가 현재 초안에 병합되었습니다",
       "attachmentsNotRestored": "대기 중인 메시지의 첨부 파일을 복원하지 못했습니다",
-      "editBlockedAttachments": "첨부 파일을 복원할 수 없어 메시지를 대기열에 그대로 둡니다"
+      "editBlockedAttachments": "첨부 파일을 복원할 수 없어 메시지를 대기열에 그대로 둡니다",
+      "steerNow": "지금 보내기(현재 턴에 삽입)",
+      "steering": "현재 턴에 삽입하는 중...",
+      "steered": "현재 턴에 삽입됨"
     },
     "closePreview": "미리보기 닫기",
     "loadingDropdown": "로딩 중...",

@@ -41,11 +41,6 @@
   },
   "chat": {
     "sendMessage": "給 {{provider}} 發送訊息",
-    "queue": {
-      "steerNow": "立即發送（插入目前回合）",
-      "steering": "正在插入目前回合...",
-      "steered": "已插入目前回合"
-    },
     "steerRejected": {
       "no_active_turn": "目前沒有進行中的回合可插入",
       "session_mismatch": "會話不符，未能插入",
@@ -85,7 +80,10 @@
       "reorderHint": "拖曳可排序，聚焦後可用方向鍵調整",
       "mergedIntoDraft": "排隊訊息已合併到目前草稿",
       "attachmentsNotRestored": "排隊訊息的附件未能回填到草稿",
-      "editBlockedAttachments": "此訊息的附件無法回填，已保留在佇列中"
+      "editBlockedAttachments": "此訊息的附件無法回填，已保留在佇列中",
+      "steerNow": "立即發送（插入目前回合）",
+      "steering": "正在插入目前回合...",
+      "steered": "已插入目前回合"
     },
     "closePreview": "關閉預覽",
     "loadingDropdown": "載入中...",

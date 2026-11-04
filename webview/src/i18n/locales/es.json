@@ -41,11 +41,6 @@
   },
   "chat": {
     "sendMessage": "Enviar mensaje a {{provider}}",
-    "queue": {
-      "steerNow": "Enviar ahora (insertar en el turno actual)",
-      "steering": "Insertando en el turno actual...",
-      "steered": "Insertado en el turno actual"
-    },
     "steerRejected": {
       "no_active_turn": "No hay un turno en curso para insertar",
       "session_mismatch": "La sesión no coincide; no se pudo insertar",
@@ -85,7 +80,10 @@
       "reorderHint": "Arrastra para reordenar, o usa las flechas tras enfocar",
       "mergedIntoDraft": "El mensaje en cola se añadió al borrador actual",
       "attachmentsNotRestored": "Los archivos adjuntos del mensaje en cola no se restauraron",
-      "editBlockedAttachments": "Sus archivos adjuntos no se pueden restaurar aquí, el mensaje se queda en la cola"
+      "editBlockedAttachments": "Sus archivos adjuntos no se pueden restaurar aquí, el mensaje se queda en la cola",
+      "steerNow": "Enviar ahora (insertar en el turno actual)",
+      "steering": "Insertando en el turno actual...",
+      "steered": "Insertado en el turno actual"
     },
     "closePreview": "Cerrar vista previa",
     "loadingDropdown": "Cargando...",

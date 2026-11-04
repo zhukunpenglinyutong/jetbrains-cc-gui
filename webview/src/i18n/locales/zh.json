@@ -58,11 +58,6 @@
   },
   "chat": {
     "sendMessage": "给 {{provider}} 发送消息",
-    "queue": {
-      "steerNow": "立即发送（插入当前回合）",
-      "steering": "正在插入当前回合...",
-      "steered": "已插入当前回合"
-    },
     "steerRejected": {
       "no_active_turn": "当前没有进行中的回合可插入",
       "session_mismatch": "会话不匹配，未能插入",
@@ -102,7 +97,10 @@
       "reorderHint": "拖动可排序，聚焦后可用方向键调整",
       "mergedIntoDraft": "排队消息已合并到当前草稿",
       "attachmentsNotRestored": "排队消息的附件未能回填到草稿",
-      "editBlockedAttachments": "该消息的附件无法回填，已保留在队列中"
+      "editBlockedAttachments": "该消息的附件无法回填，已保留在队列中",
+      "steerNow": "立即发送（插入当前回合）",
+      "steering": "正在插入当前回合...",
+      "steered": "已插入当前回合"
     },
     "closePreview": "关闭预览",
     "loadingDropdown": "加载中...",

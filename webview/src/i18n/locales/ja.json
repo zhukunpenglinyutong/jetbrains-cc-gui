@@ -41,11 +41,6 @@
   },
   "chat": {
     "sendMessage": "{{provider}}にメッセージを送信",
-    "queue": {
-      "steerNow": "今すぐ送信（現在のターンに挿入）",
-      "steering": "現在のターンに挿入しています...",
-      "steered": "現在のターンに挿入済み"
-    },
     "steerRejected": {
       "no_active_turn": "挿入できる進行中のターンがありません",
       "session_mismatch": "セッションが一致しないため挿入できませんでした",
@@ -85,7 +80,10 @@
       "reorderHint": "ドラッグで並べ替え、フォーカス後に矢印キーで調整",
       "mergedIntoDraft": "キューのメッセージを現在の下書きに統合しました",
       "attachmentsNotRestored": "キューに入れたメッセージの添付ファイルを復元できませんでした",
-      "editBlockedAttachments": "このメッセージの添付ファイルは復元できないため、キューに残したままにします"
+      "editBlockedAttachments": "このメッセージの添付ファイルは復元できないため、キューに残したままにします",
+      "steerNow": "今すぐ送信（現在のターンに挿入）",
+      "steering": "現在のターンに挿入しています...",
+      "steered": "現在のターンに挿入済み"
     },
     "closePreview": "プレビューを閉じる",
     "loadingDropdown": "読み込み中...",

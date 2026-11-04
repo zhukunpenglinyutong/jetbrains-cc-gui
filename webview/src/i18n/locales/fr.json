@@ -41,11 +41,6 @@
   },
   "chat": {
     "sendMessage": "Envoyer un message à {{provider}}",
-    "queue": {
-      "steerNow": "Envoyer maintenant (insérer dans le tour en cours)",
-      "steering": "Insertion dans le tour en cours...",
-      "steered": "Inséré dans le tour en cours"
-    },
     "steerRejected": {
       "no_active_turn": "Aucun tour en cours à insérer",
       "session_mismatch": "Session incompatible ; insertion impossible",
@@ -85,7 +80,10 @@
       "reorderHint": "Faire glisser pour réordonner, ou utiliser les flèches après avoir mis le focus",
       "mergedIntoDraft": "Le message en file d'attente a été ajouté au brouillon en cours",
       "attachmentsNotRestored": "Les pièces jointes du message en file n ont pas été restaurées",
-      "editBlockedAttachments": "Ses pièces jointes ne peuvent pas être restaurées ici, le message reste dans la file d'attente"
+      "editBlockedAttachments": "Ses pièces jointes ne peuvent pas être restaurées ici, le message reste dans la file d'attente",
+      "steerNow": "Envoyer maintenant (insérer dans le tour en cours)",
+      "steering": "Insertion dans le tour en cours...",
+      "steered": "Inséré dans le tour en cours"
     },
     "closePreview": "Fermer l'aperçu",
     "loadingDropdown": "Chargement...",

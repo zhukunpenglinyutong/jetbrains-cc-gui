@@ -58,11 +58,6 @@
   },
   "chat": {
     "sendMessage": "Send message to {{provider}}",
-    "queue": {
-      "steerNow": "Send now (steer the current turn)",
-      "steering": "Steering the current turn...",
-      "steered": "Steered into the current turn"
-    },
     "steerRejected": {
       "no_active_turn": "No live turn to steer",
       "session_mismatch": "Session mismatch; steer was not applied",
@@ -102,7 +97,10 @@
       "reorderHint": "Drag to reorder, or focus and use arrow keys",
       "mergedIntoDraft": "Queued message added to the current draft",
       "attachmentsNotRestored": "Attachments from the queued message were not restored",
-      "editBlockedAttachments": "Its attachments cannot be restored here, so the message stays in the queue"
+      "editBlockedAttachments": "Its attachments cannot be restored here, so the message stays in the queue",
+      "steerNow": "Send now (steer the current turn)",
+      "steering": "Steering the current turn...",
+      "steered": "Steered into the current turn"
     },
     "closePreview": "Close preview",
     "loadingDropdown": "Loading...",
