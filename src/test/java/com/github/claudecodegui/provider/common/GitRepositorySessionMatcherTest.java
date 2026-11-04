@@ -129,4 +129,24 @@ public class GitRepositorySessionMatcherTest {
         assertEquals(2, matcher.filterNativeThreads(response, "//SERVER/SHARE/REPO/").getAsJsonArray("data").size());
         assertEquals(2, matcher.filterNativeThreads(response, "\\\\?\\UNC\\Server\\Share\\Repo").getAsJsonArray("data").size());
     }
+
+    @Test public void normalizesGithubPathCaseButPreservesUnknownHostPaths() {
+        assertEquals("github.com/owner/repo", GitRepositorySessionMatcher.repositoryIdentityFromRemote(
+                "git@GitHub.com:Owner/Repo.git"));
+        assertEquals("github.com/owner/repo", GitRepositorySessionMatcher.repositoryIdentityFromRemote(
+                "https://github.com/owner/repo"));
+        assertEquals("private.host/Owner/Repo", GitRepositorySessionMatcher.repositoryIdentityFromRemote(
+                "https://private.host/Owner/Repo.git"));
+    }
+
+    @Test public void doesNotInheritHomeDotfilesButStillFindsNestedRepositories() throws Exception {
+        Path home = create(tmp.getRoot().toPath().resolve("home"), "https://host/team/dotfiles.git");
+        Path plain = Files.createDirectories(home.resolve("plain/src"));
+        assertFalse(new GitRepositorySessionMatcher(plain.toString(), home).hasRepository());
+        assertTrue(new GitRepositorySessionMatcher(home.toString(), home).hasRepository());
+        Path nested = create(home.resolve("project"), "https://host/team/game.git");
+        assertTrue(new GitRepositorySessionMatcher(nested.resolve(".git").toString(), home).hasRepository());
+        Path clone = create(tmp.getRoot().toPath().resolve("clone"), "https://host/team/game.git");
+        assertTrue(new GitRepositorySessionMatcher(nested.toString(), home).test(clone.toString()));
+    }
 }

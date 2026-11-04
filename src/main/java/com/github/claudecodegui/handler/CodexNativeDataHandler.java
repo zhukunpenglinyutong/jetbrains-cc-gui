@@ -76,6 +76,7 @@ public class CodexNativeDataHandler extends BaseMessageHandler {
         boolean matchRepository = "codex.listThreads".equals(method)
                 && GitRepositorySessionMatcher.isEnabled(this.context.getSettingsService());
         String projectPath = this.context.getProject() == null ? cwd : this.context.getProject().getBasePath();
+        String historyRoot = nonEmpty(this.context.resolveEffectiveWorkingDirectory(), projectPath);
         if (matchRepository) {
             params.add("projectPath", new JsonArray());
         }
@@ -83,7 +84,7 @@ public class CodexNativeDataHandler extends BaseMessageHandler {
                 method, channelId, cwd, threadId, params);
         if (matchRepository) {
             result = result.thenApplyAsync(response -> new GitRepositorySessionMatcher(projectPath)
-                    .filterNativeThreads(response, cwd), AppExecutorUtil.getAppExecutorService());
+                    .filterNativeThreads(response, historyRoot), AppExecutorUtil.getAppExecutorService());
         }
         result.whenComplete((response, failure) -> {
             JsonObject output = response == null ? new JsonObject() : response.deepCopy();

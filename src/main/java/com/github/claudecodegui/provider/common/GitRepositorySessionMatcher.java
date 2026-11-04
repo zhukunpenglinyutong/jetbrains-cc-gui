@@ -23,8 +23,20 @@ public final class GitRepositorySessionMatcher implements Predicate<String> {
     private final Map<Path, Optional<String>> repositoryIdentities = new HashMap<>();
     private final Map<String, Optional<Path>> directories = new HashMap<>();
     private final String projectRepositoryIdentity;
+    private final Path homeBoundary;
 
     public GitRepositorySessionMatcher(String projectPath) {
+        this(projectPath, Path.of(NodeDetector.resolveHomeForFileOps()));
+    }
+
+    GitRepositorySessionMatcher(String projectPath, Path homeDirectory) {
+        Path boundary;
+        try {
+            boundary = homeDirectory.toRealPath();
+        } catch (IOException error) {
+            boundary = homeDirectory.toAbsolutePath().normalize();
+        }
+        this.homeBoundary = boundary;
         this.projectRepositoryIdentity = repositoryIdentity(projectPath);
     }
 
@@ -87,7 +99,12 @@ public final class GitRepositorySessionMatcher implements Predicate<String> {
             if (!Files.isDirectory(current)) {
                 return Optional.empty();
             }
+            Path start = current;
             while (current != null) {
+                // Do not inherit a home-level dotfiles repository for unrelated projects.
+                if (current.equals(homeBoundary) && !current.equals(start)) {
+                    break;
+                }
                 // A linked worktree uses a .git file; a normal checkout uses a directory.
                 if (Files.exists(current.resolve(".git"))) {
                     return Optional.of(current);
@@ -196,6 +213,9 @@ public final class GitRepositorySessionMatcher implements Predicate<String> {
             if (path.isBlank() || java.util.Arrays.stream(path.split("/"))
                     .anyMatch(part -> part.isBlank() || part.equals(".") || part.equals(".."))) {
                 return null;
+            }
+            if (host.equalsIgnoreCase("github.com")) {
+                path = path.toLowerCase(java.util.Locale.ROOT);
             }
             int port = uri.getPort();
             boolean standard = port == -1 || scheme.equalsIgnoreCase("ssh") && port == 22

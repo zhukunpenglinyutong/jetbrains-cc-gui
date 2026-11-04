@@ -44,6 +44,31 @@ public class ClaudeHistoryRepositoryMatchingTest {
         assertEquals(project.toString(), search.findSessionHistoryCwd(cloneId, project.toString(), null));
     }
 
+    @Test public void cachedCrossDirectoryRowsRefreshOnAppendAndDeletionWithoutDirectoryMtimeDrift() throws Exception {
+        Path root = tmp.getRoot().toPath();
+        Path project = create(root.resolve("cache-project"), "https://host/team/game.git");
+        Path clone = create(root.resolve("cache-clone"), "https://host/team/game.git");
+        Path projects = Files.createDirectory(root.resolve("cache-history"));
+        String id = writeSession(projects, clone);
+        Path directory = projects.resolve(PathUtils.sanitizePath(clone.toRealPath().toString()));
+        Path transcript = directory.resolve(id + ".jsonl");
+        var modified = Files.getLastModifiedTime(directory);
+        var index = new ClaudeHistoryIndexService(projects, new ClaudeHistoryParser(), new SessionIndexManager(root.resolve("cache-index")));
+        var matcher = new GitRepositorySessionMatcher(project.toString());
+        var original = index.readProjectSessions(project.toString(), matcher);
+        assertEquals(1, original.size());
+        long oldSize = original.get(0).fileSize;
+        String line = Files.readString(transcript);
+        Files.writeString(transcript, line + line);
+        Files.setLastModifiedTime(directory, modified);
+        var updated = index.readProjectSessions(project.toString(), matcher);
+        assertEquals(1, updated.size());
+        assertTrue(updated.get(0).fileSize > oldSize);
+        Files.delete(transcript);
+        Files.setLastModifiedTime(directory, modified);
+        assertTrue(index.readProjectSessions(project.toString(), matcher).isEmpty());
+    }
+
     private static String writeSession(Path projects, Path cwd) throws Exception {
         Path directory = Files.createDirectories(projects.resolve(PathUtils.sanitizePath(cwd.toRealPath().toString())));
         String id = UUID.randomUUID().toString();

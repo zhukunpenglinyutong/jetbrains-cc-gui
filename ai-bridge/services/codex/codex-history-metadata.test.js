@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeCodexMetadataKeys, applyCodexFavorites, readFavoriteCodexThreads } from './codex-history-metadata.js';
+import { normalizeCodexMetadataKeys, applyCodexFavorites, readFavoriteCodexThreads, MAX_FAVORITE_LOOKUP_PAGES } from './codex-history-metadata.js';
 
 test('legacy keys work and direct Codex metadata wins without importing Claude identities', () => {
   const records = { [JSON.stringify({ sessionId: 'a', provider: 'codex' })]: { customTitle: 'Old' },
@@ -25,4 +25,54 @@ test('favorite lookup uses cached scoped list pages and never reads foreign indi
   assert.equal(calls, 1);
   await readFavoriteCodexThreads({ ...data, now: 30_001 });
   assert.equal(calls, 2);
+});
+
+const matchAll = rows => rows;
+test('favorites already present on page one never trigger supplemental reads', async () => {
+  const rows = [{ id: 'saved' }];
+  const result = await readFavoriteCodexThreads({ owner: {}, scope: 'p',
+    favorites: { saved: { favoritedAt: 1 } }, firstPage: { data: rows, nextCursor: 'next' },
+    matchProject: matchAll, readPage: async () => { throw new Error('must not read'); } });
+  assert.deepEqual(result, rows);
+});
+
+test('supplemental lookup stops immediately after finding all favorites', async () => {
+  let calls = 0;
+  const result = await readFavoriteCodexThreads({ owner: {}, scope: 'p',
+    favorites: { saved: {} }, firstPage: { data: [], nextCursor: 'next' }, matchProject: matchAll,
+    readPage: async () => { calls++; return { data: [{ id: 'saved' }], nextCursor: 'unnecessary' }; } });
+  assert.equal(calls, 1);
+  assert.deepEqual(result, [{ id: 'saved' }]);
+});
+
+test('unknown shared Claude favorites have a bounded native catalog lookup', async () => {
+  let calls = 0;
+  const result = await readFavoriteCodexThreads({ owner: {}, scope: 'p',
+    favorites: { 'claude-only': {} }, firstPage: { data: [], nextCursor: 'start' }, matchProject: matchAll,
+    readPage: async () => ({ data: [], nextCursor: String(++calls) }) });
+  assert.equal(calls, MAX_FAVORITE_LOOKUP_PAGES);
+  assert.deepEqual(result, []);
+});
+
+test('a later page failure returns only page one and does not cache a failed walk', async () => {
+  const owner = {};
+  let calls = 0;
+  const data = { owner, scope: 'p', favorites: { first: {}, later: {}, missing: {} },
+    firstPage: { data: [{ id: 'first' }], nextCursor: 'next' }, matchProject: matchAll,
+    readPage: async cursor => {
+      calls++;
+      if (cursor === 'next') return { data: [{ id: 'later' }], nextCursor: 'failure' };
+      throw new Error('app server unavailable');
+    } };
+  assert.deepEqual(await readFavoriteCodexThreads(data), [{ id: 'first' }]);
+  assert.deepEqual(await readFavoriteCodexThreads(data), [{ id: 'first' }]);
+  assert.equal(calls, 4);
+});
+
+test('repeated cursors terminate supplemental lookup', async () => {
+  let calls = 0;
+  await readFavoriteCodexThreads({ owner: {}, scope: 'p', favorites: { unknown: {} },
+    firstPage: { data: [], nextCursor: 'same' }, matchProject: matchAll,
+    readPage: async () => { calls++; return { data: [], nextCursor: 'same' }; } });
+  assert.equal(calls, 1);
 });

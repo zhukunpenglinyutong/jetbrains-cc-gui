@@ -853,7 +853,7 @@ test('a warm favorite catalog cannot restore a deleted rollout after upstream hi
   try {
     const data = { channelId: 'cached-favorite-deleted', cwd: testCwd,
       codexCommandPrefix: peerCommandPrefix('early-notification'), params: { projectPath: [] } };
-    const dependencies = { loadFavorites: () => ({ [thread.id]: { favoritedAt: 1 } }) };
+    const dependencies = { loadFavorites: () => ({ [thread.id]: { favoritedAt: 1 }, unknown: {} }) };
     assert.equal((await codexListThreadsPersistent(data, dependencies)).data[0].isFavorited, true);
     unlinkSync(path);
     assert.deepEqual((await codexListThreadsPersistent(data, dependencies)).data, []);
@@ -884,6 +884,28 @@ test('skipping stale first pages still resolves off-page favorites only for the 
     const page = await codexListThreadsPersistent({ ...data, params: { ...data.params, cursor: 'valid' } }, dependencies);
     assert.deepEqual(page.data.map(row => row.id), ['ordinary']);
     assert.deepEqual(cursors, [undefined, 'valid', 'favorites', 'valid']);
+  } finally {
+    CodexAppServerService.prototype.readOnly = original;
+  }
+});
+
+
+test('supplemental favorite page failures preserve a successfully loaded native first page', async () => {
+  const original = CodexAppServerService.prototype.readOnly;
+  const cursors = [];
+  CodexAppServerService.prototype.readOnly = async (method, params) => {
+    assert.equal(method, 'thread/list');
+    cursors.push(params.cursor);
+    if (params.cursor) throw new Error('supplemental list failure');
+    return { data: [{ id: 'first-page', cwd: testCwd }], nextCursor: 'failed-page' };
+  };
+  try {
+    const result = await codexListThreadsPersistent({ channelId: 'favorite-page-failure', cwd: testCwd,
+      codexCommandPrefix: peerCommandPrefix('early-notification'), params: { projectPath: [] } },
+    { loadFavorites: () => ({ unknown: {} }) });
+    assert.deepEqual(result.data.map(row => row.id), ['first-page']);
+    assert.equal(result.nextCursor, 'failed-page');
+    assert.deepEqual(cursors, [undefined, 'failed-page']);
   } finally {
     CodexAppServerService.prototype.readOnly = original;
   }

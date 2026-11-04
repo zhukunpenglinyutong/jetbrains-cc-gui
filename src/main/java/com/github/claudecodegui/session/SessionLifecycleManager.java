@@ -206,11 +206,7 @@ public class SessionLifecycleManager {
      */
     static String resolveClaudeHistoryWorkingDirectory(String sessionId, String fallbackCwd, String projectRoot,
             CodemossSettingsService settings, com.github.claudecodegui.provider.claude.ClaudeHistoryReader reader) {
-        if (!com.github.claudecodegui.provider.common.GitRepositorySessionMatcher.isEnabled(settings)) {
-            return fallbackCwd;
-        }
-        var matcher = new com.github.claudecodegui.provider.common.GitRepositorySessionMatcher(projectRoot);
-        return matcher.hasRepository() ? reader.findSessionHistoryCwd(sessionId, fallbackCwd, matcher) : fallbackCwd;
+        return reader.resolveRepositoryHistoryCwd(sessionId, fallbackCwd, projectRoot, settings);
     }
 
     public void loadHistorySession(String sessionId, String projectPath) {

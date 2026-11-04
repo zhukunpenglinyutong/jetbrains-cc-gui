@@ -1,6 +1,8 @@
 package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.provider.common.GitRepositorySessionMatcher;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.Gson;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -265,6 +267,16 @@ public class ClaudeHistoryReader {
 
     public String getProjectDataAsJson(String projectPath, Predicate<String> additionalMatch) {
         return searchService.getProjectDataAsJson(projectPath, additionalMatch);
+    }
+
+    /** Resolve only repository-authorized transcripts; shared by resume, export and delete. */
+    public String resolveRepositoryHistoryCwd(String sessionId, String currentCwd, String projectRoot,
+            CodemossSettingsService settings) {
+        if (!GitRepositorySessionMatcher.isEnabled(settings)) {
+            return currentCwd;
+        }
+        var matcher = new GitRepositorySessionMatcher(projectRoot);
+        return matcher.hasRepository() ? findSessionHistoryCwd(sessionId, currentCwd, matcher) : currentCwd;
     }
 
     /** Locates a matching repository's transcript without changing the active working directory. */

@@ -216,23 +216,31 @@ class ClaudeHistoryIndexService {
         return new ArrayList<>(sessions.subList(fromIndex, toIndex));
     }
 
-    private record CachedRepositorySessions(long loadedAt, long directoryModified,
+    private record TranscriptStamp(java.nio.file.attribute.FileTime modified, long size) { }
+    private record CachedRepositorySessions(Map<Path, TranscriptStamp> files,
             List<ClaudeHistoryReader.SessionInfo> sessions) { }
     private static final java.util.concurrent.ConcurrentHashMap<Path, CachedRepositorySessions> REPOSITORY_SESSIONS =
             new java.util.concurrent.ConcurrentHashMap<>();
 
     private List<ClaudeHistoryReader.SessionInfo> cachedRepositorySessions(Path directory) throws IOException {
-        long now = System.currentTimeMillis();
-        long modified = Files.getLastModifiedTime(directory).toMillis();
+        Map<Path, TranscriptStamp> files = new HashMap<>();
+        try (Stream<Path> paths = Files.list(directory)) {
+            for (Path path : paths.filter(p -> p.toString().endsWith(".jsonl")).toList()) {
+                BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
+                if (attributes.isRegularFile()) {
+                    files.put(path, new TranscriptStamp(attributes.lastModifiedTime(), attributes.size()));
+                }
+            }
+        }
         CachedRepositorySessions cached = REPOSITORY_SESSIONS.get(directory);
-        if (cached != null && now - cached.loadedAt() < 30_000L && cached.directoryModified() == modified) {
+        if (cached != null && cached.files().equals(files)) {
             return cached.sessions();
         }
         var sessions = scanProjectSessionsLite(directory, 0, 0).sessions;
         if (REPOSITORY_SESSIONS.size() > 512) {
             REPOSITORY_SESSIONS.clear();
         }
-        REPOSITORY_SESSIONS.put(directory, new CachedRepositorySessions(now, modified, sessions));
+        REPOSITORY_SESSIONS.put(directory, new CachedRepositorySessions(files, sessions));
         return sessions;
     }
 
