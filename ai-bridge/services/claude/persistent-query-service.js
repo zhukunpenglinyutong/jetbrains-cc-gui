@@ -64,6 +64,7 @@ import {
   processToolResultMessages,
   shouldOutputMessage,
 } from './stream-event-processor.js';
+import { describeClaudeLaunchFailure } from './windows-launch-error.js';
 import { generateSessionTitle } from '../session-title-service.js';
 import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
 
@@ -491,6 +492,11 @@ function emitSendError(runtime, error, requestContext) {
   // these before they reach the UI / Java logs.
   if (error?.stack) payload.details.stack = redactSecrets(truncateString(error.stack, 2000));
 
+  const launchFailureHint = describeClaudeLaunchFailure(error?.message);
+  if (launchFailureHint) {
+    payload.error = `${launchFailureHint}\n\n${payload.error}`;
+  }
+
   if (runtime?.stderrLines?.length) {
     const sdkErrorText = redactSecrets(runtime.stderrLines.slice(-10).join('\n'));
     payload.error = `SDK-STDERR:\n\`\`\`\n${sdkErrorText}\n\`\`\`\n\n${payload.error}`;
@@ -897,6 +903,7 @@ export const __testing = {
     setCachedQueryFn(queryFn);
   },
   notifyExpiredResume,
+  emitSendError,
   async buildRequestContext(params = {}, withAttachments = false, overrides = {}) {
     return buildRequestContext(params, withAttachments, overrides);
   },
