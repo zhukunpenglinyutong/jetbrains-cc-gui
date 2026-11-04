@@ -282,10 +282,14 @@ class SessionForkService {
         String uuidNeedle = "\"uuid\":\"" + forkPointUuid + "\"";
         int anchor = -1;
         int lineIndex = 0;
-        // Pass one stops at the anchor line; nothing after it is retained.
+        // Pass one stops at the anchor line; nothing after it is retained. The
+        // containment hit is only a candidate: the same needle can appear inside
+        // row content (a tool echoing a transcript row embeds the whole JSON,
+        // needle included), and cutting there would fork from the wrong turn.
         try (Stream<String> lines = Files.lines(source, StandardCharsets.UTF_8)) {
             for (Iterator<String> it = lines.iterator(); it.hasNext(); lineIndex++) {
-                if (it.next().contains(uuidNeedle)) {
+                String line = it.next();
+                if (line.contains(uuidNeedle) && forkPointUuid.equals(getJsonString(parseRow(line), "uuid"))) {
                     anchor = lineIndex;
                     break;
                 }
@@ -315,6 +319,18 @@ class SessionForkService {
     }
 
     /**
+     * Parse one JSONL row into an object, or null when the line is not a JSON
+     * object (a truncated tail row or foreign payload must not crash the scan).
+     */
+    private static JsonObject parseRow(String line) {
+        try {
+            return new Gson().fromJson(line, JsonObject.class);
+        } catch (JsonSyntaxException e) {
+            return null;
+        }
+    }
+
+    /**
      * Check whether one JSONL row starts a new user turn. Mirrors the frontend's
      * tool-result-only detection: user rows carrying tool results (and meta or
      * sidechain rows) belong to the assistant cycle and must not end the fork.
@@ -323,12 +339,7 @@ class SessionForkService {
      * @return true when the row is a genuine user text message.
      */
     static boolean isRealUserTextRow(String line) {
-        JsonObject row;
-        try {
-            row = new Gson().fromJson(line, JsonObject.class);
-        } catch (JsonSyntaxException e) {
-            return false;
-        }
+        JsonObject row = parseRow(line);
         if (row == null || !"user".equals(getJsonString(row, "type"))) {
             return false;
         }

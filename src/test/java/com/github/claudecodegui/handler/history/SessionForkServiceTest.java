@@ -220,6 +220,22 @@ public class SessionForkServiceTest {
     }
 
     @Test
+    public void cutIndexSkipsRowsThatEmbedTheAnchorNeedleInsideTheirContent() throws IOException {
+        // A row echoing a transcript fragment (a tool that re-reads the transcript
+        // embeds whole JSON rows) carries the anchor needle inside its content.
+        // Anchoring there instead of the real assistant row would fork from the
+        // wrong turn, so the candidate must be verified against the parsed uuid.
+        List<String> rows = new java.util.ArrayList<>(turnFixture());
+        rows.add(5, "{\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"system\","
+                + "\"content\":\"row echo\","
+                + "\"row\":{\"uuid\":\"" + A1 + "\",\"type\":\"assistant\"}}");
+
+        Path source = writeFixture(rows);
+
+        assertEquals(4, SessionForkService.resolveCutIndex(source, A1));
+    }
+
+    @Test
     public void copySessionFileAtForkPointTruncatesAndRewrites() throws IOException {
         Path source = writeFixture(turnFixture());
         Path target = source.getParent().resolve(FORK_ID + ".jsonl");
