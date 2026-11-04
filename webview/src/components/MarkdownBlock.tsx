@@ -25,6 +25,7 @@ import { ImagePreviewOverlay } from './MarkdownBlock/ImagePreviewOverlay';
 import hljs from 'highlight.js/lib/core';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
+import dart from 'highlight.js/lib/languages/dart';
 import diff from 'highlight.js/lib/languages/diff';
 import dockerfile from 'highlight.js/lib/languages/dockerfile';
 import go from 'highlight.js/lib/languages/go';
@@ -125,6 +126,7 @@ const MARKDOWN_LINK_SANITIZE_OPTIONS = {
 const highlightLanguages: Array<[string, Parameters<typeof hljs.registerLanguage>[1]]> = [
   ['bash', bash],
   ['css', css],
+  ['dart', dart],
   ['diff', diff],
   ['dockerfile', dockerfile],
   ['go', go],
@@ -152,6 +154,7 @@ hljs.registerAliases(['ts', 'tsx'], { languageName: 'typescript' });
 hljs.registerAliases(['sh', 'zsh'], { languageName: 'bash' });
 hljs.registerAliases(['html', 'xhtml', 'svg'], { languageName: 'xml' });
 hljs.registerAliases(['yml'], { languageName: 'yaml' });
+hljs.registerAliases(['flutter'], { languageName: 'dart' });
 
 // Configure marked to use syntax highlighting
 marked.use(

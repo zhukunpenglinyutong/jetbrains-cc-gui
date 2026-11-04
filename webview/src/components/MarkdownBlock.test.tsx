@@ -1033,4 +1033,28 @@ describe('MarkdownBlock linkify integration', () => {
     expect(paragraphs[0].textContent).toBe('Intro.');
     expect(paragraphs[paragraphs.length - 1].textContent).toBe('Outro.');
   });
+
+  it('syntax-highlights Dart fences and the flutter alias', () => {
+    // Dart is Flutter's language, so both tags should reach the dart grammar
+    // instead of falling back to plain text.
+    const snippet = [
+      'class Counter extends StatelessWidget {',
+      '  const Counter({super.key, required this.count});',
+      '  final int count;',
+      '}',
+    ].join('\n');
+
+    const view = render(
+      <MarkdownBlock content={'```dart\n' + snippet + '\n```'} />,
+    );
+    const dartCode = view.container.querySelector('pre code');
+    expect(dartCode?.className).toContain('language-dart');
+    expect(dartCode?.querySelectorAll('.hljs-keyword').length).toBeGreaterThan(0);
+    expect(dartCode?.textContent).toContain('StatelessWidget');
+
+    view.rerender(<MarkdownBlock content={'```flutter\n' + snippet + '\n```'} />);
+    const flutterCode = view.container.querySelector('pre code');
+    expect(flutterCode?.className).toContain('language-flutter');
+    expect(flutterCode?.querySelectorAll('.hljs-keyword').length).toBeGreaterThan(0);
+  });
 });
