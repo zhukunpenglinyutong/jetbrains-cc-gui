@@ -35,7 +35,11 @@ const PROJECT_RELATIVE_PATH_REGEX = /(?:[A-Za-z0-9_-]+\/)(?:[A-Za-z0-9._-]+\/)*[
 const FILE_WITH_LINE_REGEX = /(?:[A-Za-z]:\\(?:[^\\/:*?"<>|\r\n\s]+\\)*[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+|\/(?:[^/\s]+\/)*[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+|(?:\.\/|(?:\.\.\/)+)(?:[^/\s]+\/)*[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+|(?:[A-Za-z0-9_-]+\/)(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+|[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+):\d+(?:-\d+)?(?!:\d)/g;
 const JAVA_FQCN_REGEX = /[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*\.[A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*/g;
 const FILE_LINE_INFO_REGEX = /^(.*):(\d+)(?:-(\d+))?$/;
+const FILE_HASH_LINE_INFO_REGEX = /^(.*)#L(\d+)(?:-L?(\d+))?$/i;
 const HTTP_LINK_REGEX = /^(https?:|mailto:)/i;
+const URL_LIKE_PROTOCOL_REGEX = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARACTERS_REGEX = /[\u0000-\u001F\u007F]/g;
 const JAVA_FQCN_CANDIDATE_REGEX = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*\.[A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*$/;
 
 // Standalone filename regex: matches single filenames with common source file extensions
@@ -386,6 +390,14 @@ function collectLinkifyMatches(
   return matches;
 }
 
+function isExactFileLinkMatch(value: string): boolean {
+  const matches = collectLinkifyMatches(value, DEFAULT_FILE_LINK_CAPABILITIES, false);
+  return matches.length === 1
+    && matches[0].type === 'file'
+    && matches[0].start === 0
+    && matches[0].end === value.length;
+}
+
 function replaceTextNodeWithLinks(
   textNode: Text,
   matches: LinkifyMatch[],
@@ -427,6 +439,9 @@ function shouldSkipTextNode(textNode: Text): boolean {
 
 const FILE_URI_SCHEME_REGEX = /^file:/i;
 const WINDOWS_DRIVE_PATH_REGEX = /^[A-Za-z]:[\\/]/;
+const DEFAULT_FILE_LINK_CAPABILITIES: LinkifyCapabilities = {
+  classNavigationEnabled: false,
+};
 
 /**
  * Percent-decode an href, repeating to collapse double-encoding such as
@@ -508,6 +523,66 @@ export function isMarkdownFileNavigationHref(href: string): boolean {
   return /\.[A-Za-z0-9._-]+$/.test(normalized);
 }
 
+/**
+ * A source-file extension must not make an arbitrary URL scheme navigable. Browsers drop
+ * control characters while parsing a URL, so `java<Tab>script:` counts as a scheme too.
+ */
+function hasCustomProtocol(value: string): boolean {
+  const withoutControlCharacters = value.replace(CONTROL_CHARACTERS_REGEX, '');
+  return URL_LIKE_PROTOCOL_REGEX.test(withoutControlCharacters)
+    && !FILE_URI_SCHEME_REGEX.test(withoutControlCharacters)
+    && !WINDOWS_DRIVE_PATH_REGEX.test(withoutControlCharacters);
+}
+
+export function normalizeFileLinkHref(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+  const decodedValue = decodeHrefRepeatedly(trimmedValue);
+  if (!decodedValue || HTTP_LINK_REGEX.test(decodedValue)) {
+    return null;
+  }
+
+  // Decoding turns `+` into a space, which hides a scheme such as `web+foo:`.
+  const customProtocol = hasCustomProtocol(trimmedValue) || hasCustomProtocol(decodedValue);
+
+  // Matched before decoding: an encoded # is part of the file name, not a line fragment.
+  const hashLineMatch = FILE_HASH_LINE_INFO_REGEX.exec(trimmedValue);
+  if (hashLineMatch) {
+    const [, rawPath, lineStart, lineEnd] = hashLineMatch;
+    const path = decodeHrefRepeatedly(rawPath);
+    // The linkify patterns are ASCII-only and stop at spaces, so paths such as
+    // `CCGUI 项目/a.ts` or `Assets/脚本/Foo.cs` need the broader href check as well.
+    const isFilePath = path
+      && (isExactFileLinkMatch(path) || (!customProtocol && isMarkdownFileNavigationHref(path)));
+    if (!isFilePath) {
+      return null;
+    }
+    // Stays encoded: the bridge decodes it, and a decoded # or ? would cut a file URI short.
+    const target = lineEnd ? `${rawPath}:${lineStart}-${lineEnd}` : `${rawPath}:${lineStart}`;
+    // Java would read an invalid range as part of the file name, so open the file without a line.
+    return parseFileLinkTarget(target) ? target : rawPath;
+  }
+
+  const parsedTarget = parseFileLinkTarget(decodedValue);
+  if (parsedTarget && isExactFileLinkMatch(parsedTarget.path)) {
+    return decodedValue;
+  }
+
+  // Standalone path:line targets were checked above because they resemble schemes.
+  if (customProtocol) {
+    return null;
+  }
+
+  if (isMarkdownFileNavigationHref(trimmedValue) || isExactFileLinkMatch(decodedValue)) {
+    return trimmedValue;
+  }
+
+  return null;
+}
+
 export function parseFileLinkTarget(value: string): FileLinkTarget | null {
   const trimmedValue = value.trim();
   if (!trimmedValue) {
@@ -555,6 +630,11 @@ export function isJavaFqcnCandidate(value: string): boolean {
 }
 
 export function decorateExistingAnchors(root: Element): void {
+  // Click and tooltip handlers trust data-file-path over href, so only this function may set it.
+  root.querySelectorAll('a[data-file-path]').forEach((anchor) => {
+    anchor.removeAttribute('data-file-path');
+  });
+
   root.querySelectorAll('a[href]').forEach((anchor) => {
     const href = anchor.getAttribute('href')?.trim();
     if (!href) {
@@ -567,9 +647,11 @@ export function decorateExistingAnchors(root: Element): void {
       return;
     }
 
-    if (isMarkdownFileNavigationHref(href)) {
+    const fileTarget = normalizeFileLinkHref(href);
+    if (fileTarget) {
       anchor.classList.add('file-link');
       anchor.setAttribute('data-linkify', 'file');
+      anchor.setAttribute('data-file-path', fileTarget);
     }
   });
 }

@@ -12,6 +12,7 @@ import { useMarkdownFileLinkTooltip } from '../hooks/useMarkdownFileLinkTooltip'
 import {
   decorateExistingAnchors,
   linkifyHtml,
+  normalizeFileLinkHref,
 } from '../utils/linkify';
 import {
   getLinkifyCapabilities,
@@ -80,6 +81,10 @@ function isAllowedHrefValue(value: string): boolean {
   }
 
   if (FILE_URI_SCHEME_REGEX.test(trimmed)) {
+    return true;
+  }
+
+  if (normalizeFileLinkHref(trimmed)) {
     return true;
   }
 
