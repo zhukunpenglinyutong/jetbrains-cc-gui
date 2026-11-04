@@ -742,6 +742,12 @@
         "enabled": "已开启",
         "disabled": "已关闭",
         "hint": "关闭后，在已有消息的会话中点击新建将直接创建，不再弹出确认窗口"
+      },
+      "autoConvertSessionsOnExit": {
+        "label": "退出时自动将会话转换为 CLI",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "插件通过 SDK 创建的会话不会出现在 Claude Code CLI 的 /resume 列表中，因为它们的 entrypoint 是 sdk-cli。开启后，会在关闭 IDE 时自动转换。"
       }
     },
     "providers": "供应商管理",

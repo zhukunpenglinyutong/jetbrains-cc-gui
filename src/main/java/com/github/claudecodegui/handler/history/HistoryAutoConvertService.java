@@ -3,18 +3,15 @@ package com.github.claudecodegui.handler.history;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.github.claudecodegui.util.PathUtils;
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.DirectoryStream;
@@ -104,7 +101,19 @@ public class HistoryAutoConvertService {
     // VisibleForTesting
     static final int MAX_ENTRYPOINT_SNIFF_LINES = 50;
 
-    private final Gson gson = new Gson();
+    private final SessionConversionCore conversionCore = new SessionConversionCore();
+
+    /**
+     * Whether any early row declares a convertible entrypoint. Metadata rows —
+     * {@code summary}, {@code file-history-snapshot} — carry no entrypoint, so the
+     * scan walks forward until some row declares one (bounded by
+     * {@link #MAX_ENTRYPOINT_SNIFF_LINES}): a CLI row settles it as "already CLI",
+     * a convertible row as "convert", anything else keeps the scan going. A file
+     * that cannot be read or that declares nothing within the bound is left alone.
+     */
+    private boolean needsConversion(Path sessionFile) {
+        return conversionCore.needsConversion(sessionFile);
+    }
 
     /**
      * Resolves {@code ~/.claude/projects} at call time — never in a static field,
@@ -152,7 +161,7 @@ public class HistoryAutoConvertService {
      * @param activeSessionIdsSupplier session ids that must be skipped because a window is writing them.
      */
     // VisibleForTesting
-    HistoryAutoConvertService(
+    public HistoryAutoConvertService(
             Supplier<Path> projectsDirSupplier,
             Supplier<Set<String>> scannedProjectDirNamesSupplier,
             Supplier<Set<String>> activeSessionIdsSupplier
@@ -190,11 +199,42 @@ public class HistoryAutoConvertService {
     }
 
     /**
+     * Get project directory names using the effective working directory (custom working directory
+     * if configured, otherwise project base path). This matches what the batch converter uses.
+     *
+     * @return set of sanitized project directory names, or empty set on error
+     */
+    public static Set<String> openProjectDirectoryNamesWithEffectiveWorkingDir() {
+        try {
+            ProjectManager projectManager = ProjectManager.getInstance();
+            if (projectManager == null) {
+                return Set.of();
+            }
+            Set<String> names = new HashSet<>();
+            for (Project project : projectManager.getOpenProjects()) {
+                String basePath = project.getBasePath();
+                if (basePath != null) {
+                    // Use effective working directory like the batch converter does
+                    CodemossSettingsService settingsService = new CodemossSettingsService();
+                    String effectivePath = settingsService.getEffectiveWorkingDirectory(basePath);
+                    names.add(PathUtils.sanitizePath(PathUtils.realPath(
+                            SessionConversionService.resolveProjectPathForFileOps(effectivePath))));
+                }
+            }
+            return names;
+        } catch (Exception e) {
+            LOG.warn("[HistoryAutoConvert] Cannot enumerate open projects with effective working dir: "
+                    + e.getMessage());
+            return Set.of();
+        }
+    }
+
+    /**
      * Sessions open in any chat window of any open project. A failure to enumerate them
      * degrades to an empty set: the pre-swap stat guard still catches a writer that
      * appended during the conversion.
      */
-    private static Set<String> activeSessionIdsAcrossOpenProjects() {
+    public static Set<String> activeSessionIdsAcrossOpenProjects() {
         try {
             ProjectManager projectManager = ProjectManager.getInstance();
             if (projectManager == null) {
@@ -354,277 +394,21 @@ public class HistoryAutoConvertService {
      * <p>The head is sniffed cheaply so already-CLI sessions — the common
      * case — cost a few row reads and no rewrite.
      *
-     * <p>The session file is only ever modified by the final {@code move}, and the
-     * backup is only ever written back when it is known to be a complete copy taken
-     * from the current state of the file. Both conditions matter: a restore that used
-     * a truncated backup would replace a whole session with its own first half, which
-     * is silent, unrecoverable, and triggered by nothing more exotic than a full disk
-     * or a network home going away mid-copy.
+     * <p>Uses the shared {@link SessionConversionCore} for the actual conversion
+     * logic to ensure identical behavior between auto-convert, batch convert, and
+     * single-session convert.
      *
      * @return true when the file was rewritten
      */
     // VisibleForTesting
     boolean convertSessionFile(Path sessionFile) {
-        if (!needsConversion(sessionFile)) {
-            return false;
-        }
-
-        Path backupFile = null;
-        Path tempFile = null;
-        // Flipped to true only once the backup provably holds every byte of the
-        // source. Until then the backup is at best useless and at worst a fragment,
-        // so the catch block must leave the session file completely alone.
-        boolean backupComplete = false;
-        long backupSourceSize = 0L;
+        var activeIdsSupplier = this.activeSessionIdsSupplier;
         try {
-            backupSourceSize = Files.size(sessionFile);
-            if (backupSourceSize > this.getMaxSessionFileSizeBytes()) {
-                LOG.warn("[HistoryAutoConvert] Skipping " + sessionFile.getFileName() + ": " + backupSourceSize
-                        + " bytes exceeds the per-file limit of " + this.getMaxSessionFileSizeBytes()
-                        + "; convert it manually from the history page");
-                return false;
-            }
-            long backupSourceMtime = Files.getLastModifiedTime(sessionFile).toMillis();
-
-            Path sessionDir = sessionFile.getParent();
-            backupFile = SessionTempFiles.createPrivateTempFile(
-                    sessionDir, sessionFile.getFileName() + ".backup.", ".tmp");
-            copyBackup(sessionFile, backupFile);
-            long backupSize = Files.size(backupFile);
-            if (backupSize != backupSourceSize) {
-                // A copy that returned without throwing but wrote fewer bytes is just
-                // as unsafe as one that threw. Treat it as "no backup" rather than
-                // trusting a size we did not verify.
-                LOG.warn("[HistoryAutoConvert] Backup of " + sessionFile.getFileName() + " is short ("
-                        + backupSize + " of " + backupSourceSize + " bytes); leaving the session untouched");
-                return false;
-            }
-            backupComplete = true;
-
-            tempFile = SessionTempFiles.createPrivateTempFile(
-                    sessionDir, sessionFile.getFileName() + ".convert.", ".tmp");
-
-            this.afterCompleteBackup(sessionFile);
-
-            int modified = rewriteEntrypoint(sessionFile, tempFile);
-            if (modified == 0) {
-                Files.deleteIfExists(tempFile);
-                tempFile = null;
-                return false;
-            }
-
-            // The failure path has grew/shrank guards on the restore; the success path
-            // needs the matching guard on the swap. A writer that appended since the
-            // backup was taken would lose those rows to the old inode, and a half-written
-            // last line read mid-append would have been split across two lines in the temp
-            // file. Either change — size or mtime — abandons the conversion and leaves the
-            // newer file on disk exactly as it is.
-            if (Files.size(sessionFile) != backupSourceSize
-                    || Files.getLastModifiedTime(sessionFile).toMillis() != backupSourceMtime) {
-                LOG.warn("[HistoryAutoConvert] " + sessionFile.getFileName()
-                        + " changed during conversion; leaving the newer file alone");
-                return false;
-            }
-
-            moveReplacing(tempFile, sessionFile);
-            tempFile = null;
-            LOG.info("[HistoryAutoConvert] Converted " + sessionFile.getFileName());
-            return true;
+            var outcome = conversionCore.convertSessionFile(sessionFile, activeIdsSupplier);
+            return outcome.converted();
         } catch (IOException e) {
             LOG.warn("[HistoryAutoConvert] Failed to convert " + sessionFile + ": " + e.getMessage());
-            if (backupComplete) {
-                restoreBackup(backupFile, sessionFile, backupSourceSize);
-            } else {
-                LOG.warn("[HistoryAutoConvert] No complete backup of " + sessionFile.getFileName()
-                        + "; the session file was not touched and stays as it is on disk");
-            }
             return false;
-        } finally {
-            deleteQuietly(tempFile);
-            deleteQuietly(backupFile);
-        }
-    }
-
-    /**
-     * No-op hook, invoked once the backup is known to hold every byte of the session
-     * and the scratch temp file exists, immediately before the rewrite runs.
-     *
-     * <p>This is the first point at which a failure is still recoverable: up to here the
-     * session file is byte-for-byte what it was, and from here on the restore in
-     * {@link #convertSessionFile} is the only thing that can put it back. It exists so
-     * tests can abort at exactly that point — and, just as importantly, change the file
-     * underneath the conversion the way a concurrent writer or a truncation would.
-     * Without that second half the grew/shrank guards in {@link #restoreBackup} are
-     * unreachable: with nothing moving the file its size always still equals the size
-     * the backup was taken at.
-     *
-     * <p>Empty in production; subclasses in tests override it to inject the failure.
-     *
-     * @param sessionFile the file being converted.
-     * @throws IOException to simulate a rewrite that died after the backup was taken.
-     */
-    // VisibleForTesting
-    void afterCompleteBackup(Path sessionFile) throws IOException {
-    }
-
-    /**
-     * Copy the session file to the backup path.
-     *
-     * <p>Split out from {@link #convertSessionFile} so tests can simulate a copy that
-     * dies half way through — ENOSPC, EIO, a network share vanishing — without having
-     * to fill an actual disk.
-     *
-     * @param source session file to copy.
-     * @param backup already-created, empty destination.
-     * @throws IOException if the copy fails, possibly after writing part of the file.
-     */
-    // VisibleForTesting
-    void copyBackup(Path source, Path backup) throws IOException {
-        Files.copy(source, backup, StandardCopyOption.REPLACE_EXISTING);
-    }
-
-    /**
-     * Whether any early row declares a convertible entrypoint. Metadata rows —
-     * {@code summary}, {@code file-history-snapshot} — carry no entrypoint, so the
-     * scan walks forward until some row declares one (bounded by
-     * {@link #MAX_ENTRYPOINT_SNIFF_LINES}): a CLI row settles it as "already CLI",
-     * a convertible row as "convert", anything else keeps the scan going. A file
-     * that cannot be read or that declares nothing within the bound is left alone.
-     */
-    private boolean needsConversion(Path sessionFile) {
-        try (BufferedReader reader = Files.newBufferedReader(sessionFile, StandardCharsets.UTF_8)) {
-            String line;
-            int scanned = 0;
-            while ((line = reader.readLine()) != null && scanned++ < MAX_ENTRYPOINT_SNIFF_LINES) {
-                JsonObject row = parseRow(line);
-                if (row == null) {
-                    continue;
-                }
-                SessionEntrypoint entrypoint = SessionEntrypoint.fromValue(readEntrypoint(row));
-                if (entrypoint == SessionEntrypoint.CLI) {
-                    return false;
-                }
-                if (entrypoint.isConvertibleToCli()) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (IOException e) {
-            LOG.warn("[HistoryAutoConvert] Cannot read " + sessionFile + ": " + e.getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Rewrite the entrypoint of every convertible row into a temp file.
-     *
-     * @return number of rewritten rows
-     */
-    private int rewriteEntrypoint(Path source, Path target) throws IOException {
-        int modified = 0;
-        try (BufferedReader reader = Files.newBufferedReader(source, StandardCharsets.UTF_8);
-             BufferedWriter writer = Files.newBufferedWriter(target, StandardCharsets.UTF_8)) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                writer.write(convertLine(line));
-                writer.newLine();
-                if (isConvertedLine(line)) {
-                    modified++;
-                }
-            }
-        } catch (UncheckedIOException e) {
-            throw e.getCause();
-        }
-        return modified;
-    }
-
-    private String convertLine(String line) {
-        JsonObject row = parseRow(line);
-        if (row == null || !SessionEntrypoint.fromValue(readEntrypoint(row)).isConvertibleToCli()) {
-            return line;
-        }
-        row.addProperty(ENTRYPOINT_FIELD, ENTRYPOINT_CLI);
-        return gson.toJson(row);
-    }
-
-    private boolean isConvertedLine(String line) {
-        JsonObject row = parseRow(line);
-        return row != null && SessionEntrypoint.fromValue(readEntrypoint(row)).isConvertibleToCli();
-    }
-
-    /** Parse a JSONL row, tolerating non-JSON payloads by keeping the line verbatim. */
-    private JsonObject parseRow(String line) {
-        if (line == null || line.isBlank()) {
-            return null;
-        }
-        try {
-            return gson.fromJson(line, JsonObject.class);
-        } catch (JsonSyntaxException e) {
-            return null;
-        }
-    }
-
-    private String readEntrypoint(JsonObject row) {
-        if (!row.has(ENTRYPOINT_FIELD)) {
-            return null;
-        }
-        JsonElement value = row.get(ENTRYPOINT_FIELD);
-        return value != null && value.isJsonPrimitive() ? value.getAsString() : null;
-    }
-
-    /**
-     * Replace the target atomically, falling back to a non-atomic replace where the
-     * filesystem does not support it. A plain replace still keeps the file whole:
-     * the temp file is complete before the move.
-     */
-    private void moveReplacing(Path tempFile, Path target) throws IOException {
-        try {
-            Files.move(tempFile, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException e) {
-            Files.move(tempFile, target, StandardCopyOption.REPLACE_EXISTING);
-        }
-    }
-
-    /**
-     * Put the original file back after a failed rewrite.
-     *
-     * <p>Only called for a backup that is known to be complete — see
-     * {@link #convertSessionFile} — and even then only when the file on disk has not
-     * grown since the backup was taken. A writer that appended in the meantime would
-     * lose those rows to a restore, and rows written after T0 are worth more than the
-     * older snapshot. A file that shrank means something truncated it, and then the
-     * complete backup is the only good copy left, so that case is restored.
-     *
-     * <p>The restore is a rename rather than a copy: the scratch file sits in the
-     * same directory, so the move stays within one filesystem, and a crash during it
-     * cannot leave a half-written session behind.
-     */
-    private void restoreBackup(Path backupFile, Path sessionFile, long expectedSize) {
-        if (backupFile == null || !Files.exists(backupFile)) {
-            return;
-        }
-        try {
-            long currentSize = Files.size(sessionFile);
-            if (currentSize > expectedSize) {
-                LOG.warn("[HistoryAutoConvert] " + sessionFile.getFileName() + " grew after the backup was taken ("
-                        + currentSize + " > " + expectedSize + " bytes); not restoring the older snapshot over it");
-                return;
-            }
-            moveReplacing(backupFile, sessionFile);
-            LOG.info("[HistoryAutoConvert] Restored " + sessionFile.getFileName() + " from backup");
-        } catch (IOException e) {
-            LOG.error("[HistoryAutoConvert] Failed to restore backup for " + sessionFile + ": " + e.getMessage());
-        }
-    }
-
-    private void deleteQuietly(Path path) {
-        if (path == null) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(path);
-        } catch (IOException e) {
-            LOG.warn("[HistoryAutoConvert] Failed to delete temp file " + path + ": " + e.getMessage());
         }
     }
 }

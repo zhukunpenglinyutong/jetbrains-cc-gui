@@ -50,10 +50,15 @@ public enum SessionEntrypoint {
     /**
      * Returns whether this entrypoint can be rewritten into a CLI session.
      *
+     * <p>The CLI only hides {@code sdk-cli}, {@code sdk-ts}, and {@code sdk-py} sessions
+     * from its {@code /resume} list. Converting {@code claude-vscode} sessions rewrites
+     * files owned by the VS Code extension without any visible benefit, as the CLI does
+     * not hide them anyway.
+     *
      * @return true when conversion to CLI is supported
      */
     public boolean isConvertibleToCli() {
-        return this == SDK_CLI || this == CLAUDE_VSCODE;
+        return this == SDK_CLI;
     }
 
     /**

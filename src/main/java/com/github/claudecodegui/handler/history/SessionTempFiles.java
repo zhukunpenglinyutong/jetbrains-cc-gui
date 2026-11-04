@@ -7,6 +7,7 @@ import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * Creation of the scratch files the session converters work through.
@@ -30,6 +31,41 @@ final class SessionTempFiles {
     };
 
     private SessionTempFiles() {
+    }
+
+    private static final String BACKUP_PREFIX = ".backup.";
+    private static final String CONVERT_PREFIX = ".convert.";
+    private static final String TMP_SUFFIX = ".tmp";
+
+    /**
+     * Remove stale temporary files from a previous crashed run.
+     *
+     * <p>The worker thread may be killed mid-flight at JVM exit, leaving behind
+     * {@code *.backup.*.tmp} and {@code *.convert.*.tmp} files (each up to 64 MB).
+     * This method scans the session directory for such files and deletes them
+     * before a new conversion run starts.
+     *
+     * @param sessionDir directory containing session files.
+     */
+    static void cleanupStaleTempFiles(Path sessionDir) {
+        if (!Files.isDirectory(sessionDir)) {
+            return;
+        }
+        try (Stream<Path> files = Files.list(sessionDir)) {
+            files.filter(path -> {
+                String name = path.getFileName().toString();
+                return (name.contains(BACKUP_PREFIX) || name.contains(CONVERT_PREFIX))
+                        && name.endsWith(TMP_SUFFIX);
+            }).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException e) {
+                    // Ignore: best effort cleanup
+                }
+            });
+        } catch (IOException e) {
+            // Ignore: best effort cleanup
+        }
     }
 
     /**

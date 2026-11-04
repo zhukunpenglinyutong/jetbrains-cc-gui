@@ -396,10 +396,10 @@ describe('HistoryView batch conversion', () => {
     messageCount: 1,
     lastTimestamp: new Date().toISOString(),
     provider: 'claude',
-    entrypoint: index % 2 === 0 ? 'sdk-cli' : 'claude-vscode',
+    entrypoint: 'sdk-cli', // Only sdk-cli is convertible; claude-vscode is not converted
   });
 
-  // 50 convertible sessions plus the active one, which is never part of the batch.
+  // 50 convertible sessions (all sdk-cli) plus the active one, which is never part of the batch.
   const batchHistoryData: HistoryData = {
     success: true,
     total: 51,

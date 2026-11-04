@@ -1,9 +1,12 @@
 import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
 import { ChatHeader } from './ChatHeader';
 import { sendBridgeEvent } from '../utils/bridge';
 import { useSession } from '../contexts/SessionContext';
 import { useUIState } from '../contexts/UIStateContext';
 import { useActiveSessionEntrypoint } from '../hooks/useActiveSessionEntrypoint';
+import { useSessionProvider } from '../contexts/SubagentContext';
+import { useSettingsBasicActions } from '../components/settings/hooks/useSettingsBasicActions';
 import { CONVERTIBLE_ENTRYPOINTS } from './history/historyItemUtils';
 
 interface AppHeaderProps {
@@ -24,6 +27,11 @@ export const AppHeader = ({ sessionTitle, onNewSession, onUpdateHistoryTitle }: 
     setSettingsInitialTab, setSettingsProviderSubTab,
   } = useUIState();
   const { currentSessionId, setCustomSessionTitle, historyData } = useSession();
+  const currentProvider = useSessionProvider();
+  const { autoConvertSessionsOnExit } = useSettingsBasicActions({ currentProvider });
+
+  // Dismissible state for the convert hint
+  const [hintDismissed, setHintDismissed] = useState(false);
 
   // The snapshot the hint reads from is otherwise only filled by a manual visit to
   // the history view, which would hide the hint from its primary audience: a session
@@ -37,10 +45,20 @@ export const AppHeader = ({ sessionTitle, onNewSession, onUpdateHistoryTitle }: 
   // history snapshot the webview already holds — no extra round-trip. A session the
   // snapshot does not know yet falls back to no hint rather than a guess.
   const activeSession = historyData?.sessions?.find(s => s.sessionId === currentSessionId);
-  const convertHintVisible = currentView === 'chat'
+  const isConvertible = currentView === 'chat'
     && currentSessionId != null
     && activeSession?.entrypoint != null
     && CONVERTIBLE_ENTRYPOINTS.has(activeSession.entrypoint);
+
+  // Only show hint when: auto-convert is enabled, provider is claude, session is convertible, and not dismissed
+  const convertHintVisible = isConvertible
+    && autoConvertSessionsOnExit
+    && currentProvider === 'claude'
+    && !hintDismissed;
+
+  const handleDismissHint = () => {
+    setHintDismissed(true);
+  };
 
   return (
     <ChatHeader
@@ -64,6 +82,7 @@ export const AppHeader = ({ sessionTitle, onNewSession, onUpdateHistoryTitle }: 
           onUpdateHistoryTitle(currentSessionId, newTitle);
         }
       }}
+      onDismissConvertHint={handleDismissHint}
     />
   );
 };

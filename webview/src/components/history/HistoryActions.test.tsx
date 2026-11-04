@@ -3,6 +3,7 @@ import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HistoryActions } from './HistoryActions';
+import { SessionIdContext } from '../../contexts/SubagentContext';
 
 // HistoryActions receives `t` as a prop rather than through useTranslation, so the
 // translations live here. Unresolvable keys fall through to defaultValue, mirroring
@@ -40,7 +41,14 @@ const renderActions = (overrides: Partial<React.ComponentProps<typeof HistoryAct
     onConvertAllToCliSessions: vi.fn(),
     ...overrides,
   };
-  return { props, ...render(<HistoryActions {...props} />) };
+  return {
+    props,
+    ...render(
+      <SessionIdContext.Provider value={{ currentSessionId: 'test-session', currentProvider: 'claude' }}>
+        <HistoryActions {...props} />
+      </SessionIdContext.Provider>
+    ),
+  };
 };
 
 // The button's accessible name is the tooltip (aria-label wins over the visible label),

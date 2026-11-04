@@ -441,6 +441,11 @@
         "enabled": "사용",
         "disabled": "사용 안 함",
         "hint": "정규화된 원격 호스트, 소유자, 저장소가 같은 다른 디렉터리의 Codex 및 Claude Code 기록도 포함합니다. Git 정보를 읽을 수 없으면 작업 디렉터리로 매칭합니다."
+      "autoConvertSessionsOnExit": {
+        "label": "IDE 종료 시 세션을 CLI로 자동 변환",
+        "enabled": "활성화",
+        "disabled": "비활성화",
+        "hint": "플러그인이 SDK를 통해 만든 세션은 entrypoint가 sdk-cli라서 Claude Code CLI의 /resume 목록에 표시되지 않습니다. 활성화하면 IDE를 닫을 때 자동으로 변환됩니다."
       }
     },
     "providers": "제공자 관리",

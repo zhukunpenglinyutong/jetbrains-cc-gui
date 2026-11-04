@@ -78,6 +78,9 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
   // Watchdog that releases the in-flight guard if the backend never answers. Held in a
   // ref so the answer handler can cancel it without being re-created.
   const batchWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks whether the watchdog has already fired (showed the timeout error toast).
+  // If true, we suppress the success toast when the delayed backend response arrives.
+  const watchdogFiredRef = useRef(false);
   // The answer handler is installed once and must stay stable, so the values it reads
   // come from refs. Re-registering it on every language or provider change used to
   // unregister it (cleanup sets it to undefined) in the middle of a running batch: the
@@ -314,6 +317,7 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
       return;
     }
     isBatchConvertingRef.current = true;
+    watchdogFiredRef.current = false;
     setIsBatchConverting(true);
 
     // A rejected event is a synchronous failure, not a slow run: the command never
@@ -340,6 +344,7 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
         return;
       }
       isBatchConvertingRef.current = false;
+      watchdogFiredRef.current = true;
       setIsBatchConverting(false);
       window.addToast?.(tRef.current('history.convertAllTimeout', {
         defaultValue: 'The conversion took too long. The list has been refreshed, please check it in a moment.',
@@ -410,7 +415,10 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
         failed,
         defaultValue: `Converted ${converted} of ${total} session(s), ${failed} failed`,
       }), 'warning');
-    } else {
+    } else if (!watchdogFiredRef.current) {
+      // Only show success toast if the watchdog hasn't already fired (which would
+      // have shown a timeout error toast). This prevents the contradictory "took too
+      // long" error followed by a success toast.
       window.addToast?.(tRef.current('history.convertAllSuccess', {
         count: converted,
         defaultValue: `${converted} session(s) converted, now visible in CLI /resume`,

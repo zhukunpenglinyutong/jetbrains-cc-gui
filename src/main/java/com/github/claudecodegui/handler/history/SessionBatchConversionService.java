@@ -132,8 +132,11 @@ class SessionBatchConversionService {
         } catch (RuntimeException rejected) {
             // The executor refused the task outright (IDE shutting down). Release the guard,
             // otherwise every later batch would be rejected as "already running" forever.
+            // Send a result back so the frontend button is re-enabled immediately instead of
+            // waiting for the 30s watchdog to fire.
             LOG.warn("[SessionBatchConversion] Batch not scheduled: " + rejected.getMessage());
             this.running.set(false);
+            this.resultSink.accept(executorRejectedResult(rejected.getMessage()));
         }
     }
 
@@ -201,6 +204,11 @@ class SessionBatchConversionService {
 
             if (resultCode == null) {
                 converted++;
+            } else if (resultCode == ConversionResultCode.SESSION_ACTIVE) {
+                // Session became active during conversion (e.g., user opened it in a tab).
+                // The PR description says this should land in 'skipped', not 'failed'.
+                skipped++;
+                skippedSessionIds.add(sessionId);
             } else {
                 failed++;
                 failedSessionIds.add(sessionId);
@@ -250,6 +258,14 @@ class SessionBatchConversionService {
         result.addProperty("status", STATUS_FAILED);
         addCounts(result, 0, 0, 0, 0);
         result.addProperty("error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+        return result;
+    }
+
+    private static JsonObject executorRejectedResult(String reason) {
+        JsonObject result = new JsonObject();
+        result.addProperty("status", STATUS_FAILED);
+        addCounts(result, 0, 0, 0, 0);
+        result.addProperty("error", "Executor rejected the batch: " + reason);
         return result;
     }
 

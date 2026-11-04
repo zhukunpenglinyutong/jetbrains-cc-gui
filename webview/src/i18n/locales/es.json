@@ -441,6 +441,11 @@
         "enabled": "Activado",
         "disabled": "Desactivado",
         "hint": "Incluye el historial de Codex y Claude Code de otros directorios con el mismo host remoto, propietario y repositorio normalizados. Si no hay información de Git, se agrupa por directorio de trabajo."
+      "autoConvertSessionsOnExit": {
+        "label": "Convertir sesiones a CLI al salir",
+        "enabled": "Activado",
+        "disabled": "Desactivado",
+        "hint": "Las sesiones creadas por el plugin mediante el SDK no aparecen en la lista /resume de Claude Code CLI porque su entrypoint es sdk-cli. Si se activa, se convierten automáticamente al cerrar el IDE."
       }
     },
     "providers": "Gestión de proveedores",

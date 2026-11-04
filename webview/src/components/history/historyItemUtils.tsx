@@ -1,8 +1,9 @@
 // Shared pure helpers for history list rows and dialogs.
 
-// Entrypoints the backend conversion service actually knows how to rewrite
-// (SessionConversionService only matches sdk-cli / claude-vscode patterns).
-export const CONVERTIBLE_ENTRYPOINTS = new Set(['sdk-cli', 'claude-vscode']);
+// Entrypoints the backend conversion service actually knows how to rewrite.
+// The CLI only hides sdk-cli (and sdk-ts, sdk-py) sessions from /resume.
+// Converting claude-vscode sessions provides no benefit since the CLI doesn't hide them.
+export const CONVERTIBLE_ENTRYPOINTS = new Set(['sdk-cli']);
 
 const HIGHLIGHT_MARK_STYLE: React.CSSProperties = {
   backgroundColor: '#ffd700',

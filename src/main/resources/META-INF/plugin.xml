@@ -101,6 +101,12 @@
              orphaned Cmd+V KEYUP and forwards clipboard images to the webview. -->
         <postStartupActivity implementation="com.github.claudecodegui.startup.PasteKeyInitializer"/>
 
+        <!-- Opt-in: convert SDK-created Claude sessions to CLI entries on project startup,
+             BEFORE tabs are restored and their SDK daemons start writing. This ensures
+             the session the user was working in when they quit gets converted (the exit
+             hook skipped it because the daemon was still running). -->
+        <postStartupActivity implementation="com.github.claudecodegui.startup.AutoConvertOnStartupListener"/>
+
         <!-- StatusBar widget for task notification -->
         <statusBarWidgetFactory id="ClaudeStatusBarWidget"
                                 implementation="com.github.claudecodegui.notifications.ClaudeStatusBarWidget$Factory"/>

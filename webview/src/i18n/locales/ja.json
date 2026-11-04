@@ -441,6 +441,11 @@
         "enabled": "有効",
         "disabled": "無効",
         "hint": "正規化したリモートホスト、オーナー、リポジトリが同じ他のディレクトリの Codex と Claude Code の履歴も表示します。Git 情報を取得できない場合は作業ディレクトリで照合します。"
+      "autoConvertSessionsOnExit": {
+        "label": "IDE 終了時にセッションを CLI へ自動変換",
+        "enabled": "有効",
+        "disabled": "無効",
+        "hint": "プラグインが SDK 経由で作成したセッションは entrypoint が sdk-cli のため、Claude Code CLI の /resume リストに表示されません。有効にすると、IDE を閉じる際に自動的に変換されます。"
       }
     },
     "providers": "プロバイダー管理",

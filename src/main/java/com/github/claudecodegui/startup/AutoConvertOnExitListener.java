@@ -5,6 +5,8 @@ import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.intellij.ide.AppLifecycleListener;
 import com.intellij.openapi.diagnostic.Logger;
 
+import java.nio.file.Paths;
+
 /**
  * Converts SDK-created Claude sessions to CLI-recognizable ones when the IDE exits,
  * so they show up in Claude Code's {@code /resume} list.
@@ -98,7 +100,11 @@ public class AutoConvertOnExitListener implements AppLifecycleListener {
 
     private void runConversion() {
         try {
-            new HistoryAutoConvertService().convertAllProjects();
+            new HistoryAutoConvertService(
+                    () -> Paths.get(com.github.claudecodegui.bridge.NodeDetector.resolveHomeForFileOps(), ".claude", "projects"),
+                    HistoryAutoConvertService::openProjectDirectoryNamesWithEffectiveWorkingDir,
+                    HistoryAutoConvertService::activeSessionIdsAcrossOpenProjects
+            ).convertAllProjects();
         } catch (Exception e) {
             // Never surface a shutdown failure to the user.
             LOG.warn("[AutoConvertOnExit] Auto conversion failed: " + e.getMessage());
