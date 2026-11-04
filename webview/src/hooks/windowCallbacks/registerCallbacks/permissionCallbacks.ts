@@ -237,6 +237,10 @@ export function registerPermissionCallbacks(options: PermissionCallbacks, getTra
         if (options.currentProviderRef.current === 'codex' && (!warningRoot || !currentThread || warningRoot === currentThread)
             && event.payload?.message) {
           const method = event.payload.method;
+          // Match the native TUI: successful reviews need no attention; subscribers already received the event.
+          if (method === 'guardianWarning' && event.payload.message.startsWith('Automatic approval review approved (')) {
+            return;
+          }
           if (method === 'configWarning' || method === 'deprecationNotice') {
             // Startup and thread loading can repeat the same notice. Other warnings stay independent.
             const key = JSON.stringify([event.channelId, event.sessionEpoch, event.runtimeBackend, event.payload.message]);

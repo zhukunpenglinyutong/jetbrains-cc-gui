@@ -219,6 +219,8 @@ yield / notify 续接遵循以下边界：
 
 Java 为每个原生反向请求生成由 channel、session epoch、runtime generation 和原始 RPC ID 组成的不透明 `interactionKey`，并为当前页面签发 `dialogToken`。页面只回传这两个 opaque 值；Java 从 registry 取回真实 RPC ID、thread/turn/item 身份后发送 typed result，重复、过期或旧页面回答会被拒绝。JCEF 重建时 registry 保留 deadline 与 params 快照，`frontend_ready` 后按 `deliverySequence` 重放尚未 resolved 的请求并轮换 `dialogToken`；原生 `serverRequest/resolved` 事件携带相同 token，页面只关闭对应弹窗。
 
+`guardianWarning` 同时承载自动审批成功与异常的诊断文字。前端与原生 TUI 保持一致，仅对以 `Automatic approval review approved (` 开头的该类通知静默处理，避免每次自动批准都弹出黄色警告；Node/Java 转发及 `codex-runtime-event` 分发仍保留脱敏后的事件。拒绝、超时、失败、中断及未知格式继续显示警告，普通 `warning` 不按这段文字过滤。此展示规则不改变审批设置或原生反向请求的交互流程。
+
 每次用户提交由 webview 生成 `clientMessageId`，乐观气泡、Java `SessionState`、Node `codex.send` 与原生 `turn/start.clientUserMessageId` 共用该值。原生 `userMessage.clientId` 到达后按身份更新原气泡，重复文本不会被当成同一条提交；不确定失败不会自动重发。
 
 Codex 的 `requestUserInput` 和 MCP elicitation 在提交前写入插件私有 `~/.codemoss/codex-privacy/` 版本化索引。每次写入独立 `<home 指纹>.record.<uuid>.json` 原子记录，Node/Java 兼容读取旧 `<home 指纹>.json`，避免多个窗口的独立 Node 进程互相覆盖分类。索引只包含宿主/home scope、thread、turn、call、item、question 身份和 secret 标记，不写问题正文、答案或答案 hash；原生仍可能把已提交答案保存到自己的 transcript，插件不宣称可以控制该存储。页面草稿会跳过 `isSecret` 问题，索引原子写入失败时不会转发交互。
