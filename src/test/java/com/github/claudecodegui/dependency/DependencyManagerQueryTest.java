@@ -80,6 +80,14 @@ public class DependencyManagerQueryTest {
         assertThrows(IOException.class, () -> DependencyManager.parseVersionInfo("{}"));
     }
 
+    @Test public void parsesTheArrayShapeEmittedByMultiFieldNpmView() throws Exception {
+        var result = DependencyManager.parseVersionInfo("[{\"versions\":[\"0.3.220\",\"0.3.307\",\"0.4.0-beta.1\"],\"dist-tags.latest\":\"0.3.307\"}]");
+        assertEquals(java.util.List.of("0.3.307", "0.3.220"), result.versions());
+        assertEquals("0.3.307", result.latestVersion());
+        assertNull(result.error());
+        assertThrows(IOException.class, () -> DependencyManager.parseVersionInfo("[]"));
+    }
+
     private ProcessBuilder peer(String mode, String file) throws Exception {
         String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
         Path classes = temporary.newFolder("query-peer-classes").toPath();

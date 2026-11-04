@@ -7,6 +7,7 @@ import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.WslPathUtil;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
@@ -265,7 +266,11 @@ public class DependencyManager {
 
     static VersionQueryResult parseVersionInfo(String output) throws IOException {
         try {
-            JsonObject metadata = JsonParser.parseString(output).getAsJsonObject();
+            JsonElement parsed = JsonParser.parseString(output);
+            // npm >= 7 wraps multi-field `view` output in a single-element array; older npm returns the object directly.
+            JsonObject metadata = parsed.isJsonArray()
+                ? parsed.getAsJsonArray().get(0).getAsJsonObject()
+                : parsed.getAsJsonObject();
             List<String> versions = parseVersionList(metadata.get("versions").toString());
             if (versions.isEmpty()) {
                 throw new IOException("NPM_QUERY_INVALID_RESPONSE");
