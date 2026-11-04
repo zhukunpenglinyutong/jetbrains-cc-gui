@@ -26,6 +26,13 @@ only calls `hooks/list`. It verifies default enablement, exact native keys,
 independent handlers, disable/re-enable preferences for both declaration formats,
 and unchanged JSON declarations. It requires no account or model request and
 does not execute hook commands. Missing CLI configuration is an explicit skip.
+
+The fixture resolves its temporary home to the physical path before deriving
+workspace paths, native keys, or child-process home variables. This includes
+macOS temporary directories reached through `/var` and other linked temp roots.
+Cleanup retains the original temporary path and validates it against the original
+temp root, so canonicalization cannot invalidate the cleanup boundary check.
+
 The catalog keeps runtime-version verification conservative because installed
 CLI versions can differ. Codemoss directory scripts are not discovered, edited,
 or toggled: no supported executor contract has been established. Unreleased

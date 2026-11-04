@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -12,40 +12,43 @@ test('Codex 0.163.0 reads per-handler user state for TOML and JSON hooks', {
   skip: !cli && 'Set CC_GUI_HOOKS_TEST_CLI to the pinned 0.163.0 CLI entry point',
   timeout: 60_000,
 }, async () => {
-  const home = await mkdtemp(path.join(tmpdir(), 'ccgui-hooks-contract-'));
-  const codexHome = path.join(home, '.codex');
-  const cwd = path.join(home, 'project');
-  await mkdir(codexHome);
-  await mkdir(cwd);
-  const configPath = path.join(codexHome, 'config.toml');
-  const hooksPath = path.join(codexHome, 'hooks.json');
-  const original = 'cli_auth_credentials_store="file"\n'
-    + '[[hooks.PreToolUse]]\nmatcher="Bash"\n'
-    + 'hooks=[{type="command",command="echo first-fixture"},'
-    + '{type="command",command="echo second-fixture"}]\n';
-  const declaration = JSON.stringify({ hooks: { Stop: [{ hooks: [
-    { type: 'command', command: 'echo json-fixture' },
-  ] }] } });
-  await writeFile(configPath, original);
-  await writeFile(hooksPath, declaration);
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-    !/API_KEY|TOKEN|SECRET|AUTHORIZATION|NODE_OPTIONS/.test(key.toUpperCase())));
-  Object.assign(env, { HOME: home, USERPROFILE: home, CODEX_HOME: codexHome });
-  const command = /\.m?js$/i.test(cli) ? [process.execPath, cli] : [cli];
-  async function list() {
-    const client = new CodexAppServerClient({ command, env, cwd,
-      requestTimeoutMs: 15_000, contextSupportProbe: async () => false });
-    try {
-      const response = await client.request('hooks/list', { cwds: [cwd] });
-      assert.equal(response.data.length, 1);
-      assert.deepEqual(response.data[0].errors, []);
-      return response.data[0].hooks;
-    } finally {
-      client.close();
-      await client.waitForExit();
-    }
-  }
+  const temporaryRoot = tmpdir();
+  const temporaryHome = await mkdtemp(path.join(temporaryRoot, 'ccgui-hooks-contract-'));
   try {
+    // Native hook keys use physical paths, including when macOS tmpdir() is under /var.
+    const home = await realpath(temporaryHome);
+    const codexHome = path.join(home, '.codex');
+    const cwd = path.join(home, 'project');
+    await mkdir(codexHome);
+    await mkdir(cwd);
+    const configPath = path.join(codexHome, 'config.toml');
+    const hooksPath = path.join(codexHome, 'hooks.json');
+    const original = 'cli_auth_credentials_store="file"\n'
+      + '[[hooks.PreToolUse]]\nmatcher="Bash"\n'
+      + 'hooks=[{type="command",command="echo first-fixture"},'
+      + '{type="command",command="echo second-fixture"}]\n';
+    const declaration = JSON.stringify({ hooks: { Stop: [{ hooks: [
+      { type: 'command', command: 'echo json-fixture' },
+    ] }] } });
+    await writeFile(configPath, original);
+    await writeFile(hooksPath, declaration);
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+      !/API_KEY|TOKEN|SECRET|AUTHORIZATION|NODE_OPTIONS/.test(key.toUpperCase())));
+    Object.assign(env, { HOME: home, USERPROFILE: home, CODEX_HOME: codexHome });
+    const command = /\.m?js$/i.test(cli) ? [process.execPath, cli] : [cli];
+    async function list() {
+      const client = new CodexAppServerClient({ command, env, cwd,
+        requestTimeoutMs: 15_000, contextSupportProbe: async () => false });
+      try {
+        const response = await client.request('hooks/list', { cwds: [cwd] });
+        assert.equal(response.data.length, 1);
+        assert.deepEqual(response.data[0].errors, []);
+        return response.data[0].hooks;
+      } finally {
+        client.close();
+        await client.waitForExit();
+      }
+    }
     const firstKey = `${configPath}:pre_tool_use:0:0`;
     const secondKey = `${configPath}:pre_tool_use:0:1`;
     const jsonKey = `${hooksPath}:stop:0:0`;
@@ -70,10 +73,10 @@ test('Codex 0.163.0 reads per-handler user state for TOML and JSON hooks', {
     items = await list();
     assert.deepEqual(new Set(items.map(item => item.key)), new Set([firstKey, secondKey, jsonKey]));
     assert.ok(items.every(item => item.enabled === true));
-
   } finally {
-    const resolved = path.resolve(home);
-    assert.equal(path.dirname(resolved), path.resolve(tmpdir()));
+    // Cleanup keeps the lexical path so the boundary check also works for linked temp roots.
+    const resolved = path.resolve(temporaryHome);
+    assert.equal(path.dirname(resolved), path.resolve(temporaryRoot));
     assert.ok(path.basename(resolved).startsWith('ccgui-hooks-contract-'));
     await rm(resolved, { recursive: true, force: true });
   }
