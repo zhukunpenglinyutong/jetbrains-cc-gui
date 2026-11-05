@@ -62,6 +62,31 @@ public class AgentFileMatcherTest {
         assertFalse(AgentFileMatcher.isRelatedToSession(agentFile, SESSION_ID));
     }
 
+    /** Pin the scan window's edges: a hit on line 20 counts, line 21 does not. */
+    @Test
+    public void matchesAReferenceOnTheLastScannedLine() throws IOException {
+        List<String> lines = new ArrayList<>();
+        for (int i = 0; i < 19; i++) {
+            lines.add("{\"uuid\":\"filler-" + i + "\"}");
+        }
+        lines.add("{\"uuid\":\"edge\",\"sessionId\":\"" + SESSION_ID + "\"}");
+        Path agentFile = writeAgentFile("agent-line-20.jsonl", lines);
+
+        assertTrue(AgentFileMatcher.isRelatedToSession(agentFile, SESSION_ID));
+    }
+
+    @Test
+    public void ignoresAReferenceJustPastTheLastScannedLine() throws IOException {
+        List<String> lines = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            lines.add("{\"uuid\":\"filler-" + i + "\"}");
+        }
+        lines.add("{\"uuid\":\"edge\",\"sessionId\":\"" + SESSION_ID + "\"}");
+        Path agentFile = writeAgentFile("agent-line-21.jsonl", lines);
+
+        assertFalse(AgentFileMatcher.isRelatedToSession(agentFile, SESSION_ID));
+    }
+
     @Test
     public void rejectsNeighbouringSessionId() throws IOException {
         Path agentFile = writeAgentFile("agent-neighbour.jsonl", List.of(

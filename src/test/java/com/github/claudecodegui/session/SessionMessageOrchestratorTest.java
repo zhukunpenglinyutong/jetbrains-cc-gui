@@ -243,6 +243,46 @@ public class SessionMessageOrchestratorTest {
     }
 
     @Test
+    public void updateAssistantMessageUuidsRetriesWhenTheBridgeReadThrows() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-1");
+        state.setCwd("/workspace");
+
+        JsonObject streamedRaw = new JsonObject();
+        streamedRaw.add("message", new JsonObject());
+        ClaudeSession.Message streamedAssistant = new ClaudeSession.Message(
+                ClaudeSession.Message.Type.ASSISTANT, "收到", streamedRaw);
+        state.addMessage(streamedAssistant);
+
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+        callbackFacade.setCallback(callback);
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        // A crashed bridge read is an exception, not a null tail: the retry loop
+        // must absorb it, spend its budget, and never stamp a bogus uuid.
+        historyAccess.recentAssistantFailure = new RuntimeException("bridge died");
+
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.updateAssistantMessageUuids();
+
+        assertEquals(3, historyAccess.recentAssistantMessagesRequests.get());
+        assertFalse(streamedAssistant.raw.has("uuid"));
+        assertTrue(callback.messageUuidPatches.isEmpty());
+    }
+
+    @Test
     public void updateAssistantMessageUuidsGivesUpAfterTheRetryBudget() {
         SessionState state = new SessionState();
         state.setProvider("claude");
@@ -3217,6 +3257,8 @@ public class SessionMessageOrchestratorTest {
         private JsonArray recentAssistantRows;
         /** Reads that report an unfinished transcript tail before rows become available. */
         private int recentAssistantIncompleteTimes;
+        /** Failure to throw instead of returning rows, covering the bridge-crash path. */
+        private RuntimeException recentAssistantFailure;
         private Runnable recentAssistantReadHook;
         private JsonObject messagesPage;
         private final AtomicInteger earlierPageRequests = new AtomicInteger();
@@ -3256,6 +3298,9 @@ public class SessionMessageOrchestratorTest {
         @Override
         public JsonArray getRecentClaudeAssistantMessages(String sessionId, String cwd, int limit) {
             recentAssistantMessagesRequests.incrementAndGet();
+            if (this.recentAssistantFailure != null) {
+                throw this.recentAssistantFailure;
+            }
             if (this.recentAssistantReadHook != null) {
                 this.recentAssistantReadHook.run();
             }

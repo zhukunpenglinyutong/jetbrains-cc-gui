@@ -1232,6 +1232,48 @@ describe('useSessionManagement', () => {
     expect(body.title.endsWith('history.forkedTitleSuffix')).toBe(true);
   });
 
+  it('forkHistorySession drops an emoji instead of persisting half of one', () => {
+    const mocks = createMocks();
+    // 25 units of base + an emoji pair + one trailing unit; the base window is
+    // 50 - 24 (suffix key) = 26 units, so the cut lands inside the pair.
+    const longTitle = 'x'.repeat(25) + '😀' + 'y';
+    const historyData = {
+      success: true,
+      sessions: [
+        {
+          sessionId: 'history-1',
+          title: longTitle,
+          provider: 'claude',
+          messageCount: 1,
+          lastTimestamp: Date.now(),
+        },
+      ],
+      total: 1,
+    } as unknown as HistoryData;
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData,
+        currentSessionId: null,
+        ...mocks,
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.forkHistorySession('history-1');
+    });
+
+    const [payload] = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls[0] as string[];
+    const body = JSON.parse(payload.slice('fork_session:'.length));
+    // The whole pair is backed out of the cut: 25 units of base + the suffix,
+    // with neither half of the emoji anywhere in the payload.
+    expect(body.title).toBe('x'.repeat(25) + 'history.forkedTitleSuffix');
+    expect(body.title.length).toBeLessThanOrEqual(50);
+  });
+
   it('forkHistorySession omits the title field for untitled sessions and keeps the row provider', () => {
     const mocks = createMocks();
     const historyData = {

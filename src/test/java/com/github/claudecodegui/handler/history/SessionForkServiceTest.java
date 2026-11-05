@@ -1,39 +1,151 @@
 package com.github.claudecodegui.handler.history;
 
+import com.github.claudecodegui.handler.NodeJsServiceCaller;
+import com.github.claudecodegui.handler.core.HandlerContext;
+import com.intellij.openapi.application.Application;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.project.Project;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.IOException;
+import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Coverage for the pure pieces of session forking: the per-row id rewrite and the
- * stream copy that materializes the fork file. The wider service needs a live
- * {@code ~/.claude/projects} tree and a Node bridge, so its orchestration is kept
- * thin and untested here, mirroring {@link SessionConversionServiceTest}.
+ * Coverage for session forking: the pure pieces (per-row id rewrite, the stream
+ * copy that materializes the fork file) and the orchestration — payload
+ * validation, error routing, the temp-home file scan, and the best-effort title
+ * application — against a temporary {@code ~/.claude} tree with a fake bridge.
  */
 public class SessionForkServiceTest {
 
     private static final String SOURCE_ID = "11111111-2222-3333-4444-555555555555";
     private static final String FORK_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
-    // The tested paths (rewriteRowForFork, copySessionFile) touch neither the
+    // The pure paths (rewriteRowForFork, copySessionFile) touch neither the
     // HandlerContext nor the Node service caller, so nulls are fine.
     private final SessionForkService service = new SessionForkService(null, null);
 
     @Rule
     public TemporaryFolder temporaryFolder = new TemporaryFolder();
+
+    private Application previousApplication;
+
+    /** Run fork work synchronously; forkSession dispatches on the pooled thread. */
+    @Before
+    public void runPooledTasksInline() {
+        previousApplication = ApplicationManager.getApplication();
+        Application application = (Application) Proxy.newProxyInstance(Application.class.getClassLoader(),
+                new Class<?>[]{Application.class}, (proxy, method, arguments) -> {
+                    if ("executeOnPooledThread".equals(method.getName())) {
+                        ((Runnable) arguments[0]).run();
+                        return CompletableFuture.completedFuture(null);
+                    }
+                    if (method.getReturnType() == boolean.class) {
+                        return false;
+                    }
+                    return null;
+                });
+        ApplicationManager.setApplication(application);
+    }
+
+    @After
+    public void restoreApplication() {
+        ApplicationManager.setApplication(previousApplication);
+    }
+
+    /** Records the window.onForkResult scripts the service queues. */
+    private static final class RecordingJsCallback implements HandlerContext.JsCallback {
+        final List<String> scripts = new ArrayList<>();
+
+        @Override
+        public void callJavaScript(String functionName, String... args) {
+        }
+
+        @Override
+        public String escapeJs(String str) {
+            return str;
+        }
+
+        @Override
+        public void executeJavaScript(String jsCode) {
+            scripts.add(jsCode);
+        }
+    }
+
+    /** One title-service reply, recorded instead of spawned. */
+    private static final class RecordingTitleCaller extends NodeJsServiceCaller {
+        final List<String> titles = new ArrayList<>();
+        String nextReply = "{\"success\":true}";
+
+        RecordingTitleCaller() {
+            super(null);
+        }
+
+        @Override
+        public String callNodeJsTitlesServiceWithParams(String functionName, String sessionId,
+                                                        String customTitle) {
+            titles.add(customTitle);
+            return nextReply;
+        }
+    }
+
+    /** A live-enough Project stub: sendForkResult only queues scripts for one. */
+    private static Project stubProject() {
+        return (Project) Proxy.newProxyInstance(Project.class.getClassLoader(),
+                new Class<?>[]{Project.class}, (proxy, method, arguments) -> {
+                    if ("isDisposed".equals(method.getName())) {
+                        return false;
+                    }
+                    if (method.getReturnType() == boolean.class) {
+                        return false;
+                    }
+                    return null;
+                });
+    }
+
+    /** Extract the JSON payload of the (only) queued window.onForkResult call. */
+    private static String forkResultJson(RecordingJsCallback callback) {
+        assertEquals(1, callback.scripts.size());
+        Matcher matcher = Pattern.compile("window\\.onForkResult\\('(.*?)'\\)").matcher(callback.scripts.get(0));
+        assertTrue("expected a queued onForkResult script: " + callback.scripts, matcher.find());
+        return matcher.group(1);
+    }
+
+    private Path claudeHomeRoot;
+
+    /** The temp {@code ~/.claude/projects} tree; one home per test, idempotent. */
+    private Path newClaudeHome() throws IOException {
+        if (claudeHomeRoot == null) {
+            claudeHomeRoot = temporaryFolder.newFolder("claude-home").toPath();
+        }
+        return Files.createDirectories(claudeHomeRoot.resolve(".claude").resolve("projects"));
+    }
+
+    private Path claudeHomeRoot() throws IOException {
+        newClaudeHome();
+        return claudeHomeRoot;
+    }
 
     @Test
     public void rewriteRowReplacesTopLevelSessionId() {
@@ -404,5 +516,229 @@ public class SessionForkServiceTest {
         assertFalse(SessionForkService.isRealUserTextRow(
                 "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[]}}"));
         assertFalse(SessionForkService.isRealUserTextRow("not json at all"));
+    }
+
+    @Test
+    public void truncateForkTitleCutsByCodeUnitsWithoutSplittingSurrogatePairs() {
+        assertNull(SessionForkService.truncateForkTitle(null));
+        assertEquals("short", SessionForkService.truncateForkTitle("short"));
+        // Exactly at the limit: untouched.
+        assertEquals("x".repeat(SessionForkService.MAX_TITLE_LENGTH),
+                SessionForkService.truncateForkTitle("x".repeat(SessionForkService.MAX_TITLE_LENGTH)));
+
+        // 49 units + one emoji pair: the cut would split the pair, so it backs off
+        // to 49 and drops the emoji entirely instead of persisting half of it.
+        String emojiAtCut = "x".repeat(SessionForkService.MAX_TITLE_LENGTH - 1) + "😀";
+        String truncated = SessionForkService.truncateForkTitle(emojiAtCut);
+        assertEquals(SessionForkService.MAX_TITLE_LENGTH - 1, truncated.length());
+        assertFalse(truncated.contains("😀"));
+
+        // The pair already inside the window survives intact; the trailing unit is
+        // dropped because the pair occupies the last two slots of the window.
+        String emojiInside = "x".repeat(SessionForkService.MAX_TITLE_LENGTH - 2) + "😀y";
+        String kept = SessionForkService.truncateForkTitle(emojiInside);
+        assertEquals(SessionForkService.MAX_TITLE_LENGTH, kept.length());
+        assertTrue(kept.contains("😀"));
+        assertFalse("the pair must survive complete",
+                Character.isHighSurrogate(kept.charAt(kept.length() - 1)));
+    }
+
+    @Test
+    public void forkSessionRejectsAnUnparseablePayloadWithTheGenericCode() {
+        RecordingJsCallback callback = new RecordingJsCallback();
+        SessionForkService forkService = new SessionForkService(
+                new HandlerContext(stubProject(), null, null, null, callback), null);
+
+        forkService.forkSession("{not json", null);
+
+        assertEquals("FORK_FAILED", forkResultCode(callback));
+    }
+
+    @Test
+    public void forkSessionRejectsAnInvalidSessionId() {
+        RecordingJsCallback callback = new RecordingJsCallback();
+        SessionForkService forkService = new SessionForkService(
+                new HandlerContext(stubProject(), null, null, null, callback), null);
+
+        forkService.forkSession("{\"sessionId\":\"../escape\"}", null);
+
+        assertEquals("INVALID_SESSION_ID", forkResultCode(callback));
+    }
+
+    @Test
+    public void forkSessionRejectsAnInvalidForkPointUuid() {
+        RecordingJsCallback callback = new RecordingJsCallback();
+        SessionForkService forkService = new SessionForkService(
+                new HandlerContext(stubProject(), null, null, null, callback), null);
+
+        forkService.forkSession("{\"sessionId\":\"" + SOURCE_ID + "\",\"forkPointUuid\":\"a/b\"}", null);
+
+        assertEquals("INVALID_SESSION_ID", forkResultCode(callback));
+    }
+
+    @Test
+    public void forkSessionRejectsAnUnsupportedProvider() {
+        RecordingJsCallback callback = new RecordingJsCallback();
+        SessionForkService forkService = new SessionForkService(
+                new HandlerContext(stubProject(), null, null, null, callback), null);
+
+        forkService.forkSession("{\"sessionId\":\"" + SOURCE_ID + "\",\"provider\":\"codex\"}", null);
+
+        assertEquals("UNSUPPORTED_PROVIDER", forkResultCode(callback));
+    }
+
+    @Test
+    public void forkSessionReportsAMissingSession() throws IOException {
+        RecordingJsCallback callback = new RecordingJsCallback();
+        SessionForkService forkService = new SessionForkService(
+                new HandlerContext(stubProject(), null, null, null, callback), null);
+
+        forkService.forkSession("{\"sessionId\":\"" + SOURCE_ID + "\"}", null,
+                claudeHomeRoot());
+
+        assertEquals("SESSION_NOT_FOUND", forkResultCode(callback));
+    }
+
+    @Test
+    public void forkSessionReportsAnUnreadableProjectsDirectoryAsForkFailed() throws Exception {
+        // A permissions problem must not masquerade as "session not found": the
+        // finder now propagates IO errors and the caller routes them to FORK_FAILED.
+        Path claudeHome = newClaudeHome();
+        java.util.Set<java.nio.file.attribute.PosixFilePermission> restore =
+                Files.getPosixFilePermissions(claudeHome);
+        Files.setPosixFilePermissions(claudeHome, PosixFilePermissions.fromString("---------"));
+        RecordingJsCallback callback = new RecordingJsCallback();
+        SessionForkService forkService = new SessionForkService(
+                new HandlerContext(stubProject(), null, null, null, callback), null);
+        try {
+            forkService.forkSession("{\"sessionId\":\"" + SOURCE_ID + "\"}", null,
+                    claudeHome.getParent().getParent());
+        } finally {
+            Files.setPosixFilePermissions(claudeHome, restore);
+        }
+
+        assertEquals("FORK_FAILED", forkResultCode(callback));
+    }
+
+    @Test
+    public void forkSessionForksASessionFoundByScanningTheTempHome() throws IOException {
+        Path projectDir = newClaudeHome().resolve("whatever-key");
+        Files.createDirectories(projectDir);
+        Path source = projectDir.resolve(SOURCE_ID + ".jsonl");
+        Files.write(source, List.of(
+                "{\"uuid\":\"u1\",\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"user\"}",
+                "{\"uuid\":\"u2\",\"parentUuid\":\"u1\",\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"assistant\"}"
+        ), StandardCharsets.UTF_8);
+
+        RecordingJsCallback callback = new RecordingJsCallback();
+        RecordingTitleCaller caller = new RecordingTitleCaller();
+        SessionForkService forkService = new SessionForkService(
+                new HandlerContext(stubProject(), null, null, null, callback), caller);
+
+        // No projectPath: the scan-all-projects branch has to find the file.
+        forkService.forkSession("{\"sessionId\":\"" + SOURCE_ID + "\"}", null,
+                claudeHomeRoot());
+
+        String result = forkResultJson(callback);
+        assertTrue(result.contains("\"success\":true"));
+        assertFalse(result.contains(SOURCE_ID));
+        // The fork lands next to its source under the temp home, ids rewritten.
+        String newSessionId = result.replaceAll(".*\"newSessionId\":\"([^\"]+)\".*", "$1");
+        Path forkFile = projectDir.resolve(newSessionId + ".jsonl");
+        assertTrue(Files.exists(forkFile));
+        assertTrue(Files.readString(forkFile, StandardCharsets.UTF_8).contains("\"sessionId\":\"" + newSessionId + "\""));
+        assertNoTempFiles(projectDir);
+    }
+
+    @Test
+    public void forkSessionReportsAMissingForkPoint() throws IOException {
+        Path projectDir = newClaudeHome().resolve("whatever-key");
+        Files.createDirectories(projectDir);
+        Files.write(projectDir.resolve(SOURCE_ID + ".jsonl"), List.of(
+                "{\"uuid\":\"u1\",\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"user\"}"
+        ), StandardCharsets.UTF_8);
+
+        RecordingJsCallback callback = new RecordingJsCallback();
+        SessionForkService forkService = new SessionForkService(
+                new HandlerContext(stubProject(), null, null, null, callback), null);
+
+        forkService.forkSession(
+                "{\"sessionId\":\"" + SOURCE_ID + "\",\"forkPointUuid\":\"" + FORK_ID + "\"}", null,
+                claudeHomeRoot());
+
+        assertEquals("FORK_POINT_NOT_FOUND", forkResultCode(callback));
+    }
+
+    @Test
+    public void forkSessionTruncatesTheTitleBeforeTheTitlesService() throws IOException {
+        Path projectDir = newClaudeHome().resolve("whatever-key");
+        Files.createDirectories(projectDir);
+        Files.write(projectDir.resolve(SOURCE_ID + ".jsonl"),
+                List.of("{\"uuid\":\"u1\",\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"user\"}"),
+                StandardCharsets.UTF_8);
+
+        RecordingJsCallback callback = new RecordingJsCallback();
+        RecordingTitleCaller caller = new RecordingTitleCaller();
+        SessionForkService forkService = new SessionForkService(
+                new HandlerContext(stubProject(), null, null, null, callback), caller);
+
+        String longTitle = "t".repeat(SessionForkService.MAX_TITLE_LENGTH) + "😀tail";
+        forkService.forkSession("{\"sessionId\":\"" + SOURCE_ID + "\",\"title\":\"" + longTitle + "\"}", null,
+                claudeHomeRoot());
+
+        assertTrue("fork success must not depend on the title",
+                forkResultJson(callback).contains("\"success\":true"));
+        // The service received at most the 50-unit limit, without a split pair.
+        assertEquals(1, caller.titles.size());
+        String sent = caller.titles.get(0);
+        assertTrue("title must fit the service limit: " + sent.length(),
+                sent.length() <= SessionForkService.MAX_TITLE_LENGTH);
+        assertFalse("no split surrogate may be persisted",
+                Character.isHighSurrogate(sent.charAt(sent.length() - 1)));
+    }
+
+    @Test
+    public void forkSessionKeepsTheForkUsableWhenTheTitleServiceRejectsTheTitle() throws IOException {
+        Path projectDir = newClaudeHome().resolve("whatever-key");
+        Files.createDirectories(projectDir);
+        Files.write(projectDir.resolve(SOURCE_ID + ".jsonl"),
+                List.of("{\"uuid\":\"u1\",\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"user\"}"),
+                StandardCharsets.UTF_8);
+
+        RecordingJsCallback callback = new RecordingJsCallback();
+        RecordingTitleCaller caller = new RecordingTitleCaller();
+        caller.nextReply = "{\"success\":false,\"error\":\"Title too long\"}";
+        SessionForkService forkService = new SessionForkService(
+                new HandlerContext(stubProject(), null, null, null, callback), caller);
+
+        forkService.forkSession("{\"sessionId\":\"" + SOURCE_ID + "\",\"title\":\"fork title\"}", null,
+                claudeHomeRoot());
+
+        assertTrue("a rejected title must not fail the fork",
+                forkResultJson(callback).contains("\"success\":true"));
+    }
+
+    @Test
+    public void copySessionFileFailsOnAMissingSourceWithoutLeavingTempFiles() throws IOException {
+        Path dir = temporaryFolder.newFolder("project-missing").toPath();
+        Path missingSource = dir.resolve(SOURCE_ID + ".jsonl");
+        Path target = dir.resolve(FORK_ID + ".jsonl");
+
+        try {
+            service.copySessionFile(missingSource, target, SOURCE_ID, FORK_ID, null);
+            throw new AssertionError("a missing source must fail the copy");
+        } catch (IOException expected) {
+            // NoSuchFileException or a wrapped equivalent — both are fine.
+        }
+
+        assertFalse(Files.exists(target));
+        assertNoTempFiles(dir);
+    }
+
+    private static String forkResultCode(RecordingJsCallback callback) {
+        String json = forkResultJson(callback);
+        Matcher matcher = Pattern.compile("\"errorCode\":\"([^\"]+)\"").matcher(json);
+        assertTrue("expected an errorCode in: " + json, matcher.find());
+        return matcher.group(1);
     }
 }
