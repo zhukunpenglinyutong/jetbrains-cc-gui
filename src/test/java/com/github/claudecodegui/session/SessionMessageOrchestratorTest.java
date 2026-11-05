@@ -283,6 +283,66 @@ public class SessionMessageOrchestratorTest {
     }
 
     @Test
+    public void updateAssistantMessageUuidsKeepsRetryingAfterAPartialSuccess() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-1");
+        state.setCwd("/workspace");
+
+        JsonObject firstRaw = new JsonObject();
+        firstRaw.add("message", new JsonObject());
+        ClaudeSession.Message first = new ClaudeSession.Message(
+                ClaudeSession.Message.Type.ASSISTANT, "first reply", firstRaw);
+        state.addMessage(first);
+        JsonObject secondRaw = new JsonObject();
+        secondRaw.add("message", new JsonObject());
+        ClaudeSession.Message second = new ClaudeSession.Message(
+                ClaudeSession.Message.Type.ASSISTANT, "second reply", secondRaw);
+        state.addMessage(second);
+
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+        callbackFacade.setCallback(callback);
+
+        JsonArray firstReadRows = new JsonArray();
+        JsonObject rowOne = new JsonObject();
+        rowOne.addProperty("uuid", "row-1");
+        rowOne.addProperty("text", "first reply");
+        firstReadRows.add(rowOne);
+        JsonArray bothRows = firstReadRows.deepCopy();
+        JsonObject rowTwo = new JsonObject();
+        rowTwo.addProperty("uuid", "row-2");
+        rowTwo.addProperty("text", "second reply");
+        bothRows.add(rowTwo);
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        historyAccess.recentAssistantRows = firstReadRows;
+        // The transcript tail lands gradually: the second read carries both rows.
+        historyAccess.recentAssistantReadHook = () -> {
+            if (historyAccess.recentAssistantMessagesRequests.get() >= 1) {
+                historyAccess.recentAssistantRows = bothRows;
+            }
+        };
+
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.updateAssistantMessageUuids();
+
+        assertEquals("row-1", first.raw.get("uuid").getAsString());
+        assertEquals("row-2", second.raw.get("uuid").getAsString());
+        assertEquals(List.of("first reply|row-1", "second reply|row-2"), callback.messageUuidPatches);
+    }
+
+    @Test
     public void updateAssistantMessageUuidsGivesUpAfterTheRetryBudget() {
         SessionState state = new SessionState();
         state.setProvider("claude");

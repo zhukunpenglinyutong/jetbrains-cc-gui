@@ -429,6 +429,24 @@ public class SessionForkServiceTest {
                 .contains("\"parentSessionId\":\"" + FORK_ID + "\""));
     }
 
+    @Test
+    public void copySidechainsIgnoresForeignEntriesBesideTheSubagentsDirectory() throws IOException {
+        // The delete path removes only the known subagents subtree; copying anything
+        // else would leave fork directories it can never fully clean up.
+        Path projectDir = temporaryFolder.newFolder("sidechain-foreign").toPath();
+        Path subagents = Files.createDirectories(projectDir.resolve(SOURCE_ID).resolve("subagents"));
+        Files.write(subagents.resolve("agent-a1.jsonl"), List.of(
+                        "{\"uuid\":\"s1\",\"sessionId\":\"" + SOURCE_ID + "\"}"),
+                StandardCharsets.UTF_8);
+        Files.write(projectDir.resolve(SOURCE_ID).resolve("foreign.json"), List.of("keep out"),
+                StandardCharsets.UTF_8);
+
+        service.copySidechains(projectDir, SOURCE_ID, FORK_ID);
+
+        assertFalse(Files.exists(projectDir.resolve(FORK_ID).resolve("foreign.json")));
+        assertTrue(Files.exists(projectDir.resolve(FORK_ID).resolve("subagents").resolve("agent-a1.jsonl")));
+    }
+
     /** Legacy layout: flat {@code agent-*.jsonl} referencing the session, copied under a fresh name. */
     @Test
     public void copySidechainsCopiesLegacyAgentFilesUnderFreshNames() throws IOException {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import { registerSessionAndSdkCallbacks } from './sessionCallbacks';
 
@@ -38,6 +38,10 @@ describe('session fork result', () => {
       options,
       { current: ((key: string) => key) as UseWindowCallbacksOptions['t'] },
     );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('auto-opens a message-level fork and keeps its title for the switch', () => {
@@ -110,5 +114,25 @@ describe('session fork result', () => {
     expect(window.__pendingForkProvider).toBeUndefined();
     expect(addToast).toHaveBeenCalledWith('history.forkErrors.FORK_FAILED', 'error');
     expect(window.__forkInFlight).toBe(false);
+  });
+
+  it('retires the 60s backstop timer when a successful result arrives', () => {
+    const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout');
+    window.__forkInFlightTimer = 123;
+
+    window.onForkResult!(JSON.stringify({ success: true, newSessionId: 'fork-5' }));
+
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(123);
+    expect(window.__forkInFlightTimer).toBeUndefined();
+  });
+
+  it('retires the backstop timer on a failed result too', () => {
+    const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout');
+    window.__forkInFlightTimer = 456;
+
+    window.onForkResult!(JSON.stringify({ success: false, errorCode: 'FORK_FAILED' }));
+
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(456);
+    expect(window.__forkInFlightTimer).toBeUndefined();
   });
 });
