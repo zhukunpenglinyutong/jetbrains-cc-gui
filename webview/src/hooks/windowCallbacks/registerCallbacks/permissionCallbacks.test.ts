@@ -110,6 +110,59 @@ it('shows native warnings for the current Codex root without changing loading or
   expect(result.current.currentPermissionRequest).toBeNull();
 });
 
+it('keeps approved automatic reviews quiet during bootstrap and live delivery while retaining their events', () => {
+  const { result } = renderHook(() => useDialogManagement({ t }));
+  const addToast = vi.fn();
+  const onEvent = vi.fn();
+  const approved = 'Automatic approval review approved (risk: low, authorization: high): Read the requested directory.';
+  const events = [
+    approved,
+    approved,
+    'Automatic approval review approved (risk: low, authorization: [redacted]): 仅读取监听器元数据。',
+    'Automatic approval review approved (risk: medium, authorization: high): Run the requested checks.',
+  ].map(message => ({
+    kind: 'nativeWarning', channelId: 'C', sessionEpoch: 'epoch', rootThreadId: 'root', threadId: 'root',
+    payload: { method: 'guardianWarning', message },
+  }));
+  window.__pendingCodexRuntimeEvents = [JSON.stringify(events[0])];
+  window.addEventListener('codex-runtime-event', onEvent);
+  try {
+    act(() => registerPermissionCallbacks({ ...result.current, addToast,
+      currentProviderRef: { current: 'codex' }, currentSessionIdRef: { current: 'root' } }));
+    for (const event of events.slice(1)) {
+      act(() => window.onCodexRuntimeEvent?.(JSON.stringify(event)));
+    }
+    expect(addToast).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.map(([event]) => event.detail)).toEqual(events);
+    expect(window.__pendingCodexRuntimeEvents).toEqual([]);
+    expect(sendBridgeEvent).not.toHaveBeenCalled();
+    expect(result.current.currentPermissionRequest).toBeNull();
+  } finally {
+    window.removeEventListener('codex-runtime-event', onEvent);
+  }
+});
+
+it.each([
+  ['guardianWarning', 'Automatic approval review denied (risk: high): The action is outside the requested scope.'],
+  ['guardianWarning', 'Automatic approval review timed out while evaluating the requested approval.'],
+  ['guardianWarning', 'Automatic approval review failed: reviewer unavailable.'],
+  ['guardianWarning', 'Automatic approval review aborted while evaluating the requested approval.'],
+  ['guardianWarning', 'Automatic approval review stopped after repeated denials.'],
+  ['guardianWarning', 'Automatic approval review approved without a recognized result format.'],
+  ['guardianWarning', 'An unknown reviewer warning requires attention.'],
+  ['warning', 'Automatic approval review approved (risk: low, authorization: high): An ordinary warning.'],
+])('retains actionable or unrecognized %s notifications: %s', (method, message) => {
+  const { result } = renderHook(() => useDialogManagement({ t }));
+  const addToast = vi.fn();
+  act(() => registerPermissionCallbacks({ ...result.current, addToast,
+    currentProviderRef: { current: 'codex' }, currentSessionIdRef: { current: 'root' } }));
+  act(() => window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'nativeWarning', rootThreadId: 'root',
+    payload: { method, message } })));
+  expect(addToast).toHaveBeenCalledExactlyOnceWith(message, 'warning');
+  expect(sendBridgeEvent).not.toHaveBeenCalled();
+  expect(result.current.currentPermissionRequest).toBeNull();
+});
+
 it('coalesces repeated configuration toasts while retaining raw events and distinct notices', () => {
   const { result } = renderHook(() => useDialogManagement({ t }));
   const addToast = vi.fn();
