@@ -2,10 +2,10 @@ package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.bridge.NodeProcessRunner;
 import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.provider.common.SessionHistoryIncompleteException;
 import com.github.claudecodegui.provider.common.SessionHistoryNotFoundException;
-import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -13,16 +13,12 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.function.Supplier;
@@ -46,6 +42,7 @@ class ClaudeSessionQueryService {
     private final ProcessManager processManager;
     private final EnvironmentConfigurator envConfigurator;
     private final ClaudeJsonOutputExtractor outputExtractor;
+    private final int processTimeoutSeconds;
 
     ClaudeSessionQueryService(
             Logger log,
@@ -56,6 +53,20 @@ class ClaudeSessionQueryService {
             EnvironmentConfigurator envConfigurator,
             ClaudeJsonOutputExtractor outputExtractor
     ) {
+        this(log, gson, nodeDetector, sdkDirSupplier, processManager, envConfigurator, outputExtractor,
+                PROCESS_TIMEOUT_SECONDS);
+    }
+
+    ClaudeSessionQueryService(
+            Logger log,
+            Gson gson,
+            NodeDetector nodeDetector,
+            Supplier<File> sdkDirSupplier,
+            ProcessManager processManager,
+            EnvironmentConfigurator envConfigurator,
+            ClaudeJsonOutputExtractor outputExtractor,
+            int processTimeoutSeconds
+    ) {
         this.log = log;
         this.gson = gson;
         this.nodeDetector = nodeDetector;
@@ -63,6 +74,7 @@ class ClaudeSessionQueryService {
         this.processManager = processManager;
         this.envConfigurator = envConfigurator;
         this.outputExtractor = outputExtractor;
+        this.processTimeoutSeconds = processTimeoutSeconds;
     }
 
     List<JsonObject> getSessionMessages(String sessionId, String cwd) {
@@ -211,36 +223,11 @@ class ClaudeSessionQueryService {
         envConfigurator.updateProcessEnvironment(pb, node);
 
         // L5 fix: register with ProcessManager so cleanupAllProcesses sees this child.
-        String channelId = ProcessManager.newChannelId("claude-session-query");
-        Process process = null;
-        StringBuilder output = new StringBuilder();
-        try {
-            process = pb.start();
-            processManager.registerProcess(channelId, process);
+        // NodeProcessRunner fails rather than returning stdout it has not read to EOF.
+        NodeProcessRunner.Result result = NodeProcessRunner.run(
+                pb, processManager, "claude-session-query", null, processTimeoutSeconds);
 
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
-            }
-
-            boolean finished = process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            if (!finished) {
-                PlatformUtils.terminateProcess(process);
-                throw new RuntimeException("Node.js process timed out after " + PROCESS_TIMEOUT_SECONDS + " seconds");
-            }
-        } finally {
-            if (process != null) {
-                if (process.isAlive()) {
-                    PlatformUtils.terminateProcess(process);
-                }
-                processManager.unregisterProcess(channelId, process);
-            }
-        }
-
-        String outputStr = output.toString().trim();
+        String outputStr = result.output().trim();
         log.debug("[" + logPrefix + "] Raw output length: " + outputStr.length());
         if (log.isDebugEnabled()) {
             log.debug("[" + logPrefix + "] Raw output (first 300 chars): "

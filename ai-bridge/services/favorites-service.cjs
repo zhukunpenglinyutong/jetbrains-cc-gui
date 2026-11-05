@@ -106,6 +106,32 @@ function removeFavorite(sessionId) {
 }
 
 /**
+ * Remove several favorites with a single read and write
+ * @param {string[]} sessionIds - Session IDs
+ * @returns {boolean} Whether the operation succeeded
+ */
+function removeFavorites(sessionIds) {
+  try {
+    const favorites = loadFavorites();
+    const present = (Array.isArray(sessionIds) ? sessionIds : []).filter(id => favorites[id]);
+    if (present.length === 0) {
+      return true;
+    }
+
+    const removed = new Set(present);
+    const remaining = Object.fromEntries(
+      Object.entries(favorites).filter(([sessionId]) => !removed.has(sessionId))
+    );
+    saveFavorites(remaining);
+    console.log('[Favorites] Removed favorites:', present.length);
+    return true;
+  } catch (error) {
+    console.error('[Favorites] Failed to remove favorites:', error.message);
+    return false;
+  }
+}
+
+/**
  * Toggle favorite status
  * @param {string} sessionId - Session ID
  * @returns {Object} { success: boolean, isFavorited: boolean }
@@ -172,6 +198,7 @@ module.exports = {
   loadFavorites,
   addFavorite,
   removeFavorite,
+  removeFavorites,
   toggleFavorite,
   isFavorited,
   getFavoritedAt,

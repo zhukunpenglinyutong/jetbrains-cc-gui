@@ -824,9 +824,9 @@ public class WebviewInitializer {
         return !disposed && !frontendReady && webviewActive;
     }
 
-    /** Resume startup bridge fallback when a previously hidden tab becomes active. */
+    /** Restore the renderer bridge when a previously hidden tab becomes active. */
     public void onTabActivated() {
-        if (host.isDisposed() || host.isFrontendReady() || !host.isWebviewActive()) {
+        if (host.isDisposed() || !host.isWebviewActive()) {
             return;
         }
 
@@ -842,6 +842,9 @@ public class WebviewInitializer {
             }
             currentPageGeneration = currentBridges.getPageGeneration();
         }
+        // Remote JCEF can replace a hidden page without onLoadEnd. Backend readiness then
+        // describes the old document, so restore the idempotent bootstrap before trusting it.
+        injectBridgeFallback(currentBrowser, currentBridges, currentPageGeneration, 0);
         scheduleBridgeInjectionRetries(currentBrowser, currentBridges, currentPageGeneration);
     }
 

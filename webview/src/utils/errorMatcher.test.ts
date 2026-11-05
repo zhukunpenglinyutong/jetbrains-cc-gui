@@ -85,6 +85,25 @@ describe('matchErrorPattern', () => {
     ]);
   });
 
+  it('matches the Claude Code minimum version error and offers the in-place SDK update', () => {
+    const text = 'API Error: 400 {"type":"error","error":{"type":"invalid_request_error",'
+      + '"message":"Claude Code 2.1.39 does not support this model; version 2.1.280 or newer is required. '
+      + 'Run \'claude update\', or update the Claude desktop app, then try again.",'
+      + '"details":{"error_code":"claude_code_version_too_old"}},"request_id":"req_0123456789"}';
+    const result = matchErrorPattern(text);
+    expect(result?.code).toBe('claudeCodeVersionTooOld');
+    const updateSdk = result?.solutions.find((s) => s.key === 'updateSdk');
+    expect(updateSdk?.recommended).toBe(true);
+    expect(updateSdk?.steps).toEqual([{ kind: 'action', action: 'updateClaudeSdk' }]);
+    const updateCustomCli = result?.solutions.find((s) => s.key === 'updateCustomCli');
+    expect(updateCustomCli?.steps).toEqual([{ kind: 'command', command: 'claude update' }]);
+  });
+
+  it('matches the Claude Code minimum version message without the error code', () => {
+    const text = 'Claude Code 2.1.39 does not support this model; version 2.1.280 or newer is required.';
+    expect(matchErrorPattern(text)?.code).toBe('claudeCodeVersionTooOld');
+  });
+
   it('does not treat a clean exit line without the CLI hint as a CLI install problem', () => {
     // The bare transport line also appears for ordinary closes; only the
     // runtime failure text carries the actionable hint.

@@ -149,6 +149,8 @@ public class ClaudeProviderOperations {
                 throw new IllegalArgumentException("Special provider '" + id + "' cannot be updated via update_provider");
             }
 
+            // What the provider wrote into settings.json is known only from its pre-edit config.
+            JsonObject providerBeforeEdit = context.getSettingsService().getSavedClaudeProvider(id);
             context.getSettingsService().updateClaudeProvider(id, updates);
 
             boolean syncedActiveProvider = false;
@@ -156,7 +158,7 @@ public class ClaudeProviderOperations {
             if (activeProvider != null &&
                         activeProvider.has("id") &&
                         id.equals(activeProvider.get("id").getAsString())) {
-                context.getSettingsService().applyProviderToClaudeSettings(activeProvider);
+                context.getSettingsService().applyProviderToClaudeSettings(activeProvider, providerBeforeEdit);
                 syncedActiveProvider = true;
             }
 

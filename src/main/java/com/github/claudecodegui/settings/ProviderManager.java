@@ -540,7 +540,56 @@ public class ProviderManager {
             LOG.info("[ProviderManager] No active provider to sync to .claude/settings.json");
             return;
         }
-        claudeSettingsManager.applyProviderToClaudeSettings(activeProvider);
+        applyProviderToClaudeSettings(activeProvider);
+    }
+
+    /**
+     * Apply {@code provider} to settings.json, removing the env values the provider that last
+     * wrote the file put there (unless the user has changed them since).
+     */
+    public void applyProviderToClaudeSettings(JsonObject provider) throws IOException {
+        applyProviderToClaudeSettings(provider, null);
+    }
+
+    /**
+     * Re-apply a provider that was just edited. The saved config already holds the edit, so the
+     * values it wrote into settings.json come from {@code providerBeforeEdit}; a value removed
+     * by the edit is then removed from settings.json as well.
+     *
+     * @param provider           the provider to apply
+     * @param providerBeforeEdit a copy of the same provider taken before the edit, or null
+     */
+    public void applyProviderToClaudeSettings(JsonObject provider, JsonObject providerBeforeEdit) throws IOException {
+        claudeSettingsManager.applyProviderToClaudeSettings(provider, id ->
+                providerBeforeEdit != null && id.equals(idOf(providerBeforeEdit))
+                        ? providerBeforeEdit
+                        : getSavedClaudeProvider(id));
+    }
+
+    private static String idOf(JsonObject provider) {
+        return provider.has("id") && provider.get("id").isJsonPrimitive() ? provider.get("id").getAsString() : null;
+    }
+
+    /**
+     * @param id a provider id
+     * @return a copy of the saved provider with that id (with {@code id} set), or null when there is none
+     */
+    public JsonObject getSavedClaudeProvider(String id) {
+        JsonObject config = configReader.apply(null);
+        if (id == null || config == null || !config.has("claude") || !config.get("claude").isJsonObject()) {
+            return null;
+        }
+        JsonObject claude = config.getAsJsonObject("claude");
+        if (!claude.has("providers") || !claude.get("providers").isJsonObject()) {
+            return null;
+        }
+        JsonObject providers = claude.getAsJsonObject("providers");
+        if (!providers.has(id) || !providers.get(id).isJsonObject()) {
+            return null;
+        }
+        JsonObject provider = providers.getAsJsonObject(id).deepCopy();
+        provider.addProperty("id", id);
+        return provider;
     }
 
     /**

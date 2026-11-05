@@ -1,12 +1,22 @@
-import { memo, useState, useCallback } from 'react';
+import { memo, useState, useCallback, useSyncExternalStore } from 'react';
 import type { TFunction } from 'i18next';
 import type { DiagnosticPattern, DiagnosticStep } from '../../utils/errorMatcher';
 import { copyToClipboard } from '../../utils/copyUtils';
 import { openBrowserExternal } from '../../utils/bridge';
+import {
+  getClaudeSdkUpdateSnapshot,
+  requestClaudeSdkUpdate,
+  subscribeClaudeSdkUpdate,
+  type ClaudeSdkUpdateResult,
+} from '../../utils/claudeSdkUpdate';
+
+/** When the error was shown; the host sends epoch milliseconds, history may carry ISO strings. */
+type ErrorTimestamp = string | number;
 
 interface ErrorDiagnosticCardProps {
   t: TFunction;
   pattern: DiagnosticPattern;
+  errorTimestamp?: ErrorTimestamp;
   onNavigateToDependencySettings?: () => void;
 }
 
@@ -71,14 +81,114 @@ const CommandBlock = memo(function CommandBlock({ command, t }: CommandBlockProp
   );
 });
 
+function toEpochMs(timestamp?: ErrorTimestamp): number | undefined {
+  const ms = typeof timestamp === 'string' ? Date.parse(timestamp) : timestamp;
+  return ms !== undefined && Number.isFinite(ms) ? ms : undefined;
+}
+
+function describeUpdateSuccess(t: TFunction, result: ClaudeSdkUpdateResult) {
+  const version = result.installedVersion ?? 'unknown';
+  if (result.customCliPath) {
+    return { warning: true, text: t('errorDiagnostic.updateClaudeSdkCustomCli', { version, path: result.customCliPath }) };
+  }
+  if (result.installedVersion && result.installedVersion === result.previousVersion) {
+    return { warning: true, text: t('errorDiagnostic.updateClaudeSdkAlreadyLatest', { version }) };
+  }
+  return { warning: false, text: t('errorDiagnostic.updateClaudeSdkSuccess', { version }) };
+}
+
+function describeUpdateFailure(t: TFunction, result: ClaudeSdkUpdateResult) {
+  if (result.timedOut) {
+    return t('errorDiagnostic.updateClaudeSdkTimedOut');
+  }
+  return result.error
+    ? t('errorDiagnostic.updateClaudeSdkFailed', { error: result.error })
+    : t('errorDiagnostic.updateClaudeSdkFailedUnknown');
+}
+
+interface UpdateClaudeSdkActionProps {
+  t: TFunction;
+  errorTimestamp?: ErrorTimestamp;
+  onNavigateToDependencySettings?: () => void;
+}
+
+const UpdateClaudeSdkAction = memo(function UpdateClaudeSdkAction({
+  t,
+  errorTimestamp,
+  onNavigateToDependencySettings,
+}: UpdateClaudeSdkActionProps) {
+  const update = useSyncExternalStore(subscribeClaudeSdkUpdate, getClaudeSdkUpdateSnapshot);
+  const [requested, setRequested] = useState(false);
+
+  const handleUpdate = useCallback(() => {
+    setRequested(true);
+    void requestClaudeSdkUpdate();
+  }, []);
+
+  // An update that finished after this error answers it, even when the card remounted since;
+  // the same error shown after that update gets the button again.
+  const errorAt = toEpochMs(errorTimestamp);
+  const answered = update.completedAt !== undefined
+    && (errorAt !== undefined ? errorAt <= update.completedAt : requested);
+  const result = answered ? update.lastResult : undefined;
+
+  if (update.updating) {
+    return (
+      <>
+        <button type="button" className="error-diagnostic-nav-btn" disabled>
+          {t('errorDiagnostic.updatingClaudeSdk')}
+        </button>
+        {update.progress && (
+          <p className="error-diagnostic-action-progress" aria-live="polite">{update.progress}</p>
+        )}
+      </>
+    );
+  }
+
+  if (result?.success) {
+    const { warning, text } = describeUpdateSuccess(t, result);
+    return (
+      <p className={`error-diagnostic-action-status ${warning ? 'warning' : 'success'}`} role="status">
+        {text}
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <button type="button" className="error-diagnostic-nav-btn" onClick={handleUpdate}>
+        {t('errorDiagnostic.updateClaudeSdk')}
+      </button>
+      {result && (
+        <>
+          <p className="error-diagnostic-action-status error" role="alert">
+            {describeUpdateFailure(t, result)}
+          </p>
+          {onNavigateToDependencySettings && (
+            <button
+              type="button"
+              className="error-diagnostic-nav-btn"
+              onClick={onNavigateToDependencySettings}
+            >
+              {t('errorDiagnostic.openDependencySettings')}
+              <ArrowRightIcon />
+            </button>
+          )}
+        </>
+      )}
+    </>
+  );
+});
+
 interface StepRendererProps {
   step: DiagnosticStep;
   description: string;
   t: TFunction;
+  errorTimestamp?: ErrorTimestamp;
   onNavigateToDependencySettings?: () => void;
 }
 
-function StepRenderer({ step, description, t, onNavigateToDependencySettings }: StepRendererProps) {
+function StepRenderer({ step, description, t, errorTimestamp, onNavigateToDependencySettings }: StepRendererProps) {
   if (step.kind === 'command') {
     return (
       <div className="error-diagnostic-step">
@@ -128,12 +238,28 @@ function StepRenderer({ step, description, t, onNavigateToDependencySettings }: 
     );
   }
 
+  if (step.kind === 'action') {
+    return (
+      <div className="error-diagnostic-step">
+        <p className="error-diagnostic-step-text">{description}</p>
+        {step.action === 'updateClaudeSdk' && (
+          <UpdateClaudeSdkAction
+            t={t}
+            errorTimestamp={errorTimestamp}
+            onNavigateToDependencySettings={onNavigateToDependencySettings}
+          />
+        )}
+      </div>
+    );
+  }
+
   return null;
 }
 
 export const ErrorDiagnosticCard = memo(function ErrorDiagnosticCard({
   t,
   pattern,
+  errorTimestamp,
   onNavigateToDependencySettings,
 }: ErrorDiagnosticCardProps) {
   const baseKey = `errorDiagnostic.${pattern.code}`;
@@ -174,6 +300,7 @@ export const ErrorDiagnosticCard = memo(function ErrorDiagnosticCard({
                   step={step}
                   description={t(`${solutionKey}.step${index}`)}
                   t={t}
+                  errorTimestamp={errorTimestamp}
                   onNavigateToDependencySettings={onNavigateToDependencySettings}
                 />
               ))}

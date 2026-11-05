@@ -130,6 +130,32 @@ function deleteTitle(sessionId) {
 }
 
 /**
+ * Delete several session titles with a single read and write
+ * @param {string[]} sessionIds - Session IDs
+ * @returns {boolean} Whether the operation succeeded
+ */
+function deleteTitles(sessionIds) {
+  try {
+    const titles = loadTitles();
+    const present = (Array.isArray(sessionIds) ? sessionIds : []).filter(id => titles[id]);
+    if (present.length === 0) {
+      return true;
+    }
+
+    const removed = new Set(present);
+    const remaining = Object.fromEntries(
+      Object.entries(titles).filter(([sessionId]) => !removed.has(sessionId))
+    );
+    saveTitles(remaining);
+    console.log('[SessionTitles] Deleted titles:', present.length);
+    return true;
+  } catch (error) {
+    console.error('[SessionTitles] Failed to delete titles:', error.message);
+    return false;
+  }
+}
+
+/**
  * Get the last updated timestamp
  * @param {string} sessionId - Session ID
  * @returns {number|null} Updated timestamp, or null if unset
@@ -145,6 +171,7 @@ module.exports = {
   updateTitle,
   getTitle,
   deleteTitle,
+  deleteTitles,
   getUpdatedAt,
   ensureTitlesDir
 };

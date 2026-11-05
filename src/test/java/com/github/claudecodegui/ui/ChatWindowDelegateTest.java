@@ -72,7 +72,7 @@ public class ChatWindowDelegateTest {
     @Test
     public void frontendReadyDoesNotApplyBackendTabStateOutsideRuntimeRecovery() {
         List<String> javaScriptCalls = new ArrayList<>();
-        ChatWindowDelegate delegate = createFrontendReadyDelegate(false, javaScriptCalls);
+        ChatWindowDelegate delegate = createFrontendReadyDelegate(false, false, javaScriptCalls);
 
         delegate.handleFrontendReady();
 
@@ -87,10 +87,30 @@ public class ChatWindowDelegateTest {
     @Test
     public void frontendReadyAppliesBackendTabStateOnlyDuringRuntimeRecovery() {
         List<String> javaScriptCalls = new ArrayList<>();
-        ChatWindowDelegate delegate = createFrontendReadyDelegate(true, javaScriptCalls);
+        ChatWindowDelegate delegate = createFrontendReadyDelegate(true, false, javaScriptCalls);
 
         delegate.handleFrontendReady();
 
+        assertBackendTabStateAppliedOnceBeforeReplay(javaScriptCalls);
+    }
+
+    /**
+     * Verifies that a frontend_ready arriving while Java still holds the ready flag is treated as
+     * runtime recovery. The webview sends the signal once per document, so a repeat means remote
+     * JCEF replaced the page without a load Java observed, and the replacement booted from the
+     * tab's original HTML snapshot rather than the current Session selection.
+     */
+    @Test
+    public void frontendReadyFromReplacedPageAppliesBackendTabState() {
+        List<String> javaScriptCalls = new ArrayList<>();
+        ChatWindowDelegate delegate = createFrontendReadyDelegate(false, true, javaScriptCalls);
+
+        delegate.handleFrontendReady();
+
+        assertBackendTabStateAppliedOnceBeforeReplay(javaScriptCalls);
+    }
+
+    private static void assertBackendTabStateAppliedOnceBeforeReplay(List<String> javaScriptCalls) {
         int snapshotIndex = javaScriptCalls.indexOf("window.applyBackendTabState");
         int replayIndex = javaScriptCalls.indexOf("showLoading");
         assertEquals(1, Collections.frequency(javaScriptCalls, "window.applyBackendTabState"));
@@ -132,6 +152,7 @@ public class ChatWindowDelegateTest {
      */
     private static ChatWindowDelegate createFrontendReadyDelegate(
             boolean runtimeRecovery,
+            boolean frontendAlreadyReady,
             List<String> javaScriptCalls
     ) {
         ClaudeSession session = new ClaudeSession(null, null, null, null);
@@ -198,6 +219,8 @@ public class ChatWindowDelegateTest {
                                     return permissionHandler;
                                 case "isRuntimeRecoveryPage":
                                     return runtimeRecovery;
+                                case "isFrontendReady":
+                                    return frontendAlreadyReady;
                                 case "callJavaScript":
                                     javaScriptCalls.add((String) args[0]);
                                     return null;

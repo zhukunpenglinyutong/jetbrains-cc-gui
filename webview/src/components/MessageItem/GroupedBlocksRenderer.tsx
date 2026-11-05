@@ -297,6 +297,7 @@ export const GroupedBlocksRenderer = memo(function GroupedBlocksRenderer({
           <ErrorDiagnosticCard
             t={t}
             pattern={errorDiagnosticPattern}
+            errorTimestamp={message.timestamp}
             onNavigateToDependencySettings={onNavigateToDependencySettings}
           />
         )}

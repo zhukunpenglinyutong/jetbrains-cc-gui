@@ -95,6 +95,15 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
     }
 
     /**
+     * Call after the Claude SDK on disk is installed or updated. Every Claude daemon in the IDE
+     * keeps the SDK module it imported, so each one restarts before its next request, never in
+     * the middle of one, to load the new SDK.
+     */
+    public static void markSdkChanged() {
+        ClaudeDaemonCoordinator.markSdkChanged();
+    }
+
+    /**
      * Shut down the daemon process.
      */
     public void shutdownDaemon() {

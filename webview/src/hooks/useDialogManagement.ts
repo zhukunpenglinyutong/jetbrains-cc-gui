@@ -7,6 +7,8 @@ import type { RewindRequest } from '../components/RewindDialog';
 import type { ContextUsageData } from '../components/ContextUsageDialog';
 import { openBrowserExternal, sendBridgeEvent } from '../utils/bridge';
 import { clearDialogDraft, type DialogDraftKind } from '../utils/dialogStateStorage';
+import type { ToastMessage } from '../components/Toast';
+import { useCodexDeliveryRecovery, type SubmittedCodexAnswer } from './useCodexDeliveryRecovery';
 
 const CLOSED_DIALOG_TOKEN_LIMIT = 256;
 
@@ -133,6 +135,7 @@ function applyForceClose<T extends ForceCloseableRequest>(
 
 interface UseDialogManagementOptions {
   t: TFunction;
+  addToast?: (message: string, type?: ToastMessage['type']) => void;
 }
 
 interface UseDialogManagementReturn {
@@ -187,7 +190,7 @@ interface UseDialogManagementReturn {
 /**
  * Hook for managing dialog states (permission, ask user question, rewind)
  */
-export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialogManagementReturn {
+export function useDialogManagement({ t, addToast }: UseDialogManagementOptions): UseDialogManagementReturn {
   // Permission dialog state
   const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
   const [currentPermissionRequest, setCurrentPermissionRequest] = useState<PermissionRequest | null>(null);
@@ -316,6 +319,55 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
     setPlanApprovalDialogOpen(true);
   }, []);
 
+  // A Codex answer Java could not deliver reopens its dialog (see useCodexDeliveryRecovery).
+  const reopenUndeliveredCodexAnswer = useCallback((answer: SubmittedCodexAnswer) => {
+    if (answer.kind === 'permission') {
+      if (answer.request.dialogToken) closedPermissionTokensRef.current.delete(answer.request.dialogToken);
+      openPermissionDialog(answer.request);
+    } else {
+      if (answer.request.dialogToken) closedAskUserQuestionTokensRef.current.delete(answer.request.dialogToken);
+      openAskUserQuestionDialog(answer.request);
+    }
+  }, [openPermissionDialog, openAskUserQuestionDialog]);
+  const { rememberCodexAnswer, forgetCodexAnswers } = useCodexDeliveryRecovery({
+    t, addToast, reopen: reopenUndeliveredCodexAnswer,
+  });
+
+  const sendCodexPermissionResult = useCallback((
+    current: PermissionRequest,
+    result: Record<string, unknown>,
+  ): false | undefined => {
+    if (sendBridgeEvent('codex_interaction_response', JSON.stringify({
+      interactionKey: current.codexInteractionKey,
+      channelId: current.channelId,
+      dialogToken: current.dialogToken,
+      result,
+    })) === false) return false;
+    rememberCodexAnswer({ kind: 'permission', request: current });
+    rememberClosedDialog(closedPermissionTokensRef.current, current.dialogToken);
+    currentPermissionRequestRef.current = null;
+    setPermissionDialogOpen(false);
+    setCurrentPermissionRequest(null);
+    return undefined;
+  }, [rememberCodexAnswer]);
+
+  const sendCodexQuestionResult = useCallback((
+    current: AskUserQuestionRequest,
+    result: Record<string, unknown>,
+  ): false | undefined => {
+    if (sendBridgeEvent('codex_interaction_response', JSON.stringify({
+      interactionKey: current.codexInteractionKey,
+      dialogToken: current.dialogToken,
+      result,
+    })) === false) return false;
+    rememberCodexAnswer({ kind: 'question', request: current });
+    rememberClosedDialog(closedAskUserQuestionTokensRef.current, current.dialogToken);
+    currentAskUserQuestionRequestRef.current = null;
+    setAskUserQuestionDialogOpen(false);
+    setCurrentAskUserQuestionRequest(null);
+    return undefined;
+  }, [rememberCodexAnswer]);
+
   // Process pending permission requests queue
   useEffect(() => {
     if (permissionDialogOpen) return;
@@ -353,17 +405,7 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
       const result = current.codexMethod === 'item/permissions/requestApproval'
         ? buildCodexPermissionApprovalResult(current.inputs, 'turn')
         : { decision: 'accept' };
-      if (sendBridgeEvent('codex_interaction_response', JSON.stringify({
-        interactionKey: current.codexInteractionKey,
-        channelId: current.channelId,
-        dialogToken: current.dialogToken,
-        result,
-      })) === false) return false;
-      rememberClosedDialog(closedPermissionTokensRef.current, current.dialogToken);
-      currentPermissionRequestRef.current = null;
-      setPermissionDialogOpen(false);
-      setCurrentPermissionRequest(null);
-      return;
+      return sendCodexPermissionResult(current, result);
     }
     const payload = JSON.stringify({
       channelId,
@@ -377,7 +419,7 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
     currentPermissionRequestRef.current = null;
     setPermissionDialogOpen(false);
     setCurrentPermissionRequest(null);
-  }, []);
+  }, [sendCodexPermissionResult]);
 
   const handlePermissionApproveAlways = useCallback((channelId: string) => {
     const current = currentPermissionRequestRef.current;
@@ -385,17 +427,7 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
       const result = current.codexMethod === 'item/permissions/requestApproval'
         ? buildCodexPermissionApprovalResult(current.inputs, 'session')
         : { decision: 'acceptForSession' };
-      if (sendBridgeEvent('codex_interaction_response', JSON.stringify({
-        interactionKey: current.codexInteractionKey,
-        channelId: current.channelId,
-        dialogToken: current.dialogToken,
-        result,
-      })) === false) return false;
-      rememberClosedDialog(closedPermissionTokensRef.current, current.dialogToken);
-      currentPermissionRequestRef.current = null;
-      setPermissionDialogOpen(false);
-      setCurrentPermissionRequest(null);
-      return;
+      return sendCodexPermissionResult(current, result);
     }
     const payload = JSON.stringify({
       channelId,
@@ -409,7 +441,7 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
     currentPermissionRequestRef.current = null;
     setPermissionDialogOpen(false);
     setCurrentPermissionRequest(null);
-  }, []);
+  }, [sendCodexPermissionResult]);
 
   const handlePermissionSkip = useCallback((channelId: string) => {
     const current = currentPermissionRequestRef.current;
@@ -417,17 +449,7 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
       const result = current.codexMethod === 'item/permissions/requestApproval'
         ? buildCodexPermissionApprovalResult({}, 'turn')
         : { decision: 'decline' };
-      if (sendBridgeEvent('codex_interaction_response', JSON.stringify({
-        interactionKey: current.codexInteractionKey,
-        channelId: current.channelId,
-        dialogToken: current.dialogToken,
-        result,
-      })) === false) return false;
-      rememberClosedDialog(closedPermissionTokensRef.current, current.dialogToken);
-      currentPermissionRequestRef.current = null;
-      setPermissionDialogOpen(false);
-      setCurrentPermissionRequest(null);
-      return;
+      return sendCodexPermissionResult(current, result);
     }
     const payload = JSON.stringify({
       channelId,
@@ -441,7 +463,7 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
     currentPermissionRequestRef.current = null;
     setPermissionDialogOpen(false);
     setCurrentPermissionRequest(null);
-  }, [t]);
+  }, [sendCodexPermissionResult, t]);
 
   const handlePermissionCancel = useCallback((channelId: string) => {
     const current = currentPermissionRequestRef.current;
@@ -449,17 +471,7 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
       const result = current.codexMethod === 'item/permissions/requestApproval'
         ? buildCodexPermissionApprovalResult({}, 'turn')
         : { decision: 'cancel' };
-      if (sendBridgeEvent('codex_interaction_response', JSON.stringify({
-        interactionKey: current.codexInteractionKey,
-        channelId: current.channelId,
-        dialogToken: current.dialogToken,
-        result,
-      })) === false) return false;
-      rememberClosedDialog(closedPermissionTokensRef.current, current.dialogToken);
-      currentPermissionRequestRef.current = null;
-      setPermissionDialogOpen(false);
-      setCurrentPermissionRequest(null);
-      return;
+      return sendCodexPermissionResult(current, result);
     }
     const payload = JSON.stringify({
       channelId,
@@ -473,25 +485,15 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
     currentPermissionRequestRef.current = null;
     setPermissionDialogOpen(false);
     setCurrentPermissionRequest(null);
-  }, [t]);
+  }, [sendCodexPermissionResult, t]);
 
   const handlePermissionDecision = useCallback((channelId: string, decision: Record<string, unknown>) => {
     const current = currentPermissionRequestRef.current;
     if (current?.codexInteractionKey) {
-      if (sendBridgeEvent('codex_interaction_response', JSON.stringify({
-        interactionKey: current.codexInteractionKey,
-        channelId: current.channelId,
-        dialogToken: current.dialogToken,
-        result: decision,
-      })) === false) return false;
-      rememberClosedDialog(closedPermissionTokensRef.current, current.dialogToken);
-      currentPermissionRequestRef.current = null;
-      setPermissionDialogOpen(false);
-      setCurrentPermissionRequest(null);
-      return;
+      return sendCodexPermissionResult(current, decision);
     }
     handlePermissionApprove(channelId);
-  }, [handlePermissionApprove]);
+  }, [handlePermissionApprove, sendCodexPermissionResult]);
 
   // AskUserQuestion handlers
   const handleAskUserQuestionSubmit = useCallback((requestId: string, answers: Record<string, string | string[]>) => {
@@ -517,29 +519,9 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
             : null,
         };
         if (elicitation?.meta !== undefined) result._meta = elicitation.meta;
-        if (sendBridgeEvent('codex_interaction_response', JSON.stringify({
-          interactionKey: current.codexInteractionKey,
-          dialogToken: current.dialogToken,
-          result,
-        })) === false) return false;
-        rememberClosedDialog(closedAskUserQuestionTokensRef.current, current.dialogToken);
-        currentAskUserQuestionRequestRef.current = null;
-        setAskUserQuestionDialogOpen(false);
-        setCurrentAskUserQuestionRequest(null);
-        return;
+        return sendCodexQuestionResult(current, result);
       }
-      if (sendBridgeEvent('codex_interaction_response', JSON.stringify({
-        interactionKey: current.codexInteractionKey,
-        dialogToken: current.dialogToken,
-        result: {
-          answers: buildCodexUserInputAnswers(answers),
-        },
-      })) === false) return false;
-      rememberClosedDialog(closedAskUserQuestionTokensRef.current, current.dialogToken);
-      currentAskUserQuestionRequestRef.current = null;
-      setAskUserQuestionDialogOpen(false);
-      setCurrentAskUserQuestionRequest(null);
-      return;
+      return sendCodexQuestionResult(current, { answers: buildCodexUserInputAnswers(answers) });
     }
     const payload = JSON.stringify({
       requestId,
@@ -551,7 +533,7 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
     currentAskUserQuestionRequestRef.current = null;
     setAskUserQuestionDialogOpen(false);
     setCurrentAskUserQuestionRequest(null);
-  }, []);
+  }, [sendCodexQuestionResult]);
 
   const handleAskUserQuestionCancel = useCallback((requestId: string) => {
     const current = currentAskUserQuestionRequestRef.current;
@@ -562,27 +544,9 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
           content: null,
         };
         if (current.codexElicitation?.meta !== undefined) result._meta = current.codexElicitation.meta;
-        if (sendBridgeEvent('codex_interaction_response', JSON.stringify({
-          interactionKey: current.codexInteractionKey,
-          dialogToken: current.dialogToken,
-          result,
-        })) === false) return false;
-        rememberClosedDialog(closedAskUserQuestionTokensRef.current, current.dialogToken);
-        currentAskUserQuestionRequestRef.current = null;
-        setAskUserQuestionDialogOpen(false);
-        setCurrentAskUserQuestionRequest(null);
-        return;
+        return sendCodexQuestionResult(current, result);
       }
-      if (sendBridgeEvent('codex_interaction_response', JSON.stringify({
-        interactionKey: current.codexInteractionKey,
-        dialogToken: current.dialogToken,
-        result: { answers: {} },
-      })) === false) return false;
-      rememberClosedDialog(closedAskUserQuestionTokensRef.current, current.dialogToken);
-      currentAskUserQuestionRequestRef.current = null;
-      setAskUserQuestionDialogOpen(false);
-      setCurrentAskUserQuestionRequest(null);
-      return;
+      return sendCodexQuestionResult(current, { answers: {} });
     }
     const payload = JSON.stringify({
       requestId,
@@ -594,7 +558,7 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
     currentAskUserQuestionRequestRef.current = null;
     setAskUserQuestionDialogOpen(false);
     setCurrentAskUserQuestionRequest(null);
-  }, []);
+  }, [sendCodexQuestionResult]);
 
   // PlanApproval handlers
   const handlePlanApprovalApprove = useCallback((requestId: string, targetMode: string) => {
@@ -627,8 +591,13 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
 
   // The backend already resolved this request; closing its dialog must not send another rejection.
   const forceCloseAskUserQuestionDialog = useCallback((requestId?: string | null, dialogToken?: string) => {
+    const targetId = requestId && requestId.length > 0 ? requestId : null;
+    // The runtime ended these requests; a late delivery failure must not reopen them.
+    forgetCodexAnswers((answer) => answer.kind === 'question'
+      && (targetId === null || answer.request.requestId === targetId)
+      && (!dialogToken || answer.request.dialogToken === dialogToken));
     applyForceClose(
-      requestId && requestId.length > 0 ? requestId : null,
+      targetId,
       dialogToken,
       'askUserQuestion',
       closedAskUserQuestionTokensRef.current,
@@ -641,11 +610,15 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
         setCurrentAskUserQuestionRequest(null);
       },
     );
-  }, []);
+  }, [forgetCodexAnswers]);
 
   const forceClosePermissionDialog = useCallback((channelId?: string | null, dialogToken?: string) => {
+    const targetId = channelId && channelId.length > 0 ? channelId : null;
+    forgetCodexAnswers((answer) => answer.kind === 'permission'
+      && (targetId === null || answer.request.channelId === targetId)
+      && (!dialogToken || answer.request.dialogToken === dialogToken));
     applyForceClose(
-      channelId && channelId.length > 0 ? channelId : null,
+      targetId,
       dialogToken,
       'permission',
       closedPermissionTokensRef.current,
@@ -658,7 +631,7 @@ export function useDialogManagement({ t }: UseDialogManagementOptions): UseDialo
         setCurrentPermissionRequest(null);
       },
     );
-  }, []);
+  }, [forgetCodexAnswers]);
 
   const forceClosePlanApprovalDialog = useCallback((requestId?: string | null, dialogToken?: string) => {
     applyForceClose(

@@ -662,6 +662,24 @@
     background: rgba(255, 255, 255, 0.15);
 }
 
+/* Command prefix / host a rule button would allow; long prefixes are
+   truncated and the full text stays available on hover. */
+.permission-dialog-v3-option .option-detail {
+    max-width: 16em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--idea-editor-font-family, monospace);
+    font-size: 12px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--bg-elevated);
+}
+
+.permission-dialog-v3-option.selected .option-detail {
+    background: rgba(255, 255, 255, 0.15);
+}
+
 @media (max-width: 450px) {
     .permission-dialog-v3 {
         padding: 10px 12px;

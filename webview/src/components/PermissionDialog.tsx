@@ -43,6 +43,26 @@ function readNativeDecisions(suggestions: unknown): NativeDecision[] | null {
   return decisions.length > 0 ? Array.from(new Set(decisions)) : [];
 }
 
+// What a rule amendment would allow from now on: the command prefix for an
+// exec-policy rule, the host for a network rule. Shown beside the button label
+// so the user can tell what "allow with this rule" actually covers.
+function describeRuleAmendment(
+  kind: 'acceptWithExecpolicyAmendment' | 'applyNetworkPolicyAmendment',
+  payload: unknown,
+): string {
+  const record = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : null;
+  if (kind === 'acceptWithExecpolicyAmendment') {
+    const prefix = record?.execpolicy_amendment;
+    return Array.isArray(prefix)
+      ? prefix.filter((token): token is string => typeof token === 'string').join(' ')
+      : '';
+  }
+  const rule = record?.network_policy_amendment as Record<string, unknown> | undefined;
+  return typeof rule?.host === 'string' ? rule.host : '';
+}
+
 interface PermissionDialogProps {
   isOpen: boolean;
   request: PermissionRequest | null;
@@ -180,7 +200,7 @@ const PermissionDialog = ({
       const record = entry as Record<string, unknown>;
       const kind = Object.keys(record)[0] as NativeDecision | undefined;
       return kind && (kind === 'acceptWithExecpolicyAmendment' || kind === 'applyNetworkPolicyAmendment')
-        ? [{ kind, decision: { [kind]: record[kind] } }]
+        ? [{ kind, decision: { [kind]: record[kind] }, detail: describeRuleAmendment(kind, record[kind]) }]
         : [];
     });
   }, [request]);
@@ -217,6 +237,7 @@ const PermissionDialog = ({
       action: 'approve' | 'always' | 'skip' | 'cancel' | 'native';
       label: string;
       decision?: Record<string, unknown>;
+      detail?: string;
     }> = [
       ...(allowsApprove ? [{ action: 'approve' as const, label: t('permission.allow') }] : []),
     ];
@@ -233,6 +254,7 @@ const PermissionDialog = ({
       options.push({
         action: 'native',
         decision: suggestion.decision,
+        detail: suggestion.detail,
         label: suggestion.kind === 'acceptWithExecpolicyAmendment'
           ? t('permission.allowWithRule', 'Allow with this command rule')
           : t('permission.allowWithNetworkRule', 'Allow with this network rule'),
@@ -501,6 +523,9 @@ const PermissionDialog = ({
                 onMouseEnter={() => setSelectedIndex(index)}
               >
                 <span className="option-text">{option.label}</span>
+                {option.detail && (
+                  <code className="option-detail" title={option.detail}>{option.detail}</code>
+                )}
                 <span className="option-key">{index + 1}</span>
               </button>
             );

@@ -1,21 +1,15 @@
 package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.bridge.NodeProcessRunner;
 import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.handler.core.HandlerContext;
-import com.github.claudecodegui.util.PlatformUtils;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Handles input history management messages.
@@ -29,9 +23,15 @@ public class InputHistoryHandler {
     private static final long PROCESS_TIMEOUT_SECONDS = 30;
 
     private final HandlerContext context;
+    private final long processTimeoutSeconds;
 
     public InputHistoryHandler(HandlerContext context) {
+        this(context, PROCESS_TIMEOUT_SECONDS);
+    }
+
+    InputHistoryHandler(HandlerContext context, long processTimeoutSeconds) {
         this.context = context;
+        this.processTimeoutSeconds = processTimeoutSeconds;
     }
 
     /**
@@ -179,7 +179,8 @@ public class InputHistoryHandler {
 
     /**
      * Execute a Node.js script, optionally writing stdinData to the process stdin.
-     * Handles process creation, stdin write, stdout read, 30s timeout, and exit code check.
+     * Stdin is written and stdout drained off the calling thread, so the timeout
+     * bounds the whole call (see {@link NodeProcessRunner}).
      *
      * @param nodePath   path to the node executable
      * @param nodeScript the JavaScript code to run via node -e
@@ -195,49 +196,11 @@ public class InputHistoryHandler {
 
         // L7 fix: register with ProcessManager so cleanupAllProcesses sees this child.
         ProcessManager processManager = context.getClaudeSDKBridge().getProcessManager();
-        String channelId = ProcessManager.newChannelId("input-history");
-        Process process = null;
-        try {
-            process = pb.start();
-            processManager.registerProcess(channelId, process);
-
-            if (stdinData != null) {
-                try (BufferedWriter writer = new BufferedWriter(
-                        new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8))) {
-                    writer.write(stdinData);
-                    writer.flush();
-                }
-            }
-
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
-            }
-
-            boolean finished = process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            if (!finished) {
-                PlatformUtils.terminateProcess(process);
-                throw new Exception("Node.js process timeout after " + PROCESS_TIMEOUT_SECONDS + " seconds");
-            }
-
-            int exitCode = process.exitValue();
-            if (exitCode != 0) {
-                throw new Exception("Node.js process exited with code " + exitCode + ": " + output);
-            }
-
-            String[] lines = output.toString().split("\n");
-            return lines.length > 0 ? lines[lines.length - 1] : "{}";
-        } finally {
-            if (process != null) {
-                if (process.isAlive()) {
-                    PlatformUtils.terminateProcess(process);
-                }
-                processManager.unregisterProcess(channelId, process);
-            }
+        NodeProcessRunner.Result result =
+                NodeProcessRunner.run(pb, processManager, "input-history", stdinData, processTimeoutSeconds);
+        if (result.exitCode() != 0) {
+            throw new Exception("Node.js process exited with code " + result.exitCode() + ": " + result.output());
         }
+        return result.lastLine();
     }
 }

@@ -415,12 +415,7 @@ public final class JBCefBrowserFactory {
     }
 
     private static boolean isAndroidStudioJcefPluginMissing() {
-        var build = ApplicationInfo.getInstance().getBuild();
-        boolean supportedOs = SystemInfo.isWindows || SystemInfo.isMac;
-        boolean separateJcefModule = build.getBaselineVersion() >= 262;
-        return "AI".equals(build.getProductCode())
-                && supportedOs
-                && separateJcefModule
+        return JcefMissingGuidance.isAndroidStudioWithSeparateJcefModule()
                 && ApplicationManager.getApplication().getService(JcefModuleAvailability.class) == null;
     }
 

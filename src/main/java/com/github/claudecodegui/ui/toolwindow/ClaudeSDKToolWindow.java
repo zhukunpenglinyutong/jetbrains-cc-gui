@@ -3,7 +3,10 @@ package com.github.claudecodegui.ui.toolwindow;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.TabStateService;
 import com.github.claudecodegui.startup.BridgePreloader;
+import com.github.claudecodegui.ui.ErrorPanelBuilder;
 import com.github.claudecodegui.ui.detached.DetachedWindowManager;
+import com.github.claudecodegui.util.JcefClassAvailability;
+import com.github.claudecodegui.util.JcefMissingGuidance;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
@@ -222,6 +225,15 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
 
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
+        // ClaudeChatWindow construction resolves JBCefOSRHandlerFactory. On Android Studio
+        // that class is absent until Web Browser (JCEF) is installed, so show guidance
+        // before bridge startup, tab restoration, listeners, or chat-window linkage.
+        if (!JcefClassAvailability.isAvailable(ClaudeSDKToolWindow.class.getClassLoader())) {
+            LOG.info("[ToolWindow] JCEF classes are unavailable, showing installation guidance");
+            installJcefMissingPanel(toolWindow);
+            return;
+        }
+
         registerShutdownHook();
 
         ContentFactory contentFactory = ContentFactory.getInstance();
@@ -392,6 +404,21 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         }
 
         LOG.debug("[TabManager] Updated tab closeable state: count=" + tabCount + ", closeable=" + closeable);
+    }
+
+    /**
+     * Swing fallback used when the JCEF classes cannot be loaded, e.g. when the Web Browser
+     * (JCEF) plugin is not installed in Android Studio. Does not touch saved tabs, SDK bridges,
+     * or chat-only tool-window actions. The guidance text ends with an IDE restart step.
+     */
+    private void installJcefMissingPanel(@NotNull ToolWindow toolWindow) {
+        JPanel panel = ErrorPanelBuilder.buildCenteredPanel(
+                "⚠️",
+                JcefMissingGuidance.title(),
+                JcefMissingGuidance.solution());
+        Content content = ContentFactory.getInstance().createContent(panel, TOOL_WINDOW_DISPLAY_NAME, false);
+        content.setCloseable(false);
+        toolWindow.getContentManager().addContent(content);
     }
 
     private JPanel createLoadingPanel() {

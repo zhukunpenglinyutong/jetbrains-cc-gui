@@ -20,6 +20,41 @@ import {
 import { listModels } from '../services/claude/models-service.js';
 
 /**
+ * Coerce an optional turn cursor supplied through stdin JSON or as a positional
+ * CLI argument.
+ *
+ * Returns null when the caller supplied no cursor (the caller then wants the
+ * latest page) and when the value is not a non-negative integer, so an unusable
+ * cursor degrades to the latest page instead of reaching the pagination layer.
+ *
+ * The distinction matters because Number(null) === 0 and Number('') === 0:
+ * coercing before ruling out "absent" turns "no cursor" into "the page before
+ * turn 0", which buildSessionMessagesPagePayload answers with an empty page.
+ *
+ * No upper bound is applied here: only buildSessionMessagesPagePayload knows
+ * the history length, and it answers any cursor beyond it with the latest page
+ * plus cursorReset. The Java client depends on that flag, because it replaces
+ * its transcript on a reset and prepends the page otherwise.
+ *
+ * @param {unknown} raw cursor value from stdin JSON or argv
+ * @returns {number|null} non-negative integer turn index, or null when absent/unusable
+ */
+export function parseOptionalTurnCursor(raw) {
+  if (typeof raw === 'number') {
+    return Number.isInteger(raw) && raw >= 0 ? raw : null;
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed === '') {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+  }
+  return null;
+}
+
+/**
  * Execute a Claude specific command.
  * @param {string} command
  * @param {string[]} args
@@ -78,18 +113,13 @@ export async function handleClaudeCommand(command, args, stdinData) {
       break;
 
     case 'getSessionPage': {
-      // Paginated history load. Falls back to the full-history getSession
-      // path on the Java side when the page request fails, so a malformed
-      // cursor never leaves the user with an empty chat.
+      // Paginated history load. An absent cursor means "the latest page" and an
+      // unusable one degrades to it as well, so a malformed cursor never leaves
+      // the user with an empty chat; the Java side additionally falls back to
+      // the full-history getSession path when the page request fails.
       const sessionId = stdinData?.sessionId || args[0];
       const cwd = stdinData?.cwd || args[1] || null;
-      const beforeTurnRaw = stdinData?.beforeTurn ?? (args[2] !== '' && args[2] !== undefined ? args[2] : null);
-      const parsedBeforeTurn = typeof beforeTurnRaw === 'number'
-        ? beforeTurnRaw
-        : typeof beforeTurnRaw === 'string' && beforeTurnRaw.trim()
-          ? Number(beforeTurnRaw)
-          : null;
-      const beforeTurn = Number.isInteger(parsedBeforeTurn) && parsedBeforeTurn >= 0 ? parsedBeforeTurn : null;
+      const beforeTurn = parseOptionalTurnCursor(stdinData?.beforeTurn ?? args[2]);
       const parsedLimit = Number(stdinData?.limit ?? args[3]);
       const limit = Number.isInteger(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 200) : 30;
       await claudeGetSessionMessagesPage(sessionId, cwd, beforeTurn, limit);

@@ -289,6 +289,28 @@ public class CodexProviderTransportIntegrationTest {
         }
     }
 
+    /** The daemon's failure code reaches Java, so a correctable answer is told apart from a dead request. */
+    @Test
+    public void aCorrectableRejectionCarriesTheDaemonCodeAndTheRequestStaysAnswerable() throws Exception {
+        try (Fixture fixture = this.fixture("reverse-approval")) {
+            CompletableFuture<SDKResult> send = fixture.send();
+            JsonObject approval = fixture.awaitEvent("interactionRequested");
+            JsonObject unsupported = new JsonObject();
+            unsupported.addProperty("decision", "maybe");
+            JsonObject rejected = fixture.bridge.respondCodexInteraction("fixture", fixture.cwd.toString(),
+                    string(approval, "interactionKey"), string(approval, "dialogToken"), unsupported);
+            assertEquals(rejected.toString(), "INVALID_INTERACTION_RESULT", string(rejected, "code"));
+            assertFalse(rejected.has("retryable"));
+
+            JsonObject accept = new JsonObject();
+            accept.addProperty("decision", "accept");
+            JsonObject reply = fixture.bridge.respondCodexInteraction("fixture", fixture.cwd.toString(),
+                    string(approval, "interactionKey"), string(approval, "dialogToken"), accept);
+            assertFalse(reply.toString(), reply.has("error"));
+            assertTrue(send.get(15, TimeUnit.SECONDS).success);
+        }
+    }
+
     @Test
     public void childApprovalRemainsRoutableAfterParentCompletes() throws Exception {
         try (Fixture fixture = this.fixture("child-interaction")) {

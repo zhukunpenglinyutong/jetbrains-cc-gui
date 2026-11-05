@@ -743,12 +743,32 @@ export async function codexReloadMcpPersistent(stdinData) {
   return await codexReadOnlyPersistent('config/mcpServer/reload', stdinData);
 }
 
-/** Control operation (bypasses queue): reply to a native interaction. */
-export async function codexRespondInteractionPersistent(stdinData) {
+/**
+ * A reply that can never be delivered: the request was already answered, the
+ * thread released it, or its runtime is gone. Hosts must not ask the user to
+ * answer again — the code tells them apart from a correctable rejection.
+ */
+function interactionNotPending(message) {
+  const error = new Error(message);
+  error.code = 'INTERACTION_NOT_PENDING';
+  return error;
+}
+
+/** The runtime that still waits for {@code stdinData.rpcId}, or a not-pending error. */
+function serviceAwaitingReply(stdinData) {
   const service = getServiceOrNull(stdinData);
   if (!service) {
-    throw new Error('codex runtime is not connected for this session');
+    throw interactionNotPending('codex runtime is not connected for this session');
   }
+  if (!service.hasPendingInteraction(stdinData.rpcId)) {
+    throw interactionNotPending('Codex is no longer waiting for this answer');
+  }
+  return service;
+}
+
+/** Control operation (bypasses queue): reply to a native interaction. */
+export async function codexRespondInteractionPersistent(stdinData) {
+  const service = serviceAwaitingReply(stdinData);
   const replied = service.respondInteraction(stdinData.rpcId, stdinData.result ?? {});
   if (!replied) {
     const error = new Error('invalid native Codex interaction result');
@@ -760,12 +780,9 @@ export async function codexRespondInteractionPersistent(stdinData) {
 
 /** Control operation (bypasses queue): typed error reply. */
 export async function codexRespondInteractionErrorPersistent(stdinData) {
-  const service = getServiceOrNull(stdinData);
-  if (!service) {
-    throw new Error('codex runtime is not connected for this session');
-  }
+  const service = serviceAwaitingReply(stdinData);
   if (!service.respondInteractionError(stdinData.rpcId, stdinData.code, stdinData.message)) {
-    throw new Error('Unknown or stale Codex interaction');
+    throw interactionNotPending('Unknown or stale Codex interaction');
   }
   return { replied: true };
 }

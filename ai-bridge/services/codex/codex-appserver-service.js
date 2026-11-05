@@ -2004,6 +2004,11 @@ export class CodexAppServerService extends EventEmitter {
     }
   }
 
+  /** Whether the native runtime is still waiting for an answer to {@code rpcId}. */
+  hasPendingInteraction(rpcId) {
+    return this.pendingInteractions.has(rpcId) && !!this.client?.alive;
+  }
+
   /** Reply to a verified interaction (bypasses the FIFO entirely, D4). */
   respondInteraction(rpcId, result) {
     const interaction = this.pendingInteractions.get(rpcId);

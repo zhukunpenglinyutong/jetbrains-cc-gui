@@ -29,6 +29,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -81,7 +82,7 @@ class HistoryDeleteService {
                         LOG.info("[HistoryHandler] Delete completed - Main file: " + (result.mainDeleted ? "deleted" : "not found") + ", Agent files: " + result.agentFilesDeleted);
 
                         if (result.mainDeleted) {
-                            cleanupSessionMetadata(sessionId);
+                            cleanupSessionMetadata(List.of(sessionId));
                         }
                         cleanupCache(currentProvider);
 
@@ -116,12 +117,11 @@ class HistoryDeleteService {
                         int mainDeletedCount = 0;
                         int agentFilesDeletedCount = 0;
 
+                        List<String> deletedSessionIds = new ArrayList<>();
                         if ("codex".equals(currentProvider)) {
                             CodexBatchDeleteResult result = deleteCodexSessions(sessionIds);
                             mainDeletedCount = result.deletedSessionIds.size();
-                            for (String sessionId : result.deletedSessionIds) {
-                                cleanupSessionMetadata(sessionId);
-                            }
+                            deletedSessionIds.addAll(result.deletedSessionIds);
                             LOG.info("[HistoryHandler] Deleted Codex rollout files: " + result.deletedFileCount);
                         } else {
                             for (String sessionId : sessionIds) {
@@ -129,7 +129,7 @@ class HistoryDeleteService {
                                     DeleteResult result = deleteSessionFiles(sessionId, currentProvider);
                                     if (result.mainDeleted) {
                                         mainDeletedCount++;
-                                        cleanupSessionMetadata(sessionId);
+                                        deletedSessionIds.add(sessionId);
                                     }
                                     agentFilesDeletedCount += result.agentFilesDeleted;
                                 } catch (Exception e) {
@@ -137,6 +137,7 @@ class HistoryDeleteService {
                                 }
                             }
                         }
+                        cleanupSessionMetadata(deletedSessionIds);
 
                         cleanupCache(currentProvider);
 
@@ -592,13 +593,49 @@ class HistoryDeleteService {
         return new int[]{mainDeleted ? 1 : 0, agentFilesDeleted};
     }
 
-    private void cleanupSessionMetadata(String sessionId) {
+    /**
+     * Removes the deleted sessions' favorites and custom titles, with one Node process per store
+     * however many sessions were deleted.
+     *
+     * @param sessionIds the sessions whose files were deleted
+     * @return true if both were cleaned up (or there was nothing to clean up)
+     */
+    boolean cleanupSessionMetadata(List<String> sessionIds) {
+        if (sessionIds.isEmpty()) {
+            return true;
+        }
+        // Independent steps: a failed favorite removal must not leave the custom titles behind.
+        // Both services report a failed save as a false result while still exiting 0.
+        boolean favoritesRemoved = runMetadataCleanupStep("remove favorites",
+                () -> "true".equals(nodeJsServiceCaller.callNodeJsRemoveFavorites(sessionIds)));
+        boolean titlesDeleted = runMetadataCleanupStep("delete custom titles",
+                () -> isSuccessResult(nodeJsServiceCaller.callNodeJsDeleteTitles(sessionIds)));
+        if (favoritesRemoved && titlesDeleted) {
+            LOG.info("[HistoryHandler] Cleaned up metadata of " + sessionIds.size() + " session(s)");
+        }
+        return favoritesRemoved && titlesDeleted;
+    }
+
+    private static boolean runMetadataCleanupStep(String step, Callable<Boolean> action) {
         try {
-            nodeJsServiceCaller.callNodeJsFavoritesService("removeFavorite", sessionId);
-            nodeJsServiceCaller.callNodeJsDeleteTitle(sessionId);
-            LOG.info("[HistoryHandler] Cleaned up session metadata");
+            if (action.call()) {
+                return true;
+            }
+            LOG.warn("[HistoryHandler] Failed to " + step + " (does not affect deletion): service reported failure");
         } catch (Exception e) {
-            LOG.warn("[HistoryHandler] Failed to clean up metadata (does not affect deletion): " + e.getMessage());
+            LOG.warn("[HistoryHandler] Failed to " + step + " (does not affect deletion): " + e.getMessage());
+        }
+        return false;
+    }
+
+    private static boolean isSuccessResult(String json) {
+        try {
+            JsonElement result = JsonParser.parseString(json);
+            return result.isJsonObject()
+                    && result.getAsJsonObject().has("success")
+                    && result.getAsJsonObject().get("success").getAsBoolean();
+        } catch (RuntimeException e) {
+            return false;
         }
     }
 

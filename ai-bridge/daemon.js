@@ -1029,7 +1029,9 @@ async function runDaemonMain() {
         .then(() => writeRawLine({ id: replyId, done: true, success: true }))
         .catch((e) => {
           _originalStderrWrite('[daemon] codex interaction reply error: ' + (e.message || String(e)) + '\n');
-          writeRawLine({ id: replyId, done: true, success: false, error: e.message || String(e) });
+          // The code lets the host tell "answer again" from "this can no longer be delivered".
+          writeRawLine({ id: replyId, done: true, success: false, error: e.message || String(e),
+            ...(typeof e?.code === 'string' ? { code: e.code } : {}) });
         });
       return;
     }

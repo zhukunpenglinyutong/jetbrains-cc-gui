@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDialogManagement } from '../hooks/useDialogManagement';
+import { useUIState } from './UIStateContext';
 
 type DialogManagementValue = ReturnType<typeof useDialogManagement>;
 
@@ -14,7 +15,8 @@ const DialogContext = createContext<DialogManagementValue | null>(null);
  */
 export function DialogProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
-  const dialogState = useDialogManagement({ t });
+  const { addToast } = useUIState();
+  const dialogState = useDialogManagement({ t, addToast });
 
   // useDialogManagement already returns a stable object shape per render;
   // wrap in useMemo over its full set of fields to avoid re-creating the

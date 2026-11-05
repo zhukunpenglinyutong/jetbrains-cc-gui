@@ -937,7 +937,16 @@ public class CodemossSettingsService {
     }
 
     public void applyProviderToClaudeSettings(JsonObject provider) throws IOException {
-        claudeSettingsManager.applyProviderToClaudeSettings(provider);
+        providerManager.applyProviderToClaudeSettings(provider);
+    }
+
+    /** See {@link ProviderManager#applyProviderToClaudeSettings(JsonObject, JsonObject)}. */
+    public void applyProviderToClaudeSettings(JsonObject provider, JsonObject providerBeforeEdit) throws IOException {
+        providerManager.applyProviderToClaudeSettings(provider, providerBeforeEdit);
+    }
+
+    public JsonObject getSavedClaudeProvider(String id) {
+        return providerManager.getSavedClaudeProvider(id);
     }
 
     public void applyCliLoginToClaudeSettings() throws IOException {

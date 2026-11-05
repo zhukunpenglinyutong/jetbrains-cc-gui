@@ -44,7 +44,7 @@ tasks.named('checkstyleTest') {
 group = 'com.github.idea-claude-code-gui'
 // Keep this line as a plain literal: webview/scripts/extract-version.mjs matches it
 // with /^version\s*=\s*'(.+)'$/ to generate the webview's APP_VERSION.
-version = '0.6.2'
+version = '0.6.3'
 
 // Local-only override for custom builds (e.g. distribution flavors). Put
 // plugin.version=... in the gitignored local.properties (or pass -Pplugin.version=...)

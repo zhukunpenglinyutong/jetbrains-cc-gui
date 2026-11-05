@@ -3,9 +3,6 @@ package com.github.claudecodegui.dependency;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -96,30 +93,30 @@ public class NpmPermissionHelper {
      * @return true if the cleanup succeeded
      */
     public static boolean cleanNpmCache(String npmPath) {
+        return cleanNpmCache(npmPath, TimeUnit.SECONDS.toMillis(60));
+    }
+
+    /**
+     * @param timeoutMillis hard deadline; it runs under the install lock, so a stalled clean
+     *                      (e.g. a locked cache file on Windows) must not hold the lock forever
+     */
+    static boolean cleanNpmCache(String npmPath, long timeoutMillis) {
         try {
             LOG.info("[NpmPermissionHelper] Attempting to clean npm cache using: npm cache clean --force");
 
             ProcessBuilder pb = new ProcessBuilder(npmPath, "cache", "clean", "--force");
-            Process process = pb.start();
+            pb.redirectErrorStream(true);
 
-            // Read output (may contain warning messages)
+            // Output may contain warning messages
             StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
-            }
-
-            boolean finished = process.waitFor(60, TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
+            NpmInstallRunner.Outcome outcome = NpmInstallRunner.run(pb, timeoutMillis,
+                    line -> output.append(line).append("\n"));
+            if (outcome.timedOut()) {
                 LOG.warn("[NpmPermissionHelper] npm cache clean timed out");
                 return false;
             }
 
-            int exitCode = process.exitValue();
+            int exitCode = outcome.exitCode();
             if (exitCode == 0) {
                 LOG.info("[NpmPermissionHelper] npm cache cleaned successfully");
                 return true;

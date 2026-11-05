@@ -52,6 +52,34 @@
       ]
     },
     {
+      "code": "claudeCodeVersionTooOld",
+      "match": {
+        "regex": "claude_code_version_too_old|Claude Code \\S+ does not support this model"
+      },
+      "solutions": [
+        {
+          "key": "updateSdk",
+          "recommended": true,
+          "steps": [
+            {
+              "kind": "action",
+              "action": "updateClaudeSdk"
+            }
+          ]
+        },
+        {
+          "key": "updateCustomCli",
+          "recommended": false,
+          "steps": [
+            {
+              "kind": "command",
+              "command": "claude update"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "code": "spawnEbusy",
       "match": {
         "regex": "spawn EBUSY"
