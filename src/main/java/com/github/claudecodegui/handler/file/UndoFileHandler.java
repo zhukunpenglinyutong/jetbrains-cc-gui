@@ -68,7 +68,7 @@ public class UndoFileHandler extends BaseMessageHandler {
         return false;
     }
 
-    /** Validates the undo target against project content roots. / 按项目 content roots 校验撤销目标。 */
+    /** Validates the undo target against project content roots. */
     private boolean isValidFilePath(String filePath) {
         Project project = this.context.getProject();
         if (project == null) {

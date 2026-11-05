@@ -28,7 +28,7 @@ public class DiffFileOperations {
         this.context = context;
     }
 
-    /** Checks whether the path is inside any project content root. / 检查路径是否位于任意项目 content root 内。 */
+    /** Checks whether the path is inside any project content root. */
     public boolean isPathWithinProject(String filePath) {
         Project project = context.getProject();
         if (project == null) {

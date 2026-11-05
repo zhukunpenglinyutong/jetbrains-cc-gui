@@ -14,15 +14,14 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * Boundary rule: the project base and content roots form a union.
- * 边界规则：项目根目录与 content roots 取并集。
  */
 public class ProjectPathUtilsTest {
 
-    /** Keeps filesystem fixtures isolated from the repository. / 让测试文件与仓库隔离。 */
+    /** Keeps filesystem fixtures isolated from the repository. */
     @Rule
     public TemporaryFolder temporary = new TemporaryFolder();
 
-    /** Accepts a content root outside the project base. / 接受位于项目根之外的 content root。 */
+    /** Accepts a content root outside the project base. */
     @Test
     public void acceptsContentRootOutsideTheProjectBase() throws Exception {
         Path base = this.temporary.newFolder("base").toPath();
@@ -31,7 +30,7 @@ public class ProjectPathUtilsTest {
                 attached.resolve("X.java").toString(), base.toString(), List.of(attached.toString())));
     }
 
-    /** Accepts a path under the project base when content roots exist. / content roots 存在时，base 下的路径仍然放行。 */
+    /** Accepts a path under the project base when content roots exist. */
     @Test
     public void acceptsBasePathWhenContentRootsExist() throws Exception {
         Path base = this.temporary.newFolder("base").toPath();
@@ -40,7 +39,7 @@ public class ProjectPathUtilsTest {
                 base.resolve("notes.md").toString(), base.toString(), List.of(attached.toString())));
     }
 
-    /** Accepts the project base when no content root is available. / 没有 content root 时，项目根目录仍然放行。 */
+    /** Accepts the project base when no content root is available. */
     @Test
     public void acceptsTheProjectBaseWhenNoContentRootsAreAvailable() throws Exception {
         Path base = this.temporary.newFolder("base").toPath();
@@ -51,7 +50,7 @@ public class ProjectPathUtilsTest {
                 outside.resolve("A.java").toString(), base.toString(), List.of()));
     }
 
-    /** Rejects a path outside both the base and every content root. / base 和所有 content root 之外仍然拒绝。 */
+    /** Rejects a path outside both the base and every content root. */
     @Test
     public void rejectsPathOutsideBaseAndContentRoots() throws Exception {
         Path base = this.temporary.newFolder("base").toPath();
@@ -61,7 +60,7 @@ public class ProjectPathUtilsTest {
                 outside.resolve("A.java").toString(), base.toString(), List.of(attached.toString())));
     }
 
-    /** Accepts a file under any of several content roots. / 命中任意一个 content root 即可。 */
+    /** Accepts a file under any of several content roots. */
     @Test
     public void acceptsAnyOfMultipleContentRoots() throws Exception {
         Path first = this.temporary.newFolder("first").toPath();
@@ -70,7 +69,7 @@ public class ProjectPathUtilsTest {
                 second.resolve("B.java").toString(), null, List.of(first.toString(), second.toString())));
     }
 
-    /** Fails closed when no boundary is available. / 没有可用边界时失败关闭。 */
+    /** Fails closed when no boundary is available. */
     @Test
     public void rejectsWhenNoBoundaryIsAvailable() throws Exception {
         Path file = this.temporary.newFolder("file").toPath().resolve("A.java");
@@ -78,7 +77,7 @@ public class ProjectPathUtilsTest {
         assertFalse(ProjectPathUtils.isWithinProjectBoundaries("", null, List.of()));
     }
 
-    /** The public API fails closed for a null project or path. / 公共 API 对 null 项目和路径失败关闭。 */
+    /** The public API fails closed for a null project or path. */
     @Test
     public void rejectsNullProjectOrPath() {
         Project project = (Project) Proxy.newProxyInstance(
@@ -90,7 +89,7 @@ public class ProjectPathUtilsTest {
         assertFalse(ProjectPathUtils.isPathWithinProject(project, ""));
     }
 
-    /** Rejects a sibling that only shares the root's string prefix. / 拒绝仅共享 root 字符串前缀的兄弟目录。 */
+    /** Rejects a sibling that only shares the root's string prefix. */
     @Test
     public void rejectsSiblingPathSharingTheRootPrefix() throws Exception {
         Path root = this.temporary.newFolder("root").toPath();
@@ -99,7 +98,7 @@ public class ProjectPathUtilsTest {
                 sibling.resolve("A.java").toString(), null, List.of(root.toString())));
     }
 
-    /** Rejects traversal that escapes the content root. / 拒绝通过 .. 逃逸 content root 的路径。 */
+    /** Rejects traversal that escapes the content root. */
     @Test
     public void rejectsTraversalOutsideTheContentRoot() throws Exception {
         Path root = this.temporary.newFolder("root").toPath();

@@ -68,7 +68,6 @@ public class DiffReviewService {
         }
 
         // Security: validate the path against the project content roots.
-        // 安全校验：路径必须位于项目 content root 内。
         if (!ProjectPathUtils.isPathWithinProject(project, filePath)) {
             LOG.warn("DiffReview: Security - file path outside project: " + filePath);
             return null;
