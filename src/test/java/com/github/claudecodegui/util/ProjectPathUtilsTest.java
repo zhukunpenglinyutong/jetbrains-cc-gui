@@ -13,8 +13,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Boundary rule: content roots are authoritative; the project base is only a fallback.
- * 边界规则：content roots 优先；项目根目录仅在 content roots 不可用时兜底。
+ * Boundary rule: the project base and content roots form a union.
+ * 边界规则：项目根目录与 content roots 取并集。
  */
 public class ProjectPathUtilsTest {
 
@@ -31,24 +31,34 @@ public class ProjectPathUtilsTest {
                 attached.resolve("X.java").toString(), base.toString(), List.of(attached.toString())));
     }
 
-    /** Rejects a path under the project base when content roots exist. / content roots 存在时，base 下的路径应被拒绝。 */
+    /** Accepts a path under the project base when content roots exist. / content roots 存在时，base 下的路径仍然放行。 */
     @Test
-    public void rejectsBasePathWhenContentRootsExist() throws Exception {
+    public void acceptsBasePathWhenContentRootsExist() throws Exception {
         Path base = this.temporary.newFolder("base").toPath();
         Path attached = this.temporary.newFolder("attached").toPath();
-        assertFalse(ProjectPathUtils.isWithinProjectBoundaries(
+        assertTrue(ProjectPathUtils.isWithinProjectBoundaries(
                 base.resolve("notes.md").toString(), base.toString(), List.of(attached.toString())));
     }
 
-    /** Falls back to the project base when no content root is available. / content roots 为空时退回项目根判断。 */
+    /** Accepts the project base when no content root is available. / 没有 content root 时，项目根目录仍然放行。 */
     @Test
-    public void fallsBackToTheProjectBaseWhenNoContentRootsAreAvailable() throws Exception {
+    public void acceptsTheProjectBaseWhenNoContentRootsAreAvailable() throws Exception {
         Path base = this.temporary.newFolder("base").toPath();
         Path outside = this.temporary.newFolder("outside").toPath();
         assertTrue(ProjectPathUtils.isWithinProjectBoundaries(
                 base.resolve("src/A.java").toString(), base.toString(), List.of()));
         assertFalse(ProjectPathUtils.isWithinProjectBoundaries(
                 outside.resolve("A.java").toString(), base.toString(), List.of()));
+    }
+
+    /** Rejects a path outside both the base and every content root. / base 和所有 content root 之外仍然拒绝。 */
+    @Test
+    public void rejectsPathOutsideBaseAndContentRoots() throws Exception {
+        Path base = this.temporary.newFolder("base").toPath();
+        Path attached = this.temporary.newFolder("attached").toPath();
+        Path outside = this.temporary.newFolder("outside").toPath();
+        assertFalse(ProjectPathUtils.isWithinProjectBoundaries(
+                outside.resolve("A.java").toString(), base.toString(), List.of(attached.toString())));
     }
 
     /** Accepts a file under any of several content roots. / 命中任意一个 content root 即可。 */

@@ -16,15 +16,14 @@ import java.util.List;
 /**
  * Project-boundary path checks for multi-content-root projects.
  *
- * <p>A project's files live in module content roots, which may sit outside
- * {@link Project#getBasePath()} (for example directories attached as sibling
- * content roots). The loaded project model's content roots are authoritative:
- * a directory removed from the content roots is not project content just
- * because it sits under the project base. The base directory is only a
- * fallback when the content roots are unavailable.
+ * <p>A project's files can live in the project base directory or in module content
+ * roots outside it (for example directories attached as sibling content roots).
+ * The boundary is the union of the project base directory and the loaded project
+ * model's content roots, so accepting content roots only extends the previous
+ * base-only boundary and never narrows it.
  *
- * <p>项目边界判断：以已加载项目模型的 content roots 为准，允许附加在项目根之外的 content root。
- * 用户从 content roots 中移除的目录不再视为项目内容；仅在 content roots 不可用时才退回项目根目录。
+ * <p>项目边界判断：项目边界是项目根目录与已加载项目模型 content roots 的并集。
+ * 接受附加在项目根之外的 content root，只会扩大原有 base 边界，不会收窄。
  */
 public final class ProjectPathUtils {
 
@@ -34,19 +33,17 @@ public final class ProjectPathUtils {
     }
 
     /**
-     * Returns true when {@code filePath} is inside a module content root.
+     * Returns true when {@code filePath} is inside the project base directory or any loaded content root.
      *
-     * <p>Content roots are authoritative. The project base directory is used only when no
-     * content root is available (for example while Gradle/Maven is still syncing, a module
-     * has no content root, or a test uses a proxy project). A directory removed from the
-     * content roots is therefore not treated as project content just because it sits under
-     * the base directory.
+     * <p>The boundary is the union of the project base directory and the loaded project model's
+     * content roots. Content roots extend the base boundary; the base directory is always accepted,
+     * even when it is not itself a content root.
      *
      * <p>Returns false when no boundary can be determined, so callers that gate writes fail closed.
      *
-     * <p>当路径位于任意模块 content root 内时返回 true。content roots 是唯一权威边界；
-     * 仅当没有任何 content root 可用（如 Gradle/Maven 同步中、模块没有 content root，
-     * 或测试使用 proxy project）时才退回项目根。无法确定边界时返回 false，调用方的写操作保持失败关闭。
+     * <p>当路径位于项目根目录或任意已加载 content root 内时返回 true。项目边界是两者的并集：
+     * content roots 用于扩展 base 边界，base 目录始终放行，即使它本身不是 content root。
+     * 无法确定边界时返回 false，调用方的写操作保持失败关闭。
      */
     public static boolean isPathWithinProject(@Nullable Project project, @Nullable String filePath) {
         if (project == null || filePath == null || filePath.isEmpty()) {
@@ -55,7 +52,7 @@ public final class ProjectPathUtils {
         return isWithinProjectBoundaries(filePath, project.getBasePath(), getContentRootPaths(project));
     }
 
-    /** Applies the boundary rule to already-collected roots. Visible for tests. / 对已收集的边界应用规则，测试可见。 */
+    /** Applies the base ∪ content-root boundary rule. Visible for tests. / 对已收集的边界应用 base ∪ content roots 规则，测试可见。 */
     static boolean isWithinProjectBoundaries(
             @NotNull String filePath,
             @Nullable String basePath,
@@ -64,13 +61,10 @@ public final class ProjectPathUtils {
         if (filePath.isEmpty()) {
             return false;
         }
-        if (!contentRoots.isEmpty()) {
-            for (String contentRoot : contentRoots) {
-                if (WslPathUtil.isPathWithinDirectory(filePath, contentRoot)) {
-                    return true;
-                }
+        for (String contentRoot : contentRoots) {
+            if (WslPathUtil.isPathWithinDirectory(filePath, contentRoot)) {
+                return true;
             }
-            return false;
         }
         return basePath != null && WslPathUtil.isPathWithinDirectory(filePath, basePath);
     }
