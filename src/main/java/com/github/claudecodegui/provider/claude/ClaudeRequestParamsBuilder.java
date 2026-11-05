@@ -9,16 +9,36 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 /**
  * Builds the request payload shared by daemon and per-process Claude sends.
  */
 class ClaudeRequestParamsBuilder {
 
+    private static final BooleanSupplier UNTRUSTED = () -> false;
+
     private final Gson gson;
+    private volatile BooleanSupplier projectTrust = UNTRUSTED;
 
     ClaudeRequestParamsBuilder(Gson gson) {
         this.gson = gson;
+    }
+
+    void setProjectTrust(BooleanSupplier projectTrust) {
+        this.projectTrust = projectTrust != null ? projectTrust : UNTRUSTED;
+    }
+
+    boolean isProjectTrusted() {
+        try {
+            return projectTrust.getAsBoolean();
+        } catch (RuntimeException error) {
+            return false;
+        }
+    }
+
+    void addProjectTrust(JsonObject params) {
+        params.addProperty("projectTrusted", isProjectTrusted());
     }
 
     JsonObject buildSendParams(
@@ -63,6 +83,7 @@ class ClaudeRequestParamsBuilder {
         if (reasoningEffort != null && !reasoningEffort.trim().isEmpty()) {
             params.addProperty("reasoningEffort", reasoningEffort);
         }
+        addProjectTrust(params);
 
         return params;
     }

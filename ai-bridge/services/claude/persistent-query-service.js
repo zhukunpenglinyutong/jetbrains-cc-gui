@@ -64,6 +64,7 @@ import {
   processToolResultMessages,
   shouldOutputMessage,
 } from './stream-event-processor.js';
+import { settingSourcesFor } from './project-trust.js';
 import { generateSessionTitle } from '../session-title-service.js';
 import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
 
@@ -129,7 +130,7 @@ function resolveRequestModelState(modelId, settingsEnv) {
   };
 }
 
-function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers, modelId, settingsEnv, resolvedModelId) {
+function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers, modelId, settingsEnv, resolvedModelId, projectTrusted) {
   const claudeCliOverride = getClaudeCliPathOverride();
   return {
     cwd: workingDirectory,
@@ -148,7 +149,7 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
       )
     ),
     canUseTool,
-    settingSources: ['user', 'project', 'local'],
+    settingSources: settingSourcesFor(projectTrusted),
     // bypassPermissions requires this flag per SDK contract (sdk.d.ts: "Must be set to
     // true when using permissionMode: 'bypassPermissions'"). Without it a future SDK
     // version could silently drop bypass and change permission behavior.
@@ -223,7 +224,7 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   const options = buildQueryOptions(
     workingDirectory, sdkModelName, permissionMode,
     maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId,
-    mcpServers, modelId, settings?.env, resolvedModelId
+    mcpServers, modelId, settings?.env, resolvedModelId, params.projectTrusted
   );
 
   const userMessage = await buildUserMessage(params, withAttachments, requestedSessionId);
