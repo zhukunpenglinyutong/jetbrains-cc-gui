@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -33,6 +34,9 @@ final class CodexExecHistoryReplay {
     private static final List<String> PATCH_TOKENS = List.of("tools.apply_patch", "functions.apply_patch");
     private static final List<String> SHELL_TOKENS = List.of("tools.shell_command", "tools.exec_command");
     private static final Pattern TOOL_CALL_TOKEN = Pattern.compile("(?:tools|functions)\\.[A-Za-z_][A-Za-z0-9_]*");
+    private static final Pattern INTERPOLATED_EXECUTION = Pattern.compile("\\\\|(?<![A-Za-z0-9_$])(?:tools|functions|eval|Function|constructor)(?![A-Za-z0-9_$])");
+    private static final Set<String> SOURCE_EVALUATORS = Set.of("eval", "Function", "constructor");
+    private static final Set<String> GLOBAL_OBJECTS = Set.of("globalThis", "window", "self", "this");
     private static final Pattern JAVASCRIPT_NUMBER_PATTERN = Pattern.compile(
         "-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?"
     );
@@ -882,7 +886,11 @@ final class CodexExecHistoryReplay {
         while (cursor < script.length()) {
             char current = script.charAt(cursor);
             if (isQuote(current)) {
-                cursor = skipJavaScriptString(script, cursor);
+                int end = skipJavaScriptString(script, cursor);
+                if (current == '`' && hidesExecution(readTemplateInterpolations(script, cursor, end))) {
+                    return true;
+                }
+                cursor = end;
             } else if (current == '/' && cursor + 1 < script.length() && script.charAt(cursor + 1) == '/') {
                 cursor = skipLineComment(script, cursor + 2);
             } else if (current == '/' && cursor + 1 < script.length() && script.charAt(cursor + 1) == '*') {
@@ -890,11 +898,75 @@ final class CodexExecHistoryReplay {
             } else if (current == '/') {
                 // Unsupported regex/division syntax must not hide later calls behind quotes or brackets.
                 return true;
+            } else if (current == '\\') {
+                // An escaped identifier names a binding that no token search can match.
+                return true;
+            } else if (isJavaScriptIdentifierPart(current)) {
+                int end = cursor + 1;
+                while (end < script.length() && isJavaScriptIdentifierPart(script.charAt(end))) {
+                    end++;
+                }
+                String word = script.substring(cursor, end);
+                // Evaluated source text runs unseen, and a global object can reach the tool namespace as a property.
+                if (SOURCE_EVALUATORS.contains(word) || GLOBAL_OBJECTS.contains(word)
+                        && (script.startsWith(".tools", end) || script.startsWith(".functions", end))) {
+                    return true;
+                }
+                cursor = end;
             } else {
                 cursor++;
             }
         }
         return false;
+    }
+
+    private static boolean hidesExecution(List<String> interpolations) {
+        return interpolations == null || interpolations.stream().anyMatch(source -> INTERPOLATED_EXECUTION.matcher(source).find());
+    }
+
+    /** Returns each ${...} source of a template; null when the string ends inside one, as a nested template does. */
+    static List<String> readTemplateInterpolations(String script, int start, int end) {
+        List<String> interpolations = new ArrayList<>();
+        int cursor = start + 1;
+        while (cursor + 1 < end) {
+            char current = script.charAt(cursor);
+            if (current == '\\') {
+                cursor += 2;
+            } else if (current != '$' || script.charAt(cursor + 1) != '{') {
+                cursor++;
+            } else {
+                int close = interpolationEnd(script, cursor + 2, end - 1);
+                if (close < 0) {
+                    return null;
+                }
+                interpolations.add(script.substring(cursor + 2, close));
+                cursor = close + 1;
+            }
+        }
+        return interpolations;
+    }
+
+    private static int interpolationEnd(String script, int start, int limit) {
+        int depth = 1;
+        int cursor = start;
+        while (cursor < limit) {
+            char current = script.charAt(cursor);
+            if (current == '\'' || current == '"') {
+                cursor = skipJavaScriptString(script, cursor);
+                continue;
+            }
+            if (current == '/') {
+                // Comments and regex can hold a brace that does not close anything; the source stays unparsed.
+                return -1;
+            }
+            if (current == '{') {
+                depth++;
+            } else if (current == '}' && --depth == 0) {
+                return cursor;
+            }
+            cursor++;
+        }
+        return -1;
     }
 
     private static String firstNonBlankString(JsonObject values, String... keys) {
@@ -1226,11 +1298,11 @@ final class CodexExecHistoryReplay {
         return value == '\'' || value == '"' || value == '`';
     }
 
-    private static boolean isJavaScriptIdentifierStart(char value) {
+    static boolean isJavaScriptIdentifierStart(char value) {
         return Character.isLetter(value) || value == '_' || value == '$';
     }
 
-    private static boolean isJavaScriptIdentifierPart(char value) {
+    static boolean isJavaScriptIdentifierPart(char value) {
         return Character.isLetterOrDigit(value) || value == '_' || value == '$';
     }
 

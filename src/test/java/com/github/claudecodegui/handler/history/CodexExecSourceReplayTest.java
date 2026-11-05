@@ -1296,6 +1296,262 @@ public class CodexExecSourceReplayTest {
         assertTrue(results(blocks).stream().anyMatch(result -> result.contains("unrelated wait output")));
     }
 
+    /** A plain-string body stays readable text on its way through the fallback, alone or merged. */
+    @Test
+    public void keepsPlainStringOutputsReadableInTheFallback() {
+        JsonArray opaque = scope("turn");
+        opaque.add(call("exec", "await tools[load('tool')](load('args'));"));
+        opaque.add(plainOutput("exec", COMPLETED + "hello"));
+        assertEquals(List.of(COMPLETED + "hello"), results(blocks(opaque)));
+
+        JsonArray untooled = scope("turn");
+        untooled.add(call("exec", "text('hi');"));
+        untooled.add(plainOutput("exec", COMPLETED + "hi"));
+        assertEquals(List.of(COMPLETED + "hi"), results(blocks(untooled)));
+
+        JsonArray yielded = scope("turn");
+        yielded.add(call("exec", "await tools[load('tool')](load('args'));"));
+        yielded.add(plainOutput("exec", YIELDED + "first"));
+        yielded.add(waitCall("wait-1", "cell-1"));
+        yielded.add(plainOutput("wait-1", COMPLETED + "second"));
+        assertEquals(List.of(YIELDED + "first", COMPLETED + "second"), results(blocks(yielded)));
+
+        JsonArray parallel = scope("turn");
+        parallel.add(JsonParser.parseString("{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"sleep\",\"call_id\":\"sleep-1\",\"arguments\":\"{}\"}}"));
+        parallel.add(call("exec", "await tools[load('tool')](load('args'));"));
+        parallel.add(plainOutput("sleep-1", "slept"));
+        parallel.add(plainOutput("exec", COMPLETED));
+        assertEquals(List.of("slept", COMPLETED), results(blocks(parallel)));
+
+        JsonArray notified = scope("turn");
+        notified.add(call("exec", "notify('progress');await tools[load('tool')](load('args'));"));
+        notified.add(plainOutput("exec", "progress"));
+        notified.add(plainOutput("exec", COMPLETED + "done"));
+        assertEquals(List.of("progress\n" + COMPLETED + "done"), results(blocks(notified)));
+
+        JsonArray encoded = scope("turn");
+        encoded.add(call("exec", "notify('progress');text(await tools.exec_command({cmd:'npm test'}));"));
+        encoded.add(plainOutput("exec", "[{\"type\":\"input_text\",\"text\":\"progress\"}]"));
+        JsonArray body = new JsonArray();
+        for (String text : List.of(COMPLETED, "{\"exit_code\":0,\"output\":\"printed\"}")) {
+            JsonObject block = new JsonObject();
+            block.addProperty("type", "input_text");
+            block.addProperty("text", text);
+            body.add(block);
+        }
+        encoded.add(plainOutput("exec", body.toString()));
+        assertEquals(List.of("bash"), names(blocks(encoded)));
+        assertEquals(List.of("printed"), results(blocks(encoded)));
+
+        JsonArray enveloped = scope("turn");
+        enveloped.add(call("exec", "notify('progress');await tools[load('tool')](load('args'));"));
+        JsonObject envelope = plainOutput("exec", "");
+        envelope.getAsJsonObject("payload").add("output", JsonParser.parseString("{\"content\":\"progress\"}"));
+        enveloped.add(envelope);
+        enveloped.add(output("exec", COMPLETED));
+        assertEquals(List.of("progress\n" + COMPLETED), results(blocks(enveloped)));
+    }
+
+    /** Shared consts are analysed once per script, whatever the number of calls or size of unrelated text. */
+    @Test(timeout = 5000)
+    public void readsSharedConstsWithinTheParsingBudget() {
+        StringBuilder source = new StringBuilder("const base={cwd:'/repo'};const note='" + "lorem ipsum ".repeat(20_000) + "';");
+        List<String> outputs = new ArrayList<>();
+        outputs.add(COMPLETED);
+        for (int index = 0; index < 100; index++) {
+            source.append("text(await tools.exec_command({...base,cmd:'echo ").append(index).append("'}));");
+            outputs.add("{\"exit_code\":0,\"output\":\"printed " + index + "\"}");
+        }
+        JsonArray records = new JsonArray();
+        records.add(call("exec", source.toString()));
+        records.add(output("exec", outputs.toArray(String[]::new)));
+        List<JsonObject> blocks = blocks(records);
+        assertEquals(100, names(blocks).stream().filter("bash"::equals).count());
+        assertEquals("printed 99", results(blocks).get(99));
+    }
+
+    /** Consts may be shared between tool arguments, but any other use still leaves their value unproven. */
+    @Test
+    public void readsConstsOnlyWhenEveryUseIsAToolArgument() {
+        JsonArray shared = new JsonArray();
+        shared.add(call("exec", "const base={cwd:'/repo'};const extra={env:{A:'1'}};text(await tools.exec_command({...base,cmd:'npm test'}));"
+                + "text(await tools.exec_command({...base,...extra,cmd:'git status'}));"));
+        shared.add(output("exec", COMPLETED, "{\"exit_code\":0,\"output\":\"first\"}", "{\"exit_code\":0,\"output\":\"second\"}"));
+        assertEquals(List.of("bash", "bash"), names(blocks(shared)));
+
+        for (String script : List.of(
+                "const args={cmd:'npm test'};text(args.cmd);text(await tools.exec_command(args));",
+                "const args={cmd:'npm test'};text(await tools.exec_command(args));args.cmd='rm -rf build';",
+                "const args={cmd:'npm test'};const copy={...args};text(await tools.exec_command(copy));",
+                "text(await tools.exec_command(args));const args={cmd:'npm test'};",
+                "const args={cmd:'npm test'} /* ; */ + later();text(await tools.exec_command(args));",
+                "const patch='*** Begin Patch\\n*** End Patch\\n';await tools.apply_patch(patch);text(await tools.exec_command({cmd:'npm test',patch}));",
+                "const args={cmd:'npm test'};text(await tools.exec_command(args));await tools.apply_patch(mutate(args));",
+                "const args={cmd:'npm test'};const hidden={...tools.exec_command((args.cmd='rm -rf x',{cmd:'touch y'}))};text(await tools.exec_command(args));",
+                "const args={cmd:'npm test'};tools.custom$tool(args.cmd='rm -rf x');text(await tools.exec_command(args));",
+                "const args={cmd:'npm test'};await tools.apply_patch((args.cmd='rm -rf x',text(await tools.exec_command(args)),'x'));",
+                "const hidden={...tools.exec_command({cmd:'rm -rf x'})};text(await tools.exec_command({cmd:'npm test'}));",
+                "tools.mcp__a$b({});text(await tools.exec_command({cmd:'npm test'}));",
+                "await globalThis.tools.exec_command({cmd:'rm -rf x'});text(await tools.exec_command({cmd:'npm test'}));",
+                "await this.functions.exec_command({cmd:'rm -rf x'});text(await tools.exec_command({cmd:'npm test'}));")) {
+            JsonArray records = new JsonArray();
+            records.add(call("exec", script));
+            if (script.contains("apply_patch((")) {
+                records.add(patch("edit", "x", "x\n", "completed"));
+            }
+            records.add(output("exec", COMPLETED, "{\"exit_code\":0,\"output\":\"printed\"}"));
+            assertEquals(script, "exec", names(blocks(records)).get(0));
+        }
+    }
+
+    /** A call behind a bare condition may never run, so no printed result can be assigned to it. */
+    @Test
+    public void keepsWrapperForCallsBehindBareConditions() {
+        String install = "await tools.exec_command({cmd:'npm install'})";
+        String test = "text(await tools.exec_command({cmd:'npm test'}));";
+        for (String script : List.of(
+                "if (globalThis.need) " + install + ";" + test,
+                "globalThis.need && " + install + ";" + test,
+                "globalThis.skip || " + install + ";" + test,
+                "globalThis.value ?? " + install + ";" + test,
+                "globalThis.need?." + "length;text(globalThis.need?.[" + install + "]);" + test,
+                "const first=globalThis.need?" + install + ":" + install.replace("install", "ci") + ";text(first);" + test,
+                "if (globalThis.need) text('x'); else " + install + ";" + test,
+                "while (globalThis.more()) " + install + ";" + test,
+                "do " + install + "; while (globalThis.more());" + test,
+                "if (globalThis.need) var first=" + install + ";" + test,
+                "for (;globalThis.more();" + install + ");" + test,
+                "const later=(first=" + install + ")=>first;" + test,
+                "const [first=" + install + "]=[1];" + test,
+                "const {first=" + install + "}={first:1};" + test,
+                "const cached=globalThis.value ? // cached (fast)\n {cached:true} : " + install + ";text(cached);" + test,
+                "const cached=globalThis.value ?" + " ".repeat(40) + "{cached:true} : " + install + ";text(cached);" + test,
+                "if (globalThis.need) exit();" + install + ";" + test,
+                "if (globalThis.need) { exit(); } " + install + ";" + test,
+                "const jobs=[{cmd:'npm install'},{cmd:'npm ci'}];if (globalThis.need) for (const job of jobs) text(await tools.exec_command(job));" + test)) {
+            JsonArray records = scope("turn");
+            records.add(call("exec", script));
+            records.add(command("native", "npm test", 0));
+            records.add(output("exec", COMPLETED, "{\"exit_code\":0,\"output\":\"tests passed\"}"));
+            List<JsonObject> blocks = blocks(records);
+            assertEquals(script, "exec", names(blocks).get(0));
+            assertFalse(script, blocks.toString().contains("\"command\":\"npm install\""));
+        }
+    }
+
+    /** A condition that has finished, or a head that always runs, says nothing about what follows it. */
+    @Test
+    public void replaysCallsAfterCompletedConditions() {
+        String test = "text(await tools.exec_command({cmd:'npm test'}));";
+        for (String prefix : List.of(
+                "if (globalThis.dry) text('dry');",
+                "if (globalThis.dry) { text('dry'); } else { text('wet'); }",
+                "try { text('a'); } finally { text('b'); }",
+                "for (const line of globalThis.lines) text(line);",
+                "for (const line of globalThis.lines) { text(line); }",
+                "const mode=globalThis.dry?'dry':'wet';",
+                "const mode=globalThis.dry ?? 'wet'\nconst other=globalThis.other || 'x';",
+                "const size=globalThis.lines?.length;")) {
+            JsonArray records = new JsonArray();
+            records.add(call("exec", prefix + test));
+            records.add(output("exec", COMPLETED, "{\"exit_code\":0,\"output\":\"tests passed\"}"));
+            assertEquals(prefix, List.of("bash"), names(blocks(records)));
+        }
+        JsonArray condition = scope("turn");
+        condition.add(call("exec", "if ((await tools.exec_command({cmd:'npm test'})).exit_code) text('failed');"));
+        condition.add(command("native", "npm test", 0));
+        condition.add(output("exec", COMPLETED));
+        assertEquals(List.of("bash"), names(blocks(condition)));
+
+        JsonArray finished = new JsonArray();
+        finished.add(call("exec", test + "exit();"));
+        finished.add(output("exec", COMPLETED, "{\"exit_code\":0,\"output\":\"tests passed\"}"));
+        assertEquals(List.of("bash"), names(blocks(finished)));
+
+        JsonArray plan = new JsonArray();
+        plan.add(call("exec", "await tools.update_plan({plan:[{step:'a',status:'pending'}]});"));
+        plan.add(output("exec", COMPLETED));
+        assertEquals(List.of("todowrite"), names(blocks(plan)));
+
+        JsonArray guardedPlan = new JsonArray();
+        guardedPlan.add(call("exec", "if (globalThis.need) await tools.update_plan({plan:[{step:'a',status:'pending'}]});"));
+        guardedPlan.add(output("exec", COMPLETED));
+        assertEquals(List.of("exec"), names(blocks(guardedPlan)));
+    }
+
+    /** Unparsed source cannot rule out notify, so a first output without a host header does not close the cell. */
+    @Test
+    public void keepsLateEditsWhenNotifyFollowsUnparsedSource() {
+        for (String prefix : List.of("const half=10/2;notify('progress');", "const clean='abc'.replace(/b/g,'x');notify('progress');",
+                "const half=10/2;const send=notify;send('progress');", "const half=10/2;['progress'].forEach(notify);",
+                "const half=10/2;notify /* now */ ('progress');", "const half=10/2;notify?.('progress');",
+                "const half=10/2;globalThis.notify('progress');", "text(`${notify('progress')}`);", "globalThis.notify('progress');")) {
+            JsonArray records = scope("turn");
+            records.add(call("exec", prefix + "await tools[load('tool')](load('args'));"));
+            records.add(output("exec", "progress"));
+            records.add(patch("late-edit", "saved.txt", "retained\n", "completed"));
+            records.add(output("exec", COMPLETED));
+            List<JsonObject> blocks = blocks(records);
+            assertEquals(prefix, 1, blocks.stream().filter(block -> "late-edit".equals(text(block, "id"))).count());
+            assertEquals(prefix, 1, blocks.stream().filter(block -> "exec".equals(text(block, "tool_use_id"))).count());
+        }
+    }
+
+    /** Source inside template interpolations or eval runs unseen, so nothing around it can be proven. */
+    @Test
+    public void keepsWrapperForSourceHiddenInTemplatesOrEval() {
+        String test = "text(await tools.exec_command({cmd:'npm test'}));";
+        for (String script : List.of(
+                "text(`s: ${(await tools.exec_command({cmd:'rm -rf x'})).output}`);" + test,
+                "const run=tools.exec_command;text(`s: ${(await run({cmd:'rm -rf x'})).output}`);text(await run({cmd:'npm test'}));",
+                "const {exec_command:run}=tools;text(`s: ${(await run({cmd:'rm -rf x'})).output}`);text(await run({cmd:'npm test'}));",
+                "const args={cmd:'npm test'};const note=`${args.cmd='rm -rf x'}`;text(await tools.exec_command(args));",
+                "const jobs=[{cmd:'npm test'}];const note=`${jobs.push({cmd:'rm -rf x'})}`;for (const job of jobs) text(await tools.exec_command(job));",
+                "const note=`outer ${`inner`} '`;" + test,
+                "const args={cmd:'npm test'};eval(\"args.cmd='rm -rf x'\");text(await tools.exec_command(args));",
+                "new Function(\"return tools.exec_command({cmd:'rm -rf x'})\")();" + test,
+                "const args={cmd:'npm test'};const note=`${/* } */ args.cmd='rm -rf x'}`;text(await tools.exec_command(args));",
+                "text(`${/* } */ (await tools.exec_command({cmd:'rm -rf x'})).output}`);" + test,
+                "text(`${/}/.test('a') && tools.exec_command({cmd:'rm -rf x'})}`);" + test,
+                "globalThis.eval(\"tools.exec_command({cmd:'rm -rf x'})\");" + test,
+                "new globalThis.Function(\"return tools.exec_command({cmd:'rm -rf x'})\")();" + test,
+                "(()=>{}).constructor(\"return tools.exec_command({cmd:'rm -rf x'})\")();" + test,
+                "const args={cmd:'npm test'};text(`${eval(\"ar\"+\"gs.cmd='rm -rf x'\")}`);text(await tools.exec_command(args));",
+                "const args={cmd:'npm test'};arg\\u0073.cmd='rm -rf x';text(await tools.exec_command(args));")) {
+            JsonArray records = new JsonArray();
+            records.add(call("exec", script));
+            records.add(output("exec", COMPLETED, "{\"exit_code\":0,\"output\":\"printed\"}"));
+            assertEquals(script, List.of("exec"), names(blocks(records)));
+        }
+        JsonArray harmless = new JsonArray();
+        harmless.add(call("exec", "const label=`run ${globalThis.name} tools.exec_command`;" + test));
+        harmless.add(output("exec", COMPLETED, "{\"exit_code\":0,\"output\":\"printed\"}"));
+        assertEquals(List.of("bash"), names(blocks(harmless)));
+    }
+
+    /** A wrapper's own result stays in the opening turn on the plain fallback path as well. */
+    @Test
+    public void keepsTheOpeningTurnOnPlainFallbackResults() {
+        for (String script : List.of("text('hi');", "await tools.exec_command({cmd:'ls'});")) {
+            JsonArray records = scope("opening");
+            records.add(call("exec", script));
+            records.add(JsonParser.parseString("{\"type\":\"turn_context\",\"payload\":{\"turn_id\":\"later\"}}"));
+            records.add(output("exec", COMPLETED));
+            List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+            assertEquals(script, 2, messages.size());
+            messages.forEach(message -> assertEquals(script, "opening", text(message.getAsJsonObject("raw"), "codexTurnId")));
+        }
+    }
+
+    private static JsonObject plainOutput(String id, String body) {
+        JsonObject record = JsonParser.parseString("{\"type\":\"response_item\",\"payload\":{}}").getAsJsonObject();
+        JsonObject payload = record.getAsJsonObject("payload");
+        payload.addProperty("type", id.contains("wait") || id.contains("sleep") ? "function_call_output" : "custom_tool_call_output");
+        payload.addProperty("call_id", id);
+        payload.addProperty("output", body);
+        return record;
+    }
+
     private static JsonObject command(String id, String command, int exitCode) {
         JsonObject record = JsonParser.parseString("{\"type\":\"event_msg\",\"payload\":{\"type\":\"item_completed\",\"thread_id\":\"root\",\"turn_id\":\"turn\","
                 + "\"item\":{\"type\":\"CommandExecution\",\"status\":\"completed\"}}}").getAsJsonObject();

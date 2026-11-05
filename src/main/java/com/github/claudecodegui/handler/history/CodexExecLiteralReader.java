@@ -5,11 +5,16 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Comparator;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Reads bounded literal expressions without evaluating historical JavaScript. */
@@ -20,8 +25,64 @@ final class CodexExecLiteralReader {
     private static final Pattern TOOL_ARGUMENT = Pattern.compile("(?:tools|functions)\\.([A-Za-z_$][A-Za-z0-9_$]*)\\s*\\(");
     private static final Pattern TOOL_ALIAS = Pattern.compile("const\\s+(" + IDENTIFIER + ")\\s*=\\s*((?:tools|functions)\\.(" + IDENTIFIER + "))\\s*;");
     private static final Pattern DESTRUCTURED_TOOLS = Pattern.compile("const\\s*\\{([^{}]+)}\\s*=\\s*(tools|functions)\\s*;");
+    private static final Pattern INTERPOLATED_NAME = Pattern.compile("(?<![A-Za-z0-9_$])" + IDENTIFIER);
+    private static final Set<String> BLOCK_KEYWORDS = Set.of("else", "try", "finally", "do");
+    private static final Set<String> SKIPPING_KEYWORDS = Set.of("else", "while", "do");
+    private static final Set<String> HEADED_KEYWORDS = Set.of("if", "for", "switch");
+    // A var can be the bare body of a condition; these two can only begin a new statement.
+    private static final Set<String> LEXICAL_KEYWORDS = Set.of("const", "let");
 
     private record Replacement(int start, int end, String text) { }
+    private record CodeScan(Map<String, List<Integer>> references, List<Integer> topLevelConsts, Set<String> interpolated) { }
+    private record ToolArgument(int start, int end, boolean patch) { }
+    private record Constant(String name, JsonElement value, int visibleFrom) { }
+    private record Frame(int open, boolean conditional, boolean head, boolean block) { }
+
+    /** Top-level consts whose every use is a tool argument, analysed once per script. */
+    static final class Constants {
+        private final String script;
+        private CodeScan scan;
+        private List<Constant> constants;
+
+        Constants(String script) {
+            this.script = script;
+        }
+
+        boolean isInterpolated(String name) {
+            return this.scan().interpolated().contains(name);
+        }
+
+        /** Counts uses of the tool namespaces in code, except property keys that merely share their name. */
+        int namespaceUses() {
+            int uses = 0;
+            for (String namespace : List.of("tools", "functions")) {
+                for (int position : this.scan().references().getOrDefault(namespace, List.of())) {
+                    uses += isLiteralKey(this.script, position, position + namespace.length()) ? 0 : 1;
+                }
+            }
+            return uses;
+        }
+
+        Map<String, JsonElement> visibleAt(int position) {
+            if (this.constants == null) {
+                this.constants = readConstants(this.script, this.scan());
+            }
+            Map<String, JsonElement> visible = new LinkedHashMap<>();
+            for (Constant constant : this.constants) {
+                if (constant.visibleFrom() <= position) {
+                    visible.put(constant.name(), constant.value());
+                }
+            }
+            return visible;
+        }
+
+        private CodeScan scan() {
+            if (this.scan == null) {
+                this.scan = CodexExecLiteralReader.scan(this.script);
+            }
+            return this.scan;
+        }
+    }
 
     private CodexExecLiteralReader() { }
 
@@ -45,10 +106,12 @@ final class CodexExecLiteralReader {
 
     private static String normalizeAliases(String source) {
         List<Replacement> replacements = new ArrayList<>();
+        Set<String> interpolated = scan(source).interpolated();
         var alias = TOOL_ALIAS.matcher(source);
         while (alias.find()) {
             if (CodexExecHistoryReplay.findJavaScriptToken(source, "const", alias.start()) == alias.start() && isTopLevel(source, alias.start())) {
-                List<Replacement> calls = readAliasCalls(source, alias.group(1), alias.group(2), alias.start(), alias.end());
+                List<Replacement> calls = interpolated.contains(alias.group(1)) ? null
+                        : readAliasCalls(source, alias.group(1), alias.group(2), alias.start(), alias.end());
                 if (calls != null) {
                     replacements.addAll(calls);
                     replacements.add(new Replacement(alias.start(), alias.end(), " ".repeat(alias.end() - alias.start())));
@@ -68,7 +131,8 @@ final class CodexExecLiteralReader {
                     valid = false;
                     break;
                 }
-                List<Replacement> references = readAliasCalls(source, pair.get(pair.size() - 1), destructured.group(2) + "." + pair.get(0),
+                List<Replacement> references = interpolated.contains(pair.get(pair.size() - 1)) ? null
+                        : readAliasCalls(source, pair.get(pair.size() - 1), destructured.group(2) + "." + pair.get(0),
                         destructured.start(), destructured.end());
                 if (references == null) {
                     valid = false;
@@ -184,61 +248,149 @@ final class CodexExecLiteralReader {
         return null;
     }
 
-    static Map<String, JsonElement> readBindings(String script, int argumentStart, int argumentEnd) {
-        Map<String, JsonElement> bindings = new LinkedHashMap<>();
-        int cursor = 0;
-        while ((cursor = CodexExecHistoryReplay.findJavaScriptToken(script, "const", cursor)) >= 0 && cursor < argumentStart) {
+    private static List<Constant> readConstants(String script, CodeScan scan) {
+        List<ToolArgument> arguments = readToolArguments(script, scan);
+        List<Constant> constants = new ArrayList<>();
+        int consumed = 0;
+        for (int position : scan.topLevelConsts()) {
             var declaration = DECLARATION.matcher(script);
-            declaration.region(cursor, argumentStart);
-            if (!declaration.lookingAt() || !isTopLevel(script, cursor)) {
-                cursor += 5;
+            declaration.region(position, script.length());
+            if (position < consumed || !declaration.lookingAt()) {
                 continue;
             }
-            int start = declaration.end();
-            int end = expressionEnd(script, start, argumentStart);
-            if (end < start) {
-                cursor += 5;
+            int end = expressionEnd(script, declaration.end());
+            if (end < 0) {
                 continue;
             }
+            consumed = end + 1;
             String name = declaration.group(1);
-            JsonElement value = read(script.substring(start, end), bindings);
-            String references = script.replace("...", "   ");
-            if (CodexExecHistoryReplay.findJavaScriptToken(references, name, 0) != declaration.start(1)) {
-                cursor = end + 1;
-                continue;
+            JsonElement value = read(script.substring(declaration.end(), end), Map.of());
+            if (value != null && !scan.interpolated().contains(name)
+                    && isOnlyReadByToolArguments(scan.references().get(name), declaration.start(1), arguments)) {
+                constants.add(new Constant(name, value, end + 1));
             }
-            int reference = CodexExecHistoryReplay.findJavaScriptToken(references, name, end + 1);
-            while (value != null && reference >= 0 && reference < argumentStart && readOnlyArgument(script, reference, name, value, bindings)) {
-                reference = CodexExecHistoryReplay.findJavaScriptToken(references, name, reference + name.length());
-            }
-            int later = CodexExecHistoryReplay.findJavaScriptToken(references, name, argumentEnd);
-            while (value != null && later >= 0 && readOnlyArgument(script, later, name, value, bindings)) {
-                later = CodexExecHistoryReplay.findJavaScriptToken(references, name, later + name.length());
-            }
-            // Later declarations can be hoisted; every use must preserve this literal, regardless of source order.
-            if (value != null && reference >= argumentStart && reference < argumentEnd && later < 0) {
-                bindings.put(name, value);
-            }
-            cursor = end + 1;
         }
-        return bindings;
+        return constants;
     }
 
-    private static boolean readOnlyArgument(String script, int reference, String name, JsonElement value, Map<String, JsonElement> known) {
-        var tool = TOOL_ARGUMENT.matcher(script);
-        while (tool.find() && tool.start() < reference) {
-            if (tool.group(1).equals("apply_patch") || CodexExecHistoryReplay.findJavaScriptToken(script, tool.group().substring(0, tool.group().indexOf('(')).strip(), tool.start()) != tool.start()) {
-                continue;
+    /** Every non-patch tool argument must itself read as a literal or readActions keeps the wrapper, so none can mutate. */
+    private static boolean isOnlyReadByToolArguments(List<Integer> references, int declaration, List<ToolArgument> arguments) {
+        // Later declarations can be hoisted; every use must preserve this literal, regardless of source order.
+        if (references.get(0) != declaration) {
+            return false;
+        }
+        Set<ToolArgument> users = new HashSet<>();
+        for (int reference : references.subList(1, references.size())) {
+            ToolArgument argument = enclosingArgument(arguments, reference);
+            if (argument == null) {
+                return false;
             }
-            int paren = tool.end() - 1;
-            int end = CodexExecHistoryReplay.findMatchingParenthesisEnd(script, paren);
-            if (reference < end) {
-                Map<String, JsonElement> bindings = new LinkedHashMap<>(known);
-                bindings.put(name, value);
-                return read(script.substring(paren + 1, end), bindings) != null;
+            users.add(argument);
+        }
+        // A computed patch is never read as a literal, so it can only own its const outright.
+        return users.size() <= 1 || users.stream().noneMatch(ToolArgument::patch);
+    }
+
+    /** Returns the innermost argument, so a use nested in another tool's call never counts as the outer patch's own. */
+    private static ToolArgument enclosingArgument(List<ToolArgument> arguments, int reference) {
+        ToolArgument innermost = null;
+        for (ToolArgument argument : arguments) {
+            if (argument.start() > reference) {
+                break;
+            }
+            if (reference < argument.end()) {
+                innermost = argument;
             }
         }
-        return false;
+        return innermost;
+    }
+
+    /** A namespace name used as a literal property key does not refer to the runtime namespace. */
+    static boolean isLiteralKey(String script, int start, int end) {
+        int next = CodexExecHistoryReplay.skipTrivia(script, end, script.length());
+        int previous = start - 1;
+        while (previous >= 0 && Character.isWhitespace(script.charAt(previous))) {
+            previous--;
+        }
+        return next < script.length() && script.charAt(next) == ':' && previous >= 0
+                && (script.charAt(previous) == '{' || script.charAt(previous) == ',');
+    }
+
+    private static List<ToolArgument> readToolArguments(String script, CodeScan scan) {
+        List<ToolArgument> arguments = new ArrayList<>();
+        for (String namespace : List.of("tools", "functions")) {
+            for (int position : scan.references().getOrDefault(namespace, List.of())) {
+                var tool = TOOL_ARGUMENT.matcher(script);
+                tool.region(position, script.length());
+                if (tool.lookingAt()) {
+                    int paren = tool.end() - 1;
+                    int end = CodexExecHistoryReplay.findMatchingParenthesisEnd(script, paren);
+                    if (end > paren) {
+                        arguments.add(new ToolArgument(paren, end, tool.group(1).equals("apply_patch")));
+                    }
+                }
+            }
+        }
+        arguments.sort(Comparator.comparingInt(ToolArgument::start));
+        return arguments;
+    }
+
+    /** One pass over code positions: identifier uses, top-level consts and names read inside template interpolations. */
+    private static CodeScan scan(String script) {
+        Map<String, List<Integer>> references = new HashMap<>();
+        List<Integer> consts = new ArrayList<>();
+        Set<String> interpolated = new HashSet<>();
+        int depth = 0;
+        int cursor = 0;
+        while (cursor < script.length()) {
+            char value = script.charAt(cursor);
+            int next = cursor + 1;
+            if (value == '\'' || value == '"' || value == '`') {
+                next = CodexExecHistoryReplay.skipJavaScriptString(script, cursor);
+                if (value == '`') {
+                    addInterpolatedNames(script, cursor, next, interpolated);
+                }
+            } else if (value == '/') {
+                next = Math.max(next, CodexExecHistoryReplay.skipTrivia(script, cursor, script.length()));
+            } else if (CodexExecHistoryReplay.isJavaScriptIdentifierPart(value)) {
+                next = identifierEnd(script, cursor);
+                // A spread reads its operand, unlike the property access that a single dot begins.
+                boolean property = cursor > 0 && script.charAt(cursor - 1) == '.' && !script.startsWith("...", cursor - 3);
+                if (!property && CodexExecHistoryReplay.isJavaScriptIdentifierStart(value)) {
+                    String name = script.substring(cursor, next);
+                    references.computeIfAbsent(name, key -> new ArrayList<>()).add(cursor);
+                    if (depth == 0 && name.equals("const")) {
+                        consts.add(cursor);
+                    }
+                }
+            } else if (value == '(' || value == '[' || value == '{') {
+                depth++;
+            } else if (value == ')' || value == ']' || value == '}') {
+                depth--;
+            }
+            cursor = next;
+        }
+        return new CodeScan(references, consts, interpolated);
+    }
+
+    private static void addInterpolatedNames(String script, int start, int end, Set<String> names) {
+        List<String> interpolations = CodexExecHistoryReplay.readTemplateInterpolations(script, start, end);
+        if (interpolations != null) {
+            for (String source : interpolations) {
+                var name = INTERPOLATED_NAME.matcher(source);
+                while (name.find()) {
+                    names.add(name.group());
+                }
+            }
+        }
+    }
+
+    private static int identifierEnd(String script, int start) {
+        int end = start + 1;
+        while (end < script.length() && CodexExecHistoryReplay.isJavaScriptIdentifierPart(script.charAt(end))) {
+            end++;
+        }
+        return end;
     }
 
     static List<String> split(String source, char delimiter) {
@@ -321,21 +473,80 @@ final class CodexExecLiteralReader {
             }
         }
         // Deferred callbacks and conditional blocks need their own execution evidence, not lexical ordering.
-        return arrows.isEmpty() && braces == 0;
+        return arrows.isEmpty() && braces == 0 && !followsCondition(script, position);
     }
 
-    private static int expressionEnd(String script, int start, int limit) {
-        List<String> parts = split(script.substring(start, limit), ';');
-        if (parts.size() < 2) {
-            return -1;
+    /** A bare if/else/loop, a short circuit, exit() or an unused default in the current statement can skip a call. */
+    private static boolean followsCondition(String script, int position) {
+        Deque<Frame> frames = new ArrayDeque<>();
+        boolean conditional = false;
+        boolean head = false;
+        char previous = '\0';
+        String previousWord = null;
+        int cursor = 0;
+        while (cursor < position) {
+            char value = script.charAt(cursor);
+            int next = cursor + 1;
+            String word = null;
+            if (value == '/' || Character.isWhitespace(value)) {
+                // Trivia is not a token, so it cannot stand between a keyword and the block it opens.
+                cursor = Math.max(next, CodexExecHistoryReplay.skipTrivia(script, cursor, script.length()));
+                continue;
+            }
+            if (value == '\'' || value == '"' || value == '`') {
+                next = CodexExecHistoryReplay.skipJavaScriptString(script, cursor);
+            } else if (CodexExecHistoryReplay.isJavaScriptIdentifierPart(value)) {
+                next = identifierEnd(script, cursor);
+                word = cursor > 0 && script.charAt(cursor - 1) == '.' ? null : script.substring(cursor, next);
+                if ("exit".equals(word)) {
+                    // Everything after a reachable exit() may never run, though the script still reports success.
+                    return true;
+                }
+                conditional = SKIPPING_KEYWORDS.contains(String.valueOf(word)) || conditional && !LEXICAL_KEYWORDS.contains(String.valueOf(word));
+                head |= HEADED_KEYWORDS.contains(String.valueOf(word));
+            } else if (value == '(' || value == '[' || value == '{') {
+                boolean block = value == '{' && (previous == '\0' || ");{}".indexOf(previous) >= 0 || BLOCK_KEYWORDS.contains(String.valueOf(previousWord)));
+                frames.push(new Frame(cursor, conditional, head && value == '(', block));
+                head &= value != '(';
+                conditional = false;
+            } else if (value == ')' || value == ']' || value == '}') {
+                Frame frame = frames.poll();
+                // The head of if/for/switch always runs; its body does not, until a closing block ends the statement.
+                conditional = frame != null && !frame.block() && (frame.conditional() || frame.head());
+            } else if (value == ';') {
+                // Only the first clause of a C-style for head is certain to run.
+                conditional = frames.peek() != null && frames.peek().head();
+            } else if (value == '?' || (value == '&' || value == '|') && next < position && script.charAt(next) == value) {
+                conditional = true;
+            }
+            previous = script.charAt(next - 1);
+            previousWord = word;
+            cursor = next;
         }
-        // split strips whitespace; locate the actual delimiter without changing source coordinates.
+        return conditional || frames.stream().anyMatch(frame -> frame.conditional() || closesIntoBinding(script, frame.open()));
+    }
+
+    /** Defaults in parameter lists and destructuring patterns run only when their value is missing. */
+    private static boolean closesIntoBinding(String script, int open) {
+        char value = script.charAt(open);
+        int close = value == '(' ? CodexExecHistoryReplay.findMatchingParenthesisEnd(script, open)
+                : value == '[' ? CodexExecHistoryReplay.findMatchingArrayEnd(script, open) : CodexExecHistoryReplay.findMatchingObjectEnd(script, open);
+        int next = close < open ? script.length() : CodexExecHistoryReplay.skipTrivia(script, close + 1, script.length());
+        return script.startsWith("=>", next) || value != '(' && script.startsWith("=", next) && !script.startsWith("==", next);
+    }
+
+    private static int expressionEnd(String script, int start) {
         int end = start;
         int depth = 0;
-        while (end < limit) {
+        while (end < script.length()) {
             char value = script.charAt(end);
             if (value == '\'' || value == '"' || value == '`') {
                 end = CodexExecHistoryReplay.skipJavaScriptString(script, end);
+                continue;
+            }
+            if (value == '/') {
+                // A delimiter inside a comment does not end the initializer.
+                end = Math.max(end + 1, CodexExecHistoryReplay.skipTrivia(script, end, script.length()));
                 continue;
             }
             if (value == '(' || value == '[' || value == '{') {

@@ -19,6 +19,7 @@ final class CodexExecContinuation {
     private static final Pattern RUNNING = Pattern.compile("^Script running with cell ID ([^\\s]+)(?:\\n|$)");
     private static final Pattern HOST_HEADER = Pattern.compile(
             "^Script (?:completed|failed|terminated|running with cell ID [^\\s]+)\\nWall time:? [^\\n]+\\nOutput:\\n");
+    private static final Pattern NOTIFY_USE = Pattern.compile("(?<![A-Za-z0-9_$])notify(?![A-Za-z0-9_$])");
     private final String callId;
     private final boolean notifications;
     private final List<JsonObject> records = new ArrayList<>();
@@ -36,7 +37,8 @@ final class CodexExecContinuation {
         JsonObject payload = object(original, "payload");
         this.callId = text(payload, "call_id");
         String source = text(payload, payload.has("input") ? "input" : "arguments");
-        this.notifications = source != null && CodexExecHistoryReplay.findJavaScriptToken(source, "notify", 0) >= 0;
+        // Aliases, templates and regex all hide notify from a token search; a false text match only waits for a host header.
+        this.notifications = source != null && NOTIFY_USE.matcher(source).find();
     }
 
     boolean accept(JsonObject record, long recordNumber, String nativeTurnId) {
@@ -185,12 +187,7 @@ final class CodexExecContinuation {
             if (CodexMessageConverter.isFailedToolOutput(output)) {
                 payload.addProperty("status", "error");
             }
-            JsonElement content = output.get("output");
-            if (content != null && content.isJsonArray()) {
-                content.getAsJsonArray().forEach(value -> body.add(value.deepCopy()));
-            } else if (content != null) {
-                body.add(content.deepCopy());
-            }
+            appendOutput(body, output.get("output"));
             JsonObject metadata = object(output, "internal_chat_message_metadata_passthrough");
             JsonElement calls = metadata == null ? null : metadata.get("executed_tool_calls");
             if (calls == null && text(metadata, "cell_id") == null) {
@@ -217,7 +214,6 @@ final class CodexExecContinuation {
 
     List<JsonObject> fallbackRecords() {
         List<JsonObject> replay = new ArrayList<>();
-        Map<String, JsonArray> outputBodies = new LinkedHashMap<>();
         Map<String, JsonObject> outputPayloads = new LinkedHashMap<>();
         Map<String, Integer> nativePositions = new LinkedHashMap<>();
         for (JsonObject record : this.records) {
@@ -238,28 +234,43 @@ final class CodexExecContinuation {
                 continue;
             }
             String id = text(payload, "call_id");
-            JsonArray body = outputBodies.get(id);
-            if (body == null) {
-                JsonObject combined = record.deepCopy();
-                body = new JsonArray();
-                object(combined, "payload").add("output", body);
-                outputBodies.put(id, body);
-                outputPayloads.put(id, object(combined, "payload"));
-                replay.add(combined);
+            JsonObject combined = outputPayloads.get(id);
+            if (combined == null) {
+                // A lone output keeps its original body; the converter reads plain strings and typed blocks as they are.
+                JsonObject copy = record.deepCopy();
+                combined = object(copy, "payload");
+                outputPayloads.put(id, combined);
+                replay.add(copy);
+            } else {
+                JsonArray body = new JsonArray();
+                appendOutput(body, combined.get("output"));
+                appendOutput(body, payload.get("output"));
+                combined.add("output", body);
             }
             if (CodexMessageConverter.isFailedToolOutput(payload)) {
-                outputPayloads.get(id).addProperty("status", "error");
-            }
-            JsonElement output = payload.get("output");
-            if (output != null && output.isJsonArray()) {
-                for (JsonElement entry : output.getAsJsonArray()) {
-                    body.add(entry.deepCopy());
-                }
-            } else if (output != null) {
-                body.add(output.deepCopy());
+                combined.addProperty("status", "error");
             }
         }
         return replay;
+    }
+
+    private static void appendOutput(JsonArray body, JsonElement output) {
+        if (output == null) {
+            return;
+        }
+        if (output.isJsonArray()) {
+            output.getAsJsonArray().forEach(entry -> body.add(entry.deepCopy()));
+            return;
+        }
+        // Only typed blocks yield their text; a bare array element would render as raw JSON, and encoded bodies would stay encoded.
+        List<String> texts = new ArrayList<>();
+        CodexExecHistoryReplay.collectOutputTexts(output, texts);
+        for (String text : texts) {
+            JsonObject block = new JsonObject();
+            block.addProperty("type", "input_text");
+            block.addProperty("text", text);
+            body.add(block);
+        }
     }
 
     private static String nativeItemIdentity(JsonObject payload) {

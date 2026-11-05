@@ -931,9 +931,7 @@ public class HistoryMessageInjector {
                 }
                 this.acceptOpaqueExecRecord(replay.original(), replay.callId(), false);
                 for (JsonObject record : continuation.fallbackRecords()) {
-                    JsonObject recordPayload = getResponseItemPayload(record);
-                    if (isToolOutputPayload(recordPayload) && replay.callId().equals(getStringProperty(recordPayload, "call_id"))
-                            && continuation.ownsOutput(record)) {
+                    if (ownsWrapperOutput(replay, continuation, record)) {
                         this.acceptOpaqueExecRecord(record, replay.callId(), true);
                     } else {
                         // Waits keep their arrival scope; the original exec result stays with its opening turn.
@@ -947,7 +945,20 @@ public class HistoryMessageInjector {
                 return;
             }
             this.acceptLegacy(replay.original());
-            continuation.fallbackRecords().forEach(this::acceptDeferredExecRecord);
+            for (JsonObject record : continuation.fallbackRecords()) {
+                if (ownsWrapperOutput(replay, continuation, record)) {
+                    // The caller has restored the opening turn, which this result shares with its wrapper.
+                    this.acceptRecordedExecRecord(record);
+                } else {
+                    this.acceptDeferredExecRecord(record);
+                }
+            }
+        }
+
+        private static boolean ownsWrapperOutput(CodexKnownExecReplay replay, CodexExecContinuation continuation, JsonObject record) {
+            JsonObject payload = getResponseItemPayload(record);
+            return isToolOutputPayload(payload) && replay.callId().equals(getStringProperty(payload, "call_id"))
+                    && continuation.ownsOutput(record);
         }
 
         private void acceptDeferredExecRecord(JsonObject record) {

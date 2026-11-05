@@ -98,7 +98,8 @@ final class CodexKnownExecReplay {
         String script = firstText(payload, "input", "arguments");
         this.opaqueToolAccess = actions == null && (!Set.of("tools.update_plan").equals(readToolTokens(script))
                 || CodexExecHistoryReplay.findJavaScriptToken(script, "function", 0) >= 0
-                || CodexExecHistoryReplay.extractUpdatePlanInput(payload) == null || CodexExecHistoryReplay.containsUnsupportedToolCalls(payload));
+                || CodexExecHistoryReplay.extractUpdatePlanInput(payload) == null || CodexExecHistoryReplay.containsUnsupportedToolCalls(payload)
+                || !CodexExecLiteralReader.reachesCallInSourceOrder(script, CodexExecHistoryReplay.findJavaScriptToken(script, "tools.update_plan", 0)));
         this.multipleBatches = hasMultipleBatches(script);
         BatchOutput batchOutput = readBatchOutput(script);
         this.resultIndexLabel = batchOutput.indexLabel;
@@ -1395,6 +1396,7 @@ final class CodexKnownExecReplay {
             return null;
         }
         script = CodexExecLiteralReader.normalizeToolAccess(script);
+        CodexExecLiteralReader.Constants constants = new CodexExecLiteralReader.Constants(script);
         payload = payload.deepCopy();
         payload.addProperty("input", script);
         Set<String> tokens = readToolTokens(script);
@@ -1415,9 +1417,11 @@ final class CodexKnownExecReplay {
         if (groupEntries == null || settledKeys == null) {
             return null;
         }
+        int readCalls = 0;
         for (String token : tokens) {
             int position = 0;
             while ((position = CodexExecHistoryReplay.findJavaScriptToken(script, token, position)) >= 0) {
+                readCalls++;
                 String kind = token.substring(token.indexOf('.') + 1);
                 if (!List.of("apply_patch", "exec_command", "shell_command", "write_stdin", "view_image", "web__run", "web_run").contains(kind) && !isMcp(kind) && !isClock(kind)) {
                     return null;
@@ -1427,7 +1431,7 @@ final class CodexKnownExecReplay {
                     return null;
                 }
                 if (!kind.equals("apply_patch")) {
-                    CodexMappedCommandBatch.Batch batch = CodexMappedCommandBatch.readInputs(script, token, position);
+                    CodexMappedCommandBatch.Batch batch = CodexMappedCommandBatch.readInputs(script, token, position, constants);
                     if (batch != null) {
                         if (!groupEntries.isEmpty() || actions.size() + batch.inputs().size() > MAX_CALLS) {
                             return null;
@@ -1454,7 +1458,7 @@ final class CodexKnownExecReplay {
                     if (end < paren) {
                         return null;
                     }
-                    JsonElement patch = readLiteralArgument(script, paren + 1, end);
+                    JsonElement patch = readLiteralArgument(script, paren + 1, end, constants);
                     if (patch != null && patch.isJsonPrimitive() && patch.getAsJsonPrimitive().isString()) {
                         input.addProperty("patch", patch.getAsString());
                     }
@@ -1464,7 +1468,7 @@ final class CodexKnownExecReplay {
                     if (end < start) {
                         return null;
                     }
-                    JsonElement literal = readLiteralArgument(script, start, end);
+                    JsonElement literal = readLiteralArgument(script, start, end, constants);
                     input = literal != null && literal.isJsonObject() ? literal.getAsJsonObject() : null;
                     if (!validInput(kind, input)) {
                         return null;
@@ -1485,6 +1489,10 @@ final class CodexKnownExecReplay {
                 }
                 position += token.length();
             }
+        }
+        if (readCalls != constants.namespaceUses()) {
+            // A spread or an unusual tool name can reach the namespace past the token search; none of its calls were read.
+            return null;
         }
         actions.sort(Comparator.comparingInt(Action::position));
         List<Action> indexed = new ArrayList<>();
@@ -1522,11 +1530,11 @@ final class CodexKnownExecReplay {
         return indexed;
     }
 
-    private static JsonElement readLiteralArgument(String script, int start, int end) {
+    private static JsonElement readLiteralArgument(String script, int start, int end, CodexExecLiteralReader.Constants constants) {
         String expression = script.substring(start, end);
         JsonElement literal = CodexExecLiteralReader.read(expression, Map.of());
-        // Most calls contain complete literals; unrelated declarations need no repeated binding analysis.
-        return literal != null ? literal : CodexExecLiteralReader.read(expression, CodexExecLiteralReader.readBindings(script, start, end));
+        // Most calls contain complete literals; unrelated declarations need no binding analysis.
+        return literal != null ? literal : CodexExecLiteralReader.read(expression, constants.visibleAt(start));
     }
 
     private static Set<String> readToolTokens(String script) {
@@ -1534,10 +1542,7 @@ final class CodexKnownExecReplay {
         for (String namespace : List.of("tools", "functions")) {
             int cursor = 0;
             while ((cursor = CodexExecHistoryReplay.findJavaScriptToken(script, namespace, cursor)) >= 0) {
-                int next = CodexExecHistoryReplay.skipTrivia(script, cursor + namespace.length(), script.length());
-                String prefix = script.substring(0, cursor).stripTrailing();
-                if (next < script.length() && script.charAt(next) == ':' && (prefix.endsWith("{") || prefix.endsWith(","))) {
-                    // A literal property key does not refer to the runtime namespace.
+                if (CodexExecLiteralReader.isLiteralKey(script, cursor, cursor + namespace.length())) {
                     cursor += namespace.length();
                     continue;
                 }

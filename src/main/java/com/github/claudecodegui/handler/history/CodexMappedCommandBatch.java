@@ -23,7 +23,7 @@ final class CodexMappedCommandBatch {
 
     private CodexMappedCommandBatch() { }
 
-    static Batch readInputs(String script, String token, int position) {
+    static Batch readInputs(String script, String token, int position, CodexExecLiteralReader.Constants constants) {
         var mapping = MAPPING.matcher(script.substring(0, position));
         int mappingStart = -1;
         int paren = -1;
@@ -70,7 +70,7 @@ final class CodexMappedCommandBatch {
             boolean labelled = prefix.matches("\\(\\s*\\{\\s*" + IDENTIFIER + "\\s*,\\s*\\.\\.\\.\\s*await")
                     && suffix != null && suffix.matches("}\\s*\\)\\s*\\)");
             if ((plain || block || labelled) && CodexExecLiteralReader.reachesCallInSourceOrder(script, mappingStart)) {
-                return unpack(script, token, position, name, mappingStart, parameter, true);
+                return unpack(script, token, position, name, mappingStart, parameter, true, constants);
             }
         }
         var loop = LOOP.matcher(script.substring(0, position));
@@ -99,7 +99,7 @@ final class CodexMappedCommandBatch {
         if (loop.group(3) != null && (tail >= script.length() || script.charAt(tail) != '}')) {
             return null;
         }
-        return unpack(script, token, position, loop.group(2), loop.start(2), loop.group(1), false);
+        return unpack(script, token, position, loop.group(2), loop.start(2), loop.group(1), false, constants);
     }
 
     private static String suffix(String script, String token, int position, int end) {
@@ -112,7 +112,11 @@ final class CodexMappedCommandBatch {
         return start >= script.length() || script.charAt(start) != '(' ? -1 : CodexExecHistoryReplay.findMatchingParenthesisEnd(script, start);
     }
 
-    private static Batch unpack(String script, String token, int position, String batch, int reference, String parameter, boolean parallel) {
+    private static Batch unpack(String script, String token, int position, String batch, int reference, String parameter, boolean parallel,
+                                CodexExecLiteralReader.Constants constants) {
+        if (constants.isInterpolated(batch)) {
+            return null;
+        }
         var declaration = Pattern.compile("\\bconst\\s+(" + Pattern.quote(batch) + ")\\s*=\\s*(\\[)").matcher(script);
         declaration.region(0, reference);
         if (!declaration.find() || CodexExecHistoryReplay.findJavaScriptToken(script, "const", declaration.start()) != declaration.start()
@@ -139,7 +143,7 @@ final class CodexMappedCommandBatch {
             return null;
         }
         List<JsonObject> inputs = new ArrayList<>();
-        Map<String, JsonElement> globals = CodexExecLiteralReader.readBindings(script, argumentStart, argumentEnd);
+        Map<String, JsonElement> globals = constants.visibleAt(argumentStart);
         for (JsonElement job : jobs.getAsJsonArray()) {
             Map<String, JsonElement> bindings = bind(parameter, job);
             if (bindings != null) {
