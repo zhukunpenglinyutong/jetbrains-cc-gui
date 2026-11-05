@@ -207,6 +207,7 @@
     "codexReviewStarted": "Codex is reviewing the workspace",
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexCliOutdated": "Codex CLI {{version}} is outdated; some models and permission modes may not work. Update to {{minimumVersion}} or newer.",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
     "continueRefiningPlan": "Continue refining this plan:"
   },
@@ -2815,6 +2816,22 @@
           "title": "Option 2: Reinstall the latest SDK from the official npm registry",
           "step0": "1. Switch to the official npm registry (avoid the Taobao mirror — it may not have the latest version):",
           "step1": "2. Open Dependency Management and reinstall the latest SDK:"
+        }
+      }
+    },
+    "codexCliVersionTooOld": {
+      "title": "Codex CLI is too old for this permission mode",
+      "intro": "Full Auto and Auto Mode use the automatic reviewer setting. This Codex CLI does not recognize it and rejected the request, so your message was not processed.",
+      "reason": "The plugin runs the Codex CLI found on your machine, so updating the plugin does not update the CLI. If the error continues after updating, an older codex may come first on your PATH.",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "Option 1: Install or update the CLI using the official instructions",
+          "step0": "1. Open the official instructions and choose the standalone installer, npm, or Homebrew for your runtime environment. Update through the original installation channel; do not use npm uninstall for a standalone installation:",
+          "step1": "2. In a new terminal, confirm the version has changed, then restart the IDE so the plugin picks up the new CLI:"
+        },
+        "useDefaultMode": {
+          "title": "Option 2: Switch the permission mode for now",
+          "step0": "Switch to Default Mode. It does not use the automatic reviewer, so you can keep working until the CLI is updated. If the error continues, update the CLI as described in Option 1."
         }
       }
     },

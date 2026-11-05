@@ -34,12 +34,39 @@ describe('matchErrorPattern', () => {
     expect(matchErrorPattern(text)).toBeNull();
   });
 
+  it.each([
+    'Invalid request: unknown variant `auto_review`, expected `user` or `guardian_subagent`',
+    'thread/resume: Invalid request: unknown variant `auto_review`, expected `user` or `guardian_subagent`',
+  ])('explains a Codex CLI too old for the automatic reviewer: %s', (text) => {
+    expect(matchErrorPattern(text)?.code).toBe('codexCliVersionTooOld');
+  });
+
+  it.each([
+    // A variant a newer CLI removed must not advise updating the CLI.
+    'Invalid request: unknown variant `untrusted`, expected `never` or `on-request`',
+    'auto_review was denied by the reviewer',
+  ])('does not blame the CLI version for other failures: %s', (text) => {
+    expect(matchErrorPattern(text)?.code).not.toBe('codexCliVersionTooOld');
+  });
+
+  it('localizes the Codex CLI version notice with its versions in every supported language', () => {
+    const locales = import.meta.glob<{ chat: Record<string, string> }>('../i18n/locales/*.json', {
+      eager: true, import: 'default',
+    });
+    expect(Object.keys(locales)).toHaveLength(10);
+    for (const [locale, { chat }] of Object.entries(locales)) {
+      expect(chat.codexCliOutdated, locale).toContain('{{version}}');
+      expect(chat.codexCliOutdated, locale).toContain('{{minimumVersion}}');
+    }
+  });
+
   it('provides localized recovery instructions in every supported language', () => {
     const locales = import.meta.glob<{ errorDiagnostic: Record<string, unknown> }>('../i18n/locales/*.json', {
       eager: true, import: 'default',
     });
     const recoveryPatterns = patternsData.patterns.filter(pattern =>
-      pattern.code === 'codexWriterConflict' || pattern.code.startsWith('codexThread'));
+      pattern.code === 'codexWriterConflict' || pattern.code === 'codexCliVersionTooOld'
+        || pattern.code.startsWith('codexThread'));
     expect(Object.keys(locales)).toHaveLength(10);
     for (const [locale, { errorDiagnostic }] of Object.entries(locales)) {
       for (const pattern of recoveryPatterns) {

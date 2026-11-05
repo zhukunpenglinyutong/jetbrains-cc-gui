@@ -207,6 +207,7 @@
     "codexReviewStarted": "Codex 正在审查工作区改动",
     "codexDiffUsage": "请直接使用 /diff，无需参数",
     "codexApprovalsUsage": "请直接使用 /approvals，无需参数",
+    "codexCliOutdated": "Codex CLI {{version}} 版本较旧，部分模型和权限模式可能无法正常使用，请升级到 {{minimumVersion}} 或更高版本。",
     "codexSandboxConflict": "Codex 自动审查不能使用 danger-full-access 沙箱，请改用 workspace-write 或请求批准模式。",
     "continueRefiningPlan": "继续完善此计划："
   },
@@ -2819,6 +2820,22 @@
           "title": "方案二：用 npm 官方源重装最新版 SDK",
           "step0": "1. 切换到 npm 官方源（淘宝源可能未同步最新版本，请勿使用淘宝源安装）：",
           "step1": "2. 打开「依赖管理」重装最新版 SDK："
+        }
+      }
+    },
+    "codexCliVersionTooOld": {
+      "title": "Codex CLI 版本过低，不支持当前权限模式",
+      "intro": "全自动和自动审批模式会用到自动审查器设置。当前的 Codex CLI 不认识这个设置并拒绝了请求，所以这条消息没有被处理。",
+      "reason": "插件使用本机识别到的 Codex CLI，更新插件不会同时更新 CLI。如果更新后仍然报错，可能是 PATH 上还有一个更旧的 codex 排在前面。",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "方案一：按官方说明安装或更新 CLI",
+          "step0": "1. 打开官方说明，选择适合当前运行环境的独立安装器、npm 或 Homebrew。更新时沿用原安装渠道，不要直接对独立安装版执行 npm 卸载：",
+          "step1": "2. 在新终端中确认版本已经更新，然后重启 IDE，让插件换用新的 CLI："
+        },
+        "useDefaultMode": {
+          "title": "方案二：暂时切换权限模式",
+          "step0": "切换到默认模式。这个模式不使用自动审查器，可以在更新 CLI 之前继续工作。如果仍然报错，请按方案一更新 CLI。"
         }
       }
     },

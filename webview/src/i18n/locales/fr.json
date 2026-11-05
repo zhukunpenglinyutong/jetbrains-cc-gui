@@ -169,6 +169,7 @@
     "codexReviewStarted": "Codex is reviewing the workspace",
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexCliOutdated": "Codex CLI {{version}} est obsolète ; certains modèles et modes d'autorisation peuvent ne pas fonctionner. Mettez à jour vers la version {{minimumVersion}} ou ultérieure.",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
     "continueRefiningPlan": "Continuer à affiner ce plan :"
   },
@@ -2218,6 +2219,22 @@
           "title": "Option 2 : Réinstaller le dernier SDK depuis le registre npm officiel",
           "step0": "1. Basculez vers le registre npm officiel (évitez le miroir Taobao — il peut ne pas avoir la dernière version) :",
           "step1": "2. Ouvrez Gestion des dépendances et réinstallez le dernier SDK :"
+        }
+      }
+    },
+    "codexCliVersionTooOld": {
+      "title": "Codex CLI est trop ancien pour ce mode d'autorisation",
+      "intro": "Les modes Automatisation totale et Approbation automatique utilisent le paramètre du réviseur automatique. Ce Codex CLI ne le reconnaît pas et a rejeté la requête : votre message n'a donc pas été traité.",
+      "reason": "Le plugin exécute le Codex CLI trouvé sur votre machine : mettre à jour le plugin ne met donc pas à jour le CLI. Si l'erreur persiste après la mise à jour, un codex plus ancien se trouve peut-être en tête de votre PATH.",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "Option 1 : installer ou mettre à jour le CLI en suivant les instructions officielles",
+          "step0": "1. Ouvrez les instructions officielles et choisissez l'installateur autonome, npm ou Homebrew selon votre environnement d'exécution. Mettez à jour par le canal d'installation d'origine ; n'exécutez pas npm uninstall sur une installation autonome :",
+          "step1": "2. Dans un nouveau terminal, vérifiez que la version a changé, puis redémarrez l'IDE pour que le plugin utilise le nouveau CLI :"
+        },
+        "useDefaultMode": {
+          "title": "Option 2 : changer de mode d'autorisation pour l'instant",
+          "step0": "Passez en Default Mode. Ce mode n'utilise pas le réviseur automatique : vous pouvez continuer à travailler en attendant de mettre à jour le CLI. Si l'erreur persiste, mettez à jour le CLI comme indiqué dans l'option 1."
         }
       }
     },

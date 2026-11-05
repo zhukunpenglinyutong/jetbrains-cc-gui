@@ -198,6 +198,144 @@ it('coalesces repeated configuration toasts while retaining raw events and disti
   }
 });
 
+describe('Codex warnings that repeat on every turn', () => {
+  const metadataWarning = (slug: string) =>
+    `Model metadata for \`${slug}\` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.`;
+
+  const setup = (currentSessionId: string | null = 'root') => {
+    const { result } = renderHook(() => useDialogManagement({ t }));
+    const addToast = vi.fn();
+    const onEvent = vi.fn();
+    window.addEventListener('codex-runtime-event', onEvent);
+    const currentSessionIdRef = { current: currentSessionId };
+    act(() => registerPermissionCallbacks({ ...result.current, addToast,
+      currentProviderRef: { current: 'codex' }, currentSessionIdRef }));
+    const emit = (message: string, { rootThreadId = 'root', sessionEpoch = 'epoch', channelId = 'C', method = 'warning' } = {}) =>
+      act(() => window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'nativeWarning', channelId, sessionEpoch,
+        rootThreadId, threadId: rootThreadId, payload: { method, message } })));
+    return { addToast, emit, onEvent, currentSessionIdRef,
+      cleanup: () => window.removeEventListener('codex-runtime-event', onEvent) };
+  };
+
+  it('shows the fallback model metadata warning once per model in a session', () => {
+    const { addToast, emit, onEvent, cleanup } = setup();
+    try {
+      emit(metadataWarning('gpt-6.1-sol'));
+      emit(metadataWarning('gpt-6.1-sol'));
+      emit(metadataWarning('gpt-6.1-sol'));
+      expect(addToast).toHaveBeenCalledExactlyOnceWith(metadataWarning('gpt-6.1-sol'), 'warning');
+      expect(onEvent).toHaveBeenCalledTimes(3);
+      emit(metadataWarning('gpt-6-astra'));
+      expect(addToast).toHaveBeenCalledTimes(2);
+      expect(addToast).toHaveBeenLastCalledWith(metadataWarning('gpt-6-astra'), 'warning');
+    } finally { cleanup(); }
+  });
+
+  it('keeps the warning quiet for as long as the session lasts, unlike the timed configuration window', () => {
+    const { addToast, emit, cleanup } = setup();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-04T00:00:00Z'));
+    try {
+      emit(metadataWarning('gpt-6.1-sol'));
+      vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+      emit(metadataWarning('gpt-6.1-sol'));
+      expect(addToast).toHaveBeenCalledTimes(1);
+    } finally { cleanup(); }
+  });
+
+  it('warns again for a new conversation or a new runtime session', () => {
+    const { addToast, emit, currentSessionIdRef, cleanup } = setup();
+    try {
+      emit(metadataWarning('gpt-6.1-sol'));
+      currentSessionIdRef.current = 'next-root';
+      emit(metadataWarning('gpt-6.1-sol'), { rootThreadId: 'next-root' });
+      expect(addToast).toHaveBeenCalledTimes(2);
+      emit(metadataWarning('gpt-6.1-sol'), { rootThreadId: 'next-root', sessionEpoch: 'next-epoch' });
+      expect(addToast).toHaveBeenCalledTimes(3);
+    } finally { cleanup(); }
+  });
+
+  it('does not consume the warning while another conversation is selected', () => {
+    const { addToast, emit, currentSessionIdRef, cleanup } = setup('other-root');
+    try {
+      emit(metadataWarning('gpt-6.1-sol'));
+      expect(addToast).not.toHaveBeenCalled();
+      currentSessionIdRef.current = 'root';
+      emit(metadataWarning('gpt-6.1-sol'));
+      expect(addToast).toHaveBeenCalledTimes(1);
+    } finally { cleanup(); }
+  });
+
+  it('leaves other warnings independent, including the same text from another method', () => {
+    const { addToast, emit, cleanup } = setup();
+    try {
+      emit('Long threads can make the model less accurate.');
+      emit('Long threads can make the model less accurate.');
+      expect(addToast).toHaveBeenCalledTimes(2);
+      emit(metadataWarning('gpt-6.1-sol'), { method: 'guardianWarning' });
+      emit(metadataWarning('gpt-6.1-sol'), { method: 'guardianWarning' });
+      expect(addToast).toHaveBeenCalledTimes(4);
+    } finally { cleanup(); }
+  });
+});
+
+describe('Codex CLI version notice', () => {
+  const translated = ((key: string, options: { version?: string; minimumVersion?: string }) =>
+    `${key}|${options.version}|${options.minimumVersion}`) as unknown as TFunction;
+
+  const setup = () => {
+    const { result } = renderHook(() => useDialogManagement({ t }));
+    const addToast = vi.fn();
+    const currentProviderRef = { current: 'codex' };
+    act(() => registerPermissionCallbacks({ ...result.current, addToast,
+      currentProviderRef, currentSessionIdRef: { current: 'root' } }, () => translated));
+    const emit = (version: string, { channelId = 'C', sessionEpoch = 'epoch', rootThreadId = null as string | null } = {}) =>
+      act(() => window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'nativeWarning', channelId, sessionEpoch,
+        rootThreadId, payload: { method: 'cliVersionOutdated', version, minimumVersion: '0.160.0',
+          message: `Codex CLI ${version} is older than 0.160.0.` } })));
+    return { addToast, emit, currentProviderRef };
+  };
+
+  it('is not scoped to a conversation, since the service can still report an earlier root', () => {
+    const { addToast, emit } = setup();
+    emit('0.159.0', { rootThreadId: 'earlier-root' });
+    expect(addToast).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for Codex to be the selected provider without consuming the notice', () => {
+    const { addToast, emit, currentProviderRef } = setup();
+    currentProviderRef.current = 'claude';
+    emit('0.159.0');
+    expect(addToast).not.toHaveBeenCalled();
+    currentProviderRef.current = 'codex';
+    emit('0.159.0');
+    expect(addToast).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a localized notice with the versions', () => {
+    const { addToast, emit } = setup();
+    emit('0.159.0');
+    expect(addToast).toHaveBeenCalledExactlyOnceWith('chat.codexCliOutdated|0.159.0|0.160.0', 'warning');
+    expect(sendBridgeEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not repeat when the runtime restarts with the same CLI', () => {
+    const { addToast, emit } = setup();
+    emit('0.159.0');
+    emit('0.159.0');
+    emit('0.159.0', { sessionEpoch: 'next-epoch' });
+    expect(addToast).toHaveBeenCalledTimes(1);
+  });
+
+  it('notices a different CLI and stays scoped to its chat window', () => {
+    const { addToast, emit } = setup();
+    emit('0.159.0');
+    emit('0.158.0');
+    emit('0.159.0', { channelId: 'other-channel' });
+    expect(addToast).toHaveBeenCalledTimes(3);
+  });
+});
+
 it.each(['configWarning', 'deprecationNotice'])('keeps %s details behind a compact warning without interrupting the question', method => {
   const { result } = renderHook(() => useDialogManagement({ t }));
   const addToast = vi.fn();

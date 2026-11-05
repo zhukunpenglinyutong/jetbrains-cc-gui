@@ -169,6 +169,7 @@
     "codexReviewStarted": "Codex is reviewing the workspace",
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexCliOutdated": "Codex CLI {{version}} は古いバージョンです。一部のモデルや権限モードが正しく動作しない場合があります。{{minimumVersion}} 以降に更新してください。",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
     "continueRefiningPlan": "このプランの改善を続ける："
   },
@@ -2220,6 +2221,22 @@
           "title": "方法 2：npm 公式レジストリから最新の SDK を再インストール",
           "step0": "1. npm 公式レジストリに切り替える（Taobao ミラーは最新版に同期されていない可能性があります、使用しないでください）：",
           "step1": "2. 「依存関係管理」を開いて最新の SDK を再インストール："
+        }
+      }
+    },
+    "codexCliVersionTooOld": {
+      "title": "Codex CLI が古いため、この権限モードを使用できません",
+      "intro": "完全自動と自動承認モードは自動審査設定を使用します。この Codex CLI はその設定を認識できずリクエストを拒否したため、メッセージは処理されませんでした。",
+      "reason": "プラグインはマシン上で検出した Codex CLI を実行するため、プラグインを更新しても CLI は更新されません。更新後もエラーが続く場合は、より古い codex が PATH の先頭にある可能性があります。",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "方法 1：公式の手順に従って CLI をインストールまたは更新",
+          "step0": "1. 公式の手順を開き、実行環境に合わせてスタンドアロンインストーラー、npm、Homebrew のいずれかを選択します。更新は元のインストール経路で行い、スタンドアロン版に対して npm uninstall を実行しないでください：",
+          "step1": "2. 新しいターミナルでバージョンが更新されたことを確認し、IDE を再起動して新しい CLI を読み込みます："
+        },
+        "useDefaultMode": {
+          "title": "方法 2：権限モードを一時的に切り替える",
+          "step0": "デフォルトモードに切り替えます。このモードは自動審査を使用しないため、CLI を更新するまで作業を続けられます。それでもエラーが続く場合は、方法 1 で CLI を更新してください。"
         }
       }
     },
