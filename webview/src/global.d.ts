@@ -49,8 +49,11 @@ interface Window {
 
   /**
    * Patch a single message UUID without re-sending the full message list.
+   * The role names the pusher (user-row sync vs assistant backfill) so a push
+   * cannot be claimed by the other kind's unresolved message repeating the
+   * same text; callers without a role keep the legacy assistant-first order.
    */
-  patchMessageUuid?: (content: string, uuid: string) => void;
+  patchMessageUuid?: (content: string, uuid: string, role?: 'user' | 'assistant') => void;
 
   /**
    * Update status message
@@ -274,6 +277,13 @@ interface Window {
 
   /** True while a fork request is awaiting onForkResult; blocks double submits. */
   __forkInFlight?: boolean;
+
+  /**
+   * Handle of the 60s backstop timer arming {@link __forkInFlight}, so
+   * onForkResult can retire it the moment the fork settles instead of leaving
+   * a stale timer to release a later fork's guard early.
+   */
+  __forkInFlightTimer?: number;
 
   /**
    * Usage statistics update callback

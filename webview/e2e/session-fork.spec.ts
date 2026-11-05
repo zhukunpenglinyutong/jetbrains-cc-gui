@@ -41,11 +41,14 @@ const longTitleHistory = {
   total: 2,
 } as never;
 
-async function setup(page: Page) {
-  await page.addInitScript(version => {
+async function setup(page: Page, opts?: { pendingSessionId?: string }) {
+  await page.addInitScript(({ version, pendingSessionId }) => {
     localStorage.setItem('lastSeenChangelogVersion', version);
     localStorage.setItem('model-selection-state', JSON.stringify({ provider: 'claude' }));
     localStorage.setItem('language', 'zh');
+    if (pendingSessionId) {
+      window.__pendingSessionId = pendingSessionId;
+    }
     const bridge = window as unknown as { __bridge: string[] };
     bridge.__bridge = [];
     window.sendToJava = message => {
@@ -57,7 +60,7 @@ async function setup(page: Page) {
         })), 0);
       }
     };
-  }, APP_VERSION);
+  }, { version: APP_VERSION, pendingSessionId: opts?.pendingSessionId });
   await page.goto('/');
   await expect(page.locator('.input-editable')).toBeVisible();
   await page.addStyleTag({ content: '#__vconsole { display: none !important; }' });
@@ -166,26 +169,7 @@ test.describe('history row fork', () => {
 
 test.describe('fork from an assistant message', () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(version => {
-      localStorage.setItem('lastSeenChangelogVersion', version);
-      localStorage.setItem('model-selection-state', JSON.stringify({ provider: 'claude' }));
-      localStorage.setItem('language', 'zh');
-      window.__pendingSessionId = 'msg-src';
-      const bridge = window as unknown as { __bridge: string[] };
-      bridge.__bridge = [];
-      window.sendToJava = message => {
-        bridge.__bridge.push(message);
-        if (message.startsWith('get_dependency_status:')) {
-          setTimeout(() => window.updateDependencyStatus?.(JSON.stringify({
-            'claude-sdk': { status: 'installed', meetsMinimumVersion: true },
-            'codex-sdk': { status: 'installed', meetsMinimumVersion: true },
-          })), 0);
-        }
-      };
-    }, APP_VERSION);
-    await page.goto('/');
-    await expect(page.locator('.input-editable')).toBeVisible();
-    await page.addStyleTag({ content: '#__vconsole { display: none !important; }' });
+    await setup(page, { pendingSessionId: 'msg-src' });
   });
 
   const userPrompt = {

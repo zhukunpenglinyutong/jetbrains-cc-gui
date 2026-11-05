@@ -30,8 +30,6 @@ public class SessionMessageOrchestrator {
 
     private static final Logger LOG = Logger.getInstance(SessionMessageOrchestrator.class);
     private static final int MAX_UUID_SYNC_RETRIES = 3;
-    /** Extra transcript rows fetched beyond the unresolved count, so rows filtered out of the chat view cannot starve a match. */
-    private static final int UUID_SYNC_ROW_MARGIN = 5;
 
     public interface SessionHistoryAccess {
         List<JsonObject> getProviderSessionMessages(String provider, String sessionId, String cwd);
@@ -119,6 +117,7 @@ public class SessionMessageOrchestrator {
     private final UsageDisplay usageDisplay;
     private final long initialUuidSyncDelayMs;
     private final long uuidRetryDelayMs;
+    private final AssistantUuidBackfiller assistantUuidBackfiller;
 
     // Claude history pagination state
     private volatile int claudeHistoryFromTurn = 0;
@@ -179,6 +178,8 @@ public class SessionMessageOrchestrator {
         this.usageDisplay = usageDisplay;
         this.initialUuidSyncDelayMs = initialUuidSyncDelayMs;
         this.uuidRetryDelayMs = uuidRetryDelayMs;
+        this.assistantUuidBackfiller = new AssistantUuidBackfiller(
+                state, historyAccess, callbackFacade, uuidRetryDelayMs);
     }
 
     public CompletableFuture<Void> syncUserMessageUuidsAfterSend() {
@@ -252,235 +253,15 @@ public class SessionMessageOrchestrator {
     }
 
     /**
-     * Backfill the uuids of live-streamed assistant messages after a turn ends.
-     * Streaming replies are synthesized from deltas by the bridge, so their raw
-     * carries no uuid — and without one the chat cannot offer per-message forks.
-     * The CLI assigns the row uuid when it appends the transcript, so after the
-     * turn we resolve each uuid-less assistant message against the recent
-     * transcript rows by text and stamp it, mirroring the user-message sync
-     * that powers rewind.
+     * Backfill the uuids of live-streamed assistant messages after a turn ends;
+     * the matching rules live in {@link AssistantUuidBackfiller}.
      */
     public CompletableFuture<Void> syncAssistantMessageUuidsAfterSend() {
-        String provider = state.getProvider();
-        if ("codex".equals(provider) || SessionProviderRouter.isCliProvider(provider)) {
-            return CompletableFuture.completedFuture(null);
-        }
-        if (findUnresolvedAssistantMessages().isEmpty()) {
-            return CompletableFuture.completedFuture(null);
-        }
-
-        return CompletableFuture.runAsync(() -> updateAssistantMessageUuids());
+        return assistantUuidBackfiller.syncAfterSend();
     }
 
     void updateAssistantMessageUuids() {
-        String sessionId = state.getSessionId();
-        String cwd = state.getCwd();
-        if (sessionId == null || sessionId.isEmpty()) {
-            return;
-        }
-
-        for (int attempt = 1; attempt <= MAX_UUID_SYNC_RETRIES; attempt++) {
-            List<ClaudeSession.Message> unresolved = findUnresolvedAssistantMessages();
-            if (unresolved.isEmpty()) {
-                return;
-            }
-
-            try {
-                JsonArray rows = historyAccess.getRecentClaudeAssistantMessages(
-                        sessionId, cwd, unresolved.size() + UUID_SYNC_ROW_MARGIN);
-                if (rows == null) {
-                    // Transcript tail still being written; retry after a beat.
-                    if (attempt < MAX_UUID_SYNC_RETRIES) {
-                        sleep(assistantRetryDelayMs(attempt));
-                        continue;
-                    }
-                    return;
-                }
-
-                int patchedCount = 0;
-                List<String[]> pendingNotifications = new ArrayList<>();
-                java.util.Set<String> usedUuids = new java.util.HashSet<>();
-                synchronized (state.getMessageStateLock()) {
-                    // The rows above belong to the session captured on entry. If the
-                    // user switched sessions during the retries, this loop would stamp
-                    // the new session's messages with the old session's uuids — a fork
-                    // point that does not exist in the new transcript. Abandon instead.
-                    if (!sessionId.equals(state.getSessionId())) {
-                        return;
-                    }
-                    // Rows already claimed by an earlier stamp (user-message sync or a
-                    // previous backfill run) must never match again: a duplicate reply
-                    // text would otherwise steal the older row's uuid and fork from the
-                    // wrong turn. UUIDs are CLI-global, so excluding every uuid already
-                    // stamped on a live message is safe and costs one list scan.
-                    for (ClaudeSession.Message msg : state.getMessagesReference()) {
-                        if (msg.raw != null && msg.raw.has("uuid")
-                                && msg.raw.get("uuid").isJsonPrimitive()) {
-                            usedUuids.add(msg.raw.get("uuid").getAsString());
-                        }
-                    }
-                    // Re-read under the lock: a concurrent append could have added
-                    // messages after the lockless pre-check.
-                    List<ClaudeSession.Message> locked = findUnresolvedAssistantMessages();
-                    for (ClaudeSession.Message localMsg : locked) {
-                        String matchedUuid = findRowUuidByText(rows, localMsg.content, usedUuids);
-                        if (matchedUuid == null) {
-                            continue;
-                        }
-                        if (localMsg.raw == null) {
-                            localMsg.raw = new JsonObject();
-                        }
-                        localMsg.raw.addProperty("uuid", matchedUuid);
-                        patchedCount++;
-                        pendingNotifications.add(new String[]{
-                                localMsg.content != null ? localMsg.content : "", matchedUuid});
-                    }
-                }
-                if (patchedCount > 0) {
-                    LOG.info("[Fork] Backfilled " + patchedCount + " streamed assistant message uuid(s)");
-                    for (String[] notification : pendingNotifications) {
-                        callbackFacade.notifyAssistantMessageUuidPatched(notification[0], notification[1]);
-                    }
-                    return;
-                }
-
-                if (attempt < MAX_UUID_SYNC_RETRIES) {
-                    sleep(assistantRetryDelayMs(attempt));
-                }
-            } catch (Exception e) {
-                LOG.warn("[Fork] Failed to backfill assistant message uuids (attempt "
-                        + attempt + "): " + e.getMessage());
-                if (attempt < MAX_UUID_SYNC_RETRIES) {
-                    sleep(assistantRetryDelayMs(attempt));
-                }
-            }
-        }
-
-        // Every retry was spent without a match: surface it instead of silently
-        // leaving those replies without a fork button, which is impossible to
-        // diagnose from the UI alone.
-        List<ClaudeSession.Message> remaining = findUnresolvedAssistantMessages();
-        if (!remaining.isEmpty()) {
-            LOG.warn("[Fork] " + remaining.size()
-                    + " assistant message(s) still have no transcript uuid; first text: "
-                    + abbreviate(remaining.get(0).content));
-        }
-    }
-
-    /**
-     * Backoff between assistant-uuid backfill attempts.
-     *
-     * <p>The CLI appends the transcript row only after it flushes the turn, and each
-     * attempt spawns a fresh bridge process to read the tail, so a flat short delay
-     * spends the whole budget before the row exists. Doubling from the injected base
-     * (250ms in production) gives 250ms + 500ms of waiting across the two gaps, which
-     * is roughly 1.7s wall clock once the three bridge spawns are counted. Tests
-     * inject 0, which collapses to no waiting.
-     */
-    private long assistantRetryDelayMs(int attempt) {
-        return this.uuidRetryDelayMs * (1L << (attempt - 1));
-    }
-
-    /** First 40 characters of a message with newlines flattened, for a one-line log. */
-    private static String abbreviate(String text) {
-        if (text == null) {
-            return "";
-        }
-        String flattened = text.replace('\n', ' ').replace('\r', ' ');
-        return flattened.length() <= 40 ? flattened : flattened.substring(0, 40) + "...";
-    }
-
-    /**
-     * Assistant messages still missing a transcript uuid, oldest first. Only
-     * text-bearing ones are collected: the per-message fork button renders on
-     * copyable (text) replies, so rows without text never need a uuid.
-     */
-    private List<ClaudeSession.Message> findUnresolvedAssistantMessages() {
-        synchronized (state.getMessageStateLock()) {
-            List<ClaudeSession.Message> messages = state.getMessagesReference();
-            List<ClaudeSession.Message> unresolved = new ArrayList<>();
-            for (ClaudeSession.Message msg : messages) {
-                if (msg.type != ClaudeSession.Message.Type.ASSISTANT) {
-                    continue;
-                }
-                if (msg.raw != null && msg.raw.has("uuid") && !msg.raw.get("uuid").isJsonNull()) {
-                    continue;
-                }
-                if (msg.content == null || msg.content.isEmpty()) {
-                    continue;
-                }
-                unresolved.add(msg);
-            }
-            return unresolved;
-        }
-    }
-
-    /**
-     * Find a recent assistant row whose joined text equals the local message's
-     * streamed text. Rows already consumed by a previous match are skipped via
-     * usedUuids so duplicate texts cannot share one uuid.
-     *
-     * <p>An exact match is attempted first, which keeps duplicate replies pairing
-     * up in order. The transcript reader joins a row's text blocks with {@code '\n'}
-     * ({@code extractTextContent} in session-service.js), while the streamed
-     * accumulator appends them back-to-back, so a reply split across text /
-     * thinking / tool blocks only matches once whitespace is ignored — that is
-     * the second pass.
-     */
-    private static String findRowUuidByText(JsonArray rows, String text, Set<String> usedUuids) {
-        if (text == null || text.isEmpty()) {
-            return null;
-        }
-        String exact = findRowUuid(rows, text, usedUuids, false);
-        return exact != null ? exact : findRowUuid(rows, text, usedUuids, true);
-    }
-
-    private static String findRowUuid(JsonArray rows, String text, Set<String> usedUuids,
-                                      boolean ignoreWhitespace) {
-        String needle = ignoreWhitespace ? stripWhitespace(text) : text;
-        for (JsonElement element : rows) {
-            if (!element.isJsonObject()) {
-                continue;
-            }
-            JsonObject row = element.getAsJsonObject();
-            JsonElement uuidElement = row.get("uuid");
-            JsonElement textElement = row.get("text");
-            if (uuidElement == null || !uuidElement.isJsonPrimitive()
-                    || textElement == null || !textElement.isJsonPrimitive()) {
-                continue;
-            }
-            String uuid = uuidElement.getAsString();
-            if (usedUuids.contains(uuid)) {
-                continue;
-            }
-            String candidate = textElement.getAsString();
-            String haystack = ignoreWhitespace ? stripWhitespace(candidate) : candidate;
-            if (needle.equals(haystack)) {
-                usedUuids.add(uuid);
-                return uuid;
-            }
-        }
-        return null;
-    }
-
-    /** Drop every whitespace character so the two concatenation styles compare equal. */
-    private static String stripWhitespace(String value) {
-        if (value == null || value.isEmpty()) {
-            return "";
-        }
-        StringBuilder stripped = null;
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            if (Character.isWhitespace(c)) {
-                if (stripped == null) {
-                    stripped = new StringBuilder(value.length());
-                    stripped.append(value, 0, i);
-                }
-            } else if (stripped != null) {
-                stripped.append(c);
-            }
-        }
-        return stripped == null ? value : stripped.toString();
+        assistantUuidBackfiller.updateUuids();
     }
 
     /** Load provider history without letting obsolete reads replace a newer transcript. */

@@ -282,10 +282,82 @@ export function registerSessionAndSdkCallbacks(
   // Session Fork Result Callback
   // =========================================================================
 
+  /** Map a backend ForkResultCode to the localized message, with a generic fallback. */
+  const translateForkError = (errorCode: string | undefined): string => {
+    let errorMessage = tRef.current('history.forkFailed');
+    if (errorCode) {
+      // A missing key makes i18next echo the key itself, which is truthy; ask
+      // for an empty default so an untranslated code falls back to the generic
+      // message instead of leaking `history.forkErrors.XXX` into the toast.
+      const translated = tRef.current(`history.forkErrors.${errorCode}`, { defaultValue: '' });
+      if (translated) {
+        errorMessage = translated;
+      }
+    }
+    return errorMessage;
+  };
+
+  const handleForkSuccess = (
+    result: { newSessionId?: string; forkPointUuid?: string },
+    requestedTitle: string | undefined,
+  ) => {
+    // Consume the fork row's provider: the reload must query the store the fork
+    // came from, and the panel's currentProvider can be stale after switching
+    // chat providers without reopening the list (same reason delete requests
+    // carry their row provider).
+    const requestedProvider = window.__pendingForkProvider;
+    delete window.__pendingForkProvider;
+    // Reload so the fork row appears in the list. No optimistic insert: the
+    // row's messageCount/fileSize are only known to the backend, and unlike
+    // conversion there is no optimistic state to roll back on failure.
+    const provider = requestedProvider || options.currentProviderRef.current;
+    if (provider) {
+      sendBridgeEvent('deep_search_history', provider);
+    } else {
+      console.warn('[Frontend] Provider unavailable for fork list reload');
+    }
+
+    // A fork created from an assistant message switches straight to the fork so
+    // the user continues from that point; history-list forks keep the list open.
+    // The transition clears toasts, so a message-level fork defers its success
+    // toast until the switch completes (same mechanism as the delete toast);
+    // adding it directly here would be wiped before a single frame renders.
+    if (result.forkPointUuid && result.newSessionId) {
+      // Only the auto-opened fork needs the pending title: setSessionId applies
+      // it to the header, and the fork's row is not in the list yet. A
+      // history-list fork keeps the title the backend wrote through the
+      // custom-title service, so stashing it here would leave an unclaimed
+      // global waiting for a session the user may never open.
+      if (typeof requestedTitle === 'string') {
+        window.__pendingForkTitle = {
+          sessionId: result.newSessionId,
+          title: requestedTitle,
+        };
+      }
+      window.__pendingSessionTransitionToast = {
+        message: tRef.current('history.forkSuccess'),
+        type: 'success',
+      };
+      // Read through the ref: the closure would hold the mount-time
+      // loadHistorySession, whose `loading` is permanently false, so a
+      // mid-stream auto-open would skip the interrupt and clear messages
+      // under the live reply (see UseWindowCallbacksOptions).
+      loadHistorySessionRef?.current?.(result.newSessionId);
+    } else {
+      addToast(tRef.current('history.forkSuccess'), 'success');
+    }
+  };
+
   window.onForkResult = (json: string) => {
     // Release the one-fork-at-a-time guard on every outcome, including a
-    // malformed payload that never reaches the try block below.
+    // malformed payload that never reaches the try block below. The 60s
+    // backstop timer goes with it, so a stale release cannot free a later
+    // fork's guard early.
     window.__forkInFlight = false;
+    if (window.__forkInFlightTimer != null) {
+      clearTimeout(window.__forkInFlightTimer);
+      delete window.__forkInFlightTimer;
+    }
     try {
       const result = JSON.parse(json);
       if (result.success) {
@@ -293,66 +365,11 @@ export function registerSessionAndSdkCallbacks(
         // session id must not leave a stale title to be bound to some later fork.
         const requestedTitle = window.__pendingForkTitleRequest;
         delete window.__pendingForkTitleRequest;
-        // Consume the fork row's provider the same way: the reload must query
-        // the store the fork came from, and the panel's currentProvider can be
-        // stale after switching chat providers without reopening the list
-        // (same reason delete requests carry their row provider).
-        const requestedProvider = window.__pendingForkProvider;
-        delete window.__pendingForkProvider;
-        // Reload so the fork row appears in the list. No optimistic insert: the
-        // row's messageCount/fileSize are only known to the backend, and unlike
-        // conversion there is no optimistic state to roll back on failure.
-        const provider = requestedProvider || options.currentProviderRef.current;
-        if (provider) {
-          sendBridgeEvent('deep_search_history', provider);
-        } else {
-          console.warn('[Frontend] Provider unavailable for fork list reload');
-        }
-
-        // A fork created from an assistant message switches straight to the fork so
-        // the user continues from that point; history-list forks keep the list open.
-        // The transition clears toasts, so a message-level fork defers its success
-        // toast until the switch completes (same mechanism as the delete toast);
-        // adding it directly here would be wiped before a single frame renders.
-        if (result.forkPointUuid && result.newSessionId) {
-          // Only the auto-opened fork needs the pending title: setSessionId applies
-          // it to the header, and the fork's row is not in the list yet. A
-          // history-list fork keeps the title the backend wrote through the
-          // custom-title service, so stashing it here would leave an unclaimed
-          // global waiting for a session the user may never open.
-          if (typeof requestedTitle === 'string') {
-            window.__pendingForkTitle = {
-              sessionId: result.newSessionId,
-              title: requestedTitle,
-            };
-          }
-          window.__pendingSessionTransitionToast = {
-            message: tRef.current('history.forkSuccess'),
-            type: 'success',
-          };
-          // Read through the ref: the closure would hold the mount-time
-          // loadHistorySession, whose `loading` is permanently false, so a
-          // mid-stream auto-open would skip the interrupt and clear messages
-          // under the live reply (see UseWindowCallbacksOptions).
-          loadHistorySessionRef?.current?.(result.newSessionId);
-        } else {
-          addToast(tRef.current('history.forkSuccess'), 'success');
-        }
+        handleForkSuccess(result, requestedTitle);
         return;
       }
 
-      const errorCode = result.errorCode;
-      let errorMessage = tRef.current('history.forkFailed');
-      if (errorCode) {
-        // A missing key makes i18next echo the key itself, which is truthy; ask
-        // for an empty default so an untranslated code falls back to the generic
-        // message instead of leaking `history.forkErrors.XXX` into the toast.
-        const translated = tRef.current(`history.forkErrors.${errorCode}`, { defaultValue: '' });
-        if (translated) {
-          errorMessage = translated;
-        }
-      }
-      addToast(errorMessage, 'error');
+      addToast(translateForkError(result.errorCode), 'error');
       // The fork never produced a session: drop the title it was waiting to bind.
       delete window.__pendingForkTitleRequest;
       delete window.__pendingForkProvider;

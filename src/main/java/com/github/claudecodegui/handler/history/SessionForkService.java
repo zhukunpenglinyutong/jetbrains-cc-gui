@@ -111,6 +111,22 @@ class SessionForkService {
      * testable against a temporary home, mirroring {@code HistoryDeleteService}.
      */
     void forkSession(String content, String projectPath, Path home) {
+        ParsedForkRequest request = parseForkRequest(content);
+        if (request.errorCode() != null) {
+            this.sendForkResult(false, null, request.errorCode(), null);
+            return;
+        }
+        ApplicationManager.getApplication().executeOnPooledThread(
+                () -> this.doFork(request, projectPath, home));
+    }
+
+    /** Parsed and validated fork request; {@code errorCode} non-null means rejected. */
+    record ParsedForkRequest(String sessionId, String forkPointUuid, String provider, String title,
+                             ForkResultCode errorCode) {
+    }
+
+    /** Parse and validate the payload; each rejection logs its own reason. */
+    static ParsedForkRequest parseForkRequest(String content) {
         JsonObject request;
         try {
             request = ROW_GSON.fromJson(content, JsonObject.class);
@@ -118,88 +134,84 @@ class SessionForkService {
             LOG.warn("[SessionForkService] Fork rejected: unparseable payload");
             // Not a session-id problem: report the generic failure so the user is
             // not told their id is invalid when the payload itself was malformed.
-            this.sendForkResult(false, null, ForkResultCode.FORK_FAILED, null);
-            return;
+            return new ParsedForkRequest(null, null, null, null, ForkResultCode.FORK_FAILED);
         }
 
         String sessionId = request != null && request.has("sessionId") && request.get("sessionId").isJsonPrimitive()
                 ? request.get("sessionId").getAsString() : null;
         if (!HistoryDeleteService.isValidSessionId(sessionId)) {
             LOG.warn("[SessionForkService] Fork rejected: invalid sessionId");
-            this.sendForkResult(false, null, ForkResultCode.INVALID_SESSION_ID, null);
-            return;
+            return new ParsedForkRequest(null, null, null, null, ForkResultCode.INVALID_SESSION_ID);
         }
 
         String forkPointUuid = request.has("forkPointUuid") && request.get("forkPointUuid").isJsonPrimitive()
                 ? request.get("forkPointUuid").getAsString() : null;
         if (forkPointUuid != null && !HistoryDeleteService.isValidSessionId(forkPointUuid)) {
             LOG.warn("[SessionForkService] Fork rejected: invalid forkPointUuid");
-            this.sendForkResult(false, null, ForkResultCode.INVALID_SESSION_ID, null);
-            return;
+            return new ParsedForkRequest(null, null, null, null, ForkResultCode.INVALID_SESSION_ID);
         }
 
         String provider = request.has("provider") && request.get("provider").isJsonPrimitive()
                 ? request.get("provider").getAsString() : CLAUDE_PROVIDER;
         if (!CLAUDE_PROVIDER.equals(provider)) {
             LOG.info("[SessionForkService] Fork rejected: provider not supported: " + provider);
-            this.sendForkResult(false, null, ForkResultCode.UNSUPPORTED_PROVIDER, null);
-            return;
+            return new ParsedForkRequest(null, null, null, null, ForkResultCode.UNSUPPORTED_PROVIDER);
         }
 
         // The frontend already truncates the title to the service limit; this is the
         // backend belt-and-braces so the Node call cannot fail on length alone.
         String forkTitle = request.has("title") && request.get("title").isJsonPrimitive()
                 ? request.get("title").getAsString() : null;
-        forkTitle = truncateForkTitle(forkTitle);
+        return new ParsedForkRequest(sessionId, forkPointUuid, provider,
+                truncateForkTitle(forkTitle), null);
+    }
 
-        String finalForkTitle = forkTitle;
-        String finalForkPointUuid = forkPointUuid;
-        Path resolvedHome = home;
-        ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            try {
-                Path sessionFile = this.findSessionFile(sessionId, projectPath, resolvedHome);
-                if (sessionFile == null) {
-                    LOG.warn("[SessionForkService] Session file not found: " + sessionId);
-                    this.sendForkResult(false, null, ForkResultCode.SESSION_NOT_FOUND, null);
-                    return;
-                }
-
-                // The finder only returns existing files; this catches a narrow TOCTOU
-                // window where another process deletes the file after discovery.
-                if (!Files.exists(sessionFile)) {
-                    LOG.warn("[SessionForkService] Session file does not exist: " + sessionFile);
-                    this.sendForkResult(false, null, ForkResultCode.FILE_NOT_EXIST, null);
-                    return;
-                }
-
-                String newSessionId = UUID.randomUUID().toString();
-                Path targetFile = sessionFile.getParent().resolve(newSessionId + ".jsonl");
-
-                this.copySessionFile(sessionFile, targetFile, sessionId, newSessionId, finalForkPointUuid);
-                LOG.info("[SessionForkService] Forked session " + sessionId
-                        + (finalForkPointUuid != null ? " at " + finalForkPointUuid : "")
-                        + " into " + newSessionId);
-
-                // Sidechain transcripts and metadata are best-effort: the main fork is
-                // already usable at this point, so a failure here degrades gracefully
-                // (missing subagent panels) instead of failing the whole fork.
-                this.copySidechains(sessionFile.getParent(), sessionId, newSessionId);
-                this.applyForkTitle(newSessionId, finalForkTitle);
-
-                this.sendForkResult(true, newSessionId, null, finalForkPointUuid);
-            } catch (FileAlreadyExistsException e) {
-                // warn like HistoryDeleteService: a failed fork is a reported user
-                // action, not an IDE-level fault.
-                LOG.warn("[SessionForkService] Fork target already exists: " + e.getMessage());
-                this.sendForkResult(false, null, ForkResultCode.FORK_FAILED, null);
-            } catch (ForkPointNotFoundException e) {
-                LOG.warn("[SessionForkService] Fork point not found in session: " + e.getMessage());
-                this.sendForkResult(false, null, ForkResultCode.FORK_POINT_NOT_FOUND, null);
-            } catch (Exception e) {
-                LOG.warn("[SessionForkService] Failed to fork session: " + e.getMessage(), e);
-                this.sendForkResult(false, null, ForkResultCode.FORK_FAILED, null);
+    /** Run on the pooled thread: locate the source, copy, mirror sidechains, apply the title, report. */
+    private void doFork(ParsedForkRequest request, String projectPath, Path home) {
+        try {
+            Path sessionFile = this.findSessionFile(request.sessionId(), projectPath, home);
+            if (sessionFile == null) {
+                LOG.warn("[SessionForkService] Session file not found: " + request.sessionId());
+                this.sendForkResult(false, null, ForkResultCode.SESSION_NOT_FOUND, null);
+                return;
             }
-        });
+
+            // The finder only returns existing files; this catches a narrow TOCTOU
+            // window where another process deletes the file after discovery.
+            if (!Files.exists(sessionFile)) {
+                LOG.warn("[SessionForkService] Session file does not exist: " + sessionFile);
+                this.sendForkResult(false, null, ForkResultCode.FILE_NOT_EXIST, null);
+                return;
+            }
+
+            String newSessionId = UUID.randomUUID().toString();
+            Path targetFile = sessionFile.getParent().resolve(newSessionId + ".jsonl");
+
+            this.copySessionFile(sessionFile, targetFile, request.sessionId(), newSessionId,
+                    request.forkPointUuid());
+            LOG.info("[SessionForkService] Forked session " + request.sessionId()
+                    + (request.forkPointUuid() != null ? " at " + request.forkPointUuid() : "")
+                    + " into " + newSessionId);
+
+            // Sidechain transcripts and metadata are best-effort: the main fork is
+            // already usable at this point, so a failure here degrades gracefully
+            // (missing subagent panels) instead of failing the whole fork.
+            this.copySidechains(sessionFile.getParent(), request.sessionId(), newSessionId);
+            this.applyForkTitle(newSessionId, request.title());
+
+            this.sendForkResult(true, newSessionId, null, request.forkPointUuid());
+        } catch (FileAlreadyExistsException e) {
+            // warn like HistoryDeleteService: a failed fork is a reported user
+            // action, not an IDE-level fault.
+            LOG.warn("[SessionForkService] Fork target already exists: " + e.getMessage());
+            this.sendForkResult(false, null, ForkResultCode.FORK_FAILED, null);
+        } catch (ForkPointNotFoundException e) {
+            LOG.warn("[SessionForkService] Fork point not found in session: " + e.getMessage());
+            this.sendForkResult(false, null, ForkResultCode.FORK_POINT_NOT_FOUND, null);
+        } catch (Exception e) {
+            LOG.warn("[SessionForkService] Failed to fork session: " + e.getMessage(), e);
+            this.sendForkResult(false, null, ForkResultCode.FORK_FAILED, null);
+        }
     }
 
     /** Thrown when the requested fork-point uuid does not exist in the source file. */
@@ -444,8 +456,10 @@ class SessionForkService {
      * fully independent (its subagent panels work, and deleting either session leaves
      * the other's sidechains alone). Handles both layouts:
      * <ul>
-     *   <li>Current layout: {@code <projectDir>/<sessionId>/} directory, copied wholesale
-     *       under the fork's id, with .jsonl rows' id fields rewritten.</li>
+     *   <li>Current layout: the {@code subagents/} subtree of {@code <projectDir>/<sessionId>/},
+     *       copied under the fork's id with .jsonl rows' id fields rewritten. Only that
+     *       known subtree is copied — the delete path removes exactly the same subtree,
+     *       so anything else beside it would survive a fork delete as an orphan.</li>
      *   <li>Legacy layout: {@code agent-*.jsonl} files directly in the project dir whose
      *       first lines reference the session, copied under fresh names.</li>
      * </ul>
@@ -456,8 +470,16 @@ class SessionForkService {
         try {
             Path sidechainDir = sessionDir.resolve(sourceSessionId);
             if (Files.isDirectory(sidechainDir)) {
-                this.copyDirectory(sidechainDir, sessionDir.resolve(newSessionId), sourceSessionId, newSessionId);
-                LOG.debug("[SessionForkService] Copied sidechain directory for fork " + newSessionId);
+                // Mirror the delete path, which removes only the known subagents
+                // subtree: copying foreign entries would leave fork directories the
+                // delete can never fully clean up (residual empty shells).
+                Path subagentsDir = sidechainDir.resolve("subagents");
+                if (Files.isDirectory(subagentsDir)) {
+                    this.copyDirectory(subagentsDir,
+                            sessionDir.resolve(newSessionId).resolve("subagents"),
+                            sourceSessionId, newSessionId);
+                    LOG.debug("[SessionForkService] Copied sidechain directory for fork " + newSessionId);
+                }
             }
         } catch (Exception e) {
             LOG.warn("[SessionForkService] Failed to copy sidechain directory: " + e.getMessage());

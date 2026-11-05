@@ -132,7 +132,7 @@ export function useSessionManagement({
   const suppressNextStatusToastRef = useRef(false);
   const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 60s backstop for window.__forkInFlight; cleared when the fork settles early. */
-  const forkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const forkTimeoutRef = useRef<number | null>(null);
   const historyDataRef = useRef(historyData);
   useEffect(() => {
     historyDataRef.current = historyData;
@@ -657,6 +657,11 @@ export function useSessionManagement({
   // backend, and a wrong placeholder would be jarring once the real row lands.
   // options.forkPointUuid narrows the fork to the conversation up to the end of that
   // assistant reply's turn (backend cuts before the next real user message).
+  const localMessagesRef = useRef(messages);
+  useEffect(() => {
+    localMessagesRef.current = messages;
+  }, [messages]);
+
   const forkHistorySession = useCallback((sessionId: string, options?: { forkPointUuid?: string }) => {
     // One fork at a time: a double click would create two copies, and the two
     // onForkResult callbacks would race over __pendingForkTitleRequest.
@@ -667,14 +672,19 @@ export function useSessionManagement({
     // Release the guard even if the backend callback never arrives. Generous on
     // purpose: forking copies the whole transcript, and a large session can take
     // well past 15s — releasing early would let a second click duplicate the fork.
-    // The handle lets the failure path below (and the next fork) retire the timer.
+    // The handle is mirrored on window so onForkResult can retire the timer the
+    // moment the fork settles instead of leaving a stale release for a later fork.
     if (forkTimeoutRef.current !== null) {
       clearTimeout(forkTimeoutRef.current);
     }
-    forkTimeoutRef.current = setTimeout(() => {
+    // window.setTimeout (not the Node-typed global) so the handle is a plain
+    // number under every tsconfig the test script type-checks.
+    forkTimeoutRef.current = window.setTimeout(() => {
       forkTimeoutRef.current = null;
       window.__forkInFlight = false;
+      delete window.__forkInFlightTimer;
     }, 60_000);
+    window.__forkInFlightTimer = forkTimeoutRef.current;
 
     const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
     const provider = session?.provider || currentProvider || 'claude';
@@ -687,12 +697,14 @@ export function useSessionManagement({
     let baseTitle = (session?.title ?? '').trim();
     if (!baseTitle && getMessageText) {
       // Fresh chat sessions are not in the history list yet, so the row lookup
-      // above misses; derive the same base title the chat header shows.
+      // above misses; derive the same base title the chat header shows. Read
+      // through the ref: a `messages` dependency would re-create this callback
+      // on every streamed delta and defeat HistoryListItem's memo.
       baseTitle = deriveSessionTitle({
         customSessionTitle: null,
         restoredSessionTitle: null,
         currentSessionId: sessionId,
-        messages,
+        messages: localMessagesRef.current,
         fallbackTitle: '',
         getMessageText,
       }).trim();
@@ -726,11 +738,12 @@ export function useSessionManagement({
         forkTimeoutRef.current = null;
       }
       window.__forkInFlight = false;
+      delete window.__forkInFlightTimer;
       delete window.__pendingForkTitleRequest;
       delete window.__pendingForkProvider;
       addToast(t('history.forkFailed'), 'error');
     }
-  }, [addToast, currentProvider, t, messages, getMessageText]);
+  }, [addToast, currentProvider, t, getMessageText]);
 
   return {
     showNewSessionConfirm,
