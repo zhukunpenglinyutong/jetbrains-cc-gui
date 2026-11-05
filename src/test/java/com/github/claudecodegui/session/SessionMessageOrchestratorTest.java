@@ -375,6 +375,63 @@ public class SessionMessageOrchestratorTest {
         assertEquals(List.of("again|row-older", "again|row-newer"), callback.messageUuidPatches);
     }
 
+    /**
+     * A duplicate reply whose earlier twin was already stamped by a previous
+     * backfill run must not steal that row's uuid: the transcript tail the read
+     * returns still carries the older row, and oldest-first matching would
+     * anchor the fork on the previous turn instead of the clicked reply.
+     */
+    @Test
+    public void updateAssistantMessageUuidsSkipsRowsAlreadyStampedOnEarlierReplies() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-1");
+        state.setCwd("/workspace");
+
+        // The previous turn's reply, already stamped with its row uuid.
+        JsonObject stampedRaw = new JsonObject();
+        stampedRaw.addProperty("uuid", "row-older");
+        state.addMessage(new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, "again", stampedRaw));
+        // The new streamed reply with the same text, still without a uuid.
+        JsonObject streamedRaw = new JsonObject();
+        streamedRaw.add("message", new JsonObject());
+        ClaudeSession.Message streamed = new ClaudeSession.Message(
+                ClaudeSession.Message.Type.ASSISTANT, "again", streamedRaw);
+        state.addMessage(streamed);
+
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+        callbackFacade.setCallback(callback);
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        JsonArray rows = new JsonArray();
+        JsonObject rowOne = new JsonObject();
+        rowOne.addProperty("uuid", "row-older");
+        rowOne.addProperty("text", "again");
+        rows.add(rowOne);
+        JsonObject rowTwo = new JsonObject();
+        rowTwo.addProperty("uuid", "row-newer");
+        rowTwo.addProperty("text", "again");
+        rows.add(rowTwo);
+        historyAccess.recentAssistantRows = rows;
+
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.updateAssistantMessageUuids();
+
+        assertEquals("row-newer", streamed.raw.get("uuid").getAsString());
+        assertEquals(List.of("again|row-newer"), callback.messageUuidPatches);
+    }
+
     @Test
     public void updateAssistantMessageUuidsMatchesMultiBlockRepliesAcrossJoinStyles() {
         SessionState state = new SessionState();

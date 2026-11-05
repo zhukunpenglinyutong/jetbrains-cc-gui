@@ -308,6 +308,17 @@ public class SessionMessageOrchestrator {
                     if (!sessionId.equals(state.getSessionId())) {
                         return;
                     }
+                    // Rows already claimed by an earlier stamp (user-message sync or a
+                    // previous backfill run) must never match again: a duplicate reply
+                    // text would otherwise steal the older row's uuid and fork from the
+                    // wrong turn. UUIDs are CLI-global, so excluding every uuid already
+                    // stamped on a live message is safe and costs one list scan.
+                    for (ClaudeSession.Message msg : state.getMessagesReference()) {
+                        if (msg.raw != null && msg.raw.has("uuid")
+                                && msg.raw.get("uuid").isJsonPrimitive()) {
+                            usedUuids.add(msg.raw.get("uuid").getAsString());
+                        }
+                    }
                     // Re-read under the lock: a concurrent append could have added
                     // messages after the lockless pre-check.
                     List<ClaudeSession.Message> locked = findUnresolvedAssistantMessages();
