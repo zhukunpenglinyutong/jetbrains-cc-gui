@@ -62,6 +62,12 @@ final class CodexSubagentHistoryLoader {
     }
 
     Result load(String parentSessionId, String toolUseId, String requestedAgentPath) throws IOException {
+        try (var permit = com.github.claudecodegui.provider.codex.CodexHistoryReader.requireReadPermit()) {
+            return loadAdmitted(parentSessionId, toolUseId, requestedAgentPath);
+        }
+    }
+
+    private Result loadAdmitted(String parentSessionId, String toolUseId, String requestedAgentPath) throws IOException {
         validateId("sessionId", parentSessionId);
         if (toolUseId != null && !toolUseId.isBlank()) {
             validateId("toolUseId", toolUseId);
@@ -105,6 +111,12 @@ final class CodexSubagentHistoryLoader {
     }
 
     List<StatusResult> loadStatuses(String parentSessionId, List<StatusRequest> requests) throws IOException {
+        try (var permit = com.github.claudecodegui.provider.codex.CodexHistoryReader.requireReadPermit()) {
+            return loadStatusesAdmitted(parentSessionId, requests);
+        }
+    }
+
+    private List<StatusResult> loadStatusesAdmitted(String parentSessionId, List<StatusRequest> requests) throws IOException {
         validateId("sessionId", parentSessionId);
         if (requests == null || requests.size() > MAX_STATUS_REQUESTS) {
             throw new IllegalArgumentException("Invalid agents count");

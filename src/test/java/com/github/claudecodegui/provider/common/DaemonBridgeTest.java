@@ -1,12 +1,15 @@
 package com.github.claudecodegui.provider.common;
 
+import com.github.claudecodegui.bridge.AiDataProcessGate;
 import com.google.gson.JsonObject;
 import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.BufferedWriter;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -18,6 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
@@ -27,6 +32,46 @@ import static org.junit.Assert.assertTrue;
  * transitions.
  */
 public class DaemonBridgeTest {
+
+    @Test
+    public void retiredDaemonKeepsMigrationBlockedUntilItsProcessExits() throws Exception {
+        for (boolean claimDeath : new boolean[]{false, true}) {
+            AiDataProcessGate gate = new AiDataProcessGate();
+            AiDataProcessGate.ProcessPermit permit = gate.acquireProcessPermit();
+            ControlledProcess process = new ControlledProcess(7001L);
+            DaemonBridge.DaemonGenerationContext context = new DaemonBridge.DaemonGenerationContext(
+                    process, new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8)),
+                    1L, 0L, 0L, permit);
+            try {
+                if (claimDeath) {
+                    context.claimDeath();
+                } else {
+                    context.stop();
+                }
+                AiDataProcessGate.MigrationPermit premature = gate.tryAcquireMigrationPermit();
+                try {
+                    assertNull("Retiring callback ownership must not release a live process", premature);
+                } finally {
+                    if (premature != null) {
+                        premature.close();
+                    }
+                }
+
+                process.exit();
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                AiDataProcessGate.MigrationPermit migration;
+                while ((migration = gate.tryAcquireMigrationPermit()) == null && System.nanoTime() < deadline) {
+                    Thread.sleep(10L);
+                }
+                assertNotNull("The exited daemon must eventually release its permit", migration);
+                migration.close();
+            } finally {
+                process.destroy();
+                process.closeOutput();
+                permit.close();
+            }
+        }
+    }
 
     // HEARTBEAT_TIMEOUT_MS = 45_000; just over threshold triggers unresponsive
     private static final long JUST_OVER_HEARTBEAT_THRESHOLD = 46_000;

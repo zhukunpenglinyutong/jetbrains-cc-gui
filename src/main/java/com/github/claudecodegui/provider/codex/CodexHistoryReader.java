@@ -17,8 +17,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -86,8 +86,10 @@ public class CodexHistoryReader {
      * Uses memory cache and file index for performance optimization.
      */
     public List<SessionInfo> readAllSessions() throws IOException {
-        logSessionAccessWithoutLocalConfigAuthorization();
-        return indexService.readAllSessions();
+        try (var permit = requireReadPermit()) {
+            logSessionAccessWithoutLocalConfigAuthorization();
+            return indexService.readAllSessions();
+        }
     }
 
     /**
@@ -202,18 +204,25 @@ public class CodexHistoryReader {
      * missing and the caller should treat the session id as stale.
      */
     public String getSessionMessagesAsJson(String sessionId) {
-        logSessionAccessWithoutLocalConfigAuthorization();
-        String source = this.sessionService.getSessionMessagesAsJson(sessionId);
-        if (source == null) {
-            return null;
+        try (var permit = requireReadPermit()) {
+            logSessionAccessWithoutLocalConfigAuthorization();
+            String source = this.sessionService.getSessionMessagesAsJson(sessionId);
+            if (source == null) {
+                return null;
+            }
+            CodexHistoryPrivacy privacy = new CodexHistoryPrivacy(sessionId);
+            com.google.gson.JsonArray sourceArray = this.gson.fromJson(source, com.google.gson.JsonArray.class);
+            com.google.gson.JsonArray result = new com.google.gson.JsonArray();
+            for (var entry : sourceArray) {
+                result.add(entry.isJsonObject() ? privacy.protect(entry.getAsJsonObject()) : entry);
+            }
+            return this.gson.toJson(result);
+        } catch (IOException error) {
+            JsonObject result = new JsonObject();
+            result.addProperty("success", false);
+            result.addProperty("error", error.getMessage());
+            return result.toString();
         }
-        CodexHistoryPrivacy privacy = new CodexHistoryPrivacy(sessionId);
-        com.google.gson.JsonArray sourceArray = this.gson.fromJson(source, com.google.gson.JsonArray.class);
-        com.google.gson.JsonArray result = new com.google.gson.JsonArray();
-        for (var entry : sourceArray) {
-            result.add(entry.isJsonObject() ? privacy.protect(entry.getAsJsonObject()) : entry);
-        }
-        return this.gson.toJson(result);
     }
 
     /**
@@ -227,12 +236,14 @@ public class CodexHistoryReader {
 
     public int forEachSessionMessage(String sessionId, BooleanSupplier cancellation,
                                      Consumer<JsonObject> consumer) throws IOException {
-        logSessionAccessWithoutLocalConfigAuthorization();
-        CodexHistoryPrivacy privacy = new CodexHistoryPrivacy(sessionId);
-        return this.sessionService.forEachSessionMessage(sessionId, cancellation, message -> {
-            JsonObject raw = this.gson.toJsonTree(message).getAsJsonObject();
-            consumer.accept(privacy.protect(raw));
-        });
+        try (var permit = requireReadPermit()) {
+            logSessionAccessWithoutLocalConfigAuthorization();
+            CodexHistoryPrivacy privacy = new CodexHistoryPrivacy(sessionId);
+            return this.sessionService.forEachSessionMessage(sessionId, cancellation, message -> {
+                JsonObject raw = this.gson.toJsonTree(message).getAsJsonObject();
+                consumer.accept(privacy.protect(raw));
+            });
+        }
     }
 
     public Path resolveSessionFile(String sessionId) throws IOException {
@@ -247,16 +258,18 @@ public class CodexHistoryReader {
     public int forEachSessionMessage(Path file, long offset, long end,
                                      java.util.function.BooleanSupplier active,
                                      Consumer<JsonObject> consumer) throws IOException {
-        CodexHistoryPrivacy privacy = new CodexHistoryPrivacy(this.privacyThread.get());
-        Consumer<ByteBuffer> observer = this.sourceBytesObserver.get();
-        // Nested reads started by a record consumer must not feed this read's fingerprint.
-        this.sourceBytesObserver.remove();
-        try {
-            return this.sessionService.forEachSessionMessage(file, offset, end, active, observer,
-                    message -> consumer.accept(privacy.protect(this.gson.toJsonTree(message).getAsJsonObject())));
-        } finally {
-            if (observer != null) {
-                this.sourceBytesObserver.set(observer);
+        try (var permit = requireReadPermit()) {
+            CodexHistoryPrivacy privacy = new CodexHistoryPrivacy(this.privacyThread.get());
+            Consumer<ByteBuffer> observer = this.sourceBytesObserver.get();
+            // Nested reads started by a record consumer must not feed this read's fingerprint.
+            this.sourceBytesObserver.remove();
+            try {
+                return this.sessionService.forEachSessionMessage(file, offset, end, active, observer,
+                        message -> consumer.accept(privacy.protect(this.gson.toJsonTree(message).getAsJsonObject())));
+            } finally {
+                if (observer != null) {
+                    this.sourceBytesObserver.set(observer);
+                }
             }
         }
     }
@@ -313,6 +326,17 @@ public class CodexHistoryReader {
         } catch (Exception e) {
             LOG.warn("[CodexHistoryReader] Failed to read Codex local authorization state: " + e.getMessage());
             return false;
+        }
+    }
+    public static com.github.claudecodegui.bridge.AiDataProcessGate.ReadPermit requireReadPermit() throws IOException {
+        try {
+            var permit = com.github.claudecodegui.bridge.AiDataProcessGate.getInstance().tryAcquireReadPermit();
+            if (permit == null) {
+                throw new IOException("DATABASE_BUSY");
+            }
+            return permit;
+        } catch (IllegalStateException error) {
+            throw new IOException(error.getCause() == null ? error.getMessage() : error.getCause().getMessage(), error);
         }
     }
 }

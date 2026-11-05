@@ -1,5 +1,7 @@
 package com.github.claudecodegui.settings;
 
+import com.github.claudecodegui.bridge.ProcessManager;
+
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.model.DeleteResult;
@@ -729,6 +731,9 @@ public class ProviderManager {
      * @return the list of parsed providers
      */
     public List<JsonObject> parseProvidersFromCcSwitchDb(String dbPath, String appType) throws IOException {
+        ProcessManager processes = new ProcessManager();
+        String channelId = ProcessManager.newChannelId("cc-switch-import");
+        Process process = null;
         List<JsonObject> result = new ArrayList<>();
         if (appType == null || appType.trim().isEmpty()) {
             appType = "claude";
@@ -792,7 +797,7 @@ public class ProviderManager {
             LOG.info("[ProviderManager] Executing command: " + nodePath + " " + scriptPath + " " + dbPath);
 
             // Start the process
-            Process process = pb.start();
+            process = processes.startManagedProcess(channelId, pb);
 
             // Read output
             StringBuilder output = new StringBuilder();
@@ -847,6 +852,11 @@ public class ProviderManager {
             LOG.warn("[ProviderManager] " + errorMsg);
             LOG.error("Error occurred", e);
             throw new IOException(errorMsg, e);
+        } finally {
+            if (process != null) {
+                processes.interruptChannel(channelId);
+                processes.unregisterProcess(channelId, process);
+            }
         }
 
         return result;

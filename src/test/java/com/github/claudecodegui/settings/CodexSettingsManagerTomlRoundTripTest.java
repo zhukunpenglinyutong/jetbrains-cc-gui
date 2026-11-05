@@ -22,6 +22,13 @@ import static org.junit.Assert.fail;
 
 public class CodexSettingsManagerTomlRoundTripTest {
 
+    @org.junit.BeforeClass
+    public static void requireIsolatedNativeConfigHome() {
+        String configuredHome = System.getenv("CODEX_HOME");
+        assertTrue("Run configuration fixtures with CODEX_HOME unset or empty", configuredHome == null || configuredHome.isBlank());
+    }
+
+
     private String originalHomeDir;
     private boolean homeOverridden;
 

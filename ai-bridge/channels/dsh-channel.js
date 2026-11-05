@@ -80,6 +80,7 @@ export async function handleDshCommand(command, args, stdinData) {
           provider: 'dsh',
           origin: handle.origin,
           ownership: handle.ownership,
+          pid: handle.pid || null,
           describe: handle.describe,
         }));
       } catch (error) {

@@ -3,6 +3,7 @@ package com.github.claudecodegui.provider.zcode;
 import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.provider.common.HistoryCancellation;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.google.gson.Gson;
@@ -19,8 +20,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
 /**
@@ -89,8 +90,7 @@ public class ZcodeHistoryReader {
             throw e;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            CancellationException cancellationException = new CancellationException(
-                    "History loading was interrupted");
+            CancellationException cancellationException = new CancellationException("History loading was interrupted");
             cancellationException.initCause(e);
             throw cancellationException;
         } catch (Exception e) {
@@ -105,22 +105,15 @@ public class ZcodeHistoryReader {
         stdin.addProperty("sessionId", sessionId != null ? sessionId : "");
         stdin.addProperty("cwd", cwd != null ? cwd : "");
         JsonObject result = runCommand("getSessionMessages", stdin, cancellation);
-        if (result == null) {
-            throw new IllegalStateException("ZCode history returned no response");
-        }
-        if (result.has("success") && !result.get("success").getAsBoolean()) {
-            throw new IllegalStateException("ZCode history request failed");
-        }
-        if (!result.has("messages") || !result.get("messages").isJsonArray()) {
+        if (result == null || !result.has("success") || !result.get("success").getAsBoolean()
+                || !result.has("messages") || !result.get("messages").isJsonArray()) {
             throw new IllegalStateException("ZCode history returned an invalid message response");
         }
-        if (result.has("messages") && result.get("messages").isJsonArray()) {
-            JsonArray arr = result.getAsJsonArray("messages");
-            for (int i = 0; i < arr.size(); i++) {
-                checkCancellation(cancellation);
-                if (arr.get(i).isJsonObject()) {
-                    messages.add(arr.get(i).getAsJsonObject());
-                }
+        JsonArray arr = result.getAsJsonArray("messages");
+        for (int i = 0; i < arr.size(); i++) {
+            checkCancellation(cancellation);
+            if (arr.get(i).isJsonObject()) {
+                messages.add(arr.get(i).getAsJsonObject());
             }
         }
         return messages;
@@ -154,13 +147,11 @@ public class ZcodeHistoryReader {
         try {
             return runCommand(command, stdinPayload, () -> false);
         } catch (java.util.concurrent.TimeoutException timeout) {
-            // Ordinary list/delete calls keep their warning-only timeout contract; the strict runner already logged it.
             return null;
         }
     }
 
-    JsonObject runCommand(String command, JsonObject stdinPayload,
-                                  BooleanSupplier cancellation) throws Exception {
+    JsonObject runCommand(String command, JsonObject stdinPayload, BooleanSupplier cancellation) throws Exception {
         checkCancellation(cancellation);
         String node = nodeDetector.findNodeExecutable();
         BridgeDirectoryResolver resolver = BridgePreloader.getSharedResolver();
@@ -190,61 +181,66 @@ public class ZcodeHistoryReader {
 
         LOG.info("[ZcodeHistoryReader] Running: " + String.join(" ", cmd));
 
-        Process process = pb.start();
+        ProcessManager processes = new ProcessManager();
+        String channelId = ProcessManager.newChannelId("zcode-history");
+        Process process = processes.startManagedProcess(channelId, pb);
+        try {
 
-        // Parameters go over stdin (ZCODE_USE_STDIN=true); close it so the child
-        // does not wait for more input.
-        try (OutputStreamWriter writer = new OutputStreamWriter(
-                process.getOutputStream(), StandardCharsets.UTF_8)) {
-            writer.write(gson.toJson(stdinPayload != null ? stdinPayload : new JsonObject()));
-            writer.flush();
-        } catch (Exception e) {
-            LOG.warn("[ZcodeHistoryReader] Failed to write stdin: " + e.getMessage());
-        }
+            // Parameters go over stdin (ZCODE_USE_STDIN=true); close it so the child
+            // does not wait for more input.
+            try (OutputStreamWriter writer = new OutputStreamWriter(
+                    process.getOutputStream(), StandardCharsets.UTF_8)) {
+                writer.write(gson.toJson(stdinPayload != null ? stdinPayload : new JsonObject()));
+                writer.flush();
+            } catch (Exception e) {
+                LOG.warn("[ZcodeHistoryReader] Failed to write stdin: " + e.getMessage());
+            }
 
-        // Drain stdout on a daemon thread (bounded) so a verbose child cannot
-        // deadlock on a full pipe buffer while this thread enforces the timeout.
-        StringBuilder output = new StringBuilder();
-        Thread readerThread = new Thread(() -> {
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    synchronized (output) {
-                        if (output.length() < MAX_OUTPUT_CHARS) {
-                            output.append(line).append('\n');
+            // Drain stdout on a daemon thread (bounded) so a verbose child cannot
+            // deadlock on a full pipe buffer while this thread enforces the timeout.
+            StringBuilder output = new StringBuilder();
+            Thread readerThread = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        synchronized (output) {
+                            if (output.length() < MAX_OUTPUT_CHARS) {
+                                output.append(line).append('\n');
+                            }
                         }
                     }
+                } catch (Exception ignored) {
                 }
-            } catch (Exception ignored) {
-            }
-        });
-        readerThread.setDaemon(true);
-        readerThread.start();
+            });
+            readerThread.setDaemon(true);
+            readerThread.start();
 
-        long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
-        boolean finished = false;
-        try {
-            while (!(finished = process.waitFor(100L, TimeUnit.MILLISECONDS))) {
-                checkCancellation(cancellation);
-                if (System.nanoTime() >= deadlineNanos) {
-                    LOG.warn("[ZcodeHistoryReader] Timed out running zcode " + command);
-                    throw new java.util.concurrent.TimeoutException("ZCode history request timed out");
+            long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
+            boolean finished = false;
+            try {
+                while (!(finished = process.waitFor(100L, TimeUnit.MILLISECONDS))) {
+                    checkCancellation(cancellation);
+                    if (System.nanoTime() >= deadlineNanos) {
+                        LOG.warn("[ZcodeHistoryReader] Timed out running zcode " + command);
+                        throw new java.util.concurrent.TimeoutException("ZCode history request timed out");
+                    }
+                }
+                readerThread.join(2000L);
+                String outputText;
+                synchronized (output) {
+                    outputText = output.toString();
+                }
+                return extractJsonObject(outputText);
+            } finally {
+                if (!finished && process.isAlive()) {
+                    process.destroyForcibly();
                 }
             }
         } finally {
-            if (!finished && process.isAlive()) {
-                process.destroyForcibly();
-            }
+            processes.interruptChannel(channelId);
+            processes.unregisterProcess(channelId, process);
         }
-        // Process exited; the reader hits EOF promptly — join for the final lines.
-        readerThread.join(2000L);
-
-        String outputText;
-        synchronized (output) {
-            outputText = output.toString();
-        }
-        return extractJsonObject(outputText);
     }
 
     private static void checkCancellation(BooleanSupplier cancellation) {

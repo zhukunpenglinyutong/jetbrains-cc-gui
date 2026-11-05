@@ -1,5 +1,8 @@
 package com.github.claudecodegui.dependency;
 
+import com.github.claudecodegui.bridge.AiDataProcessGate;
+import com.github.claudecodegui.bridge.ProcessManager;
+
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.model.NodeDetectionResult;
@@ -448,8 +451,11 @@ public class DependencyManager {
                 return InstallResult.failure(sdkId, "Installation interrupted", "");
             }
         }
-        try {
+        try (AiDataProcessGate.ProcessPermit ignored = AiDataProcessGate.getInstance().acquireProcessPermit()) {
             return installSdkLocked(sdk, sdkId, requestedVersion, logCallback);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            return InstallResult.failure(sdkId, "AI_PROCESS_START_INTERRUPTED", "");
         } finally {
             lock.unlock();
         }
@@ -556,22 +562,27 @@ public class DependencyManager {
                 pb.redirectErrorStream(true);
                 configureProcessEnvironment(pb);
 
-                // Streams the output into the log while enforcing the deadline.
-                NpmInstallRunner.Outcome outcome = NpmInstallRunner.run(pb, INSTALL_ATTEMPT_TIMEOUT_MILLIS, log);
+                ProcessManager processes = new ProcessManager();
+                String channelId = ProcessManager.newChannelId("sdk-install");
+                Process process = processes.startManagedProcess(channelId, pb);
+                NpmInstallRunner.Outcome outcome;
+                try {
+                    outcome = NpmInstallRunner.run(process, INSTALL_ATTEMPT_TIMEOUT_MILLIS, log);
+                } finally {
+                    processes.interruptChannel(channelId);
+                    processes.unregisterProcess(channelId, process);
+                }
                 if (outcome.timedOut()) {
                     lastResult = InstallResult.failure(sdkId,
                             "Installation timed out (3 minutes)", logs.toString());
                     if (isWsl) {
-                        // Killing wsl.exe may leave npm running inside Linux; a retry would
-                        // race it in the same install folder.
+                        // Do not race a Linux child which may survive termination of wsl.exe.
                         break;
                     }
-                    continue; // Retry
+                    continue;
                 }
-
                 int exitCode = outcome.exitCode();
                 if (exitCode == 0) {
-                    // Installation succeeded, proceed to next steps
                     installed = true;
                     break;
                 }
@@ -662,7 +673,10 @@ public class DependencyManager {
      * @return true if the uninstallation completed fully, false if some files failed to delete
      */
     public boolean uninstallSdk(String sdkId) {
-        try {
+        try (AiDataProcessGate.ReadPermit admission = AiDataProcessGate.getInstance().tryAcquireReadPermit()) {
+            if (admission == null) {
+                return false;
+            }
             Path sdkDir = getSdkDir(sdkId);
             if (!Files.exists(sdkDir)) {
                 return true;

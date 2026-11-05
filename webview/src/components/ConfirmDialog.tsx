@@ -8,6 +8,8 @@ interface ConfirmDialogProps {
   cancelText?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  confirmDisabled?: boolean;
+  danger?: boolean;
   /**
    * Optional extra content rendered inside the dialog body, beneath the message
    * and above the footer. Used by AppDialogs to inject a "don't ask again"
@@ -26,6 +28,8 @@ const ConfirmDialog = ({
   onConfirm,
   onCancel,
   children,
+  confirmDisabled = false,
+  danger = false,
 }: ConfirmDialogProps) => {
   const titleId = useId();
 
@@ -62,10 +66,11 @@ const ConfirmDialog = ({
           {children}
         </div>
         <div className="confirm-dialog-footer">
-          <button className="confirm-dialog-button cancel-button" onClick={onCancel}>
+          <button className="confirm-dialog-button cancel-button" onClick={onCancel} autoFocus={danger}>
             {cancelText}
           </button>
-          <button className="confirm-dialog-button confirm-button" onClick={onConfirm} autoFocus>
+          <button className="confirm-dialog-button confirm-button" onClick={onConfirm} disabled={confirmDisabled} autoFocus={!danger}
+            style={danger ? { background: 'var(--color-error, #c34b4b)', borderColor: 'var(--color-error, #c34b4b)' } : undefined}>
             {confirmText}
           </button>
         </div>

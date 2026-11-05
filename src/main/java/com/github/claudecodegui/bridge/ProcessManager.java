@@ -13,18 +13,85 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Process manager.
  * Manages child processes related to the Claude SDK.
  */
-public class ProcessManager {
+public class ProcessManager implements AiDataProcessGate.IdleRuntime {
 
     private static final Logger LOG = Logger.getInstance(ProcessManager.class);
     private static final String CLAUDE_TEMP_DIR_NAME = "claude-agent-tmp";
 
     private final Map<String, Process> activeChannelProcesses = new ConcurrentHashMap<>();
+    private final Map<Process, AiDataProcessGate.ProcessPermit> processPermits = new ConcurrentHashMap<>();
     private final Set<String> interruptedChannels = ConcurrentHashMap.newKeySet();
+    private final AtomicInteger pendingStarts = new AtomicInteger();
+
+    public ProcessManager() {
+        AiDataProcessGate.getInstance().registerRuntime(this);
+    }
+
+    @Override
+    public boolean hasActiveWork() {
+        return pendingStarts.get() > 0 || activeChannelProcesses.values().stream().anyMatch(Process::isAlive)
+                || processPermits.values().stream().anyMatch(AiDataProcessGate.ProcessPermit::hasLiveDescendants);
+    }
+
+    @Override
+    public boolean stopIfIdle() {
+        if (hasActiveWork()) {
+            return false;
+        }
+        for (Map.Entry<Process, AiDataProcessGate.ProcessPermit> entry : processPermits.entrySet()) {
+            releaseProcessPermit(entry.getKey());
+        }
+        return true;
+    }
+
+    /** Starts and registers an AI process only after data directory migration has yielded. */
+    public Process startManagedProcess(String channelId, ProcessBuilder processBuilder) throws IOException {
+        return startManagedProcess(channelId, processBuilder, () -> { });
+    }
+
+    /** Revalidates provider-specific admission after acquiring the shared permit, before spawning. */
+    public Process startManagedProcess(String channelId, ProcessBuilder processBuilder, ProcessStartCheck check) throws IOException {
+        pendingStarts.incrementAndGet();
+        try {
+            return startAdmittedProcess(channelId, processBuilder, check);
+        } finally {
+            pendingStarts.decrementAndGet();
+        }
+    }
+
+    private Process startAdmittedProcess(String channelId, ProcessBuilder processBuilder, ProcessStartCheck check) throws IOException {
+        AiDataProcessGate.ProcessPermit permit;
+        try {
+            permit = AiDataProcessGate.getInstance().acquireProcessPermit();
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new IOException("AI_PROCESS_START_INTERRUPTED", error);
+        }
+
+        try {
+            check.validate();
+            Process process = processBuilder.start();
+            permit.bindProcess(process);
+            processPermits.put(process, permit);
+            permit.whenReleased(() -> processPermits.remove(process, permit));
+            registerProcess(channelId, process);
+            return process;
+        } catch (IOException | RuntimeException error) {
+            permit.close();
+            throw error;
+        }
+    }
+
+    @FunctionalInterface
+    public interface ProcessStartCheck {
+        void validate() throws IOException;
+    }
 
     /**
      * Generates a unique channel ID by appending a random UUID to {@code prefix}.
@@ -44,6 +111,10 @@ public class ProcessManager {
      */
     public void registerProcess(String channelId, Process process) {
         if (channelId != null && process != null) {
+            AiDataProcessGate.ProcessPermit permit = processPermits.get(process);
+            if (permit != null) {
+                permit.bindProcess(process);
+            }
             activeChannelProcesses.put(channelId, process);
             interruptedChannels.remove(channelId);
         }
@@ -56,6 +127,7 @@ public class ProcessManager {
         if (channelId != null) {
             activeChannelProcesses.remove(channelId, process);
         }
+        releaseProcessPermit(process);
     }
 
     /**
@@ -95,7 +167,7 @@ public class ProcessManager {
         // Use platform-aware process termination
         // Windows: uses taskkill /F /T to kill the process tree
         // Unix: uses standard destroy/destroyForcibly
-        PlatformUtils.terminateProcess(process);
+        terminateManagedProcess(process);
 
         // Wait for the process to fully terminate
         try {
@@ -111,6 +183,7 @@ public class ProcessManager {
             Thread.currentThread().interrupt();
         } finally {
             activeChannelProcesses.remove(channelId, process);
+            releaseProcessPermit(process);
             // Verify the process has actually terminated
             if (process.isAlive()) {
                 LOG.warn("[Interrupt] Warning: Process may still be alive for channel: " + channelId);
@@ -134,11 +207,15 @@ public class ProcessManager {
 
             if (process != null && process.isAlive()) {
                 LOG.info("[ProcessManager] Terminating process for channel: " + channelId);
-                PlatformUtils.terminateProcess(process);
+                terminateManagedProcess(process);
                 count++;
             }
         }
 
+        for (Process process : processPermits.keySet()) {
+            terminateManagedProcess(process);
+            releaseProcessPermit(process);
+        }
         activeChannelProcesses.clear();
         interruptedChannels.clear();
 
@@ -244,6 +321,26 @@ public class ProcessManager {
         }
         if (cleaned > 0) {
             LOG.info("[ProcessManager] Cleaned up " + cleaned + " stale temp cwd files.");
+        }
+    }
+
+    private void releaseProcessPermit(Process process) {
+        if (process == null) {
+            return;
+        }
+        AiDataProcessGate.ProcessPermit permit = processPermits.get(process);
+        if (permit != null) {
+            permit.whenReleased(() -> processPermits.remove(process, permit));
+            permit.close();
+        }
+    }
+
+    private void terminateManagedProcess(Process process) {
+        AiDataProcessGate.ProcessPermit permit = processPermits.get(process);
+        if (permit == null) {
+            PlatformUtils.terminateProcess(process);
+        } else {
+            permit.terminateProcessTree(3000L);
         }
     }
 }

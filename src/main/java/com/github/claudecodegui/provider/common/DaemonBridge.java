@@ -1,5 +1,6 @@
 package com.github.claudecodegui.provider.common;
 
+import com.github.claudecodegui.bridge.AiDataProcessGate;
 import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
@@ -37,7 +38,7 @@ import java.util.function.Consumer;
  * - Command output lines have an "id" field matching the request
  * - Command completion is signaled by {"id":"X","done":true}
  */
-public class DaemonBridge {
+public class DaemonBridge implements AiDataProcessGate.IdleRuntime {
 
     private static final Logger LOG = Logger.getInstance(DaemonBridge.class);
     private static final String DAEMON_SCRIPT = "daemon.js";
@@ -79,6 +80,8 @@ public class DaemonBridge {
     // Event listeners for custom daemon events. CopyOnWriteArrayList allows safe
     // iteration during dispatch while listeners may be added/removed concurrently.
     private final List<DaemonEventListener> eventListeners = new CopyOnWriteArrayList<>();
+    private final Map<Process, AiDataProcessGate.ProcessPermit> ownedProcesses = new ConcurrentHashMap<>();
+    private final AiDataProcessGate processGate;
 
     public DaemonBridge(
             NodeDetector nodeDetector,
@@ -135,6 +138,21 @@ public class DaemonBridge {
             long heartbeatIntervalMs,
             Consumer<Map<String, String>> customEnvConfigurator
     ) {
+        this(nodeDetector, directoryResolver, envConfigurator, timeSource, processLauncher,
+                lifecycleHooks, heartbeatIntervalMs, customEnvConfigurator, AiDataProcessGate.getInstance());
+    }
+
+    DaemonBridge(
+            NodeDetector nodeDetector,
+            BridgeDirectoryResolver directoryResolver,
+            EnvironmentConfigurator envConfigurator,
+            TimeSource timeSource,
+            DaemonProcessLauncher processLauncher,
+            DaemonLifecycleHooks lifecycleHooks,
+            long heartbeatIntervalMs,
+            Consumer<Map<String, String>> customEnvConfigurator,
+            AiDataProcessGate processGate
+    ) {
         this.nodeDetector = nodeDetector;
         this.directoryResolver = directoryResolver;
         this.envConfigurator = envConfigurator;
@@ -145,6 +163,26 @@ public class DaemonBridge {
                 ? lifecycleHooks : DaemonLifecycleHooks.NO_OP;
         this.heartbeatIntervalMs = heartbeatIntervalMs;
         this.customEnvConfigurator = customEnvConfigurator;
+        this.processGate = processGate;
+        processGate.registerRuntime(this);
+    }
+
+    @Override
+    public boolean hasActiveWork() {
+        synchronized (startLock) {
+            DaemonGenerationContext context = daemonContext;
+            return activeStartAttempt != null || context != null && context.activeRequestCount.get() > 0;
+        }
+    }
+
+    @Override
+    public boolean stopIfIdle() {
+        if (hasActiveWork()) {
+            return false;
+        }
+        // Migration intent already prevents new starts and request registration.
+        stop(false);
+        return true;
     }
 
     // =========================================================================
@@ -199,6 +237,7 @@ public class DaemonBridge {
     private boolean executeStartAttempt(StartAttempt attempt) {
         DaemonGenerationContext startedContext = null;
         Process startedProcess = null;
+        AiDataProcessGate.ProcessPermit processPermit = null;
         try {
             synchronized (startLock) {
                 if (!isStartAttemptCurrentLocked(attempt)) {
@@ -207,7 +246,13 @@ public class DaemonBridge {
                 }
             }
 
+            processPermit = processGate.acquireProcessPermit();
             startedProcess = processLauncher.launch();
+            processPermit.bindProcess(startedProcess);
+            Process ownedProcess = startedProcess;
+            AiDataProcessGate.ProcessPermit ownedPermit = processPermit;
+            ownedProcesses.put(ownedProcess, ownedPermit);
+            ownedPermit.whenReleased(() -> ownedProcesses.remove(ownedProcess, ownedPermit));
             BufferedWriter startedStdin = new BufferedWriter(
                     new OutputStreamWriter(startedProcess.getOutputStream(), StandardCharsets.UTF_8));
             long startedGeneration = daemonGenerationCounter.incrementAndGet();
@@ -218,7 +263,9 @@ public class DaemonBridge {
                     startedStdin,
                     startedGeneration,
                     startedWallTime,
-                    startedNanos);
+                    startedNanos,
+                    processPermit);
+            processPermit = null;
 
             synchronized (startLock) {
                 if (!isStartAttemptCurrentLocked(attempt)) {
@@ -271,6 +318,9 @@ public class DaemonBridge {
         } catch (Exception e) {
             LOG.error("[DaemonBridge] Failed to start daemon", e);
             failStartAttempt(attempt, startedContext, startedProcess);
+            if (processPermit != null) {
+                releaseProcessPermitAfterExit(startedProcess, processPermit);
+            }
             return false;
         }
     }
@@ -337,6 +387,30 @@ public class DaemonBridge {
         }
     }
 
+    /** Retiring callback ownership does not prove that the native process has stopped writing. */
+    private static void releaseProcessPermitAfterExit(Process process, AiDataProcessGate.ProcessPermit permit) {
+        if (process == null || !process.isAlive()) {
+            permit.close();
+            return;
+        }
+        Thread monitor = new Thread(() -> {
+            try {
+                while (process.isAlive()) {
+                    process.waitFor();
+                    // A custom Process may complete waitFor before its liveness changes.
+                    if (process.isAlive()) {
+                        Thread.sleep(25L);
+                    }
+                }
+                permit.close();
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+            }
+        }, "ai-daemon-permit-monitor");
+        monitor.setDaemon(true);
+        monitor.start();
+    }
+
     private Process launchConfiguredDaemon() throws IOException {
         File bridgeDir = directoryResolver.findSdkDir();
         if (bridgeDir == null) {
@@ -382,6 +456,10 @@ public class DaemonBridge {
      * Stop the daemon process gracefully.
      */
     public void stop() {
+        stop(true);
+    }
+
+    private void stop(boolean terminateDescendants) {
         LOG.info("[DaemonBridge] Stopping daemon...");
         DaemonGenerationContext context;
         synchronized (startLock) {
@@ -399,12 +477,18 @@ public class DaemonBridge {
             }
         }
         if (context == null) {
+            stopOwnedProcesses(terminateDescendants);
             return;
         }
 
         // Cancel all pending requests
         for (RequestHandler handler : context.drainRequests()) {
             handler.onError("Daemon stopped");
+        }
+
+        // Retain descendants before the cooperative parent exit makes them undiscoverable.
+        if (context.processPermit != null) {
+            context.processPermit.hasLiveDescendants();
         }
 
         // Send shutdown command before closing stdin (allows daemon to flush)
@@ -428,8 +512,18 @@ public class DaemonBridge {
             LOG.debug("[DaemonBridge] Error closing stdin: " + e.getMessage());
         }
 
+        if (!terminateDescendants) {
+            try {
+                context.process.waitFor(3, TimeUnit.SECONDS);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
         // Kill process if still alive and wait for termination
-        if (context.process.isAlive()) {
+        if (context.processPermit != null && terminateDescendants) {
+            context.processPermit.terminateProcessTree(3000L);
+        } else if (context.process.isAlive()) {
             context.process.destroyForcibly();
             try {
                 context.process.waitFor(3, TimeUnit.SECONDS);
@@ -457,6 +551,20 @@ public class DaemonBridge {
         }
 
         LOG.info("[DaemonBridge] Daemon stopped");
+        stopOwnedProcesses(terminateDescendants);
+    }
+
+    private void stopOwnedProcesses(boolean terminateDescendants) {
+        for (Map.Entry<Process, AiDataProcessGate.ProcessPermit> entry : ownedProcesses.entrySet()) {
+            AiDataProcessGate.ProcessPermit permit = entry.getValue();
+            if (terminateDescendants) {
+                permit.terminateProcessTree(3000L);
+            } else if (entry.getKey().isAlive()) {
+                permit.hasLiveDescendants();
+                entry.getKey().destroyForcibly();
+            }
+            permit.close();
+        }
     }
 
     /**
@@ -574,51 +682,56 @@ public class DaemonBridge {
             if (!ensureRunning()) {
                 return failedCommand(new IOException("Daemon not running"));
             }
-            DaemonGenerationContext context = daemonContext;
-            if (context == null || !context.isActive() || !context.process.isAlive()) {
-                continue;
-            }
-            lifecycleHooks.beforeRequestRegistration(context.generation);
+            try (AiDataProcessGate.ProcessPermit admission = processGate.acquireProcessPermit()) {
+                DaemonGenerationContext context = daemonContext;
+                if (context == null || !context.isActive() || !context.process.isAlive()) {
+                    continue;
+                }
+                lifecycleHooks.beforeRequestRegistration(context.generation);
 
-            String requestId = String.valueOf(requestIdCounter.incrementAndGet());
-            CompletableFuture<Boolean> future = new CompletableFuture<>();
-            boolean countsAsActiveRequest = !"heartbeat".equals(method) && !"status".equals(method);
+                String requestId = String.valueOf(requestIdCounter.incrementAndGet());
+                CompletableFuture<Boolean> future = new CompletableFuture<>();
+                boolean countsAsActiveRequest = !"heartbeat".equals(method) && !"status".equals(method);
 
-            RequestHandler handler = new RequestHandler(callback, future);
-            if (!context.registerRequest(requestId, handler, countsAsActiveRequest, timeSource)) {
-                continue;
-            }
+                RequestHandler handler = new RequestHandler(callback, future);
+                if (!context.registerRequest(requestId, handler, countsAsActiveRequest, timeSource)) {
+                    continue;
+                }
 
-            // Ensure cleanup when future completes (e.g., via timeout or cancellation)
-            future.whenComplete((result, ex) -> context.removeRequest(requestId));
+                // Ensure cleanup when future completes (e.g., via timeout or cancellation)
+                future.whenComplete((result, ex) -> context.removeRequest(requestId));
 
-            JsonObject request = new JsonObject();
-            request.addProperty("id", requestId);
-            request.addProperty("method", method);
-            request.add("params", params);
+                JsonObject request = new JsonObject();
+                request.addProperty("id", requestId);
+                request.addProperty("method", method);
+                request.add("params", params);
 
-            try {
-                synchronized (context.stdin) {
-                    if (!context.isActive()) {
-                        throw new IOException("Daemon generation changed before write");
+                try {
+                    synchronized (context.stdin) {
+                        if (!context.isActive()) {
+                            throw new IOException("Daemon generation changed before write");
+                        }
+                        context.stdin.write(request.toString());
+                        context.stdin.newLine();
+                        context.stdin.flush();
                     }
-                    context.stdin.write(request.toString());
-                    context.stdin.newLine();
-                    context.stdin.flush();
+                    LOG.info("[DaemonBridge] Sent request " + requestId + ": " + method);
+                    if (method.startsWith("codex.") && params != null) {
+                        // Routing identities reveal duplicate runtimes without logging prompts or credentials.
+                        LOG.info("[CodexRoute] request=" + requestId + ", channel=" + params.get("channelId")
+                                + ", epoch=" + params.get("sessionEpoch") + ", thread=" + params.get("threadId"));
+                    }
+                } catch (IOException e) {
+                    context.removeRequest(requestId);
+                    future.completeExceptionally(e);
+                    LOG.error("[DaemonBridge] Failed to send request: " + e.getMessage());
                 }
-                LOG.info("[DaemonBridge] Sent request " + requestId + ": " + method);
-                if (method.startsWith("codex.") && params != null) {
-                    // Routing identities reveal duplicate runtimes without logging prompts or credentials.
-                    LOG.info("[CodexRoute] request=" + requestId + ", channel=" + params.get("channelId")
-                            + ", epoch=" + params.get("sessionEpoch") + ", thread=" + params.get("threadId"));
-                }
-            } catch (IOException e) {
-                context.removeRequest(requestId);
-                future.completeExceptionally(e);
-                LOG.error("[DaemonBridge] Failed to send request: " + e.getMessage());
-            }
 
-            return future;
+                return future;
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                return failedCommand(new IOException("AI_PROCESS_START_INTERRUPTED", error));
+            }
         }
         return failedCommand(new IOException("Daemon generation changed before request"));
     }
@@ -1463,6 +1576,8 @@ public class DaemonBridge {
                 new ConcurrentHashMap<>();
         private final Deque<String> recentStderrLines = new ArrayDeque<>();
         private final HeartbeatTimestamps heartbeatTimestamps;
+        private final AiDataProcessGate.ProcessPermit processPermit;
+        private final AtomicBoolean permitReleaseScheduled = new AtomicBoolean();
         private volatile DaemonGenerationState state = DaemonGenerationState.ACTIVE;
         private volatile boolean startupPublished;
         private volatile Thread readerThread;
@@ -1475,12 +1590,24 @@ public class DaemonBridge {
                 long startedWallTimeMs,
                 long startedAtNanos
         ) {
+            this(process, stdin, generation, startedWallTimeMs, startedAtNanos, null);
+        }
+
+        DaemonGenerationContext(
+                Process process,
+                BufferedWriter stdin,
+                long generation,
+                long startedWallTimeMs,
+                long startedAtNanos,
+                AiDataProcessGate.ProcessPermit processPermit
+        ) {
             this.process = process;
             this.stdin = stdin;
             this.generation = generation;
             this.startedAtWallTimeMs = startedWallTimeMs;
             this.heartbeatTimestamps = new HeartbeatTimestamps(
                     startedWallTimeMs, startedAtNanos);
+            this.processPermit = processPermit;
         }
 
         boolean isActive() {
@@ -1502,11 +1629,21 @@ public class DaemonBridge {
         synchronized void claimDeath() {
             if (state == DaemonGenerationState.ACTIVE) {
                 state = DaemonGenerationState.DEATH_CLAIMED;
+                closeProcessPermit();
             }
         }
 
         void stop() {
-            state = DaemonGenerationState.STOPPED;
+            if (state != DaemonGenerationState.STOPPED) {
+                state = DaemonGenerationState.STOPPED;
+                closeProcessPermit();
+            }
+        }
+
+        private void closeProcessPermit() {
+            if (processPermit != null && permitReleaseScheduled.compareAndSet(false, true)) {
+                releaseProcessPermitAfterExit(process, processPermit);
+            }
         }
 
         synchronized boolean signalReady(boolean preloaded) {

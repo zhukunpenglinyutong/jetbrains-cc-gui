@@ -103,8 +103,7 @@ public final class NodeProcessRunner {
         String channelId = ProcessManager.newChannelId(label);
         Process process = null;
         try {
-            process = pb.start();
-            processManager.registerProcess(channelId, process);
+            process = processManager.startManagedProcess(channelId, pb);
 
             CompletableFuture<String> stdout = startStdoutReader(process, label);
             if (stdinData != null) {

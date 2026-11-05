@@ -42,6 +42,11 @@ const SPAWN_POLL_MS = 250;
  */
 const NEGOTIATE_LAUNCH_TIMEOUT_MS = 5_000;
 const VERSION_PROBE_TIMEOUT_MS = 5_000;
+// Windows process inspection can outlast a version probe while the IDE is busy.
+// Keep this inside the Java stop command's 30-second deadline.
+const HOST_STOP_INSPECTION_TIMEOUT_MS = 10_000;
+const HOST_STOP_TIMEOUT_MS = 5_000;
+const HOST_FORCE_STOP_TIMEOUT_MS = 2_000;
 
 function logDebug(...args) {
   console.error('[DEBUG][DSH]', ...args);
@@ -122,20 +127,43 @@ function isPidAlive(pid) {
   }
 }
 
+async function waitForPidExit(pid, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isPidAlive(pid)) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return !isPidAlive(pid);
+}
+
+async function stopWindowsHostProcess(pid) {
+  const result = spawnSync('taskkill', ['/F', '/T', '/PID', String(pid)], {
+    encoding: 'utf8', timeout: HOST_STOP_TIMEOUT_MS, windowsHide: true,
+  });
+  if (result.error || result.status !== 0) {
+    return `Failed to terminate DSH host process tree: ${result.error?.message || result.stderr?.trim() || result.status}`;
+  }
+  return await waitForPidExit(pid, HOST_FORCE_STOP_TIMEOUT_MS)
+    ? null
+    : `DSH host process tree ${pid} did not exit`;
+}
+
 /** Best-effort command line for a pid ('' when unavailable). */
-function processCommandLine(pid) {
+function processCommandLine(pid, timeoutMs = VERSION_PROBE_TIMEOUT_MS) {
   try {
     if (process.platform === 'win32') {
       const result = spawnSync(
         'powershell',
-        ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CommandLine`],
-        { encoding: 'utf8', timeout: VERSION_PROBE_TIMEOUT_MS, windowsHide: true }
+        ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}" -Property CommandLine).CommandLine`],
+        { encoding: 'utf8', timeout: timeoutMs, windowsHide: true }
       );
       return (result.stdout || '').trim();
     }
     const result = spawnSync('ps', ['-p', String(pid), '-o', 'command='], {
       encoding: 'utf8',
-      timeout: VERSION_PROBE_TIMEOUT_MS,
+      timeout: timeoutMs,
     });
     return (result.stdout || '').trim();
   } catch {
@@ -419,7 +447,7 @@ export async function ensureHost(settings) {
           + 'auto-start the host.'
         );
       }
-      return existing;
+      return { ...existing, ownership: ownedRunning ? 'spawned' : 'adopted', pid: ownedRunning ? remembered.pid : null };
     }
 
     logDebug(
@@ -443,7 +471,7 @@ export async function ensureHost(settings) {
         refreshedRemembered.logFile,
         SPAWN_READY_TIMEOUT_MS
       );
-      return { ...handle, ownership: 'spawned' };
+      return { ...handle, ownership: 'spawned', pid: refreshedRemembered.pid };
     } catch {
       // recorded spawn never became healthy — respawn below
     }
@@ -475,7 +503,7 @@ export async function ensureHost(settings) {
 
   try {
     const handle = await waitForDescribe(settings, logFile, SPAWN_READY_TIMEOUT_MS);
-    return { ...handle, ownership: 'spawned' };
+    return { ...handle, ownership: 'spawned', pid: child.pid };
   } catch (error) {
     let logTail = '';
     try {
@@ -547,31 +575,50 @@ export async function collectDshStatus(settings) {
 export async function stopSpawnedHost(settings) {
   const origin = originFromHostPort(settings.host, settings.port);
   const remembered = readStateFile();
-  if (!remembered || remembered.origin !== origin || !isPidAlive(remembered.pid)) {
+  if (!remembered || remembered.origin !== origin) {
+    return { success: true, stopped: false, reason: 'no-spawned-host' };
+  }
+  if (!isPidAlive(remembered.pid)) {
     removeStateFile();
     return { success: true, stopped: false, reason: 'no-spawned-host' };
   }
-  if (!isDshHostProcess(remembered.pid, remembered.bin)) {
+  const commandLine = processCommandLine(remembered.pid, HOST_STOP_INSPECTION_TIMEOUT_MS);
+  if (!commandLine) {
+    return { success: false, stopped: false, error: 'Unable to verify DSH host process' };
+  }
+  if (!looksLikeDshHostCommand(commandLine, remembered.bin)) {
     // PID reuse — the recorded pid now belongs to an unrelated process.
     removeStateFile();
-    return { success: true, stopped: false, reason: 'pid-reused' };
+    return { success: true, stopped: false, reason: 'pid-reused', pid: remembered.pid };
   }
-  try {
-    process.kill(remembered.pid, 'SIGTERM');
-  } catch (error) {
-    return { success: false, stopped: false, error: error.message };
-  }
-  const deadline = Date.now() + 5_000;
-  while (Date.now() < deadline && isPidAlive(remembered.pid)) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  if (isPidAlive(remembered.pid)) {
+  if (process.platform === 'win32') {
+    const error = await stopWindowsHostProcess(remembered.pid);
+    if (error) {
+      return { success: false, stopped: false, error };
+    }
+  } else {
     try {
-      process.kill(remembered.pid, 'SIGKILL');
-    } catch {
-      // ignore
+      process.kill(remembered.pid, 'SIGTERM');
+    } catch (error) {
+      return { success: false, stopped: false, error: error.message };
+    }
+    let stopped = await waitForPidExit(remembered.pid, HOST_STOP_TIMEOUT_MS);
+    if (!stopped) {
+      try {
+        process.kill(remembered.pid, 'SIGKILL');
+      } catch (error) {
+        return { success: false, stopped: false, error: error.message };
+      }
+      stopped = await waitForPidExit(remembered.pid, HOST_FORCE_STOP_TIMEOUT_MS);
+    }
+    if (!stopped) {
+      return {
+        success: false,
+        stopped: false,
+        error: `DSH host process ${remembered.pid} did not exit after forced termination`,
+      };
     }
   }
   removeStateFile();
-  return { success: true, stopped: true };
+  return { success: true, stopped: true, pid: remembered.pid };
 }

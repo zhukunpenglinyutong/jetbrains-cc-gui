@@ -160,8 +160,8 @@ const isValidFqcn = (className: string): boolean => {
 const callBridge = (payload: string) => {
   try {
     if (window.sendToJava) {
-      window.sendToJava(payload);
-      return true;
+      const delivered: unknown = window.sendToJava(payload);
+      return delivered !== false;
     }
   } catch {
     // Host/page replacement may throw; callers need a refused dispatch to preserve retries.
@@ -244,9 +244,9 @@ export const openBrowserExternal = (url?: string) => {
   sendBridgeEvent('open_browser_external', url);
 };
 
-export const sendToJava = (message: string, payload: any = {}) => {
+export const sendToJava = (message: string, payload: unknown = {}): boolean => {
   const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
-  sendBridgeEvent(message, payloadStr);
+  return sendBridgeEvent(message, payloadStr);
 };
 
 export const refreshFile = (filePath: string) => {

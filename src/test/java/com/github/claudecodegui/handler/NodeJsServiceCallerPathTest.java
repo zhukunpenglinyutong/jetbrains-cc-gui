@@ -41,7 +41,8 @@ public class NodeJsServiceCallerPathTest {
         writeService(servicesDir.resolve("favorites-service.cjs"),
                 "module.exports = {"
                         + " loadFavorites: sessionId => ({ sessionId }),"
-                        + " toggleFavorite: sessionId => ({ sessionId })"
+                        + " toggleFavorite: sessionId => ({ sessionId }),"
+                        + " removeFavorite: () => false"
                         + " };\n");
         writeService(servicesDir.resolve("input-history-service.cjs"),
                 "module.exports = {"
@@ -72,6 +73,7 @@ public class NodeJsServiceCallerPathTest {
         assertEquals(0, bridge.getProcessManager().getActiveProcessCount());
     }
 
+
     @Test
     public void favoritesServiceLoadsFromPathContainingSingleQuote() throws Exception {
         String result = new NodeJsServiceCaller(context)
@@ -79,6 +81,14 @@ public class NodeJsServiceCallerPathTest {
 
         JsonObject json = JsonParser.parseString(result).getAsJsonObject();
         assertEquals("session-2", json.get("sessionId").getAsString());
+        assertEquals(0, bridge.getProcessManager().getActiveProcessCount());
+    }
+
+    @Test
+    public void favoriteRemovalIsAllowedAndReturnsTheServiceOutcome() throws Exception {
+        String result = new NodeJsServiceCaller(context).callNodeJsFavoritesService("removeFavorite", "session-2");
+
+        assertEquals("false", result);
         assertEquals(0, bridge.getProcessManager().getActiveProcessCount());
     }
 

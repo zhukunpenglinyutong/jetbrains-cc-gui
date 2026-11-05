@@ -58,6 +58,17 @@ public class NpmInstallRunnerTest {
         }
     }
 
+    @Test public void anAlreadyOwnedProcessRetainsTheSameOutputDeadline() throws Exception {
+        Path pidFile = temporary.getRoot().toPath().resolve("managed-install.pid");
+        Process owned = peer("hang", pidFile.toString()).start();
+        try {
+            NpmInstallRunner.Outcome result = NpmInstallRunner.run(owned, 5000, line -> { });
+            assertTrue(result.timedOut());
+            assertTrue(owned.waitFor(5, TimeUnit.SECONDS));
+            assertFalse(owned.isAlive());
+        } finally { owned.destroyForcibly(); }
+    }
+
     private ProcessBuilder peer(String mode, String file) throws Exception {
         String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
         Path classes = temporary.newFolder("install-peer-classes").toPath();

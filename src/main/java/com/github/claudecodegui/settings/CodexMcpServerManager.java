@@ -1,5 +1,7 @@
 package com.github.claudecodegui.settings;
 
+import com.github.claudecodegui.bridge.ProcessManager;
+
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -599,6 +601,8 @@ public class CodexMcpServerManager {
             }
         }
 
+        ProcessManager processManager = new ProcessManager();
+        String channelId = ProcessManager.newChannelId("codex-mcp-status");
         Process process = null;
         try {
             ProcessBuilder pb = new ProcessBuilder(cmd);
@@ -619,7 +623,7 @@ public class CodexMcpServerManager {
                 }
             }
 
-            process = pb.start();
+            process = processManager.startManagedProcess(channelId, pb);
             return performStdioHandshake(process, serverName);
         } catch (Exception e) {
             LOG.info("[CodexMcpServerManager] Failed to start STDIO server " + serverName + ": " + e.getMessage());
@@ -648,6 +652,8 @@ public class CodexMcpServerManager {
                         Thread.currentThread().interrupt();
                     }
                 }
+                processManager.interruptChannel(channelId);
+                processManager.unregisterProcess(channelId, process);
             }
         }
     }

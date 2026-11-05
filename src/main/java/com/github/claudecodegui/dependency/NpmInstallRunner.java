@@ -50,7 +50,12 @@ final class NpmInstallRunner {
      */
     static Outcome run(ProcessBuilder builder, long timeoutMillis, Consumer<String> lineSink)
             throws IOException, InterruptedException {
-        Process process = builder.start();
+        return run(builder.start(), timeoutMillis, lineSink);
+    }
+
+    /** The caller can register the process with storage admission before starting the same deadline-controlled drain. */
+    static Outcome run(Process process, long timeoutMillis, Consumer<String> lineSink)
+            throws IOException, InterruptedException {
         GatedSink sink = new GatedSink(lineSink);
         Thread reader = startReader(process.getInputStream(), sink);
         try {

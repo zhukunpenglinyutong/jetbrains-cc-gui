@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  sendBridgeEvent,
   openBrowser,
   openClass,
   openFile,
@@ -11,6 +12,13 @@ import {
 describe('bridge navigation helpers', () => {
   beforeEach(() => {
     window.sendToJava = vi.fn();
+  });
+
+  it('honors a refused host dispatch while supporting legacy void bridges', () => {
+    window.sendToJava = vi.fn(() => false);
+    expect(sendBridgeEvent('get_ai_data_directory_status')).toBe(false);
+    window.sendToJava = vi.fn();
+    expect(sendBridgeEvent('get_ai_data_directory_status')).toBe(true);
   });
 
   it('decodes percent-encoded navigation paths for openFile', () => {

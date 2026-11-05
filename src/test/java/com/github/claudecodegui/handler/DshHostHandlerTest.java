@@ -1,18 +1,53 @@
 package com.github.claudecodegui.handler;
 
+import com.google.gson.JsonObject;
 import org.junit.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Unit tests for the DSH connection settings validators
  * ({@link DshHostHandler#validateDshHost} / {@link DshHostHandler#validateDshBin}).
  */
 public class DshHostHandlerTest {
+
+    @Test
+    public void releasesOwnedHostOnlyAfterVerifiedStop() {
+        JsonObject stopped = new JsonObject();
+        stopped.addProperty("success", true);
+        stopped.addProperty("stopped", true);
+        stopped.addProperty("pid", 123L);
+        assertTrue(DshHostHandler.isStoppedHostResult(stopped));
+
+        JsonObject missingPid = new JsonObject();
+        missingPid.addProperty("success", true);
+        missingPid.addProperty("stopped", true);
+        assertFalse(DshHostHandler.isStoppedHostResult(missingPid));
+
+        JsonObject notStopped = new JsonObject();
+        notStopped.addProperty("success", true);
+        notStopped.addProperty("stopped", false);
+        notStopped.addProperty("reason", "no-spawned-host");
+        assertFalse(DshHostHandler.isStoppedHostResult(notStopped));
+
+        JsonObject reused = new JsonObject();
+        reused.addProperty("success", true);
+        reused.addProperty("stopped", false);
+        reused.addProperty("reason", "pid-reused");
+        reused.addProperty("pid", 123L);
+        assertTrue(DshHostHandler.isStoppedHostResult(reused));
+
+        JsonObject failed = new JsonObject();
+        failed.addProperty("success", false);
+        failed.addProperty("stopped", false);
+        assertFalse(DshHostHandler.isStoppedHostResult(failed));
+    }
 
     // ---------- validateDshHost ----------
 
