@@ -133,6 +133,8 @@ export function useSessionManagement({
   const pendingActionRef = useRef<'newSession' | null>(null);
   const suppressNextStatusToastRef = useRef(false);
   const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 60s backstop for window.__forkInFlight; cleared when the fork settles early. */
+  const forkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyDataRef = useRef(historyData);
   useEffect(() => {
     historyDataRef.current = historyData;
@@ -667,7 +669,12 @@ export function useSessionManagement({
     // Release the guard even if the backend callback never arrives. Generous on
     // purpose: forking copies the whole transcript, and a large session can take
     // well past 15s — releasing early would let a second click duplicate the fork.
-    setTimeout(() => {
+    // The handle lets the failure path below (and the next fork) retire the timer.
+    if (forkTimeoutRef.current !== null) {
+      clearTimeout(forkTimeoutRef.current);
+    }
+    forkTimeoutRef.current = setTimeout(() => {
+      forkTimeoutRef.current = null;
       window.__forkInFlight = false;
     }, 60_000);
 
@@ -700,14 +707,30 @@ export function useSessionManagement({
     // this fork should carry; onForkResult binds it to the new session id and
     // window.setSessionId applies it once that session becomes active.
     window.__pendingForkTitleRequest = forkTitle;
+    // onForkResult reloads the list after a successful fork; the row's provider
+    // rides along so the reload queries the store the fork came from even when
+    // the panel's currentProvider is stale (same rule as requestHistoryDeletion).
+    window.__pendingForkProvider = provider;
 
-    sendBridgeEvent('fork_session', JSON.stringify({
+    if (!sendBridgeEvent('fork_session', JSON.stringify({
       sessionId,
       provider,
       ...(forkTitle ? { title: forkTitle } : {}),
       ...(options?.forkPointUuid ? { forkPointUuid: options.forkPointUuid } : {}),
-    }));
-  }, [currentProvider, t, messages, getMessageText]);
+    }))) {
+      // The bridge refused the event, so no onForkResult will ever arrive.
+      // Release the guard and drop the pending globals now, or every fork
+      // click would be silently swallowed until the 60s backstop fired.
+      if (forkTimeoutRef.current !== null) {
+        clearTimeout(forkTimeoutRef.current);
+        forkTimeoutRef.current = null;
+      }
+      window.__forkInFlight = false;
+      delete window.__pendingForkTitleRequest;
+      delete window.__pendingForkProvider;
+      addToast(t('history.forkFailed'), 'error');
+    }
+  }, [addToast, currentProvider, t, messages, getMessageText]);
 
   return {
     showNewSessionConfirm,

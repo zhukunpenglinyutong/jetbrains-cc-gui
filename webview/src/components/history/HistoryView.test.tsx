@@ -133,6 +133,16 @@ describe('HistoryView running session protection', () => {
     expect(screen.getByText('0 selected')).toBeTruthy();
   });
 
+  it('disables the fork button for a running session', () => {
+    // Forking copies the transcript file the CLI is still appending to, so a
+    // running row must not fork — same protection the delete button already has.
+    const data = { ...historyData, sessions: historyData.sessions!.map(session => ({ ...session, running: true })) };
+    render(<HistoryView {...actions} historyData={data} />);
+    const forkButton = screen.getByRole('button', { name: 'history.forkSession' });
+    expect(forkButton.hasAttribute('disabled')).toBe(true);
+    expect(forkButton.getAttribute('title')).toBe('history.sessionInUse');
+  });
+
   it('cancels an open confirmation when the current session starts a turn', () => {
     const { rerender } = render(<HistoryView {...actions} historyData={historyData} currentSessionBusy={false} />);
     const row = screen.getByText('Second session').closest('.history-item') as HTMLElement;

@@ -67,8 +67,9 @@ export const HistoryItemActions = ({
       {session.provider === 'claude' && (
         <button
           className="history-fork-btn"
+          disabled={session.running}
           onClick={handleFork}
-          title={t('history.forkSession')}
+          title={session.running ? t('history.sessionInUse') : t('history.forkSession')}
           aria-label={t('history.forkSession')}
         >
           <span className="codicon codicon-git-branch"></span>

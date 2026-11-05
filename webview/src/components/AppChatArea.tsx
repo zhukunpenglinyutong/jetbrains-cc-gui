@@ -53,13 +53,18 @@ export const AppChatArea = (props: AppChatAreaProps) => {
   // Fork the active session at an assistant reply: the message carries the JSONL row
   // uuid the backend needs to cut the fork at that turn's end.
   const handleForkFromMessage = useCallback((message: ClaudeMessage) => {
-    if (!currentSessionId || !onForkSession) return;
+    // A busy session must not fork: the backend copies the transcript file the
+    // CLI is still appending to, and the success auto-open would clear messages
+    // under the live reply (it interrupts only when `loading` was seen true).
+    // The per-message fork button stays rendered for earlier replies during a
+    // stream, so the entry point is what has to refuse.
+    if (currentSessionBusy || !currentSessionId || !onForkSession) return;
     const raw = message.raw;
     const uuid = raw && typeof raw === 'object'
       ? (raw as Record<string, unknown>).uuid : undefined;
     if (typeof uuid !== 'string' || !uuid) return;
     onForkSession(currentSessionId, { forkPointUuid: uuid });
-  }, [currentSessionId, onForkSession]);
+  }, [currentSessionBusy, currentSessionId, onForkSession]);
 
   return (
     <>

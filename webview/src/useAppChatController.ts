@@ -247,6 +247,13 @@ export const useAppChatController = ({
     getMessageText: getMessageTextForFork,
     clearQueuedMessages,
   });
+  // Window callbacks register once on mount; the ref lets window.onForkResult
+  // reach the latest loadHistorySession so a mid-stream fork auto-open still
+  // sees loading === true and interrupts before switching sessions.
+  const loadHistorySessionRef = useRef(loadHistorySession);
+  useLayoutEffect(() => {
+    loadHistorySessionRef.current = loadHistorySession;
+  }, [loadHistorySession]);
 
   useHistoryLoader({ currentView, currentProvider });
 
@@ -287,7 +294,7 @@ export const useAppChatController = ({
     setCustomSessionTitle,
     setRestoredSessionTitle,
     // Message-level fork auto-open switches to the fork via the standard load flow
-    loadHistorySession,
+    loadHistorySessionRef,
     setPermissionDialogTimeoutSeconds,
     setStartupHistoryLoadState,
     clearQueuedMessages,

@@ -11,6 +11,7 @@ import { registerSessionAndSdkCallbacks } from './sessionCallbacks';
 describe('session fork result', () => {
   const addToast = vi.fn();
   const loadHistorySession = vi.fn();
+  const loadHistorySessionRef = { current: loadHistorySession };
   const setCustomSessionTitle = vi.fn();
   const options = {
     currentSessionIdRef: { current: 'root' },
@@ -20,13 +21,16 @@ describe('session fork result', () => {
     setCustomSessionTitle,
     applyHistoryTitleLocal: vi.fn(),
     addToast,
-    loadHistorySession,
+    loadHistorySessionRef,
   } as unknown as UseWindowCallbacksOptions;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    loadHistorySessionRef.current = loadHistorySession;
+    options.currentProviderRef.current = 'claude';
     delete window.__pendingForkTitle;
     delete window.__pendingForkTitleRequest;
+    delete window.__pendingForkProvider;
     delete window.__pendingSessionTransitionToast;
     window.__forkInFlight = true;
     window.sendToJava = vi.fn();
@@ -50,6 +54,21 @@ describe('session fork result', () => {
     expect(window.__forkInFlight).toBe(false);
   });
 
+  it('auto-opens through the ref so a re-created loader is the one invoked', () => {
+    // loadHistorySession is a useCallback recreated whenever `loading` changes;
+    // callbacks register once on mount, so the ref — not the closure — is what
+    // keeps a mid-stream auto-open interrupting before it clears the reply.
+    const latestLoader = vi.fn();
+    loadHistorySessionRef.current = latestLoader;
+
+    window.onForkResult!(
+      JSON.stringify({ success: true, newSessionId: 'fork-3', forkPointUuid: 'row-uuid-3' }),
+    );
+
+    expect(latestLoader).toHaveBeenCalledWith('fork-3');
+    expect(loadHistorySession).not.toHaveBeenCalled();
+  });
+
   it('leaves a history-list fork title to the backend instead of stashing it', () => {
     window.__pendingForkTitleRequest = 'Chat (fork)';
 
@@ -63,13 +82,32 @@ describe('session fork result', () => {
     expect(addToast).toHaveBeenCalledWith('history.forkSuccess', 'success');
   });
 
-  it('drops the requested title when the fork fails', () => {
+  it('reloads the list with the fork row provider, not the panel provider', () => {
+    // The panel switched to codex while the claude list stayed open: reloading
+    // through currentProviderRef would replace the list with codex rows and the
+    // new fork row would never appear.
+    options.currentProviderRef.current = 'codex';
+    window.__pendingForkProvider = 'claude';
+
+    window.onForkResult!(JSON.stringify({ success: true, newSessionId: 'fork-4' }));
+
+    const sent = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls
+      .map(([payload]) => String(payload));
+    expect(sent).toContain('deep_search_history:claude');
+    expect(sent).not.toContain('deep_search_history:codex');
+    // Consumed on success so a later fork cannot reuse the stale row provider.
+    expect(window.__pendingForkProvider).toBeUndefined();
+  });
+
+  it('drops the requested title and provider stash when the fork fails', () => {
     window.__pendingForkTitleRequest = 'Chat (fork)';
+    window.__pendingForkProvider = 'claude';
 
     window.onForkResult!(JSON.stringify({ success: false, errorCode: 'FORK_FAILED' }));
 
     expect(window.__pendingForkTitle).toBeUndefined();
     expect(window.__pendingForkTitleRequest).toBeUndefined();
+    expect(window.__pendingForkProvider).toBeUndefined();
     expect(addToast).toHaveBeenCalledWith('history.forkErrors.FORK_FAILED', 'error');
     expect(window.__forkInFlight).toBe(false);
   });

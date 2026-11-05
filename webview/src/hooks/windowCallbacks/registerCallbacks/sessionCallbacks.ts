@@ -38,7 +38,7 @@ export function registerSessionAndSdkCallbacks(
     updateHistoryTitle,
     applyHistoryTitleLocal,
     setCustomSessionTitle,
-    loadHistorySession,
+    loadHistorySessionRef,
   } = options;
 
   window.setSessionId = (sessionId: string) => {
@@ -295,10 +295,16 @@ export function registerSessionAndSdkCallbacks(
         // session id must not leave a stale title to be bound to some later fork.
         const requestedTitle = window.__pendingForkTitleRequest;
         delete window.__pendingForkTitleRequest;
+        // Consume the fork row's provider the same way: the reload must query
+        // the store the fork came from, and the panel's currentProvider can be
+        // stale after switching chat providers without reopening the list
+        // (same reason delete requests carry their row provider).
+        const requestedProvider = window.__pendingForkProvider;
+        delete window.__pendingForkProvider;
         // Reload so the fork row appears in the list. No optimistic insert: the
         // row's messageCount/fileSize are only known to the backend, and unlike
         // conversion there is no optimistic state to roll back on failure.
-        const provider = options.currentProviderRef.current;
+        const provider = requestedProvider || options.currentProviderRef.current;
         if (provider) {
           sendBridgeEvent('deep_search_history', provider);
         } else {
@@ -326,7 +332,11 @@ export function registerSessionAndSdkCallbacks(
             message: tRef.current('history.forkSuccess'),
             type: 'success',
           };
-          loadHistorySession?.(result.newSessionId);
+          // Read through the ref: the closure would hold the mount-time
+          // loadHistorySession, whose `loading` is permanently false, so a
+          // mid-stream auto-open would skip the interrupt and clear messages
+          // under the live reply (see UseWindowCallbacksOptions).
+          loadHistorySessionRef?.current?.(result.newSessionId);
         } else {
           addToast(tRef.current('history.forkSuccess'), 'success');
         }
@@ -347,9 +357,11 @@ export function registerSessionAndSdkCallbacks(
       addToast(errorMessage, 'error');
       // The fork never produced a session: drop the title it was waiting to bind.
       delete window.__pendingForkTitleRequest;
+      delete window.__pendingForkProvider;
     } catch (error) {
       console.error('[Frontend] Failed to parse fork result:', error);
       delete window.__pendingForkTitleRequest;
+      delete window.__pendingForkProvider;
       addToast(tRef.current('history.forkFailed'), 'error');
     }
   };

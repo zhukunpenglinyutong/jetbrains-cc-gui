@@ -30,6 +30,7 @@ describe('useSessionManagement', () => {
     window.sendToJava = vi.fn();
     delete window.__pendingForkTitleRequest;
     delete window.__pendingForkTitle;
+    delete window.__pendingForkProvider;
     delete window.__forkInFlight;
     // Reset the "skip new-session confirm" preference between tests so cases
     // that exercise the localStorage path can't leak into ones that don't.
@@ -1376,8 +1377,59 @@ describe('useSessionManagement', () => {
 
     // t() returns the key, so the requested title is "My Session" + the raw key.
     expect(window.__pendingForkTitleRequest).toBe('My Session' + 'history.forkedTitleSuffix');
+    // onForkResult reloads the list through this provider instead of the panel's
+    // possibly-stale currentProvider.
+    expect(window.__pendingForkProvider).toBe('claude');
   });
 
+  it('forkHistorySession rolls the guard back when the bridge refuses the event', () => {
+    const mocks = createMocks();
+    const historyData = {
+      success: true,
+      sessions: [
+        {
+          sessionId: 'history-1',
+          title: 'My Session',
+          provider: 'claude',
+          messageCount: 3,
+          lastTimestamp: Date.now(),
+        },
+      ],
+      total: 3,
+    } as unknown as HistoryData;
 
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData,
+        currentSessionId: null,
+        ...mocks,
+        t,
+      })
+    );
+
+    // No host bridge: callBridge reports a refused dispatch and onForkResult
+    // never arrives, so the hook must release everything it armed itself.
+    const refused = window.sendToJava;
+    window.sendToJava = undefined as unknown as typeof window.sendToJava;
+    act(() => {
+      result.current.forkHistorySession('history-1');
+    });
+
+    expect(mocks.addToast).toHaveBeenCalledWith('history.forkFailed', 'error');
+    expect(window.__forkInFlight).toBe(false);
+    expect(window.__pendingForkTitleRequest).toBeUndefined();
+    expect(window.__pendingForkProvider).toBeUndefined();
+
+    // The released guard lets a retry through once the bridge is back.
+    window.sendToJava = refused;
+    act(() => {
+      result.current.forkHistorySession('history-1');
+    });
+    expect(window.sendToJava).toHaveBeenCalledTimes(1);
+    expect(String((window.sendToJava as ReturnType<typeof vi.fn>).mock.calls[0][0]))
+      .toMatch(/^fork_session:/);
+  });
 
 });

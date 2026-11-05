@@ -264,6 +264,14 @@ interface Window {
     title: string;
   };
 
+  /**
+   * Provider of the history row a pending fork was created from. The list
+   * reload after onForkResult must query that store: the panel's
+   * currentProvider can be stale after switching chat providers without
+   * reopening the list (same reason delete requests carry their row provider).
+   */
+  __pendingForkProvider?: string;
+
   /** True while a fork request is awaiting onForkResult; blocks double submits. */
   __forkInFlight?: boolean;
 
