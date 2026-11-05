@@ -93,6 +93,20 @@ test('system and credential paths are denied before any dialog is shown', async 
   }
 });
 
+test('a read-only tool on a system path alias is denied before it can auto-allow', async () => {
+  const javaSide = startJavaSide(true);
+  try {
+    for (const file_path of ['/private/etc/hosts', '/proc/self/root/etc/passwd', '/etc/hosts']) {
+      const result = await canUseTool('Read', { file_path });
+      assert.equal(result.behavior, 'deny', file_path);
+      assert.equal(result.message, SENSITIVE_MESSAGE, file_path);
+    }
+    assert.equal(javaSide.requests().length, 0);
+  } finally {
+    javaSide.stop();
+  }
+});
+
 test('file tools are screened with the same rule', async () => {
   const javaSide = startJavaSide(true);
   try {

