@@ -466,7 +466,11 @@
       "uninstallFailed": "解除安裝失敗: {{error}}",
       "updating": "更新中...",
       "updateSuccess": "{{name}} 更新成功",
-      "cliTransportBadge": "CLI · {{transport}}"
+      "cliTransportBadge": "CLI · {{transport}}",
+      "versionCacheAccessError": "npm file access was denied, including the separate-cache retry. Check cache permissions or security software.",
+      "versionQueryTimeout": "The npm version query timed out. Check your network or proxy and retry.",
+      "versionQueryNetworkError": "Cannot connect to the npm registry. Check your network, proxy, or registry URL and retry.",
+      "versionQueryFailed": "The npm version query failed. Check your Node.js and npm configuration and retry."
     },
     "usage": "使用統計",
     "usageDesc": "檢視您的 Token 消耗、費用統計和使用趨勢分析",
@@ -1110,7 +1114,10 @@
     "previewUnavailable": "原生檔案預覽不可用。你可以拒絕或取消該請求。",
     "requestedPermissions": "請求的原生權限",
     "allowWithRule": "允許並加入此命令規則",
-    "allowWithNetworkRule": "允許並加入此網路規則"
+    "allowWithNetworkRule": "允許並加入此網路規則",
+    "codexDeliveryRetry": "Codex did not receive your choice ({{error}}). Please choose again.",
+    "codexDeliveryFailed": "Codex did not receive your choice ({{error}}). If the conversation does not continue, click Stop and send your message again.",
+    "codexDeliveryUnconfirmed": "Codex has not confirmed your choice yet ({{error}}). It may still take effect, so do not answer again; if the conversation does not continue, click Stop and send your message again."
   },
   "askUserQuestion": {
     "title": "Claude 有一些問題想問你",
@@ -1456,7 +1463,7 @@
     "required": "Required",
     "optional": "Optional",
     "refreshServer": "Refresh {{name}}",
-"configCopiedRedacted": "設定已複製到剪貼簿（敏感值已隱藏）",
+    "configCopiedRedacted": "設定已複製到剪貼簿（敏感值已隱藏）",
     "approveConfirmTitle": "批准專案本機 MCP 伺服器",
     "approveConfirmMessage": "批准「{{name}}」將允許本儲存庫在你的機器上執行：\n\n{{target}}\n\n並使用你的權限。請只批准你信任的伺服器。",
     "approveConfirm": "批准並執行",
@@ -1464,7 +1471,7 @@
     "copyConfigWarningTitle": "複製專案設定",
     "copyConfigWarningMessage": "「{{name}}」定義在本儲存庫的 .mcp.json 中。其設定可能包含儲存庫作者的憑證，而非你的憑證。僅在你打算使用該伺服器時再複製。",
     "copyConfigWarningConfirm": "仍要複製",
-"nativeStatus": "原生 Codex MCP 狀態"
+    "nativeStatus": "原生 Codex MCP 狀態"
   },
   "tools": {
     "toolCall": "工具調用",
@@ -2214,6 +2221,29 @@
         "pointCodexBin": {
           "title": "方案二：讓外掛指向可用的執行檔",
           "step0": "列出 PATH 上所有的 codex（Windows 使用 where codex）。如果可用的那個不在最前面，請把 CODEX_BIN 環境變數設為它的完整路徑，然後重新啟動 IDE。外掛現在也會自動回退到後面可用的安裝。"
+        }
+      }
+    },
+    "updateClaudeSdk": "Update SDK",
+    "updatingClaudeSdk": "Updating...",
+    "updateClaudeSdkSuccess": "Updated to {{version}}. Send your message again.",
+    "updateClaudeSdkFailed": "Update failed: {{error}}",
+    "updateClaudeSdkFailedUnknown": "Update failed. Open Dependency Settings for details.",
+    "updateClaudeSdkTimedOut": "No result after 15 minutes. Check Dependency Settings for the update status.",
+    "updateClaudeSdkCustomCli": "SDK updated to {{version}}, but the plugin runs your custom Claude CLI ({{path}}). Update it with Option 2.",
+    "updateClaudeSdkAlreadyLatest": "{{version}} is already the newest SDK this plugin supports, and this model needs a newer Claude Code. Update the plugin when a new release is out, or choose another model.",
+    "claudeCodeVersionTooOld": {
+      "title": "Claude Code SDK is too old for this model",
+      "intro": "The plugin runs the Claude Code bundled in its own SDK, not the claude command in your terminal. That bundled version is older than this model requires.",
+      "reason": "The SDK is installed separately from the plugin, so updating the plugin or the claude command in your terminal does not update it.",
+      "solutions": {
+        "updateSdk": {
+          "title": "Option 1: Update the Claude Code SDK",
+          "step0": "Installs the latest supported SDK. The plugin then restarts its Claude process, so you can send your message again right away."
+        },
+        "updateCustomCli": {
+          "title": "Option 2: Update your custom Claude CLI",
+          "step0": "If you set \"Claude CLI Path (override)\", the plugin runs that binary instead of the SDK. Update it in a terminal:"
         }
       }
     }

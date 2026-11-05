@@ -82,7 +82,12 @@
       "tooltipReset": "Resets: {{value}} (local time)",
       "clickToSwitch": "Click period label to switch window",
       "worstHint": "Dot shows worst window ({{color}})",
-      "paceColors": { "green": "green", "yellow": "yellow", "red": "red", "neutral": "unknown" },
+      "paceColors": {
+        "green": "green",
+        "yellow": "yellow",
+        "red": "red",
+        "neutral": "unknown"
+      },
       "stale": "Data may be outdated (refresh failed)"
     },
     "noMatchingFiles": "No matching files",
@@ -853,7 +858,11 @@
       "uninstallFailed": "Uninstall failed: {{error}}",
       "updating": "Updating...",
       "updateSuccess": "{{name}} updated successfully",
-      "cliTransportBadge": "CLI · {{transport}}"
+      "cliTransportBadge": "CLI · {{transport}}",
+      "versionCacheAccessError": "npm file access was denied, including the separate-cache retry. Check cache permissions or security software.",
+      "versionQueryTimeout": "The npm version query timed out. Check your network or proxy and retry.",
+      "versionQueryNetworkError": "Cannot connect to the npm registry. Check your network, proxy, or registry URL and retry.",
+      "versionQueryFailed": "The npm version query failed. Check your Node.js and npm configuration and retry."
     },
     "usage": "Usage Statistics",
     "usageDesc": "View your Token consumption, cost statistics and usage trend analysis",
@@ -1507,7 +1516,10 @@
     "previewUnavailable": "Native file preview is unavailable. You can deny or cancel this request.",
     "requestedPermissions": "Requested native permissions",
     "allowWithRule": "Allow with this command rule",
-    "allowWithNetworkRule": "Allow with this network rule"
+    "allowWithNetworkRule": "Allow with this network rule",
+    "codexDeliveryRetry": "Codex did not receive your choice ({{error}}). Please choose again.",
+    "codexDeliveryFailed": "Codex did not receive your choice ({{error}}). If the conversation does not continue, click Stop and send your message again.",
+    "codexDeliveryUnconfirmed": "Codex has not confirmed your choice yet ({{error}}). It may still take effect, so do not answer again; if the conversation does not continue, click Stop and send your message again."
   },
   "askUserQuestion": {
     "title": "Claude has some questions for you",
@@ -1854,7 +1866,7 @@
     "required": "Required",
     "optional": "Optional",
     "refreshServer": "Refresh {{name}}",
-"configCopiedRedacted": "Config copied to clipboard (sensitive values redacted)",
+    "configCopiedRedacted": "Config copied to clipboard (sensitive values redacted)",
     "approveConfirmTitle": "Approve project-local MCP server",
     "approveConfirmMessage": "Approving \"{{name}}\" lets this repository run:\n\n{{target}}\n\non your machine, with your permissions. Only approve servers you trust.",
     "approveConfirm": "Approve and run",
@@ -1862,7 +1874,7 @@
     "copyConfigWarningTitle": "Copy config from a project",
     "copyConfigWarningMessage": "\"{{name}}\" is defined in this repository's .mcp.json. Its configuration may contain credentials that belong to the repository's author, not to you. Copy it only if you intend to use this server.",
     "copyConfigWarningConfirm": "Copy anyway",
-"nativeStatus": "Native Codex MCP status"
+    "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
     "toolCall": "Tool Call",
@@ -2687,6 +2699,29 @@
         "pointCodexBin": {
           "title": "Option 2: Point the plugin at a working binary",
           "step0": "List every codex on your PATH (on Windows: where codex). If the working one is not first, set the CODEX_BIN environment variable to its full path and restart the IDE. The plugin also falls back to later installs automatically."
+        }
+      }
+    },
+    "updateClaudeSdk": "Update SDK",
+    "updatingClaudeSdk": "Updating...",
+    "updateClaudeSdkSuccess": "Updated to {{version}}. Send your message again.",
+    "updateClaudeSdkFailed": "Update failed: {{error}}",
+    "updateClaudeSdkFailedUnknown": "Update failed. Open Dependency Settings for details.",
+    "updateClaudeSdkTimedOut": "No result after 15 minutes. Check Dependency Settings for the update status.",
+    "updateClaudeSdkCustomCli": "SDK updated to {{version}}, but the plugin runs your custom Claude CLI ({{path}}). Update it with Option 2.",
+    "updateClaudeSdkAlreadyLatest": "{{version}} is already the newest SDK this plugin supports, and this model needs a newer Claude Code. Update the plugin when a new release is out, or choose another model.",
+    "claudeCodeVersionTooOld": {
+      "title": "Claude Code SDK is too old for this model",
+      "intro": "The plugin runs the Claude Code bundled in its own SDK, not the claude command in your terminal. That bundled version is older than this model requires.",
+      "reason": "The SDK is installed separately from the plugin, so updating the plugin or the claude command in your terminal does not update it.",
+      "solutions": {
+        "updateSdk": {
+          "title": "Option 1: Update the Claude Code SDK",
+          "step0": "Installs the latest supported SDK. The plugin then restarts its Claude process, so you can send your message again right away."
+        },
+        "updateCustomCli": {
+          "title": "Option 2: Update your custom Claude CLI",
+          "step0": "If you set \"Claude CLI Path (override)\", the plugin runs that binary instead of the SDK. Update it in a terminal:"
         }
       }
     }

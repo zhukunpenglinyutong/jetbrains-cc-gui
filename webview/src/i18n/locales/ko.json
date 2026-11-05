@@ -454,7 +454,11 @@
       "uninstallFailed": "제거 실패: {{error}}",
       "updating": "업데이트 중...",
       "updateSuccess": "{{name}} 업데이트 완료",
-      "cliTransportBadge": "CLI · {{transport}}"
+      "cliTransportBadge": "CLI · {{transport}}",
+      "versionCacheAccessError": "npm file access was denied, including the separate-cache retry. Check cache permissions or security software.",
+      "versionQueryTimeout": "The npm version query timed out. Check your network or proxy and retry.",
+      "versionQueryNetworkError": "Cannot connect to the npm registry. Check your network, proxy, or registry URL and retry.",
+      "versionQueryFailed": "The npm version query failed. Check your Node.js and npm configuration and retry."
     },
     "usage": "사용 통계",
     "usageDesc": "토큰 소비량, 비용 통계 및 사용 추이 분석 보기",
@@ -1154,7 +1158,10 @@
     "previewUnavailable": "Native file preview is unavailable. You can deny or cancel this request.",
     "requestedPermissions": "Requested native permissions",
     "allowWithRule": "Allow with this command rule",
-    "allowWithNetworkRule": "Allow with this network rule"
+    "allowWithNetworkRule": "Allow with this network rule",
+    "codexDeliveryRetry": "Codex did not receive your choice ({{error}}). Please choose again.",
+    "codexDeliveryFailed": "Codex did not receive your choice ({{error}}). If the conversation does not continue, click Stop and send your message again.",
+    "codexDeliveryUnconfirmed": "Codex has not confirmed your choice yet ({{error}}). It may still take effect, so do not answer again; if the conversation does not continue, click Stop and send your message again."
   },
   "askUserQuestion": {
     "title": "Claude가 질문이 있습니다",
@@ -1500,7 +1507,7 @@
     "required": "필수",
     "optional": "선택사항",
     "refreshServer": "{{name}} 새로고침",
-"configCopiedRedacted": "설정을 클립보드에 복사했습니다(민감한 값은 마스킹됨)",
+    "configCopiedRedacted": "설정을 클립보드에 복사했습니다(민감한 값은 마스킹됨)",
     "approveConfirmTitle": "프로젝트 로컬 MCP 서버 승인",
     "approveConfirmMessage": "\"{{name}}\"을(를) 승인하면 이 저장소가 사용자의 컴퓨터에서 다음을 실행할 수 있습니다:\n\n{{target}}\n\n사용자의 권한으로 실행됩니다. 신뢰하는 서버만 승인하세요.",
     "approveConfirm": "승인하고 실행",
@@ -1508,7 +1515,7 @@
     "copyConfigWarningTitle": "프로젝트 설정 복사",
     "copyConfigWarningMessage": "\"{{name}}\"은(는) 이 저장소의 .mcp.json에 정의되어 있습니다. 해당 설정에는 저장소 작성자의 자격 증명이 포함되어 있을 수 있으며 사용자의 것이 아닙니다. 이 서버를 사용할 계획이 있을 때만 복사하세요.",
     "copyConfigWarningConfirm": "그대로 복사",
-"nativeStatus": "Native Codex MCP status"
+    "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
     "toolCall": "도구 호출",
@@ -2198,6 +2205,29 @@
         "pointCodexBin": {
           "title": "방법 2: 동작하는 바이너리를 플러그인에 지정",
           "step0": "PATH에 있는 모든 codex를 확인하세요(Windows: where codex). 동작하는 것이 첫 번째가 아니면 CODEX_BIN 환경 변수를 전체 경로로 설정하고 IDE를 다시 시작하세요. 플러그인은 뒤의 설치로도 자동 폴백합니다."
+        }
+      }
+    },
+    "updateClaudeSdk": "Update SDK",
+    "updatingClaudeSdk": "Updating...",
+    "updateClaudeSdkSuccess": "Updated to {{version}}. Send your message again.",
+    "updateClaudeSdkFailed": "Update failed: {{error}}",
+    "updateClaudeSdkFailedUnknown": "Update failed. Open Dependency Settings for details.",
+    "updateClaudeSdkTimedOut": "No result after 15 minutes. Check Dependency Settings for the update status.",
+    "updateClaudeSdkCustomCli": "SDK updated to {{version}}, but the plugin runs your custom Claude CLI ({{path}}). Update it with Option 2.",
+    "updateClaudeSdkAlreadyLatest": "{{version}} is already the newest SDK this plugin supports, and this model needs a newer Claude Code. Update the plugin when a new release is out, or choose another model.",
+    "claudeCodeVersionTooOld": {
+      "title": "Claude Code SDK is too old for this model",
+      "intro": "The plugin runs the Claude Code bundled in its own SDK, not the claude command in your terminal. That bundled version is older than this model requires.",
+      "reason": "The SDK is installed separately from the plugin, so updating the plugin or the claude command in your terminal does not update it.",
+      "solutions": {
+        "updateSdk": {
+          "title": "Option 1: Update the Claude Code SDK",
+          "step0": "Installs the latest supported SDK. The plugin then restarts its Claude process, so you can send your message again right away."
+        },
+        "updateCustomCli": {
+          "title": "Option 2: Update your custom Claude CLI",
+          "step0": "If you set \"Claude CLI Path (override)\", the plugin runs that binary instead of the SDK. Update it in a terminal:"
         }
       }
     }

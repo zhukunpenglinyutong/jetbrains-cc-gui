@@ -82,7 +82,12 @@
       "tooltipReset": "重置时间：{{value}}（本地时间）",
       "clickToSwitch": "点击周期标签切换额度窗口",
       "worstHint": "圆点表示消耗节奏最紧张的窗口（{{color}}）",
-      "paceColors": { "green": "绿色", "yellow": "黄色", "red": "红色", "neutral": "未知" },
+      "paceColors": {
+        "green": "绿色",
+        "yellow": "黄色",
+        "red": "红色",
+        "neutral": "未知"
+      },
       "stale": "刷新失败，当前展示的额度可能已过期"
     },
     "noMatchingFiles": "无匹配文件",
@@ -853,7 +858,11 @@
       "uninstallFailed": "卸载失败: {{error}}",
       "updating": "更新中...",
       "updateSuccess": "{{name}} 更新成功",
-      "cliTransportBadge": "CLI · {{transport}}"
+      "cliTransportBadge": "CLI · {{transport}}",
+      "versionCacheAccessError": "npm file access was denied, including the separate-cache retry. Check cache permissions or security software.",
+      "versionQueryTimeout": "The npm version query timed out. Check your network or proxy and retry.",
+      "versionQueryNetworkError": "Cannot connect to the npm registry. Check your network, proxy, or registry URL and retry.",
+      "versionQueryFailed": "The npm version query failed. Check your Node.js and npm configuration and retry."
     },
     "usage": "使用统计",
     "usageDesc": "查看您的 Token 消耗、费用统计和使用趋势分析",
@@ -1512,7 +1521,10 @@
     "previewUnavailable": "原生文件预览不可用。你可以拒绝或取消该请求。",
     "requestedPermissions": "请求的原生权限",
     "allowWithRule": "允许并添加此命令规则",
-    "allowWithNetworkRule": "允许并添加此网络规则"
+    "allowWithNetworkRule": "允许并添加此网络规则",
+    "codexDeliveryRetry": "Codex did not receive your choice ({{error}}). Please choose again.",
+    "codexDeliveryFailed": "Codex did not receive your choice ({{error}}). If the conversation does not continue, click Stop and send your message again.",
+    "codexDeliveryUnconfirmed": "Codex has not confirmed your choice yet ({{error}}). It may still take effect, so do not answer again; if the conversation does not continue, click Stop and send your message again."
   },
   "askUserQuestion": {
     "title": "Claude 有一些问题想问你",
@@ -1859,7 +1871,7 @@
     "required": "必填",
     "optional": "可选",
     "refreshServer": "刷新 {{name}}",
-"configCopiedRedacted": "配置已复制到剪贴板（敏感值已隐藏）",
+    "configCopiedRedacted": "配置已复制到剪贴板（敏感值已隐藏）",
     "approveConfirmTitle": "批准项目本地 MCP 服务器",
     "approveConfirmMessage": "批准“{{name}}”将允许本仓库在你的机器上运行：\n\n{{target}}\n\n并使用你的权限。请只批准你信任的服务器。",
     "approveConfirm": "批准并运行",
@@ -1867,7 +1879,7 @@
     "copyConfigWarningTitle": "复制项目配置",
     "copyConfigWarningMessage": "“{{name}}”定义在本仓库的 .mcp.json 中。其配置可能包含仓库作者的凭据，而非你的凭据。仅在你打算使用该服务器时再复制。",
     "copyConfigWarningConfirm": "仍要复制",
-"nativeStatus": "原生 Codex MCP 状态"
+    "nativeStatus": "原生 Codex MCP 状态"
   },
   "tools": {
     "toolCall": "工具调用",
@@ -2691,6 +2703,29 @@
         "pointCodexBin": {
           "title": "方案二：让插件指向可用的二进制",
           "step0": "列出 PATH 上所有的 codex（Windows 使用 where codex）。如果可用的那个不在最前面，把 CODEX_BIN 环境变量设置为它的完整路径，然后重启 IDE。插件现在也会自动回退到后面可用的安装。"
+        }
+      }
+    },
+    "updateClaudeSdk": "Update SDK",
+    "updatingClaudeSdk": "Updating...",
+    "updateClaudeSdkSuccess": "Updated to {{version}}. Send your message again.",
+    "updateClaudeSdkFailed": "Update failed: {{error}}",
+    "updateClaudeSdkFailedUnknown": "Update failed. Open Dependency Settings for details.",
+    "updateClaudeSdkTimedOut": "No result after 15 minutes. Check Dependency Settings for the update status.",
+    "updateClaudeSdkCustomCli": "SDK updated to {{version}}, but the plugin runs your custom Claude CLI ({{path}}). Update it with Option 2.",
+    "updateClaudeSdkAlreadyLatest": "{{version}} is already the newest SDK this plugin supports, and this model needs a newer Claude Code. Update the plugin when a new release is out, or choose another model.",
+    "claudeCodeVersionTooOld": {
+      "title": "Claude Code SDK is too old for this model",
+      "intro": "The plugin runs the Claude Code bundled in its own SDK, not the claude command in your terminal. That bundled version is older than this model requires.",
+      "reason": "The SDK is installed separately from the plugin, so updating the plugin or the claude command in your terminal does not update it.",
+      "solutions": {
+        "updateSdk": {
+          "title": "Option 1: Update the Claude Code SDK",
+          "step0": "Installs the latest supported SDK. The plugin then restarts its Claude process, so you can send your message again right away."
+        },
+        "updateCustomCli": {
+          "title": "Option 2: Update your custom Claude CLI",
+          "step0": "If you set \"Claude CLI Path (override)\", the plugin runs that binary instead of the SDK. Update it in a terminal:"
         }
       }
     }
