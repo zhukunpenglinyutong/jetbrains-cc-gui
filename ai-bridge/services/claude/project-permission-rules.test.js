@@ -12,7 +12,7 @@ function makeProject(files = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-project-rules-'));
   created.push(dir);
   for (const [name, content] of Object.entries(files)) {
-    const target = path.join(dir, '.claude', name);
+    const target = path.join(dir, '.claude', ...name.split('/'));
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, typeof content === 'string' ? content : JSON.stringify(content));
   }
@@ -70,6 +70,67 @@ test('a project PreToolUse hook can approve tools and counts as an auto-approve 
     'settings.json': { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'allow.sh' }] }] } },
   });
   assert.equal(projectHasAutoApproveRules(dir), true);
+});
+
+test('an enabled project sandbox auto-allows sandboxed commands and counts as an auto-approve rule', () => {
+  assert.equal(projectHasAutoApproveRules(makeProject({ 'settings.json': { sandbox: { enabled: true } } })), true);
+  assert.equal(projectHasAutoApproveRules(makeProject({ 'settings.local.json': { sandbox: { enabled: true } } })), true);
+  assert.equal(projectHasAutoApproveRules(makeProject({ 'settings.json': { sandbox: {} } })), false);
+});
+
+test('a project agent that sets its own permission mode counts as an auto-approve rule', () => {
+  const granting = makeProject({ 'agents/reviewer.md': '---\nname: reviewer\npermissionMode: acceptEdits\n---\nReview code.\n' });
+  assert.equal(projectHasAutoApproveRules(granting), true);
+  const plain = makeProject({ 'agents/reviewer.md': '---\nname: reviewer\ntools: Read, Grep\n---\nReview code.\n' });
+  assert.equal(projectHasAutoApproveRules(plain), false);
+});
+
+test('a project skill or command that pre-approves tools counts as an auto-approve rule', () => {
+  assert.equal(projectHasAutoApproveRules(makeProject({ 'skills/cleanup/SKILL.md': '---\nname: cleanup\nallowed-tools: Bash\n---\n' })), true);
+  assert.equal(projectHasAutoApproveRules(makeProject({ 'skills/cleanup/SKILL.md': '---\nallowed_tools: Bash\n---\n' })), true);
+  assert.equal(projectHasAutoApproveRules(makeProject({ 'commands/deploy.md': '---\nallowed-tools: Bash(git push:*)\n---\n' })), true);
+  assert.equal(projectHasAutoApproveRules(makeProject({ 'commands/ops/deploy.md': '---\nallowed-tools: Bash\n---\n' })), true);
+  assert.equal(projectHasAutoApproveRules(makeProject({ 'skills/cleanup/SKILL.md': '---\nname: cleanup\ndescription: tidy\n---\n' })), false);
+  assert.equal(projectHasAutoApproveRules(makeProject({ 'skills/cleanup/notes.txt': 'allowed-tools: Bash\n' })), false);
+});
+
+test('a skill directory reached through a link is scanned too', (t) => {
+  const outside = makeProject({ 'skills/real/SKILL.md': '---\nallowed-tools: Bash\n---\n' });
+  const dir = makeProject();
+  fs.mkdirSync(path.join(dir, '.claude', 'skills'), { recursive: true });
+  try {
+    fs.symlinkSync(path.join(outside, '.claude', 'skills', 'real'), path.join(dir, '.claude', 'skills', 'linked'), 'junction');
+  } catch {
+    t.skip('this filesystem cannot create directory links');
+    return;
+  }
+  assert.equal(projectHasAutoApproveRules(dir), true);
+});
+
+test('a link loop under the project settings ends the scan', (t) => {
+  const dir = makeProject({ 'skills/a/SKILL.md': '---\nname: a\n---\n' });
+  try {
+    fs.symlinkSync(path.join(dir, '.claude', 'skills'), path.join(dir, '.claude', 'skills', 'a', 'loop'), 'junction');
+  } catch {
+    t.skip('this filesystem cannot create directory links');
+    return;
+  }
+  assert.equal(projectHasAutoApproveRules(dir), false);
+});
+
+test('skill trees too deep or too large to scan are not trusted', () => {
+  const deep = makeProject();
+  let nested = path.join(deep, '.claude', 'skills');
+  for (let level = 0; level < 12; level += 1) nested = path.join(nested, `level${level}`);
+  fs.mkdirSync(nested, { recursive: true });
+  fs.writeFileSync(path.join(nested, 'SKILL.md'), '---\nname: deep\n---\n');
+  assert.equal(projectHasAutoApproveRules(deep), true);
+
+  const large = makeProject();
+  const skills = path.join(large, '.claude', 'skills', 'many');
+  fs.mkdirSync(skills, { recursive: true });
+  for (let index = 0; index < 2100; index += 1) fs.writeFileSync(path.join(skills, `note${index}.txt`), '');
+  assert.equal(projectHasAutoApproveRules(large), true);
 });
 
 test('settings that cannot be read or parsed are not trusted', () => {

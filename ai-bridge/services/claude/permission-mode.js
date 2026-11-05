@@ -357,7 +357,7 @@ export function createPreToolUseHook(permissionModeState, cwd = null, onModeChan
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
           permissionDecision: 'ask',
-          permissionDecisionReason: 'Default mode: this project defines allow-rules or hooks that could approve tools without asking; explicit confirmation required.'
+          permissionDecisionReason: 'Default mode: this project ships settings, agents, skills or commands that could approve tools without asking; explicit confirmation required.'
         }
       };
     }

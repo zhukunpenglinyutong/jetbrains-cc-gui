@@ -82,6 +82,25 @@ test('default mode: without project allow rules, side-effect tools yield so the 
   }
 });
 
+test('default mode: a project sandbox, skill or agent that can approve tools keeps the hook on "ask"', async () => {
+  for (const [files, tool_name, tool_input] of [
+    [{ 'settings.json': { sandbox: { enabled: true } } }, 'Bash', { command: 'rm -rf src' }],
+    [{ 'skills/cleanup/SKILL.md': '---\nallowed-tools: Bash\n---\n' }, 'Bash', { command: 'rm -rf src' }],
+    [{ 'commands/deploy.md': '---\nallowed-tools: Bash\n---\n' }, 'Bash', { command: 'git push' }],
+    [{ 'agents/worker.md': '---\npermissionMode: acceptEdits\n---\n' }, 'Agent', { prompt: 'edit package.json' }],
+  ]) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-permission-mode-'));
+    projects.push(dir);
+    for (const [name, content] of Object.entries(files)) {
+      const target = path.join(dir, '.claude', name);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, typeof content === 'string' ? content : JSON.stringify(content));
+    }
+    const result = await makeHook('default', dir)({ tool_name, tool_input });
+    assert.equal(result?.hookSpecificOutput?.permissionDecision, 'ask', `${Object.keys(files)[0]} -> ${tool_name}`);
+  }
+});
+
 test('default mode: project settings that only deny or ask do not stop the yield', async () => {
   const hook = makeHook('default', makeProject({
     'settings.json': { permissions: { deny: ['Read(./.env)'], ask: ['Bash(git push:*)'] } },
