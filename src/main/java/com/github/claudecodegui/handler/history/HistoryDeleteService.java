@@ -232,19 +232,6 @@ class HistoryDeleteService {
         return HistoryDeletionGuard.quiesce(session, sessionIds, currentProvider, bridge);
     }
 
-    /**
-     * Resolve which provider owns the row being deleted. The payload wins: the
-     * panel's currentProvider is only what the chat surface is showing, and it can
-     * lag behind the history list (switching providers without reopening the list),
-     * which would route a Claude session into the Codex branch and delete nothing.
-     */
-    static String resolveProvider(JsonObject request, String currentProvider) {
-        if (request != null && request.has("provider") && request.get("provider").isJsonPrimitive()) {
-            return request.get("provider").getAsString();
-        }
-        return currentProvider;
-    }
-
     static List<String> parseSessionIds(String content) {
         LinkedHashSet<String> sessionIds = new LinkedHashSet<>();
         if (content == null || content.trim().isEmpty()) {

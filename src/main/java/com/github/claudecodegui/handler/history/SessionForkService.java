@@ -34,7 +34,9 @@ import java.util.stream.Stream;
  * that is currently active in this window is safe — unlike conversion, which must reject
  * it because it replaces the file the SDK process keeps appending to. A torn last line
  * written concurrently by the CLI is copied verbatim and tolerated by the reader, the
- * same way non-JSON rows are.
+ * same way non-JSON rows are — provided the tear falls between UTF-8 characters; a tear
+ * inside a multi-byte character fails the read and the fork (a retry once the CLI has
+ * flushed succeeds).
  *
  * Only the Claude provider is supported for now. Codex sessions are resumed through the
  * app-server thread mechanism rather than by file identity, so a copied rollout file
@@ -51,9 +53,11 @@ class SessionForkService {
     /** Matches the custom-title service limit; see session-titles-service.cjs. */
     static final int MAX_TITLE_LENGTH = 50;
 
+    /** Thread-safe shared parser; one instance per row would dominate large transcripts. */
+    private static final Gson ROW_GSON = new Gson();
+
     private final HandlerContext context;
     private final NodeJsServiceCaller nodeJsServiceCaller;
-    private final Gson gson = new Gson();
 
     SessionForkService(HandlerContext context, NodeJsServiceCaller nodeJsServiceCaller) {
         this.context = context;
@@ -61,13 +65,15 @@ class SessionForkService {
     }
 
     /**
-     * Resolve {@code ~/.claude/projects} at call time. A static field would snapshot the
-     * Windows home at class-load, but a WSL node stores sessions under the WSL filesystem;
-     * {@link NodeDetector#resolveHomeForFileOps()} returns the correct home for the active
-     * node. Every other history service in this package was migrated the same way.
+     * Resolve the user home at call time; the {@code .claude/projects} tree under it
+     * holds the sessions. A static field would snapshot the Windows home at
+     * class-load, but a WSL node stores sessions under the WSL filesystem;
+     * {@link NodeDetector#resolveHomeForFileOps()} returns the correct home for the
+     * active node. Every other history service in this package was migrated the same
+     * way.
      */
-    private static Path projectsDir() {
-        return Paths.get(NodeDetector.resolveHomeForFileOps(), ".claude", "projects");
+    private static Path claudeHomeDir() {
+        return Paths.get(NodeDetector.resolveHomeForFileOps());
     }
 
     /**
@@ -95,9 +101,19 @@ class SessionForkService {
      * @param projectPath Project path (optional, will scan all projects if null).
      */
     void forkSession(String content, String projectPath) {
+        this.forkSession(content, projectPath, claudeHomeDir());
+    }
+
+    /**
+     * Fork under an explicit user home. Production resolves the home per node at
+     * call time (see {@link #claudeHomeDir()}); the overload exists so the
+     * orchestration — payload validation, error routing, the pooled-thread run — is
+     * testable against a temporary home, mirroring {@code HistoryDeleteService}.
+     */
+    void forkSession(String content, String projectPath, Path home) {
         JsonObject request;
         try {
-            request = this.gson.fromJson(content, JsonObject.class);
+            request = ROW_GSON.fromJson(content, JsonObject.class);
         } catch (JsonSyntaxException e) {
             LOG.warn("[SessionForkService] Fork rejected: unparseable payload");
             // Not a session-id problem: report the generic failure so the user is
@@ -132,19 +148,16 @@ class SessionForkService {
 
         // The frontend already truncates the title to the service limit; this is the
         // backend belt-and-braces so the Node call cannot fail on length alone.
-        // Truncate by code point: a plain substring can split a surrogate pair and
-        // persist half an emoji.
         String forkTitle = request.has("title") && request.get("title").isJsonPrimitive()
                 ? request.get("title").getAsString() : null;
-        if (forkTitle != null && forkTitle.codePointCount(0, forkTitle.length()) > MAX_TITLE_LENGTH) {
-            forkTitle = forkTitle.substring(0, forkTitle.offsetByCodePoints(0, MAX_TITLE_LENGTH));
-        }
+        forkTitle = truncateForkTitle(forkTitle);
 
         String finalForkTitle = forkTitle;
         String finalForkPointUuid = forkPointUuid;
+        Path resolvedHome = home;
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
-                Path sessionFile = this.findSessionFile(sessionId, projectPath);
+                Path sessionFile = this.findSessionFile(sessionId, projectPath, resolvedHome);
                 if (sessionFile == null) {
                     LOG.warn("[SessionForkService] Session file not found: " + sessionId);
                     this.sendForkResult(false, null, ForkResultCode.SESSION_NOT_FOUND, null);
@@ -175,13 +188,15 @@ class SessionForkService {
 
                 this.sendForkResult(true, newSessionId, null, finalForkPointUuid);
             } catch (FileAlreadyExistsException e) {
-                LOG.error("[SessionForkService] Fork target already exists: " + e.getMessage());
+                // warn like HistoryDeleteService: a failed fork is a reported user
+                // action, not an IDE-level fault.
+                LOG.warn("[SessionForkService] Fork target already exists: " + e.getMessage());
                 this.sendForkResult(false, null, ForkResultCode.FORK_FAILED, null);
             } catch (ForkPointNotFoundException e) {
                 LOG.warn("[SessionForkService] Fork point not found in session: " + e.getMessage());
                 this.sendForkResult(false, null, ForkResultCode.FORK_POINT_NOT_FOUND, null);
             } catch (Exception e) {
-                LOG.error("[SessionForkService] Failed to fork session: " + e.getMessage(), e);
+                LOG.warn("[SessionForkService] Failed to fork session: " + e.getMessage(), e);
                 this.sendForkResult(false, null, ForkResultCode.FORK_FAILED, null);
             }
         });
@@ -192,6 +207,24 @@ class SessionForkService {
         ForkPointNotFoundException(String message) {
             super(message);
         }
+    }
+
+    /**
+     * Truncate a fork title to the custom-title service limit. The limit counts
+     * UTF-16 code units (Node's {@code .length}, see session-titles-service.cjs), and
+     * a plain substring could cut an emoji in half, so the cut backs off one unit
+     * when it would split a surrogate pair.
+     */
+    // Package-private so the truncation contract is testable directly.
+    static String truncateForkTitle(String title) {
+        if (title == null || title.length() <= MAX_TITLE_LENGTH) {
+            return title;
+        }
+        int end = MAX_TITLE_LENGTH;
+        if (Character.isHighSurrogate(title.charAt(end - 1))) {
+            end--;
+        }
+        return title.substring(0, end);
     }
 
     /**
@@ -324,7 +357,7 @@ class SessionForkService {
      */
     private static JsonObject parseRow(String line) {
         try {
-            return new Gson().fromJson(line, JsonObject.class);
+            return ROW_GSON.fromJson(line, JsonObject.class);
         } catch (JsonSyntaxException e) {
             return null;
         }
@@ -477,13 +510,23 @@ class SessionForkService {
     /**
      * Apply the fork's list title via the custom-title service. Best-effort: the fork is
      * already complete and usable; an untitled fork merely shows its default title.
+     * A {@code success:false} reply is not an exception — parse it so the cause lands
+     * in the log instead of the title silently disappearing.
      */
     private void applyForkTitle(String newSessionId, String forkTitle) {
         if (forkTitle == null || forkTitle.isEmpty()) {
             return;
         }
         try {
-            this.nodeJsServiceCaller.callNodeJsTitlesServiceWithParams("updateTitle", newSessionId, forkTitle);
+            String reply = this.nodeJsServiceCaller.callNodeJsTitlesServiceWithParams(
+                    "updateTitle", newSessionId, forkTitle);
+            JsonObject result = reply != null ? ROW_GSON.fromJson(reply, JsonObject.class) : null;
+            if (result != null && result.has("success") && !result.get("success").getAsBoolean()) {
+                String error = result.has("error") && result.get("error").isJsonPrimitive()
+                        ? result.get("error").getAsString() : "unknown error";
+                LOG.warn("[SessionForkService] Fork title rejected by the titles service: " + error);
+                return;
+            }
             LOG.debug("[SessionForkService] Applied fork title: " + forkTitle);
         } catch (Exception e) {
             LOG.warn("[SessionForkService] Failed to apply fork title: " + e.getMessage());
@@ -495,41 +538,39 @@ class SessionForkService {
      *
      * @param sessionId Session ID.
      * @param projectPath Project path (optional).
-     * @return Session file path, or null if not found.
+     * @param home The user home whose {@code .claude/projects} is searched.
+     * @return Session file path, or null when no project directory holds it. IO
+     *         errors propagate: the caller reports them as {@code FORK_FAILED}
+     *         instead of masking a permissions or disk problem as a missing session.
      */
-    private Path findSessionFile(String sessionId, String projectPath) {
-        try {
-            Path projectsDir = projectsDir();
-            if (projectPath != null && !projectPath.isEmpty()) {
-                Path projectDir = this.getProjectDir(projectsDir, resolveProjectPathForFileOps(projectPath));
+    private Path findSessionFile(String sessionId, String projectPath, Path home) throws IOException {
+        Path projectsDir = home.resolve(".claude").resolve("projects");
+        if (projectPath != null && !projectPath.isEmpty()) {
+            Path projectDir = this.getProjectDir(projectsDir, resolveProjectPathForFileOps(projectPath));
+            Path sessionFile = projectDir.resolve(sessionId + ".jsonl");
+            if (Files.exists(sessionFile)) {
+                return sessionFile;
+            }
+        }
+
+        // Scan all project directories
+        if (!Files.exists(projectsDir)) {
+            return null;
+        }
+
+        LOG.debug("[SessionForkService] Scanning project directories for session: " + sessionId);
+        try (var stream = Files.newDirectoryStream(projectsDir)) {
+            for (Path projectDir : stream) {
+                if (!Files.isDirectory(projectDir)) {
+                    continue;
+                }
                 Path sessionFile = projectDir.resolve(sessionId + ".jsonl");
                 if (Files.exists(sessionFile)) {
                     return sessionFile;
                 }
             }
-
-            // Scan all project directories
-            if (!Files.exists(projectsDir)) {
-                return null;
-            }
-
-            LOG.debug("[SessionForkService] Scanning project directories for session: " + sessionId);
-            try (var stream = Files.newDirectoryStream(projectsDir)) {
-                for (Path projectDir : stream) {
-                    if (!Files.isDirectory(projectDir)) {
-                        continue;
-                    }
-                    Path sessionFile = projectDir.resolve(sessionId + ".jsonl");
-                    if (Files.exists(sessionFile)) {
-                        return sessionFile;
-                    }
-                }
-                return null;
-            }
-        } catch (Exception e) {
-            LOG.error("[SessionForkService] Error finding session file: " + e.getMessage(), e);
-            return null;
         }
+        return null;
     }
 
     /**
@@ -572,7 +613,7 @@ class SessionForkService {
 
         Project project = this.context.getProject();
         if (project != null && !project.isDisposed()) {
-            String escapedJson = this.context.escapeJs(this.gson.toJson(result));
+            String escapedJson = this.context.escapeJs(ROW_GSON.toJson(result));
             String jsCode = "if (window.onForkResult) { window.onForkResult('" + escapedJson + "'); }";
             this.context.executeJavaScriptQueued(jsCode);
         }

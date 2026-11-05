@@ -6,6 +6,7 @@ import { getSkipNewSessionConfirm } from '../utils/skipNewSessionConfirm';
 import { clearAllPersistedExpanded } from '../utils/expandedState';
 import { normalizeClaudeModelForBridge } from '../utils/customClaudeModels';
 import { sumKnownHistoryMessages } from '../utils/historyMessageCount';
+import { CUSTOM_TITLE_MAX_LENGTH, truncateToCodeUnits } from '../utils/sessionTitleLimit';
 import { deriveSessionTitle } from './useChatComputations';
 
 type ViewMode = 'chat' | 'history' | 'settings';
@@ -24,9 +25,6 @@ interface HistoryDeleteResult {
 
 const createDeletionRequestId = () =>
   `delete-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-
-// Matches session-titles-service.cjs#updateTitle, which rejects longer titles.
-const CUSTOM_TITLE_MAX_LENGTH = 50;
 
 const createSessionTransitionToken = () =>
   `transition-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -699,8 +697,10 @@ export function useSessionManagement({
         getMessageText,
       }).trim();
     }
+    // Truncate by UTF-16 code unit with a surrogate-pair back-off: the custom-title
+    // service counts code units, and a plain slice could persist half an emoji.
     const forkTitle = baseTitle
-      ? baseTitle.slice(0, Math.max(0, CUSTOM_TITLE_MAX_LENGTH - suffix.length)) + suffix
+      ? truncateToCodeUnits(baseTitle, Math.max(0, CUSTOM_TITLE_MAX_LENGTH - suffix.length)) + suffix
       : '';
 
     // The fork row is not in the list yet when the fork opens, so remember the title

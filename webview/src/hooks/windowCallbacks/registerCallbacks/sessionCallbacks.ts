@@ -16,9 +16,7 @@ import {
   isDependencyStatusResponse,
   settleDependencyStatusRequest,
 } from '../../../utils/bridgeStartup';
-
-// Matches session-titles-service.cjs#updateTitle, which rejects longer titles.
-const CUSTOM_TITLE_MAX_LENGTH = 50;
+import { CUSTOM_TITLE_MAX_LENGTH } from '../../../utils/sessionTitleLimit';
 
 export function registerSessionAndSdkCallbacks(
   options: UseWindowCallbacksOptions,

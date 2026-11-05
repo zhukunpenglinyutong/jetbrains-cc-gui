@@ -303,6 +303,44 @@ export async function getSessionMessages(sessionId, cwd = null) {
   }
 }
 
+/**
+ * Stream the tail of a session JSONL and invoke onRow(message) per parsed row.
+ *
+ * Reads only the last {@code tailBytes} for performance on large sessions and
+ * skips the potentially partial first line when reading from mid-file. Returns
+ * {@code { startByte, tailMalformed }}: tailMalformed is true while the most
+ * recent non-blank line failed to parse — a valid line clears it, so it ends up
+ * describing the LAST non-blank line alone, which is exactly what a torn tail
+ * is. Same semantics as SubagentHistoryService's readJsonl: only an unterminated
+ * tail means the writer is mid-append, while a corrupted line followed by valid
+ * ones is stale damage the file will never heal and must not block reads
+ * forever.
+ */
+async function scanSessionJsonlTail(sessionFile, tailBytes, onRow) {
+  const stat = statSync(sessionFile);
+  const startByte = Math.max(0, stat.size - tailBytes);
+  const rl = createInterface({
+    input: createReadStream(sessionFile, { encoding: 'utf8', start: startByte }),
+    crlfDelay: Infinity
+  });
+
+  let tailMalformed = false;
+  let firstLine = startByte > 0;
+  for await (const line of rl) {
+    // Skip potentially partial first line when reading from mid-file
+    if (firstLine) { firstLine = false; continue; }
+    if (!line.trim()) continue;
+    try {
+      const message = JSON.parse(line);
+      tailMalformed = false;
+      onRow(message);
+    } catch {
+      tailMalformed = true;
+    }
+  }
+  return { startByte, tailMalformed };
+}
+
 export async function getLatestUserMessage(sessionId, cwd = null) {
   try {
     const sessionFile = resolveSessionFile(sessionId, cwd);
@@ -315,39 +353,12 @@ export async function getLatestUserMessage(sessionId, cwd = null) {
       return;
     }
 
-    // Read only the tail of the file for performance on large sessions
-    const TAIL_BYTES = 32 * 1024;
-    const stat = statSync(sessionFile);
-    const startByte = Math.max(0, stat.size - TAIL_BYTES);
-
     let latestUserMessage = null;
-    // True while the most recent non-blank line failed to parse. A valid line
-    // clears it, so this ends up describing the LAST non-blank line alone — which
-    // is exactly what a torn tail is. Same semantics as SubagentHistoryService's
-    // readJsonl: only an unterminated tail means the writer is mid-append, while a
-    // corrupted line followed by valid ones is stale damage the file will never
-    // heal and must not block reads forever.
-    let tailMalformed = false;
-    const rl = createInterface({
-      input: createReadStream(sessionFile, { encoding: 'utf8', start: startByte }),
-      crlfDelay: Infinity
-    });
-
-    let firstLine = startByte > 0;
-    for await (const line of rl) {
-      // Skip potentially partial first line when reading from mid-file
-      if (firstLine) { firstLine = false; continue; }
-      if (!line.trim()) continue;
-      try {
-        const message = JSON.parse(line);
-        tailMalformed = false;
-        if (isUserTextMessage(message)) {
-          latestUserMessage = message;
-        }
-      } catch {
-        tailMalformed = true;
+    const { tailMalformed } = await scanSessionJsonlTail(sessionFile, 32 * 1024, (message) => {
+      if (isUserTextMessage(message)) {
+        latestUserMessage = message;
       }
-    }
+    });
 
     if (tailMalformed) {
       await writeJsonResponse({
@@ -393,25 +404,9 @@ export async function getRecentAssistantMessages(sessionId, cwd = null, limit = 
     }
 
     // Assistant rows can be large (tool_use payloads); scan a generous tail.
-    const TAIL_BYTES = 256 * 1024;
-    const stat = statSync(sessionFile);
-    const startByte = Math.max(0, stat.size - TAIL_BYTES);
-
     const collected = [];
-    let tailMalformed = false;
-    const rl = createInterface({
-      input: createReadStream(sessionFile, { encoding: 'utf8', start: startByte }),
-      crlfDelay: Infinity
-    });
-
-    let firstLine = startByte > 0;
-    for await (const line of rl) {
-      // Skip potentially partial first line when reading from mid-file
-      if (firstLine) { firstLine = false; continue; }
-      if (!line.trim()) continue;
-      try {
-        const message = JSON.parse(line);
-        tailMalformed = false;
+    const { startByte, tailMalformed } = await scanSessionJsonlTail(
+      sessionFile, 256 * 1024, (message) => {
         if (
           message &&
           message.type === 'assistant' &&
@@ -426,10 +421,7 @@ export async function getRecentAssistantMessages(sessionId, cwd = null, limit = 
             collected.shift();
           }
         }
-      } catch {
-        tailMalformed = true;
-      }
-    }
+      });
 
     if (tailMalformed) {
       await writeJsonResponse({
