@@ -55,20 +55,34 @@ import java.util.Set;
  * trust, so the exact rule wins, and it is also what Claude Code itself does
  * with the name field.
  *
- * <h2>Read-only, and only one layer</h2>
+ * <h2>Settings hierarchy</h2>
  *
- * <p>This class opens {@code ~/.claude/settings.json} and never writes to it
- * (PRD NG4: editing settings.json is out of scope). Only the user-level file is
- * consulted: project {@code .claude/settings.json},
- * {@code .claude/settings.local.json} and the platform managed-settings file
- * exist too, and an agent denied by any of them would ideally be marked too.
- * Reading them is a one-line change once the plugin is prepared to say which
- * file a rule came from, and until then under-reporting is the safe direction.
+ * <p>Deny rules are read from the full hierarchy, highest precedence first:
+ * <ol>
+ *   <li>Managed settings (enterprise/org policy): Linux {@code /etc/claude-code/managed-settings.json},
+ *       macOS {@code /Library/Application Support/ClaudeCode/managed-settings.json},
+ *       Windows {@code %ProgramFiles%\ClaudeCode\managed-settings.json}</li>
+ *   <li>User-level: {@code ~/.claude/settings.json}</li>
+ *   <li>Project-level: {@code {workspace}/.claude/settings.json}</li>
+ *   <li>Project local: {@code {workspace}/.claude/settings.local.json}</li>
+ * </ol>
+ * Rules are unioned — a name denied at any level is denied.
+ * The managed settings file is only read on the corresponding OS; the legacy
+ * {@code %PROGRAMDATA%\Claude\settings.json} is not read per the documentation.
  *
- * <p>Nothing here throws. A missing file, a half-edited document, a
- * {@code permissions} node of the wrong shape — all of them are ordinary states
- * that produce an empty rule set, because the Agents tab must keep rendering
- * every agent while a user's settings.json is being rewritten.
+ * <h2>Rule forms</h2>
+ *
+ * <ul>
+ *   <li>{@code Agent(name)} — denies the subagent with this exact name</li>
+ *   <li>{@code Agent(*)} — denies every subagent (wildcard)</li>
+ *   <li>{@code Task(name)} — alias form, still works as an alias per documentation</li>
+ *   <li>{@code Agent(param:value)} — parameter rules (e.g., {@code model:opus}), kept for display only</li>
+ * </ul>
+ *
+ * <h2>Bare Agent tool deny</h2>
+ *
+ * <p>A bare {@code "Agent"} entry in the deny array (no parentheses) disables
+ * every subagent. This is equivalent to {@code Agent(*)}.
  */
 public final class AgentDenyRules {
 
@@ -76,9 +90,13 @@ public final class AgentDenyRules {
 
     private static final String CLAUDE_DIR = ".claude";
     private static final String SETTINGS_FILE = "settings.json";
+    private static final String LOCAL_SETTINGS_FILE = "settings.local.json";
+    private static final String MANAGED_SETTINGS_FILE = "managed-settings.json";
 
     /** The prefix every agent rule starts with. */
     private static final String RULE_PREFIX = "Agent(";
+    /** Alias form prefix. */
+    private static final String TASK_PREFIX = "Task(";
 
     /** The token the specification forbids inside a name, and the parameter separator. */
     private static final char PARAMETER_SEPARATOR = ':';
@@ -146,10 +164,6 @@ public final class AgentDenyRules {
             if (agentName == null) {
                 return null;
             }
-            // The queried name is compared verbatim: the frontmatter parser and
-            // AgentManager both hand over an already-trimmed name, and folding
-            // whitespace here would quietly make the comparison looser than the
-            // exact rule this class documents.
             return deniedNames.contains(agentName) ? RULE_PREFIX + agentName + ")" : null;
         }
     }
@@ -157,6 +171,68 @@ public final class AgentDenyRules {
     // ------------------------------------------------------------------
     // Reading
     // ------------------------------------------------------------------
+
+    /**
+     * Read the deny rules for a project, combining the full hierarchy.
+     *
+     * <p>Order of precedence (highest first, but rules are unioned):
+     * <ol>
+     *   <li>Managed settings (OS-specific)</li>
+     *   <li>User-level: {@code ~/.claude/settings.json}</li>
+     *   <li>Project-level: {@code {workspace}/.claude/settings.json}</li>
+     *   <li>Project local: {@code {workspace}/.claude/settings.local.json}</li>
+     * </ol>
+     *
+     * @param workspaceRoot the effective working directory, or null/blank for no project
+     * @return the combined rules from all levels
+     */
+    public static DenyIndex readForProject(String workspaceRoot) {
+        Set<String> allNames = new LinkedHashSet<>();
+        List<String> allParameterRules = new ArrayList<>();
+        boolean anyDenyAll = false;
+        List<String> allProblems = new ArrayList<>();
+
+        // 1. Managed settings (OS-specific)
+        List<Path> managedPaths = managedSettingsPaths();
+        for (Path p : managedPaths) {
+            DenyIndex idx = read(p);
+            mergeInto(idx, allNames, allParameterRules, anyDenyAll, allProblems);
+            anyDenyAll = anyDenyAll || idx.denyAll();
+        }
+
+        // 2. User-level settings
+        Path userSettings = currentSettingsPath();
+        DenyIndex userIdx = read(userSettings);
+        mergeInto(userIdx, allNames, allParameterRules, anyDenyAll, allProblems);
+        anyDenyAll = anyDenyAll || userIdx.denyAll();
+
+        // 3. Project-level settings
+        if (workspaceRoot != null && !workspaceRoot.isBlank()) {
+            Path projectSettings = Paths.get(workspaceRoot, CLAUDE_DIR, SETTINGS_FILE);
+            DenyIndex projectIdx = read(projectSettings);
+            mergeInto(projectIdx, allNames, allParameterRules, anyDenyAll, allProblems);
+            anyDenyAll = anyDenyAll || projectIdx.denyAll();
+
+            // 4. Project local settings
+            Path localSettings = Paths.get(workspaceRoot, CLAUDE_DIR, LOCAL_SETTINGS_FILE);
+            DenyIndex localIdx = read(localSettings);
+            mergeInto(localIdx, allNames, allParameterRules, anyDenyAll, allProblems);
+            anyDenyAll = anyDenyAll || localIdx.denyAll();
+        }
+
+        DenyIndex combined = new DenyIndex(
+                Collections.unmodifiableSet(allNames),
+                anyDenyAll,
+                List.copyOf(allParameterRules),
+                List.copyOf(allProblems)
+        );
+
+        LOG.info("[AgentDeny] Combined deny rules: " + allNames.size() + " denied agent name(s), "
+                + (anyDenyAll ? "plus a deny-all rule, " : "")
+                + allParameterRules.size() + " parameter rule(s), "
+                + allProblems.size() + " problem(s)");
+        return combined;
+    }
 
     /**
      * Read the user-level {@code ~/.claude/settings.json} of the current session.
@@ -259,6 +335,10 @@ public final class AgentDenyRules {
             String rule = element.getAsString().trim();
             String value = innerValue(rule);
             if (value == null) {
+                // Check for bare "Agent" (no parentheses) - denies all
+                if (rule.equalsIgnoreCase("Agent")) {
+                    denyAll = true;
+                }
                 continue;
             }
             if (value.indexOf(PARAMETER_SEPARATOR) >= 0) {
@@ -270,9 +350,6 @@ public final class AgentDenyRules {
             }
         }
 
-        // An unmodifiable view rather than Set.copyOf, whose iteration order is
-        // unspecified: the order the user wrote the rules in is the order they
-        // are reported in.
         DenyIndex index = new DenyIndex(Collections.unmodifiableSet(names), denyAll,
                 List.copyOf(parameterRules), List.of());
         LOG.info("[AgentDeny] Read " + names.size() + " denied agent name(s), "
@@ -282,7 +359,21 @@ public final class AgentDenyRules {
     }
 
     /**
-     * The trimmed content between {@code Agent(} and the closing parenthesis.
+     * Merge one DenyIndex into the accumulating sets.
+     */
+    private static void mergeInto(DenyIndex src,
+                                  Set<String> allNames,
+                                  List<String> allParameterRules,
+                                  boolean anyDenyAll,
+                                  List<String> allProblems) {
+        if (src == null) return;
+        allNames.addAll(src.deniedNames());
+        allParameterRules.addAll(src.parameterRules());
+        allProblems.addAll(src.problems());
+    }
+
+    /**
+     * The trimmed content between {@code Agent(} / {@code Task(} and the closing parenthesis.
      *
      * <p>Null for anything that is not a well-formed rule: the prefix and the
      * closing parenthesis are both required, so a bare word, a half-written
@@ -290,11 +381,17 @@ public final class AgentDenyRules {
      * empty value is rejected too — {@code Agent()} names nothing.
      */
     private static String innerValue(String rule) {
-        if (!rule.startsWith(RULE_PREFIX) || !rule.endsWith(")")
-                || rule.length() <= RULE_PREFIX.length() + 1) {
-            return null;
+        // Check Agent(...) form
+        if (rule.startsWith(RULE_PREFIX) && rule.endsWith(")")
+                && rule.length() > RULE_PREFIX.length() + 1) {
+            return rule.substring(RULE_PREFIX.length(), rule.length() - 1).trim();
         }
-        return rule.substring(RULE_PREFIX.length(), rule.length() - 1).trim();
+        // Check Task(...) alias form
+        if (rule.startsWith(TASK_PREFIX) && rule.endsWith(")")
+                && rule.length() > TASK_PREFIX.length() + 1) {
+            return rule.substring(TASK_PREFIX.length(), rule.length() - 1).trim();
+        }
+        return null;
     }
 
     /** Copy an index with one extra problem note, leaving everything else alone. */
@@ -303,6 +400,29 @@ public final class AgentDenyRules {
         problems.add(problem);
         return new DenyIndex(index.deniedNames(), index.denyAll(),
                 index.parameterRules(), List.copyOf(problems));
+    }
+
+    /**
+     * The managed settings paths per OS (documented at
+     * https://code.claude.com/docs/en/managed-settings).
+     *
+     * @return list of paths to check (one per OS, only the current OS's path exists)
+     */
+    private static List<Path> managedSettingsPaths() {
+        List<Path> paths = new ArrayList<>();
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("linux")) {
+            paths.add(Paths.get("/etc", "claude-code", MANAGED_SETTINGS_FILE));
+        } else if (os.contains("mac")) {
+            paths.add(Paths.get("/Library", "Application Support", "ClaudeCode", MANAGED_SETTINGS_FILE));
+        } else if (os.contains("windows")) {
+            String programFiles = System.getenv("ProgramFiles");
+            if (programFiles != null && !programFiles.isBlank()) {
+                paths.add(Paths.get(programFiles, "ClaudeCode", MANAGED_SETTINGS_FILE));
+            }
+            // Note: legacy %PROGRAMDATA%\Claude\settings.json is NOT read per docs
+        }
+        return paths;
     }
 
     /**

@@ -74,11 +74,14 @@ public class SubagentDiscoveryScannerTest {
      * {@code {workspace}/.claude/agents}, carrying the scope strings the rest of
      * the plugin already uses. The home is resolved through the WSL-aware
      * resolver, so on a Windows host running a WSL Node it is the UNC form.
+     * The local root is only added when the directory exists (walk-up discovery).
      */
     @Test
     public void buildsGlobalAndLocalRootsFromHomeAndWorkspace() throws IOException {
         Path home = temp.newFolder("home").toPath();
         Path workspace = temp.newFolder("workspace").toPath();
+        // Create the .claude/agents directory in the workspace for the local root to exist
+        Files.createDirectories(workspace.resolve(".claude").resolve("agents"));
 
         List<ScanRoot> roots = SubagentDiscoveryScanner.roots(home.toString(), workspace.toString());
 
@@ -157,12 +160,12 @@ public class SubagentDiscoveryScannerTest {
     }
 
     /**
-     * R2: no recursion. A subdirectory holding a perfectly valid agent is
-     * invisible to the scan, because Claude Code does not load it either and
-     * showing it would promise something the runtime will not do.
+     * R2 (updated): recursive scan. A subdirectory holding a perfectly valid agent
+     * IS now visible to the scan, because Claude Code scans recursively.
+     * The nested agent is found and reported with its relative path.
      */
     @Test
-    public void doesNotRecurseIntoSubdirectories() throws IOException {
+    public void recursesIntoSubdirectories() throws IOException {
         Path root = agentsRoot();
         write(root.resolve("code-reviewer.md"), VALID_AGENT);
         Path nested = Files.createDirectories(root.resolve("nested"));
@@ -170,7 +173,8 @@ public class SubagentDiscoveryScannerTest {
 
         ScanResult result = SubagentDiscoveryScanner.scanDirectory(root, AgentFields.SCOPE_GLOBAL);
 
-        assertEquals(List.of("code-reviewer"), names(result.loadable()));
+        // Both agents should be found now
+        assertEquals(List.of("code-reviewer", "deep-agent"), names(result.loadable()));
         // The directory entry itself is not reported as a broken agent either.
         assertTrue("unexpected warnings: " + result.warnings(), result.warnings().isEmpty());
     }

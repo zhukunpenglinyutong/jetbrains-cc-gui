@@ -9,15 +9,25 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
+import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Read-only discovery of Claude Code subagent files (PRD task 58, R1/R2/R14).
@@ -38,7 +48,8 @@ import java.util.Set;
  *       override that property, and on a Windows host driving a WSL Node the
  *       home is a UNC path that has to keep its backslashes or every
  *       {@code ~/.claude} scan silently comes back empty.</li>
- *   <li>{@code {workspace}/.claude/agents} — scope {@link AgentFields#SCOPE_LOCAL}.
+ *   <li>{@code {workspace}/.claude/agents} and its ancestors up to the repository
+ *       root (first directory containing {@code .git}) — scope {@link AgentFields#SCOPE_LOCAL}.
  *       The workspace is passed in rather than derived here, so the caller stays
  *       the single place that decides what "the project" is: the handlers pass
  *       {@code context.resolveEffectiveWorkingDirectory()}, which already
@@ -47,9 +58,9 @@ import java.util.Set;
  *
  * <h2>Scan semantics</h2>
  *
- * <p>Top-level {@code *.md} only, no recursion — a subdirectory is invisible to
- * Claude Code too, and listing it would promise an agent the runtime will not
- * load. Bodies are never read: every file goes through
+ * <p>Recursive scan of {@code *.md} files — a subdirectory is visible to
+ * Claude Code, and listing it promises an agent the runtime will load.
+ * Bodies are never read: every file goes through
  * {@link SubagentFrontmatterParser#parse(Path)}, which streams and stops at the
  * closing delimiter, so a 200 KB system prompt costs the same as a 60-byte
  * frontmatter. There is deliberately no cache, matching the skills scan; the
@@ -103,6 +114,15 @@ import java.util.Set;
  * parser's {@code Path} entry point does not offer; a symlink pointing at a
  * readable file the user owns is not the threat model here.
  *
+ * <h2>Walk-up discovery</h2>
+ *
+ * <p>Project subagents are discovered by walking up from the current working
+ * directory, so every {@code .claude/agents/} between there and the repository
+ * root is scanned. When more than one of these nested directories defines the
+ * same {@code name}, Claude Code uses the definition closest to the working
+ * directory. This implementation follows that rule: roots are collected from
+ * nearest to farthest, and merged farthest-first so the nearest definition wins.
+ *
  * <h2>What is never logged</h2>
  *
  * <p>Log lines carry a scope, a file name, a count and a reason code. They
@@ -121,6 +141,9 @@ public final class SubagentDiscoveryScanner {
 
     /** The only extension Claude Code treats as an agent file. */
     private static final String MARKDOWN_EXTENSION = ".md";
+
+    /** The repository marker that stops the walk-up. */
+    private static final String GIT_DIR = ".git";
 
     private SubagentDiscoveryScanner() {
     }
@@ -251,7 +274,7 @@ public final class SubagentDiscoveryScanner {
         /**
          * The empty result.
          *
-         * @return a result with no entries and no warnings
+         * @return a result with no agents and no warnings
          */
         public static ScanResult empty() {
             return EMPTY;
@@ -288,10 +311,17 @@ public final class SubagentDiscoveryScanner {
      * The discovery roots for the current session, with the global home
      * resolved through the WSL-aware resolver.
      *
+     * <p>Walk-up discovery: starting from the effective working directory, walk
+     * up the filesystem tree until a directory containing {@code .git} is found
+     * (the repository root), collecting every {@code .claude/agents} directory
+     * along the way. The global root ({@code ~/.claude/agents}) is always first
+     * in the list, followed by local roots from farthest to nearest (so that
+     * merging farthest-first makes the nearest definition win).
+     *
      * @param workspaceRoot the effective working directory, or null/blank when
      *                      no project is open — in which case only the global
      *                      root is returned
-     * @return the roots to scan, global first
+     * @return the roots to scan, global first, then local from farthest to nearest
      */
     public static List<ScanRoot> roots(String workspaceRoot) {
         return roots(NodeDetector.resolveHomeForFileOps(), workspaceRoot);
@@ -306,19 +336,77 @@ public final class SubagentDiscoveryScanner {
      * @param homeDir       the home directory, or null/blank for no global root
      * @param workspaceRoot the effective working directory, or null/blank for
      *                      no local root
-     * @return the roots to scan, global first
+     * @return the roots to scan, global first, then local from farthest to nearest
      */
     static List<ScanRoot> roots(String homeDir, String workspaceRoot) {
-        List<ScanRoot> roots = new ArrayList<>(2);
+        List<ScanRoot> roots = new ArrayList<>();
+
+        // Global root always comes first (lowest priority)
         if (homeDir != null && !homeDir.isBlank()) {
-            roots.add(new ScanRoot(AgentFields.SCOPE_GLOBAL,
-                    Paths.get(homeDir, CLAUDE_DIR, AGENTS_DIR)));
+            Path globalAgents = Paths.get(homeDir, CLAUDE_DIR, AGENTS_DIR);
+            roots.add(new ScanRoot(AgentFields.SCOPE_GLOBAL, globalAgents));
         }
+
+        // Walk-up discovery for local roots
         if (workspaceRoot != null && !workspaceRoot.isBlank()) {
-            roots.add(new ScanRoot(AgentFields.SCOPE_LOCAL,
-                    Paths.get(workspaceRoot, CLAUDE_DIR, AGENTS_DIR)));
+            Path workspace = Paths.get(workspaceRoot).toAbsolutePath().normalize();
+            List<ScanRoot> localRoots = walkUpForLocalRoots(workspace, homeDir);
+            // Add local roots from farthest to nearest (so merge farthest-first makes nearest win)
+            roots.addAll(localRoots);
         }
+
         return roots;
+    }
+
+    /**
+     * Walk up from the workspace directory to find all .claude/agents directories
+     * until reaching a .git directory (repository root).
+     *
+     * @param workspace the workspace directory
+     * @param homeDir   the home directory (to avoid duplicating global root)
+     * @return local roots from farthest to nearest
+     */
+    private static List<ScanRoot> walkUpForLocalRoots(Path workspace, String homeDir) {
+        List<ScanRoot> localRoots = new ArrayList<>();
+        Path current = workspace;
+        Path homeAgents = (homeDir != null && !homeDir.isBlank())
+                ? Paths.get(homeDir, CLAUDE_DIR, AGENTS_DIR).toAbsolutePath().normalize()
+                : null;
+
+        while (current != null) {
+            Path agentsDir = current.resolve(CLAUDE_DIR).resolve(AGENTS_DIR);
+
+            // Check if this is the same as the global root (after resolution)
+            if (homeAgents != null) {
+                try {
+                    if (agentsDir.toRealPath().equals(homeAgents)) {
+                        // This is the global root, don't add it again as local
+                        break;
+                    }
+                } catch (IOException e) {
+                    // If we can't resolve, treat as different
+                }
+            }
+
+            if (Files.isDirectory(agentsDir)) {
+                localRoots.add(new ScanRoot(AgentFields.SCOPE_LOCAL, agentsDir));
+            }
+
+            // Check if this directory contains .git (repository root)
+            if (Files.exists(current.resolve(GIT_DIR))) {
+                break;
+            }
+
+            Path parent = current.getParent();
+            if (parent == null || parent.equals(current)) {
+                break;
+            }
+            current = parent;
+        }
+
+        // Reverse to get farthest-to-nearest order for merging
+        Collections.reverse(localRoots);
+        return localRoots;
     }
 
     /**
@@ -332,6 +420,7 @@ public final class SubagentDiscoveryScanner {
 
     /**
      * The project agents directory, {@code {workspace}/.claude/agents}.
+     * (For backward compatibility - returns only the nearest local root)
      *
      * @param workspaceRoot the effective working directory
      * @return the path, or null when there is no workspace
@@ -340,9 +429,23 @@ public final class SubagentDiscoveryScanner {
         return roots(NodeDetector.resolveHomeForFileOps(), workspaceRoot)
                 .stream()
                 .filter(root -> AgentFields.SCOPE_LOCAL.equals(root.scope()))
-                .map(ScanRoot::directory)
                 .findFirst()
+                .map(ScanRoot::directory)
                 .orElse(null);
+    }
+
+    /**
+     * All local roots for the given workspace (for watcher to monitor).
+     *
+     * @param workspaceRoot the effective working directory
+     * @return all local roots from farthest to nearest
+     */
+    public static List<Path> allLocalRoots(String workspaceRoot) {
+        return roots(NodeDetector.resolveHomeForFileOps(), workspaceRoot)
+                .stream()
+                .filter(root -> AgentFields.SCOPE_LOCAL.equals(root.scope()))
+                .map(ScanRoot::directory)
+                .toList();
     }
 
     // ------------------------------------------------------------------
@@ -385,7 +488,7 @@ public final class SubagentDiscoveryScanner {
     }
 
     /**
-     * Scan one {@code agents} directory.
+     * Scan one {@code agents} directory recursively.
      *
      * <p>Never throws and never writes. A directory that does not exist, cannot
      * be read, or holds nothing usable all produce an empty or partial result.
@@ -427,81 +530,139 @@ public final class SubagentDiscoveryScanner {
                     + escapedRoot.message());
         }
 
-        List<Path> candidates = listTopLevel(root);
-        if (candidates == null) {
-            return new ScanResult(List.of(), List.copyOf(warnings));
-        }
-
-        // Real paths already handled, so a symlink alias inside the root
-        // collapses onto the file it points at rather than duplicating it.
-        Set<Path> read = new HashSet<>();
-
-        for (Path candidate : candidates) {
-            String fileName = candidate.getFileName().toString();
-            if (!isCandidate(fileName)) {
-                continue;
-            }
-            // The name is attacker-controlled: an agent file can arrive from a
-            // cloned repository, and a file name may legally contain a newline
-            // or an escape sequence. Interpolated raw into a log line, such a
-            // name breaks the line in two and the tail reads as an independent
-            // record — enough to forge a plausible-looking warning or, worse, to
-            // bury a real one. Every log line that quotes a file name goes
-            // through this first.
-            String logName = LogSanitizer.sanitize(fileName);
-
-            Path real;
-            try {
-                real = candidate.toRealPath();
-            } catch (IOException e) {
-                // A dangling link, or a file removed between the listing and
-                // the read. Reported by name only: the failure is the name's.
-                String reason = "could not be resolved (a broken symbolic link,"
-                        + " or it disappeared during the scan)";
-                warnings.add(new ScanWarning(scope, candidate, fileName,
-                        WarningReason.BROKEN_LINK, reason));
-                LOG.warn("[AgentDiscovery] Skipped " + logName + " in the " + scope
-                        + " root: " + reason);
-                continue;
-            }
-            if (!real.startsWith(root)) {
-                // The only way a directory entry can leave its own directory is
-                // through a link, so this is a symlink escape. Refused before
-                // the file is opened: reading it would turn the agents list
-                // into an arbitrary-file reader (R14).
-                String message = "is a symbolic link pointing outside the " + scope
-                        + " agents directory; it was not read";
-                warnings.add(new ScanWarning(scope, candidate, fileName,
-                        WarningReason.ESCAPES_ROOT, message));
-                LOG.warn("[AgentDiscovery] Skipped " + logName + " in the " + scope
-                        + " root: " + message);
-                continue;
-            }
-            if (!Files.isRegularFile(real) || !read.add(real)) {
-                continue;
-            }
-            if (!Files.isReadable(real)) {
-                // Checked here rather than inferred from the parser's result,
-                // which folds "could not open" into the same status as "this
-                // file simply has no frontmatter". The two mean different
-                // things to a user: a note is fine, a file the plugin cannot
-                // read is worth saying out loud. The check is best-effort --
-                // an open that still fails is reported by the parser and the
-                // file is treated as a non-agent.
-                String reason = "is not readable by this process";
-                warnings.add(new ScanWarning(scope, real, fileName,
-                        WarningReason.UNREADABLE, reason));
-                LOG.warn("[AgentDiscovery] Skipped " + logName + " in the " + scope
-                        + " root: " + reason);
-                continue;
-            }
-
-            entries.addAll(read(real, fileName, scope, warnings));
-        }
+        // Walk the directory tree recursively, following symlinks but checking containment
+        walkAndCollect(root, scope, entries, warnings);
 
         LOG.info("[AgentDiscovery] " + scope + " root: " + entries.size() + " agent(s), "
                 + warnings.size() + " warning(s)");
         return new ScanResult(List.copyOf(entries), List.copyOf(warnings));
+    }
+
+    /**
+     * Recursively walk the directory tree and collect agent files.
+     */
+    private static void walkAndCollect(Path root, String scope,
+                                       List<DiscoveredAgent> entries,
+                                       List<ScanWarning> warnings) {
+        // Map of real path -> DiscoveredAgent to deduplicate symlinks pointing to same file
+        Map<Path, DiscoveredAgent> seen = new LinkedHashMap<>();
+
+        try {
+            Files.walkFileTree(root, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
+                    new SimpleFileVisitor<>() {
+                        @Override
+                        public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                            // Skip hidden directories (but not the root itself)
+                            Path fileName = dir.getFileName();
+                            if (fileName != null && !dir.equals(root)
+                                    && fileName.toString().startsWith(".")) {
+                                return FileVisitResult.SKIP_SUBTREE;
+                            }
+
+                            // Check containment for directory symlinks
+                            if (attrs.isSymbolicLink()) {
+                                Path realDir;
+                                try {
+                                    realDir = dir.toRealPath();
+                                } catch (IOException e) {
+                                    warnings.add(new ScanWarning(scope, dir, dir.getFileName().toString(),
+                                            WarningReason.BROKEN_LINK,
+                                            "could not resolve directory symlink"));
+                                    return FileVisitResult.SKIP_SUBTREE;
+                                }
+                                if (!realDir.startsWith(root)) {
+                                    // Directory symlink escapes the root - skip entire subtree
+                                    String message = "is a symbolic link pointing outside the " + scope
+                                            + " agents directory; subtree was not scanned";
+                                    warnings.add(new ScanWarning(scope, dir, dir.getFileName().toString(),
+                                            WarningReason.ESCAPES_ROOT, message));
+                                    LOG.warn("[AgentDiscovery] Skipped subtree " + LogSanitizer.sanitize(dir.toString())
+                                            + " in the " + scope + " root: " + message);
+                                    return FileVisitResult.SKIP_SUBTREE;
+                                }
+                            }
+                            return FileVisitResult.CONTINUE;
+                        }
+
+                        @Override
+                        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                            String fileName = file.getFileName().toString();
+
+                            // Check if candidate
+                            if (!isCandidate(fileName)) {
+                                return FileVisitResult.CONTINUE;
+                            }
+
+                            // The name is attacker-controlled: an agent file can arrive from a
+                            // cloned repository, and a file name may legally contain a newline
+                            // or an escape sequence. Interpolated raw into a log line, such a
+                            // name breaks the line in two and the tail reads as an independent
+                            // record — enough to forge a plausible-looking warning or, worse, to
+                            // bury a real one. Every log line that quotes a file name goes
+                            // through this first.
+                            String logName = LogSanitizer.sanitize(fileName);
+
+                            Path real;
+                            try {
+                                real = file.toRealPath();
+                            } catch (IOException e) {
+                                // A dangling link, or a file removed between the listing and
+                                // the read. Reported by name only: the failure is the name's.
+                                String reason = "could not be resolved (a broken symbolic link,"
+                                        + " or it disappeared during the scan)";
+                                warnings.add(new ScanWarning(scope, file, fileName,
+                                        WarningReason.BROKEN_LINK, reason));
+                                LOG.warn("[AgentDiscovery] Skipped " + logName + " in the " + scope
+                                        + " root: " + reason);
+                                return FileVisitResult.CONTINUE;
+                            }
+
+                            // Containment check
+                            if (!real.startsWith(root)) {
+                                // The only way a directory entry can leave its own directory is
+                                // through a link, so this is a symlink escape. Refused before
+                                // the file is opened: reading it would turn the agents list
+                                // into an arbitrary-file reader (R14).
+                                String message = "is a symbolic link pointing outside the " + scope
+                                        + " agents directory; it was not read";
+                                warnings.add(new ScanWarning(scope, file, fileName,
+                                        WarningReason.ESCAPES_ROOT, message));
+                                LOG.warn("[AgentDiscovery] Skipped " + logName + " in the " + scope
+                                        + " root: " + message);
+                                return FileVisitResult.CONTINUE;
+                            }
+
+                            if (!Files.isRegularFile(real)) {
+                                return FileVisitResult.CONTINUE;
+                            }
+
+                            // Deduplicate by real path (symlinks to same file)
+                            if (seen.containsKey(real)) {
+                                return FileVisitResult.CONTINUE;
+                            }
+
+                            if (!Files.isReadable(real)) {
+                                String reason = "is not readable by this process";
+                                warnings.add(new ScanWarning(scope, real, fileName,
+                                        WarningReason.UNREADABLE, reason));
+                                LOG.warn("[AgentDiscovery] Skipped " + logName + " in the " + scope
+                                        + " root: " + reason);
+                                return FileVisitResult.CONTINUE;
+                            }
+
+                            // Parse and add entries
+                            List<DiscoveredAgent> parsed = read(real, fileName, scope, warnings);
+                            for (DiscoveredAgent agent : parsed) {
+                                seen.put(real, agent);
+                                entries.add(agent);
+                            }
+                            return FileVisitResult.CONTINUE;
+                        }
+                    });
+        } catch (IOException e) {
+            LOG.warn("[AgentDiscovery] Cannot walk agents directory " + LogSanitizer.sanitize(root.toString())
+                    + ": " + e.getClass().getSimpleName());
+        }
     }
 
     /**
@@ -581,29 +742,6 @@ public final class SubagentDiscoveryScanner {
         }
         return List.of(new DiscoveredAgent(parsed.name(), scope, file, true,
                 parsed.fields(), parsed.warning()));
-    }
-
-    /**
-     * The candidate file names in a directory, sorted, or null if it cannot be
-     * listed.
-     *
-     * <p>Sorted so two passes over an unchanged directory report the same
-     * order — the merge and precedence steps downstream should not depend on
-     * the filesystem's whim.
-     */
-    private static List<Path> listTopLevel(Path root) {
-        List<Path> candidates = new ArrayList<>();
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(root)) {
-            for (Path entry : stream) {
-                candidates.add(entry);
-            }
-        } catch (IOException e) {
-            LOG.warn("[AgentDiscovery] Cannot list agents directory " + LogSanitizer.sanitize(root.toString())
-                    + ": " + e.getClass().getSimpleName());
-            return null;
-        }
-        candidates.sort(Comparator.comparing(path -> path.getFileName().toString()));
-        return candidates;
     }
 
     /**

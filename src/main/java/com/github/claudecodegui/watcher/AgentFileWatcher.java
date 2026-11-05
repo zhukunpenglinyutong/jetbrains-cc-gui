@@ -1,5 +1,6 @@
 package com.github.claudecodegui.watcher;
 
+import com.github.claudecodegui.agent.SubagentDiscoveryScanner;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -60,14 +61,11 @@ public class AgentFileWatcher implements BulkFileListener {
     private static final String AGENTS_DIR = "agents";
     private static final String MARKDOWN_EXTENSION = ".md";
 
-    /**
-     * How long to keep collecting before reporting, in milliseconds.
-     *
-     * <p>Long enough to swallow a save and the follow-up events the IDE raises
-     * around it, short enough that a user who saves and looks back at Settings
-     * sees the result rather than a stale row.
-     */
+    /** How long to keep collecting before reporting, in milliseconds. */
     private static final long DEBOUNCE_MS = 400;
+
+    /** How long to cache the workspace root string to avoid I/O on every batch. */
+    private static final long WORKSPACE_ROOT_CACHE_MS = 1000;
 
     private final Project project;
     private final Supplier<String> workspaceRootSupplier;
@@ -80,6 +78,11 @@ public class AgentFileWatcher implements BulkFileListener {
 
     /** Guards the debounce so a burst produces one notification, not one per event. */
     private final AtomicBoolean pending = new AtomicBoolean(false);
+
+    /** Cached roots to avoid reading config.json on every batch. */
+    private volatile List<Path> cachedRoots = null;
+    private volatile String cachedWorkspaceRoot = null;
+    private volatile long workspaceRootCacheTime = 0;
 
     private MessageBusConnection connection;
 
@@ -104,7 +107,7 @@ public class AgentFileWatcher implements BulkFileListener {
         if (events == null || events.isEmpty()) {
             return;
         }
-        List<Path> roots = currentRoots();
+        List<Path> roots = getRootsWithCache();
         for (VFileEvent event : events) {
             VirtualFile file = event.getFile();
             if (file != null && isAgentFilePath(file.getPath(), file.isDirectory(), roots)) {
@@ -117,58 +120,59 @@ public class AgentFileWatcher implements BulkFileListener {
     /**
      * Whether a changed path is one discovery would have looked at.
      *
-     * <p>A direct child of a root, ending in {@code .md}. A false positive costs
-     * one wasted rescan and nothing else — the rescan applies the real
-     * containment checks — so the test stays cheap and this stays simple. A
-     * false <em>negative</em> is the expensive direction, and is what the cases
-     * below pin: the extension comparison is case-insensitive because
-     * discovery's own filter is, and the root comparison is too, because on a
-     * case-insensitive filesystem — the default on macOS and Windows — the
-     * scanner and the watcher can be handed the same directory spelled
-     * differently. A watcher that disagreed would miss a file the scan lists,
-     * and the settings list would go stale until it was reopened.
+     * <p>A file or directory under a discovery root, ending in {@code .md} for files.
+     * A false positive costs one wasted rescan and nothing else — the rescan applies
+     * the real containment checks — so the test stays cheap and this stays simple.
+     * A false <em>negative</em> is the expensive direction, and is what the cases
+     * below pin: the extension comparison is case-insensitive because discovery's own
+     * filter is, and the root comparison uses case-folded paths so it works correctly
+     * on case-insensitive filesystems (the default on macOS and Windows).
      *
      * <p>Takes a path rather than a {@link VirtualFile} so the rule is directly
      * testable without the platform fixtures.
      *
-     * @param path       the VFS path of the changed file
+     * @param path       the VFS path of the changed file or directory
      * @param isDirectory whether that path is a directory
      * @param roots      the discovery roots, as of this event
      * @return true when the change is one discovery cares about
      */
     static boolean isAgentFilePath(String path, boolean isDirectory, List<Path> roots) {
-        // A directory named agents/ is not a file inside it, and a `.md`
-        // directory would otherwise be indistinguishable from a document.
-        if (isDirectory) {
-            return false;
-        }
         Path file = Paths.get(path);
         Path fileName = file.getFileName();
-        if (fileName == null
-                || !fileName.toString().toLowerCase(Locale.ROOT).endsWith(MARKDOWN_EXTENSION)) {
+        if (fileName == null) {
+            return false;
+        }
+
+        String fileNameStr = fileName.toString();
+
+        if (isDirectory) {
+            // Directory events: check if the directory is under an agents root
+            // (could be the agents root itself or a subdirectory for recursive scan)
+            Path parent = file;
+            String parentKey = comparisonKey(parent);
+            for (Path root : roots) {
+                if (root == null) continue;
+                String rootKey = comparisonKey(root);
+                if (rootKey != null && (parentKey.equals(rootKey) || parentKey.startsWith(rootKey + "/"))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // File events: must be a .md file under an agents root
+        if (!fileNameStr.toLowerCase(Locale.ROOT).endsWith(MARKDOWN_EXTENSION)) {
             return false;
         }
         Path parent = file.getParent();
         if (parent == null) {
-            // A bare relative name. Resolving it against a root here would be
-            // the kind of guess the containment rules elsewhere refuse.
             return false;
         }
-        // Compared against the root itself, not the root's parent: discovery is
-        // non-recursive, so only a top-level document is its business.
-        //
-        // On a case-insensitive filesystem the VFS can hand back the same
-        // directory the root was built from with its case as stored on disk,
-        // which differs from the spelling NodeDetector and the working
-        // directory produced. Path.equals compares the path element by element,
-        // so it would call that a non-match and the watcher would sit quiet
-        // while discovery listed the file. Normalising the comparison key
-        // fixes that without touching the filesystem: the equality is still
-        // exact on the normalised form, never a prefix test, and no path is
-        // resolved or rewritten to make it match.
         String parentKey = comparisonKey(parent);
         for (Path root : roots) {
-            if (root != null && comparisonKey(root).equals(parentKey)) {
+            if (root == null) continue;
+            String rootKey = comparisonKey(root);
+            if (rootKey != null && (parentKey.equals(rootKey) || parentKey.startsWith(rootKey + "/"))) {
                 return true;
             }
         }
@@ -191,15 +195,37 @@ public class AgentFileWatcher implements BulkFileListener {
     }
 
     /**
-     * The two roots, resolved now.
+     * Get roots with caching to avoid reading config.json on every batch.
+     * Cache is invalidated when the workspace root changes or after a short TTL.
+     */
+    private List<Path> getRootsWithCache() {
+        long now = System.currentTimeMillis();
+        // If cache is fresh, return it without calling the supplier
+        if (cachedRoots != null && cachedWorkspaceRoot != null
+                && (now - workspaceRootCacheTime) < WORKSPACE_ROOT_CACHE_MS) {
+            return cachedRoots;
+        }
+
+        String workspace = workspaceRootSupplier == null ? null : workspaceRootSupplier.get();
+        // If workspace root unchanged, update cache time and return cached roots
+        if (cachedRoots != null && workspace != null && workspace.equals(cachedWorkspaceRoot)) {
+            workspaceRootCacheTime = now;
+            return cachedRoots;
+        }
+        // Workspace root changed or first call - refresh cache
+        cachedWorkspaceRoot = workspace;
+        workspaceRootCacheTime = now;
+        cachedRoots = currentRoots();
+        return cachedRoots;
+    }
+
+    /**
+     * The roots, resolved now.
      *
-     * <p>{@code ~/.claude/agents} always, plus the effective project's
-     * {@code .claude/agents} when there is one. A missing directory yields a
-     * root that simply never matches, matching discovery: the tab has to work
-     * on a machine that has never run Claude Code.
+     * <p>Uses SubagentDiscoveryScanner to get all roots including walk-up discovery.
      */
     private List<Path> currentRoots() {
-        List<Path> roots = new ArrayList<>(2);
+        List<Path> roots = new ArrayList<>();
 
         String home = NodeDetector.resolveHomeForFileOps();
         if (home != null && !home.isBlank()) {
@@ -208,7 +234,8 @@ public class AgentFileWatcher implements BulkFileListener {
 
         String workspace = workspaceRootSupplier == null ? null : workspaceRootSupplier.get();
         if (workspace != null && !workspace.isBlank()) {
-            roots.add(Paths.get(workspace, CLAUDE_DIR, AGENTS_DIR));
+            // Add all local roots from walk-up discovery
+            roots.addAll(SubagentDiscoveryScanner.allLocalRoots(workspace));
         }
         return roots;
     }

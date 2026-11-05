@@ -31,6 +31,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Agent management message handler.
@@ -72,6 +73,20 @@ public class AgentHandler extends BaseMessageHandler {
                         callJavaScript("window.agentFilesChanged", "1")));
         this.fileWatcher.startWatching();
     }
+    // Server-computed fields that must be stripped on export/import
+    private static final Set<String> SERVER_FIELDS = Set.of(
+            "disabled", "disabledReason", "warning", "warningLine",
+            "readOnly", "scope", "source", "path", "id", "prompt");
+
+    private static JsonObject stripServerFields(JsonObject agent) {
+        JsonObject stripped = agent.deepCopy();
+        for (String key : SERVER_FIELDS) {
+            stripped.remove(key);
+        }
+        return stripped;
+    }
+
+
 
     /**
      * Stop watching. Called when the chat window is torn down; the project bus
@@ -175,7 +190,7 @@ public class AgentHandler extends BaseMessageHandler {
             SubagentDiscoveryScanner.ScanResult scan = SubagentDiscoveryScanner.scanAll(workspaceRoot);
 
             AgentResolver.Resolution resolution = AgentResolver.resolve(
-                    storeAgents, scan, AgentDenyRules.readForCurrentHome(), scopes);
+                    storeAgents, scan, AgentDenyRules.readForProject(workspaceRoot), scopes);
             if (!resolution.unmatchedDenyRules().isEmpty()) {
                 // Inert rules are worth a line: the user wrote a rule and the
                 // plugin is telling them it matches nothing they can see.
@@ -450,7 +465,7 @@ public class AgentHandler extends BaseMessageHandler {
 
                 JsonArray agentsArray = new JsonArray();
                 for (JsonObject agent : agents) {
-                    agentsArray.add(agent);
+                    agentsArray.add(stripServerFields(agent));
                 }
                 exportData.add("agents", agentsArray);
 
@@ -616,7 +631,7 @@ public class AgentHandler extends BaseMessageHandler {
 
             List<JsonObject> agentsToImport = new java.util.ArrayList<>();
             for (int i = 0; i < agentsArray.size(); i++) {
-                agentsToImport.add(agentsArray.get(i).getAsJsonObject());
+                agentsToImport.add(stripServerFields(agentsArray.get(i).getAsJsonObject()));
             }
 
             Map<String, Object> result = settingsService.getAgentManager().batchImportAgents(agentsToImport, strategy);

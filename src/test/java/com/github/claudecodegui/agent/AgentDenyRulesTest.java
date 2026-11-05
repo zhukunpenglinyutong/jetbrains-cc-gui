@@ -174,6 +174,41 @@ public class AgentDenyRulesTest {
                 .denies("Explore"));
     }
 
+    /**
+     * The alias form {@code Task(name)} is documented as an alias that still
+     * works. It should deny the agent with the given name.
+     */
+    @Test
+    public void treatsTaskAliasAsNameRule() throws IOException {
+        DenyIndex index = read("{\"permissions\":{\"deny\":[\"Task(Explore)\"]}}");
+
+        assertTrue(index.denies("Explore"));
+        assertFalse(index.denies("code-reviewer"));
+    }
+
+    /**
+     * A bare {@code "Agent"} entry in the deny array (no parentheses) disables
+     * every subagent. This is equivalent to {@code Agent(*)}.
+     */
+    @Test
+    public void treatsBareAgentAsDenyAll() throws IOException {
+        DenyIndex index = read("{\"permissions\":{\"deny\":[\"Agent\"]}}");
+
+        assertTrue(index.denyAll());
+        assertTrue(index.denies("anything-at-all"));
+    }
+
+    /**
+     * The alias form {@code Task(*)} should also work as deny-all.
+     */
+    @Test
+    public void treatsTaskWildcardAsDenyAll() throws IOException {
+        DenyIndex index = read("{\"permissions\":{\"deny\":[\"Task(*)\"]}}");
+
+        assertTrue(index.denyAll());
+        assertTrue(index.denies("anything-at-all"));
+    }
+
     // ==================================================================
     // 3. Degenerate settings files
     // ==================================================================

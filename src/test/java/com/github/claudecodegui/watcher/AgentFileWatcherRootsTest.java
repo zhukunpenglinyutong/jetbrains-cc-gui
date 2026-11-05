@@ -135,13 +135,13 @@ public class AgentFileWatcherRootsTest {
     }
 
     /**
-     * A directory whose name ends in {@code .md} would otherwise be
-     * indistinguishable from a document, and firing on it would rescan on an
-     * unrelated filesystem event.
+     * A directory whose name ends in {@code .md} that is inside an agents root
+     * SHOULD trigger a refresh, because it may affect .md files inside it
+     * (recursive scan). This is a change from the old non-recursive behavior.
      */
     @Test
-    public void aDirectoryNamedLikeAMarkdownFileIsNotAChange() {
-        assertFalse(isAgentFile("/home/u/.claude/agents/bundle.md", true, roots()));
+    public void aDirectoryNamedLikeAMarkdownFileInsideRootIsAChange() {
+        assertTrue(isAgentFile("/home/u/.claude/agents/bundle.md", true, roots()));
     }
 
     /** No roots means no home and no workspace; the watcher must simply stay quiet. */

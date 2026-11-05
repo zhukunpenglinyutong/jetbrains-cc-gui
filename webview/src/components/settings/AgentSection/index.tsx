@@ -386,7 +386,7 @@ export default function AgentSection({
 
                   {/* The menu holds only mutating actions. A file-backed agent
                       has none of them, so it gets no menu rather than a menu of
-                      disabled items — the copy action sits inline instead. */}
+                      disabled items. */}
                   {editable && (
                     <div className={styles.agentActions} ref={openMenuId === agent.id ? menuRef : null}>
                       <button

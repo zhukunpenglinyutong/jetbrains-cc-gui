@@ -127,12 +127,7 @@ const SettingsView = ({
   // Declared BEFORE useLazyTabData on purpose. Both hooks do their work in
   // effects, and React runs them in declaration order — so with the lazy
   // load first, its very first get_agents went out before the callbacks
-  // that receive the answer existed. The list usually survived that race
-  // anyway (a scan of 150 files takes long enough for the listener to
-  // appear), but the repairable count parses every prompt and can answer in
-  // ~150 ms, which is inside the window. The symptom was a list that
-  // rendered while the count stayed at zero and the repair button never
-  // appeared.
+  // that receive the answer existed.
   useSettingsWindowCallbacks({
     ...themeSync,
     ...basicActions,
