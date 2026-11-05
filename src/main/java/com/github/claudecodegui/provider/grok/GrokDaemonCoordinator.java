@@ -4,6 +4,9 @@ import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.provider.common.DaemonBridge;
+import com.github.claudecodegui.provider.common.EnvFileResolver;
+import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.util.PathUtils;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -28,6 +31,7 @@ class GrokDaemonCoordinator {
     private final Supplier<BridgeDirectoryResolver> directoryResolverSupplier;
     private final EnvironmentConfigurator envConfigurator;
     private final Consumer<Map<String, String>> customEnvConfigurator;
+    private final CodemossSettingsService settingsService = new CodemossSettingsService();
 
     private volatile DaemonBridge daemonBridge;
     private final Object daemonLock = new Object();
@@ -170,6 +174,14 @@ class GrokDaemonCoordinator {
                     return;
                 }
 
+                // Re-check generation right before sending the command to catch
+                // any shutdown that raced between getDaemonBridge() and here.
+                if (generation != lifecycleGeneration) {
+                    log.info("[GrokDaemonCoordinator] Skip preconnect: generation changed during prewarm");
+                    daemon.stop();
+                    return;
+                }
+
                 JsonObject params = new JsonObject();
                 params.addProperty("cwd", cwd != null ? cwd : "");
                 params.addProperty("sessionId", sessionId != null ? sessionId : "");
@@ -180,7 +192,13 @@ class GrokDaemonCoordinator {
                 params.addProperty("model", "");
                 params.addProperty("streaming", true);
                 // Grok env is mostly XAI_ / GROK_ ; bridge will enrich via its env config
-                params.add("env", new JsonObject());
+                JsonObject envObj = new JsonObject();
+                String envFile = resolveEnvFile(cwd);
+                log.info("[GrokDaemonCoordinator] Preconnect with envFile=" + (envFile != null ? envFile : "(null/empty)"));
+                if (envFile != null && !envFile.isEmpty()) {
+                    envObj.addProperty("envFile", envFile);
+                }
+                params.add("env", envObj);
 
                 CompletableFuture<Boolean> preconnectFuture = daemon.sendCommand(
                         "grok.preconnect",
@@ -263,6 +281,48 @@ class GrokDaemonCoordinator {
             resetFuture.get(15, TimeUnit.SECONDS);
         } catch (Exception e) {
             log.warn("[GrokDaemonCoordinator] reset failed: " + e.getMessage());
+        }
+    }
+
+    private String resolveEnvFile(String cwd) {
+        try {
+            String envFile = settingsService.getEnvFile(cwd);
+
+            // State 3: explicit opt-out — load nothing, never auto-discover
+            if (CodemossSettingsService.isEnvFileDisabled(envFile)) {
+                log.debug("[GrokDaemonCoordinator] Env file explicitly disabled for cwd=" + cwd);
+                return null;
+            }
+
+            String projectDir = EnvFileResolver.resolveProjectDir(cwd);
+
+            // State 1: never configured — try the default ".env" in the project root
+            if (envFile == null) {
+                if (projectDir != null) {
+                    java.io.File defaultEnvFile = new java.io.File(projectDir, ".env");
+                    if (defaultEnvFile.exists() && defaultEnvFile.isFile()) {
+                        String discovered = PathUtils.normalizeAbsolute(defaultEnvFile.getPath());
+                        log.debug("[GrokDaemonCoordinator] Auto-discovered default .env at " + discovered);
+                        return discovered;
+                    }
+                }
+                return null;
+            }
+
+            // State 2: explicit path — resolve relative to the project dir
+            java.io.File envFileObj = new java.io.File(envFile);
+            if (!envFileObj.isAbsolute()) {
+                if (projectDir == null) {
+                    log.debug("[GrokDaemonCoordinator] Refusing to resolve relative env file without a project dir");
+                    return null;
+                }
+                envFileObj = new java.io.File(projectDir, envFile);
+            }
+            return PathUtils.normalizeAbsolute(envFileObj.getPath());
+
+        } catch (Exception e) {
+            log.warn("[GrokDaemonCoordinator] Failed to read env file setting: " + e.getMessage());
+            return null;
         }
     }
 }

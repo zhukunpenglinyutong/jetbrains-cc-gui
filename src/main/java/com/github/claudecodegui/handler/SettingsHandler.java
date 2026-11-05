@@ -111,7 +111,9 @@ public class SettingsHandler extends BaseMessageHandler {
         // User language preference
         "set_user_language",
         "get_user_language",
-        "clear_user_language"
+        "clear_user_language",
+        "get_env_file",
+        "set_env_file"
     };
 
     public SettingsHandler(HandlerContext context) {
@@ -391,6 +393,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "clear_user_language":
                 handleClearUserLanguage();
+                return true;
+            case "get_env_file":
+                projectConfigHandler.handleGetEnvFile();
+                return true;
+            case "set_env_file":
+                projectConfigHandler.handleSetEnvFile(content);
                 return true;
             default:
                 return false;

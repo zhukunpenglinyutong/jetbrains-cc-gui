@@ -21,6 +21,12 @@ export async function handleCodexCommand(command, args, stdinData) {
           cwd: args[2] || null,
           permissionMode: args[3] || null,
           model: args[4] || null,
+          baseUrl: stdinData?.baseUrl || null,
+          apiKey: stdinData?.apiKey || null,
+          envFile: stdinData?.envFile || null,
+          reasoningEffort: stdinData?.reasoningEffort || 'medium',
+          serviceTier: stdinData?.serviceTier || null,
+          attachments: stdinData?.attachments || [],
         });
         if (result.outcome !== 'completed') throw new Error(result.error || `Codex turn ${result.outcome}`);
       } finally {

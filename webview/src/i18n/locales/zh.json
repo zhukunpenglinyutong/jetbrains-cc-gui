@@ -82,7 +82,12 @@
       "tooltipReset": "重置时间：{{value}}（本地时间）",
       "clickToSwitch": "点击周期标签切换额度窗口",
       "worstHint": "圆点表示消耗节奏最紧张的窗口（{{color}}）",
-      "paceColors": { "green": "绿色", "yellow": "黄色", "red": "红色", "neutral": "未知" },
+      "paceColors": {
+        "green": "绿色",
+        "yellow": "黄色",
+        "red": "红色",
+        "neutral": "未知"
+      },
       "stale": "刷新失败，当前展示的额度可能已过期"
     },
     "noMatchingFiles": "无匹配文件",
@@ -453,6 +458,30 @@
         "placeholder": "例如 project1 或留空使用项目根目录",
         "hint": "指定 Claude 工作的目录。可以使用相对路径（相对于项目根目录）或绝对路径。留空则使用项目根目录。"
       },
+      "envFile": {
+        "label": "环境文件",
+        "projectLevel": "项目级别",
+        "placeholder": "例如 /path/to/.env 或留空",
+        "hint": "指定一个 .env 文件，用于为 Claude Code 和 Grok 加载环境变量。",
+        "invalidPath": "无效的文件路径：文件不存在或无法读取",
+        "reset": "恢复自动检测",
+        "resetHint": "清除自定义路径，重新自动检测项目根目录下的 .env",
+        "state": {
+          "notConfigured": "自动",
+          "notConfiguredDetail": "未设置自定义路径 — 自动检测项目根目录的 .env",
+          "configured": "自定义路径",
+          "configuredDetail": "以下文件会在每个新会话中加载",
+          "disabled": "已禁用",
+          "disabledDetail": "不加载任何 env 文件，也不进行自动检测",
+          "unknown": "状态未知",
+          "unknownDetail": "无法从插件读取当前有效状态"
+        },
+        "error": {
+          "invalidCharacters": "路径无效：不允许控制字符和空字节",
+          "parentTraversal": "路径无效：不允许包含 \"..\" 路径段",
+          "tooLong": "路径无效：长度过长"
+        }
+      },
       "fontSize": {
         "label": "字体大小",
         "level1": "小（80%）",
@@ -820,11 +849,7 @@
       "installedVersion": "当前版本 {{version}}",
       "latestStableVersion": "最新稳定版 {{version}}",
       "targetVersionValue": "目标版本 {{version}}",
-      "versionSourceFallback": "远程版本列表获取失败，当前展示内置推荐版本。",
-      "versionCacheAccessError": "npm 文件访问被拒绝，独立缓存重试也未成功。请检查缓存目录权限或安全软件拦截。",
-      "versionQueryTimeout": "npm 版本查询超时，请检查网络或代理后重试。",
-      "versionQueryNetworkError": "无法连接 npm 仓库，请检查网络、代理或仓库地址后重试。",
-      "versionQueryFailed": "npm 版本查询未成功，请检查 Node.js 和 npm 配置后重试。",
+      "versionSourceFallback": "远程版本列表获取失败，当前展示内置推荐版本。你仍然可以手动输入版本号。",
       "rollbackWarning": "这是回退操作，建议在切换后重新验证相关 AI 功能是否正常。",
       "nodeNotConfigured": "Node.js 未配置，请先在基础配置中设置 Node.js 路径。",
       "installSuccess": "{{name}} 安装成功",
@@ -833,7 +858,11 @@
       "uninstallFailed": "卸载失败: {{error}}",
       "updating": "更新中...",
       "updateSuccess": "{{name}} 更新成功",
-      "cliTransportBadge": "CLI · {{transport}}"
+      "cliTransportBadge": "CLI · {{transport}}",
+      "versionCacheAccessError": "npm file access was denied, including the separate-cache retry. Check cache permissions or security software.",
+      "versionQueryTimeout": "The npm version query timed out. Check your network or proxy and retry.",
+      "versionQueryNetworkError": "Cannot connect to the npm registry. Check your network, proxy, or registry URL and retry.",
+      "versionQueryFailed": "The npm version query failed. Check your Node.js and npm configuration and retry."
     },
     "usage": "使用统计",
     "usageDesc": "查看您的 Token 消耗、费用统计和使用趋势分析",
@@ -1493,9 +1522,9 @@
     "requestedPermissions": "请求的原生权限",
     "allowWithRule": "允许并添加此命令规则",
     "allowWithNetworkRule": "允许并添加此网络规则",
-    "codexDeliveryRetry": "Codex 没有收到你的选择（{{error}}），请重新选择。",
-    "codexDeliveryFailed": "Codex 没有收到你的选择（{{error}}）。如果对话没有继续，请点击停止后重新发送。",
-    "codexDeliveryUnconfirmed": "Codex 还没有确认收到你的选择（{{error}}）。它可能仍会生效，请不要重复作答；如果对话没有继续，请点击停止后重新发送。"
+    "codexDeliveryRetry": "Codex did not receive your choice ({{error}}). Please choose again.",
+    "codexDeliveryFailed": "Codex did not receive your choice ({{error}}). If the conversation does not continue, click Stop and send your message again.",
+    "codexDeliveryUnconfirmed": "Codex has not confirmed your choice yet ({{error}}). It may still take effect, so do not answer again; if the conversation does not continue, click Stop and send your message again."
   },
   "askUserQuestion": {
     "title": "Claude 有一些问题想问你",
@@ -1716,6 +1745,19 @@
     "statusNeedsAuth": "需要认证",
     "statusPending": "连接中...",
     "statusUnknown": "未知",
+    "projectLocal": "项目本地",
+    "projectLocalReadOnly": "该服务器由 .mcp.json 管理，无法从 UI 修改",
+    "pendingApprovalBadge": "待审核",
+    "pendingApprovalDesc": "项目本地 MCP 服务器待审核",
+    "rejectedBadge": "已拒绝",
+    "rejectedDesc": "已拒绝的项目本地 MCP 服务器",
+    "approveTooltip": "批准服务器",
+    "rejectTooltip": "拒绝服务器",
+    "trustNotGitVerifiedBadge": "未经 git 验证",
+    "trustNotGitVerifiedDesc": "该项目文件夹不在 git 管理下，因此无法通过 git 确认此 .mcp.json 服务器的批准是本机的本地批准",
+    "trustNotGitVerifiedDialogNote": "注意：项目文件夹不是 git 仓库，因此该批准仅基于你的确认，没有 git 作为依据。",
+    "approved": "已批准",
+    "rejected": "已拒绝",
     "errorDetails": "错误详情",
     "logs": {
       "title": "连接日志",
@@ -1738,6 +1780,7 @@
       "firstLoad": "首次加载，正在获取服务器列表...",
       "loadedServersSuccess": "加载服务器列表成功：找到 {{count}} 个服务器",
       "loadedServersFailed": "加载服务器列表失败：{{error}}",
+      "refreshOnFileChange": "MCP配置文件已更改，正在刷新服务器列表...",
       "statusUpdateComplete": "服务器状态更新完成：{{total}} 个服务器 ({{connected}} 已连接, {{failed}} 失败, {{pending}} 待定, {{needsAuth}} 需要认证)",
       "loadedStatusFailed": "加载服务器状态失败：{{error}}",
       "cleared": "刷新日志已清空",
@@ -1828,6 +1871,14 @@
     "required": "必填",
     "optional": "可选",
     "refreshServer": "刷新 {{name}}",
+    "configCopiedRedacted": "配置已复制到剪贴板（敏感值已隐藏）",
+    "approveConfirmTitle": "批准项目本地 MCP 服务器",
+    "approveConfirmMessage": "批准“{{name}}”将允许本仓库在你的机器上运行：\n\n{{target}}\n\n并使用你的权限。请只批准你信任的服务器。",
+    "approveConfirm": "批准并运行",
+    "approveConfirmUnknownTarget": "未指定的命令",
+    "copyConfigWarningTitle": "复制项目配置",
+    "copyConfigWarningMessage": "“{{name}}”定义在本仓库的 .mcp.json 中。其配置可能包含仓库作者的凭据，而非你的凭据。仅在你打算使用该服务器时再复制。",
+    "copyConfigWarningConfirm": "仍要复制",
     "nativeStatus": "原生 Codex MCP 状态"
   },
   "tools": {
@@ -2596,14 +2647,6 @@
     "copied": "已复制",
     "openDependencySettings": "打开依赖管理",
     "recommended": "推荐",
-    "updateClaudeSdk": "更新 SDK",
-    "updatingClaudeSdk": "更新中...",
-    "updateClaudeSdkSuccess": "已更新到 {{version}}，请重新发送消息。",
-    "updateClaudeSdkFailed": "更新失败：{{error}}",
-    "updateClaudeSdkFailedUnknown": "更新失败。请打开依赖管理查看详情。",
-    "updateClaudeSdkTimedOut": "15 分钟内没有收到结果。请到依赖管理查看更新状态。",
-    "updateClaudeSdkCustomCli": "SDK 已更新到 {{version}}，但插件运行的是自定义的 Claude CLI（{{path}}）。请按方案二更新它。",
-    "updateClaudeSdkAlreadyLatest": "{{version}} 已是本插件支持的最新 SDK，而此模型需要更新的 Claude Code。请在插件发布新版本后更新插件，或换用其他模型。",
     "codexWriterConflict": {
       "title": "Codex 线程被占用",
       "intro": "该会话正由另一个 Codex 回合或客户端写入，本次发送未能启动。",
@@ -2628,21 +2671,6 @@
         "downgrade": {
           "title": "方案二：版本回退",
           "step0": "在「依赖管理」中将 SDK 版本切换到 v0.2.112 或更早版本，切换后需要重启 IDEA。"
-        }
-      }
-    },
-    "claudeCodeVersionTooOld": {
-      "title": "Claude Code SDK 版本过低，无法使用此模型",
-      "intro": "插件运行的是自身 SDK 内置的 Claude Code，而不是终端里的 claude 命令。该内置版本低于此模型要求的版本。",
-      "reason": "SDK 与插件分开安装，因此更新插件或终端里的 claude 命令都不会更新 SDK。",
-      "solutions": {
-        "updateSdk": {
-          "title": "方案一：更新 Claude Code SDK",
-          "step0": "安装支持范围内的最新 SDK。之后插件会重启 Claude 进程，可以直接重新发送消息。"
-        },
-        "updateCustomCli": {
-          "title": "方案二：更新自定义的 Claude CLI",
-          "step0": "如果设置了「Claude CLI 路径（覆盖）」，插件会运行该程序而不是 SDK。请在终端中更新："
         }
       }
     },
@@ -2675,6 +2703,29 @@
         "pointCodexBin": {
           "title": "方案二：让插件指向可用的二进制",
           "step0": "列出 PATH 上所有的 codex（Windows 使用 where codex）。如果可用的那个不在最前面，把 CODEX_BIN 环境变量设置为它的完整路径，然后重启 IDE。插件现在也会自动回退到后面可用的安装。"
+        }
+      }
+    },
+    "updateClaudeSdk": "Update SDK",
+    "updatingClaudeSdk": "Updating...",
+    "updateClaudeSdkSuccess": "Updated to {{version}}. Send your message again.",
+    "updateClaudeSdkFailed": "Update failed: {{error}}",
+    "updateClaudeSdkFailedUnknown": "Update failed. Open Dependency Settings for details.",
+    "updateClaudeSdkTimedOut": "No result after 15 minutes. Check Dependency Settings for the update status.",
+    "updateClaudeSdkCustomCli": "SDK updated to {{version}}, but the plugin runs your custom Claude CLI ({{path}}). Update it with Option 2.",
+    "updateClaudeSdkAlreadyLatest": "{{version}} is already the newest SDK this plugin supports, and this model needs a newer Claude Code. Update the plugin when a new release is out, or choose another model.",
+    "claudeCodeVersionTooOld": {
+      "title": "Claude Code SDK is too old for this model",
+      "intro": "The plugin runs the Claude Code bundled in its own SDK, not the claude command in your terminal. That bundled version is older than this model requires.",
+      "reason": "The SDK is installed separately from the plugin, so updating the plugin or the claude command in your terminal does not update it.",
+      "solutions": {
+        "updateSdk": {
+          "title": "Option 1: Update the Claude Code SDK",
+          "step0": "Installs the latest supported SDK. The plugin then restarts its Claude process, so you can send your message again right away."
+        },
+        "updateCustomCli": {
+          "title": "Option 2: Update your custom Claude CLI",
+          "step0": "If you set \"Claude CLI Path (override)\", the plugin runs that binary instead of the SDK. Update it in a terminal:"
         }
       }
     }

@@ -9,6 +9,8 @@ import {
 } from '../../../types/aiFeatureConfig';
 import type { PromptEnhancerConfig, PromptEnhancerProvider } from '../../../types/promptEnhancer';
 import { DEFAULT_PROMPT_ENHANCER_CONFIG } from '../../../types/promptEnhancer';
+import type { EnvFilePathIssue, EnvFileState } from '../../../types/envFile';
+import { normalizeEnvFilePath } from '../../../types/envFile';
 import {
   DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS,
   clampPermissionDialogTimeoutSeconds,
@@ -72,6 +74,16 @@ export interface UseSettingsBasicActionsReturn {
   savingClaudeCliPath: boolean;
   workingDirectory: string;
   savingWorkingDirectory: boolean;
+  envFile: string;
+  savingEnvFile: boolean;
+  /**
+   * Effective env file state reported by the backend. `'unknown'` until the
+   * first `window.updateEnvFile` payload arrives (or if that payload is
+   * malformed) — never defaulted to a reassuring value.
+   */
+  envFileState: EnvFileState;
+  /** Client-side rejection reason for the current input, cleared on edit/save. */
+  envFileError: EnvFilePathIssue | null;
   editorFontConfig:
     | {
         fontFamily: string;
@@ -130,6 +142,11 @@ export interface UseSettingsBasicActionsReturn {
   handleSaveNodePath: () => void;
   handleSaveClaudeCliPath: () => void;
   handleSaveWorkingDirectory: () => void;
+  handleSaveEnvFile: () => void;
+  /** Back to auto-discovery of <project>/.env — the third state, otherwise unreachable. */
+  handleResetEnvFile: () => void;
+  /** User typing in the field: update the draft and clear any validation error. */
+  handleEnvFileChange: (path: string) => void;
   handleUiFontSelectionChange: (selection: string) => void;
   handleSaveUiFontCustomPath: (path: string) => void;
   handleBrowseUiFontFile: () => void;
@@ -178,6 +195,9 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setSavingClaudeCliPath: (saving: boolean) => void;
   /** @internal */ setWorkingDirectory: (dir: string) => void;
   /** @internal */ setSavingWorkingDirectory: (saving: boolean) => void;
+  /** @internal */ setEnvFile: (path: string) => void;
+  /** @internal */ setEnvFileState: (state: EnvFileState) => void;
+  /** @internal */ setSavingEnvFile: (saving: boolean) => void;
   /** @internal */ setEditorFontConfig: (
     config:
       | {
@@ -244,6 +264,15 @@ export function useSettingsBasicActions({
   // Working directory configuration
   const [workingDirectory, setWorkingDirectory] = useState('');
   const [savingWorkingDirectory, setSavingWorkingDirectory] = useState(false);
+
+  // Environment file configuration
+  const [envFile, setEnvFile] = useState('');
+  const [savingEnvFile, setSavingEnvFile] = useState(false);
+  // 'unknown' until the backend reports the effective state: an empty field and
+  // an opted-out env file look identical in the input, so the badge must come
+  // from the backend rather than be guessed from the draft value.
+  const [envFileState, setEnvFileState] = useState<EnvFileState>('unknown');
+  const [envFileError, setEnvFileError] = useState<EnvFilePathIssue | null>(null);
 
   // IDEA editor font configuration (read-only display)
   const [editorFontConfig, setEditorFontConfig] = useState<
@@ -413,6 +442,34 @@ export function useSettingsBasicActions({
     const payload = { customWorkingDir: (workingDirectory || '').trim() };
     sendToJava(`set_working_directory:${JSON.stringify(payload)}`);
   }, [workingDirectory]);
+
+  const handleSaveEnvFile = useCallback(() => {
+    // Defense in depth: the backend is the authority (it checks existence and
+    // resolves the path), this just stops obviously malformed input early.
+    const validation = normalizeEnvFilePath(envFile || '');
+    if (!validation.ok) {
+      setEnvFileError(validation.issue);
+      setSavingEnvFile(false);
+      return;
+    }
+    setEnvFileError(null);
+    setSavingEnvFile(true);
+    // An empty payload is the explicit opt-out, not "no change": the backend
+    // persists it so <project>/.env is no longer auto-discovered.
+    const payload = { envFile: validation.value };
+    sendToJava(`set_env_file:${JSON.stringify(payload)}`);
+  }, [envFile]);
+
+  const handleResetEnvFile = useCallback(() => {
+    setEnvFileError(null);
+    setSavingEnvFile(true);
+    sendToJava(`set_env_file:${JSON.stringify({ reset: true })}`);
+  }, []);
+
+  const handleEnvFileChange = useCallback((path: string) => {
+    setEnvFile(path);
+    setEnvFileError(null);
+  }, []);
 
   const handleUiFontSelectionChange = useCallback((selection: string) => {
     if (selection === 'followEditor') {
@@ -817,6 +874,13 @@ export function useSettingsBasicActions({
     setWorkingDirectory,
     savingWorkingDirectory,
     setSavingWorkingDirectory,
+    envFile,
+    setEnvFile,
+    envFileState,
+    setEnvFileState,
+    envFileError,
+    savingEnvFile,
+    setSavingEnvFile,
     editorFontConfig,
     setEditorFontConfig,
     uiFontConfig,
@@ -864,6 +928,9 @@ export function useSettingsBasicActions({
     handleSaveNodePath,
     handleSaveClaudeCliPath,
     handleSaveWorkingDirectory,
+    handleSaveEnvFile,
+    handleResetEnvFile,
+    handleEnvFileChange,
     handleUiFontSelectionChange,
     handleSaveUiFontCustomPath,
     handleBrowseUiFontFile,

@@ -51,6 +51,7 @@ class ClaudeDaemonRequestExecutor {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
+            String envFile,
             MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
@@ -74,11 +75,13 @@ class ClaudeDaemonRequestExecutor {
                         agentPrompt,
                         streaming,
                         disableThinking,
-                        reasoningEffort
+                        reasoningEffort,
+                        envFile
                 );
 
                 boolean hasAttachments = attachments != null && !attachments.isEmpty() && params.has("attachments");
-                params.add("env", ClaudeBridgeUtils.buildDaemonEnv(cwd));
+                log.debug("[ClaudeDaemonRequestExecutor] envFile before buildDaemonEnv=" + envFile);
+                params.add("env", ClaudeBridgeUtils.buildDaemonEnv(cwd, envFile));
 
                 String method = hasAttachments ? "claude.sendWithAttachments" : "claude.send";
                 log.info("[DaemonExecutor] Sending via daemon: " + method);

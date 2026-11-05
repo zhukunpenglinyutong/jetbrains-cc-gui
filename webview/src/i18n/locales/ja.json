@@ -198,6 +198,30 @@
         "placeholder": "例: project1 または空欄でプロジェクトルートを使用",
         "hint": "Claudeが作業するディレクトリを指定します。相対パス(プロジェクトルートからの相対)または絶対パスを使用できます。空欄の場合はプロジェクトルートを使用します。"
       },
+      "envFile": {
+        "label": "環境ファイル",
+        "projectLevel": "プロジェクトレベル",
+        "placeholder": "例: /path/to/.env または空欄",
+        "hint": "Claude CodeとGrokの両方で環境変数を読み込む.envファイルを指定します。",
+        "invalidPath": "無効なファイルパス: ファイルが存在しないか、読み取りできません",
+        "reset": "自動検出に戻す",
+        "resetHint": "カスタムパスを解除し、<project>/.env の自動検出を再開します",
+        "state": {
+          "notConfigured": "自動",
+          "notConfiguredDetail": "カスタムパスは未設定 — プロジェクトルートの .env が自動的に検出されます",
+          "configured": "カスタムパス",
+          "configuredDetail": "以下のファイルが新しいセッションごとに読み込まれます",
+          "disabled": "無効",
+          "disabledDetail": "env ファイルは読み込まれず、自動検出も無効です",
+          "unknown": "状態不明",
+          "unknownDetail": "プラグインから有効な状態を取得できませんでした"
+        },
+        "error": {
+          "invalidCharacters": "無効なパス: 制御文字と NUL バイトは使用できません",
+          "parentTraversal": "無効なパス: \"..\" セグメントは使用できません",
+          "tooLong": "無効なパス: 長すぎます"
+        }
+      },
       "fontSize": {
         "label": "フォントサイズ",
         "level1": "小 (80%)",
@@ -430,7 +454,11 @@
       "uninstallFailed": "アンインストール失敗: {{error}}",
       "updating": "更新中...",
       "updateSuccess": "{{name}}が正常に更新されました",
-      "cliTransportBadge": "CLI · {{transport}}"
+      "cliTransportBadge": "CLI · {{transport}}",
+      "versionCacheAccessError": "npm file access was denied, including the separate-cache retry. Check cache permissions or security software.",
+      "versionQueryTimeout": "The npm version query timed out. Check your network or proxy and retry.",
+      "versionQueryNetworkError": "Cannot connect to the npm registry. Check your network, proxy, or registry URL and retry.",
+      "versionQueryFailed": "The npm version query failed. Check your Node.js and npm configuration and retry."
     },
     "usage": "使用統計",
     "usageDesc": "トークン消費量、コスト統計、使用傾向分析を表示",
@@ -1051,9 +1079,9 @@
     "requestedPermissions": "Requested native permissions",
     "allowWithRule": "Allow with this command rule",
     "allowWithNetworkRule": "Allow with this network rule",
-    "codexDeliveryRetry": "Codex があなたの選択を受け取れませんでした（{{error}}）。もう一度選択してください。",
-    "codexDeliveryFailed": "Codex があなたの選択を受け取れませんでした（{{error}}）。会話が進まない場合は、停止してからもう一度送信してください。",
-    "codexDeliveryUnconfirmed": "Codex はまだあなたの選択の受け取りを確認していません（{{error}}）。選択はまだ反映される可能性があるため、もう一度回答しないでください。会話が進まない場合は、停止してからもう一度送信してください。"
+    "codexDeliveryRetry": "Codex did not receive your choice ({{error}}). Please choose again.",
+    "codexDeliveryFailed": "Codex did not receive your choice ({{error}}). If the conversation does not continue, click Stop and send your message again.",
+    "codexDeliveryUnconfirmed": "Codex has not confirmed your choice yet ({{error}}). It may still take effect, so do not answer again; if the conversation does not continue, click Stop and send your message again."
   },
   "askUserQuestion": {
     "title": "Claudeからの質問があります",
@@ -1273,6 +1301,19 @@
     "statusNeedsAuth": "認証が必要",
     "statusPending": "接続中...",
     "statusUnknown": "不明",
+    "projectLocal": "プロジェクトローカル",
+    "projectLocalReadOnly": "このサーバーは .mcp.json で管理されているため、UI から変更できません",
+    "pendingApprovalBadge": "保留中",
+    "pendingApprovalDesc": "プロジェクトローカル MCP サーバーの承認待ち",
+    "rejectedBadge": "拒否",
+    "rejectedDesc": "拒否されたプロジェクトローカル MCP サーバー",
+    "approveTooltip": "サーバーを承認",
+    "rejectTooltip": "サーバーを拒否",
+    "trustNotGitVerifiedBadge": "git 未検証",
+    "trustNotGitVerifiedDesc": "このプロジェクトフォルダーは git の管理下になく、この .mcp.json サーバーの承認がこのマシンにローカルなものであることを git で確認できません",
+    "trustNotGitVerifiedDialogNote": "注意: プロジェクトフォルダーは git リポジトリではないため、この承認はあなたの確認のみに基づくもので、git による裏付けはありません。",
+    "approved": "承認済み",
+    "rejected": "拒否",
     "errorDetails": "Error Details",
     "logs": {
       "title": "Connection Logs",
@@ -1295,6 +1336,7 @@
       "firstLoad": "First load, fetching server list...",
       "loadedServersSuccess": "Loaded server list: {{count}} servers found",
       "loadedServersFailed": "Failed to load server list: {{error}}",
+      "refreshOnFileChange": "MCP設定ファイルが変更されました。サーバー一覧を更新しています...",
       "statusUpdateComplete": "Status update complete: {{total}} servers ({{connected}} connected, {{failed}} failed, {{pending}} pending, {{needsAuth}} need auth)",
       "loadedStatusFailed": "Failed to load server status: {{error}}",
       "cleared": "Refresh logs cleared",
@@ -1385,6 +1427,14 @@
     "required": "Required",
     "optional": "Optional",
     "refreshServer": "Refresh {{name}}",
+    "configCopiedRedacted": "設定をクリップボードにコピーしました（機微な値はマスクされます）",
+    "approveConfirmTitle": "プロジェクトローカルの MCP サーバーを承認",
+    "approveConfirmMessage": "「{{name}}」を承認すると、このリポジトリがあなたのマシンで次を実行できます：\n\n{{target}}\n\nあなたの権限で実行されます。信頼できるサーバーだけを承認してください。",
+    "approveConfirm": "承認して実行",
+    "approveConfirmUnknownTarget": "未指定のコマンド",
+    "copyConfigWarningTitle": "プロジェクトの設定をコピー",
+    "copyConfigWarningMessage": "「{{name}}」はこのリポジトリの .mcp.json に定義されています。その設定にはリポジトリ作者の資格情報が含まれる可能性があり、あなたのものではありません。このサーバーを使う予定がある場合のみコピーしてください。",
+    "copyConfigWarningConfirm": "コピーする",
     "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
@@ -2012,14 +2062,6 @@
     "copied": "コピー済み",
     "openDependencySettings": "依存関係管理を開く",
     "recommended": "推奨",
-    "updateClaudeSdk": "SDK を更新",
-    "updatingClaudeSdk": "更新中...",
-    "updateClaudeSdkSuccess": "{{version}} に更新しました。メッセージをもう一度送信してください。",
-    "updateClaudeSdkFailed": "更新に失敗しました：{{error}}",
-    "updateClaudeSdkFailedUnknown": "更新に失敗しました。詳細は依存関係管理で確認してください。",
-    "updateClaudeSdkTimedOut": "15 分経っても結果がありません。依存関係管理で更新状況を確認してください。",
-    "updateClaudeSdkCustomCli": "SDK を {{version}} に更新しましたが、プラグインは独自に指定した Claude CLI（{{path}}）を実行しています。方法 2 でそちらを更新してください。",
-    "updateClaudeSdkAlreadyLatest": "{{version}} はこのプラグインが対応する最新の SDK ですが、このモデルにはさらに新しい Claude Code が必要です。プラグインの新しいリリースが出たら更新するか、別のモデルを選んでください。",
     "codexWriterConflict": {
       "title": "Codex スレッドが使用中",
       "intro": "別の Codex ターンまたはクライアントがこの会話に書き込んでいるため、今回の送信を開始できませんでした。",
@@ -2044,21 +2086,6 @@
         "downgrade": {
           "title": "方法 2：バージョンをロールバック",
           "step0": "「依存関係管理」で SDK バージョンを v0.2.112 以前に切り替えてください。切り替え後は IDEA の再起動が必要です。"
-        }
-      }
-    },
-    "claudeCodeVersionTooOld": {
-      "title": "Claude Code SDK がこのモデルには古すぎます",
-      "intro": "プラグインはターミナルの claude コマンドではなく、独自の SDK に同梱された Claude Code を実行します。その同梱バージョンが、このモデルに必要なバージョンより古くなっています。",
-      "reason": "SDK はプラグインとは別にインストールされるため、プラグインやターミナルの claude コマンドを更新しても SDK は更新されません。",
-      "solutions": {
-        "updateSdk": {
-          "title": "方法 1：Claude Code SDK を更新する",
-          "step0": "サポートされている最新の SDK をインストールします。その後プラグインが Claude プロセスを再起動するので、すぐにメッセージを再送信できます。"
-        },
-        "updateCustomCli": {
-          "title": "方法 2：独自に指定した Claude CLI を更新する",
-          "step0": "「Claude CLI パス（オーバーライド）」を設定している場合、プラグインは SDK の代わりにそのバイナリを実行します。ターミナルで更新してください："
         }
       }
     },
@@ -2091,6 +2118,29 @@
         "pointCodexBin": {
           "title": "方法 2：動作するバイナリをプラグインに指定する",
           "step0": "PATH 上のすべての codex を一覧表示します（Windows では where codex）。動作するものが先頭でない場合は、そのフルパスを環境変数 CODEX_BIN に設定して IDE を再起動してください。プラグインは後ろのインストールにも自動でフォールバックします。"
+        }
+      }
+    },
+    "updateClaudeSdk": "Update SDK",
+    "updatingClaudeSdk": "Updating...",
+    "updateClaudeSdkSuccess": "Updated to {{version}}. Send your message again.",
+    "updateClaudeSdkFailed": "Update failed: {{error}}",
+    "updateClaudeSdkFailedUnknown": "Update failed. Open Dependency Settings for details.",
+    "updateClaudeSdkTimedOut": "No result after 15 minutes. Check Dependency Settings for the update status.",
+    "updateClaudeSdkCustomCli": "SDK updated to {{version}}, but the plugin runs your custom Claude CLI ({{path}}). Update it with Option 2.",
+    "updateClaudeSdkAlreadyLatest": "{{version}} is already the newest SDK this plugin supports, and this model needs a newer Claude Code. Update the plugin when a new release is out, or choose another model.",
+    "claudeCodeVersionTooOld": {
+      "title": "Claude Code SDK is too old for this model",
+      "intro": "The plugin runs the Claude Code bundled in its own SDK, not the claude command in your terminal. That bundled version is older than this model requires.",
+      "reason": "The SDK is installed separately from the plugin, so updating the plugin or the claude command in your terminal does not update it.",
+      "solutions": {
+        "updateSdk": {
+          "title": "Option 1: Update the Claude Code SDK",
+          "step0": "Installs the latest supported SDK. The plugin then restarts its Claude process, so you can send your message again right away."
+        },
+        "updateCustomCli": {
+          "title": "Option 2: Update your custom Claude CLI",
+          "step0": "If you set \"Claude CLI Path (override)\", the plugin runs that binary instead of the SDK. Update it in a terminal:"
         }
       }
     }

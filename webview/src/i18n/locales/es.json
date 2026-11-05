@@ -198,6 +198,30 @@
         "placeholder": "e.g. project1 or leave empty to use project root",
         "hint": "Specify the directory where Claude works. Can use relative path (relative to project root) or absolute path. Leave empty to use project root."
       },
+      "envFile": {
+        "label": "Environment File",
+        "projectLevel": "Project-level",
+        "placeholder": "e.g. /path/to/.env or leave empty",
+        "hint": "Specify a .env file to load environment variables for both Claude Code and Grok.",
+        "invalidPath": "Invalid file path: file does not exist or is not readable",
+        "reset": "Reset to automatic",
+        "resetHint": "Clear the custom path and let <project>/.env be discovered automatically again",
+        "state": {
+          "notConfigured": "Automatic",
+          "notConfiguredDetail": "no custom path — .env from the project root is discovered automatically",
+          "configured": "Custom path",
+          "configuredDetail": "the file below is loaded for every new session",
+          "disabled": "Disabled",
+          "disabledDetail": "no env file is loaded, and automatic discovery is off",
+          "unknown": "State unknown",
+          "unknownDetail": "the effective state could not be read from the plugin"
+        },
+        "error": {
+          "invalidCharacters": "Invalid path: control characters and NUL bytes are not allowed",
+          "parentTraversal": "Invalid path: \"..\" segments are not allowed",
+          "tooLong": "Invalid path: it is too long"
+        }
+      },
       "fontSize": {
         "label": "Tamaño de fuente",
         "level1": "Pequeño (80%)",
@@ -430,7 +454,11 @@
       "uninstallFailed": "Desinstalación fallida: {{error}}",
       "updating": "Actualizando...",
       "updateSuccess": "{{name}} actualizado correctamente",
-      "cliTransportBadge": "CLI · {{transport}}"
+      "cliTransportBadge": "CLI · {{transport}}",
+      "versionCacheAccessError": "npm file access was denied, including the separate-cache retry. Check cache permissions or security software.",
+      "versionQueryTimeout": "The npm version query timed out. Check your network or proxy and retry.",
+      "versionQueryNetworkError": "Cannot connect to the npm registry. Check your network, proxy, or registry URL and retry.",
+      "versionQueryFailed": "The npm version query failed. Check your Node.js and npm configuration and retry."
     },
     "usage": "Estadísticas de uso",
     "usageDesc": "Ver consumo de Token, estadísticas de costos y análisis de tendencias de uso",
@@ -1046,9 +1074,9 @@
     "requestedPermissions": "Requested native permissions",
     "allowWithRule": "Allow with this command rule",
     "allowWithNetworkRule": "Allow with this network rule",
-    "codexDeliveryRetry": "Codex no recibió tu elección ({{error}}). Vuelve a elegir.",
-    "codexDeliveryFailed": "Codex no recibió tu elección ({{error}}). Si la conversación no continúa, pulsa Detener y vuelve a enviar el mensaje.",
-    "codexDeliveryUnconfirmed": "Codex aún no ha confirmado tu elección ({{error}}). Puede que todavía se aplique, así que no respondas de nuevo; si la conversación no continúa, pulsa Detener y vuelve a enviar el mensaje."
+    "codexDeliveryRetry": "Codex did not receive your choice ({{error}}). Please choose again.",
+    "codexDeliveryFailed": "Codex did not receive your choice ({{error}}). If the conversation does not continue, click Stop and send your message again.",
+    "codexDeliveryUnconfirmed": "Codex has not confirmed your choice yet ({{error}}). It may still take effect, so do not answer again; if the conversation does not continue, click Stop and send your message again."
   },
   "askUserQuestion": {
     "title": "Claude tiene algunas preguntas para ti",
@@ -1268,6 +1296,19 @@
     "statusNeedsAuth": "Needs Authentication",
     "statusPending": "Connecting...",
     "statusUnknown": "Unknown",
+    "projectLocal": "Local del proyecto",
+    "projectLocalReadOnly": "Este servidor se administra en .mcp.json y no se puede modificar desde la interfaz",
+    "pendingApprovalBadge": "Pendiente",
+    "pendingApprovalDesc": "Esperando aprobación para servidor MCP local del proyecto",
+    "rejectedBadge": "Rechazado",
+    "rejectedDesc": "Servidor MCP local del proyecto rechazado",
+    "approveTooltip": "Aprobar servidor",
+    "rejectTooltip": "Rechazar servidor",
+    "trustNotGitVerifiedBadge": "No verificado por git",
+    "trustNotGitVerifiedDesc": "Esta carpeta del proyecto no está bajo control de versiones de git, por lo que no se puede confirmar que la aprobación de este servidor de .mcp.json sea local de esta máquina",
+    "trustNotGitVerifiedDialogNote": "Nota: la carpeta del proyecto no es un repositorio git, por lo que esta aprobación se basa únicamente en tu confirmación y no está respaldada por git.",
+    "approved": "Aprobado",
+    "rejected": "Rechazado",
     "errorDetails": "Error Details",
     "logs": {
       "title": "Connection Logs",
@@ -1290,6 +1331,7 @@
       "firstLoad": "First load, fetching server list...",
       "loadedServersSuccess": "Loaded server list: {{count}} servers found",
       "loadedServersFailed": "Failed to load server list: {{error}}",
+      "refreshOnFileChange": "Se cambió el archivo de configuración MCP, actualizando la lista de servidores...",
       "statusUpdateComplete": "Status update complete: {{total}} servers ({{connected}} connected, {{failed}} failed, {{pending}} pending, {{needsAuth}} need auth)",
       "loadedStatusFailed": "Failed to load server status: {{error}}",
       "cleared": "Refresh logs cleared",
@@ -1380,6 +1422,14 @@
     "required": "Required",
     "optional": "Optional",
     "refreshServer": "Refresh {{name}}",
+    "configCopiedRedacted": "Configuración copiada al portapapeles (valores sensibles ocultos)",
+    "approveConfirmTitle": "Aprobar servidor MCP local del proyecto",
+    "approveConfirmMessage": "Aprobar «{{name}}» permite que este repositorio ejecute en tu máquina:\n\n{{target}}\n\ncon tus permisos. Aprueba solo servidores de confianza.",
+    "approveConfirm": "Aprobar y ejecutar",
+    "approveConfirmUnknownTarget": "un comando no especificado",
+    "copyConfigWarningTitle": "Copiar configuración de un proyecto",
+    "copyConfigWarningMessage": "«{{name}}» está definido en el .mcp.json de este repositorio. Su configuración puede contener credenciales del autor del repositorio, no tuyas. Cópiala solo si vas a usar este servidor.",
+    "copyConfigWarningConfirm": "Copiar de todos modos",
     "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
@@ -2016,14 +2066,6 @@
     "copied": "Copiado",
     "openDependencySettings": "Abrir Gestión de dependencias",
     "recommended": "Recomendado",
-    "updateClaudeSdk": "Actualizar SDK",
-    "updatingClaudeSdk": "Actualizando...",
-    "updateClaudeSdkSuccess": "Actualizado a {{version}}. Vuelve a enviar tu mensaje.",
-    "updateClaudeSdkFailed": "La actualización falló: {{error}}",
-    "updateClaudeSdkFailedUnknown": "La actualización falló. Abre Gestión de dependencias para ver los detalles.",
-    "updateClaudeSdkTimedOut": "No hubo resultado tras 15 minutos. Revisa el estado de la actualización en Gestión de dependencias.",
-    "updateClaudeSdkCustomCli": "SDK actualizado a {{version}}, pero el plugin ejecuta tu CLI de Claude personalizado ({{path}}). Actualízalo con la opción 2.",
-    "updateClaudeSdkAlreadyLatest": "{{version}} ya es el SDK más reciente que admite este plugin, y este modelo necesita un Claude Code más nuevo. Actualiza el plugin cuando salga una nueva versión o elige otro modelo.",
     "codexWriterConflict": {
       "title": "Hilo de Codex ocupado",
       "intro": "Otro turno o cliente de Codex está escribiendo en esta conversación. No se pudo iniciar este envío.",
@@ -2048,21 +2090,6 @@
         "downgrade": {
           "title": "Opción 2: Volver a una versión anterior",
           "step0": "En Gestión de dependencias, cambia la versión del SDK a v0.2.112 o anterior. Reinicia IDEA después del cambio."
-        }
-      }
-    },
-    "claudeCodeVersionTooOld": {
-      "title": "El SDK de Claude Code es demasiado antiguo para este modelo",
-      "intro": "El plugin ejecuta el Claude Code incluido en su propio SDK, no el comando claude de tu terminal. Esa versión incluida es anterior a la que requiere este modelo.",
-      "reason": "El SDK se instala por separado del plugin, así que actualizar el plugin o el comando claude de tu terminal no lo actualiza.",
-      "solutions": {
-        "updateSdk": {
-          "title": "Opción 1: Actualiza el SDK de Claude Code",
-          "step0": "Instala el SDK compatible más reciente. Después, el plugin reinicia su proceso de Claude, así que puedes volver a enviar tu mensaje de inmediato."
-        },
-        "updateCustomCli": {
-          "title": "Opción 2: Actualiza tu CLI de Claude personalizado",
-          "step0": "Si configuraste \"Ruta del CLI de Claude (anulación)\", el plugin ejecuta ese binario en lugar del SDK. Actualízalo en una terminal:"
         }
       }
     },
@@ -2095,6 +2122,29 @@
         "pointCodexBin": {
           "title": "Opción 2: apuntar el plugin a un binario que funcione",
           "step0": "Lista todos los codex de tu PATH (en Windows: where codex). Si el que funciona no es el primero, define la variable de entorno CODEX_BIN con su ruta completa y reinicia el IDE. El plugin también usa automáticamente las instalaciones posteriores."
+        }
+      }
+    },
+    "updateClaudeSdk": "Update SDK",
+    "updatingClaudeSdk": "Updating...",
+    "updateClaudeSdkSuccess": "Updated to {{version}}. Send your message again.",
+    "updateClaudeSdkFailed": "Update failed: {{error}}",
+    "updateClaudeSdkFailedUnknown": "Update failed. Open Dependency Settings for details.",
+    "updateClaudeSdkTimedOut": "No result after 15 minutes. Check Dependency Settings for the update status.",
+    "updateClaudeSdkCustomCli": "SDK updated to {{version}}, but the plugin runs your custom Claude CLI ({{path}}). Update it with Option 2.",
+    "updateClaudeSdkAlreadyLatest": "{{version}} is already the newest SDK this plugin supports, and this model needs a newer Claude Code. Update the plugin when a new release is out, or choose another model.",
+    "claudeCodeVersionTooOld": {
+      "title": "Claude Code SDK is too old for this model",
+      "intro": "The plugin runs the Claude Code bundled in its own SDK, not the claude command in your terminal. That bundled version is older than this model requires.",
+      "reason": "The SDK is installed separately from the plugin, so updating the plugin or the claude command in your terminal does not update it.",
+      "solutions": {
+        "updateSdk": {
+          "title": "Option 1: Update the Claude Code SDK",
+          "step0": "Installs the latest supported SDK. The plugin then restarts its Claude process, so you can send your message again right away."
+        },
+        "updateCustomCli": {
+          "title": "Option 2: Update your custom Claude CLI",
+          "step0": "If you set \"Claude CLI Path (override)\", the plugin runs that binary instead of the SDK. Update it in a terminal:"
         }
       }
     }

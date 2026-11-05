@@ -170,6 +170,14 @@ class ZcodeDaemonCoordinator {
                     return;
                 }
 
+                // Re-check generation right before sending the command to catch
+                // any shutdown that raced between getDaemonBridge() and here.
+                if (generation != lifecycleGeneration) {
+                    log.info("[ZcodeDaemonCoordinator] Skip preconnect: generation changed during prewarm");
+                    daemon.stop();
+                    return;
+                }
+
                 JsonObject params = new JsonObject();
                 params.addProperty("cwd", cwd != null ? cwd : "");
                 params.addProperty("sessionId", sessionId != null ? sessionId : "");
