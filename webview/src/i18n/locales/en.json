@@ -100,6 +100,9 @@
     "usagePercentage": "Usage: {{percentage}}",
     "planUsage": {
       "title": "Claude plan usage",
+      "balanceLabel": "Balance: ",
+      "balanceRemaining": "Balance: {{value}}",
+      "balanceDetail": "Total {{total}} · Used {{used}}",
       "grokTitle": "Grok plan usage",
       "staleIdle": "Last reading. It refreshes the next time you use Grok",
       "loading": "Loading usage…",
