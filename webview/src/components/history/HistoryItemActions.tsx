@@ -9,6 +9,7 @@ export interface HistoryItemActionsProps {
   onExport: (sessionId: string, title: string) => void;
   onDelete: (sessionId: string) => void;
   onFavorite: (sessionId: string) => void;
+  onFork: (sessionId: string) => void;
 }
 
 export const HistoryItemActions = ({
@@ -18,6 +19,7 @@ export const HistoryItemActions = ({
   onExport,
   onDelete,
   onFavorite,
+  onFork,
 }: HistoryItemActionsProps) => {
   const handleEditStart = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -39,6 +41,11 @@ export const HistoryItemActions = ({
     onFavorite(session.sessionId);
   }, [onFavorite, session.sessionId]);
 
+  const handleFork = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onFork(session.sessionId);
+  }, [onFork, session.sessionId]);
+
   return (
     <div className={`history-action-buttons ${session.isFavorited ? 'has-favorite' : ''}`}>
       <button
@@ -57,6 +64,17 @@ export const HistoryItemActions = ({
       >
         <span className="codicon codicon-arrow-down"></span>
       </button>
+      {session.provider === 'claude' && (
+        <button
+          className="history-fork-btn"
+          disabled={session.running}
+          onClick={handleFork}
+          title={session.running ? t('history.sessionInUse') : t('history.forkSession')}
+          aria-label={t('history.forkSession')}
+        >
+          <span className="codicon codicon-git-branch"></span>
+        </button>
+      )}
       <button
         className="history-delete-btn"
         disabled={session.running}

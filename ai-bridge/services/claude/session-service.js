@@ -303,6 +303,44 @@ export async function getSessionMessages(sessionId, cwd = null) {
   }
 }
 
+/**
+ * Stream the tail of a session JSONL and invoke onRow(message) per parsed row.
+ *
+ * Reads only the last {@code tailBytes} for performance on large sessions and
+ * skips the potentially partial first line when reading from mid-file. Returns
+ * {@code { startByte, tailMalformed }}: tailMalformed is true while the most
+ * recent non-blank line failed to parse — a valid line clears it, so it ends up
+ * describing the LAST non-blank line alone, which is exactly what a torn tail
+ * is. Same semantics as SubagentHistoryService's readJsonl: only an unterminated
+ * tail means the writer is mid-append, while a corrupted line followed by valid
+ * ones is stale damage the file will never heal and must not block reads
+ * forever.
+ */
+async function scanSessionJsonlTail(sessionFile, tailBytes, onRow) {
+  const stat = statSync(sessionFile);
+  const startByte = Math.max(0, stat.size - tailBytes);
+  const rl = createInterface({
+    input: createReadStream(sessionFile, { encoding: 'utf8', start: startByte }),
+    crlfDelay: Infinity
+  });
+
+  let tailMalformed = false;
+  let firstLine = startByte > 0;
+  for await (const line of rl) {
+    // Skip potentially partial first line when reading from mid-file
+    if (firstLine) { firstLine = false; continue; }
+    if (!line.trim()) continue;
+    try {
+      const message = JSON.parse(line);
+      tailMalformed = false;
+      onRow(message);
+    } catch {
+      tailMalformed = true;
+    }
+  }
+  return { startByte, tailMalformed };
+}
+
 export async function getLatestUserMessage(sessionId, cwd = null) {
   try {
     const sessionFile = resolveSessionFile(sessionId, cwd);
@@ -315,39 +353,12 @@ export async function getLatestUserMessage(sessionId, cwd = null) {
       return;
     }
 
-    // Read only the tail of the file for performance on large sessions
-    const TAIL_BYTES = 32 * 1024;
-    const stat = statSync(sessionFile);
-    const startByte = Math.max(0, stat.size - TAIL_BYTES);
-
     let latestUserMessage = null;
-    // True while the most recent non-blank line failed to parse. A valid line
-    // clears it, so this ends up describing the LAST non-blank line alone — which
-    // is exactly what a torn tail is. Same semantics as SubagentHistoryService's
-    // readJsonl: only an unterminated tail means the writer is mid-append, while a
-    // corrupted line followed by valid ones is stale damage the file will never
-    // heal and must not block reads forever.
-    let tailMalformed = false;
-    const rl = createInterface({
-      input: createReadStream(sessionFile, { encoding: 'utf8', start: startByte }),
-      crlfDelay: Infinity
-    });
-
-    let firstLine = startByte > 0;
-    for await (const line of rl) {
-      // Skip potentially partial first line when reading from mid-file
-      if (firstLine) { firstLine = false; continue; }
-      if (!line.trim()) continue;
-      try {
-        const message = JSON.parse(line);
-        tailMalformed = false;
-        if (isUserTextMessage(message)) {
-          latestUserMessage = message;
-        }
-      } catch {
-        tailMalformed = true;
+    const { tailMalformed } = await scanSessionJsonlTail(sessionFile, 32 * 1024, (message) => {
+      if (isUserTextMessage(message)) {
+        latestUserMessage = message;
       }
-    }
+    });
 
     if (tailMalformed) {
       await writeJsonResponse({
@@ -365,6 +376,84 @@ export async function getLatestUserMessage(sessionId, cwd = null) {
     });
   } catch (error) {
     console.error('[GET_LATEST_USER_ERROR]', error.message);
+    await writeJsonResponse({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+/**
+ * Return the most recent assistant rows of a session, oldest first, each shaped
+ * as { uuid, text } where text is the row's joined text-block content. Feeds the
+ * Java-side assistant uuid backfill: streaming-mode assistant messages are
+ * synthesized from deltas by the bridge and never carry the row uuid that the
+ * CLI assigns when it appends the JSONL, so the chat cannot fork from them
+ * until the uuid is resolved against the transcript.
+ */
+export async function getRecentAssistantMessages(sessionId, cwd = null, limit = 20) {
+  try {
+    const sessionFile = resolveSessionFile(sessionId, cwd);
+
+    if (!existsSync(sessionFile)) {
+      await writeJsonResponse({
+        success: true,
+        messages: []
+      });
+      return;
+    }
+
+    // Assistant rows can be large (tool_use payloads); scan a generous tail.
+    const collected = [];
+    const { startByte, tailMalformed } = await scanSessionJsonlTail(
+      sessionFile, 256 * 1024, (message) => {
+        if (
+          message &&
+          message.type === 'assistant' &&
+          typeof message.uuid === 'string' &&
+          !message.isSidechain
+        ) {
+          collected.push({
+            uuid: message.uuid,
+            text: extractTextContent(message)
+          });
+          if (collected.length > limit) {
+            collected.shift();
+          }
+        }
+      });
+
+    if (tailMalformed) {
+      await writeJsonResponse({
+        success: false,
+        incomplete: true,
+        error: incompleteHistoryError(),
+        messages: [],
+      });
+      return;
+    }
+
+    // The window can start inside a single row: one assistant row carrying a large
+    // tool_use payload can exceed TAIL_BYTES on its own, and that skipped partial
+    // line may be exactly the row the caller is looking for. Reporting an empty
+    // success would make the caller conclude "no match" and give up; an incomplete
+    // tail makes it retry (and log the failure if it never resolves).
+    if (startByte > 0 && collected.length === 0) {
+      await writeJsonResponse({
+        success: false,
+        incomplete: true,
+        error: incompleteHistoryError(),
+        messages: [],
+      });
+      return;
+    }
+
+    await writeJsonResponse({
+      success: true,
+      messages: collected
+    });
+  } catch (error) {
+    console.error('[GET_RECENT_ASSISTANT_ERROR]', error.message);
     await writeJsonResponse({
       success: false,
       error: error.message

@@ -1104,6 +1104,19 @@
       "ALREADY_CLI_SESSION": "Этот сеанс уже является CLI сеансом",
       "CONVERSION_FAILED": "Не удалось выполнить преобразование, попробуйте позже"
     },
+    "forkSession": "Форкнуть сессию",
+    "forkSuccess": "Сессия форкнута",
+    "forkFailed": "Не удалось форкнуть сессию",
+    "forkedTitleSuffix": " (форк)",
+    "forkFromHere": "Форкнуть от этого ответа",
+    "forkErrors": {
+      "INVALID_SESSION_ID": "Недопустимый ID сессии",
+      "UNSUPPORTED_PROVIDER": "Сейчас форкинг поддерживается только для сессий Claude",
+      "SESSION_NOT_FOUND": "Файл сессии не найден",
+      "FILE_NOT_EXIST": "Файл сессии не существует",
+      "FORK_POINT_NOT_FOUND": "Сообщение точки форка не найдено в сессии",
+      "FORK_FAILED": "Не удалось форкнуть сессию, попробуйте позже"
+    },
     "entrypointLabel": {
       "sdk-cli": "SDK сеанс",
       "claude-vscode": "VS Code",

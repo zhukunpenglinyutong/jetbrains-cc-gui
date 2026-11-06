@@ -25,6 +25,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -585,9 +586,18 @@ class HistoryDeleteService {
      * @return int[2]: [mainDeleted(0/1), agentFilesDeleted]
      */
     private int[] deleteClaudeSession(String sessionId, String projectPath) throws java.io.IOException {
-        String homeDir = NodeDetector.resolveHomeForFileOps();
-        Path claudeDir = Paths.get(homeDir, ".claude");
-        Path projectsDir = claudeDir.resolve("projects");
+        return deleteClaudeSession(sessionId, projectPath, Paths.get(NodeDetector.resolveHomeForFileOps()));
+    }
+
+    /**
+     * Same as {@link #deleteClaudeSession(String, String)}, with the home directory
+     * injected so the whole transcript + sidecar cleanup can be exercised against a
+     * temporary {@code ~/.claude} instead of the developer's own history.
+     *
+     * @return int[2]: [mainDeleted(0/1), agentFilesDeleted]
+     */
+    int[] deleteClaudeSession(String sessionId, String projectPath, Path homeDir) throws java.io.IOException {
+        Path projectsDir = homeDir.resolve(".claude").resolve("projects");
         List<Path> sessionDirs = PathUtils.getSanitizedPathCandidates(projectPath).stream()
                 .map(projectsDir::resolve)
                 .filter(Files::isDirectory)
@@ -599,43 +609,65 @@ class HistoryDeleteService {
 
         boolean mainDeleted = false;
         int agentFilesDeleted = 0;
-
         for (Path sessionDir : sessionDirs) {
-            // Delete main session file
-            Path mainSessionFile = sessionDir.resolve(sessionId + ".jsonl").normalize();
-            if (!mainSessionFile.startsWith(sessionDir.normalize())) {
-                LOG.warn("[HistoryHandler] Refused out-of-bounds path: " + mainSessionFile);
-                continue;
-            }
-            if (Files.exists(mainSessionFile)) {
-                Files.delete(mainSessionFile);
-                LOG.info("[HistoryHandler] Deleted main session file: " + mainSessionFile.getFileName());
-                mainDeleted = true;
-            }
+            int[] deletedHere = deleteClaudeSessionAt(sessionDir, sessionId);
+            mainDeleted |= deletedHere[0] > 0;
+            agentFilesDeleted += deletedHere[1];
+        }
+        return new int[]{mainDeleted ? 1 : 0, agentFilesDeleted};
+    }
 
-            // Delete related agent files
-            try (Stream<Path> stream = Files.list(sessionDir)) {
-                List<Path> agentFiles = stream
-                        .filter(path -> {
-                            String filename = path.getFileName().toString();
-                            return filename.startsWith("agent-") && filename.endsWith(".jsonl")
-                                    && isAgentFileRelatedToSession(path, sessionId);
-                        })
-                        .collect(Collectors.toList());
+    /**
+     * Delete one session's transcript, its legacy flat agent files and its sidecar
+     * directory under a single session directory.
+     *
+     * @return int[2]: [mainDeleted(0/1), agentFilesDeleted]
+     */
+    private static int[] deleteClaudeSessionAt(Path sessionDir, String sessionId) throws java.io.IOException {
+        Path mainSessionFile = sessionDir.resolve(sessionId + ".jsonl").normalize();
+        if (!mainSessionFile.startsWith(sessionDir.normalize())) {
+            LOG.warn("[HistoryHandler] Refused out-of-bounds path: " + mainSessionFile);
+            return new int[]{0, 0};
+        }
+        boolean mainDeleted = false;
+        if (Files.exists(mainSessionFile)) {
+            Files.delete(mainSessionFile);
+            LOG.info("[HistoryHandler] Deleted main session file: " + mainSessionFile.getFileName());
+            mainDeleted = true;
+        }
+        int agentFilesDeleted = deleteFlatAgentFiles(sessionDir, sessionId);
+        // Current layout keeps subagent transcripts under <project>/<sessionId>/,
+        // so the flat scan above never reaches them and deleting the session used
+        // to leave that directory behind for good.
+        if (mainDeleted) {
+            agentFilesDeleted += deleteSessionSidecarDirectory(sessionDir, sessionId);
+        }
+        return new int[]{mainDeleted ? 1 : 0, agentFilesDeleted};
+    }
 
-                for (Path agentFile : agentFiles) {
-                    try {
-                        Files.delete(agentFile);
-                        LOG.info("[HistoryHandler] Deleted related agent file: " + agentFile.getFileName());
-                        agentFilesDeleted++;
-                    } catch (Exception e) {
-                        LOG.error("[HistoryHandler] Failed to delete agent file: " + agentFile.getFileName() + " - " + e.getMessage(), e);
-                    }
+    /** Delete the legacy flat {@code agent-*.jsonl} files that reference this session. */
+    private static int deleteFlatAgentFiles(Path sessionDir, String sessionId) throws java.io.IOException {
+        int deleted = 0;
+        try (Stream<Path> stream = Files.list(sessionDir)) {
+            List<Path> agentFiles = stream
+                    .filter(path -> {
+                        String filename = path.getFileName().toString();
+                        return filename.startsWith("agent-") && filename.endsWith(".jsonl")
+                                && AgentFileMatcher.isRelatedToSession(path, sessionId);
+                    })
+                    .collect(Collectors.toList());
+
+            for (Path agentFile : agentFiles) {
+                try {
+                    Files.delete(agentFile);
+                    LOG.info("[HistoryHandler] Deleted related agent file: " + agentFile.getFileName());
+                    deleted++;
+                } catch (Exception e) {
+                    LOG.error("[HistoryHandler] Failed to delete agent file: " + agentFile.getFileName() + " - " + e.getMessage(), e);
                 }
             }
         }
-
-        return new int[]{mainDeleted ? 1 : 0, agentFilesDeleted};
+        return deleted;
     }
 
     /**
@@ -659,6 +691,85 @@ class HistoryDeleteService {
             LOG.info("[HistoryHandler] Cleaned up metadata of " + sessionIds.size() + " session(s)");
         }
         return favoritesRemoved && titlesDeleted;
+    }
+
+    /**
+     * Remove the subagent sidecars Claude Code keeps beside the transcript
+     * ({@code <project>/<sessionId>/subagents/agent-*.jsonl} plus the matching
+     * {@code .meta.json}), then drop the session directory once it is empty.
+     *
+     * <p>Only the known {@code subagents} subtree is removed: anything else that
+     * may appear beside it belongs to Claude Code, not to this feature, and must
+     * not be deleted on a guess. Only called once the main transcript is gone, so
+     * a failed delete cannot destroy a live session's sidecars.</p>
+     *
+     * <p>Best effort per entry: Windows can hold a transcript open while the agent
+     * that wrote it exits, and a locked file must not fail the whole delete.</p>
+     *
+     * @param projectDir directory holding every session of one project
+     * @param sessionId  session whose sidecars are removed
+     * @return number of files removed
+     */
+    static int deleteSessionSidecarDirectory(Path projectDir, String sessionId) throws java.io.IOException {
+        if (projectDir == null || !isValidSessionId(sessionId)) {
+            return 0;
+        }
+        Path normalizedProjectDir = projectDir.normalize();
+        Path sessionDir = normalizedProjectDir.resolve(sessionId).normalize();
+        // The id is already validated above; the containment check keeps this
+        // method safe on its own terms if a future caller passes something else.
+        // A symlinked session directory would make every path below resolve into
+        // whatever it points at, so refuse it instead of deleting someone else's
+        // transcripts through the link.
+        if (!sessionDir.startsWith(normalizedProjectDir)
+                || Files.isSymbolicLink(sessionDir)
+                || !Files.isDirectory(sessionDir)) {
+            return 0;
+        }
+
+        Path subagentsDir = sessionDir.resolve("subagents");
+        int filesDeleted = Files.isDirectory(subagentsDir) ? deleteDirectoryTree(subagentsDir) : 0;
+        if (filesDeleted > 0) {
+            LOG.info("[HistoryHandler] Deleted " + filesDeleted + " subagent sidecar file(s) for session " + sessionId);
+        }
+        if (isEmptyDirectory(sessionDir)) {
+            Files.deleteIfExists(sessionDir);
+        }
+        return filesDeleted;
+    }
+
+    /**
+     * Delete every entry below {@code directory}, deepest first, counting files
+     * only. Failures are logged and skipped so one locked transcript cannot abort
+     * the rest of the cleanup.
+     */
+    private static int deleteDirectoryTree(Path directory) throws java.io.IOException {
+        List<Path> entries;
+        try (Stream<Path> paths = Files.walk(directory)) {
+            // Deepest first: a directory can only be removed once it is empty.
+            entries = paths.sorted(Comparator.reverseOrder()).collect(Collectors.toList());
+        }
+
+        int filesDeleted = 0;
+        for (Path entry : entries) {
+            boolean isDirectory = Files.isDirectory(entry);
+            try {
+                if (Files.deleteIfExists(entry) && !isDirectory) {
+                    filesDeleted++;
+                }
+            } catch (Exception e) {
+                LOG.warn("[HistoryHandler] Failed to delete session sidecar entry: " + entry + " - " + e.getMessage());
+            }
+        }
+        return filesDeleted;
+    }
+
+    private static boolean isEmptyDirectory(Path directory) {
+        try (Stream<Path> entries = Files.list(directory)) {
+            return entries.findAny().isEmpty();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private static boolean runMetadataCleanupStep(String step, Callable<Boolean> action) {
@@ -698,30 +809,6 @@ class HistoryDeleteService {
             }
         } catch (Exception e) {
             LOG.warn("[HistoryHandler] Failed to clean up cache (does not affect deletion): " + e.getMessage());
-        }
-    }
-
-    /**
-     * Check if an agent file belongs to the specified session.
-     */
-    private boolean isAgentFileRelatedToSession(Path agentFilePath, String sessionId) {
-        try (BufferedReader reader = Files.newBufferedReader(agentFilePath, StandardCharsets.UTF_8)) {
-            String line;
-            int lineCount = 0;
-            // Only read the first 20 lines for performance
-            while ((line = reader.readLine()) != null && lineCount < 20) {
-                if (line.contains("\"sessionId\":\"" + sessionId + "\"") ||
-                            line.contains("\"parentSessionId\":\"" + sessionId + "\"")) {
-                    LOG.debug("[HistoryHandler] Agent file " + agentFilePath.getFileName() + " belongs to session " + sessionId);
-                    return true;
-                }
-                lineCount++;
-            }
-            LOG.debug("[HistoryHandler] Agent file " + agentFilePath.getFileName() + " does not belong to session " + sessionId);
-            return false;
-        } catch (Exception e) {
-            LOG.warn("[HistoryHandler] Failed to read agent file " + agentFilePath.getFileName() + ": " + e.getMessage());
-            return false;
         }
     }
 

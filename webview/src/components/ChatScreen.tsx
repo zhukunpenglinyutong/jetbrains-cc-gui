@@ -87,6 +87,8 @@ export interface ChatScreenProps {
   onRewind: () => void;
   onNavigateToProviderSettings: () => void;
   onProviderSelect: (providerId: string) => void;
+  /** Fork the session at an assistant reply's turn end (claude provider only). */
+  onForkFromMessage?: (message: import('../types').ClaudeMessage) => void;
 
   // Model / provider state (slice from useModelProviderState)
   currentProvider: ProviderState['currentProvider'];
@@ -159,6 +161,7 @@ export const ChatScreen = ({
   onUndoFile, onDiscardAll, onKeepAll,
   onSubmit, onInterrupt, onRewind,
   onNavigateToProviderSettings, onProviderSelect,
+  onForkFromMessage,
   currentProvider, selectedModel, permissionMode, selectedAgent,
   codexNativeAutoReviewAvailable = true,
   sdkStatusLoading, sdkStatusError, onRetrySdkStatus, currentSdkInstalled,
@@ -319,6 +322,7 @@ export const ChatScreen = ({
                   onCollapsedCountChange={setAnchorCollapsedCount}
                   onNavigateToProviderSettings={onNavigateToProviderSettings}
                   onNavigateToDependencySettings={handleNavigateToDependencySettings}
+                  onForkFromMessage={onForkFromMessage}
                   currentProvider={currentProvider}
                   currentSessionId={currentSessionId}
                 />

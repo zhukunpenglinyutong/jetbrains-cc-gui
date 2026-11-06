@@ -46,6 +46,16 @@ public class SessionMessageOrchestrator {
         JsonObject getLatestClaudeUserMessage(String sessionId, String cwd);
 
         /**
+         * Recent assistant transcript rows, oldest first, each { uuid, text }.
+         * Returns null when the tail was incomplete (writer mid-append); the
+         * caller should retry. Feeds the assistant uuid backfill that lets
+         * streamed messages anchor session forks.
+         */
+        default JsonArray getRecentClaudeAssistantMessages(String sessionId, String cwd, int limit) {
+            return new JsonArray();
+        }
+
+        /**
          * Load a page of Claude session history (turn-based pagination).
          * Returns null when the provider does not support pagination or the
          * query fails; the caller should fall back to getProviderSessionMessages.
@@ -107,6 +117,7 @@ public class SessionMessageOrchestrator {
     private final UsageDisplay usageDisplay;
     private final long initialUuidSyncDelayMs;
     private final long uuidRetryDelayMs;
+    private final AssistantUuidBackfiller assistantUuidBackfiller;
 
     // Claude history pagination state
     private volatile int claudeHistoryFromTurn = 0;
@@ -142,7 +153,12 @@ public class SessionMessageOrchestrator {
                     callbackFacade.notifyUsageUpdate(usedTokens, maxTokens);
                 },
                 100,
-                50
+                // The transcript row lands after the CLI flushes the turn, and every
+                // attempt spawns a fresh bridge process, so a 50ms base gave the
+                // backfill barely 150ms of room. The assistant path doubles this per
+                // attempt; the user path uses it flat and is unaffected in practice
+                // (it runs on a pooled thread after the send).
+                250
         );
     }
 
@@ -162,6 +178,8 @@ public class SessionMessageOrchestrator {
         this.usageDisplay = usageDisplay;
         this.initialUuidSyncDelayMs = initialUuidSyncDelayMs;
         this.uuidRetryDelayMs = uuidRetryDelayMs;
+        this.assistantUuidBackfiller = new AssistantUuidBackfiller(
+                state, historyAccess, callbackFacade, uuidRetryDelayMs);
     }
 
     public CompletableFuture<Void> syncUserMessageUuidsAfterSend() {
@@ -232,6 +250,18 @@ public class SessionMessageOrchestrator {
     /** Number of history loads whose transcript replaced the live list. */
     public long getCommittedHistoryLoadCount() {
         return committedHistoryLoads.get();
+    }
+
+    /**
+     * Backfill the uuids of live-streamed assistant messages after a turn ends;
+     * the matching rules live in {@link AssistantUuidBackfiller}.
+     */
+    public CompletableFuture<Void> syncAssistantMessageUuidsAfterSend() {
+        return assistantUuidBackfiller.syncAfterSend();
+    }
+
+    void updateAssistantMessageUuids() {
+        assistantUuidBackfiller.updateUuids();
     }
 
     /** Load provider history without letting obsolete reads replace a newer transcript. */

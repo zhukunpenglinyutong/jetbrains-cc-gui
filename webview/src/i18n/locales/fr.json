@@ -1077,6 +1077,19 @@
       "ALREADY_CLI_SESSION": "Cette session est déjà une session CLI",
       "CONVERSION_FAILED": "Échec de la conversion, veuillez réessayer plus tard"
     },
+    "forkSession": "Forker la session",
+    "forkSuccess": "Session forkée",
+    "forkFailed": "Échec du fork",
+    "forkedTitleSuffix": " (fork)",
+    "forkFromHere": "Forker à partir de cette réponse",
+    "forkErrors": {
+      "INVALID_SESSION_ID": "ID de session invalide",
+      "UNSUPPORTED_PROVIDER": "Le fork n'est actuellement pris en charge que pour les sessions Claude",
+      "SESSION_NOT_FOUND": "Fichier de session introuvable",
+      "FILE_NOT_EXIST": "Le fichier de session n'existe pas",
+      "FORK_POINT_NOT_FOUND": "Message du point de fork introuvable dans la session",
+      "FORK_FAILED": "Échec du fork, veuillez réessayer plus tard"
+    },
     "entrypointLabel": {
       "sdk-cli": "Session SDK",
       "claude-vscode": "VS Code",

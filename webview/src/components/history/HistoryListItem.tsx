@@ -33,6 +33,7 @@ export interface HistoryListItemProps {
   onFavorite: (sessionId: string) => void;
   onCopySessionId: (sessionId: string) => void;
   onConvertToCliSession: (sessionId: string) => void;
+  onFork: (sessionId: string) => void;
 }
 
 export const HistoryListItem = memo(({
@@ -57,6 +58,7 @@ export const HistoryListItem = memo(({
   onFavorite,
   onCopySessionId,
   onConvertToCliSession,
+  onFork,
 }: HistoryListItemProps) => {
   const handleRowClick = useCallback(() => {
     onItemClick(session, isEditing);
@@ -97,6 +99,7 @@ export const HistoryListItem = memo(({
             onExport={onExport}
             onDelete={onDelete}
             onFavorite={onFavorite}
+            onFork={onFork}
           />
         )}
       </div>

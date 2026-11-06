@@ -98,6 +98,8 @@ interface MessageListProps {
   onCollapsedCountChange?: (count: number) => void;
   onNavigateToProviderSettings?: () => void;
   onNavigateToDependencySettings?: () => void;
+  /** Fork the session at an assistant reply's turn end (claude provider only). */
+  onForkFromMessage?: (message: ClaudeMessage) => void;
   /** Current active provider id; forwarded to MessageItem for streaming-connect label. */
   currentProvider?: string;
   currentSessionId?: string | null;
@@ -121,6 +123,7 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
   onCollapsedCountChange,
   onNavigateToProviderSettings,
   onNavigateToDependencySettings,
+  onForkFromMessage,
   currentProvider,
   currentSessionId,
 }, ref) {
@@ -389,6 +392,7 @@ export const MessageList = memo(forwardRef<MessageListRevealHandle, MessageListP
             onNodeRef={onMessageNodeRef}
             onNavigateToProviderSettings={onNavigateToProviderSettings}
             onNavigateToDependencySettings={onNavigateToDependencySettings}
+            onForkFromMessage={onForkFromMessage}
             toolResultSignature={toolResultSignature}
             currentProvider={currentProvider}
             detailedOutputEnabled={detailedOutputEnabled}
