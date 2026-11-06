@@ -11,6 +11,7 @@ import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.util.WslPathUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.Gson;
@@ -1784,13 +1785,15 @@ public class HistoryMessageInjector {
         }
     }
 
-    private static JsonObject createLocalImageBlock(String imagePath) {
+    static JsonObject createLocalImageBlock(String imagePath) {
         if (imagePath == null || imagePath.trim().isEmpty()) {
             return null;
         }
 
         try {
-            Path path = Path.of(imagePath);
+            // A Codex running in WSL records Linux paths; a Windows JVM only reaches those through the UNC share.
+            String windowsPath = WslPathUtil.convertWslPathToWindowsUnc(imagePath);
+            Path path = Path.of(windowsPath != null ? windowsPath : imagePath);
             if (!Files.isRegularFile(path)) {
                 LOG.debug("[HistoryMessageInjector] Skip missing local image: " + imagePath);
                 return null;

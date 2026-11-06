@@ -2295,6 +2295,25 @@
         }
       }
     },
+    "claudeCodeWindowsTooOld": {
+      "title": "이 Windows 버전에서는 Claude Code를 시작할 수 없습니다",
+      "intro": "필요한 시스템 함수를 찾지 못해 Windows가 Claude Code 시작을 막았습니다(오류 0xC0000139). 보통 Windows가 너무 오래되었다는 뜻입니다. Claude Code 2.1.118 이상은 ClosePseudoConsole을 사용하며, 이 함수에는 Windows 10 버전 1809 또는 Windows Server 2019가 필요합니다.",
+      "reason": "Windows는 프로그램을 불러오는 단계, 즉 Claude Code가 실행되기 전에 거부하므로 모델, 제공자, 권한 설정을 바꿔도 해결되지 않습니다.",
+      "solutions": {
+        "updateWindows": {
+          "title": "방법 1: Windows 업데이트",
+          "step0": "Windows 10 버전 1809 이상 또는 Windows Server 2019 이상으로 업데이트하세요. 이 버전들에는 누락된 함수가 포함되어 있습니다."
+        },
+        "useOlderSdk": {
+          "title": "방법 2: 이전 SDK로 전환",
+          "step0": "'종속성 관리'에서 SDK 버전을 v0.2.112 또는 그 이전으로 전환하세요. 최신 모델은 이 버전을 허용하지 않을 수 있습니다. 모델이 더 새로운 Claude Code를 요구하면 다른 모델을 선택하거나 Windows를 업데이트하세요. SDK를 업데이트하면 이 오류가 다시 나타납니다."
+        },
+        "checkCustomCli": {
+          "title": "방법 3: 직접 지정한 Claude CLI 확인",
+          "step0": "'Claude CLI 경로 (재정의)'를 설정했다면 플러그인은 SDK 대신 그 바이너리를 실행하므로 SDK를 전환해도 효과가 없습니다. 경로를 지우거나 이전 Claude Code를 가리키도록 바꾸세요. Windows가 이미 최신이라면 이 항목을 먼저 확인하세요."
+        }
+      }
+    },
     "spawnEbusy": {
       "title": "spawn EBUSY — 자식 프로세스 시작 실패",
       "intro": "이 오류는 일반적으로 Node.js 버전 비호환성 또는 불완전한 SDK 설치로 인해 발생합니다. 아래 두 가지 방법을 순서대로 시도해 보세요:",

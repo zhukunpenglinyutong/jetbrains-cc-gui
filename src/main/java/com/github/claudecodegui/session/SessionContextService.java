@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -77,14 +78,19 @@ public class SessionContextService {
     }
 
     /** Keeps changing editor references separate from the user's native message. */
-    public JsonObject buildCodexAdditionalContext(JsonObject openedFilesJson, List<String> fileTagPaths) {
-        Map<String, String> sections = this.buildMessageContext(openedFilesJson, null, false);
+    public JsonObject buildCodexAdditionalContext(
+            JsonObject openedFilesJson,
+            List<String> fileTagPaths,
+            UnaryOperator<String> toNodePath
+    ) {
+        Map<String, String> sections = this.buildMessageContext(withNodePaths(openedFilesJson, toNodePath), null, false);
         // Native limits apply per fragment, so explicit references must not share a budget with editor state.
         if (fileTagPaths != null) {
             for (int index = 0; index < fileTagPaths.size(); index++) {
                 String path = fileTagPaths.get(index);
                 if (path != null) {
-                    for (Map.Entry<String, String> section : this.buildMessageContext(null, List.of(path), false).entrySet()) {
+                    String reference = path.startsWith("terminal://") ? path : toNodePath.apply(path);
+                    for (Map.Entry<String, String> section : this.buildMessageContext(null, List.of(reference), false).entrySet()) {
                         sections.put(section.getKey() + "_" + index, section.getValue());
                     }
                 }
@@ -98,6 +104,33 @@ public class SessionContextService {
             fragments.add(section.getKey(), editorContext);
         }
         return fragments;
+    }
+
+    /** Codex runs where node runs, so inside WSL it can only open Linux paths. */
+    private static JsonObject withNodePaths(JsonObject openedFilesJson, UnaryOperator<String> toNodePath) {
+        if (openedFilesJson == null) {
+            return null;
+        }
+        JsonObject converted = openedFilesJson.deepCopy();
+        if (converted.has("active") && !converted.get("active").isJsonNull()) {
+            converted.addProperty("active", toNodePath.apply(converted.get("active").getAsString()));
+        }
+        if (converted.has("others") && converted.get("others").isJsonArray()) {
+            JsonArray others = new JsonArray();
+            for (JsonElement other : converted.getAsJsonArray("others")) {
+                others.add(toNodePath.apply(other.getAsString()));
+            }
+            converted.add("others", others);
+        }
+        if (converted.has("subprojects") && converted.get("subprojects").isJsonArray()) {
+            for (JsonElement subproject : converted.getAsJsonArray("subprojects")) {
+                JsonObject entry = subproject.getAsJsonObject();
+                if (entry.has("path")) {
+                    entry.addProperty("path", toNodePath.apply(entry.get("path").getAsString()));
+                }
+            }
+        }
+        return converted;
     }
 
     /** Preserves the existing module context for other CLI providers. */
