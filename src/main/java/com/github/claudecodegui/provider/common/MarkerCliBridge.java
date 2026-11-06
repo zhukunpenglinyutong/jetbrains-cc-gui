@@ -183,7 +183,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
-                null, null, null, null, callback);
+                null, null, null, (Boolean) null, callback);
     }
 
     /**
@@ -204,7 +204,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
-                attachments, null, null, null, callback);
+                attachments, null, null, (Boolean) null, callback);
     }
 
     /**
@@ -231,10 +231,154 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             Boolean thinking,
             MessageCallback callback
     ) {
+        return sendMessageWithPayload(
+                channelId, message, sessionId, cwd, model, reasoningEffort,
+                attachments, permissionMode, dshPreset, thinking, null, callback);
+    }
+
+    /**
+     * Send a message with the cwd as requested BEFORE the send-path guard.
+     *
+     * <p>{@code cwd} is the guarded workspace the turn actually runs in (already
+     * clamped to the project base by {@code PathUtils.guardWorkingDirectory});
+     * {@code requestedCwd} is what the user asked for before that clamp. When the
+     * two differ, provider services surface a visible substitution notice —
+     * substitution must never be silent (AC5/NFR2). The field is provider-neutral:
+     * services that don't use it simply ignore the extra stdin key.
+     */
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String cwd,
+            String model,
+            String reasoningEffort,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String dshPreset,
+            String requestedCwd,
+            MessageCallback callback
+    ) {
+        return sendMessageWithPayload(
+                channelId, message, sessionId, cwd, model, reasoningEffort,
+                attachments, permissionMode, dshPreset, null, requestedCwd, callback);
+    }
+
+    /**
+     * Send a message with both the thinking toggle and the pre-clamp requestedCwd.
+     */
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String cwd,
+            String model,
+            String reasoningEffort,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String dshPreset,
+            Boolean thinking,
+            String requestedCwd,
+            MessageCallback callback
+    ) {
+        if (requestedCwd == null) {
+            return sendMessage(
+                    channelId, message, sessionId, cwd, model, reasoningEffort,
+                    attachments, permissionMode, dshPreset, thinking, callback);
+        }
+        return sendMessageWithPayload(
+                channelId, message, sessionId, cwd, model, reasoningEffort,
+                attachments, permissionMode, dshPreset, thinking, requestedCwd, callback);
+    }
+
+    private CompletableFuture<SDKResult> sendMessageWithPayload(
+            String channelId,
+            String message,
+            String sessionId,
+            String cwd,
+            String model,
+            String reasoningEffort,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String dshPreset,
+            Boolean thinking,
+            String requestedCwd,
+            MessageCallback callback
+    ) {
+        JsonObject stdinPayload = buildCliStdinPayload(
+                message, sessionId, cwd, model, reasoningEffort,
+                attachments, permissionMode, dshPreset, thinking, requestedCwd);
+        String stdinJson = gson.toJson(stdinPayload);
+        List<String> command = buildBaseCommand("send");
+        if (command.isEmpty()) {
+            SDKResult error = new SDKResult();
+            error.success = false;
+            error.error = "Bridge directory not ready or invalid";
+            callback.onError(error.error);
+            return CompletableFuture.completedFuture(error);
+        }
+
+        int attachmentCount = attachments != null ? attachments.size() : 0;
+        // Read the mode back from the payload so the log line can never drift
+        // from what was actually piped to the channel.
+        String mode = stdinPayload.get("permissionMode").getAsString();
+        LOG.info("[" + getProviderName() + "] send sessionId="
+                + (sessionId != null && !sessionId.isEmpty() ? sessionId : "(new)")
+                + " model=" + (model != null && !model.isEmpty() ? model : "(default)")
+                + " permissionMode=" + mode
+                + " thinking=" + (thinking == null || thinking)
+                + " attachments=" + attachmentCount);
+
+        return executeStreamingCommand(channelId, command, stdinJson, cwd, callback);
+    }
+
+    /**
+     * Build the JSON payload piped to channel-manager on stdin.
+     *
+     * <p>Static so the stdin contract is pinned by tests
+     * ({@code GeminiCliBridgeTest}): {@code cwd} is the guarded workspace, and
+     * {@code requestedCwd} (optional) is what the user asked for BEFORE the
+     * Java-side clamp — the Node notice compares the two (AC5).
+     */
+    public static JsonObject buildCliStdinPayload(
+            String message,
+            String sessionId,
+            String cwd,
+            String model,
+            String reasoningEffort,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String dshPreset,
+            String requestedCwd
+    ) {
+        return buildCliStdinPayload(
+                message, sessionId, cwd, model, reasoningEffort,
+                attachments, permissionMode, dshPreset, null, requestedCwd);
+    }
+
+    /**
+     * Build the JSON payload piped to channel-manager on stdin, including
+     * both {@code thinking} and {@code requestedCwd}.
+     */
+    public static JsonObject buildCliStdinPayload(
+            String message,
+            String sessionId,
+            String cwd,
+            String model,
+            String reasoningEffort,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String dshPreset,
+            Boolean thinking,
+            String requestedCwd
+    ) {
         JsonObject stdinInput = new JsonObject();
         stdinInput.addProperty("message", message != null ? message : "");
         stdinInput.addProperty("sessionId", sessionId != null ? sessionId : "");
         stdinInput.addProperty("cwd", cwd != null ? cwd : "");
+        if (requestedCwd != null && !requestedCwd.isBlank()) {
+            stdinInput.addProperty("requestedCwd", requestedCwd);
+        }
         stdinInput.addProperty("model", model != null ? model : "");
         stdinInput.addProperty("reasoningEffort", reasoningEffort != null ? reasoningEffort : "");
         // Always send permissionMode (even "default") so Grok/other CLIs never
@@ -248,29 +392,10 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
         if (attachments != null && !attachments.isEmpty()) {
             stdinInput.add("attachments", buildAttachmentArray(attachments));
         }
-
-        String stdinJson = gson.toJson(stdinInput);
-        List<String> command = buildBaseCommand("send");
-        if (command.isEmpty()) {
-            SDKResult error = new SDKResult();
-            error.success = false;
-            error.error = "Bridge directory not ready or invalid";
-            callback.onError(error.error);
-            return CompletableFuture.completedFuture(error);
-        }
-
-        int attachmentCount = attachments != null ? attachments.size() : 0;
-        LOG.info("[" + getProviderName() + "] send sessionId="
-                + (sessionId != null && !sessionId.isEmpty() ? sessionId : "(new)")
-                + " model=" + (model != null && !model.isEmpty() ? model : "(default)")
-                + " permissionMode=" + mode
-                + " thinking=" + (thinking == null || thinking)
-                + " attachments=" + attachmentCount);
-
-        return executeStreamingCommand(channelId, command, stdinJson, cwd, callback);
+        return stdinInput;
     }
 
-    private JsonArray buildAttachmentArray(List<ClaudeSession.Attachment> attachments) {
+    private static JsonArray buildAttachmentArray(List<ClaudeSession.Attachment> attachments) {
         JsonArray attArr = new JsonArray();
         for (ClaudeSession.Attachment attachment : attachments) {
             if (attachment == null) {

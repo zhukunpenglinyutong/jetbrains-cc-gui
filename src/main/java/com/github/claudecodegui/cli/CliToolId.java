@@ -11,6 +11,7 @@ public enum CliToolId {
     PI("pi", "PI CLI", "pi", null),
     OMP("omp", "OMP CLI", "omp", null),
     DSH("dsh", "DeepSeek Harness", "dsh", null),
+    GEMINI("gemini", "Antigravity CLI", "agy", null),
     // Official installer exposes `minimax`; npm global installs expose `mcode`.
     MINIMAX("minimax", "MiniMax Code", "minimax", "mcode"),
     // ZCode has no PATH binary — the app-server entry (zcode.cjs) lives inside

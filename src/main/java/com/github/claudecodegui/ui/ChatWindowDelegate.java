@@ -30,6 +30,7 @@ import com.github.claudecodegui.handler.provider.CustomModelPricingHandler;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.handler.provider.ProviderHandler;
 import com.github.claudecodegui.handler.provider.claude.ClaudePlanUsageHandler;
+import com.github.claudecodegui.handler.provider.gemini.GeminiPlanUsageHandler;
 import com.github.claudecodegui.handler.provider.grok.GrokPlanUsageHandler;
 import com.github.claudecodegui.handler.RewindHandler;
 import com.github.claudecodegui.handler.SessionHandler;
@@ -473,6 +474,7 @@ public class ChatWindowDelegate {
 
         messageDispatcher.registerHandler(new ProviderHandler(handlerContext));
         messageDispatcher.registerHandler(new ClaudePlanUsageHandler(handlerContext));
+        messageDispatcher.registerHandler(new GeminiPlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new GrokPlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new CustomModelPricingHandler(handlerContext, settingsService));
         messageDispatcher.registerHandler(new McpServerHandler(handlerContext));
@@ -884,8 +886,12 @@ public class ChatWindowDelegate {
     }
 
     /**
-     * Resolves the same configured Claude model mapping used by an explicit model selection,
-     * while retaining v0.5's provider-aware Codex/static context-window behavior.
+     * Resolves the context window pushed during WebView recovery.
+     *
+     * <p>Claude applies the settings model mapping. Codex keeps the provider table.
+     * Gemini uses {@link ModelProviderHandler#resolveContextLimit} so a {@code gemini-*}
+     * id still resolves to 1M after that prefix left the model-only lookup. Other
+     * providers keep the static model table.</p>
      */
     static int resolveModelContextLimitForRecovery(
             String provider,
@@ -895,6 +901,9 @@ public class ChatWindowDelegate {
     ) {
         if ("codex".equalsIgnoreCase(provider)) {
             return SettingsHandler.getModelContextLimit(provider, model);
+        }
+        if ("gemini".equalsIgnoreCase(provider)) {
+            return ModelProviderHandler.resolveContextLimit(provider, model, cwd);
         }
 
         boolean isClaude = "claude".equalsIgnoreCase(provider);

@@ -1,5 +1,5 @@
 import type { ClaudeContentBlock, ToolResultBlock, TaskEvent, SubagentHistoryResponse } from '../../types';
-import { isSubagentHistoryCurrent, parseSpawnAgentMeta } from '../../utils/subagentResult';
+import { isSubagentHistoryCurrent, parseSpawnAgentMeta, extractResultText } from '../../utils/subagentResult';
 
 // Constants extracted from magic numbers
 const MAX_SUMMARY_LENGTH = 120;
@@ -40,6 +40,20 @@ export function resolveAgentIdentity(args: {
   agentToolMeta: { agentId?: string };
 }): AgentIdentity {
   const { toolName, input, result, agentBlock, agentToolMeta } = args;
+  if (toolName === 'invoke_subagent') {
+    const subagents = Array.isArray(input?.Subagents)
+      ? (input?.Subagents as Array<Record<string, unknown>>)
+      : Array.isArray(input?.subagents)
+        ? (input?.subagents as Array<Record<string, unknown>>)
+        : [];
+    const firstChild = subagents[0];
+    const agentType = String(firstChild?.Role ?? firstChild?.role ?? firstChild?.TypeName ?? firstChild?.typeName ?? 'Unknown');
+    const summary = String(input?.toolSummary ?? input?.tool_summary ?? input?.toolAction ?? input?.tool_action ?? '').slice(0, MAX_SUMMARY_LENGTH);
+    const resultText = extractResultText(result) ?? '';
+    const match = /(?:conversationId|conversation_id)["']?\s*[:=]\s*["']?([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/i.exec(resultText);
+    const agentId = match ? match[1] : undefined;
+    return { agentType, summary, agentId, agentPath: undefined };
+  }
   const spawnMeta = toolName === 'spawn_agent' ? parseSpawnAgentMeta(input ?? {}, result) : {};
   const agentType = toolName === 'spawn_agent' ? spawnMeta.identityLabel ?? '' : getAgentType(agentBlock);
   const summary = toolName === 'spawn_agent'

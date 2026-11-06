@@ -1,11 +1,14 @@
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useClaudePlanUsage } from '../../hooks/useClaudePlanUsage';
+import { useGeminiPlanUsage } from '../../hooks/useGeminiPlanUsage';
 import { useGrokPlanUsage } from '../../hooks/useGrokPlanUsage';
 import { PlanUsageIndicator } from './PlanUsageIndicator';
 
 interface ContextToolsRightProps {
   currentProvider: string;
+  /** Selected model id (gemini slug rides the quota poll for billing-family selection). */
+  selectedModel?: string;
   hasMessages: boolean;
   onRewind?: () => void;
   statusPanelExpanded: boolean;
@@ -15,6 +18,7 @@ interface ContextToolsRightProps {
 /** Right side tools: plan usage, StatusPanel toggle and Rewind button. */
 export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
   currentProvider,
+  selectedModel,
   hasMessages,
   onRewind,
   statusPanelExpanded,
@@ -22,8 +26,10 @@ export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
 }) => {
   const { t } = useTranslation();
   const isClaude = currentProvider === 'claude';
+  const isGemini = currentProvider === 'gemini';
   const isGrok = currentProvider === 'grok';
   const claudePlanUsage = useClaudePlanUsage(currentProvider);
+  const geminiPlanUsage = useGeminiPlanUsage(currentProvider, selectedModel);
   const grokPlanUsage = useGrokPlanUsage(currentProvider);
 
   return (
@@ -32,6 +38,12 @@ export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
         <PlanUsageIndicator
           snapshot={claudePlanUsage.snapshot}
           status={claudePlanUsage.status}
+        />
+      )}
+      {isGemini && (
+        <PlanUsageIndicator
+          snapshot={geminiPlanUsage.snapshot}
+          status={geminiPlanUsage.status}
         />
       )}
       {isGrok && (

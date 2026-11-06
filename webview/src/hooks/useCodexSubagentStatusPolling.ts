@@ -20,21 +20,25 @@ export function useCodexSubagentStatusPolling({
   const requestSequenceRef = useRef(0);
   const agentsJson = useMemo(() => JSON.stringify(
     subagents
-      .filter((subagent) => subagent.isAsync && subagent.status === 'running')
+      .filter((subagent) => subagent.isAsync && subagent.status === 'running' && (currentProvider !== 'gemini' || !!subagent.agentId))
       .slice(0, MAX_CODEX_SUBAGENT_STATUS_TARGETS)
       .map((subagent) => ({
         toolUseId: subagent.id,
         agentId: subagent.agentId,
-        agentPath: subagent.agentPath,
-        nativeTaskId: subagent.nativeTaskId,
-        nativeTaskPreviousTurnId: subagent.nativeTaskPreviousTurnId,
+        ...(currentProvider === 'codex' ? {
+          agentPath: subagent.agentPath,
+          nativeTaskId: subagent.nativeTaskId,
+          nativeTaskPreviousTurnId: subagent.nativeTaskPreviousTurnId,
+        } : {}),
       })),
-  ), [subagents]);
+  ), [subagents, currentProvider]);
   const tasksJson = useMemo(() => JSON.stringify(subagents.map(agent => ({ id: agent.id, nativeTaskId: agent.nativeTaskId }))), [subagents]);
 
   useEffect(() => {
-    if (currentProvider !== 'codex' || !currentSessionId) return;
-    trackCodexSubagentTasks(currentSessionId, JSON.parse(tasksJson) as Array<{ id: string; nativeTaskId?: string }>);
+    if ((currentProvider !== 'codex' && currentProvider !== 'gemini') || !currentSessionId) return;
+    if (currentProvider === 'codex') {
+      trackCodexSubagentTasks(currentSessionId, JSON.parse(tasksJson) as Array<{ id: string; nativeTaskId?: string }>);
+    }
 
     const agents = JSON.parse(agentsJson) as Array<{
       toolUseId: string;

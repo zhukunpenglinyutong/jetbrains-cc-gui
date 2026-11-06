@@ -462,7 +462,8 @@ public class SessionLifecycleManager {
                 host.getClaudeSDKBridge(),
                 host.getCodexSDKBridge(),
                 host.getCliBridges(),
-                host.getGrokSDKBridge());
+                host.getGrokSDKBridge(),
+                host.getZcodeSDKBridge());
     }
 
     /**
