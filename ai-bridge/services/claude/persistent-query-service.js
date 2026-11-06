@@ -219,7 +219,7 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   const maxThinkingTokens = resolveThinkingTokens(params, settings);
   const systemPromptAppend = buildSystemPromptAppend(params);
 
-  const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
+  const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory, params.projectTrusted === true);
 
   const options = buildQueryOptions(
     workingDirectory, sdkModelName, permissionMode,

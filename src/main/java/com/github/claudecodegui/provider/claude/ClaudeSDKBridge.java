@@ -64,7 +64,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         );
         this.mcpQueryService = new ClaudeMcpQueryService(
                 LOG, gson, nodeDetector, sdkDirSupplier, processManager,
-                envConfigurator, jsonOutputExtractor
+                envConfigurator, jsonOutputExtractor, requestParamsBuilder::isProjectTrusted
         );
         this.rewindService = new ClaudeRewindService(
                 LOG, gson, nodeDetector, sdkDirSupplier, processManager,
@@ -75,7 +75,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         );
     }
 
-    public void setProjectTrustSupplier(java.util.function.BooleanSupplier projectTrust) {
+    public void setProjectTrustSupplier(java.util.function.Predicate<String> projectTrust) {
         requestParamsBuilder.setProjectTrust(projectTrust);
     }
 
@@ -128,8 +128,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * Prewarm daemon asynchronously to reduce first-message latency.
      */
     public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch) {
-        daemonCoordinator.prewarmDaemonAsync(normalizeCwdForNode(cwd), runtimeSessionEpoch, null,
-                requestParamsBuilder.isProjectTrusted());
+        String nodeCwd = normalizeCwdForNode(cwd);
+        daemonCoordinator.prewarmDaemonAsync(nodeCwd, runtimeSessionEpoch, null,
+                requestParamsBuilder.isProjectTrusted(nodeCwd));
     }
 
     /**
@@ -141,8 +142,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * @param sessionId The historical session ID to resume
      */
     public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String sessionId) {
-        daemonCoordinator.prewarmDaemonAsync(normalizeCwdForNode(cwd), runtimeSessionEpoch, sessionId,
-                requestParamsBuilder.isProjectTrusted());
+        String nodeCwd = normalizeCwdForNode(cwd);
+        daemonCoordinator.prewarmDaemonAsync(nodeCwd, runtimeSessionEpoch, sessionId,
+                requestParamsBuilder.isProjectTrusted(nodeCwd));
     }
 
     public void resetPersistentRuntime(String runtimeSessionEpoch) {
@@ -551,7 +553,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         if (model != null && !model.isEmpty()) {
             params.addProperty("model", model);
         }
-        requestParamsBuilder.addProjectTrust(params);
+        requestParamsBuilder.addProjectTrust(params, cwd);
 
         AtomicReference<JsonObject> resultRef = new AtomicReference<>();
         CompletableFuture<JsonObject> resultFuture = new CompletableFuture<>();

@@ -154,14 +154,14 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
 
     case 'getMcpServerStatus': {
       const cwd = stdinData?.cwd || args[0] || null;
-      await claudeGetMcpServerStatus(cwd);
+      await claudeGetMcpServerStatus(cwd, stdinData?.projectTrusted === true);
       break;
     }
 
     case 'getMcpServerTools': {
       const serverId = stdinData?.serverId || args[0] || null;
       const cwd = stdinData?.cwd || args[1] || null;
-      await claudeGetMcpServerTools(serverId, cwd);
+      await claudeGetMcpServerTools(serverId, cwd, stdinData?.projectTrusted === true);
       break;
     }
 

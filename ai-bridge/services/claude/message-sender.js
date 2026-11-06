@@ -529,7 +529,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     console.log('[DEBUG] Config:', { effectivePermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort: normalizedReasoningEffort });
 
     const preToolUseHook = createPreToolUseHook(effectivePermissionMode, workingDirectory);
-    const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
+    const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory, projectTrusted === true);
     const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedModel, projectTrusted });
 
     if (normalizedReasoningEffort) {
@@ -605,7 +605,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     streamingEnabled = streamingParam != null ? streamingParam : (settings?.streamingEnabled ?? false);
     console.log('[DEBUG] (withAttachments) Config:', { normalizedPermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort });
 
-    const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
+    const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory, stdinData?.projectTrusted === true);
     const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedAttachModel, projectTrusted: stdinData?.projectTrusted });
 
     if (reasoningEffort) {

@@ -9,36 +9,37 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 
 /**
  * Builds the request payload shared by daemon and per-process Claude sends.
  */
 class ClaudeRequestParamsBuilder {
 
-    private static final BooleanSupplier UNTRUSTED = () -> false;
+    private static final Predicate<String> UNTRUSTED = cwd -> false;
 
     private final Gson gson;
-    private volatile BooleanSupplier projectTrust = UNTRUSTED;
+    private volatile Predicate<String> projectTrust = UNTRUSTED;
 
     ClaudeRequestParamsBuilder(Gson gson) {
         this.gson = gson;
     }
 
-    void setProjectTrust(BooleanSupplier projectTrust) {
+    void setProjectTrust(Predicate<String> projectTrust) {
         this.projectTrust = projectTrust != null ? projectTrust : UNTRUSTED;
     }
 
-    boolean isProjectTrusted() {
+    /** Whether project settings may load for a request that runs in {@code cwd}. */
+    boolean isProjectTrusted(String cwd) {
         try {
-            return projectTrust.getAsBoolean();
+            return projectTrust.test(cwd);
         } catch (RuntimeException error) {
             return false;
         }
     }
 
-    void addProjectTrust(JsonObject params) {
-        params.addProperty("projectTrusted", isProjectTrusted());
+    void addProjectTrust(JsonObject params, String cwd) {
+        params.addProperty("projectTrusted", isProjectTrusted(cwd));
     }
 
     JsonObject buildSendParams(
@@ -83,7 +84,7 @@ class ClaudeRequestParamsBuilder {
         if (reasoningEffort != null && !reasoningEffort.trim().isEmpty()) {
             params.addProperty("reasoningEffort", reasoningEffort);
         }
-        addProjectTrust(params);
+        addProjectTrust(params, cwd);
 
         return params;
     }
