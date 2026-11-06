@@ -592,6 +592,12 @@
         "disabled": "已关闭",
         "hint": "开启后，在提交对话框中显示「AI 生成提交信息」按钮。关闭后隐藏该按钮。"
       },
+      "sessionGitRepositoryMatching": {
+        "label": "按 Git 远端仓库匹配历史会话",
+        "enabled": "启用",
+        "disabled": "禁用",
+        "hint": "显示远端主机、所有者及仓库都相同的 Codex 和 Claude Code 会话。无法读取 Git 信息时按工作目录匹配。"
+      },
       "statusBarWidget": {
         "label": "状态栏信息展示",
         "enabled": "已开启",
@@ -1465,6 +1471,9 @@
     }
   },
   "history": {
+    "confirmDirectoryTitle": "在另一个目录中打开会话？",
+    "confirmDirectoryMessage": "命令和文件修改将在下方目录中执行。",
+    "executionDirectory": "运行目录",
     "title": "历史会话",
     "sessionDeleted": "会话已删除",
     "confirmDelete": "确认删除",
