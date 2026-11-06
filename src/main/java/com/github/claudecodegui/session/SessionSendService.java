@@ -482,7 +482,8 @@ public class SessionSendService {
         }
 
         JsonObject turnSettings = nativeCodexSettings == null ? new JsonObject() : nativeCodexSettings.deepCopy();
-        turnSettings.add("additionalContext", this.contextService.buildCodexAdditionalContext(openedFilesJson, fileTagPaths));
+        turnSettings.add("additionalContext", this.contextService.buildCodexAdditionalContext(
+                openedFilesJson, fileTagPaths, this.codexSDKBridge::normalizePathForNode));
         String sessionInstructions = this.contextService.buildCodexSessionInstructions(agentPrompt, openedFilesJson);
         String configuredModel = new CodexSettingsManager(this.gson).resolveModelAlias(this.state.getModel());
 

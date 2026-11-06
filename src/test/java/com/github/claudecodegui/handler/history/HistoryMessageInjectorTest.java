@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.history;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.session.ClaudeSession;
@@ -7,6 +8,7 @@ import com.github.claudecodegui.session.MessageParser;
 import com.github.claudecodegui.session.SessionCallbackFacade;
 import com.github.claudecodegui.session.SessionMessageOrchestrator;
 import com.github.claudecodegui.session.SessionState;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -27,7 +29,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 /**
  * Unit tests for provider-aware history loading, pagination, and frontend conversion.
@@ -1356,6 +1360,24 @@ public class HistoryMessageInjectorTest {
         payload.add("content", content);
         line.add("payload", payload);
         return line;
+    }
+
+    /** A Codex running in WSL records Linux image paths; only the Windows CI job gets past the assumptions. */
+    @Test
+    public void restoresLocalImageRecordedByCodexInWsl() throws Exception {
+        assumeTrue("Skipped: not running on Windows", PlatformUtils.isWindows());
+        assumeTrue("Skipped: WSL not available", NodeDetector.resolveWslHomeUncPath() != null);
+        String imagePath = "/tmp/ccgui-history-image-test.png";
+        Process write = new ProcessBuilder("wsl", "-e", "sh", "-c", "echo image > " + imagePath).start();
+        assertTrue(write.waitFor(60, TimeUnit.SECONDS));
+        try {
+            JsonObject block = HistoryMessageInjector.createLocalImageBlock(imagePath);
+
+            assertNotNull("the image recorded in WSL must be restored", block);
+            assertEquals("image", block.get("type").getAsString());
+        } finally {
+            new ProcessBuilder("wsl", "-e", "rm", "-f", imagePath).start().waitFor(60, TimeUnit.SECONDS);
+        }
     }
 
     private static JsonObject eventUserMessage(String timestamp, String text) {

@@ -63,6 +63,25 @@ public class NodeDetectorWslTest {
     }
 
     @Test
+    public void convertToWslPath_distroRoot_returnsRoot() {
+        assertEquals("/", NodeDetector.convertToWslPath("\\\\wsl.localhost\\Ubuntu"));
+        assertEquals("/", NodeDetector.convertToWslPath("//wsl.localhost/Ubuntu"));
+        assertEquals("/", NodeDetector.convertToWslPath("//wsl$/Ubuntu/"));
+    }
+
+    @Test
+    public void uncDistroName_returnsTheDistroOfWslPathsOnly() {
+        assertEquals("Ubuntu", WslPathUtil.uncDistroName("\\\\wsl.localhost\\Ubuntu\\home\\user"));
+        assertEquals("Ubuntu-22.04", WslPathUtil.uncDistroName("//wsl$/Ubuntu-22.04/home/user"));
+        assertEquals("Debian", WslPathUtil.uncDistroName("//wsl.localhost/Debian"));
+        assertNull(WslPathUtil.uncDistroName("//wsl.localhost/"));
+        assertNull(WslPathUtil.uncDistroName("//wsl.localhost"));
+        assertNull(WslPathUtil.uncDistroName("C:\\Users\\foo"));
+        assertNull(WslPathUtil.uncDistroName("/home/user"));
+        assertNull(WslPathUtil.uncDistroName(null));
+    }
+
+    @Test
     public void convertToWslPath_nullOrEmpty_returnsInput() {
         assertEquals(null, NodeDetector.convertToWslPath(null));
         assertEquals("", NodeDetector.convertToWslPath(""));
@@ -191,6 +210,22 @@ public class NodeDetectorWslTest {
 
         assertTrue("UNC path must start with \\\\", uncPath.startsWith("\\\\"));
         assertTrue("UNC path must be accessible via Files.exists()", Files.exists(Paths.get(uncPath)));
+    }
+
+    /** The daemon reports WSL_DISTRO_NAME; the Codex distro guard compares it with this UNC segment. */
+    @Test
+    public void wslDistroName_matchesTheDistroInUncPaths() throws Exception {
+        Assume.assumeTrue("Skipped: not running on Windows", System.getProperty("os.name", "").toLowerCase().contains("windows"));
+        String uncPath = NodeDetector.resolveWslHomeUncPath();
+        Assume.assumeTrue("Skipped: WSL not available", uncPath != null && !uncPath.isEmpty());
+
+        Process process = new ProcessBuilder("wsl", "-e", "sh", "-c", "echo $WSL_DISTRO_NAME")
+                .redirectError(ProcessBuilder.Redirect.DISCARD).start();
+        assertTrue(process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS));
+        String reported = new String(process.getInputStream().readAllBytes(),
+                java.nio.charset.StandardCharsets.UTF_8).trim();
+
+        assertEquals(WslPathUtil.uncDistroName(uncPath).toLowerCase(), reported.toLowerCase());
     }
 
     @Test

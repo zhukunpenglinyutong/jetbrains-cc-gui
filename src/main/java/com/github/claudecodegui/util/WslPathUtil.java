@@ -40,13 +40,17 @@ public final class WslPathUtil {
         // or their forward-slash forms (IntelliJ's project.getBasePath() returns
         // forward slashes when the project lives on the WSL filesystem).
         // Checked before the "already Unix" guard so //wsl.localhost/... is stripped.
-        if (windowsPath.startsWith("\\\\wsl") || windowsPath.startsWith("//wsl")) {
+        if (isWslUncPath(windowsPath)) {
             String normalized = windowsPath.replace('\\', '/');
             int distroNameStart = normalized.indexOf('/', 2);        // index of '/' before <distro>
             if (distroNameStart > 0) {
                 int distroPathStart = normalized.indexOf('/', distroNameStart + 1); // index of '/' after <distro>
                 if (distroPathStart > 0) {
                     return normalized.substring(distroPathStart);    // /home/...
+                }
+                // Nothing follows <distro>, so the path is the distro root.
+                if (normalized.length() > distroNameStart + 1) {
+                    return "/";
                 }
             }
         }
@@ -66,6 +70,25 @@ public final class WslPathUtil {
         }
         // Fallback: just replace backslashes
         return windowsPath.replace('\\', '/');
+    }
+
+    private static boolean isWslUncPath(String path) {
+        return path.startsWith("\\\\wsl") || path.startsWith("//wsl");
+    }
+
+    /** Returns the distro of a WSL UNC path (e.g. {@code Ubuntu} for {@code \\wsl.localhost\Ubuntu\home\x}), or null for any other path. */
+    public static String uncDistroName(String path) {
+        if (path == null || !isWslUncPath(path)) {
+            return null;
+        }
+        String normalized = path.replace('\\', '/');
+        int nameStart = normalized.indexOf('/', 2) + 1;
+        if (nameStart <= 0) {
+            return null;
+        }
+        int nameEnd = normalized.indexOf('/', nameStart);
+        String name = nameEnd < 0 ? normalized.substring(nameStart) : normalized.substring(nameStart, nameEnd);
+        return name.isEmpty() ? null : name;
     }
 
     /** Converts a Linux absolute path to its Windows UNC form (e.g. {@code /home/x} to {@code \\wsl.localhost\Ubuntu\home\x}). */

@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
@@ -397,6 +398,36 @@ public class DaemonBridgeTest {
                 false, 5, 4, claimed, claimed, 1));
         assertFalse(DaemonBridge.shouldAutoRestart(
                 true, 5, 4, claimed, claimed, 1));
+    }
+
+    /** The distro belongs to one daemon generation: a replacement reports its own. */
+    @Test
+    public void wslDistroComesFromTheCurrentGenerationsReadyEvent() throws Exception {
+        ControlledProcess first = new ControlledProcess(211);
+        ControlledProcess second = new ControlledProcess(212);
+        first.emitLine("{\"type\":\"daemon\",\"event\":\"ready\",\"sdkPreloaded\":true,\"wslDistro\":\"Debian\"}");
+        second.emitReady();
+        AtomicInteger launchCount = new AtomicInteger();
+        DaemonBridge bridge = new DaemonBridge(
+                null, null, null,
+                new MutableTimeSource(0, nanos(0)),
+                () -> launchCount.getAndIncrement() == 0 ? first : second,
+                null);
+
+        try {
+            assertNull(bridge.getWslDistro());
+            assertTrue(bridge.start());
+            assertEquals("Debian", bridge.getWslDistro());
+
+            first.emitIdleShutdownRequest(7);
+            awaitStdinContains(first, "\"method\":\"idle_shutdown_ack\"");
+            first.exit();
+            assertTrue(bridge.ensureRunning());
+            assertEquals(2, launchCount.get());
+            assertNull(bridge.getWslDistro());
+        } finally {
+            bridge.stop();
+        }
     }
 
     /** An idle exit is owned by Java and the next command starts a new daemon. */
