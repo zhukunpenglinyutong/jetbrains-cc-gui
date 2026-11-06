@@ -157,6 +157,21 @@ export function isAcceptEditsAllowed(filePath, cwd, additionalDirs) {
   return isPathInWorkingDirectory(filePath, cwd, additionalDirs);
 }
 
+// Unix/macOS system directories. They match only at the start of a path: after the string start,
+// a separator or quote, `..`, `$IFS`, a positional parameter such as `$9`, a `}` that does not
+// close `${VAR}` or a `:-` default value, optionally behind an attached short option (`-T`,
+// `-4T`) and a `/private` (macOS) or `/proc/<pid>/root` alias. So `~/.claude/bin/` or `./bin/`
+// is not mistaken for `/bin/`. `//` and `/./` runs are collapsed first (DOT_SEGMENTS), so the
+// patterns need no repeated group and stay linear on long inputs.
+const PATH_BOUNDARY = '(?:^|[^\\w.~$}-]|\\.\\.|\\$(?:IFS|\\{IFS[^}]{0,64}\\}|\\d)|(?<!\\$\\{[^}]*)\\}|:-)';
+const ROOT_ALIAS = '(?:/private|/proc/[^/\\s]+/root)?';
+const SYSTEM_DIR_START = `${PATH_BOUNDARY}(?:-[\\w#]+)?${ROOT_ALIAS}`;
+const DOT_SEGMENTS = /\/(?:\.?\/)+/g;
+const SYSTEM_DIR_PATTERNS = ['/etc/', '/System/', '/usr/', '/bin/', '/sbin/'].map(dir => new RegExp(
+  SYSTEM_DIR_START + dir.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'),
+  process.platform === 'win32' ? 'i' : ''
+));
+
 /**
  * Check whether a file path matches any known dangerous pattern.
  * @param {string} filePath - The path to check
@@ -169,12 +184,6 @@ export function isDangerousPath(filePath) {
   const isWindows = process.platform === 'win32';
 
   const dangerousPatterns = [
-    // Unix/macOS system paths
-    '/etc/',
-    '/System/',
-    '/usr/',
-    '/bin/',
-    '/sbin/',
     // User-sensitive directories (credentials, config)
     `${userHomeDir}/.ssh/`,
     `${userHomeDir}/.aws/`,
@@ -211,7 +220,10 @@ export function isDangerousPath(filePath) {
       expandedPath = expandedPath.split('~\\').join(`${userHomeDir}\\`);
     }
   }
-  const normalizedPath = isWindows ? expandedPath.toLowerCase() : expandedPath;
+  const normalizedPath = (isWindows ? expandedPath.toLowerCase() : expandedPath).replace(DOT_SEGMENTS, '/');
+  if (SYSTEM_DIR_PATTERNS.some(pattern => pattern.test(normalizedPath))) {
+    return true;
+  }
   for (const pattern of dangerousPatterns) {
     const normalizedPattern = isWindows ? pattern.toLowerCase() : pattern;
     if (normalizedPath.includes(normalizedPattern)) {
