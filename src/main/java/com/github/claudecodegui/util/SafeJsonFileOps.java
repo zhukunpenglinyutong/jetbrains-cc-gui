@@ -3,6 +3,7 @@ package com.github.claudecodegui.util;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
+import kotlin.NotImplementedError;
 
 import java.io.IOException;
 import java.io.Writer;
@@ -419,6 +420,16 @@ public final class SafeJsonFileOps {
      * @throws IOException if a lock cannot be acquired (timeout/interrupt/IO error) or the action throws
      */
     public static void withLock(Path lockFile, long timeoutMs, IORunnable action) throws IOException {
+        withLock(lockFile, timeoutMs, action, FileChannel::tryLock);
+    }
+
+    /** File-lock operation supplied by the channel; injectable to test unsupported providers. */
+    @FunctionalInterface
+    interface FileLockAttempt {
+        FileLock tryLock(FileChannel channel) throws IOException;
+    }
+
+    static void withLock(Path lockFile, long timeoutMs, IORunnable action, FileLockAttempt lockAttempt) throws IOException {
         Path parent = lockFile.getParent();
         if (parent != null) {
             Files.createDirectories(parent);
@@ -444,7 +455,7 @@ public final class SafeJsonFileOps {
 
         try {
             try (FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-                 FileLock fileLock = acquireLock(channel, lockFile, timeoutMs)) {
+                 FileLock fileLock = acquireLock(channel, lockFile, timeoutMs, lockAttempt)) {
                 Set<String> held = HELD_LOCKS.get();
                 held.add(lockKey);
                 try {
@@ -735,13 +746,23 @@ public final class SafeJsonFileOps {
      * @param channel   the channel of the lock file
      * @param lockFile  the lock file (for the error message)
      * @param timeoutMs how long to wait
+     * @param lockAttempt the channel operation used to acquire the lock
      * @return the acquired lock
      * @throws IOException when the timeout elapses, the wait is interrupted, or the channel fails
      */
-    private static FileLock acquireLock(FileChannel channel, Path lockFile, long timeoutMs) throws IOException {
+    private static FileLock acquireLock(FileChannel channel, Path lockFile, long timeoutMs, FileLockAttempt lockAttempt) throws IOException {
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
         for (;;) {
-            FileLock lock = channel.tryLock();
+            FileLock lock;
+            try {
+                lock = lockAttempt.tryLock(channel);
+            } catch (UnsupportedOperationException | NotImplementedError unsupported) {
+                // IJent in some supported IDE versions exposes FileChannel but does not
+                // implement tryLock. Report a normal IO failure so startup can continue;
+                // the protected action must never run without its cross-process lock.
+                throw new IOException("The filesystem provider does not support file locking for " + lockFile
+                        + "; no changes were written. This operation requires a filesystem with file-lock support.", unsupported);
+            }
             if (lock != null) {
                 return lock;
             }
