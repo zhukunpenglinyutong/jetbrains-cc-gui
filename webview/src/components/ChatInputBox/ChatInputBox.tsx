@@ -7,6 +7,7 @@ import type {
 import { DEFAULT_CLAUDE_MODEL_ID } from './types.js';
 import { ChatInputBoxHeader } from './ChatInputBoxHeader.js';
 import { ChatInputBoxFooter } from './ChatInputBoxFooter.js';
+import { ArtifactReviewDrafts } from './ArtifactReviewDrafts';
 import { ResizeHandles } from './ResizeHandles.js';
 import { InputEditableArea } from './InputEditableArea.js';
 import { useChatInputController } from './hooks/useChatInputController.js';
@@ -92,6 +93,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     const { t } = useTranslation();
 
     const {
+      artifactReviews,
       attachments,
       handleAddAttachment,
       handleRemoveAttachment,
@@ -218,6 +220,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         />
 
         {/* Input area */}
+        <ArtifactReviewDrafts batches={artifactReviews.batches} remove={artifactReviews.remove} />
         <InputEditableArea
           editableWrapperRef={editableWrapperRef}
           editableWrapperStyle={editableWrapperStyle}
@@ -240,7 +243,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
 
         <ChatInputBoxFooter
           disabled={disabled}
-          hasInputContent={!isPreparingImages && (hasContent || attachments.length > 0)}
+          hasInputContent={!isPreparingImages && (hasContent || attachments.length > 0 || artifactReviews.hasReviews)}
           isLoading={isLoading}
           isEnhancing={isEnhancing}
           selectedModel={selectedModel}

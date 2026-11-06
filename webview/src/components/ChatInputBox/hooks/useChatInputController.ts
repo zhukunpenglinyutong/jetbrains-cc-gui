@@ -27,6 +27,7 @@ import { useChatInputTextPipeline } from './useChatInputTextPipeline.js';
 import { SessionContext } from '../../../contexts/SessionContext.js';
 import { useUIState } from '../../../contexts/UIStateContext.js';
 import { useContextMenu } from '../../../hooks/useContextMenu.js';
+import { useArtifactReviews } from './useArtifactReviews';
 
 interface UseChatInputControllerOptions
   extends Pick<
@@ -124,6 +125,14 @@ export function useChatInputController({
   // SessionContext is read null-safely so this component still mounts in tests
   // without a SessionProvider.
   const sessionCtx = useContext(SessionContext);
+  const artifactReviews = useArtifactReviews();
+  const reviewSessionRef = useRef(sessionCtx?.currentSessionId ?? null);
+  useEffect(() => {
+    const next = sessionCtx?.currentSessionId ?? null;
+    // null -> first assigned ID is the same conversation, not a session reset.
+    if (reviewSessionRef.current !== null && reviewSessionRef.current !== next) artifactReviews.reset();
+    reviewSessionRef.current = next;
+  }, [sessionCtx?.currentSessionId, artifactReviews.reset]);
   const clearInternalAttachments = useCallback(() => {
     setInternalAttachments([]);
     clearAttachmentsDraft?.();
@@ -212,6 +221,7 @@ export function useChatInputController({
 
   const handleSubmit = useSubmitHandler({
     getTextContent,
+    captureReviewSubmission: artifactReviews.captureSubmission,
     invalidateCache,
     attachments,
     sdkStatusLoading,
@@ -411,6 +421,7 @@ export function useChatInputController({
   };
 
   return {
+    artifactReviews,
     attachments,
     handleAddAttachment,
     handleRemoveAttachment,

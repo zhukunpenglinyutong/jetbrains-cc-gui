@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useOmpRoles } from './hooks/providers/useCliModels';
 import {
@@ -25,7 +25,14 @@ const App = () => {
   // Toast queue + current view drive the top-level layout regions below;
   // everything else from UIStateContext is consumed inside the extracted
   // components/hooks (same convention as ChatScreen / AppDialogs).
-  const { toasts, dismissToast, currentView, addToast } = useUIState();
+  const { toasts, dismissToast, currentView, setCurrentView, addToast } = useUIState();
+  useLayoutEffect(() => {
+    // Remount the chat input before the backend replays pending reviews.
+    // Settings replaces the chat subtree, so its input callbacks are absent.
+    const showChat = () => setCurrentView('chat');
+    window.showArtifactReviewChat = showChat;
+    return () => { if (window.showArtifactReviewChat === showChat) delete window.showArtifactReviewChat; };
+  }, [setCurrentView]);
 
   // ── Permission dialog timeout (synced with backend config) ──
   const [permissionDialogTimeoutSeconds, setPermissionDialogTimeoutSeconds] = useState(DEFAULT_PERMISSION_DIALOG_TIMEOUT_SECONDS);

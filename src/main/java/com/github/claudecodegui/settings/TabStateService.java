@@ -204,6 +204,7 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
         public String model;
         public String permissionMode;
         public String reasoningEffort;
+        public String reviewTargetId;
         public boolean unread;
 
         public TabSessionState copy() {
@@ -215,6 +216,7 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
             copy.model = this.model;
             copy.permissionMode = this.permissionMode;
             copy.reasoningEffort = this.reasoningEffort;
+            copy.reviewTargetId = this.reviewTargetId;
             copy.unread = this.unread;
             return copy;
         }
