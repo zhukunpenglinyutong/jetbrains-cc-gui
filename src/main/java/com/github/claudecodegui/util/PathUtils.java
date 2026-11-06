@@ -151,6 +151,31 @@ public class PathUtils {
         return cwd;
     }
 
+    /**
+     * Whether a request's working directory stays inside the project, following symlinks.
+     *
+     * <p>A blank cwd counts as inside: the bridge falls back to the project path then. A null or
+     * empty project base cannot contain anything, so every cwd is outside it. Unlike
+     * {@link #guardWorkingDirectory(String, String)}, which clamps lexically, this also resolves
+     * both paths so a symlink inside the project that points elsewhere does not pass.
+     */
+    public static boolean isWorkingDirectoryInsideProject(String cwd, String projectBase) {
+        if (projectBase == null || projectBase.isEmpty()) {
+            return false;
+        }
+        if (!isValidWorkingDirectory(cwd)) {
+            return true;
+        }
+        String base = normalizeAbsolute(projectBase);
+        String normalizedCwd = normalizeAbsolute(cwd);
+        if (base == null || base.isEmpty() || normalizedCwd == null || !isWithinOrEqual(normalizedCwd, base)) {
+            return false;
+        }
+        String realBase = normalizeAbsolute(realPath(base));
+        String realCwd = normalizeAbsolute(realPath(normalizedCwd));
+        return realBase != null && realCwd != null && isWithinOrEqual(realCwd, realBase);
+    }
+
     /** Non-null, non-empty, and not one of the sentinel strings the webview sends for "no cwd". */
     private static boolean isValidWorkingDirectory(String cwd) {
         return cwd != null && !cwd.isEmpty() && !"undefined".equals(cwd) && !"null".equals(cwd);

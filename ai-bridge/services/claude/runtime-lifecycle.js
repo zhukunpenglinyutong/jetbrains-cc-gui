@@ -186,7 +186,8 @@ export function buildRuntimeSignature(options, systemPromptAppend, streamingEnab
     // Full Auto rebuilds the runtime with the correct launch flag. The other modes
     // (default/plan/acceptEdits/auto) need no launch flag and keep applying live via
     // setPermissionMode, so they intentionally do NOT change the signature.
-    bypassPermissions: options.permissionMode === 'bypassPermissions'
+    bypassPermissions: options.permissionMode === 'bypassPermissions',
+    settingSources: options.settingSources || []
   };
   return JSON.stringify(material);
 }
