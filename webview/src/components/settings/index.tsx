@@ -115,17 +115,19 @@ const SettingsView = ({
   // Use agent management hook
   const agentManagement = useAgentManagement({
     onSuccess: (msg) => pageState.addToast(msg, 'success'),
+    // Without this a failed copy or repair would leave the user watching an
+    // unchanged list, with nothing saying why.
+    onError: (msg) => pageState.addToast(msg, 'error'),
   });
 
   // Note: Prompt management is now handled internally by PromptSection component
 
-  useLazyTabData(pageState.currentTab, {
-    loadProviders: providerManagement.loadProviders,
-    loadCodexProviders: codexProviderManagement.loadCodexProviders,
-    loadAgents: agentManagement.loadAgents,
-  });
-
-  // Register window callbacks for Java bridge communication
+  // Register window callbacks for Java bridge communication.
+  //
+  // Declared BEFORE useLazyTabData on purpose. Both hooks do their work in
+  // effects, and React runs them in declaration order — so with the lazy
+  // load first, its very first get_agents went out before the callbacks
+  // that receive the answer existed.
   useSettingsWindowCallbacks({
     ...themeSync,
     ...basicActions,
@@ -135,6 +137,12 @@ const SettingsView = ({
     ...agentManagement,
     onStreamingEnabledChangeProp,
     onSendShortcutChangeProp,
+  });
+
+  useLazyTabData(pageState.currentTab, {
+    loadProviders: providerManagement.loadProviders,
+    loadCodexProviders: codexProviderManagement.loadCodexProviders,
+    loadAgents: agentManagement.loadAgents,
   });
 
   // Save provider (wrapper function with validation logic)

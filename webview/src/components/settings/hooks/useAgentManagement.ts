@@ -1,7 +1,11 @@
 import { useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AgentConfig } from '../../../types/agent';
+import type { AgentConfig, GetAgentsMessage } from '../../../types/agent';
+import { AGENT_SCOPES } from '../../../types/agent';
 import type { ImportPreviewResult, ConflictStrategy } from '../../../types/import';
+
+/** How long a quiet refresh waits before giving up on its answer. */
+const REFRESH_TIMEOUT = 3000;
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -36,7 +40,7 @@ export interface UseAgentManagementOptions {
 
 export function useAgentManagement(options: UseAgentManagementOptions = {}) {
   const { t } = useTranslation();
-  const { onSuccess } = options;
+  const { onSuccess, onError } = options;
 
   // Timeout timer reference (using useRef to avoid global variable pollution)
   const agentsLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -68,13 +72,24 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
     isOpen: false,
   });
 
+  // Spins on the refresh button while an explicit re-read is in flight. Kept
+  // apart from `agentsLoading` on purpose: that one blanks the list, which is
+  // right for a first load and wrong for a user who clicked Refresh because
+  // they did not believe what they were looking at.
+  const [refreshing, setRefreshing] = useState(false);
+
   // Load agent list (with retry mechanism)
   const loadAgents = useCallback((retryCount = 0) => {
     const MAX_RETRIES = 2;
     const TIMEOUT = 3000; // 3-second timeout
 
     setAgentsLoading(true);
-    sendToJava('get_agents:');
+    // The backend resolves store, ~/.claude/agents and {workspace}/.claude/agents
+    // into one list and answers precedence itself; the tab asks for the scopes
+    // it wants to display and never decides which definition of a name wins.
+    // AGENT_SCOPES keeps this list in step with the server contract.
+    const request: GetAgentsMessage = { scopes: [...AGENT_SCOPES] };
+    sendToJava(`get_agents:${JSON.stringify(request)}`);
 
     // Set up timeout timer
     const timeoutId = setTimeout(() => {
@@ -92,8 +107,59 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
     agentsLoadingTimeoutRef.current = timeoutId;
   }, []);
 
+  /**
+   * Re-read the list without flashing the loading state.
+   *
+   * <p>Used when the backend reports that an agent file changed on disk. The
+   * tab is already showing a list the user is looking at; replacing it with a
+   * spinner because they saved a file in another window would be a worse
+   * answer than the 50 ms the rescan takes. There is no retry loop either: a
+   * watcher-driven refresh is a repeat of a request that just succeeded, so
+   * retrying it would only re-trigger the watcher.
+   *
+   * <p>It arms a timeout of its own rather than borrowing the first load's.
+   * Clearing that one without replacing it would leave both flags with no way
+   * back: a change arriving during the initial load would clear the safety net
+   * that was about to clear `agentsLoading`, and a lost answer would strand the
+   * tab on "loading" with no way out but reopening Settings. `refreshing` had
+   * the same hole, since only `updateAgents` ever cleared it.
+   *
+   * <p>Unlike the first load, this timeout does not empty the list. A failed
+   * background refresh must not destroy the list the user is reading.
+   */
+  const refreshAgentsQuietly = useCallback(() => {
+    if (agentsLoadingTimeoutRef.current) {
+      clearTimeout(agentsLoadingTimeoutRef.current);
+    }
+    const request: GetAgentsMessage = { scopes: [...AGENT_SCOPES] };
+    sendToJava(`get_agents:${JSON.stringify(request)}`);
+
+    agentsLoadingTimeoutRef.current = setTimeout(() => {
+      agentsLoadingTimeoutRef.current = null;
+      setAgentsLoading(false);
+      setRefreshing(false);
+    }, REFRESH_TIMEOUT);
+  }, []);
+
+  /**
+   * Re-read the list at the user's request.
+   *
+   * <p>Same wire request as the quiet refresh, but it marks itself in flight so
+   * the button can show that something happened. The list is not blanked: a
+   * user who pressed Refresh has a list in front of them, and replacing it with
+   * a spinner is a worse answer than an icon that turns for the few dozen
+   * milliseconds the scan takes.
+   */
+  const refreshAgents = useCallback(() => {
+    setRefreshing(true);
+    refreshAgentsQuietly();
+  }, [refreshAgentsQuietly]);
+
   // Update agent list (used by window callback)
   const updateAgents = useCallback((agentsList: AgentConfig[]) => {
+    // Whatever answer arrives ends an explicit refresh; the request is the same
+    // one, so there is nothing to distinguish.
+    setRefreshing(false);
     // Clear timeout timer
     if (agentsLoadingTimeoutRef.current) {
       clearTimeout(agentsLoadingTimeoutRef.current);
@@ -184,16 +250,22 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
   // Handle agent operation result (used by window callback)
   const handleAgentOperationResult = useCallback(
     (result: { success: boolean; operation?: string; error?: string }) => {
-      if (result.success) {
-        const operationMessages: Record<string, string> = {
-          add: t('settings.agent.addSuccess'),
-          update: t('settings.agent.updateSuccess'),
-          delete: t('settings.agent.deleteSuccess'),
-        };
-        onSuccess?.(operationMessages[result.operation || ''] || t('settings.agent.operationSuccess'));
+      if (!result.success) {
+        // Previously a failed operation reported nothing, so the tab simply
+        // stopped responding to clicks with no explanation. The backend sends
+        // `error` for a rejected request such as an unknown scope, and that
+        // message is the only thing that tells the user what to fix.
+        onError?.(t('settings.agent.operationFailedReason', { error: result.error || '' }));
+        return;
       }
+      const operationMessages: Record<string, string> = {
+        add: t('settings.agent.addSuccess'),
+        update: t('settings.agent.updateSuccess'),
+        delete: t('settings.agent.deleteSuccess'),
+      };
+      onSuccess?.(operationMessages[result.operation || ''] || t('settings.agent.operationSuccess'));
     },
-    [onSuccess, t]
+    [onSuccess, onError, t]
   );
 
   // Open export dialog
@@ -285,10 +357,13 @@ export function useAgentManagement(options: UseAgentManagementOptions = {}) {
     deleteAgentConfirm,
     importPreviewDialog,
     exportDialog,
+    refreshing,
 
     // Methods
     loadAgents,
     updateAgents,
+    refreshAgentsQuietly,
+    refreshAgents,
     cleanupAgentsTimeout,
     handleAddAgent,
     handleEditAgent,
