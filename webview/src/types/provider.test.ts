@@ -71,6 +71,7 @@ describe('PROVIDER_PRESETS', () => {
       'longcat',
       'opencode-go',
       'openrouter',
+      'cheaper-inference',
     ]);
 
     expect(PROVIDER_PRESETS.find(provider => provider.id === 'kimi-coding')?.env).toMatchObject({
@@ -91,6 +92,14 @@ describe('PROVIDER_PRESETS', () => {
       ANTHROPIC_BASE_URL: 'https://opencode.ai/zen/go',
       ANTHROPIC_AUTH_TOKEN: '',
       ...getModelSlots('deepseek-v4-flash'),
+    });
+    expect(PROVIDER_PRESETS.find(provider => provider.id === 'cheaper-inference')?.env).toMatchObject({
+      ANTHROPIC_BASE_URL: 'https://api.cheaperinference.com',
+      ANTHROPIC_AUTH_TOKEN: '',
+      ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4.5',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4.5',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4.5',
     });
     expect(PROVIDER_PRESETS.find(provider => provider.id === 'bailian')?.env).toMatchObject({
       ANTHROPIC_BASE_URL: 'https://dashscope.aliyuncs.com/apps/anthropic',
@@ -119,6 +128,7 @@ describe('CODEX_PROVIDER_PRESETS', () => {
       'longcat',
       'opencode-go',
       'openrouter',
+      'cheaper-inference',
     ]);
 
     expect(CODEX_PROVIDER_PRESETS.find(provider => provider.id === 'kimi-coding')?.configToml).toContain('base_url = "https://api.kimi.com/coding/v1"');
@@ -127,6 +137,9 @@ describe('CODEX_PROVIDER_PRESETS', () => {
     expect(CODEX_PROVIDER_PRESETS.find(provider => provider.id === 'longcat')?.configToml).toContain('model = "LongCat-2.0"');
     expect(CODEX_PROVIDER_PRESETS.find(provider => provider.id === 'opencode-go')?.configToml).toContain('base_url = "https://opencode.ai/zen/go/v1"');
     expect(CODEX_PROVIDER_PRESETS.find(provider => provider.id === 'opencode-go')?.configToml).toContain('model = "glm-5.2"');
+    expect(CODEX_PROVIDER_PRESETS.find(provider => provider.id === 'cheaper-inference')?.configToml).toContain('base_url = "https://api.cheaperinference.com/v1"');
+    expect(CODEX_PROVIDER_PRESETS.find(provider => provider.id === 'cheaper-inference')?.configToml).toContain('model = "gpt-5.6-sol"');
+    expect(CODEX_PROVIDER_PRESETS.find(provider => provider.id === 'cheaper-inference')?.configToml).toContain('wire_api = "responses"');
     expect(CODEX_PROVIDER_PRESETS.find(provider => provider.id === 'bailian')?.configToml).toContain('base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"');
     expect(CODEX_PROVIDER_PRESETS.find(provider => provider.id === 'bailian')?.configToml).toContain('model = "qwen3-coder-plus"');
     expect(CODEX_PROVIDER_PRESETS.find(provider => provider.id === 'bailian-coding')?.configToml).toContain('base_url = "https://coding.dashscope.aliyuncs.com/v1"');

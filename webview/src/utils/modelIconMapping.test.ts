@@ -25,6 +25,7 @@ describe('modelIconMapping', () => {
     expect(resolveIconVendor('bailian-coding')).toBe('bailian');
     expect(resolveIconVendor('longcat')).toBe('longcat');
     expect(resolveIconVendor('opencode-go')).toBe('opencode');
+    expect(resolveIconVendor('cheaper-inference')).toBe('cheaperinference');
     // Runtime CLI provider (ProviderSelect / BlinkingLogo), not only the go preset
     expect(resolveIconVendor('opencode')).toBe('opencode');
     // Runtime CLI provider — must not fall through to Claude default
@@ -39,6 +40,8 @@ describe('modelIconMapping', () => {
     expect(resolveVendorFromBaseUrl('https://dashscope.aliyuncs.com/apps/anthropic')).toBe('bailian');
     expect(resolveVendorFromBaseUrl('https://openrouter.ai/api')).toBe('openrouter');
     expect(resolveVendorFromBaseUrl('https://opencode.ai/zen/go')).toBe('opencode');
+    expect(resolveVendorFromBaseUrl('https://api.cheaperinference.com')).toBe('cheaperinference');
+    expect(resolveVendorFromBaseUrl('https://api.cheaperinference.com/v1')).toBe('cheaperinference');
     expect(resolveVendorFromBaseUrl(undefined)).toBeNull();
     expect(resolveVendorFromBaseUrl('https://my-personal-proxy.example.com')).toBeNull();
   });

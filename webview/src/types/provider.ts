@@ -515,6 +515,13 @@ export const CODEX_PROVIDER_PRESETS: CodexProviderPreset[] = [
     configToml: buildCodexProviderConfigToml('openrouter', 'https://openrouter.ai/api/v1', 'gpt-5.6-sol'),
     authJson: DEFAULT_CODEX_AUTH_JSON,
   },
+  {
+    id: 'cheaper-inference',
+    name: 'Cheaper Inference',
+    nameKey: 'settings.provider.presets.cheaperInference',
+    configToml: buildCodexProviderConfigToml('cheaper_inference', 'https://api.cheaperinference.com/v1', 'gpt-5.6-sol'),
+    authJson: DEFAULT_CODEX_AUTH_JSON,
+  },
 ];
 
 // ============ Provider Presets ============
@@ -685,6 +692,18 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
       ANTHROPIC_DEFAULT_HAIKU_MODEL: 'anthropic/claude-haiku-4.5',
       ANTHROPIC_DEFAULT_SONNET_MODEL: 'anthropic/claude-sonnet-4.5',
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'anthropic/claude-opus-4.5',
+    },
+  },
+  {
+    id: 'cheaper-inference',
+    nameKey: 'settings.provider.presets.cheaperInference',
+    env: {
+      ANTHROPIC_BASE_URL: 'https://api.cheaperinference.com',
+      ANTHROPIC_AUTH_TOKEN: '',
+      ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4.5',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4.5',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4.5',
     },
   },
 ];
