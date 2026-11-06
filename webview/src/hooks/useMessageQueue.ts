@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import type { MutableRefObject } from 'react';
 import type { Attachment } from '../components/ChatInputBox/types';
 import { restoreQuotes, snapshotQuotes } from '../components/ChatInputBox/utils/quoteRegistry';
 import type { QuoteSnapshot } from '../components/ChatInputBox/utils/quoteRegistry';
@@ -13,6 +14,11 @@ export interface QueuedMessage {
    */
   quotes?: QuoteSnapshot;
   queuedAt: number;
+  /**
+   * queued waits for idle send; steering is in-flight on the live turn.
+   * Absent means `queued`, so existing constructions stay valid.
+   */
+  status?: 'queued' | 'steering';
 }
 
 export interface UseMessageQueueOptions {
@@ -21,6 +27,12 @@ export interface UseMessageQueueOptions {
   /** Callback to execute a message */
   onExecute: (content: string, attachments?: Attachment[]) => void;
 }
+
+/**
+ * Grace period that lets an outstanding steer receipt requeue its row at the
+ * head before the next queued message dispatches (plan B2/F2).
+ */
+const STEER_RECEIPT_DISPATCH_DELAY_MS = 2000;
 
 export interface UseMessageQueueReturn {
   /** Current queue */
@@ -37,32 +49,39 @@ export interface UseMessageQueueReturn {
   dequeueForEdit: (id: string) => QueuedMessage | undefined;
   /** Read a queued message without removing it */
   peekQueuedMessage: (id: string) => QueuedMessage | undefined;
+  /**
+   * Take a steered row off the queue while keeping its recovery data.
+   *
+   * The fold backstop uses this when the turn has ended and no receipt ever
+   * arrived: the row must stop showing as steering, but a late `undelivered`
+   * still has to be able to put the message back, so `steeringItemsRef` must
+   * keep holding it.
+   */
+  hideSteerRow: (id: string) => void;
   /** Clear entire queue */
   clearQueue: () => void;
   /** Reorder the queue by an ordered list of ids (index 0 executes first) */
   reorder: (orderedIds: string[]) => void;
+  /** Mark an item as steering after the daemon accepted it */
+  markSteering: (id: string) => void;
+  /**
+   * Whether the item is still mid-steer. `accepted` receipts are replayed
+   * against this so a late receipt cannot re-hide a row that a rejected or
+   * undelivered receipt already restored to the queue.
+   */
+  isSteering: (id: string) => boolean;
+  /**
+   * Restore a rejected item in place. When the queue row is already gone
+   * (the receipt outlived it, e.g. a session transition cleared the queue),
+   * `fallback` is requeued at the head instead of the receipt being dropped.
+   */
+  restore: (id: string, fallback?: QueuedMessage) => void;
+  /** Put an undelivered item back at the head as queued */
+  requeueAtHead: (item: QueuedMessage) => void;
+  /** Steering items retained for undelivered receipts */
+  steeringItemsRef: MutableRefObject<Map<string, QueuedMessage>>;
   /** Whether queue has items */
   hasQueuedMessages: boolean;
-}
-
-/**
- * Rebuild the queue in the order of `orderedIds` (index 0 executes next).
- * Kept out of the hook so the ordering rules read on their own; the hook still
- * has to move the queue mirror with the result.
- */
-function applyQueueOrder(queue: QueuedMessage[], orderedIds: string[]): QueuedMessage[] {
-  const byId = new Map(queue.map(item => [item.id, item]));
-  const seen = new Set<string>();
-  const ordered: QueuedMessage[] = [];
-  for (const id of orderedIds) {
-    const item = byId.get(id);
-    if (item && !seen.has(id)) {
-      ordered.push(item);
-      seen.add(id);
-    }
-  }
-  const remaining = queue.filter(item => !seen.has(item.id));
-  return [...ordered, ...remaining];
 }
 
 /**
@@ -85,11 +104,23 @@ export function useMessageQueue({
   // never sends a message an edit already took, even when either lands
   // between a render and its effects.
   const queueRef = useRef<QueuedMessage[]>(queue);
+  // Steered rows that left the queue but must stay recoverable until a fold or
+  // an undelivered receipt settles them.
+  const steeringItemsRef = useRef<Map<string, QueuedMessage>>(new Map());
 
   const commitQueue = useCallback((next: QueuedMessage[]) => {
     queueRef.current = next;
     setQueue(next);
   }, []);
+
+  /**
+   * Apply a queue transform against the live ref and publish the result.
+   * Mutations read `queueRef` rather than React state so two calls in the same
+   * tick cannot both act on a stale snapshot.
+   */
+  const mutateQueue = useCallback((updater: (prev: QueuedMessage[]) => QueuedMessage[]) => {
+    commitQueue(updater(queueRef.current));
+  }, [commitQueue]);
 
   // Generate unique ID
   const generateId = useCallback(() => {
@@ -105,6 +136,7 @@ export function useMessageQueue({
       attachments,
       ...(quotes ? { quotes } : {}),
       queuedAt: Date.now(),
+      status: 'queued',
     };
     commitQueue([...queueRef.current, newItem]);
   }, [generateId, commitQueue]);
@@ -116,6 +148,7 @@ export function useMessageQueue({
   const dequeueForEdit = useCallback((id: string): QueuedMessage | undefined => {
     const removed = queueRef.current.find(item => item.id === id);
     if (!removed) return undefined;
+    steeringItemsRef.current.delete(id);
     commitQueue(queueRef.current.filter(item => item.id !== id));
     return removed;
   }, [commitQueue]);
@@ -131,8 +164,14 @@ export function useMessageQueue({
     dequeueForEdit(id);
   }, [dequeueForEdit]);
 
+  // Drop the row from the queue without dropping the recovery copy
+  const hideSteerRow = useCallback((id: string) => {
+    commitQueue(queueRef.current.filter(item => item.id !== id));
+  }, [commitQueue]);
+
   // Clear entire queue
   const clearQueue = useCallback(() => {
+    steeringItemsRef.current.clear();
     commitQueue([]);
   }, [commitQueue]);
 
@@ -143,8 +182,99 @@ export function useMessageQueue({
    *   their original order so no message is ever dropped.
    */
   const reorder = useCallback((orderedIds: string[]) => {
-    commitQueue(applyQueueOrder(queueRef.current, orderedIds));
-  }, [commitQueue]);
+    mutateQueue(prev => {
+      const byId = new Map(prev.map(item => [item.id, item]));
+      const seen = new Set<string>();
+      const ordered: QueuedMessage[] = [];
+      for (const id of orderedIds) {
+        const item = byId.get(id);
+        if (item && !seen.has(id)) {
+          ordered.push(item);
+          seen.add(id);
+        }
+      }
+      const remaining = prev.filter(item => !seen.has(item.id));
+      return [...ordered, ...remaining];
+    });
+  }, [mutateQueue]);
+
+  /** Mark an item as steering and keep its recovery copy for receipts */
+  const markSteering = useCallback((id: string) => {
+    mutateQueue(prev => prev.map(item => {
+      if (item.id !== id) return item;
+      const next: QueuedMessage = { ...item, status: 'steering' };
+      steeringItemsRef.current.set(id, next);
+      return next;
+    }));
+  }, [mutateQueue]);
+
+  /** Whether the item still has an unsettled steer in flight */
+  const isSteering = useCallback((id: string) => steeringItemsRef.current.has(id), []);
+
+  /** Put a rejected item back in the queue, rebuilding it when the row is gone */
+  const restore = useCallback((id: string, fallback?: QueuedMessage) => {
+    steeringItemsRef.current.delete(id);
+    mutateQueue(prev => {
+      if (prev.some(item => item.id === id)) {
+        return prev.map(item => (
+          item.id === id ? { ...item, status: 'queued' } : item
+        ));
+      }
+      // Steer plan F1: a receipt must never silently drop its message. When
+      // the row is gone, rebuild it from the optimistic-bubble fallback.
+      if (fallback && !prev.some(item => item.id === fallback.id)) {
+        return [{ ...fallback, status: 'queued' }, ...prev];
+      }
+      return prev;
+    });
+  }, [mutateQueue]);
+
+  /** Requeue an undelivered item at the head so it dispatches next */
+  const requeueAtHead = useCallback((item: QueuedMessage) => {
+    const restored: QueuedMessage = { ...item, status: 'queued' };
+    steeringItemsRef.current.delete(item.id);
+    mutateQueue(prev => {
+      const without = prev.filter(existing => existing.id !== item.id);
+      return [restored, ...without];
+    });
+  }, [mutateQueue]);
+
+  const onExecuteRef = useRef(onExecute);
+  onExecuteRef.current = onExecute;
+  const steerDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearSteerDelay = useCallback(() => {
+    if (steerDelayRef.current != null) {
+      clearTimeout(steerDelayRef.current);
+      steerDelayRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Hand the first non-steering row to `onExecute`.
+   *
+   * Dequeue and execute must stay atomic: deferring the execution behind a
+   * timer let the dequeue's own re-render cancel it and silently drop the
+   * already-dequeued message (80027de2). Rows marked `steering` are skipped —
+   * they are already in the live turn and only return through a receipt.
+   */
+  const dispatchNextQueued = useCallback(() => {
+    clearSteerDelay();
+    if (dispatchedAtRef.current !== null) {
+      return;
+    }
+    // Absent status means `queued`: only rows explicitly marked `steering`
+    // are in the live turn and must wait for a receipt.
+    const nextMessage = queueRef.current.find(item => item.status !== 'steering');
+    if (!nextMessage) {
+      return;
+    }
+    dispatchedAtRef.current = Date.now();
+    commitQueue(queueRef.current.filter(item => item.id !== nextMessage.id));
+    // The input may have pruned these while the message waited.
+    restoreQuotes(nextMessage.quotes);
+    onExecuteRef.current(nextMessage.content, nextMessage.attachments);
+  }, [clearSteerDelay, commitQueue]);
 
   // Auto-execute next message whenever the chat is idle. Dequeue and execute
   // must stay atomic inside this effect: deferring the execution behind a
@@ -163,24 +293,35 @@ export function useMessageQueue({
   // missing) leaves the gate closed so the queue waits instead of spamming
   // doomed sends; any subsequent turn reopens it.
   //
-  // `queue` only triggers the effect; the live ref is what gets read, because
-  // a message taken for editing after this render committed is already gone
-  // from the ref while the render's `queue` still holds it.
+  // While a steer receipt is still outstanding (steeringItemsRef non-empty)
+  // the dispatch waits briefly so the receipt can requeue the steered row at
+  // the head first — TC-07/TC-08 expect the undelivered row to auto-send
+  // before older rows. The row stays queued during the wait and the receipt
+  // path re-runs this effect, so cancelling the backstop never strands a
+  // message.
   useEffect(() => {
     if (isLoading) {
       dispatchedAtRef.current = null;
-      return;
+      clearSteerDelay();
+      return undefined;
     }
-    const [nextMessage, ...remaining] = queueRef.current;
-    if (!nextMessage || dispatchedAtRef.current !== null) {
-      return;
+    if (dispatchedAtRef.current !== null) {
+      return undefined;
     }
-    dispatchedAtRef.current = Date.now();
-    commitQueue(remaining);
-    // The input may have pruned these while the message waited.
-    restoreQuotes(nextMessage.quotes);
-    onExecute(nextMessage.content, nextMessage.attachments);
-  }, [isLoading, queue, onExecute, commitQueue]);
+    if (steeringItemsRef.current.size > 0) {
+      if (steerDelayRef.current == null) {
+        steerDelayRef.current = setTimeout(() => {
+          steerDelayRef.current = null;
+          dispatchNextQueued();
+        }, STEER_RECEIPT_DISPATCH_DELAY_MS);
+      }
+    } else {
+      dispatchNextQueued();
+    }
+    return () => {
+      clearSteerDelay();
+    };
+  }, [isLoading, queue, dispatchNextQueued, clearSteerDelay]);
 
   return {
     queue,
@@ -188,8 +329,14 @@ export function useMessageQueue({
     dequeue,
     dequeueForEdit,
     peekQueuedMessage,
+    hideSteerRow,
     clearQueue,
     reorder,
+    markSteering,
+    isSteering,
+    restore,
+    requeueAtHead,
+    steeringItemsRef,
     hasQueuedMessages: queue.length > 0,
   };
 }

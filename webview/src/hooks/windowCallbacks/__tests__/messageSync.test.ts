@@ -638,6 +638,23 @@ describe('preserveLastAssistantIdentity', () => {
     // Since timestamps match, preserveMessageIdentity returns next unchanged
     expect(result[0].timestamp).toBe(ts);
   });
+
+  it('does not copy segment 1 identity onto a post-fold segment 2', () => {
+    const prevTs = '2024-01-01T10:00:00.000Z';
+    const prev = [
+      makeUserMsg('refactor'),
+      makeAssistantMsg('segment 1', { timestamp: prevTs }),
+    ];
+    const next = [
+      makeUserMsg('refactor'),
+      makeAssistantMsg('segment 1', { timestamp: prevTs }),
+      makeUserMsg('do not touch B', { raw: { steered: true } }),
+      makeAssistantMsg('', { timestamp: '2024-01-01T10:00:02.000Z' }),
+    ];
+    const result = preserveLastAssistantIdentity(prev, next, findLastAssistantIndex);
+    expect(result).toBe(next);
+    expect(result[3].timestamp).not.toBe(prevTs);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -645,6 +662,25 @@ describe('preserveLastAssistantIdentity', () => {
 // ---------------------------------------------------------------------------
 
 describe('preserveStreamingAssistantContent', () => {
+  it('does not copy segment 1 content onto a post-fold segment 2', () => {
+    const longContent = 'long content from segment 1';
+    const prev = [
+      makeUserMsg('refactor'),
+      makeAssistantMsg(longContent),
+    ];
+    const next = [
+      makeUserMsg('refactor'),
+      makeAssistantMsg(longContent),
+      makeUserMsg('do not touch B', { raw: { steered: true } }),
+      makeAssistantMsg('short'),
+    ];
+    const result = preserveStreamingAssistantContent(
+      prev, next, ref(true), ref(longContent),
+      findLastAssistantIndex, patchAssistantForStreaming,
+    );
+    expect(result).toBe(next);
+    expect(result[3].content).toBe('short');
+  });
   it('returns nextList unchanged when not streaming', () => {
     const prev = [makeAssistantMsg('streamed long content here')];
     const next = [makeAssistantMsg('short')];
@@ -1004,6 +1040,26 @@ describe('stripDuplicateTrailingToolMessages', () => {
 // ---------------------------------------------------------------------------
 
 describe('ensureStreamingAssistantInList', () => {
+  it('recovers before a trailing steered bubble instead of jumping over it', () => {
+    // Layout while a steer is pending: segment 1 streams below the user's turn
+    // opener and the steered bubble was inserted optimistically after it. The
+    // snapshot arrives without segment 1 but with the steered bubble
+    // (appendOptimisticMessageIfMissing re-appended it), so recovery must slot
+    // the segment back above its own steered message instead of below it.
+    const streamingMsg = makeAssistantMsg('segment 1', { __turnId: 1, isStreaming: true });
+    const steeredBubble = makeUserMsg('steer me', {
+      steered: true, steerId: 'steer-1', steerPending: true,
+    });
+    const prev = [makeUserMsg('q'), streamingMsg, steeredBubble];
+    const result = [makeUserMsg('q'), steeredBubble];
+
+    const { list, streamingIndex } = ensureStreamingAssistantInList(prev, result, true, 1);
+
+    expect(list.map((m) => m.type)).toEqual(['user', 'assistant', 'user']);
+    expect(list[1]).toBe(streamingMsg);
+    expect(list[2]).toBe(steeredBubble);
+    expect(streamingIndex).toBe(1);
+  });
   // ---- Primary path (refs valid) ----
 
   it('returns resultList unchanged when streaming assistant already in resultList', () => {
@@ -1561,5 +1617,102 @@ describe('ensureRawTextCovers', () => {
       { type: 'text', text: 'Step 2 done.' },
     ]);
     expect(ensureRawTextCovers(preToolTextRaw, 'Step 1. ')).toBe(preToolTextRaw);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pending steer bubbles
+// ---------------------------------------------------------------------------
+
+describe('appendOptimisticMessageIfMissing — pending steer bubbles', () => {
+  /** The bubble useMessageSender builds on click: optimistic, runtime-only. */
+  const pendingSteer = (steerId: string, content: string) => makeUserMsg(content, {
+    steered: true,
+    steerId,
+    steerPending: true,
+    raw: { steered: true, steerId },
+  });
+
+  it('keeps a pending bubble whose text repeats an earlier user message', () => {
+    // "继续" is exactly the kind of steer a user types while a turn runs, and
+    // the transcript already contains the same words from the previous turn.
+    const earlier = makeUserMsg('继续');
+    const prev = [
+      earlier,
+      makeAssistantMsg('answering the earlier 继续', { isStreaming: true }),
+      pendingSteer('s1', '继续'),
+      makeAssistantMsg('', { isStreaming: true }),
+    ];
+    const snapshot = [earlier, makeAssistantMsg('answering the earlier 继续')];
+
+    const result = appendOptimisticMessageIfMissing(prev, snapshot);
+
+    const kept = result.filter((m) => m.steerId === 's1');
+    expect(kept).toHaveLength(1);
+    // The snapshot carries no open placeholder, so the bubble goes last rather
+    // than being dropped: the message the user is watching stays on screen.
+    expect(result[result.length - 1].steerId).toBe('s1');
+  });
+
+  it('keeps two back-to-back pending steers', () => {
+    const prev = [
+      makeAssistantMsg('first segment', { isStreaming: false }),
+      pendingSteer('s1', '继续'),
+      makeAssistantMsg('second segment', { isStreaming: false }),
+      pendingSteer('s2', '继续'),
+      makeAssistantMsg('', { isStreaming: true }),
+    ];
+    // The first fold landed, the second has not.
+    const snapshot = [
+      makeAssistantMsg('first segment'),
+      makeUserMsg('继续', { steered: true, steerId: 's1' }),
+      makeAssistantMsg('second segment'),
+    ];
+
+    const result = appendOptimisticMessageIfMissing(prev, snapshot);
+
+    expect(result.filter((m) => m.steerId === 's1')).toHaveLength(1);
+    expect(result.filter((m) => m.steerId === 's2')).toHaveLength(1);
+  });
+
+  it('does not duplicate a steer the snapshot already carries', () => {
+    const prev = [pendingSteer('s1', '继续'), makeAssistantMsg('', { isStreaming: true })];
+    const snapshot = [
+      makeUserMsg('继续', { steered: true, steerId: 's1' }),
+      makeAssistantMsg('segment 2'),
+    ];
+
+    const result = appendOptimisticMessageIfMissing(prev, snapshot);
+
+    expect(result.filter((m) => m.steerId === 's1')).toHaveLength(1);
+  });
+
+  it('leaves a settled steered row alone', () => {
+    const prev = [makeUserMsg('继续', { steered: true, steerId: 's1' }), makeAssistantMsg('done')];
+    const snapshot = [makeUserMsg('继续', { steered: true, steerId: 's1' }), makeAssistantMsg('done')];
+
+    const result = appendOptimisticMessageIfMissing(prev, snapshot);
+
+    expect(result).toHaveLength(2);
+  });
+
+  it('keeps the bubble above an open segment placeholder', () => {
+    // The shape right after clicking steer: segment 1 closed, bubble, then an
+    // empty placeholder for the reply that follows the fold. A snapshot that
+    // still carries the open assistant must not swallow the bubble or push it
+    // below the placeholder.
+    const prev = [
+      makeAssistantMsg('segment 1'),
+      pendingSteer('s1', '继续'),
+      makeAssistantMsg('', { isStreaming: true }),
+    ];
+    const snapshot = [makeAssistantMsg('segment 1'), makeAssistantMsg('', { isStreaming: true })];
+
+    const result = appendOptimisticMessageIfMissing(prev, snapshot);
+
+    const bubbleIndex = result.findIndex((m) => m.steerId === 's1');
+    expect(bubbleIndex).toBe(1);
+    expect(result[2].type).toBe('assistant');
+    expect(result[2].isStreaming).toBe(true);
   });
 });

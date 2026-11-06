@@ -8,9 +8,31 @@
 
 import type { MutableRefObject } from 'react';
 import type { ClaudeContentOrResultBlock, ClaudeMessage, ClaudeRawMessage } from '../../types';
+import { isSteeredUserMessage } from '../../utils/turnScope';
+import { getSteerIdOf } from '../../utils/steerMessages';
 
 /** Time window (ms) for matching optimistic messages with backend messages. */
 export const OPTIMISTIC_MESSAGE_TIME_WINDOW = 5000;
+
+/**
+ * True when the last assistant in nextList is a post-fold segment 2 that
+ * should not inherit segment 1 identity or streamed content.
+ */
+function isSteerSegmentBoundary(
+  prevList: ClaudeMessage[],
+  nextList: ClaudeMessage[],
+  prevAssistantIdx: number,
+  nextAssistantIdx: number,
+): boolean {
+  const nextSteeredIdx = nextList.findIndex((message, index) => (
+    index < nextAssistantIdx && isSteeredUserMessage(message)
+  ));
+  if (nextSteeredIdx < 0) return false;
+  const prevSteeredIdx = prevList.findIndex((message, index) => (
+    index < prevAssistantIdx && isSteeredUserMessage(message)
+  ));
+  return prevSteeredIdx < 0 || prevSteeredIdx !== nextSteeredIdx;
+}
 
 export const getStreamEndHandlingMode = (
   provider: string,
@@ -88,7 +110,7 @@ export const preserveMessageIdentity = (
  * Also merges attachment blocks from the optimistic message into the matched
  * backend message so non-image file attachments remain visible.
  */
-export const appendOptimisticMessageIfMissing = (
+const appendOptimisticTailIfMissing = (
   prevList: ClaudeMessage[],
   nextList: ClaudeMessage[],
 ): ClaudeMessage[] => {
@@ -188,6 +210,69 @@ export const appendOptimisticMessageIfMissing = (
 
   return nextList;
 };
+
+/**
+ * Keep pending steer bubbles across a backend snapshot.
+ *
+ * A steer bubble is optimistic and runtime-only: the snapshot cannot contain it
+ * until the CLI folds the steer, which can be minutes away while the CLI is busy
+ * with a tool call. Two things make the tail-only optimistic merge above the
+ * wrong tool for this:
+ *
+ * - The bubble is rarely last. Clicking steer closes the running segment and
+ * opens a placeholder after the bubble, so the tail check never even looks at
+ * it.
+ * - Matching by text is wrong for steers. A pending "continue" or "yes" matches
+ *   an earlier user message with the same words (`backendCopyExists`), and the
+ *   bubble is dropped while nothing has replaced it yet.
+ *
+ * So keep every bubble that still carries a `steerPending` marker, keyed by
+ * steerId, wherever it sits. Once the fold lands the host provides the durable
+ * row with the same steerId and this keeps it untouched.
+ */
+const retainPendingSteerBubbles = (
+  prevList: ClaudeMessage[],
+  nextList: ClaudeMessage[],
+): ClaudeMessage[] => {
+  const pending = prevList.filter((message) => (
+    message.type === 'user' && message.steerPending === true && !!getSteerIdOf(message)
+  ));
+  if (pending.length === 0) return nextList;
+
+  let next = nextList;
+  for (const bubble of pending) {
+    const steerId = getSteerIdOf(bubble);
+    if (!steerId) continue;
+    // The snapshot already carries this steer (a folded row, or a bubble kept
+    // by an earlier merge): nothing to restore.
+    if (next.some((message) => getSteerIdOf(message) === steerId)) continue;
+    const tailIndex = next.length - 1;
+    const tail = next[tailIndex];
+    // Land before the open segment placeholder so the bubble stays between the
+    // answer it interrupts and the reply that follows it.
+    next = tail && tail.type === 'assistant' && tail.isStreaming
+      ? [...next.slice(0, tailIndex), bubble, ...next.slice(tailIndex)]
+      : [...next, bubble];
+  }
+  return next;
+};
+
+/**
+ * Fold an incoming backend snapshot into the current transcript without losing
+ * the user's own optimistic rows: the just-sent message when the send has not
+ * landed yet, and every steer bubble still waiting for its fold.
+ *
+ * @param prevList current transcript
+ * @param nextList snapshot from the backend
+ * @returns merged transcript
+ */
+export const appendOptimisticMessageIfMissing = (
+  prevList: ClaudeMessage[],
+  nextList: ClaudeMessage[],
+): ClaudeMessage[] => retainPendingSteerBubbles(
+  prevList,
+  appendOptimisticTailIfMissing(prevList, nextList),
+);
 
 /**
  * Extract comparable text content from a user message for deduplication matching.
@@ -291,6 +376,9 @@ export const preserveLastAssistantIdentity = (
   // Block when either side has __turnId and they differ
   if ((prevAssistant.__turnId !== undefined || nextAssistant.__turnId !== undefined) &&
       prevAssistant.__turnId !== nextAssistant.__turnId) {
+    return nextList;
+  }
+  if (isSteerSegmentBoundary(prevList, nextList, prevAssistantIdx, nextAssistantIdx)) {
     return nextList;
   }
   const stabilized = preserveMessageIdentity(prevAssistant, nextAssistant);
@@ -711,6 +799,9 @@ export const preserveStreamingAssistantContent = (
       prevAssistant.__turnId !== nextAssistant.__turnId) {
     return nextList;
   }
+  if (isSteerSegmentBoundary(prevList, nextList, prevAssistantIdx, nextAssistantIdx)) {
+    return nextList;
+  }
 
   const previousContent = prevAssistant.content || '';
   const bufferedContent = streamingContentRef.current || '';
@@ -932,6 +1023,22 @@ export const preserveLatestMessagesOnShrink = (
 // ---------------------------------------------------------------------------
 
 /**
+ * Where a recovered assistant message belongs in the list.
+ *
+ * Normally that is the tail. A steered user row is the exception: it is
+ * inserted optimistically while segment 1 is still streaming, so it always sits
+ * after the assistant it belongs to and must never be jumped over — otherwise
+ * the recovered segment lands below its own steered message.
+ */
+const findAssistantRecoveryIndex = (list: ClaudeMessage[]): number => {
+  let index = list.length;
+  while (index > 0 && isSteeredUserMessage(list[index - 1])) {
+    index -= 1;
+  }
+  return index;
+};
+
+/**
  * Ensure a streaming assistant message is not lost when updateMessages replaces
  * the entire message list.  Returns the (possibly amended) result list and the
  * index of the streaming assistant inside it.
@@ -980,8 +1087,13 @@ export const ensureStreamingAssistantInList = (
     }
 
     if (streamingAssistant) {
-      const result = [...resultList, streamingAssistant];
-      return { list: result, streamingIndex: result.length - 1 };
+      const insertIndex = findAssistantRecoveryIndex(resultList);
+      const result = [
+        ...resultList.slice(0, insertIndex),
+        streamingAssistant,
+        ...resultList.slice(insertIndex),
+      ];
+      return { list: result, streamingIndex: insertIndex };
     }
 
     return { list: resultList, streamingIndex: -1 };
@@ -1008,8 +1120,13 @@ export const ensureStreamingAssistantInList = (
         i < resultList.length && resultList.slice(i).some((m) => m.type === 'assistant');
 
       if (!alreadyPresent && !assistantAlreadyAtOrAfterPosition) {
-        const result = [...resultList, msg];
-        return { list: result, streamingIndex: result.length - 1 };
+        const insertIndex = findAssistantRecoveryIndex(resultList);
+        const result = [
+          ...resultList.slice(0, insertIndex),
+          msg,
+          ...resultList.slice(insertIndex),
+        ];
+        return { list: result, streamingIndex: insertIndex };
       }
       // Already in resultList — no recovery needed
       break;

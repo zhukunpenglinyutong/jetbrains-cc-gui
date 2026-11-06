@@ -48,7 +48,17 @@ class ClaudeHistoryParser {
                 if (line.trim().isEmpty()) { continue; }
 
                 try {
-                    ClaudeHistoryReader.ConversationMessage msg = this.gson.fromJson(line, ClaudeHistoryReader.ConversationMessage.class);
+                    ClaudeHistoryReader.ConversationMessage msg;
+                    if (line.contains("queued_command")) {
+                        // Only a queued_command attachment can become a steered user
+                        // row. Rewriting unconditionally parsed every line of the
+                        // session twice (tree, then POJO) to find the rare one.
+                        com.google.gson.JsonObject row = this.gson.fromJson(line, com.google.gson.JsonObject.class);
+                        row = QueuedCommandHistoryRewrite.rewrite(row);
+                        msg = this.gson.fromJson(row, ClaudeHistoryReader.ConversationMessage.class);
+                    } else {
+                        msg = this.gson.fromJson(line, ClaudeHistoryReader.ConversationMessage.class);
+                    }
                     if (msg != null) {
                         messages.add(msg);
                     }

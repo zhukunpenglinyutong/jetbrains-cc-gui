@@ -45,6 +45,8 @@ export interface ResetTransientUiStateOptions {
    * session swap, so its state never belongs to the session that follows.
    */
   setStartupHistoryLoadState?: (state: StartupHistoryLoadState | null) => void;
+  /** Reset live provider capabilities on session switch */
+  resetCapabilities?: () => void;
 }
 
 /**
@@ -66,6 +68,9 @@ export const buildResetTransientUiState = (opts: ResetTransientUiStateOptions) =
       opts.clearQueuedMessages();
     }
     opts.setStartupHistoryLoadState?.(null);
+    if (opts.resetCapabilities) {
+      opts.resetCapabilities();
+    }
     opts.isStreamingRef.current = false;
     opts.useBackendStreamingRenderRef.current = false;
     opts.streamingMessageIndexRef.current = -1;

@@ -38,6 +38,7 @@ import { registerSessionAndSdkCallbacks } from './registerCallbacks/sessionCallb
 import { registerUsageModeCallbacks } from './registerCallbacks/usageModeCallbacks';
 import { registerPermissionCallbacks } from './registerCallbacks/permissionCallbacks';
 import { registerAgentAndSelectionCallbacks } from './registerCallbacks/agentCallbacks';
+import { registerSteerCallbacks } from './registerCallbacks/steerCallbacks';
 import { sendBridgeEvent } from '../../utils/bridge';
 import {
   isCurrentSubagentResponse,
@@ -91,7 +92,7 @@ export function registerWindowCallbacks(
     thinkingUpdateTimeoutRef: options.thinkingUpdateTimeoutRef,
     streamingTurnIdRef: options.streamingTurnIdRef,
     clearQueuedMessages: options.clearQueuedMessages,
-    setStartupHistoryLoadState: options.setStartupHistoryLoadState,
+    resetCapabilities: options.resetCapabilities,
   });
 
   // Expose as single entry point for session transition cleanup.
@@ -112,6 +113,7 @@ export function registerWindowCallbacks(
   window.__codexFrontendPageGeneration = pageGeneration;
   sendBridgeEvent('codex_runtime_frontend_ready', JSON.stringify({ pageGeneration }));
   registerAgentAndSelectionCallbacks(options);
+  registerSteerCallbacks(options, tRef);
 
   window.onSubagentHistoryChunk = appendSubagentHistoryChunk;
 

@@ -18,26 +18,76 @@ export interface MessageQueueProps {
   onEdit?: (id: string) => void;
   /** Reorder callback (orderedIds[0] executes first); drag is disabled when absent */
   onReorder?: (orderedIds: string[]) => void;
+  /** Show the steer button when the live runtime can inject into the current turn */
+  canSteer?: boolean;
+  /** Steer a queued item into the live turn */
+  onSteer?: (id: string) => void;
   /** Translation function */
   t: TFunction;
 }
 
 /**
+ * Merge a reordered list of visible rows back into the full queue.
+ *
+ * Hidden `steering` rows are neither draggable nor rendered, so the visible
+ * list a drag produces has no ids for them. Handing that list straight to the
+ * parent would treat every hidden row as "missing" and push it to the tail,
+ * which then shows up as a restored message landing at the end of the queue
+ * instead of in the slot it was steered from. The hidden rows keep their
+ * original slots here and only the visible rows trade places.
+ *
+ * @param queue full queue including hidden steering rows
+ * @param orderedVisibleIds visible ids in their new order
+ * @returns full id sequence covering every row
+ */
+export function mergeVisibleOrderIntoQueue(
+  queue: QueuedMessage[],
+  orderedVisibleIds: string[],
+): string[] {
+  const visibleIds = new Set(queue.filter(item => item.status !== 'steering').map(item => item.id));
+  const reordered = orderedVisibleIds.filter(id => visibleIds.has(id));
+  let cursor = 0;
+  return queue.map(item => {
+    if (item.status === 'steering') return item.id;
+    const next = reordered[cursor];
+    cursor += 1;
+    return next ?? item.id;
+  });
+}
+
+/**
  * MessageQueue - Displays queued messages above input box
- * Shows numbered list with drag handle, message preview, edit and close buttons.
+ * Shows numbered list with drag handle, message preview, edit, steer and close
+ * buttons, all rendered per item in that order.
  * Items render in reverse order so the next message to execute (queue[0]) is at the bottom.
  * Drag is initiated only from the gripper handle (pointer-based), so text in the
  * row stays selectable and other controls are unaffected.
  */
-export function MessageQueue({ queue, onRemove, onEdit, onReorder, t }: MessageQueueProps) {
+export function MessageQueue({
+  queue, onRemove, onEdit, onReorder, canSteer = false, onSteer, t,
+}: MessageQueueProps) {
+  /**
+   * A steering item has already been shown in the transcript as an optimistic
+   * steered bubble, so it is hidden here to keep one message in one place. It
+   * stays in the parent queue state (and in steeringItemsRef) so a rejected or
+   * undelivered receipt can restore it to its original slot.
+   */
+  const visibleQueue = useMemo(
+    () => queue.filter(item => item.status !== 'steering'),
+    [queue],
+  );
+
   /**
    * Sort callback fired when a drag completes.
-   * useDragSort emits orderedIds in real queue order (not display order), so
-   * they can be handed straight to the parent reorder.
+   * useDragSort emits orderedIds in real queue order (not display order);
+   * hidden rows are woven back by mergeVisibleOrderIntoQueue so they keep
+   * their slots, then the full sequence goes to the parent reorder.
    */
   const handleSort = useCallback((orderedIds: string[]) => {
-    onReorder?.(orderedIds);
-  }, [onReorder]);
+    const merged = mergeVisibleOrderIntoQueue(queue, orderedIds);
+    onReorder?.(merged);
+  }, [queue, onReorder]);
+
   /**
    * Keyboard reorder for the drag handle: the list renders reversed (queue[0]
    * at the bottom), so ArrowUp moves the message later in the queue (visually
@@ -47,13 +97,13 @@ export function MessageQueue({ queue, onRemove, onEdit, onReorder, t }: MessageQ
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
     e.preventDefault();
     e.stopPropagation();
-    const index = queue.findIndex(item => item.id === id);
+    const index = visibleQueue.findIndex(item => item.id === id);
     const swapIndex = e.key === 'ArrowUp' ? index + 1 : index - 1;
-    if (index === -1 || swapIndex < 0 || swapIndex >= queue.length) return;
-    const next = [...queue];
+    if (index === -1 || swapIndex < 0 || swapIndex >= visibleQueue.length) return;
+    const next = [...visibleQueue];
     [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
-    onReorder?.(next.map(item => item.id));
-  }, [queue, onReorder]);
+    onReorder?.(mergeVisibleOrderIntoQueue(queue, next.map(item => item.id)));
+  }, [queue, visibleQueue, onReorder]);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -68,7 +118,7 @@ export function MessageQueue({ queue, onRemove, onEdit, onReorder, t }: MessageQ
   // Only the pointer-based path is used; `queue` (parent state) is the single
   // source of truth for rendering because reorder applies synchronously.
   const { draggedId, dragOverId, dragOverPlacement, handlePointerDown } = useDragSort({
-    items: queue,
+    items: visibleQueue,
     onSort: handleSort,
     resolveDropTarget,
   });
@@ -77,18 +127,18 @@ export function MessageQueue({ queue, onRemove, onEdit, onReorder, t }: MessageQ
   // near its edges so rows outside the viewport can be reached.
   useDragAutoScroll(containerRef, draggedId !== null);
 
-  if (queue.length === 0) {
+  if (visibleQueue.length === 0) {
     return null;
   }
 
-  const canReorder = typeof onReorder === 'function' && queue.length > 1;
+  const canReorder = typeof onReorder === 'function' && visibleQueue.length > 1;
 
   return (
     <div className="message-queue" ref={containerRef}>
       {/* Render in reverse order so newest is at bottom (closest to input) */}
-      {[...queue].reverse().map((item, reversedIndex) => {
+      {[...visibleQueue].reverse().map((item, reversedIndex) => {
         // Calculate actual queue position (1-based, from bottom)
-        const queuePosition = queue.length - reversedIndex;
+        const queuePosition = visibleQueue.length - reversedIndex;
         // Placement is in queue order; the display is reversed, so 'after'
         // (higher index) draws the insert line above the row and 'before' below it.
         const isDragOver = dragOverId === item.id;
@@ -128,6 +178,17 @@ export function MessageQueue({ queue, onRemove, onEdit, onReorder, t }: MessageQ
                 onClick={() => onEdit(item.id)}
               >
                 <span className="codicon codicon-edit" aria-hidden="true" />
+              </button>
+            )}
+            {canSteer && (
+              <button
+                type="button"
+                className="message-queue-steer"
+                aria-label={t('chat.queue.steerNow')}
+                title={t('chat.queue.steerNow')}
+                onClick={() => onSteer?.(item.id)}
+              >
+                <span className="codicon codicon-run-above" aria-hidden="true" />
               </button>
             )}
             <button
