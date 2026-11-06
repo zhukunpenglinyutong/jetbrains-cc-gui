@@ -76,7 +76,8 @@ const App = () => {
     handleSubmit, interruptSession, messageQueue, dequeueMessage, handleEditQueuedMessage, reorderMessageQueue,
     handleOpenRewindSelectDialog, handleNavigateToProviderSettings, wrappedHandleProviderSelect,
     createNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
-    exportHistorySession, toggleFavoriteSession, updateHistoryTitle, convertToCliSession,
+    exportHistorySession, toggleFavoriteSession, updateHistoryTitle,
+    regenerateHistoryTitle, convertToCliSession, regeneratingTitleSessionIds,
     showNewSessionConfirm, handleConfirmNewSession, handleCancelNewSession,
     showInterruptConfirm, handleConfirmInterrupt, handleCancelInterrupt,
     handleRewindSelect, handleRewindSelectCancel, handleRewindConfirm, handleRewindCancel,
@@ -96,6 +97,9 @@ const App = () => {
         sessionTitle={sessionTitle}
         onNewSession={createNewSession}
         onUpdateHistoryTitle={updateHistoryTitle}
+        onRegenerateTitle={regenerateHistoryTitle}
+        regeneratingTitleSessionIds={regeneratingTitleSessionIds}
+        canRegenerateTitle={model.currentProvider === 'claude'}
       />
 
       {currentView === 'settings' ? (
@@ -197,6 +201,8 @@ const App = () => {
           onExportSession={exportHistorySession}
           onToggleFavorite={toggleFavoriteSession}
           onUpdateTitle={updateHistoryTitle}
+          onRegenerateTitle={regenerateHistoryTitle}
+          regeneratingTitleSessionIds={regeneratingTitleSessionIds}
           onConvertToCliSession={convertToCliSession}
         />
       )}

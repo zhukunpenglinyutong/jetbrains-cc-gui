@@ -154,6 +154,48 @@
     opacity: 1;
 }
 
+/* AI regenerate-title button next to the session title */
+.session-title-regenerate-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-chat-bars-muted-text, var(--text-tertiary));
+    cursor: pointer;
+    font-size: 13px;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    opacity: 0;
+    line-height: 1;
+    flex-shrink: 0;
+
+    .codicon {
+        font-size: 13px;
+    }
+
+    &:disabled {
+        cursor: default;
+    }
+
+    &:not(:disabled):hover {
+        background-color: var(--color-button-accent-hover-bg);
+        color: var(--accent-primary);
+    }
+
+    &:not(:disabled):active {
+        transform: scale(0.92);
+    }
+}
+
+.session-title-wrapper:hover .session-title-regenerate-btn {
+    opacity: 1;
+}
+
+/* Keep the spinner visible even without hovering the title */
+.session-title-regenerate-btn.is-loading {
+    opacity: 1;
+    color: #30d158;
+}
+
 /* Edit mode */
 .session-title-edit-mode {
     display: flex;

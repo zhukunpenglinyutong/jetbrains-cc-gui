@@ -153,6 +153,8 @@ export interface HistorySessionSummary {
   agent?: string;
   fileSize?: number;
   entrypoint?: string; // Session entrypoint: 'cli', 'sdk-cli', 'claude-vscode', etc.
+  /** Set by HistoryLoadService when session-titles.json carries a manual title. */
+  hasCustomTitle?: boolean;
 }
 
 export interface HistoryData {
