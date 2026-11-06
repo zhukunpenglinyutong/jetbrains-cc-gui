@@ -188,6 +188,34 @@
       ]
     },
     {
+      "code": "claudeCodeWindowsTooOld",
+      "match": {
+        "regex": "Claude Code process exited with code\\s+(?:3221225785|-1073741511)\\b"
+      },
+      "solutions": [
+        {
+          "key": "updateWindows",
+          "recommended": true,
+          "steps": [{ "kind": "instruction" }]
+        },
+        {
+          "key": "useOlderSdk",
+          "recommended": false,
+          "steps": [
+            {
+              "kind": "navigation",
+              "action": "openDependencySettings"
+            }
+          ]
+        },
+        {
+          "key": "checkCustomCli",
+          "recommended": false,
+          "steps": [{ "kind": "instruction" }]
+        }
+      ]
+    },
+    {
       "code": "spawnEbusy",
       "match": {
         "regex": "spawn EBUSY"
