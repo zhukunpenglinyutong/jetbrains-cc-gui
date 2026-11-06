@@ -2806,6 +2806,25 @@
         }
       }
     },
+    "claudeCodeWindowsTooOld": {
+      "title": "当前 Windows 版本无法启动 Claude Code",
+      "intro": "Windows 阻止了 Claude Code 启动，因为找不到它需要的系统函数（错误 0xC0000139）。这通常说明 Windows 版本过旧：Claude Code 2.1.118 及更高版本使用 ClosePseudoConsole，需要 Windows 10 1809 或 Windows Server 2019。",
+      "reason": "Windows 在加载程序时就拒绝了它，此时 Claude Code 还没有运行，所以更换模型、供应商或权限设置都没有帮助。",
+      "solutions": {
+        "updateWindows": {
+          "title": "方案一：升级 Windows",
+          "step0": "升级到 Windows 10 1809 或更高版本，或 Windows Server 2019 或更高版本。这些版本包含缺失的函数。"
+        },
+        "useOlderSdk": {
+          "title": "方案二：切换到旧版 SDK",
+          "step0": "在「依赖管理」中将 SDK 版本切换到 v0.2.112 或更早版本。较新的模型可能不接受这个旧版本。如果模型要求更新的 Claude Code，请换用其他模型或升级 Windows，因为更新 SDK 会让这个错误再次出现。"
+        },
+        "checkCustomCli": {
+          "title": "方案三：检查自定义的 Claude CLI",
+          "step0": "如果设置了「Claude CLI 路径（覆盖）」，插件会运行该程序而不是 SDK，切换 SDK 不会有任何效果。请清空该路径，或改为指向旧版 Claude Code。如果 Windows 已是最新版本，请先检查这一项。"
+        }
+      }
+    },
     "spawnEbusy": {
       "title": "spawn EBUSY — 子进程启动失败",
       "intro": "该错误通常由 Node.js 版本不兼容或 SDK 安装不完整引起，按以下两个方向排查通常可解决：",

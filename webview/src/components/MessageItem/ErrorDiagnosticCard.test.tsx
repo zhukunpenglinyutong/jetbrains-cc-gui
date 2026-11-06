@@ -26,6 +26,18 @@ describe('ErrorDiagnosticCard', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
+  it('sends old Windows users to the dependency settings and offers no one-click SDK update', () => {
+    const onNavigate = vi.fn();
+    const pattern = matchErrorPattern('Claude Code process exited with code 3221225785');
+    expect(pattern).not.toBeNull();
+    render(<ErrorDiagnosticCard t={t} pattern={pattern!} onNavigateToDependencySettings={onNavigate} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /errorDiagnostic\.openDependencySettings/ }));
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('errorDiagnostic.updateClaudeSdk')).toBeNull();
+    expect(screen.getByText('errorDiagnostic.claudeCodeWindowsTooOld.solutions.checkCustomCli.step0')).toBeTruthy();
+  });
+
   it('opens the official platform install instructions without running installation commands', () => {
     window.sendToJava = vi.fn();
     const pattern = matchErrorPattern('codex app-server exited (code=1, signal=null)\nCodex CLI check');

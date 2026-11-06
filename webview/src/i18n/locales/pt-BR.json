@@ -2346,6 +2346,25 @@
         }
       }
     },
+    "claudeCodeWindowsTooOld": {
+      "title": "O Claude Code não pode iniciar nesta versão do Windows",
+      "intro": "O Windows impediu o Claude Code de iniciar porque não encontrou uma função do sistema necessária (erro 0xC0000139). Isso geralmente indica que o Windows é antigo demais: o Claude Code 2.1.118 e posteriores usam ClosePseudoConsole, que exige o Windows 10 versão 1809 ou o Windows Server 2019.",
+      "reason": "O Windows rejeita o programa ao carregá-lo, antes de o Claude Code ser executado, então mudar o modelo, o provedor ou as permissões não vai ajudar.",
+      "solutions": {
+        "updateWindows": {
+          "title": "Opção 1: atualize o Windows",
+          "step0": "Atualize para o Windows 10 versão 1809 ou posterior, ou para o Windows Server 2019 ou posterior. Essas versões incluem a função que falta."
+        },
+        "useOlderSdk": {
+          "title": "Opção 2: mude para um SDK anterior",
+          "step0": "Em Gerenciamento de Dependências, altere a versão do SDK para v0.2.112 ou anterior. Modelos mais recentes podem não aceitar essa versão. Se um modelo pedir um Claude Code mais recente, escolha outro modelo ou atualize o Windows: atualizar o SDK faz este erro voltar."
+        },
+        "checkCustomCli": {
+          "title": "Opção 3: verifique seu CLI do Claude personalizado",
+          "step0": "Se você definiu \"Caminho do CLI do Claude (substituição)\", o plugin executa esse binário em vez do SDK, então trocar o SDK não tem efeito. Limpe o caminho ou aponte-o para um Claude Code anterior. Verifique isto primeiro se o seu Windows já estiver atualizado."
+        }
+      }
+    },
     "spawnEbusy": {
       "title": "spawn EBUSY — falha ao iniciar o processo filho",
       "intro": "Este erro geralmente é causado por uma versão incompatível do Node.js ou uma instalação incompleta do SDK. Tente as duas opções abaixo na ordem:",

@@ -22,7 +22,7 @@ import { buildIDEContextPrompt } from '../system-prompts.js';
 import { buildQuickFixPrompt } from '../quickfix-prompts.js';
 import { registerActiveQueryResult, removeSession } from './message-service.js';
 import { normalizePermissionMode } from './permission-mode.js';
-import { redactSecrets, truncateString } from './message-output-filter.js';
+import { MAX_SEND_ERROR_LENGTH, prependSdkStderr, redactSecrets, truncateString } from './message-output-filter.js';
 import { extractResultError } from './message-utils.js';
 import {
   beginRuntimeTurn,
@@ -64,7 +64,6 @@ import {
   processToolResultMessages,
   shouldOutputMessage,
 } from './stream-event-processor.js';
-import { describeClaudeLaunchFailure } from './windows-launch-error.js';
 import { generateSessionTitle } from '../session-title-service.js';
 import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
 
@@ -492,18 +491,13 @@ function emitSendError(runtime, error, requestContext) {
   // these before they reach the UI / Java logs.
   if (error?.stack) payload.details.stack = redactSecrets(truncateString(error.stack, 2000));
 
-  const launchFailureHint = describeClaudeLaunchFailure(error?.message);
-  if (launchFailureHint) {
-    payload.error = `${launchFailureHint}\n\n${payload.error}`;
-  }
-
   if (runtime?.stderrLines?.length) {
     const sdkErrorText = redactSecrets(runtime.stderrLines.slice(-10).join('\n'));
-    payload.error = `SDK-STDERR:\n\`\`\`\n${sdkErrorText}\n\`\`\`\n\n${payload.error}`;
+    payload.error = prependSdkStderr(payload.error, sdkErrorText);
     payload.details.sdkError = sdkErrorText;
   }
 
-  payload.error = truncateString(payload.error, 2500);
+  payload.error = truncateString(payload.error, MAX_SEND_ERROR_LENGTH);
 
   // The error payload is emitted on three channels intentionally:
   //   1. stderr ([SEND_ERROR] tag) — captured by Java's stderrLines for diagnostics
