@@ -34,25 +34,16 @@ interface CodexRuntimeEnvelope {
   };
 }
 
-const FALLBACK_MODEL_METADATA_PREFIX = 'Model metadata for `';
-const FALLBACK_MODEL_METADATA_SUFFIX = '` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.';
+const FALLBACK_MODEL_METADATA_WARNING = /^Model metadata for `[^`\n]*` not found\. Defaulting to fallback metadata; this can degrade performance and cause issues\.$/;
 
 /**
- * Key for a warning that stays true until something changes, or null for one
- * that may be worth repeating. The CLI re-sends the fallback metadata warning on
- * every turn; the native TUI shows it once per model, and so does this.
+ * The CLI re-sends this on every turn for any model outside its catalog, including
+ * third-party models that no update can help, while the chat keeps working. The
+ * native TUI only counts it in its footer, so it gets no toast here either. A CLI
+ * below the recommended minimum is told to update by its cliVersionOutdated notice.
  */
-function oneShotWarningKey(event: CodexRuntimeEnvelope): string | null {
-  const { method, message, version } = event.payload ?? {};
-  if (method === 'cliVersionOutdated') {
-    return JSON.stringify([method, event.channelId, version]);
-  }
-  if (method === 'warning' && message?.startsWith(FALLBACK_MODEL_METADATA_PREFIX)
-      && message.endsWith(FALLBACK_MODEL_METADATA_SUFFIX)) {
-    return JSON.stringify([method, event.channelId, event.sessionEpoch, event.runtimeBackend,
-      event.rootThreadId ?? event.threadId ?? null, message]);
-  }
-  return null;
+function isFallbackModelMetadataWarning(method?: string, message?: string): boolean {
+  return method === 'warning' && FALLBACK_MODEL_METADATA_WARNING.test(message ?? '');
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -277,12 +268,15 @@ export function registerPermissionCallbacks(options: PermissionCallbacks, getTra
           if (method === 'guardianWarning' && event.payload.message.startsWith('Automatic approval review approved (')) {
             return;
           }
-          const oneShotKey = oneShotWarningKey(event);
-          if (oneShotKey && !rememberOneShotWarning(oneShotKey)) {
+          if (isFallbackModelMetadataWarning(method, event.payload.message)) {
             return;
           }
           if (method === 'cliVersionOutdated') {
             const { message, version, minimumVersion } = event.payload;
+            // Stays true until the CLI changes, so a new runtime on this channel does not repeat it.
+            if (!rememberOneShotWarning(JSON.stringify([event.channelId, version]))) {
+              return;
+            }
             const t = getTranslation?.() ?? options.t;
             options.addToast(t?.('chat.codexCliOutdated', { defaultValue: message, version, minimumVersion }) ?? message, 'warning');
             return;
