@@ -811,7 +811,8 @@
         "bailianCoding": "Bailian Coding",
         "longcat": "LongCat",
         "opencodeGo": "OpenCode Go",
-        "openrouter": "OpenRouter"
+        "openrouter": "OpenRouter",
+        "cheaperInference": "Cheaper Inference"
       }
     },
     "comingSoon": "功能即將推出...",

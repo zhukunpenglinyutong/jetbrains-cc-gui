@@ -35,6 +35,7 @@ export type ModelVendor =
   | 'cohere'
   | 'grok'
   | 'openrouter'
+  | 'cheaperinference'
   | 'yi';
 
 /**
@@ -90,6 +91,7 @@ const BASE_URL_VENDOR_PATTERNS: ReadonlyArray<readonly [RegExp, ModelVendor]> = 
   [/longcat\.chat/i, 'longcat'],
   [/opencode\.ai/i, 'opencode'],
   [/openrouter\.ai/i, 'openrouter'],
+  [/cheaperinference\.com/i, 'cheaperinference'],
   [/api\.anthropic\.com/i, 'claude'],
   [/googleapis\.com/i, 'gemini'],
   [/api\.openai\.com/i, 'openai'],
@@ -127,6 +129,7 @@ const PROVIDER_TO_VENDOR: Record<string, ModelVendor> = {
   // DeepSeek Harness — brand follows DeepSeek.
   dsh: 'deepseek',
   openrouter: 'openrouter',
+  'cheaper-inference': 'cheaperinference',
 };
 
 /**

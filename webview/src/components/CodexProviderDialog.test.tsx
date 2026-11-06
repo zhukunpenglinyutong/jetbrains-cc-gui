@@ -58,6 +58,7 @@ describe('CodexProviderDialog', () => {
     expect(screen.getByRole('radio', { name: 'settings.provider.presets.longcat' })).toBeTruthy();
     expect(screen.getByRole('radio', { name: 'settings.provider.presets.opencodeGo' })).toBeTruthy();
     expect(screen.getByRole('radio', { name: 'settings.provider.presets.openrouter' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'settings.provider.presets.cheaperInference' })).toBeTruthy();
 
     expect(screen.queryByRole('radio', { name: 'settings.provider.presets.qwen' })).toBeNull();
     expect(document.querySelector('[data-provider-icon="bailian-coding"]')).toBeTruthy();
