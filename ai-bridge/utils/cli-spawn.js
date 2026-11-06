@@ -3,9 +3,11 @@
  */
 
 import { spawn } from 'child_process';
+import { existsSync } from 'fs';
 import { createInterface } from 'readline';
+import { StringDecoder } from 'string_decoder';
 import { emitSendError, endStream } from './marker-protocol.js';
-import { resolveCliSpawn } from './cli-path.js';
+import { resolveCliSpawn, decodeCliOutput, stripOuterQuotes } from './cli-path.js';
 
 function killChildTree(child, label) {
   if (!child || child.killed) return;
@@ -55,6 +57,10 @@ function killChildTree(child, label) {
  * @param {(message: string) => void} [options.onError] - when set, called instead of
  *   writing `[SEND_ERROR]` (used by session-less ask paths: prompt enhance / commit)
  * @param {boolean} [options.emitEndStream=true] - when false, skip chat stream end markers
+ * @param {string} [options.stdinData] - when set, piped to the child's stdin
+ *   (and stdio[0] becomes 'pipe'). For payloads that cannot ride argv: Windows
+ *   cmd.exe command lines truncate at the first newline and cap near 32k chars,
+ *   so multi-line/oversized prompts must go through a stdin pipe instead.
  * @returns {Promise<{ code: number|null, signal: NodeJS.Signals|null, hadError: boolean, errorMessage?: string }>}
  */
 export function runCliStreaming({
@@ -68,6 +74,7 @@ export function runCliStreaming({
   onCloseBeforeEnd,
   onError,
   emitEndStream = true,
+  stdinData,
 }) {
   return new Promise((resolve) => {
     let hadError = false;
@@ -110,7 +117,7 @@ export function runCliStreaming({
       const invocation = resolveCliSpawn(bin, args, {
         cwd,
         env,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: [stdinData != null ? 'pipe' : 'ignore', 'pipe', 'pipe'],
         detached: process.platform !== 'win32',
       });
       child = spawn(invocation.file, invocation.args, invocation.options);
@@ -121,14 +128,31 @@ export function runCliStreaming({
       return;
     }
 
+    // Feed piped payloads after the listeners are wired. EPIPE is expected
+    // when the CLI exits before draining stdin (e.g. an immediate arg error),
+    // so write failures must not take the stream loop down.
+    if (stdinData != null && child.stdin) {
+      child.stdin.on('error', () => { /* child exited early; close handler reports */ });
+      child.stdin.write(stdinData);
+      child.stdin.end();
+    }
+
     const onParentSignal = () => killChildTree(child, label);
     process.once('SIGTERM', onParentSignal);
     process.once('SIGINT', onParentSignal);
     process.once('SIGHUP', onParentSignal);
 
     const stdoutRl = createInterface({ input: child.stdout });
-    // Rolling tail only — never accumulate the child's full stderr.
-    let stderrTail = '';
+    // Rolling tail only — never accumulate the child's full stderr. Kept as
+    // RAW bytes: the win32 GBK fallback needs a complete buffer (a multi-byte
+    // character split across chunk boundaries is not GBK, and re-decoding
+    // such chunks as GBK garbles healthy UTF-8), so it re-decodes this tail
+    // once at close instead of each chunk as it arrives.
+    const STDERR_TAIL_MAX_BYTES = 16384;
+    let stderrTailBytes = Buffer.alloc(0);
+    // Incremental UTF-8 decode for the live echo: buffers partial multi-byte
+    // sequences so a character split across chunks survives.
+    const stderrDecoder = new StringDecoder('utf8');
 
     stdoutRl.on('line', (line) => {
       try {
@@ -151,15 +175,21 @@ export function runCliStreaming({
     });
 
     child.stderr.on('data', (chunk) => {
-      const text = chunk.toString();
-      stderrTail = (stderrTail + text).slice(-4000);
+      const text = stderrDecoder.write(chunk);
+      const merged = stderrTailBytes.length + chunk.length > STDERR_TAIL_MAX_BYTES
+        ? Buffer.concat([stderrTailBytes, chunk]).subarray(-STDERR_TAIL_MAX_BYTES)
+        : Buffer.concat([stderrTailBytes, chunk]);
+      stderrTailBytes = merged;
       process.stderr.write(text);
     });
 
     child.on('error', (error) => {
       hadError = true;
+      const binPath = stripOuterQuotes(bin);
       const hint = error?.code === 'ENOENT'
-        ? `${label} CLI not found. Install it and ensure \`${bin}\` is on PATH.`
+        ? (existsSync(binPath)
+          ? `${label} CLI failed to start (ENOENT) even though \`${binPath}\` exists — a missing working directory (${cwd}) or a broken shim target inside \`${binPath}\` is the likely cause.`
+          : `${label} CLI not found. Install it and ensure \`${bin}\` is on PATH.`)
         : (error?.message || String(error));
       reportError(hint);
     });
@@ -174,7 +204,10 @@ export function runCliStreaming({
         && code !== 0
         && signal !== 'SIGTERM'
         && signal !== 'SIGINT') {
-        const tail = stderrTail.trim().slice(-800);
+        // Decode the complete tail once: UTF-8 first, GBK retry on win32 only
+        // (cmd.exe emits localized messages in the OEM codepage — GBK on
+        // Chinese Windows — which a forced UTF-8 read turns into U+FFFD).
+        const tail = decodeCliOutput(stderrTailBytes).trim().slice(-800);
         reportError(
           `${label} CLI exited with code ${code}${signal ? ` (signal ${signal})` : ''}`
           + (tail ? `\n${tail}` : '')
