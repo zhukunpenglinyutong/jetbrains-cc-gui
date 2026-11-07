@@ -304,6 +304,77 @@ describe('MarkdownBlock linkify integration', () => {
     expect(markdownLink.classList.contains('url-link')).toBe(true);
   });
 
+  it('routes markdown file links through openFile and shows file tooltips', () => {
+    bridgeMocks.resolveFilePathWithCallback.mockImplementation((path: string, callback: (result: string | null) => void) => {
+      callback(path);
+    });
+
+    render(
+      <MarkdownBlock content={'Open [Foo.cs](Assets/GameScripts/Foo.cs#L12)'} />,
+    );
+
+    const fileLink = screen.getByRole('link', { name: 'Foo.cs' });
+    expect(fileLink.classList.contains('file-link')).toBe(true);
+    expect(fileLink.getAttribute('data-linkify')).toBe('file');
+    expect(fileLink.getAttribute('data-file-path')).toBe('Assets/GameScripts/Foo.cs:12');
+
+    fireEvent.mouseOver(fileLink, {
+      clientX: 10,
+      clientY: 10,
+    });
+    expect(bridgeMocks.resolveFilePathWithCallback).toHaveBeenCalledWith(
+      'Assets/GameScripts/Foo.cs:12',
+      expect.any(Function),
+    );
+    expect(document.querySelector('.file-link-tooltip')?.textContent).toBe('Assets/GameScripts/Foo.cs:12');
+
+    fireEvent.click(fileLink);
+    expect(bridgeMocks.openFile).toHaveBeenCalledWith('Assets/GameScripts/Foo.cs:12');
+  });
+
+  it('opens line fragments on paths with spaces and non-ASCII names', () => {
+    render(
+      <MarkdownBlock content={'[a.ts](/Users/me/CCGUI%20%E9%A1%B9%E7%9B%AE/src/a.ts#L12) [Foo.cs](Assets/%E8%84%9A%E6%9C%AC/Foo.cs#L3-L9)'} />,
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: 'a.ts' }));
+    expect(bridgeMocks.openFile).toHaveBeenLastCalledWith('/Users/me/CCGUI%20%E9%A1%B9%E7%9B%AE/src/a.ts:12');
+
+    const relativeLink = screen.getByRole('link', { name: 'Foo.cs' });
+    expect(relativeLink.classList.contains('file-link')).toBe(true);
+    fireEvent.click(relativeLink);
+    expect(bridgeMocks.openFile).toHaveBeenLastCalledWith('Assets/%E8%84%9A%E6%9C%AC/Foo.cs:3-9');
+  });
+
+  it('strips the href of a custom protocol even with a line fragment', () => {
+    const { container } = render(
+      <MarkdownBlock content={'[run](javascript:alert(1)//x.cs#L1)'} />,
+    );
+
+    expect(container.querySelector('a[href^="javascript"]')).toBeNull();
+  });
+
+  it('escapes raw anchors, so message text cannot author data-file-path', () => {
+    const { container } = render(
+      <MarkdownBlock content={'<a href="#top" data-file-path="/etc/hosts">harmless</a>'} />,
+    );
+
+    expect(container.querySelector('a')).toBeNull();
+  });
+
+  it('preserves standalone markdown file links with colon line suffixes', () => {
+    render(
+      <MarkdownBlock content={'Open [Foo.cs](Foo.cs:12)'} />,
+    );
+
+    const fileLink = screen.getByRole('link', { name: 'Foo.cs' });
+    expect(fileLink.getAttribute('href')).toBe('Foo.cs:12');
+    expect(fileLink.getAttribute('data-file-path')).toBe('Foo.cs:12');
+
+    fireEvent.click(fileLink);
+    expect(bridgeMocks.openFile).toHaveBeenCalledWith('Foo.cs:12');
+  });
+
   it('renders LaTeX math while preserving dollar signs in code blocks', () => {
     render(
       <MarkdownBlock
@@ -961,5 +1032,29 @@ describe('MarkdownBlock linkify integration', () => {
     const paragraphs = document.querySelectorAll('.md-block > p');
     expect(paragraphs[0].textContent).toBe('Intro.');
     expect(paragraphs[paragraphs.length - 1].textContent).toBe('Outro.');
+  });
+
+  it('syntax-highlights Dart fences and the flutter alias', () => {
+    // Dart is Flutter's language, so both tags should reach the dart grammar
+    // instead of falling back to plain text.
+    const snippet = [
+      'class Counter extends StatelessWidget {',
+      '  const Counter({super.key, required this.count});',
+      '  final int count;',
+      '}',
+    ].join('\n');
+
+    const view = render(
+      <MarkdownBlock content={'```dart\n' + snippet + '\n```'} />,
+    );
+    const dartCode = view.container.querySelector('pre code');
+    expect(dartCode?.className).toContain('language-dart');
+    expect(dartCode?.querySelectorAll('.hljs-keyword').length).toBeGreaterThan(0);
+    expect(dartCode?.textContent).toContain('StatelessWidget');
+
+    view.rerender(<MarkdownBlock content={'```flutter\n' + snippet + '\n```'} />);
+    const flutterCode = view.container.querySelector('pre code');
+    expect(flutterCode?.className).toContain('language-flutter');
+    expect(flutterCode?.querySelectorAll('.hljs-keyword').length).toBeGreaterThan(0);
   });
 });

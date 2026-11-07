@@ -1,5 +1,6 @@
 package com.github.claudecodegui.util;
 
+import com.github.claudecodegui.provider.grok.GrokContextUsageBuilder;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.JsonObject;
 
@@ -11,6 +12,8 @@ import java.util.List;
  * — used by MessageJsonConverter, SettingsHandler, and ClaudeSession.
  */
 public final class TokenUsageUtils {
+
+    private static final String KEY_TOTAL_TOKENS = "total_tokens";
 
     private TokenUsageUtils() {
     } // utility class, no instances
@@ -24,9 +27,21 @@ public final class TokenUsageUtils {
         return inputTokens + cacheCreationTokens + cacheReadTokens + outputTokens;
     }
 
+    /**
+     * Extracts the context window token count from a provider usage JSON object.
+     *
+     * @param usage Provider usage JSON object
+     * @param provider Provider identifier
+     * @return context token count
+     */
     public static int extractContextTokens(JsonObject usage, String provider) {
         if (usage == null) {
             return 0;
+        }
+        if ("grok".equals(provider)) {
+            // Grok mixes cache-inclusive camelCase and Claude-layout snake_case input; the
+            // builder knows which is which, so never read input_tokens on its own here.
+            return GrokContextUsageBuilder.extractUsedTokens(usage);
         }
         int input = usage.has("input_tokens") ? usage.get("input_tokens").getAsInt() : 0;
         if ("codex".equals(provider)) {
@@ -37,9 +52,9 @@ public final class TokenUsageUtils {
         int cacheRead = usage.has("cache_read_input_tokens")
                 ? usage.get("cache_read_input_tokens").getAsInt() : 0;
         if ("opencode".equals(provider)) {
-            if (usage.has("total_tokens") && !usage.get("total_tokens").isJsonNull()) {
+            if (usage.has(KEY_TOTAL_TOKENS) && !usage.get(KEY_TOTAL_TOKENS).isJsonNull()) {
                 try {
-                    int total = usage.get("total_tokens").getAsInt();
+                    int total = usage.get(KEY_TOTAL_TOKENS).getAsInt();
                     if (total > 0) {
                         return total;
                     }
@@ -53,12 +68,17 @@ public final class TokenUsageUtils {
     }
 
     /**
-     * Extract used token count from a usage JSON object, respecting provider differences.
-     * - Claude: input + cache_creation + cache_read + output (total tokens, matches CLI status bar)
-     * - Codex: input + output (input already includes cached tokens)
+     * Extracts the used token count from a usage JSON object, respecting provider differences.
+     *
+     * @param usage Provider usage JSON object
+     * @param provider Provider identifier
+     * @return used token count
      */
     public static int extractUsedTokens(JsonObject usage, String provider) {
         if (usage == null) { return 0; }
+        if ("grok".equals(provider)) {
+            return GrokContextUsageBuilder.extractUsedTokens(usage);
+        }
         int input = usage.has("input_tokens") ? usage.get("input_tokens").getAsInt() : 0;
         int output = usage.has("output_tokens") ? usage.get("output_tokens").getAsInt() : 0;
         if ("codex".equals(provider)) {

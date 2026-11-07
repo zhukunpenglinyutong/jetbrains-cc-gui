@@ -34,6 +34,7 @@ import {
   buildConfigErrorPayload,
   extractResultError
 } from './message-utils.js';
+import { MAX_SEND_ERROR_LENGTH, prependSdkStderr, redactSecrets } from './message-output-filter.js';
 import { createPreToolUseHook } from './permission-mode.js';
 import { loadMcpServersConfigAsRecord } from './mcp-status/config-loader.js';
 import { setActiveQueryResult } from './message-session-registry.js';
@@ -470,13 +471,15 @@ function handleSendError(error, streamState, sdkStderrLines) {
   }
   const payload = buildConfigErrorPayload(error);
   if (sdkStderrLines.length > 0) {
-    const sdkErrorText = sdkStderrLines.slice(-10).join('\n');
-    payload.error = `SDK-STDERR:\n\`\`\`\n${sdkErrorText}\n\`\`\`\n\n${payload.error}`;
+    const sdkErrorText = redactSecrets(sdkStderrLines.slice(-10).join('\n'));
+    payload.error = prependSdkStderr(payload.error, sdkErrorText);
     payload.details.sdkError = sdkErrorText;
   }
-  payload.error = truncateString(payload.error);
+  payload.error = truncateString(payload.error, MAX_SEND_ERROR_LENGTH);
   console.error('[SEND_ERROR]', JSON.stringify(payload));
 }
+
+export const __testing = { handleSendError };
 
 // ========== Exported send functions ==========
 

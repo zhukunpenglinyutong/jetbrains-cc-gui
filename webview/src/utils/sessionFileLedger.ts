@@ -96,7 +96,7 @@ export function applySearchReplace(
   return content.slice(0, index) + newString + content.slice(index + oldString.length);
 }
 
-function isWriteTool(toolName: string): boolean {
+export function isWriteTool(toolName: string): boolean {
   return WRITE_TOOL_NAMES.has(normalizeToolName(toolName));
 }
 

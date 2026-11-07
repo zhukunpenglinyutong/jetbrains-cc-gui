@@ -1,5 +1,7 @@
 package com.github.claudecodegui.cli;
 
+import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.dependency.DependencyManager;
 import com.intellij.openapi.application.ApplicationManager;
@@ -32,6 +34,9 @@ public final class CliStatusDetector {
 
     private static final Logger LOG = Logger.getInstance(CliStatusDetector.class);
     private static final int PROBE_TIMEOUT_SECONDS = 5;
+    // Covers a cold WSL boot, which alone can outlast the normal probe budget.
+    private static final int WSL_PROBE_TIMEOUT_SECONDS = 10;
+    private static final String WSL_CODEX_PROBE_SCRIPT = "services/codex/codex-cli-probe.js";
     private static final long CACHE_TTL_MILLIS = 30_000L;
     private static final Pattern VERSION_TOKEN = Pattern.compile(
             "(\\d+\\.\\d+(?:\\.\\d+)?(?:[-+][A-Za-z0-9.]+)?)"
@@ -138,6 +143,14 @@ public final class CliStatusDetector {
                         return probe.ok ? CliToolStatus.installed(tool, probe.version, probe.resolvedPath)
                                 : CliToolStatus.error(tool, "Configured Codex CLI cannot be executed: " + override);
                     }
+                }
+            }
+            String nodePath = NodeDetector.getInstance().getCachedNodePath();
+            if (tool == CliToolId.CODEX && NodeDetector.isWslPath(nodePath)) {
+                File bridgeDir = BridgePreloader.getSharedResolver().findSdkDir();
+                CliToolStatus inWsl = bridgeDir == null ? null : detectCodexInWsl(nodePath, bridgeDir);
+                if (inWsl != null) {
+                    return inWsl;
                 }
             }
             if (tool == CliToolId.ZCODE) {
@@ -498,6 +511,47 @@ public final class CliStatusDetector {
         return new ProbeResult(true, version, path != null ? path : candidate);
     }
 
+    /**
+     * Probes Codex inside WSL, where the bridge runs it when node is a WSL binary and the Windows-side
+     * lookup cannot see it. Returns null when WSL has no working Codex so the caller falls through.
+     */
+    static CliToolStatus detectCodexInWsl(String nodePath, File bridgeDir) {
+        return detectCodexInWsl(codexWslProbeCommand(nodePath, bridgeDir), command -> {
+            ProcessResult result = run(command, null, WSL_PROBE_TIMEOUT_SECONDS);
+            return result.exitCode == 0 ? result.stdout : null;
+        });
+    }
+
+    /** Starts the bridge's own CLI lookup the way the daemon starts, so both find the same install. */
+    static List<String> codexWslProbeCommand(String nodePath, File bridgeDir) {
+        return NodeDetector.buildNodeScriptCommand(
+                nodePath, new File(bridgeDir, WSL_CODEX_PROBE_SCRIPT).getAbsolutePath());
+    }
+
+    /**
+     * @param command the probe command
+     * @param runner runs the command and returns its stdout, or null on failure
+     */
+    static CliToolStatus detectCodexInWsl(
+            List<String> command,
+            java.util.function.Function<List<String>, String> runner
+    ) {
+        String stdout = runner.apply(command);
+        if (stdout == null) {
+            return null;
+        }
+        Matcher matcher = CODEX_VERSION_LINE.matcher(stdout);
+        if (!matcher.find()) {
+            return null;
+        }
+        String before = stdout.substring(0, matcher.start()).stripTrailing();
+        String path = before.substring(before.lastIndexOf('\n') + 1).trim();
+        if (!path.startsWith("/")) {
+            return null;
+        }
+        return CliToolStatus.installed(CliToolId.CODEX, matcher.group(1), path);
+    }
+
     /** A half-installed npm launcher can still be executable; only real version output proves Codex can start. */
     static String probeCodexVersion(String candidate) {
         ProcessResult result = run(List.of(candidate, "--version"), parentDirOf(candidate));
@@ -652,6 +706,10 @@ public final class CliStatusDetector {
     }
 
     private static ProcessResult run(List<String> command, String extraBinDir) {
+        return run(command, extraBinDir, PROBE_TIMEOUT_SECONDS);
+    }
+
+    private static ProcessResult run(List<String> command, String extraBinDir, int timeoutSeconds) {
         Process process = null;
         try {
             ProcessBuilder pb = new ProcessBuilder(command);
@@ -663,7 +721,7 @@ public final class CliStatusDetector {
             // Bound the wait first so a hung child cannot block the probe:
             // expected output is a tiny version string that will not fill the
             // OS pipe buffer before exit, so draining after waitFor is safe.
-            boolean finished = process.waitFor(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
                 return ProcessResult.timeout();
