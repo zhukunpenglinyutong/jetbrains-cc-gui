@@ -24,6 +24,7 @@ import { installRuntimeProviderDispatchers } from './utils/runtimeProviderCapabi
 import { sendBridgeEvent } from './utils/bridge';
 import { debugLog } from './utils/debug';
 import { forceWebviewRepaint, repaintRemoteWebview } from './utils/forceWebviewRepaint';
+import { installRemoteInputRepaint } from './utils/remoteInputRepaint';
 import { fontSizeLevelToScale } from './utils/fontScale';
 import {
   advanceSurfaceDamagePulse,
@@ -748,8 +749,10 @@ if (typeof window !== 'undefined') {
   };
   window.cancelWebviewRecovery = cancelWebviewRecovery;
   window.onTabActivated = (remote) => {
-    if (remote === true || remote === 'true') repaintRemoteWebview();
-    else forceWebviewRepaint('tab-activated');
+    if (remote === true || remote === 'true') {
+      installRemoteInputRepaint();
+      repaintRemoteWebview();
+    } else forceWebviewRepaint('tab-activated');
   };
 }
 
