@@ -48,7 +48,7 @@ public class SessionCallbackAdapterUnreadTest {
                 @Override public void callJavaScript(String name, String... args) { calls.add(name); }
                 @Override public SessionExecutionState.Snapshot getExecutionSnapshot() { return execution.snapshot(); }
                 @Override public void onTurnStarted() { starts.incrementAndGet(); }
-                @Override public void onTurnCompleted() {
+                @Override public void onTurnCompleted(SessionExecutionState.Snapshot completed) {
                     completions.incrementAndGet();
                     if (failNotification.get()) throw new IllegalStateException("UI unavailable");
                 }

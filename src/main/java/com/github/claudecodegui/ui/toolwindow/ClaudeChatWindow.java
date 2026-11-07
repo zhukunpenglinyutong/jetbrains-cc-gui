@@ -2733,9 +2733,8 @@ public class ClaudeChatWindow {
                     }
 
                     @Override
-                    public void onTurnCompleted() {
-                        SessionExecutionState.Snapshot completed = getExecutionSnapshot();
-                        if (disposed || completed == null) {
+                    public void onTurnCompleted(SessionExecutionState.Snapshot completed) {
+                        if (disposed || session != callbackSession) {
                             return;
                         }
                         chatWindowDelegate.onTurnCompleted(() -> {

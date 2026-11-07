@@ -35,7 +35,7 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
 
         default SessionExecutionState.Snapshot getExecutionSnapshot() { return null; }
         default void onTurnStarted() { }
-        default void onTurnCompleted() { }
+        default void onTurnCompleted(SessionExecutionState.Snapshot completed) { }
     }
 
     private final StreamMessageCoalescer streamCoalescer;
@@ -331,7 +331,7 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     }
 
     /** Stream boundaries and idle flags can precede SDK completion; only an owned terminal success is unread. */
-    private void observeTurnCompletion(boolean busy, boolean loading) {
+    private synchronized void observeTurnCompletion(boolean busy, boolean loading) {
         SessionExecutionState.Snapshot snapshot = jsTarget.getExecutionSnapshot();
         if (snapshot == null || snapshot.turnId() == null || snapshot.turnId().isEmpty()) {
             return;
@@ -344,7 +344,7 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
                 && snapshot.outcome() == SessionExecutionState.Outcome.SUCCEEDED
                 && !snapshot.terminalEventId().isEmpty()
                 && !snapshot.terminalEventId().equals(completedEventId.getAndSet(snapshot.terminalEventId()))) {
-            safeRun("turn completed notification", jsTarget::onTurnCompleted);
+            safeRun("turn completed notification", () -> jsTarget.onTurnCompleted(snapshot));
         }
     }
 
