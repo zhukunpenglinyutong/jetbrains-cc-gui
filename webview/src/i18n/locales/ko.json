@@ -14,6 +14,7 @@
     "cancel": "취소"
   },
   "common": {
+    "recoveryRestoreFailed": "임시 저장된 입력을 복원하지 못했습니다. 원본은 보존되어 있습니다. 다시 시도하세요.",
     "ready": "준비 완료",
     "loading": "로딩 중",
     "save": "저장",

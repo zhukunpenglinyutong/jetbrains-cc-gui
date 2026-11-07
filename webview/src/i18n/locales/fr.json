@@ -14,6 +14,7 @@
     "cancel": "Annuler"
   },
   "common": {
+    "recoveryRestoreFailed": "Le brouillon n’a pas pu être restauré. Il a été conservé ; réessayez.",
     "ready": "Prêt",
     "loading": "Chargement",
     "save": "Enregistrer",

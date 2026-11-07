@@ -49,6 +49,24 @@ public class WindowEventHandlerTest {
         assertEquals("4:5:6:7:B:true", observed.get());
     }
 
+    @Test
+    public void recoveryRequiresATypedCheckpointAcknowledgement() {
+        AtomicReference<String> observed = new AtomicReference<>();
+        HandlerContext context = new HandlerContext(null, null, null, null, new NoOpJsCallback());
+        WindowEventHandler handler = new WindowEventHandler(context, new NoOpCallback() {
+            @Override public void onWebviewRecoveryPrepared(String requestId, boolean success) {
+                observed.set(requestId + ":" + success);
+            }
+        });
+        for (String invalid : new String[]{"null", "{}", "{\"requestId\":\"r\",\"success\":\"true\"}",
+                "{\"requestId\":1,\"success\":true}", "[]"}) {
+            assertTrue(handler.handle("webview_recovery_prepared", invalid));
+            assertEquals(null, observed.get());
+        }
+        assertTrue(handler.handle("webview_recovery_prepared", "{\"requestId\":\"r\",\"success\":true}"));
+        assertEquals("r:true", observed.get());
+    }
+
     /** No-op JavaScript collaborator used by the handler context in this isolated dispatch test. */
     private static final class NoOpJsCallback implements HandlerContext.JsCallback {
         @Override

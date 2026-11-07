@@ -664,7 +664,7 @@ public final class NodeProcessRegistry implements Disposable {
             // Try parent content's display name first (e.g., "AI1", "AI2")
             Content content = window.getParentContent();
             if (content != null) {
-                String displayName = content.getDisplayName();
+                String displayName = com.github.claudecodegui.ui.CompletedTabTitle.plain(content);
                 if (displayName != null && !displayName.isEmpty()) {
                     return displayName;
                 }

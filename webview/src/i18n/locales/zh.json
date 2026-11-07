@@ -30,6 +30,7 @@
     }
   },
   "common": {
+    "recoveryRestoreFailed": "草稿暂时无法恢复，已保留原副本。请重试恢复此聊天。",
     "ready": "就绪",
     "loading": "加载中",
     "save": "保存",

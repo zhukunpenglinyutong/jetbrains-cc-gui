@@ -14,6 +14,7 @@
     "cancel": "取消"
   },
   "common": {
+    "recoveryRestoreFailed": "暫時無法還原草稿，已保留原始副本。請重試還原此聊天。",
     "ready": "就緒",
     "loading": "載入中",
     "save": "儲存",

@@ -33,8 +33,9 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     public interface JsTarget {
         void callJavaScript(String functionName, String... args);
 
-        /** Backend activity remains observable when a remote renderer is hidden or disconnected. */
-        default void onAssistantActivity() { }
+        default SessionExecutionState.Snapshot getExecutionSnapshot() { return null; }
+        default void onTurnStarted() { }
+        default void onTurnCompleted(SessionExecutionState.Snapshot completed) { }
     }
 
     private final StreamMessageCoalescer streamCoalescer;
@@ -54,8 +55,8 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     private final AtomicReference<String> lastSessionId = new AtomicReference<>();
     /** Latest state callback, retained so stream end can capture the post-boundary raw tree. */
     private volatile List<ClaudeSession.Message> latestMessages;
-    private volatile boolean assistantActivityObserved;
-    private volatile boolean requestActive;
+    private final AtomicReference<String> observedTurnId = new AtomicReference<>();
+    private final AtomicReference<String> completedEventId = new AtomicReference<>();
 
     public SessionCallbackAdapter(
             StreamMessageCoalescer streamCoalescer,
@@ -73,7 +74,6 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
                 DELTA_THROTTLE_MS,
                 delta -> {
                     if (!isInactive()) {
-                        notifyAssistantActivity();
                         jsTarget.callJavaScript("onContentDelta", JsUtils.escapeJs(delta));
                     }
                 }
@@ -87,6 +87,11 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
                 }
         );
         this.streamEndFallbackAlarm = new Alarm(Alarm.ThreadToUse.SWING_THREAD);
+        SessionExecutionState.Snapshot initial = jsTarget.getExecutionSnapshot();
+        if (initial != null) {
+            // Attaching an observer to a finished session must not announce its old result again.
+            completedEventId.set(initial.terminalEventId());
+        }
     }
 
     public void deactivate() {
@@ -112,11 +117,6 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
             }
             latestMessages = messages;
             streamCoalescer.enqueue(messages);
-            // Restoring disk history must not create unread messages in background tabs.
-            if ((requestActive || streamCoalescer.isStreamActive()) && messages != null && !messages.isEmpty()
-                    && messages.get(messages.size() - 1).type == ClaudeSession.Message.Type.ASSISTANT) {
-                notifyAssistantActivity();
-            }
         }
     }
 
@@ -125,20 +125,13 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         if (isInactive()) {
             return;
         }
-        boolean wasActive = requestActive;
-        requestActive = busy;
-        if (busy && !wasActive) {
-            assistantActivityObserved = false;
-        } else if (wasActive && !busy && !loading && assistantActivityObserved) {
-            notifyAssistantActivity();
-        }
+        observeTurnCompletion(busy, loading);
         if (busy && loading && this.streamEndStarted.get() && !this.streamCoalescer.isStreamActive()) {
             // A new submission can fail before the provider emits its first stream-start.
             this.streamEndFallbackAlarm.cancelAllRequests();
             this.streamEndStarted.set(false);
             this.streamEndSignalSent.set(false);
             this.streamGeneration.incrementAndGet();
-            this.assistantActivityObserved = false;
         }
         // The webview queue owns JS-thread marshalling; only the VFS refresh needs the EDT.
         if (!loading && streamCoalescer.isStreamActive()) {
@@ -246,7 +239,6 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         streamEndSignalSent.set(false);
         streamGeneration.incrementAndGet();
         latestMessages = null;
-        assistantActivityObserved = false;
         contentDeltaThrottler.reset();
         thinkingDeltaThrottler.reset();
         // The queue preserves this lifecycle edge ahead of all following deltas.
@@ -316,9 +308,6 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
             LOG.debug("Skipping stale stream-end signal (sequence=" + sequence + ")");
             return;
         }
-        if (assistantActivityObserved) {
-            notifyAssistantActivity();
-        }
         safeRun("callJavaScript(onStreamEnd)", () ->
                 jsTarget.callJavaScript("onStreamEnd", String.valueOf(sequence)));
         safeRun("callJavaScript(showLoading, false)", () ->
@@ -341,10 +330,22 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         }
     }
 
-    /** Observe both text deltas and native message snapshots without adding a browser round trip. */
-    private void notifyAssistantActivity() {
-        assistantActivityObserved = true;
-        safeRun("assistant activity notification", jsTarget::onAssistantActivity);
+    /** Stream boundaries and idle flags can precede SDK completion; only an owned terminal success is unread. */
+    private synchronized void observeTurnCompletion(boolean busy, boolean loading) {
+        SessionExecutionState.Snapshot snapshot = jsTarget.getExecutionSnapshot();
+        if (snapshot == null || snapshot.turnId() == null || snapshot.turnId().isEmpty()) {
+            return;
+        }
+        if (snapshot.outcome() == SessionExecutionState.Outcome.NONE
+                && !snapshot.turnId().equals(observedTurnId.getAndSet(snapshot.turnId()))) {
+            safeRun("turn started notification", jsTarget::onTurnStarted);
+        }
+        if (!busy && !loading && snapshot.phase() == SessionExecutionState.Phase.SUCCEEDED
+                && snapshot.outcome() == SessionExecutionState.Outcome.SUCCEEDED
+                && !snapshot.terminalEventId().isEmpty()
+                && !snapshot.terminalEventId().equals(completedEventId.getAndSet(snapshot.terminalEventId()))) {
+            safeRun("turn completed notification", () -> jsTarget.onTurnCompleted(snapshot));
+        }
     }
 
     @Override

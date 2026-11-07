@@ -51,9 +51,10 @@ public class DetachedChatFrame extends JFrame {
      * @param content The Content to detach
      */
     public DetachedChatFrame(Project project, Content content) {
-        super(ClaudeSDKToolWindow.TOOL_WINDOW_DISPLAY_NAME + " - " + content.getDisplayName());
+        super(ClaudeSDKToolWindow.TOOL_WINDOW_DISPLAY_NAME + " - "
+                + com.github.claudecodegui.ui.CompletedTabTitle.plain(content));
         this.project = project;
-        this.originalTabName = content.getDisplayName();
+        this.originalTabName = com.github.claudecodegui.ui.CompletedTabTitle.plain(content);
         this.chatWindow = ClaudeSDKToolWindow.getChatWindowForContent(content);
 
         if (chatWindow == null) {

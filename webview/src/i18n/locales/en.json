@@ -30,6 +30,7 @@
     }
   },
   "common": {
+    "recoveryRestoreFailed": "The draft could not be restored. It has been kept; retry to restore this chat.",
     "ready": "Ready",
     "loading": "Loading",
     "save": "Save",

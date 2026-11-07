@@ -14,6 +14,7 @@
     "cancel": "Cancelar"
   },
   "common": {
+    "recoveryRestoreFailed": "Não foi possível restaurar o rascunho. A cópia original foi preservada; tente novamente.",
     "ready": "Pronto",
     "loading": "Carregando",
     "save": "Salvar",

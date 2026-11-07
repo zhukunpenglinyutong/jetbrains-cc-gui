@@ -58,8 +58,6 @@ import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.IconLoader;
-import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.util.concurrency.AppExecutorUtil;
@@ -68,7 +66,8 @@ import javax.swing.*;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
@@ -134,6 +133,8 @@ public class ChatWindowDelegate {
         void setFrontendReady(boolean ready);
         void onHistoryRenderComplete(long commitEpoch);
         void onSurfaceDamageApplied(String token, String phase, boolean applied);
+        default void onWebviewRecoveryPrepared(String requestId, boolean success) {
+        }
         void setSlashCommandsFetched(boolean fetched);
         void setFetchedSlashCommandsCount(int count);
         void persistTabSessionState();
@@ -154,12 +155,9 @@ public class ChatWindowDelegate {
 
     private final DelegateHost host;
     private final Consumer<Runnable> unreadUiScheduler;
-    private final AtomicBoolean unreadUpdateQueued = new AtomicBoolean();
+    private final AtomicLong unreadGeneration = new AtomicLong();
     private volatile boolean unread;
     private Content unreadBadgeContent;
-    private Icon previousTabIcon;
-    private Boolean previousIconVisibility;
-    private Icon unreadIcon;
     private TabAnswerStatus currentTabStatus = TabAnswerStatus.IDLE;
     private ScheduledFuture<?> statusResetTask;
     private volatile String pendingQuickFixPrompt = null;
@@ -181,14 +179,30 @@ public class ChatWindowDelegate {
         return unread;
     }
 
-    /** Coalesce streaming notifications; already-unread tabs do no additional EDT work. */
-    public void onAssistantActivity() {
-        if (host.isDisposed() || unread || !unreadUpdateQueued.compareAndSet(false, true)) {
+    /** A new turn retires the previous completion, including callbacks still queued on the EDT. */
+    public void onTurnStarted() {
+        unreadGeneration.incrementAndGet();
+        if (!unread) {
             return;
         }
+        unread = false;
         unreadUiScheduler.accept(() -> {
-            unreadUpdateQueued.set(false);
-            if (host.isDisposed() || isChatVisibleForReading() || unread) {
+            if (!host.isDisposed()) {
+                renderUnreadBadge();
+                host.persistTabSessionState();
+            }
+        });
+    }
+
+    /** Completion is rechecked on the EDT so a new task cannot acquire an old task's green dot. */
+    public void onTurnCompleted(BooleanSupplier stillCompleted) {
+        if (host.isDisposed() || unread) {
+            return;
+        }
+        long generation = unreadGeneration.get();
+        unreadUiScheduler.accept(() -> {
+            if (host.isDisposed() || generation != unreadGeneration.get() || !stillCompleted.getAsBoolean()
+                    || isChatVisibleForReading() || unread) {
                 return;
             }
             unread = true;
@@ -228,29 +242,16 @@ public class ChatWindowDelegate {
         });
     }
 
-    /**
-     * Restore the original icon on read and transfer the badge when Content is reattached.
-     * The tab label repaints on setIcon and reads SHOW_CONTENT_ICON only then, so the flag is
-     * always written first.
-     */
+    /** Transfer only the title decoration; the tab's existing icon and plain name remain available. */
     private void renderUnreadBadge() {
         Content content = host.getParentContent();
         if (unreadBadgeContent != null && (!unread || unreadBadgeContent != content)) {
-            if (unreadBadgeContent.getIcon() == unreadIcon) {
-                unreadBadgeContent.putUserData(ToolWindow.SHOW_CONTENT_ICON, previousIconVisibility);
-                unreadBadgeContent.setIcon(previousTabIcon);
-            }
+            CompletedTabTitle.hide(unreadBadgeContent);
             unreadBadgeContent = null;
         }
-        if (unread && content != null && unreadBadgeContent == null) {
-            if (unreadIcon == null) {
-                unreadIcon = IconLoader.getIcon("/icons/unread-dot.svg", ChatWindowDelegate.class);
-            }
-            previousTabIcon = content.getIcon();
-            previousIconVisibility = content.getUserData(ToolWindow.SHOW_CONTENT_ICON);
+        if (unread && content != null) {
             unreadBadgeContent = content;
-            content.putUserData(ToolWindow.SHOW_CONTENT_ICON, true);
-            content.setIcon(unreadIcon);
+            CompletedTabTitle.show(content);
         }
     }
 
@@ -462,7 +463,7 @@ public class ChatWindowDelegate {
                         return originalTabName;
                     }
                     Content content = host.getParentContent();
-                    return content == null ? null : content.getDisplayName();
+                    return content == null ? null : CompletedTabTitle.plain(content);
                 });
         handlerContext.setContentActivator(host::activateContent);
         handlerContext.setSession(host.getSession());
@@ -539,6 +540,9 @@ public class ChatWindowDelegate {
             }
             @Override public void onRefreshSlashCommands() {
                 host.getSessionLifecycleManager().fetchSlashCommandsOnStartup();
+            }
+            @Override public void onWebviewRecoveryPrepared(String requestId, boolean success) {
+                host.onWebviewRecoveryPrepared(requestId, success);
             }
         }));
 
@@ -641,7 +645,7 @@ public class ChatWindowDelegate {
 
         ApplicationManager.getApplication().invokeLater(() -> {
             String tabName = originalTabName;
-            String currentDisplayName = parentContent.getDisplayName();
+            String currentDisplayName = CompletedTabTitle.plain(parentContent);
             if (currentDisplayName != null && !currentDisplayName.startsWith(tabName)) {
                 tabName = currentDisplayName.endsWith("...")
                     ? currentDisplayName.substring(0, currentDisplayName.length() - 3)
@@ -673,7 +677,7 @@ public class ChatWindowDelegate {
                     LOG.debug("[TabStatus] Restored idle state for tab: " + displayName);
                     break;
             }
-            parentContent.setDisplayName(displayName);
+            CompletedTabTitle.setPlain(parentContent, displayName);
         });
     }
 

@@ -129,7 +129,7 @@ public class DetachTabAction extends AnAction implements DumbAware {
                     return;
                 }
 
-                String tabName = content.getDisplayName();
+                String tabName = com.github.claudecodegui.ui.CompletedTabTitle.plain(content);
                 LOG.info("[DetachTabAction] Detaching tab: " + tabName);
 
                 // Create the detached frame BEFORE removing content

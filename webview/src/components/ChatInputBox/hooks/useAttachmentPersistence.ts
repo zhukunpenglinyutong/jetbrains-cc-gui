@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { Attachment } from '../types.js';
 import { debugLog, debugError } from '../../../utils/debug.js';
+import { DRAFT_FLUSH_EVENT } from '../../../contexts/draftStorage';
 
 /** Webview-local key; same-origin chat tabs must never restore each other's images. */
 export const ATTACHMENTS_DRAFT_KEY = 'chat-input-attachments-draft';
@@ -231,6 +232,11 @@ export function useAttachmentPersistence({
   const saveDraft = useCallback(() => {
     saveAttachmentsDraft(attachments);
   }, [attachments]);
+
+  useEffect(() => {
+    window.addEventListener(DRAFT_FLUSH_EVENT, saveDraft);
+    return () => window.removeEventListener(DRAFT_FLUSH_EVENT, saveDraft);
+  }, [saveDraft]);
 
   return { saveDraft, clearDraft: discardAttachmentsDraft };
 }

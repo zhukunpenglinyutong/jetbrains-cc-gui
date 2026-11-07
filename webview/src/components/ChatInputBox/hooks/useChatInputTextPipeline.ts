@@ -13,6 +13,7 @@ import { useSpaceKeyListener } from './useSpaceKeyListener.js';
 import { debounce } from '../utils/debounce.js';
 import { perfTimer } from '../../../utils/debug.js';
 import { DEBOUNCE_TIMING } from '../../../constants/performance.js';
+import { DRAFT_FLUSH_EVENT } from '../../../contexts/draftStorage';
 
 /**
  * InputEvent.inputType values that belong to an active IME composition.
@@ -304,8 +305,16 @@ export function useChatInputTextPipeline({
       notifyInput(isVisuallyEmpty(text) ? '' : text);
     };
     window.addEventListener('pagehide', flush);
-    return () => window.removeEventListener('pagehide', flush);
-  }, [getTextContent, notifyInput]);
+    const prepareRecovery = (event: Event) => {
+      if (isComposingRef.current) event.preventDefault();
+      else flush();
+    };
+    window.addEventListener(DRAFT_FLUSH_EVENT, prepareRecovery);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener(DRAFT_FLUSH_EVENT, prepareRecovery);
+    };
+  }, [getTextContent, notifyInput, isComposingRef]);
 
   const clearInput = useCallback(() => {
     if (editableRef.current) {

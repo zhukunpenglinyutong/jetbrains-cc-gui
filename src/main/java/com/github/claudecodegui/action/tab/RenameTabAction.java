@@ -2,6 +2,7 @@ package com.github.claudecodegui.action.tab;
 
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.TabStateService;
+import com.github.claudecodegui.ui.CompletedTabTitle;
 import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
 import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
@@ -71,7 +72,7 @@ public class RenameTabAction extends AnAction implements DumbAware {
             return;
         }
 
-        String currentName = selectedContent.getDisplayName();
+        String currentName = CompletedTabTitle.plain(selectedContent);
 
         // Show input dialog with current name as default
         String newName = Messages.showInputDialog(
@@ -92,7 +93,7 @@ public class RenameTabAction extends AnAction implements DumbAware {
         newName = newName.trim();
 
         // Update the tab name
-        selectedContent.setDisplayName(newName);
+        CompletedTabTitle.setPlain(selectedContent, newName);
 
         // Update originalTabName so status indicators won't revert to the old name
         ClaudeChatWindow chatWindow = ClaudeSDKToolWindow.getChatWindowForContent(selectedContent);

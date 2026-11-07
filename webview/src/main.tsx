@@ -4,7 +4,13 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { MessagesProvider } from './contexts/MessagesContext';
 import { SessionProvider } from './contexts/SessionContext';
 import { chatMounted, UIStateProvider } from './contexts/UIStateContext';
-import { pruneClosedDrafts } from './contexts/draftStorage';
+import { parseOpenDraftWindows, pruneClosedDrafts } from './contexts/draftStorage';
+import {
+  cancelWebviewRecovery,
+  prepareWebviewRecovery,
+  pruneClosedRecoveryCheckpoints,
+  restoreWebviewRecovery,
+} from './utils/webviewRecovery';
 import { DialogProvider } from './contexts/DialogContext';
 import { TaskEventProvider } from './contexts/SubagentContext';
 import './codicon.css';
@@ -18,6 +24,7 @@ import { installRuntimeProviderDispatchers } from './utils/runtimeProviderCapabi
 import { sendBridgeEvent } from './utils/bridge';
 import { debugLog } from './utils/debug';
 import { forceWebviewRepaint, repaintRemoteWebview } from './utils/forceWebviewRepaint';
+import { installRemoteInputRepaint } from './utils/remoteInputRepaint';
 import { fontSizeLevelToScale } from './utils/fontScale';
 import {
   advanceSurfaceDamagePulse,
@@ -731,15 +738,28 @@ if (typeof window !== 'undefined') {
   window.updateLinkifyCapabilities = (json: string) => {
     applyLinkifyCapabilitiesPayload(json);
   };
-  window.pruneClosedDrafts = pruneClosedDrafts;
+  window.pruneClosedDrafts = (json) => {
+    pruneClosedDrafts(json);
+    const windows = parseOpenDraftWindows(json);
+    if (windows) pruneClosedRecoveryCheckpoints(windows.scope, windows.open);
+  };
+  window.prepareWebviewRecovery = (requestId) => {
+    const result = prepareWebviewRecovery(requestId);
+    if (!sendBridgeEvent('webview_recovery_prepared', JSON.stringify(result))) cancelWebviewRecovery(requestId);
+  };
+  window.cancelWebviewRecovery = cancelWebviewRecovery;
   window.onTabActivated = (remote) => {
-    if (remote === true || remote === 'true') repaintRemoteWebview();
-    else forceWebviewRepaint('tab-activated');
+    if (remote === true || remote === 'true') {
+      installRemoteInputRepaint();
+      repaintRemoteWebview();
+    } else forceWebviewRepaint('tab-activated');
   };
 }
 
-// Render the React application
-ReactDOM.createRoot(document.getElementById('app') as HTMLElement).render(
+// A recreated browser has new sessionStorage; restore its one-use checkpoint before hooks hydrate.
+try {
+  restoreWebviewRecovery();
+  ReactDOM.createRoot(document.getElementById('app') as HTMLElement).render(
   <ErrorBoundary>
     <UIStateProvider>
       <SessionProvider>
@@ -753,7 +773,21 @@ ReactDOM.createRoot(document.getElementById('app') as HTMLElement).render(
       </SessionProvider>
     </UIStateProvider>
   </ErrorBoundary>,
-);
+  );
+} catch {
+  // Keep the checkpoint intact if storage is unavailable; never mount an empty input over it.
+  const panel = document.createElement('div');
+  panel.dataset.ccguiRecoveryFailed = 'true';
+  panel.setAttribute('role', 'alert');
+  panel.style.cssText = 'padding:24px;display:grid;gap:16px;justify-items:start';
+  const message = document.createElement('p');
+  message.textContent = i18n.t('common.recoveryRestoreFailed');
+  const retry = document.createElement('button');
+  retry.textContent = i18n.t('common.retry');
+  retry.onclick = () => window.location.reload();
+  panel.append(message, retry);
+  document.getElementById('app')?.replaceChildren(panel);
+}
 
 /**
  * Wait for the sendToJava bridge function to become available

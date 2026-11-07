@@ -26,6 +26,7 @@ describe('forceWebviewRepaint', () => {
 
   afterEach(() => {
     cancelSurfaceDamagePulse('strict-attempt');
+    document.body.replaceChildren();
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -38,6 +39,38 @@ describe('forceWebviewRepaint', () => {
       cb(0);
     }
   };
+
+  it('repaints a focused editor without zooming or forcing its layout', () => {
+    document.body.innerHTML = '<div id="app" style="zoom: 1.1"><textarea>中文 English</textarea></div>';
+    const app = document.getElementById('app')!;
+    const editor = app.querySelector('textarea')!;
+    editor.focus();
+    editor.setSelectionRange(2, 5);
+    const layoutRead = vi.fn(() => 100);
+    Object.defineProperty(app, 'offsetHeight', { get: layoutRead });
+    const completed = vi.fn();
+
+    forceWebviewRepaint('while-editing', completed);
+    flushRaf();
+
+    expect(app.style.zoom).toBe('1.1');
+    expect(layoutRead).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(editor);
+    expect(editor.value).toBe('中文 English');
+    expect([editor.selectionStart, editor.selectionEnd]).toEqual([2, 5]);
+    expect(completed).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(150);
+    expect(document.getElementById('ccgui-remote-repaint')).toBeNull();
+    expect(completed).toHaveBeenCalledTimes(1);
+
+    fontScale = '1.4';
+    forceWebviewRepaint('font-scale-change');
+    flushRaf();
+    expect(app.style.zoom).toBe('1.4');
+    expect(layoutRead).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(editor);
+    expect([editor.selectionStart, editor.selectionEnd]).toEqual([2, 5]);
+  });
 
   it('toggles inline zoom and dispatches resize after a double rAF', () => {
     const zoomWrites: string[] = [];

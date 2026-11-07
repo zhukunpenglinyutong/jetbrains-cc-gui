@@ -70,7 +70,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         int maxNumber = 0;
 
         for (Content content : contentManager.getContents()) {
-            String displayName = content.getDisplayName();
+            String displayName = com.github.claudecodegui.ui.CompletedTabTitle.plain(content);
             if (displayName == null) {
                 continue;
             }
@@ -221,6 +221,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
     public void init(@NotNull ToolWindow toolWindow) {
         toolWindow.setTitle(TOOL_WINDOW_DISPLAY_NAME);
         toolWindow.setStripeTitle(TOOL_WINDOW_DISPLAY_NAME);
+        // During init this updates the saved layout directly, including in the new UI.
+        toolWindow.setShowStripeButton(true);
+        ToolWindowManager manager = ToolWindowManager.getInstance(toolWindow.getProject());
+        // Observe model creation before the registration event can expose this window to the client.
+        RemoteToolWindowStripeSupport.install(manager, toolWindow);
+        // Anchor changes require a registered entry; do not open the chat just to pin its button.
+        manager.invokeLater(() -> ToolWindowStripeSupport.pinToRight(manager, toolWindow));
     }
 
     @Override
@@ -322,6 +329,13 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         if (createFromTemplateAction != null) {
             gearActions.add(createFromTemplateAction);
         }
+        com.intellij.openapi.actionSystem.AnAction recoverViewAction =
+                com.intellij.openapi.actionSystem.ActionManager.getInstance()
+                        .getAction("ClaudeCodeGUI.RecoverViewAction");
+        if (recoverViewAction != null) {
+            gearActions.addSeparator();
+            gearActions.add(recoverViewAction);
+        }
         toolWindow.setAdditionalGearActions(gearActions);
 
         registerProjectCloseListener(project);
@@ -381,7 +395,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     return;
                 }
 
-                String tabName = content.getDisplayName();
+                String tabName = com.github.claudecodegui.ui.CompletedTabTitle.plain(content);
                 int result = com.intellij.openapi.ui.Messages.showYesNoDialog(
                     project,
                     ClaudeCodeGuiBundle.message("tab.close.confirm.message", tabName),

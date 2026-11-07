@@ -152,6 +152,11 @@
                 class="com.github.claudecodegui.action.tab.RenameTabAction"
                 icon="AllIcons.Actions.Edit"/>
 
+        <!-- Native recovery stays accessible when the browser view stops painting. -->
+        <action id="ClaudeCodeGUI.RecoverViewAction"
+                class="com.github.claudecodegui.action.tab.RecoverViewAction"
+                icon="AllIcons.Actions.Refresh"/>
+
         <!-- Detach Tab Action -->
         <action id="ClaudeCodeGUI.DetachTabAction"
                 class="com.github.claudecodegui.action.tab.DetachTabAction"

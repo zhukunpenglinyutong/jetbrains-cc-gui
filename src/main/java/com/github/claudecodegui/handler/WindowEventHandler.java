@@ -18,7 +18,7 @@ public class WindowEventHandler extends BaseMessageHandler {
         "heartbeat", "tab_loading_changed", "tab_status_changed",
         "create_new_session", "frontend_ready", "history_dom_committed",
         "history_render_complete", "surface_damage_applied",
-        "refresh_slash_commands"
+        "refresh_slash_commands", "webview_recovery_prepared"
     };
 
     /**
@@ -33,6 +33,8 @@ public class WindowEventHandler extends BaseMessageHandler {
         void onHistoryRenderComplete(long commitEpoch);
         void onSurfaceDamageApplied(String token, String phase, boolean applied);
         void onRefreshSlashCommands();
+        default void onWebviewRecoveryPrepared(String requestId, boolean success) {
+        }
     }
 
     private final Callback callback;
@@ -71,6 +73,22 @@ public class WindowEventHandler extends BaseMessageHandler {
                 return true;
             case "refresh_slash_commands":
                 callback.onRefreshSlashCommands();
+                return true;
+            case "webview_recovery_prepared":
+                try {
+                    JsonObject acknowledgement = new Gson().fromJson(content, JsonObject.class);
+                    if (acknowledgement == null || !acknowledgement.has("requestId") || !acknowledgement.has("success")
+                            || !acknowledgement.get("requestId").isJsonPrimitive()
+                            || !acknowledgement.getAsJsonPrimitive("requestId").isString()
+                            || !acknowledgement.get("success").isJsonPrimitive()
+                            || !acknowledgement.getAsJsonPrimitive("success").isBoolean()) {
+                        return true;
+                    }
+                    callback.onWebviewRecoveryPrepared(acknowledgement.get("requestId").getAsString(),
+                            acknowledgement.get("success").getAsBoolean());
+                } catch (RuntimeException e) {
+                    LOG.warn("[WebviewRecovery] Invalid checkpoint acknowledgement");
+                }
                 return true;
             default:
                 return false;

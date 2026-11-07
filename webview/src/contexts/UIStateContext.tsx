@@ -6,7 +6,7 @@ import type { ContextInfo, ViewMode } from '../hooks';
 import { DEFAULT_STATUS } from './MessagesContext';
 import { forceWebviewRepaint } from '../utils/forceWebviewRepaint';
 import {
-  draftCacheKey, mirrorDraft, pruneDrafts, readDraft, readSessionDraft, writeDraft,
+  DRAFT_FLUSH_EVENT, draftCacheKey, mirrorDraft, pruneDrafts, readDraft, readSessionDraft, writeDraft,
 } from './draftStorage';
 
 const DRAFT_SAVE_DEBOUNCE_MS = 200;
@@ -90,6 +90,16 @@ export function UIStateProvider({ children }: { children: ReactNode }) {
     if (!next || document.visibilityState === 'hidden') void writeDraft(next);
   }, []);
   const [searchOpen, setSearchOpen] = useState<boolean>(false);
+
+  // A native recovery action must checkpoint the authoritative draft before replacing the browser.
+  useEffect(() => {
+    const flush = (event: Event) => {
+      if (!draftReady) event.preventDefault();
+      else mirrorDraft(draftRef.current);
+    };
+    window.addEventListener(DRAFT_FLUSH_EVENT, flush);
+    return () => window.removeEventListener(DRAFT_FLUSH_EVENT, flush);
+  }, [draftReady]);
 
   useEffect(() => {
     if (!draftCacheKey()) return;

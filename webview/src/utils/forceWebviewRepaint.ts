@@ -54,7 +54,20 @@ export function forceWebviewRepaint(_reason?: string, onRepaint?: () => void): v
     const expectedScale = getComputedStyle(document.documentElement)
       .getPropertyValue('--font-scale')
       .trim();
-    if (!performGenericSurfaceDamage(app, expectedScale)) {
+    const focused = document.activeElement;
+    const editing = focused instanceof HTMLElement
+      && (focused.isContentEditable || focused.matches('input, textarea'))
+      && app.contains(focused);
+    if (editing) {
+      // A zoom nudge rebuilds Chromium's native caret/IME geometry. Damage pixels
+      // without that layout cycle while editing, but still apply a real font change.
+      if (app.style.zoom && expectedScale
+        && Number.parseFloat(app.style.zoom) !== Number.parseFloat(expectedScale)) {
+        app.style.zoom = expectedScale;
+      }
+      repaintRemoteWebview();
+      window.dispatchEvent(new Event('resize'));
+    } else if (!performGenericSurfaceDamage(app, expectedScale)) {
       runAfterSurfaceDamagePulse(repaint);
       return;
     }

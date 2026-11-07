@@ -11,6 +11,7 @@ import { expandQuoteTokens } from '../components/ChatInputBox/utils/quoteRegistr
 const DRAFT_CACHE_NAME = 'ccgui-drafts-v1';
 const DRAFT_URL_PREFIX = 'https://cc-gui-webview.local/drafts/';
 const DRAFT_SESSION_PREFIX = 'ccgui-draft:';
+export const DRAFT_FLUSH_EVENT = 'ccgui-flush-draft';
 export const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 export const DRAFT_MAX_ENTRIES = 32;
 

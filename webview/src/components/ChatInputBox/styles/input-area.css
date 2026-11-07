@@ -114,6 +114,8 @@
 .input-editable {
   min-height: calc(1.5em * 4);
   outline: none;
+  /* Give OSR caret damage an opaque backing instead of clearing through ancestors. */
+  background: var(--input-bg);
   color: var(--text-primary);
   font-size: 14px;
   font-family: inherit;

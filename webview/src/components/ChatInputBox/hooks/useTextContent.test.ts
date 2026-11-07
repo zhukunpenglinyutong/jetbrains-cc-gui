@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useTextContent } from './useTextContent.js';
 import { makeQuoteToken } from '../utils/quoteRegistry.js';
 import { useChatInputTextPipeline } from './useChatInputTextPipeline.js';
+import { DRAFT_FLUSH_EVENT } from '../../../contexts/draftStorage';
 
 describe('useTextContent', () => {
   afterEach(() => {
@@ -10,6 +11,40 @@ describe('useTextContent', () => {
     vi.restoreAllMocks();
     vi.useRealTimers();
     document.body.replaceChildren();
+  });
+
+  it('flushes unpublished keystrokes before native browser recovery checkpoints the input', () => {
+    vi.useFakeTimers();
+    const editableRef = { current: document.createElement('div') };
+    const onInput = vi.fn();
+    const { result } = renderHook(() => useChatInputTextPipeline({
+      editableRef, onInput, setHasContent: vi.fn(), currentProvider: 'claude',
+    }));
+    act(() => {
+      editableRef.current.textContent = '尚未经过防抖的输入';
+      result.current.handleInput('insertText');
+    });
+    expect(onInput).not.toHaveBeenCalled();
+    act(() => { window.dispatchEvent(new Event(DRAFT_FLUSH_EVENT, { cancelable: true })); });
+    expect(onInput).toHaveBeenCalledExactlyOnceWith('尚未经过防抖的输入');
+  });
+
+  it('vetoes browser replacement during an unfinished IME composition', () => {
+    vi.useFakeTimers();
+    const editableRef = { current: document.createElement('div') };
+    const onInput = vi.fn();
+    const { result } = renderHook(() => useChatInputTextPipeline({
+      editableRef, onInput, setHasContent: vi.fn(), currentProvider: 'claude',
+    }));
+    act(() => {
+      result.current.handleCompositionStart();
+      editableRef.current.textContent = '组合输入';
+      result.current.handleInput('insertCompositionText');
+    });
+    let accepted = true;
+    act(() => { accepted = window.dispatchEvent(new Event(DRAFT_FLUSH_EVENT, { cancelable: true })); });
+    expect(accepted).toBe(false);
+    expect(onInput).not.toHaveBeenCalled();
   });
 
   it('extracts once per content version without serializing large HTML', () => {

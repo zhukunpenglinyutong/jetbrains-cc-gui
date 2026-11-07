@@ -12,6 +12,8 @@ interface Window {
   __CCGUI_DRAFT_CACHE_KEY__?: string;
   /** Java's open chat windows; deletes persisted drafts of closed windows in the same scope. */
   pruneClosedDrafts?: (json: string) => void;
+  prepareWebviewRecovery?: (requestId: string) => void;
+  cancelWebviewRecovery?: (requestId: string) => void;
 
   /** Strict two-frame OSR damage pulse, owned by a Java frame-fence attempt token. */
   __ccguiSurfaceDamagePhaseA?: (token: string) => boolean;
