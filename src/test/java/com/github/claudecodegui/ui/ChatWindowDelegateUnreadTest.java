@@ -5,7 +5,6 @@ import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.ui.content.Content;
-import com.intellij.util.SVGLoader;
 import org.junit.Test;
 
 import javax.swing.Icon;
@@ -25,8 +24,6 @@ import static org.junit.Assert.*;
 public class ChatWindowDelegateUnreadTest {
     private static final class Tab {
         final AtomicReference<Icon> icon = new AtomicReference<>();
-        /** Like the platform tab label, setIcon repaints and reads SHOW_CONTENT_ICON only then. */
-        final AtomicReference<Icon> painted = new AtomicReference<>();
         final AtomicReference<String> name = new AtomicReference<>("AI test");
         final Map<Key<?>, Object> data = new HashMap<>();
         final Content content = (Content) Proxy.newProxyInstance(Content.class.getClassLoader(),
@@ -35,8 +32,6 @@ public class ChatWindowDelegateUnreadTest {
                         case "getIcon": return icon.get();
                         case "setIcon":
                             icon.set((Icon) args[0]);
-                            painted.set(Boolean.TRUE.equals(data.get(ToolWindow.SHOW_CONTENT_ICON))
-                                    ? (Icon) args[0] : null);
                             return null;
                         case "getUserData": return data.get(args[0]);
                         case "putUserData": data.put((Key<?>) args[0], args[1]); return null;
@@ -78,48 +73,36 @@ public class ChatWindowDelegateUnreadTest {
     }
 
     @Test
-    public void backgroundRepliesSetOnePersistentBadgeWithoutPerTokenUpdates() {
+    public void aBackgroundCompletionPersistsUntilReadWithoutReplacingTheTabIcon() {
         Fixture f = new Fixture();
-        for (int i = 0; i < 100; i++) f.delegate.onAssistantActivity();
-        assertEquals(1, f.queue.size());
+        Icon original = new ImageIcon(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB));
+        f.tab.get().icon.set(original);
+        f.delegate.onTurnCompleted(() -> true);
         f.drain();
         assertTrue(f.delegate.hasUnread());
-        assertNotNull(f.tab.get().icon.get());
-        assertEquals(Boolean.TRUE, f.tab.get().data.get(ToolWindow.SHOW_CONTENT_ICON));
-        for (int i = 0; i < 100; i++) f.delegate.onAssistantActivity();
+        assertTrue(f.tab.get().name.get().contains("#3FA05B"));
+        assertEquals("AI test", CompletedTabTitle.plain(f.tab.get().content));
+        assertSame(original, f.tab.get().icon.get());
+        assertNull(f.tab.get().data.get(ToolWindow.SHOW_CONTENT_ICON));
+        for (int i = 0; i < 100; i++) f.delegate.onTurnCompleted(() -> true);
         assertTrue(f.queue.isEmpty());
         assertEquals(1, f.saves.get());
     }
 
     @Test
-    public void badgeIsPaintedWhenSetAndTheHiddenIconStaysHiddenWhenCleared() {
+    public void visibleCompletionsStayRead() {
         Fixture f = new Fixture();
-        f.tab.get().icon.set(new ImageIcon(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB)));
-        f.delegate.onAssistantActivity(); f.drain();
-        assertNotNull(f.tab.get().painted.get());
         f.selected.set(true);
-        f.delegate.markTabReadIfVisible(); f.drain();
-        assertNull(f.tab.get().painted.get());
-    }
-
-    @Test
-    public void visibleRepliesStayReadAndPreserveExistingIcons() {
-        Fixture f = new Fixture();
-        Icon original = new ImageIcon(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB));
-        f.tab.get().icon.set(original);
-        f.selected.set(true);
-        f.delegate.onAssistantActivity(); f.drain();
+        f.delegate.onTurnCompleted(() -> true); f.drain();
         assertFalse(f.delegate.hasUnread());
-        assertSame(original, f.tab.get().icon.get());
+        assertEquals("AI test", f.tab.get().name.get());
         assertEquals(0, f.saves.get());
     }
 
     @Test
-    public void onlyAVisibleReadySelectionClearsTheBadgeAndRestoresTheIcon() {
+    public void onlyAVisibleReadySelectionClearsTheDot() {
         Fixture f = new Fixture();
-        Icon original = new ImageIcon(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB));
-        f.tab.get().icon.set(original);
-        f.delegate.onAssistantActivity(); f.drain();
+        f.delegate.onTurnCompleted(() -> true); f.drain();
         f.selected.set(true); f.showing.set(false);
         f.delegate.markTabReadIfVisible(); f.drain();
         assertTrue(f.delegate.hasUnread());
@@ -129,46 +112,70 @@ public class ChatWindowDelegateUnreadTest {
         f.ready.set(true);
         f.delegate.markTabReadIfVisible(); f.drain();
         assertFalse(f.delegate.hasUnread());
-        assertSame(original, f.tab.get().icon.get());
-        assertNull(f.tab.get().data.get(ToolWindow.SHOW_CONTENT_ICON));
+        assertEquals("AI test", f.tab.get().name.get());
         assertEquals(2, f.saves.get());
     }
 
     @Test
-    public void queuedActivityResamplesSelectionAndIgnoresClosedTabs() {
+    public void aNewTurnInvalidatesQueuedCompletionAndClearsAnOlderDot() {
         Fixture f = new Fixture();
-        f.delegate.onAssistantActivity(); f.selected.set(true); f.drain();
+        f.delegate.onTurnCompleted(() -> true);
+        f.delegate.onTurnStarted(); f.drain();
         assertFalse(f.delegate.hasUnread());
-        f.selected.set(false); f.delegate.onAssistantActivity(); f.disposed.set(true); f.drain();
+        f.delegate.onTurnCompleted(() -> true); f.drain();
+        assertTrue(f.delegate.hasUnread());
+        f.delegate.onTurnStarted(); f.drain();
+        assertFalse(f.delegate.hasUnread());
+        assertEquals("AI test", f.tab.get().name.get());
+    }
+
+    @Test
+    public void theNextCompletionIsNotLostWhenAnOldCompletionWasStillQueued() {
+        Fixture f = new Fixture();
+        f.delegate.onTurnCompleted(() -> false);
+        f.delegate.onTurnStarted();
+        f.delegate.onTurnCompleted(() -> true); f.drain();
+        assertTrue(f.delegate.hasUnread());
+    }
+
+    @Test
+    public void queuedCompletionResamplesTaskVisibilityAndDisposal() {
+        Fixture f = new Fixture();
+        AtomicBoolean stillCompleted = new AtomicBoolean(true);
+        f.delegate.onTurnCompleted(stillCompleted::get); stillCompleted.set(false); f.drain();
+        assertFalse(f.delegate.hasUnread());
+        f.delegate.onTurnCompleted(() -> true); f.selected.set(true); f.drain();
+        assertFalse(f.delegate.hasUnread());
+        f.selected.set(false); f.delegate.onTurnCompleted(() -> true); f.disposed.set(true); f.drain();
         assertFalse(f.delegate.hasUnread());
         assertEquals(0, f.saves.get());
     }
 
     @Test
-    public void restoringUnreadDoesNotGenerateANewMessageOrClearItUntilRead() {
+    public void restoringUnreadDoesNotGenerateANewReplyOrClearItUntilRead() {
         Fixture f = new Fixture();
         f.delegate.restoreUnread(true); f.drain();
         assertTrue(f.delegate.hasUnread());
         assertEquals(0, f.saves.get());
-        assertNotNull(f.tab.get().icon.get());
+        assertTrue(f.tab.get().name.get().contains("#3FA05B"));
         f.selected.set(true); f.delegate.markTabReadIfVisible(); f.drain();
         assertFalse(f.delegate.hasUnread());
-        assertEquals(1, f.saves.get());
+        assertEquals("AI test", f.tab.get().name.get());
     }
 
     @Test
-    public void reattachingTransfersTheBadgeAndReleasesTheOldContent() {
+    public void reattachingTransfersTheDotAndReleasesTheOldContent() {
         Fixture f = new Fixture();
-        f.delegate.onAssistantActivity(); f.drain();
+        f.delegate.onTurnCompleted(() -> true); f.drain();
         Tab original = f.tab.get(); f.tab.set(new Tab());
         f.delegate.refreshUnreadBadge(); f.drain();
-        assertNull(original.icon.get());
-        assertNotNull(f.tab.get().icon.get());
+        assertEquals("AI test", original.name.get());
+        assertTrue(f.tab.get().name.get().contains("#3FA05B"));
         assertTrue(f.delegate.hasUnread());
     }
 
     @Test
-    public void idleStatusResetDoesNotClearUnreadOrLeaveStatusTextInTheName() {
+    public void statusAndRenameChangesKeepTheDotOutOfThePlainTitle() {
         Fixture f = new Fixture();
         Application previous = ApplicationManager.getApplication();
         Application app = (Application) Proxy.newProxyInstance(Application.class.getClassLoader(),
@@ -178,36 +185,19 @@ public class ChatWindowDelegateUnreadTest {
                 });
         try {
             ApplicationManager.setApplication(app);
-            f.delegate.onAssistantActivity(); f.drain();
+            f.delegate.onTurnCompleted(() -> true); f.drain();
             f.delegate.updateTabStatus(ChatWindowDelegate.TabAnswerStatus.ANSWERING); f.drain();
             f.delegate.updateTabStatus(ChatWindowDelegate.TabAnswerStatus.IDLE); f.drain();
             assertTrue(f.delegate.hasUnread());
-            assertNotNull(f.tab.get().icon.get());
-            assertEquals("AI test", f.tab.get().name.get());
+            assertEquals("AI test", CompletedTabTitle.plain(f.tab.get().content));
+            CompletedTabTitle.setPlain(f.tab.get().content, "renamed <A&B>");
+            assertEquals("renamed <A&B>", CompletedTabTitle.plain(f.tab.get().content));
+            assertTrue(f.tab.get().name.get().contains("#3FA05B"));
+            f.selected.set(true); f.delegate.markTabReadIfVisible(); f.drain();
+            assertEquals("renamed <A&B>", f.tab.get().name.get());
         } finally {
             f.delegate.dispose();
             ApplicationManager.setApplication(previous);
         }
-    }
-
-    @Test
-    public void badgeResourcePaintsVisibleRedPixels() throws Exception {
-        Fixture f = new Fixture();
-        f.delegate.onAssistantActivity(); f.drain();
-        assertNotNull(f.tab.get().icon.get());
-        // IconLoader stays inactive in a headless test JVM; use its SVG renderer directly.
-        java.awt.Image rendered = SVGLoader.load(ChatWindowDelegate.class.getResource("/icons/unread-dot.svg"), 1f);
-        BufferedImage image = new BufferedImage(rendered.getWidth(null), rendered.getHeight(null), BufferedImage.TYPE_INT_ARGB);
-        java.awt.Graphics2D graphics = image.createGraphics();
-        try { graphics.drawImage(rendered, 0, 0, null); } finally { graphics.dispose(); }
-        int redPixels = 0;
-        for (int y = 0; y < image.getHeight(); y++) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                int pixel = image.getRGB(x, y);
-                if ((pixel >>> 24) > 100 && ((pixel >>> 16) & 255) > 150
-                        && ((pixel >>> 16) & 255) > 2 * ((pixel >>> 8) & 255)) redPixels++;
-            }
-        }
-        assertTrue("Unread must be a visible red dot", redPixels >= 8);
     }
 }

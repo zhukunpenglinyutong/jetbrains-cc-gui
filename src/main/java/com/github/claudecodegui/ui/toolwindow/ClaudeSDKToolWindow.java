@@ -70,7 +70,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
         int maxNumber = 0;
 
         for (Content content : contentManager.getContents()) {
-            String displayName = content.getDisplayName();
+            String displayName = com.github.claudecodegui.ui.CompletedTabTitle.plain(content);
             if (displayName == null) {
                 continue;
             }
@@ -395,7 +395,7 @@ public class ClaudeSDKToolWindow implements ToolWindowFactory, DumbAware {
                     return;
                 }
 
-                String tabName = content.getDisplayName();
+                String tabName = com.github.claudecodegui.ui.CompletedTabTitle.plain(content);
                 int result = com.intellij.openapi.ui.Messages.showYesNoDialog(
                     project,
                     ClaudeCodeGuiBundle.message("tab.close.confirm.message", tabName),

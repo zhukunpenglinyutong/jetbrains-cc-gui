@@ -24,6 +24,7 @@ import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionCallbackAdapter;
+import com.github.claudecodegui.session.SessionExecutionState;
 import com.github.claudecodegui.session.SessionLifecycleManager;
 import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
@@ -31,6 +32,7 @@ import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.TabStateService;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.github.claudecodegui.ui.ChatWindowDelegate;
+import com.github.claudecodegui.ui.CompletedTabTitle;
 import com.github.claudecodegui.ui.DraftCacheKeys;
 import com.github.claudecodegui.ui.EditorContextTracker;
 import com.github.claudecodegui.ui.SurfaceFrameFence;
@@ -530,7 +532,7 @@ public class ClaudeChatWindow {
             LOG.debug("[MultiTab] Registered Content -> ClaudeChatWindow mapping for: " + content.getDisplayName());
 
             if (this.originalTabName == null) {
-                String displayName = content.getDisplayName();
+                String displayName = CompletedTabTitle.plain(content);
                 this.originalTabName = displayName.endsWith("...")
                         ? displayName.substring(0, displayName.length() - 3)
                         : displayName;
@@ -2719,10 +2721,29 @@ public class ClaudeChatWindow {
                 streamCoalescer,
                 new SessionCallbackAdapter.JsTarget() {
                     @Override
-                    public void onAssistantActivity() {
+                    public SessionExecutionState.Snapshot getExecutionSnapshot() {
+                        return session == callbackSession ? callbackSession.getState().getExecutionSnapshot() : null;
+                    }
+
+                    @Override
+                    public void onTurnStarted() {
                         if (!disposed && session == callbackSession) {
-                            chatWindowDelegate.onAssistantActivity();
+                            chatWindowDelegate.onTurnStarted();
                         }
+                    }
+
+                    @Override
+                    public void onTurnCompleted() {
+                        SessionExecutionState.Snapshot completed = getExecutionSnapshot();
+                        if (disposed || completed == null) {
+                            return;
+                        }
+                        chatWindowDelegate.onTurnCompleted(() -> {
+                            SessionExecutionState.Snapshot current = getExecutionSnapshot();
+                            return current != null
+                                    && current.phase() == SessionExecutionState.Phase.SUCCEEDED
+                                    && current.terminalEventId().equals(completed.terminalEventId());
+                        });
                     }
 
                     @Override
