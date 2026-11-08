@@ -42,7 +42,6 @@ import sql from 'highlight.js/lib/languages/sql';
 import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
-import 'highlight.js/styles/github-dark.css';
 import 'katex/dist/katex.css';
 import { markedHighlight } from 'marked-highlight';
 import { copyToClipboard } from '../utils/copyUtils';
