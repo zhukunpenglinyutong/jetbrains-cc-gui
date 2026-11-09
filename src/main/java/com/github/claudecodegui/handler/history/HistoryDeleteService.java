@@ -47,7 +47,10 @@ class HistoryDeleteService {
 
     // Reject anything outside [A-Za-z0-9._-] to defeat path-traversal payloads such as "../foo"
     // before they reach Path.resolve. Session IDs in both providers are alphanumeric/UUID style.
-    private static final Pattern SESSION_ID_PATTERN = Pattern.compile("^[A-Za-z0-9._-]+$");
+    // Pure-dot ids are rejected too: "." normalizes onto the project directory itself, and the
+    // sidecar cleanup's containment check accepts equality — with the matching "<.>.jsonl" file
+    // present, deleting that session would take the project-level subagents/ tree with it.
+    private static final Pattern SESSION_ID_PATTERN = Pattern.compile("^(?!\\.+\\z)[A-Za-z0-9._-]+$");
 
     static boolean isValidSessionId(String sessionId) {
         return sessionId != null && SESSION_ID_PATTERN.matcher(sessionId).matches();
@@ -718,10 +721,13 @@ class HistoryDeleteService {
         Path sessionDir = normalizedProjectDir.resolve(sessionId).normalize();
         // The id is already validated above; the containment check keeps this
         // method safe on its own terms if a future caller passes something else.
-        // A symlinked session directory would make every path below resolve into
-        // whatever it points at, so refuse it instead of deleting someone else's
-        // transcripts through the link.
+        // Containment must be STRICT: a session dir equal to the project dir (a
+        // "." id that normalized onto it) would let the cleanup below delete the
+        // project-level subagents/ tree. A symlinked session directory would
+        // make every path below resolve into whatever it points at, so refuse
+        // it instead of deleting someone else's transcripts through the link.
         if (!sessionDir.startsWith(normalizedProjectDir)
+                || sessionDir.equals(normalizedProjectDir)
                 || Files.isSymbolicLink(sessionDir)
                 || !Files.isDirectory(sessionDir)) {
             return 0;

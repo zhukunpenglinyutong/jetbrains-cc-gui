@@ -732,6 +732,37 @@ public class HistoryDeleteServiceTest {
         assertTrue(Files.exists(survivor));
     }
 
+    /**
+     * A "." session id normalizes onto the project directory itself, and the old
+     * containment check accepted equality: once the matching "&lt;.&gt;.jsonl" main file
+     * was deleted, the cleanup below could take the project-level subagents/ tree
+     * (and even the emptied project dir) with it. Pure-dot ids are rejected and
+     * containment is strict, so the project directory must survive untouched.
+     */
+    @Test
+    public void sidecarDirectoryRemovalRefusesTheProjectDirectoryItself() throws Exception {
+        Path projectDir = temporaryFolder.newFolder("projects", "proj").toPath();
+        Path projectSubagents = Files.createDirectories(projectDir.resolve("subagents"));
+        Path survivor = Files.write(projectSubagents.resolve("agent-keep.jsonl"),
+                Collections.singletonList("{}"), StandardCharsets.UTF_8);
+        Files.write(projectDir.resolve(".jsonl"), Collections.singletonList("{}"), StandardCharsets.UTF_8);
+
+        assertEquals(0, HistoryDeleteService.deleteSessionSidecarDirectory(projectDir, "."));
+        assertTrue("project-level subagents/ must survive", Files.exists(survivor));
+        assertTrue(Files.exists(projectDir));
+    }
+
+    @Test
+    public void sessionIdValidationRejectsPureDotIds() {
+        assertFalse(HistoryDeleteService.isValidSessionId("."));
+        assertFalse(HistoryDeleteService.isValidSessionId(".."));
+        assertFalse(HistoryDeleteService.isValidSessionId("..."));
+        assertFalse(HistoryDeleteService.isValidSessionId(null));
+        assertFalse(HistoryDeleteService.isValidSessionId("../escape"));
+        assertTrue(HistoryDeleteService.isValidSessionId("9d1f0f6e-1b2c-4b3a-9d4e-2f5a6b7c8d90"));
+        assertTrue(HistoryDeleteService.isValidSessionId("a.b-c_d1"));
+    }
+
     @Test
     public void sidecarDirectoryRemovalIgnoresSessionsWithoutSidecars() throws Exception {
         Path projectDir = temporaryFolder.newFolder("projects", "proj").toPath();
