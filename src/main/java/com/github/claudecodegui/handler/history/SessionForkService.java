@@ -120,7 +120,7 @@ class SessionForkService {
     void forkSession(String content, String projectPath, Path home) {
         ParsedForkRequest request = parseForkRequest(content);
         if (request.errorCode() != null) {
-            this.sendForkResult(false, null, request.errorCode(), null);
+            this.sendForkResult(false, null, request.errorCode(), null, request.requestId());
             return;
         }
         ApplicationManager.getApplication().executeOnPooledThread(
@@ -129,7 +129,7 @@ class SessionForkService {
 
     /** Parsed and validated fork request; {@code errorCode} non-null means rejected. */
     record ParsedForkRequest(String sessionId, String forkPointUuid, String provider, String title,
-                             ForkResultCode errorCode) {
+                             String requestId, ForkResultCode errorCode) {
     }
 
     /** Parse and validate the payload; each rejection logs its own reason. */
@@ -141,28 +141,35 @@ class SessionForkService {
             LOG.warn("[SessionForkService] Fork rejected: unparseable payload");
             // Not a session-id problem: report the generic failure so the user is
             // not told their id is invalid when the payload itself was malformed.
-            return new ParsedForkRequest(null, null, null, null, ForkResultCode.FORK_FAILED);
+            return new ParsedForkRequest(null, null, null, null, null, ForkResultCode.FORK_FAILED);
         }
+
+        // The frontend correlates onForkResult with the request through this id
+        // (mirrors the delete flow): the 60s backstop can release the guard while
+        // a large fork still runs, and a late result must not settle the fork
+        // started meanwhile. Echoed verbatim; no format contract.
+        String requestId = request != null && request.has("requestId") && request.get("requestId").isJsonPrimitive()
+                ? request.get("requestId").getAsString() : null;
 
         String sessionId = request != null && request.has("sessionId") && request.get("sessionId").isJsonPrimitive()
                 ? request.get("sessionId").getAsString() : null;
         if (!HistoryDeleteService.isValidSessionId(sessionId)) {
             LOG.warn("[SessionForkService] Fork rejected: invalid sessionId");
-            return new ParsedForkRequest(null, null, null, null, ForkResultCode.INVALID_SESSION_ID);
+            return new ParsedForkRequest(null, null, null, null, requestId, ForkResultCode.INVALID_SESSION_ID);
         }
 
         String forkPointUuid = request.has("forkPointUuid") && request.get("forkPointUuid").isJsonPrimitive()
                 ? request.get("forkPointUuid").getAsString() : null;
         if (forkPointUuid != null && !HistoryDeleteService.isValidSessionId(forkPointUuid)) {
             LOG.warn("[SessionForkService] Fork rejected: invalid forkPointUuid");
-            return new ParsedForkRequest(null, null, null, null, ForkResultCode.INVALID_SESSION_ID);
+            return new ParsedForkRequest(null, null, null, null, requestId, ForkResultCode.INVALID_SESSION_ID);
         }
 
         String provider = request.has("provider") && request.get("provider").isJsonPrimitive()
                 ? request.get("provider").getAsString() : CLAUDE_PROVIDER;
         if (!CLAUDE_PROVIDER.equals(provider)) {
             LOG.info("[SessionForkService] Fork rejected: provider not supported: " + provider);
-            return new ParsedForkRequest(null, null, null, null, ForkResultCode.UNSUPPORTED_PROVIDER);
+            return new ParsedForkRequest(null, null, null, null, requestId, ForkResultCode.UNSUPPORTED_PROVIDER);
         }
 
         // The frontend already truncates the title to the service limit; this is the
@@ -170,7 +177,7 @@ class SessionForkService {
         String forkTitle = request.has("title") && request.get("title").isJsonPrimitive()
                 ? request.get("title").getAsString() : null;
         return new ParsedForkRequest(sessionId, forkPointUuid, provider,
-                truncateForkTitle(forkTitle), null);
+                truncateForkTitle(forkTitle), requestId, null);
     }
 
     /** Run on the pooled thread: locate the source, copy, mirror sidechains, apply the title, report. */
@@ -179,7 +186,7 @@ class SessionForkService {
             Path sessionFile = this.findSessionFile(request.sessionId(), projectPath, home);
             if (sessionFile == null) {
                 LOG.warn("[SessionForkService] Session file not found: " + request.sessionId());
-                this.sendForkResult(false, null, ForkResultCode.SESSION_NOT_FOUND, null);
+                this.sendForkResult(false, null, ForkResultCode.SESSION_NOT_FOUND, null, request.requestId());
                 return;
             }
 
@@ -187,7 +194,7 @@ class SessionForkService {
             // window where another process deletes the file after discovery.
             if (!Files.exists(sessionFile)) {
                 LOG.warn("[SessionForkService] Session file does not exist: " + sessionFile);
-                this.sendForkResult(false, null, ForkResultCode.FILE_NOT_EXIST, null);
+                this.sendForkResult(false, null, ForkResultCode.FILE_NOT_EXIST, null, request.requestId());
                 return;
             }
 
@@ -206,21 +213,21 @@ class SessionForkService {
             this.copySidechains(sessionFile.getParent(), request.sessionId(), newSessionId);
             this.applyForkTitle(newSessionId, request.title());
 
-            this.sendForkResult(true, newSessionId, null, request.forkPointUuid());
+            this.sendForkResult(true, newSessionId, null, request.forkPointUuid(), request.requestId());
         } catch (FileAlreadyExistsException e) {
             // warn like HistoryDeleteService: a failed fork is a reported user
             // action, not an IDE-level fault.
             LOG.warn("[SessionForkService] Fork target already exists: " + e.getMessage());
-            this.sendForkResult(false, null, ForkResultCode.FORK_FAILED, null);
+            this.sendForkResult(false, null, ForkResultCode.FORK_FAILED, null, request.requestId());
         } catch (DanglingToolUseException e) {
             LOG.warn("[SessionForkService] " + e.getMessage());
-            this.sendForkResult(false, null, ForkResultCode.UNRESOLVED_TOOL_USE, null);
+            this.sendForkResult(false, null, ForkResultCode.UNRESOLVED_TOOL_USE, null, request.requestId());
         } catch (ForkPointNotFoundException e) {
             LOG.warn("[SessionForkService] Fork point not found in session: " + e.getMessage());
-            this.sendForkResult(false, null, ForkResultCode.FORK_POINT_NOT_FOUND, null);
+            this.sendForkResult(false, null, ForkResultCode.FORK_POINT_NOT_FOUND, null, request.requestId());
         } catch (Exception e) {
             LOG.warn("[SessionForkService] Failed to fork session: " + e.getMessage(), e);
-            this.sendForkResult(false, null, ForkResultCode.FORK_FAILED, null);
+            this.sendForkResult(false, null, ForkResultCode.FORK_FAILED, null, request.requestId());
         }
     }
 
@@ -781,11 +788,16 @@ class SessionForkService {
      *                      frontend auto-opens the fork in the chat only for
      *                      message-level forks (history-list forks must not yank the
      *                      user out of the list).
+     * @param requestId Echoed fork request id, or null when the payload carried none;
+     *                  the frontend settles only the fork this id belongs to.
      */
     private void sendForkResult(boolean success, String newSessionId, ForkResultCode code,
-                                String forkPointUuid) {
+                                String forkPointUuid, String requestId) {
         JsonObject result = new JsonObject();
         result.addProperty("success", success);
+        if (requestId != null) {
+            result.addProperty("requestId", requestId);
+        }
         if (newSessionId != null) {
             result.addProperty("newSessionId", newSessionId);
         }

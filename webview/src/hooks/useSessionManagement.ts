@@ -669,6 +669,12 @@ export function useSessionManagement({
       return;
     }
     window.__forkInFlight = true;
+    // Correlate the eventual onForkResult with this request (mirrors the delete
+    // flow's requestId): the backstop below can release the guard while a large
+    // fork is still running, and the late result of that abandoned request must
+    // not settle the fork started meanwhile.
+    const requestId = 'fork-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    window.__forkInFlightRequestId = requestId;
     // Release the guard even if the backend callback never arrives. Generous on
     // purpose: forking copies the whole transcript, and a large session can take
     // well past 15s — releasing early would let a second click duplicate the fork.
@@ -683,6 +689,10 @@ export function useSessionManagement({
       forkTimeoutRef.current = null;
       window.__forkInFlight = false;
       delete window.__forkInFlightTimer;
+      // The request is abandoned from here: dropping the correlation id lets a
+      // late result be honored again (no fork is in flight it could confuse),
+      // while a result arriving after a NEW fork started is rejected by id.
+      delete window.__forkInFlightRequestId;
     }, 60_000);
     window.__forkInFlightTimer = forkTimeoutRef.current;
 
@@ -725,6 +735,7 @@ export function useSessionManagement({
     window.__pendingForkProvider = provider;
 
     if (!sendBridgeEvent('fork_session', JSON.stringify({
+      requestId,
       sessionId,
       provider,
       ...(forkTitle ? { title: forkTitle } : {}),
@@ -739,6 +750,7 @@ export function useSessionManagement({
       }
       window.__forkInFlight = false;
       delete window.__forkInFlightTimer;
+      delete window.__forkInFlightRequestId;
       delete window.__pendingForkTitleRequest;
       delete window.__pendingForkProvider;
       addToast(t('history.forkFailed'), 'error');

@@ -32,6 +32,8 @@ describe('useSessionManagement', () => {
     delete window.__pendingForkTitle;
     delete window.__pendingForkProvider;
     delete window.__forkInFlight;
+    delete window.__forkInFlightRequestId;
+    delete window.__forkInFlightTimer;
     // Reset the "skip new-session confirm" preference between tests so cases
     // that exercise the localStorage path can't leak into ones that don't.
     localStorage.removeItem('skipNewSessionConfirm');
@@ -1155,11 +1157,15 @@ describe('useSessionManagement', () => {
     expect(payload.startsWith('fork_session:')).toBe(true);
     const body = JSON.parse(payload.slice('fork_session:'.length));
     expect(body).toEqual({
+      requestId: expect.any(String),
       sessionId: 'history-1',
       provider: 'claude',
       // t() returns the key itself, so the suffix is the raw i18n key.
       title: 'My Session' + 'history.forkedTitleSuffix',
     });
+    // The correlation id rides on window too: onForkResult settles only the
+    // fork this id belongs to (mirrors the delete flow's requestId echo).
+    expect(window.__forkInFlightRequestId).toBe(body.requestId);
   });
 
   it('forkHistorySession ignores a second click while the first fork is in flight', () => {
@@ -1308,7 +1314,7 @@ describe('useSessionManagement', () => {
 
     const [payload] = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls[0] as string[];
     const body = JSON.parse(payload.slice('fork_session:'.length));
-    expect(body).toEqual({ sessionId: 'history-1', provider: 'grok' });
+    expect(body).toEqual({ requestId: expect.any(String), sessionId: 'history-1', provider: 'grok' });
   });
 
   it('forkHistorySession forwards the fork point uuid for message-level forks', () => {

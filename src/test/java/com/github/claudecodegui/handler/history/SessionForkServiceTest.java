@@ -777,9 +777,12 @@ public class SessionForkServiceTest {
         SessionForkService forkService = new SessionForkService(
                 new HandlerContext(stubProject(), null, null, null, callback), null);
 
-        forkService.forkSession("{\"sessionId\":\"../escape\"}", null);
+        forkService.forkSession("{\"sessionId\":\"../escape\",\"requestId\":\"fork-req-2\"}", null);
 
         assertEquals("INVALID_SESSION_ID", forkResultCode(callback));
+        // Even a rejected request echoes its id: the frontend releases the
+        // pending state of exactly that request, not of one started meanwhile.
+        assertTrue(forkResultJson(callback).contains("\"requestId\":\"fork-req-2\""));
     }
 
     @Test
@@ -853,11 +856,13 @@ public class SessionForkServiceTest {
                 new HandlerContext(stubProject(), null, null, null, callback), caller);
 
         // No projectPath: the scan-all-projects branch has to find the file.
-        forkService.forkSession("{\"sessionId\":\"" + SOURCE_ID + "\"}", null,
+        forkService.forkSession("{\"sessionId\":\"" + SOURCE_ID + "\",\"requestId\":\"fork-req-1\"}", null,
                 claudeHomeRoot());
 
         String result = forkResultJson(callback);
         assertTrue(result.contains("\"success\":true"));
+        assertTrue("the result must echo the request id so the frontend can correlate it",
+                result.contains("\"requestId\":\"fork-req-1\""));
         assertFalse(result.contains(SOURCE_ID));
         // The fork lands next to its source under the temp home, ids rewritten.
         String newSessionId = result.replaceAll(".*\"newSessionId\":\"([^\"]+)\".*", "$1");

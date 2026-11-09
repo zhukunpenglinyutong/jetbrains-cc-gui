@@ -222,7 +222,10 @@ interface Window {
   /**
    * Session fork result callback.
    * Called by the Java backend after attempting to fork (duplicate) a session.
-   * Payload: { success: boolean, newSessionId?: string, errorCode?: string }.
+   * Payload: { requestId?: string, success: boolean, newSessionId?: string, errorCode?: string }.
+   * requestId echoes the fork request, so a result arriving after the 60s
+   * backstop released its guard cannot settle a different fork (mirrors the
+   * delete flow's requestId);
    * newSessionId identifies the created fork on success;
    * errorCode identifies the failure reason for i18n lookup.
    */
@@ -277,6 +280,15 @@ interface Window {
 
   /** True while a fork request is awaiting onForkResult; blocks double submits. */
   __forkInFlight?: boolean;
+
+  /**
+   * Correlation id of the fork request currently in flight. onForkResult
+   * settles the guard and the pending title/provider only when the result's
+   * echoed requestId matches — the 60s backstop can release the guard while a
+   * large fork still runs, and a late result of that abandoned request must
+   * not consume the state of the fork started meanwhile.
+   */
+  __forkInFlightRequestId?: string;
 
   /**
    * Handle of the 60s backstop timer arming {@link __forkInFlight}, so

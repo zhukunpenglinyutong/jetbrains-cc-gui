@@ -341,43 +341,78 @@ export function registerSessionAndSdkCallbacks(
       // Read through the ref: the closure would hold the mount-time
       // loadHistorySession, whose `loading` is permanently false, so a
       // mid-stream auto-open would skip the interrupt and clear messages
-      // under the live reply (see UseWindowCallbacksOptions).
-      loadHistorySessionRef?.current?.(result.newSessionId);
+      // under the live reply (see UseWindowCallbacksOptions). The loader
+      // takes the fork row's provider explicitly: the row is absent from
+      // historyData until the async list reload lands, and falling back to
+      // currentProvider would open the fork through whatever provider the
+      // panel switched to while the fork was running.
+      if (requestedProvider) {
+        loadHistorySessionRef?.current?.(result.newSessionId, requestedProvider);
+      } else {
+        loadHistorySessionRef?.current?.(result.newSessionId);
+      }
     } else {
       addToast(tRef.current('history.forkSuccess'), 'success');
     }
   };
 
-  window.onForkResult = (json: string) => {
-    // Release the one-fork-at-a-time guard on every outcome, including a
-    // malformed payload that never reaches the try block below. The 60s
-    // backstop timer goes with it, so a stale release cannot free a later
-    // fork's guard early.
+  /** Release the in-flight fork guard, its 60s backstop and its correlation id. */
+  const settleForkRequest = () => {
     window.__forkInFlight = false;
     if (window.__forkInFlightTimer != null) {
       clearTimeout(window.__forkInFlightTimer);
       delete window.__forkInFlightTimer;
     }
-    try {
-      const result = JSON.parse(json);
-      if (result.success) {
-        // Consume the requested title on every outcome: a result without a new
-        // session id must not leave a stale title to be bound to some later fork.
-        const requestedTitle = window.__pendingForkTitleRequest;
-        delete window.__pendingForkTitleRequest;
-        handleForkSuccess(result, requestedTitle);
-        return;
-      }
+    delete window.__forkInFlightRequestId;
+  };
 
-      addToast(translateForkError(result.errorCode), 'error');
-      // The fork never produced a session: drop the title it was waiting to bind.
-      delete window.__pendingForkTitleRequest;
-      delete window.__pendingForkProvider;
+  window.onForkResult = (json: string) => {
+    let result: {
+      requestId?: string;
+      success?: boolean;
+      newSessionId?: string;
+      forkPointUuid?: string;
+      errorCode?: string;
+    };
+    try {
+      result = JSON.parse(json);
     } catch (error) {
       console.error('[Frontend] Failed to parse fork result:', error);
+      settleForkRequest();
       delete window.__pendingForkTitleRequest;
       delete window.__pendingForkProvider;
       addToast(tRef.current('history.forkFailed'), 'error');
+      return;
     }
+    // Correlate the result with the request still in flight (mirrors the delete
+    // flow's requestId echo). The 60s backstop releases the guard while a large
+    // fork is still running, so the user can start fork B before fork A
+    // settles: without the id check, A's late result would clear B's guard,
+    // consume B's pending title/provider and auto-open A's session under B's
+    // title. A result without a requestId (older backend) belongs to the only
+    // request that could be in flight and is accepted as before; with no
+    // request in flight at all, the pending state belongs to that same fork
+    // and the result is honored so its row still lands in the list.
+    const activeRequestId = window.__forkInFlightRequestId;
+    if (activeRequestId != null && result.requestId != null
+        && result.requestId !== activeRequestId) {
+      console.warn('[Frontend] Ignored a stale fork result: request ' + result.requestId
+          + ' settled while ' + activeRequestId + ' is in flight');
+      return;
+    }
+    settleForkRequest();
+    if (result.success) {
+      // Consume the requested title on every outcome: a result without a new
+      // session id must not leave a stale title to be bound to some later fork.
+      const requestedTitle = window.__pendingForkTitleRequest;
+      delete window.__pendingForkTitleRequest;
+      handleForkSuccess(result, requestedTitle);
+      return;
+    }
+
+    addToast(translateForkError(result.errorCode), 'error');
+    // The fork never produced a session: drop the title it was waiting to bind.
+    delete window.__pendingForkTitleRequest;
+    delete window.__pendingForkProvider;
   };
 }

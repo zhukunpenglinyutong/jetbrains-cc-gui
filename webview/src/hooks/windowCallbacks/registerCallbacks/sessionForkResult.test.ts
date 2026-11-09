@@ -32,6 +32,8 @@ describe('session fork result', () => {
     delete window.__pendingForkTitleRequest;
     delete window.__pendingForkProvider;
     delete window.__pendingSessionTransitionToast;
+    delete window.__forkInFlightRequestId;
+    delete window.__forkInFlightTimer;
     window.__forkInFlight = true;
     window.sendToJava = vi.fn();
     registerSessionAndSdkCallbacks(
@@ -56,6 +58,23 @@ describe('session fork result', () => {
     expect(window.__pendingSessionTransitionToast).toMatchObject({ type: 'success' });
     expect(window.__pendingForkTitleRequest).toBeUndefined();
     expect(window.__forkInFlight).toBe(false);
+  });
+
+  it('auto-opens through the fork row provider, not the panel provider', () => {
+    // The author's provider-switch scenario: a Claude fork requested from the
+    // message level, the panel switched to codex while it ran. The fork row is
+    // absent from historyData until the async reload lands, so falling back to
+    // currentProvider would emit load_session with provider "codex" and open
+    // the fork through the wrong provider.
+    options.currentProviderRef.current = 'codex';
+    window.__pendingForkProvider = 'claude';
+    window.__pendingForkTitleRequest = 'Chat (fork)';
+
+    window.onForkResult!(
+      JSON.stringify({ success: true, newSessionId: 'fork-1', forkPointUuid: 'row-uuid-1' }),
+    );
+
+    expect(loadHistorySession).toHaveBeenCalledWith('fork-1', 'claude');
   });
 
   it('auto-opens through the ref so a re-created loader is the one invoked', () => {
@@ -134,5 +153,61 @@ describe('session fork result', () => {
 
     expect(clearTimeoutSpy).toHaveBeenCalledWith(456);
     expect(window.__forkInFlightTimer).toBeUndefined();
+  });
+
+  it('settles the in-flight request when the echoed requestId matches', () => {
+    window.__forkInFlightRequestId = 'fork-b';
+    window.__pendingForkTitleRequest = 'Chat (fork)';
+
+    window.onForkResult!(JSON.stringify({ requestId: 'fork-b', success: true, newSessionId: 'fork-6' }));
+
+    expect(window.__forkInFlight).toBe(false);
+    expect(window.__forkInFlightRequestId).toBeUndefined();
+    expect(window.__pendingForkTitleRequest).toBeUndefined();
+    expect(addToast).toHaveBeenCalledWith('history.forkSuccess', 'success');
+  });
+
+  it('ignores a stale result that settles a different request than the one in flight', () => {
+    // Fork A outlived the 60s backstop, fork B started: A's late result must
+    // not release B's guard, consume B's pending title/provider or auto-open
+    // A's session under B's title.
+    window.__forkInFlightRequestId = 'fork-b';
+    window.__pendingForkTitleRequest = 'Chat B (fork)';
+    window.__pendingForkProvider = 'claude';
+
+    window.onForkResult!(
+      JSON.stringify({ requestId: 'fork-a', success: true, newSessionId: 'fork-old', forkPointUuid: 'row-old' }),
+    );
+
+    expect(window.__forkInFlight).toBe(true);
+    expect(window.__forkInFlightRequestId).toBe('fork-b');
+    expect(window.__pendingForkTitleRequest).toBe('Chat B (fork)');
+    expect(window.__pendingForkProvider).toBe('claude');
+    expect(loadHistorySession).not.toHaveBeenCalled();
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it('ignores a stale failed result for the same reason', () => {
+    window.__forkInFlightRequestId = 'fork-b';
+    window.__pendingForkTitleRequest = 'Chat B (fork)';
+
+    window.onForkResult!(JSON.stringify({ requestId: 'fork-a', success: false, errorCode: 'FORK_FAILED' }));
+
+    expect(window.__forkInFlight).toBe(true);
+    expect(window.__pendingForkTitleRequest).toBe('Chat B (fork)');
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it('honors a late result after the backstop released the guard', () => {
+    // No request is in flight anymore (the 60s backstop fired and dropped the
+    // correlation id): the pending state belongs to that same fork, so the
+    // result is honored and the fork still lands in the list.
+    window.__pendingForkTitleRequest = 'Chat A (fork)';
+
+    window.onForkResult!(JSON.stringify({ requestId: 'fork-a', success: true, newSessionId: 'fork-7' }));
+
+    expect(window.__forkInFlight).toBe(false);
+    expect(window.__pendingForkTitleRequest).toBeUndefined();
+    expect(addToast).toHaveBeenCalledWith('history.forkSuccess', 'success');
   });
 });
