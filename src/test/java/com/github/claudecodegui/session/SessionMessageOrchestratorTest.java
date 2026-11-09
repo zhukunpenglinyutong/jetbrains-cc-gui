@@ -577,6 +577,155 @@ public class SessionMessageOrchestratorTest {
         assertEquals(List.of("first partsecond part|row-uuid-multi"), callback.messageUuidPatches);
     }
 
+    /**
+     * Two unresolved replies with identical text against rows whose older one
+     * differs only by whitespace: order-preserving matching must anchor the
+     * older reply to the older row. The previous exact-first-then-normalized
+     * full-table passes per message let the older reply's exact match consume
+     * the newer row, and both anchors swapped — each fork would cut at the
+     * wrong turn.
+     */
+    @Test
+    public void updateAssistantMessageUuidsPreservesRowOrderAcrossJoinStyles() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-1");
+        state.setCwd("/workspace");
+
+        JsonObject firstRaw = new JsonObject();
+        ClaudeSession.Message first = new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, "ab", firstRaw);
+        state.addMessage(first);
+        JsonObject secondRaw = new JsonObject();
+        ClaudeSession.Message second = new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, "ab", secondRaw);
+        state.addMessage(second);
+
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+        callbackFacade.setCallback(callback);
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        JsonArray rows = new JsonArray();
+        JsonObject rowOlder = new JsonObject();
+        rowOlder.addProperty("uuid", "row-older");
+        rowOlder.addProperty("text", "a\nb");
+        rows.add(rowOlder);
+        JsonObject rowNewer = new JsonObject();
+        rowNewer.addProperty("uuid", "row-newer");
+        rowNewer.addProperty("text", "ab");
+        rows.add(rowNewer);
+        historyAccess.recentAssistantRows = rows;
+
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.updateAssistantMessageUuids();
+
+        assertEquals("row-older", first.raw.get("uuid").getAsString());
+        assertEquals("row-newer", second.raw.get("uuid").getAsString());
+        assertEquals(List.of("ab|row-older", "ab|row-newer"), callback.messageUuidPatches);
+    }
+
+    /**
+     * Auto-continuation persists one streamed reply as several contiguous
+     * assistant rows, so no single row equals the whole text. The matcher must
+     * aggregate consecutive rows and take the LAST row's uuid — the one
+     * representing the reply's end, which is where a fork cuts.
+     */
+    @Test
+    public void updateAssistantMessageUuidsAggregatesContinuationRowsToTheReplyEnd() {
+        SessionState state = new SessionState();
+        state.setProvider("claude");
+        state.setSessionId("session-1");
+        state.setCwd("/workspace");
+
+        // The streamed accumulator concatenates the continuation's rows with no separator.
+        JsonObject streamedRaw = new JsonObject();
+        streamedRaw.add("message", new JsonObject());
+        ClaudeSession.Message streamedAssistant = new ClaudeSession.Message(
+                ClaudeSession.Message.Type.ASSISTANT, "Complete thought.First paragraph.Final paragraph.", streamedRaw);
+        state.addMessage(streamedAssistant);
+
+        RecordingCallback callback = new RecordingCallback();
+        SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+        callbackFacade.setCallback(callback);
+
+        RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+        JsonArray rows = new JsonArray();
+        String[] continuation = {"Complete thought.", "First paragraph.", "Final paragraph."};
+        for (int i = 0; i < continuation.length; i++) {
+            JsonObject row = new JsonObject();
+            row.addProperty("uuid", "row-c" + i);
+            row.addProperty("text", continuation[i]);
+            rows.add(row);
+        }
+        historyAccess.recentAssistantRows = rows;
+
+        SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                state,
+                new MessageParser(),
+                callbackFacade,
+                historyAccess,
+                (usedTokens, maxTokens) -> {
+                },
+                0,
+                0
+        );
+
+        orchestrator.updateAssistantMessageUuids();
+
+        assertTrue(streamedAssistant.raw.has("uuid"));
+        assertEquals("row-c2", streamedAssistant.raw.get("uuid").getAsString());
+        assertEquals(List.of("Complete thought.First paragraph.Final paragraph.|row-c2"),
+                callback.messageUuidPatches);
+    }
+
+    /**
+     * Grok and ZCode are independent SDK providers: their transcripts are not
+     * the Claude JSONL this resolver queries, so their uuid-less replies must
+     * short-circuit instead of spending three bridge reads plus retry delays
+     * on a file that can never match.
+     */
+    @Test
+    public void syncAssistantMessageUuidsShortCircuitsForNonClaudeProviders() {
+        for (String provider : List.of("grok", "zcode", "codex", "kimi")) {
+            SessionState state = new SessionState();
+            state.setProvider(provider);
+            state.setSessionId("session-nonclaude");
+            state.setCwd("/workspace");
+
+            JsonObject streamedRaw = new JsonObject();
+            streamedRaw.add("message", new JsonObject());
+            state.addMessage(new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, "no uuid", streamedRaw));
+
+            RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+            SessionCallbackFacade callbackFacade = new SessionCallbackFacade(null);
+
+            SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                    state,
+                    new MessageParser(),
+                    callbackFacade,
+                    historyAccess,
+                    (usedTokens, maxTokens) -> {
+                    },
+                    0,
+                    0
+            );
+
+            orchestrator.syncAssistantMessageUuidsAfterSend().join();
+
+            assertEquals("provider " + provider + " must not reach the bridge",
+                    0, historyAccess.recentAssistantMessagesRequests.get());
+        }
+    }
+
     @Test
     public void loadFromServerParsesHistoryAndClearsLoadingState() {
         SessionState state = new SessionState();

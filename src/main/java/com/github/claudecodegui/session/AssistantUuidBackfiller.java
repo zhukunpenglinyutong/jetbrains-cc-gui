@@ -56,10 +56,17 @@ class AssistantUuidBackfiller {
         this.retryDelayMs = retryDelayMs;
     }
 
-    /** Skip non-Claude providers and turns that left nothing to resolve; else retry on the backfill executor. */
+    /**
+     * Only Claude turns backfill: the resolver queries the Claude CLI's session
+     * JSONL, and only that transcript carries the row uuids it matches against.
+     * An exclusion list (codex + the CLI bridge ids) silently grew stale when
+     * the independent Grok/ZCode SDK providers landed — their uuid-less replies
+     * would each trigger three Claude queries plus retry delays — so gate
+     * positively on the one provider this resolver serves. Skips turns that
+     * left nothing to resolve; else retries on the backfill executor.
+     */
     CompletableFuture<Void> syncAfterSend() {
-        String provider = state.getProvider();
-        if ("codex".equals(provider) || SessionProviderRouter.isCliProvider(provider)) {
+        if (!"claude".equals(state.getProvider())) {
             return CompletableFuture.completedFuture(null);
         }
         if (findUnresolvedAssistantMessages().isEmpty()) {
@@ -119,8 +126,12 @@ class AssistantUuidBackfiller {
                     // messages after the lockless pre-check.
                     List<ClaudeSession.Message> locked = findUnresolvedAssistantMessages();
                     unresolvedAtScan = locked.size();
+                    // Row cursor shared by every message of this scan: rows and
+                    // messages are both oldest first, so a match may only move
+                    // forward. See findRowUuidByText.
+                    int[] rowCursor = {0};
                     for (ClaudeSession.Message localMsg : locked) {
-                        String matchedUuid = findRowUuidByText(rows, localMsg.content, usedUuids);
+                        String matchedUuid = findRowUuidByText(rows, localMsg.content, usedUuids, rowCursor);
                         if (matchedUuid == null) {
                             continue;
                         }
@@ -218,51 +229,93 @@ class AssistantUuidBackfiller {
     }
 
     /**
-     * Find a recent assistant row whose joined text equals the local message's
-     * streamed text. Rows already consumed by a previous match are skipped via
-     * usedUuids so duplicate texts cannot share one uuid.
+     * Find the transcript row uuid for one streamed reply, preserving row/reply
+     * order across exact and whitespace-insensitive matching.
      *
-     * <p>An exact match is attempted first, which keeps duplicate replies pairing
-     * up in order. The transcript reader joins a row's text blocks with {@code '\n'}
-     * ({@code extractTextContent} in session-service.js), while the streamed
-     * accumulator appends them back-to-back, so a reply split across text /
-     * thinking / tool blocks only matches once whitespace is ignored — that is
-     * the second pass.
+     * <p>Messages and rows are both oldest first (transcripts are append-only),
+     * and {@code cursor} carries the next unconsumed row index across the whole
+     * scan. Each message claims the earliest row from the cursor whose text
+     * equals the reply once whitespace is stripped. One order-preserving
+     * predicate replaces the previous exact-first-then-normalized full-table
+     * passes per message: those let an older message's exact match consume a
+     * newer row while the older, whitespace-differing row fell through to a
+     * younger message — two replies "ab" against rows "a\nb" then "ab" both
+     * received the other's uuid, anchoring each fork at the wrong turn.
+     *
+     * <p>When no single row matches, the auto-continuation fallback joins the
+     * consecutive rows the CLI persists for one streamed reply continued past
+     * an output-token limit. The uuid returned is the window's LAST row — the
+     * one representing the reply's end, which is where a fork must cut.
+     *
+     * <p>Rows already consumed by a previous match are skipped via {@code
+     * usedUuids} so duplicate texts cannot share one uuid. The transcript
+     * reader joins a row's text blocks with {@code '\n'} ({@code
+     * extractTextContent} in session-service.js) while the streamed accumulator
+     * appends them back-to-back, so all comparisons ignore whitespace; every
+     * exact match is therefore also a whitespace-insensitive one, and the
+     * earliest such row is the right anchor.
      */
-    private static String findRowUuidByText(JsonArray rows, String text, Set<String> usedUuids) {
+    private static String findRowUuidByText(JsonArray rows, String text, Set<String> usedUuids,
+                                            int[] cursor) {
         if (text == null || text.isEmpty()) {
             return null;
         }
-        String exact = findRowUuid(rows, text, usedUuids, false);
-        return exact != null ? exact : findRowUuid(rows, text, usedUuids, true);
-    }
-
-    private static String findRowUuid(JsonArray rows, String text, Set<String> usedUuids,
-                                      boolean ignoreWhitespace) {
-        String needle = ignoreWhitespace ? stripWhitespace(text) : text;
-        for (JsonElement element : rows) {
-            if (!element.isJsonObject()) {
+        String needle = stripWhitespace(text);
+        if (needle.isEmpty()) {
+            // Whitespace-only content can only bogus-match an empty row.
+            return null;
+        }
+        for (int i = cursor[0]; i < rows.size(); i++) {
+            JsonObject row = asTextRow(rows.get(i));
+            if (row == null) {
                 continue;
             }
-            JsonObject row = element.getAsJsonObject();
-            JsonElement uuidElement = row.get("uuid");
-            JsonElement textElement = row.get("text");
-            if (uuidElement == null || !uuidElement.isJsonPrimitive()
-                    || textElement == null || !textElement.isJsonPrimitive()) {
-                continue;
-            }
-            String uuid = uuidElement.getAsString();
+            String uuid = row.get("uuid").getAsString();
             if (usedUuids.contains(uuid)) {
                 continue;
             }
-            String candidate = textElement.getAsString();
-            String haystack = ignoreWhitespace ? stripWhitespace(candidate) : candidate;
-            if (needle.equals(haystack)) {
+            if (needle.equals(stripWhitespace(row.get("text").getAsString()))) {
                 usedUuids.add(uuid);
+                cursor[0] = i + 1;
                 return uuid;
             }
         }
+        StringBuilder joined = new StringBuilder();
+        for (int i = cursor[0]; i < rows.size(); i++) {
+            JsonObject row = asTextRow(rows.get(i));
+            if (row == null) {
+                continue;
+            }
+            String uuid = row.get("uuid").getAsString();
+            if (usedUuids.contains(uuid)) {
+                // The window may not span a row another reply already owns.
+                break;
+            }
+            joined.append(stripWhitespace(row.get("text").getAsString()));
+            if (needle.equals(joined.toString())) {
+                usedUuids.add(uuid);
+                cursor[0] = i + 1;
+                return uuid;
+            }
+            if (joined.length() > needle.length()) {
+                break;
+            }
+        }
         return null;
+    }
+
+    /** A row carrying both a uuid and a text primitive, or null when it is not one. */
+    private static JsonObject asTextRow(JsonElement element) {
+        if (!element.isJsonObject()) {
+            return null;
+        }
+        JsonObject row = element.getAsJsonObject();
+        JsonElement uuidElement = row.get("uuid");
+        JsonElement textElement = row.get("text");
+        return uuidElement != null && uuidElement.isJsonPrimitive()
+                && textElement != null && textElement.isJsonPrimitive()
+                ? row
+                : null;
     }
 
     /** Drop every whitespace character so the two concatenation styles compare equal. */

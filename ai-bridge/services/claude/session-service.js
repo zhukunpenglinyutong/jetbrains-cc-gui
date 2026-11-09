@@ -384,74 +384,72 @@ export async function getLatestUserMessage(sessionId, cwd = null) {
 }
 
 /**
- * Return the most recent assistant rows of a session, oldest first, each shaped
- * as { uuid, text } where text is the row's joined text-block content. Feeds the
- * Java-side assistant uuid backfill: streaming-mode assistant messages are
- * synthesized from deltas by the bridge and never carry the row uuid that the
- * CLI assigns when it appends the JSONL, so the chat cannot fork from them
- * until the uuid is resolved against the transcript.
+ * Build the getRecentAssistantMessages response payload. Exported (not just
+ * inlined) so the chain filter + candidate collection is unit-testable without
+ * going through process.stdout.
+ *
+ * Returns the most recent assistant rows of the session's effective
+ * conversation, oldest first, each shaped as { uuid, text } where text is the
+ * row's joined text-block content. Feeds the Java-side assistant uuid backfill:
+ * streaming-mode assistant messages are synthesized from deltas by the bridge
+ * and never carry the row uuid that the CLI assigns when it appends the JSONL,
+ * so the chat cannot fork from them until the uuid is resolved against the
+ * transcript.
  */
+export function buildRecentAssistantMessagesPayload(sessionFile, limit = 20) {
+  if (!existsSync(sessionFile)) {
+    return { success: true, messages: [] };
+  }
+
+  // getSession-style one-shot read: waiting for the writer costs nothing here,
+  // and a torn tail is exactly the "row not flushed yet" case — an incomplete
+  // response makes the Java caller retry instead of concluding "no match".
+  const parsed = readParsedHistory(sessionFile, true);
+  if (parsed.malformedTail) {
+    return {
+      success: false,
+      incomplete: true,
+      error: incompleteHistoryError(),
+      messages: [],
+    };
+  }
+  if (parsed.malformedLineNumbers.length > 0) {
+    console.warn('[RECENT_ASSISTANT_MALFORMED_LINES]', parsed.malformedLineNumbers.join(','));
+  }
+
+  // Rewind keeps abandoned branches on disk. Candidates must come from the
+  // live chain only: an abandoned assistant row whose text equals the current
+  // reply would otherwise be matched first (rows are oldest-first) and hand
+  // the backfiller a uuid that cuts the fork at the wrong turn.
+  const chain = selectConversationChain(parsed.messages);
+  const candidates = [];
+  for (const message of chain) {
+    if (
+      message &&
+      message.type === 'assistant' &&
+      typeof message.uuid === 'string' &&
+      !message.isSidechain
+    ) {
+      const text = extractTextContent(message);
+      // Tool-only rows carry no text: Java can never match an empty needle,
+      // so counting them would only evict real candidates from the limit.
+      if (!text.trim()) {
+        continue;
+      }
+      candidates.push({ uuid: message.uuid, text });
+    }
+  }
+
+  return {
+    success: true,
+    messages: candidates.slice(Math.max(0, candidates.length - limit)),
+  };
+}
+
 export async function getRecentAssistantMessages(sessionId, cwd = null, limit = 20) {
   try {
     const sessionFile = resolveSessionFile(sessionId, cwd);
-
-    if (!existsSync(sessionFile)) {
-      await writeJsonResponse({
-        success: true,
-        messages: []
-      });
-      return;
-    }
-
-    // Assistant rows can be large (tool_use payloads); scan a generous tail.
-    const collected = [];
-    const { startByte, tailMalformed } = await scanSessionJsonlTail(
-      sessionFile, 256 * 1024, (message) => {
-        if (
-          message &&
-          message.type === 'assistant' &&
-          typeof message.uuid === 'string' &&
-          !message.isSidechain
-        ) {
-          collected.push({
-            uuid: message.uuid,
-            text: extractTextContent(message)
-          });
-          if (collected.length > limit) {
-            collected.shift();
-          }
-        }
-      });
-
-    if (tailMalformed) {
-      await writeJsonResponse({
-        success: false,
-        incomplete: true,
-        error: incompleteHistoryError(),
-        messages: [],
-      });
-      return;
-    }
-
-    // The window can start inside a single row: one assistant row carrying a large
-    // tool_use payload can exceed TAIL_BYTES on its own, and that skipped partial
-    // line may be exactly the row the caller is looking for. Reporting an empty
-    // success would make the caller conclude "no match" and give up; an incomplete
-    // tail makes it retry (and log the failure if it never resolves).
-    if (startByte > 0 && collected.length === 0) {
-      await writeJsonResponse({
-        success: false,
-        incomplete: true,
-        error: incompleteHistoryError(),
-        messages: [],
-      });
-      return;
-    }
-
-    await writeJsonResponse({
-      success: true,
-      messages: collected
-    });
+    await writeJsonResponse(buildRecentAssistantMessagesPayload(sessionFile, limit));
   } catch (error) {
     console.error('[GET_RECENT_ASSISTANT_ERROR]', error.message);
     await writeJsonResponse({
