@@ -271,8 +271,7 @@ function splitMarkdownBlocks(content: string): string[] {
   const lines = content.split('\n');
   const blocks: string[] = [];
   let current: string[] = [];
-  let inFence = false;
-  let fenceMarker = '';
+  const scan: FenceScan = { marker: '', listIndent: 0 };
   let inDisplayMath = false;
   let mathCloser = '';
 
@@ -281,16 +280,19 @@ function splitMarkdownBlocks(content: string): string[] {
       blocks.push(current.join('\n'));
       current = [];
     }
+    scan.marker = '';
+    scan.listIndent = 0;
+    inDisplayMath = false;
+    mathCloser = '';
   };
 
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
     const trimmed = line.trim();
 
-    if (inFence) {
+    if (scan.marker) {
       current.push(line);
-      if (!nextFenceMarker(line, fenceMarker)) {
-        inFence = false;
-      }
+      scanFenceLine(line, scan);
       continue;
     }
 
@@ -302,10 +304,8 @@ function splitMarkdownBlocks(content: string): string[] {
       continue;
     }
 
-    const openingFence = nextFenceMarker(line, '');
+    const openingFence = scanFenceLine(line, scan);
     if (openingFence) {
-      inFence = true;
-      fenceMarker = openingFence;
       current.push(line);
       continue;
     }
@@ -318,6 +318,14 @@ function splitMarkdownBlocks(content: string): string[] {
     }
 
     if (trimmed === '') {
+      // A blank line inside a list item does not end that item: the following
+      // indented content still belongs to it. Splitting here would turn a fence
+      // indented 4+ spaces into a top-level indented code block, which renders
+      // the backticks literally and escapes the code's generics as prose.
+      if (scan.listIndent > 0 && nextLineIndent(lines, index + 1) >= scan.listIndent) {
+        current.push(line);
+        continue;
+      }
       flush();
       continue;
     }
@@ -362,19 +370,19 @@ function escapeXmlTags(text: string): string {
  */
 function splitCodeFences(content: string): string[] {
   const parts: string[] = [];
-  let marker = '';
+  const scan: FenceScan = { marker: '', listIndent: 0 };
   let start = 0;
   let offset = 0;
   for (const line of content.split('\n')) {
-    const nextMarker = nextFenceMarker(line, marker);
-    if (!marker && nextMarker) {
+    const previous = scan.marker;
+    const nextMarker = scanFenceLine(line, scan);
+    if (!previous && nextMarker) {
       parts.push(content.slice(start, offset));
       start = offset;
-    } else if (marker && !nextMarker) {
+    } else if (previous && !nextMarker) {
       parts.push(content.slice(start, offset + line.length));
       start = offset + line.length;
     }
-    marker = nextMarker;
     offset += line.length + 1;
   }
   parts.push(content.slice(start));
@@ -643,22 +651,99 @@ interface BlockSectionProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
-function nextFenceMarker(line: string, marker: string): string {
-  const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+const LIST_ITEM_RE = /^( {0,3})([-*+]|\d{1,9}[.)])( {1,4})(.*)$/;
+
+/**
+ * Content column of a list item line, or 0 when the line does not open one.
+ * CommonMark starts a list item's content right after its marker, so this column
+ * is the baseline for a fence nested in that item.
+ */
+function listItemContentIndent(line: string): number {
+  const match = LIST_ITEM_RE.exec(line);
+  if (!match) return 0;
+  return match[1].length + match[2].length + match[3].length;
+}
+
+/** Number of leading spaces on a line. */
+function leadingSpaceCount(line: string): number {
+  let count = 0;
+  while (count < line.length && line[count] === ' ') {
+    count++;
+  }
+  return count;
+}
+
+/**
+ * Indentation of the next non-blank line at or after `from`, or -1 when only
+ * blank lines remain. Decides whether content after a blank line still belongs
+ * to the list item that is being accumulated.
+ */
+function nextLineIndent(lines: string[], from: number): number {
+  for (let index = from; index < lines.length; index++) {
+    if (lines[index].trim() !== '') {
+      return leadingSpaceCount(lines[index]);
+    }
+  }
+  return -1;
+}
+
+interface FenceScan {
+  marker: string;
+  listIndent: number;
+}
+
+/**
+ * Advance one line of a fence scan, tracking the list-item content column the
+ * same way marked does so that a fence indented under a list item still counts
+ * as a fence. Lines inside an open fence never change the column.
+ *
+ * @param line markdown line
+ * @param scan mutable scan state (open marker + list content column)
+ * @returns the open fence marker after this line ('' when no fence is open)
+ */
+function scanFenceLine(line: string, scan: FenceScan): string {
+  if (!scan.marker) {
+    const itemIndent = listItemContentIndent(line);
+    if (itemIndent > 0) {
+      scan.listIndent = itemIndent;
+    } else if (line.trim() !== '' && leadingSpaceCount(line) < scan.listIndent) {
+      scan.listIndent = 0;
+    }
+  }
+  scan.marker = nextFenceMarker(line, scan.marker, scan.listIndent);
+  return scan.marker;
+}
+
+/**
+ * Detect a fence marker on one line.
+ *
+ * @param line markdown line
+ * @param marker marker of the fence currently open ('' when none)
+ * @param baseIndent content column of the list item that owns the line
+ * @returns the open fence marker after this line ('' once it is closed)
+ */
+function nextFenceMarker(line: string, marker: string, baseIndent = 0): string {
+  // Strip the owning list item's content column first: CommonMark allows a fence
+  // up to three spaces past that column, which is what a list-nested fence uses.
+  let indent = 0;
+  while (indent < baseIndent && line[indent] === ' ') {
+    indent++;
+  }
+  const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line.slice(indent));
   if (!fence) return marker;
   if (!marker) return fence[1][0] !== '`' || !fence[2].includes('`') ? fence[1] : '';
   return fence[1][0] === marker[0] && fence[1].length >= marker.length && !fence[2].trim() ? '' : marker;
 }
 
 function getFenceState(source: string) {
-  let marker = '';
+  const scan: FenceScan = { marker: '', listIndent: 0 };
   let closed = 0;
   for (const line of source.split('\n')) {
-    const nextMarker = nextFenceMarker(line, marker);
-    if (marker && !nextMarker) closed++;
-    marker = nextMarker;
+    const previous = scan.marker;
+    const nextMarker = scanFenceLine(line, scan);
+    if (previous && !nextMarker) closed++;
   }
-  return { open: marker !== '', marker, closed };
+  return { open: scan.marker !== '', marker: scan.marker, closed };
 }
 
 function useStreamingHighlightSource(source: string, isStreamingTail: boolean) {

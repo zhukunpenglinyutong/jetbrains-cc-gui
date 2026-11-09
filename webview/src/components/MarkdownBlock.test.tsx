@@ -1057,4 +1057,70 @@ describe('MarkdownBlock linkify integration', () => {
     expect(flutterCode?.className).toContain('language-flutter');
     expect(flutterCode?.querySelectorAll('.hljs-keyword').length).toBeGreaterThan(0);
   });
+
+  it('renders fenced code blocks indented under list items', () => {
+    // Issue #2046: a fence indented 4+ spaces under a list item used to be split
+    // into its own block, miss the 0-3 space fence rule, and render as an
+    // indented code block with visible backticks and escaped generics.
+    const ordered = [
+      '1. Step one:',
+      '',
+      '    ```dart',
+      '    List<Widget> items = <Widget>[];',
+      '    Map<String, int> m = {};',
+      '    ```',
+      '',
+      '2. Step two',
+    ].join('\n');
+
+    const view = render(<MarkdownBlock content={ordered} />);
+    const code = view.container.querySelector('pre code');
+    expect(code?.className).toContain('language-dart');
+    expect(code?.querySelectorAll('span[class*="hljs-"]').length).toBeGreaterThan(0);
+    expect(code?.textContent).toContain('List<Widget> items = <Widget>[];');
+    expect(code?.textContent).not.toContain('```');
+    // The block belongs to the list item that owns it, not to the document root.
+    expect(view.container.querySelector('ol > li pre code')).not.toBeNull();
+
+    const unordered = [
+      '- Step one:',
+      '',
+      '    ```dart',
+      '    final items = <Widget>[];',
+      '    ```',
+    ].join('\n');
+
+    view.rerender(<MarkdownBlock content={unordered} />);
+    const unorderedCode = view.container.querySelector('pre code');
+    expect(unorderedCode?.className).toContain('language-dart');
+    expect(unorderedCode?.textContent).toContain('final items = <Widget>[];');
+    expect(unorderedCode?.textContent).not.toContain('```');
+    expect(view.container.querySelector('ul > li pre code')).not.toBeNull();
+
+    // While the fence is still open the tail must not leak backticks either.
+    view.rerender(
+      <MarkdownBlock content={'- Step one:\n\n    ```dart\n    final items = <Widget>[];'} isStreaming />,
+    );
+    const streamingCode = view.container.querySelector('pre code');
+    expect(streamingCode?.textContent).toContain('final items = <Widget>[];');
+    expect(streamingCode?.textContent).not.toContain('```');
+  });
+
+  it('renders a fenced code block nested in a sub-list', () => {
+    const nested = [
+      '- Parent:',
+      '  - Child:',
+      '',
+      '    ```dart',
+      '    final items = <Widget>[];',
+      '    ```',
+    ].join('\n');
+
+    const view = render(<MarkdownBlock content={nested} />);
+    const code = view.container.querySelector('pre code');
+    expect(code?.className).toContain('language-dart');
+    expect(code?.textContent).toContain('final items = <Widget>[];');
+    expect(code?.textContent).not.toContain('```');
+    expect(view.container.querySelector('ul ul li pre code')).not.toBeNull();
+  });
 });
