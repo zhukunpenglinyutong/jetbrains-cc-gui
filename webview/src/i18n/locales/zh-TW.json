@@ -1128,6 +1128,7 @@
       "SESSION_NOT_FOUND": "找不到會話檔案",
       "FILE_NOT_EXIST": "會話檔案不存在",
       "FORK_POINT_NOT_FOUND": "會話中找不到分岔點訊息",
+      "UNRESOLVED_TOOL_USE": "åæ¯é»çååå­å¨æªæ¶å°çµæçå·¥å·èª¿ç¨",
       "FORK_FAILED": "分岔失敗，請稍後再試"
     },
     "entrypointLabel": {

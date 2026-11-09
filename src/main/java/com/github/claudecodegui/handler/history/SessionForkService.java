@@ -18,12 +18,16 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 /**
@@ -33,10 +37,13 @@ import java.util.stream.Stream;
  * The source file is only ever read (never locked or rewritten), so forking the session
  * that is currently active in this window is safe — unlike conversion, which must reject
  * it because it replaces the file the SDK process keeps appending to. A torn last line
- * written concurrently by the CLI is copied verbatim and tolerated by the reader, the
- * same way non-JSON rows are — provided the tear falls between UTF-8 characters; a tear
- * inside a multi-byte character fails the read and the fork (a retry once the CLI has
- * flushed succeeds).
+ * written concurrently by the CLI is never finalized into the fork: a mid-file non-JSON
+ * row is copied verbatim (the reader tolerates those, the same way the source's reader
+ * does), but a malformed terminal row is dropped — a fork file ending on a torn row
+ * would be reported incomplete by the full-history reader forever, because nothing ever
+ * appends behind it. Provided the tear falls between UTF-8 characters, dropping it
+ * keeps the fork openable; a tear inside a multi-byte character fails the read and the
+ * fork (a retry once the CLI has flushed succeeds).
  *
  * Only the Claude provider is supported for now. Codex sessions are resumed through the
  * app-server thread mechanism rather than by file identity, so a copied rollout file
@@ -205,6 +212,9 @@ class SessionForkService {
             // action, not an IDE-level fault.
             LOG.warn("[SessionForkService] Fork target already exists: " + e.getMessage());
             this.sendForkResult(false, null, ForkResultCode.FORK_FAILED, null);
+        } catch (DanglingToolUseException e) {
+            LOG.warn("[SessionForkService] " + e.getMessage());
+            this.sendForkResult(false, null, ForkResultCode.UNRESOLVED_TOOL_USE, null);
         } catch (ForkPointNotFoundException e) {
             LOG.warn("[SessionForkService] Fork point not found in session: " + e.getMessage());
             this.sendForkResult(false, null, ForkResultCode.FORK_POINT_NOT_FOUND, null);
@@ -217,6 +227,18 @@ class SessionForkService {
     /** Thrown when the requested fork-point uuid does not exist in the source file. */
     static class ForkPointNotFoundException extends IOException {
         ForkPointNotFoundException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Thrown when the rows kept around the fork point cannot end on a resolved
+     * turn: the clicked reply's own cycle still carries a {@code tool_use} that
+     * never received its {@code tool_result} (an interrupted turn), and no cut
+     * keeps the reply while dropping the call.
+     */
+    static class DanglingToolUseException extends IOException {
+        DanglingToolUseException(String message) {
             super(message);
         }
     }
@@ -277,20 +299,40 @@ class SessionForkService {
         try {
             try (Stream<String> lines = Files.lines(source, StandardCharsets.UTF_8);
                  BufferedWriter writer = Files.newBufferedWriter(tempFile, StandardCharsets.UTF_8)) {
-                AtomicInteger copied = new AtomicInteger(0);
-                lines.takeWhile(line -> copied.get() < limit).forEach(line -> {
-                    try {
-                        writer.write(this.rewriteRowForFork(line, sourceSessionId, newSessionId));
-                        // The CLI always writes '\n'; writer.newLine() would turn the
-                        // whole fork into CRLF on Windows and break byte-for-byte
-                        // comparisons with the source.
-                        writer.write('\n');
-                    } catch (IOException e) {
-                        throw new UncheckedIOException(e);
-                    } finally {
-                        copied.incrementAndGet();
+                // Rows are flushed one row behind: the last row taken can only be
+                // judged once the stream ends, so a malformed terminal row is
+                // dropped instead of being finalized into the fork — the full
+                // history reader reports a fork ending on a torn row incomplete
+                // forever, because nothing ever appends behind it. Mid-file
+                // non-JSON rows stay verbatim: the reader tolerates those.
+                int copied = 0;
+                String pending = null;
+                boolean pendingIsTail = false;
+                Iterator<String> rows = lines.iterator();
+                while (copied < limit && rows.hasNext()) {
+                    String line = rows.next();
+                    if (pending != null) {
+                        writeForkRow(writer, pending, sourceSessionId, newSessionId);
+                        copied++;
                     }
-                });
+                    pending = line;
+                    pendingIsTail = !rows.hasNext();
+                }
+                if (pending != null && copied < limit) {
+                    if (pendingIsTail && parseRow(pending) == null) {
+                        LOG.warn("[SessionForkService] Dropped a torn tail row (length "
+                                + pending.length() + ") from the fork copy");
+                    } else {
+                        writeForkRow(writer, pending, sourceSessionId, newSessionId);
+                        copied++;
+                    }
+                }
+                if (copied == 0 && pending != null) {
+                    // Every row of a non-empty source was dropped: publishing an
+                    // empty fork file would look like a blank session, so fail
+                    // the fork instead.
+                    throw new IOException("Fork copy dropped every row of a non-empty transcript");
+                }
             } catch (UncheckedIOException e) {
                 // UncheckedIOException wraps the IOException thrown inside the lambda.
                 // Unwrap and rethrow so the outer catch(Exception) handles it uniformly.
@@ -309,6 +351,16 @@ class SessionForkService {
         }
     }
 
+    /** Write one rewritten fork row; the CLI's LF terminator is preserved. */
+    private static void writeForkRow(BufferedWriter writer, String line, String sourceSessionId,
+                                     String newSessionId) throws IOException {
+        writer.write(rewriteRowForFork(line, sourceSessionId, newSessionId));
+        // The CLI always writes '\n'; writer.newLine() would turn the
+        // whole fork into CRLF on Windows and break byte-for-byte
+        // comparisons with the source.
+        writer.write('\n');
+    }
+
     /**
      * Resolve the exclusive cut line for a fork at the given assistant message.
      * The fork must never end on a dangling {@code tool_use}: the API rejects a
@@ -318,24 +370,46 @@ class SessionForkService {
      * same cycle are kept, and the cut lands right before the next real user text
      * message (or end of file).
      *
+     * <p>Rows after the anchor are also screened for unresolved tool calls: an
+     * interrupted or errored turn between the anchor and the next real user row
+     * (or the end of the file) carries a {@code tool_use} without its result,
+     * and keeping it would end the fork mid-call. The cut shrinks back to the
+     * first assistant row of that incomplete cycle. When the incomplete cycle
+     * reaches into the clicked reply itself, no cut keeps the reply while
+     * dropping the call, so {@link DanglingToolUseException} is thrown instead
+     * of publishing a fork the API would reject.
+     *
      * @param source Source session file.
      * @param forkPointUuid Row uuid of the clicked assistant message.
      * @return Exclusive line index to stop at, or -1 when the uuid is not present.
+     * @throws DanglingToolUseException when the anchor row's own turn ends on an
+     *         unresolved tool call.
      */
     // Package-private so SessionForkServiceTest can exercise the boundary logic.
     static int resolveCutIndex(Path source, String forkPointUuid) throws IOException {
         String uuidNeedle = "\"uuid\":\"" + forkPointUuid + "\"";
         int anchor = -1;
         int lineIndex = 0;
+        Set<String> pendingToolUses = new LinkedHashSet<>();
         // Pass one stops at the anchor line; nothing after it is retained. The
         // containment hit is only a candidate: the same needle can appear inside
         // row content (a tool echoing a transcript row embeds the whole JSON,
-        // needle included), and cutting there would fork from the wrong turn.
+        // needle included), and cutting there would fork from the wrong turn. A
+        // malformed row that happens to contain the needle is skipped, not fatal.
         try (Stream<String> lines = Files.lines(source, StandardCharsets.UTF_8)) {
             for (Iterator<String> it = lines.iterator(); it.hasNext(); lineIndex++) {
                 String line = it.next();
-                if (line.contains(uuidNeedle) && forkPointUuid.equals(getJsonString(parseRow(line), "uuid"))) {
+                if (!line.contains(uuidNeedle)) {
+                    continue;
+                }
+                JsonObject row = parseRow(line);
+                if (row != null && forkPointUuid.equals(getJsonString(row, "uuid"))) {
                     anchor = lineIndex;
+                    // Seed the pairing with the anchor row's own tool calls: an
+                    // interrupted anchor turn must not pass the screen below.
+                    if ("assistant".equals(getJsonString(row, "type"))) {
+                        pendingToolUses.addAll(collectToolUseIds(row));
+                    }
                     break;
                 }
             }
@@ -343,9 +417,14 @@ class SessionForkService {
         if (anchor < 0) {
             return -1;
         }
+        // First assistant row of a cycle whose tool calls are still open; -1
+        // once every open call has received its result.
+        int incompleteCycleStart = pendingToolUses.isEmpty() ? -1 : anchor;
 
-        // Pass two only tracks line numbers: the previous version buffered every
-        // row after the anchor, which peaked at the whole file tail in memory.
+        // Pass two walks the rows after the anchor tracking line numbers and the
+        // tool_use/tool_result pairing: the previous version buffered every row
+        // after the anchor in memory, and neither version verified that the rows
+        // kept after the anchor resolve their tool calls.
         int cut = -1;
         int totalLines = 0;
         lineIndex = 0;
@@ -353,14 +432,88 @@ class SessionForkService {
             for (Iterator<String> it = lines.iterator(); it.hasNext(); lineIndex++) {
                 String line = it.next();
                 totalLines = lineIndex + 1;
-                if (lineIndex > anchor && isRealUserTextRow(line)) {
-                    cut = lineIndex;
-                    break;
+                if (lineIndex <= anchor) {
+                    continue;
+                }
+                JsonObject row = parseRow(line);
+                if (row == null) {
+                    continue;
+                }
+                String type = getJsonString(row, "type");
+                if ("assistant".equals(type)) {
+                    for (String id : collectToolUseIds(row)) {
+                        if (pendingToolUses.add(id) && incompleteCycleStart < 0) {
+                            incompleteCycleStart = lineIndex;
+                        }
+                    }
+                } else if ("user".equals(type)) {
+                    for (String id : collectToolResultIds(row)) {
+                        pendingToolUses.remove(id);
+                    }
+                    if (pendingToolUses.isEmpty()) {
+                        incompleteCycleStart = -1;
+                    }
+                    if (isRealUserTextRow(line)) {
+                        // A real user turn starts here; an open tool call from
+                        // the rows in between means the cycle before it never
+                        // finished, so the cut excludes that cycle entirely.
+                        cut = incompleteCycleStart >= 0 ? incompleteCycleStart : lineIndex;
+                        break;
+                    }
                 }
             }
         }
-        // No following user turn: the fork keeps the rest of the transcript.
-        return cut >= 0 ? cut : totalLines;
+        if (cut < 0) {
+            // No following user turn: the fork keeps the rest of the transcript —
+            // unless its tail is an interrupted cycle with an open tool call.
+            cut = incompleteCycleStart >= 0 ? incompleteCycleStart : totalLines;
+        }
+        if (cut <= anchor) {
+            throw new DanglingToolUseException(
+                    "Fork point's turn ends on an unresolved tool call: " + forkPointUuid);
+        }
+        return cut;
+    }
+
+    /**
+     * Collect the {@code tool_use} block ids of one row (an assistant row), in
+     * order. String content or absent blocks yield an empty list.
+     */
+    private static List<String> collectToolUseIds(JsonObject row) {
+        return collectBlockIds(row, "tool_use", "id");
+    }
+
+    /**
+     * Collect the {@code tool_use_id} references of a row's {@code tool_result}
+     * blocks (a user row carrying results), in order.
+     */
+    private static List<String> collectToolResultIds(JsonObject row) {
+        return collectBlockIds(row, "tool_result", "tool_use_id");
+    }
+
+    private static List<String> collectBlockIds(JsonObject row, String blockType, String idField) {
+        List<String> ids = new ArrayList<>();
+        JsonElement message = row.get("message");
+        if (message == null || !message.isJsonObject()) {
+            return ids;
+        }
+        JsonElement content = message.getAsJsonObject().get("content");
+        if (content == null || !content.isJsonArray()) {
+            return ids;
+        }
+        for (JsonElement block : content.getAsJsonArray()) {
+            if (!block.isJsonObject()) {
+                continue;
+            }
+            JsonObject blockObject = block.getAsJsonObject();
+            if (blockType.equals(getJsonString(blockObject, "type"))) {
+                String id = getJsonString(blockObject, idField);
+                if (id != null) {
+                    ids.add(id);
+                }
+            }
+        }
+        return ids;
     }
 
     /**
@@ -376,9 +529,12 @@ class SessionForkService {
     }
 
     /**
-     * Check whether one JSONL row starts a new user turn. Mirrors the frontend's
-     * tool-result-only detection: user rows carrying tool results (and meta or
-     * sidechain rows) belong to the assistant cycle and must not end the fork.
+     * Check whether one JSONL row starts a new user turn. Mirrors {@code
+     * HistoryMessageInjector.isHumanUserMessage}: text and image blocks both
+     * make the row genuine user input, and a {@code tool_result} block does not
+     * disqualify a row that also carries real input — only a tool-result-only
+     * row (and meta or sidechain rows) belongs to the assistant cycle and must
+     * not end the fork.
      *
      * @param line JSONL row to inspect.
      * @return true when the row is a genuine user text message.
@@ -406,20 +562,17 @@ class SessionForkService {
         if (!content.isJsonArray()) {
             return false;
         }
-        boolean hasText = false;
+        boolean hasUserInput = false;
         for (JsonElement block : content.getAsJsonArray()) {
             if (!block.isJsonObject()) {
                 continue;
             }
             String blockType = getJsonString(block.getAsJsonObject(), "type");
-            if ("tool_result".equals(blockType)) {
-                return false;
-            }
-            if ("text".equals(blockType)) {
-                hasText = true;
+            if ("text".equals(blockType) || "image".equals(blockType)) {
+                hasUserInput = true;
             }
         }
-        return hasText;
+        return hasUserInput;
     }
 
     private static String getJsonString(JsonObject row, String field) {
@@ -469,12 +622,14 @@ class SessionForkService {
     void copySidechains(Path sessionDir, String sourceSessionId, String newSessionId) {
         try {
             Path sidechainDir = sessionDir.resolve(sourceSessionId);
-            if (Files.isDirectory(sidechainDir)) {
+            // No-follow on both levels, mirroring the delete path: a link where
+            // the sidechain dir is expected must not drag an outside tree in.
+            if (Files.isDirectory(sidechainDir, LinkOption.NOFOLLOW_LINKS)) {
                 // Mirror the delete path, which removes only the known subagents
                 // subtree: copying foreign entries would leave fork directories the
                 // delete can never fully clean up (residual empty shells).
                 Path subagentsDir = sidechainDir.resolve("subagents");
-                if (Files.isDirectory(subagentsDir)) {
+                if (Files.isDirectory(subagentsDir, LinkOption.NOFOLLOW_LINKS)) {
                     this.copyDirectory(subagentsDir,
                             sessionDir.resolve(newSessionId).resolve("subagents"),
                             sourceSessionId, newSessionId);
@@ -514,7 +669,15 @@ class SessionForkService {
             entries.forEach(entry -> {
                 Path target = targetDir.resolve(entry.getFileName().toString());
                 try {
-                    if (Files.isDirectory(entry)) {
+                    // No-follow semantics, mirroring the delete path: a link
+                    // inside subagents/ must not pull in content from outside
+                    // the source tree, and following a directory loop would
+                    // recurse until StackOverflowError — which the catch below
+                    // could not intercept anyway.
+                    if (Files.isSymbolicLink(entry)) {
+                        LOG.warn("[SessionForkService] Skipped a symbolic link in the sidechain copy: "
+                                + entry);
+                    } else if (Files.isDirectory(entry, LinkOption.NOFOLLOW_LINKS)) {
                         this.copyDirectory(entry, target, sourceSessionId, newSessionId);
                     } else if (entry.getFileName().toString().endsWith(".jsonl")) {
                         this.copySessionFile(entry, target, sourceSessionId, newSessionId, null);

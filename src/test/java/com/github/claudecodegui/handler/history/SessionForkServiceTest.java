@@ -348,6 +348,92 @@ public class SessionForkServiceTest {
     }
 
     @Test
+    public void cutIndexToleratesAMalformedRowContainingTheAnchorNeedle() throws IOException {
+        // A truncated row can still contain the literal needle: the containment
+        // pre-check hits it, the parse fails, and the scan must skip the row
+        // instead of crashing the fork.
+        List<String> rows = new java.util.ArrayList<>();
+        rows.add("{\"uuid\":\"" + A1 + "\",\"sessionId");
+        rows.addAll(turnFixture());
+
+        Path source = writeFixture(rows);
+
+        // The malformed row is skipped and the real anchor (index 2) wins; the
+        // whole tool cycle after it still fits.
+        assertEquals(5, SessionForkService.resolveCutIndex(source, A1));
+    }
+
+    /**
+     * An interrupted turn between the anchor and the next real user row carries
+     * a tool call that never received its result: keeping it would end the fork
+     * mid-call and the API would reject the resume, so the cut shrinks back to
+     * the first assistant row of the incomplete cycle.
+     */
+    @Test
+    public void cutIndexShrinksPastAnInterruptedToolCycle() throws IOException {
+        List<String> rows = List.of(
+                "{\"uuid\":\"" + U1 + "\",\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"user\","
+                        + "\"message\":{\"role\":\"user\",\"content\":\"hello\"}}",
+                "{\"uuid\":\"" + A1 + "\",\"parentUuid\":\"" + U1 + "\",\"sessionId\":\"" + SOURCE_ID + "\","
+                        + "\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":"
+                        + "[{\"type\":\"text\",\"text\":\"answered\"}]}}",
+                "{\"uuid\":\"" + A2 + "\",\"parentUuid\":\"" + A1 + "\",\"sessionId\":\"" + SOURCE_ID + "\","
+                        + "\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":"
+                        + "[{\"type\":\"tool_use\",\"id\":\"t9\"}]}}",
+                "{\"uuid\":\"" + U2 + "\",\"parentUuid\":\"" + A2 + "\",\"sessionId\":\"" + SOURCE_ID + "\","
+                        + "\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"next question\"}}"
+        );
+
+        Path source = writeFixture(rows);
+
+        // Forking from A1 keeps only turn 1's completed reply; the interrupted
+        // A2 cycle is cut out instead of leaving a dangling tool_use.
+        assertEquals(2, SessionForkService.resolveCutIndex(source, A1));
+    }
+
+    @Test
+    public void cutIndexDropsAnInterruptedTailCycleAtEof() throws IOException {
+        // Same hazard at end of file: the transcript ends mid-cycle, so the
+        // "keep the rest" default would end the fork on an open tool call.
+        List<String> rows = List.of(
+                "{\"uuid\":\"" + U1 + "\",\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"user\","
+                        + "\"message\":{\"role\":\"user\",\"content\":\"hello\"}}",
+                "{\"uuid\":\"" + A1 + "\",\"parentUuid\":\"" + U1 + "\",\"sessionId\":\"" + SOURCE_ID + "\","
+                        + "\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":"
+                        + "[{\"type\":\"text\",\"text\":\"answered\"}]}}",
+                "{\"uuid\":\"" + A2 + "\",\"parentUuid\":\"" + A1 + "\",\"sessionId\":\"" + SOURCE_ID + "\","
+                        + "\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":"
+                        + "[{\"type\":\"tool_use\",\"id\":\"t9\"}]}}"
+        );
+
+        Path source = writeFixture(rows);
+
+        assertEquals(2, SessionForkService.resolveCutIndex(source, A1));
+    }
+
+    @Test
+    public void cutIndexRejectsAnAnchorTurnWithAnUnresolvedToolCall() throws IOException {
+        // The clicked reply's own cycle is interrupted: no cut keeps the reply
+        // while dropping the call, so the fork is refused outright.
+        List<String> rows = List.of(
+                "{\"uuid\":\"" + U1 + "\",\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"user\","
+                        + "\"message\":{\"role\":\"user\",\"content\":\"hello\"}}",
+                "{\"uuid\":\"" + A1 + "\",\"parentUuid\":\"" + U1 + "\",\"sessionId\":\"" + SOURCE_ID + "\","
+                        + "\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":"
+                        + "[{\"type\":\"tool_use\",\"id\":\"t9\"}]}}"
+        );
+
+        Path source = writeFixture(rows);
+
+        try {
+            SessionForkService.resolveCutIndex(source, A1);
+            throw new AssertionError("expected DanglingToolUseException");
+        } catch (SessionForkService.DanglingToolUseException e) {
+            // expected
+        }
+    }
+
+    @Test
     public void copySessionFileAtForkPointTruncatesAndRewrites() throws IOException {
         Path source = writeFixture(turnFixture());
         Path target = source.getParent().resolve(FORK_ID + ".jsonl");
@@ -395,6 +481,69 @@ public class SessionForkServiceTest {
 
         String raw = new String(Files.readAllBytes(target), StandardCharsets.UTF_8);
         assertFalse("the fork must keep the CLI's LF endings", raw.contains("\r"));
+    }
+
+    @Test
+    public void copySessionFileDropsATornTailRow() throws IOException {
+        // A fork file must never end on a torn row: the full-history reader
+        // reports such a copy incomplete forever, because nothing ever appends
+        // behind the row. The torn row is dropped; complete rows are copied.
+        Path dir = temporaryFolder.newFolder("torn-tail").toPath();
+        Path source = dir.resolve(SOURCE_ID + ".jsonl");
+        // No trailing newline: the last row is torn mid-JSON, exactly what the
+        // CLI leaves behind while it is still appending.
+        Files.write(source, String.join("\n",
+                "{\"uuid\":\"u1\",\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"user\"}",
+                "{\"uuid\":\"u2\",\"parentUuid\":\"u1\",\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"assistant\"}",
+                "{\"uuid\":\"u3\",\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"assi")
+                .getBytes(StandardCharsets.UTF_8));
+
+        Path target = dir.resolve(FORK_ID + ".jsonl");
+        service.copySessionFile(source, target, SOURCE_ID, FORK_ID, null);
+
+        List<String> rows = Files.readAllLines(target, StandardCharsets.UTF_8);
+        assertEquals(2, rows.size());
+        assertTrue(rows.get(1).contains("\"uuid\":\"u2\""));
+    }
+
+    @Test
+    public void copySessionFileKeepsAMidFileNonJsonRowVerbatim() throws IOException {
+        // Mid-file non-JSON rows are stale damage the reader tolerates: they
+        // stay verbatim. Only the terminal row is validated.
+        Path dir = temporaryFolder.newFolder("mid-file-torn").toPath();
+        Path source = dir.resolve(SOURCE_ID + ".jsonl");
+        Files.write(source, List.of(
+                "{\"sessionId\":\"" + SOURCE_ID + "\"}",
+                "not json at all",
+                "{\"type\":\"user\"}"
+        ), StandardCharsets.UTF_8);
+
+        Path target = dir.resolve(FORK_ID + ".jsonl");
+        service.copySessionFile(source, target, SOURCE_ID, FORK_ID, null);
+
+        List<String> rows = Files.readAllLines(target, StandardCharsets.UTF_8);
+        assertEquals(3, rows.size());
+        assertEquals("not json at all", rows.get(1));
+    }
+
+    @Test
+    public void copySessionFileFailsWhenEveryRowOfANonEmptySourceIsDropped() throws IOException {
+        // A transcript that is only a torn row cannot yield a usable fork: an
+        // empty copy would look like a blank session, so the fork fails.
+        Path dir = temporaryFolder.newFolder("all-torn").toPath();
+        Path source = dir.resolve(SOURCE_ID + ".jsonl");
+        Files.write(source, "{\"uuid\":\"u1\",\"session".getBytes(StandardCharsets.UTF_8));
+
+        Path target = dir.resolve(FORK_ID + ".jsonl");
+
+        try {
+            service.copySessionFile(source, target, SOURCE_ID, FORK_ID, null);
+            throw new AssertionError("expected an IOException for a fully dropped copy");
+        } catch (IOException expected) {
+            // expected
+        }
+        assertFalse(Files.exists(target));
+        assertNoTempFiles(dir);
     }
 
     // ── sidechain copy ─────────────────────────────────────────────────────────
@@ -445,6 +594,35 @@ public class SessionForkServiceTest {
 
         assertFalse(Files.exists(projectDir.resolve(FORK_ID).resolve("foreign.json")));
         assertTrue(Files.exists(projectDir.resolve(FORK_ID).resolve("subagents").resolve("agent-a1.jsonl")));
+    }
+
+    /**
+     * Symbolic links inside subagents/ are skipped: following them could copy
+     * content from outside the source tree, and a directory loop would recurse
+     * until StackOverflowError escaped the per-entry catch.
+     */
+    @Test
+    public void copySidechainsSkipsSymbolicLinks() throws IOException {
+        Path projectDir = temporaryFolder.newFolder("sidechain-links").toPath();
+        Path outsideDir = temporaryFolder.newFolder("outside").toPath();
+        Path subagents = Files.createDirectories(projectDir.resolve(SOURCE_ID).resolve("subagents"));
+        Files.write(subagents.resolve("agent-a1.jsonl"), List.of(
+                        "{\"uuid\":\"s1\",\"sessionId\":\"" + SOURCE_ID + "\"}"),
+                StandardCharsets.UTF_8);
+        Files.write(outsideDir.resolve("secret.json"), List.of("outside content"),
+                StandardCharsets.UTF_8);
+        Files.createSymbolicLink(subagents.resolve("outside-file"),
+                outsideDir.resolve("secret.json"));
+        Files.createSymbolicLink(subagents.resolve("outside-dir"), outsideDir);
+
+        service.copySidechains(projectDir, SOURCE_ID, FORK_ID);
+
+        Path forkSubagents = projectDir.resolve(FORK_ID).resolve("subagents");
+        assertTrue(Files.exists(forkSubagents.resolve("agent-a1.jsonl")));
+        assertFalse("a file link must not drag in outside content",
+                Files.exists(forkSubagents.resolve("outside-file")));
+        assertFalse("a directory link must not be recursed into",
+                Files.exists(forkSubagents.resolve("outside-dir")));
     }
 
     /** Legacy layout: flat {@code agent-*.jsonl} referencing the session, copied under a fresh name. */
@@ -534,6 +712,27 @@ public class SessionForkServiceTest {
         assertFalse(SessionForkService.isRealUserTextRow(
                 "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[]}}"));
         assertFalse(SessionForkService.isRealUserTextRow("not json at all"));
+    }
+
+    /**
+     * Row classification must match {@code HistoryMessageInjector.isHumanUserMessage}:
+     * image-only rows and rows mixing tool results with genuine input both start a
+     * user turn, so a fork anchored before them must not swallow their turns.
+     */
+    @Test
+    public void realUserTextRowCountsImageAndMixedRowsAsUserTurns() {
+        // Image-only input is a real user turn.
+        assertTrue(SessionForkService.isRealUserTextRow(
+                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":"
+                        + "[{\"type\":\"image\",\"source\":{\"type\":\"base64\"}}]}}"));
+        // Tool results alongside genuine text do not disqualify the row.
+        assertTrue(SessionForkService.isRealUserTextRow(
+                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":"
+                        + "[{\"type\":\"tool_result\",\"tool_use_id\":\"t1\"},{\"type\":\"text\",\"text\":\"and also this\"}]}}"));
+        // A tool-result-only row stays inside the assistant cycle.
+        assertFalse(SessionForkService.isRealUserTextRow(
+                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":"
+                        + "[{\"type\":\"tool_result\",\"tool_use_id\":\"t1\"}]}}"));
     }
 
     @Test
@@ -685,6 +884,32 @@ public class SessionForkServiceTest {
                 claudeHomeRoot());
 
         assertEquals("FORK_POINT_NOT_FOUND", forkResultCode(callback));
+    }
+
+    @Test
+    public void forkSessionReportsAnUnresolvedToolUseAtTheForkPoint() throws IOException {
+        // The clicked reply's own turn was interrupted mid-tool-call: no cut
+        // keeps the reply while dropping the call, so the fork is refused with
+        // its own code instead of a generic failure.
+        Path projectDir = newClaudeHome().resolve("whatever-key");
+        Files.createDirectories(projectDir);
+        Files.write(projectDir.resolve(SOURCE_ID + ".jsonl"), List.of(
+                "{\"uuid\":\"" + U1 + "\",\"sessionId\":\"" + SOURCE_ID + "\",\"type\":\"user\","
+                        + "\"message\":{\"role\":\"user\",\"content\":\"hello\"}}",
+                "{\"uuid\":\"" + A1 + "\",\"parentUuid\":\"" + U1 + "\",\"sessionId\":\"" + SOURCE_ID + "\","
+                        + "\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":"
+                        + "[{\"type\":\"tool_use\",\"id\":\"t9\"}]}}"
+        ), StandardCharsets.UTF_8);
+
+        RecordingJsCallback callback = new RecordingJsCallback();
+        SessionForkService forkService = new SessionForkService(
+                new HandlerContext(stubProject(), null, null, null, callback), null);
+
+        forkService.forkSession(
+                "{\"sessionId\":\"" + SOURCE_ID + "\",\"forkPointUuid\":\"" + A1 + "\"}", null,
+                claudeHomeRoot());
+
+        assertEquals("UNRESOLVED_TOOL_USE", forkResultCode(callback));
     }
 
     @Test

@@ -1225,6 +1225,7 @@
       "SESSION_NOT_FOUND": "Arquivo de sessão não encontrado",
       "FILE_NOT_EXIST": "O arquivo de sessão não existe",
       "FORK_POINT_NOT_FOUND": "Mensagem do ponto de bifurcação não encontrada na sessão",
+      "UNRESOLVED_TOOL_USE": "O turno do ponto de bifurcaÃ§Ã£o termina em uma chamada de ferramenta nÃ£o resolvida",
       "FORK_FAILED": "Falha ao bifurcar, tente novamente mais tarde"
     },
     "entrypointLabel": {

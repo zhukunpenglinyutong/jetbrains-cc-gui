@@ -1087,6 +1087,7 @@
       "SESSION_NOT_FOUND": "Fichier de session introuvable",
       "FILE_NOT_EXIST": "Le fichier de session n'existe pas",
       "FORK_POINT_NOT_FOUND": "Message du point de fork introuvable dans la session",
+      "UNRESOLVED_TOOL_USE": "Le tour du point de fork se termine par un appel d'outil sans rÃ©sultat",
       "FORK_FAILED": "Échec du fork, veuillez réessayer plus tard"
     },
     "entrypointLabel": {

@@ -1543,6 +1543,7 @@
       "SESSION_NOT_FOUND": "未找到会话文件",
       "FILE_NOT_EXIST": "会话文件不存在",
       "FORK_POINT_NOT_FOUND": "会话中未找到分叉点消息",
+      "UNRESOLVED_TOOL_USE": "åæ¯ç¹çååå­å¨æªæ¶å°ç»æçå·¥å·è°ç¨",
       "FORK_FAILED": "分叉失败，请稍后重试"
     },
     "timeAgo": {

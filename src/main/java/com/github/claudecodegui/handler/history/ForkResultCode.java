@@ -33,6 +33,13 @@ enum ForkResultCode {
     FORK_POINT_NOT_FOUND("FORK_POINT_NOT_FOUND"),
 
     /**
+     * The rows kept around the fork point cannot end on a resolved turn: the
+     * clicked reply's own cycle still carries a tool call that never received
+     * its result (an interrupted turn), so no fork can be published there.
+     */
+    UNRESOLVED_TOOL_USE("UNRESOLVED_TOOL_USE"),
+
+    /**
      * Generic fork failure.
      */
     FORK_FAILED("FORK_FAILED");
