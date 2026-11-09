@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Backfills the transcript uuids of live-streamed assistant messages after a
@@ -129,7 +130,7 @@ class AssistantUuidBackfiller {
                     // Row cursor shared by every message of this scan: rows and
                     // messages are both oldest first, so a match may only move
                     // forward. See findRowUuidByText.
-                    int[] rowCursor = {0};
+                    AtomicInteger rowCursor = new AtomicInteger();
                     for (ClaudeSession.Message localMsg : locked) {
                         String matchedUuid = findRowUuidByText(rows, localMsg.content, usedUuids, rowCursor);
                         if (matchedUuid == null) {
@@ -256,7 +257,7 @@ class AssistantUuidBackfiller {
      * earliest such row is the right anchor.
      */
     private static String findRowUuidByText(JsonArray rows, String text, Set<String> usedUuids,
-                                            int[] cursor) {
+                                            AtomicInteger cursor) {
         if (text == null || text.isEmpty()) {
             return null;
         }
@@ -265,7 +266,7 @@ class AssistantUuidBackfiller {
             // Whitespace-only content can only bogus-match an empty row.
             return null;
         }
-        for (int i = cursor[0]; i < rows.size(); i++) {
+        for (int i = cursor.get(); i < rows.size(); i++) {
             JsonObject row = asTextRow(rows.get(i));
             if (row == null) {
                 continue;
@@ -276,12 +277,12 @@ class AssistantUuidBackfiller {
             }
             if (needle.equals(stripWhitespace(row.get("text").getAsString()))) {
                 usedUuids.add(uuid);
-                cursor[0] = i + 1;
+                cursor.set(i + 1);
                 return uuid;
             }
         }
         StringBuilder joined = new StringBuilder();
-        for (int i = cursor[0]; i < rows.size(); i++) {
+        for (int i = cursor.get(); i < rows.size(); i++) {
             JsonObject row = asTextRow(rows.get(i));
             if (row == null) {
                 continue;
@@ -294,7 +295,7 @@ class AssistantUuidBackfiller {
             joined.append(stripWhitespace(row.get("text").getAsString()));
             if (needle.equals(joined.toString())) {
                 usedUuids.add(uuid);
-                cursor[0] = i + 1;
+                cursor.set(i + 1);
                 return uuid;
             }
             if (joined.length() > needle.length()) {
