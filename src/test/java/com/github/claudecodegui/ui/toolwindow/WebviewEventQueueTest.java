@@ -671,6 +671,15 @@ public class WebviewEventQueueTest {
         assertEquals(EnumSet.of(WebviewEventQueue.EventClass.LIFECYCLE),
                 WebviewEventQueue.EVENT_CLASSES.get("onTaskEvent"));
 
+        // A steer receipt is the only evidence that the message left or rejoined
+        // the queue, so evicting one loses the message itself.
+        for (String steerReceipt : List.of("onSteerResult", "onSteerFolded")) {
+            assertEquals("steer receipt " + steerReceipt,
+                    EnumSet.of(WebviewEventQueue.EventClass.CRITICAL,
+                            WebviewEventQueue.EventClass.LIFECYCLE),
+                    WebviewEventQueue.EVENT_CLASSES.get(steerReceipt));
+        }
+
         // Boundaries protect the page; consecutive slices share a pending entry.
         for (String codexPage : List.of("beginCodexHistoryPage", "completeCodexHistoryPage", "codexHistoryPageError")) {
             assertEquals("codex history page call " + codexPage,

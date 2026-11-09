@@ -202,7 +202,17 @@ class ClaudeHistorySearchService {
                     if (line.trim().isEmpty()) { continue; }
 
                     try {
-                        ClaudeHistoryReader.ConversationMessage msg = gson.fromJson(line, ClaudeHistoryReader.ConversationMessage.class);
+                        ClaudeHistoryReader.ConversationMessage msg;
+                        if (line.contains("queued_command")) {
+                            // See ClaudeHistoryParser: only these rows need the
+                            // rewrite, and parsing every line twice is expensive
+                            // on large sessions.
+                            com.google.gson.JsonObject row = gson.fromJson(line, com.google.gson.JsonObject.class);
+                            row = QueuedCommandHistoryRewrite.rewrite(row);
+                            msg = gson.fromJson(row, ClaudeHistoryReader.ConversationMessage.class);
+                        } else {
+                            msg = gson.fromJson(line, ClaudeHistoryReader.ConversationMessage.class);
+                        }
                         if (msg != null) {
                             messages.add(msg);
                         }

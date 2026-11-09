@@ -19,6 +19,7 @@ export {
   takeQueuedMessageForEdit,
   writeQueuedMessageToDraft,
 } from './queuedMessageDraft';
+export { useProviderCapabilities } from './useProviderCapabilities';
 export { useThemeInit } from './useThemeInit';
 export { useContextActions } from './useContextActions';
 export { useMessageProcessing } from './useMessageProcessing';
@@ -31,6 +32,7 @@ export type { UseRewindHandlersOptions, UseRewindHandlersReturn } from './useRew
 export type { UseHistoryLoaderOptions } from './useHistoryLoader';
 export type { QueuedMessage, UseMessageQueueOptions, UseMessageQueueReturn } from './useMessageQueue';
 export type { QueuedDraftRestore, QueuedDraftTarget, QueuedDraftWrite } from './queuedMessageDraft';
+export type { ProviderCapabilities } from './useProviderCapabilities';
 export type { ViewMode, UseModelProviderStateOptions } from './useModelProviderState';
 export type { UseMessageProcessingOptions } from './useMessageProcessing';
 export type { UseMessageSenderOptions } from './useMessageSender';
