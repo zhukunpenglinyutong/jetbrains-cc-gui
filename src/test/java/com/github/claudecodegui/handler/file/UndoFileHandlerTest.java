@@ -9,7 +9,11 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Computable;
+import com.intellij.openapi.vfs.VirtualFile;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -23,6 +27,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Predicate;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -245,9 +251,79 @@ public class UndoFileHandlerTest {
         assertTrue(failure.getCause() instanceof IllegalArgumentException);
     }
 
+    /** Undo runs on a pooled thread, where the platform asserts a read action around this lookup. */
+    @Test
+    public void readsTheDocumentInsideAReadAction() {
+        AtomicBoolean inReadAction = new AtomicBoolean();
+        List<Boolean> lookups = new ArrayList<>();
+        FileDocumentManager documents = new RecordingDocumentManager(() -> lookups.add(inReadAction.get()));
+        Application previous = ApplicationManager.getApplication();
+        ApplicationManager.setApplication((Application) Proxy.newProxyInstance(Application.class.getClassLoader(),
+                new Class<?>[]{Application.class}, (proxy, method, args) -> {
+                    if ("getService".equals(method.getName())) return documents;
+                    if ("runReadAction".equals(method.getName()) && args[0] instanceof Computable<?> computable) {
+                        inReadAction.set(true);
+                        try {
+                            return computable.compute();
+                        } finally {
+                            inReadAction.set(false);
+                        }
+                    }
+                    return method.getReturnType() == boolean.class ? false : null;
+                }));
+        try {
+            new UndoFileHandler(null).readDocument(null);
+        } finally {
+            ApplicationManager.setApplication(previous);
+        }
+        assertEquals(List.of(true), lookups);
+    }
+
     private void restore(Path current, Path original, String content) throws Exception {
         Method restore = UndoFileHandler.class.getDeclaredMethod("restoreFileBaseline", Path.class, Path.class, String.class, Charset.class);
         restore.setAccessible(true);
         restore.invoke(new UndoFileHandler(null), current, original, content, StandardCharsets.UTF_8);
+    }
+
+    /** Reports each document lookup; the rest of the platform API is unused by this path. */
+    private static final class RecordingDocumentManager extends FileDocumentManager {
+        private final Runnable onLookup;
+
+        private RecordingDocumentManager(Runnable onLookup) {
+            this.onLookup = onLookup;
+        }
+
+        @Override public Document getDocument(VirtualFile file) {
+            this.onLookup.run();
+            return null;
+        }
+
+        @Override public Document getCachedDocument(VirtualFile file) { return null; }
+
+        @Override public VirtualFile getFile(Document document) { return null; }
+
+        @Override public void saveAllDocuments() { }
+
+        @Override public void saveDocuments(Predicate<? super Document> filter) { }
+
+        @Override public void saveDocument(Document document) { }
+
+        @Override public void saveDocumentAsIs(Document document) { }
+
+        @Override public Document[] getUnsavedDocuments() { return new Document[0]; }
+
+        @Override public boolean isDocumentUnsaved(Document document) { return false; }
+
+        @Override public boolean isFileModified(VirtualFile file) { return false; }
+
+        @Override public boolean isPartialPreviewOfALargeFile(Document document) { return false; }
+
+        @Override public void reloadFromDisk(Document document, Project project) { }
+
+        @Override public String getLineSeparator(VirtualFile file, Project project) { return "\n"; }
+
+        @Override public boolean requestWriting(Document document, Project project) { return true; }
+
+        @Override public void reloadFiles(VirtualFile... files) { }
     }
 }

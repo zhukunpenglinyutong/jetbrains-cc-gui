@@ -7,6 +7,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
+import java.time.Instant;
+
 /**
  * Claude plan-usage snapshot builder + resolver.
  *
@@ -69,10 +71,13 @@ public final class ClaudePlanUsageService {
      * disk on each call, so edits to {@code settings.json} are picked up.
      */
     public static JsonObject resolvePlanUsagePayload(CodemossSettingsService settingsService) {
+        return resolvePlanUsagePayload(settingsService, System.currentTimeMillis());
+    }
+
+    static JsonObject resolvePlanUsagePayload(CodemossSettingsService settingsService, long nowMs) {
         try {
             if (settingsService != null) {
-                JsonObject relay = RelayUsageRegistry.resolve(
-                        settingsService.readClaudeSettings(), System.currentTimeMillis());
+                JsonObject relay = RelayUsageRegistry.resolve(settingsService.readClaudeSettings(), nowMs);
                 if (relay != null) {
                     return relay;
                 }
@@ -81,10 +86,34 @@ public final class ClaudePlanUsageService {
             LOG.warn("Claude plan-usage resolve failed, falling back to rate_limit cache: " + e.getMessage());
         }
         JsonObject cached = cachedRateLimit;
-        if (cached != null) {
+        // The snapshot only changes when the CLI emits another rate_limit_event, so
+        // once its window has reset the figure describes a window that is over.
+        // Report unavailable until the next event instead of showing it as current.
+        if (cached != null && !hasWindowReset(cached, nowMs)) {
             return cached.deepCopy();
         }
         return unavailable("Claude usage unavailable");
+    }
+
+    /**
+     * Drop the cached rate_limit snapshot. Called when the active Claude provider
+     * changes: the snapshot belongs to the previous account and must not linger
+     * until the new one emits its own event.
+     */
+    public static void clearRateLimitCache() {
+        cachedRateLimit = null;
+    }
+
+    private static boolean hasWindowReset(JsonObject payload, long nowMs) {
+        String resetAt = RelayUsageJson.asString(payload, "reset_at");
+        if (resetAt == null) {
+            return false;
+        }
+        try {
+            return Instant.parse(resetAt).toEpochMilli() <= nowMs;
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     // ===== real Anthropic rate_limit_event =====
@@ -170,11 +199,6 @@ public final class ClaudePlanUsageService {
         out.addProperty("provider", "claude");
         out.addProperty("message", message);
         return out;
-    }
-
-    /** Test-only: drop the cached rate_limit snapshot. */
-    static void resetRateLimitCacheForTests() {
-        cachedRateLimit = null;
     }
 
 }

@@ -169,6 +169,7 @@
     "codexReviewStarted": "Codex is reviewing the workspace",
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexCliOutdated": "O Codex CLI {{version}} está desatualizado; alguns modelos e modos de permissão podem não funcionar. Atualize para a versão {{minimumVersion}} ou mais recente.",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
     "continueRefiningPlan": "Continuar refinando este plano:"
   },
@@ -2346,6 +2347,25 @@
         }
       }
     },
+    "claudeCodeWindowsTooOld": {
+      "title": "O Claude Code não pode iniciar nesta versão do Windows",
+      "intro": "O Windows impediu o Claude Code de iniciar porque não encontrou uma função do sistema necessária (erro 0xC0000139). Isso geralmente indica que o Windows é antigo demais: o Claude Code 2.1.118 e posteriores usam ClosePseudoConsole, que exige o Windows 10 versão 1809 ou o Windows Server 2019.",
+      "reason": "O Windows rejeita o programa ao carregá-lo, antes de o Claude Code ser executado, então mudar o modelo, o provedor ou as permissões não vai ajudar.",
+      "solutions": {
+        "updateWindows": {
+          "title": "Opção 1: atualize o Windows",
+          "step0": "Atualize para o Windows 10 versão 1809 ou posterior, ou para o Windows Server 2019 ou posterior. Essas versões incluem a função que falta."
+        },
+        "useOlderSdk": {
+          "title": "Opção 2: mude para um SDK anterior",
+          "step0": "Em Gerenciamento de Dependências, altere a versão do SDK para v0.2.112 ou anterior. Modelos mais recentes podem não aceitar essa versão. Se um modelo pedir um Claude Code mais recente, escolha outro modelo ou atualize o Windows: atualizar o SDK faz este erro voltar."
+        },
+        "checkCustomCli": {
+          "title": "Opção 3: verifique seu CLI do Claude personalizado",
+          "step0": "Se você definiu \"Caminho do CLI do Claude (substituição)\", o plugin executa esse binário em vez do SDK, então trocar o SDK não tem efeito. Limpe o caminho ou aponte-o para um Claude Code anterior. Verifique isto primeiro se o seu Windows já estiver atualizado."
+        }
+      }
+    },
     "spawnEbusy": {
       "title": "spawn EBUSY — falha ao iniciar o processo filho",
       "intro": "Este erro geralmente é causado por uma versão incompatível do Node.js ou uma instalação incompleta do SDK. Tente as duas opções abaixo na ordem:",
@@ -2359,6 +2379,22 @@
           "title": "Opção 2: Reinstale o SDK mais recente a partir do registro npm oficial",
           "step0": "1. Mude para o registro npm oficial (evite o mirror da Taobao — pode não ter a versão mais recente):",
           "step1": "2. Abra Gerenciamento de Dependências e reinstale o SDK mais recente:"
+        }
+      }
+    },
+    "codexCliVersionTooOld": {
+      "title": "O Codex CLI é antigo demais para este modo de permissão",
+      "intro": "Auto Total e Aprovação automática usam a configuração do revisor automático. Este Codex CLI não a reconhece e rejeitou a solicitação, então sua mensagem não foi processada.",
+      "reason": "O plugin executa o Codex CLI encontrado na sua máquina, portanto atualizar o plugin não atualiza o CLI. Se o erro continuar após a atualização, pode haver um codex mais antigo primeiro no seu PATH.",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "Opção 1: instalar ou atualizar o CLI usando as instruções oficiais",
+          "step0": "1. Abra as instruções oficiais e escolha o instalador independente, o npm ou o Homebrew para o seu ambiente de execução. Atualize pelo canal de instalação original; não execute npm uninstall em uma instalação independente:",
+          "step1": "2. Em um novo terminal, confirme que a versão mudou e reinicie o IDE para que o plugin use o novo CLI:"
+        },
+        "useDefaultMode": {
+          "title": "Opção 2: trocar o modo de permissão por enquanto",
+          "step0": "Mude para o Modo Padrão. Ele não usa o revisor automático, então você pode continuar trabalhando até atualizar o CLI. Se o erro continuar, atualize o CLI conforme a opção 1."
         }
       }
     },

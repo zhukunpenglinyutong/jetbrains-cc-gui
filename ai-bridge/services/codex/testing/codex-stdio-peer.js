@@ -963,10 +963,11 @@ export const SCENARIOS = {
 export const SCENARIO_NAMES = Object.keys(SCENARIOS);
 
 class PeerContext {
-  constructor({ scenario, trace, quiet, output = process.stdout, writeStderr = null, onExit = null }) {
+  constructor({ scenario, trace, quiet, output = process.stdout, writeStderr = null, onExit = null, userAgent = 'codex-test-peer/1.0' }) {
     this.scenario = scenario;
     this.trace = trace;
     this.quiet = quiet;
+    this.userAgent = userAgent;
     this.output = output;
     this.writeStderrFn = writeStderr || ((text) => process.stderr.write(text));
     this.onExitFn = onExit || ((code) => process.exit(code));
@@ -1056,7 +1057,7 @@ class PeerContext {
         await this.scenario.onInitialize(params, this);
         return;
       }
-      this.reply(id, { userAgent: 'codex-test-peer/1.0', authMode: null });
+      this.reply(id, { userAgent: this.userAgent, authMode: null });
       return;
     }
     if (method === 'initialized') {
@@ -1199,6 +1200,7 @@ export function startPeerWithStreams({
   output,
   stderr = null,
   onExit = null,
+  userAgent = 'codex-test-peer/1.0',
 } = {}) {
   const scenario = SCENARIOS[scenarioName || 'early-notification'];
   if (!scenario) {
@@ -1211,6 +1213,7 @@ export function startPeerWithStreams({
     output,
     writeStderr: stderr ? (text) => stderr.write(text) : null,
     onExit: onExit || null,
+    userAgent,
   });
   attachPeerInput(ctx, input, trace);
   return ctx;
