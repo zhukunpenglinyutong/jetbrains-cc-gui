@@ -9,9 +9,9 @@ const session = vi.hoisted(() => ({ currentSessionId: 'history-a' as string | nu
 vi.mock('../../../contexts/SessionContext', () => ({ useSession: () => session }));
 vi.mock('../../../contexts/UIStateContext', () => ({ useUIState: () => ({ currentView: 'chat' }) }));
 
-function SessionMenu({ provider = 'claude', busy = false }: { provider?: string; busy?: boolean }) {
+function SessionMenu({ provider = 'claude', busy = false, onToggleThinking }: { provider?: string; busy?: boolean; onToggleThinking?: (enabled: boolean) => void }) {
   const supplier = useSessionSuppliers(provider, busy);
-  return <SessionSupplierContext.Provider value={supplier}><ConfigSelect currentProvider={provider} /></SessionSupplierContext.Provider>;
+  return <SessionSupplierContext.Provider value={supplier}><ConfigSelect currentProvider={provider} alwaysThinkingEnabled={supplier.thinkingSettings?.enabled} onToggleThinking={onToggleThinking ?? supplier.thinkingSettings?.onChange} /></SessionSupplierContext.Provider>;
 }
 
 function requests() {
@@ -108,6 +108,27 @@ describe('ConfigSelect runtime provider submenu', () => {
       writable: true,
       value: originalInnerWidth,
     });
+  });
+
+  it('disables thinking until the supplier snapshot is usable and recovers after a read failure', async () => {
+    const changed = vi.fn();
+    render(<SessionMenu onToggleThinking={changed} />);
+    fireEvent.click(screen.getByRole('button', { name: /Configure/i }));
+    const row = screen.getByRole('button', { name: /Thinking/i });
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(row);
+    fireEvent.keyDown(row, { key: 'Enter' });
+    expect(changed).not.toHaveBeenCalled();
+    await waitFor(() => expect(requests().length).toBeGreaterThan(0));
+    reply({ error: 'Unavailable' });
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(row);
+    expect(changed).not.toHaveBeenCalled();
+    fireEvent(window, new Event('focus'));
+    reply({ thinkingEnabled: false });
+    expect(row.getAttribute('aria-disabled')).toBe('false');
+    fireEvent.click(row);
+    expect(changed).toHaveBeenCalledWith(true);
   });
 
   it.each(['claude', 'codex'])('changes only the %s conversation after backend confirmation', async provider => {

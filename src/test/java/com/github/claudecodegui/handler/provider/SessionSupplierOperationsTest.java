@@ -87,6 +87,45 @@ public class SessionSupplierOperationsTest {
     }
 
     @Test
+    public void duplicatePickerOptionsMergeContextCapabilitiesInEitherOrder() {
+        for (boolean extendedFirst : List.of(false, true)) {
+            Fixture fixture = new Fixture();
+            String first = extendedFirst ? "b-route[1M]" : "b-route";
+            String second = extendedFirst ? "b-route" : "b-route[1m]";
+            fixture.settings.b.getAsJsonObject("settingsConfig").add("modelPicker", JsonParser.parseString("{\"options\":["
+                    + "{\"model\":\"" + first + "\",\"label\":\"First label\"},{\"model\":\"" + second + "\"}]}"));
+            fixture.operations.handle(fixture.request("b").toString(), true);
+            var models = fixture.reply.get().getAsJsonObject("modelCatalog").getAsJsonArray("models");
+            assertEquals(1, models.size());
+            assertEquals("First label", models.get(0).getAsJsonObject().get("label").getAsString());
+            assertTrue(models.get(0).getAsJsonObject().get("supports1MContext").getAsBoolean());
+        }
+    }
+
+    @Test
+    public void unsupportedCodexFragmentsAreUnavailableBeforeSelectionWithoutExposingTheirContents() {
+        for (String fragment : List.of("mcp_servers = {}\n", "skills = {}\n", "[mcp_servers.fixture]\ncommand = \"fixture\"\n",
+                "skills.config = []\n", "secret-fixture = [")) {
+            Fixture fixture = new Fixture();
+            fixture.session.getState().setProvider("codex");
+            fixture.session.getState().setSupplierId("codex", "a");
+            fixture.settings.a.addProperty("configToml", "model = \"skills and mcp_servers are text\" # mcp_servers\n");
+            fixture.settings.b.addProperty("configToml", fragment);
+            JsonObject request = fixture.request("b");
+            request.addProperty("provider", "codex");
+            fixture.operations.handle(request.toString(), false);
+            var suppliers = fixture.reply.get().getAsJsonArray("suppliers");
+            assertTrue(suppliers.get(0).getAsJsonObject().get("available").getAsBoolean());
+            assertFalse(suppliers.get(1).getAsJsonObject().get("available").getAsBoolean());
+            assertFalse(fixture.reply.get().toString().contains("secret-fixture"));
+            assertFalse(com.github.claudecodegui.settings.SessionSupplierCatalog.available(fixture.settings, "codex", "b"));
+            fixture.operations.handle(request.toString(), true);
+            assertTrue(fixture.reply.get().has("error"));
+            assertEquals("a", fixture.session.getState().getSupplierId("codex"));
+        }
+    }
+
+    @Test
     public void nativeLoginUsesAuthorizedNativeMappingsAndPickerInsteadOfAnEmptyVirtualEntry() {
         Fixture fixture = new Fixture();
         JsonObject login = new JsonObject();
@@ -161,6 +200,16 @@ public class SessionSupplierOperationsTest {
                 throw new IllegalArgumentException("secret-fixture-diagnostic");
             }
             return providers;
+        }
+
+        @Override
+        public List<JsonObject> getCodexProviders() {
+            return getClaudeProviders();
+        }
+
+        @Override
+        public JsonObject getActiveCodexProvider() {
+            return active;
         }
 
         @Override

@@ -49,16 +49,16 @@ public class SessionLifecycleReleaseTest {
         try {
             manager.createNewSession();
             assertSame(previous, host.session);
-            assertFalse(host.scriptNames.contains("window.dispatchEvent"));
+            assertFalse(host.scriptNames.contains("window.notifySessionSupplierBindingChanged"));
             bridge.release.complete(new JsonObject());
             assertNotSame(previous, host.session);
             assertSame(host.session, host.context.getSession());
             for (Runnable callback : List.copyOf(uiCalls)) {
                 callback.run();
             }
-            assertTrue(host.scriptNames.contains("window.dispatchEvent"));
-            assertEquals("new Event('session-supplier-binding-changed')", host.bindingEvent);
-            assertTrue(host.scriptNames.indexOf("window.dispatchEvent") < host.scriptNames.indexOf("historyLoadComplete"));
+            assertTrue(host.scriptNames.contains("window.notifySessionSupplierBindingChanged"));
+            assertEquals(0, host.bindingArgumentCount);
+            assertTrue(host.scriptNames.indexOf("window.notifySessionSupplierBindingChanged") < host.scriptNames.indexOf("historyLoadComplete"));
         } finally {
             host.coalescer.dispose();
             bridge.cleanupAllProcesses();
@@ -147,7 +147,7 @@ public class SessionLifecycleReleaseTest {
         private final StreamMessageCoalescer coalescer;
         private ClaudeSession session;
         private final List<String> scriptNames = new ArrayList<>();
-        private String bindingEvent;
+        private int bindingArgumentCount = -1;
 
         private Host(HoldingReleaseBridge bridge) {
             this.bridge = bridge;
@@ -190,8 +190,8 @@ public class SessionLifecycleReleaseTest {
         /** Replaces JCEF delivery while exercising the lifecycle manager. */
         @Override public void callJavaScript(String functionName, String... args) {
             this.scriptNames.add(functionName);
-            if ("window.dispatchEvent".equals(functionName)) {
-                this.bindingEvent = args[0];
+            if ("window.notifySessionSupplierBindingChanged".equals(functionName)) {
+                this.bindingArgumentCount = args.length;
             }
         }
         /** Keeps the destination available during release ordering. */

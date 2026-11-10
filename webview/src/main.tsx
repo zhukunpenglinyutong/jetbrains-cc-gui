@@ -16,6 +16,7 @@ import { setupDollarCommandsCallback } from './components/ChatInputBox/providers
 import { applyLinkifyCapabilitiesPayload } from './utils/linkifyCapabilities';
 import { installRuntimeProviderDispatchers } from './utils/runtimeProviderCapabilities';
 import { sendBridgeEvent } from './utils/bridge';
+import { installSessionSupplierCallbacks } from './utils/sessionSupplierEvents';
 import { debugLog } from './utils/debug';
 import { forceWebviewRepaint, repaintRemoteWebview } from './utils/forceWebviewRepaint';
 import { fontSizeLevelToScale } from './utils/fontScale';
@@ -47,6 +48,7 @@ if (!import.meta.env.DEV) {
 // through a deterministic subscriber registry instead of overriding
 // `window.update*Provider*` callbacks ad-hoc.
 installRuntimeProviderDispatchers();
+installSessionSupplierCallbacks();
 
 function createBridgeHeartbeatStarter() {
   let started = false;

@@ -2,7 +2,7 @@
 
 ## Approved scope
 
-Claude and Codex conversations independently select an existing configured API supplier and model. New conversations capture the global supplier default once. Changing a global default must not rebind existing conversations. The settings page retains supplier management and default selection.
+Claude and Codex conversations independently select an existing configured API supplier and model. New conversations capture the global supplier default once. Changing a global default must not rebind existing configured API supplier conversations. The settings page retains supplier management and default selection.
 
 ## Acceptance criteria
 
@@ -15,7 +15,9 @@ Claude and Codex conversations independently select an existing configured API s
 
 ## Compatibility
 
-Initial scope covers configured Claude/Codex API suppliers. Existing local configuration and CLI login modes retain their authorization rules; independent OAuth accounts are outside scope. Other AI engines retain their existing behavior. No version-history edits or remote push are included.
+Initial scope covers configured Claude/Codex API suppliers. Local configuration and CLI login remain shared native modes, available only while that native mode is the global selection and its existing authorization is valid. Their bindings do not pin an independent account: changing the global selection makes a previously native-bound conversation unavailable until the native mode is restored or a configured API supplier is selected. Independent OAuth accounts are outside scope.
+
+Codex supplier fragments containing top-level `mcp_servers` or `skills` are not supported as conversation-specific configurations. These entries are shown as unavailable and cannot be selected; the existing shared native configuration remains separate. Invalid TOML is also unavailable. Other AI engines retain their existing behavior. No version-history edits are included.
 
 ## Validation
 

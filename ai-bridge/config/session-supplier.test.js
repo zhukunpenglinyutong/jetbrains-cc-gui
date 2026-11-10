@@ -146,3 +146,33 @@ test('cloud supplier routing wins over global settings without changing request 
   assert.equal(override.env.NODE_OPTIONS, undefined);
   assert.equal(buildSessionClaudeSettingsOverride(null, override), override);
 });
+
+
+test('inline cloud settings clear global endpoints, headers, auth bypasses and future routing keys', () => {
+  const globalEnv = {
+    ANTHROPIC_BEDROCK_BASE_URL: 'https://global-bedrock.example.invalid',
+    ANTHROPIC_VERTEX_BASE_URL: 'https://global-vertex.example.invalid',
+    ANTHROPIC_CUSTOM_HEADERS: 'x-fixture: global-only',
+    CLAUDE_CODE_SKIP_BEDROCK_AUTH: '1', CLAUDE_CODE_SKIP_VERTEX_AUTH: '1',
+    ANTHROPIC_FUTURE_ROUTING: 'global-only', AWS_ENDPOINT_URL_FUTURE_SERVICE: 'global-only',
+  };
+  const before = structuredClone(globalEnv);
+  for (const cloud of ['BEDROCK', 'VERTEX']) {
+    const settingsConfig = { env: { [`CLAUDE_CODE_USE_${cloud}`]: '1' } };
+    const supplier = buildSessionClaudeConfig('cloud', {
+      config: { claude: { providers: { cloud: { settingsConfig } } } },
+      baseEnv: { ...globalEnv },
+    });
+    const override = buildSessionClaudeSettingsOverride(supplier, { env: {} }, { globalSettings: { env: globalEnv } });
+    const effective = { ...globalEnv, ...override.env };
+    for (const key of Object.keys(globalEnv)) assert.equal(effective[key], '', key);
+    assert.equal(effective[`CLAUDE_CODE_USE_${cloud}`], '1');
+    assert.equal(supplier.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH, undefined);
+    assert.equal(supplier.env.CLAUDE_CODE_SKIP_VERTEX_AUTH, undefined);
+    settingsConfig.env.ANTHROPIC_CUSTOM_HEADERS = 'x-fixture: bound-only';
+    const explicit = buildSessionClaudeConfig('cloud', { config: { claude: { providers: { cloud: { settingsConfig } } } }, baseEnv: {} });
+    assert.equal(buildSessionClaudeSettingsOverride(explicit, { env: {} }, { globalSettings: { env: globalEnv } }).env.ANTHROPIC_CUSTOM_HEADERS,
+      'x-fixture: bound-only');
+  }
+  assert.deepEqual(globalEnv, before);
+});

@@ -81,7 +81,8 @@ final class SessionSupplierOperations {
                 safe.addProperty("id", id);
                 String name = SessionSupplierCatalog.text(provider, "name");
                 safe.addProperty("name", name.isBlank() ? id : name);
-                safe.addProperty("available", !SessionSupplierCatalog.isNativeMode(id) || id.equals(defaultId));
+                safe.addProperty("available", SessionSupplierCatalog.supportsConfiguration(engine, provider)
+                        && (!SessionSupplierCatalog.isNativeMode(id) || id.equals(defaultId)));
                 entries.add(safe);
             }
             reply.add("suppliers", entries);
@@ -133,7 +134,7 @@ final class SessionSupplierOperations {
         JsonObject picker = settings.has("modelPicker") && settings.get("modelPicker").isJsonObject()
                 ? settings.getAsJsonObject("modelPicker") : new JsonObject();
         JsonArray models = new JsonArray();
-        java.util.Set<String> ids = new java.util.HashSet<>();
+        java.util.Map<String, JsonObject> modelsById = new java.util.HashMap<>();
         boolean hasOptions = picker.has("options") && picker.get("options").isJsonArray();
         if (hasOptions) {
             for (var value : picker.getAsJsonArray("options")) {
@@ -143,7 +144,14 @@ final class SessionSupplierOperations {
                 JsonObject option = value.getAsJsonObject();
                 String rawModel = string(option, "model").trim();
                 String id = rawModel.replaceAll("(?i)\\[1m\\]$", "");
-                if (id.isEmpty() || !ids.add(id)) {
+                if (id.isEmpty()) {
+                    continue;
+                }
+                JsonObject existing = modelsById.get(id);
+                if (existing != null) {
+                    if (!rawModel.equals(id)) {
+                        existing.addProperty("supports1MContext", true);
+                    }
                     continue;
                 }
                 JsonObject model = new JsonObject();
@@ -156,6 +164,7 @@ final class SessionSupplierOperations {
                     model.addProperty("description", option.get("description").getAsString());
                 }
                 models.add(model);
+                modelsById.put(id, model);
             }
         }
         JsonObject env = settings.has("env") && settings.get("env").isJsonObject() ? settings.getAsJsonObject("env") : new JsonObject();
@@ -166,7 +175,7 @@ final class SessionSupplierOperations {
                 break;
             }
         }
-        if (!ids.contains(defaultModel)) {
+        if (!modelsById.containsKey(defaultModel)) {
             defaultModel = models.isEmpty() ? null : models.get(0).getAsJsonObject().get("id").getAsString();
         }
         JsonObject catalog = new JsonObject();

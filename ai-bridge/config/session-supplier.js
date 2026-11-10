@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { parse } from 'smol-toml';
 import {
   loadCodemossConfig, getClaudeRuntimeState, getCodexRuntimeState,
-  isDangerousEnvVar, isWebviewControlledEnvVar,
+  isDangerousEnvVar, isWebviewControlledEnvVar, loadClaudeSettings,
 } from './api-config.js';
 
 const SPECIAL = new Set(['__local_settings_json__', '__cli_login__', '__codex_cli_login__']);
@@ -38,7 +38,7 @@ export function buildSessionClaudeConfig(supplierId, { baseEnv = process.env, ..
   if (!object(settings) || !object(settings.env)) throw unavailable();
   const env = { ...baseEnv };
   for (const key of Object.keys(env)) {
-    if (/^(ANTHROPIC_|CLAUDE_CODE_USE_|CCGUI_CLI_LOGIN_AUTHORIZED$|CLAUDE_AGENT_SDK_VERSION$|CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST$)/i.test(key)
+    if (/^(ANTHROPIC_|CLAUDE_CODE_USE_|CLAUDE_CODE_SKIP_|CCGUI_CLI_LOGIN_AUTHORIZED$|CLAUDE_AGENT_SDK_VERSION$|CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST$)/i.test(key)
         || isWebviewControlledEnvVar(key)) delete env[key];
   }
   for (const [key, value] of Object.entries(settings.env)) {
@@ -57,17 +57,29 @@ export function buildSessionClaudeConfig(supplierId, { baseEnv = process.env, ..
 }
 
 /** Inline settings also fence cloud routing, where host-managed stripping is disabled. */
-export function buildSessionClaudeSettingsOverride(supplier, override) {
+export function buildSessionClaudeSettingsOverride(supplier, override, { globalSettings } = {}) {
   if (!supplier) return override;
+  const inherited = globalSettings === undefined ? loadClaudeSettings() : globalSettings;
   const env = {};
   for (const key of [
     'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY',
     'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_API_URL',
+    'ANTHROPIC_BEDROCK_BASE_URL', 'ANTHROPIC_VERTEX_BASE_URL', 'ANTHROPIC_CUSTOM_HEADERS',
+    'CLAUDE_CODE_SKIP_BEDROCK_AUTH', 'CLAUDE_CODE_SKIP_VERTEX_AUTH', 'CLAUDE_CODE_SKIP_FOUNDRY_AUTH',
+    'AWS_ENDPOINT_URL', 'AWS_ENDPOINT_URL_BEDROCK', 'AWS_ENDPOINT_URL_BEDROCK_RUNTIME',
     'AWS_PROFILE', 'AWS_DEFAULT_PROFILE', 'AWS_REGION', 'AWS_DEFAULT_REGION',
     'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_BEARER_TOKEN_BEDROCK',
     'ANTHROPIC_FOUNDRY_API_KEY', 'ANTHROPIC_FOUNDRY_BASE_URL', 'ANTHROPIC_FOUNDRY_RESOURCE',
     'ANTHROPIC_VERTEX_PROJECT_ID', 'CLOUD_ML_REGION', 'GCLOUD_PROJECT', 'GOOGLE_APPLICATION_CREDENTIALS',
+    'GOOGLE_CLOUD_PROJECT', 'GOOGLE_CLOUD_LOCATION',
   ]) env[key] = supplier.env[key] ?? '';
+  // Fence all routing keys actually present in global settings, including future
+  // SDK additions, without copying any of that profile's credential values.
+  for (const key of Object.keys(object(inherited?.env) ? inherited.env : {})) {
+    if (/^(ANTHROPIC_|CLAUDE_CODE_USE_|CLAUDE_CODE_SKIP_|AWS_|GOOGLE_|GCLOUD_|CLOUD_ML_)/i.test(key)) {
+      env[key] = supplier.settings.env[key] ?? '';
+    }
+  }
   for (const [key, value] of Object.entries(supplier.settings.env)) {
     if (!isDangerousEnvVar(key) && !isWebviewControlledEnvVar(key) && typeof value === 'string') env[key] = value;
   }

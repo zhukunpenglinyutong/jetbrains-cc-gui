@@ -1,6 +1,7 @@
 package com.github.claudecodegui.settings;
 
 import com.google.gson.JsonObject;
+import org.tomlj.Toml;
 
 import java.util.List;
 
@@ -59,7 +60,8 @@ public final class SessionSupplierCatalog {
 
     public static boolean available(CodemossSettingsService settings, String provider, String id) {
         try {
-            if (find(settings, provider, id) == null) {
+            JsonObject entry = find(settings, provider, id);
+            if (entry == null || !supportsConfiguration(provider, entry)) {
                 return false;
             }
             if (isNativeMode(id)) {
@@ -67,6 +69,20 @@ public final class SessionSupplierCatalog {
             }
             return true;
         } catch (Exception error) {
+            return false;
+        }
+    }
+
+    /** Keep picker availability aligned with the Bridge's conversation override limits. */
+    public static boolean supportsConfiguration(String provider, JsonObject entry) {
+        if (!"codex".equals(provider) || isNativeMode(text(entry, "id"))) {
+            return true;
+        }
+        try {
+            var parsed = Toml.parse(text(entry, "configToml"));
+            return !parsed.hasErrors() && !parsed.keySet().contains("mcp_servers") && !parsed.keySet().contains("skills");
+        } catch (RuntimeException | StackOverflowError error) {
+            // Parser diagnostics can contain supplier credentials; expose availability only.
             return false;
         }
     }

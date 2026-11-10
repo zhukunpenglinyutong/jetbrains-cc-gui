@@ -1,5 +1,30 @@
 # Session supplier deep review
 
+
+## Maintainer follow-up (2026-11-10)
+
+The maintainer's blocking JavaScript finding and the reviewed configuration/UI issues are corrected in this follow-up.
+
+| Finding | Resolution and evidence |
+| --- | --- |
+| P1: the new-session bootstrap serialized an Event expression into a quoted bridge argument | Java now calls a named, no-argument webview callback. A Node-backed Java regression parses and executes the generated batch, checks binding/history/status order, and verifies zero arguments. The callback dispatches a real Event and is installed before React mounts. The lifecycle event is protected from ordinary queue backpressure. |
+| P2: global pricing settings used the active conversation's model mapping | The settings hook reads the global mapping explicitly. A regression keeps a conflicting conversation mapping mounted while changing the global mapping. Remaining session-aware mapping consumers are chat controls. |
+| P2: the thinking control silently ignored clicks without a supplier snapshot | The control is disabled while the snapshot is missing, pending, failed, or unavailable. Mouse, keyboard, and successful retry behavior are covered. |
+| P2: bound cloud settings could inherit another profile's endpoints, headers, or auth bypasses | The inline override clears the reviewed Bedrock/Vertex/header/auth keys and all routing-family keys present in inherited settings before applying the selected profile. Regressions cover both cloud modes, future routing keys, explicit bound headers, and unchanged input settings. |
+| P2: unsupported Codex MCP/skills fragments appeared selectable | The Java catalog parses the fragment with the existing TOML parser and marks top-level MCP/skills fragments and invalid TOML unavailable. Both the picker snapshot and selection validation use the same rule. The Bridge retains its independent check. Tests cover inline tables, nested tables, dotted keys, malformed TOML, and harmless occurrences in strings/comments. |
+| Follow-up: model deduplication lost a later 1M capability | Duplicate entries retain the first display metadata and OR their context capability. Both option orders and mixed-case suffixes are covered. |
+
+The two new catalog regressions failed against the previous implementation before passing with the fixes. Configured API suppliers remain independent of the global default. Local/CLI login remains a shared, globally authorized native mode; the PRD and API now state that changing away from that global mode makes its existing native bindings unavailable until restored or explicitly rebound. Independent OAuth account pinning is outside this feature's scope.
+
+PR-worktree validation: the full Java run passed 2557 tests with 28 skipped before the last catalog changes; the final affected Java suites passed 39 tests and Checkstyle. The full frontend passed 2899 tests across 261 files plus packaging checks, test TypeScript checking passed, and the production frontend build passed. The supplier Bridge suite passed all 10 tests. All 12 supplier-menu Playwright checks passed across four viewport sizes, with only the Java transport mocked and the real callback required to be installed. The first parallel cold-start run timed out during four initial page navigations; the isolated-port single-worker run completed without failures.
+
+Development-workspace validation: Java 3315 passed with 32 skipped; Checkstyle, both production frontend bundles and buildPlugin passed. The frontend passed 3294 tests across 302 files plus packaging checks and test TypeScript checking. The full Bridge run passed 1480 tests with 15 skipped and one five-second process-exit timeout; that unchanged test passed its isolated rerun in 671 ms. All 27 final archive checks passed, including exact Bridge sources and Java class bytes, the named callback in Java and frontend, and the compressed frontend resource bytes.
+
+Non-blocking follow-ups remain: pruning deleted-history binding metadata, reducing manual reselection after configuring the first supplier, and validating direct Bedrock title construction with the actual SDK or an installed IDE. Supplier changes retired by a real conversation replacement remain fenced and cannot mutate the replacement conversation. This follow-up does not introduce independent native login accounts or per-supplier MCP/skills configuration.
+
+## Earlier review evidence
+
+
 Review date: 2026-11-10 (Asia/Shanghai). The initial review's ten findings and two subsequent P1 native-provider findings have been fixed. The current native-provider follow-up has no confirmed finding left open within its scope. Java, frontend, Bridge, Checkstyle, production builds and the final updated archive audit passed. Live supplier connectivity and installed-IDE acceptance remain unverified as described below.
 
 ## Confirmed findings and fixes

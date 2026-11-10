@@ -50,6 +50,7 @@ async function installBridge(page: Page, provider: string) {
   }, { provider, version: APP_VERSION });
   await page.goto('/');
   await expect(page.locator('.input-editable')).toBeVisible();
+  expect(await page.evaluate(() => typeof window.notifySessionSupplierBindingChanged)).toBe('function');
   await page.addStyleTag({ content: '#__vconsole { display: none !important; }' });
 }
 
@@ -104,7 +105,7 @@ test('failed switches retry from the same menu and a new unsaved chat uses its o
   await page.mouse.click(8, 8);
   await page.evaluate(() => {
     (window as SupplierMenuWindow).__supplierBinding = { id: 'b', token: 'binding-new-chat', fail: false };
-    window.dispatchEvent(new Event('session-supplier-binding-changed'));
+    window.notifySessionSupplierBindingChanged!();
   });
   const newMenu = await openSupplierMenu(page);
   await expect(newMenu.getByRole('option', { name: 'Supplier B' })).toHaveAttribute('aria-selected', 'true');
