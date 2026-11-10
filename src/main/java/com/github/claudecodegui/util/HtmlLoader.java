@@ -80,7 +80,7 @@ public class HtmlLoader {
      *
      * @param html the static HTML document.
      * @param theme the IDE theme name.
-     * @param bgColor the background color to apply.
+     * @param bgColor the startup background color, used as the CSS variable fallback.
      * @return the HTML with the initial theme bootstrap.
      */
     static String injectIdeTheme(String html, String theme, String bgColor) {
@@ -90,7 +90,11 @@ public class HtmlLoader {
         int bodyTagEnd = findLastOpeningTagEnd(
                 html, "<body", htmlClosingTagStart >= 0 ? htmlClosingTagStart : html.length());
 
-        String styleAttribute = " style=\"background-color:" + bgColor + ";\"";
+        // Reference the chat background variable with the startup color as its fallback. An
+        // inline background-color outranks the stylesheet, so a plain color would pin the page
+        // root (and the area around the status panel) to the startup theme after the user picks
+        // a custom chat background.
+        String styleAttribute = " style=\"background-color:var(--bg-chat," + bgColor + ");\"";
         String scriptInjection = "\n    <script>window.__INITIAL_IDE_THEME__ = '"
                 + theme + "';</script>";
         StringBuilder result = new StringBuilder(html.length() + styleAttribute.length() * 2

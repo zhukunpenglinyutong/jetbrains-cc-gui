@@ -65,6 +65,7 @@ import {
   shouldOutputMessage,
 } from './stream-event-processor.js';
 import { projectTrustFor, settingSourcesFor } from './project-trust.js';
+import { resolveStallTimeoutMs, takeWithStallTimeout, trackToolActivity } from './turn-stall-watchdog.js';
 import { generateSessionTitle } from '../session-title-service.js';
 import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
 
@@ -318,14 +319,22 @@ _runtimeCleanupTimer.unref();
     console.log('[MESSAGE_START]');
     runtime.inputStream.enqueue(requestContext.userMessage);
 
+    const stallTimeoutMs = resolveStallTimeoutMs();
+    const pendingToolUseIds = new Set();
+
     while (true) {
       let next;
       try {
         // Receive message from perpetual reader via turnSink
-        // (perpetual reader owns runtime.query.next())
-        next = await runtime.turnSink.take();
+        // (perpetual reader owns runtime.query.next()). A stalled upstream would
+        // otherwise leave this wait, and every request queued behind it, hanging.
+        next = await takeWithStallTimeout(runtime.turnSink, {
+          timeoutMs: stallTimeoutMs,
+          hasToolInFlight: () => pendingToolUseIds.size > 0,
+        });
       } catch (error) {
         const wrapped = new Error(error?.message || String(error));
+        if (error?.code) wrapped.code = error.code;
         wrapped.runtimeTerminated = true;
         wrapped.resumeExpiredNotified = error?.resumeExpiredNotified === true;
         throw wrapped;
@@ -339,6 +348,10 @@ _runtimeCleanupTimer.unref();
 
       touchRuntime(runtime);
       const msg = next.value;
+
+      if (!msg?.parent_tool_use_id) {
+        trackToolActivity(pendingToolUseIds, msg);
+      }
 
       if (turnState.streamingEnabled && !turnState.streamStarted) {
         process.stdout.write('[STREAM_START]\n');

@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.file;
 
+import com.github.claudecodegui.util.ProjectPathUtils;
 import com.github.claudecodegui.util.WslPathUtil;
 import com.github.claudecodegui.util.FileChangeUndoPlan;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
@@ -14,6 +15,7 @@ import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -66,15 +68,16 @@ public class UndoFileHandler extends BaseMessageHandler {
         return false;
     }
 
+    /** Validates the undo target against project content roots. */
     private boolean isValidFilePath(String filePath) {
-        String projectBasePath = this.context.getProject() != null ? this.context.getProject().getBasePath() : null;
-        if (projectBasePath == null) {
-            LOG.warn("[UndoFileHandler] Cannot validate path: project base path is null");
+        Project project = this.context.getProject();
+        if (project == null) {
+            LOG.warn("[UndoFileHandler] Cannot validate path: project is null");
             return false;
         }
         String resolved = this.resolveFilePath(filePath);
-        boolean isValid = WslPathUtil.isPathWithinDirectory(resolved, projectBasePath) && !Files.isDirectory(Path.of(resolved))
-                && !Path.of(resolved).normalize().equals(Path.of(WslPathUtil.toVfsPath(projectBasePath)).normalize());
+        boolean isValid = ProjectPathUtils.isPathWithinProject(project, resolved)
+                && !Files.isDirectory(Path.of(resolved));
         if (!isValid) {
             LOG.warn("[UndoFileHandler] File path outside project directory: " + filePath);
         }
