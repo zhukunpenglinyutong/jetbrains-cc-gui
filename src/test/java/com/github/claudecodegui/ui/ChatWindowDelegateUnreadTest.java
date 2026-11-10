@@ -166,7 +166,7 @@ public class ChatWindowDelegateUnreadTest {
     }
 
     @Test
-    public void answeringOutranksUnreadAndIdleRestoresTheUnreadDot() {
+    public void answeringOutranksUnreadAndIdleRestoresTheCompletedDot() {
         Fixture f = new Fixture();
         f.delegate.onAssistantActivity(); f.drain();
         Icon unreadIcon = f.tab.get().icon.get();
@@ -179,23 +179,55 @@ public class ChatWindowDelegateUnreadTest {
     }
 
     @Test
-    public void statusPrecedenceIsAnsweringThenUnreadThenCompleted() {
+    public void statusPrecedenceIsAnsweringThenFailedThenCompleted() {
         assertSame(ChatWindowDelegate.TabIndicator.ANSWERING,
-                ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.ANSWERING, true));
-        assertSame(ChatWindowDelegate.TabIndicator.UNREAD,
-                ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.IDLE, true));
+                ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.ANSWERING, true, true));
+        assertSame(ChatWindowDelegate.TabIndicator.ERROR,
+                ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.IDLE, false, true));
+        assertSame(ChatWindowDelegate.TabIndicator.ERROR,
+                ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.ERROR, true, false));
+        // A completion echo arriving after a failure must not repaint the turn green.
+        assertSame(ChatWindowDelegate.TabIndicator.ERROR,
+                ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.COMPLETED, false, true));
         assertSame(ChatWindowDelegate.TabIndicator.COMPLETED,
-                ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.COMPLETED, false));
-        assertNull(ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.IDLE, false));
+                ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.IDLE, true, false));
+        assertSame(ChatWindowDelegate.TabIndicator.COMPLETED,
+                ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.COMPLETED, false, false));
+        assertNull(ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.IDLE, false, false));
     }
 
     @Test
-    public void statusDotResourcesPaintBlueOrangeAndGreen() throws Exception {
-        // The reference desktop client's palette: running is blue, unread is orange
-        // (red is reserved for failures), a finished turn is green.
+    public void aFailedTurnStaysRedInABackgroundTabUntilTheTabIsRead() {
+        Fixture f = new Fixture();
+        f.showing.set(false);
+        f.delegate.onTurnFailed(); f.drain();
+        Icon red = f.tab.get().icon.get();
+        assertNotNull(red);
+        f.delegate.updateTabStatus(ChatWindowDelegate.TabAnswerStatus.COMPLETED); f.drain();
+        assertSame(red, f.tab.get().icon.get());
+        f.selected.set(true); f.showing.set(true);
+        f.delegate.markTabReadIfVisible(); f.drain();
+        assertNull(f.tab.get().icon.get());
+    }
+
+    @Test
+    public void aNewTurnClearsTheFailureColor() {
+        Fixture f = new Fixture();
+        f.showing.set(false);
+        f.delegate.onTurnFailed(); f.drain();
+        Icon red = f.tab.get().icon.get();
+        f.delegate.updateTabStatus(ChatWindowDelegate.TabAnswerStatus.ANSWERING); f.drain();
+        assertNotSame(red, f.tab.get().icon.get());
+        f.delegate.updateTabStatus(ChatWindowDelegate.TabAnswerStatus.IDLE); f.drain();
+        assertNull(f.tab.get().icon.get());
+    }
+
+    @Test
+    public void statusDotResourcesPaintBlueGreenAndRed() throws Exception {
+        // A running turn is blue, a finished turn is green, a failed turn is red.
         assertDotColor("/icons/tab-status-streaming.svg", 0x2F80ED);
-        assertDotColor("/icons/tab-status-unread.svg", 0xF97316);
         assertDotColor("/icons/tab-status-completed.svg", 0x22C55E);
+        assertDotColor("/icons/tab-status-error.svg", 0xEF4444);
     }
 
     private static void assertDotColor(String resource, int expectedRgb) throws Exception {

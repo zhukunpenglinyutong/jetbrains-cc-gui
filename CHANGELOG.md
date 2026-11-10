@@ -14,7 +14,7 @@ English:
 - **Explain why Claude Code cannot start on older Windows** (#1928, #2052): exit code 0xC0000139 (also reported as `-1073741511`) now opens a localized diagnostic card. It explains that Claude Code 2.1.118 and later need Windows 10 1809 or Windows Server 2019, and offers two ways out: update Windows, or switch the SDK to v0.2.112 or earlier in Dependency Management (by @Faq, @zhukunpenglinyutong)
 - **Make code blocks easier to read** (#1908, #2039, #2047, #2064): Dart and Flutter fences are now syntax-highlighted. The light theme gets its own highlight palette, with keywords, built-ins, comments and tags darkened to reach 4.5:1 contrast on the code background, and the palette follows IDE theme changes at runtime (by @hebulin, @EeeasyCode)
 - **Open project files through symlinked paths** (#2030): file links under symlinked project directories now open, navigate and show tooltips correctly. `#L12-L20` line ranges work, including on paths with spaces, non-ASCII names and file URIs. Diff writes and deletes still go through the canonical project boundary check, so a link through a symlink or Windows junction cannot grant write access outside the project (by @kochpy, @zhukunpenglinyutong)
-- **Give chat-tab activity its own colors instead of red**: the tab strip now follows the desktop client. A running turn shows a blue dot, an unread reply shows an orange dot (red read as an error), and a turn that just finished shows a green dot for five seconds. The tab title is no longer rewritten to `AI1...` or suffixed with a localized "Completed", so names stay stable (by @zhukunpenglinyutong)
+- **Give chat-tab activity its own status colors**: the tab strip marks each turn by color. A running turn shows a blue dot, a finished turn shows a green dot (kept while its reply is unread), and a turn that failed shows a red dot until the tab is opened or a new turn starts. The tab title is no longer rewritten to `AI1...` or suffixed with a localized "Completed", so names stay stable (by @zhukunpenglinyutong)
 
 🐛 Fixes
 - **Restore the OMP icon's brand colors**: the OMP CLI π now uses omp.sh's pink → violet → cyan gradient in the provider switcher, Settings and history instead of a flat theme tint, while mono contexts keep the currentColor mark (by @zhukunpenglinyutong)
@@ -43,7 +43,7 @@ English:
 - **说明旧版 Windows 上 Claude Code 无法启动的原因**（#1928、#2052）：退出码 0xC0000139（也可能显示为 `-1073741511`）现在会显示本地化诊断卡片，说明 Claude Code 2.1.118 及以后版本需要 Windows 10 1809 或 Windows Server 2019，并给出两种解决办法：升级 Windows，或在依赖管理中把 SDK 切换到 v0.2.112 或更早版本（by @Faq、@zhukunpenglinyutong）
 - **代码块更易阅读**（#1908、#2039、#2047、#2064）：Dart 与 Flutter 代码块现在支持语法高亮。浅色主题使用独立的高亮配色，关键字、内置名、注释和标签的颜色加深到在代码背景上达到 4.5:1 对比度，IDE 主题在运行时切换时配色也会跟随变化（by @hebulin、@EeeasyCode）
 - **可通过符号链接路径打开项目文件**（#2030）：位于符号链接目录下的文件链接现在可以正常打开、跳转并显示悬浮提示；支持 `#L12-L20` 行号范围，包括含空格、非 ASCII 字符的路径和 file URI。diff 的写入与删除仍经过规范化后的项目边界检查，经由符号链接或 Windows junction 的链接无法获得项目外的写权限（by @kochpy、@zhukunpenglinyutong）
-- **聊天标签页活动状态改用颜色区分，不再使用红色**：标签页与桌面端保持一致：回答中显示蓝色圆点，未读回复显示橙色圆点（红色容易被误认为出错），刚完成的回合显示 5 秒绿色圆点。标签页标题不再被改写成 `AI1...`，也不再追加本地化的“已完成”，名称保持稳定（by @zhukunpenglinyutong）
+- **聊天标签页按状态区分圆点颜色**：回答中显示蓝色圆点，回复完成显示绿色圆点（回复未读时保持显示），回合失败显示红色圆点，直到打开该标签页或开始新的回合。标签页标题不再被改写成 `AI1...`，也不再追加本地化的“已完成”，名称保持稳定（by @zhukunpenglinyutong）
 
 🐛 修复
 - **恢复 OMP 图标的品牌配色**：OMP CLI 的 π 标记在 Provider 选择器、设置页和历史记录中改为 omp.sh 的粉 → 紫 → 青渐变，不再显示为单色主题色；单色场景仍保留 currentColor 版本（by @zhukunpenglinyutong）

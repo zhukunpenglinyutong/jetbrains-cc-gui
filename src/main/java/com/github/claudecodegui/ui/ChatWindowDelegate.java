@@ -85,7 +85,9 @@ public class ChatWindowDelegate {
     public enum TabAnswerStatus {
         IDLE,
         ANSWERING,
-        COMPLETED
+        COMPLETED,
+        /** The turn ended with an error: the tab strip shows a red dot. */
+        ERROR
     }
 
     public interface DelegateHost {
@@ -163,15 +165,17 @@ public class ChatWindowDelegate {
     private Icon indicatorAppliedIcon;
     private final Map<TabIndicator, Icon> indicatorIcons = new EnumMap<>(TabIndicator.class);
     private volatile TabAnswerStatus currentTabStatus = TabAnswerStatus.IDLE;
+    /** A finished turn failed and its tab has not been looked at yet; red outlives the timer. */
+    private volatile boolean failedTurn;
 
     /**
      * The single dot in the tab strip, in precedence order: a running turn is
-     * blue, unread output is orange, a turn that just finished is green.
+     * blue, a failed turn is red, a finished turn (read or not) is green.
      * The tab name is never rewritten; the dot carries the state.
      */
     enum TabIndicator {
         ANSWERING("/icons/tab-status-streaming.svg"),
-        UNREAD("/icons/tab-status-unread.svg"),
+        ERROR("/icons/tab-status-error.svg"),
         COMPLETED("/icons/tab-status-completed.svg");
 
         private final String iconPath;
@@ -222,12 +226,13 @@ public class ChatWindowDelegate {
 
     /** Selection alone is insufficient while a hidden or reloading page cannot show the reply. */
     public void markTabReadIfVisible() {
-        if (!unread) {
+        if (!unread && !failedTurn) {
             return;
         }
         uiScheduler.accept(() -> {
-            if (!host.isDisposed() && unread && isChatVisibleForReading()) {
+            if (!host.isDisposed() && (unread || failedTurn) && isChatVisibleForReading()) {
                 unread = false;
+                failedTurn = false;
                 renderTabIndicator();
                 host.persistTabSessionState();
             }
@@ -236,7 +241,38 @@ public class ChatWindowDelegate {
 
     public void restoreUnread(boolean savedUnread) {
         unread = savedUnread;
+        failedTurn = false;
         refreshTabIndicator();
+    }
+
+    /**
+     * A turn ended with an error: paint the tab red. A visible tab holds the red dot
+     * for the same short window as a completed turn; a hidden tab keeps it until the
+     * failure is read, so it does not disappear before the user looks at the tab.
+     */
+    public void onTurnFailed() {
+        uiScheduler.accept(() -> {
+            if (host.isDisposed()) {
+                return;
+            }
+            if (isChatVisibleForReading()) {
+                updateTabStatus(TabAnswerStatus.ERROR);
+                return;
+            }
+            if (failedTurn) {
+                return;
+            }
+            failedTurn = true;
+            // A failed turn is not an unread reply; red is the only state worth keeping.
+            unread = false;
+            currentTabStatus = TabAnswerStatus.IDLE;
+            if (statusResetTask != null && !statusResetTask.isDone()) {
+                statusResetTask.cancel(false);
+                statusResetTask = null;
+            }
+            renderTabIndicator();
+            host.persistTabSessionState();
+        });
     }
 
     public void refreshTabIndicator() {
@@ -293,17 +329,17 @@ public class ChatWindowDelegate {
     }
 
     private TabIndicator resolveTabIndicator() {
-        return resolveTabIndicator(currentTabStatus, unread);
+        return resolveTabIndicator(currentTabStatus, unread, failedTurn);
     }
 
-    static TabIndicator resolveTabIndicator(TabAnswerStatus status, boolean unread) {
+    static TabIndicator resolveTabIndicator(TabAnswerStatus status, boolean unread, boolean failed) {
         if (status == TabAnswerStatus.ANSWERING) {
             return TabIndicator.ANSWERING;
         }
-        if (unread) {
-            return TabIndicator.UNREAD;
+        if (failed || status == TabAnswerStatus.ERROR) {
+            return TabIndicator.ERROR;
         }
-        return status == TabAnswerStatus.COMPLETED ? TabIndicator.COMPLETED : null;
+        return unread || status == TabAnswerStatus.COMPLETED ? TabIndicator.COMPLETED : null;
     }
 
     private Icon iconFor(TabIndicator indicator) {
@@ -687,10 +723,28 @@ public class ChatWindowDelegate {
             return;
         }
 
+        // A new turn supersedes the previous turn's outcome.
+        if (status == TabAnswerStatus.ANSWERING) {
+            failedTurn = false;
+        }
+
+        // A failure owns the dot until the tab is read or a new turn starts: the
+        // frontend's late completion echo must not repaint an errored turn green.
+        if (failedTurn && (status == TabAnswerStatus.IDLE || status == TabAnswerStatus.COMPLETED)) {
+            LOG.debug("[TabStatus] Keeping failed indicator instead of " + status);
+            return;
+        }
+        if (status == TabAnswerStatus.COMPLETED && currentTabStatus == TabAnswerStatus.ERROR) {
+            LOG.debug("[TabStatus] Keeping error indicator instead of completed");
+            return;
+        }
+
         // Loading stopping is not newer information than the turn finishing: keep the
-        // green confirmation until its timer fires so a late showLoading(false) cannot erase it.
-        if (status == TabAnswerStatus.IDLE && currentTabStatus == TabAnswerStatus.COMPLETED) {
-            LOG.debug("[TabStatus] Keeping completed indicator instead of idle");
+        // terminal dot until its timer fires so a late showLoading(false) cannot erase it.
+        if (status == TabAnswerStatus.IDLE
+                && (currentTabStatus == TabAnswerStatus.COMPLETED
+                        || currentTabStatus == TabAnswerStatus.ERROR)) {
+            LOG.debug("[TabStatus] Keeping terminal indicator instead of idle");
             return;
         }
 
@@ -706,9 +760,9 @@ public class ChatWindowDelegate {
             statusResetTask = null;
         }
 
-        if (status == TabAnswerStatus.COMPLETED) {
+        if (status == TabAnswerStatus.COMPLETED || status == TabAnswerStatus.ERROR) {
             statusResetTask = AppExecutorUtil.getAppScheduledExecutorService().schedule(
-                    () -> ApplicationManager.getApplication().invokeLater(this::clearCompletedIndicator),
+                    () -> ApplicationManager.getApplication().invokeLater(this::clearStatusIndicator),
                     STATUS_RESET_DELAY_SECONDS, TimeUnit.SECONDS);
         }
 
@@ -719,9 +773,11 @@ public class ChatWindowDelegate {
         });
     }
 
-    /** The completion confirmation owns its own deadline; a real ANSWERING already replaced it. */
-    private void clearCompletedIndicator() {
-        if (host.isDisposed() || currentTabStatus != TabAnswerStatus.COMPLETED) {
+    /** A terminal dot owns its own deadline; a new ANSWERING already replaced it. */
+    private void clearStatusIndicator() {
+        if (host.isDisposed()
+                || (currentTabStatus != TabAnswerStatus.COMPLETED
+                        && currentTabStatus != TabAnswerStatus.ERROR)) {
             return;
         }
         currentTabStatus = TabAnswerStatus.IDLE;

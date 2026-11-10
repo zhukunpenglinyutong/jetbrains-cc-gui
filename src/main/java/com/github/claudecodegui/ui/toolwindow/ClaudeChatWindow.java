@@ -2724,6 +2724,13 @@ public class ClaudeChatWindow {
                     }
 
                     @Override
+                    public void onTurnFailed() {
+                        if (!disposed && session == callbackSession) {
+                            chatWindowDelegate.onTurnFailed();
+                        }
+                    }
+
+                    @Override
                     public void callJavaScript(String functionName, String... args) {
                         ClaudeChatWindow.this.callJavaScript(functionName, args);
                     }
