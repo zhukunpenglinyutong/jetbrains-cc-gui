@@ -17,10 +17,15 @@ export interface SessionContextValue {
   setRestoredSessionTitle: React.Dispatch<React.SetStateAction<RestoredSessionTitle | null>>;
   historyData: HistoryData | null;
   setHistoryData: React.Dispatch<React.SetStateAction<HistoryData | null>>;
+  /** Sessions with an AI-title regeneration in flight (refresh buttons in the history list and the chat header). */
+  regeneratingTitleSessionIds: ReadonlySet<string>;
+  setRegeneratingTitleSessionIds: React.Dispatch<React.SetStateAction<Set<string>>>;
   /** Stale-closure guard: always reflects latest currentSessionId without triggering re-render. */
   currentSessionIdRef: React.RefObject<string | null>;
   /** Stale-closure guard: always reflects latest customSessionTitle without triggering re-render. */
   customSessionTitleRef: React.RefObject<string | null>;
+  /** Stale-closure guard: always reflects latest historyData without triggering re-render. */
+  historyDataRef: React.RefObject<HistoryData | null>;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -36,12 +41,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [customSessionTitle, setCustomSessionTitle] = useState<string | null>(null);
   const [restoredSessionTitle, setRestoredSessionTitle] = useState<RestoredSessionTitle | null>(null);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
+  const [regeneratingTitleSessionIds, setRegeneratingTitleSessionIds] = useState<Set<string>>(new Set());
 
   const currentSessionIdRef = useRef<string | null>(currentSessionId);
   useEffect(() => { currentSessionIdRef.current = currentSessionId; }, [currentSessionId]);
 
   const customSessionTitleRef = useRef<string | null>(customSessionTitle);
   useEffect(() => { customSessionTitleRef.current = customSessionTitle; }, [customSessionTitle]);
+
+  const historyDataRef = useRef<HistoryData | null>(historyData);
+  useEffect(() => { historyDataRef.current = historyData; }, [historyData]);
 
   const value = useMemo<SessionContextValue>(
     () => ({
@@ -53,10 +62,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setRestoredSessionTitle,
       historyData,
       setHistoryData,
+      regeneratingTitleSessionIds,
+      setRegeneratingTitleSessionIds,
       currentSessionIdRef,
       customSessionTitleRef,
+      historyDataRef,
     }),
-    [currentSessionId, customSessionTitle, restoredSessionTitle, historyData],
+    [currentSessionId, customSessionTitle, restoredSessionTitle, historyData, regeneratingTitleSessionIds],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

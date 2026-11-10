@@ -31,10 +31,12 @@ interface HistoryViewProps {
   onExportSession: (sessionId: string, title: string) => void; // Export session callback
   onToggleFavorite: (sessionId: string) => void; // Toggle favorite callback
   onUpdateTitle: (sessionId: string, newTitle: string) => void; // Update title callback
+  onRegenerateTitle: (sessionId: string) => void; // Request AI title regeneration from session content
+  regeneratingTitleSessionIds: ReadonlySet<string>; // Sessions with regeneration in flight (shared with the chat-header button)
   onConvertToCliSession: (sessionId: string) => void; // Convert sidechain session to CLI session callback
 }
 
-const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSessionBusy, onLoadSession, onDeleteSession, onDeleteSessions, onExportSession, onToggleFavorite, onUpdateTitle, onConvertToCliSession }: HistoryViewProps) => {
+const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSessionBusy, onLoadSession, onDeleteSession, onDeleteSessions, onExportSession, onToggleFavorite, onUpdateTitle, onRegenerateTitle, regeneratingTitleSessionIds, onConvertToCliSession }: HistoryViewProps) => {
   const { t } = useTranslation();
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // Session ID pending deletion
@@ -215,6 +217,14 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
     setConvertingSessionId(sessionId);
   }, []);
 
+  // ── AI title regeneration (refresh button next to each Claude session title) ──
+  // Spinner state and the result callback live in shared app-level state
+  // (SessionContext + sessionCallbacks) so the chat-header button shares them.
+
+  const handleRegenerateRequest = useCallback((sessionId: string) => {
+    onRegenerateTitle(sessionId);
+  }, [onRegenerateTitle]);
+
   const confirmConvert = useCallback(() => {
     if (convertingSessionId) {
       onConvertToCliSession(convertingSessionId);
@@ -248,6 +258,7 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
       isCopied={copiedSessionId === session.sessionId}
       isCopyFailed={copyFailedSessionId === session.sessionId}
       isActiveSession={currentSessionId === session.sessionId}
+      isRegeneratingTitle={regeneratingTitleSessionIds.has(session.sessionId)}
       editingTitle={editingSessionId === session.sessionId ? editingTitle : ''}
       searchQuery={searchQuery}
       t={t}
@@ -261,6 +272,7 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
       onDelete={handleDeleteRequest}
       onFavorite={handleFavoriteRequest}
       onCopySessionId={handleCopySessionId}
+      onRegenerateTitle={handleRegenerateRequest}
       onConvertToCliSession={handleConvertRequest}
     />
   );
