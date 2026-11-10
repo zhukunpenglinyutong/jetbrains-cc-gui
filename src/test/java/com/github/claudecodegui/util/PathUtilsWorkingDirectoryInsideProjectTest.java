@@ -43,6 +43,18 @@ public class PathUtilsWorkingDirectoryInsideProjectTest {
     }
 
     @Test
+    public void wslUncSubdirectoriesAreInsideAndSiblingsAreOutside() {
+        String project = "//wsl.localhost/Ubuntu/home/alice/proj";
+
+        assertTrue(PathUtils.isWorkingDirectoryInsideProject(project, project));
+        assertTrue(PathUtils.isWorkingDirectoryInsideProject("//wsl.localhost/Ubuntu/home/alice/proj/src/deep", project));
+        assertTrue(PathUtils.isWorkingDirectoryInsideProject("\\\\wsl.localhost\\Ubuntu\\home\\alice\\proj\\src", project));
+        assertFalse(PathUtils.isWorkingDirectoryInsideProject("//wsl.localhost/Ubuntu/home/alice/proj-other", project));
+        assertFalse(PathUtils.isWorkingDirectoryInsideProject("//wsl.localhost/Ubuntu/home/alice/proj/../other", project));
+        assertFalse(PathUtils.isWorkingDirectoryInsideProject("//wsl.localhost/Debian/home/alice/proj", project));
+    }
+
+    @Test
     public void aDirectoryOutsideTheProjectIsOutside() throws IOException {
         String project = project();
         String sibling = tmp.newFolder("project-other").getPath();

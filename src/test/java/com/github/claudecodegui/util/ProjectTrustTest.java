@@ -169,6 +169,19 @@ public class ProjectTrustTest {
     }
 
     @Test
+    public void aTrustedWslProjectTrustsItsUncSubdirectoriesButNotOtherUncPaths() {
+        Project project = project("//wsl.localhost/Ubuntu/home/alice/proj");
+        assertTrue(ProjectTrust.isTrustedForClaude(project, "//wsl.localhost/Ubuntu/home/alice/proj", TRUSTING, notices::add, outside::add));
+        assertTrue(ProjectTrust.isTrustedForClaude(project, "\\\\wsl.localhost\\Ubuntu\\home\\alice\\proj\\src", TRUSTING, notices::add, outside::add));
+        assertTrue(outside.isEmpty());
+
+        assertFalse(ProjectTrust.isTrustedForClaude(project, "//wsl.localhost/Ubuntu/home/alice/other", TRUSTING, notices::add, outside::add));
+        assertFalse(ProjectTrust.isTrustedForClaude(project, "//wsl.localhost/Ubuntu/home/alice/proj-other", TRUSTING, notices::add, outside::add));
+        assertFalse(ProjectTrust.isTrustedForClaude(project, "//wsl.localhost/Ubuntu/home/alice/proj/../other", TRUSTING, notices::add, outside::add));
+        assertEquals(List.of(project), outside);
+    }
+
+    @Test
     public void aTrustedProjectDoesNotTrustAWorkingDirectoryOutsideIt() throws Exception {
         java.io.File base = java.nio.file.Files.createTempDirectory("ccgui-trust-base").toFile();
         java.io.File other = java.nio.file.Files.createTempDirectory("ccgui-trust-other").toFile();

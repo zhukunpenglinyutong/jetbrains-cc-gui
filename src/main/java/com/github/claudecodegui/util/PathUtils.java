@@ -186,7 +186,10 @@ public class PathUtils {
         if (path.equals(base)) {
             return true;
         }
-        String prefix = base.endsWith(File.separator) ? base : base + File.separator;
+        // normalizeAbsolute keeps WSL UNC paths in their //wsl.localhost/... form, with forward
+        // slashes on every platform, so their children are separated by '/', not File.separator.
+        String separator = isWslUncPath(base) ? "/" : File.separator;
+        String prefix = base.endsWith(separator) ? base : base + separator;
         return path.startsWith(prefix);
     }
 
