@@ -1819,13 +1819,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · 速度最快，適合快速回覆"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · 最強大 · Mythos 級"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · 最強大 · Mythos 級"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · 保留的前代 Fable 模型"
+        "description": "Fable 5.1 · 保留的前代 Fable 模型"
       }
     },
     "longContext": {

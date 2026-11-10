@@ -372,6 +372,16 @@ const LEGACY_CLAUDE_MODEL_ID_ALIASES: Record<string, string> = {
 };
 
 /**
+ * Ids dropped from CLAUDE_MODELS that the API still serves -> the built-in entry
+ * that replaces them. A saved built-in selection is migrated (otherwise it fails
+ * validation and resets to the Sonnet fallback), but unlike the retired table a
+ * custom model with one of these ids is not labelled "Retired".
+ */
+const DELISTED_CLAUDE_MODEL_ID_ALIASES: Record<string, string> = {
+  'claude-fable-5': 'claude-fable-5-2',
+};
+
+/**
  * Map a saved/restored Claude model id to the id that should be used now.
  *
  * Retired ids are migrated to their live replacement. Ids listed in
@@ -393,7 +403,9 @@ export function normalizeClaudeModelId(
   if (customModelIds?.has(stripped)) {
     return stripped;
   }
-  return LEGACY_CLAUDE_MODEL_ID_ALIASES[stripped] ?? stripped;
+  return LEGACY_CLAUDE_MODEL_ID_ALIASES[stripped]
+    ?? DELISTED_CLAUDE_MODEL_ID_ALIASES[stripped]
+    ?? stripped;
 }
 
 /**
@@ -413,14 +425,14 @@ export function isRetiredClaudeModelId(modelId: string | undefined | null): bool
  */
 export const CLAUDE_MODELS: ModelInfo[] = [
   {
-    id: 'claude-fable-5-1',
-    label: 'Fable 5.1',
-    description: 'Fable 5.1 · Most powerful · Mythos-class',
+    id: 'claude-fable-5-2',
+    label: 'Fable 5.2',
+    description: 'Fable 5.2 · Most powerful · Mythos-class',
   },
   {
-    id: 'claude-fable-5',
-    label: 'Fable 5',
-    description: 'Fable 5 · Previous Fable generation',
+    id: 'claude-fable-5-1',
+    label: 'Fable 5.1',
+    description: 'Fable 5.1 · Previous Fable generation',
   },
   {
     id: 'claude-opus-5-5',
@@ -747,6 +759,7 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
  * Based on: https://code.claude.com/docs/en/model-config#adjust-effort-level
  */
 export const EFFORT_SUPPORTED_CLAUDE_MODELS = new Set([
+  'claude-fable-5-2',
   'claude-fable-5-1',
   'claude-fable-5',
   'claude-opus-5-5',
@@ -764,6 +777,7 @@ export const EFFORT_SUPPORTED_CLAUDE_MODELS = new Set([
  * Claude models that additionally support the 'xhigh' effort level.
  */
 export const XHIGH_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-fable-5-2',
   'claude-fable-5-1',
   'claude-fable-5',
   'claude-opus-5-5',
@@ -775,6 +789,7 @@ export const XHIGH_EFFORT_CLAUDE_MODELS = new Set([
  * Claude models that support the 'max' effort level.
  */
 export const MAX_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-fable-5-2',
   'claude-fable-5-1',
   'claude-fable-5',
   'claude-opus-5-5',

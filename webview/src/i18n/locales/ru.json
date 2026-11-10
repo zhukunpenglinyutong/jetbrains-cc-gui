@@ -1801,13 +1801,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Самая быстрая для быстрых ответов"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · Самая мощная · класс Mythos"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · Самая мощная · класс Mythos"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · Предыдущее поколение Fable"
+        "description": "Fable 5.1 · Предыдущее поколение Fable"
       }
     },
     "longContext": {

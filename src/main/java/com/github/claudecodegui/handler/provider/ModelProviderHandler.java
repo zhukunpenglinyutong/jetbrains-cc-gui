@@ -41,6 +41,7 @@ public class ModelProviderHandler {
     static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
     static {
         // Claude models with 1M context (base IDs)
+        MODEL_CONTEXT_LIMITS.put("claude-fable-5-2", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-fable-5-1", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-5-5", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-5", 200_000);
@@ -52,6 +53,7 @@ public class ModelProviderHandler {
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-8", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-6", 200_000);
         // Claude models with [1m] suffix - 1M context
+        MODEL_CONTEXT_LIMITS.put("claude-fable-5-2[1m]", 1_000_000);
         MODEL_CONTEXT_LIMITS.put("claude-fable-5-1[1m]", 1_000_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-5-5[1m]", 1_000_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-5[1m]", 1_000_000);

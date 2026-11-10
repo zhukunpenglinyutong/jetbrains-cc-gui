@@ -1916,13 +1916,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Mais rápido para respostas rápidas"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · O mais poderoso · classe Mythos"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · O mais poderoso · classe Mythos"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · Geração anterior do Fable"
+        "description": "Fable 5.1 · Geração anterior do Fable"
       }
     },
     "longContext": {
