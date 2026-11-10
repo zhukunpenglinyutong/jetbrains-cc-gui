@@ -30,6 +30,18 @@ v0.1.5-beta1，v0.1.5-beta2，v0.1.5-beta3，..... 直到 v0.1.5
 - 社区 PR 必须合并到**当前正在迭代的最新版本分支**（不要合到 `main`、`develop`，也不要合到已结束的旧 `feature/v*` 分支，除非是专门修那个版本）。
 - 提交 PR 后会生成 PR AI 审查报告；若存在中风险或高风险问题，必须在 PR 中修复后才可合并。
 
+### Third-party service endpoints and provider presets（第三方服务端点与服务商预设）
+
+- Do not submit a PR that introduces or replaces a third-party service endpoint, provider preset, API base URL, model gateway, authentication endpoint, telemetry destination, webhook, or remote callback without documented, explicit, prior maintainer approval.
+- An unapproved submission is merge-blocking and may be closed. Passing tests, successful builds, public documentation, or similarity to an existing provider does not make it acceptable.
+- An approved proposal must disclose the service owner, purpose, exact destination hosts, authentication flow, data categories transmitted, privacy implications, and user-visible behavior. Approval of one host does not extend to other hosts or later endpoint changes.
+- This policy covers indirect endpoint additions through generated configuration, redirects, fallback hosts, and runtime-resolved values. Ordinary documentation hyperlinks are not service endpoints unless the application uses them for network communication.
+
+- 未经维护者有记录的事先明确批准，不要提交新增或替换第三方服务端点、服务商预设、API 基础地址、模型网关、认证端点、遥测目的地、Webhook 或远程回调的 PR。
+- 未经批准的提交将阻塞合并，并可能被直接关闭。测试通过、构建成功、存在公开文档或模仿已有服务商，均不能作为放行理由。
+- 已获批准的方案必须说明服务所有者、用途、精确目标主机、认证流程、传输的数据类别、隐私影响及用户可见行为。批准一个主机不代表批准其他主机或后续端点变更。
+- 本规范同样约束通过生成配置、重定向、回退主机和运行时动态值间接引入端点的行为。普通文档超链接不属于服务端点，除非程序实际通过它进行网络通信。
+
 ---
 
 ### Version Iteration Planning Specification（版本迭代规划规范）

@@ -82,20 +82,31 @@
   transition: all 0.2s ease;
 }
 
+/* The icon swaps between layers and chevron, so ease the swap itself
+   (the class flip restarts the keyframes). */
 .status-panel-toggle .codicon {
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: status-panel-toggle-icon 0.2s ease;
 }
 
-.status-panel-toggle.expanded .codicon {
-  transform: rotate(0deg);
-}
-
-.status-panel-toggle.collapsed .codicon {
-  transform: rotate(0deg);
+@keyframes status-panel-toggle-icon {
+  from {
+    opacity: 0.2;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .status-panel-toggle:hover .codicon {
   color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-panel-toggle .codicon {
+    animation: none;
+  }
 }
 
 .context-item {

@@ -14,7 +14,11 @@ import type { ContextUsageData } from '../../../components/ContextUsageDialog';
 import { isStartupHistoryLoadState } from '../../../types/startupHistory';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import { debugError } from '../../../utils/debug';
-import { clearPendingStreamStart, isPendingStreamStartActive } from '../../../utils/streamLifecycle';
+import {
+  clearPendingStreamStart,
+  isPendingStreamStartActive,
+  scheduleLoadingResyncAfterImmunity,
+} from '../../../utils/streamLifecycle';
 import {
   appendOptimisticMessageIfMissing,
   ensureStreamingAssistantInList,
@@ -772,7 +776,10 @@ export function registerMessageCallbacks(
     // must not reset the loading state the newly dispatched turn just
     // claimed, or the queue drain dispatches the next item while the
     // previous send is still booting (overlapping turns on one Codex thread).
+    // The swallowed reset may also be the new turn's own, so re-check with
+    // the backend once the window closes.
     if (!isLoading && isPendingStreamStartActive()) {
+      scheduleLoadingResyncAfterImmunity();
       return;
     }
     if (!isLoading) clearPendingStreamStart();

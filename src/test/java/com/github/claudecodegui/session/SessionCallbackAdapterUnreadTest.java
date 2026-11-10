@@ -13,6 +13,7 @@ import static org.junit.Assert.assertEquals;
 public class SessionCallbackAdapterUnreadTest {
     private static final class Fixture implements AutoCloseable {
         final AtomicInteger activity = new AtomicInteger();
+        final AtomicInteger failures = new AtomicInteger();
         final AtomicBoolean failActivity = new AtomicBoolean();
         final List<String> calls = new CopyOnWriteArrayList<>();
         final StreamMessageCoalescer coalescer = new StreamMessageCoalescer(new StreamMessageCoalescer.JsCallbackTarget() {
@@ -22,6 +23,7 @@ public class SessionCallbackAdapterUnreadTest {
         });
         final SessionCallbackAdapter adapter = new SessionCallbackAdapter(coalescer, new SessionCallbackAdapter.JsTarget() {
             @Override public void callJavaScript(String name, String... args) { calls.add(name); }
+            @Override public void onTurnFailed() { failures.incrementAndGet(); }
             @Override public void onAssistantActivity() {
                 activity.incrementAndGet();
                 if (failActivity.get()) throw new IllegalStateException("UI unavailable");
@@ -70,6 +72,19 @@ public class SessionCallbackAdapterUnreadTest {
             f.adapter.onBlockReset();
             f.adapter.onMessageUpdate(List.of(new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, "late snapshot")));
             assertEquals(1, f.activity.get());
+        }
+    }
+
+    @Test
+    public void eachDistinctFailureNotifiesTheTabOnce() {
+        try (Fixture f = new Fixture()) {
+            // busy/loading stay set here: the idle branch needs a running IntelliJ application.
+            f.adapter.onStateChange(true, true, "boom");
+            f.adapter.onStateChange(true, true, "boom");
+            assertEquals(1, f.failures.get());
+            f.adapter.onStateChange(true, true, null);
+            f.adapter.onStateChange(true, true, "boom");
+            assertEquals(2, f.failures.get());
         }
     }
 

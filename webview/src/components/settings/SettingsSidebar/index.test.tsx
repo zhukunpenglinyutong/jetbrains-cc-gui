@@ -30,6 +30,15 @@ describe('SettingsSidebar', () => {
     });
   });
 
+  it('colors the tooltip text from the theme, because antd assumes a CSS variable color is dark', async () => {
+    renderSidebar(true);
+
+    fireEvent.mouseEnter(screen.getByRole('button', { name: 'settings.basic.title' }));
+
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip.style.color).toBe('var(--text-primary)');
+  });
+
   it('supports keyboard navigation for collapsed items', async () => {
     const onTabChange = vi.fn();
     render(

@@ -10,12 +10,19 @@ import {
 } from '../utils/toolConstants';
 import { normalizeToolInput } from '../utils/toolInputNormalization';
 import { readPatchFiles, readPatchOutcome } from '../utils/codexPatch';
+import {
+  isMcpToolCall,
+  patchFileInProject,
+  readPathInProject,
+  unwrapMcpArguments,
+} from '../utils/mcpFileToolInput';
 import { collectPatchLedger } from '../utils/patchLedger';
 import { PATCH_TOOL_NAMES } from '../utils/toolConstants';
-import { getToolLineInfo } from '../utils/toolPresentation';
+import { getToolLineInfo, isAbsolutePath } from '../utils/toolPresentation';
 import {
   buildSessionFileLedger,
   diffLineStats,
+  isWriteTool,
   ledgerEntriesToSummaries,
   sameLedgerOps,
   type LedgerOp,
@@ -92,7 +99,7 @@ function extractFilePath(input: Record<string, unknown>): string | null {
     ?? (typeof targetFileValue === 'string' ? targetFileValue : undefined)
     ?? (typeof targetFileValue2 === 'string' ? targetFileValue2 : undefined)
     ?? (typeof notebookPathValue === 'string' ? notebookPathValue : undefined)
-    ?? null
+    ?? readPathInProject(input)
   );
 }
 
@@ -211,19 +218,44 @@ interface FileToolInput {
   agentId: string;
 }
 
-function collectLedgerOpsFromToolUse(params: FileToolInput, out: LedgerOp[]): void {
-  const { sourceId, toolUseId, toolName, rawName, input, result, agentId } = params;
-  if (!isToolName(toolName, FILE_MODIFY_TOOL_NAMES)) return;
-  if (isToolName(toolName, PATCH_TOOL_NAMES)) {
-    const outcome = readPatchOutcome(input, result);
-    if (!outcome.isCompleted || outcome.isError || outcome.isUnknown) return;
-    for (const file of readPatchFiles(input)) {
-      out.push(...collectPatchLedger(file, { sourceId, toolUseId, agentId }));
-    }
-    return;
-  }
-  if (!isSuccessfulResult(result)) return;
+/**
+ * Undo of an "add" deletes the file, so only a create that refuses an existing
+ * path may claim one; an overwrite names none of the content it replaced.
+ */
+function collectCreatedFile(params: FileToolInput, input: Record<string, unknown>, out: LedgerOp[]): void {
+  const { sourceId, toolUseId, agentId } = params;
+  const filePath = extractFilePath(input);
+  if (!filePath) return;
+  const isNewFile = input.overwrite === undefined || input.overwrite === false;
+  out.push({
+    sourceId,
+    toolUseId,
+    agentId,
+    filePath,
+    toolName: 'write',
+    oldString: '',
+    newString: typeof input.text === 'string' ? input.text : '',
+    fileChangeKind: isNewFile ? 'add' : 'update',
+    ...(isNewFile ? {} : { oldStringKnown: false }),
+  });
+}
 
+function collectPatchOps(params: FileToolInput, input: Record<string, unknown>, out: LedgerOp[]): void {
+  const { sourceId, toolUseId, agentId, result } = params;
+  const outcome = readPatchOutcome(input, result);
+  if (!outcome.isCompleted || outcome.isError || outcome.isUnknown) return;
+  for (const file of readPatchFiles(input)) {
+    out.push(...collectPatchLedger(patchFileInProject(file, input.projectPath), { sourceId, toolUseId, agentId }));
+  }
+}
+
+function collectEditOps(
+  params: FileToolInput,
+  input: Record<string, unknown>,
+  keepEmptyWrite: boolean,
+  out: LedgerOp[],
+): void {
+  const { sourceId, toolUseId, toolName, rawName, agentId, result } = params;
   const normalized = normalizeToolInput(rawName ?? toolName, input) as Record<string, unknown>;
   const defaultPath = extractFilePath(normalized);
   const pairs = extractEditPairs(normalized);
@@ -232,7 +264,7 @@ function collectLedgerOpsFromToolUse(params: FileToolInput, out: LedgerOp[]): vo
   for (const pair of pairs) {
     const filePath = pair.filePath || defaultPath;
     if (!filePath) continue;
-    if (pair.oldString === '' && pair.newString === '') continue;
+    if (pair.oldString === '' && pair.newString === '' && !keepEmptyWrite) continue;
 
     out.push({
       sourceId,
@@ -246,6 +278,60 @@ function collectLedgerOpsFromToolUse(params: FileToolInput, out: LedgerOp[]): vo
       lineStart: lineInfo.start,
       lineEnd: lineInfo.end,
     });
+  }
+}
+
+/**
+ * An MCP edit is only reversible when the call fully states its effect; every
+ * other one stays listed but makes undo refuse. The kind keeps Undo and diff
+ * Reject on the same validated plan, and replaceAll stays unset because
+ * reversing it would also rewrite matching text that was already in the file.
+ */
+function toMcpEditOp(op: LedgerOp, input: Record<string, unknown>): LedgerOp {
+  const statesItsEffect = normalizeToolName(op.toolName) === 'replace_text_in_file'
+    && input.caseSensitive !== false && op.oldString !== '';
+  return {
+    ...op,
+    replaceAll: undefined,
+    fileChangeKind: 'update',
+    ...(statesItsEffect ? {} : { oldStringKnown: false }),
+  };
+}
+
+/** MCP paths start at the project root, while undo resolves relative ones against the session directory. */
+function refuseRelativeMcpUndo(op: LedgerOp): LedgerOp {
+  const pathsAreAbsolute = isAbsolutePath(op.filePath) && (!op.moveFrom || isAbsolutePath(op.moveFrom));
+  return pathsAreAbsolute ? op : { ...op, oldStringKnown: false };
+}
+
+function collectMcpOps(params: FileToolInput, out: LedgerOp[]): void {
+  const { toolName, result } = params;
+  const input = unwrapMcpArguments(params.input);
+  if (input.dryRun === true) return;
+  const ops: LedgerOp[] = [];
+  if (isToolName(toolName, PATCH_TOOL_NAMES)) {
+    collectPatchOps(params, input, ops);
+  } else if (isSuccessfulResult(result)) {
+    if (normalizeToolName(toolName) === 'create_new_file') {
+      collectCreatedFile(params, input, ops);
+    } else {
+      const edits: LedgerOp[] = [];
+      collectEditOps(params, input, isWriteTool(toolName), edits);
+      ops.push(...edits.map(op => toMcpEditOp(op, input)));
+    }
+  }
+  out.push(...ops.map(refuseRelativeMcpUndo));
+}
+
+function collectLedgerOpsFromToolUse(params: FileToolInput, out: LedgerOp[]): void {
+  const { toolName, rawName, input, result } = params;
+  if (!isToolName(toolName, FILE_MODIFY_TOOL_NAMES)) return;
+  if (isMcpToolCall(rawName ?? toolName, input)) {
+    collectMcpOps(params, out);
+  } else if (isToolName(toolName, PATCH_TOOL_NAMES)) {
+    collectPatchOps(params, input, out);
+  } else if (isSuccessfulResult(result)) {
+    collectEditOps(params, input, false, out);
   }
 }
 

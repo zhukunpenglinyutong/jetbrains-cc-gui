@@ -95,6 +95,8 @@ const SettingsSidebar = ({
         trigger={['hover', 'focus']}
         placement="right"
         color="var(--dropdown-bg)"
+        // antd cannot parse a CSS variable and picks white text, which vanishes on the light theme's background.
+        styles={{ container: { color: 'var(--text-primary)' } }}
         mouseEnterDelay={0.15}
         destroyOnHidden
       >

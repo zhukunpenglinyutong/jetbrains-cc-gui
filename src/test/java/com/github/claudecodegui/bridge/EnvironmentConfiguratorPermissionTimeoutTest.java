@@ -136,6 +136,7 @@ public class EnvironmentConfiguratorPermissionTimeoutTest {
         assertTrue("WSLENV must include CLAUDE_PERMISSION_DIR", wslenv.contains("CLAUDE_PERMISSION_DIR"));
         assertTrue("WSLENV must include CLAUDE_SESSION_ID", wslenv.contains("CLAUDE_SESSION_ID"));
         assertTrue("WSLENV must include CLAUDE_PERMISSION_SAFETY_NET_MS", wslenv.contains("CLAUDE_PERMISSION_SAFETY_NET_MS"));
+        assertTrue("WSLENV must include the Codex proxy opt-in", wslenv.contains("CC_GUI_CODEX_INHERIT_PROXY"));
     }
 
     @Test

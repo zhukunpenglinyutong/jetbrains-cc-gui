@@ -162,18 +162,11 @@ test('editing a queued message brings its attachments back', async ({ page }) =>
 });
 
 /**
- * Switches the active provider through the toolbar selector. Picking a Beta
- * provider shows a one-time notice that has to be confirmed before the
- * selection is applied.
+ * Switches the active provider through the toolbar selector.
  */
 async function selectProvider(page: Page, providerId: string) {
   await page.locator('.button-area-left .selector-button').nth(1).click();
   await page.locator(`[data-provider-id="${providerId}"]`).click();
-
-  const confirm = page.locator('.alert-dialog .confirm-button');
-  if (await confirm.isVisible().catch(() => false)) {
-    await confirm.click();
-  }
 
   await expect(page.locator('.button-area').first()).toHaveAttribute('data-provider', providerId);
 }

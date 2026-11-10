@@ -24,10 +24,26 @@ public class HtmlLoaderTest {
 
         String injected = HtmlLoader.injectIdeTheme(html, "dark", "#1e1e1e");
 
-        assertTrue(injected.contains("<html lang=\"zh-CN\" style=\"background-color:#1e1e1e;\">"));
-        assertTrue(injected.contains("<body style=\"background-color:#1e1e1e;\"></body>"));
+        assertTrue(injected.contains("<html lang=\"zh-CN\" style=\"background-color:var(--bg-chat,#1e1e1e);\">"));
+        assertTrue(injected.contains("<body style=\"background-color:var(--bg-chat,#1e1e1e);\"></body>"));
         assertTrue(injected.contains("const sample = '<body class=\\\"embedded\\\">'"));
         assertTrue(injected.contains("window.__INITIAL_IDE_THEME__ = 'dark'"));
+    }
+
+    /** Verifies that a custom chat background can repaint the document root after startup. */
+    @Test
+    public void rootBackgroundFallsBackToTheStartupColor() {
+        String html = "<html><head></head><body></body></html>";
+
+        String dark = HtmlLoader.injectIdeTheme(html, "dark", "#1e1e1e");
+        String light = HtmlLoader.injectIdeTheme(html, "light", "#ffffff");
+
+        // The variable must stay first and the startup color must stay a fallback, otherwise the
+        // inline declaration wins over the stylesheet and the status-panel gap keeps the old color.
+        assertTrue(dark.contains("background-color:var(--bg-chat,#1e1e1e);"));
+        assertTrue(light.contains("background-color:var(--bg-chat,#ffffff);"));
+        assertFalse(dark.contains("background-color:#1e1e1e;"));
+        assertFalse(light.contains("background-color:#ffffff;"));
     }
 
     /** Verifies that all page-start variables are added with one ordered head injection. */
