@@ -1354,6 +1354,14 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 safeChannelId, ignored -> UUID.randomUUID().toString());
         params.addProperty("sessionEpoch", sessionEpoch);
         payloadWriter.accept(params);
+        if ("codex.updateSettings".equals(method)) {
+            try {
+                this.captureRuntimeConfiguration(params);
+            } catch (RuntimeException error) {
+                LOG.warn("[Codex] Could not prepare the settings update", error);
+                return interactionError("Codex provider configuration could not be captured");
+            }
+        }
         return this.appServerRequestExecutor.sendControlCommand(daemon, method, params, 10_000L);
     }
 
