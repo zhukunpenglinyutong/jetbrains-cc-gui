@@ -1516,6 +1516,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "コマンドをコピー",
+    "bashGroupCopyOutput": "出力をコピー",
+    "bashGroupOutput": "出力",
+    "bashGroupOutputFailed": "失敗",
+    "bashGroupRunning": "実行中…",
+    "bashGroupNoOutput": "（出力なし）",
     "reportFindings": {
       "title": "レビュー指摘",
       "findingsCount_one": "{{count}} 件の指摘",

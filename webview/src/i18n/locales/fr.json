@@ -1511,6 +1511,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "Copier la commande",
+    "bashGroupCopyOutput": "Copier la sortie",
+    "bashGroupOutput": "Sortie",
+    "bashGroupOutputFailed": "Échec",
+    "bashGroupRunning": "En cours…",
+    "bashGroupNoOutput": "(aucune sortie)",
     "reportFindings": {
       "title": "Constats de la revue",
       "findingsCount_one": "{{count}} constat",

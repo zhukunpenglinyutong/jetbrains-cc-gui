@@ -1555,6 +1555,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "複製命令",
+    "bashGroupCopyOutput": "複製輸出",
+    "bashGroupOutput": "輸出",
+    "bashGroupOutputFailed": "執行失敗",
+    "bashGroupRunning": "執行中…",
+    "bashGroupNoOutput": "（無輸出）",
     "reportFindings": {
       "title": "審查發現",
       "findingsCount_one": "{{count}} 項發現",

@@ -1980,6 +1980,12 @@
     "bashGroupCompleted": "完成",
     "bashGroupAllCompleted": "全部完成",
     "bashGroupFailed": "失败",
+    "bashGroupCopyCommand": "复制命令",
+    "bashGroupCopyOutput": "复制输出",
+    "bashGroupOutput": "输出",
+    "bashGroupOutputFailed": "执行失败",
+    "bashGroupRunning": "运行中…",
+    "bashGroupNoOutput": "（无输出）",
     "updatePlan": "更新计划",
     "applyPatch": "应用补丁",
     "reportFindings": {

@@ -1651,6 +1651,12 @@
     "bashGroupCompleted": "concluído",
     "bashGroupAllCompleted": "Todos Concluídos",
     "bashGroupFailed": "falhou",
+    "bashGroupCopyCommand": "Copiar comando",
+    "bashGroupCopyOutput": "Copiar saída",
+    "bashGroupOutput": "Saída",
+    "bashGroupOutputFailed": "Falhou",
+    "bashGroupRunning": "Executando…",
+    "bashGroupNoOutput": "(sem saída)",
     "updatePlan": "Atualizar Plano",
     "applyPatch": "Aplicar Patch",
     "reportFindings": {

@@ -1596,6 +1596,12 @@
     "bashGroupCompleted": "완료됨",
     "bashGroupAllCompleted": "모두 완료",
     "bashGroupFailed": "실패",
+    "bashGroupCopyCommand": "명령 복사",
+    "bashGroupCopyOutput": "출력 복사",
+    "bashGroupOutput": "출력",
+    "bashGroupOutputFailed": "실패",
+    "bashGroupRunning": "실행 중…",
+    "bashGroupNoOutput": "(출력 없음)",
     "updatePlan": "계획 업데이트",
     "applyPatch": "패치 적용",
     "reportFindings": {

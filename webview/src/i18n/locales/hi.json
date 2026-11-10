@@ -1511,6 +1511,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "कमांड कॉपी करें",
+    "bashGroupCopyOutput": "आउटपुट कॉपी करें",
+    "bashGroupOutput": "आउटपुट",
+    "bashGroupOutputFailed": "विफल",
+    "bashGroupRunning": "चल रहा है…",
+    "bashGroupNoOutput": "(कोई आउटपुट नहीं)",
     "reportFindings": {
       "title": "समीक्षा निष्कर्ष",
       "findingsCount_one": "{{count}} निष्कर्ष",

@@ -1537,6 +1537,12 @@
     "bashGroupCompleted": "завершено",
     "bashGroupAllCompleted": "Все завершены",
     "bashGroupFailed": "ошибка",
+    "bashGroupCopyCommand": "Копировать команду",
+    "bashGroupCopyOutput": "Копировать вывод",
+    "bashGroupOutput": "Вывод",
+    "bashGroupOutputFailed": "Ошибка",
+    "bashGroupRunning": "Выполняется…",
+    "bashGroupNoOutput": "(нет вывода)",
     "promptLabel": "Промпт",
     "reportFindings": {
       "title": "Результаты ревью",
