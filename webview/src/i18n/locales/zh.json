@@ -2275,13 +2275,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 速度最快，适合快速答复"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · 最强大 · Mythos 级"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · 最强大 · Mythos 级"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · 保留的前代 Fable 模型"
+        "description": "Fable 5.1 · 保留的前代 Fable 模型"
       }
     },
     "codex": {

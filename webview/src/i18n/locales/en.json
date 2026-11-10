@@ -2270,13 +2270,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Fastest for quick answers"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · Most powerful · Mythos-class"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · Most powerful · Mythos-class"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · Previous Fable generation"
+        "description": "Fable 5.1 · Previous Fable generation"
       }
     },
     "codex": {

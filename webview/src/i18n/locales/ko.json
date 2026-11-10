@@ -1861,13 +1861,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · 빠른 응답에 최적"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · 가장 강력함 · Mythos급"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · 가장 강력함 · Mythos급"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · 이전 세대 Fable 모델"
+        "description": "Fable 5.1 · 이전 세대 Fable 모델"
       }
     },
     "longContext": {

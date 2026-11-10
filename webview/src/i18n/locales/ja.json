@@ -1786,13 +1786,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · 迅速な回答に最速"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · 最も強力 · Mythosクラス"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · 最も強力 · Mythosクラス"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · 前世代の Fable モデル"
+        "description": "Fable 5.1 · 前世代の Fable モデル"
       }
     },
     "codex": {
