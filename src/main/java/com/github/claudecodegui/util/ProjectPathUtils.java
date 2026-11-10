@@ -3,6 +3,7 @@ package com.github.claudecodegui.util;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.util.Computable;
@@ -90,6 +91,8 @@ public final class ProjectPathUtils {
                 return paths;
             });
             return roots == null ? List.of() : roots;
+        } catch (ProcessCanceledException e) {
+            throw e;
         } catch (Exception e) {
             LOG.debug("ProjectPathUtils: failed to read content roots: " + e.getMessage());
             return List.of();

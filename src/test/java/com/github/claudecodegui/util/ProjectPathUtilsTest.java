@@ -1,5 +1,8 @@
 package com.github.claudecodegui.util;
 
+import com.intellij.openapi.application.Application;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
 import org.junit.Rule;
 import org.junit.Test;
@@ -10,6 +13,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -105,5 +109,35 @@ public class ProjectPathUtilsTest {
         Path outside = root.resolve("..").resolve("outside.ts");
         assertFalse(ProjectPathUtils.isWithinProjectBoundaries(
                 outside.toString(), null, List.of(root.toString())));
+    }
+
+    /** Propagates platform cancellation instead of falling back to the base path. */
+    @Test
+    public void propagatesCancellationWhileReadingContentRoots() {
+        Application previous = ApplicationManager.getApplication();
+        Application application = (Application) Proxy.newProxyInstance(
+                Application.class.getClassLoader(),
+                new Class<?>[]{Application.class},
+                (proxy, method, args) -> {
+                    if ("runReadAction".equals(method.getName())) {
+                        throw new ProcessCanceledException();
+                    }
+                    return method.getReturnType() == boolean.class ? false : null;
+                });
+        Project project = (Project) Proxy.newProxyInstance(
+                Project.class.getClassLoader(),
+                new Class<?>[]{Project.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getBasePath" -> this.temporary.getRoot().getAbsolutePath();
+                    case "isDisposed" -> false;
+                    default -> null;
+                });
+        ApplicationManager.setApplication(application);
+        try {
+            assertThrows(ProcessCanceledException.class, () ->
+                    ProjectPathUtils.isPathWithinProject(project, "A.java"));
+        } finally {
+            ApplicationManager.setApplication(previous);
+        }
     }
 }
