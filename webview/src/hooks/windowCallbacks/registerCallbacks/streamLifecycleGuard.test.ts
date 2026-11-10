@@ -11,7 +11,7 @@
  * the previous send is still booting, overlapping two live turns on one
  * Codex thread.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { registerMessageCallbacks } from './messageCallbacks';
 import { registerStreamingCallbacks } from './streamingCallbacks';
 import { releaseSessionTransition } from '../sessionTransition';
@@ -298,5 +298,91 @@ describe('pending-stream-start immunity window', () => {
       clearInterval(window.__stallWatchdogInterval);
       window.__stallWatchdogInterval = null;
     }
+  });
+});
+
+describe('loading resync after the immunity window', () => {
+  let bridgeCalls: string[];
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    clearPendingStreamStart();
+    window.__sessionTransitioning = false;
+    bridgeCalls = [];
+    window.sendToJava = (message: string) => {
+      bridgeCalls.push(message);
+    };
+  });
+
+  afterEach(() => {
+    clearPendingStreamStart();
+    window.sendToJava = undefined;
+    vi.useRealTimers();
+  });
+
+  const syncRequests = () => bridgeCalls.filter(call => call.startsWith('sync_loading_state:'));
+
+  it('asks the backend once the window closes on a turn that never streamed', () => {
+    // A queued send whose turn ends (or fails) before any [STREAM_START]: its
+    // only loading reset lands inside the window and is swallowed.
+    const loadingValues: boolean[] = [];
+    createHarness(loadingValues);
+
+    markPendingStreamStart();
+    window.showLoading!('false');
+    window.showLoading!('false');
+    expect(loadingValues).not.toContain(false);
+
+    vi.advanceTimersByTime(7999);
+    expect(syncRequests()).toHaveLength(0);
+    vi.advanceTimersByTime(1);
+    expect(syncRequests()).toHaveLength(1);
+
+    // The backend reports idle; the answer is no longer suppressed.
+    window.showLoading!('false');
+    expect(loadingValues).toContain(false);
+    expect(isPendingStreamStartActive()).toBe(false);
+  });
+
+  it('keeps loading when the backend reports the turn is still running', () => {
+    const loadingValues: boolean[] = [];
+    createHarness(loadingValues);
+
+    markPendingStreamStart();
+    window.showLoading!('false'); // older turn's echo
+    vi.advanceTimersByTime(8000);
+    expect(syncRequests()).toHaveLength(1);
+
+    window.showLoading!('true');
+    expect(loadingValues).not.toContain(false);
+  });
+
+  it('does not ask once the dispatched turn has started streaming', () => {
+    createHarness([]);
+
+    markPendingStreamStart();
+    window.showLoading!('false');
+    clearPendingStreamStart(); // what onStreamStart does
+    vi.advanceTimersByTime(10000);
+    expect(syncRequests()).toHaveLength(0);
+  });
+
+  it('leaves a newer send to schedule its own check', () => {
+    createHarness([]);
+
+    markPendingStreamStart();
+    window.showLoading!('false');
+    vi.advanceTimersByTime(5000);
+    markPendingStreamStart(); // next send dispatched
+    vi.advanceTimersByTime(5000);
+    expect(syncRequests()).toHaveLength(0);
+  });
+
+  it('does not ask when nothing was swallowed', () => {
+    createHarness([]);
+
+    markPendingStreamStart();
+    vi.advanceTimersByTime(10000);
+    expect(syncRequests()).toHaveLength(0);
   });
 });
