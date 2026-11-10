@@ -207,6 +207,29 @@ describe('buildPromptBlocks multimodal', () => {
     assert.equal(text.includes('## Attachments'), false);
     assert.ok(blocks.some((b) => b.type === 'image'));
   });
+
+  it('skips global rules on subsequent turns when includeGlobalRules is false', (t) => {
+    t.mock.method(fs, 'existsSync', (filePath) => String(filePath).endsWith('grok-rules.md'));
+    t.mock.method(fs, 'readFileSync', (filePath) =>
+      String(filePath).endsWith('grok-rules.md') ? 'Follow repository conventions.\n' : ''
+    );
+
+    const firstTurnBlocks = buildPromptBlocks({
+      message: 'hi',
+      includeGlobalRules: true,
+    });
+    assert.ok(firstTurnBlocks[0].text.includes('## Global Grok Rules (~/.grok/grok-rules.md)'));
+
+    const secondTurnBlocks = buildPromptBlocks({
+      message: 'follow up',
+      includeGlobalRules: false,
+    });
+    assert.equal(secondTurnBlocks[0].text, 'follow up');
+    assert.equal(
+      secondTurnBlocks[0].text.includes('## Global Grok Rules (~/.grok/grok-rules.md)'),
+      false
+    );
+  });
 });
 
 describe('kimi / read-path prompt builders', () => {

@@ -8,6 +8,7 @@ import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.provider.ClaudeContextWindowOverrideProvider;
 import com.github.claudecodegui.provider.CustomModelContextWindowProvider;
+import com.github.claudecodegui.provider.grok.GrokContextWindowResolver;
 import com.github.claudecodegui.provider.opencode.OpenCodeContextWindowResolver;
 import com.github.claudecodegui.util.EditorFileUtils;
 import com.github.claudecodegui.util.TokenUsageUtils;
@@ -94,6 +95,9 @@ public class ModelProviderHandler {
         MODEL_CONTEXT_LIMITS.put("grok-beta", 128_000);
         MODEL_CONTEXT_LIMITS.put("grok", 500_000);
         MODEL_CONTEXT_LIMITS.put("grok-1.5", 128_000);
+        MODEL_CONTEXT_LIMITS.put("grok-4.7", 256_000);
+        MODEL_CONTEXT_LIMITS.put("grok-4.7-build-fast", 256_000);
+        MODEL_CONTEXT_LIMITS.put("grok-4.7-build", 256_000);
         MODEL_CONTEXT_LIMITS.put("grok-4.6", 500_000);
         MODEL_CONTEXT_LIMITS.put("grok-4.5", 500_000); // legacy alias
         MODEL_CONTEXT_LIMITS.put("grok-4", 500_000);
@@ -562,6 +566,12 @@ public class ModelProviderHandler {
         if ("opencode".equalsIgnoreCase(provider)) {
             Integer declared = OpenCodeContextWindowResolver.resolve(model, cwd);
             if (declared != null) {
+                return declared;
+            }
+        }
+        if ("grok".equalsIgnoreCase(provider)) {
+            Integer declared = GrokContextWindowResolver.resolve(model);
+            if (declared != null && declared > 0) {
                 return declared;
             }
         }
