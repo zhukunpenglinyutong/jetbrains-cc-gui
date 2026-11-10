@@ -19,7 +19,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -38,7 +37,6 @@ class ClaudeMcpQueryService {
     private final ProcessManager processManager;
     private final EnvironmentConfigurator envConfigurator;
     private final ClaudeJsonOutputExtractor outputExtractor;
-    private final Predicate<String> projectTrust;
 
     ClaudeMcpQueryService(
             Logger log,
@@ -47,8 +45,7 @@ class ClaudeMcpQueryService {
             Supplier<File> sdkDirSupplier,
             ProcessManager processManager,
             EnvironmentConfigurator envConfigurator,
-            ClaudeJsonOutputExtractor outputExtractor,
-            Predicate<String> projectTrust
+            ClaudeJsonOutputExtractor outputExtractor
     ) {
         this.log = log;
         this.gson = gson;
@@ -57,40 +54,35 @@ class ClaudeMcpQueryService {
         this.processManager = processManager;
         this.envConfigurator = envConfigurator;
         this.outputExtractor = outputExtractor;
-        this.projectTrust = projectTrust;
     }
 
-    /** Repo-local env only expands into the user's MCP servers when the IDE trusts the project. */
-    private boolean isProjectTrusted(String cwd) {
-        try {
-            return projectTrust.test(cwd);
-        } catch (RuntimeException error) {
-            return false;
-        }
-    }
-
-    JsonObject buildStatusInput(String cwd) {
+    /**
+     * Repo-local env only expands into the user's MCP servers when the IDE trusts the project.
+     * The caller decides {@code projectTrusted} on the IDE's form of {@code cwd}, which is
+     * already in the form Node runs in.
+     */
+    static JsonObject buildStatusInput(String cwd, boolean projectTrusted) {
         JsonObject stdinInput = new JsonObject();
         stdinInput.addProperty("cwd", cwd != null ? cwd : "");
-        stdinInput.addProperty("projectTrusted", isProjectTrusted(cwd));
+        stdinInput.addProperty("projectTrusted", projectTrusted);
         return stdinInput;
     }
 
-    JsonObject buildToolsInput(String serverId, String cwd) {
+    static JsonObject buildToolsInput(String serverId, String cwd, boolean projectTrusted) {
         JsonObject stdinInput = new JsonObject();
         stdinInput.addProperty("serverId", serverId != null ? serverId : "");
         if (cwd != null && !cwd.isEmpty()) {
             stdinInput.addProperty("cwd", cwd);
         }
-        stdinInput.addProperty("projectTrusted", isProjectTrusted(cwd));
+        stdinInput.addProperty("projectTrusted", projectTrusted);
         return stdinInput;
     }
 
-    CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
+    CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd, boolean projectTrusted) {
         return CompletableFuture.supplyAsync(() -> {
             log.info("[McpStatus] Starting getMcpServerStatus, cwd=" + cwd);
 
-            JsonObject stdinInput = buildStatusInput(cwd);
+            JsonObject stdinInput = buildStatusInput(cwd, projectTrusted);
 
             MarkerResult result = executeMarkerQuery(
                     MCP_STATUS_CHANNEL_ID,
@@ -152,11 +144,11 @@ class ClaudeMcpQueryService {
         });
     }
 
-    CompletableFuture<JsonObject> getMcpServerTools(String serverId, String cwd) {
+    CompletableFuture<JsonObject> getMcpServerTools(String serverId, String cwd, boolean projectTrusted) {
         return CompletableFuture.supplyAsync(() -> {
             log.info("[McpTools] Starting getMcpServerTools, serverId=" + serverId + ", cwd=" + cwd);
 
-            JsonObject stdinInput = buildToolsInput(serverId, cwd);
+            JsonObject stdinInput = buildToolsInput(serverId, cwd, projectTrusted);
 
             MarkerResult result = executeMarkerQuery(
                     MCP_TOOLS_CHANNEL_ID,

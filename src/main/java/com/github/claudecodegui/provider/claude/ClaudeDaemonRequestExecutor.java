@@ -51,6 +51,7 @@ class ClaudeDaemonRequestExecutor {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
+            boolean projectTrusted,
             MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
@@ -74,7 +75,8 @@ class ClaudeDaemonRequestExecutor {
                         agentPrompt,
                         streaming,
                         disableThinking,
-                        reasoningEffort
+                        reasoningEffort,
+                        projectTrusted
                 );
 
                 boolean hasAttachments = attachments != null && !attachments.isEmpty() && params.has("attachments");

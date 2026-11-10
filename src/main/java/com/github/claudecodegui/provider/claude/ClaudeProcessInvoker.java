@@ -75,6 +75,7 @@ class ClaudeProcessInvoker {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
+            boolean projectTrusted,
             MessageCallback callback
     ) {
         AtomicBoolean errorAlreadyReported = new AtomicBoolean(false);
@@ -113,7 +114,8 @@ class ClaudeProcessInvoker {
                         agentPrompt,
                         streaming,
                         disableThinking,
-                        reasoningEffort
+                        reasoningEffort,
+                        projectTrusted
                 );
                 stdinInput.addProperty("executionScope", callback.executionScope());
                 String stdinJson = gson.toJson(stdinInput);

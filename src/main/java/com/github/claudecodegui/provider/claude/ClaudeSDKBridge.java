@@ -64,7 +64,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         );
         this.mcpQueryService = new ClaudeMcpQueryService(
                 LOG, gson, nodeDetector, sdkDirSupplier, processManager,
-                envConfigurator, jsonOutputExtractor, requestParamsBuilder::isProjectTrusted
+                envConfigurator, jsonOutputExtractor
         );
         this.rewindService = new ClaudeRewindService(
                 LOG, gson, nodeDetector, sdkDirSupplier, processManager,
@@ -128,9 +128,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * Prewarm daemon asynchronously to reduce first-message latency.
      */
     public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch) {
-        String nodeCwd = normalizeCwdForNode(cwd);
-        daemonCoordinator.prewarmDaemonAsync(nodeCwd, runtimeSessionEpoch, null,
-                requestParamsBuilder.isProjectTrusted(nodeCwd));
+        prewarmDaemonAsync(cwd, runtimeSessionEpoch, null);
     }
 
     /**
@@ -142,9 +140,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * @param sessionId The historical session ID to resume
      */
     public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String sessionId) {
-        String nodeCwd = normalizeCwdForNode(cwd);
-        daemonCoordinator.prewarmDaemonAsync(nodeCwd, runtimeSessionEpoch, sessionId,
-                requestParamsBuilder.isProjectTrusted(nodeCwd));
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        daemonCoordinator.prewarmDaemonAsync(requestCwd.nodeCwd(), runtimeSessionEpoch, sessionId,
+                requestCwd.projectTrusted());
     }
 
     public void resetPersistentRuntime(String runtimeSessionEpoch) {
@@ -421,14 +419,16 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String reasoningEffort,
             MessageCallback callback
     ) {
-        String normalizedCwd = normalizeCwdForNode(cwd);
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        String normalizedCwd = requestCwd.nodeCwd();
+        boolean projectTrusted = requestCwd.projectTrusted();
 
         // Try daemon mode first (avoids per-request Node.js process spawning)
         DaemonBridge db = daemonCoordinator.getDaemonBridge();
         if (db != null) {
             return sendMessageViaDaemon(db, channelId, message, sessionId, runtimeSessionEpoch, normalizedCwd,
                     attachments, permissionMode, model, openedFiles, agentPrompt,
-                    streaming, disableThinking, reasoningEffort, callback);
+                    streaming, disableThinking, reasoningEffort, projectTrusted, callback);
         }
 
         // Fallback: per-process mode (spawns a new Node.js process per request)
@@ -447,6 +447,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 streaming,
                 disableThinking,
                 reasoningEffort,
+                projectTrusted,
                 callback
         );
     }
@@ -483,21 +484,23 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * Get MCP server connection status.
      */
     public CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
-        return mcpQueryService.getMcpServerStatus(normalizeCwdForNode(cwd));
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        return mcpQueryService.getMcpServerStatus(requestCwd.nodeCwd(), requestCwd.projectTrusted());
     }
 
     /**
      * Get MCP server tools list.
      */
     public CompletableFuture<JsonObject> getMcpServerTools(String serverId) {
-        return mcpQueryService.getMcpServerTools(serverId, null);
+        return mcpQueryService.getMcpServerTools(serverId, null, false);
     }
 
     /**
      * Get MCP server tools list with working directory for project-specific config resolution.
      */
     public CompletableFuture<JsonObject> getMcpServerTools(String serverId, String cwd) {
-        return mcpQueryService.getMcpServerTools(serverId, normalizeCwdForNode(cwd));
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        return mcpQueryService.getMcpServerTools(serverId, requestCwd.nodeCwd(), requestCwd.projectTrusted());
     }
 
     // ============================================================================
@@ -553,7 +556,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         if (model != null && !model.isEmpty()) {
             params.addProperty("model", model);
         }
-        requestParamsBuilder.addProjectTrust(params, cwd);
+        params.addProperty("projectTrusted", requestParamsBuilder.isProjectTrusted(cwd));
 
         AtomicReference<JsonObject> resultRef = new AtomicReference<>();
         CompletableFuture<JsonObject> resultFuture = new CompletableFuture<>();
@@ -748,6 +751,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
+            boolean projectTrusted,
             MessageCallback callback
     ) {
         return daemonRequestExecutor.sendMessageViaDaemon(
@@ -765,8 +769,14 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 streaming,
                 disableThinking,
                 reasoningEffort,
+                projectTrusted,
                 callback
         );
+    }
+
+    /** The cwd Node runs in, with trust decided on the IDE's form of the same path. */
+    private ClaudeRequestParamsBuilder.RequestCwd resolveRequestCwd(String cwd) {
+        return requestParamsBuilder.resolveRequestCwd(cwd, this::normalizeCwdForNode);
     }
 
     /**

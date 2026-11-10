@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 
 /**
  * Builds the request payload shared by daemon and per-process Claude sends.
@@ -38,8 +39,19 @@ class ClaudeRequestParamsBuilder {
         }
     }
 
-    void addProjectTrust(JsonObject params, String cwd) {
-        params.addProperty("projectTrusted", isProjectTrusted(cwd));
+    /** A request's working directory in the form Node runs in, and whether project settings may load there. */
+    record RequestCwd(String nodeCwd, boolean projectTrusted) {
+    }
+
+    /**
+     * Decides trust on the IDE's form of {@code ideCwd}, then converts it for Node.
+     *
+     * <p>The project base path is in the IDE's form. On WSL the converted cwd ({@code /mnt/c/...},
+     * {@code /home/...}) names the same directory but cannot be compared with it, so the check
+     * runs before the conversion and the request carries the converted form of the same path.
+     */
+    RequestCwd resolveRequestCwd(String ideCwd, UnaryOperator<String> toNodeCwd) {
+        return new RequestCwd(toNodeCwd.apply(ideCwd), isProjectTrusted(ideCwd));
     }
 
     JsonObject buildSendParams(
@@ -54,7 +66,8 @@ class ClaudeRequestParamsBuilder {
             String agentPrompt,
             Boolean streaming,
             Boolean disableThinking,
-            String reasoningEffort
+            String reasoningEffort,
+            boolean projectTrusted
     ) {
         JsonObject params = new JsonObject();
         params.addProperty("message", message);
@@ -84,7 +97,7 @@ class ClaudeRequestParamsBuilder {
         if (reasoningEffort != null && !reasoningEffort.trim().isEmpty()) {
             params.addProperty("reasoningEffort", reasoningEffort);
         }
-        addProjectTrust(params, cwd);
+        params.addProperty("projectTrusted", projectTrusted);
 
         return params;
     }

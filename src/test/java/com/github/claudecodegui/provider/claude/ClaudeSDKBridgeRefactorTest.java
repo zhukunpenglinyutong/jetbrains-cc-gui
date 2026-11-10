@@ -64,7 +64,8 @@ public class ClaudeSDKBridgeRefactorTest {
                 "system prompt",
                 Boolean.TRUE,
                 Boolean.TRUE,
-                "xhigh"
+                "xhigh",
+                false
         );
 
         assertEquals("hello", params.get("message").getAsString());
@@ -101,7 +102,8 @@ public class ClaudeSDKBridgeRefactorTest {
                 null,
                 null,
                 null,
-                null
+                null,
+                false
         );
 
         assertFalse(params.has("attachments"));
@@ -261,6 +263,7 @@ public class ClaudeSDKBridgeRefactorTest {
                 Boolean.TRUE,
                 null,
                 null,
+                false,
                 callback
         ).get(5, TimeUnit.SECONDS);
 
