@@ -1123,4 +1123,86 @@ describe('MarkdownBlock linkify integration', () => {
     expect(code?.textContent).not.toContain('```');
     expect(view.container.querySelector('ul ul li pre code')).not.toBeNull();
   });
+
+  it('renders a fence that opens on the list-marker line', () => {
+    // The opener follows the marker on the same line, so the scanner must look
+    // past "- " before testing for a fence.
+    const content = ['- ```dart', '  final items = <Widget>[];', '  ```'].join('\n');
+
+    const view = render(<MarkdownBlock content={content} />);
+    const code = view.container.querySelector('li pre code');
+    expect(code?.className).toContain('language-dart');
+    expect(code?.textContent).toContain('final items = <Widget>[];');
+    expect(code?.textContent).not.toContain('```');
+
+    view.rerender(<MarkdownBlock content={'- ```dart\n  final items = <Widget>[];'} isStreaming />);
+    const streamingCode = view.container.querySelector('li pre code');
+    expect(streamingCode?.textContent).toContain('final items = <Widget>[];');
+    expect(streamingCode?.textContent).not.toContain('```');
+  });
+
+  it('renders a fence nested four list levels deep', () => {
+    const content = [
+      '- Level one:',
+      '  - Level two:',
+      '    - Level three:',
+      '      - Level four:',
+      '',
+      '        ```dart',
+      '        final items = <Widget>[];',
+      '        ```',
+    ].join('\n');
+
+    const view = render(<MarkdownBlock content={content} />);
+    const code = view.container.querySelector('pre code');
+    expect(code?.className).toContain('language-dart');
+    expect(code?.textContent).toContain('final items = <Widget>[];');
+    expect(code?.textContent).not.toContain('```');
+    expect(view.container.querySelector('ul ul ul ul li pre code')).not.toBeNull();
+  });
+
+  it('renders a tab-indented fence inside a list item', () => {
+    const content = ['- Step:', '', '\t```dart', '\tfinal items = <Widget>[];', '\t```'].join('\n');
+
+    const view = render(<MarkdownBlock content={content} />);
+    const code = view.container.querySelector('li pre code');
+    expect(code?.className).toContain('language-dart');
+    expect(code?.textContent).toContain('final items = <Widget>[];');
+    expect(code?.textContent).not.toContain('```');
+  });
+
+  it('keeps a fence inside its list item after a lazy continuation line', () => {
+    // An unindented paragraph line still belongs to the item; dropping the list
+    // state there moved the following fence out of the item.
+    const content = [
+      '- Step one',
+      'lazy continuation',
+      '',
+      '  ```dart',
+      '  final items = <Widget>[];',
+      '  ```',
+    ].join('\n');
+
+    const view = render(<MarkdownBlock content={content} />);
+    const code = view.container.querySelector('li pre code');
+    expect(code?.className).toContain('language-dart');
+    expect(code?.textContent).toContain('final items = <Widget>[];');
+    expect(code?.textContent).not.toContain('```');
+  });
+
+  it('does not double-escape an indented code block', () => {
+    // Five spaces after the marker put four spaces past the item's content
+    // column: CommonMark (and marked) parse that as an indented code block.
+    // The escape pass must leave it to marked, which escapes the tags once.
+    const content = [
+      '-     ```dart',
+      '      final items = <Widget>[];',
+      '      ```',
+    ].join('\n');
+
+    const view = render(<MarkdownBlock content={content} />);
+    const code = view.container.querySelector('li pre code');
+    expect(code?.textContent).toContain('final items = <Widget>[];');
+    expect(code?.textContent).not.toContain('&lt;Widget&gt;');
+  });
 });

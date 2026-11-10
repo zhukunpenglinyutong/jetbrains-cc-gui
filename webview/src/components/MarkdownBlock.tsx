@@ -271,7 +271,7 @@ function splitMarkdownBlocks(content: string): string[] {
   const lines = content.split('\n');
   const blocks: string[] = [];
   let current: string[] = [];
-  const scan: FenceScan = { marker: '', listIndent: 0 };
+  let scan = createFenceScan();
   let inDisplayMath = false;
   let mathCloser = '';
 
@@ -280,8 +280,7 @@ function splitMarkdownBlocks(content: string): string[] {
       blocks.push(current.join('\n'));
       current = [];
     }
-    scan.marker = '';
-    scan.listIndent = 0;
+    scan = createFenceScan();
     inDisplayMath = false;
     mathCloser = '';
   };
@@ -290,9 +289,10 @@ function splitMarkdownBlocks(content: string): string[] {
     const line = lines[index];
     const trimmed = line.trim();
 
-    if (scan.marker) {
+    // Code blocks (fenced or indented) own their blank lines; never split them.
+    if (scan.marker || scan.indentedCode) {
       current.push(line);
-      scanFenceLine(line, scan);
+      scanLine(line, scan);
       continue;
     }
 
@@ -304,8 +304,7 @@ function splitMarkdownBlocks(content: string): string[] {
       continue;
     }
 
-    const openingFence = scanFenceLine(line, scan);
-    if (openingFence) {
+    if (scanLine(line, scan)) {
       current.push(line);
       continue;
     }
@@ -322,7 +321,7 @@ function splitMarkdownBlocks(content: string): string[] {
       // indented content still belongs to it. Splitting here would turn a fence
       // indented 4+ spaces into a top-level indented code block, which renders
       // the backticks literally and escapes the code's generics as prose.
-      if (scan.listIndent > 0 && nextLineIndent(lines, index + 1) >= scan.listIndent) {
+      if (scan.containers.length > 0 && nextLineColumn(lines, index + 1) >= containerColumn(scan)) {
         current.push(line);
         continue;
       }
@@ -368,20 +367,18 @@ function escapeXmlTags(text: string): string {
  * (outside fenced code blocks and inline code). Preserves code content as-is
  * so marked can handle XML tags inside code naturally (auto-escape).
  */
-function splitCodeFences(content: string): string[] {
+function splitCodeFences(content: string, trackIndentedCode = true): string[] {
   const parts: string[] = [];
-  const scan: FenceScan = { marker: '', listIndent: 0 };
+  const scan = createFenceScan(trackIndentedCode);
   let start = 0;
   let offset = 0;
+  let previousCode = false;
   for (const line of content.split('\n')) {
-    const previous = scan.marker;
-    const nextMarker = scanFenceLine(line, scan);
-    if (!previous && nextMarker) {
+    const isCode = scanLine(line, scan);
+    if (isCode !== previousCode) {
       parts.push(content.slice(start, offset));
       start = offset;
-    } else if (previous && !nextMarker) {
-      parts.push(content.slice(start, offset + line.length));
-      start = offset + line.length;
+      previousCode = isCode;
     }
     offset += line.length + 1;
   }
@@ -405,7 +402,7 @@ const BRACKET_MATH_DELIMITER_MAP: Record<string, string> = {
  * fenced code blocks and inline code keep their literal backslash delimiters.
  */
 function normalizeBracketMathDelimiters(content: string): string {
-  return splitCodeFences(content)
+  return splitCodeFences(content, false)
     .map((fencePart, fenceIdx) => {
       if (fenceIdx % 2 === 1) return fencePart;
 
@@ -424,7 +421,7 @@ function normalizeBracketMathDelimiters(content: string): string {
 }
 
 function normalizeIndentedDisplayMath(content: string): string {
-  return splitCodeFences(content)
+  return splitCodeFences(content, false)
     .map((part, partIndex) => {
       if (partIndex % 2 === 1) return part;
 
@@ -651,97 +648,225 @@ interface BlockSectionProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
-const LIST_ITEM_RE = /^( {0,3})([-*+]|\d{1,9}[.)])( {1,4})(.*)$/;
+const TAB_WIDTH = 4;
+const LIST_MARKER_RE = /^([-*+]|\d{1,9}[.)])([ \t]+)(.*)$/;
+const FENCE_LINE_RE = /^(`{3,}|~{3,})(.*)$/;
 
-/**
- * Content column of a list item line, or 0 when the line does not open one.
- * CommonMark starts a list item's content right after its marker, so this column
- * is the baseline for a fence nested in that item.
- */
-function listItemContentIndent(line: string): number {
-  const match = LIST_ITEM_RE.exec(line);
-  if (!match) return 0;
-  return match[1].length + match[2].length + match[3].length;
-}
-
-/** Number of leading spaces on a line. */
-function leadingSpaceCount(line: string): number {
-  let count = 0;
-  while (count < line.length && line[count] === ' ') {
-    count++;
+/** Visual column of a line's first non-whitespace character, tabs advancing to the next four-column stop. */
+function leadingColumn(line: string): number {
+  let column = 0;
+  for (let index = 0; index < line.length; index++) {
+    const ch = line[index];
+    if (ch === ' ') {
+      column += 1;
+    } else if (ch === '\t') {
+      column += TAB_WIDTH - (column % TAB_WIDTH);
+    } else {
+      break;
+    }
   }
-  return count;
+  return column;
+}
+
+/** Line text without its leading spaces and tabs. */
+function lineContent(line: string): string {
+  let index = 0;
+  while (index < line.length && (line[index] === ' ' || line[index] === '\t')) {
+    index += 1;
+  }
+  return line.slice(index);
+}
+
+/** Width in columns of a whitespace run that starts at `startColumn`, tabs included. */
+function columnWidth(whitespace: string, startColumn: number): number {
+  let column = startColumn;
+  let width = 0;
+  for (const ch of whitespace) {
+    const advance = ch === '\t' ? TAB_WIDTH - (column % TAB_WIDTH) : 1;
+    column += advance;
+    width += advance;
+  }
+  return width;
 }
 
 /**
- * Indentation of the next non-blank line at or after `from`, or -1 when only
- * blank lines remain. Decides whether content after a blank line still belongs
- * to the list item that is being accumulated.
+ * Column of the next non-blank line at or after `from`, or -1 when only blank
+ * lines remain.
  */
-function nextLineIndent(lines: string[], from: number): number {
+function nextLineColumn(lines: string[], from: number): number {
   for (let index = from; index < lines.length; index++) {
     if (lines[index].trim() !== '') {
-      return leadingSpaceCount(lines[index]);
+      return leadingColumn(lines[index]);
     }
   }
   return -1;
 }
 
 interface FenceScan {
+  /** Open fence marker, '' when no fence is open. */
   marker: string;
-  listIndent: number;
+  /** Content column of the list item that owns the open fence. */
+  fenceContainer: number;
+  /** Content columns of the active list items, outermost first. */
+  containers: number[];
+  /** Whether the innermost list item still has an open paragraph (lazy continuations). */
+  paragraphOpen: boolean;
+  /** Whether the previous lines belong to an indented code block. */
+  indentedCode: boolean;
+  /**
+   * Whether indented code blocks are tracked as code. The escape pass needs them
+   * protected, while the math normalizers must keep treating indented LaTeX as
+   * prose (assistant history emits it that way).
+   */
+  trackIndentedCode: boolean;
+}
+
+/** Fresh scan state for one document or block. */
+function createFenceScan(trackIndentedCode = true): FenceScan {
+  return {
+    marker: '',
+    fenceContainer: 0,
+    containers: [],
+    paragraphOpen: false,
+    indentedCode: false,
+    trackIndentedCode,
+  };
+}
+
+/** Content column the line is measured against: innermost list item, or the document. */
+function containerColumn(scan: FenceScan): number {
+  return scan.containers.length > 0 ? scan.containers[scan.containers.length - 1] : 0;
+}
+
+/** Fence marker opened by `content`, or '' when the text is not a fence opener. */
+function fenceMarkerOf(content: string): string {
+  const fence = FENCE_LINE_RE.exec(content);
+  if (!fence) return '';
+  // A backtick fence cannot carry a backtick in its info string.
+  return fence[1][0] !== '`' || !fence[2].includes('`') ? fence[1] : '';
 }
 
 /**
- * Advance one line of a fence scan, tracking the list-item content column the
- * same way marked does so that a fence indented under a list item still counts
- * as a fence. Lines inside an open fence never change the column.
+ * Scan one line, updating fence and list-container state the way marked parses
+ * containers.
  *
- * @param line markdown line
- * @param scan mutable scan state (open marker + list content column)
- * @returns the open fence marker after this line ('' when no fence is open)
+ * The scanner keeps a stack of list-item content columns instead of one indent,
+ * so a fence nested to any depth is measured against the item that owns it.
+ * Indentation is counted in columns with four-column tab stops, and a lazy
+ * continuation line (paragraph text that is not indented into the item) keeps
+ * the enclosing list alive instead of dropping it.
+ *
+ * @param line one markdown line
+ * @param scan mutable scan state
+ * @returns true when the line belongs to a code block (fenced or indented)
  */
-function scanFenceLine(line: string, scan: FenceScan): string {
-  if (!scan.marker) {
-    const itemIndent = listItemContentIndent(line);
-    if (itemIndent > 0) {
-      scan.listIndent = itemIndent;
-    } else if (line.trim() !== '' && leadingSpaceCount(line) < scan.listIndent) {
-      scan.listIndent = 0;
+function scanLine(line: string, scan: FenceScan): boolean {
+  const content = lineContent(line);
+
+  if (scan.marker) {
+    const fence = FENCE_LINE_RE.exec(content);
+    const indentation = leadingColumn(line) - scan.fenceContainer;
+    if (
+      fence
+      && fence[1][0] === scan.marker[0]
+      && fence[1].length >= scan.marker.length
+      && !fence[2].trim()
+      && indentation <= 3
+    ) {
+      scan.marker = '';
+    }
+    return true;
+  }
+
+  if (content === '') {
+    // Blank lines close paragraphs but not list items or indented code blocks.
+    scan.paragraphOpen = false;
+    return scan.indentedCode;
+  }
+
+  const column = leadingColumn(line);
+
+  if (scan.indentedCode) {
+    if (column - containerColumn(scan) >= 4) {
+      return true;
+    }
+    scan.indentedCode = false;
+  }
+
+  // Dedent out of list items this line is not indented into. A paragraph line
+  // that continues the innermost item lazily keeps the stack alive.
+  while (scan.containers.length > 0 && column < containerColumn(scan)) {
+    const lazyContinuation = scan.paragraphOpen
+      && !LIST_MARKER_RE.test(content)
+      && !fenceMarkerOf(content);
+    if (lazyContinuation) {
+      break;
+    }
+    scan.containers.pop();
+  }
+
+  const base = containerColumn(scan);
+  const relative = column - base;
+
+  if (relative >= 0 && relative <= 3) {
+    const marker = fenceMarkerOf(content);
+    if (marker) {
+      scan.marker = marker;
+      scan.fenceContainer = base;
+      scan.paragraphOpen = false;
+      return true;
+    }
+
+    const listItem = LIST_MARKER_RE.exec(content);
+    if (listItem) {
+      const markerWidth = listItem[1].length;
+      const gapWidth = columnWidth(listItem[2], column + markerWidth);
+      // Five or more spaces leave the content one space past the marker; the
+      // remaining spaces make a fence there an indented code block, not a fence.
+      const contentColumn = column + markerWidth + (gapWidth > 4 ? 1 : gapWidth);
+      scan.containers.push(contentColumn);
+      const afterMarker = listItem[3];
+      if (gapWidth > 4) {
+        if (!scan.trackIndentedCode) {
+          scan.paragraphOpen = false;
+          return false;
+        }
+        scan.indentedCode = true;
+        scan.paragraphOpen = false;
+        return true;
+      }
+      const inlineFence = fenceMarkerOf(afterMarker);
+      if (inlineFence) {
+        scan.marker = inlineFence;
+        scan.fenceContainer = contentColumn;
+        scan.paragraphOpen = false;
+        return true;
+      }
+      scan.paragraphOpen = afterMarker.trim() !== '';
+      return false;
     }
   }
-  scan.marker = nextFenceMarker(line, scan.marker, scan.listIndent);
-  return scan.marker;
-}
 
-/**
- * Detect a fence marker on one line.
- *
- * @param line markdown line
- * @param marker marker of the fence currently open ('' when none)
- * @param baseIndent content column of the list item that owns the line
- * @returns the open fence marker after this line ('' once it is closed)
- */
-function nextFenceMarker(line: string, marker: string, baseIndent = 0): string {
-  // Strip the owning list item's content column first: CommonMark allows a fence
-  // up to three spaces past that column, which is what a list-nested fence uses.
-  let indent = 0;
-  while (indent < baseIndent && line[indent] === ' ') {
-    indent++;
+  if (relative >= 4 && !scan.paragraphOpen) {
+    if (!scan.trackIndentedCode) {
+      scan.paragraphOpen = true;
+      return false;
+    }
+    scan.indentedCode = true;
+    return true;
   }
-  const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line.slice(indent));
-  if (!fence) return marker;
-  if (!marker) return fence[1][0] !== '`' || !fence[2].includes('`') ? fence[1] : '';
-  return fence[1][0] === marker[0] && fence[1].length >= marker.length && !fence[2].trim() ? '' : marker;
+
+  scan.paragraphOpen = true;
+  return false;
 }
 
 function getFenceState(source: string) {
-  const scan: FenceScan = { marker: '', listIndent: 0 };
+  const scan = createFenceScan();
   let closed = 0;
   for (const line of source.split('\n')) {
     const previous = scan.marker;
-    const nextMarker = scanFenceLine(line, scan);
-    if (previous && !nextMarker) closed++;
+    scanLine(line, scan);
+    if (previous && !scan.marker) closed++;
   }
   return { open: scan.marker !== '', marker: scan.marker, closed };
 }
