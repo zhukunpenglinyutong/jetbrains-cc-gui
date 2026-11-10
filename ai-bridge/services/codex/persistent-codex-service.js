@@ -192,10 +192,10 @@ function ensureSessionService(stdinData, { nativeEnvironmentDependencies = {} } 
   const runtime = buildCodexNativeRuntime({
     ...launchInputs,
     extraConfig: supplier?.extraConfig,
+    modelProvider: supplier?.modelProvider,
     projectDocFallbackFilenames: stdinData?.projectDocFallbackFilenames,
     baseEnv,
   });
-  if (supplier?.modelProvider) runtime.modelProvider = supplier.modelProvider;
   const launchOptions = {
     ...launchInputs,
     cwd: stdinData?.cwd,
@@ -220,12 +220,12 @@ function ensureSessionService(stdinData, { nativeEnvironmentDependencies = {} } 
     'codexCommandPrefix', 'pluginVersion',
   ].filter((key) => Object.hasOwn(stdinData, key)).map((key) => [key, stdinData[key]]));
   let candidateIndex = 0;
-  const createClient = async () => {
+  const createClient = async ({ nativeConfig = runtime.config, modelProvider = runtime.modelProvider } = {}) => {
     const candidate = cliPlan.candidates[candidateIndex] ?? cliPlan.candidates[0];
     let sensitiveEnvNames = [];
     const env = await prepareCodexRuntimeEnvironment({ authMode, baseEnv, codexHome: launchInputs.codexHome,
       onCredentialNames: names => { sensitiveEnvNames = names; },
-      config: runtime.config, env: {
+      config: nativeConfig, env: {
         ...runtime.env,
         ...(launchInputs.codexHome || baseEnv.CODEX_HOME
           ? { CODEX_HOME: launchInputs.codexHome || baseEnv.CODEX_HOME } : {}),
@@ -237,6 +237,7 @@ function ensureSessionService(stdinData, { nativeEnvironmentDependencies = {} } 
       command: candidate.command,
       cwd: stdinData?.cwd || undefined,
       env, sensitiveEnvNames,
+      nativeConfig, modelProvider,
       clientInfo: {
         name: 'codemoss_intellij',
         title: 'CC GUI',

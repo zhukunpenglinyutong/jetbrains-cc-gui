@@ -43,7 +43,7 @@ if (!import.meta.env.DEV) {
 }
 
 // Install the runtime provider dispatcher exactly once so that every
-// consumer (Settings, RuntimeProviderSelect, …) receives provider events
+// consumer (Settings, provider state, …) receives provider events
 // through a deterministic subscriber registry instead of overriding
 // `window.update*Provider*` callbacks ad-hoc.
 installRuntimeProviderDispatchers();

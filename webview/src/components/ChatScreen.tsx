@@ -1,7 +1,8 @@
-import { type RefObject, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type RefObject, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChatInputBox } from './ChatInputBox';
-import { SessionSupplierSelect, type SessionThinkingSettings } from './SessionSupplierSelect';
+import { useSessionSuppliers } from '../hooks/useSessionSuppliers';
+import { SessionSupplierContext } from '../contexts/SessionSupplierContext';
 import type {
   Attachment,
   ChatInputBoxHandle,
@@ -182,7 +183,9 @@ export const ChatScreen = ({
   // Native stream cleanup can precede the control reply without ending its wait.
   const waiting = loading || codexCompactionPending;
   const { currentSessionId } = useSession();
-  const [sessionThinking, setSessionThinking] = useState<SessionThinkingSettings | null>(null);
+  const sessionSuppliers = useSessionSuppliers(currentProvider,
+    loading || streamingActive || codexTurnActive || codexPlanExecutionPending || codexCompactionPending);
+  const sessionThinking = sessionSuppliers.thinkingSettings;
   const previousMessageKeySnapshotRef = useRef<MessageKeySnapshot | undefined>(undefined);
   const messageKeySnapshot = useMemo(
     () => reconcileMessageKeys(
@@ -372,88 +375,88 @@ export const ChatScreen = ({
       )}
 
       <div className="input-area" ref={inputAreaRef}>
-        <SessionSupplierSelect provider={currentProvider} busy={loading || streamingActive || codexTurnActive || codexPlanExecutionPending || codexCompactionPending}
-          onThinkingSettingsChange={setSessionThinking} />
-        <ChatInputBox
-          ref={chatInputRef}
-          isLoading={waiting}
-          selectedModel={selectedModel}
-          permissionMode={permissionMode}
-          codexNativeAutoReviewAvailable={codexNativeAutoReviewAvailable}
-          currentProvider={currentProvider}
-          usagePercentage={usagePercentage}
-          usageUsedTokens={usageUsedTokens}
-          usageMaxTokens={usageMaxTokens}
-          showUsage={true}
-          alwaysThinkingEnabled={sessionThinking?.enabled ?? activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? claudeSettingsAlwaysThinkingEnabled}
-          placeholder={sendShortcut === 'cmdEnter' ? t('chat.inputPlaceholderCmdEnter') : t('chat.inputPlaceholderEnter')}
-          sdkInstalled={currentSdkInstalled}
-          sdkStatusLoading={sdkStatusLoading}
-          sdkStatusError={sdkStatusError !== null}
-          onRetrySdkStatus={onRetrySdkStatus}
-          onInstallSdk={() => {
-            setSettingsInitialTab('dependencies');
-            setCurrentView('settings');
-          }}
-          value={draftInput}
-          onInput={setDraftInput}
-          onSubmit={handleSubmit}
-          onStop={onInterrupt}
-          onModeSelect={onModeSelect}
-          onModelSelect={onModelSelect}
-          onProviderSelect={onProviderSelect}
-          reasoningEffort={reasoningEffort}
-          dshPreset={dshPreset}
-          onReasoningChange={onReasoningChange}
-          codexFastMode={codexFastMode}
-          onCodexFastModeChange={onCodexFastModeChange}
-          onDshPresetChange={onDshPresetChange}
-          onToggleThinking={currentProvider === 'claude' ? sessionThinking?.onChange ?? (() => {}) : onToggleThinking}
-          streamingEnabled={streamingEnabledSetting}
-          onStreamingEnabledChange={onStreamingEnabledChange}
-          sendShortcut={sendShortcut}
-          selectedAgent={selectedAgent}
-          onAgentSelect={onAgentSelect}
-          activeFile={contextInfo?.file}
-          selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined
-            ? (contextInfo.startLine === contextInfo.endLine
-                ? `L${contextInfo.startLine}`
-                : `L${contextInfo.startLine}-${contextInfo.endLine}`)
-            : undefined}
-          onClearContext={() => setContextInfo(null)}
-          onOpenAgentSettings={() => {
-            setSettingsInitialTab('agents');
-            setCurrentView('settings');
-          }}
-          onOpenCliSettings={() => {
-            setSettingsInitialTab('providers');
-            setSettingsProviderSubTab('cli');
-            setCurrentView('settings');
-          }}
-          onOpenPromptSettings={() => {
-            setSettingsInitialTab('prompts');
-            setCurrentView('settings');
-          }}
-          onOpenModelSettings={() => {
-            setAddModelDialogOpen(true);
-          }}
-          hasMessages={messages.length > 0}
-          onRewind={onRewind}
-          statusPanelExpanded={statusPanelExpanded}
-          onToggleStatusPanel={() => {
-            userCollapsedRef.current = !userCollapsedRef.current;
-            forceStatusUpdate((c) => c + 1);
-          }}
-          addToast={addToast}
-          messageQueue={messageQueue}
-          onRemoveFromQueue={onRemoveFromQueue}
-          onEditFromQueue={onEditFromQueue}
-          onReorderQueue={onReorderQueue}
-          autoOpenFileEnabled={autoOpenFileEnabled}
-          onAutoOpenFileEnabledChange={onAutoOpenFileEnabledChange}
-          longContextEnabled={longContextEnabled}
-          onLongContextChange={onLongContextChange}
-        />
+        <SessionSupplierContext.Provider value={sessionSuppliers}>
+          <ChatInputBox
+            ref={chatInputRef}
+            isLoading={waiting}
+            selectedModel={selectedModel}
+            permissionMode={permissionMode}
+            codexNativeAutoReviewAvailable={codexNativeAutoReviewAvailable}
+            currentProvider={currentProvider}
+            usagePercentage={usagePercentage}
+            usageUsedTokens={usageUsedTokens}
+            usageMaxTokens={usageMaxTokens}
+            showUsage={true}
+            alwaysThinkingEnabled={sessionThinking?.enabled ?? activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? claudeSettingsAlwaysThinkingEnabled}
+            placeholder={sendShortcut === 'cmdEnter' ? t('chat.inputPlaceholderCmdEnter') : t('chat.inputPlaceholderEnter')}
+            sdkInstalled={currentSdkInstalled}
+            sdkStatusLoading={sdkStatusLoading}
+            sdkStatusError={sdkStatusError !== null}
+            onRetrySdkStatus={onRetrySdkStatus}
+            onInstallSdk={() => {
+              setSettingsInitialTab('dependencies');
+              setCurrentView('settings');
+            }}
+            value={draftInput}
+            onInput={setDraftInput}
+            onSubmit={handleSubmit}
+            onStop={onInterrupt}
+            onModeSelect={onModeSelect}
+            onModelSelect={onModelSelect}
+            onProviderSelect={onProviderSelect}
+            reasoningEffort={reasoningEffort}
+            dshPreset={dshPreset}
+            onReasoningChange={onReasoningChange}
+            codexFastMode={codexFastMode}
+            onCodexFastModeChange={onCodexFastModeChange}
+            onDshPresetChange={onDshPresetChange}
+            onToggleThinking={currentProvider === 'claude' ? sessionThinking?.onChange ?? (() => {}) : onToggleThinking}
+            streamingEnabled={streamingEnabledSetting}
+            onStreamingEnabledChange={onStreamingEnabledChange}
+            sendShortcut={sendShortcut}
+            selectedAgent={selectedAgent}
+            onAgentSelect={onAgentSelect}
+            activeFile={contextInfo?.file}
+            selectedLines={contextInfo?.startLine !== undefined && contextInfo?.endLine !== undefined
+              ? (contextInfo.startLine === contextInfo.endLine
+                  ? `L${contextInfo.startLine}`
+                  : `L${contextInfo.startLine}-${contextInfo.endLine}`)
+              : undefined}
+            onClearContext={() => setContextInfo(null)}
+            onOpenAgentSettings={() => {
+              setSettingsInitialTab('agents');
+              setCurrentView('settings');
+            }}
+            onOpenCliSettings={() => {
+              setSettingsInitialTab('providers');
+              setSettingsProviderSubTab('cli');
+              setCurrentView('settings');
+            }}
+            onOpenPromptSettings={() => {
+              setSettingsInitialTab('prompts');
+              setCurrentView('settings');
+            }}
+            onOpenModelSettings={() => {
+              setAddModelDialogOpen(true);
+            }}
+            hasMessages={messages.length > 0}
+            onRewind={onRewind}
+            statusPanelExpanded={statusPanelExpanded}
+            onToggleStatusPanel={() => {
+              userCollapsedRef.current = !userCollapsedRef.current;
+              forceStatusUpdate((c) => c + 1);
+            }}
+            addToast={addToast}
+            messageQueue={messageQueue}
+            onRemoveFromQueue={onRemoveFromQueue}
+            onEditFromQueue={onEditFromQueue}
+            onReorderQueue={onReorderQueue}
+            autoOpenFileEnabled={autoOpenFileEnabled}
+            onAutoOpenFileEnabledChange={onAutoOpenFileEnabledChange}
+            longContextEnabled={longContextEnabled}
+            onLongContextChange={onLongContextChange}
+          />
+        </SessionSupplierContext.Provider>
       </div>
     </>
   );

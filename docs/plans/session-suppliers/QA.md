@@ -69,3 +69,25 @@ Bedrock title fixtures verify explicit captured AWS keys/token, region and endpo
 Local logs are under `.codex/session-suppliers/`: `java-full.log`, `java-final-package.log`, `webview-full.log`, `webview-final-targeted.log`, `webview-final-build.log`, `bridge-final.log`, and `bridge-last-targeted.log`. Browser screenshots are `narrow-ui.png` and `production-ui.png` in the same directory. Temporary QA browser tabs and Vite servers were closed after verification.
 
 Review evidence uses the `deep-review-` prefix: `java-final.log`, `webview-final.log`, `webview-final-build.log`, `bridge-final.log`, `codex-controls.log`, `titles.log`, `browser.png`, `package-final.log`, `package-audit.json`, `integrity.json` and `final-evidence.json`. Intermediate failing logs are preserved separately from the final runs.
+
+## Native provider and legacy history follow-up
+
+The 2026-11-10 follow-up reproduced both the process/thread provider mismatch and the opposite mismatch when resuming an old `OpenAI` thread. The first startup-only test missed historical provider-id migration; the expanded real CLI test fails on that earlier implementation and passes after the guarded legacy recovery.
+
+- Full Bridge: 1495 tests, 1480 passed, 15 skipped, zero failures.
+- Installed Codex 0.167.0 against local HTTP/SSE endpoints: two concurrent suppliers, ordinary continuation, cold resume, supplier switch, legacy `OpenAI` history restoration, another cold restart and switching that old thread to supplier B passed. Exactly nine model requests corresponded to nine sends. Historical thread ids, original history content and global configuration/authentication remained intact.
+- Four service lifecycle regressions passed, including shared preconnect/send ownership, resetting a prepared replacement, cancelling only the send while preconnect continues, and retaining unstructured native errors. The process integration also restores and rebinds a legacy thread through the actual persistent factory.
+- The completed plugin build and 21 archive checks passed. The final ZIP's extracted Bridge passed all 151 service/launch/native tests, including the expanded real CLI regression.
+
+Evidence uses `.codex/session-suppliers/provider-legacy-*`. The uniquely named delivery archive is `idea-claude-code-gui-0.6.4-codex-resume-fix.zip`; its hash and size are in `delivery.md`. Live third-party connectivity and acceptance in the user's restarted IDE remain manual checks.
+
+
+## Supplier menu consolidation follow-up (2026-11-10)
+
+- Removed the standalone supplier/refresh strip. The lower-left input configuration menu is the conversation supplier entry for Claude and Codex.
+- Full frontend: 301 files, 3289 tests passed, six packaging-script checks passed, production/test TypeScript checks passed. After adding the final timeout/unmount cases, both affected suites passed all 25 tests.
+- Browser: 16 Playwright checks passed on the actual Vite application at desktop, narrow, short and mobile sizes. Only the Java bridge was mocked. Both engines select with a session/binding fence, preserve their checkmarks, refresh when reopened and never emit the global switch commands. Failure/reselection and a new unsaved binding passed; the extra input row is absent. The standard config submenus remain within their viewports.
+- The first browser fixture expected a hover menu to stay open while its old chat was replaced. On narrow viewports the pointer naturally left the resized menu; the fixture now closes the old menu before switching chats and validates the reopened new binding. No timing delays or forced clicks were introduced.
+- Local evidence: `.codex/session-suppliers/supplier-menu-webview-tests.log`, `supplier-menu-browser-final.log`, `supplier-menu-mobile.png` and `supplier-menu-desktop.png`. The plugin build and all 24 archive checks passed; their logs use the same prefix. The final archive retains the previously validated native runtime sources and Java bytecode.
+
+The existing native process/history fixes are retained. Live supplier connectivity and installed-IDE acceptance still require the user's environment; controlled browser fixtures do not consume API credits.

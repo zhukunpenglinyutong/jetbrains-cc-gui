@@ -7,6 +7,7 @@ import { getCodemossDir } from '../../utils/path-utils.js';
 import { __testing as claude } from '../../services/claude/persistent-query-service.js';
 
 const events = [];
+
 process.stdout._originalStdoutWrite = chunk => {
   for (const line of String(chunk).split('\n').filter(Boolean)) {
     try { events.push(JSON.parse(line)); } catch { /* ignore non-event markers */ }
@@ -81,6 +82,20 @@ try {
   await codex.codexSendPersistent({ ...a, supplierId: 'b' }, options);
   assert.equal(diagnostics('fixture-a').at(-1).credentialHash, hash('fixture-b'));
   assert.equal(diagnostics('fixture-a').at(-1).baseUrl, 'https://b.example.invalid/v1');
+  const legacy = { ...request('fixture-legacy', 'a'), threadId: 'th-test-legacy-supplier' };
+  await codex.codexPreconnectPersistent(legacy, options);
+  const legacyResult = await codex.codexSendPersistent(legacy, options);
+  assert.equal(legacyResult.outcome, 'completed', legacyResult.error);
+  assert.equal(diagnostics('fixture-legacy').at(-1).providerId, 'OpenAI');
+  assert.equal(diagnostics('fixture-legacy').at(-1).baseUrl, 'https://a.example.invalid/v1');
+  assert.equal(diagnostics('fixture-legacy').at(-1).credentialHash, hash('fixture-a'));
+  const legacySwitched = await codex.codexSendPersistent({ ...legacy, supplierId: 'b' }, options);
+  assert.equal(legacySwitched.outcome, 'completed', legacySwitched.error);
+  assert.equal(diagnostics('fixture-legacy').at(-1).providerId, 'OpenAI');
+  assert.equal(diagnostics('fixture-legacy').at(-1).baseUrl, 'https://b.example.invalid/v1');
+  assert.equal(diagnostics('fixture-legacy').at(-1).credentialHash, hash('fixture-b'));
+  assert.equal(codex.getCodexRuntimeSnapshot().sessions.find(
+    item => item.sessionKey === `${legacy.channelId}::${legacy.sessionEpoch}`)?.rootThreadId, legacy.threadId);
   assert.equal(readFileSync(join(sharedHistory, 'config.toml'), 'utf8'), nativeHomeBefore);
   assert.equal(readFileSync(join(sharedHistory, 'auth.json'), 'utf8'), authBefore);
   delete config.codex.providers.a;

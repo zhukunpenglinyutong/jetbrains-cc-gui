@@ -129,11 +129,12 @@ export const ConfigSelect = ({
     }
   }, [t]);
 
-  const showProviderToast = useCallback((providerName: string) => {
+  const showProviderToast = useCallback((providerName: string, appliesNextTurn: boolean) => {
     if (toastTimerRef.current !== undefined) {
       window.clearTimeout(toastTimerRef.current);
     }
-    setToastMessage(t('config.runtimeProvider.switched', { provider: providerName }));
+    const switched = t('config.runtimeProvider.switched', { provider: providerName });
+    setToastMessage(appliesNextTurn ? `${switched} · ${t('sessionSupplier.nextTurn', 'Applies to the next turn')}` : switched);
     setShowToast(true);
     toastTimerRef.current = window.setTimeout(() => {
       setShowToast(false);

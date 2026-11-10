@@ -77,6 +77,8 @@ test('Codex suppliers keep native history in the same home while isolating launc
   assert.equal(a.runtime.env.CODEX_API_KEY, 'fixture-a');
   assert.equal(b.runtime.env.CODEX_API_KEY, 'fixture-b');
   const providerId = a.supplier.modelProvider;
+  assert.equal(a.runtime.modelProvider, providerId);
+  assert.equal(b.runtime.modelProvider, b.supplier.modelProvider);
   assert.equal(a.runtime.config.model_providers[providerId].base_url, 'https://a.example.invalid/v1');
   assert.equal(b.runtime.config.model_providers[providerId].base_url, 'https://b.example.invalid/v1');
   assert.equal(a.runtime.config.model_providers[providerId].requires_openai_auth, false);

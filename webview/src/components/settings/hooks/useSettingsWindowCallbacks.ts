@@ -151,7 +151,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
 
     // Provider callbacks - subscribe to the registry instead of overriding
     // window callbacks directly. This keeps behavior deterministic when
-    // multiple consumers (e.g. RuntimeProviderSelect) are mounted.
+    // multiple settings/provider state consumers are mounted.
     const unsubscribeProviders = subscribeProviderList((jsonStr: string) => {
       try {
         const providersList: ProviderConfig[] = JSON.parse(jsonStr);

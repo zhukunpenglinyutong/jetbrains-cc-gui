@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from '../contexts/SessionContext';
 import { useUIState } from '../contexts/UIStateContext';
 import { sendBridgeEvent } from '../utils/bridge';
 import { parseClaudeModelMappingEnv, setSessionClaudeModelMapping } from '../utils/claudeModelMapping';
 import { setSessionClaudeModelCatalog, type SessionClaudeModelCatalog } from '../utils/sessionClaudeModelCatalog';
-import './SessionSupplierSelect.css';
 
-interface SupplierEntry {
+export interface SupplierEntry {
   id: string;
   name: string;
   available: boolean;
@@ -34,26 +32,35 @@ declare global {
   }
 }
 
-interface SessionSupplierSelectProps {
-  provider: string;
-  busy: boolean;
-  onThinkingSettingsChange?: (settings: SessionThinkingSettings | null) => void;
-}
-
 export interface SessionThinkingSettings {
   enabled: boolean;
   onChange: (enabled: boolean) => void;
 }
 
-/** Backend owns the binding; the control never writes a global supplier default. */
-export function SessionSupplierSelect({ provider, busy, onThinkingSettingsChange }: SessionSupplierSelectProps) {
-  const { t } = useTranslation();
+export interface SessionSupplierState {
+  provider: string;
+  suppliers: SupplierEntry[];
+  supplierId?: string;
+  bindingToken?: string;
+  pending: boolean;
+  busy: boolean;
+  error: boolean;
+  missing: boolean;
+  deferred: boolean;
+  refresh: () => void;
+  selectSupplier: (supplierId: string) => Promise<boolean>;
+  thinkingSettings: SessionThinkingSettings | null;
+}
+
+/** Backend owns the binding; menu choices never write a global supplier default. */
+export function useSessionSuppliers(provider: string, busy: boolean): SessionSupplierState {
   const { currentSessionId } = useSession();
   const { currentView } = useUIState();
   const [snapshot, setSnapshot] = useState<SupplierSnapshot | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
   const requestRef = useRef('');
+  const completeRequest = useRef<((success: boolean) => void) | null>(null);
   const responseTimer = useRef<number | undefined>(undefined);
   const snapshotRef = useRef<SupplierSnapshot | null>(null);
   const pendingRef = useRef(false);
@@ -61,16 +68,30 @@ export function SessionSupplierSelect({ provider, busy, onThinkingSettingsChange
   const previousBusy = useRef(busy);
   const supported = provider === 'claude' || provider === 'codex';
 
-  const request = useCallback((supplierId?: string, thinkingEnabled?: boolean) => {
-    if (!supported) return;
+  const finishRequest = useCallback((success: boolean) => {
+    window.clearTimeout(responseTimer.current);
+    pendingRef.current = false;
+    setPending(false);
+    completeRequest.current?.(success);
+    completeRequest.current = null;
+  }, []);
+
+  const request = useCallback((supplierId?: string, thinkingEnabled?: boolean): Promise<boolean> => {
+    if (!supported) return Promise.resolve(false);
     if (pendingRef.current) {
       if (supplierId === undefined && thinkingEnabled === undefined) refreshAfterPending.current = true;
-      return;
+      return Promise.resolve(false);
     }
     if (thinkingEnabled !== undefined) {
-      if (pendingRef.current || !snapshotRef.current?.supplierId) return;
+      if (!snapshotRef.current?.supplierId) return Promise.resolve(false);
       supplierId = snapshotRef.current.supplierId;
     }
+    // A selection must use an acknowledged binding, including its epoch fence.
+    if (supplierId !== undefined && (!snapshotRef.current?.bindingToken
+      || !snapshotRef.current.suppliers?.some(entry => entry.id === supplierId && entry.available))) {
+      return Promise.resolve(false);
+    }
+    const result = new Promise<boolean>(resolve => { completeRequest.current = resolve; });
     const requestId = crypto.randomUUID();
     requestRef.current = requestId;
     window.clearTimeout(responseTimer.current);
@@ -81,19 +102,19 @@ export function SessionSupplierSelect({ provider, busy, onThinkingSettingsChange
       ...(supplierId === undefined ? {} : { sessionId: snapshotRef.current?.sessionId ?? null, bindingToken: snapshotRef.current?.bindingToken }),
     }));
     if (sent === false) {
-      setPending(false);
-      pendingRef.current = false;
+      finishRequest(false);
       setError(true);
-    } else {
+    } else if (pendingRef.current) {
       responseTimer.current = window.setTimeout(() => {
         if (requestRef.current === requestId) {
-          setPending(false);
-          pendingRef.current = false;
+          requestRef.current = '';
+          finishRequest(false);
           setError(true);
         }
       }, 10000);
     }
-  }, [provider, supported]);
+    return result;
+  }, [provider, supported, finishRequest]);
 
   useEffect(() => {
     if (!pending && refreshAfterPending.current) {
@@ -106,17 +127,20 @@ export function SessionSupplierSelect({ provider, busy, onThinkingSettingsChange
     if (!supported) return;
     snapshotRef.current = null;
     setSnapshot(null);
+    setPending(false);
+    setError(false);
     const receive = (payload: string) => {
       let reply: SupplierSnapshot;
       try { reply = JSON.parse(payload) as SupplierSnapshot; } catch { return; }
       if (reply.provider !== provider || reply.requestId !== requestRef.current) return;
-      window.clearTimeout(responseTimer.current);
-      setPending(false);
-      pendingRef.current = false;
       setError(Boolean(reply.error));
-      if (reply.error) return;
+      if (reply.error) {
+        finishRequest(false);
+        return;
+      }
       setSnapshot(reply);
       snapshotRef.current = reply;
+      finishRequest(true);
       window.dispatchEvent(new CustomEvent('session-supplier-snapshot', { detail: {
         provider: reply.provider, supplierId: reply.supplierId, bindingToken: reply.bindingToken, busy: reply.busy,
       } }));
@@ -139,7 +163,7 @@ export function SessionSupplierSelect({ provider, busy, onThinkingSettingsChange
       window.clearTimeout(timer);
       window.clearTimeout(responseTimer.current);
       requestRef.current = '';
-      pendingRef.current = false;
+      finishRequest(false);
       refreshAfterPending.current = false;
       snapshotRef.current = null;
       setSnapshot(null);
@@ -160,17 +184,18 @@ export function SessionSupplierSelect({ provider, busy, onThinkingSettingsChange
       if (window.onSessionSuppliers === receive) delete window.onSessionSuppliers;
       requestRef.current = '';
       pendingRef.current = false;
+      completeRequest.current?.(false);
+      completeRequest.current = null;
       refreshAfterPending.current = false;
       setSessionClaudeModelMapping(null);
       setSessionClaudeModelCatalog(null);
     };
-  }, [provider, currentSessionId, currentView, request, supported]);
+  }, [provider, currentSessionId, currentView, request, supported, finishRequest]);
 
-  useEffect(() => {
-    onThinkingSettingsChange?.(provider === 'claude' && snapshot?.provider === provider && typeof snapshot.thinkingEnabled === 'boolean'
-      ? { enabled: snapshot.thinkingEnabled, onChange: enabled => request(undefined, enabled) } : null);
-    return () => onThinkingSettingsChange?.(null);
-  }, [provider, snapshot, request, onThinkingSettingsChange]);
+  const thinkingSettings = useMemo<SessionThinkingSettings | null>(() => (
+    provider === 'claude' && snapshot?.provider === provider && typeof snapshot.thinkingEnabled === 'boolean'
+      ? { enabled: snapshot.thinkingEnabled, onChange: enabled => { void request(undefined, enabled); } } : null
+  ), [provider, snapshot, request]);
 
   useEffect(() => {
     const changed = previousBusy.current !== busy;
@@ -178,34 +203,19 @@ export function SessionSupplierSelect({ provider, busy, onThinkingSettingsChange
     if (changed && window.sendToJava) request();
   }, [busy, request]);
 
-  if (!supported) return null;
-  const suppliers = snapshot?.provider === provider ? snapshot.suppliers ?? [] : [];
-  const selectedId = snapshot?.provider === provider ? snapshot.supplierId : undefined;
-  const missing = !suppliers.some(entry => entry.id === selectedId && entry.available);
-  const deferred = (busy || snapshot?.busy) && snapshot?.activeSupplierId !== selectedId;
+  const refresh = useCallback(() => { void request(); }, [request]);
+  const selectSupplier = useCallback((supplierId: string) => request(supplierId), [request]);
 
-  return (
-    <div className="session-supplier-row">
-      <label className="session-supplier-label">
-        <span>{t('sessionSupplier.label', 'Supplier')}</span>
-        <select
-          aria-label={t('sessionSupplier.label', 'Supplier')}
-          value={selectedId ?? ''}
-          disabled={pending}
-          onChange={event => request(event.target.value)}
-        >
-          {missing && <option value={selectedId ?? ''} disabled>{t('sessionSupplier.choose', 'Select a supplier')}</option>}
-          {suppliers.map(entry => <option key={entry.id} value={entry.id} disabled={!entry.available}>{entry.name}</option>)}
-        </select>
-      </label>
-      <button type="button" onClick={() => request()} disabled={pending} aria-label={t('common.refresh', 'Refresh')}>
-        <span aria-hidden="true" className={`codicon codicon-${pending ? 'loading codicon-modifier-spin' : 'refresh'}`} />
-      </button>
-      <span role="status" className={error || (missing && !pending) ? 'session-supplier-error' : undefined}>
-        {error ? t('sessionSupplier.unavailable', 'Supplier unavailable. Refresh or select another supplier.')
-          : deferred ? t('sessionSupplier.nextTurn', 'Applies to the next turn')
-            : missing && !pending ? t('sessionSupplier.choose', 'Select a supplier') : ''}
-      </span>
-    </div>
-  );
+  return useMemo(() => {
+    const current = snapshot?.provider === provider ? snapshot : null;
+    const suppliers = current?.suppliers ?? [];
+    const supplierId = current?.supplierId;
+    return {
+      provider, suppliers, supplierId, bindingToken: current?.bindingToken, pending, error,
+      busy: Boolean(busy || current?.busy),
+      missing: !suppliers.some(entry => entry.id === supplierId && entry.available),
+      deferred: Boolean((busy || current?.busy) && current?.activeSupplierId !== supplierId),
+      refresh, selectSupplier, thinkingSettings,
+    };
+  }, [provider, snapshot, pending, error, busy, refresh, selectSupplier, thinkingSettings]);
 }

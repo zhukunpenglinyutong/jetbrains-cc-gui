@@ -3,7 +3,7 @@
  *
  * The Java bridge invokes a single set of `window.update*` callbacks to deliver
  * provider-list and active-provider updates. Multiple React components
- * (Settings hook, RuntimeProviderSelect, etc.) need to react to those events.
+ * (Settings and model/provider state hooks) need to react to those events.
  *
  * Registering a single dispatcher on `window` and routing events through a
  * subscriber Set keeps behavior deterministic regardless of mount order, and
