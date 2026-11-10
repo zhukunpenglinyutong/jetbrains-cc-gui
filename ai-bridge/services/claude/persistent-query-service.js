@@ -64,7 +64,7 @@ import {
   processToolResultMessages,
   shouldOutputMessage,
 } from './stream-event-processor.js';
-import { settingSourcesFor } from './project-trust.js';
+import { projectTrustFor, settingSourcesFor } from './project-trust.js';
 import { generateSessionTitle } from '../session-title-service.js';
 import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
 
@@ -219,12 +219,13 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   const maxThinkingTokens = resolveThinkingTokens(params, settings);
   const systemPromptAppend = buildSystemPromptAppend(params);
 
-  const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory, params.projectTrusted === true);
+  const projectTrusted = projectTrustFor(params.projectTrusted, params.cwd, workingDirectory);
+  const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory, projectTrusted);
 
   const options = buildQueryOptions(
     workingDirectory, sdkModelName, permissionMode,
     maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId,
-    mcpServers, modelId, settings?.env, resolvedModelId, params.projectTrusted
+    mcpServers, modelId, settings?.env, resolvedModelId, projectTrusted
   );
 
   const userMessage = await buildUserMessage(params, withAttachments, requestedSessionId);

@@ -546,17 +546,8 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             return CompletableFuture.completedFuture(error);
         }
 
-        JsonObject params = new JsonObject();
-        if (sessionId != null && !sessionId.isEmpty()) {
-            params.addProperty("sessionId", sessionId);
-        }
-        if (cwd != null && !cwd.isEmpty()) {
-            params.addProperty("cwd", cwd);
-        }
-        if (model != null && !model.isEmpty()) {
-            params.addProperty("model", model);
-        }
-        params.addProperty("projectTrusted", requestParamsBuilder.isProjectTrusted(cwd));
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        JsonObject params = buildContextUsageParams(sessionId, requestCwd, model);
 
         AtomicReference<JsonObject> resultRef = new AtomicReference<>();
         CompletableFuture<JsonObject> resultFuture = new CompletableFuture<>();
@@ -777,6 +768,22 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
     /** The cwd Node runs in, with trust decided on the IDE's form of the same path. */
     private ClaudeRequestParamsBuilder.RequestCwd resolveRequestCwd(String cwd) {
         return requestParamsBuilder.resolveRequestCwd(cwd, this::normalizeCwdForNode);
+    }
+
+    static JsonObject buildContextUsageParams(String sessionId, ClaudeRequestParamsBuilder.RequestCwd requestCwd, String model) {
+        JsonObject params = new JsonObject();
+        if (sessionId != null && !sessionId.isEmpty()) {
+            params.addProperty("sessionId", sessionId);
+        }
+        String nodeCwd = requestCwd.nodeCwd();
+        if (nodeCwd != null && !nodeCwd.isEmpty()) {
+            params.addProperty("cwd", nodeCwd);
+        }
+        if (model != null && !model.isEmpty()) {
+            params.addProperty("model", model);
+        }
+        params.addProperty("projectTrusted", requestCwd.projectTrusted());
+        return params;
     }
 
     /**

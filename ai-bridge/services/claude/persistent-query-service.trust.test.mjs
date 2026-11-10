@@ -7,7 +7,14 @@ import assert from 'node:assert/strict';
 
 import { __testing } from './persistent-query-service.js';
 
-const base = { sessionId: '', model: 'claude-sonnet-4-6', cwd: process.cwd(), permissionMode: 'default' };
+const originalCwd = process.cwd();
+const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-trust-project-'));
+const base = { sessionId: '', model: 'claude-sonnet-4-6', cwd: projectDir, permissionMode: 'default' };
+
+test.after(() => {
+  process.chdir(originalCwd);
+  fs.rmSync(projectDir, { recursive: true, force: true });
+});
 
 test('a trusted project starts the chat runtime with project and local settings', async () => {
   const context = await __testing.buildRequestContext({ ...base, projectTrusted: true });
@@ -60,4 +67,20 @@ test('an untrusted project cannot redirect the user MCP servers through its sett
 
 test('a trusted project keeps expanding ${VAR} in the user MCP servers from its settings.local.json env', async () => {
   assert.equal(await mcpTargetUrl(true), 'https://attacker.example/steal');
+});
+
+test('a trusted flag does not follow the bridge into a fallback directory', async () => {
+  const missing = path.join(projectDir, 'does-not-exist');
+  const context = await __testing.buildRequestContext({ ...base, cwd: missing, projectTrusted: true });
+  assert.notEqual(context.options.cwd, path.resolve(missing));
+  assert.deepEqual(context.options.settingSources, ['user']);
+  process.chdir(originalCwd);
+});
+
+test('a trusted flag without a cwd stays untrusted', async () => {
+  for (const cwd of [undefined, '', 'undefined']) {
+    const context = await __testing.buildRequestContext({ ...base, cwd, projectTrusted: true });
+    assert.deepEqual(context.options.settingSources, ['user'], String(cwd));
+  }
+  process.chdir(originalCwd);
 });

@@ -154,8 +154,10 @@ public class PathUtils {
     /**
      * Whether a request's working directory stays inside the project, following symlinks.
      *
-     * <p>A blank cwd counts as inside: the bridge falls back to the project path then. A null or
-     * empty project base cannot contain anything, so every cwd is outside it. Unlike
+     * <p>A blank cwd is not inside: the bridge then picks a directory of its own (an environment
+     * project path, its process cwd or the home directory) that nobody checked. A null or empty
+     * project base cannot contain anything, so every cwd is outside it. Both paths must be in the
+     * IDE's form: compare before converting the cwd for a WSL Node, not after. Unlike
      * {@link #guardWorkingDirectory(String, String)}, which clamps lexically, this also resolves
      * both paths so a symlink inside the project that points elsewhere does not pass.
      */
@@ -164,7 +166,7 @@ public class PathUtils {
             return false;
         }
         if (!isValidWorkingDirectory(cwd)) {
-            return true;
+            return false;
         }
         String base = normalizeAbsolute(projectBase);
         String normalizedCwd = normalizeAbsolute(cwd);
@@ -177,7 +179,7 @@ public class PathUtils {
     }
 
     /** Non-null, non-empty, and not one of the sentinel strings the webview sends for "no cwd". */
-    private static boolean isValidWorkingDirectory(String cwd) {
+    public static boolean isValidWorkingDirectory(String cwd) {
         return cwd != null && !cwd.isEmpty() && !"undefined".equals(cwd) && !"null".equals(cwd);
     }
 

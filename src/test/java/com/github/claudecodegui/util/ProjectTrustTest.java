@@ -159,11 +159,25 @@ public class ProjectTrustTest {
             Project project = project(base.getPath());
             assertTrue(ProjectTrust.isTrustedForClaude(project, base.getPath(), TRUSTING, notices::add, outside::add));
             assertTrue(ProjectTrust.isTrustedForClaude(project, nested.getPath(), TRUSTING, notices::add, outside::add));
-            assertTrue(ProjectTrust.isTrustedForClaude(project, "", TRUSTING, notices::add, outside::add));
             assertTrue(notices.isEmpty());
             assertTrue(outside.isEmpty());
         } finally {
             nested.delete();
+            base.delete();
+        }
+    }
+
+    @Test
+    public void aBlankWorkingDirectoryIsUntrustedWithoutTheOutsideNotice() throws Exception {
+        java.io.File base = java.nio.file.Files.createTempDirectory("ccgui-trust").toFile();
+        try {
+            Project project = project(base.getPath());
+            assertFalse(ProjectTrust.isTrustedForClaude(project, "", TRUSTING, notices::add, outside::add));
+            assertFalse(ProjectTrust.isTrustedForClaude(project, null, TRUSTING, notices::add, outside::add));
+            assertFalse(ProjectTrust.isTrustedForClaude(project, "undefined", TRUSTING, notices::add, outside::add));
+            assertTrue(notices.isEmpty());
+            assertTrue(outside.isEmpty());
+        } finally {
             base.delete();
         }
     }

@@ -33,13 +33,13 @@ public class PathUtilsWorkingDirectoryInsideProjectTest {
     }
 
     @Test
-    public void aBlankWorkingDirectoryFallsBackToTheProject() throws IOException {
+    public void aBlankWorkingDirectoryIsNotInside() throws IOException {
         String project = project();
 
-        assertTrue(PathUtils.isWorkingDirectoryInsideProject(null, project));
-        assertTrue(PathUtils.isWorkingDirectoryInsideProject("", project));
-        assertTrue(PathUtils.isWorkingDirectoryInsideProject("undefined", project));
-        assertTrue(PathUtils.isWorkingDirectoryInsideProject("null", project));
+        assertFalse(PathUtils.isWorkingDirectoryInsideProject(null, project));
+        assertFalse(PathUtils.isWorkingDirectoryInsideProject("", project));
+        assertFalse(PathUtils.isWorkingDirectoryInsideProject("undefined", project));
+        assertFalse(PathUtils.isWorkingDirectoryInsideProject("null", project));
     }
 
     @Test

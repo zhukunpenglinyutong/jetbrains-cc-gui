@@ -48,7 +48,12 @@ public final class ProjectTrust {
      *
      * <p>The IDE asks about the project, but settings load from the working directory. A
      * working directory outside the project is a different repository the IDE never asked
-     * about, so it is untrusted even when the project is trusted.
+     * about, so it is untrusted even when the project is trusted. A blank working directory is
+     * untrusted too: the bridge would then pick a directory of its own that was never checked.
+     * The user did not choose that, so it gets no outside-directory notice.
+     *
+     * <p>{@code cwd} must be in the IDE's form, the same form as the project base path. Decide
+     * before converting it for a WSL Node, and send the converted form of the same path.
      */
     public static boolean isTrustedForClaude(Project project, String cwd, Consumer<Project> untrustedNotice,
                                              Consumer<Project> outsideWorkingDirectoryNotice) {
@@ -59,6 +64,9 @@ public final class ProjectTrust {
                                       Consumer<Project> untrustedNotice,
                                       Consumer<Project> outsideWorkingDirectoryNotice) {
         if (!isTrustedForClaude(project, lookups, untrustedNotice)) {
+            return false;
+        }
+        if (!PathUtils.isValidWorkingDirectory(cwd)) {
             return false;
         }
         if (PathUtils.isWorkingDirectoryInsideProject(cwd, project.getBasePath())) {

@@ -119,6 +119,18 @@ public class ClaudeProjectTrustParamsTest {
     }
 
     @Test
+    public void contextUsageRequestsCarryTheNodeCwdAndItsTrust() {
+        JsonObject trusted = ClaudeSDKBridge.buildContextUsageParams("s1",
+                new ClaudeRequestParamsBuilder.RequestCwd("/mnt/c/work/project", true), "m");
+        assertEquals("/mnt/c/work/project", trusted.get("cwd").getAsString());
+        assertTrue(trusted.get("projectTrusted").getAsBoolean());
+
+        JsonObject untrusted = ClaudeSDKBridge.buildContextUsageParams("s1",
+                new ClaudeRequestParamsBuilder.RequestCwd("/mnt/c/work/other", false), "m");
+        assertFalse(untrusted.get("projectTrusted").getAsBoolean());
+    }
+
+    @Test
     public void preconnectRequestsCarryTheProjectTrust() {
         assertTrue(ClaudeDaemonCoordinator.buildPreconnectParams("/work", "", "", true).get("projectTrusted").getAsBoolean());
         assertFalse(ClaudeDaemonCoordinator.buildPreconnectParams("/work", "", "", false).get("projectTrusted").getAsBoolean());
