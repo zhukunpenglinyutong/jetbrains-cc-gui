@@ -1,6 +1,7 @@
-import { type RefObject, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
+import { type RefObject, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChatInputBox } from './ChatInputBox';
+import { SessionSupplierSelect, type SessionThinkingSettings } from './SessionSupplierSelect';
 import type {
   Attachment,
   ChatInputBoxHandle,
@@ -136,6 +137,7 @@ export interface ChatScreenProps {
   codexPlanExecutionPending?: boolean;
   codexCompactionPending?: boolean;
   codexCompactionStartedAt?: number | null;
+  codexTurnActive?: boolean;
   onExecuteCodexPlan?: () => void;
   onContinueCodexPlan?: () => void;
 }
@@ -172,6 +174,7 @@ export const ChatScreen = ({
   codexPlan = null, codexPlanExecutionPending = false,
   codexCompactionPending = false,
   codexCompactionStartedAt = null,
+  codexTurnActive = false,
   onExecuteCodexPlan, onContinueCodexPlan,
 }: ChatScreenProps) => {
   const { t } = useTranslation();
@@ -179,6 +182,7 @@ export const ChatScreen = ({
   // Native stream cleanup can precede the control reply without ending its wait.
   const waiting = loading || codexCompactionPending;
   const { currentSessionId } = useSession();
+  const [sessionThinking, setSessionThinking] = useState<SessionThinkingSettings | null>(null);
   const previousMessageKeySnapshotRef = useRef<MessageKeySnapshot | undefined>(undefined);
   const messageKeySnapshot = useMemo(
     () => reconcileMessageKeys(
@@ -368,6 +372,8 @@ export const ChatScreen = ({
       )}
 
       <div className="input-area" ref={inputAreaRef}>
+        <SessionSupplierSelect provider={currentProvider} busy={loading || streamingActive || codexTurnActive || codexPlanExecutionPending || codexCompactionPending}
+          onThinkingSettingsChange={setSessionThinking} />
         <ChatInputBox
           ref={chatInputRef}
           isLoading={waiting}
@@ -379,7 +385,7 @@ export const ChatScreen = ({
           usageUsedTokens={usageUsedTokens}
           usageMaxTokens={usageMaxTokens}
           showUsage={true}
-          alwaysThinkingEnabled={activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? claudeSettingsAlwaysThinkingEnabled}
+          alwaysThinkingEnabled={sessionThinking?.enabled ?? activeProviderConfig?.settingsConfig?.alwaysThinkingEnabled ?? claudeSettingsAlwaysThinkingEnabled}
           placeholder={sendShortcut === 'cmdEnter' ? t('chat.inputPlaceholderCmdEnter') : t('chat.inputPlaceholderEnter')}
           sdkInstalled={currentSdkInstalled}
           sdkStatusLoading={sdkStatusLoading}
@@ -402,7 +408,7 @@ export const ChatScreen = ({
           codexFastMode={codexFastMode}
           onCodexFastModeChange={onCodexFastModeChange}
           onDshPresetChange={onDshPresetChange}
-          onToggleThinking={onToggleThinking}
+          onToggleThinking={currentProvider === 'claude' ? sessionThinking?.onChange ?? (() => {}) : onToggleThinking}
           streamingEnabled={streamingEnabledSetting}
           onStreamingEnabledChange={onStreamingEnabledChange}
           sendShortcut={sendShortcut}

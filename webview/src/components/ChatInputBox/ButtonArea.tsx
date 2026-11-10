@@ -75,7 +75,7 @@ export const ButtonArea = ({
 }: ButtonAreaProps) => {
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
-  const { cliModels, cliModelsLoading, cliModelsError, cliDefaultModel, cliCatalogHasEntries, cliModelsReplaceBuiltIns, cliModelsLoaded, refreshCliModels } = useCliModels(currentProvider);
+  const { cliModels, cliModelsLoading, cliModelsError, cliDefaultModel, cliCatalogHasEntries, cliModelsReplaceBuiltIns, cliModelsLoaded, refreshCliModels } = useCliModels(currentProvider, 'session');
   // Dynamic omp roles (static smol/slow/plan fallback until loaded).
   const ompRoles = useOmpRoles();
 

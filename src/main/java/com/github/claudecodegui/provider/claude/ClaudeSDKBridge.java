@@ -75,6 +75,10 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         );
     }
 
+    public void setSessionSupplierResolver(java.util.function.Supplier<String> resolver) {
+        this.requestParamsBuilder.setSessionSupplierResolver(resolver);
+    }
+
     /**
      * Register a listener for custom daemon events (e.g., AI title generation).
      * Multiple listeners may coexist; callers MUST pair this with
@@ -536,6 +540,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         }
 
         JsonObject params = new JsonObject();
+        this.requestParamsBuilder.addSessionSupplier(params);
         if (sessionId != null && !sessionId.isEmpty()) {
             params.addProperty("sessionId", sessionId);
         }

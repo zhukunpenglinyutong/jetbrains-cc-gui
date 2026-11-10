@@ -86,7 +86,8 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
           agentPrompt || null,
           streaming,  // Pass streaming parameter
           disableThinking || false,  // Pass disableThinking parameter
-          reasoningEffort || null  // Pass reasoning effort level
+          reasoningEffort || null,  // Pass reasoning effort level
+          stdinData.supplierId
         );
       } else {
         await claudeSendMessage(args[0], args[1], args[2], args[3], args[4]);
@@ -104,7 +105,7 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
           cwd || '',
           permissionMode || '',
           model || '',
-          attachments ? { attachments, openedFiles, agentPrompt, streaming, reasoningEffort } : { openedFiles, agentPrompt, streaming, reasoningEffort }
+          { attachments, openedFiles, agentPrompt, streaming, reasoningEffort, supplierId: stdinData.supplierId }
         );
       } else {
         await claudeSendMessageWithAttachments(args[0], args[1], args[2], args[3], args[4], stdinData);

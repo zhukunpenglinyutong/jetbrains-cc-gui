@@ -522,6 +522,11 @@ public class SessionLifecycleManager {
         fetchSlashCommandsOnStartup();
 
         ApplicationManager.getApplication().invokeLater(() -> {
+            if (host.isDisposed()) {
+                return;
+            }
+            // Unsaved sessions both have a null id, so publish the new binding explicitly.
+            host.callJavaScript("window.dispatchEvent", "new Event('session-supplier-binding-changed')");
             // Release the frontend session transition guard so updateMessages works again.
             // Must come BEFORE updateStatus to ensure the guard is lifted before any
             // subsequent message updates arrive.

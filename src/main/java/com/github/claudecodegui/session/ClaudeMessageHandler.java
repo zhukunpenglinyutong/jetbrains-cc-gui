@@ -732,7 +732,8 @@ public class ClaudeMessageHandler implements MessageCallback {
      */
     private String resolveMappedModel(String model) {
         try {
-            JsonObject claudeSettings = settingsService.readClaudeSettings();
+            JsonObject claudeSettings = com.github.claudecodegui.settings.SessionSupplierCatalog.claudeSettings(
+                    settingsService, state.getRuntimeSupplierId("claude"));
             if (claudeSettings != null && claudeSettings.has("env") && claudeSettings.get("env").isJsonObject()) {
                 return ModelProviderHandler.resolveConfiguredClaudeModel(model, claudeSettings.getAsJsonObject("env"));
             }

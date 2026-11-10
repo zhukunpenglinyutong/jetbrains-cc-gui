@@ -3,6 +3,7 @@ package com.github.claudecodegui.session;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.CodexSettingsManager;
+import com.github.claudecodegui.settings.SessionSupplierCatalog;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
@@ -476,7 +477,7 @@ public class SessionSendService {
         }
 
         String accessError = getCodexRuntimeAccessError(accessMode);
-        if (accessError != null) {
+        if (accessError != null && !codexSDKBridge.hasSessionSupplier()) {
             handler.onError(accessError);
             return CompletableFuture.completedFuture(null);
         }
@@ -485,7 +486,9 @@ public class SessionSendService {
         turnSettings.add("additionalContext", this.contextService.buildCodexAdditionalContext(
                 openedFilesJson, fileTagPaths, this.codexSDKBridge::normalizePathForNode));
         String sessionInstructions = this.contextService.buildCodexSessionInstructions(agentPrompt, openedFilesJson);
-        String configuredModel = new CodexSettingsManager(this.gson).resolveModelAlias(this.state.getModel());
+        String supplier = this.state.getRuntimeSupplierId("codex");
+        String configuredModel = codexSDKBridge.hasSessionSupplier() && !SessionSupplierCatalog.isNativeMode(supplier) ? this.state.getModel()
+                : new CodexSettingsManager(this.gson).resolveModelAlias(this.state.getModel());
 
         return settleFromResult(expectedTurnOwner, codexSDKBridge.sendMessage(
                 channelId,

@@ -7,6 +7,20 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class TabStateServiceTest {
+    @Test
+    public void supplierBindingsSurviveTabCopyAndProjectXmlRestore() {
+        TabStateService service = new TabStateService();
+        TabStateService.TabSessionState snapshot = new TabStateService.TabSessionState();
+        snapshot.claudeSupplierId = "claude-a";
+        snapshot.codexSupplierId = "codex-b";
+        service.saveTabSessionState(0, snapshot);
+        snapshot.claudeSupplierId = "unrelated";
+        TabStateService restored = new TabStateService();
+        restored.loadState(XmlSerializer.deserialize(XmlSerializer.serialize(service.getState()), TabStateService.State.class));
+        assertEquals("claude-a", restored.getTabSessionState(0).claudeSupplierId);
+        assertEquals("codex-b", restored.getTabSessionState(0).codexSupplierId);
+    }
+
     /** Unread belongs to a session snapshot and survives copying and project XML reload. */
     @Test
     public void preservesUnreadAcrossSnapshotCopiesAndProjectRestart() {

@@ -17,6 +17,7 @@ import {
 import { isCliOnlyProvider } from './cliProviders';
 import { subscribeActiveCodexProvider, subscribeActiveProvider } from '../../utils/runtimeProviderCapabilities';
 import { type ClaudeModelMapping, writeClaudeModelMapping } from '../../utils/claudeModelMapping';
+import { getSessionClaudeModelCatalog, subscribeSessionClaudeModelCatalog } from '../../utils/sessionClaudeModelCatalog';
 
 type CliModelsByProvider = Record<string, ModelInfo[]>;
 
@@ -119,7 +120,9 @@ function normalizeModels(raw: unknown): ModelInfo[] {
  * Loads model catalogs for headless CLI providers (Kimi / OpenCode) and Codex
  * via channel-manager `listModels`. Falls back to static defaults until loaded.
  */
-export function useCliModels(currentProvider: string) {
+export function useCliModels(currentProvider: string, scope: 'global' | 'session' = 'global') {
+  const sessionCatalog = useSyncExternalStore(subscribeSessionClaudeModelCatalog, getSessionClaudeModelCatalog);
+  const conversationClaude = scope === 'session' && currentProvider === 'claude';
   // Seed from module cache so history→chat remounts keep the last catalog.
   const [modelsByProvider, setModelsByProvider] = useState<CliModelsByProvider>(() => ({ ...modelsCache }));
   const [defaultModelByProvider, setDefaultModelByProvider] = useState<Record<string, string>>(
@@ -136,6 +139,7 @@ export function useCliModels(currentProvider: string) {
   const [errorByProvider, setErrorByProvider] = useState<Record<string, string>>({});
   const pendingLoadRef = useRef<{ provider: string; timer: ReturnType<typeof setTimeout> } | null>(null);
   const nativeRequestRef = useRef<{ id: string; rows: unknown[]; cursors: Set<unknown> } | null>(null);
+  const codexBindingRef = useRef<{ token: string; supplierId?: string } | null>(null);
 
   const clearPendingLoad = useCallback(() => {
     if (pendingLoadRef.current) {
@@ -145,6 +149,10 @@ export function useCliModels(currentProvider: string) {
   }, []);
 
   const beginLoad = useCallback((providerId: string) => {
+    if (providerId === 'claude' && scope === 'session') {
+      window.dispatchEvent(new Event('session-suppliers-refresh'));
+      return;
+    }
     clearPendingLoad();
     setLoadingProvider(providerId);
     setErrorByProvider((prev) => {
@@ -173,7 +181,7 @@ export function useCliModels(currentProvider: string) {
         setErrorByProvider((prev) => ({ ...prev, [providerId]: 'timeout' }));
       }, CLI_MODELS_TIMEOUT_MS),
     };
-  }, [clearPendingLoad]);
+  }, [clearPendingLoad, scope]);
 
   useEffect(() => {
     const handler = (dataOrStr: string | { provider?: string; models?: unknown; roles?: unknown; success?: boolean; error?: string; defaultModel?: unknown; replaceBuiltInOptions?: unknown; modelMapping?: unknown }) => {
@@ -189,6 +197,7 @@ export function useCliModels(currentProvider: string) {
       }
       if (!payload?.provider) return;
       const provider = payload.provider;
+      if (provider === 'claude' && scope === 'session') return;
       if (provider === 'claude' && payload.success !== false
         && payload.modelMapping && typeof payload.modelMapping === 'object' && !Array.isArray(payload.modelMapping)) {
         const mapping: ClaudeModelMapping = {};
@@ -309,21 +318,44 @@ export function useCliModels(currentProvider: string) {
       window.removeEventListener('codex-native-data', nativeCatalogHandler);
       clearPendingLoad();
     };
-  }, [clearPendingLoad]);
+  }, [clearPendingLoad, scope]);
 
   useEffect(() => {
     if (!supportsDynamicModels(currentProvider)) return;
+    if (conversationClaude) return;
     if (currentProvider in modelsByProvider) return;
     if (pendingLoadRef.current?.provider === currentProvider) return;
 
     beginLoad(currentProvider);
-  }, [currentProvider, modelsByProvider, beginLoad]);
+  }, [currentProvider, conversationClaude, modelsByProvider, beginLoad]);
+
+  // A bound catalog follows this conversation, after its active turn has released the old supplier.
+  useEffect(() => {
+    if (scope !== 'session' || currentProvider !== 'codex') return;
+    const onSnapshot = (event: Event) => {
+      const detail = (event as CustomEvent<{ provider?: string; supplierId?: string; bindingToken?: string; busy?: boolean }>).detail;
+      if (detail?.provider !== 'codex' || !detail.bindingToken || detail.busy) return;
+      const previous = codexBindingRef.current;
+      if (previous?.token === detail.bindingToken && previous.supplierId === detail.supplierId) return;
+      codexBindingRef.current = { token: detail.bindingToken, supplierId: detail.supplierId };
+      nativeRequestRef.current = null;
+      delete modelsCache.codex;
+      delete defaultModelCache.codex;
+      delete catalogHasEntriesCache.codex;
+      setModelsByProvider(prev => { const next = { ...prev }; delete next.codex; return next; });
+      setDefaultModelByProvider(prev => { const next = { ...prev }; delete next.codex; return next; });
+      setCatalogHasEntriesByProvider(prev => { const next = { ...prev }; delete next.codex; return next; });
+      beginLoad('codex');
+    };
+    window.addEventListener('session-supplier-snapshot', onSnapshot);
+    return () => window.removeEventListener('session-supplier-snapshot', onSnapshot);
+  }, [currentProvider, scope, beginLoad]);
 
   // Switching Claude providers changes settings.json, including cc-switch's
   // modelPicker. Invalidate even an empty catalog so routes cannot linger.
   useEffect(() => subscribeActiveProvider(() => {
     // Revoke old route capabilities before loading the new provider's catalog.
-    updateClaudeModelCapabilities([]);
+    if (scope !== 'session') updateClaudeModelCapabilities([]);
     delete modelsCache.claude;
     delete defaultModelCache.claude;
     delete catalogHasEntriesCache.claude;
@@ -336,24 +368,25 @@ export function useCliModels(currentProvider: string) {
     setDefaultModelByProvider((prev) => ({ ...prev, claude: '' }));
     setCatalogHasEntriesByProvider((prev) => ({ ...prev, claude: false }));
     setReplaceBuiltInsByProvider((prev) => ({ ...prev, claude: false }));
-    if (currentProvider === 'claude') beginLoad('claude');
-  }), [currentProvider, beginLoad]);
+    if (currentProvider === 'claude' && scope !== 'session') beginLoad('claude');
+  }), [currentProvider, beginLoad, scope]);
 
   // cc-switch can rewrite the local picker while the IDE is in the background.
   useEffect(() => {
-    if (currentProvider !== 'claude') return;
+    if (currentProvider !== 'claude' || conversationClaude) return;
     const refresh = () => {
       if (pendingLoadRef.current?.provider !== 'claude') beginLoad('claude');
     };
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
-  }, [currentProvider, beginLoad]);
+  }, [currentProvider, conversationClaude, beginLoad]);
 
   // Switching the active Codex provider rewrites ~/.codex/config.toml, so the
   // cached catalog no longer reflects what the CLI would serve. Drop the cache
   // and refetch when the chat is currently on codex.
   useEffect(() => {
     return subscribeActiveCodexProvider(() => {
+      if (scope === 'session' && codexBindingRef.current?.supplierId !== '__codex_cli_login__') return;
       delete modelsCache.codex;
       delete defaultModelCache.codex;
       delete catalogHasEntriesCache.codex;
@@ -379,7 +412,7 @@ export function useCliModels(currentProvider: string) {
         beginLoad('codex');
       }
     });
-  }, [currentProvider, beginLoad]);
+  }, [currentProvider, beginLoad, scope]);
 
   const refreshCliModels = useCallback((providerId: string) => {
     if (!supportsDynamicModels(providerId)) return;
@@ -391,13 +424,13 @@ export function useCliModels(currentProvider: string) {
     : fallbackModels(currentProvider);
 
   return {
-    cliModels,
-    cliModelsLoading: loadingProvider === currentProvider,
-    cliModelsError: errorByProvider[currentProvider] ?? null,
-    cliDefaultModel: defaultModelByProvider[currentProvider] ?? null,
-    cliCatalogHasEntries: catalogHasEntriesByProvider[currentProvider] ?? false,
-    cliModelsReplaceBuiltIns: replaceBuiltInsByProvider[currentProvider] ?? false,
-    cliModelsLoaded: currentProvider in modelsByProvider,
+    cliModels: conversationClaude ? sessionCatalog?.models ?? [] : cliModels,
+    cliModelsLoading: !conversationClaude && loadingProvider === currentProvider,
+    cliModelsError: conversationClaude ? null : errorByProvider[currentProvider] ?? null,
+    cliDefaultModel: conversationClaude ? sessionCatalog?.defaultModel ?? null : defaultModelByProvider[currentProvider] ?? null,
+    cliCatalogHasEntries: conversationClaude ? Boolean(sessionCatalog?.models.length) : catalogHasEntriesByProvider[currentProvider] ?? false,
+    cliModelsReplaceBuiltIns: conversationClaude ? sessionCatalog?.replaceBuiltInOptions ?? false : replaceBuiltInsByProvider[currentProvider] ?? false,
+    cliModelsLoaded: conversationClaude ? sessionCatalog !== null : currentProvider in modelsByProvider,
     refreshCliModels,
     modelsByProvider,
   };

@@ -1,7 +1,50 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildSessionTitleRequest } from './session-title-service.js';
+import { buildSessionTitleRequest, __testing } from './session-title-service.js';
+
+test('bound Bedrock titles use their captured AWS credentials, endpoint and model', async () => {
+  const before = { ...process.env };
+  let receivedOptions;
+  let request;
+  class BedrockFixture {
+    constructor(options) { receivedOptions = options; }
+    messages = { create: async input => {
+      request = input;
+      return { content: [{ type: 'text', text: '{"title":"Supplier-local title"}' }] };
+    } };
+  }
+  const supplier = { env: { CLAUDE_CODE_USE_BEDROCK: '1', AWS_ACCESS_KEY_ID: 'fixture-access',
+    AWS_SECRET_ACCESS_KEY: 'fixture-secret', AWS_SESSION_TOKEN: 'fixture-session', AWS_REGION: 'fixture-region',
+    ANTHROPIC_BEDROCK_BASE_URL: 'https://fixture.example.invalid', ANTHROPIC_AUTH_TOKEN: 'irrelevant-api-token' },
+  settings: { env: { ANTHROPIC_DEFAULT_HAIKU_MODEL: 'fixture-cloud-haiku' } } };
+  const title = await __testing.callHaikuApi('fix a bug', 'fixture-title', supplier, {
+    bedrockSdk: async () => ({ AnthropicBedrock: BedrockFixture }),
+    anthropicSdk: async () => { throw new Error('Bound cloud title cannot use the direct Anthropic endpoint'); },
+  });
+  assert.equal(title, 'Supplier-local title');
+  assert.equal(request.model, 'fixture-cloud-haiku');
+  assert.equal(receivedOptions.apiKey, null);
+  assert.equal(receivedOptions.awsAccessKey, 'fixture-access');
+  assert.equal(receivedOptions.awsSecretKey, 'fixture-secret');
+  assert.equal(receivedOptions.awsSessionToken, 'fixture-session');
+  assert.equal(receivedOptions.awsRegion, 'fixture-region');
+  assert.equal(receivedOptions.baseURL, 'https://fixture.example.invalid');
+  assert.equal(receivedOptions.defaultHeaders['x-opencode-session'], 'fixture-title');
+  assert.deepEqual({ ...process.env }, before);
+});
+
+test('cloud titles never fall back to unrelated direct API credentials or a global AWS profile', async () => {
+  const noSdk = async () => { throw new Error('Unsupported direct title credentials must not start a client'); };
+  for (const env of [
+    { CLAUDE_CODE_USE_BEDROCK: '1', AWS_PROFILE: 'fixture-profile' },
+    { CLAUDE_CODE_USE_VERTEX: '1', ANTHROPIC_AUTH_TOKEN: 'irrelevant-api-token' },
+    { CLAUDE_CODE_USE_FOUNDRY: '1', ANTHROPIC_API_KEY: 'irrelevant-api-key' },
+  ]) {
+    assert.equal(await __testing.callHaikuApi('hello', 'fixture-title', { env, settings: {} },
+      { bedrockSdk: noSdk, anthropicSdk: noSdk }), null);
+  }
+});
 
 // ---------- buildSessionTitleRequest (#1693 follow-up) ----------
 

@@ -4,6 +4,7 @@ import { __resetCliModelsCacheForTests, useCliModels, useOmpRoles } from './useC
 import { CODEX_MODELS, KIMI_MODELS, OMP_ROLE_MODELS, apply1MContextSuffix, modelSupports1MContext } from '../../components/ChatInputBox/types';
 import { installRuntimeProviderDispatchers } from '../../utils/runtimeProviderCapabilities';
 import { readClaudeModelMapping, writeClaudeModelMapping } from '../../utils/claudeModelMapping';
+import { setSessionClaudeModelCatalog } from '../../utils/sessionClaudeModelCatalog';
 
 const sendBridgeEventMock = vi.hoisted(() => vi.fn());
 
@@ -22,6 +23,7 @@ describe('useCliModels', () => {
     localStorage.clear();
     sendBridgeEventMock.mockClear();
     __resetCliModelsCacheForTests();
+    setSessionClaudeModelCatalog(null);
     installRuntimeProviderDispatchers();
   });
 
@@ -57,6 +59,41 @@ describe('useCliModels', () => {
     expect(sendBridgeEventMock).toHaveBeenCalledWith('codex_native_list_models', expect.stringContaining('"requestId"'));
   });
 
+  it('reloads a bound Codex catalog after deferred switching and rejects the previous native response', () => {
+    const { result } = renderHook(() => useCliModels('codex', 'session'));
+    const original = JSON.parse(sendBridgeEventMock.mock.calls.at(-1)?.[1] as string) as { requestId: string };
+    const nativeReply = (requestId: string, model: string) => act(() => window.dispatchEvent(new CustomEvent('codex-native-data', {
+      detail: { requestType: 'codex_native_list_models', requestId, data: [{ model, displayName: model }] },
+    })));
+    nativeReply(original.requestId, 'supplier-a-model');
+    expect(result.current.cliModels[0].id).toBe('supplier-a-model');
+    sendBridgeEventMock.mockClear();
+    const snapshot = (busy: boolean) => act(() => window.dispatchEvent(new CustomEvent('session-supplier-snapshot', {
+      detail: { provider: 'codex', supplierId: 'b', bindingToken: 'binding-b', busy },
+    })));
+    snapshot(true);
+    expect(sendBridgeEventMock).not.toHaveBeenCalled();
+    snapshot(false);
+    expect(sendBridgeEventMock).toHaveBeenCalledWith('codex_native_list_models', expect.any(String));
+    const current = JSON.parse(sendBridgeEventMock.mock.calls.at(-1)?.[1] as string) as { requestId: string };
+    nativeReply(original.requestId, 'stale-model');
+    expect(result.current.cliModels.some(model => model.id === 'stale-model')).toBe(false);
+    nativeReply(current.requestId, 'supplier-b-model');
+    expect(result.current.cliModels[0].id).toBe('supplier-b-model');
+    sendBridgeEventMock.mockClear();
+    snapshot(false);
+    expect(sendBridgeEventMock).not.toHaveBeenCalled();
+    act(() => window.updateActiveCodexProvider?.(JSON.stringify({ id: 'unrelated-global-provider' })));
+    expect(sendBridgeEventMock).not.toHaveBeenCalled();
+    expect(result.current.cliModels[0].id).toBe('supplier-b-model');
+    act(() => window.dispatchEvent(new CustomEvent('session-supplier-snapshot', {
+      detail: { provider: 'codex', supplierId: '__codex_cli_login__', bindingToken: 'native-binding', busy: false },
+    })));
+    sendBridgeEventMock.mockClear();
+    act(() => window.updateActiveCodexProvider?.(JSON.stringify({ id: '__codex_cli_login__' })));
+    expect(sendBridgeEventMock).toHaveBeenCalledWith('codex_native_list_models', expect.any(String));
+  });
+
   it('fetches the grok catalog when the grok provider is active', () => {
     renderHook(() => useCliModels('grok'));
     expect(sendBridgeEventMock).toHaveBeenCalledWith('get_cli_models', 'grok');
@@ -65,6 +102,31 @@ describe('useCliModels', () => {
   it('fetches the settings.json model picker for claude', () => {
     renderHook(() => useCliModels('claude'));
     expect(sendBridgeEventMock).toHaveBeenCalledWith('get_cli_models', 'claude');
+  });
+
+  it('uses a bound conversation catalog while ignoring late global catalog replies and switches', () => {
+    const { result } = renderHook(() => useCliModels('claude', 'session'));
+    expect(sendBridgeEventMock).not.toHaveBeenCalledWith('get_cli_models', 'claude');
+    expect(result.current.cliModelsLoaded).toBe(false);
+    act(() => setSessionClaudeModelCatalog({ models: [{ id: 'bound-route', label: 'Bound Route', supports1MContext: true }],
+      defaultModel: 'bound-route', replaceBuiltInOptions: true }));
+    expect(result.current.cliModels[0].id).toBe('bound-route');
+    expect(result.current.cliDefaultModel).toBe('bound-route');
+    expect(result.current.cliModelsReplaceBuiltIns).toBe(true);
+    emitCliModels({ provider: 'claude', success: true, models: [{ id: 'global-route' }], modelMapping: { sonnet: 'global-model' } });
+    act(() => window.updateActiveProvider?.(JSON.stringify({ id: 'global-provider' })));
+    expect(result.current.cliModels[0].id).toBe('bound-route');
+    expect(apply1MContextSuffix('bound-route', true)).toBe('bound-route[1m]');
+    expect(readClaudeModelMapping()).toEqual({});
+    const refresh = vi.fn();
+    window.addEventListener('session-suppliers-refresh', refresh);
+    act(() => result.current.refreshCliModels('claude'));
+    window.removeEventListener('session-suppliers-refresh', refresh);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(sendBridgeEventMock).not.toHaveBeenCalledWith('get_cli_models', 'claude');
+    act(() => setSessionClaudeModelCatalog(null));
+    expect(result.current.cliModels).toEqual([]);
+    expect(result.current.cliModelsLoaded).toBe(false);
   });
 
   it('replaces old aggregation mappings with fresh route and direct mappings even without picker entries', () => {

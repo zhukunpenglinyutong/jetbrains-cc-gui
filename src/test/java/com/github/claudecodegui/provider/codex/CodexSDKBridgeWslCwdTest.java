@@ -40,6 +40,29 @@ public class CodexSDKBridgeWslCwdTest {
 
     private String previousNode;
 
+    /** Plan execution must carry the same supplier identity as ordinary conversation operations. */
+    @Test
+    public void everyRuntimeStartingOperationCapturesTheSessionSupplier() throws Exception {
+        NodeDetector.getInstance().setNodeExecutable(NATIVE_NODE);
+        RecordingDaemon daemon = new RecordingDaemon(NATIVE_NODE, "Ubuntu");
+        CodexSDKBridge bridge = newBridge(daemon);
+        bridge.setSessionSupplierResolver(() -> "fixture-supplier");
+        try {
+            exerciseEveryCwdCarryingOperation(bridge, "C:\\work\\project");
+            awaitMethods(daemon, CWD_CARRYING_METHODS);
+            for (String method : Set.of("codex.send", "codex.review", "codex.compact", "codex.preconnect",
+                    "codex.executePlan", "codex.listSkills", "codex.updateSettings")) {
+                JsonObject params = daemon.paramsByMethod.get(method);
+                assertNotNull(method, params);
+                assertTrue(method, params.has("supplierId"));
+                assertEquals(method, "fixture-supplier", params.get("supplierId").getAsString());
+                assertTrue(method, params.has("codexHome"));
+            }
+        } finally {
+            bridge.cleanupAllProcesses();
+        }
+    }
+
     @Before
     public void rememberNode() {
         assumeTrue(System.getProperty("os.name").startsWith("Windows"));
@@ -175,6 +198,7 @@ public class CodexSDKBridgeWslCwdTest {
 
     private static final class RecordingDaemon extends DaemonBridge {
         private final Map<String, String> cwdByMethod = new ConcurrentHashMap<>();
+        private final Map<String, JsonObject> paramsByMethod = new ConcurrentHashMap<>();
         private final String launchedNode;
         private final String wslDistro;
 
@@ -211,6 +235,7 @@ public class CodexSDKBridgeWslCwdTest {
         @Override
         public CompletableFuture<Boolean> sendCommand(String method, JsonObject params,
                                                        DaemonOutputCallback callback) {
+            this.paramsByMethod.put(method, params.deepCopy());
             if (params.has("cwd")) {
                 this.cwdByMethod.put(method, params.get("cwd").getAsString());
             }
@@ -233,6 +258,13 @@ public class CodexSDKBridgeWslCwdTest {
     }
 
     private static final class FixtureSettings extends CodemossSettingsService {
+        @Override
+        public List<JsonObject> getCodexProviders() {
+            JsonObject supplier = new JsonObject();
+            supplier.addProperty("id", "fixture-supplier");
+            return List.of(supplier);
+        }
+
         @Override
         public String getCodexRuntimeAccessMode() {
             return CODEX_RUNTIME_ACCESS_CLI_LOGIN;

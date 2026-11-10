@@ -1,0 +1,44 @@
+.session-supplier-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 4px 8px 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.session-supplier-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.session-supplier-label select {
+  max-width: 220px;
+  padding: 3px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.session-supplier-row button {
+  display: inline-flex;
+  border: 0;
+  padding: 3px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.session-supplier-row button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.session-supplier-error {
+  color: var(--color-error, #d9534f);
+}
