@@ -8,7 +8,7 @@
  */
 
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
-import type { ClaudeMessage, CodexHistoryPageInfo } from '../../../types';
+import type { ClaudeMessage, ClaudeRawMessage, CodexHistoryPageInfo } from '../../../types';
 import { mergeCodexHistory } from '../../codexHistoryMerge';
 import type { ContextUsageData } from '../../../components/ContextUsageDialog';
 import { isStartupHistoryLoadState } from '../../../types/startupHistory';
@@ -31,6 +31,52 @@ import { reconstructTurnMetadata } from '../../../utils/turnMetadataReconstructi
 import { collectUnresolvedToolUseIds } from './streamingCallbacks';
 
 const isTruthy = (v: unknown) => v === true || v === 'true';
+
+/** Stable key for a content block, used to fold inter-turn increments. */
+function interTurnBlockKey(block: unknown): string {
+  if (!block || typeof block !== 'object') return '';
+  const b = block as Record<string, unknown>;
+  if (b.type === 'tool_use') return `tool_use:${String(b.id ?? '')}`;
+  if (b.type === 'tool_result') return `tool_result:${String(b.tool_use_id ?? '')}`;
+  const text = typeof b.text === 'string' ? b.text : typeof b.thinking === 'string' ? b.thinking : '';
+  return `${String(b.type)}:${text.length}:${text.slice(0, 64)}`;
+}
+
+/**
+ * Fold an inter-turn increment into the raw message that already carries the
+ * same SDK message id. The CLI emits one assistant record per content block
+ * (thinking / tool_use / text) while a follow-up turn streams, so the live
+ * forward arrives as several increments sharing one `message.id`. Appending a
+ * fresh bubble per increment would fragment a single answer across many
+ * bubbles; appending only unseen blocks keeps one bubble per message.
+ */
+function mergeInterTurnRaw(prevRaw: ClaudeRawMessage, nextRaw: ClaudeRawMessage): ClaudeRawMessage {
+  const prevBlocks = Array.isArray(prevRaw?.message?.content) ? prevRaw.message.content : [];
+  const nextBlocks = Array.isArray(nextRaw?.message?.content) ? nextRaw.message.content : [];
+  const seen = new Set(prevBlocks.map(interTurnBlockKey));
+  const merged = [...prevBlocks];
+  for (const block of nextBlocks) {
+    const key = interTurnBlockKey(block);
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    merged.push(block);
+  }
+  return { ...prevRaw, message: { ...prevRaw?.message, content: merged } };
+}
+
+/** Extract the plain-text body from an inter-turn assistant raw message. */
+function extractInterTurnText(raw: ClaudeRawMessage): string {
+  const blocks = raw?.message?.content;
+  if (!Array.isArray(blocks)) {
+    return typeof blocks === 'string' ? blocks : '';
+  }
+  return blocks
+    .filter((block): block is { type: 'text'; text: string } =>
+      !!block && typeof block === 'object' && (block as { type?: unknown }).type === 'text'
+      && typeof (block as { text?: unknown }).text === 'string')
+    .map((block) => block.text)
+    .join('\n');
+}
 
 /** Build a bounded signature for a structural JSON value. */
 function getStructuralValueSignature(value: unknown): string {
@@ -110,6 +156,7 @@ export function registerMessageCallbacks(
     useBackendStreamingRenderRef,
     streamingMessageIndexRef,
     streamingTurnIdRef,
+    turnIdCounterRef,
     findLastAssistantIndex,
     extractRawBlocks,
     patchAssistantForStreaming,
@@ -1252,6 +1299,89 @@ export function registerMessageCallbacks(
         messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
       }
     });
+  };
+
+  // Assistant body from a background follow-up turn (a completed
+  // run_in_background task triggered a CLI turn while no user turn was
+  // active). The perpetual reader forwards it because the [MESSAGE] stream
+  // cannot carry it and the session_updated reload is best-effort. Append it
+  // live so the user sees the AI's analysis without reopening the session.
+  //
+  // Guard chain (mirrors addUserMessage / task_event):
+  //  - drop during session transitions;
+  //  - drop when the event's sessionId is not the displayed session (Java
+  //    already guards this; the frontend re-check is a cheap second line
+  //    because a body append is visible pollution, unlike a keyed task card);
+  //  - drop while streaming — unreachable in practice ([STREAM_END] is written
+  //    before the reader re-enters inter-turn, so inter_turn_message always
+  //    arrives after the stream ended), and the follow-up result's
+  //    session_updated reload recovers the content if it ever happens;
+  //  - drop payloads already present (uuid match) so a replayed event or a
+  //    duplicate delivery converges to one bubble.
+  //
+  // The __turnId tag is load-bearing: preserveLatestMessagesOnShrink keeps a
+  // tail assistant only when it carries isStreaming or __turnId, so without
+  // the tag a stale reload snapshot (generated before the JSONL append)
+  // would silently drop this message — the very loss this callback fixes.
+  // It also stops mergeConsecutiveAssistantMessages from folding the
+  // follow-up report into the previous turn's bubble.
+  window.onInterTurnMessage = (json: string) => {
+    try {
+      if (window.__sessionTransitioning) return;
+      const payload = JSON.parse(json) as { sessionId?: unknown; message?: unknown };
+      if (typeof payload.sessionId !== 'string' || payload.sessionId !== currentSessionIdRef.current) return;
+      if (isStreamingRef.current) return;
+      const raw = payload.message as ClaudeRawMessage | undefined;
+      if (!raw || typeof raw !== 'object') return;
+      const appended: ClaudeMessage = {
+        type: 'assistant',
+        content: extractInterTurnText(raw),
+        raw,
+        timestamp: typeof raw.timestamp === 'string' ? raw.timestamp : new Date().toISOString(),
+      };
+      // Take the turn id OUTSIDE the setMessages updater — updaters must stay
+      // pure because React StrictMode double-invokes them.
+      turnIdCounterRef.current += 1;
+      const turnId = turnIdCounterRef.current;
+      setMessages((prev) => {
+        const appendedUuid = getRawUuid(appended);
+        // The exact same SDK record forwarded twice: nothing new to fold.
+        if (appendedUuid && prev.some((message) => getRawUuid(message) === appendedUuid)) {
+          return prev;
+        }
+        // Increments sharing one message.id are blocks of a single answer, so
+        // fold them into the bubble already on screen (see mergeInterTurnRaw).
+        const msgId = (raw.message as { id?: unknown } | undefined)?.id;
+        if (typeof msgId === 'string' && msgId) {
+          const index = prev.findIndex((message) => {
+            const messageRaw = message.raw;
+            if (!messageRaw || typeof messageRaw !== 'object') return false;
+            const id = (messageRaw as { message?: { id?: unknown } }).message?.id;
+            return typeof id === 'string' && id === msgId;
+          });
+          if (index >= 0) {
+            const existing = prev[index];
+            const existingRaw = typeof existing.raw === 'object' && existing.raw
+              ? existing.raw as ClaudeRawMessage
+              : {};
+            const mergedRaw = mergeInterTurnRaw(existingRaw, raw);
+            const next = [...prev];
+            next[index] = { ...existing, raw: mergedRaw, content: extractInterTurnText(mergedRaw) };
+            return next;
+          }
+        }
+        return [...prev, { ...appended, __turnId: turnId }];
+      });
+      userPausedRef.current = false;
+      isUserAtBottomRef.current = true;
+      requestAnimationFrame(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      });
+    } catch {
+      // Ignore malformed payloads; the session_updated reload still recovers the content.
+    }
   };
 
 }

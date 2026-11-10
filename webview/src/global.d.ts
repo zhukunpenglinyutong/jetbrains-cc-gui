@@ -185,6 +185,14 @@ interface Window {
    */
   onTaskEvent?: (eventJson: string) => void;
 
+  /**
+   * Assistant body from a background follow-up turn (inter-turn). Payload:
+   * { sessionId, message } where message is the full SDK assistant message
+   * (raw.message.content blocks). Rendered as a live append; a later
+   * updateMessages snapshot supersedes the appended copy.
+   */
+  onInterTurnMessage?: (json: string) => void;
+
   /** Structured native Codex app-server event envelope. */
   onCodexRuntimeEvent?: (eventJson: string) => void;
   /** Native Codex catalog/history response envelope. */

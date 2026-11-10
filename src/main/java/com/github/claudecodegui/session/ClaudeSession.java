@@ -171,6 +171,19 @@ public class ClaudeSession {
         }
 
         /**
+         * Called when the ai-bridge perpetual reader forwards an assistant
+         * message body produced by a background follow-up turn (inter-turn).
+         *
+         * <p>These bodies never ride the normal [MESSAGE] stream because no user
+         * turn is active when the CLI generates them, and the session_updated
+         * reload that also recovers them from JSONL is best-effort. Forwarding
+         * them live lets the chat surface the AI's analysis of a completed
+         * background task without a manual reload.</p>
+         */
+        default void onInterTurnMessage(String messageJson) {
+        }
+
+        /**
          * Called when the native Codex app-server emits a structured runtime event.
          *
          * @param eventJson serialized event envelope

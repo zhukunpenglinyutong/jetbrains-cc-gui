@@ -2878,6 +2878,29 @@ public class ClaudeChatWindow {
                     if (adapter != null && data.has("taskEvent") && !data.get("taskEvent").isJsonNull()) {
                         adapter.onTaskEvent(data.get("taskEvent").toString());
                     }
+                } else if ("inter_turn_message".equals(event)) {
+                    // Assistant body from a background follow-up turn, forwarded
+                    // by the ai-bridge perpetual reader's inter-turn branch (no
+                    // active turn means the [MESSAGE] stream cannot carry it and
+                    // the session_updated reload is best-effort). Mirror
+                    // task_event's session guard so a stale follow-up cannot leak
+                    // into a session the user has navigated to; a dropped event
+                    // is still recovered by the loadHistorySession reload when
+                    // the user switches back.
+                    String interTurnSessionId = data.has("sessionId") && data.get("sessionId").isJsonPrimitive()
+                            ? data.get("sessionId").getAsString() : null;
+                    if (interTurnSessionId == null) {
+                        LOG.warn("[ClaudeChatWindow] inter_turn_message event missing sessionId");
+                        return;
+                    }
+                    var interTurnAdapter = sessionCallbackAdapter;
+                    String interTurnCurrentSessionId = session != null ? session.getSessionId() : null;
+                    if (interTurnCurrentSessionId == null || !interTurnCurrentSessionId.equals(interTurnSessionId)) {
+                        return;
+                    }
+                    if (interTurnAdapter != null && data.has("message") && !data.get("message").isJsonNull()) {
+                        interTurnAdapter.onInterTurnMessage(data.get("message").toString());
+                    }
                 }
             };
             this.claudeSDKBridge.addDaemonEventListener(this.titleEventListener);

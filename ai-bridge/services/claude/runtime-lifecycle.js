@@ -79,7 +79,7 @@ export function notifyExpiredResume(requestContext, error, runtime = null) {
   return true;
 }
 
-function emitInterTurnEvent(sessionId) {
+export function emitInterTurnEvent(sessionId) {
   emitDaemonEvent('session_updated', sessionId);
 }
 
@@ -95,6 +95,18 @@ function emitInterTurnEvent(sessionId) {
  */
 export function emitTaskEvent(sessionId, taskMsg) {
   emitDaemonEvent('task_event', sessionId, { taskEvent: taskMsg });
+}
+
+/**
+ * Forward an inter-turn assistant message body to Java as a daemon event.
+ * The perpetual reader emits this for assistant bodies produced by a
+ * background follow-up turn (a completed run_in_background task whose
+ * notification triggered a CLI turn outside any active user turn). The
+ * message is already persisted to JSONL; this is the live display fast-path
+ * so the frontend does not depend on the best-effort session_updated reload.
+ */
+function emitInterTurnMessage(sessionId, msg) {
+  emitDaemonEvent('inter_turn_message', sessionId, { message: msg });
 }
 
 /**
@@ -649,6 +661,24 @@ export function startPerpetualReader(runtime, callbacks) {
               }
             } else {
               console.log('[PERPETUAL_READER] Inter-turn task-notification message for anonymous runtime, consuming silently');
+            }
+          }
+          // A background follow-up turn's assistant body (the AI's analysis of
+          // a completed background task) is the one inter-turn message the
+          // user must actually see. It is persisted to JSONL, but the reload
+          // path that normally recovers it is best-effort (DeferredReload
+          // stream-end races, fan-out last answers), so forward it live as an
+          // inter_turn_message daemon event, mirroring emitTaskEvent's
+          // delivery. Sidechain bodies (non-null parent_tool_use_id) stay
+          // excluded — their transcript loads separately via
+          // onSubagentHistoryLoaded. The task-notification XML carrier handled
+          // above is a user message, so it can never reach this branch.
+          if (msg?.type === 'assistant' && !msg?.parent_tool_use_id) {
+            if (runtime.sessionId) {
+              console.log('[PERPETUAL_READER] Inter-turn assistant message for sessionId=' + runtime.sessionId + ', forwarding as inter_turn_message');
+              emitInterTurnMessage(runtime.sessionId, msg);
+            } else {
+              console.log('[PERPETUAL_READER] Inter-turn assistant message for anonymous runtime, consuming silently');
             }
           }
           // For other message types during inter-turn, we silently consume
