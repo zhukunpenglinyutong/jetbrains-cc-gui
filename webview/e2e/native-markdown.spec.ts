@@ -406,3 +406,49 @@ test('shows hover descriptions for icon-only controls', async ({ page }) => {
   await page.mouse.move(4, 4);
   await expect(tooltip).toBeHidden();
 });
+
+test('lets the floating review controls be moved out of the way', async ({ page }) => {
+  const controls = page.locator('.ccgui-md-controls');
+  const grip = page.locator('.ccgui-md-controls-grip');
+  await expect(grip).toBeVisible();
+  const before = (await controls.boundingBox())!;
+  const handle = (await grip.boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x - 80, handle.y - 60, { steps: 6 });
+  await page.mouse.up();
+  const after = (await controls.boundingBox())!;
+  expect(after.x).toBeLessThan(before.x - 40);
+  expect(after.y).toBeLessThan(before.y - 30);
+});
+
+test('reports an empty comment instead of ignoring the add button', async ({ page }) => {
+  await page.evaluate(() => {
+    const range = document.createRange(); range.selectNodeContents(document.querySelectorAll('p')[1].firstChild!);
+    window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
+  });
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  await page.getByRole('button', { name: 'Add comment', exact: true }).click();
+  await expect(page.locator('.ccgui-md-status')).toHaveText('Add a comment first');
+});
+
+test('wraps long quoted text in the comment list', async ({ page }) => {
+  const longText = 'Long quoted source text for the review list '.repeat(8).trim();
+  await page.evaluate(text => {
+    const native = window as any;
+    native.__state.annotations = [
+      { id: '000a', revision: 1, start: 82, end: 120, selectedText: text, comment: 'note', status: 'attached' },
+    ];
+    native.__response(JSON.stringify(native.__state));
+  }, longText);
+  await page.getByRole('button', { name: '1 comments', exact: true }).click();
+  const quote = page.locator('.ccgui-md-list-quote');
+  await expect(quote).toHaveText(longText);
+  const metrics = await quote.evaluate(element => ({
+    whiteSpace: getComputedStyle(element).whiteSpace,
+    height: element.getBoundingClientRect().height,
+    lineHeight: parseFloat(getComputedStyle(element).lineHeight),
+  }));
+  expect(metrics.whiteSpace).toBe('pre-wrap');
+  expect(metrics.height).toBeGreaterThan(metrics.lineHeight * 1.5);
+});

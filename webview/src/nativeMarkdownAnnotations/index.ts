@@ -41,6 +41,8 @@ function start(pipe: NativePipe) {
   let relocating: Annotation | null = null;
   let popupPosition: { left: number; top: number } | null = null;
   let drag: { id: number; x: number; y: number; left: number; top: number } | null = null;
+  let controlsPosition: { left: number; top: number } | null = null;
+  let controlsDrag: { id: number; x: number; y: number; left: number; top: number } | null = null;
   let composing = false;
   let requestCounter = 0;
   let frame = 0;
@@ -60,6 +62,32 @@ function start(pipe: NativePipe) {
   highlights.className = 'ccgui-md-highlights';
   const controls = document.createElement('div');
   controls.className = 'ccgui-md-controls';
+  const applyControlsPosition = () => {
+    if (!controlsPosition) return;
+    controls.style.left = controlsPosition.left + 'px';
+    controls.style.top = controlsPosition.top + 'px';
+    controls.style.right = 'auto';
+    controls.style.bottom = 'auto';
+  };
+  const endControlsDrag = () => { controlsDrag = null; };
+  controls.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || (event.target as Element).closest('button')) return;
+    const rect = controls.getBoundingClientRect();
+    controlsDrag = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
+    controls.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  controls.addEventListener('pointermove', event => {
+    if (!controlsDrag || event.pointerId !== controlsDrag.id) return;
+    controlsPosition = {
+      left: Math.max(4, Math.min(controlsDrag.left + event.clientX - controlsDrag.x, innerWidth - controls.offsetWidth - 4)),
+      top: Math.max(4, Math.min(controlsDrag.top + event.clientY - controlsDrag.y, innerHeight - controls.offsetHeight - 4)),
+    };
+    applyControlsPosition();
+  });
+  controls.addEventListener('pointerup', endControlsDrag);
+  controls.addEventListener('pointercancel', endControlsDrag);
+  controls.addEventListener('lostpointercapture', endControlsDrag);
   const popup = document.createElement('div');
   popup.className = 'ccgui-md-popup';
   popup.setAttribute('role', 'dialog');
@@ -107,14 +135,21 @@ function start(pipe: NativePipe) {
       resolve(false);
     }, 8000);
     callbacks.set(requestId, { resolve, timer });
-    pipe.post('ccgui.markdown.request', JSON.stringify({
-      action, requestId, panelId: state?.panelId,
-      documentVersion: state?.documentVersion,
-      ...(['ready', 'sync'].includes(action) ? {
-        renderedSourceLength: Number(/^0\.\.(\d+)$/.exec(root?.getAttribute(positionAttribute() ?? '') ?? '')?.[1] ?? -1),
-      } : {}),
-      ...payload,
-    }));
+    try {
+      pipe.post('ccgui.markdown.request', JSON.stringify({
+        action, requestId, panelId: state?.panelId,
+        documentVersion: state?.documentVersion,
+        ...(['ready', 'sync'].includes(action) ? {
+          renderedSourceLength: Number(/^0\.\.(\d+)$/.exec(root?.getAttribute(positionAttribute() ?? '') ?? '')?.[1] ?? -1),
+        } : {}),
+        ...payload,
+      }));
+    } catch {
+      clearTimeout(timer);
+      callbacks.delete(requestId);
+      message = labels.failed;
+      resolve(false);
+    }
   });
 
   /** Errors cross the bridge as keys (plan §7); the overlay owns the display language. */
@@ -286,6 +321,16 @@ function start(pipe: NativePipe) {
       controls.append(status);
     }
 
+    const grip = document.createElement('span');
+    grip.className = 'ccgui-md-controls-grip';
+    grip.textContent = '⠿';
+    grip.title = labels.moveControls;
+    grip.setAttribute('aria-hidden', 'true');
+    grip.addEventListener('pointerenter', () => showTooltip(grip, labels.moveControls));
+    grip.addEventListener('pointerleave', hideTooltip);
+    controls.append(grip);
+    applyControlsPosition();
+
     toolbar.replaceChildren();
     toolbar.hidden = editing || showAllComments || (!!activeComment && !relocating) || !!state?.dirty || (!selection && !relocating);
     if (!toolbar.hidden) {
@@ -341,6 +386,7 @@ function start(pipe: NativePipe) {
             const id = document.createElement('small'); id.textContent = '#' + annotation.id;
             const quote = document.createElement('span'); quote.className = 'ccgui-md-list-quote';
             quote.textContent = annotation.selectedText;
+            quote.title = annotation.selectedText;
             const comment = document.createElement('span'); comment.className = 'ccgui-md-list-comment';
             comment.textContent = annotation.comment;
             entry.append(id, quote, comment);
@@ -372,6 +418,9 @@ function start(pipe: NativePipe) {
           textarea.addEventListener('input', () => { draft = textarea.value; });
           textarea.addEventListener('compositionstart', () => { composing = true; });
           textarea.addEventListener('compositionend', () => { composing = false; });
+          // Clicking Add/Save commits the IME too; a missing compositionend
+          // event must not leave every later submit silently blocked.
+          textarea.addEventListener('blur', () => { composing = false; });
           textarea.addEventListener('keydown', event => {
             if (composing || event.isComposing || event.keyCode === 229) return;
             if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); return; }
@@ -391,14 +440,17 @@ function start(pipe: NativePipe) {
           });
           const actions = document.createElement('div'); actions.className = 'ccgui-md-actions';
           const saveComment = () => {
-            if (pending || composing || !draft.trim()) return;
+            if (pending) return;
+            if (!draft.trim()) { message = labels.empty; render(); return; }
+            if (!activeComment && !selection) { message = labels.selectionMismatch; render(); return; }
             pending = true;
             const operation = activeComment
               ? send('update', { id: activeComment.id, revision: activeComment.revision, comment: draft })
               : send('create', { ...selection, documentVersion: selectionVersion, comment: draft });
-            void operation.then(ok => { pending = false; if (ok) close(); else render(); });
+            void operation.then(ok => { pending = false; if (ok) close(); else render(); })
+              .catch(() => { pending = false; message = labels.failed; render(); });
           };
-          actions.append(button(labels.cancel, close), button(activeComment ? labels.save : labels.add, saveComment, false, 'primary'));
+          actions.append(button(labels.cancel, close), button(activeComment ? labels.save : labels.add, saveComment, pending, 'primary'));
           popup.append(textarea, actions);
         } else if (activeComment) {
           const body = document.createElement('p'); body.textContent = activeComment.comment;
@@ -589,7 +641,16 @@ function start(pipe: NativePipe) {
   });
   window.addEventListener('scroll', scheduleRender, { passive: true });
   document.addEventListener('scroll', scheduleRender, { passive: true, capture: true });
-  window.addEventListener('resize', scheduleRender);
+  window.addEventListener('resize', () => {
+    if (controlsPosition) {
+      controlsPosition = {
+        left: Math.max(4, Math.min(controlsPosition.left, innerWidth - controls.offsetWidth - 4)),
+        top: Math.max(4, Math.min(controlsPosition.top, innerHeight - controls.offsetHeight - 4)),
+      };
+      applyControlsPosition();
+    }
+    scheduleRender();
+  });
   // Coalesce native preview patches: every sync makes the host reconcile and
   // republish overlay state, so sending one per patch during typing is wasteful.
   let syncTimer: ReturnType<typeof setTimeout> | null = null;
