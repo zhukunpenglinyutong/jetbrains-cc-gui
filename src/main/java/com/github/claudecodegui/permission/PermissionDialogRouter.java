@@ -1,11 +1,14 @@
 package com.github.claudecodegui.permission;
 
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.util.ProjectPathUtils;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
 
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -124,7 +127,7 @@ class PermissionDialogRouter {
         }
 
         String normalizedCwd = normalizePathSafely(cwd);
-        Project[] openProjects = ProjectManager.getInstance().getOpenProjects();
+        Project[] openProjects = getOpenProjects();
         Project bestMatch = null;
         int longestMatchLength = 0;
 
@@ -132,18 +135,31 @@ class PermissionDialogRouter {
             if (project.isDisposed()) {
                 continue;
             }
-            String basePath = project.getBasePath();
-            if (basePath == null) {
-                continue;
-            }
-            String normalizedBasePath = normalizePathSafely(basePath);
-            if (pathMatches(normalizedCwd, normalizedBasePath) && normalizedBasePath.length() > longestMatchLength) {
-                longestMatchLength = normalizedBasePath.length();
-                bestMatch = project;
+            for (String boundaryPath : getProjectBoundaryPaths(project)) {
+                String normalizedBoundaryPath = normalizePathSafely(boundaryPath);
+                if (pathMatches(normalizedCwd, normalizedBoundaryPath)
+                        && normalizedBoundaryPath.length() > longestMatchLength) {
+                    longestMatchLength = normalizedBoundaryPath.length();
+                    bestMatch = project;
+                }
             }
         }
 
         return bestMatch;
+    }
+
+    Project[] getOpenProjects() {
+        return ProjectManager.getInstance().getOpenProjects();
+    }
+
+    List<String> getProjectBoundaryPaths(Project project) {
+        List<String> boundaryPaths = new ArrayList<>();
+        String basePath = project.getBasePath();
+        if (basePath != null) {
+            boundaryPaths.add(basePath);
+        }
+        boundaryPaths.addAll(ProjectPathUtils.getContentRootPaths(project));
+        return boundaryPaths;
     }
 
     boolean hasRegisteredDialogShowers() {
@@ -189,17 +205,15 @@ class PermissionDialogRouter {
         int longestMatchLength = 0;
         for (Map.Entry<Project, T> entry : dialogShowers.entrySet()) {
             Project project = entry.getKey();
-            String projectPath = project.getBasePath();
-            if (projectPath == null) {
-                continue;
-            }
-            String normalizedProjectPath = normalizePathSafely(projectPath);
-            if (pathMatches(normalizedCwd, normalizedProjectPath)
-                    && normalizedProjectPath.length() > longestMatchLength) {
-                longestMatchLength = normalizedProjectPath.length();
-                bestMatch = project;
-                debugLog.accept(logPrefix, "Found potential match: " + project.getName()
-                        + " (path: " + projectPath + ", length: " + normalizedProjectPath.length() + ")");
+            for (String boundaryPath : getProjectBoundaryPaths(project)) {
+                String normalizedBoundaryPath = normalizePathSafely(boundaryPath);
+                if (pathMatches(normalizedCwd, normalizedBoundaryPath)
+                        && normalizedBoundaryPath.length() > longestMatchLength) {
+                    longestMatchLength = normalizedBoundaryPath.length();
+                    bestMatch = project;
+                    debugLog.accept(logPrefix, "Found potential match: " + project.getName()
+                            + " (path: " + boundaryPath + ", length: " + normalizedBoundaryPath.length() + ")");
+                }
             }
         }
 
