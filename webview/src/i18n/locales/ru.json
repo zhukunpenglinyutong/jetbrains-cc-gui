@@ -141,8 +141,7 @@
       "matchCase": "Учитывать регистр (Alt+C)",
       "wholeWord": "Слово целиком (Alt+W)",
       "regex": "Регулярное выражение (Alt+R)",
-      "invalidRegex": "Недопустимое регулярное выражение",
-      "openTooltip": "Поиск в беседе (Cmd/Ctrl+F)"
+      "invalidRegex": "Недопустимое регулярное выражение"
     },
     "compactSummary": {
       "receivedTime": "Время записи",

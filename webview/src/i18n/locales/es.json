@@ -141,8 +141,7 @@
       "matchCase": "Coincidir mayúsculas y minúsculas (Alt+C)",
       "wholeWord": "Coincidir palabra completa (Alt+W)",
       "regex": "Expresión regular (Alt+R)",
-      "invalidRegex": "Regex no válida",
-      "openTooltip": "Buscar en la conversación (Cmd/Ctrl+F)"
+      "invalidRegex": "Regex no válida"
     },
     "compactSummary": {
       "receivedTime": "Hora registrada",

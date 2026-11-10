@@ -141,8 +141,7 @@
       "matchCase": "Respecter la casse (Alt+C)",
       "wholeWord": "Mot entier (Alt+W)",
       "regex": "Expression régulière (Alt+R)",
-      "invalidRegex": "Regex invalide",
-      "openTooltip": "Rechercher dans la conversation (Cmd/Ctrl+F)"
+      "invalidRegex": "Regex invalide"
     },
     "compactSummary": {
       "receivedTime": "Heure enregistrée",

@@ -141,8 +141,7 @@
       "matchCase": "大文字と小文字を区別 (Alt+C)",
       "wholeWord": "単語単位で検索 (Alt+W)",
       "regex": "正規表現 (Alt+R)",
-      "invalidRegex": "無効な正規表現",
-      "openTooltip": "会話内を検索 (Cmd/Ctrl+F)"
+      "invalidRegex": "無効な正規表現"
     },
     "compactSummary": {
       "receivedTime": "記録時刻",

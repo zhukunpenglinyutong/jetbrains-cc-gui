@@ -179,8 +179,7 @@
       "matchCase": "区分大小写 (Alt+C)",
       "wholeWord": "全词匹配 (Alt+W)",
       "regex": "正则表达式 (Alt+R)",
-      "invalidRegex": "正则无效",
-      "openTooltip": "在对话中搜索 (Cmd/Ctrl+F)"
+      "invalidRegex": "正则无效"
     },
     "compactSummary": {
       "receivedTime": "记录时间",

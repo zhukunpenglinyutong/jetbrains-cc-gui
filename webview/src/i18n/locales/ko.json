@@ -141,8 +141,7 @@
       "matchCase": "대소문자 구분 (Alt+C)",
       "wholeWord": "단어 단위 일치 (Alt+W)",
       "regex": "정규식 (Alt+R)",
-      "invalidRegex": "유효하지 않은 정규식",
-      "openTooltip": "대화에서 검색 (Cmd/Ctrl+F)"
+      "invalidRegex": "유효하지 않은 정규식"
     },
     "compactSummary": {
       "receivedTime": "기록 시간",

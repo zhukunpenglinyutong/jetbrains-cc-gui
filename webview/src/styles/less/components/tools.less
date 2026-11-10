@@ -36,6 +36,7 @@
 .bash-tool-header {
     border-bottom: none;
     background: var(--bg-primary);
+    gap: 8px;
 }
 
 .bash-tool-header.expanded {
@@ -53,13 +54,20 @@
     font-size: 13px;
     color: var(--text-secondary);
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
+/* Long commands truncate with an ellipsis instead of being clipped mid-glyph
+   and running under the status dot, matching the bash group timeline rows. */
 .bash-tool-description {
     color: var(--text-tertiary);
     font-style: normal;
     margin-left: 12px;
     white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .bash-tool-status {
