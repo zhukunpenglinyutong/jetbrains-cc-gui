@@ -2465,11 +2465,6 @@
     "omp": {
       "label": "OMP CLI"
     },
-    "beta": {
-      "badge": "Beta",
-      "title": "Beta 功能",
-      "message": "此功能仍处于 Beta 阶段。如果遇到使用 Bug，请及时反馈给作者。"
-    },
     "dsh": {
       "label": "DeepSeek Harness"
     },

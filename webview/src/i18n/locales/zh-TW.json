@@ -2007,11 +2007,6 @@
     "omp": {
       "label": "OMP CLI"
     },
-    "beta": {
-      "badge": "Beta",
-      "title": "Beta 功能",
-      "message": "此功能仍處於 Beta 階段。如果遇到使用 Bug，請及時回饋給作者。"
-    },
     "dsh": {
       "label": "DeepSeek Harness"
     },

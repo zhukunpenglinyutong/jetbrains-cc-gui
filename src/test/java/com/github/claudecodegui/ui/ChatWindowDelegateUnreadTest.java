@@ -1,8 +1,6 @@
 package com.github.claudecodegui.ui;
 
 import com.intellij.openapi.util.Key;
-import com.intellij.openapi.application.Application;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.ui.content.Content;
 import com.intellij.util.SVGLoader;
@@ -161,53 +159,58 @@ public class ChatWindowDelegateUnreadTest {
         Fixture f = new Fixture();
         f.delegate.onAssistantActivity(); f.drain();
         Tab original = f.tab.get(); f.tab.set(new Tab());
-        f.delegate.refreshUnreadBadge(); f.drain();
+        f.delegate.refreshTabIndicator(); f.drain();
         assertNull(original.icon.get());
         assertNotNull(f.tab.get().icon.get());
         assertTrue(f.delegate.hasUnread());
     }
 
     @Test
-    public void idleStatusResetDoesNotClearUnreadOrLeaveStatusTextInTheName() {
+    public void answeringOutranksUnreadAndIdleRestoresTheUnreadDot() {
         Fixture f = new Fixture();
-        Application previous = ApplicationManager.getApplication();
-        Application app = (Application) Proxy.newProxyInstance(Application.class.getClassLoader(),
-                new Class<?>[]{Application.class}, (proxy, method, args) -> {
-                    if (method.getName().equals("invokeLater")) f.queue.add((Runnable) args[0]);
-                    return method.getReturnType() == boolean.class ? false : null;
-                });
-        try {
-            ApplicationManager.setApplication(app);
-            f.delegate.onAssistantActivity(); f.drain();
-            f.delegate.updateTabStatus(ChatWindowDelegate.TabAnswerStatus.ANSWERING); f.drain();
-            f.delegate.updateTabStatus(ChatWindowDelegate.TabAnswerStatus.IDLE); f.drain();
-            assertTrue(f.delegate.hasUnread());
-            assertNotNull(f.tab.get().icon.get());
-            assertEquals("AI test", f.tab.get().name.get());
-        } finally {
-            f.delegate.dispose();
-            ApplicationManager.setApplication(previous);
-        }
+        f.delegate.onAssistantActivity(); f.drain();
+        Icon unreadIcon = f.tab.get().icon.get();
+        f.delegate.updateTabStatus(ChatWindowDelegate.TabAnswerStatus.ANSWERING); f.drain();
+        assertNotSame(unreadIcon, f.tab.get().icon.get());
+        f.delegate.updateTabStatus(ChatWindowDelegate.TabAnswerStatus.IDLE); f.drain();
+        assertSame(unreadIcon, f.tab.get().icon.get());
+        assertTrue(f.delegate.hasUnread());
+        assertEquals("AI test", f.tab.get().name.get());
     }
 
     @Test
-    public void badgeResourcePaintsVisibleRedPixels() throws Exception {
-        Fixture f = new Fixture();
-        f.delegate.onAssistantActivity(); f.drain();
-        assertNotNull(f.tab.get().icon.get());
+    public void statusPrecedenceIsAnsweringThenUnreadThenCompleted() {
+        assertSame(ChatWindowDelegate.TabIndicator.ANSWERING,
+                ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.ANSWERING, true));
+        assertSame(ChatWindowDelegate.TabIndicator.UNREAD,
+                ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.IDLE, true));
+        assertSame(ChatWindowDelegate.TabIndicator.COMPLETED,
+                ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.COMPLETED, false));
+        assertNull(ChatWindowDelegate.resolveTabIndicator(ChatWindowDelegate.TabAnswerStatus.IDLE, false));
+    }
+
+    @Test
+    public void statusDotResourcesPaintBlueOrangeAndGreen() throws Exception {
+        // The reference desktop client's palette: running is blue, unread is orange
+        // (red is reserved for failures), a finished turn is green.
+        assertDotColor("/icons/tab-status-streaming.svg", 0x2F80ED);
+        assertDotColor("/icons/tab-status-unread.svg", 0xF97316);
+        assertDotColor("/icons/tab-status-completed.svg", 0x22C55E);
+    }
+
+    private static void assertDotColor(String resource, int expectedRgb) throws Exception {
         // IconLoader stays inactive in a headless test JVM; use its SVG renderer directly.
-        java.awt.Image rendered = SVGLoader.load(ChatWindowDelegate.class.getResource("/icons/unread-dot.svg"), 1f);
+        java.awt.Image rendered = SVGLoader.load(ChatWindowDelegate.class.getResource(resource), 1f);
         BufferedImage image = new BufferedImage(rendered.getWidth(null), rendered.getHeight(null), BufferedImage.TYPE_INT_ARGB);
         java.awt.Graphics2D graphics = image.createGraphics();
         try { graphics.drawImage(rendered, 0, 0, null); } finally { graphics.dispose(); }
-        int redPixels = 0;
-        for (int y = 0; y < image.getHeight(); y++) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                int pixel = image.getRGB(x, y);
-                if ((pixel >>> 24) > 100 && ((pixel >>> 16) & 255) > 150
-                        && ((pixel >>> 16) & 255) > 2 * ((pixel >>> 8) & 255)) redPixels++;
-            }
+        int pixel = image.getRGB(image.getWidth() / 2, image.getHeight() / 2);
+        assertEquals(255, pixel >>> 24);
+        for (int shift = 0; shift <= 16; shift += 8) {
+            int expected = (expectedRgb >>> shift) & 0xFF;
+            int actual = (pixel >>> shift) & 0xFF;
+            assertTrue(resource + " channel " + shift + " was " + actual + ", expected " + expected,
+                    Math.abs(expected - actual) <= 2);
         }
-        assertTrue("Unread must be a visible red dot", redPixels >= 8);
     }
 }

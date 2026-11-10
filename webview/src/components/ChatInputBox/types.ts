@@ -734,8 +734,6 @@ export interface ProviderInfo {
   label: string;
   icon: string;
   enabled: boolean;
-  /** When true, show a Beta badge and first-click notice dialog. */
-  beta?: boolean;
 }
 
 /**
@@ -744,14 +742,14 @@ export interface ProviderInfo {
 export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   { id: 'claude', label: 'Claude Code', icon: 'codicon-terminal', enabled: true },
   { id: 'codex', label: 'Codex', icon: 'codicon-terminal', enabled: true },
-  { id: 'grok', label: 'Grok CLI', icon: 'codicon-terminal', enabled: true, beta: true },
-  { id: 'kimi', label: 'Kimi CLI', icon: 'codicon-terminal', enabled: true, beta: true },
-  { id: 'opencode', label: 'OpenCode', icon: 'codicon-terminal', enabled: true, beta: true },
-  { id: 'pi', label: 'PI CLI', icon: 'codicon-terminal', enabled: true, beta: true },
-  { id: 'omp', label: 'OMP CLI', icon: 'codicon-terminal', enabled: true, beta: true },
-  { id: 'dsh', label: 'DeepSeek Harness', icon: 'codicon-terminal', enabled: true, beta: true },
-  { id: 'minimax', label: 'MiniMax Code', icon: 'codicon-terminal', enabled: true, beta: true },
-  { id: 'zcode', label: 'ZCode', icon: 'codicon-terminal', enabled: true, beta: true },
+  { id: 'grok', label: 'Grok CLI', icon: 'codicon-terminal', enabled: true },
+  { id: 'kimi', label: 'Kimi CLI', icon: 'codicon-terminal', enabled: true },
+  { id: 'opencode', label: 'OpenCode', icon: 'codicon-terminal', enabled: true },
+  { id: 'pi', label: 'PI CLI', icon: 'codicon-terminal', enabled: true },
+  { id: 'omp', label: 'OMP CLI', icon: 'codicon-terminal', enabled: true },
+  { id: 'dsh', label: 'DeepSeek Harness', icon: 'codicon-terminal', enabled: true },
+  { id: 'minimax', label: 'MiniMax Code', icon: 'codicon-terminal', enabled: true },
+  { id: 'zcode', label: 'ZCode', icon: 'codicon-terminal', enabled: true },
 ];
 
 /**

@@ -2461,11 +2461,6 @@
     "omp": {
       "label": "OMP CLI"
     },
-    "beta": {
-      "badge": "Beta",
-      "title": "Beta Feature",
-      "message": "This feature is still in Beta. If you encounter any bugs, please report them to the author promptly."
-    },
     "dsh": {
       "label": "DeepSeek Harness"
     },

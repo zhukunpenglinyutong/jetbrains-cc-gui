@@ -536,7 +536,7 @@ public class ClaudeChatWindow {
             }
 
             persistTabSessionState();
-            chatWindowDelegate.refreshUnreadBadge();
+            chatWindowDelegate.refreshTabIndicator();
         }
     }
 
