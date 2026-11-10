@@ -14,7 +14,8 @@
 #ccgui-markdown-review button:disabled { opacity: .5; cursor: not-allowed; }
 #ccgui-markdown-review button:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
 #ccgui-markdown-review .ccgui-md-controls, #ccgui-markdown-review .ccgui-md-toolbar, #ccgui-markdown-review .ccgui-md-popup { position: fixed; border: 1px solid var(--border-secondary); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); box-shadow: var(--shadow-md); pointer-events: auto; }
-#ccgui-markdown-review .ccgui-md-controls { right: 12px; bottom: 12px; display: grid; grid-template-columns: auto auto auto; align-items: center; gap: 4px; max-width: calc(100vw - 24px); padding: 3px 4px; }
+#ccgui-markdown-review .ccgui-md-controls { right: 12px; bottom: 12px; display: grid; grid-template-columns: auto auto auto; align-items: center; gap: 4px; max-width: calc(100vw - 24px); padding: 3px 4px 3px 16px; }
+#ccgui-markdown-review .ccgui-md-controls-grip { position: absolute; left: 3px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); font-size: 12px; letter-spacing: -1px; line-height: 1; cursor: move; user-select: none; }
 #ccgui-markdown-review .ccgui-md-controls .ccgui-md-button { min-height: 24px; padding: 2px 6px; font-size: 12px; }
 #ccgui-markdown-review .ccgui-md-controls svg { width: 14px; height: 14px; }
 #ccgui-markdown-review .ccgui-md-controls > .secondary { border-color: transparent; color: var(--text-tertiary); }
@@ -32,7 +33,7 @@
 #ccgui-markdown-review .ccgui-md-comment-list li { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border-secondary); }
 #ccgui-markdown-review .ccgui-md-comment-list .ccgui-md-button { display: grid; width: 100%; gap: 3px; padding: 7px 6px; border: 0; text-align: left; justify-content: stretch; }
 #ccgui-markdown-review .ccgui-md-comment-list small { color: var(--text-tertiary); font-size: 10px; }
-#ccgui-markdown-review .ccgui-md-list-quote { color: var(--text-tertiary); font-size: 11px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#ccgui-markdown-review .ccgui-md-list-quote { color: var(--text-tertiary); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
 #ccgui-markdown-review .ccgui-md-list-comment { font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 #ccgui-markdown-review .ccgui-md-comment-list .ccgui-md-list-empty { padding: 12px 6px; color: var(--text-tertiary); }
 .mermaid[data-actual-fence-content] svg text,
