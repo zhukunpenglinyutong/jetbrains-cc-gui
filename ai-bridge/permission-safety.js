@@ -158,14 +158,16 @@ export function isAcceptEditsAllowed(filePath, cwd, additionalDirs) {
 }
 
 // Unix/macOS system directories. They match only at the start of a path: after the string start,
-// a separator or quote, `..`, `$IFS`, a positional parameter such as `$9`, a `}` that does not
-// close `${VAR}` or a `:-` default value, optionally behind an attached short option (`-T`,
-// `-4T`) and a `/private` (macOS) or `/proc/<pid>/root` alias. So `~/.claude/bin/` or `./bin/`
-// is not mistaken for `/bin/`. `//` and `/./` runs are collapsed first (DOT_SEGMENTS), so the
+// a separator or quote, a `..` path segment, `$IFS`, a positional parameter, a known-empty
+// parameter expansion, a `}` that does not close `${VAR}` or a `:-` default value, optionally
+// behind an attached short option (`-T`, `-4T`, including empty quotes). `/private` (macOS)
+// and `/proc/<pid>/root` aliases may be repeated. So `~/.claude/bin/` or `./bin/` is not
+// mistaken for `/bin/`. `//` and `/./` runs are collapsed first (DOT_SEGMENTS), so the
 // patterns need no repeated group and stay linear on long inputs.
-const PATH_BOUNDARY = '(?:^|[^\\w.~$}-]|\\.\\.|\\$(?:IFS|\\{IFS[^}]{0,64}\\}|\\d)|(?<!\\$\\{[^}]*)\\}|:-)';
-const ROOT_ALIAS = '(?:/private|/proc/[^/\\s]+/root)?';
-const SYSTEM_DIR_START = `${PATH_BOUNDARY}(?:-[\\w#]+)?${ROOT_ALIAS}`;
+const SHELL_EXPANSION = '\\$(?:IFS|\\{IFS[^}]{0,64}\\}|\\d|\\{\\d+\\}|\\{[@*]\\}|\\{[A-Za-z_]\\w*(?::[-+=]|:\\d+:0)\\})';
+const PATH_BOUNDARY = `(?:^|[^\\w.~$}-]|(?<![\\w.~$}-])\\.\\.|${SHELL_EXPANSION}|(?<!\\$\\{[^}]*)\\}|:-)`;
+const ROOT_ALIAS = '(?:(?:/private|/proc/[^/\\s]+/root)+)?';
+const SYSTEM_DIR_START = `${PATH_BOUNDARY}(?:-(?:[\\w#]|''|"")+)?${ROOT_ALIAS}`;
 const DOT_SEGMENTS = /\/(?:\.?\/)+/g;
 const SYSTEM_DIR_PATTERNS = ['/etc/', '/System/', '/usr/', '/bin/', '/sbin/'].map(dir => new RegExp(
   SYSTEM_DIR_START + dir.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'),
