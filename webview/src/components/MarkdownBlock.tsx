@@ -12,6 +12,7 @@ import { useMarkdownFileLinkTooltip } from '../hooks/useMarkdownFileLinkTooltip'
 import {
   decorateExistingAnchors,
   linkifyHtml,
+  normalizeFileLinkHref,
 } from '../utils/linkify';
 import {
   getLinkifyCapabilities,
@@ -24,6 +25,7 @@ import { ImagePreviewOverlay } from './MarkdownBlock/ImagePreviewOverlay';
 import hljs from 'highlight.js/lib/core';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
+import dart from 'highlight.js/lib/languages/dart';
 import diff from 'highlight.js/lib/languages/diff';
 import dockerfile from 'highlight.js/lib/languages/dockerfile';
 import go from 'highlight.js/lib/languages/go';
@@ -40,7 +42,6 @@ import sql from 'highlight.js/lib/languages/sql';
 import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
-import 'highlight.js/styles/github-dark.css';
 import 'katex/dist/katex.css';
 import { markedHighlight } from 'marked-highlight';
 import { copyToClipboard } from '../utils/copyUtils';
@@ -83,6 +84,10 @@ function isAllowedHrefValue(value: string): boolean {
     return true;
   }
 
+  if (normalizeFileLinkHref(trimmed)) {
+    return true;
+  }
+
   if (!URI_SCHEME_REGEX.test(trimmed)) {
     return true;
   }
@@ -120,6 +125,7 @@ const MARKDOWN_LINK_SANITIZE_OPTIONS = {
 const highlightLanguages: Array<[string, Parameters<typeof hljs.registerLanguage>[1]]> = [
   ['bash', bash],
   ['css', css],
+  ['dart', dart],
   ['diff', diff],
   ['dockerfile', dockerfile],
   ['go', go],
@@ -147,6 +153,7 @@ hljs.registerAliases(['ts', 'tsx'], { languageName: 'typescript' });
 hljs.registerAliases(['sh', 'zsh'], { languageName: 'bash' });
 hljs.registerAliases(['html', 'xhtml', 'svg'], { languageName: 'xml' });
 hljs.registerAliases(['yml'], { languageName: 'yaml' });
+hljs.registerAliases(['flutter'], { languageName: 'dart' });
 
 // Configure marked to use syntax highlighting
 marked.use(

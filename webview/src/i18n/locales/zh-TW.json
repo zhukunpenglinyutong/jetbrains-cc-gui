@@ -214,6 +214,7 @@
     "codexReviewStarted": "Codex 正在審查工作區變更",
     "codexDiffUsage": "請直接使用 /diff，無需參數",
     "codexApprovalsUsage": "請直接使用 /approvals，無需參數",
+    "codexCliOutdated": "Codex CLI {{version}} 版本較舊，部分模型和權限模式可能無法正常使用，請升級到 {{minimumVersion}} 或更高版本。",
     "codexSandboxConflict": "Codex 自動審查不能使用 danger-full-access 沙箱，請改用 workspace-write 或請求批准模式。",
     "continueRefiningPlan": "繼續完善此計畫："
   },
@@ -2355,6 +2356,25 @@
         }
       }
     },
+    "claudeCodeWindowsTooOld": {
+      "title": "目前的 Windows 版本無法啟動 Claude Code",
+      "intro": "Windows 阻止了 Claude Code 啟動，因為找不到它需要的系統函式（錯誤 0xC0000139）。這通常表示 Windows 版本過舊：Claude Code 2.1.118 及更新版本使用 ClosePseudoConsole，需要 Windows 10 1809 或 Windows Server 2019。",
+      "reason": "Windows 在載入程式時就拒絕了它，此時 Claude Code 還沒有執行，所以更換模型、供應商或權限設定都沒有幫助。",
+      "solutions": {
+        "updateWindows": {
+          "title": "方案一：升級 Windows",
+          "step0": "升級到 Windows 10 1809 或更新版本，或 Windows Server 2019 或更新版本。這些版本包含缺少的函式。"
+        },
+        "useOlderSdk": {
+          "title": "方案二：切換到舊版 SDK",
+          "step0": "在「相依性管理」中將 SDK 版本切換到 v0.2.112 或更早版本。較新的模型可能不接受這個舊版本。如果模型要求較新的 Claude Code，請改用其他模型或升級 Windows，因為更新 SDK 會讓這個錯誤再次出現。"
+        },
+        "checkCustomCli": {
+          "title": "方案三：檢查自訂的 Claude CLI",
+          "step0": "如果設定了「Claude CLI 路徑（覆寫）」，外掛會執行該程式而不是 SDK，切換 SDK 不會有任何效果。請清空該路徑，或改為指向舊版 Claude Code。如果 Windows 已是最新版本，請先檢查這一項。"
+        }
+      }
+    },
     "spawnEbusy": {
       "title": "spawn EBUSY — 子處理程序啟動失敗",
       "intro": "此錯誤通常由 Node.js 版本不相容或 SDK 安裝不完整引起，按以下兩個方向排查通常可解決：",
@@ -2368,6 +2388,22 @@
           "title": "方案二：用 npm 官方源重新安裝最新版 SDK",
           "step0": "1. 切換到 npm 官方源（淘寶源可能未同步最新版本，請勿使用淘寶源安裝）：",
           "step1": "2. 開啟「相依性管理」重新安裝最新版 SDK："
+        }
+      }
+    },
+    "codexCliVersionTooOld": {
+      "title": "Codex CLI 版本過低，不支援目前的權限模式",
+      "intro": "全自動和自動審批模式會用到自動審查器設定。目前的 Codex CLI 不認識這個設定並拒絕了請求，所以這則訊息沒有被處理。",
+      "reason": "外掛使用本機識別到的 Codex CLI，更新外掛不會同時更新 CLI。如果更新後仍然報錯，可能是 PATH 上還有一個更舊的 codex 排在前面。",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "方案一：按官方說明安裝或更新 CLI",
+          "step0": "1. 開啟官方說明，選擇適合目前執行環境的獨立安裝器、npm 或 Homebrew。更新時沿用原安裝管道，不要對獨立安裝版執行 npm 解除安裝：",
+          "step1": "2. 在新終端機中確認版本已經更新，然後重新啟動 IDE，讓外掛換用新的 CLI："
+        },
+        "useDefaultMode": {
+          "title": "方案二：暫時切換權限模式",
+          "step0": "切換到預設模式。這個模式不使用自動審查器，可以在更新 CLI 之前繼續工作。如果仍然報錯，請按方案一更新 CLI。"
         }
       }
     },

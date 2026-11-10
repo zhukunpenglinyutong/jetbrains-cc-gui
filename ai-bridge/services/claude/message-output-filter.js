@@ -8,6 +8,23 @@ export function truncateString(str, maxLen = 1000) {
   return str.substring(0, maxLen) + `... [truncated, total ${str.length} chars]`;
 }
 
+export const MAX_SEND_ERROR_LENGTH = 2500;
+const STDERR_TRUNCATED_MARKER = '[earlier stderr truncated]\n';
+
+/**
+ * Puts the CLI's stderr in front of an error message. Diagnostic cards match on
+ * the message, so when both do not fit in MAX_SEND_ERROR_LENGTH only the stderr
+ * gives way, keeping its most recent output. Callers keep the full stderr in
+ * details.sdkError.
+ */
+export function prependSdkStderr(message, stderrText) {
+  const format = (text) => `SDK-STDERR:\n\`\`\`\n${text}\n\`\`\`\n\n${message}`;
+  const overflow = format(stderrText).length - MAX_SEND_ERROR_LENGTH;
+  if (overflow <= 0) return format(stderrText);
+  const keep = stderrText.length - overflow - STDERR_TRUNCATED_MARKER.length;
+  return keep > 0 ? format(STDERR_TRUNCATED_MARKER + stderrText.slice(-keep)) : message;
+}
+
 // Patterns covering common credential shapes that can leak through SDK
 // stderr / stack traces. Each entry pairs a regex with its replacement string.
 // Patterns that need to preserve a leading label (Bearer, Authorization:, etc.)

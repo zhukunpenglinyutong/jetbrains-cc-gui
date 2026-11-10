@@ -8,6 +8,7 @@ import com.github.claudecodegui.provider.ClaudeContextWindowOverrideProvider;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
 import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.session.SessionLifecycleManager;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
 import com.google.gson.JsonObject;
@@ -15,6 +16,7 @@ import com.google.gson.JsonParser;
 import org.junit.Test;
 
 import javax.swing.JPanel;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -36,6 +38,31 @@ import static org.junit.Assert.assertTrue;
  * and frontend-ready state ownership in {@link ChatWindowDelegate}.
  */
 public class ChatWindowDelegateTest {
+
+    /** Unsupported provider locking must not abort the tool-window startup repair. */
+    @Test
+    public void startupContinuesWhenProviderRepairCannotLockTheFilesystem() {
+        java.util.concurrent.atomic.AtomicBoolean attempted = new java.util.concurrent.atomic.AtomicBoolean();
+        CodemossSettingsService settings = new CodemossSettingsService() {
+            @Override
+            public boolean repairActiveProviderToClaudeSettings() throws IOException {
+                attempted.set(true);
+                throw new IOException("The filesystem provider does not support file locking; no changes were written",
+                        new kotlin.NotImplementedError("Not yet implemented"));
+            }
+        };
+        ChatWindowDelegate.DelegateHost host = (ChatWindowDelegate.DelegateHost) Proxy.newProxyInstance(
+                ChatWindowDelegate.DelegateHost.class.getClassLoader(),
+                new Class<?>[]{ChatWindowDelegate.DelegateHost.class},
+                (proxy, method, args) -> {
+                    if ("getSettingsService".equals(method.getName())) {
+                        return settings;
+                    }
+                    throw new AssertionError("Unexpected startup interaction: " + method.getName());
+                });
+        new ChatWindowDelegate(host).syncActiveProvider();
+        assertTrue("Startup must attempt repair and handle the lock failure", attempted.get());
+    }
 
     /** Reconnect must repair a missed terminal without replacing the user's input document. */
     @Test

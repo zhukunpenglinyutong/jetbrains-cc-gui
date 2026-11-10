@@ -34,12 +34,39 @@ describe('matchErrorPattern', () => {
     expect(matchErrorPattern(text)).toBeNull();
   });
 
+  it.each([
+    'Invalid request: unknown variant `auto_review`, expected `user` or `guardian_subagent`',
+    'thread/resume: Invalid request: unknown variant `auto_review`, expected `user` or `guardian_subagent`',
+  ])('explains a Codex CLI too old for the automatic reviewer: %s', (text) => {
+    expect(matchErrorPattern(text)?.code).toBe('codexCliVersionTooOld');
+  });
+
+  it.each([
+    // A variant a newer CLI removed must not advise updating the CLI.
+    'Invalid request: unknown variant `untrusted`, expected `never` or `on-request`',
+    'auto_review was denied by the reviewer',
+  ])('does not blame the CLI version for other failures: %s', (text) => {
+    expect(matchErrorPattern(text)?.code).not.toBe('codexCliVersionTooOld');
+  });
+
+  it('localizes the Codex CLI version notice with its versions in every supported language', () => {
+    const locales = import.meta.glob<{ chat: Record<string, string> }>('../i18n/locales/*.json', {
+      eager: true, import: 'default',
+    });
+    expect(Object.keys(locales)).toHaveLength(10);
+    for (const [locale, { chat }] of Object.entries(locales)) {
+      expect(chat.codexCliOutdated, locale).toContain('{{version}}');
+      expect(chat.codexCliOutdated, locale).toContain('{{minimumVersion}}');
+    }
+  });
+
   it('provides localized recovery instructions in every supported language', () => {
     const locales = import.meta.glob<{ errorDiagnostic: Record<string, unknown> }>('../i18n/locales/*.json', {
       eager: true, import: 'default',
     });
     const recoveryPatterns = patternsData.patterns.filter(pattern =>
-      pattern.code === 'codexWriterConflict' || pattern.code.startsWith('codexThread'));
+      pattern.code === 'codexWriterConflict' || pattern.code === 'codexCliVersionTooOld'
+        || pattern.code.startsWith('codexThread'));
     expect(Object.keys(locales)).toHaveLength(10);
     for (const [locale, { errorDiagnostic }] of Object.entries(locales)) {
       for (const pattern of recoveryPatterns) {
@@ -157,6 +184,60 @@ describe('matchErrorPattern', () => {
   it('matches the Claude Code minimum version message without the error code', () => {
     const text = 'Claude Code 2.1.39 does not support this model; version 2.1.280 or newer is required.';
     expect(matchErrorPattern(text)?.code).toBe('claudeCodeVersionTooOld');
+  });
+
+  it.each([
+    'Claude Code process exited with code 3221225785',
+    'Claude Code process exited with code -1073741511',
+    'Claude Code process exited with code 3221225785. stderr: tail',
+    'Cannot write to process that exited with error: Claude Code process exited with code 3221225785',
+    'SDK-STDERR:\n```\nnoise\n```\n\nClaude Code process exited with code 3221225785',
+    'Claude Code error:\n- Error message: Claude Code process exited with code 3221225785\n- Current API Key source: Not configured',
+  ])('diagnoses a Claude Code that Windows refused to load: %s', (text) => {
+    expect(matchErrorPattern(text)?.code).toBe('claudeCodeWindowsTooOld');
+  });
+
+  it.each([
+    'Claude Code process exited with code 1',
+    'Claude Code process exited with code 3221225786',
+    'Claude Code process exited with code 32212257851',
+    'MCP server "foo" process exited with code 3221225785',
+    'Hook process exited with code 3221225785',
+  ])('does not blame the Windows version for: %s', (text) => {
+    expect(matchErrorPattern(text)).toBeNull();
+  });
+
+  it('points old Windows at the last SDK that runs on Node.js, in every supported language', () => {
+    const locales = import.meta.glob<{
+      errorDiagnostic: Record<string, unknown>;
+      settings: { basic: { claudeCliPath: { label: string } } };
+    }>('../i18n/locales/*.json', {
+      eager: true, import: 'default',
+    });
+    const pattern = patternsData.patterns.find(entry => entry.code === 'claudeCodeWindowsTooOld');
+    expect(pattern?.solutions.map(solution => solution.key)).toEqual(['updateWindows', 'useOlderSdk', 'checkCustomCli']);
+    expect(Object.keys(locales)).toHaveLength(10);
+    for (const [locale, { errorDiagnostic, settings }] of Object.entries(locales)) {
+      const diagnostic = errorDiagnostic.claudeCodeWindowsTooOld as {
+        title: string; intro: string; reason: string;
+        solutions: Record<string, Record<string, string>>;
+      };
+      expect(diagnostic?.title, `${locale}: title`).toBeTruthy();
+      expect(diagnostic?.reason, `${locale}: reason`).toBeTruthy();
+      for (const required of ['0xC0000139', '2.1.118', '1809', 'Windows Server 2019']) {
+        expect(diagnostic?.intro, `${locale}: intro`).toContain(required);
+      }
+      for (const solution of pattern?.solutions ?? []) {
+        const translated = diagnostic?.solutions?.[solution.key];
+        expect(translated?.title, `${locale}: ${solution.key}`).toBeTruthy();
+        solution.steps.forEach((_, index) => {
+          expect(translated?.[`step${index}`], `${locale}: ${solution.key}.step${index}`).toBeTruthy();
+        });
+      }
+      expect(diagnostic?.solutions?.useOlderSdk?.step0, `${locale}: useOlderSdk`).toContain('v0.2.112');
+      expect(diagnostic?.solutions?.checkCustomCli?.step0, `${locale}: checkCustomCli`)
+        .toContain(settings.basic.claudeCliPath.label);
+    }
   });
 
   it('does not treat a clean exit line without the CLI hint as a CLI install problem', () => {

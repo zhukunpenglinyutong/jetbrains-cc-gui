@@ -4,6 +4,7 @@ import GenericToolBlock from './GenericToolBlock';
 
 const hookMocks = vi.hoisted(() => ({
   useResolvedFileLinkTooltip: vi.fn(),
+  openFile: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -17,7 +18,7 @@ vi.mock('../../hooks/useIsToolDenied', () => ({
 }));
 
 vi.mock('../../utils/bridge', () => ({
-  openFile: vi.fn(),
+  openFile: hookMocks.openFile,
 }));
 
 vi.mock('../../hooks/useResolvedFileLinkTooltip', () => ({
@@ -33,6 +34,7 @@ describe('GenericToolBlock', () => {
   beforeEach(() => {
     hookMocks.useResolvedFileLinkTooltip.mockReset();
     hookMocks.useResolvedFileLinkTooltip.mockReturnValue({});
+    hookMocks.openFile.mockReset();
   });
 
   it('shows the wrapper error output when details are expanded', () => {
@@ -159,6 +161,26 @@ describe('GenericToolBlock', () => {
     // both the link target and the fallback display text so the tooltip can
     // still show the user where the link points before the backend resolves.
     expect(hookMocks.useResolvedFileLinkTooltip).toHaveBeenCalledWith(absolutePath, absolutePath);
+  });
+
+  it('opens apply_patch file links with the extracted relative path', () => {
+    render(
+      <GenericToolBlock
+        name="apply_patch"
+        input={{
+          input: [
+            '*** Begin Patch',
+            '*** Update File: Assets/GameScripts/Foo.cs',
+            '@@',
+            '*** End Patch',
+          ].join('\n'),
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Foo.cs'));
+
+    expect(hookMocks.openFile).toHaveBeenCalledWith('Assets/GameScripts/Foo.cs');
   });
 
   it('caps huge param values instead of dumping them into the DOM', () => {

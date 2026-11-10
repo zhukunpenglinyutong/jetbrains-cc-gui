@@ -13,6 +13,64 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: '0.6.4',
+    date: '2026-11-03',
+    content: {
+      en: `✨ Features
+- **Choose how restored history loads when the IDE starts** (#1879): a new application setting can leave restored sessions unloaded until requested, while the chat shows explicit unloaded, loading, loaded, timed-out, cancelled and failed states with Load, Cancel and Retry actions. Automatic loads have a bounded deadline, cancellation reaches Claude, Codex and local CLI readers, and request/session generation guards prevent a slow result from replacing a newer transcript (by @GGMGG, @zhukunpenglinyutong)
+- **Edit messages that are waiting in the queue** (#2017): every queued row now has an edit action that restores its text, references and attachments to the input. Existing drafts are merged instead of overwritten, attachments are deduplicated, queue ordering remains stable, and edits are refused without removing the message when an in-flight paste or controlled attachment state cannot be restored safely (by @57ggfk, @zhukunpenglinyutong)
+- **Import and export provider backups** (#2002): Settings can now save provider configurations to a backup and restore them through native file dialogs. Imports use the normal validated settings path and keep the standard config backup, exports skip invalid providers while reporting partial success, protected Codex environment variables are rejected, and cancelling or waiting in the file picker no longer produces a false timeout (by @sss-codes, @zhukunpenglinyutong)
+- **Let Codex ask questions without blocking the active turn** (#2014): asynchronous questions and their recorded answers now appear as first-class conversation items, with localized labels and delivery recovery. Dismissing a question steers that result into the owning operation instead of interrupting an unrelated turn, and uncertain or late deliveries are retired with a clear status so the same answer cannot be applied twice (by @GGMGG, @zhukunpenglinyutong)
+- **Show real usage for Grok and OpenCode** (#1887, #2021, #2035): the context bar can poll Grok plan billing without waking an idle daemon and keeps the last good reading through transient failures. OpenCode usage is accumulated across every step of a turn, uses provider-reported cost when available and restores from history, while both providers resolve the active model's context window from their current configuration instead of relying on a fixed fallback (by @toxeh, @zhukunpenglinyutong)
+
+🔧 Improvements
+- **Track execution ownership and interactive waits consistently across providers** (#1946): session state now distinguishes a running operation from one waiting for approval or a question, keeps the owning execution stable across callbacks and settles Claude, Codex, Grok, Zcode and local CLI turns through one lifecycle. Stop and cancellation results are preserved instead of being overwritten by late callbacks, which also makes tab state and history deletion decisions more reliable (by @GGMGG, @zhukunpenglinyutong)
+- **Make Settings easier to scan and navigate** (#1917): related connection, prompt, extension and maintenance pages are grouped in the sidebar, Community stays in a fixed footer, Codex Pet sits beside the other extension controls, and the Skills toolbar now follows the MCP layout and adapts cleanly to narrow panels (by @GGMGG)
+- **Match Claude's real context window in the input indicator** (#1973): the displayed capacity now follows the CLI's model mapping and settings precedence, understands custom limits and explicit \`[1m]\`/\`[500k]\` suffixes, preserves the request's suffix through model remapping, and formats million-token capacities accurately. Project and managed settings are resolved from the session working directory, while built-in Claude models keep their official windows unless compaction is disabled (by @Cyber0xFE, @zhukunpenglinyutong)
+- **Make native Codex history and workspace metadata more complete** (#1989, #1990, #1991, #1992): replay preserves MCP outcomes, wrapper failures, questions and tool correlations; edit history is paged without treating tool receipts as edits; custom titles survive native history loads; workspace skills stay within repository boundaries and refresh safely; and scoped configuration warnings now identify the affected source (by @GGMGG, @zhukunpenglinyutong)
+- **Load very large Claude transcripts without creating one giant string** (#1986): JSONL history is read in bounded chunks and split on UTF-8-safe line boundaries, so sessions larger than V8's roughly 512 MiB string limit can still be paged and resumed while keeping malformed-tail and line-number behavior unchanged (by @obidnov)
+- **Resolve Windows MCP commands reliably** (#1914): bare executables and script shims are resolved in PATH/PATHEXT order without corrupting non-ASCII directories, quoted batch arguments preserve trailing backslashes, lookups have a five-second bound, configured working directories are kept, and expanded Codex server rows refresh their tool catalogs without reviving stale results (by @GGMGG, @zhukunpenglinyutong)
+
+🐛 Fixes
+- **Keep the selected Claude model and tier on every provider path** (#1749): the webview-controlled settings layer now receives the request's resolved model directly instead of reading stale process environment values, preserving custom model names and \`[1m]\` tier choices for CLI-login and cloud-provider sessions without allowing old settings to override the current request (by @hebulin, @Bebop, @zhukunpenglinyutong)
+- **Recover Remote Development chats without losing drafts** (#2015, #2020): text is mirrored synchronously for fast reloads, stale per-window drafts are pruned, a stalled persistent store cannot hold the chat blank forever, and replaced remote webviews re-bootstrap provider/model state and interactions. Failed JCEF instances are quarantined so watchdog recovery cannot reuse a browser whose native resources are already being disposed (by @Jefung, @GGMGG, @zhukunpenglinyutong)
+- **Keep manual session titles after reloads and history edits** (#1977): persisted titles are replayed when the frontend becomes ready, title edits from the history list immediately update the open chat, and AI-generated titles are kept separate from manual titles so a late generation result cannot overwrite the user's choice (by @R-Tsubasa)
+- **Delete Codex history only when its native writer is idle** (#2011, #2029): deletion requests carry their provider and request id, hold writer leases while rollout files are removed, refuse running or foreign-owned sessions, and report partial or failed outcomes instead of optimistically closing the active chat. Stale rollout entries are filtered from native history and malformed rows no longer abort the list (by @GGMGG, @kochpy, @zhukunpenglinyutong)
+- **Keep Codex resume, streaming and patch rendering faithful** (#2006, #2010, #2012): resume failures now distinguish writer conflicts, missing history, archived threads and configuration errors with bounded retry guidance; stream end keeps a backend snapshot tail that deltas never painted; and native add/delete patches are treated as complete file contents so previews, line counts and undo match history (by @gadfly3173, @toxeh)
+- **Return Codex rule approvals in the shape the CLI expects** (#2028): approval results are wrapped in the required decision envelope, preventing valid rule choices from being rejected or left waiting by native Codex (by @kochpy)
+- **Keep Grok messages, tools and questions in the right order** (#2004, #2007, #2008, #2036): image-only turns receive their analysis prompt before global rules and IDE context, injected rules/context are stripped back out of displayed user messages, prose around tool calls is segmented once without duplication, and idle cleanup no longer removes a still-open ask dialog (by @toxeh, @zhukunpenglinyutong)
+- **Decode more WebP Codex Pet images** (#1996): Pet previews and installations try IDE-provided WebP readers before the bundled fallback and continue to another reader after a decoder-specific failure, while WebP pets remain listed even when the global ImageIO registry has no reader (by @GGMGG, @zhukunpenglinyutong)
+- **Preserve keyboard focus on code-copy buttons during streaming** (#1999): when syntax highlighting replaces a focused button, its position is captured during render and focus moves to the replacement before paint, without stealing focus after an intentional blur or move to another control (by @GGMGG, @zhukunpenglinyutong)
+- **Do not start Claude merely because the Commit Message action refreshed** (#1985): presentation updates now read enablement only, so Codex-selected, disabled and unavailable commit generation paths no longer prewarm a Claude runtime before the user asks to generate anything (by @jianhong-li, @zhukunpenglinyutong)`,
+      zh: `✨ 新功能
+- **可选择 IDE 启动时如何加载恢复会话的历史记录**（#1879）：新增应用级设置，可让恢复的会话先保持未加载，直到用户主动请求；聊天界面会明确展示未加载、加载中、已加载、超时、已取消与失败状态，并提供加载、取消和重试操作。自动加载具有明确截止时间，取消会传递到 Claude、Codex 与本地 CLI 读取器，请求 ID 和会话代次校验可防止迟到结果覆盖较新的对话（by @GGMGG、@zhukunpenglinyutong）
+- **可编辑消息队列中等待发送的消息**（#2017）：每条排队消息新增编辑操作，可把文本、引用与附件恢复到输入框；已有草稿会合并而非覆盖，附件按 ID 去重，队列顺序保持稳定；若图片仍在粘贴或受控附件无法安全恢复，编辑会被拒绝且原消息不会从队列中移除（by @57ggfk、@zhukunpenglinyutong）
+- **支持导入与导出 Provider 备份**（#2002）：设置页现在可以通过原生文件对话框保存 Provider 配置备份并恢复。导入复用标准的校验与设置写入路径并保留常规配置备份；导出会跳过无效 Provider 并报告部分成功；受保护的 Codex 环境变量会被拒绝；取消文件选择或长时间停留在对话框中也不会再被误报为超时（by @sss-codes、@zhukunpenglinyutong）
+- **Codex 可在不中断当前回合的情况下异步提问**（#2014）：异步问题及其回答会作为一等对话项显示，并带有本地化标签与投递恢复。关闭问题时会把“已跳过”结果转向创建它的操作，而不是中断无关回合；投递不确定或回答过晚时会以明确状态结束，避免同一回答被应用两次（by @GGMGG、@zhukunpenglinyutong）
+- **显示 Grok 与 OpenCode 的真实用量**（#1887、#2021、#2035）：上下文栏可轮询 Grok 套餐用量且不会唤醒空闲守护进程，短暂失败时会保留最近一次有效数据。OpenCode 会累加同一回合每个 step 的用量，优先使用 Provider 返回的实际费用并支持从历史恢复；两者都会从当前配置解析活动模型的上下文窗口，不再依赖固定兜底值（by @toxeh、@zhukunpenglinyutong）
+
+🔧 优化
+- **在所有 Provider 间统一追踪执行归属与交互等待状态**（#1946）：会话状态现在能区分正在运行与等待审批/回答，并在回调期间保持执行归属稳定；Claude、Codex、Grok、Zcode 与本地 CLI 的回合通过统一生命周期结束。停止与取消结果不会再被迟到回调覆盖，标签页状态和历史删除判断也因此更可靠（by @GGMGG、@zhukunpenglinyutong）
+- **设置页更易浏览和定位**（#1917）：侧边栏按连接、提示词、扩展与维护对相关页面分组，Community 固定在底部，Codex Pet 与其他扩展控制项相邻；Skills 工具栏统一为 MCP 页面布局，并能在窄面板中自适应排列（by @GGMGG）
+- **输入框中的 Claude 上下文窗口与 CLI 实际值保持一致**（#1973）：容量显示现在遵循 CLI 的模型映射与设置优先级，支持自定义上限和显式 \`[1m]\`/\`[500k]\` 后缀，并在模型重映射后保留本次请求的后缀，百万级容量也会准确格式化。项目级与托管设置按会话工作目录解析；除非禁用压缩，内置 Claude 模型仍使用官方窗口（by @Cyber0xFE、@zhukunpenglinyutong）
+- **原生 Codex 历史与工作区元数据更加完整**（#1989、#1990、#1991、#1992）：回放会保留 MCP 结果、包装器失败、问题与工具关联；编辑历史支持分页且不会把工具回执当成编辑；自定义标题可跨原生历史加载保留；工作区 Skill 被限制在仓库边界内并安全刷新；配置警告会指出具体受影响来源（by @GGMGG、@zhukunpenglinyutong）
+- **超大 Claude 会话不再一次性读取成巨型字符串**（#1986）：JSONL 历史改为按有界数据块读取，并在 UTF-8 安全的换行边界切分，因此超过 V8 约 512 MiB 字符串上限的会话仍可分页和继续，同时保持原有的残缺尾行识别与行号语义（by @obidnov）
+- **可靠解析 Windows 上的 MCP 命令**（#1914）：裸可执行文件与脚本 shim 按 PATH/PATHEXT 顺序解析，不再损坏含非 ASCII 字符的目录；批处理参数末尾反斜杠可正确保留；查找最多执行五秒；配置的工作目录不会丢失；展开的 Codex 服务器行会刷新工具目录而不会复用过期结果（by @GGMGG、@zhukunpenglinyutong）
+
+🐛 修复
+- **所有 Provider 路径都能保留所选 Claude 模型与档位**（#1749）：由 webview 控制的设置层现在直接接收本次请求解析出的模型，不再读取可能过期的进程环境变量；CLI 登录与云 Provider 会话中的自定义模型名和 \`[1m]\` 档位得以保留，同时旧设置不会覆盖当前请求（by @hebulin、@Bebop、@zhukunpenglinyutong）
+- **Remote Development 会话恢复时不再丢失草稿**（#2015、#2020）：文本会同步镜像以覆盖快速重载，过期的窗口草稿会被清理，持久化存储卡住时也不会让聊天界面一直空白；被替换的远程 webview 会重新引导 Provider、模型状态与交互。失败的 JCEF 实例会被隔离，防止看门狗恢复流程复用正在释放原生资源的浏览器（by @Jefung、@GGMGG、@zhukunpenglinyutong）
+- **手动会话标题在重载与历史编辑后保持不变**（#1977）：前端就绪后会回放持久化标题，从历史列表修改标题会立即同步到当前打开的会话；AI 生成标题与手动标题分开保存，迟到的生成结果不会覆盖用户选择（by @R-Tsubasa）
+- **仅在原生写入器空闲时删除 Codex 历史**（#2011、#2029）：删除请求携带 Provider 与请求 ID，移除 rollout 文件期间持有写入租约，并拒绝仍在运行或由其他窗口持有的会话；部分成功和失败会如实报告，不再乐观关闭活动会话。原生历史会过滤过期 rollout 条目，格式异常的单行也不会导致整个列表加载失败（by @GGMGG、@kochpy、@zhukunpenglinyutong）
+- **Codex 恢复、流式内容与补丁渲染保持真实**（#2006、#2010、#2012）：恢复失败会区分写入冲突、历史缺失、线程归档与配置错误，并给出有限重试指引；流结束时会保留增量缓冲区从未绘制的后端快照尾部；原生新增/删除补丁按完整文件内容处理，使预览、行数统计与撤销结果和历史记录一致（by @gadfly3173、@toxeh）
+- **以 Codex CLI 期望的结构返回规则审批结果**（#2028）：审批结果现在包裹在必需的 decision envelope 中，避免有效的规则选项被原生 Codex 拒绝或一直停留在等待状态（by @kochpy）
+- **Grok 消息、工具与问题保持正确顺序**（#2004、#2007、#2008、#2036）：纯图片消息会在全局规则和 IDE 上下文之前获得图片分析提示；注入的规则/上下文会从用户消息展示中移除；工具调用前后的文本只分段一次且不重复；空闲清理不会再移除仍打开的提问对话框（by @toxeh、@zhukunpenglinyutong）
+- **支持解码更多 WebP Codex Pet 图片**（#1996）：Pet 预览和安装会优先尝试 IDE 提供的 WebP reader，再使用内置兜底，并在特定解码器失败后继续尝试其他 reader；即使全局 ImageIO 注册表中没有 WebP reader，相关 Pet 也仍会显示在列表中（by @GGMGG、@zhukunpenglinyutong）
+- **流式高亮期间保留代码复制按钮的键盘焦点**（#1999）：语法高亮替换当前聚焦按钮时，会在渲染期间记录其位置并在绘制前把焦点交给替代按钮；用户主动失焦或移到其他控件后不会被强行抢回（by @GGMGG、@zhukunpenglinyutong）
+- **提交信息操作刷新时不再无故启动 Claude**（#1985）：界面状态更新现在只读取启用状态，因此选择 Codex、功能已禁用或项目不可用时，不会在用户真正请求生成之前预热 Claude 运行时（by @jianhong-li、@zhukunpenglinyutong）`,
+    },
+  },
+  {
     version: '0.6.3',
     date: '2026-10-27',
     content: {

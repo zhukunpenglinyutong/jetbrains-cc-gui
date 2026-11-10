@@ -1,13 +1,19 @@
 package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.permission.PermissionRequest;
+import com.github.claudecodegui.provider.grok.GrokUsageLedger;
 import com.github.claudecodegui.session.ClaudeSession.Message;
+import com.google.gson.JsonObject;
 import org.junit.Test;
 
+import java.lang.reflect.Constructor;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -440,5 +446,158 @@ public class GrokMessageHandlerTest {
         assertEquals(2, streamed.size());
         assertEquals("Plan more", streamed.get(0).getAsJsonObject().get("thinking").getAsString());
         assertEquals("Answer", streamed.get(1).getAsJsonObject().get("text").getAsString());
+    }
+
+    @Test
+    public void resultAfterBlockResetStampsNormalizedTurnUsageOnStreamAssistantMessage() {
+        SessionState state = new SessionState();
+        state.addMessage(new Message(Message.Type.USER, "Prompt"));
+
+        GrokMessageHandler handler = newHandler(state);
+        handler.onMessage("stream_start", "");
+        handler.onMessage("content_delta", "Thinking and working");
+        handler.onMessage("block_reset", "");
+
+        JsonObject resultObj = new JsonObject();
+        JsonObject usageObj = new JsonObject();
+        usageObj.addProperty("inputTokens", 46915);
+        usageObj.addProperty("cachedReadTokens", 24960);
+        usageObj.addProperty("outputTokens", 415);
+        usageObj.addProperty("reasoningTokens", 361);
+        usageObj.addProperty("totalTokens", 47330);
+        resultObj.add("usage", usageObj);
+
+        handler.onMessage("result", resultObj.toString());
+        handler.onMessage("stream_end", "");
+
+        List<Message> messages = state.getMessages();
+        assertEquals(2, messages.size());
+        Message assistant = messages.get(1);
+        assertNotNull("Assistant raw must not be null", assistant.raw);
+        assertTrue("Assistant raw must contain turnUsage", assistant.raw.has("turnUsage"));
+
+        JsonObject turnUsage = assistant.raw.getAsJsonObject("turnUsage");
+        assertEquals("input_tokens must be cache-exclusive", 21955, turnUsage.get("input_tokens").getAsInt());
+        assertEquals("cache_read_input_tokens must be 24960", 24960, turnUsage.get("cache_read_input_tokens").getAsInt());
+        assertEquals("output_tokens must be 415", 415, turnUsage.get("output_tokens").getAsInt());
+        assertEquals("thinking_tokens must be 361", 361, turnUsage.get("thinking_tokens").getAsInt());
+        assertEquals("total_tokens must be 47330", 47330, turnUsage.get("total_tokens").getAsInt());
+    }
+
+    @Test
+    public void midStreamUsageDoesNotWriteDuplicateLedgerRowsAndTurnRecordsOnceWithCwd() throws Exception {
+        SessionState state = new SessionState();
+        state.setSessionId("test-session-ledger");
+        state.setModel("grok-4.7");
+        state.setCwd("/test/cwd/project");
+        state.addMessage(new Message(Message.Type.USER, "Prompt"));
+
+        Path tempLedger = Files.createTempFile("grok-ledger-test", ".jsonl");
+        try {
+            Constructor<GrokUsageLedger> ledgerCtor = GrokUsageLedger.class.getDeclaredConstructor(Path.class);
+            ledgerCtor.setAccessible(true);
+            GrokUsageLedger ledger = ledgerCtor.newInstance(tempLedger);
+
+            GrokMessageHandler handler;
+            try {
+                Constructor<GrokMessageHandler> ctor = GrokMessageHandler.class.getDeclaredConstructor(
+                        SessionState.class,
+                        CallbackHandler.class,
+                        GrokUsageLedger.class
+                );
+                ctor.setAccessible(true);
+                CallbackHandler callbacks = new CallbackHandler();
+                callbacks.setCallback(new RecordingCallback());
+                handler = ctor.newInstance(state, callbacks, ledger);
+            } catch (NoSuchMethodException e) {
+                throw new AssertionError("GrokMessageHandler(SessionState, CallbackHandler, GrokUsageLedger) constructor not found", e);
+            }
+
+            handler.onMessage("stream_start", "");
+            handler.onMessage("usage", "{\"total_tokens\":12000,\"input_tokens\":10000,\"output_tokens\":2000}");
+            handler.onMessage("usage", "{\"total_tokens\":24000,\"input_tokens\":20000,\"output_tokens\":4000}");
+
+            assertEquals("Mid-stream usage must not write to ledger", 0, Files.readAllLines(tempLedger).size());
+
+            JsonObject resultObj = new JsonObject();
+            JsonObject usageObj = new JsonObject();
+            usageObj.addProperty("totalTokens", 24000);
+            usageObj.addProperty("inputTokens", 20000);
+            usageObj.addProperty("outputTokens", 4000);
+            resultObj.add("usage", usageObj);
+            handler.onMessage("result", resultObj.toString());
+            handler.onMessage("stream_end", "");
+
+            List<String> lines = Files.readAllLines(tempLedger);
+            assertEquals("Turn completion must record exactly one ledger entry", 1, lines.size());
+            assertTrue("Ledger entry must record cwd", lines.get(0).contains("/test/cwd/project"));
+        } finally {
+            Files.deleteIfExists(tempLedger);
+        }
+    }
+
+    @Test
+    public void ledgerRecordsCacheExclusiveInputFromTurnResult() throws Exception {
+        Path tempLedger = Files.createTempFile("grok-ledger-result", ".jsonl");
+        try {
+            GrokMessageHandler handler = newLedgerHandler(newLedgerState(), tempLedger);
+            handler.onMessage("stream_start", "");
+            handler.onMessage("content_delta", "Answer");
+            handler.onMessage("result", "{\"usage\":{\"totalTokens\":47330,\"inputTokens\":46915,"
+                    + "\"cachedReadTokens\":24960,\"outputTokens\":415}}");
+            handler.onMessage("stream_end", "");
+
+            JsonObject entry = singleLedgerEntry(tempLedger);
+            assertEquals(21955, entry.get("inputTokens").getAsLong());
+            assertEquals(24960, entry.get("cacheReadTokens").getAsLong());
+            assertEquals(415, entry.get("outputTokens").getAsLong());
+            assertEquals(47330, entry.get("totalTokens").getAsLong());
+        } finally {
+            Files.deleteIfExists(tempLedger);
+        }
+    }
+
+    @Test
+    public void ledgerFallbackAtStreamEndSplitsCacheOutOfTheContextSnapshot() throws Exception {
+        Path tempLedger = Files.createTempFile("grok-ledger-fallback", ".jsonl");
+        try {
+            GrokMessageHandler handler = newLedgerHandler(newLedgerState(), tempLedger);
+            handler.onMessage("stream_start", "");
+            handler.onMessage("content_delta", "Answer");
+            // The total is not exactly input + output; the split must not depend on that.
+            handler.onMessage("usage", "{\"totalTokens\":24086,\"inputTokens\":23722,"
+                    + "\"cachedReadTokens\":23168,\"outputTokens\":356}");
+            handler.onMessage("stream_end", "");
+
+            JsonObject entry = singleLedgerEntry(tempLedger);
+            assertEquals(554, entry.get("inputTokens").getAsLong());
+            assertEquals(23168, entry.get("cacheReadTokens").getAsLong());
+            assertEquals(24086, entry.get("totalTokens").getAsLong());
+        } finally {
+            Files.deleteIfExists(tempLedger);
+        }
+    }
+
+    private static SessionState newLedgerState() {
+        SessionState state = new SessionState();
+        state.setSessionId("ledger-session");
+        state.setModel("grok-4.7");
+        state.setCwd("/test/cwd/project");
+        state.addMessage(new Message(Message.Type.USER, "Prompt"));
+        return state;
+    }
+
+    private static GrokMessageHandler newLedgerHandler(SessionState state, Path ledgerPath) throws Exception {
+        Constructor<GrokUsageLedger> ledgerCtor = GrokUsageLedger.class.getDeclaredConstructor(Path.class);
+        ledgerCtor.setAccessible(true);
+        CallbackHandler callbacks = new CallbackHandler();
+        callbacks.setCallback(new RecordingCallback());
+        return new GrokMessageHandler(state, callbacks, ledgerCtor.newInstance(ledgerPath));
+    }
+
+    private static JsonObject singleLedgerEntry(Path ledgerPath) throws Exception {
+        List<String> lines = Files.readAllLines(ledgerPath);
+        assertEquals("Exactly one ledger entry per turn", 1, lines.size());
+        return com.google.gson.JsonParser.parseString(lines.get(0)).getAsJsonObject();
     }
 }

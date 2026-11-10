@@ -37,6 +37,7 @@ import { ASYNC_QUESTION_METHOD, normalizeAsyncQuestions, asyncQuestionAnswer, as
   from './codex-async-questions.js';
 import { CodexAppServerClient, ClassifiedError } from './codex-appserver-client.js';
 import { buildProjectDocFallbackConfig } from './codex-native-runtime-config.js';
+import { CODEX_CLI_RECOMMENDED_MIN_VERSION, isCodexCliOutdated, parseCodexCliVersion } from './codex-utils.js';
 
 // Only an explicit closing rejection proves that retrying resume replays no work.
 const THREAD_RESUME_RETRY_DELAYS_MS = [250, 750];
@@ -278,6 +279,28 @@ export class CodexAppServerService extends EventEmitter {
     } finally {
       this.startupInFlight = false;
     }
+  }
+
+  /**
+   * An old CLI may still work for this conversation, so this informs instead of
+   * blocking. It runs at dispatch because a catalog read can start the runtime
+   * before the channel has a subscriber, and that event would never be delivered.
+   */
+  #noticeOutdatedCli() {
+    if (this.outdatedCliNoticeGeneration === this.runtimeGeneration) return;
+    this.outdatedCliNoticeGeneration = this.runtimeGeneration;
+    const version = parseCodexCliVersion(this.client?.userAgent);
+    if (!isCodexCliOutdated(version)) return;
+    this.emit('codex_event', this.#envelope({
+      kind: 'nativeWarning',
+      payload: {
+        method: 'cliVersionOutdated',
+        version,
+        minimumVersion: CODEX_CLI_RECOMMENDED_MIN_VERSION,
+        message: `Codex CLI ${version} is outdated; some models and permission modes may not work.`
+          + ` Update to ${CODEX_CLI_RECOMMENDED_MIN_VERSION} or newer.`,
+      },
+    }));
   }
 
   /**
@@ -785,6 +808,7 @@ export class CodexAppServerService extends EventEmitter {
     try {
       await this.ensureRuntime();
       if (operation.settled) return;
+      this.#noticeOutdatedCli();
       // Stop may have requested cancellation while the runtime was starting.
       if (operation.cancelRequested && operation.dispatchPhase === 'notWritten') {
         this.#settleOperation(operation, { outcome: 'cancelled', error: 'cancelled before dispatch' });
