@@ -90,3 +90,4 @@ logs/*.log
 
 # Playwright MCP local test artifacts
 .playwright-mcp/
+/.ccg/
