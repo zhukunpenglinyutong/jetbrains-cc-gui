@@ -60,7 +60,11 @@ public class DependencyManager {
     private final NodeDetector nodeDetector;
     private final EnvironmentConfigurator envConfigurator;
     /** Caches resolved WSL npm paths keyed by node path. Populated lazily on first lookup. */
-    private final Map<String, String> wslNpmPathCache = new ConcurrentHashMap<>();
+    private final Map<String, WslNpm> wslNpmPathCache = new ConcurrentHashMap<>();
+
+    /** A resolved WSL npm path and whether it came from the WSL {@code PATH}. */
+    private record WslNpm(String path, boolean onPath) {
+    }
 
     public DependencyManager() {
         this.gson = new GsonBuilder().setPrettyPrinting().create();
@@ -286,7 +290,7 @@ public class DependencyManager {
     }
 
     private String queryRegistry(String nodePath, String npmPath, String... arguments) throws Exception {
-        ProcessBuilder builder = new ProcessBuilder(buildNpmCommand(nodePath, npmPath, arguments));
+        ProcessBuilder builder = new ProcessBuilder(buildNpmCommand(npmInvocation(nodePath, npmPath), arguments));
         configureProcessEnvironment(builder);
         String cache = getDependenciesDir().resolve(".npm-query-cache").toString();
         if (NodeDetector.isWslPath(nodePath)) {
@@ -486,7 +490,8 @@ public class DependencyManager {
             log.accept("Using Node.js: " + nodePath);
 
             String npmPath = getNpmPath(nodePath);
-            log.accept("Using npm: " + npmPath);
+            List<String> npmInvocation = npmInvocation(nodePath, npmPath);
+            log.accept("Using npm: " + String.join(" ", npmInvocation));
 
             // 2. Create the SDK directory
             Path sdkDir = getSdkDir(sdkId);
@@ -536,19 +541,13 @@ public class DependencyManager {
 
                 log.accept("Running npm install...");
                 boolean isWsl = NodeDetector.isWslPath(nodePath);
-                List<String> command;
-                if (isWsl) {
-                    // Pass the WSL Unix path as a raw String — wrapping it in Paths.get() on
-                    // Windows would convert forward slashes to backslashes (e.g. /home/foo →
-                    // \home\foo), which WSL npm cannot resolve as a Linux absolute path.
-                    String wslPrefix = NodeDetector.convertToWslPath(normalizedSdkDir.toString());
-                    command = NpmPermissionHelper.buildInstallCommandWithFallback(
-                            npmPath, wslPrefix, packages, attempt);
-                    command.add(0, "wsl");
-                } else {
-                    command = NpmPermissionHelper.buildInstallCommandWithFallback(
-                            npmPath, normalizedSdkDir, packages, attempt);
-                }
+                // Pass the WSL Unix path as a raw String — wrapping it in Paths.get() on
+                // Windows would convert forward slashes to backslashes (e.g. /home/foo →
+                // \home\foo), which WSL npm cannot resolve as a Linux absolute path.
+                String prefix = isWsl
+                        ? NodeDetector.convertToWslPath(normalizedSdkDir.toString())
+                        : normalizedSdkDir.toString();
+                List<String> command = buildInstallCommand(npmInvocation, prefix, packages, attempt);
                 log.accept("Command: " + String.join(" ", command));
 
                 ProcessBuilder pb = new ProcessBuilder(command);
@@ -840,11 +839,16 @@ public class DependencyManager {
      * </ol>
      */
     private String resolveWslNpmPath(String nodePath) {
-        String cached = wslNpmPathCache.get(nodePath);
+        return resolveWslNpm(nodePath).path();
+    }
+
+    private WslNpm resolveWslNpm(String nodePath) {
+        WslNpm cached = wslNpmPathCache.get(nodePath);
         if (cached != null) {
             return cached;
         }
         String resolved = queryWslWhichNpm();
+        boolean onPath = resolved != null;
         if (resolved == null) {
             int lastSlash = nodePath.lastIndexOf('/');
             resolved = (lastSlash > 0) ? nodePath.substring(0, lastSlash) + "/npm" : "npm";
@@ -854,8 +858,9 @@ public class DependencyManager {
         } else {
             LOG.info("[DependencyManager] Resolved WSL npm via `wsl which npm`: " + resolved);
         }
-        wslNpmPathCache.put(nodePath, resolved);
-        return resolved;
+        WslNpm result = new WslNpm(resolved, onPath);
+        wslNpmPathCache.put(nodePath, result);
+        return result;
     }
 
     /**
@@ -885,15 +890,61 @@ public class DependencyManager {
     }
 
     /**
-     * Builds an npm command list, prepending {@code "wsl"} when {@code nodePath} is a WSL path.
+     * Returns the command prefix that runs npm for the given node and npm paths.
      */
-    private static List<String> buildNpmCommand(String nodePath, String npmPath, String... args) {
-        List<String> command = new ArrayList<>();
-        if (NodeDetector.isWslPath(nodePath)) {
-            command.add("wsl");
+    private List<String> npmInvocation(String nodePath, String npmPath) {
+        boolean wsl = NodeDetector.isWslPath(nodePath);
+        boolean npmOnWslPath = wsl && resolveWslNpm(nodePath).onPath();
+        return npmInvocation(wsl, nodePath, npmPath, npmOnWslPath);
+    }
+
+    /**
+     * Returns the command prefix that runs npm.
+     * <p>A native npm runs directly. A WSL npm runs through {@code wsl}. The npm script starts
+     * with {@code #!/usr/bin/env node}, and a non-interactive {@code wsl} command only has the
+     * default {@code PATH}: Node.js from nvm or unpacked from the nodejs.org tarball is not on
+     * it. So when npm was not found on the WSL {@code PATH}, the configured node runs npm's CLI
+     * script, which the standard layout keeps at
+     * {@code <nodeDir>/../lib/node_modules/npm/bin/npm-cli.js}.
+     */
+    static List<String> npmInvocation(boolean wsl, String nodePath, String npmPath, boolean npmOnWslPath) {
+        List<String> invocation = new ArrayList<>();
+        if (!wsl) {
+            invocation.add(npmPath);
+            return invocation;
         }
-        command.add(npmPath);
+        invocation.add("wsl");
+        if (npmOnWslPath) {
+            invocation.add(npmPath);
+            return invocation;
+        }
+        invocation.add(nodePath);
+        invocation.add(parentUnixPath(parentUnixPath(nodePath)) + "/lib/node_modules/npm/bin/npm-cli.js");
+        return invocation;
+    }
+
+    private static String parentUnixPath(String path) {
+        int lastSlash = path.lastIndexOf('/');
+        return lastSlash > 0 ? path.substring(0, lastSlash) : "";
+    }
+
+    /**
+     * Builds an npm command: the npm invocation followed by {@code args}.
+     */
+    static List<String> buildNpmCommand(List<String> npmInvocation, String... args) {
+        List<String> command = new ArrayList<>(npmInvocation);
         Collections.addAll(command, args);
+        return command;
+    }
+
+    /**
+     * Builds the npm install command for the given npm invocation and {@code --prefix} value.
+     */
+    static List<String> buildInstallCommand(
+            List<String> npmInvocation, String prefix, List<String> packages, int attempt) {
+        List<String> install = NpmPermissionHelper.buildInstallCommandWithFallback("npm", prefix, packages, attempt);
+        List<String> command = new ArrayList<>(npmInvocation);
+        command.addAll(install.subList(1, install.size()));
         return command;
     }
 
