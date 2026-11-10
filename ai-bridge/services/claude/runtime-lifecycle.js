@@ -310,6 +310,9 @@ async function createRuntime(requestContext, callbacks) {
     sessionId: requestContext.requestedSessionId || null,
     runtimeSessionEpoch: requestContext.runtimeSessionEpoch || null,
     runtimeSignature: requestContext.runtimeSignature,
+    // Which settings this runtime's CLI loaded at spawn. The /context fast path compares it
+    // with the request's trust because it reuses runtimes without building a signature.
+    settingSources: [...(requestContext.options?.settingSources || [])],
     currentModel: requestContext.sdkModelName || null,
     modelId: requestContext.modelId || null, // Original model ID, may contain [1m] suffix
     currentResolvedModel: requestContext.resolvedModelId || null,

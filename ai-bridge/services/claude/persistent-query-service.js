@@ -561,6 +561,25 @@ function shouldRecreateRuntimeForModel(runtime, modelId) {
 }
 
 /**
+ * Whether an existing runtime loaded different setting sources than this request may load.
+ *
+ * The send path rebuilds such a runtime through the runtime signature. The /context fast path
+ * skips buildRequestContext, so it compares the trust here: otherwise a runtime started while
+ * the project was trusted would keep its project MCP servers after the trust is revoked.
+ *
+ * @param {object|null} runtime - The runtime the fast path would reuse.
+ * @param {object} params - The context usage request ({ cwd, projectTrusted }).
+ * @returns {boolean} True if the runtime must be disposed and recreated.
+ */
+function shouldRecreateRuntimeForTrust(runtime, params) {
+  if (!runtime || runtime.closed) return false;
+  const workingDirectory = selectWorkingDirectory(params?.cwd || null);
+  const requested = settingSourcesFor(projectTrustFor(params?.projectTrusted, params?.cwd, workingDirectory));
+  const current = Array.isArray(runtime.settingSources) ? runtime.settingSources : [];
+  return requested.length !== current.length || requested.some((source, index) => source !== current[index]);
+}
+
+/**
  * Temporarily set `CLAUDE_CODE_DISABLE_1M_CONTEXT` for the duration of `operation`.
  *
  * NOT concurrency-safe: mutates a process-global env var. If two callers run in
@@ -828,7 +847,8 @@ export async function getContextUsagePersistent(params = {}) {
       }
     }
 
-    const mustRecreate = shouldRecreateRuntimeForModel(runtime, modelId);
+    const mustRecreate = shouldRecreateRuntimeForModel(runtime, modelId)
+      || shouldRecreateRuntimeForTrust(runtime, safeParams);
 
     if (!runtime || runtime.closed || mustRecreate) {
       if (mustRecreate && runtime && !runtime.closed) {

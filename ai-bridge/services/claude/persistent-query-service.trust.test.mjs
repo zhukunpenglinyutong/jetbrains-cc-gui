@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { __testing } from './persistent-query-service.js';
+import { __testing, getContextUsagePersistent } from './persistent-query-service.js';
 
 const originalCwd = process.cwd();
 const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-trust-project-'));
@@ -83,4 +83,59 @@ test('a trusted flag without a cwd stays untrusted', async () => {
     assert.deepEqual(context.options.settingSources, ['user'], String(cwd));
   }
   process.chdir(originalCwd);
+});
+
+function createIdleQueryFactory() {
+  const runtimes = [];
+  return {
+    runtimes,
+    queryFn({ prompt, options }) {
+      let closeReject;
+      const idle = new Promise((_, reject) => { closeReject = reject; });
+      const runtime = {
+        prompt,
+        options,
+        closed: false,
+        setPermissionMode: async () => {},
+        setModel: async () => {},
+        setMaxThinkingTokens: async () => {},
+        getContextUsage: async () => ({ totalTokens: 1 }),
+        close() {
+          this.closed = true;
+          closeReject(new Error('runtime closed'));
+        },
+        next: () => idle
+      };
+      runtimes.push(runtime);
+      return runtime;
+    }
+  };
+}
+
+async function contextUsageAfterTrustChange(startTrusted, nextTrusted) {
+  await __testing.resetState();
+  const factory = createIdleQueryFactory();
+  __testing.setQueryFn(factory.queryFn);
+  const params = { ...base, sessionId: 'sess-trust' };
+  try {
+    await __testing.acquireRuntime(await __testing.buildRequestContext({ ...params, projectTrusted: startTrusted }));
+    await getContextUsagePersistent({ ...params, projectTrusted: nextTrusted });
+    return factory.runtimes.map((runtime) => runtime.options.settingSources);
+  } finally {
+    await __testing.resetState();
+    process.chdir(originalCwd);
+  }
+}
+
+test('/context rebuilds a trusted runtime once the project is no longer trusted', async () => {
+  assert.deepEqual(await contextUsageAfterTrustChange(true, false), [['user', 'project', 'local'], ['user']]);
+});
+
+test('/context rebuilds an untrusted runtime once the project is trusted', async () => {
+  assert.deepEqual(await contextUsageAfterTrustChange(false, true), [['user'], ['user', 'project', 'local']]);
+});
+
+test('/context keeps reusing a runtime whose trust has not changed', async () => {
+  assert.deepEqual(await contextUsageAfterTrustChange(true, true), [['user', 'project', 'local']]);
+  assert.deepEqual(await contextUsageAfterTrustChange(false, false), [['user']]);
 });
