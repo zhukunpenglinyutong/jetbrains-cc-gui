@@ -89,7 +89,7 @@ public class NodePathHandler {
             } catch (Exception e) {
                 LOG.error("[NodePathHandler] Failed to get Node.js path: " + e.getMessage(), e);
                 ApplicationManager.getApplication().invokeLater(() ->
-                    context.callJavaScript("window.showError", context.escapeJs("获取 Node.js 路径失败: " + e.getMessage()))
+                    context.callJavaScript("window.showError", context.escapeJs(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.getFailed", e.getMessage())))
                 );
             }
         }, AppExecutorUtil.getAppExecutorService()).exceptionally(ex -> {
@@ -117,7 +117,7 @@ public class NodePathHandler {
         } catch (Exception e) {
             LOG.error("[NodePathHandler] Failed to parse set_node_path content: " + e.getMessage(), e);
             ApplicationManager.getApplication().invokeLater(() ->
-                context.callJavaScript("window.showError", context.escapeJs("保存 Node.js 路径失败: " + e.getMessage()))
+                context.callJavaScript("window.showError", context.escapeJs(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.saveFailed", e.getMessage())))
             );
             return;
         }
@@ -148,7 +148,7 @@ public class NodePathHandler {
                         context.getCodexSDKBridge().setNodeExecutable(finalPath);
                         verifySuccess = true;
                     } else {
-                        failureMsg = "已清空自定义路径，但无法自动检测到 Node.js，请手动配置路径";
+                        failureMsg = com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.clearedNotDetected");
                     }
                 } else {
                     // Verify before saving to avoid caching invalid path
@@ -164,7 +164,7 @@ public class NodePathHandler {
                     } else {
                         // Verification failed, don't save invalid path
                         finalPath = "";
-                        failureMsg = result != null ? result.getErrorMessage() : "无法验证指定的 Node.js 路径";
+                        failureMsg = result != null ? result.getErrorMessage() : com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.notVerified");
                         LOG.warn("[NodePathHandler] Node.js path verification failed: " + pathArg + " - " + failureMsg);
                     }
                 }
@@ -183,19 +183,19 @@ public class NodePathHandler {
 
                     if (successFlag) {
                         // Trigger environment re-check, no IDE restart needed
-                        context.callJavaScript("window.showSwitchSuccess", context.escapeJs("Node.js 路径已保存并生效,无需重启IDE"));
+                        context.callJavaScript("window.showSwitchSuccess", context.escapeJs(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.saved")));
 
                         // Notify DependencySection to re-check Node.js environment
                         context.callJavaScript("window.checkNodeEnvironment");
                     } else {
-                        String msg = failureMsgFinal != null ? failureMsgFinal : "无法验证指定的 Node.js 路径";
-                        context.callJavaScript("window.showError", context.escapeJs("保存的 Node.js 路径无效: " + msg));
+                        String msg = failureMsgFinal != null ? failureMsgFinal : com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.notVerified");
+                        context.callJavaScript("window.showError", context.escapeJs(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.invalid", msg)));
                     }
                 });
             } catch (Exception e) {
                 LOG.error("[NodePathHandler] Failed to set Node.js path: " + e.getMessage(), e);
                 ApplicationManager.getApplication().invokeLater(() ->
-                    context.callJavaScript("window.showError", context.escapeJs("保存 Node.js 路径失败: " + e.getMessage()))
+                    context.callJavaScript("window.showError", context.escapeJs(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.saveFailed", e.getMessage())))
                 );
             }
         }, AppExecutorUtil.getAppExecutorService()).exceptionally(ex -> {
