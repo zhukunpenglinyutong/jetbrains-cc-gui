@@ -154,7 +154,7 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
     // true when using permissionMode: 'bypassPermissions'"). Without it a future SDK
     // version could silently drop bypass and change permission behavior.
     ...(permissionMode === 'bypassPermissions' && { allowDangerouslySkipPermissions: true }),
-    ...(mcpServers && { mcpServers }),
+    ...(mcpServers && { mcpServers, strictMcpConfig: true }),
     ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride }),
     systemPrompt: {
       type: 'preset',

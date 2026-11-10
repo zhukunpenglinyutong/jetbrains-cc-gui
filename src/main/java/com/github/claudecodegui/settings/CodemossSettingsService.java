@@ -1538,12 +1538,20 @@ public class CodemossSettingsService {
         mcpServerManager.upsertMcpServer(server, projectPath);
     }
 
+    public void upsertMcpServer(JsonObject server, String projectPath, String scope) throws IOException {
+        mcpServerManager.upsertMcpServer(server, projectPath, scope);
+    }
+
     public boolean deleteMcpServer(String serverId) throws IOException {
         return mcpServerManager.deleteMcpServer(serverId);
     }
 
     public boolean deleteMcpServer(String serverId, String projectPath) throws IOException {
         return mcpServerManager.deleteMcpServer(serverId, projectPath);
+    }
+
+    public boolean deleteMcpServer(String serverId, String projectPath, String scope) throws IOException {
+        return mcpServerManager.deleteMcpServer(serverId, projectPath, scope);
     }
 
     public Map<String, Object> validateMcpServer(JsonObject server) {

@@ -581,6 +581,41 @@ public class ProjectConfigHandler {
                 return;
             }
 
+            // Validate file is within project directory (security: prevent escape)
+            String projectRealPath;
+            try {
+                projectRealPath = new java.io.File(projectPath).getCanonicalPath();
+            } catch (IOException e) {
+                showError("Cannot resolve project directory");
+                pushJson("window.updateEnvFile", buildEnvFileStatePayload(settingsService.getEnvFile(projectPath)));
+                return;
+            }
+            String fileRealPath;
+            try {
+                fileRealPath = envFileObj.getCanonicalPath();
+            } catch (IOException e) {
+                showError("Cannot resolve env file path");
+                pushJson("window.updateEnvFile", buildEnvFileStatePayload(settingsService.getEnvFile(projectPath)));
+                return;
+            }
+            if (!fileRealPath.startsWith(projectRealPath + java.io.File.separator) && !fileRealPath.equals(projectRealPath)) {
+                showError("Env file must be inside the project directory: " + envFile);
+                pushJson("window.updateEnvFile", buildEnvFileStatePayload(settingsService.getEnvFile(projectPath)));
+                return;
+            }
+
+            // Validate file name is in allowlist (only .env, .env.local, .env.development, etc.)
+            String fileName = envFileObj.getName().toLowerCase();
+            Set<String> allowedNames = new HashSet<>(Arrays.asList(
+                ".env", ".env.local", ".env.development", ".env.production",
+                ".env.test", ".env.staging", ".env.qa", ".env.ci"
+            ));
+            if (!allowedNames.contains(fileName)) {
+                showError("Env file name not allowed: " + fileName + ". Allowed: " + String.join(", ", allowedNames));
+                pushJson("window.updateEnvFile", buildEnvFileStatePayload(settingsService.getEnvFile(projectPath)));
+                return;
+            }
+
             // Persist the normalized absolute path so the value shown in the UI is
             // byte-for-byte the one the runtime hands to the daemon.
             String normalized = PathUtils.normalizeAbsolute(envFileObj.getPath());

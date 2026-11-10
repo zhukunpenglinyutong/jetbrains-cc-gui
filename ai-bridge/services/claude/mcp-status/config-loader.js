@@ -7,6 +7,7 @@ import { existsSync, readFileSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join } from 'path';
+import { createHash } from 'node:crypto';
 import { getRealHomeDir, getManagedSettingsPath } from '../../../utils/path-utils.js';
 import { log } from './logger.js';
 
@@ -573,6 +574,78 @@ function isProjectServerTrustVerified(name, cwd = null) {
 }
 
 /**
+ * Read the stored fingerprint map from settings files.
+ * Returns a map of serverId -> fingerprint (sha256 hex).
+ * Reads from user settings.json, managed-settings.json, and project settings.local.json (if trusted).
+ * @param {string|null} cwd - Project root
+ * @returns {Promise<Map<string, string>>} Fingerprint map
+ */
+async function loadProjectMcpFingerprints(cwd = null) {
+  const fingerprints = new Map();
+  const sources = await collectApprovalSettingsSources(cwd);
+  for (const source of sources) {
+    try {
+      const settings = JSON.parse(await readFile(source.file, 'utf8'));
+      if (settings && settings.enabledMcpjsonServerFingerprints) {
+        for (const [serverId, fp] of Object.entries(settings.enabledMcpjsonServerFingerprints)) {
+          if (typeof fp === 'string' && /^[a-f0-9]{64}$/.test(fp)) {
+            fingerprints.set(serverId, fp);
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore read/parse errors
+    }
+  }
+  return fingerprints;
+}
+
+/**
+ * Compute the canonical fingerprint of a server spec matching Java's fingerprintOfServerSpec.
+ * Uses deterministic JSON serialization with sorted keys for env and headers.
+ * @param {Object} serverSpec - Raw server spec from .mcp.json
+ * @returns {string|null} Lowercase hex SHA256 digest, or null if spec is invalid
+ */
+function fingerprintOfServerSpec(serverSpec) {
+  if (!serverSpec || typeof serverSpec !== 'object') {
+    return null;
+  }
+  const spec = serverSpec.server && typeof serverSpec.server === 'object' ? serverSpec.server : serverSpec;
+
+  // Build canonical object with execution-affecting fields
+  const canonical = {
+    type: spec.type || '',
+    command: spec.command || '',
+    url: spec.url || '',
+    cwd: spec.cwd || ''
+  };
+
+  if (Array.isArray(spec.args)) {
+    canonical.args = [...spec.args];
+  }
+
+  if (spec.env && typeof spec.env === 'object') {
+    canonical.env = {};
+    // Sort keys for consistent ordering
+    for (const key of Object.keys(spec.env).sort()) {
+      canonical.env[key] = spec.env[key];
+    }
+  }
+
+  if (spec.headers && typeof spec.headers === 'object') {
+    canonical.headers = {};
+    // Sort keys for consistent ordering
+    for (const key of Object.keys(spec.headers).sort()) {
+      canonical.headers[key] = spec.headers[key];
+    }
+  }
+
+  // Serialize with deterministic field order
+  const canonicalString = JSON.stringify(canonical);
+  return createHash('sha256').update(canonicalString, 'utf8').digest('hex');
+}
+
+/**
  * Parse the server list and disabled list from the MCP configuration file
  * Extracts shared logic used by both loadMcpServersConfig and loadAllMcpServersInfo
  * @param {string} cwd - Current working directory (used for project detection)
@@ -581,20 +654,25 @@ function isProjectServerTrustVerified(name, cwd = null) {
 async function parseMcpConfig(cwd = null) {
   const claudeJsonPath = join(getRealHomeDir(), '.claude.json');
 
-  if (!existsSync(claudeJsonPath)) {
-    log('info', '~/.claude.json not found');
-    return null;
-  }
+  let config = null;
+  let hasClaudeJson = false;
 
-  const content = await readFile(claudeJsonPath, 'utf8');
-  const config = JSON.parse(content);
+  if (existsSync(claudeJsonPath)) {
+    hasClaudeJson = true;
+    try {
+      const content = await readFile(claudeJsonPath, 'utf8');
+      config = JSON.parse(content);
 
-  // Validate configuration structure
-  const validation = validateConfigStructure(config);
-  if (!validation.valid) {
-    log('error', 'Invalid config structure:', validation.reason);
-    return null;
-  }
+      // Validate configuration structure
+      const validation = validateConfigStructure(config);
+      if (!validation.valid) {
+        log('error', 'Invalid config structure:', validation.reason);
+        return null;
+      }
+    } catch (e) {
+      log('warn', 'Failed to read ~/.claude.json:', e.message);
+      return null;
+    }
 
   // Normalize the path to match the path format used in config
   let normalizedCwd = cwd;
@@ -659,6 +737,9 @@ async function parseMcpConfig(cwd = null) {
     // Denial wins over approval in every case, including enableAllProjectMcpServers.
     const { approved, denied, approveAll } = getProjectMcpApproval(cwd);
 
+    // Load stored fingerprints for runtime gate validation
+    const storedFingerprints = await loadProjectMcpFingerprints(cwd);
+
     const mergedProject = {};
     for (const [name, config] of Object.entries(projectMcpJson.mcpServers || {})) {
       if (denied.has(name)) {
@@ -675,6 +756,23 @@ async function parseMcpConfig(cwd = null) {
         log('warn', `[MCP Config] Project server "${name}" is pending approval; skipping`);
         continue;
       }
+
+      // Fingerprint validation: ensure the current server spec matches what was approved
+      const currentFingerprint = fingerprintOfServerSpec(config);
+      const storedFingerprint = storedFingerprints.get(name);
+      if (!currentFingerprint) {
+        log('warn', `[MCP Config] Project server "${name}" fingerprint could not be computed; skipping`);
+        continue;
+      }
+      if (!storedFingerprint) {
+        log('warn', `[MCP Config] Project server "${name}" has no stored fingerprint; requiring re-approval`);
+        continue;
+      }
+      if (currentFingerprint !== storedFingerprint) {
+        log('warn', `[MCP Config] Project server "${name}" fingerprint mismatch (spec changed since approval); requiring re-approval`);
+        continue;
+      }
+
       mergedProject[name] = config;
     }
 

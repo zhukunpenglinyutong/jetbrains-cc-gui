@@ -854,6 +854,23 @@ async function runDaemonMain() {
         `[daemon] Rejected input line of ${line.length} bytes (limit ${MAX_INPUT_LINE_LENGTH})\n`,
         'utf8'
       );
+      // Try to extract request ID to send error response
+      let requestId = '0';
+      try {
+        // Try to parse just enough to get the ID without parsing the full JSON
+        const idMatch = line.match(/"id"\s*:\s*("([^"]*)"|(\d+))/);
+        if (idMatch) {
+          requestId = idMatch[2] || idMatch[3] || '0';
+        }
+      } catch {
+        // Ignore parse errors, use default ID
+      }
+      writeRawLine({
+        id: requestId,
+        done: true,
+        success: false,
+        error: `Request too large: ${line.length} bytes (limit ${MAX_INPUT_LINE_LENGTH})`
+      });
       return;
     }
 

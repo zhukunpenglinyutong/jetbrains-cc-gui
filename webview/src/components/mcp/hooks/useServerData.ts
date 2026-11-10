@@ -68,11 +68,20 @@ function getKnownStatusKeys(servers: McpServer[]): Set<string> {
  * ~/.claude.json / .mcp.json; caching them in localStorage would keep them readable
  * on disk for the whole cache lifetime. The live state keeps the full spec — only
  * the cached copy is trimmed.
+ *
+ * Project servers (source === 'project') are already protected by the approval gate
+ * and their secrets should NOT be stripped from the cache, otherwise editing them
+ * would lose env/headers.
  */
 function toCacheableServers(servers: McpServer[]): McpServer[] {
   return servers.map((server) => {
     const spec = server.server;
     if (!spec || spec.env === undefined && spec.headers === undefined) {
+      return server;
+    }
+    // Don't strip secrets from project servers - they're protected by approval gate
+    const isProjectServer = server.source === 'project';
+    if (isProjectServer) {
       return server;
     }
     const { env, headers, ...restSpec } = spec;

@@ -217,7 +217,13 @@ export function isDangerousEnvVar(varName) {
 // attacker-controlled directory. Rejecting PATH from env files costs nothing
 // legitimate: users who need to extend PATH configure it in the IDE, which
 // still flows through the untouched params.env path.
-const ENV_FILE_DENYLIST_EXTRA = new Set(['PATH']);
+//
+// CLAUDE_CODE_PATH and GROK_CLI_PATH select the executable to launch.
+// An auto-discovered .env containing CLAUDE_CODE_PATH=./repo-controlled-cli
+// would become the value returned by getClaudeCliPathOverride(), allowing
+// a project to hijack the CLI binary. These must be rejected on the env-file
+// path while retaining the trusted IDE configuration path.
+const ENV_FILE_DENYLIST_EXTRA = new Set(['PATH', 'CLAUDE_CODE_PATH', 'GROK_CLI_PATH']);
 
 /**
  * Whether an env var must be rejected when it originates from a .env file.

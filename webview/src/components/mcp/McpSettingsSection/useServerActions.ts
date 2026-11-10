@@ -38,7 +38,7 @@ function looksLikeSecretValue(value: string): boolean {
 /**
  * Redact secrets passed as command-line arguments.
  * A value is redacted when it follows a secret-looking flag ("--api-key sk-…") or when
- * it looks like a credential on its own.
+ * it looks like a credential on its own, or when it's in --key=value format.
  */
 function redactArgs(args: unknown[]): { args: string[]; redacted: boolean } {
   const out: string[] = [];
@@ -51,9 +51,31 @@ function redactArgs(args: unknown[]): { args: string[]; redacted: boolean } {
       out.push(REDACTED);
       redacted = true;
       maskNext = false;
-    } else if (value.startsWith('-') && SENSITIVE_KEY_PATTERN.test(value.replace(/^--?/, ''))) {
-      out.push(value);
-      maskNext = true;
+    } else if (value.startsWith('-')) {
+      // Check for --key=value format
+      const eqIdx = value.indexOf('=');
+      if (eqIdx > 0) {
+        const flag = value.substring(0, eqIdx);
+        const flagValue = value.substring(eqIdx + 1);
+        if (SENSITIVE_KEY_PATTERN.test(flag.replace(/^--?/, ''))) {
+          // Redact the value part of --key=value
+          out.push(flag + '=' + REDACTED);
+          redacted = true;
+        } else if (looksLikeSecretValue(flagValue)) {
+          out.push(flag + '=' + REDACTED);
+          redacted = true;
+        } else {
+          out.push(value);
+        }
+      } else if (SENSITIVE_KEY_PATTERN.test(value.replace(/^--?/, ''))) {
+        out.push(value);
+        maskNext = true;
+      } else if (looksLikeSecretValue(value)) {
+        out.push(REDACTED);
+        redacted = true;
+      } else {
+        out.push(value);
+      }
     } else if (looksLikeSecretValue(value)) {
       out.push(REDACTED);
       redacted = true;
@@ -149,7 +171,12 @@ export function useServerActions({
   // Confirm deletion
   const confirmDelete = useCallback(() => {
     if (deletingServer) {
-      sendToJava(`delete_${messagePrefix}mcp_server`, { id: deletingServer.id });
+      // Include scope to ensure we delete from the correct config (global vs project)
+      const scope = deletingServer.source === 'project' ? 'project' : 'global';
+      sendToJava(`delete_${messagePrefix}mcp_server`, {
+        id: deletingServer.id,
+        scope
+      });
       if (!isCodexMode) {
         addToast(`${t('mcp.deleted')} ${deletingServer.name || deletingServer.id}`, 'success');
         setTimeout(() => loadServers(), 100);
@@ -198,16 +225,20 @@ export function useServerActions({
   // Save server
   const handleSaveServer = useCallback((server: McpServer) => {
     if (editingServer) {
+      // Include scope for delete/update operations to target the correct config
+      const editingScope = editingServer.source === 'project' ? 'project' : 'global';
+      const newScope = server.source === 'project' ? 'project' : 'global';
+
       if (editingServer.id !== server.id) {
         if (isCodexMode) {
           sendToJava('update_codex_mcp_server', { ...server, oldId: editingServer.id });
         } else {
-          sendToJava(`delete_${messagePrefix}mcp_server`, { id: editingServer.id });
-          sendToJava(`add_${messagePrefix}mcp_server`, server);
+          sendToJava(`delete_${messagePrefix}mcp_server`, { id: editingServer.id, scope: editingScope });
+          sendToJava(`add_${messagePrefix}mcp_server`, { ...server, scope: newScope });
           addToast(`${t('mcp.updated')} ${server.name || server.id}`, 'success');
         }
       } else {
-        sendToJava(`update_${messagePrefix}mcp_server`, server);
+        sendToJava(`update_${messagePrefix}mcp_server`, { ...server, scope: editingScope });
         if (!isCodexMode) {
           addToast(`${t('mcp.saved')} ${server.name || server.id}`, 'success');
         }

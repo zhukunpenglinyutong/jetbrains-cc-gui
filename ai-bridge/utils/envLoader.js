@@ -277,7 +277,7 @@ export async function loadEnvFile(filePath, baseDir = null) {
   try {
     // Read realPath — the exact string the containment check cleared above —
     // not the logical path, so validation and read cannot diverge (TOCTOU).
-    const content = await readFile(realPath, 'utf8');
+    let content = await readFile(realPath, 'utf8');
     // Strip UTF-8 BOM if present, otherwise the first key becomes ﻿KEY
     if (content.charCodeAt(0) === 0xFEFF) {
       content = content.slice(1);
@@ -456,6 +456,9 @@ export function parseEnvContent(content) {
       debugLog('envLoader.parseEnvContent: skipped line with invalid env var name');
       continue;
     }
+    // Strip inline comments (not inside quoted strings)
+    // e.g. API_KEY=secret # production -> value = "secret"
+    value = stripInlineComments(value);
     if ((value.startsWith('"') && value.endsWith('"')) ||
         (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
@@ -463,4 +466,60 @@ export function parseEnvContent(content) {
     result[key] = value;
   }
   return result;
+}
+
+/**
+ * Strip inline comments from a value string, respecting quoted strings.
+ * Comments start with # but only when not inside single or double quotes.
+ * @param {string} value - The value string potentially containing inline comments
+ * @returns {string} Value with inline comments removed and trimmed
+ */
+function stripInlineComments(value) {
+  if (!value || typeof value !== 'string') {
+    return value || '';
+  }
+  let result = '';
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let escaped = false;
+
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+    const nextChar = i + 1 < value.length ? value[i + 1] : '';
+
+    if (escaped) {
+      // Previous char was backslash, this char is escaped
+      result += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      // Escape sequence - mark next char as escaped
+      escaped = true;
+      result += char;
+      continue;
+    }
+
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+      result += char;
+      continue;
+    }
+
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+      result += char;
+      continue;
+    }
+
+    if (char === '#' && !inSingleQuote && !inDoubleQuote) {
+      // Found inline comment - stop processing
+      break;
+    }
+
+    result += char;
+  }
+
+  return result.trim();
 }

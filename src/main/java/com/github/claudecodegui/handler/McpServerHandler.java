@@ -343,8 +343,9 @@ public class McpServerHandler extends BaseMessageHandler {
             String projectPath = context.getProject() != null
                 ? context.getProject().getBasePath()
                 : null;
+            String scope = server.has("scope") ? server.get("scope").getAsString() : "global";
 
-            context.getSettingsService().upsertMcpServer(server, projectPath);
+            context.getSettingsService().upsertMcpServer(server, projectPath, scope);
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.mcpServerUpdated", escapeJs(content));
@@ -370,8 +371,9 @@ public class McpServerHandler extends BaseMessageHandler {
             String projectPath = context.getProject() != null
                 ? context.getProject().getBasePath()
                 : null;
+            String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
 
-            boolean success = context.getSettingsService().deleteMcpServer(serverId, projectPath);
+            boolean success = context.getSettingsService().deleteMcpServer(serverId, projectPath, scope);
 
             if (success) {
                 ApplicationManager.getApplication().invokeLater(() -> {
