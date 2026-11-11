@@ -631,6 +631,20 @@ describe('MarkdownBlock linkify integration', () => {
     expect(bridgeMocks.openBrowser).toHaveBeenCalledWith('https://example.com/docs');
   });
 
+  it('previews a linked image without letting the link navigate the webview', () => {
+    const { container } = render(
+      <MarkdownBlock content="[![build](https://example.com/badge.png)](https://example.com/repo)" />
+    );
+
+    const image = container.querySelector('a img');
+    expect(image).not.toBeNull();
+    const defaultAllowed = fireEvent.click(image!);
+
+    expect(defaultAllowed).toBe(false);
+    expect(container.querySelector('.image-preview-overlay')).not.toBeNull();
+    expect(bridgeMocks.openBrowser).not.toHaveBeenCalled();
+  });
+
   it('strips system-internal XML tags (context, commit_analysis, etc.)', () => {
     render(
       <MarkdownBlock
