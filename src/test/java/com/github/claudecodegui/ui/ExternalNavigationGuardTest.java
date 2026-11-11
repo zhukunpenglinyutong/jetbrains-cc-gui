@@ -30,8 +30,15 @@ public class ExternalNavigationGuardTest {
         // loadHTML pages live on file:///jbcefbrowser/; the ErrorBoundary reset reloads that URL.
         assertFalse(guard.handleNavigation("file:///jbcefbrowser/1234#url=about:blank", false));
         assertFalse(guard.handleNavigation("file:///jbcefbrowser/1234#url=about:blank", true));
-        assertFalse(guard.handleNavigation("https://example.com", false));
         assertFalse(guard.handleNavigation(null, true));
+
+        assertTrue(opened.isEmpty());
+    }
+
+    @Test
+    public void webNavigationWithoutGestureIsCancelledButNotOpened() {
+        // CEF re-issues a middle-click or file:// -> https:// navigation without the gesture flag.
+        assertTrue(guard.handleNavigation("https://example.com", false));
 
         assertTrue(opened.isEmpty());
     }

@@ -18,8 +18,8 @@ import java.util.regex.Pattern;
  * Keeps the chat webview on its own page.
  *
  * <p>Message links are normally routed to the system browser by the frontend's
- * {@code open_browser} bridge. A user-initiated navigation the frontend does not intercept
- * (for example a click on a linked image, or a link opened as a popup) would otherwise load
+ * {@code open_browser} bridge. A navigation the frontend does not intercept (for example a
+ * middle-click, a click on a linked image, or a link opened as a popup) would otherwise load
  * the site inside the tool window, replacing the chat with no way back except closing the tab.
  * This guard cancels such navigations and popups and opens web URLs in the system browser.</p>
  */
@@ -48,6 +48,13 @@ final class ExternalNavigationGuard {
                                           boolean userGesture, boolean isRedirect) {
                 return guard.handleNavigation(request.getURL(), userGesture);
             }
+
+            // CEF asks here first for middle/ctrl-clicks and for leaving the file:// chat page.
+            @Override
+            public boolean onOpenURLFromTab(CefBrowser target, CefFrame frame, String targetUrl,
+                                            boolean userGesture) {
+                return guard.handleNavigation(targetUrl, userGesture);
+            }
         }, cefBrowser);
         client.addLifeSpanHandler(new CefLifeSpanHandlerAdapter() {
             @Override
@@ -59,14 +66,18 @@ final class ExternalNavigationGuard {
     }
 
     /**
-     * Returns true to cancel the navigation. The plugin's own loads ({@code loadHTML}, watchdog
-     * and error-boundary reloads) target {@code file:///jbcefbrowser/}, so they are never cancelled.
+     * Returns true to cancel the navigation. The chat never navigates its own document to the web:
+     * its loads ({@code loadHTML}, watchdog and error-boundary reloads) stay on
+     * {@code file:///jbcefbrowser/}. Only user-initiated web navigations reach the system browser.
      */
     boolean handleNavigation(String url, boolean userGesture) {
-        if (!userGesture || !isExternalUrl(url)) {
+        if (!isExternalUrl(url)) {
             return false;
         }
-        externalOpener.accept(url);
+        LOG.debug("Keeping a web navigation out of the chat webview, userGesture=" + userGesture);
+        if (userGesture) {
+            externalOpener.accept(url);
+        }
         return true;
     }
 
