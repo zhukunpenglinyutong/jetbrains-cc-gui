@@ -1205,7 +1205,11 @@
     "codexDeliveryFailed": "Codex가 선택을 받지 못했습니다({{error}}). 대화가 계속되지 않으면 중지를 누른 뒤 다시 보내 주세요.",
     "codexDeliveryUnconfirmed": "Codex가 아직 선택을 받았는지 확인하지 못했습니다({{error}}). 선택이 여전히 적용될 수 있으니 다시 응답하지 마세요. 대화가 계속되지 않으면 중지를 누른 뒤 다시 보내 주세요."
   },
+  "modelConfig": {
+    "approvals": "승인"
+  },
   "askUserQuestion": {
+    "ompTitle": "OMP에서 몇 가지 질문이 있습니다",
     "title": "Claude가 질문이 있습니다",
     "progress": "질문 {{current}} / {{total}}",
     "multiSelectHint": "여러 옵션을 선택할 수 있습니다",
@@ -1987,6 +1991,25 @@
       "label": "완전 자동",
       "tooltip": "Codex approval_policy=never – 확인 없이 명령을 실행하고 파일을 작성합니다 (워크스페이스 샌드박스는 여전히 적용됨).",
       "description": "자율 모드. Codex가 편집과 셸 명령을 즉시 실행합니다."
+    }
+  },
+  "ompApprovals": {
+    "title": "OMP 승인 모드 선택",
+    "default": {
+      "label": "기본값",
+      "description": "OMP 자체의 tools.approvalMode 설정을 따릅니다"
+    },
+    "alwaysAsk": {
+      "label": "묻기",
+      "description": "편집과 명령 실행 전에 묻습니다"
+    },
+    "write": {
+      "label": "편집 자동 승인",
+      "description": "명령 실행 전에만 묻습니다"
+    },
+    "yolo": {
+      "label": "완전 자동",
+      "description": "묻지 않습니다"
     }
   },
   "ompModes": {

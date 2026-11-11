@@ -14,12 +14,14 @@ import {
   DSH_DEFAULT_MODEL_ID,
   DSH_PRESET_NONE,
   isValidDshPreset,
+  isValidOmpApprovalMode,
+  OMP_APPROVAL_DEFAULT,
   isValidPermissionMode,
   normalizeClaudeModelId,
   apply1MContextSuffix,
   strip1MContextSuffix,
 } from '../../components/ChatInputBox/types';
-import type { CodexFastMode, PermissionMode, ReasoningEffort } from '../../components/ChatInputBox/types';
+import type { CodexFastMode, OmpApprovalMode, PermissionMode, ReasoningEffort } from '../../components/ChatInputBox/types';
 import { isCliOnlyProvider, normalizeCliPermissionMode, OMP_ROLE_MODEL_IDS } from './cliProviders';
 import {
   migrateCodexSettingsSnapshot,
@@ -91,6 +93,7 @@ export interface UseModelStatePersistenceOptions {
   setReasoningEffort: (value: ReasoningEffort) => void;
   setCodexFastMode: (value: CodexFastMode) => void;
   setDshPreset: (value: string) => void;
+  setOmpApprovalMode: (value: OmpApprovalMode) => void;
   setCodexCollaborationMode?: (value: CodexCollaborationMode) => void;
   setCodexApprovalPreset?: (value: CodexApprovalPreset) => void;
   setCodexSandboxSelection?: (value: CodexSandboxSelection) => void;
@@ -121,6 +124,7 @@ export interface UseModelStatePersistenceOptions {
   reasoningEffort: ReasoningEffort;
   codexFastMode: CodexFastMode;
   dshPreset: string;
+  ompApprovalMode: OmpApprovalMode;
   codexCollaborationMode?: CodexCollaborationMode;
   codexApprovalPreset?: CodexApprovalPreset;
   codexSandboxSelection?: CodexSandboxSelection;
@@ -165,6 +169,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     setReasoningEffort,
     setCodexFastMode,
     setDshPreset,
+    setOmpApprovalMode,
     setCodexCollaborationMode,
     setCodexApprovalPreset,
     setCodexSandboxSelection,
@@ -194,6 +199,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     reasoningEffort,
     codexFastMode,
     dshPreset,
+    ompApprovalMode,
     codexCollaborationMode = 'default',
     codexApprovalPreset = 'request',
     codexSandboxSelection = 'workspace-write',
@@ -397,6 +403,8 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           restoredDshPreset = state.dshPreset;
           setDshPreset(restoredDshPreset);
         }
+        // Missing or unknown value falls back to the default (no CLI flag).
+        setOmpApprovalMode(isValidOmpApprovalMode(state.ompApprovalMode) ? state.ompApprovalMode : OMP_APPROVAL_DEFAULT);
 
         const claudeModelCandidate = hasBackendModel && restoredProvider === 'claude'
           ? initialTabModel
@@ -639,6 +647,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           reasoningEffort,
           codexFastMode,
           dshPreset,
+          ompApprovalMode,
           codexCollaborationMode,
           codexApprovalPreset,
           codexSandboxSelection,
@@ -681,6 +690,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     reasoningEffort,
     codexFastMode,
     dshPreset,
+    ompApprovalMode,
     codexCollaborationMode,
     codexApprovalPreset,
     codexSandboxSelection,

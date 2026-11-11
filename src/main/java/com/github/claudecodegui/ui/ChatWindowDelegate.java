@@ -30,6 +30,7 @@ import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.handler.provider.ProviderHandler;
 import com.github.claudecodegui.handler.provider.claude.ClaudePlanUsageHandler;
 import com.github.claudecodegui.handler.provider.grok.GrokPlanUsageHandler;
+import com.github.claudecodegui.handler.provider.omp.OmpPlanUsageHandler;
 import com.github.claudecodegui.handler.RewindHandler;
 import com.github.claudecodegui.handler.SessionHandler;
 import com.github.claudecodegui.handler.SettingsHandler;
@@ -567,6 +568,7 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new ProviderHandler(handlerContext));
         messageDispatcher.registerHandler(new ClaudePlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new GrokPlanUsageHandler(handlerContext));
+        messageDispatcher.registerHandler(new OmpPlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new CustomModelPricingHandler(handlerContext, settingsService));
         messageDispatcher.registerHandler(new McpServerHandler(handlerContext));
         messageDispatcher.registerHandler(new McpMarketplaceHandler(handlerContext));

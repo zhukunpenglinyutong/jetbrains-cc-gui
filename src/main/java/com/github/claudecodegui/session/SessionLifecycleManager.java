@@ -9,6 +9,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.github.claudecodegui.skill.OmpSlashCommandService;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.util.JsUtils;
 import com.intellij.ide.util.PropertiesComponent;
@@ -415,6 +416,30 @@ public class SessionLifecycleManager {
                 LOG.warn("Failed to send slash commands to frontend: " + e.getMessage(), e);
             }
         });
+
+        // Cached (or empty) list is queued above; the fetched catalog is queued after it.
+        if (OmpSlashCommandService.isOmp(provider)) {
+            final String ompCwd = cwd;
+            OmpSlashCommandService.refreshAndPush(
+                    ompCwd,
+                    () -> !host.isDisposed() && isCurrentOmpSlashCwd(ompCwd),
+                    fetchedJson -> ApplicationManager.getApplication().invokeLater(() -> {
+                        try {
+                            host.callJavaScript("updateSlashCommands", JsUtils.escapeJs(fetchedJson));
+                        } catch (Exception e) {
+                            LOG.warn("Failed to send omp slash commands to frontend: " + e.getMessage(), e);
+                        }
+                    }));
+        }
+    }
+
+    private boolean isCurrentOmpSlashCwd(String cwd) {
+        ClaudeSession session = host.getSession();
+        if (session == null || !OmpSlashCommandService.isOmp(session.getProvider())) {
+            return false;
+        }
+        String currentCwd = session.getCwd() != null ? session.getCwd() : host.getProject().getBasePath();
+        return OmpSlashCommandService.cacheKey(cwd).equals(OmpSlashCommandService.cacheKey(currentCwd));
     }
 
     /**

@@ -199,6 +199,7 @@ public class SessionHandler extends BaseMessageHandler {
                 requestedCodexFastMode = payload.get("codexFastMode").getAsString();
             }
             requestedDshPreset = extractDshPreset(payload);
+            applyOmpApprovalMode(payload);
             nativeCodexSettings = extractNativeCodexSettings(payload);
             if (payload != null && payload.has("clientMessageId")
                     && !payload.get("clientMessageId").isJsonNull()) {
@@ -347,6 +348,7 @@ public class SessionHandler extends BaseMessageHandler {
                 requestedCodexFastMode = payload.get("codexFastMode").getAsString();
             }
             requestedDshPreset = extractDshPreset(payload);
+            applyOmpApprovalMode(payload);
             nativeCodexSettings = extractNativeCodexSettings(payload);
             if (payload != null && payload.has("clientMessageId")
                     && !payload.get("clientMessageId").isJsonNull()) {
@@ -548,6 +550,20 @@ public class SessionHandler extends BaseMessageHandler {
         }
         String preset = payload.get("dshPreset").getAsString();
         return SessionState.isValidDshPreset(preset) ? preset.trim() : null;
+    }
+
+    /**
+     * The webview states the OMP approval mode on every send, so a payload
+     * without one resets the session to "follow OMP's own setting".
+     */
+    private void applyOmpApprovalMode(JsonObject payload) {
+        if (context.getSession() == null) {
+            return;
+        }
+        String mode = payload != null && payload.has("ompApprovalMode") && !payload.get("ompApprovalMode").isJsonNull()
+                ? payload.get("ompApprovalMode").getAsString()
+                : null;
+        context.getSession().getState().setOmpApprovalMode(mode);
     }
 
     private JsonObject extractNativeCodexSettings(JsonObject payload) {

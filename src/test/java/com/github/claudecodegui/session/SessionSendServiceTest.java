@@ -158,6 +158,41 @@ public class SessionSendServiceTest {
     }
 
     @Test
+    public void cliReasoningEffortPassesEveryLevelToOmpAndForcesNothingWhenUnset() {
+        for (String level : new String[]{"low", "medium", "high", "xhigh", "max"}) {
+            assertEquals(level, SessionSendService.normalizeCliReasoningEffort("omp", level));
+        }
+        assertEquals("xhigh", SessionSendService.normalizeCliReasoningEffort("omp", " XHigh "));
+        // No --thinking flag: the level configured in OMP itself applies.
+        assertEquals("", SessionSendService.normalizeCliReasoningEffort("omp", null));
+        assertEquals("", SessionSendService.normalizeCliReasoningEffort("omp", "extreme"));
+    }
+
+    @Test
+    public void cliReasoningEffortKeepsThreeLevelsAndMediumDefaultForOtherCliProviders() {
+        assertEquals("high", SessionSendService.normalizeCliReasoningEffort("pi", "high"));
+        assertEquals("medium", SessionSendService.normalizeCliReasoningEffort("pi", "xhigh"));
+        assertEquals("medium", SessionSendService.normalizeCliReasoningEffort("kimi", null));
+    }
+
+    @Test
+    public void ompApprovalModeKeepsKnownModesAndTreatsEverythingElseAsOmpsOwnSetting() {
+        SessionState state = new SessionState();
+        assertEquals("", state.getOmpApprovalMode());
+
+        for (String mode : new String[]{"always-ask", "write", "yolo"}) {
+            state.setOmpApprovalMode(mode);
+            assertEquals(mode, state.getOmpApprovalMode());
+        }
+        // "default" is the webview's name for "pass no --approval-mode flag".
+        for (String mode : new String[]{"default", "", "bypassPermissions", "always-ask-cached", null}) {
+            state.setOmpApprovalMode("yolo");
+            state.setOmpApprovalMode(mode);
+            assertEquals("", state.getOmpApprovalMode());
+        }
+    }
+
+    @Test
     public void getCodexRuntimeAccessErrorRequiresAuthorizationOrManagedProvider() {
         assertEquals(
                 "Codex local configuration access is not authorized. Please authorize local ~/.codex access or enable a managed Codex provider first.",

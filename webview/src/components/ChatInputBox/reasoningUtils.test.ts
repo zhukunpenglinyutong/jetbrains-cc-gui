@@ -46,3 +46,49 @@ describe('cc-switch aggregated model effort', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 });
+
+describe('omp catalog-driven effort levels', () => {
+  const catalog = {
+    models: [
+      { id: 'anthropic/claude-opus-5-5', label: 'Opus', supportedReasoningEfforts: ['minimal', 'low', 'high', 'max'] },
+      { id: 'openai/gpt-x', label: 'GPT X' },
+      { id: 'misc/odd', label: 'Odd', supportedReasoningEfforts: ['minimal'] },
+    ],
+    roles: [
+      { id: 'slow', label: 'Slow', description: 'anthropic/claude-opus-5-5:xhigh' },
+      { id: 'smol', label: 'Smol', description: 'openai/gpt-x' },
+      { id: 'ghost', label: 'Ghost', description: 'nowhere/none:high' },
+    ],
+  };
+  const ids = (model?: string, provider = 'omp') =>
+    getAvailableReasoningLevels(provider, model, catalog).map(level => level.id);
+  const ALL = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+  it('shows exactly the plugin levels the model lists, ignoring unknown ids', () => {
+    expect(ids('anthropic/claude-opus-5-5')).toEqual(['low', 'high', 'max']);
+  });
+
+  it('resolves a role through its selector, stripping the :level suffix', () => {
+    expect(ids('slow')).toEqual(['low', 'high', 'max']);
+  });
+
+  it('shows all five levels when nothing is known', () => {
+    expect(ids('auto')).toEqual(ALL);
+    expect(ids('ghost')).toEqual(ALL);
+    expect(ids('smol')).toEqual(ALL);
+    expect(ids('openai/gpt-x')).toEqual(ALL);
+    expect(ids('misc/odd')).toEqual(ALL);
+    expect(getAvailableReasoningLevels('omp', 'anthropic/claude-opus-5-5').map(level => level.id)).toEqual(ALL);
+  });
+
+  it('leaves other providers unchanged', () => {
+    expect(ids('anthropic/claude-opus-5-5', 'pi')).toEqual(['low', 'medium', 'high', 'xhigh']);
+    expect(ids('anthropic/claude-opus-5-5', 'grok')).toEqual(['low', 'medium', 'high', 'xhigh']);
+  });
+
+  it('replaces an effort the new model does not offer, like other providers', () => {
+    const onChange = vi.fn();
+    renderHook(() => useReasoningEffortGuard('medium', onChange, 'anthropic/claude-opus-5-5', 'omp', catalog));
+    expect(onChange).toHaveBeenCalledWith('high');
+  });
+});

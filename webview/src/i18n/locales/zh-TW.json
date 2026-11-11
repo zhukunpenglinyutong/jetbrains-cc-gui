@@ -1162,6 +1162,7 @@
     "codexDeliveryUnconfirmed": "Codex 尚未確認收到你的選擇（{{error}}）。它可能仍會生效，請不要重複作答；如果對話沒有繼續，請點擊停止後重新傳送。"
   },
   "askUserQuestion": {
+    "ompTitle": "OMP 有一些問題想問你",
     "title": "Claude 有一些問題想問你",
     "progress": "問題 {{current}} / {{total}}",
     "multiSelectHint": "可以選擇多個選項",
@@ -1885,6 +1886,7 @@
     "effort": "思考強度",
     "speed": "速度",
     "preset": "預設組合",
+    "approvals": "審核",
     "model": "模型"
   },
   "modes": {
@@ -2152,6 +2154,25 @@
     "fast": {
       "label": "Fast",
       "description": "Codex 快速回應模式（會產生額外消耗）"
+    }
+  },
+  "ompApprovals": {
+    "title": "選擇 OMP 審核模式",
+    "default": {
+      "label": "預設",
+      "description": "沿用 OMP 自身的 tools.approvalMode 設定"
+    },
+    "alwaysAsk": {
+      "label": "詢問",
+      "description": "編輯與指令執行前都會詢問"
+    },
+    "write": {
+      "label": "自動核准編輯",
+      "description": "僅在執行指令前詢問"
+    },
+    "yolo": {
+      "label": "完全自動",
+      "description": "從不詢問"
     }
   },
   "dshPresets": {

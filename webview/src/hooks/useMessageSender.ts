@@ -5,10 +5,11 @@ import { sendBridgeEvent } from '../utils/bridge';
 import { clearPendingStreamStart, markPendingStreamStart } from '../utils/streamLifecycle';
 import type { ClaudeContentBlock, ClaudeMessage } from '../types';
 import {
+  OMP_APPROVAL_DEFAULT,
   apply1MContextSuffix,
 } from '../components/ChatInputBox/types';
 import { claudeModelAllowsEffort } from '../components/ChatInputBox/reasoningUtils';
-import type { Attachment, ChatInputBoxHandle, PermissionMode, ReasoningEffort, SelectedAgent, CodexFastMode } from '../components/ChatInputBox/types';
+import type { Attachment, ChatInputBoxHandle, OmpApprovalMode, PermissionMode, ReasoningEffort, SelectedAgent, CodexFastMode } from '../components/ChatInputBox/types';
 import { expandQuoteTokens } from '../components/ChatInputBox/utils/quoteRegistry';
 import type { ViewMode } from './useModelProviderState';
 import { parseCodexCommand } from './codexCommandDispatcher';
@@ -53,6 +54,7 @@ export interface UseMessageSenderOptions {
   codexSandboxSelection?: 'read-only' | 'workspace-write' | 'danger-full-access';
   codexNativeAutoReviewAvailable: boolean;
   dshPreset?: string;
+  ompApprovalMode?: OmpApprovalMode;
   selectedAgent: SelectedAgent | null;
   sdkStatusLoading: boolean;
   currentSdkInstalled: boolean;
@@ -93,6 +95,7 @@ export function useMessageSender({
   codexSandboxSelection = 'workspace-write',
   codexNativeAutoReviewAvailable,
   dshPreset,
+  ompApprovalMode,
   selectedAgent,
   sdkStatusLoading,
   currentSdkInstalled,
@@ -208,10 +211,11 @@ export function useMessageSender({
 
   /**
    * Check for context usage command (/context)
-   * Only available for Claude provider. Opens a dialog to display context window usage.
+   * Opens the plugin's context window dialog for Claude. OMP has a /context of
+   * its own, so there the command is sent on like any other.
    */
   const checkContextCommand = useCallback((text: string): boolean => {
-    if (!text.startsWith('/')) return false;
+    if (!text.startsWith('/') || currentProvider === 'omp') return false;
     const command = text.split(WHITESPACE_REGEX)[0].toLowerCase();
     if (CONTEXT_COMMANDS.has(command)) {
       if (currentProvider !== 'claude') {
@@ -248,10 +252,10 @@ export function useMessageSender({
   }, [currentProvider, selectedModel, longContextEnabled, addToast, t, openContextUsageDialog, closeContextUsageDialog]);
 
   /**
-   * Check for unimplemented slash commands
+   * Check for unimplemented slash commands (OMP implements /plugins itself)
    */
   const checkUnimplementedCommand = useCallback((text: string): boolean => {
-    if (!text.startsWith('/')) return false;
+    if (!text.startsWith('/') || currentProvider === 'omp') return false;
 
     const command = text.split(/\s+/)[0].toLowerCase();
     const unimplementedCommands = ['/plugin', '/plugins'];
@@ -271,7 +275,7 @@ export function useMessageSender({
       return true;
     }
     return false;
-  }, [t, setMessages]);
+  }, [t, setMessages, currentProvider]);
 
   /**
    * Build content blocks for the user message
@@ -348,6 +352,7 @@ export function useMessageSender({
         clientMessageId,
         ...reasoningEffortPayload,
         ...(currentProvider === 'dsh' ? { dshPreset: dshPreset || '' } : {}),
+        ...(currentProvider === 'omp' ? { ompApprovalMode: ompApprovalMode || OMP_APPROVAL_DEFAULT } : {}),
         codexFastMode,
         ...(currentProvider === 'codex' ? {
           codexSettings: {
@@ -369,7 +374,7 @@ export function useMessageSender({
       return false;
     }
   }, [codexApprovalPreset, codexCollaborationMode, codexFastMode, codexNativeAutoReviewAvailable,
-    codexSandboxSelection, currentProvider, dshPreset, selectedModel, reasoningEffort, longContextEnabled]);
+    codexSandboxSelection, currentProvider, dshPreset, ompApprovalMode, selectedModel, reasoningEffort, longContextEnabled]);
 
   /**
    * Execute message sending (from queue or directly)
@@ -501,6 +506,7 @@ export function useMessageSender({
     currentSdkInstalled,
     currentProvider,
     dshPreset,
+    ompApprovalMode,
     permissionMode,
     selectedAgent,
     buildUserContentBlocks,

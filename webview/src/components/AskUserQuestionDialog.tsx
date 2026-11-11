@@ -15,6 +15,8 @@ import './AskUserQuestionDialog.css';
 export interface QuestionOption {
   label: string;
   description: string;
+  /** Checked when the dialog opens, like a form's preselected checkbox. */
+  selected?: boolean;
 }
 
 /** Presentation intent a capable UI may recognise (DSH `plan-review` today). */
@@ -46,7 +48,7 @@ export interface AskUserQuestionRequest {
   requestId: string;
   toolName: string;
   questions: Question[];
-  provider?: 'claude' | 'codex' | 'dsh' | 'grok';
+  provider?: 'claude' | 'codex' | 'dsh' | 'grok' | 'omp';
   /** Native Codex request may be visible without blocking the active turn. */
   isBlocking?: boolean;
   deadlineMs?: number;
@@ -104,13 +106,16 @@ const AskUserQuestionDialog = ({
   const isCodexRequest = request?.provider === 'codex' || request?.toolName === 'request_user_input';
   const isDshRequest = request?.provider === 'dsh';
   const isGrokRequest = request?.provider === 'grok';
+  const isOmpRequest = request?.provider === 'omp';
   const dialogTitle = isGrokRequest
     ? t('askUserQuestion.grokTitle', 'Grok has some questions for you')
-    : isDshRequest
-      ? t('askUserQuestion.dshTitle', 'DeepSeek Harness 有一些问题想问你')
-      : isCodexRequest
-        ? t('askUserQuestion.codexTitle', 'Codex 有一些问题想问你')
-        : t('askUserQuestion.title', 'Claude 有一些问题想问你');
+    : isOmpRequest
+      ? t('askUserQuestion.ompTitle', 'OMP has some questions for you')
+      : isDshRequest
+        ? t('askUserQuestion.dshTitle', 'DeepSeek Harness 有一些问题想问你')
+        : isCodexRequest
+          ? t('askUserQuestion.codexTitle', 'Codex 有一些问题想问你')
+          : t('askUserQuestion.title', 'Claude 有一些问题想问你');
 
   const handleCancel = useCallback(() => {
     if (request && markSubmitted()) {

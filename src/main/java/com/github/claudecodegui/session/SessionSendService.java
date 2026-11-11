@@ -651,6 +651,7 @@ public class SessionSendService {
         }
 
         String effort = normalizeCliReasoningEffort(
+                provider,
                 requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort()
         );
         String modelForCli = normalizeCliModelForProvider(provider, state.getModel());
@@ -680,6 +681,7 @@ public class SessionSendService {
                 attachments,
                 effectiveMode,
                 "dsh".equals(provider) ? state.getDshPreset() : null,
+                "omp".equals(provider) ? state.getOmpApprovalMode() : null,
                 thinking,
                 handler
         ));
@@ -720,11 +722,18 @@ public class SessionSendService {
         return new CodexMessageHandler(state, callbacks);
     }
 
-    static String normalizeCliReasoningEffort(String effort) {
-        if (effort == null) {
-            return "medium";
+    /**
+     * Map the UI effort onto the CLI flag value.
+     *
+     * <p>OMP accepts every UI level as {@code --thinking}, and an empty result
+     * omits the flag so the model keeps the level from OMP's own config. The
+     * other CLI providers only know low/medium/high and default to medium.
+     */
+    static String normalizeCliReasoningEffort(String provider, String effort) {
+        String normalized = effort == null ? "" : effort.trim().toLowerCase();
+        if ("omp".equals(provider)) {
+            return SessionState.isValidReasoningEffort(normalized) ? normalized : "";
         }
-        String normalized = effort.trim().toLowerCase();
         if ("low".equals(normalized) || "medium".equals(normalized) || "high".equals(normalized)) {
             return normalized;
         }

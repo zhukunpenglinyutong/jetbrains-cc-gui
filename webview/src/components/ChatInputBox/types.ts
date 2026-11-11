@@ -674,6 +674,58 @@ export const isValidDshPreset = (value: unknown): value is DshPreset =>
   && (DSH_PRESETS.some((preset) => preset.id === value)
     || getUserDshPresetOptions().some((preset) => preset.id === value));
 
+/** OMP approval mode: `default` defers to OMP's own `tools.approvalMode` setting. */
+export type OmpApprovalMode = 'default' | 'always-ask' | 'write' | 'yolo';
+
+export const OMP_APPROVAL_DEFAULT: OmpApprovalMode = 'default';
+
+export interface OmpApprovalOption {
+  id: OmpApprovalMode;
+  labelKey: string;
+  descriptionKey: string;
+  label: string;
+  description: string;
+  icon: string;
+}
+
+export const OMP_APPROVAL_OPTIONS: OmpApprovalOption[] = [
+  {
+    id: 'default',
+    labelKey: 'ompApprovals.default.label',
+    descriptionKey: 'ompApprovals.default.description',
+    label: 'Default',
+    description: "Follows OMP's own tools.approvalMode setting",
+    icon: 'codicon-circle-outline',
+  },
+  {
+    id: 'always-ask',
+    labelKey: 'ompApprovals.alwaysAsk.label',
+    descriptionKey: 'ompApprovals.alwaysAsk.description',
+    label: 'Ask',
+    description: 'Asks before edits and commands',
+    icon: 'codicon-shield',
+  },
+  {
+    id: 'write',
+    labelKey: 'ompApprovals.write.label',
+    descriptionKey: 'ompApprovals.write.description',
+    label: 'Auto-approve edits',
+    description: 'Asks only before commands',
+    icon: 'codicon-edit',
+  },
+  {
+    id: 'yolo',
+    labelKey: 'ompApprovals.yolo.label',
+    descriptionKey: 'ompApprovals.yolo.description',
+    label: 'Full auto',
+    description: 'Never asks',
+    icon: 'codicon-rocket',
+  },
+];
+
+export const isValidOmpApprovalMode = (value: unknown): value is OmpApprovalMode =>
+  OMP_APPROVAL_OPTIONS.some((option) => option.id === value);
+
 /** MiniMax Code default: omit `--model` so the CLI resolves its own default. */
 export const MINIMAX_DEFAULT_MODEL_ID = 'auto';
 
@@ -1002,6 +1054,10 @@ export interface ChatInputBoxProps {
   onCodexFastModeChange?: (mode: CodexFastMode) => void;
   /** Switch DSH agent preset callback */
   onDshPresetChange?: (preset: string) => void;
+  /** OMP approval mode */
+  ompApprovalMode?: OmpApprovalMode;
+  /** Switch OMP approval mode callback */
+  onOmpApprovalModeChange?: (mode: OmpApprovalMode) => void;
   /** Toggle thinking mode */
   onToggleThinking?: (enabled: boolean) => void;
   /** Whether streaming is enabled */
@@ -1098,6 +1154,8 @@ export interface ButtonAreaProps {
   codexFastMode?: CodexFastMode;
   /** DSH agent preset */
   dshPreset?: string;
+  /** OMP approval mode */
+  ompApprovalMode?: OmpApprovalMode;
 
   // Event callbacks
   onSubmit?: () => void;
@@ -1111,6 +1169,8 @@ export interface ButtonAreaProps {
   onCodexFastModeChange?: (mode: CodexFastMode) => void;
   /** Switch DSH agent preset callback */
   onDshPresetChange?: (preset: string) => void;
+  /** Switch OMP approval mode callback */
+  onOmpApprovalModeChange?: (mode: OmpApprovalMode) => void;
   /** Enhance prompt callback */
   onEnhancePrompt?: () => void;
   /** Whether always thinking enabled */

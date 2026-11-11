@@ -1575,6 +1575,7 @@
     "codexDeliveryUnconfirmed": "Codex 还没有确认收到你的选择（{{error}}）。它可能仍会生效，请不要重复作答；如果对话没有继续，请点击停止后重新发送。"
   },
   "askUserQuestion": {
+    "ompTitle": "OMP 有一些问题想问你",
     "configWarning": "Codex 部分配置可能未生效，请查看兼容提示详情。",
     "configWarningTitle": "Codex 配置兼容提示",
     "apiDeprecationWarning": "Codex 返回接口兼容提示，可查看详情。",
@@ -2341,6 +2342,7 @@
     "effort": "思考强度",
     "speed": "速度",
     "preset": "预设",
+    "approvals": "审批",
     "model": "模型"
   },
   "modes": {
@@ -2648,6 +2650,25 @@
     "fast": {
       "label": "Fast",
       "description": "Codex快速响应模式（会产生额外消耗）"
+    }
+  },
+  "ompApprovals": {
+    "title": "选择 OMP 审批模式",
+    "default": {
+      "label": "默认",
+      "description": "沿用 OMP 自身的 tools.approvalMode 设置"
+    },
+    "alwaysAsk": {
+      "label": "询问",
+      "description": "编辑和命令执行前都会询问"
+    },
+    "write": {
+      "label": "自动批准编辑",
+      "description": "仅在执行命令前询问"
+    },
+    "yolo": {
+      "label": "完全自动",
+      "description": "从不询问"
     }
   },
   "dshPresets": {

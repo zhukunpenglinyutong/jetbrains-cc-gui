@@ -449,4 +449,37 @@ describe('useMessageSender - /context command', () => {
     const payload = getBridgePayload('send_message_with_attachments');
     expect(payload.reasoningEffort).toBe('low');
   });
+
+  it.each([false, true])('sends ompApprovalMode for omp and never for claude (attachments: %s)', (withAttachments) => {
+    const attachments = withAttachments
+      ? [{ id: 'a', fileName: 'a.txt', mediaType: 'text/plain', data: 'aGk=' }]
+      : undefined;
+    const event = withAttachments ? 'send_message_with_attachments' : 'send_message';
+
+    const omp = renderHook(() => useMessageSender(createOptions({
+      currentProvider: 'omp', selectedModel: 'auto', ompApprovalMode: 'write',
+    })));
+    act(() => omp.result.current.handleSubmit('hello', attachments));
+    expect(getBridgePayload(event).ompApprovalMode).toBe('write');
+    omp.unmount();
+
+    window.sendToJava = vi.fn();
+    const claude = renderHook(() => useMessageSender(createOptions({ ompApprovalMode: 'write' })));
+    act(() => claude.result.current.handleSubmit('hello', attachments));
+    expect(getBridgePayload(event)).not.toHaveProperty('ompApprovalMode');
+  });
+
+  it.each(['/context', '/plugins list'])('sends %s to OMP, which implements it itself', (command) => {
+    const addToast = vi.fn();
+    const openContextUsageDialog = vi.fn();
+    const { result } = renderHook(() => useMessageSender(createOptions({
+      currentProvider: 'omp', selectedModel: 'auto', addToast, openContextUsageDialog,
+    })));
+
+    act(() => result.current.handleSubmit(command));
+
+    expect(getBridgePayload('send_message').text).toBe(command);
+    expect(addToast).not.toHaveBeenCalled();
+    expect(openContextUsageDialog).not.toHaveBeenCalled();
+  });
 });

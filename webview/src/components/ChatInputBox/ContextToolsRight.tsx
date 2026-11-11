@@ -2,6 +2,7 @@ import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useClaudePlanUsage } from '../../hooks/useClaudePlanUsage';
 import { useGrokPlanUsage } from '../../hooks/useGrokPlanUsage';
+import { useOmpPlanUsage } from '../../hooks/useOmpPlanUsage';
 import { PlanUsageIndicator } from './PlanUsageIndicator';
 
 interface ContextToolsRightProps {
@@ -23,8 +24,10 @@ export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
   const { t } = useTranslation();
   const isClaude = currentProvider === 'claude';
   const isGrok = currentProvider === 'grok';
+  const isOmp = currentProvider === 'omp';
   const claudePlanUsage = useClaudePlanUsage(currentProvider);
   const grokPlanUsage = useGrokPlanUsage(currentProvider);
+  const ompPlanUsage = useOmpPlanUsage(currentProvider);
 
   return (
     <div className="context-tools-right">
@@ -38,6 +41,12 @@ export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
         <PlanUsageIndicator
           snapshot={grokPlanUsage.snapshot}
           status={grokPlanUsage.status}
+        />
+      )}
+      {isOmp && (
+        <PlanUsageIndicator
+          snapshot={ompPlanUsage.snapshot}
+          status={ompPlanUsage.status}
         />
       )}
 

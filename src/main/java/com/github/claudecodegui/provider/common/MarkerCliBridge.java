@@ -183,7 +183,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
-                null, null, null, null, callback);
+                null, null, null, null, null, callback);
     }
 
     /**
@@ -204,7 +204,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
-                attachments, null, null, null, callback);
+                attachments, null, null, null, null, callback);
     }
 
     /**
@@ -217,6 +217,9 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
      * <p>{@code thinking} carries the plugin "always thinking" toggle for
      * providers that gate reasoning on a CLI flag (OpenCode {@code --thinking});
      * {@code null} means the daemon default (enabled).
+     *
+     * <p>{@code ompApprovalMode} is the OMP {@code --approval-mode} override;
+     * empty means OMP's own setting decides, {@code null} omits the field.
      */
     public CompletableFuture<SDKResult> sendMessage(
             String channelId,
@@ -228,6 +231,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             List<ClaudeSession.Attachment> attachments,
             String permissionMode,
             String dshPreset,
+            String ompApprovalMode,
             Boolean thinking,
             MessageCallback callback
     ) {
@@ -244,6 +248,9 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
         stdinInput.addProperty("thinking", thinking == null || thinking);
         if (dshPreset != null) {
             stdinInput.addProperty("preset", dshPreset);
+        }
+        if (ompApprovalMode != null) {
+            stdinInput.addProperty("approvalMode", ompApprovalMode);
         }
         if (attachments != null && !attachments.isEmpty()) {
             stdinInput.add("attachments", buildAttachmentArray(attachments));

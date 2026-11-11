@@ -14,7 +14,11 @@ export const buildInitialAnswerState = (request: AskUserQuestionRequest) => {
 
   // Native question IDs are data, including names inherited by ordinary objects.
   const initialAnswers: Record<string, Set<string>> = Object.fromEntries(
-    questions.map(q => [q.id ?? q.question, new Set<string>()]));
+    questions.map(q => {
+      const preselected = q.options.filter(option => option.selected).map(option => option.label);
+      // A single-select question carries one value.
+      return [q.id ?? q.question, new Set(q.multiSelect ? preselected : preselected.slice(0, 1))];
+    }));
   const initialCustomInputs: Record<string, string> = Object.fromEntries(
     questions.map(q => [q.id ?? q.question, '']));
   return { initialAnswers, initialCustomInputs };
@@ -110,4 +114,21 @@ export const formatAnswers = (
     }
   });
   return formattedAnswers;
+};
+
+/**
+ * Name every optional question a submitted dialog left blank.
+ *
+ * Over the file IPC an empty answer map means the dialog was dismissed, so
+ * without the blank entries a bridge cannot tell "nothing selected" from
+ * "cancelled".
+ */
+export const withBlankOptionalAnswers = (
+  questions: Question[],
+  answers: Record<string, string | string[]>,
+): Record<string, string | string[]> => {
+  const blanks = questions
+    .filter(q => q.required === false && !Object.hasOwn(answers, q.id ?? q.question))
+    .map((q): [string, string | string[]] => [q.id ?? q.question, q.multiSelect ? [] : '']);
+  return Object.fromEntries([...Object.entries(answers), ...blanks]);
 };

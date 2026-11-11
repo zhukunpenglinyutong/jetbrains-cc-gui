@@ -8,6 +8,7 @@ import {
   XHIGH_EFFORT_CLAUDE_MODELS,
   codexModelSupportsMaxEffort,
   strip1MContextSuffix,
+  type ModelInfo,
   type ReasoningEffort,
   type ReasoningInfo,
 } from './types';
@@ -42,10 +43,40 @@ export function isReasoningVisible(currentProvider?: string, selectedModel?: str
   return currentProvider !== 'claude' || !selectedModel || claudeModelAllowsEffort(selectedModel);
 }
 
+/** Catalog data omp effort levels are derived from; passed in, never read from a global. */
+export interface OmpReasoningCatalog {
+  models: ModelInfo[];
+  roles: ModelInfo[];
+}
+
+/**
+ * Levels the selected omp model offers, or null when nothing is known
+ * (auto, unresolved role, model without the field, empty intersection).
+ * A role id resolves through its selector (`provider/model[:level]`).
+ */
+function resolveOmpLevelIds(selectedModel: string | undefined, catalog: OmpReasoningCatalog | undefined): Set<ReasoningEffort> | null {
+  if (!selectedModel || !catalog) return null;
+  const role = catalog.roles.find((item) => item.id === selectedModel);
+  // Exact match first: a model id may itself contain ':' (e.g. a local tag).
+  const roleSelector = role?.description ?? '';
+  const findModel = (id: string) => catalog.models.find((model) => model.id === id);
+  const target = role
+    ? findModel(roleSelector) ?? findModel(roleSelector.replace(/:[^:/]*$/, ''))
+    : findModel(selectedModel);
+  const efforts = target?.supportedReasoningEfforts;
+  if (!efforts) return null;
+  const supported = new Set<ReasoningEffort>(
+    REASONING_LEVELS.filter((level) => efforts.includes(level.id)).map((level) => level.id),
+  );
+  return supported.size > 0 ? supported : null;
+}
+
 export function getAvailableReasoningLevels(
   currentProvider?: string,
   selectedModel?: string,
+  ompCatalog?: OmpReasoningCatalog,
 ): ReasoningInfo[] {
+  const ompLevelIds = currentProvider === 'omp' ? resolveOmpLevelIds(selectedModel, ompCatalog) : null;
   const { id: claudeModel, gateway } = resolveClaudeEffortModel(selectedModel);
   const configuredEffort = gateway || (currentProvider === 'claude' && hasConfiguredClaudeMapping(selectedModel));
   return REASONING_LEVELS.filter((level) => {
@@ -54,6 +85,9 @@ export function getAvailableReasoningLevels(
     }
     if (currentProvider === 'codex') {
       return level.id !== 'max' || (selectedModel !== undefined && codexModelSupportsMaxEffort(selectedModel));
+    }
+    if (currentProvider === 'omp') {
+      return ompLevelIds ? ompLevelIds.has(level.id) : true;
     }
     if (currentProvider !== 'claude') {
       return level.id !== 'max';
@@ -89,6 +123,7 @@ export function useReasoningEffortGuard(
   onChange: (effort: ReasoningEffort) => void,
   selectedModel?: string,
   currentProvider?: string,
+  ompCatalog?: OmpReasoningCatalog,
 ): {
   isVisible: boolean;
   availableLevels: ReasoningInfo[];
@@ -97,7 +132,7 @@ export function useReasoningEffortGuard(
   const isVisible = isReasoningVisible(currentProvider, selectedModel);
   // Mapping changes can keep the same Sonnet/Opus alias. Re-evaluate on every
   // render so switching cc-switch modes does not retain an old filtered list.
-  const availableLevels = getAvailableReasoningLevels(currentProvider, selectedModel);
+  const availableLevels = getAvailableReasoningLevels(currentProvider, selectedModel, ompCatalog);
   const currentLevel = resolveCurrentReasoningLevel(value, availableLevels);
 
   useEffect(() => {
