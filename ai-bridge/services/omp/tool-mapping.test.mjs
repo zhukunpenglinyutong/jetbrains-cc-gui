@@ -217,15 +217,17 @@ test('write to a path omp rewrites waits for its result', () => {
 
 test('isPlainFilePath accepts only paths omp writes to exactly as written', () => {
   for (const path of ['notes.md', 'src/a.ts', '/abs/a.ts', '~', '~/a', 'C:\\a\\b.txt']) {
-    assert.equal(isPlainFilePath(path), true, path);
+    assert.equal(isPlainFilePath(path, 'linux'), true, path);
   }
   for (const path of [
     '@/abs/a', ':./a', '~name', '[src/a.ts#1A2B]', 'bundle.zip:inner.txt', 'a\u00A0b', '/', '', ' a', 'xd://lsp', 5,
   ]) {
-    assert.equal(isPlainFilePath(path), false, String(path));
+    assert.equal(isPlainFilePath(path, 'linux'), false, String(path));
   }
+  // On Windows omp turns `/c/...` into a drive path, and any leading slash is drive-relative.
   assert.equal(isPlainFilePath('/c/a', 'win32'), false);
-  assert.equal(isPlainFilePath('/c/a', 'linux'), true);
+  assert.equal(isPlainFilePath('/abs/a.ts', 'win32'), false);
+  assert.equal(isPlainFilePath('C:\\a\\b.txt', 'win32'), true);
 });
 
 test('write to a URL or device is not a file write', () => {
