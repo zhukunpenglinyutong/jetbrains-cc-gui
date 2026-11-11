@@ -35,6 +35,9 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
 
         /** Backend activity remains observable when a remote renderer is hidden or disconnected. */
         default void onAssistantActivity() { }
+
+        /** The bound turn ended with an error; the tab strip paints it red. */
+        default void onTurnFailed() { }
     }
 
     private final StreamMessageCoalescer streamCoalescer;
@@ -56,6 +59,8 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     private volatile List<ClaudeSession.Message> latestMessages;
     private volatile boolean assistantActivityObserved;
     private volatile boolean requestActive;
+    /** Last error already forwarded to the tab strip, so a repeated report does not repaint. */
+    private volatile String lastStateError;
 
     public SessionCallbackAdapter(
             StreamMessageCoalescer streamCoalescer,
@@ -149,6 +154,13 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
         // Show error in status bar only (not as toast) to avoid duplicate notifications.
         if (error != null && !error.isEmpty()) {
             jsTarget.callJavaScript("updateStatus", JsUtils.escapeJs("Error: " + error));
+            // A provider may report the same failure again on completion; the dot only needs it once.
+            if (!error.equals(lastStateError)) {
+                lastStateError = error;
+                safeRun("tab failure notification", jsTarget::onTurnFailed);
+            }
+        } else {
+            lastStateError = null;
         }
         if (!busy && !loading) {
             ApplicationManager.getApplication().invokeLater(() -> {

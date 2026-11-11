@@ -141,8 +141,7 @@
       "matchCase": "대소문자 구분 (Alt+C)",
       "wholeWord": "단어 단위 일치 (Alt+W)",
       "regex": "정규식 (Alt+R)",
-      "invalidRegex": "유효하지 않은 정규식",
-      "openTooltip": "대화에서 검색 (Cmd/Ctrl+F)"
+      "invalidRegex": "유효하지 않은 정규식"
     },
     "compactSummary": {
       "receivedTime": "기록 시간",
@@ -1597,6 +1596,12 @@
     "bashGroupCompleted": "완료됨",
     "bashGroupAllCompleted": "모두 완료",
     "bashGroupFailed": "실패",
+    "bashGroupCopyCommand": "명령 복사",
+    "bashGroupCopyOutput": "출력 복사",
+    "bashGroupOutput": "출력",
+    "bashGroupOutputFailed": "실패",
+    "bashGroupRunning": "실행 중…",
+    "bashGroupNoOutput": "(출력 없음)",
     "updatePlan": "계획 업데이트",
     "applyPatch": "패치 적용",
     "reportFindings": {
@@ -1861,13 +1866,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · 빠른 응답에 최적"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · 가장 강력함 · Mythos급"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · 가장 강력함 · Mythos급"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · 이전 세대 Fable 모델"
+        "description": "Fable 5.1 · 이전 세대 Fable 모델"
       }
     },
     "longContext": {

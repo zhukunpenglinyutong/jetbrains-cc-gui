@@ -1,3 +1,65 @@
+##### **2026年11月10日（v0.6.5）**
+
+English:
+
+✨ Features
+- **Add Fable 5.2 to the Claude model list**: Fable 5.2 is now the top built-in Claude model, with its 200K and `[1m]` context windows, pricing, effort levels up to `max` and model mapping. Fable 5.1 moves to the previous-generation slot. A saved Fable 5 selection is migrated to Fable 5.2 instead of falling back to Sonnet, while a custom model that uses the `claude-fable-5` id keeps working and is not labelled as retired (by @zhukunpenglinyutong)
+- **Run Codex in projects opened from WSL** (#2013, #2050): when the project is opened through a `\\wsl.localhost\<distro>\...` path and node runs inside WSL, Codex now receives a Linux working directory for sends and for the plan, review, compact, preconnect and release controls, so it no longer fails with `spawn ... ENOENT`. The CLI settings page also detects a Codex installed inside WSL instead of reporting it as not installed (by @Faq, @zhukunpenglinyutong)
+- **Replay more of native Codex exec history** (#2016): replay reads literal arguments, object spreads, string concatenation and const or destructured tool aliases without running the script, and splits `Promise.all`/`allSettled` map callbacks and awaited `for-of` loops into one result per command, matched by their native receipts. Yielded cells stay open until the host reports a final response, recorded dynamic tool calls are shown, and successful automatic approvals no longer add noise. Calls that may never run keep their original wrapper, and const analysis runs once per script, which takes one large record from over 80 seconds to under a second (by @gadfly3173, @saligia3173, @zhukunpenglinyutong)
+
+🔧 Improvements
+- **Drop the Beta labels from the CLI providers**: Grok, Kimi, OpenCode, PI, OMP, DeepSeek Harness, MiniMax Code and ZCode no longer carry a Beta badge in the provider switcher or in Settings. Picking one now switches immediately instead of opening a one-time Beta notice (by @zhukunpenglinyutong)
+- **Keep Codex turn footers and track MCP file edits**: a turn that used tools shows its time, token and cost footer again. File edits made through MCP tools, including the JetBrains `replace_text_in_file`, `create_new_file` and `apply_patch` tools, now appear in the edit list. Only edits that fully state their effect can be undone: overwrites, case-insensitive replacements, edits from other servers and relative paths are listed with a read-only diff. Undo and diff Reject follow the same rule, which now also applies to MCP edits in Claude sessions (by @zhukunpenglinyutong)
+- **Tell users once when their Codex CLI is outdated**: a CLI older than 0.160.0 now gets one notice per chat window instead of failing silently, and the `unknown variant auto_review` rejection from 0.123.x shows a localized diagnostic that explains how to update the CLI or change the permission mode. The fallback model metadata warning, which the CLI repeats on every turn for models outside its catalog, no longer pops up as a toast (by @zhukunpenglinyutong)
+- **Explain why Claude Code cannot start on older Windows** (#1928, #2052): exit code 0xC0000139 (also reported as `-1073741511`) now opens a localized diagnostic card. It explains that Claude Code 2.1.118 and later need Windows 10 1809 or Windows Server 2019, and offers two ways out: update Windows, or switch the SDK to v0.2.112 or earlier in Dependency Management (by @Faq, @zhukunpenglinyutong)
+- **Make code blocks easier to read** (#1908, #2039, #2047, #2064): Dart and Flutter fences are now syntax-highlighted. The light theme gets its own highlight palette, with keywords, built-ins, comments and tags darkened to reach 4.5:1 contrast on the code background, and the palette follows IDE theme changes at runtime (by @hebulin, @EeeasyCode)
+- **Open project files through symlinked paths** (#2030): file links under symlinked project directories now open, navigate and show tooltips correctly. `#L12-L20` line ranges work, including on paths with spaces, non-ASCII names and file URIs. Diff writes and deletes still go through the canonical project boundary check, so a link through a symlink or Windows junction cannot grant write access outside the project (by @kochpy, @zhukunpenglinyutong)
+- **Give chat-tab activity its own status colors**: the tab strip marks each turn by color. A running turn shows a blue dot, a finished turn shows a green dot (kept while its reply is unread), and a turn that failed shows a red dot until the tab is opened or a new turn starts. The tab title is no longer rewritten to `AI1...` or suffixed with a localized "Completed", so names stay stable (by @zhukunpenglinyutong)
+
+🐛 Fixes
+- **Restore the OMP icon's brand colors**: the OMP CLI π now uses omp.sh's pink → violet → cyan gradient in the provider switcher, Settings and history instead of a flat theme tint, while mono contexts keep the currentColor mark (by @zhukunpenglinyutong)
+- **Stop a stalled Claude stream from blocking the window** (#2001, #2051): when the model API or a relay stops sending mid-stream, the turn now fails after 10 minutes without activity with a clear "Claude stopped responding" error, and the next message starts a fresh runtime instead of waiting behind it forever. The timer pauses while a main-conversation tool call is running, so long commands, subagents and approval dialogs are not treated as a stall. `CC_GUI_CLAUDE_STALL_TIMEOUT_MS` changes the limit and `0` disables it (by @Faq)
+- **Unstick the message queue when a send never starts streaming**: a send that ended or failed before streaming began, for example with streaming disabled or an error reported only as a status, could leave the chat loading forever, so every later message waited in the queue. The webview now asks the backend for the session's real loading state once the wait window closes (by @zhukunpenglinyutong)
+- **Stop denying commands that only mention `bin`, `usr` or `etc` inside a longer path** (#2054): system directories now count only when they start a path, so commands such as `~/.claude/bin/...`, `./bin/rails` and `/opt/homebrew/bin/gh` run again. The check also catches the `/private/etc` and `/proc/<pid>/root/etc` aliases, which previously let a read-only tool read `/private/etc/hosts` on macOS without a dialog, as well as quoted and combined short options, brace lists and parameter expansions, and it stays fast on very long input (by @Faq, @zhukunpenglinyutong)
+- **Review edits in attached content roots** (#2048): in PyCharm and other JetBrains IDEs, Edit/Write on a file in a content root outside the project base directory now opens the review diff instead of a plain permission dialog, and diff actions and undo work for these files. The project boundary is the base directory plus every loaded content root, and multi-project routing uses the same boundary (by @yuansezx, @zhukunpenglinyutong)
+- **Convert SDK sessions on Windows** (#1745, #2053): conversion read the session file through a second handle while holding an exclusive lock on it, which Windows rejects, so every conversion failed. The backup and rewrite now read through the locked file itself, and a failed conversion only restores a fully written backup, so it can no longer replace the session with an empty file (by @Faq)
+- **Clear stale Claude plan usage** (#1737, #2045): for Claude CLI login, the plan-usage bar stops showing a figure once its window has reset and clears when the active Claude provider changes, instead of keeping the old number or the previous account's usage until the CLI sends a new event (by @EeeasyCode)
+- **Read version info from npm 12** (#2003, #2037): Dependency Management now understands the array-wrapped output of `npm view` in npm 12, so SDK version information is read correctly again (by @EeeasyCode)
+- **Open the tool window on IJent file systems without file locking** (#2060, #2061): when a remote file system cannot lock files, the failed lock is now treated as an ordinary I/O error, so the chat window opens instead of crashing at startup. Settings and MCP changes that need the lock still fail without writing anything (by @nikitasnv)
+- **Apply a custom chat background to the whole page** (#1832, #2065): the band around the status panel used to keep the startup theme color after a custom chat background was chosen; the page root now follows the chosen background too (by @hebulin)
+- **Keep collapsed Settings sidebar tooltips readable on the light theme**: tooltip text used to fall back to white on a light background and now uses the theme's primary text color (by @zhukunpenglinyutong)
+
+中文：
+
+✨ 新功能
+- **Claude 模型列表新增 Fable 5.2**：Fable 5.2 成为内置 Claude 模型中的首选，并配置了 200K 与 `[1m]` 上下文窗口、计费、最高到 `max` 的推理强度以及模型映射；Fable 5.1 移到上一代位置。之前保存的 Fable 5 选择会迁移到 Fable 5.2，不会再回退到 Sonnet；以 `claude-fable-5` 为 ID 的自定义模型仍可正常使用，也不会被标记为已退役（by @zhukunpenglinyutong）
+- **支持在 WSL 路径打开的项目中运行 Codex**（#2013、#2050）：项目通过 `\\wsl.localhost\<distro>\...` 路径打开且 node 运行在 WSL 中时，发送消息以及计划、审查、压缩、预连接与释放等控制请求都会向 Codex 传入 Linux 工作目录，不再报 `spawn ... ENOENT`。CLI 设置页也能识别安装在 WSL 内的 Codex，不再显示“未安装”（by @Faq、@zhukunpenglinyutong）
+- **回放更多原生 Codex exec 历史**（#2016）：回放在不执行脚本的前提下读取字面量参数、对象展开、字符串拼接以及 const 或解构出的工具别名，并把 `Promise.all`/`allSettled` 的 map 回调和带 await 的 `for-of` 循环拆分为每条命令一个结果，按原生回执逐一对应。yield 出的单元会保持打开，直到宿主报告最终响应；录制的动态工具调用会显示出来；成功的自动审批不再产生多余内容。可能不会执行的调用保留原有包装，const 分析改为每个脚本只做一次，单条大型记录的耗时从 80 多秒降到 1 秒以内（by @gadfly3173、@saligia3173、@zhukunpenglinyutong）
+
+🔧 优化
+- **CLI Provider 去掉 Beta 标记**：Grok、Kimi、OpenCode、PI、OMP、DeepSeek Harness、MiniMax Code 与 ZCode 在 Provider 选择器和设置页中不再显示 Beta 标签；选择后立即切换，不再弹出一次性的 Beta 提示（by @zhukunpenglinyutong）
+- **Codex 回合底栏恢复显示，并记录 MCP 文件编辑**：用过工具的回合重新显示耗时、Token 与费用底栏。通过 MCP 工具（包括 JetBrains 的 `replace_text_in_file`、`create_new_file` 与 `apply_patch`）做的文件编辑现在会出现在编辑列表中。只有完整描述了改动效果的编辑才能撤销；覆盖写入、忽略大小写的替换、其他服务器的编辑以及相对路径会列出，但 diff 只读。撤销与 diff 拒绝遵循同一规则，Claude 会话中的 MCP 编辑也按此处理（by @zhukunpenglinyutong）
+- **Codex CLI 版本过旧时只提示一次**：低于 0.160.0 的 CLI 现在会在每个聊天窗口提示一次，不再默默失败；0.123.x 报出的 `unknown variant auto_review` 错误会显示本地化诊断，说明如何升级 CLI 或切换权限模式。CLI 对目录外模型每个回合都会重复发出的“回退模型元数据”警告，不再弹出提示（by @zhukunpenglinyutong）
+- **说明旧版 Windows 上 Claude Code 无法启动的原因**（#1928、#2052）：退出码 0xC0000139（也可能显示为 `-1073741511`）现在会显示本地化诊断卡片，说明 Claude Code 2.1.118 及以后版本需要 Windows 10 1809 或 Windows Server 2019，并给出两种解决办法：升级 Windows，或在依赖管理中把 SDK 切换到 v0.2.112 或更早版本（by @Faq、@zhukunpenglinyutong）
+- **代码块更易阅读**（#1908、#2039、#2047、#2064）：Dart 与 Flutter 代码块现在支持语法高亮。浅色主题使用独立的高亮配色，关键字、内置名、注释和标签的颜色加深到在代码背景上达到 4.5:1 对比度，IDE 主题在运行时切换时配色也会跟随变化（by @hebulin、@EeeasyCode）
+- **可通过符号链接路径打开项目文件**（#2030）：位于符号链接目录下的文件链接现在可以正常打开、跳转并显示悬浮提示；支持 `#L12-L20` 行号范围，包括含空格、非 ASCII 字符的路径和 file URI。diff 的写入与删除仍经过规范化后的项目边界检查，经由符号链接或 Windows junction 的链接无法获得项目外的写权限（by @kochpy、@zhukunpenglinyutong）
+- **聊天标签页按状态区分圆点颜色**：回答中显示蓝色圆点，回复完成显示绿色圆点（回复未读时保持显示），回合失败显示红色圆点，直到打开该标签页或开始新的回合。标签页标题不再被改写成 `AI1...`，也不再追加本地化的“已完成”，名称保持稳定（by @zhukunpenglinyutong）
+
+🐛 修复
+- **恢复 OMP 图标的品牌配色**：OMP CLI 的 π 标记在 Provider 选择器、设置页和历史记录中改为 omp.sh 的粉 → 紫 → 青渐变，不再显示为单色主题色；单色场景仍保留 currentColor 版本（by @zhukunpenglinyutong）
+- **Claude 流卡住时不再阻塞整个窗口**（#2001、#2051）：模型 API 或中转服务在流式输出中途停止发送时，回合会在 10 分钟无任何数据后失败，并给出明确的“Claude 已停止响应”错误，下一条消息会启动新的运行时，不再一直排在后面等待。主对话的工具调用执行期间计时会暂停，长命令、子代理和审批对话框都不会被误判为卡住。可通过 `CC_GUI_CLAUDE_STALL_TIMEOUT_MS` 调整时限，设为 `0` 则关闭（by @Faq）
+- **发送后迟迟未开始流式输出时，消息队列不再卡死**：如果一次发送在开始流式输出前就已结束或失败（例如关闭了流式输出，或错误只以状态提示的形式出现），聊天可能一直处于加载中，之后的所有消息都只能排队。现在等待窗口结束后，webview 会向后端查询会话真实的加载状态（by @zhukunpenglinyutong）
+- **命令中只是在较长路径里出现 `bin`、`usr` 或 `etc` 时不再被拒绝**（#2054）：系统目录只有出现在路径开头时才会被识别，`~/.claude/bin/...`、`./bin/rails`、`/opt/homebrew/bin/gh` 等命令可以重新运行。检查同时覆盖 `/private/etc` 与 `/proc/<pid>/root/etc` 别名（此前在 macOS 上只读工具可以不经对话框读取 `/private/etc/hosts`），以及带引号或组合的短选项、花括号列表和参数展开，并且在超长输入下依然很快（by @Faq、@zhukunpenglinyutong）
+- **附加内容根中的文件也能进入编辑审查**（#2048）：在 PyCharm 等 JetBrains IDE 中，对项目根目录之外的内容根里的文件执行 Edit/Write 时，现在会打开审查 diff 而不是普通权限对话框，diff 操作与撤销也能正常使用。项目边界改为项目根目录加上所有已加载的内容根，多项目路由也使用同一边界（by @yuansezx、@zhukunpenglinyutong）
+- **Windows 上可以正常转换 SDK 会话**（#1745、#2053）：转换时在持有会话文件独占锁的同时又用第二个句柄读取该文件，Windows 会拒绝这种访问，导致每次转换都失败。现在备份与重写都通过已加锁的文件本身读取；转换失败时只会用完整写入的备份恢复，不会再把会话替换成空文件（by @Faq）
+- **清除过期的 Claude 套餐用量**（#1737、#2045）：使用 Claude CLI 登录时，套餐用量条会在窗口重置后停止显示旧数值，切换 Claude Provider 时也会清空，不再一直显示旧数字或上一个账号的用量，直到 CLI 发出新事件（by @EeeasyCode）
+- **兼容 npm 12 的版本信息**（#2003、#2037）：依赖管理现在能识别 npm 12 中 `npm view` 以数组包裹的输出，SDK 版本信息可以重新正确读取（by @EeeasyCode）
+- **在不支持文件锁的 IJent 文件系统上也能打开工具窗口**（#2060、#2061）：远程文件系统无法加锁时，加锁失败会按普通 I/O 错误处理，聊天窗口可以正常打开，不再在启动时崩溃。需要加锁的设置与 MCP 修改仍会失败，但不会写入任何内容（by @nikitasnv）
+- **自定义聊天背景覆盖整个页面**（#1832、#2065）：选择自定义聊天背景后，状态面板周围的边带此前仍保留启动时的主题色，现在页面根元素也会跟随所选背景（by @hebulin）
+- **浅色主题下折叠的设置侧边栏提示文字清晰可读**：提示文字此前会回退为白色，在浅色背景上几乎看不见，现在使用主题的主文本颜色（by @zhukunpenglinyutong）
+
+---
+
 ##### **2026年11月3日（v0.6.4）**
 
 English:

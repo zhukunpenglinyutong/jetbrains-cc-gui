@@ -141,8 +141,7 @@
       "matchCase": "Учитывать регистр (Alt+C)",
       "wholeWord": "Слово целиком (Alt+W)",
       "regex": "Регулярное выражение (Alt+R)",
-      "invalidRegex": "Недопустимое регулярное выражение",
-      "openTooltip": "Поиск в беседе (Cmd/Ctrl+F)"
+      "invalidRegex": "Недопустимое регулярное выражение"
     },
     "compactSummary": {
       "receivedTime": "Время записи",
@@ -1538,6 +1537,12 @@
     "bashGroupCompleted": "завершено",
     "bashGroupAllCompleted": "Все завершены",
     "bashGroupFailed": "ошибка",
+    "bashGroupCopyCommand": "Копировать команду",
+    "bashGroupCopyOutput": "Копировать вывод",
+    "bashGroupOutput": "Вывод",
+    "bashGroupOutputFailed": "Ошибка",
+    "bashGroupRunning": "Выполняется…",
+    "bashGroupNoOutput": "(нет вывода)",
     "promptLabel": "Промпт",
     "reportFindings": {
       "title": "Результаты ревью",
@@ -1801,13 +1806,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Самая быстрая для быстрых ответов"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · Самая мощная · класс Mythos"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · Самая мощная · класс Mythos"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · Предыдущее поколение Fable"
+        "description": "Fable 5.1 · Предыдущее поколение Fable"
       }
     },
     "longContext": {

@@ -539,7 +539,7 @@ public class ClaudeChatWindow {
             }
 
             persistTabSessionState();
-            chatWindowDelegate.refreshUnreadBadge();
+            chatWindowDelegate.refreshTabIndicator();
         }
     }
 
@@ -2730,6 +2730,13 @@ public class ClaudeChatWindow {
                     public void onAssistantActivity() {
                         if (!disposed && session == callbackSession) {
                             chatWindowDelegate.onAssistantActivity();
+                        }
+                    }
+
+                    @Override
+                    public void onTurnFailed() {
+                        if (!disposed && session == callbackSession) {
+                            chatWindowDelegate.onTurnFailed();
                         }
                     }
 

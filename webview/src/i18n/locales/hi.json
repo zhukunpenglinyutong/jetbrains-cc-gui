@@ -141,8 +141,7 @@
       "matchCase": "केस मिलान (Alt+C)",
       "wholeWord": "पूरा शब्द (Alt+W)",
       "regex": "नियमित अभिव्यक्ति (Alt+R)",
-      "invalidRegex": "अमान्य रेगेक्स",
-      "openTooltip": "बातचीत में खोजें (Cmd/Ctrl+F)"
+      "invalidRegex": "अमान्य रेगेक्स"
     },
     "compactSummary": {
       "receivedTime": "दर्ज समय",
@@ -1512,6 +1511,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "कमांड कॉपी करें",
+    "bashGroupCopyOutput": "आउटपुट कॉपी करें",
+    "bashGroupOutput": "आउटपुट",
+    "bashGroupOutputFailed": "विफल",
+    "bashGroupRunning": "चल रहा है…",
+    "bashGroupNoOutput": "(कोई आउटपुट नहीं)",
     "reportFindings": {
       "title": "समीक्षा निष्कर्ष",
       "findingsCount_one": "{{count}} निष्कर्ष",
@@ -1774,13 +1779,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · सबसे तेज़, त्वरित उत्तरों के लिए उपयुक्त"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · सबसे शक्तिशाली · Mythos-श्रेणी"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · सबसे शक्तिशाली · Mythos-श्रेणी"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · पिछली Fable पीढ़ी"
+        "description": "Fable 5.1 · पिछली Fable पीढ़ी"
       }
     },
     "longContext": {

@@ -141,8 +141,7 @@
       "matchCase": "Diferenciar maiúsculas (Alt+C)",
       "wholeWord": "Palavra inteira (Alt+W)",
       "regex": "Expressão regular (Alt+R)",
-      "invalidRegex": "Regex inválida",
-      "openTooltip": "Pesquisar na conversa (Cmd/Ctrl+F)"
+      "invalidRegex": "Regex inválida"
     },
     "compactSummary": {
       "receivedTime": "Hora registrada",
@@ -1652,6 +1651,12 @@
     "bashGroupCompleted": "concluído",
     "bashGroupAllCompleted": "Todos Concluídos",
     "bashGroupFailed": "falhou",
+    "bashGroupCopyCommand": "Copiar comando",
+    "bashGroupCopyOutput": "Copiar saída",
+    "bashGroupOutput": "Saída",
+    "bashGroupOutputFailed": "Falhou",
+    "bashGroupRunning": "Executando…",
+    "bashGroupNoOutput": "(sem saída)",
     "updatePlan": "Atualizar Plano",
     "applyPatch": "Aplicar Patch",
     "reportFindings": {
@@ -1916,13 +1921,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Mais rápido para respostas rápidas"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · O mais poderoso · classe Mythos"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · O mais poderoso · classe Mythos"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · Geração anterior do Fable"
+        "description": "Fable 5.1 · Geração anterior do Fable"
       }
     },
     "longContext": {

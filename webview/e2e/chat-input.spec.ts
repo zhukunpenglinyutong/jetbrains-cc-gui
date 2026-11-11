@@ -119,6 +119,13 @@ test.beforeEach(async ({ page }) => {
   await page.addStyleTag({ content: '#__vconsole { display: none !important; }' });
 });
 
+/** The batch command card shows its title and count in separate nodes. */
+async function expectCommandBatch(page: Page, count: number) {
+  const header = page.locator('.bash-group-header').filter({ hasText: 'Batch Run Commands' });
+  await expect(header).toBeVisible();
+  await expect(header.locator('.bash-group-count')).toHaveText(String(count));
+}
+
 async function switchToCodex(page: Page) {
   const providerButton = page.locator('.button-area-left .selector-button').nth(1);
   await providerButton.click();
@@ -497,7 +504,7 @@ test('Codex reported round26 wrappers render evaluated edits and MCP receipts wi
   await expect(page.locator('.messages-container')).toContainText('Open In Codex');
   await expect(page.locator('.messages-container')).toContainText('Batch Run Commands');
   await expect(page.locator('.tool-title-text').filter({ hasText: /^exec$/ })).toHaveCount(0);
-  await expect(page.locator('.bash-timeline-item')).toHaveCount(3);
+  await expect(page.locator('.bash-group-item')).toHaveCount(3);
   await page.evaluate((messages) => {
     window.beginCodexHistoryPage?.(JSON.stringify({ pageId: 'round26', sessionId: 'round26-receipts', mode: 'replace' }));
     window.appendCodexHistoryPageBatch?.('round26', JSON.stringify(messages));
@@ -607,19 +614,19 @@ for (const source of ['public', 'reported'] as const) {
     }, { messages: fixture.preview, threadId });
     const batch = page.locator('.bash-group-container');
     await expect(batch).toHaveCount(1);
-    await expect(batch.locator('.bash-timeline-item')).toHaveCount(2);
+    await expect(batch.locator('.bash-group-item')).toHaveCount(2);
     await page.evaluate(messages => window.updateMessages?.(JSON.stringify(messages)), fixture.complete);
     const checkComplete = async () => {
       await expect(batch).toHaveCount(1);
-      await expect(batch.locator('.bash-timeline-item')).toHaveCount(2);
-      await expect(batch.locator('.tool-status-indicator.pending')).toHaveCount(0);
-      await expect(batch.locator('.tool-status-indicator.completed')).toHaveCount(source === 'public' ? 1 : 2);
-      await expect(batch.locator('.tool-status-indicator.error')).toHaveCount(source === 'public' ? 1 : 0);
+      await expect(batch.locator('.bash-group-item')).toHaveCount(2);
+      await expect(batch.locator('.bash-group-row-status.pending')).toHaveCount(0);
+      await expect(batch.locator('.bash-group-row-status.completed')).toHaveCount(source === 'public' ? 1 : 2);
+      await expect(batch.locator('.bash-group-row-status.error')).toHaveCount(source === 'public' ? 1 : 0);
       await expect(page.locator('.tool-title-text').filter({ hasText: /^exec$/ })).toHaveCount(0);
-      await expect(batch.locator('.bash-timeline-description').first()).not.toContainText('pwsh');
-      await batch.locator('.bash-timeline-content').first().click();
-      await expect(batch.locator('.bash-output-text').first()).not.toHaveText('');
-      await batch.locator('.bash-timeline-content').first().click();
+      await expect(batch.locator('.bash-group-row-main').first()).not.toContainText('pwsh');
+      await batch.locator('.bash-group-row-toggle').first().click();
+      await expect(batch.locator('.bash-group-detail-output').first()).not.toHaveText('');
+      await batch.locator('.bash-group-row-toggle').first().click();
     };
     await checkComplete();
     await page.reload();
@@ -1149,8 +1156,8 @@ test('Codex reported empty reasoning leaves no cards or batch gaps in full and p
   const assertVisibleControls = async () => {
     await expect(page.locator('.thinking-block')).toHaveCount(0);
     await expect(page.locator('.message.assistant')).toHaveCount(1);
-    await expect(page.getByText('Batch Run Commands (2)', { exact: true })).toBeVisible();
-    await expect(page.locator('.bash-timeline-item')).toHaveCount(2);
+    await expectCommandBatch(page, 2);
+    await expect(page.locator('.bash-group-item')).toHaveCount(2);
     await expect(page.getByText('Readable replies remain visible.', { exact: true })).toBeVisible();
     await expect(page.locator('.messages-container')).not.toContainText('No thinking content');
   };
@@ -1214,7 +1221,7 @@ for (const fixtureName of ['codex-reloaded-tool-batch', 'codex-interrupted-comma
       window.onStreamStart?.();
       window.updateMessages?.(JSON.stringify(liveMessages));
     }, { sessionId, liveMessages });
-    await expect(page.locator('.bash-timeline-description')).toHaveText(commands);
+    await expect(page.locator('.bash-group-row-command-text')).toHaveText(commands);
     await page.evaluate(() => {
       window.onStreamEnd?.();
       window.clearMessages?.();
@@ -1226,11 +1233,11 @@ for (const fixtureName of ['codex-reloaded-tool-batch', 'codex-interrupted-comma
     const assertContinuousBatch = async () => {
       await expect(page.locator('.message.assistant')).toHaveCount(1);
       await expect(page.locator('.thinking-block')).toHaveCount(0);
-      await expect(page.getByText(`Batch Run Commands (${expectedToolCount})`, { exact: true })).toBeVisible();
-      await expect(page.locator('.bash-timeline-item')).toHaveCount(expectedToolCount);
-      await expect(page.locator('.bash-timeline-description')).toHaveText(commands);
+      await expectCommandBatch(page, expectedToolCount);
+      await expect(page.locator('.bash-group-item')).toHaveCount(expectedToolCount);
+      await expect(page.locator('.bash-group-row-command-text')).toHaveText(commands);
       await expect(page.locator('.tool-status-indicator.pending')).toHaveCount(0);
-      await expect(page.locator('.tool-status-indicator.error')).toHaveCount(fixture.expectedFailedCount ?? 0);
+      await expect(page.locator('.bash-group-row-status.error')).toHaveCount(fixture.expectedFailedCount ?? 0);
       await expect(page.getByText('exec', { exact: true })).toHaveCount(0);
       await expect(page.locator('.messages-container')).not.toContainText('Promise.resolve');
       await expect(page.locator('.messages-container')).not.toContainText('ALL_TOOLS');
@@ -1253,7 +1260,7 @@ for (const fixtureName of ['codex-reloaded-tool-batch', 'codex-interrupted-comma
       window.completeCodexHistoryPage?.(JSON.stringify({ pageId: 'legacy-batch-tail', sessionId, mode: 'replace',
         source: 'legacy', fromTurn: 1, toTurn: 1, totalTurns: 1, hasMore: true, loadedMessageCount: 1 }));
     }, { sessionId, messages });
-    await expect(page.locator('.bash-timeline-item')).toHaveCount(0);
+    await expect(page.locator('.bash-group-item')).toHaveCount(0);
     await page.evaluate(({ sessionId, messages }) => {
       window.beginCodexHistoryPage?.(JSON.stringify({ pageId: 'legacy-batch-older', sessionId, mode: 'prepend' }));
       window.appendCodexHistoryPageBatch?.('legacy-batch-older', JSON.stringify(messages));
@@ -1805,14 +1812,14 @@ test('Codex mixed wrappers share edit and command batches without exec or pollin
   const verifyCards = async () => {
     await expect(page.getByText('Batch Edit Files', { exact: true })).toBeVisible();
     await expect(page.locator('.file-list-item')).toHaveCount(4);
-    await expect(page.getByText('Batch Run Commands (4)')).toBeVisible();
+    await expectCommandBatch(page, 4);
     await expect(page.locator('.message.assistant')).toHaveCount(1);
     await expect(page.locator('.task-container')).toHaveCount(2);
-    await expect(page.locator('.bash-timeline-item')).toHaveCount(4);
+    await expect(page.locator('.bash-group-item')).toHaveCount(4);
     await expect(page.locator('.tool-status-indicator.pending')).toHaveCount(0);
     await expect(page.locator('.messages-container')).not.toContainText('tools.apply_patch');
     await expect(page.locator('.messages-container')).not.toContainText('tools.write_stdin');
-    for (const row of await page.locator('.bash-timeline-description').all()) await expect(row).not.toContainText('pwsh');
+    for (const row of await page.locator('.bash-group-row-main').all()) await expect(row).not.toContainText('pwsh');
   };
   await verifyCards();
   await page.evaluate(({ messages, threadId }) => {
@@ -1847,7 +1854,7 @@ test('Codex native commands share one batch and one message surface live and aft
     window.updateMessages?.(JSON.stringify(messages));
     return messages;
   });
-  await expect(page.getByText('Batch Run Commands (3)')).toBeVisible();
+  await expectCommandBatch(page, 3);
   await expect(page.locator('.message.assistant')).toHaveCount(1);
   await expect(page.locator('.bash-tool-header')).toHaveCount(0);
   await expect(page.locator('.messages-container')).toContainText('Inspecting the workspace');
@@ -1860,10 +1867,10 @@ test('Codex native commands share one batch and one message surface live and aft
     window.completeCodexHistoryPage?.(JSON.stringify({ pageId: 'commands', sessionId: 'command-thread', mode: 'replace', source: 'native',
       cursor: null, hasMore: false, fromTurn: 0, toTurn: 1, totalTurns: 1, loadedMessageCount: messages.length }));
   }, messages);
-  await expect(page.getByText('Batch Run Commands (3)')).toBeVisible();
+  await expectCommandBatch(page, 3);
   await expect(page.locator('.message.assistant')).toHaveCount(1);
-  await expect(page.locator('.bash-timeline-item')).toHaveCount(3);
-  for (const row of await page.locator('.bash-timeline-description').all()) await expect(row).not.toContainText('pwsh');
+  await expect(page.locator('.bash-group-item')).toHaveCount(3);
+  for (const row of await page.locator('.bash-group-row-main').all()) await expect(row).not.toContainText('pwsh');
   await page.screenshot({ path: `../.workflow/codex-command-batch-${testInfo.project.name}.png` });
 });
 

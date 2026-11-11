@@ -1,6 +1,6 @@
 # Conversation supplier delivery
 
-Claude and Codex conversation suppliers, native Codex compatibility, the original-menu integration and the maintainer review fixes are implemented in the development workspace. GitHub delivery is tracked by [PR #2067](https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/pull/2067), targeting `feature/v0.6.5`.
+Claude and Codex conversation suppliers, native Codex compatibility, the original-menu integration and the maintainer review fixes are implemented in the development workspace. GitHub delivery is tracked by [PR #2067](https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/pull/2067), targeting `feature/v0.6.6`.
 
 ## Behavior
 
@@ -25,9 +25,9 @@ Install from the IDE's Plugins settings using Install Plugin from Disk, then res
 ## Verification and acceptance boundary
 
 - Development workspace: Java 3315 passed / 32 skipped; Checkstyle, both frontend production bundles and plugin build passed. Webview: 3294 tests across 302 files plus packaging checks and test TypeScript checking passed.
-- Bridge: the full run passed 1480 tests / 15 skipped with one five-second process-exit timeout during concurrent builds. That unchanged test passed its isolated rerun in 671 ms; all other full-run tests passed.
-- PR worktree: the full Java run passed 2557 tests / 28 skipped before the last catalog fixes; final affected suites passed 39 tests and Checkstyle. Both new catalog regressions failed before their fixes. Webview: 2899 tests across 261 files, packaging checks, test TypeScript checking and production build passed. Supplier Bridge regressions: 10 passed.
-- Browser: all 12 supplier-menu scenarios passed across four viewport sizes, using the actual application with only the Java transport mocked. The checks require the installed named callback, both engine menus, failure handling and replacement of unsaved-session bindings. Initial parallel cold-start navigation timeouts and the final isolated single-worker rerun are recorded in the review evidence.
+- Development-workspace Bridge: the full run passed 1480 tests / 15 skipped with one five-second process-exit timeout during concurrent builds. That unchanged test passed its isolated rerun in 671 ms; all other full-run tests passed.
+- PR worktree after merging the official v0.6.6 base: the full Java run passed 2584 tests / 28 skipped; Checkstyle passed. Webview: 2909 tests across 259 files, six packaging-script checks, test TypeScript checking and production build passed. The full Bridge run passed 1442 tests / 7 skipped. The earlier catalog regressions failed before their fixes.
+- Browser: all 16 checks passed across four viewport sizes on the first single-worker run, using the actual application with only the Java transport mocked. These include 12 supplier-menu scenarios and 4 configuration-submenu viewport checks. Supplier checks require the installed named callback, both engine menus, failure handling and replacement of unsaved-session bindings.
 
 Earlier real Codex CLI fixtures verified native startup routing, older OpenAI-thread restoration, cold restart and supplier switching through loopback transports. The current archive audit retains the reviewed native runtime sources.
 

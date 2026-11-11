@@ -1,5 +1,15 @@
 # Session supplier deep review
 
+## v0.6.6 base synchronization (2026-11-11)
+
+PR #2067 now targets `feature/v0.6.6`. The merge incorporates official commit `7944d092064ca1d7c915300641993f097ba660f6` without replacing the conversation supplier implementation or the maintainer follow-up fixes.
+
+The only manual conflict was the comment in `RuntimeProviderMenuItem.tsx`. The resolution keeps upstream's non-beta CLI wording and retains the session supplier callback, next-turn feedback and keyboard/menu behavior. The automatically merged Java window callbacks, model mappings, settings panel and browser fixtures were checked for both sets of changes. No new finding was confirmed in this merge review.
+
+The official CHANGELOG, frontend version history, Gradle version and both README files match the upstream commit byte-for-byte. The delivery document and PR description target the current development branch.
+
+Validation: the full Java run passed 2584 tests with 28 skipped; Checkstyle passed. The full frontend passed 2909 tests across 259 files, six packaging-script checks and test TypeScript checking. The production frontend build passed. The full Bridge run passed 1442 tests with 7 skipped. All 16 browser checks passed on the first single-worker run across four viewport sizes: 12 supplier-menu scenarios and 4 configuration-submenu viewport checks, using the actual application with only the Java transport mocked.
+
 
 ## Maintainer follow-up (2026-11-10)
 

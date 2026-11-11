@@ -141,8 +141,7 @@
       "matchCase": "區分大小寫 (Alt+C)",
       "wholeWord": "全字符合 (Alt+W)",
       "regex": "正規表達式 (Alt+R)",
-      "invalidRegex": "正規表達式無效",
-      "openTooltip": "在對話中搜尋 (Cmd/Ctrl+F)"
+      "invalidRegex": "正規表達式無效"
     },
     "compactSummary": {
       "receivedTime": "記錄時間",
@@ -1556,6 +1555,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "複製命令",
+    "bashGroupCopyOutput": "複製輸出",
+    "bashGroupOutput": "輸出",
+    "bashGroupOutputFailed": "執行失敗",
+    "bashGroupRunning": "執行中…",
+    "bashGroupNoOutput": "（無輸出）",
     "reportFindings": {
       "title": "審查發現",
       "findingsCount_one": "{{count}} 項發現",
@@ -1819,13 +1824,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · 速度最快，適合快速回覆"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · 最強大 · Mythos 級"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · 最強大 · Mythos 級"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · 保留的前代 Fable 模型"
+        "description": "Fable 5.1 · 保留的前代 Fable 模型"
       }
     },
     "longContext": {
@@ -2006,11 +2011,6 @@
     },
     "omp": {
       "label": "OMP CLI"
-    },
-    "beta": {
-      "badge": "Beta",
-      "title": "Beta 功能",
-      "message": "此功能仍處於 Beta 階段。如果遇到使用 Bug，請及時回饋給作者。"
     },
     "dsh": {
       "label": "DeepSeek Harness"

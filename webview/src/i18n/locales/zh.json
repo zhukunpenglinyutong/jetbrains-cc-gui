@@ -185,8 +185,7 @@
       "matchCase": "区分大小写 (Alt+C)",
       "wholeWord": "全词匹配 (Alt+W)",
       "regex": "正则表达式 (Alt+R)",
-      "invalidRegex": "正则无效",
-      "openTooltip": "在对话中搜索 (Cmd/Ctrl+F)"
+      "invalidRegex": "正则无效"
     },
     "compactSummary": {
       "receivedTime": "记录时间",
@@ -1987,6 +1986,12 @@
     "bashGroupCompleted": "完成",
     "bashGroupAllCompleted": "全部完成",
     "bashGroupFailed": "失败",
+    "bashGroupCopyCommand": "复制命令",
+    "bashGroupCopyOutput": "复制输出",
+    "bashGroupOutput": "输出",
+    "bashGroupOutputFailed": "执行失败",
+    "bashGroupRunning": "运行中…",
+    "bashGroupNoOutput": "（无输出）",
     "updatePlan": "更新计划",
     "applyPatch": "应用补丁",
     "reportFindings": {
@@ -2281,13 +2286,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 速度最快，适合快速答复"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · 最强大 · Mythos 级"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · 最强大 · Mythos 级"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · 保留的前代 Fable 模型"
+        "description": "Fable 5.1 · 保留的前代 Fable 模型"
       }
     },
     "codex": {
@@ -2470,11 +2475,6 @@
     },
     "omp": {
       "label": "OMP CLI"
-    },
-    "beta": {
-      "badge": "Beta",
-      "title": "Beta 功能",
-      "message": "此功能仍处于 Beta 阶段。如果遇到使用 Bug，请及时反馈给作者。"
     },
     "dsh": {
       "label": "DeepSeek Harness"
