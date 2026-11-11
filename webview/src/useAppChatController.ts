@@ -15,9 +15,7 @@ import {
   useChatComputations,
 } from './hooks';
 import type { UseWindowCallbacksOptions, UseMessageSenderOptions } from './hooks';
-import {
-  CONTEXT_COMMANDS,
-} from './hooks/useMessageSender';
+import { isLocalContextCommand } from './hooks/useMessageSender';
 import { parseCodexCommand } from './hooks/codexCommandDispatcher';
 import { useCodexQuestionResponses } from './hooks/useCodexQuestionResponses';
 import { useCodexTurnActivity } from './hooks/useCodexTurnActivity';
@@ -403,8 +401,8 @@ export const useAppChatController = ({
         addToast(t('chat.planModeEnabled', { defaultValue: 'Plan mode enabled' }), 'info');
         return;
       }
-      // /context - handled locally even while loading
-      if (text.split(/\s+/)[0].toLowerCase() === '/context' || CONTEXT_COMMANDS.has(text.split(/\s+/)[0].toLowerCase())) {
+      // /context answered by the plugin works even while loading; OMP's own /context is an ordinary message
+      if (isLocalContextCommand(text, currentProvider)) {
         hookHandleSubmit(content, attachments);
         return;
       }

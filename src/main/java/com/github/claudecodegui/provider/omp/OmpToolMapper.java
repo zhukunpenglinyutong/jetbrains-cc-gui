@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import java.io.File;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +23,10 @@ final class OmpToolMapper {
 
     private static final Pattern URL_SCHEME = Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]*://");
     private static final Pattern WINDOWS_ABSOLUTE = Pattern.compile("^[a-zA-Z]:[\\\\/].*");
-    private static final Pattern DIFF_LINE = Pattern.compile("^([ +\\-])\\s*\\d+\\|(.*)$", Pattern.DOTALL);
+    private static final Pattern DRIVE_PREFIX = Pattern.compile("^[A-Za-z]:[\\\\/]");
+    private static final Pattern CONTROL_CHARS = Pattern.compile("[\\u0000-\\u001F\\u007F]");
+    private static final Pattern UNICODE_SPACES = Pattern.compile("[\\u00A0\\u2000-\\u200A\\u202F\\u205F\\u3000]");
+    private static final Pattern DIFF_LINE = Pattern.compile("^([ +\\-])\\s*(\\d{1,9})\\|(.*)$", Pattern.DOTALL);
     private static final Pattern PATH_HEADER =
             Pattern.compile("^\\[([^\\]#\\n]+)#[0-9A-Fa-f]{4}\\]", Pattern.MULTILINE);
 
@@ -189,27 +193,47 @@ final class OmpToolMapper {
 
     /**
      * Splits a numbered diff into its regions; returns {@code [old, new]} per region that changes text.
-     * Any line that is not a diff line (the empty separator included) ends the current region, so a
-     * region is always a contiguous slice of the file.
+     * Context and {@code -} lines carry their line number in the old file, {@code +} lines theirs in the
+     * new file. omp prints hunks back to back when it leaves out the unchanged lines between them, so a
+     * gap in the line numbers, or any line that is not a diff line (the empty separator included), ends
+     * the current region: a region is always a contiguous slice of the file.
      */
     private static List<String[]> changedRegions(String diff) {
         List<String[]> regions = new ArrayList<>();
         List<String> oldLines = new ArrayList<>();
         List<String> newLines = new ArrayList<>();
+        // Number the next old-file line (context, '-') and the next new-file line ('+') must have; -1 when unknown.
+        long nextOld = -1;
+        long nextNew = -1;
         for (String line : diff.split("\n", -1)) {
             String clean = line.endsWith("\r") ? line.substring(0, line.length() - 1) : line;
             Matcher m = DIFF_LINE.matcher(clean);
             if (!m.matches()) {
                 flushRegion(regions, oldLines, newLines);
+                nextOld = -1;
+                nextNew = -1;
                 continue;
             }
             String marker = m.group(1);
-            String text = m.group(2);
+            long number = Long.parseLong(m.group(2));
+            String text = m.group(3);
+            long expected = "+".equals(marker) ? nextNew : nextOld;
+            if (expected >= 0 && number != expected) {
+                flushRegion(regions, oldLines, newLines);
+                nextOld = -1;
+                nextNew = -1;
+            }
             if (!"+".equals(marker)) {
                 oldLines.add(text);
+                nextOld = number + 1;
             }
             if (!"-".equals(marker)) {
                 newLines.add(text);
+            }
+            if ("+".equals(marker)) {
+                nextNew = number + 1;
+            } else if (" ".equals(marker) && nextNew >= 0) {
+                nextNew++;
             }
         }
         flushRegion(regions, oldLines, newLines);
@@ -239,6 +263,10 @@ final class OmpToolMapper {
             filePath = string(result.details, "resolvedPath");
         }
         if (filePath == null) {
+            // omp rewrites some paths before writing; only a plain one is known without the result.
+            if (!isPlainPath(path)) {
+                return null;
+            }
             filePath = absolute(path, cwd, home);
         }
         JsonObject input = new JsonObject();
@@ -278,6 +306,33 @@ final class OmpToolMapper {
             }
         }
         return mapped;
+    }
+
+    /**
+     * Whether omp writes to {@code path} exactly as written (resolved against the session
+     * directory, {@code ~} and {@code ~/} against home). Every other form is rewritten by omp
+     * first ({@code @...}, {@code :...}, {@code ~name}, {@code [path#TAG]}, {@code archive:member}, ...),
+     * so where it lands is only known from the result.
+     */
+    static boolean isPlainPath(String path) {
+        if (path == null || path.isEmpty() || !path.equals(path.strip())) {
+            return false;
+        }
+        if (CONTROL_CHARS.matcher(path).find() || UNICODE_SPACES.matcher(path).find()
+                || URL_SCHEME.matcher(path).find()) {
+            return false;
+        }
+        char first = path.charAt(0);
+        if (first == '@' || first == ':' || first == '[' || path.chars().allMatch(c -> c == '/')) {
+            return false;
+        }
+        if (path.startsWith("~") && !"~".equals(path) && !path.startsWith("~/") && !path.startsWith("~\\")) {
+            return false;
+        }
+        if (File.separatorChar == '\\' && path.startsWith("/")) {
+            return false;
+        }
+        return (DRIVE_PREFIX.matcher(path).find() ? path.substring(2) : path).indexOf(':') < 0;
     }
 
     /** {@code abs(p)}: absolute paths stay, {@code ~} expands to home, anything else resolves against cwd. */

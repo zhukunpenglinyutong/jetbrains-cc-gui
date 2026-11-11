@@ -10,9 +10,13 @@ function textDelta(delta) {
   return { type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta } };
 }
 
-/** Run one turn against a fake whose `prompt` plays `promptSteps`; returns everything it emitted. */
-async function runTurn(promptSteps, { script = {}, options = {}, onEvent } = {}) {
+/**
+ * Run one turn against a fake whose `prompt` plays `promptSteps`; returns everything it emitted.
+ * `script` adds commands to the fake's `on`, `scriptFields` adds top-level script fields (`onClose`).
+ */
+async function runTurn(promptSteps, { script = {}, scriptFields = {}, options = {}, onEvent } = {}) {
   const omp = fakeOmp({
+    ...scriptFields,
     on: {
       set_event_filter: [{ respond: { events: [], messageUpdates: 'delta' } }],
       get_session_stats: [{ respond: STATS }],
@@ -81,6 +85,7 @@ test('buildOmpArgs omits --resume for an empty or unsafe session id', () => {
 test('a turn streams the session id, thinking, text and per-step usage', async () => {
   const { result, events, received } = await runTurn([
     { respond: null },
+    { emit: { type: 'agent_start' } },
     { emit: { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', contentIndex: 0, delta: 'Let me see' } } },
     { emit: textDelta('Hel') },
     { emit: textDelta('lo') },
@@ -114,6 +119,19 @@ test('a turn streams the session id, thinking, text and per-step usage', async (
     }],
   ]);
   assert.deepEqual(received.find((frame) => frame.type === 'prompt'), { id: 'prompt', type: 'prompt', message: 'hello' });
+});
+
+test('a new session is announced right before the first assistant reply when omp sends no agent_start', async () => {
+  const { events } = await runTurn([
+    { respond: null },
+    { emit: textDelta('Hi') },
+    { emit: { type: 'message_end', message: { role: 'user', content: [] } } },
+    { emit: { type: 'message_end', message: { role: 'assistant', usage: { input: 1, output: 2, totalTokens: 3 } } } },
+    { emit: DONE },
+  ]);
+  const kinds = events.map(([kind]) => kind);
+  assert.deepEqual(kinds, ['content', 'sessionId', 'usage']);
+  assert.equal(events[1][1], 'sess-1');
 });
 
 test('images travel inside the prompt command', async () => {
@@ -209,6 +227,44 @@ test('a tool approval is decided in the permission dialog and answered before th
   assert.deepEqual(events.at(-1), ['toolResult', { toolUseId: 't1', content: 'Tool call denied by user', isError: true }]);
 });
 
+test('an approval is shown for the call it prints, not for another running call of the tool', async () => {
+  const asked = [];
+  await runTurn([
+    { respond: null },
+    { emit: { type: 'tool_execution_start', toolCallId: 't1', toolName: 'bash', args: { command: 'sleep 6' } } },
+    {
+      emit: {
+        type: 'extension_ui_request',
+        id: 'ui-1',
+        method: 'select',
+        title: 'Allow tool: bash\nCommand: echo danger',
+        options: ['Approve', 'Approve bash for this session', 'Deny'],
+      },
+    },
+    { waitFor: 'extension_ui_response' },
+    { emit: { type: 'tool_execution_start', toolCallId: 't2', toolName: 'bash', args: { command: 'echo danger' } } },
+    {
+      emit: {
+        type: 'tool_execution_end',
+        toolCallId: 't2',
+        toolName: 'bash',
+        isError: false,
+        result: { content: [{ type: 'text', text: 'danger\n' }] },
+      },
+    },
+    { emit: DONE },
+  ], {
+    options: {
+      requestPermission: async (toolName, inputs) => {
+        asked.push({ toolName, inputs });
+        return true;
+      },
+    },
+  });
+
+  assert.deepEqual(asked, [{ toolName: 'bash', inputs: { text: 'Command: echo danger' } }]);
+});
+
 test('a local slash command prints its output and ends without a model turn', async () => {
   const { result, events } = await runTurn([
     { emit: { type: 'command_output', text: 'Session: sess-1\nCWD: /work/project' } },
@@ -216,6 +272,37 @@ test('a local slash command prints its output and ends without a model turn', as
   ]);
   assert.equal(result.status, 'completed');
   assert.deepEqual(events.filter(([kind]) => kind === 'content'), [['content', 'Session: sess-1\nCWD: /work/project\n']]);
+  // No agent run happened, so omp wrote no session file: the id must not be announced.
+  assert.deepEqual(events.filter(([kind]) => kind === 'sessionId'), []);
+});
+
+test('a builtin that keeps working after its acknowledgement is left to finish', async () => {
+  const { result, events } = await runTurn([{ respond: { agentInvoked: false } }], {
+    scriptFields: {
+      onClose: [{ delay: 400 }, { emit: { type: 'command_output', text: 'Handoff saved' } }],
+    },
+    options: { closeGraceMs: 100 },
+  });
+  assert.equal(result.status, 'completed');
+  assert.deepEqual(events.filter(([kind]) => kind === 'content').map(([, text]) => text), ['Handoff saved\n']);
+});
+
+test('stopping a local command that is still working ends the turn', async () => {
+  const stop = new AbortController();
+  const started = Date.now();
+  const { result } = await runTurn([
+    { respond: { agentInvoked: false } },
+    { delay: 100 },
+    { emit: { type: 'command_output', text: 'working' } },
+  ], {
+    scriptFields: { onClose: [{ delay: 60_000 }] },
+    options: { abortSignal: stop.signal },
+    onEvent: (kind) => {
+      if (kind === 'content') stop.abort();
+    },
+  });
+  assert.equal(result.status, 'aborted');
+  assert.ok(Date.now() - started < 10_000);
 });
 
 test('the turn stays open while background work can still wake the agent', async () => {

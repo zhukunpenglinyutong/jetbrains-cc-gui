@@ -27,6 +27,12 @@ export const CODEX_REVIEW_COMMANDS = new Set(['/review']);
 // Hoisted regex to avoid creating new RegExp on every call
 const WHITESPACE_REGEX = /\s+/;
 
+/** Whether `/context` is answered by the plugin itself. OMP has a `/context` of its own. */
+export function isLocalContextCommand(text: string, provider: string): boolean {
+  if (provider === 'omp' || !text.startsWith('/')) return false;
+  return CONTEXT_COMMANDS.has(text.split(WHITESPACE_REGEX)[0].toLowerCase());
+}
+
 function createContextUsageRequestId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -215,40 +221,37 @@ export function useMessageSender({
    * its own, so there the command is sent on like any other.
    */
   const checkContextCommand = useCallback((text: string): boolean => {
-    if (!text.startsWith('/') || currentProvider === 'omp') return false;
+    if (!isLocalContextCommand(text, currentProvider)) return false;
     const command = text.split(WHITESPACE_REGEX)[0].toLowerCase();
-    if (CONTEXT_COMMANDS.has(command)) {
-      if (currentProvider !== 'claude') {
-        addToast(t('chat.commandProviderOnly', {
-          command,
-          provider: 'Claude',
-          defaultValue: `${command} is only available for Claude provider`,
-        }), 'warning');
-        return true;
-      }
-
-      const requestId = createContextUsageRequestId();
-
-      // Open dialog with loading state immediately
-      openContextUsageDialog(requestId, true);
-
-      // Send bridge event to fetch context usage with current model
-      // Apply [1m] suffix if long context is enabled so the SDK creates
-      // a runtime with the correct context window limit.
-      const sent = sendBridgeEvent('get_context_usage', JSON.stringify({
-        model: apply1MContextSuffix(selectedModel, longContextEnabled ?? false),
-        requestId,
-      }));
-
-      if (!sent) {
-        closeContextUsageDialog(requestId);
-        addToast(t('chat.bridgeUnavailable', {
-          defaultValue: 'Bridge is not available right now',
-        }), 'error');
-      }
+    if (currentProvider !== 'claude') {
+      addToast(t('chat.commandProviderOnly', {
+        command,
+        provider: 'Claude',
+        defaultValue: `${command} is only available for Claude provider`,
+      }), 'warning');
       return true;
     }
-    return false;
+
+    const requestId = createContextUsageRequestId();
+
+    // Open dialog with loading state immediately
+    openContextUsageDialog(requestId, true);
+
+    // Send bridge event to fetch context usage with current model
+    // Apply [1m] suffix if long context is enabled so the SDK creates
+    // a runtime with the correct context window limit.
+    const sent = sendBridgeEvent('get_context_usage', JSON.stringify({
+      model: apply1MContextSuffix(selectedModel, longContextEnabled ?? false),
+      requestId,
+    }));
+
+    if (!sent) {
+      closeContextUsageDialog(requestId);
+      addToast(t('chat.bridgeUnavailable', {
+        defaultValue: 'Bridge is not available right now',
+      }), 'error');
+    }
+    return true;
   }, [currentProvider, selectedModel, longContextEnabled, addToast, t, openContextUsageDialog, closeContextUsageDialog]);
 
   /**

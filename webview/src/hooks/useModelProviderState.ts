@@ -192,7 +192,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   const {
     selectedOmpModel, setSelectedOmpModel,
     ompPermissionMode, setOmpPermissionMode,
-    ompApprovalMode, setOmpApprovalMode,
+    setOmpApprovalMode,
   } = omp;
   const {
     selectedDshModel, setSelectedDshModel,
@@ -228,7 +228,6 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setReasoningEffort,
     setCodexFastMode,
     setDshPreset,
-    setOmpApprovalMode,
     setCodexCollaborationMode,
     setCodexApprovalPreset,
     setCodexSandboxSelection,
@@ -258,7 +257,6 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     reasoningEffort,
     codexFastMode,
     dshPreset,
-    ompApprovalMode,
     codexCollaborationMode,
     codexApprovalPreset,
     codexSandboxSelection,

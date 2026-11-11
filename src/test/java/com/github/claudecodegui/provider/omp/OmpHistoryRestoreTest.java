@@ -209,6 +209,26 @@ public class OmpHistoryRestoreTest {
     }
 
     @Test
+    public void editHunksPrintedBackToBackWithAJumpInLineNumbersAreSeparateRegions() throws Exception {
+        String diff = " 3|keep\n-4|old\n+4|new\n 5|keep\n 28|far\n-29|old2\n+29|new2\n 30|end";
+        JsonObject details = json("{'op':'update','path':'/abs/File.cs'}");
+        details.addProperty("diff", diff);
+        writeSession(header(), user("edit"),
+                assistant("a1", null, call("e1", "edit", "{'input':'x'}")),
+                toolResult("e1", "edit", "Updated", details.toString(), false));
+
+        List<JsonObject> uses = blocks(load(), "tool_use");
+        assertEquals(2, uses.size());
+        assertEquals("e1", uses.get(0).get("id").getAsString());
+        assertEquals("e1#2", uses.get(1).get("id").getAsString());
+        assertEquals("Edit", uses.get(1).get("name").getAsString());
+        assertEquals("keep\nold\nkeep", uses.get(0).getAsJsonObject("input").get("old_string").getAsString());
+        assertEquals("keep\nnew\nkeep", uses.get(0).getAsJsonObject("input").get("new_string").getAsString());
+        assertEquals("far\nold2\nend", uses.get(1).getAsJsonObject("input").get("old_string").getAsString());
+        assertEquals("far\nnew2\nend", uses.get(1).getAsJsonObject("input").get("new_string").getAsString());
+    }
+
+    @Test
     public void multiFileEditNumbersBlocksAcrossFiles() throws Exception {
         JsonObject f1 = json("{'path':'/abs/a.cs','op':'update'}");
         f1.addProperty("diff", "-1|one\n+1|uno");
@@ -324,6 +344,37 @@ public class OmpHistoryRestoreTest {
         JsonObject use = blocks(load(), "tool_use").get(0);
         assertEquals("write", use.get("name").getAsString());
         assertEquals("local://x.md", use.getAsJsonObject("input").get("path").getAsString());
+    }
+
+    @Test
+    public void writeToPathOmpRewritesIsWriteAtResolvedPath() throws Exception {
+        writeSession(header(), user("w"),
+                assistant("a1", null, call("w1", "write", "{'path':'@/tmp/other/out.txt','content':'x'}")),
+                toolResult("w1", "write", "Wrote", "{'resolvedPath':'/tmp/other/out.txt'}", false));
+        JsonObject use = blocks(load(), "tool_use").get(0);
+        assertEquals("Write", use.get("name").getAsString());
+        assertEquals("/tmp/other/out.txt", use.getAsJsonObject("input").get("file_path").getAsString());
+    }
+
+    @Test
+    public void writeToPathOmpRewritesStaysWriteWithoutResolvedPath() throws Exception {
+        writeSession(header(), user("w"),
+                assistant("a1", null, call("w1", "write", "{'path':'@/tmp/other/out.txt','content':'x'}")),
+                toolResult("w1", "write", "denied", "{}", true));
+        JsonObject use = blocks(load(), "tool_use").get(0);
+        assertEquals("write", use.get("name").getAsString());
+        assertEquals("@/tmp/other/out.txt", use.getAsJsonObject("input").get("path").getAsString());
+    }
+
+    @Test
+    public void plainPathsAreTheOnesOmpWritesToAsWritten() {
+        for (String path : new String[]{"notes.md", "src/a.ts", "/abs/a.ts", "~", "~/a", "C:\\a\\b.txt"}) {
+            assertTrue(path, OmpToolMapper.isPlainPath(path));
+        }
+        for (String path : new String[]{"@/abs/a", ":./a", "~name", "[src/a.ts#1A2B]", "bundle.zip:inner.txt",
+                "a\u00A0b", "/", "", " a", "xd://lsp"}) {
+            assertFalse(path, OmpToolMapper.isPlainPath(path));
+        }
     }
 
     // ---- task ----

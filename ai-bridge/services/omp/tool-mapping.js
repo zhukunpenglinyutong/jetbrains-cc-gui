@@ -12,8 +12,11 @@ import { isAbsolute, resolve } from 'path';
 
 const URL_SCHEME = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
 // `<marker><line number>|<text>`: marker is ' ' (context), '-' or '+'.
-const DIFF_LINE = /^([ +-])\s*\d+\|(.*)$/s;
+const DIFF_LINE = /^([ +-])\s*(\d{1,9})\|(.*)$/s;
 const PATCH_HEADER = /^\[([^\]#\n]+)#[0-9A-Fa-f]{4}\]/m;
+const CONTROL_CHARS = /[\u0000-\u001F\u007F]/;
+const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/;
+const DRIVE_PREFIX = /^[A-Za-z]:[\\/]/;
 
 /** Tools whose rendering needs the result, so the live stream holds the call back until it ends. */
 const RESULT_DEPENDENT_TOOLS = new Set(['todo', 'edit']);
@@ -41,11 +44,29 @@ export function absolutePath(path, cwd, home = homedir()) {
 }
 
 /**
- * Split OMP's numbered diff into its changed regions. An empty line separates
- * regions that are not adjacent in the file; within a region the context and
- * `-` lines are a contiguous slice of the old file, the context and `+` lines
- * the matching slice of the new one. Any line that is not a diff line ends the
- * region, so a region never joins lines that were apart.
+ * Whether omp writes to `path` exactly as written (resolved against the session
+ * directory, `~` and `~/` against home). Every other form is rewritten by omp
+ * first (`@…`, `:…`, `~name`, `[path#TAG]`, `archive:member`, …), so where it
+ * lands is only known from the result.
+ */
+export function isPlainFilePath(path, platform = process.platform) {
+  if (typeof path !== 'string' || path === '' || path !== path.trim()) return false;
+  if (CONTROL_CHARS.test(path) || UNICODE_SPACES.test(path) || URL_SCHEME.test(path)) return false;
+  if (/^[@:[]/.test(path) || /^\/+$/.test(path)) return false;
+  if (path.startsWith('~') && path !== '~' && !path.startsWith('~/') && !path.startsWith('~\\')) return false;
+  if (platform === 'win32' && path.startsWith('/')) return false;
+  return !(DRIVE_PREFIX.test(path) ? path.slice(2) : path).includes(':');
+}
+
+/**
+ * Split OMP's numbered diff into its changed regions. Within a region the
+ * context and `-` lines are a contiguous slice of the old file, the context
+ * and `+` lines the matching slice of the new one. OMP prints hunks back to
+ * back when it leaves out the unchanged lines between them, so a gap in the
+ * line numbers, or any line that is not a diff line, ends the region.
+ *
+ * Context and `-` lines carry their line number in the old file, `+` lines
+ * theirs in the new file.
  *
  * @param {string} diff
  * @returns {{ old_string: string, new_string: string }[]}
@@ -53,20 +74,32 @@ export function absolutePath(path, cwd, home = homedir()) {
 export function parseNumberedDiff(diff) {
   const regions = [];
   let current = null;
+  // Number the next old-file line (context, `-`) and the next new-file line (`+`) must have.
+  let nextOld = null;
+  let nextNew = null;
   for (const rawLine of String(diff ?? '').split('\n')) {
     const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
     const match = DIFF_LINE.exec(line);
-    if (!match) {
+    const expected = match && (match[1] === '+' ? nextNew : nextOld);
+    // omp leaves out unchanged lines between two changes without marking the gap.
+    if (!match || (expected !== null && Number(match[2]) !== expected)) {
       current = null;
-      continue;
+      nextOld = null;
+      nextNew = null;
     }
+    if (!match) continue;
     if (!current) {
       current = { before: [], after: [] };
       regions.push(current);
     }
-    const [, marker, text] = match;
-    if (marker !== '+') current.before.push(text);
+    const [, marker, number, text] = match;
+    if (marker !== '+') {
+      current.before.push(text);
+      nextOld = Number(number) + 1;
+    }
     if (marker !== '-') current.after.push(text);
+    if (marker === '+') nextNew = Number(number) + 1;
+    else if (marker === ' ' && nextNew !== null) nextNew += 1;
   }
   return regions
     .map((region) => ({ old_string: region.before.join('\n'), new_string: region.after.join('\n') }))
@@ -151,10 +184,13 @@ export function mapCompletedTool(call, result = null) {
 
   if (name === 'write' && typeof input.path === 'string' && !URL_SCHEME.test(input.path)
     && typeof input.content === 'string') {
+    // omp rewrites some paths before writing; only a plain one is known without the result.
     const filePath = typeof details.resolvedPath === 'string'
       ? details.resolvedPath
-      : absolutePath(input.path, cwd, home);
-    return mapped([{ id, name: 'Write', input: { file_path: filePath, content: input.content } }]);
+      : isPlainFilePath(input.path) ? absolutePath(input.path, cwd, home) : undefined;
+    if (filePath !== undefined) {
+      return mapped([{ id, name: 'Write', input: { file_path: filePath, content: input.content } }]);
+    }
   }
 
   if (name === 'task' && Array.isArray(input.tasks) && input.tasks.length > 0) {
@@ -177,8 +213,13 @@ export function mapCompletedTool(call, result = null) {
 
 /**
  * Blocks to show as soon as a call starts, or null when the call must wait for
- * its result (see RESULT_DEPENDENT_TOOLS).
+ * its result (see RESULT_DEPENDENT_TOOLS, and `write` to a path omp rewrites).
  */
 export function mapStartedTool(call) {
-  return RESULT_DEPENDENT_TOOLS.has(call.name) ? null : mapCompletedTool(call).uses;
+  if (RESULT_DEPENDENT_TOOLS.has(call.name)) return null;
+  const path = call.args?.path;
+  if (call.name === 'write' && typeof path === 'string' && !URL_SCHEME.test(path) && !isPlainFilePath(path)) {
+    return null;
+  }
+  return mapCompletedTool(call).uses;
 }

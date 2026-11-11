@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
-import { buildPermissionRequest, createUiBridge, parseApprovalRequest } from './ui-bridge.js';
+import { approvalDescribesCall, buildPermissionRequest, createUiBridge, parseApprovalRequest } from './ui-bridge.js';
 
 const CWD = resolve('/work/project');
 const OTHER = 'Other (type your own)';
@@ -31,8 +31,8 @@ function harness({ permission = async () => true, answers = async () => null, ca
       asked.answers.push(input);
       return answers(input);
     },
-    claimToolCall: (toolName) => {
-      const index = queue.findIndex((call) => call.name === toolName);
+    claimToolCall: (toolName, describes) => {
+      const index = queue.findIndex((call) => call.name === toolName && describes(call.args));
       return index >= 0 ? queue.splice(index, 1)[0] : undefined;
     },
     cwd: CWD,
@@ -182,6 +182,78 @@ test('approvals for the same tool are matched to its calls in order', async () =
   bridge.handle(approvalFrame('b', 'Allow tool: bash\nCommand: second'));
   await idle();
   assert.deepEqual(asked.permission.map((request) => request.inputs.command), ['first', 'second']);
+});
+
+test('prompts that arrive in the opposite order to the calls are matched by content', async () => {
+  const { bridge, asked, idle } = harness({
+    calls: [{ name: 'bash', args: { command: 'first' } }, { name: 'bash', args: { command: 'second' } }],
+  });
+  bridge.handle(approvalFrame('a', 'Allow tool: bash\nCommand: second'));
+  bridge.handle(approvalFrame('b', 'Allow tool: bash\nCommand: first'));
+  await idle();
+  assert.deepEqual(asked.permission.map((request) => request.inputs.command), ['second', 'first']);
+});
+
+test('a prompt no running call matches shows OMP\'s own text and leaves the calls unclaimed', async () => {
+  const running = { name: 'bash', args: { command: 'sleep 6' } };
+  const { bridge, asked, idle } = harness({ calls: [running] });
+  bridge.handle(approvalFrame('a', 'Allow tool: bash\nCommand: echo danger'));
+  await idle();
+  assert.deepEqual(asked.permission, [{ toolName: 'bash', inputs: { text: 'Command: echo danger' } }]);
+
+  // The call is still there for its own prompt.
+  bridge.handle(approvalFrame('b', 'Allow tool: bash\nCommand: sleep 6'));
+  await idle();
+  assert.deepEqual(asked.permission[1], { toolName: 'Bash', inputs: { command: 'sleep 6', cwd: CWD } });
+});
+
+test('a command OMP printed cut to 2000 characters still claims its call, and the dialog shows all of it', async () => {
+  const command = `echo ${'x'.repeat(2495)}`;
+  const { bridge, asked, idle } = harness({ calls: [{ name: 'bash', args: { command } }] });
+  bridge.handle(approvalFrame('a', `Allow tool: bash\nCommand: ${command.slice(0, 2000)}[…500ch elided…]`));
+  await idle();
+  assert.deepEqual(asked.permission, [{ toolName: 'Bash', inputs: { command, cwd: CWD } }]);
+});
+
+test('a write prompt claims the call even though OMP trimmed the file\'s final newline', async () => {
+  const { bridge, asked, idle } = harness({
+    calls: [{ name: 'write', args: { path: 'notes.md', content: 'hello\n' } }],
+  });
+  bridge.handle(approvalFrame('a', 'Allow tool: write\nPath: notes.md\nContent:\nhello'));
+  await idle();
+  assert.deepEqual(asked.permission, [
+    { toolName: 'Write', inputs: { file_path: resolve(CWD, 'notes.md'), content: 'hello\n' } },
+  ]);
+});
+
+test('a write to a path OMP rewrites is shown with OMP\'s own text', async () => {
+  const details = 'Path: @/tmp/other/out.txt\nContent:\nhello';
+  const { bridge, asked, idle } = harness({
+    calls: [{ name: 'write', args: { path: '@/tmp/other/out.txt', content: 'hello' } }],
+  });
+  bridge.handle(approvalFrame('a', `Allow tool: write\n${details}`));
+  await idle();
+  assert.deepEqual(asked.permission, [{ toolName: 'write', inputs: { text: details } }]);
+});
+
+test('approvalDescribesCall compares the printed value with the whole one', () => {
+  const bash = (details) => ({ toolName: 'bash', details });
+  assert.equal(approvalDescribesCall(bash('Command: echo danger'), { command: 'echo danger' }), true);
+  assert.equal(approvalDescribesCall(bash('Command: echo'), { command: 'echo danger' }), false);
+  assert.equal(approvalDescribesCall(bash('Command: echo danger'), { command: 'echo' }), false);
+  assert.equal(approvalDescribesCall(bash('Reason: why\nCommand: a\nb'), { command: 'a\nb' }), true);
+  assert.equal(approvalDescribesCall(bash('Command: ls'), {}), false);
+  assert.equal(approvalDescribesCall(bash('Command: ls'), undefined), false);
+
+  const write = (details) => ({ toolName: 'write', details });
+  const args = { path: 'a.txt', content: 'one' };
+  assert.equal(approvalDescribesCall(write('Path: a.txt\nContent:\none'), args), true);
+  assert.equal(approvalDescribesCall(write('Path: b.txt\nContent:\none'), args), false);
+  assert.equal(approvalDescribesCall(write('Path: a.txt\nContent:\ntwo'), args), false);
+  assert.equal(approvalDescribesCall(write('Path: a.txt\nContent:'), { path: 'a.txt', content: '' }), true);
+
+  // Nothing to compare for other tools.
+  assert.equal(approvalDescribesCall({ toolName: 'browser', details: '' }, { action: 'open' }), true);
 });
 
 test('a select is asked as one question and answered with the chosen option', async () => {

@@ -38,7 +38,6 @@ function makeOptions(overrides: Partial<UseModelStatePersistenceOptions> = {}): 
     setReasoningEffort: vi.fn(),
     setCodexFastMode: vi.fn(),
     setDshPreset: vi.fn(),
-    setOmpApprovalMode: vi.fn(),
     currentProvider: 'claude',
     selectedClaudeModel: 'claude-sonnet-4-5',
     selectedCodexModel: 'gpt-5-codex',
@@ -64,7 +63,6 @@ function makeOptions(overrides: Partial<UseModelStatePersistenceOptions> = {}): 
     reasoningEffort: 'medium',
     codexFastMode: 'normal',
     dshPreset: '',
-    ompApprovalMode: 'default',
     ...overrides,
   };
 }
@@ -407,33 +405,6 @@ describe('useModelStatePersistence — CLI provider persistence', () => {
     expect(setOmpPermissionMode).toHaveBeenCalledWith('acceptEdits');
     expect(bridgeEventsFor('set_provider')).toEqual([['set_provider', 'omp']]);
     expect(bridgeEventsFor('set_model')).toEqual([['set_model', 'openai/gpt-5']]);
-  });
-
-  it.each(['always-ask', 'write', 'yolo'] as const)('round-trips omp approval mode %s', (mode) => {
-    const setOmpApprovalMode = vi.fn();
-    renderHook(() => useModelStatePersistence(makeOptions({ currentProvider: 'omp', ompApprovalMode: mode })));
-    const saved = JSON.parse(localStorage.getItem('model-selection-state') ?? '{}');
-    expect(saved.ompApprovalMode).toBe(mode);
-
-    renderHook(() => useModelStatePersistence(makeOptions({ setOmpApprovalMode })));
-    vi.advanceTimersByTime(200);
-    expect(setOmpApprovalMode).toHaveBeenCalledWith(mode);
-  });
-
-  it.each([
-    ['missing', undefined],
-    ['unknown', 'bogus'],
-  ])('falls back to default when the snapshot approval mode is %s', (_label, value) => {
-    const setOmpApprovalMode = vi.fn();
-    localStorage.setItem('model-selection-state', JSON.stringify({
-      provider: 'omp',
-      ompApprovalMode: value,
-    }));
-
-    renderHook(() => useModelStatePersistence(makeOptions({ setOmpApprovalMode })));
-    vi.advanceTimersByTime(200);
-
-    expect(setOmpApprovalMode).toHaveBeenCalledWith('default');
   });
 
   it('reconciles a stale omp pair saved before mode⇔model unification (role mode + auto model)', () => {

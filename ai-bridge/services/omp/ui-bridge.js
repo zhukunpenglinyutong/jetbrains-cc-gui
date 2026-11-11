@@ -12,7 +12,7 @@
  * multi-select question (see `handleCheckboxRound`).
  */
 
-import { absolutePath } from './tool-mapping.js';
+import { absolutePath, isPlainFilePath } from './tool-mapping.js';
 
 const APPROVAL_TITLE_PREFIX = 'Allow tool: ';
 // The `ask` tool appends this row to choice questions and follows it with an `input` request.
@@ -21,7 +21,7 @@ const OTHER_OPTION_LABEL = 'Other (type your own)';
 // one, and the last row (`<success symbol> Done selecting`) ends the question.
 const SELECTED_COUNT_PREFIX = /^\((\d+) selected\) /;
 const DONE_OPTION = /(?:^|\s)Done selecting(?: \(\d+\))?$/;
-const URL_SCHEME = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
+const ELIDED_TAIL = /\[…(\d+)ch elided…\]$/;
 const CONFIRM_YES = 'Yes';
 const CONFIRM_NO = 'No';
 
@@ -54,18 +54,48 @@ export function parseApprovalRequest(frame) {
   return toolName ? { toolName, details: rest.join('\n').trim(), approve, deny } : null;
 }
 
+/** Whether `shown`, a value as OMP prints it in an approval prompt, stands for `actual`. */
+function showsValue(shown, actual) {
+  // The prompt's details are trimmed, which drops trailing whitespace of the last value.
+  if (shown === actual || shown === actual.trimEnd()) return true;
+  const elided = ELIDED_TAIL.exec(shown);
+  if (!elided) return false;
+  const head = shown.slice(0, elided.index);
+  return actual.length === head.length + Number(elided[1]) && actual.startsWith(head);
+}
+
+/**
+ * Whether a running call is the one an approval prompt prints. The prompt
+ * carries no call id, only the tool's detail lines: the command of a `bash`
+ * call, the path and content of a `write`. Other tools print nothing to compare.
+ *
+ * @param {{ toolName: string, details: string }} approval
+ * @param {unknown} args the call's arguments
+ */
+export function approvalDescribesCall({ toolName, details }, args) {
+  if (toolName !== 'bash' && toolName !== 'write') return true;
+  if (!args || typeof args !== 'object') return false;
+  if (toolName === 'bash') {
+    const shown = /(?:^|\n)Command: ([\s\S]*)$/.exec(details)?.[1];
+    return typeof args.command === 'string' && shown !== undefined && showsValue(shown, args.command);
+  }
+  const shown = /(?:^|\n)Path: ([^\n]*)\nContent:(?:\n([\s\S]*))?$/.exec(details);
+  return typeof args.path === 'string' && typeof args.content === 'string' && shown !== null
+    && showsValue(shown[1], args.path) && showsValue(shown[2] ?? '', args.content);
+}
+
 /**
  * What the permission dialog shows for an OMP tool. `Bash` and `Write` take the
- * shapes the plugin already knows (command preview, IDE diff review); every
- * other tool shows OMP's own description of the call.
+ * shapes the plugin already knows (command preview, IDE diff review) once the
+ * running call the prompt is about is known; everything else shows OMP's own
+ * description of the call.
  */
 export function buildPermissionRequest({ toolName, details }, call, { cwd, home } = {}) {
   const args = call?.args && typeof call.args === 'object' ? call.args : {};
   if (toolName === 'bash' && typeof args.command === 'string') {
     return { toolName: 'Bash', inputs: { command: args.command, cwd: typeof args.cwd === 'string' ? args.cwd : cwd } };
   }
-  if (toolName === 'write' && typeof args.path === 'string' && !URL_SCHEME.test(args.path)
-    && typeof args.content === 'string') {
+  if (toolName === 'write' && typeof args.content === 'string' && isPlainFilePath(args.path)) {
     return {
       toolName: 'Write',
       inputs: { file_path: absolutePath(args.path, cwd, home), content: args.content },
@@ -111,7 +141,8 @@ function parseCheckboxRound(title, options, current) {
  * @param {(frame: object) => void} options.respond writes an `extension_ui_response`
  * @param {(toolName: string, inputs: object) => Promise<boolean>} options.requestPermission
  * @param {(input: object) => Promise<object|null>} options.requestAnswers
- * @param {(toolName: string) => object|undefined} [options.claimToolCall] the running call an approval refers to
+ * @param {(toolName: string, describes?: (args: unknown) => boolean) => object|undefined} [options.claimToolCall]
+ *   the running call an approval refers to: the one of that tool that `describes` accepts
  * @param {string} [options.cwd]
  * @param {(...args: unknown[]) => void} [options.log]
  */
@@ -151,7 +182,8 @@ export function createUiBridge({
   };
 
   const handleApproval = async (frame, approval) => {
-    const request = buildPermissionRequest(approval, claimToolCall(approval.toolName), { cwd });
+    const call = claimToolCall(approval.toolName, (args) => approvalDescribesCall(approval, args));
+    const request = buildPermissionRequest(approval, call, { cwd });
     let allowed = false;
     try {
       allowed = await requestPermission(request.toolName, request.inputs);

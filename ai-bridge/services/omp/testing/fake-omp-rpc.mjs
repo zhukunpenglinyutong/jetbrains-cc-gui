@@ -2,7 +2,7 @@
  * Scripted stand-in for `omp --mode rpc`.
  *
  * FAKE_OMP_SCRIPT points at a JSON file:
- *   { "ready": true, "exitCode": 0, "on": { "<command type>": [step, ...] } }
+ *   { "ready": true, "exitCode": 0, "on": { "<command type>": [step, ...] }, "onClose": [step, ...] }
  * Each command read from stdin plays the steps registered for its type:
  *   { "respond": data|null }   success response to the command
  *   { "fail": "message", "code": "..." }
@@ -12,7 +12,8 @@
  *   { "stderr": "text" }
  *   { "exit": code }
  * Every stdin frame is appended to FAKE_OMP_LOG (JSON lines) when it is set.
- * Closing stdin exits, as the real CLI does.
+ * Closing stdin plays the "onClose" steps (work omp finishes after its input ended), then exits,
+ * as the real CLI does.
  */
 
 import { appendFileSync, readFileSync } from 'node:fs';
@@ -86,4 +87,7 @@ createInterface({ input: process.stdin })
       });
     }
   })
-  .on('close', () => process.exit(script.exitCode ?? 0));
+  .on('close', () => {
+    // `respond` and `fail` answer a command; there is none to answer here.
+    void play(script.onClose ?? [], {}).then(() => process.exit(script.exitCode ?? 0));
+  });

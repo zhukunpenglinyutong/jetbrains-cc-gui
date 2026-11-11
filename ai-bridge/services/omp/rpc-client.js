@@ -166,7 +166,9 @@ export class OmpRpcClient {
 
   /**
    * End the session: close stdin so omp drains and exits, then kill the
-   * process tree if it is still alive after `graceMs`.
+   * process tree if it is still alive after `graceMs`. `graceMs: 0` never
+   * kills: it waits until omp exits on its own (same convention as
+   * `request`'s `timeoutMs: 0`).
    * @returns {Promise<{ code: number|null, signal: NodeJS.Signals|null }>}
    */
   async close({ graceMs = DEFAULT_CLOSE_GRACE_MS } = {}) {
@@ -174,7 +176,7 @@ export class OmpRpcClient {
     if (!this.#child) return { code: null, signal: null };
     const stdin = this.#child?.stdin;
     if (stdin && !stdin.destroyed && !stdin.writableEnded) stdin.end();
-    const timer = setTimeout(() => this.kill(), graceMs);
+    const timer = graceMs > 0 ? setTimeout(() => this.kill(), graceMs) : null;
     try {
       return await this.#exited;
     } finally {

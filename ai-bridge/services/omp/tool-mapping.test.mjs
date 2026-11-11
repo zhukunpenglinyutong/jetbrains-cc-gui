@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
-import { absolutePath, mapCompletedTool, mapStartedTool, parseNumberedDiff } from './tool-mapping.js';
+import {
+  absolutePath,
+  isPlainFilePath,
+  mapCompletedTool,
+  mapStartedTool,
+  parseNumberedDiff,
+} from './tool-mapping.js';
 
 const CWD = resolve('/work/project');
 const HOME = resolve('/home/tester');
@@ -13,11 +19,11 @@ function ok(text, details) {
 test('parseNumberedDiff splits regions at empty lines and keeps blank file lines', () => {
   const diff = [
     ' 148|            yield return null;',
-    '-150|            yield return new WaitForEndOfFrame();',
-    '+150|            yield return null;',
-    ' 151|',
+    '-149|            yield return new WaitForEndOfFrame();',
+    '+149|            yield return null;',
+    ' 150|',
     '',
-    ' 225|        }',
+    ' 226|        }',
     '-227|        /// old',
     '+227|        /// new',
     '+228|        /// added',
@@ -35,8 +41,31 @@ test('parseNumberedDiff splits regions at empty lines and keeps blank file lines
 });
 
 test('parseNumberedDiff accepts unpadded line numbers and text containing pipes', () => {
-  assert.deepEqual(parseNumberedDiff(' 7|a | b\n-9|x|y\n+9|x|z'), [
+  assert.deepEqual(parseNumberedDiff(' 8|a | b\n-9|x|y\n+9|x|z'), [
     { old_string: 'a | b\nx|y', new_string: 'a | b\nx|z' },
+  ]);
+});
+
+test('parseNumberedDiff starts a new region where the line numbers jump', () => {
+  // omp prints hunks back to back when it leaves out the unchanged lines between them.
+  const diff = [
+    ' 3|keep',
+    '-4|old',
+    '+4|new',
+    ' 5|keep',
+    ' 28|far',
+    '-29|old2',
+    '+29|new2',
+    ' 30|end',
+  ].join('\n');
+  assert.deepEqual(parseNumberedDiff(diff), [
+    { old_string: 'keep\nold\nkeep', new_string: 'keep\nnew\nkeep' },
+    { old_string: 'far\nold2\nend', new_string: 'far\nnew2\nend' },
+  ]);
+  // Added lines alone: their numbers are those of the new file.
+  assert.deepEqual(parseNumberedDiff('+5|a\n+6|b\n+50|c'), [
+    { old_string: '', new_string: 'a\nb' },
+    { old_string: '', new_string: 'c' },
   ]);
 });
 
@@ -171,6 +200,32 @@ test('write to a file becomes Write with an absolute path', () => {
     { id: 'w', name: 'Write', input: { file_path: '/real/docs/notes.md', content: '# Notes\n' } },
   ]);
   assert.deepEqual(done.results, [{ toolUseId: 'w', content: 'Successfully wrote 8 bytes', isError: false }]);
+});
+
+test('write to a path omp rewrites waits for its result', () => {
+  const call = { id: 'w', name: 'write', args: { path: '@/tmp/other/out.txt', content: 'hi' }, cwd: CWD, home: HOME };
+  assert.equal(mapStartedTool(call), null);
+  const done = mapCompletedTool(call, ok('Successfully wrote 2 bytes', { resolvedPath: '/tmp/other/out.txt' }));
+  assert.deepEqual(done.uses, [
+    { id: 'w', name: 'Write', input: { file_path: '/tmp/other/out.txt', content: 'hi' } },
+  ]);
+  // Without a resolved path (the call failed or was cut short) the call is shown as it was made.
+  const failed = mapCompletedTool(call, { text: 'denied', details: {}, isError: true });
+  assert.deepEqual(failed.uses, [{ id: 'w', name: 'write', input: call.args }]);
+  assert.deepEqual(mapCompletedTool(call).uses, [{ id: 'w', name: 'write', input: call.args }]);
+});
+
+test('isPlainFilePath accepts only paths omp writes to exactly as written', () => {
+  for (const path of ['notes.md', 'src/a.ts', '/abs/a.ts', '~', '~/a', 'C:\\a\\b.txt']) {
+    assert.equal(isPlainFilePath(path), true, path);
+  }
+  for (const path of [
+    '@/abs/a', ':./a', '~name', '[src/a.ts#1A2B]', 'bundle.zip:inner.txt', 'a\u00A0b', '/', '', ' a', 'xd://lsp', 5,
+  ]) {
+    assert.equal(isPlainFilePath(path), false, String(path));
+  }
+  assert.equal(isPlainFilePath('/c/a', 'win32'), false);
+  assert.equal(isPlainFilePath('/c/a', 'linux'), true);
 });
 
 test('write to a URL or device is not a file write', () => {

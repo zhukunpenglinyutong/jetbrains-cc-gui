@@ -9,10 +9,12 @@
  *       [--approval-mode <mode>]
  *
  * One process per turn:
- *   ready                      -> set_event_filter, get_session_stats (session id, context window)
+ *   ready                      -> set_event_filter, get_session_stats (context window, the new session's id)
  *   prompt { message, images } -> session events until `prompt_result`
+ *   agent_start                -> the session id is announced: omp writes a session file only once an agent run began
  *   prompt_result              -> `session_settled` first when background work is still running
- *   close stdin                -> omp drains and exits
+ *   close stdin                -> omp drains and exits; a builtin that was acknowledged without an agent run
+ *                                 (/handoff, /compact) finishes its work and prints its output now
  *
  * Frames consumed:
  *   { "type":"message_update", "assistantMessageEvent":{"type":"text_delta"|"thinking_delta","delta":"..."} }
@@ -58,7 +60,7 @@ const SHUTDOWN_SIGNALS = ['SIGTERM', 'SIGINT', 'SIGHUP'];
 const PROMPT_ID = 'prompt';
 // Session events the turn consumes. Everything else (full `agent_end`
 // transcripts, `turn_end`, ...) would only add megabytes to the pipe.
-const FORWARDED_EVENTS = ['message_update', 'message_end', 'tool_execution_start', 'tool_execution_end'];
+const FORWARDED_EVENTS = ['agent_start', 'message_update', 'message_end', 'tool_execution_start', 'tool_execution_end'];
 // OMP downscales images itself; this only bounds what is pushed through the pipe.
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 // How long OMP gets to wind a turn down after `abort` before its process tree is killed.
@@ -158,6 +160,8 @@ export function buildOmpArgs({ sessionId, model, reasoningEffort, approvalMode }
  * @param {(toolName: string, inputs: object) => Promise<boolean>} options.requestPermission
  * @param {(input: object) => Promise<object|null>} options.requestAnswers
  * @param {AbortSignal} [options.abortSignal] the user stopped the turn
+ * @param {number} [options.closeGraceMs] how long omp gets to exit after an agent turn before it is killed
+ *   (default: the client's own)
  * @param {(...args: unknown[]) => void} [options.log]
  * @returns {Promise<{ status: 'completed'|'aborted' }>}
  *   rejects when the turn failed
@@ -172,6 +176,7 @@ export async function runOmpTurn({
   requestAnswers,
   abortSignal,
   log = () => {},
+  closeGraceMs,
 }) {
   // Tool calls that have started and not ended, by toolCallId.
   const calls = new Map();
@@ -179,6 +184,14 @@ export async function runOmpTurn({
   let outcome = null;
   let aborted = false;
   let client;
+  // A new session exists on disk only once an agent run recorded a message, so
+  // the id from `get_session_stats` is announced when the run starts.
+  let pendingSessionId = '';
+  const announceSession = () => {
+    if (!pendingSessionId) return;
+    emit.sessionId(pendingSessionId);
+    pendingSessionId = '';
+  };
 
   let settle;
   const settled = new Promise((resolve, reject) => {
@@ -191,16 +204,18 @@ export async function runOmpTurn({
     respond: (frame) => client.send(frame),
     requestPermission,
     requestAnswers,
-    // An approval prompt names its tool only; it belongs to the oldest running
-    // call of that tool that has not been asked about yet.
-    claimToolCall: (toolName) => {
-      for (const call of calls.values()) {
-        if (call.name === toolName && !call.asked) {
-          call.asked = true;
-          return call;
-        }
-      }
-      return undefined;
+    // An approval prompt names its tool and prints the call; it carries no call id.
+    // `describes` tells whether a running call is the one printed.
+    claimToolCall: (toolName, describes = () => true) => {
+      const candidates = [...calls.values()]
+        .filter((call) => call.name === toolName && !call.asked && describes(call.args));
+      if (candidates.length === 0) return undefined;
+      // Several calls fit: only take one when they are interchangeable.
+      const [first] = candidates;
+      const signature = JSON.stringify(first.args ?? null);
+      if (candidates.some((call) => JSON.stringify(call.args ?? null) !== signature)) return undefined;
+      first.asked = true;
+      return first;
     },
     cwd,
     log,
@@ -248,9 +263,14 @@ export async function runOmpTurn({
         }
         break;
       }
+      case 'agent_start':
+        announceSession();
+        break;
       case 'message_end': {
         const msg = frame.message;
         if (msg && msg.role === 'assistant') {
+          // An omp that sends no `agent_start` announces the session with its first reply.
+          announceSession();
           const usage = normalizeOmpUsage(msg.usage, contextWindow);
           if (usage) emit.usage(usage);
         }
@@ -308,6 +328,8 @@ export async function runOmpTurn({
     abortSignal?.addEventListener('abort', onAbort, { once: true });
   }
 
+  // The prompt ended without an agent run: a builtin that may still be working.
+  let finishedLocally = false;
   try {
     await client.start();
     try {
@@ -318,7 +340,7 @@ export async function runOmpTurn({
     }
     try {
       const stats = await client.request({ type: 'get_session_stats' });
-      if (typeof stats?.sessionId === 'string' && stats.sessionId.trim()) emit.sessionId(stats.sessionId.trim());
+      if (typeof stats?.sessionId === 'string') pendingSessionId = stats.sessionId.trim();
       contextWindow = Number(stats?.contextUsage?.contextWindow) || 0;
     } catch (error) {
       log('get_session_stats failed:', error?.message || error);
@@ -326,20 +348,25 @@ export async function runOmpTurn({
 
     const prompt = { id: PROMPT_ID, type: 'prompt', message };
     if (images.length > 0) prompt.images = images;
-    // No deadline: a builtin such as /compact answers only when it is done.
+    // The acknowledgement waits until omp admits the prompt (image preparation
+    // included). A builtin that runs synchronously answers when it is done; one that
+    // runs in the background (/handoff, /compact) answers at once and finishes after
+    // stdin closes. Hence no deadline.
     const ack = await client.request(prompt, { timeoutMs: 0 });
     // `agentInvoked: false` is a slash command that finished without a turn; no prompt_result follows.
-    if (ack?.agentInvoked !== false) await settled;
+    finishedLocally = ack?.agentInvoked === false;
+    if (!finishedLocally) await settled;
   } catch (error) {
     if (!aborted) throw error;
   } finally {
-    abortSignal?.removeEventListener('abort', onAbort);
     // A call still waiting for its result (the turn was cut short) is shown as it was made.
     for (const call of calls.values()) {
       if (!call.shown) mapCompletedTool(call).uses.forEach(emit.toolUse);
     }
     calls.clear();
-    await client.close();
+    // A local command may still be working: omp is left to finish it, and Stop still ends the wait.
+    await client.close({ graceMs: finishedLocally && !aborted ? 0 : closeGraceMs });
+    abortSignal?.removeEventListener('abort', onAbort);
   }
 
   if (!aborted && outcome?.status === 'error') {

@@ -1,6 +1,6 @@
 import { updateClaudeModelCapabilities } from '../utils/claudeModelCapabilities';
 import { act, renderHook } from '@testing-library/react';
-import { useMessageSender } from './useMessageSender';
+import { isLocalContextCommand, useMessageSender } from './useMessageSender';
 import type { UseMessageSenderOptions } from './useMessageSender';
 import { writeClaudeModelMapping } from '../utils/claudeModelMapping';
 
@@ -481,5 +481,16 @@ describe('useMessageSender - /context command', () => {
     expect(getBridgePayload('send_message').text).toBe(command);
     expect(addToast).not.toHaveBeenCalled();
     expect(openContextUsageDialog).not.toHaveBeenCalled();
+  });
+
+  it('answers /context locally for Claude and Codex, never for OMP', () => {
+    expect(isLocalContextCommand('/context', 'omp')).toBe(false);
+    expect(isLocalContextCommand('/context', 'claude')).toBe(true);
+    expect(isLocalContextCommand('/CONTEXT now', 'codex')).toBe(true);
+  });
+
+  it('does not treat other text as the local /context command', () => {
+    expect(isLocalContextCommand('context', 'claude')).toBe(false);
+    expect(isLocalContextCommand('/compact', 'claude')).toBe(false);
   });
 });

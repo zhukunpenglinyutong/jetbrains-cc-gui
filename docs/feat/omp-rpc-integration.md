@@ -28,15 +28,17 @@ Verified against `omp 18.18.6`.
 ```text
 omp --mode rpc-ui [--model <id-or-role>] [--resume <session id>] [--thinking <level>] [--approval-mode <mode>]
 
-ready                      -> set_event_filter, get_session_stats (session id, context window)
+ready                      -> set_event_filter, get_session_stats (context window, the session id)
 prompt { message, images } -> session events until prompt_result
+agent_start                -> [SESSION_ID] for a new session: omp writes a session file only once an agent run began
 prompt_result              -> session_settled first when background work is still running
-close stdin                -> omp drains and exits
+close stdin                -> omp drains and exits; a builtin acknowledged with agentInvoked: false finishes now
 ```
 
 - `rpc-client.js` owns the process: request/response correlation by id, every other frame to a callback, exit and stderr reporting, tree kill.
 - Stop: the plugin signals the bridge process; the bridge sends `abort`, and kills the process tree if OMP has not wound down after 1.5 s.
 - A turn fails with OMP's own message when `prompt_result.status` is `error`, when OMP refuses the prompt, or when the process exits early.
+- A builtin that was acknowledged with `agentInvoked: false` (`/handoff`, `/compact`) may still be working in the background: the bridge closes stdin and waits for OMP to exit on its own, so its `command_output` still arrives. Stop ends the wait.
 - One process per turn keeps the Java side unchanged (`OmpCliBridge` is still a `MarkerCliBridge`). Session continuity comes from `--resume`.
 - Commit-message generation and the prompt enhancer still use `omp --print` (`services/cli-ask.js`); they are one-shot and need no dialogs.
 
@@ -49,7 +51,7 @@ close stdin                -> omp drains and exits
 | `message_end` (assistant) | `[USAGE]` |
 | `command_output` | `[CONTENT_DELTA]` |
 | `extension_ui_request` | permission or question dialog, answered with `extension_ui_response` |
-| `get_session_stats.sessionId` | `[SESSION_ID]` |
+| `agent_start` (first one of the turn; the id comes from `get_session_stats`) | `[SESSION_ID]` |
 
 ## Tool mapping
 
@@ -58,8 +60,8 @@ close stdin                -> omp drains and exits
 | OMP tool | Rendered as | Source of the data |
 | --- | --- | --- |
 | `todo` | `TodoWrite` (todo panel) | `details.phases`; abandoned tasks are dropped, blocked ones show as pending |
-| `edit` | one `Edit` per changed region | `details.diff` / `details.perFileResults[].diff`; ids `id`, `id#2`, ... |
-| `write` to a plain path | `Write` | arguments; `details.resolvedPath` when known |
+| `edit` | one `Edit` per changed region | `details.diff` / `details.perFileResults[].diff`; a region ends where the line numbers jump; ids `id`, `id#2`, ... |
+| `write` to a plain path, or with `details.resolvedPath` | `Write` | `details.resolvedPath` when known, else the arguments (only for a path OMP does not rewrite) |
 | `task` | one `Task` per subagent | `args.tasks[]`; ids `id`, `id#2`, ... |
 | anything else, and every failed or unparsable case | unchanged | a fallback `edit` gains `file_path` when derivable |
 
@@ -69,7 +71,7 @@ close stdin                -> omp drains and exits
 
 `ui-bridge.js` answers `extension_ui_request` frames through the existing file IPC (`permission-ipc.js`), one dialog at a time.
 
-- Approval → permission dialog. `bash` is shown as `Bash { command, cwd }`, a file `write` as `Write { file_path, content }` (which opens the IDE diff review), other tools with OMP's own detail text. The answer is the once-only choice; "always allow" stays the plugin's decision store.
+- Approval → permission dialog. OMP's prompt carries no call id, so the bridge matches it to the running call it prints (`Command:` for `bash`, `Path:` and `Content:` for `write`, allowing for OMP's elision of long values). `bash` is shown as `Bash { command, cwd }`, a file `write` to a plain path as `Write { file_path, content }` (which opens the IDE diff review); when no running call matches, and for other tools, the dialog shows OMP's own text. The answer is the once-only choice; "always allow" stays the plugin's decision store.
 - `select` / `confirm` / `input` / `editor` → question dialog with `provider: "omp"`. Text typed into a choice question is returned through OMP's "Other" row and its follow-up `input`.
 - A checkbox group → one multi-select question. Before the dialog opens the bridge finds the preselected options (toggle one, read the count, toggle it back) and marks them `selected`, so the dialog opens with the form's own selection. After the dialog it replays the user's choice as toggles, sends typed text through "Other", and ends with "Done". Rounds that do not count toggles this way are shown one by one, as before.
 - An optional group can be submitted empty. The webview names the blank optional question in its answers (`withBlankOptionalAnswers`), because an empty answer map over the file IPC means "dismissed".
@@ -77,7 +79,7 @@ close stdin                -> omp drains and exits
 
 ## Approval mode
 
-The model-config popover has an **Approvals** row for OMP: Default, Ask (`always-ask`), Auto-approve edits (`write`), Full auto (`yolo`). The choice is stored per tab and sent as `ompApprovalMode` with every message. `Default` passes no flag, so OMP's own `tools.approvalMode` applies.
+The model-config popover has an **Approvals** row for OMP: Default, Ask (`always-ask`), Auto-approve edits (`write`), Full auto (`yolo`). The choice is per tab and not persisted: a new or reloaded tab starts at Default. It is sent as `ompApprovalMode` with every message. `Default` passes no flag, so OMP's own `tools.approvalMode` applies.
 
 ## Usage, cost and context
 
@@ -110,6 +112,6 @@ For OMP the `/` list is OMP's catalog (`channel-manager.js omp listCommands <cwd
 - `./gradlew test` and `./gradlew checkstyleMain`
 - Live turns through `OMP_USE_STDIN=true node channel-manager.js omp send` against `omp 18.18.6`, with a script answering the permission files the way the plugin does: resume, streaming usage, `todo` / `edit` / `write` / `task` mapping, approval allowed and denied, `ask`, image input, `/session`, stop during a running command.
 - `node channel-manager.js omp listCommands <cwd>` and `omp getPlanUsage <model>` against the same installation.
-- The webview in a browser with a mocked bridge: Approvals row, effort levels per model, `ompApprovalMode` in the send payload, persistence across reload, `/` list, plan-usage indicator.
+- The webview in a browser with a mocked bridge: Approvals row, effort levels per model, `ompApprovalMode` in the send payload, `/` list, plan-usage indicator.
 
 No `runIde` was run: the permission and question dialogs were exercised through the file IPC, not inside the IDE.

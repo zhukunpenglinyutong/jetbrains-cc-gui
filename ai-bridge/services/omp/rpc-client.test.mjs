@@ -124,3 +124,27 @@ test('start rejects when the process never reports ready', async () => {
     omp.cleanup();
   }
 });
+
+test('close without a grace period waits for omp to finish what it still does', async () => {
+  const omp = fakeOmp({ onClose: [{ delay: 300 }] });
+  const client = omp.createClient();
+  try {
+    await client.start();
+    const exit = await client.close({ graceMs: 0 });
+    assert.equal(exit.code, 0);
+  } finally {
+    omp.cleanup();
+  }
+});
+
+test('close with a grace period kills an omp that is still busy', async () => {
+  const omp = fakeOmp({ onClose: [{ delay: 300 }] });
+  const client = omp.createClient();
+  try {
+    await client.start();
+    const exit = await client.close({ graceMs: 100 });
+    assert.notEqual(exit.code, 0);
+  } finally {
+    omp.cleanup();
+  }
+});
