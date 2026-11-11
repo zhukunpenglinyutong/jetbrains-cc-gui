@@ -4,7 +4,7 @@
 - 严重级别：高（功能缺陷，非崩溃；影响所有后台任务场景的交互完整性）
 - 影响范围：ai-bridge（Node daemon）→ Java 插件 → webview 全链路
 - 关联历史：#1305（inter-turn result 路由，已修复）、#1410（one-behind shift）
-- 状态：已定位根因，待修复
+- 状态：已定位根因，待修复（2026-11-10 修订：根因 2 已按事故日志更正，见第 4 节修订说明）
 
 ## 1. 问题概述
 
@@ -75,15 +75,37 @@ if (runtime.turnSink) {
 
 **结论：INTER-TURN 模式下 follow-up 回合的 assistant 正文没有转发路径，被静默消费。** L619-620 注释亦承认："the frontend only sees it after a reload"。
 
-### 3.3 Java 层：reload 恢复路径存在已知漏洞
+### 3.3 Java 层：reload 恢复路径失效
 
 `src/main/java/com/github/claudecodegui/provider/common/DaemonBridge.java` L917-933：`session_updated` 事件仅分发给 listeners。
 
-`src/main/java/com/github/claudecodegui/ui/toolwindow/ClaudeChatWindow.java` L176-194：listener 侧设计了 DeferredReload——session_updated 触发 `loadFromServer()` 从 JSONL 重载。但作者注释明确承认了边界：
+`src/main/java/com/github/claudecodegui/ui/toolwindow/ClaudeChatWindow.java` L176-194：listener 侧设计了 DeferredReload——流活跃期间到达的 session_updated 先 park，流结束后 drain。该机制本身工作正常，2026-11-10 的真机日志可以看到完整的 `deferring reload to stream end` → `draining deferred session_updated reload after stream end` 配对。
 
-> "the LAST background answer of a fan-out with no following stream end, would otherwise never be drained — **the answer stays invisible forever**"
+初版报告曾把事故归因于 DeferredReload 的 stream-end 边沿竞态。事后回查 2026-11-09 事故时段（会话 `c632b3fe-fbba-4037-a890-c8df6a469fba`，日志 `C:\Users\28685\AppData\Local\JetBrains\IntelliJIdea2026.1\log\idea.1.log`），实际链路并非如此：
 
-500ms 兜底 alarm（`DEFERRED_RELOAD_SAFETY_DRAIN_MS`）只覆盖部分场景；"defer 落在 stream-end 边沿之后"的跨线程 check-then-act 竞态窗口仍会永久丢显示。
+| 北京时间 | 日志 |
+|---|---|
+| 22:47:04、22:50:53、22:55:43、22:55:55 | `session_updated ... reloading from server`（4 次均为即时 reload） |
+| 紧随其后约 0.3s | `Ignoring history result that has not persisted the live narrative`（4 次全部被拒绝） |
+
+全程没有出现 `deferring reload to stream end`，说明事件到达时流并不活跃，DeferredReload 的竞态窗口在这起事故中没有出现。
+
+真正的拦截点是 `src/main/java/com/github/claudecodegui/session/SessionMessageOrchestrator.java:331-336` 的 live-narrative 守卫：
+
+```java
+if ("claude".equals(requestedProvider)
+        && !historyKeepsLiveNarrative(loadedMessages, currentMessages, alignedAnchorIndex)) {
+    LOG.warn("Ignoring history result that has not persisted the live narrative");
+    requireRestoreCommit(updateSharedLoadingState);
+    return;
+}
+```
+
+该守卫的本意是防止滞后的分页读取覆盖实时流内容；但当 follow-up 正文只存在于 JSONL、live 列表由流式消息构成时，两者的文本、thinking 与结构无法逐条对齐，守卫会把这份本应补上内容的 reload 整体丢弃。同文件 L735-742 的注释已描述这一后果：
+
+> "The newest turns would then never appear ... Only navigating away and back (which rebuilds the session with an empty live list) shows the content."
+
+会话 JSONL 侧可交叉验证：`c632b3fe-fbba-4037-a890-c8df6a469fba.jsonl` 中 14:55:43.091Z 与 14:55:55.332Z 各有一条 assistant 正文（对应北京时间 22:55:43 / 22:55:55），与两次 session_updated 相隔约 0.6 秒，证明消息已落盘、只是未被应用。
 
 ### 3.4 webview 层
 
@@ -104,13 +126,19 @@ if (msg?.type === 'result' && msg.origin?.kind === 'task-notification') {
 
 ## 4. 根因结论
 
+> **修订说明（2026-11-10）**
+>
+> 初版报告的第 2 条根因，是依据 `ClaudeChatWindow` 中的代码注释做静态推断得出的，未与事故当天的运行日志交叉核对，这是我们的误判。回查 2026-11-09 事故日志与会话 JSONL 后确认：4 次 `session_updated` 全部走了即时 reload，没有任何一次进入 defer 分支，DeferredReload 的 500ms 兜底逻辑并未参与这次事故；真正拦截消息的是 `SessionMessageOrchestrator` 的 live-narrative 守卫。
+>
+> 由此给此前基于初版结论投入排查的同学们增加了额外的工作量，我们深表歉意。第 3.3 节与本节表格已按实际日志更正；根因 1、根因 3 以及第 5 节的修复方向不受影响。
+
 | # | 层 | 位置 | 问题 |
 |---|---|------|------|
 | 1 | bridge（主因） | `runtime-lifecycle.js:572-647` | INTER-TURN 模式对 assistant/user 正文消息无转发路径，静默消费；设计依赖"JSONL 落盘 + reload"延迟恢复，而该恢复路径不可靠 |
-| 2 | Java | `ClaudeChatWindow.java:176-194` | DeferredReload 为 edge-triggered，stream-end 边沿竞态与"fan-out 最后一个回答无后续 stream end"场景下回答永久不可见（作者注释已承认） |
+| 2 | Java | `SessionMessageOrchestrator.java:331-336`（`historyKeepsLiveNarrative`） | session_updated 触发的分页 reload 与 live 列表对不上时被整体拒绝，follow-up 正文虽已落盘却未应用到界面；日志特征为 `Ignoring history result that has not persisted the live narrative` |
 | 3 | bridge（时序） | `persistent-query-service.js:353-359` | in-turn 期间到达的 task-notification origin result 被 skip 且不触发 reload，恢复路径在竞态下同时失效 |
 
-消息丢失 = 问题 1 的设计缺口 + 问题 2/3 使兜底恢复路径也不可靠，三者叠加。
+消息丢失 = 问题 1 的设计缺口 + 问题 2/3 使 reload 恢复路径不可靠，三者叠加。
 
 ## 5. 修复建议
 
@@ -127,25 +155,28 @@ if (msg?.type === 'result' && msg.origin?.kind === 'task-notification') {
 - `persistent-query-service.js` L353-359：`continue` 前追加 `emitInterTurnEvent(runtime.sessionId)`（保留 skip 语义——不让 follow-up result 错误结束当前用户回合，但要触发 reload 使内容可达）
 - 该处 skip 时 assistant 正文已由 turnSink 进入当前回合流，归属处理需对照 #1410 的 "one-behind" 教训，避免错误归属到当前用户回合
 
-### P2：DeferredReload 状态查询式 drain
+### P2：修正 live-narrative 守卫，并加固 DeferredReload（可选）
 
-- `ClaudeChatWindow.java`：将 park/drain 从 edge-triggered（依赖 stream-end 边沿）改为状态查询式——reload 请求落地时若流不活跃则立即执行，活跃则登记并在活性检测点（含 500ms alarm）以"当前是否仍活跃"为准 drain，消除边沿竞态
+- `SessionMessageOrchestrator.java`（本次事故的直接修复点）：`historyKeepsLiveNarrative` 失败时不再整体丢弃 reload，退化为"保留 live 前缀、只追加尾部缺失消息"的合并；或在守卫失败后安排一次延迟重试，避免包含新内容的 reload 被永久丢弃
+- `ClaudeChatWindow.java`（一致性加固）：DeferredReload 可继续收敛为状态查询式 drain——reload 请求落地时若流不活跃则立即执行，活跃则登记并在活性检测点以"当前是否仍活跃"为准 drain。2026-11-09 事故未走到该路径，此项优先级已下降，可在后续版本中处理
 
 ### 实施顺序建议
 
-P0 独立可交付，直接消除"永久不可见"；P1/P2 加固恢复路径。若 P0 落地，P2 的紧迫性下降（reload 从"唯一恢复手段"降级为"一致性兜底"）。
+P0 独立可交付，直接消除"永久不可见"；P1/P2 加固恢复路径。P0 落地后 reload 从"唯一恢复手段"降级为"一致性兜底"，但 P2 中的守卫修正仍是本次事故的直接修复点，建议与 P0 一并交付；DeferredReload 的进一步收敛可延后。
 
 ## 6. 验证方案
 
 ### 日志观察点（修复前后对比）
 
-复现步骤 1-4 期间观察 daemon stdout（IDEA `Help → Show Log in Files`）：
+复现步骤 1-4 期间观察 daemon stdout 与 Java 侧日志（IDEA `Help → Show Log in Files`）：
 
 | 日志 | 含义 |
 |------|------|
 | `[PERPETUAL_READER] Inter-turn result detected, emitting session_updated` | 走了 reload 路径但前端未显示 → 问题 2 |
+| `Ignoring history result that has not persisted the live narrative` | reload 结果被 live-narrative 守卫拒绝 → 问题 2 的直接证据（2026-11-09 事故即命中此条） |
+| `[ClaudeChatWindow] session_updated during active turn, deferring reload to stream end` | 流活跃期间到达，进入 DeferredReload 等待；正常情况下应随后出现 `draining deferred session_updated reload after stream end`。只有前者长期无后者，才是边沿竞态 |
 | `[LIFECYCLE] Skipping task-notification result for active user turn` | 时序竞态命中 → 问题 3 |
-| 两者皆无 | follow-up 消息未产生 → 上游 CLI/SDK 问题（本报告范围外） |
+| 以上皆无 | follow-up 消息未产生 → 上游 CLI/SDK 问题（本报告范围外） |
 
 修复后应出现新增的 `inter_turn_message` 事件日志，且界面实时渲染 follow-up 内容。
 
@@ -153,7 +184,7 @@ P0 独立可交付，直接消除"永久不可见"；P1/P2 加固恢复路径。
 
 - `runtime-lifecycle` 已有测试基建（`runtime-registry.lifecycle.test.js`、`perpetual-reader-integration.test.js`）：新增用例——inter-turn 期间注入 assistant/user 正文消息，断言新事件被发出且携带完整消息体
 - `persistent-query-service` 测试（`persistent-query-service.test.js` 等）：新增用例——in-turn 期间到达 task-notification origin result，断言 skip 同时 emitInterTurnEvent 被调用
-- Java 侧：DeferredReload 竞态场景的并发测试（reload 落地于 stream-end 边沿后）
+- Java 侧：新增 `historyKeepsLiveNarrative` 用例——分页 reload 返回的内容包含 follow-up 正文、而 live 列表由流式消息构成时，断言 reload 不被整体丢弃（或退化为尾部合并）；DeferredReload 的并发测试可保留为回归保障
 - 手工端到端：复现步骤 1-6 全部通过，界面实时显示 follow-up 内容，发送新消息后无重复渲染（验证 messageSync 去重）
 
 ## 7. 附录：事故链路图
@@ -174,6 +205,7 @@ P0 独立可交付，直接消除"永久不可见"；P1/P2 加固恢复路径。
    assistant 正文               follow-up result                task-notification XML
    ★ 静默消费，不上屏            → session_updated               → 实时转发子代理卡片
    （仅 JSONL 落盘）             → Java loadFromServer            （唯一有实时路径的）
-                                 （reload 有已知漏洞，
-                                  竞态下"stays invisible forever"）
+                                 （reload 结果被
+                                  live-narrative 守卫拒绝，
+                                  消息仍未应用）
 ```

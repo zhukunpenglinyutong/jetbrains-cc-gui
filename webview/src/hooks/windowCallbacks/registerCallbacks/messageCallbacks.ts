@@ -82,6 +82,28 @@ function extractInterTurnText(raw: ClaudeRawMessage): string {
     .join('\n');
 }
 
+/** Content blocks of an SDK message, tolerating both raw shapes. */
+function interTurnContentBlocks(raw: ClaudeRawMessage): unknown[] {
+  const shaped = raw as { message?: { content?: unknown }; content?: unknown };
+  const blocks = shaped?.message?.content ?? shaped?.content;
+  return Array.isArray(blocks) ? blocks : [];
+}
+
+/** True when a user row carries at least one tool_result block. */
+function hasInterTurnToolResult(raw: ClaudeRawMessage): boolean {
+  return interTurnContentBlocks(raw).some((block) =>
+    !!block && typeof block === 'object' && (block as { type?: unknown }).type === 'tool_result');
+}
+
+/** True when a raw message carries any block the transcript can render. */
+function hasRenderableInterTurnBlock(raw: ClaudeRawMessage): boolean {
+  return interTurnContentBlocks(raw).some((block) => {
+    if (!block || typeof block !== 'object') return false;
+    const type = (block as { type?: unknown }).type;
+    return type === 'text' || type === 'thinking' || type === 'tool_use';
+  });
+}
+
 /** Build a bounded signature for a structural JSON value. */
 function getStructuralValueSignature(value: unknown): string {
   let serialized: string;
@@ -1308,23 +1330,25 @@ export function registerMessageCallbacks(
     });
   };
 
-  // Assistant body from a background follow-up turn (a completed
-  // run_in_background task triggered a CLI turn while no user turn was
-  // active). The perpetual reader forwards it because the [MESSAGE] stream
-  // cannot carry it and the session_updated reload is best-effort. Append it
-  // live so the user sees the AI's analysis without reopening the session.
+  // Inter-turn rows forwarded by the ai-bridge perpetual reader for a
+  // background follow-up turn (a completed run_in_background task triggered a
+  // CLI turn while no user turn was active). Two shapes arrive:
+  //  - assistant bodies: the AI's analysis of the finished task;
+  //  - user rows carrying tool_result blocks: they settle tool cards whose
+  //    tool_use the assistant emitted moments earlier. Without them the card
+  //    spins until a reload (findToolResult never finds a match).
+  // The [MESSAGE] stream cannot carry either (no active turn), so append them
+  // live instead of waiting for the best-effort session_updated reload.
   //
   // Guard chain (mirrors addUserMessage / task_event):
   //  - drop during session transitions;
   //  - drop when the event's sessionId is not the displayed session (Java
   //    already guards this; the frontend re-check is a cheap second line
   //    because a body append is visible pollution, unlike a keyed task card);
-  //  - drop while streaming — unreachable in practice ([STREAM_END] is written
-  //    before the reader re-enters inter-turn, so inter_turn_message always
-  //    arrives after the stream ended), and the follow-up result's
-  //    session_updated reload recovers the content if it ever happens;
+  //  - drop while streaming — the follow-up result's session_updated reload
+  //    recovers the content if a cross-process delay ever lands here mid-turn;
   //  - drop payloads already present (uuid match) so a replayed event or a
-  //    duplicate delivery converges to one bubble.
+  //    duplicate delivery converges to one row.
   //
   // The __turnId tag is load-bearing: preserveLatestMessagesOnShrink keeps a
   // tail assistant only when it carries isStreaming or __turnId, so without
@@ -1340,21 +1364,48 @@ export function registerMessageCallbacks(
       if (isStreamingRef.current) return;
       const raw = payload.message as ClaudeRawMessage | undefined;
       if (!raw || typeof raw !== 'object') return;
+      const rawType = (raw as { type?: unknown }).type;
+
+      // User rows must never render as a bubble. MessageParser labels a
+      // tool_result-only user row "[tool_result]" and the list filters that
+      // exact text out, so reusing the label keeps the live path and the
+      // history path identical.
+      let content: string;
+      if (rawType === 'user') {
+        if (!hasInterTurnToolResult(raw)) return;
+        content = '[tool_result]';
+      } else if (rawType === 'assistant') {
+        content = extractInterTurnText(raw);
+        // The CLI's "no response needed" placeholder is filtered out of history
+        // (MessageParser), so it must not enter the live list either; the same
+        // applies to rows that only carry a stop reason and no renderable block.
+        if (content.trim() === 'No response requested.') return;
+        if (!hasRenderableInterTurnBlock(raw)) return;
+      } else {
+        return;
+      }
+
       const appended: ClaudeMessage = {
-        type: 'assistant',
-        content: extractInterTurnText(raw),
+        type: rawType as ClaudeMessage['type'],
+        content,
         raw,
         timestamp: typeof raw.timestamp === 'string' ? raw.timestamp : new Date().toISOString(),
       };
+      // Read the viewport anchor before mutating: a background report must not
+      // yank a user who is reading earlier history back to the bottom.
+      const shouldScroll = isUserAtBottomRef.current;
       // Take the turn id OUTSIDE the setMessages updater — updaters must stay
-      // pure because React StrictMode double-invokes them.
-      turnIdCounterRef.current += 1;
-      const turnId = turnIdCounterRef.current;
+      // pure because React StrictMode double-invokes them. Only assistant rows
+      // need the tag; user tool_result rows survive shrink via hasUserTail.
+      const turnId = rawType === 'assistant' ? ++turnIdCounterRef.current : 0;
       setMessages((prev) => {
         const appendedUuid = getRawUuid(appended);
         // The exact same SDK record forwarded twice: nothing new to fold.
         if (appendedUuid && prev.some((message) => getRawUuid(message) === appendedUuid)) {
           return prev;
+        }
+        if (rawType === 'user') {
+          return [...prev, appended];
         }
         // Increments sharing one message.id are blocks of a single answer, so
         // fold them into the bubble already on screen (see mergeInterTurnRaw).
@@ -1379,13 +1430,13 @@ export function registerMessageCallbacks(
         }
         return [...prev, { ...appended, __turnId: turnId }];
       });
-      userPausedRef.current = false;
-      isUserAtBottomRef.current = true;
-      requestAnimationFrame(() => {
-        if (messagesContainerRef.current) {
-          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-        }
-      });
+      if (shouldScroll) {
+        requestAnimationFrame(() => {
+          if (messagesContainerRef.current) {
+            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+          }
+        });
+      }
     } catch {
       // Ignore malformed payloads; the session_updated reload still recovers the content.
     }

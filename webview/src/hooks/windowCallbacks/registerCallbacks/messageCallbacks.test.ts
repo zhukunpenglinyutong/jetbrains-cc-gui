@@ -26,6 +26,8 @@ function createHarness(currentSessionId: string | null) {
   const startupHistoryUpdates: unknown[] = [];
   let messages: ClaudeMessage[] = [];
   const isStreaming = ref(false);
+  const userPaused = ref(false);
+  const isUserAtBottom = ref(true);
 
   const options = {
     addToast: () => {},
@@ -37,8 +39,8 @@ function createHarness(currentSessionId: string | null) {
     setLoadingStartTime: () => {},
     setIsThinking: () => {},
     setHistoryData: () => {},
-    userPausedRef: ref(false),
-    isUserAtBottomRef: ref(true),
+    userPausedRef: userPaused,
+    isUserAtBottomRef: isUserAtBottom,
     messagesContainerRef: ref(null),
     suppressNextStatusToastRef: ref(false),
     streamingContentRef: ref(''),
@@ -68,7 +70,15 @@ function createHarness(currentSessionId: string | null) {
   registerMessageCallbacks(options, () => {}, () => {});
   const dispatch = window.claudeHistoryPageInfo;
   if (!dispatch) throw new Error('claudeHistoryPageInfo was not registered');
-  return { storedTitles, startupHistoryUpdates, dispatch, getMessages: () => messages, isStreaming };
+  return {
+    storedTitles,
+    startupHistoryUpdates,
+    dispatch,
+    getMessages: () => messages,
+    isStreaming,
+    userPaused,
+    isUserAtBottom,
+  };
 }
 
 const pageInfo = (overrides: Record<string, unknown> = {}) => JSON.stringify({
@@ -202,6 +212,10 @@ describe('onInterTurnMessage', () => {
     delete (window as unknown as Record<string, unknown>).onInterTurnMessage;
   });
 
+  // Mirrors the envelope ClaudeChatWindow.buildInterTurnMessagePayload emits:
+  // { sessionId, message }. Forwarding only `message` (the pre-fix behavior)
+  // fails the session guard, which is why the Java side also has a contract
+  // test pinning the envelope shape.
   const followUpPayload = (overrides: Record<string, unknown> = {}) => JSON.stringify({
     sessionId: 's1',
     message: {
@@ -258,6 +272,76 @@ describe('onInterTurnMessage', () => {
     const harness = createHarness('s1');
     expect(() => window.onInterTurnMessage?.('not json')).not.toThrow();
     expect(harness.getMessages()).toHaveLength(0);
+  });
+
+  it('appends a tool_result user row for card settlement without rendering it', () => {
+    const harness = createHarness('s1');
+    window.onInterTurnMessage?.(JSON.stringify({
+      sessionId: 's1',
+      message: {
+        type: 'user',
+        uuid: 'tool-result-uuid',
+        message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }] },
+      },
+    }));
+
+    const messages = harness.getMessages();
+    expect(messages).toHaveLength(1);
+    expect(messages[0].type).toBe('user');
+    // The list filters this exact marker text, so the row settles the matching
+    // tool card (findToolResult) without adding a visible user bubble.
+    expect(messages[0].content).toBe('[tool_result]');
+  });
+
+  it('drops user rows that carry no tool_result', () => {
+    const harness = createHarness('s1');
+    window.onInterTurnMessage?.(JSON.stringify({
+      sessionId: 's1',
+      message: {
+        type: 'user',
+        uuid: 'plain-user-uuid',
+        message: { role: 'user', content: [{ type: 'text', text: 'hi' }] },
+      },
+    }));
+    expect(harness.getMessages()).toHaveLength(0);
+  });
+
+  it('drops the "No response requested." placeholder the history parser filters', () => {
+    const harness = createHarness('s1');
+    window.onInterTurnMessage?.(JSON.stringify({
+      sessionId: 's1',
+      message: {
+        type: 'assistant',
+        uuid: 'placeholder-uuid',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'No response requested.' }] },
+      },
+    }));
+    expect(harness.getMessages()).toHaveLength(0);
+  });
+
+  it('drops an assistant row that carries no renderable block', () => {
+    const harness = createHarness('s1');
+    window.onInterTurnMessage?.(JSON.stringify({
+      sessionId: 's1',
+      message: {
+        type: 'assistant',
+        uuid: 'empty-uuid',
+        message: { role: 'assistant', content: [] },
+      },
+    }));
+    expect(harness.getMessages()).toHaveLength(0);
+  });
+
+  it('keeps the scroll pause and position when the user is reading history', () => {
+    const harness = createHarness('s1');
+    harness.userPaused.current = true;
+    harness.isUserAtBottom.current = false;
+
+    window.onInterTurnMessage?.(followUpPayload());
+
+    expect(harness.getMessages()).toHaveLength(1);
+    expect(harness.userPaused.current).toBe(true);
+    expect(harness.isUserAtBottom.current).toBe(false);
   });
 });
 

@@ -98,15 +98,28 @@ export function emitTaskEvent(sessionId, taskMsg) {
 }
 
 /**
- * Forward an inter-turn assistant message body to Java as a daemon event.
- * The perpetual reader emits this for assistant bodies produced by a
- * background follow-up turn (a completed run_in_background task whose
- * notification triggered a CLI turn outside any active user turn). The
- * message is already persisted to JSONL; this is the live display fast-path
- * so the frontend does not depend on the best-effort session_updated reload.
+ * Forward an inter-turn message body to Java as a daemon event.
+ * The perpetual reader emits this for rows produced by a background follow-up
+ * turn (a completed run_in_background task whose notification triggered a CLI
+ * turn outside any active user turn). The message is already persisted to
+ * JSONL; this is the live display fast-path so the frontend does not depend on
+ * the best-effort session_updated reload.
  */
 function emitInterTurnMessage(sessionId, msg) {
   emitDaemonEvent('inter_turn_message', sessionId, { message: msg });
+}
+
+/**
+ * True when a user message carries at least one tool_result block.
+ *
+ * Inter-turn tool results must reach the frontend: the assistant's tool_use
+ * block already rendered as a card, and without the matching tool_result the
+ * frontend cannot settle it (findToolResult stays null) until a JSONL reload.
+ */
+function hasToolResultContent(msg) {
+  const content = msg?.message?.content ?? msg?.content;
+  if (!Array.isArray(content)) return false;
+  return content.some((block) => block && typeof block === 'object' && block.type === 'tool_result');
 }
 
 /**
@@ -663,22 +676,33 @@ export function startPerpetualReader(runtime, callbacks) {
               console.log('[PERPETUAL_READER] Inter-turn task-notification message for anonymous runtime, consuming silently');
             }
           }
-          // A background follow-up turn's assistant body (the AI's analysis of
-          // a completed background task) is the one inter-turn message the
-          // user must actually see. It is persisted to JSONL, but the reload
-          // path that normally recovers it is best-effort (DeferredReload
-          // stream-end races, fan-out last answers), so forward it live as an
-          // inter_turn_message daemon event, mirroring emitTaskEvent's
-          // delivery. Sidechain bodies (non-null parent_tool_use_id) stay
-          // excluded — their transcript loads separately via
-          // onSubagentHistoryLoaded. The task-notification XML carrier handled
-          // above is a user message, so it can never reach this branch.
-          if (msg?.type === 'assistant' && !msg?.parent_tool_use_id) {
+          // A background follow-up turn's rows are the ones the user must
+          // actually see. They are persisted to JSONL, but the reload path that
+          // normally recovers them is best-effort (DeferredReload stream-end
+          // races, fan-out last answers), so forward them live as
+          // inter_turn_message daemon events, mirroring emitTaskEvent's
+          // delivery.
+          //
+          // Two shapes are forwarded:
+          //  - assistant bodies (the AI's analysis of a completed task);
+          //  - user rows carrying tool_result blocks, so the tool card the
+          //    assistant opened can settle without waiting for a reload.
+          // Sidechain rows (non-null parent_tool_use_id) stay excluded — their
+          // transcript loads separately via onSubagentHistoryLoaded. The
+          // task-notification XML carrier handled above is a user message with
+          // no tool_result, so it can never reach this branch twice.
+          const interTurnMainTurn = !msg?.parent_tool_use_id;
+          const interTurnAssistant = msg?.type === 'assistant' && interTurnMainTurn;
+          const interTurnToolResult = msg?.type === 'user' && interTurnMainTurn
+            && taskNotificationXml === null && hasToolResultContent(msg);
+          if (interTurnAssistant || interTurnToolResult) {
             if (runtime.sessionId) {
-              console.log('[PERPETUAL_READER] Inter-turn assistant message for sessionId=' + runtime.sessionId + ', forwarding as inter_turn_message');
+              console.log('[PERPETUAL_READER] Inter-turn ' + (interTurnAssistant ? 'assistant' : 'tool_result')
+                + ' message for sessionId=' + runtime.sessionId + ', forwarding as inter_turn_message');
               emitInterTurnMessage(runtime.sessionId, msg);
             } else {
-              console.log('[PERPETUAL_READER] Inter-turn assistant message for anonymous runtime, consuming silently');
+              console.log('[PERPETUAL_READER] Inter-turn ' + (interTurnAssistant ? 'assistant' : 'tool_result')
+                + ' message for anonymous runtime, consuming silently');
             }
           }
           // For other message types during inter-turn, we silently consume

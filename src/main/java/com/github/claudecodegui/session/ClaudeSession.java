@@ -428,6 +428,64 @@ public class ClaudeSession {
     }
 
     /**
+     * Append an inter-turn row forwarded by the ai-bridge perpetual reader to
+     * this session's message list.
+     *
+     * <p>These rows never ride the normal stream — no user turn is active when
+     * the CLI generates them — so without this the next {@code updateMessages}
+     * snapshot would be shorter than the frontend list (which appends its own
+     * live copy) and the positional shrink guard would misalign. Parsing goes
+     * through {@link MessageParser#parseServerMessage} so the live path and a
+     * history reload agree on what is a real row: sidechain rows, the
+     * {@code "No response requested."} placeholder and command-tag user rows
+     * are dropped, and a tool_result-only user row becomes the
+     * {@code "[tool_result]"} marker row the frontend already understands.</p>
+     *
+     * @param raw the SDK message object forwarded by the daemon
+     */
+    public void appendInterTurnMessage(JsonObject raw) {
+        if (raw == null) {
+            return;
+        }
+        Message parsed;
+        try {
+            parsed = messageParser.parseServerMessage(raw);
+        } catch (RuntimeException e) {
+            // A malformed row must not abort the caller: ClaudeChatWindow
+            // forwards the same payload to the webview immediately after this
+            // call, so throwing here would drop the live message entirely.
+            LOG.debug("[ClaudeSession] Skipping unparseable inter-turn message", e);
+            return;
+        }
+        if (parsed == null) {
+            return;
+        }
+        String uuid = rawUuid(parsed);
+        SessionState sessionState = state;
+        synchronized (sessionState.getMessageStateLock()) {
+            if (uuid != null) {
+                for (Message existing : sessionState.getMessagesReference()) {
+                    if (uuid.equals(rawUuid(existing))) {
+                        return;
+                    }
+                }
+            }
+            sessionState.addMessage(parsed);
+        }
+    }
+
+    /**
+     * Read the CLI-assigned uuid of a message, or null when it carries none.
+     */
+    private static String rawUuid(Message message) {
+        JsonObject raw = message.raw;
+        if (raw == null || !raw.has("uuid") || raw.get("uuid").isJsonNull()) {
+            return null;
+        }
+        return raw.get("uuid").getAsString();
+    }
+
+    /**
      * 提供底层会话状态访问，用于历史恢复等需要直接重建会话内存态的场景。
      */
     public SessionState getState() {

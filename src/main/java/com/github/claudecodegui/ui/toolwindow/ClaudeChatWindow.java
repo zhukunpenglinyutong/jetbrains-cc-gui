@@ -2894,13 +2894,23 @@ public class ClaudeChatWindow {
                         return;
                     }
                     var interTurnAdapter = sessionCallbackAdapter;
-                    String interTurnCurrentSessionId = session != null ? session.getSessionId() : null;
+                    ClaudeSession interTurnSession = session;
+                    String interTurnCurrentSessionId = interTurnSession != null ? interTurnSession.getSessionId() : null;
                     if (interTurnCurrentSessionId == null || !interTurnCurrentSessionId.equals(interTurnSessionId)) {
                         return;
                     }
-                    if (interTurnAdapter != null && data.has("message") && !data.get("message").isJsonNull()) {
-                        interTurnAdapter.onInterTurnMessage(data.get("message").toString());
+                    if (interTurnAdapter == null || !data.has("message") || !data.get("message").isJsonObject()) {
+                        return;
                     }
+                    JsonObject interTurnRaw = data.getAsJsonObject("message");
+                    // Keep SessionState in sync with the frontend's live append:
+                    // otherwise the next updateMessages snapshot is one row
+                    // shorter and preserveLatestMessagesOnShrink misaligns its
+                    // positional tail. MessageParser applies the same filters a
+                    // history read would (placeholder, sidechain, command tags).
+                    interTurnSession.appendInterTurnMessage(interTurnRaw);
+                    interTurnAdapter.onInterTurnMessage(
+                            buildInterTurnMessagePayload(interTurnSessionId, interTurnRaw));
                 }
             };
             this.claudeSDKBridge.addDaemonEventListener(this.titleEventListener);
@@ -2984,6 +2994,25 @@ public class ClaudeChatWindow {
 
     static boolean shouldReconcileTranscriptAtStreamEnd(String provider, String sessionId) {
         return ("grok".equals(provider) || "zcode".equals(provider)) && sessionId != null && !sessionId.isBlank();
+    }
+
+    /**
+     * Build the envelope forwarded to {@code window.onInterTurnMessage}.
+     *
+     * <p>The daemon emits {@code {type:"daemon", event:"inter_turn_message",
+     * sessionId, message}}. Forwarding only {@code message} made the frontend's
+     * session guard see no {@code sessionId} and drop every real event, so the
+     * envelope shape is pinned here and in messageCallbacks.ts.</p>
+     *
+     * @param sessionId the session the event belongs to
+     * @param message   the SDK message object
+     * @return the JSON string handed to the webview callback
+     */
+    static String buildInterTurnMessagePayload(String sessionId, JsonObject message) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("sessionId", sessionId);
+        payload.add("message", message);
+        return GSON.toJson(payload);
     }
 
     /** (Re)arm the safety backstop; overlapping arms collapse to one pending tick. */
