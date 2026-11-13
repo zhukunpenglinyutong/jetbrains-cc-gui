@@ -20,6 +20,7 @@ test('a model carries the thinking levels omp accepts for it', () => {
       id: 'anthropic/claude-opus-5-5',
       label: 'anthropic/claude-opus-5-5',
       description: 'ctx 1000K · thinking · vision',
+      contextWindow: 1000000,
       supportedReasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
     },
     {
@@ -42,4 +43,19 @@ test('a model without thinking levels has no effort list', () => {
   for (const model of models) {
     assert.equal('supportedReasoningEfforts' in model, false, model.id);
   }
+});
+
+test('contextWindow is carried only when omp reports a positive finite number', () => {
+  const models = parseOmpModelsJson(JSON.stringify({
+    models: [
+      { selector: 'a/ok', contextWindow: 200000 },
+      { selector: 'a/zero', contextWindow: 0 },
+      { selector: 'a/negative', contextWindow: -5 },
+      { selector: 'a/text', contextWindow: '1000' },
+      { selector: 'a/null', contextWindow: null },
+      { selector: 'a/missing' },
+    ],
+  }));
+  const withWindow = models.filter((model) => 'contextWindow' in model).map((model) => [model.id, model.contextWindow]);
+  assert.deepEqual(withWindow, [['a/ok', 200000]]);
 });

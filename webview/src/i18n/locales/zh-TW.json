@@ -2160,7 +2160,7 @@
     "title": "選擇 OMP 審核模式",
     "default": {
       "label": "預設",
-      "description": "沿用 OMP 自身的 tools.approvalMode 設定"
+      "description": "未設定時完全自動（OMP 的 tools.approvalMode）"
     },
     "alwaysAsk": {
       "label": "詢問",

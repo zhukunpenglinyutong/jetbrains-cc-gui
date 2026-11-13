@@ -1914,7 +1914,7 @@
     "title": "Choisir le mode d'approbation d'OMP",
     "default": {
       "label": "Par défaut",
-      "description": "Suit le réglage tools.approvalMode d'OMP"
+      "description": "Automatique total si tools.approvalMode est absent"
     },
     "alwaysAsk": {
       "label": "Demander",

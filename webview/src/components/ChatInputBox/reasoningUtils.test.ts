@@ -1,7 +1,15 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeClaudeModelMapping } from '../../utils/claudeModelMapping';
-import { claudeModelAllowsEffort, getAvailableReasoningLevels, isReasoningVisible, resolveCurrentReasoningLevel, useReasoningEffortGuard } from './reasoningUtils';
+import {
+  claudeModelAllowsEffort,
+  getAvailableReasoningLevels,
+  isReasoningVisible,
+  resolveCurrentReasoningLevel,
+  resolveOmpReasoningLevel,
+  useReasoningEffortGuard,
+} from './reasoningUtils';
+import { REASONING_LEVELS, type ReasoningEffort } from './types';
 
 describe('cc-switch aggregated model effort', () => {
   beforeEach(() => localStorage.clear());
@@ -62,7 +70,7 @@ describe('omp catalog-driven effort levels', () => {
   };
   const ids = (model?: string, provider = 'omp') =>
     getAvailableReasoningLevels(provider, model, catalog).map(level => level.id);
-  const ALL = ['low', 'medium', 'high', 'xhigh', 'max'];
+  const CLI_DEFAULT = ['low', 'medium', 'high', 'xhigh'];
 
   it('shows exactly the plugin levels the model lists, ignoring unknown ids', () => {
     expect(ids('anthropic/claude-opus-5-5')).toEqual(['low', 'high', 'max']);
@@ -72,13 +80,14 @@ describe('omp catalog-driven effort levels', () => {
     expect(ids('slow')).toEqual(['low', 'high', 'max']);
   });
 
-  it('shows all five levels when nothing is known', () => {
-    expect(ids('auto')).toEqual(ALL);
-    expect(ids('ghost')).toEqual(ALL);
-    expect(ids('smol')).toEqual(ALL);
-    expect(ids('openai/gpt-x')).toEqual(ALL);
-    expect(ids('misc/odd')).toEqual(ALL);
-    expect(getAvailableReasoningLevels('omp', 'anthropic/claude-opus-5-5').map(level => level.id)).toEqual(ALL);
+  // `max` exists for few models, so it is only offered where omp lists it.
+  it('offers what the other CLI providers offer when the model is not known', () => {
+    expect(ids('auto')).toEqual(CLI_DEFAULT);
+    expect(ids('ghost')).toEqual(CLI_DEFAULT);
+    expect(ids('smol')).toEqual(CLI_DEFAULT);
+    expect(ids('openai/gpt-x')).toEqual(CLI_DEFAULT);
+    expect(ids('misc/odd')).toEqual(CLI_DEFAULT);
+    expect(getAvailableReasoningLevels('omp', 'anthropic/claude-opus-5-5').map(level => level.id)).toEqual(CLI_DEFAULT);
   });
 
   it('leaves other providers unchanged', () => {
@@ -86,9 +95,25 @@ describe('omp catalog-driven effort levels', () => {
     expect(ids('anthropic/claude-opus-5-5', 'grok')).toEqual(['low', 'medium', 'high', 'xhigh']);
   });
 
-  it('replaces an effort the new model does not offer, like other providers', () => {
+  // The effort is shared by every provider: a model with [low, high, max] must
+  // not turn an effort of xhigh into high for the provider the user returns to.
+  it('shows the level omp will run with and leaves the stored effort alone', () => {
     const onChange = vi.fn();
-    renderHook(() => useReasoningEffortGuard('medium', onChange, 'anthropic/claude-opus-5-5', 'omp', catalog));
-    expect(onChange).toHaveBeenCalledWith('high');
+    const { result } = renderHook(() => useReasoningEffortGuard('xhigh', onChange, 'anthropic/claude-opus-5-5', 'omp', catalog));
+    expect(result.current.currentLevel?.id).toBe('high');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  // The outcomes are the ones `omp --thinking <level>` reports for such models.
+  it.each<[ReasoningEffort[], ReasoningEffort, ReasoningEffort]>([
+    [['low', 'high', 'max'], 'max', 'max'],
+    [['low', 'high', 'max'], 'xhigh', 'high'],
+    [['low', 'high', 'max'], 'medium', 'low'],
+    [['low', 'medium', 'high'], 'max', 'high'],
+    [['medium', 'high'], 'low', 'medium'],
+    [['high', 'max'], 'low', 'high'],
+  ])('a model offering %j runs an effort of %s as %s', (offered, effort, expected) => {
+    const levels = REASONING_LEVELS.filter(level => offered.includes(level.id));
+    expect(resolveOmpReasoningLevel(effort, levels)?.id).toBe(expected);
   });
 });

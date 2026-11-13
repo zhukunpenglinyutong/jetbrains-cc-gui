@@ -1176,6 +1176,12 @@ interface Window {
   /** Buffers backend tab state when Java responds before React callbacks mount. */
   __pendingBackendTabState?: string;
 
+  /** Java's copy of this tab's OMP approval mode, pushed after every page (re)load. */
+  onOmpApprovalModeReceived?: (mode: string) => void;
+
+  /** Buffers the OMP approval mode when Java responds before the provider hook mounts. */
+  __pendingOmpApprovalMode?: string;
+
   // ============================================================================
   // Provider settings panel callbacks (registered by ProviderList)
   // ============================================================================

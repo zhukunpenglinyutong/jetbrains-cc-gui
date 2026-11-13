@@ -1997,7 +1997,7 @@
     "title": "OMP 승인 모드 선택",
     "default": {
       "label": "기본값",
-      "description": "OMP 자체의 tools.approvalMode 설정을 따릅니다"
+      "description": "미설정 시 완전 자동(OMP의 tools.approvalMode)"
     },
     "alwaysAsk": {
       "label": "묻기",

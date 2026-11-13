@@ -265,6 +265,72 @@ test('an approval is shown for the call it prints, not for another running call 
   assert.deepEqual(asked, [{ toolName: 'bash', inputs: { text: 'Command: echo danger' } }]);
 });
 
+test('an approval that prints nothing about its call shows every running call of the tool', async () => {
+  const asked = [];
+  const approval = {
+    type: 'extension_ui_request',
+    id: 'ui-1',
+    method: 'select',
+    title: 'Allow tool: read',
+    options: ['Approve', 'Approve read for this session', 'Deny'],
+  };
+  await runTurn([
+    { respond: null },
+    { emit: { type: 'tool_execution_start', toolCallId: 'r1', toolName: 'read', args: { path: 'a.txt' } } },
+    { emit: approval },
+    // The prompt is about r2: OMP writes it before r2's start event reaches the stream.
+    { delay: 40 },
+    { emit: { type: 'tool_execution_start', toolCallId: 'r2', toolName: 'read', args: { path: 'ssh://host/etc/hostname' } } },
+    { waitFor: 'extension_ui_response' },
+    { emit: DONE },
+  ], {
+    options: {
+      requestPermission: async (toolName, inputs) => {
+        asked.push({ toolName, inputs });
+        return true;
+      },
+    },
+  });
+
+  assert.deepEqual(asked, [{
+    toolName: 'read',
+    inputs: {
+      text: 'OMP did not say which read call it is asking about. Running now:\n'
+        + '1. {"path":"a.txt"}\n'
+        + '2. {"path":"ssh://host/etc/hostname"}',
+    },
+  }]);
+});
+
+test('a bash prompt that reaches the bridge before its own call still gets the command dialog', async () => {
+  const asked = [];
+  await runTurn([
+    { respond: null },
+    {
+      emit: {
+        type: 'extension_ui_request',
+        id: 'ui-1',
+        method: 'select',
+        title: 'Allow tool: bash\nCommand: rm -rf build',
+        options: ['Approve', 'Approve bash for this session', 'Deny'],
+      },
+    },
+    { delay: 40 },
+    { emit: { type: 'tool_execution_start', toolCallId: 't1', toolName: 'bash', args: { command: 'rm -rf build' } } },
+    { waitFor: 'extension_ui_response' },
+    { emit: DONE },
+  ], {
+    options: {
+      requestPermission: async (toolName, inputs) => {
+        asked.push({ toolName, inputs });
+        return true;
+      },
+    },
+  });
+
+  assert.deepEqual(asked, [{ toolName: 'Bash', inputs: { command: 'rm -rf build', cwd: '/work/project' } }]);
+});
+
 test('a local slash command prints its output and ends without a model turn', async () => {
   const { result, events } = await runTurn([
     { emit: { type: 'command_output', text: 'Session: sess-1\nCWD: /work/project' } },

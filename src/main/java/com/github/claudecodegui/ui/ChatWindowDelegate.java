@@ -30,6 +30,7 @@ import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.handler.provider.ProviderHandler;
 import com.github.claudecodegui.handler.provider.claude.ClaudePlanUsageHandler;
 import com.github.claudecodegui.handler.provider.grok.GrokPlanUsageHandler;
+import com.github.claudecodegui.handler.provider.omp.OmpApprovalModeHandler;
 import com.github.claudecodegui.handler.provider.omp.OmpPlanUsageHandler;
 import com.github.claudecodegui.handler.RewindHandler;
 import com.github.claudecodegui.handler.SessionHandler;
@@ -569,6 +570,7 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new ClaudePlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new GrokPlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new OmpPlanUsageHandler(handlerContext));
+        messageDispatcher.registerHandler(new OmpApprovalModeHandler(handlerContext, host::persistTabSessionState));
         messageDispatcher.registerHandler(new CustomModelPricingHandler(handlerContext, settingsService));
         messageDispatcher.registerHandler(new McpServerHandler(handlerContext));
         messageDispatcher.registerHandler(new McpMarketplaceHandler(handlerContext));
@@ -633,7 +635,7 @@ public class ChatWindowDelegate {
                 host.onSurfaceDamageApplied(token, phase, applied);
             }
             @Override public void onRefreshSlashCommands() {
-                host.getSessionLifecycleManager().fetchSlashCommandsOnStartup();
+                host.getSessionLifecycleManager().fetchSlashCommandsOnStartup(true);
             }
         }));
 
@@ -899,6 +901,7 @@ public class ChatWindowDelegate {
             pushCurrentTabStateToFrontend();
         }
         host.getSessionLifecycleManager().sendCurrentPermissionMode();
+        host.getSessionLifecycleManager().sendCurrentOmpApprovalMode();
         // A page (re)load can silently drop the one-shot dialog-show injection,
         // leaving the future blocked until the safety net fires with the dialog
         // never shown. The webview is now ready, so replay whatever is pending.

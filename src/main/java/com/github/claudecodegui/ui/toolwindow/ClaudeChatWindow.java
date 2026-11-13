@@ -1634,6 +1634,7 @@ public class ClaudeChatWindow {
         target.setModel(source.getModel());
         target.setPermissionMode(source.getPermissionMode());
         target.setReasoningEffort(source.getReasoningEffort());
+        target.setOmpApprovalMode(source.getOmpApprovalMode());
     }
 
     public SessionLifecycleManager getSessionLifecycleManager() {
@@ -1675,6 +1676,7 @@ public class ClaudeChatWindow {
         if (savedState.reasoningEffort != null && !savedState.reasoningEffort.trim().isEmpty()) {
             session.setReasoningEffort(savedState.reasoningEffort);
         }
+        session.getState().setOmpApprovalMode(savedState.ompApprovalMode);
 
         boolean sameProject = TabSessionRestorePolicy.matchesProjectIdentity(
                 savedState,
@@ -3236,6 +3238,7 @@ public class ClaudeChatWindow {
         snapshot.model = session.getModel();
         snapshot.permissionMode = session.getPermissionMode();
         snapshot.reasoningEffort = session.getReasoningEffort();
+        snapshot.ompApprovalMode = session.getState().getOmpApprovalMode();
         snapshot.unread = chatWindowDelegate.hasUnread();
 
         TabStateService.getInstance(project).saveTabSessionState(tabIndex, snapshot);

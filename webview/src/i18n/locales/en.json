@@ -2652,7 +2652,7 @@
     "title": "Select OMP approval mode",
     "default": {
       "label": "Default",
-      "description": "Follows OMP's own tools.approvalMode setting"
+      "description": "Full auto unless OMP's tools.approvalMode is set"
     },
     "alwaysAsk": {
       "label": "Ask",

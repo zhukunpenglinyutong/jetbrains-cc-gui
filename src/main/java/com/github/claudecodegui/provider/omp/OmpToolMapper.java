@@ -1,5 +1,6 @@
 package com.github.claudecodegui.provider.omp;
 
+import com.github.claudecodegui.util.WslPathUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -335,27 +336,34 @@ final class OmpToolMapper {
         return (DRIVE_PREFIX.matcher(path).find() ? path.substring(2) : path).indexOf(':') < 0;
     }
 
-    /** {@code abs(p)}: absolute paths stay, {@code ~} expands to home, anything else resolves against cwd. */
+    /**
+     * {@code abs(p)}: absolute paths stay, {@code ~} expands to home, anything else resolves against cwd.
+     * A POSIX base (omp running in WSL or on Linux/macOS) is joined with POSIX rules on every host OS;
+     * other bases use the host's rules. {@code ~} without a usable home stays as written.
+     */
     static String absolute(String path, String cwd, String home) {
         if (path.startsWith("/") || path.startsWith("\\") || WINDOWS_ABSOLUTE.matcher(path).matches()) {
             return path;
         }
+        boolean homeRelative = "~".equals(path) || path.startsWith("~/") || path.startsWith("~\\");
+        String base = homeRelative ? home : cwd;
+        if (base == null || base.isEmpty()) {
+            return path;
+        }
+        if ("~".equals(path)) {
+            return home;
+        }
+        String relative = homeRelative ? path.substring(2) : path;
+        if (base.startsWith("/")) {
+            String folded = WslPathUtil.foldPosix(base + "/" + relative);
+            return folded != null ? folded : path;
+        }
         try {
-            if (home != null && !home.isEmpty()) {
-                if ("~".equals(path)) {
-                    return home;
-                }
-                if (path.startsWith("~/") || path.startsWith("~\\")) {
-                    return Paths.get(home).resolve(path.substring(2)).normalize().toString();
-                }
-            }
-            if (cwd != null && !cwd.isEmpty()) {
-                return Paths.get(cwd).resolve(path).normalize().toString();
-            }
+            return Paths.get(base).resolve(relative).normalize().toString();
         } catch (RuntimeException ignored) {
             // Unparsable path text: keep it as written rather than dropping the call.
+            return path;
         }
-        return path;
     }
 
     private static JsonObject toolUse(String id, String name, JsonObject input) {

@@ -2055,7 +2055,7 @@
     "title": "Selecionar o modo de aprovação do OMP",
     "default": {
       "label": "Padrão",
-      "description": "Segue a configuração tools.approvalMode do próprio OMP"
+      "description": "Automático total sem tools.approvalMode no OMP"
     },
     "alwaysAsk": {
       "label": "Perguntar",

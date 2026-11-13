@@ -1916,7 +1916,7 @@
     "title": "OMP の承認モードを選択",
     "default": {
       "label": "デフォルト",
-      "description": "OMP 自身の tools.approvalMode 設定に従います"
+      "description": "未設定ならフルオート（OMP の tools.approvalMode）"
     },
     "alwaysAsk": {
       "label": "確認する",

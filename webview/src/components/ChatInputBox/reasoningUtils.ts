@@ -86,9 +86,10 @@ export function getAvailableReasoningLevels(
     if (currentProvider === 'codex') {
       return level.id !== 'max' || (selectedModel !== undefined && codexModelSupportsMaxEffort(selectedModel));
     }
-    if (currentProvider === 'omp') {
-      return ompLevelIds ? ompLevelIds.has(level.id) : true;
+    if (currentProvider === 'omp' && ompLevelIds) {
+      return ompLevelIds.has(level.id);
     }
+    // An omp model the catalog does not describe gets what the other CLI providers get.
     if (currentProvider !== 'claude') {
       return level.id !== 'max';
     }
@@ -118,6 +119,23 @@ export function resolveCurrentReasoningLevel(
     || availableLevels[0];
 }
 
+/**
+ * The level omp runs with for a stored effort: the effort itself when the model
+ * offers it, else the next lower level the model has, else its lowest one.
+ * `omp --thinking` resolves a level the same way, so the stored effort is sent
+ * unchanged and this is what the user gets.
+ */
+export function resolveOmpReasoningLevel(
+  value: ReasoningEffort,
+  availableLevels: ReasoningInfo[],
+): ReasoningInfo | undefined {
+  const valueRank = REASONING_LEVELS.findIndex((level) => level.id === value);
+  const atOrBelow = availableLevels.filter(
+    (candidate) => REASONING_LEVELS.findIndex((level) => level.id === candidate.id) <= valueRank,
+  );
+  return atOrBelow[atOrBelow.length - 1] ?? availableLevels[0];
+}
+
 export function useReasoningEffortGuard(
   value: ReasoningEffort,
   onChange: (effort: ReasoningEffort) => void,
@@ -133,16 +151,23 @@ export function useReasoningEffortGuard(
   // Mapping changes can keep the same Sonnet/Opus alias. Re-evaluate on every
   // render so switching cc-switch modes does not retain an old filtered list.
   const availableLevels = getAvailableReasoningLevels(currentProvider, selectedModel, ompCatalog);
-  const currentLevel = resolveCurrentReasoningLevel(value, availableLevels);
+  // The effort is one value shared by every provider. omp's levels differ per
+  // model and omp resolves a missing one itself, so its selector shows the
+  // outcome and leaves the stored effort alone: rewriting it would also change
+  // the level of whatever provider the user switches to next.
+  const isOmp = currentProvider === 'omp';
+  const currentLevel = isOmp
+    ? resolveOmpReasoningLevel(value, availableLevels)
+    : resolveCurrentReasoningLevel(value, availableLevels);
 
   useEffect(() => {
-    if (!isVisible || availableLevels.some((level) => level.id === value)) {
+    if (isOmp || !isVisible || availableLevels.some((level) => level.id === value)) {
       return;
     }
     if (currentLevel) {
       onChange(currentLevel.id);
     }
-  }, [availableLevels, currentLevel, isVisible, onChange, value]);
+  }, [availableLevels, currentLevel, isOmp, isVisible, onChange, value]);
 
   return { isVisible, availableLevels, currentLevel };
 }

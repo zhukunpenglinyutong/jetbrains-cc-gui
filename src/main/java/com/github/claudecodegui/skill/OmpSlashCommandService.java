@@ -22,9 +22,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.LongSupplier;
 
 /**
  * Slash command catalog of the OMP CLI, fetched through the bridge
@@ -32,8 +35,11 @@ import java.util.function.Consumer;
  *
  * <p>OMP does not understand Claude's built-ins, so the {@code /} list for provider
  * {@code omp} comes only from here. {@link #getCached(String)} never blocks; a
- * directory that was never fetched, or whose last fetch failed, has an empty list.
- * Fetching spawns {@code omp} and must stay off the EDT: use {@link #refresh(String)}.
+ * directory that was never fetched successfully has an empty list, and a failed fetch
+ * keeps the last good one. Fetching spawns {@code omp} and must stay off the EDT: use
+ * {@link #refresh(String)}. After a failed fetch, automatic refreshes of that directory
+ * are skipped until a backoff passes, so a missing or broken {@code omp} is not spawned
+ * again by every message.
  */
 public final class OmpSlashCommandService {
 
@@ -43,10 +49,16 @@ public final class OmpSlashCommandService {
     private static final String CHANNEL_SCRIPT = "channel-manager.js";
     // The bridge allows ~20s for omp to become ready plus ~20s for the response.
     private static final long TIMEOUT_SECONDS = 50L;
+    // Wait after the 1st, 2nd and later consecutive failures of one directory.
+    static final long[] BACKOFF_MS = {20_000L, 60_000L, 300_000L};
     private static final int MAX_OUTPUT_CHARS = 256_000;
     private static final Gson GSON = new Gson();
 
+    private record Backoff(int failures, long retryAtMs) {
+    }
+
     private static final Map<String, List<SlashCommandRegistry.SlashCommand>> CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, Backoff> BACKOFF = new ConcurrentHashMap<>();
     private static final Map<String, CompletableFuture<List<SlashCommandRegistry.SlashCommand>>> IN_FLIGHT =
             new ConcurrentHashMap<>();
 
@@ -73,25 +85,65 @@ public final class OmpSlashCommandService {
     }
 
     /**
-     * Fetches the catalog on a pooled thread and stores it. Concurrent calls for one
-     * directory share a single fetch. The future always completes normally: a failed
-     * fetch evicts the directory's cache entry and yields an empty list.
+     * Automatic refresh (provider switch, session start, directory change): skipped while
+     * the directory is backing off after a failed fetch.
      */
     public static CompletableFuture<List<SlashCommandRegistry.SlashCommand>> refresh(String cwd) {
+        return refresh(cwd, false);
+    }
+
+    /**
+     * Fetches the catalog on a pooled thread and stores it. Concurrent calls for one
+     * directory share a single fetch. The future always completes normally with the list
+     * to show: the fetched one, or on failure the last good one (empty if there never was
+     * one). A skipped refresh completes at once with that same list. A refresh the user
+     * asked for ignores the backoff.
+     */
+    public static CompletableFuture<List<SlashCommandRegistry.SlashCommand>> refresh(
+            String cwd, boolean userRequested) {
+        return refresh(cwd, userRequested, OmpSlashCommandService::runBridge,
+                System::currentTimeMillis, AppExecutorUtil.getAppExecutorService());
+    }
+
+    static CompletableFuture<List<SlashCommandRegistry.SlashCommand>> refresh(
+            String cwd,
+            boolean userRequested,
+            Function<String, Optional<List<SlashCommandRegistry.SlashCommand>>> runner,
+            LongSupplier clock,
+            Executor executor
+    ) {
         String key = cacheKey(cwd);
+        Backoff backoff = BACKOFF.get(key);
+        if (!userRequested && backoff != null && clock.getAsLong() < backoff.retryAtMs()) {
+            return CompletableFuture.completedFuture(getCached(key));
+        }
         CompletableFuture<List<SlashCommandRegistry.SlashCommand>> created = new CompletableFuture<>();
         CompletableFuture<List<SlashCommandRegistry.SlashCommand>> existing = IN_FLIGHT.putIfAbsent(key, created);
         if (existing != null) {
             return existing;
         }
-        AppExecutorUtil.getAppExecutorService().execute(() -> {
-            List<SlashCommandRegistry.SlashCommand> result;
+        executor.execute(() -> {
+            List<SlashCommandRegistry.SlashCommand> result = null;
             try {
-                result = fetchAndStore(key);
+                Optional<List<SlashCommandRegistry.SlashCommand>> fetched = runner.apply(key);
+                if (fetched.isPresent()) {
+                    result = List.copyOf(fetched.get());
+                    CACHE.put(key, result);
+                    BACKOFF.remove(key);
+                    LOG.info("[OmpSlashCommands] " + result.size() + " commands for cwd=" + key);
+                }
             } catch (Throwable t) {
                 LOG.warn("[OmpSlashCommands] Unexpected failure for cwd=" + key + ": " + t.getMessage(), t);
-                CACHE.remove(key);
-                result = List.of();
+            }
+            if (result == null) {
+                // The wait is counted from the end of the failed run, which may have
+                // spent the whole timeout.
+                BACKOFF.compute(key, (k, previous) -> {
+                    int failures = previous == null ? 1 : previous.failures() + 1;
+                    long waitMs = BACKOFF_MS[Math.min(failures, BACKOFF_MS.length) - 1];
+                    return new Backoff(failures, clock.getAsLong() + waitMs);
+                });
+                result = getCached(key);
             }
             IN_FLIGHT.remove(key, created);
             created.complete(result);
@@ -100,12 +152,18 @@ public final class OmpSlashCommandService {
     }
 
     /**
-     * Refreshes the directory and hands the resulting command list, serialized for the
-     * webview, to {@code push} unless {@code stillCurrent} reports that the provider or
-     * directory moved on while omp was starting.
+     * Refreshes the directory automatically and hands the resulting command list,
+     * serialized for the webview, to {@code push} unless {@code stillCurrent} reports
+     * that the provider or directory moved on while omp was starting.
      */
     public static void refreshAndPush(String cwd, BooleanSupplier stillCurrent, Consumer<String> push) {
-        refresh(cwd).thenAccept(commands -> {
+        refreshAndPush(cwd, false, stillCurrent, push);
+    }
+
+    /** As {@link #refreshAndPush(String, BooleanSupplier, Consumer)}; {@code userRequested} ignores the backoff. */
+    public static void refreshAndPush(
+            String cwd, boolean userRequested, BooleanSupplier stillCurrent, Consumer<String> push) {
+        refresh(cwd, userRequested).thenAccept(commands -> {
             if (stillCurrent.getAsBoolean()) {
                 push.accept(SlashCommandRegistry.toJson(commands));
             }
@@ -117,23 +175,12 @@ public final class OmpSlashCommandService {
 
     static void clearCache() {
         CACHE.clear();
+        BACKOFF.clear();
         IN_FLIGHT.clear();
     }
 
     static void putCached(String cwd, List<SlashCommandRegistry.SlashCommand> commands) {
         CACHE.put(cacheKey(cwd), List.copyOf(commands));
-    }
-
-    private static List<SlashCommandRegistry.SlashCommand> fetchAndStore(String key) {
-        Optional<List<SlashCommandRegistry.SlashCommand>> fetched = runBridge(key);
-        if (fetched.isEmpty()) {
-            CACHE.remove(key);
-            return List.of();
-        }
-        List<SlashCommandRegistry.SlashCommand> commands = List.copyOf(fetched.get());
-        CACHE.put(key, commands);
-        LOG.info("[OmpSlashCommands] " + commands.size() + " commands for cwd=" + key);
-        return commands;
     }
 
     private static Optional<List<SlashCommandRegistry.SlashCommand>> runBridge(String cwd) {

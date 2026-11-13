@@ -64,6 +64,10 @@ export function parseOmpModelsJson(stdout) {
       ? entry.thinking.filter((level) => typeof level === 'string' && level)
       : [];
     if (efforts.length > 0) model.supportedReasoningEfforts = efforts;
+    // Session files do not record the window, so restored sessions look it up from this list.
+    if (typeof entry.contextWindow === 'number' && Number.isFinite(entry.contextWindow) && entry.contextWindow > 0) {
+      model.contextWindow = entry.contextWindow;
+    }
     models.push(model);
   }
   return models;

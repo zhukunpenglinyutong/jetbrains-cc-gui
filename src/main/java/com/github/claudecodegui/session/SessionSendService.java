@@ -218,7 +218,7 @@ public class SessionSendService {
     ) {
         return sendMessageToProvider(channelId, input, attachments, openedFilesJson, externalAgentPrompt, fileTagPaths,
                 requestedPermissionMode, requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
-                clientMessageId, nativeCodexSettings, state.getTurnOwner());
+                null, clientMessageId, nativeCodexSettings, state.getTurnOwner());
     }
 
     public CompletableFuture<Void> sendMessageToProvider(
@@ -228,14 +228,19 @@ public class SessionSendService {
     ) {
         return sendMessageToProvider(channelId, input, attachments, openedFilesJson, externalAgentPrompt, fileTagPaths,
                 requestedPermissionMode, requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
-                null, null, expectedTurnOwner);
+                null, null, null, expectedTurnOwner);
     }
 
+    /**
+     * @param requestedOmpApprovalMode OMP approval mode this message was sent with
+     *                                 ("" = OMP's own setting), or null when the sender states none
+     */
     public CompletableFuture<Void> sendMessageToProvider(
             String channelId, String input, List<ClaudeSession.Attachment> attachments, JsonObject openedFilesJson,
             String externalAgentPrompt, List<String> fileTagPaths, String requestedPermissionMode,
             String requestedReasoningEffort, String requestedCodexFastMode, String requestedDshPreset,
-            String clientMessageId, JsonObject nativeCodexSettings, Object expectedTurnOwner
+            String requestedOmpApprovalMode, String clientMessageId, JsonObject nativeCodexSettings,
+            Object expectedTurnOwner
     ) {
         if (!state.isCurrentTurn(expectedTurnOwner)) {
             return CompletableFuture.completedFuture(null);
@@ -318,6 +323,9 @@ public class SessionSendService {
             if ("dsh".equals(currentProvider) && requestedDshPreset != null) {
                 state.setDshPreset(requestedDshPreset);
             }
+            if ("omp".equals(currentProvider) && requestedOmpApprovalMode != null) {
+                state.setOmpApprovalMode(requestedOmpApprovalMode);
+            }
             return sendToCliProvider(
                     currentProvider,
                     channelId,
@@ -328,6 +336,7 @@ public class SessionSendService {
                     fileTagPaths,
                     normalizedRequestedEffort,
                     effectivePermissionMode,
+                    requestedOmpApprovalMode,
                     expectedTurnOwner
             );
         }
@@ -629,6 +638,7 @@ public class SessionSendService {
             List<String> fileTagPaths,
             String requestedReasoningEffort,
             String permissionMode,
+            String requestedOmpApprovalMode,
             Object expectedTurnOwner
     ) {
         MarkerCliBridge bridge = cliBridges.get(provider);
@@ -659,6 +669,11 @@ public class SessionSendService {
                 ? permissionMode
                 : "default";
         Boolean thinking = readThinkingEnabled();
+        // The mode travels with its message, so a later send cannot change it while this
+        // one is still starting. A send that states none (Quick Fix) uses the tab's choice.
+        String ompApprovalMode = requestedOmpApprovalMode != null
+                ? SessionState.normalizeOmpApprovalMode(requestedOmpApprovalMode)
+                : state.getOmpApprovalMode();
         int attachmentCount = attachments != null ? attachments.size() : 0;
 
         LOG.info("[Lifecycle] sendToCli provider=" + provider
@@ -681,7 +696,7 @@ public class SessionSendService {
                 attachments,
                 effectiveMode,
                 "dsh".equals(provider) ? state.getDshPreset() : null,
-                "omp".equals(provider) ? state.getOmpApprovalMode() : null,
+                "omp".equals(provider) ? ompApprovalMode : null,
                 thinking,
                 handler
         ));

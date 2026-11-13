@@ -1912,7 +1912,7 @@
     "title": "OMP अनुमोदन मोड चुनें",
     "default": {
       "label": "डिफ़ॉल्ट",
-      "description": "OMP की अपनी tools.approvalMode सेटिंग का पालन करता है"
+      "description": "पूर्ण स्वचालित, जब तक tools.approvalMode सेट न हो"
     },
     "alwaysAsk": {
       "label": "पूछें",

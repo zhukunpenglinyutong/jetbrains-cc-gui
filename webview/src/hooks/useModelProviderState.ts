@@ -4,10 +4,9 @@ import { sendBridgeEvent } from '../utils/bridge';
 import {
   apply1MContextSuffix,
   isValidDshPreset,
-  isValidOmpApprovalMode,
   isValidPermissionMode,
 } from '../components/ChatInputBox/types';
-import type { OmpApprovalMode, PermissionMode } from '../components/ChatInputBox/types';
+import type { PermissionMode } from '../components/ChatInputBox/types';
 import { isSpecialProviderId } from '../types/provider';
 import { useClaudeProvider } from './providers/useClaudeProvider';
 import { useCodexProvider } from './providers/useCodexProvider';
@@ -192,7 +191,6 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   const {
     selectedOmpModel, setSelectedOmpModel,
     ompPermissionMode, setOmpPermissionMode,
-    setOmpApprovalMode,
   } = omp;
   const {
     selectedDshModel, setSelectedDshModel,
@@ -495,12 +493,6 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     }
   }, [currentProvider, setDshPreset]);
 
-  // No bridge event: the mode travels in each send payload.
-  const handleOmpApprovalModeChange = useCallback((mode: OmpApprovalMode) => {
-    if (!isValidOmpApprovalMode(mode)) return;
-    setOmpApprovalMode(mode);
-  }, [setOmpApprovalMode]);
-
   const handleToggleThinking = useCallback((enabled: boolean) => {
     const config = settings.activeProviderConfig;
     const isSpecialProvider = isSpecialProviderId(config?.id || '');
@@ -556,7 +548,6 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     handleModelSelect,
     handleProviderSelect,
     handleDshPresetChange,
-    handleOmpApprovalModeChange,
     handleLongContextChange,
     handleToggleThinking,
   };

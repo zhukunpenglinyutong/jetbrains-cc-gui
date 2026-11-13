@@ -2656,7 +2656,7 @@
     "title": "选择 OMP 审批模式",
     "default": {
       "label": "默认",
-      "description": "沿用 OMP 自身的 tools.approvalMode 设置"
+      "description": "未设置时完全自动（OMP 的 tools.approvalMode）"
     },
     "alwaysAsk": {
       "label": "询问",

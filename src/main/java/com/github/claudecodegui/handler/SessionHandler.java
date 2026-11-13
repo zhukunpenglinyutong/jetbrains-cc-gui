@@ -149,6 +149,7 @@ public class SessionHandler extends BaseMessageHandler {
         String requestedReasoningEffort = null;
         String requestedCodexFastMode = null;
         String requestedDshPreset = null;
+        String requestedOmpApprovalMode = null;
         String clientMessageId = null;
         JsonObject nativeCodexSettings = null;
         try {
@@ -199,7 +200,7 @@ public class SessionHandler extends BaseMessageHandler {
                 requestedCodexFastMode = payload.get("codexFastMode").getAsString();
             }
             requestedDshPreset = extractDshPreset(payload);
-            applyOmpApprovalMode(payload);
+            requestedOmpApprovalMode = extractOmpApprovalMode(payload);
             nativeCodexSettings = extractNativeCodexSettings(payload);
             if (payload != null && payload.has("clientMessageId")
                     && !payload.get("clientMessageId").isJsonNull()) {
@@ -218,6 +219,7 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalRequestedReasoningEffort = requestedReasoningEffort;
         final String finalRequestedCodexFastMode = requestedCodexFastMode;
         final String finalRequestedDshPreset = requestedDshPreset;
+        final String finalRequestedOmpApprovalMode = requestedOmpApprovalMode;
         final String finalClientMessageId = clientMessageId;
         final JsonObject finalNativeCodexSettings = nativeCodexSettings;
 
@@ -242,7 +244,8 @@ public class SessionHandler extends BaseMessageHandler {
             // [FIX] Pass agent prompt and file tags directly to session
             context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths,
                             finalRequestedPermissionMode, finalRequestedReasoningEffort,
-                            finalRequestedCodexFastMode, finalRequestedDshPreset, finalClientMessageId,
+                            finalRequestedCodexFastMode, finalRequestedDshPreset,
+                            finalRequestedOmpApprovalMode, finalClientMessageId,
                             finalNativeCodexSettings)
                 .thenRun(() -> {
                     // Claude now triggers success on actual stream_end callback.
@@ -306,6 +309,7 @@ public class SessionHandler extends BaseMessageHandler {
             String requestedReasoningEffort = null;
             String requestedCodexFastMode = null;
             String requestedDshPreset = null;
+            String requestedOmpApprovalMode = null;
             String clientMessageId = null;
             JsonObject nativeCodexSettings = null;
             if (payload != null && payload.has("agent") && !payload.get("agent").isJsonNull()) {
@@ -348,7 +352,7 @@ public class SessionHandler extends BaseMessageHandler {
                 requestedCodexFastMode = payload.get("codexFastMode").getAsString();
             }
             requestedDshPreset = extractDshPreset(payload);
-            applyOmpApprovalMode(payload);
+            requestedOmpApprovalMode = extractOmpApprovalMode(payload);
             nativeCodexSettings = extractNativeCodexSettings(payload);
             if (payload != null && payload.has("clientMessageId")
                     && !payload.get("clientMessageId").isJsonNull()) {
@@ -356,8 +360,8 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             sendMessageWithAttachments(text, atts, agentPrompt, fileTagPaths, requestedPermissionMode,
-                    requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset, clientMessageId,
-                    nativeCodexSettings);
+                    requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
+                    requestedOmpApprovalMode, clientMessageId, nativeCodexSettings);
         } catch (Exception e) {
             LOG.error("[SessionHandler] 解析附件负载失败: " + e.getMessage(), e);
             handleSendMessage(content);
@@ -377,6 +381,7 @@ public class SessionHandler extends BaseMessageHandler {
         String requestedReasoningEffort,
         String requestedCodexFastMode,
         String requestedDshPreset,
+        String requestedOmpApprovalMode,
         String clientMessageId,
         JsonObject nativeCodexSettings
     ) {
@@ -412,7 +417,8 @@ public class SessionHandler extends BaseMessageHandler {
             // [FIX] Pass agent prompt and file tags directly to session
             context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths,
                             finalRequestedPermissionMode, finalRequestedReasoningEffort,
-                            finalRequestedCodexFastMode, finalRequestedDshPreset, finalClientMessageId,
+                            finalRequestedCodexFastMode, finalRequestedDshPreset,
+                            requestedOmpApprovalMode, finalClientMessageId,
                             finalNativeCodexSettings)
                 .thenRun(() -> {
                     // Claude now triggers success on actual stream_end callback.
@@ -553,17 +559,14 @@ public class SessionHandler extends BaseMessageHandler {
     }
 
     /**
-     * The webview states the OMP approval mode on every send, so a payload
-     * without one resets the session to "follow OMP's own setting".
+     * The OMP approval mode this message was sent with ("" = OMP's own setting),
+     * or null when the payload states none.
      */
-    private void applyOmpApprovalMode(JsonObject payload) {
-        if (context.getSession() == null) {
-            return;
+    private String extractOmpApprovalMode(JsonObject payload) {
+        if (payload == null || !payload.has("ompApprovalMode") || payload.get("ompApprovalMode").isJsonNull()) {
+            return null;
         }
-        String mode = payload != null && payload.has("ompApprovalMode") && !payload.get("ompApprovalMode").isJsonNull()
-                ? payload.get("ompApprovalMode").getAsString()
-                : null;
-        context.getSession().getState().setOmpApprovalMode(mode);
+        return SessionState.normalizeOmpApprovalMode(payload.get("ompApprovalMode").getAsString());
     }
 
     private JsonObject extractNativeCodexSettings(JsonObject payload) {

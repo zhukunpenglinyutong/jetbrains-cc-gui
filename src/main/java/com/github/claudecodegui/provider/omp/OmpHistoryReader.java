@@ -4,6 +4,7 @@ import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.provider.common.HistoryPathMatcher;
 import com.github.claudecodegui.provider.common.HistoryCancellation;
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.WslPathUtil;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -479,15 +480,24 @@ public class OmpHistoryReader {
         return messages;
     }
 
-    /** Tool-call/result pairing state for one session read. */
+    /**
+     * Tool-call/result pairing state for one session read. A call id can be reused (providers that
+     * number calls per response), so results are slotted per call, in file order, not per id.
+     */
     private static final class ToolContext {
-        final Map<String, OmpToolMapper.ToolResult> results = new HashMap<>();
+        /** Per call id: one slot per call carrying it, holding that call's own result or null. */
+        final Map<String, List<OmpToolMapper.ToolResult>> results = new HashMap<>();
+        /** Second pass: how many calls with each id were already emitted. */
+        final Map<String, Integer> callsSeen = new HashMap<>();
         final Map<String, OmpToolMapper.Mapped> pending = new HashMap<>();
         String cwd;
-        final String home = PlatformUtils.getHomeDirectory();
+        String home;
     }
 
-    /** First pass: index tool results by call id so each call can be mapped with its result. */
+    /**
+     * First pass: give each tool call a slot and put every result into the slot of the latest call
+     * with its id that precedes it, so each call can be mapped with its own result.
+     */
     private ToolContext collectToolContext(Path file, BooleanSupplier cancellation) throws IOException {
         ToolContext ctx = new ToolContext();
         try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
@@ -498,8 +508,8 @@ public class OmpHistoryReader {
                 if (line.isEmpty()) {
                     continue;
                 }
-                // Only the session header and tool results matter in this pass; skip parsing the rest.
-                if (!line.contains("toolResult") && !line.contains("\"session\"")) {
+                // Only the session header, tool calls and tool results matter in this pass; skip parsing the rest.
+                if (!line.contains("toolResult") && !line.contains("toolCall") && !line.contains("\"session\"")) {
                     continue;
                 }
                 JsonObject obj;
@@ -517,14 +527,35 @@ public class OmpHistoryReader {
                     continue;
                 }
                 JsonObject message = obj.getAsJsonObject("message");
-                if (!"toolResult".equals(text(message, "role"))) {
-                    continue;
-                }
-                String callId = text(message, "toolCallId");
-                if (callId != null && !callId.isBlank()) {
-                    ctx.results.putIfAbsent(callId, toToolResult(message));
+                String role = text(message, "role");
+                if ("assistant".equals(role) && message.get("content") != null && message.get("content").isJsonArray()) {
+                    for (JsonElement el : message.getAsJsonArray("content")) {
+                        if (el.isJsonObject() && "toolCall".equals(text(el.getAsJsonObject(), "type"))) {
+                            String toolId = text(el.getAsJsonObject(), "id");
+                            if (toolId != null && !toolId.isBlank()) {
+                                ctx.results.computeIfAbsent(toolId, k -> new ArrayList<>()).add(null);
+                            }
+                        }
+                    }
+                } else if ("toolResult".equals(role)) {
+                    String callId = text(message, "toolCallId");
+                    List<OmpToolMapper.ToolResult> slots = callId == null ? null : ctx.results.get(callId);
+                    // First result wins for its call; a result with no preceding call has no slot.
+                    if (slots != null && !slots.isEmpty() && slots.get(slots.size() - 1) == null) {
+                        slots.set(slots.size() - 1, toToolResult(message));
+                    }
                 }
             }
+        }
+        if (ctx.cwd != null && ctx.cwd.startsWith("/") && PlatformUtils.isWindows()) {
+            // omp runs in WSL: `~` is the home of the WSL user whose sessions are being read, not the
+            // Windows one. Without a WSL home `~` stays as written.
+            String fileOpsHome = NodeDetector.resolveHomeForFileOps();
+            ctx.home = WslPathUtil.uncDistroName(fileOpsHome) != null
+                    ? WslPathUtil.convertToWslPath(fileOpsHome)
+                    : null;
+        } else {
+            ctx.home = PlatformUtils.getHomeDirectory();
         }
         return ctx;
     }
@@ -586,7 +617,8 @@ public class OmpHistoryReader {
                     textBuf.setLength(0);
                 }
                 String toolId = text(block, "id");
-                if (toolId == null || toolId.isBlank()) {
+                boolean hasRecordedId = toolId != null && !toolId.isBlank();
+                if (!hasRecordedId) {
                     toolId = "omp-tool-" + (++n);
                 }
                 String name = text(block, "name");
@@ -604,8 +636,15 @@ public class OmpHistoryReader {
                     input.remove("i");
                 }
                 // The result is known up front (first pass), so the call can be mapped before it is emitted.
+                // A reused id means the n-th call with it gets the n-th slot: its own result, or none.
+                OmpToolMapper.ToolResult callResult = null;
+                if (hasRecordedId) {
+                    int occurrence = ctx.callsSeen.merge(toolId, 1, Integer::sum) - 1;
+                    List<OmpToolMapper.ToolResult> slots = ctx.results.get(toolId);
+                    callResult = slots != null && occurrence < slots.size() ? slots.get(occurrence) : null;
+                }
                 OmpToolMapper.Mapped mapped = OmpToolMapper.map(
-                        toolId, name, input, ctx.results.get(toolId), ctx.cwd, ctx.home);
+                        toolId, name, input, callResult, ctx.cwd, ctx.home);
                 ctx.pending.put(toolId, mapped);
                 for (JsonObject use : mapped.toolUses) {
                     out.add(buildToolUseMessage(

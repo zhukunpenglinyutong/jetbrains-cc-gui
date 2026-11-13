@@ -1,6 +1,15 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.github.claudecodegui.provider.common.MessageCallback;
+import com.github.claudecodegui.provider.common.SDKResult;
+import com.google.gson.Gson;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -190,6 +199,49 @@ public class SessionSendServiceTest {
             state.setOmpApprovalMode(mode);
             assertEquals("", state.getOmpApprovalMode());
         }
+    }
+
+    @Test
+    public void ompApprovalModeTravelsWithItsMessageAndOtherwiseFollowsTheTab() {
+        SessionState state = new SessionState();
+        state.setProvider("omp");
+        state.setOmpApprovalMode("always-ask");
+        List<String> sentModes = new ArrayList<>();
+        MarkerCliBridge omp = new MarkerCliBridge(SessionSendServiceTest.class) {
+            @Override
+            protected String getProviderName() {
+                return "omp";
+            }
+
+            @Override
+            protected String getStdinEnvKey() {
+                return "OMP_USE_STDIN";
+            }
+
+            @Override
+            public CompletableFuture<SDKResult> sendMessage(String channelId, String message, String sessionId,
+                    String cwd, String model, String reasoningEffort, List<ClaudeSession.Attachment> attachments,
+                    String permissionMode, String dshPreset, String ompApprovalMode, Boolean thinking,
+                    MessageCallback callback) {
+                sentModes.add(ompApprovalMode);
+                return CompletableFuture.completedFuture(SDKResult.success("ok"));
+            }
+        };
+        SessionSendService sender = new SessionSendService(null, state, new SessionCallbackFacade(null),
+                new MessageParser(), new MessageMerger(), new Gson(), null, null,
+                Map.of("omp", omp), new SessionContextService(null), null, null);
+
+        // Quick Fix states no mode: the tab's choice applies, not OMP's own (usually full auto) setting.
+        sender.sendMessageToProvider("ch", "fix this", null, null, "", null, null, null, null, null,
+                null, null, null, state.beginTurn()).join();
+        // A message carries its own mode, whatever the tab held when the send started.
+        sender.sendMessageToProvider("ch", "go", null, null, "", null, null, null, null, null,
+                "yolo", null, null, state.beginTurn()).join();
+        // "" is the webview's Default: no flag, even though the previous message ran in full auto.
+        sender.sendMessageToProvider("ch", "again", null, null, "", null, null, null, null, null,
+                "", null, null, state.beginTurn()).join();
+
+        assertEquals(List.of("always-ask", "yolo", ""), sentModes);
     }
 
     @Test

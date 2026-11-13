@@ -18,10 +18,16 @@ const APPROVAL_TITLE_PREFIX = 'Allow tool: ';
 // The `ask` tool appends this row to choice questions and follows it with an `input` request.
 const OTHER_OPTION_LABEL = 'Other (type your own)';
 // A checkbox round: the title leads with the number of answers once there is
-// one, and the last row (`<success symbol> Done selecting`) ends the question.
+// one, and a row (`<success symbol> Done selecting`) ends the question.
 const SELECTED_COUNT_PREFIX = /^\((\d+) selected\) /;
 const DONE_OPTION = /(?:^|\s)Done selecting(?: \(\d+\))?$/;
 const ELIDED_TAIL = /\[…(\d+)ch elided…\]$/;
+// Title lines OMP adds on its own, ahead of what the tool prints about the call.
+const APPROVAL_HEADER_LINE = /^(?:Origin|Reason): /;
+// A prompt can reach the bridge just before the start event of its own call
+// (OMP writes the prompt directly and the event through its event stream).
+const CALL_START_GRACE_MS = 300;
+const PRINTED_ARGS_LIMIT = 2000;
 const CONFIRM_YES = 'Yes';
 const CONFIRM_NO = 'No';
 
@@ -67,28 +73,31 @@ function showsValue(shown, actual) {
 /**
  * Whether a running call is the one an approval prompt prints. The prompt
  * carries no call id, only the tool's detail lines: the command of a `bash`
- * call, the path and content of a `write`. Other tools print nothing to compare.
+ * call, the path and content of a `write`. No other tool prints its call in a
+ * form that can be compared, so their calls are never recognized.
  *
  * @param {{ toolName: string, details: string }} approval
  * @param {unknown} args the call's arguments
  */
 export function approvalDescribesCall({ toolName, details }, args) {
-  if (toolName !== 'bash' && toolName !== 'write') return true;
   if (!args || typeof args !== 'object') return false;
   if (toolName === 'bash') {
     const shown = /(?:^|\n)Command: ([\s\S]*)$/.exec(details)?.[1];
     return typeof args.command === 'string' && shown !== undefined && showsValue(shown, args.command);
   }
-  const shown = /(?:^|\n)Path: ([^\n]*)\nContent:(?:\n([\s\S]*))?$/.exec(details);
-  return typeof args.path === 'string' && typeof args.content === 'string' && shown !== null
-    && showsValue(shown[1], args.path) && showsValue(shown[2] ?? '', args.content);
+  if (toolName === 'write') {
+    const shown = /(?:^|\n)Path: ([^\n]*)\nContent:(?:\n([\s\S]*))?$/.exec(details);
+    return typeof args.path === 'string' && typeof args.content === 'string' && shown !== null
+      && showsValue(shown[1], args.path) && showsValue(shown[2] ?? '', args.content);
+  }
+  return false;
 }
 
 /**
- * What the permission dialog shows for an OMP tool. `Bash` and `Write` take the
- * shapes the plugin already knows (command preview, IDE diff review) once the
- * running call the prompt is about is known; everything else shows OMP's own
- * description of the call.
+ * What the permission dialog shows for a prompt that prints its call. `Bash`
+ * and `Write` take the shapes the plugin already knows (command preview, IDE
+ * diff review) once the running call the prompt is about is known; everything
+ * else shows OMP's own description of the call.
  */
 export function buildPermissionRequest({ toolName, details }, call, { cwd, home } = {}) {
   const args = call?.args && typeof call.args === 'object' ? call.args : {};
@@ -101,16 +110,41 @@ export function buildPermissionRequest({ toolName, details }, call, { cwd, home 
       inputs: { file_path: absolutePath(args.path, cwd, home), content: args.content },
     };
   }
-  if (details) return { toolName, inputs: { text: details } };
-  return { toolName, inputs: args };
+  return { toolName, inputs: { text: details } };
+}
+
+/**
+ * The text for a prompt that prints nothing about its call (tools without an
+ * approval formatter). Nothing ties such a prompt to one call, so the dialog
+ * names every call of the tool that is running instead of guessing which.
+ *
+ * @param {{ toolName: string, details: string }} approval
+ * @param {{ args?: unknown }[]} calls the running calls of that tool
+ */
+export function describeUnidentifiedCall({ toolName, details }, calls) {
+  const lines = details ? [details, ''] : [];
+  if (calls.length === 0) {
+    lines.push(`OMP did not say which ${toolName} call it is asking about, and no ${toolName} call has started yet.`);
+    return lines.join('\n');
+  }
+  lines.push(`OMP did not say which ${toolName} call it is asking about. Running now:`);
+  calls.forEach((call, index) => {
+    const printed = JSON.stringify(call.args ?? {}) ?? '{}';
+    const shown = printed.length > PRINTED_ARGS_LIMIT
+      ? `${printed.slice(0, PRINTED_ARGS_LIMIT)}[…${printed.length - PRINTED_ARGS_LIMIT}ch elided…]`
+      : printed;
+    lines.push(`${index + 1}. ${shown}`);
+  });
+  return lines.join('\n');
 }
 
 /**
  * Read a `select` as one round of a checkbox question.
  *
- * A group that must have an answer and has none yet carries neither the count
- * nor the "Done" row. Such a round is only recognized as the continuation of
- * the question `current` is working through.
+ * A group that has no answer yet can come without the count and without the
+ * "Done" row (omp 18.12 always, later versions when the group must be answered).
+ * Such a round is only recognized as the continuation of the question `current`
+ * is working through.
  *
  * @param {string} title
  * @param {string[]} options
@@ -123,11 +157,20 @@ export function buildPermissionRequest({ toolName, details }, call, { cwd, home 
  */
 function parseCheckboxRound(title, options, current) {
   const counted = SELECTED_COUNT_PREFIX.exec(title);
-  const last = options.at(-1);
-  const done = last !== undefined && DONE_OPTION.test(last) ? last : null;
-  const choices = done === null ? options : options.slice(0, -1);
-  const other = choices.at(-1) === OTHER_OPTION_LABEL ? OTHER_OPTION_LABEL : null;
-  const labels = other === null ? choices : choices.slice(0, -1);
+  // The closing rows follow the labels, each at most once: "Other" then "Done"
+  // (omp 18.18) or "Done" then "Other" (omp 18.12). Only the tail is read, so an
+  // option that merely ends in the same words is still an option.
+  let done = null;
+  let other = null;
+  let end = options.length;
+  while (end > 0) {
+    const option = options[end - 1];
+    if (other === null && option === OTHER_OPTION_LABEL) other = option;
+    else if (done === null && DONE_OPTION.test(option)) done = option;
+    else break;
+    end -= 1;
+  }
+  const labels = options.slice(0, end);
   const question = counted ? title.slice(counted[0].length) : title;
   const continues = current !== null && current.question === question
     && current.labels.length === labels.length
@@ -141,8 +184,11 @@ function parseCheckboxRound(title, options, current) {
  * @param {(frame: object) => void} options.respond writes an `extension_ui_response`
  * @param {(toolName: string, inputs: object) => Promise<boolean>} options.requestPermission
  * @param {(input: object) => Promise<object|null>} options.requestAnswers
- * @param {(toolName: string, describes?: (args: unknown) => boolean) => object|undefined} [options.claimToolCall]
- *   the running call an approval refers to: the one of that tool that `describes` accepts
+ * @param {(toolName: string, describes: (args: unknown) => boolean) => object|undefined} [options.claimToolCall]
+ *   takes the running call of that tool that `describes` accepts, for a prompt that prints its call
+ * @param {(toolName: string) => { args?: unknown }[]} [options.runningToolCalls] every running call of that tool
+ * @param {(toolName: string, timeoutMs: number) => Promise<boolean>} [options.waitForToolStart]
+ *   resolves true as soon as a call of that tool starts, false once `timeoutMs` have passed
  * @param {string} [options.cwd]
  * @param {(...args: unknown[]) => void} [options.log]
  */
@@ -151,6 +197,8 @@ export function createUiBridge({
   requestPermission,
   requestAnswers,
   claimToolCall = () => undefined,
+  runningToolCalls = () => [],
+  waitForToolStart = async () => false,
   cwd,
   log = () => {},
 }) {
@@ -181,9 +229,35 @@ export function createUiBridge({
     return answer === undefined || answer === null ? null : answerLabels(answer);
   };
 
+  /**
+   * What the permission dialog shows for an approval prompt.
+   *
+   * A prompt names its tool and, for most tools, prints the call. It carries no
+   * call id, and it can arrive a moment before the start event of its own call.
+   * So a call that happens to be running is never taken for the one asked about:
+   * a `bash` or `write` call is recognized by what the prompt prints, and a
+   * prompt that prints nothing lists every running call of its tool.
+   */
+  const describeApproval = async (approval) => {
+    const { toolName, details } = approval;
+    const printsCall = details.split('\n').some((line) => line.trim() !== '' && !APPROVAL_HEADER_LINE.test(line));
+    if (!printsCall) {
+      await waitForToolStart(toolName, CALL_START_GRACE_MS);
+      return { toolName, inputs: { text: describeUnidentifiedCall(approval, runningToolCalls(toolName)) } };
+    }
+    if (toolName !== 'bash' && toolName !== 'write') return { toolName, inputs: { text: details } };
+
+    const describes = (args) => approvalDescribesCall(approval, args);
+    const deadline = Date.now() + CALL_START_GRACE_MS;
+    let call = claimToolCall(toolName, describes);
+    while (!call && await waitForToolStart(toolName, deadline - Date.now())) {
+      call = claimToolCall(toolName, describes);
+    }
+    return buildPermissionRequest(approval, call, { cwd });
+  };
+
   const handleApproval = async (frame, approval) => {
-    const call = claimToolCall(approval.toolName, (args) => approvalDescribesCall(approval, args));
-    const request = buildPermissionRequest(approval, call, { cwd });
+    const request = await describeApproval(approval);
     let allowed = false;
     try {
       allowed = await requestPermission(request.toolName, request.inputs);
@@ -288,6 +362,7 @@ export function createUiBridge({
           multiSelect: true,
           // Without its "Done" row OMP accepts nothing less than one answer.
           required: state.required || round.done === null,
+          ...(round.other === null ? { choiceOnly: true } : {}),
         });
         if (answered === null) {
           reply(frame.id, { cancelled: true });
@@ -351,7 +426,14 @@ export function createUiBridge({
     const options = labels
       .map((label, index) => ({ label, description: details[index]?.description ?? '' }))
       .filter((option) => option.label !== OTHER_OPTION_LABEL);
-    const [answer] = await ask(frame, { question: frame.title || '', header: '', options, multiSelect: false }) ?? [];
+    const [answer] = await ask(frame, {
+      question: frame.title || '',
+      header: '',
+      options,
+      multiSelect: false,
+      // A select only accepts its own options: without OMP's "Other" row there is nowhere to send typed text.
+      ...(offersOther ? {} : { choiceOnly: true }),
+    }) ?? [];
     if (answer === undefined) {
       reply(frame.id, { cancelled: true });
     } else if (labels.includes(answer)) {
@@ -360,7 +442,6 @@ export function createUiBridge({
       otherText = answer;
       reply(frame.id, { value: OTHER_OPTION_LABEL });
     } else {
-      // A select only accepts its own options; free text cannot answer it.
       reply(frame.id, { cancelled: true });
     }
   };
@@ -372,6 +453,7 @@ export function createUiBridge({
       header: '',
       options: [{ label: CONFIRM_YES, description: '' }, { label: CONFIRM_NO, description: '' }],
       multiSelect: false,
+      choiceOnly: true,
     }) ?? [];
     if (answer === CONFIRM_YES || answer === CONFIRM_NO) {
       reply(frame.id, { confirmed: answer === CONFIRM_YES });

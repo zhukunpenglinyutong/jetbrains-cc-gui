@@ -479,11 +479,12 @@ describe('ModelConfigSelect — OMP approvals and effort', () => {
     expect(dropdown.querySelectorAll('.selector-option')).toHaveLength(3);
   });
 
-  it('offers all five levels for auto', () => {
+  it('offers no max for auto, whose model the plugin does not know', () => {
     renderOmp({ selectedModel: 'auto' });
     fireEvent.click(screen.getByTestId('model-config-trigger'));
     fireEvent.click(screen.getByTestId('model-config-option-effort'));
     const dropdown = screen.getByTestId('reasoning-selector-dropdown');
-    expect(dropdown.querySelectorAll('.selector-option')).toHaveLength(5);
+    expect(dropdown.querySelectorAll('.selector-option')).toHaveLength(4);
+    expect(dropdown.textContent).not.toContain('Max');
   });
 });

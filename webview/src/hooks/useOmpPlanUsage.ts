@@ -31,9 +31,11 @@ function keepPresentOrEmpty(prev: OmpPlanUsageState): OmpPlanUsageState {
 
 /**
  * OMP plan usage for ContextBar via the Java bridge
- * ({@code get_omp_plan_usage} → {@code omp usage --json}).
+ * ({@code get_omp_plan_usage:<model>} → {@code omp usage --json}). The reading belongs to
+ * {@code model} (the plugin's model id: {@code auto}, a role id or a selector): a model
+ * change drops it, resets the failure backoff and polls at once.
  */
-export function useOmpPlanUsage(currentProvider: string) {
+export function useOmpPlanUsage(currentProvider: string, model: string) {
   const [state, setState] = useState<OmpPlanUsageState>(EMPTY);
   const genRef = useRef(0);
   const handlerRef = useRef<((json: string) => void) | null>(null);
@@ -62,13 +64,21 @@ export function useOmpPlanUsage(currentProvider: string) {
     return delay;
   }, []);
 
-  const handleReply = useCallback((jsonStr: string) => {
+  const handleReply = useCallback((jsonStr: string, requestedModel: string) => {
     let raw: unknown;
     try {
       raw = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
     } catch {
       setState(keepPresentOrEmpty);
       scheduleNext(nextFailureDelay());
+      return;
+    }
+    // Java answers through one global callback, so a slow reply for the previous model can
+    // arrive after the new request went out; the reply echoes the model it was read for.
+    const echoedModel = raw !== null && typeof raw === 'object'
+      ? (raw as Record<string, unknown>).requested_model
+      : undefined;
+    if (typeof echoedModel === 'string' && echoedModel !== requestedModel) {
       return;
     }
     const snap = parseCapacityPayload(raw);
@@ -86,6 +96,7 @@ export function useOmpPlanUsage(currentProvider: string) {
       return;
     }
     const gen = ++genRef.current;
+    const requestedModel = model.trim();
     setState(keepPresentOrEmpty);
 
     const w = window as unknown as {
@@ -95,7 +106,7 @@ export function useOmpPlanUsage(currentProvider: string) {
 
     handlerRef.current = (jsonStr: string) => {
       if (gen === genRef.current) {
-        handleReply(jsonStr);
+        handleReply(jsonStr, requestedModel);
       }
     };
     w.updateOmpPlanUsage = (json: string) => {
@@ -107,14 +118,14 @@ export function useOmpPlanUsage(currentProvider: string) {
     // Armed before sending so a reply that arrives synchronously replaces the watchdog.
     scheduleNext(REPLY_WATCHDOG_MS);
     try {
-      w.sendToJava?.('get_omp_plan_usage:');
+      w.sendToJava?.(`get_omp_plan_usage:${requestedModel}`);
     } catch {
       if (gen === genRef.current) {
         setState(keepPresentOrEmpty);
         scheduleNext(nextFailureDelay());
       }
     }
-  }, [currentProvider, handleReply, nextFailureDelay, scheduleNext]);
+  }, [currentProvider, model, handleReply, nextFailureDelay, scheduleNext]);
 
   pollRef.current = poll;
 
@@ -124,10 +135,12 @@ export function useOmpPlanUsage(currentProvider: string) {
     poll();
   }, [clearTimer, poll]);
 
+  // `poll` changes with the provider and the model, so either one restarts the loop here.
   useEffect(() => {
     failureStepRef.current = 0;
+    // The held snapshot belongs to the previous model or provider.
+    setState(EMPTY);
     if (currentProvider !== 'omp') {
-      setState(EMPTY);
       clearTimer();
       return () => {
         genRef.current += 1;

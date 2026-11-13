@@ -10,6 +10,7 @@ import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.provider.ClaudeContextWindowOverrideProvider;
 import com.github.claudecodegui.provider.CustomModelContextWindowProvider;
 import com.github.claudecodegui.provider.grok.GrokContextWindowResolver;
+import com.github.claudecodegui.provider.omp.OmpContextWindows;
 import com.github.claudecodegui.provider.opencode.OpenCodeContextWindowResolver;
 import com.github.claudecodegui.util.EditorFileUtils;
 import com.github.claudecodegui.util.TokenUsageUtils;
@@ -590,6 +591,12 @@ public class ModelProviderHandler {
     private static int providerContextLimit(String provider, String model, String cwd) {
         if ("opencode".equalsIgnoreCase(provider)) {
             Integer declared = OpenCodeContextWindowResolver.resolve(model, cwd);
+            if (declared != null) {
+                return declared;
+            }
+        }
+        if ("omp".equalsIgnoreCase(provider)) {
+            Integer declared = OmpContextWindows.resolve(model);
             if (declared != null) {
                 return declared;
             }

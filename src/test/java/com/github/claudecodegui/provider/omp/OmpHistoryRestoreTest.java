@@ -463,12 +463,158 @@ public class OmpHistoryRestoreTest {
         assertNull(messages.get(3).get("turnUsage"));
     }
 
+    // ---- reused tool call ids ----
+
+    @Test
+    public void editCallsSharingAnIdAcrossTurnsRestoreWithTheirOwnFileAndResult() throws Exception {
+        JsonObject first = json("{'op':'update','path':'/abs/a.txt'}");
+        first.addProperty("diff", "-1|alpha\n+1|ALPHA");
+        JsonObject second = json("{'op':'update','path':'/abs/b.txt'}");
+        second.addProperty("diff", "-1|beta\n+1|BETA");
+        writeSession(header(),
+                user("first"),
+                assistant("a1", null, call("call_0", "edit", "{'input':'x'}")),
+                toolResult("call_0", "edit", "done A", first.toString(), false),
+                user("second"),
+                assistant("a2", null, call("call_0", "edit", "{'input':'y'}")),
+                toolResult("call_0", "edit", "done B", second.toString(), false));
+
+        List<JsonObject> messages = load();
+        List<JsonObject> uses = blocks(messages, "tool_use");
+        assertEquals(2, uses.size());
+        assertEquals("/abs/a.txt", uses.get(0).getAsJsonObject("input").get("file_path").getAsString());
+        assertEquals("alpha", uses.get(0).getAsJsonObject("input").get("old_string").getAsString());
+        assertEquals("ALPHA", uses.get(0).getAsJsonObject("input").get("new_string").getAsString());
+        assertEquals("/abs/b.txt", uses.get(1).getAsJsonObject("input").get("file_path").getAsString());
+        assertEquals("beta", uses.get(1).getAsJsonObject("input").get("old_string").getAsString());
+        assertEquals("BETA", uses.get(1).getAsJsonObject("input").get("new_string").getAsString());
+
+        List<JsonObject> results = blocks(messages, "tool_result");
+        assertEquals(2, results.size());
+        assertEquals("done A", results.get(0).get("content").getAsString());
+        assertEquals("done B", results.get(1).get("content").getAsString());
+    }
+
+    @Test
+    public void resultOfAReusedIdGoesToTheLaterCallWhenTheEarlierOneNeverGotOne() throws Exception {
+        JsonObject second = json("{'op':'update','path':'/abs/b.txt'}");
+        second.addProperty("diff", "-1|beta\n+1|BETA");
+        writeSession(header(),
+                user("first"),
+                assistant("a1", null, call("call_0", "edit", "{'path':'/abs/a.txt','input':'x'}")),
+                user("second"),
+                assistant("a2", null, call("call_0", "edit", "{'input':'y'}")),
+                toolResult("call_0", "edit", "done B", second.toString(), false));
+
+        List<JsonObject> messages = load();
+        List<JsonObject> uses = blocks(messages, "tool_use");
+        assertEquals(2, uses.size());
+        assertEquals("/abs/a.txt", uses.get(0).getAsJsonObject("input").get("file_path").getAsString());
+        assertFalse(uses.get(0).getAsJsonObject("input").has("new_string"));
+        assertEquals("/abs/b.txt", uses.get(1).getAsJsonObject("input").get("file_path").getAsString());
+        assertEquals("BETA", uses.get(1).getAsJsonObject("input").get("new_string").getAsString());
+
+        List<JsonObject> results = blocks(messages, "tool_result");
+        assertEquals(1, results.size());
+        assertEquals("done B", results.get(0).get("content").getAsString());
+    }
+
+    // ---- zero usage / context window ----
+
+    @Test
+    public void zeroCountStepKeepsThePreviousStepUsageAndTheTurnTotal() throws Exception {
+        writeSession(header(), user("go"),
+                assistant("a1", usage(4, 6, 0, 0, 10, 0.5), "[{'type':'text','text':'first'}]"),
+                assistant("a2", usage(0, 0, 0, 0, 0, 0.0), "[{'type':'text','text':'aborted'}]"));
+
+        List<JsonObject> assistants = assistantEnvelopes(load());
+        assertEquals(2, assistants.size());
+        assertEquals(10, assistants.get(0).getAsJsonObject("message").getAsJsonObject("usage")
+                .get("total_tokens").getAsLong());
+        assertFalse(assistants.get(1).getAsJsonObject("message").has("usage"));
+        JsonObject turn = assistants.get(1).getAsJsonObject("turnUsage");
+        assertEquals(10, turn.get("total_tokens").getAsLong());
+        assertEquals(0.5, assistants.get(1).get("turnCostUsd").getAsDouble(), 1e-9);
+    }
+
+    @Test
+    public void usageWithoutTotalTokensIsTheSumOfTheCounts() {
+        JsonObject raw = new JsonObject();
+        raw.addProperty("input", 3);
+        raw.addProperty("output", 4);
+        raw.addProperty("cacheRead", 5);
+        assertEquals(12, OmpHistoryUsage.fromOmpUsage(raw).get("total_tokens").getAsLong());
+        assertNull(OmpHistoryUsage.fromOmpUsage(new JsonObject()));
+    }
+
+    @Test
+    public void restoredUsageCarriesTheContextWindowOfKnownModelsOnly() throws Exception {
+        JsonObject payload = json("{'success':true,'models':["
+                + "{'id':'anthropic/claude-opus-5-5','contextWindow':1000000},"
+                + "{'id':'kimi-code/k3','contextWindow':256000}]}");
+        OmpContextWindows.update(payload);
+        try {
+            writeSession(header(), user("go"),
+                    withModel(assistant("a1", usage(1, 2, 0, 0, 3, null), "[{'type':'text','text':'one'}]"),
+                            "anthropic", "claude-opus-5-5"),
+                    withModel(assistant("a2", usage(1, 2, 0, 0, 3, null), "[{'type':'text','text':'two'}]"),
+                            "kimi-code", "k3"),
+                    withModel(assistant("a3", usage(1, 2, 0, 0, 3, null), "[{'type':'text','text':'three'}]"),
+                            "anthropic", "claude-unlisted"),
+                    // A model id that already is a selector.
+                    withModel(assistant("a4", usage(1, 2, 0, 0, 3, null), "[{'type':'text','text':'four'}]"),
+                            "anthropic", "kimi-code/k3"));
+
+            List<JsonObject> assistants = assistantEnvelopes(load());
+            assertEquals(1_000_000, stepUsage(assistants.get(0)).get("model_context_window").getAsInt());
+            assertEquals(256_000, stepUsage(assistants.get(1)).get("model_context_window").getAsInt());
+            assertFalse(stepUsage(assistants.get(2)).has("model_context_window"));
+            assertEquals(256_000, stepUsage(assistants.get(3)).get("model_context_window").getAsInt());
+            assertFalse(assistants.get(3).getAsJsonObject("turnUsage").has("model_context_window"));
+        } finally {
+            OmpContextWindows.reset();
+        }
+    }
+
+    @Test
+    public void restoredUsageHasNoContextWindowWhileTheRegistryIsEmpty() throws Exception {
+        OmpContextWindows.reset();
+        writeSession(header(), user("go"),
+                withModel(assistant("a1", usage(1, 2, 0, 0, 3, null), "[{'type':'text','text':'one'}]"),
+                        "anthropic", "claude-opus-5-5"));
+        assertFalse(stepUsage(assistantEnvelopes(load()).get(0)).has("model_context_window"));
+    }
+
+    // ---- WSL paths ----
+
+    @Test
+    public void writeWithoutResolvedPathUnderAPosixSessionDirectoryKeepsPosixSeparators() throws Exception {
+        writeSession(header(), user("w"),
+                assistant("a1", null, call("w1", "write", "{'path':'../other/./a.txt','content':'x'}")),
+                toolResult("w1", "write", "Wrote", "{}", false));
+        JsonObject use = blocks(load(), "tool_use").get(0);
+        assertEquals("/work/other/a.txt", use.getAsJsonObject("input").get("file_path").getAsString());
+    }
+
     // ---- helpers ----
 
     private List<JsonObject> load() throws Exception {
         List<JsonObject> messages = reader.getSessionMessages(SID, CWD);
         assertNotNull(messages);
         return messages;
+    }
+
+    /** Rewrites the provider and model recorded on an assistant entry line produced by {@link #assistant}. */
+    private static String withModel(String assistantLine, String provider, String model) {
+        JsonObject line = JsonParser.parseString(assistantLine).getAsJsonObject();
+        JsonObject message = line.getAsJsonObject("message");
+        message.addProperty("provider", provider);
+        message.addProperty("model", model);
+        return line.toString();
+    }
+
+    private static JsonObject stepUsage(JsonObject assistantEnvelope) {
+        return assistantEnvelope.getAsJsonObject("message").getAsJsonObject("usage");
     }
 
     private String listedTitle() throws Exception {

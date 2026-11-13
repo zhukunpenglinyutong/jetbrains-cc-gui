@@ -7,8 +7,10 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 
 /**
- * Bridges the webview's {@code get_omp_plan_usage} poll to {@link OmpPlanUsageService}
- * and pushes the capacity payload back via {@code window.updateOmpPlanUsage}.
+ * Bridges the webview's {@code get_omp_plan_usage:<model>} poll to {@link OmpPlanUsageService}
+ * and pushes the capacity payload back via {@code window.updateOmpPlanUsage}. The reply echoes
+ * the requested model as {@code requested_model}: the callback is global, so the webview needs
+ * it to discard a slow reply for a model it has since switched away from.
  */
 public class OmpPlanUsageHandler extends BaseMessageHandler {
 
@@ -33,12 +35,17 @@ public class OmpPlanUsageHandler extends BaseMessageHandler {
         if (!DISPATCH_TYPE.equals(type)) {
             return false;
         }
+        String requestedModel = content == null ? "" : content.trim();
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             if (context.isDisposed() || (context.getProject() != null && context.getProject().isDisposed())) {
                 return;
             }
             try {
-                JsonObject usage = OmpPlanUsageService.resolvePlanUsagePayload(resolveModel(context));
+                String model = requestedModel.isEmpty() ? resolveModel(context) : requestedModel;
+                JsonObject usage = OmpPlanUsageService.resolvePlanUsagePayload(model);
+                if (!requestedModel.isEmpty()) {
+                    usage.addProperty("requested_model", requestedModel);
+                }
                 if (!context.isDisposed()) {
                     context.callJavaScript(CALLBACK, context.escapeJs(usage.toString()));
                 }
@@ -49,6 +56,9 @@ public class OmpPlanUsageHandler extends BaseMessageHandler {
                     error.addProperty("unavailable", true);
                     error.addProperty("error", true);
                     error.addProperty("message", e.getMessage());
+                    if (!requestedModel.isEmpty()) {
+                        error.addProperty("requested_model", requestedModel);
+                    }
                     context.callJavaScript(CALLBACK, context.escapeJs(error.toString()));
                 }
             } finally {

@@ -200,13 +200,16 @@ export async function runOmpTurn({
   // A rejection that arrives while nothing awaits `settled` yet must not crash the process.
   settled.catch(() => {});
 
+  // Approval prompts waiting for a call of their tool to start (see ui-bridge.js).
+  const startWaiters = new Set();
+
   const ui = createUiBridge({
     respond: (frame) => client.send(frame),
     requestPermission,
     requestAnswers,
     // An approval prompt names its tool and prints the call; it carries no call id.
     // `describes` tells whether a running call is the one printed.
-    claimToolCall: (toolName, describes = () => true) => {
+    claimToolCall: (toolName, describes) => {
       const candidates = [...calls.values()]
         .filter((call) => call.name === toolName && !call.asked && describes(call.args));
       if (candidates.length === 0) return undefined;
@@ -217,6 +220,23 @@ export async function runOmpTurn({
       first.asked = true;
       return first;
     },
+    runningToolCalls: (toolName) => [...calls.values()].filter((call) => call.name === toolName),
+    waitForToolStart: (toolName, timeoutMs) => new Promise((resolve) => {
+      if (!(timeoutMs > 0)) {
+        resolve(false);
+        return;
+      }
+      const waiter = {
+        toolName,
+        finish: (started) => {
+          clearTimeout(timer);
+          startWaiters.delete(waiter);
+          resolve(started);
+        },
+      };
+      const timer = setTimeout(() => waiter.finish(false), timeoutMs);
+      startWaiters.add(waiter);
+    }),
     cwd,
     log,
   });
@@ -231,6 +251,9 @@ export async function runOmpTurn({
       shown: false,
     };
     calls.set(call.id, call);
+    for (const waiter of [...startWaiters]) {
+      if (waiter.toolName === call.name) waiter.finish(true);
+    }
     const uses = mapStartedTool(call);
     if (uses) {
       call.shown = true;

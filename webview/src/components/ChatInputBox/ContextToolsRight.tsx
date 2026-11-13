@@ -7,6 +7,8 @@ import { PlanUsageIndicator } from './PlanUsageIndicator';
 
 interface ContextToolsRightProps {
   currentProvider: string;
+  /** Selected model id; the OMP plan usage is read for this model. */
+  selectedModel?: string;
   hasMessages: boolean;
   onRewind?: () => void;
   statusPanelExpanded: boolean;
@@ -16,6 +18,7 @@ interface ContextToolsRightProps {
 /** Right side tools: plan usage, StatusPanel toggle and Rewind button. */
 export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
   currentProvider,
+  selectedModel,
   hasMessages,
   onRewind,
   statusPanelExpanded,
@@ -27,7 +30,7 @@ export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
   const isOmp = currentProvider === 'omp';
   const claudePlanUsage = useClaudePlanUsage(currentProvider);
   const grokPlanUsage = useGrokPlanUsage(currentProvider);
-  const ompPlanUsage = useOmpPlanUsage(currentProvider);
+  const ompPlanUsage = useOmpPlanUsage(currentProvider, selectedModel ?? '');
 
   return (
     <div className="context-tools-right">

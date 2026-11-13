@@ -694,7 +694,7 @@ export const OMP_APPROVAL_OPTIONS: OmpApprovalOption[] = [
     labelKey: 'ompApprovals.default.label',
     descriptionKey: 'ompApprovals.default.description',
     label: 'Default',
-    description: "Follows OMP's own tools.approvalMode setting",
+    description: "Full auto unless OMP's tools.approvalMode is set",
     icon: 'codicon-circle-outline',
   },
   {

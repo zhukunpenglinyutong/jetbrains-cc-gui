@@ -1941,7 +1941,7 @@
     "title": "Выберите режим подтверждений OMP",
     "default": {
       "label": "По умолчанию",
-      "description": "Использует собственную настройку OMP tools.approvalMode"
+      "description": "Полный автомат, если не задан tools.approvalMode"
     },
     "alwaysAsk": {
       "label": "Спрашивать",

@@ -23,6 +23,22 @@ public class TabStateServiceTest {
         assertTrue(restored.getTabSessionState(0).unread);
     }
 
+    /** A tab on "Ask" that came back on OMP's own setting would run tools without approval. */
+    @Test
+    public void preservesOmpApprovalModeAcrossSnapshotCopiesAndProjectRestart() {
+        TabStateService service = new TabStateService();
+        TabStateService.TabSessionState session = new TabStateService.TabSessionState();
+        session.sessionId = "omp-session";
+        session.ompApprovalMode = "always-ask";
+        service.saveTabSessionState(0, session);
+        session.ompApprovalMode = "yolo";
+        assertEquals("always-ask", service.getTabSessionState(0).ompApprovalMode);
+        TabStateService restored = new TabStateService();
+        restored.loadState(XmlSerializer.deserialize(
+                XmlSerializer.serialize(service.getState()), TabStateService.State.class));
+        assertEquals("always-ask", restored.getTabSessionState(0).ompApprovalMode);
+    }
+
     /** Existing installations have no selected index and keep the first-tab fallback. */
     @Test
     public void legacyStateDefaultsToTheFirstTab() {

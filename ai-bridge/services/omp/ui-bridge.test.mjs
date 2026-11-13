@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
-import { approvalDescribesCall, buildPermissionRequest, createUiBridge, parseApprovalRequest } from './ui-bridge.js';
+import {
+  approvalDescribesCall,
+  buildPermissionRequest,
+  createUiBridge,
+  describeUnidentifiedCall,
+  parseApprovalRequest,
+} from './ui-bridge.js';
 
 const CWD = resolve('/work/project');
 const OTHER = 'Other (type your own)';
@@ -11,11 +17,17 @@ function approvalFrame(id, title, options = ['Approve', 'Approve bash for this s
   return { type: 'extension_ui_request', id, method: 'select', title, options };
 }
 
-/** A bridge whose dialogs are answered by the given stubs; `sent` collects the responses. */
-function harness({ permission = async () => true, answers = async () => null, calls = [] } = {}) {
+/**
+ * A bridge whose dialogs are answered by the given stubs; `sent` collects the responses.
+ *
+ * @param {object[]} [options.calls] the running tool calls
+ * @param {object[]} [options.late] calls whose start event reaches the bridge only while it waits for one
+ */
+function harness({ permission = async () => true, answers = async () => null, calls = [], late = [] } = {}) {
   const sent = [];
   const asked = { permission: [], answers: [] };
   const queue = [...calls];
+  const starting = [...late];
   const handled = [];
   const awaited = new Map();
   const real = createUiBridge({
@@ -34,6 +46,13 @@ function harness({ permission = async () => true, answers = async () => null, ca
     claimToolCall: (toolName, describes) => {
       const index = queue.findIndex((call) => call.name === toolName && describes(call.args));
       return index >= 0 ? queue.splice(index, 1)[0] : undefined;
+    },
+    runningToolCalls: (toolName) => queue.filter((call) => call.name === toolName),
+    waitForToolStart: async (toolName) => {
+      const index = starting.findIndex((call) => call.name === toolName);
+      if (index < 0) return false;
+      queue.push(starting.splice(index, 1)[0]);
+      return true;
     },
     cwd: CWD,
   });
@@ -61,16 +80,22 @@ function harness({ permission = async () => true, answers = async () => null, ca
  * goes out again until the answer is the "Done" row.
  *
  * @param {Set<string>} [question.held] the checked labels; preselected ones are passed in
+ * @param {boolean} [question.doneBeforeOther] the rows of omp 18.12: "Done" comes before
+ *   "Other", and only once something is selected
  * @returns {Promise<{ checked: string[], typed: string|undefined }|undefined>} undefined when cancelled
  */
-async function ompCheckboxQuestion(request, { title, labels, held = new Set(), required = false }) {
+async function ompCheckboxQuestion(request, {
+  title, labels, held = new Set(), required = false, doneBeforeOther = false,
+}) {
   let typed;
   for (;;) {
     const count = held.size + (typed === undefined ? 0 : 1);
     const response = await request({
       method: 'select',
       title: `${count > 0 ? `(${count} selected) ` : ''}${title}`,
-      options: [...labels, OTHER, ...(!required || count > 0 ? [DONE] : [])],
+      options: doneBeforeOther
+        ? [...labels, ...(count > 0 ? [DONE] : []), OTHER]
+        : [...labels, OTHER, ...(!required || count > 0 ? [DONE] : [])],
     });
     if (response.cancelled) return undefined;
     if (response.value === DONE) return { checked: labels.filter((label) => held.has(label)), typed };
@@ -147,11 +172,26 @@ test('buildPermissionRequest falls back to OMP\'s own description of the call', 
     buildPermissionRequest({ toolName: 'edit', details: 'Path: a.ts\n-1|x\n+1|y' }, { args: { input: '[a.ts#1A2B]' } }),
     { toolName: 'edit', inputs: { text: 'Path: a.ts\n-1|x\n+1|y' } },
   );
-  // Neither details nor a matching call: the arguments are all there is to show.
-  assert.deepEqual(
-    buildPermissionRequest({ toolName: 'browser', details: '' }, { args: { action: 'open' } }),
-    { toolName: 'browser', inputs: { action: 'open' } },
+});
+
+test('describeUnidentifiedCall names every running call, and says so when there is none', () => {
+  assert.equal(
+    describeUnidentifiedCall({ toolName: 'read', details: '' }, [
+      { args: { path: 'a.txt' } },
+      { args: { path: 'ssh://host/etc/hostname' } },
+    ]),
+    'OMP did not say which read call it is asking about. Running now:\n'
+      + '1. {"path":"a.txt"}\n'
+      + '2. {"path":"ssh://host/etc/hostname"}',
   );
+  assert.equal(
+    describeUnidentifiedCall({ toolName: 'read', details: 'Reason: Restricted folder: /srv' }, []),
+    'Reason: Restricted folder: /srv\n\n'
+      + 'OMP did not say which read call it is asking about, and no read call has started yet.',
+  );
+  // Arguments that would flood the dialog are cut the way OMP cuts its own: 2000 characters, then the rest counted.
+  const long = describeUnidentifiedCall({ toolName: 'github', details: '' }, [{ args: { body: 'x'.repeat(3000) } }]);
+  assert.match(long, /^1\. \{"body":"x{1991}\[…1011ch elided…\]$/m);
 });
 
 test('an approval is answered with the choice matching the permission dialog', async () => {
@@ -252,8 +292,55 @@ test('approvalDescribesCall compares the printed value with the whole one', () =
   assert.equal(approvalDescribesCall(write('Path: a.txt\nContent:\ntwo'), args), false);
   assert.equal(approvalDescribesCall(write('Path: a.txt\nContent:'), { path: 'a.txt', content: '' }), true);
 
-  // Nothing to compare for other tools.
-  assert.equal(approvalDescribesCall({ toolName: 'browser', details: '' }, { action: 'open' }), true);
+  // No other tool prints its call in a form that can be compared.
+  assert.equal(approvalDescribesCall({ toolName: 'browser', details: '' }, { action: 'open' }), false);
+  assert.equal(approvalDescribesCall({ toolName: 'read', details: 'Path: a.txt' }, { path: 'a.txt' }), false);
+});
+
+test('a prompt that prints nothing about its call lists every running call instead of picking one', async () => {
+  const { bridge, asked, idle } = harness({
+    calls: [{ name: 'read', args: { path: 'a.txt' } }, { name: 'bash', args: { command: 'ls' } }],
+    // The call the prompt is really about: its start event trails the prompt.
+    late: [{ name: 'read', args: { path: 'ssh://host/etc/hostname' } }],
+  });
+  bridge.handle(approvalFrame('a', 'Allow tool: read'));
+  await idle();
+  assert.deepEqual(asked.permission, [{
+    toolName: 'read',
+    inputs: {
+      text: 'OMP did not say which read call it is asking about. Running now:\n'
+        + '1. {"path":"a.txt"}\n'
+        + '2. {"path":"ssh://host/etc/hostname"}',
+    },
+  }]);
+});
+
+test('a line OMP adds on its own is not a description of the call', async () => {
+  const { bridge, asked, idle } = harness({ calls: [{ name: 'read', args: { path: '/srv/secret' } }] });
+  bridge.handle(approvalFrame('a', 'Allow tool: read\nReason: Restricted folder: /srv'));
+  await idle();
+  assert.deepEqual(asked.permission.map((request) => request.inputs.text), [
+    'Reason: Restricted folder: /srv\n\n'
+      + 'OMP did not say which read call it is asking about. Running now:\n'
+      + '1. {"path":"/srv/secret"}',
+  ]);
+});
+
+test('a tool that describes its own call is shown with that description, not with a running call\'s arguments', async () => {
+  const { bridge, asked, idle } = harness({ calls: [{ name: 'edit', args: { input: '[b.ts#0000]\nCUT 1.=9' } }] });
+  bridge.handle(approvalFrame('a', 'Allow tool: edit\nPath: a.ts\n-1|x\n+1|y'));
+  await idle();
+  assert.deepEqual(asked.permission, [{ toolName: 'edit', inputs: { text: 'Path: a.ts\n-1|x\n+1|y' } }]);
+});
+
+test('a bash prompt that arrives before its own call waits for the call to start', async () => {
+  const { bridge, asked, idle } = harness({
+    calls: [{ name: 'bash', args: { command: 'sleep 6' } }],
+    late: [{ name: 'bash', args: { command: 'echo unrelated' } }, { name: 'bash', args: { command: 'rm -rf build' } }],
+  });
+  bridge.handle(approvalFrame('a', 'Allow tool: bash\nCommand: rm -rf build'));
+  await idle();
+  assert.deepEqual(asked.permission, [{ toolName: 'Bash', inputs: { command: 'rm -rf build', cwd: CWD } }]);
 });
 
 test('a select is asked as one question and answered with the chosen option', async () => {
@@ -275,6 +362,8 @@ test('a select is asked as one question and answered with the chosen option', as
       header: '',
       options: [{ label: 'Postgres', description: 'Needs a server' }, { label: 'SQLite', description: '' }],
       multiSelect: false,
+      // OMP offers no "Other" row here, so the dialog must not offer a text box either.
+      choiceOnly: true,
     }],
   }]);
   assert.deepEqual(sent, [{ type: 'extension_ui_response', id: 'ui-1', value: 'SQLite' }]);
@@ -293,6 +382,7 @@ test('free text on a choice question goes through OMP\'s "Other" row and its fol
   bridge.handle({ type: 'extension_ui_request', id: 'ui-2', method: 'input', title: 'Which database?' });
   await idle();
   assert.deepEqual(asked.answers[0].questions[0].options.map((option) => option.label), ['Postgres', 'SQLite']);
+  assert.equal('choiceOnly' in asked.answers[0].questions[0], false);
   assert.equal(asked.answers.length, 1);
   assert.deepEqual(sent, [
     { type: 'extension_ui_response', id: 'ui-1', value: 'Other (type your own)' },
@@ -322,12 +412,19 @@ test('a dismissed question, or free text where only options are valid, cancels t
   assert.deepEqual(typed.sent, [{ type: 'extension_ui_response', id: 'ui-1', cancelled: true }]);
 });
 
-test('confirm maps yes and no onto confirmed, and a dismissal onto cancelled', async () => {
+test('confirm takes yes or no only, and a dismissal cancels it', async () => {
   for (const [answer, expected] of [['Yes', { confirmed: true }], ['No', { confirmed: false }], [undefined, { cancelled: true }]]) {
     const { bridge, sent, asked, idle } = harness({ answers: async () => (answer ? { 'ui-1': answer } : {}) });
     bridge.handle({ type: 'extension_ui_request', id: 'ui-1', method: 'confirm', title: 'Confirm', message: 'Continue?' });
     await idle();
-    assert.equal(asked.answers[0].questions[0].question, 'Confirm\nContinue?');
+    assert.deepEqual(asked.answers[0].questions[0], {
+      id: 'ui-1',
+      question: 'Confirm\nContinue?',
+      header: '',
+      options: [{ label: 'Yes', description: '' }, { label: 'No', description: '' }],
+      multiSelect: false,
+      choiceOnly: true,
+    });
     assert.deepEqual(sent, [{ type: 'extension_ui_response', id: 'ui-1', ...expected }]);
   }
 });
@@ -481,6 +578,51 @@ test('a group that needs an answer shows its first pick checked and takes more',
   ]);
 });
 
+test('omp 18.12 rows (Done before "Other", none until a pick) still end in one multi-select', async () => {
+  const { request, asked } = harness({ answers: answering('Go', ['Go', 'Zig']) });
+  const result = await ompCheckboxQuestion(request, {
+    title: 'Which languages?',
+    labels: ['Go', 'Rust', 'Zig'],
+    doneBeforeOther: true,
+  });
+
+  assert.deepEqual(result, { checked: ['Go', 'Zig'], typed: undefined });
+  assert.deepEqual(asked.answers.map((input) => input.questions[0].multiSelect), [false, true]);
+  assert.deepEqual(asked.answers[1].questions[0].options.map((option) => option.label), ['Go', 'Rust', 'Zig']);
+});
+
+test('omp 18.12 rows take typed text and an emptied selection like the newer ones', async () => {
+  const typed = harness({ answers: answering('Go', ['Go', 'Odin']) });
+  assert.deepEqual(
+    await ompCheckboxQuestion(typed.request, { title: 'Pick', labels: ['Go', 'Rust'], doneBeforeOther: true }),
+    { checked: ['Go'], typed: 'Odin' },
+  );
+
+  // Nothing selected leaves no "Done" row, so the question comes back until it has an answer.
+  const emptied = harness({ answers: answering('Go', [], ['Rust']) });
+  assert.deepEqual(
+    await ompCheckboxQuestion(emptied.request, { title: 'Pick', labels: ['Go', 'Rust'], doneBeforeOther: true }),
+    { checked: ['Rust'], typed: undefined },
+  );
+  assert.deepEqual(emptied.asked.answers.map((input) => input.questions[0].required), [undefined, false, true]);
+});
+
+test('an option that reads like the closing row is still an option', async () => {
+  const labels = ['Keep going', 'Done selecting'];
+  const { request, asked } = harness({ answers: answering(['Done selecting']) });
+  const result = await ompCheckboxQuestion(request, { title: 'Pick', labels });
+
+  assert.deepEqual(result, { checked: ['Done selecting'], typed: undefined });
+  assert.deepEqual(asked.answers[0].questions[0].options.map((option) => option.label), labels);
+});
+
+test('a checkbox group without OMP\'s "Other" row takes no typed answer', async () => {
+  const { request, asked } = harness({ answers: answering(['A']) });
+  const response = await request({ method: 'select', title: 'Pick', options: ['A', 'B', DONE] });
+  assert.equal(response.value, 'A');
+  assert.equal(asked.answers[0].questions[0].choiceOnly, true);
+});
+
 test('clearing a group that needs an answer asks again and insists on one', async () => {
   const { request, asked } = harness({ answers: answering('A', [], ['B']) });
   const result = await ompCheckboxQuestion(request, { title: 'Pick', labels: ['A', 'B'], required: true });
@@ -525,6 +667,7 @@ test('rounds whose count does not follow the toggles are shown as ordinary selec
     header: '',
     options: [{ label: 'A', description: '' }, { label: 'B', description: '' }, { label: DONE, description: '' }],
     multiSelect: false,
+    choiceOnly: true,
   }]);
 });
 
