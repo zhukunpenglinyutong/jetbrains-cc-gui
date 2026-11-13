@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
@@ -31,8 +32,8 @@ public class CodexHistoryReader {
 
     private final Gson gson;
     private final CodexHistoryParser parser;
-    private final CodexHistoryIndexService indexService;
-    private final CodexHistorySessionService sessionService;
+    private final Supplier<Path> sessionsDir;
+    private final SessionIndexManager indexManager;
     private final ThreadLocal<String> privacyThread = new ThreadLocal<>();
     private final ThreadLocal<Consumer<ByteBuffer>> sourceBytesObserver = new ThreadLocal<>();
 
@@ -41,21 +42,30 @@ public class CodexHistoryReader {
     }
 
     public CodexHistoryReader() {
-        this(defaultSessionsDir(), new Gson());
+        this(CodexHistoryReader::defaultSessionsDir, new Gson(), SessionIndexManager.getInstance());
     }
 
     CodexHistoryReader(Path sessionsDir, Gson gson) {
-        this.gson = gson;
-        this.parser = new CodexHistoryParser(gson);
-        this.indexService = new CodexHistoryIndexService(sessionsDir, parser);
-        this.sessionService = new CodexHistorySessionService(sessionsDir, gson);
+        this(sessionsDir, gson, SessionIndexManager.getInstance());
     }
 
     CodexHistoryReader(Path sessionsDir, Gson gson, SessionIndexManager indexManager) {
+        this(() -> sessionsDir, gson, indexManager);
+    }
+
+    CodexHistoryReader(Supplier<Path> sessionsDir, Gson gson, SessionIndexManager indexManager) {
         this.gson = gson;
         this.parser = new CodexHistoryParser(gson);
-        this.indexService = new CodexHistoryIndexService(sessionsDir, parser, indexManager);
-        this.sessionService = new CodexHistorySessionService(sessionsDir, gson);
+        this.sessionsDir = sessionsDir;
+        this.indexManager = indexManager;
+    }
+
+    private CodexHistorySessionService sessionService() {
+        return new CodexHistorySessionService(this.sessionsDir.get(), this.gson);
+    }
+
+    private CodexHistoryIndexService indexService() {
+        return new CodexHistoryIndexService(this.sessionsDir.get(), this.parser, this.indexManager);
     }
 
     /**
@@ -87,7 +97,7 @@ public class CodexHistoryReader {
      */
     public List<SessionInfo> readAllSessions() throws IOException {
         logSessionAccessWithoutLocalConfigAuthorization();
-        return indexService.readAllSessions();
+        return indexService().readAllSessions();
     }
 
     /**
@@ -203,7 +213,7 @@ public class CodexHistoryReader {
      */
     public String getSessionMessagesAsJson(String sessionId) {
         logSessionAccessWithoutLocalConfigAuthorization();
-        String source = this.sessionService.getSessionMessagesAsJson(sessionId);
+        String source = this.sessionService().getSessionMessagesAsJson(sessionId);
         if (source == null) {
             return null;
         }
@@ -229,14 +239,14 @@ public class CodexHistoryReader {
                                      Consumer<JsonObject> consumer) throws IOException {
         logSessionAccessWithoutLocalConfigAuthorization();
         CodexHistoryPrivacy privacy = new CodexHistoryPrivacy(sessionId);
-        return this.sessionService.forEachSessionMessage(sessionId, cancellation, message -> {
+        return this.sessionService().forEachSessionMessage(sessionId, cancellation, message -> {
             JsonObject raw = this.gson.toJsonTree(message).getAsJsonObject();
             consumer.accept(privacy.protect(raw));
         });
     }
 
     public Path resolveSessionFile(String sessionId) throws IOException {
-        Path file = sessionService.findSessionFile(sessionId);
+        Path file = sessionService().findSessionFile(sessionId);
         if (file == null) {
             throw new IOException("Codex session file not found: " + sessionId);
         }
@@ -252,7 +262,7 @@ public class CodexHistoryReader {
         // Nested reads started by a record consumer must not feed this read's fingerprint.
         this.sourceBytesObserver.remove();
         try {
-            return this.sessionService.forEachSessionMessage(file, offset, end, active, observer,
+            return this.sessionService().forEachSessionMessage(file, offset, end, active, observer,
                     message -> consumer.accept(privacy.protect(this.gson.toJsonTree(message).getAsJsonObject())));
         } finally {
             if (observer != null) {
