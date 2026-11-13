@@ -126,6 +126,16 @@ export interface UseWindowCallbacksOptions {
   currentSessionIdRef: MutableRefObject<string | null>;
   updateHistoryTitle: (sessionId: string, newTitle: string) => void;
   applyHistoryTitleLocal: (sessionId: string, newTitle: string) => void;
+  /**
+   * Latest loadHistorySession, read through the ref by window callbacks to
+   * auto-open a fork created from a message. The ref is what keeps this
+   * correct: registration happens once on mount, so a closure over the
+   * function itself would capture the mount-time version whose `loading` is
+   * permanently false — a mid-stream fork auto-open would then skip the
+   * interrupt and clear messages under the live reply. Same pattern as
+   * getMessageTextRef.
+   */
+  loadHistorySessionRef?: MutableRefObject<(sessionId: string, provider?: string, model?: string, agent?: string) => void>;
 
   /**
    * Discards messages waiting in the send queue; wired into

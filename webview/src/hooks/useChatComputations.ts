@@ -17,6 +17,7 @@ import {
   hasTaskNotificationTag,
   INTERNAL_METADATA_TAGS,
 } from '../utils/messageUtils';
+import { truncateToCodeUnits } from '../utils/sessionTitleLimit';
 import { extractTodosFromToolUse, extractAccumulatedTasks } from '../utils/todoToolNormalization';
 import {
   computeStatusScopeMessages,
@@ -129,7 +130,11 @@ export function deriveSessionTitle(params: {
     break;
   }
   if (!text) return fallbackTitle;
-  return text.length > 15 ? `${text.substring(0, 15)}...` : text;
+  // Truncate by UTF-16 code unit with a surrogate-pair back-off (the same rule
+  // the fork title uses): a plain substring could persist half an emoji when
+  // the cut lands between the halves of a pair, and the derived title is what
+  // a fork of a fresh session inherits as its base title.
+  return text.length > 15 ? `${truncateToCodeUnits(text, 15)}...` : text;
 }
 
 export function deriveTodosForTurn(

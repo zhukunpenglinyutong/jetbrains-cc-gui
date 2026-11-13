@@ -17,7 +17,8 @@ import {
 import {
   getSessionMessages as claudeGetSessionMessages,
   getSessionMessagesPage as claudeGetSessionMessagesPage,
-  getLatestUserMessage as claudeGetLatestUserMessage
+  getLatestUserMessage as claudeGetLatestUserMessage,
+  getRecentAssistantMessages as claudeGetRecentAssistantMessages
 } from '../services/claude/session-service.js';
 import { listModels } from '../services/claude/models-service.js';
 
@@ -134,6 +135,17 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
       await claudeGetLatestUserMessage(args[0], args[1]);
       break;
 
+    case 'getRecentAssistantMessages': {
+      // Same stdin-or-argv convention as getSessionPage/rewindFiles, so a caller
+      // switching to stdin JSON does not silently lose the sessionId.
+      const sessionId = stdinData?.sessionId || args[0];
+      const cwd = stdinData?.cwd || args[1] || null;
+      const parsedLimit = Number(stdinData?.limit ?? args[2]);
+      const limit = Number.isInteger(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 20;
+      await claudeGetRecentAssistantMessages(sessionId, cwd, limit);
+      break;
+    }
+
     case 'rewindFiles': {
       const sessionId = stdinData?.sessionId || args[0];
       const userMessageId = stdinData?.userMessageId || args[1];
@@ -183,5 +195,5 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
 }
 
 export function getClaudeCommandList() {
-  return ['send', 'sendWithAttachments', 'listModels', 'getSession', 'getLatestUserMessage', 'rewindFiles', 'getMcpServerStatus', 'getMcpServerTools', 'resetRuntime', 'getContextUsage'];
+  return ['send', 'sendWithAttachments', 'listModels', 'getSession', 'getSessionPage', 'getLatestUserMessage', 'getRecentAssistantMessages', 'rewindFiles', 'getMcpServerStatus', 'getMcpServerTools', 'resetRuntime', 'getContextUsage'];
 }

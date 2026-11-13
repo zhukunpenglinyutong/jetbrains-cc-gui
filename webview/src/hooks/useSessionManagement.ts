@@ -6,6 +6,8 @@ import { getSkipNewSessionConfirm } from '../utils/skipNewSessionConfirm';
 import { clearAllPersistedExpanded } from '../utils/expandedState';
 import { normalizeClaudeModelForBridge } from '../utils/customClaudeModels';
 import { sumKnownHistoryMessages } from '../utils/historyMessageCount';
+import { CUSTOM_TITLE_MAX_LENGTH, truncateToCodeUnits } from '../utils/sessionTitleLimit';
+import { deriveSessionTitle } from './useChatComputations';
 
 type ViewMode = 'chat' | 'history' | 'settings';
 
@@ -59,6 +61,11 @@ interface UseSessionManagementOptions {
    */
   applyHistoryModel?: (provider: string, model: string, agent?: string | null) => void;
   /**
+   * Extract a message's display text; used to derive a fork's base title when the
+   * source session is not in the history list yet (fresh chat sessions).
+   */
+  getMessageText?: (message: ClaudeMessage) => string;
+  /**
    * Discards messages still waiting in the send queue. Queued messages belong
    * to the session they were typed in, so they must not leak into the next
    * session when the user switches away.
@@ -85,6 +92,7 @@ interface UseSessionManagementReturn {
   updateHistoryTitle: (sessionId: string, newTitle: string) => void;
   applyHistoryTitleLocal: (sessionId: string, newTitle: string) => void;
   convertToCliSession: (sessionId: string) => void;
+  forkHistorySession: (sessionId: string, options?: { forkPointUuid?: string }) => void;
 }
 
 /**
@@ -115,6 +123,7 @@ export function useSessionManagement({
   addToast,
   t,
   applyHistoryModel,
+  getMessageText,
   clearQueuedMessages,
 }: UseSessionManagementOptions): UseSessionManagementReturn {
   const [showNewSessionConfirm, setShowNewSessionConfirm] = useState(false);
@@ -122,6 +131,8 @@ export function useSessionManagement({
   const pendingActionRef = useRef<'newSession' | null>(null);
   const suppressNextStatusToastRef = useRef(false);
   const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 60s backstop for window.__forkInFlight; cleared when the fork settles early. */
+  const forkTimeoutRef = useRef<number | null>(null);
   const historyDataRef = useRef(historyData);
   useEffect(() => {
     historyDataRef.current = historyData;
@@ -223,14 +234,16 @@ export function useSessionManagement({
   }, [currentSessionId]);
 
   /** Send a delete request; returns false when the bridge refused it. */
-  const requestHistoryDeletion = useCallback((type: 'delete_session' | 'delete_sessions', sessionIds: string[]) => {
+  const requestHistoryDeletion = useCallback((type: 'delete_session' | 'delete_sessions', sessionIds: string[], provider?: string) => {
     const requestId = createDeletionRequestId();
     // The provider travels with the request: native Codex history never tells
-    // the backend which history view is open.
+    // the backend which history view is open, and the panel's currentProvider
+    // can be stale after switching chat providers without reopening the list.
+    const requestProvider = provider ?? currentProvider;
     const payload = type === 'delete_session'
-      ? { sessionId: sessionIds[0], provider: currentProvider, requestId }
-      : { sessionIds, provider: currentProvider, requestId };
-    pendingDeletionsRef.current.set(requestId, currentProvider);
+      ? { sessionId: sessionIds[0], provider: requestProvider, requestId }
+      : { sessionIds, provider: requestProvider, requestId };
+    pendingDeletionsRef.current.set(requestId, requestProvider);
     if (sendBridgeEvent(type, JSON.stringify(payload))) {
       return true;
     }
@@ -400,6 +413,14 @@ export function useSessionManagement({
     // live reply.
     const isSameSession = sessionId === currentSessionId;
     if (isSameSession && effectiveProvider !== 'codex') {
+      // The row title can have changed since this session was opened (rename in
+      // the history list). The soft reload keeps the mounted session, so the
+      // header has to be told the new title explicitly — the full transition
+      // path below does it through beginSessionTransition. Only touch the title
+      // when the row is present: a missing row must not wipe the current one.
+      if (session) {
+        setCustomSessionTitle(session.title?.trim() ? session.title : null);
+      }
       sendBridgeEvent('load_session', JSON.stringify({
         sessionId,
         provider: effectiveProvider,
@@ -421,11 +442,14 @@ export function useSessionManagement({
       ...(bridgeModel ? { model: bridgeModel } : {}),
     }));
     setCurrentView('chat');
-  }, [applyHistoryModel, beginSessionTransition, currentProvider, loading, setCurrentView, currentSessionId]);
+  }, [applyHistoryModel, beginSessionTransition, currentProvider, loading, setCurrentView, setCustomSessionTitle, currentSessionId]);
 
   // Delete history session
   const deleteHistorySession = useCallback((sessionId: string) => {
-    if (!requestHistoryDeletion('delete_session', [sessionId])) return;
+    // Provider rides the payload: the row knows which store it came from, and
+    // the backend routes the delete (and the list reload) by it.
+    const rowProvider = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId)?.provider;
+    if (!requestHistoryDeletion('delete_session', [sessionId], rowProvider)) return;
     let startedSessionTransition = false;
 
     // Immediately update frontend state, remove session from history list
@@ -472,7 +496,26 @@ export function useSessionManagement({
       return;
     }
 
-    if (!requestHistoryDeletion('delete_sessions', uniqueSessionIds)) return;
+    // Group the selection by the provider recorded on each row and send one
+    // delete_sessions request per provider. A single request routes the whole
+    // batch through one provider, so a mixed selection would silently fail to
+    // delete the other half while the UI still reported success.
+    const knownSessions = historyDataRef.current?.sessions ?? [];
+    const idsByProvider = new Map<string, string[]>();
+    for (const sessionId of uniqueSessionIds) {
+      const provider = knownSessions.find(s => s.sessionId === sessionId)?.provider
+        || currentProvider
+        || 'claude';
+      const bucket = idsByProvider.get(provider);
+      if (bucket) {
+        bucket.push(sessionId);
+      } else {
+        idsByProvider.set(provider, [sessionId]);
+      }
+    }
+    for (const [provider, providerSessionIds] of idsByProvider) {
+      if (!requestHistoryDeletion('delete_sessions', providerSessionIds, provider)) return;
+    }
     let startedSessionTransition = false;
 
     if (historyData && historyData.sessions) {
@@ -607,6 +650,113 @@ export function useSessionManagement({
     });
   }, [setHistoryData]);
 
+  // Fork (duplicate) a session into a new independent session. The backend sends an
+  // onForkResult callback with success/failure; the registered handler in
+  // sessionCallbacks shows the toast and reloads the list to reveal the fork.
+  // No optimistic insert: the fork row's messageCount/fileSize are only known to the
+  // backend, and a wrong placeholder would be jarring once the real row lands.
+  // options.forkPointUuid narrows the fork to the conversation up to the end of that
+  // assistant reply's turn (backend cuts before the next real user message).
+  const localMessagesRef = useRef(messages);
+  useEffect(() => {
+    localMessagesRef.current = messages;
+  }, [messages]);
+
+  const forkHistorySession = useCallback((sessionId: string, options?: { forkPointUuid?: string }) => {
+    // One fork at a time: a double click would create two copies, and the two
+    // onForkResult callbacks would race over __pendingForkTitleRequest.
+    if (window.__forkInFlight) {
+      return;
+    }
+    window.__forkInFlight = true;
+    // Correlate the eventual onForkResult with this request (mirrors the delete
+    // flow's requestId): the backstop below can release the guard while a large
+    // fork is still running, and the late result of that abandoned request must
+    // not settle the fork started meanwhile.
+    const requestId = 'fork-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    window.__forkInFlightRequestId = requestId;
+    // Release the guard even if the backend callback never arrives. Generous on
+    // purpose: forking copies the whole transcript, and a large session can take
+    // well past 15s — releasing early would let a second click duplicate the fork.
+    // The handle is mirrored on window so onForkResult can retire the timer the
+    // moment the fork settles instead of leaving a stale release for a later fork.
+    if (forkTimeoutRef.current !== null) {
+      clearTimeout(forkTimeoutRef.current);
+    }
+    // window.setTimeout (not the Node-typed global) so the handle is a plain
+    // number under every tsconfig the test script type-checks.
+    forkTimeoutRef.current = window.setTimeout(() => {
+      forkTimeoutRef.current = null;
+      window.__forkInFlight = false;
+      delete window.__forkInFlightTimer;
+      // The request is abandoned from here: dropping the correlation id lets a
+      // late result be honored again (no fork is in flight it could confuse),
+      // while a result arriving after a NEW fork started is rejected by id.
+      delete window.__forkInFlightRequestId;
+    }, 60_000);
+    window.__forkInFlightTimer = forkTimeoutRef.current;
+
+    const session = historyDataRef.current?.sessions?.find(s => s.sessionId === sessionId);
+    const provider = session?.provider || currentProvider || 'claude';
+
+    // One uniform rule: the fork's title is the source's current title plus one
+    // localized " (fork)" suffix. Chained forks therefore read "1 (fork)",
+    // "1 (fork) (fork)", … with no counting or dedupe. Truncate the base first so
+    // the suffix always survives the custom-title service's length limit.
+    const suffix = t('history.forkedTitleSuffix');
+    let baseTitle = (session?.title ?? '').trim();
+    if (!baseTitle && getMessageText) {
+      // Fresh chat sessions are not in the history list yet, so the row lookup
+      // above misses; derive the same base title the chat header shows. Read
+      // through the ref: a `messages` dependency would re-create this callback
+      // on every streamed delta and defeat HistoryListItem's memo.
+      baseTitle = deriveSessionTitle({
+        customSessionTitle: null,
+        restoredSessionTitle: null,
+        currentSessionId: sessionId,
+        messages: localMessagesRef.current,
+        fallbackTitle: '',
+        getMessageText,
+      }).trim();
+    }
+    // Truncate by UTF-16 code unit with a surrogate-pair back-off: the custom-title
+    // service counts code units, and a plain slice could persist half an emoji.
+    const forkTitle = baseTitle
+      ? truncateToCodeUnits(baseTitle, Math.max(0, CUSTOM_TITLE_MAX_LENGTH - suffix.length)) + suffix
+      : '';
+
+    // The fork row is not in the list yet when the fork opens, so remember the title
+    // this fork should carry; onForkResult binds it to the new session id and
+    // window.setSessionId applies it once that session becomes active.
+    window.__pendingForkTitleRequest = forkTitle;
+    // onForkResult reloads the list after a successful fork; the row's provider
+    // rides along so the reload queries the store the fork came from even when
+    // the panel's currentProvider is stale (same rule as requestHistoryDeletion).
+    window.__pendingForkProvider = provider;
+
+    if (!sendBridgeEvent('fork_session', JSON.stringify({
+      requestId,
+      sessionId,
+      provider,
+      ...(forkTitle ? { title: forkTitle } : {}),
+      ...(options?.forkPointUuid ? { forkPointUuid: options.forkPointUuid } : {}),
+    }))) {
+      // The bridge refused the event, so no onForkResult will ever arrive.
+      // Release the guard and drop the pending globals now, or every fork
+      // click would be silently swallowed until the 60s backstop fired.
+      if (forkTimeoutRef.current !== null) {
+        clearTimeout(forkTimeoutRef.current);
+        forkTimeoutRef.current = null;
+      }
+      window.__forkInFlight = false;
+      delete window.__forkInFlightTimer;
+      delete window.__forkInFlightRequestId;
+      delete window.__pendingForkTitleRequest;
+      delete window.__pendingForkProvider;
+      addToast(t('history.forkFailed'), 'error');
+    }
+  }, [addToast, currentProvider, t, getMessageText]);
+
   return {
     showNewSessionConfirm,
     showInterruptConfirm,
@@ -626,5 +776,6 @@ export function useSessionManagement({
     updateHistoryTitle,
     applyHistoryTitleLocal,
     convertToCliSession,
+    forkHistorySession,
   };
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -15,6 +15,7 @@ import {
   useChatComputations,
 } from './hooks';
 import type { UseWindowCallbacksOptions, UseMessageSenderOptions } from './hooks';
+import type { ClaudeMessage } from './types';
 import {
   CONTEXT_COMMANDS,
 } from './hooks/useMessageSender';
@@ -215,6 +216,13 @@ export const useAppChatController = ({
   const clearQueuedMessages = useCallback(() => {
     clearMessageQueueRef.current();
   }, []);
+  // Same ref-indirection for getMessageText: useSessionManagement's fork title
+  // fallback needs it, but useMessageProcessing sits further down the chain.
+  const getMessageTextRef = useRef<(message: ClaudeMessage) => string>(() => '');
+  const getMessageTextForFork = useCallback(
+    (message: ClaudeMessage) => getMessageTextRef.current(message),
+    [],
+  );
 
   // ── Session management ──
   const {
@@ -226,6 +234,7 @@ export const useAppChatController = ({
     handleConfirmInterrupt, handleCancelInterrupt,
     loadHistorySession, deleteHistorySession, deleteHistorySessions, exportHistorySession,
     toggleFavoriteSession, updateHistoryTitle, applyHistoryTitleLocal, convertToCliSession,
+    forkHistorySession,
   } = useSessionManagement({
     messages, loading, historyData, currentSessionId, currentSessionIdRef, currentProvider,
     setHistoryData, setMessages, setCurrentView, setCurrentSessionId,
@@ -235,8 +244,16 @@ export const useAppChatController = ({
     setSubagentHistories,
     clearToasts, addToast, t,
     applyHistoryModel,
+    getMessageText: getMessageTextForFork,
     clearQueuedMessages,
   });
+  // Window callbacks register once on mount; the ref lets window.onForkResult
+  // reach the latest loadHistorySession so a mid-stream fork auto-open still
+  // sees loading === true and interrupts before switching sessions.
+  const loadHistorySessionRef = useRef(loadHistorySession);
+  useLayoutEffect(() => {
+    loadHistorySessionRef.current = loadHistorySession;
+  }, [loadHistorySession]);
 
   useHistoryLoader({ currentView, currentProvider });
 
@@ -276,6 +293,8 @@ export const useAppChatController = ({
     customSessionTitleRef, currentSessionIdRef, updateHistoryTitle, applyHistoryTitleLocal,
     setCustomSessionTitle,
     setRestoredSessionTitle,
+    // Message-level fork auto-open switches to the fork via the standard load flow
+    loadHistorySessionRef,
     setPermissionDialogTimeoutSeconds,
     setStartupHistoryLoadState,
     clearQueuedMessages,
@@ -286,6 +305,11 @@ export const useAppChatController = ({
     getMessageText, getContentBlocks,
     mergedMessages, sentAttachmentsRef,
   } = useMessageProcessing({ messages, currentSessionId, t });
+  // Keep the ref in sync after commit: writing it during render is unsafe under
+  // concurrent rendering, where a discarded render must not publish a value.
+  useLayoutEffect(() => {
+    getMessageTextRef.current = getMessageText;
+  }, [getMessageText]);
 
   // ── Message sender ──
   // Wrap handleProviderSelect to also clear messages and input (like creating a new session)
@@ -490,6 +514,7 @@ export const useAppChatController = ({
     // Session management
     createNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
     exportHistorySession, toggleFavoriteSession, updateHistoryTitle, convertToCliSession,
+    forkHistorySession,
     showNewSessionConfirm, handleConfirmNewSession, handleCancelNewSession,
     showInterruptConfirm, handleConfirmInterrupt, handleCancelInterrupt,
     // Rewind

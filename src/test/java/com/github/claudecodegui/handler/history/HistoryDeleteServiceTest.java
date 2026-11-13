@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.NodeJsServiceCaller;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.util.PathUtils;
 import com.google.gson.JsonObject;
 import com.github.claudecodegui.testing.SessionMetadataBridgeFixture;
 import org.junit.Rule;
@@ -266,6 +267,27 @@ public class HistoryDeleteServiceTest {
             assertEquals("SESSION_RUNNING", failure.getCause().getMessage());
             assertFalse(session.interrupted);
         }
+    }
+
+    @Test
+    public void batchDeleteQuiescesTheActiveSessionWithThePayloadProvider() throws Exception {
+        // Same stale-panel scenario as the single delete: the interrupt has to be
+        // routed by the payload provider, otherwise the CLI keeps appending to a
+        // transcript this batch is about to delete.
+        HandlerContext context = new HandlerContext(null, null, null, null, null);
+        RecordingClaudeSession active = new RecordingClaudeSession("session-1", "claude");
+        context.setSession(active);
+        RecordingHistoryLoadService historyLoadService = new RecordingHistoryLoadService(context);
+        HistoryDeleteService service = new HistoryDeleteService(context, null, historyLoadService);
+
+        service.handleDeleteSessions("{\"sessionIds\":[\"session-1\"],\"provider\":\"claude\"}", "codex");
+
+        assertTrue(historyLoadService.awaitReload());
+        assertTrue("the active session must be interrupted before its files go away",
+                active.interrupted);
+        // The reload follows the deleted rows, not the panel: reloading the panel's
+        // provider would swap the visible list for another provider's rows.
+        assertEquals("claude", historyLoadService.provider);
     }
 
     @Test
@@ -630,6 +652,185 @@ public class HistoryDeleteServiceTest {
         assertFalse(new HistoryDeleteService(null, caller, null).cleanupSessionMetadata(List.of("session-1")));
 
         assertEquals(Arrays.asList("removeFavorites:[session-1]", "deleteTitles:[session-1]"), caller.calls);
+    }
+
+    @Test
+    public void sidecarDirectoryRemovalDeletesSubagentTranscripts() throws Exception {
+        Path projectDir = temporaryFolder.newFolder("projects", "proj").toPath();
+        String sessionId = "9d1f0f6e-1b2c-4b3a-9d4e-2f5a6b7c8d90";
+        Path subagentsDir = projectDir.resolve(sessionId).resolve("subagents");
+        Files.createDirectories(subagentsDir);
+        Path transcript = Files.write(subagentsDir.resolve("agent-a80732c8.jsonl"),
+                Collections.singletonList("{}"), StandardCharsets.UTF_8);
+        Path meta = Files.write(subagentsDir.resolve("agent-a80732c8.meta.json"),
+                Collections.singletonList("{}"), StandardCharsets.UTF_8);
+
+        Path otherSubagentsDir = projectDir.resolve("other-session").resolve("subagents");
+        Files.createDirectories(otherSubagentsDir);
+        Path otherTranscript = Files.write(otherSubagentsDir.resolve("agent-keep.jsonl"),
+                Collections.singletonList("{}"), StandardCharsets.UTF_8);
+
+        int deleted = HistoryDeleteService.deleteSessionSidecarDirectory(projectDir, sessionId);
+
+        assertEquals(2, deleted);
+        assertFalse(Files.exists(transcript));
+        assertFalse(Files.exists(meta));
+        assertFalse(Files.exists(projectDir.resolve(sessionId)));
+        assertTrue(Files.exists(otherTranscript));
+    }
+
+    @Test
+    public void sidecarDirectoryRemovalKeepsUnknownSessionFiles() throws Exception {
+        // Only the known subagents subtree is ours to delete; a future Claude Code
+        // artifact beside it must survive, and so must the directory holding it.
+        Path projectDir = temporaryFolder.newFolder("projects", "proj").toPath();
+        String sessionId = "9d1f0f6e-1b2c-4b3a-9d4e-2f5a6b7c8d90";
+        Path sessionDir = Files.createDirectories(projectDir.resolve(sessionId));
+        Path subagentsDir = Files.createDirectories(sessionDir.resolve("subagents"));
+        Files.write(subagentsDir.resolve("agent-a80732c8.jsonl"),
+                Collections.singletonList("{}"), StandardCharsets.UTF_8);
+        Path unknown = Files.write(sessionDir.resolve("future-artifact.bin"),
+                Collections.singletonList("keep"), StandardCharsets.UTF_8);
+
+        int deleted = HistoryDeleteService.deleteSessionSidecarDirectory(projectDir, sessionId);
+
+        assertEquals(1, deleted);
+        assertFalse(Files.exists(subagentsDir));
+        assertTrue(Files.exists(unknown));
+        assertTrue(Files.exists(sessionDir));
+    }
+
+    @Test
+    public void sidecarDirectoryRemovalRefusesSymlinkedSessionDirectory() throws Exception {
+        // Deleting through a symlinked session directory would reach whatever it
+        // points at, so the walk must refuse the link itself.
+        Path projectDir = temporaryFolder.newFolder("projects", "proj").toPath();
+        Path realDir = temporaryFolder.newFolder("elsewhere", "real").toPath();
+        Path realSubagents = Files.createDirectories(realDir.resolve("subagents"));
+        Path transcript = Files.write(realSubagents.resolve("agent-a80732c8.jsonl"),
+                Collections.singletonList("{}"), StandardCharsets.UTF_8);
+        String sessionId = "9d1f0f6e-1b2c-4b3a-9d4e-2f5a6b7c8d90";
+        try {
+            Files.createSymbolicLink(projectDir.resolve(sessionId), realDir);
+        } catch (Exception symlinksUnavailable) {
+            // Windows without Developer Mode cannot create links; nothing to assert.
+            return;
+        }
+
+        assertEquals(0, HistoryDeleteService.deleteSessionSidecarDirectory(projectDir, sessionId));
+        assertTrue(Files.exists(transcript));
+    }
+
+    @Test
+    public void sidecarDirectoryRemovalRejectsEscapingSessionId() throws Exception {
+        Path projectDir = temporaryFolder.newFolder("projects", "proj").toPath();
+        Path outsideDir = Files.createDirectories(projectDir.getParent().resolve("outside"));
+        Path survivor = Files.write(outsideDir.resolve("keep.jsonl"),
+                Collections.singletonList("{}"), StandardCharsets.UTF_8);
+
+        assertEquals(0, HistoryDeleteService.deleteSessionSidecarDirectory(projectDir, "../outside"));
+        assertTrue(Files.exists(survivor));
+    }
+
+    /**
+     * A "." session id normalizes onto the project directory itself, and the old
+     * containment check accepted equality: once the matching "&lt;.&gt;.jsonl" main file
+     * was deleted, the cleanup below could take the project-level subagents/ tree
+     * (and even the emptied project dir) with it. Pure-dot ids are rejected and
+     * containment is strict, so the project directory must survive untouched.
+     */
+    @Test
+    public void sidecarDirectoryRemovalRefusesTheProjectDirectoryItself() throws Exception {
+        Path projectDir = temporaryFolder.newFolder("projects", "proj").toPath();
+        Path projectSubagents = Files.createDirectories(projectDir.resolve("subagents"));
+        Path survivor = Files.write(projectSubagents.resolve("agent-keep.jsonl"),
+                Collections.singletonList("{}"), StandardCharsets.UTF_8);
+        Files.write(projectDir.resolve(".jsonl"), Collections.singletonList("{}"), StandardCharsets.UTF_8);
+
+        assertEquals(0, HistoryDeleteService.deleteSessionSidecarDirectory(projectDir, "."));
+        assertTrue("project-level subagents/ must survive", Files.exists(survivor));
+        assertTrue(Files.exists(projectDir));
+    }
+
+    @Test
+    public void sessionIdValidationRejectsPureDotIds() {
+        assertFalse(HistoryDeleteService.isValidSessionId("."));
+        assertFalse(HistoryDeleteService.isValidSessionId(".."));
+        assertFalse(HistoryDeleteService.isValidSessionId("..."));
+        assertFalse(HistoryDeleteService.isValidSessionId(null));
+        assertFalse(HistoryDeleteService.isValidSessionId("../escape"));
+        assertTrue(HistoryDeleteService.isValidSessionId("9d1f0f6e-1b2c-4b3a-9d4e-2f5a6b7c8d90"));
+        assertTrue(HistoryDeleteService.isValidSessionId("a.b-c_d1"));
+    }
+
+    @Test
+    public void sidecarDirectoryRemovalIgnoresSessionsWithoutSidecars() throws Exception {
+        Path projectDir = temporaryFolder.newFolder("projects", "proj").toPath();
+
+        assertEquals(0, HistoryDeleteService.deleteSessionSidecarDirectory(projectDir, "missing-session"));
+    }
+
+    @Test
+    public void deleteRemovesTranscriptLegacyAgentFilesAndSidecars() throws Exception {
+        String sessionId = "0b6f7d3e-2c1a-4d5e-8f90-1a2b3c4d5e6f";
+        String otherSessionId = "11111111-2222-3333-4444-555555555555";
+        Path homeDir = temporaryFolder.newFolder("home").toPath();
+        String projectPath = temporaryFolder.newFolder("project").getAbsolutePath();
+        Path projectDir = claudeProjectDir(homeDir, projectPath);
+
+        Path transcript = write(projectDir.resolve(sessionId + ".jsonl"), "{}");
+        Path legacyAgent = write(projectDir.resolve("agent-legacy.jsonl"),
+                "{\"sessionId\":\"" + sessionId + "\"}");
+        Path sidecarTranscript = write(
+                projectDir.resolve(sessionId).resolve("subagents").resolve("agent-new.jsonl"), "{}");
+        Path sidecarMeta = write(
+                projectDir.resolve(sessionId).resolve("subagents").resolve("agent-new.meta.json"), "{}");
+        Path otherTranscript = write(projectDir.resolve(otherSessionId + ".jsonl"), "{}");
+        Path otherSidecar = write(
+                projectDir.resolve(otherSessionId).resolve("subagents").resolve("agent-keep.jsonl"), "{}");
+
+        int[] result = new HistoryDeleteService(new HandlerContext(null, null, null, null, null), null, null)
+                .deleteClaudeSession(sessionId, projectPath, homeDir);
+
+        assertEquals(1, result[0]);
+        assertEquals(3, result[1]);
+        assertFalse(Files.exists(transcript));
+        assertFalse(Files.exists(legacyAgent));
+        assertFalse(Files.exists(sidecarTranscript));
+        assertFalse(Files.exists(sidecarMeta));
+        assertFalse(Files.exists(projectDir.resolve(sessionId)));
+        assertTrue(Files.exists(otherTranscript));
+        assertTrue(Files.exists(otherSidecar));
+    }
+
+    @Test
+    public void deleteLeavesSidecarsAloneWhenTheTranscriptIsAlreadyGone() throws Exception {
+        // A stray sidecar directory must not authorize a delete on its own: the
+        // transcript has to be there for the sidecars to count as this session's.
+        String sessionId = "0b6f7d3e-2c1a-4d5e-8f90-1a2b3c4d5e6f";
+        Path homeDir = temporaryFolder.newFolder("home").toPath();
+        String projectPath = temporaryFolder.newFolder("project").getAbsolutePath();
+        Path projectDir = claudeProjectDir(homeDir, projectPath);
+        Path sidecar = write(projectDir.resolve(sessionId).resolve("subagents").resolve("agent-new.jsonl"), "{}");
+
+        int[] result = new HistoryDeleteService(new HandlerContext(null, null, null, null, null), null, null)
+                .deleteClaudeSession(sessionId, projectPath, homeDir);
+
+        assertEquals(0, result[0]);
+        assertEquals(0, result[1]);
+        assertTrue(Files.exists(sidecar));
+    }
+
+    private Path claudeProjectDir(Path homeDir, String projectPath) throws Exception {
+        Path projectsDir = Files.createDirectories(homeDir.resolve(".claude").resolve("projects"));
+        Path projectDir = projectsDir.resolve(PathUtils.getSanitizedPathCandidates(projectPath).get(0));
+        Files.createDirectories(projectDir);
+        return projectDir;
+    }
+
+    private Path write(Path file, String line) throws Exception {
+        Files.createDirectories(file.getParent());
+        return Files.write(file, Collections.singletonList(line), StandardCharsets.UTF_8);
     }
 
     private Path writeCodexRollout(Path sessionDir, String sessionId, String parentId, String body)

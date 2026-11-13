@@ -199,6 +199,46 @@ class ClaudeSessionQueryService {
         }
     }
 
+    /**
+     * Fetch the most recent assistant rows of a session, oldest first, each carrying
+     * { uuid, text }. Used to backfill the uuids of live-streamed assistant messages,
+     * which the bridge synthesizes from deltas without the row uuid the CLI assigns
+     * in the transcript — without it those messages cannot anchor a session fork.
+     *
+     * @param sessionId Session to read.
+     * @param cwd Working directory (WSL-normalized by the channel when needed).
+     * @param limit Maximum rows to return.
+     * @return Array of {uuid, text} objects, or null when the transcript tail was
+     *         incomplete (writer mid-append) and the caller should retry.
+     */
+    JsonArray getRecentAssistantMessages(String sessionId, String cwd, int limit) {
+        try {
+            JsonObject jsonResult = runSessionQuery("getRecentAssistantMessages", sessionId, cwd,
+                    "getRecentAssistantMessages", String.valueOf(limit));
+
+            if (jsonResult.has("success") && jsonResult.get("success").getAsBoolean()) {
+                if (jsonResult.has("messages") && jsonResult.get("messages").isJsonArray()) {
+                    return jsonResult.getAsJsonArray("messages");
+                }
+                return new JsonArray();
+            }
+
+            if (jsonResult.has("incomplete") && jsonResult.get("incomplete").isJsonPrimitive()
+                    && jsonResult.get("incomplete").getAsBoolean()) {
+                return null;
+            }
+
+            String errorMsg = (jsonResult.has("error") && !jsonResult.get("error").isJsonNull())
+                    ? jsonResult.get("error").getAsString()
+                    : "Unknown error";
+            throw new RuntimeException("Get recent assistant messages failed: " + errorMsg);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to get recent assistant messages: " + e.getMessage(), e);
+        }
+    }
+
     private JsonObject runSessionQuery(String commandName, String sessionId, String cwd, String logPrefix) throws Exception {
         return runSessionQuery(commandName, sessionId, cwd, logPrefix, () -> false, new String[0]);
     }

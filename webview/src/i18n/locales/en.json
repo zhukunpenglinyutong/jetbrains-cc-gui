@@ -1527,6 +1527,20 @@
       "ALREADY_CLI_SESSION": "This session is already a CLI session",
       "CONVERSION_FAILED": "Conversion failed, please try again later"
     },
+    "forkSession": "Fork session",
+    "forkSuccess": "Session forked",
+    "forkFailed": "Fork failed",
+    "forkedTitleSuffix": " (fork)",
+    "forkFromHere": "Fork from this reply",
+    "forkErrors": {
+      "INVALID_SESSION_ID": "Invalid session ID",
+      "UNSUPPORTED_PROVIDER": "Fork is currently only supported for Claude sessions",
+      "SESSION_NOT_FOUND": "Session file not found",
+      "FILE_NOT_EXIST": "Session file does not exist",
+      "FORK_POINT_NOT_FOUND": "Fork point message not found in the session",
+      "UNRESOLVED_TOOL_USE": "Fork point's turn ends on an unresolved tool call",
+      "FORK_FAILED": "Fork failed, please try again later"
+    },
     "timeAgo": {
       "yearsAgo": "years ago",
       "monthsAgo": "months ago",

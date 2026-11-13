@@ -695,7 +695,6 @@ test('buildSessionMessagesPayload ignores null JSONL entries as before', () => {
   }
 });
 
-
 test('forEachJsonlLineSync splits lines across chunk boundaries without corrupting multi-byte text', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-jsonl-lines-'));
   try {
@@ -746,5 +745,153 @@ test('buildSessionMessagesPagePayload and buildSessionMessagesPayload read a tra
     assert.equal(full.messages.length, 80);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('getRecentAssistantMessages returns newest assistant rows oldest-first, skipping sidechains', () => {
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-claude-project-'));
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-claude-home-'));
+  try {
+    const sessionServiceUrl = new URL('./session-service.js', import.meta.url).href;
+    const pathUtilsUrl = new URL('../../utils/path-utils.js', import.meta.url).href;
+    // Child process for the same reasons as the other session queries: the service
+    // answers on stdout, and an isolated HOME keeps the project path in temp space.
+    const script = `
+      import assert from 'node:assert/strict';
+      import fs from 'node:fs';
+      import path from 'node:path';
+      const { getClaudeProjectSessionFilePath } = await import(${JSON.stringify(pathUtilsUrl)});
+      const { getRecentAssistantMessages } = await import(${JSON.stringify(sessionServiceUrl)});
+      const projectDir = ${JSON.stringify(projectDir)};
+      const file = getClaudeProjectSessionFilePath('session-1', projectDir);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, [
+        JSON.stringify({ type: 'assistant', uuid: 'a1', message: { role: 'assistant', content: [{ type: 'text', text: 'first' }] } }),
+        JSON.stringify({ type: 'assistant', uuid: 'side', isSidechain: true, message: { role: 'assistant', content: [{ type: 'text', text: 'sidechain' }] } }),
+        JSON.stringify({ type: 'user', uuid: 'u1', message: { role: 'user', content: 'prompt' } }),
+        JSON.stringify({ type: 'assistant', uuid: 'a2', message: { role: 'assistant', content: [{ type: 'text', text: 'second' }] } }),
+      ].join('\\n') + '\\n');
+      const chunks = [];
+      process.stdout.write = (chunk, encoding, callback) => {
+        chunks.push(typeof chunk === 'string' ? chunk : chunk.toString());
+        if (typeof callback === 'function') callback();
+        return true;
+      };
+      await getRecentAssistantMessages('session-1', projectDir, 5);
+      fs.writeSync(1, chunks.join(''));
+    `;
+    const output = execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+      cwd: process.cwd(),
+      env: { ...process.env, HOME: tempHome, USERPROFILE: tempHome },
+      encoding: 'utf8',
+      timeout: 30000,
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
+    const payload = JSON.parse(output.trim());
+    assert.equal(payload.success, true);
+    assert.deepEqual(payload.messages.map((row) => row.uuid), ['a1', 'a2']);
+    assert.equal(payload.messages[0].text, 'first');
+  } finally {
+    fs.rmSync(tempHome, { recursive: true, force: true });
+    fs.rmSync(projectDir, { recursive: true, force: true });
+  }
+});
+
+test('getRecentAssistantMessages reports an incomplete tail while the transcript is mid-append', () => {
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-claude-project-'));
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-claude-home-'));
+  try {
+    const sessionServiceUrl = new URL('./session-service.js', import.meta.url).href;
+    const pathUtilsUrl = new URL('../../utils/path-utils.js', import.meta.url).href;
+    const script = `
+      import assert from 'node:assert/strict';
+      import fs from 'node:fs';
+      import path from 'node:path';
+      const { getClaudeProjectSessionFilePath } = await import(${JSON.stringify(pathUtilsUrl)});
+      const { getRecentAssistantMessages } = await import(${JSON.stringify(sessionServiceUrl)});
+      const projectDir = ${JSON.stringify(projectDir)};
+      const file = getClaudeProjectSessionFilePath('session-1', projectDir);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      // The CLI appends row by row: a torn tail means the uuid-carrying row the
+      // backfiller is looking for may not be flushed yet. An incomplete response
+      // makes the Java caller retry instead of concluding "no match".
+      fs.writeFileSync(file, [
+        JSON.stringify({ type: 'assistant', uuid: 'a1', message: { role: 'assistant', content: [{ type: 'text', text: 'first' }] } }),
+        '{"type":"assistant","uuid":"a2","message":{"role":"assistant","content":[{"type":"text","text":"trunc',
+      ].join('\\n') + '\\n');
+      const chunks = [];
+      process.stdout.write = (chunk, encoding, callback) => {
+        chunks.push(typeof chunk === 'string' ? chunk : chunk.toString());
+        if (typeof callback === 'function') callback();
+        return true;
+      };
+      await getRecentAssistantMessages('session-1', projectDir, 5);
+      fs.writeSync(1, chunks.join(''));
+    `;
+    const output = execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+      cwd: process.cwd(),
+      env: { ...process.env, HOME: tempHome, USERPROFILE: tempHome },
+      encoding: 'utf8',
+      timeout: 30000,
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
+    const payload = JSON.parse(output.trim());
+    assert.equal(payload.success, false);
+    assert.equal(payload.incomplete, true);
+    assert.deepEqual(payload.messages, []);
+  } finally {
+    fs.rmSync(tempHome, { recursive: true, force: true });
+    fs.rmSync(projectDir, { recursive: true, force: true });
+  }
+});
+
+test('getRecentAssistantMessages collects only the live chain and skips tool-only rows', () => {
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-claude-project-'));
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-claude-home-'));
+  try {
+    const sessionServiceUrl = new URL('./session-service.js', import.meta.url).href;
+    const pathUtilsUrl = new URL('../../utils/path-utils.js', import.meta.url).href;
+    const script = `
+      import assert from 'node:assert/strict';
+      import fs from 'node:fs';
+      import path from 'node:path';
+      const { getClaudeProjectSessionFilePath } = await import(${JSON.stringify(pathUtilsUrl)});
+      const { getRecentAssistantMessages } = await import(${JSON.stringify(sessionServiceUrl)});
+      const projectDir = ${JSON.stringify(projectDir)};
+      const file = getClaudeProjectSessionFilePath('session-1', projectDir);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      // u1 -> a_old was rewound: u2 re-parents to u1 and the newest leaf lives on
+      // the new branch. a_old shares its text with a_new, so an unfiltered
+      // collection would hand the backfiller the abandoned branch's uuid.
+      fs.writeFileSync(file, [
+        JSON.stringify({ type: 'user', uuid: 'u1', parentUuid: null, timestamp: '2026-01-01T00:00:00Z', message: { role: 'user', content: 'prompt' } }),
+        JSON.stringify({ type: 'assistant', uuid: 'a_old', parentUuid: 'u1', timestamp: '2026-01-01T00:00:01Z', message: { role: 'assistant', content: [{ type: 'text', text: 'same reply' }] } }),
+        JSON.stringify({ type: 'user', uuid: 'u2', parentUuid: 'u1', timestamp: '2026-01-01T00:00:02Z', message: { role: 'user', content: 'retry' } }),
+        JSON.stringify({ type: 'assistant', uuid: 't1', parentUuid: 'u2', timestamp: '2026-01-01T00:00:03Z', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'call-1', name: 'Bash', input: {} }] } }),
+        JSON.stringify({ type: 'assistant', uuid: 'a_new', parentUuid: 't1', timestamp: '2026-01-01T00:00:04Z', message: { role: 'assistant', content: [{ type: 'text', text: 'same reply' }] } }),
+      ].join('\\n') + '\\n');
+      const chunks = [];
+      process.stdout.write = (chunk, encoding, callback) => {
+        chunks.push(typeof chunk === 'string' ? chunk : chunk.toString());
+        if (typeof callback === 'function') callback();
+        return true;
+      };
+      await getRecentAssistantMessages('session-1', projectDir, 5);
+      fs.writeSync(1, chunks.join(''));
+    `;
+    const output = execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+      cwd: process.cwd(),
+      env: { ...process.env, HOME: tempHome, USERPROFILE: tempHome },
+      encoding: 'utf8',
+      timeout: 30000,
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
+    const payload = JSON.parse(output.trim());
+    assert.equal(payload.success, true);
+    assert.deepEqual(payload.messages.map((row) => row.uuid), ['a_new']);
+    assert.equal(payload.messages[0].text, 'same reply');
+  } finally {
+    fs.rmSync(tempHome, { recursive: true, force: true });
+    fs.rmSync(projectDir, { recursive: true, force: true });
   }
 });

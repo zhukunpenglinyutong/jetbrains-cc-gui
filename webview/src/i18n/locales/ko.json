@@ -1161,6 +1161,20 @@
       "ALREADY_CLI_SESSION": "이 세션은 이미 CLI 세션입니다",
       "CONVERSION_FAILED": "변환 실패, 나중에 다시 시도하세요"
     },
+    "forkSession": "세션 포크",
+    "forkSuccess": "세션이 포크되었습니다",
+    "forkFailed": "포크 실패",
+    "forkedTitleSuffix": " (포크)",
+    "forkFromHere": "이 답변에서 포크",
+    "forkErrors": {
+      "INVALID_SESSION_ID": "잘못된 세션 ID",
+      "UNSUPPORTED_PROVIDER": "포크는 현재 Claude 세션만 지원합니다",
+      "SESSION_NOT_FOUND": "세션 파일을 찾을 수 없습니다",
+      "FILE_NOT_EXIST": "세션 파일이 존재하지 않습니다",
+      "FORK_POINT_NOT_FOUND": "세션에서 포크 지점 메시지를 찾을 수 없습니다",
+      "UNRESOLVED_TOOL_USE": "í¬í¬ ì§ì ì í´ì´ ê²°ê³¼ ìë ëêµ¬ í¸ì¶ë¡ ëë©ëë¤",
+      "FORK_FAILED": "포크에 실패했습니다. 나중에 다시 시도해 주세요"
+    },
     "entrypointLabel": {
       "sdk-cli": "SDK 세션",
       "claude-vscode": "VS Code",

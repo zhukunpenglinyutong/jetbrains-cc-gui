@@ -303,6 +303,44 @@ export async function getSessionMessages(sessionId, cwd = null) {
   }
 }
 
+/**
+ * Stream the tail of a session JSONL and invoke onRow(message) per parsed row.
+ *
+ * Reads only the last {@code tailBytes} for performance on large sessions and
+ * skips the potentially partial first line when reading from mid-file. Returns
+ * {@code { startByte, tailMalformed }}: tailMalformed is true while the most
+ * recent non-blank line failed to parse — a valid line clears it, so it ends up
+ * describing the LAST non-blank line alone, which is exactly what a torn tail
+ * is. Same semantics as SubagentHistoryService's readJsonl: only an unterminated
+ * tail means the writer is mid-append, while a corrupted line followed by valid
+ * ones is stale damage the file will never heal and must not block reads
+ * forever.
+ */
+async function scanSessionJsonlTail(sessionFile, tailBytes, onRow) {
+  const stat = statSync(sessionFile);
+  const startByte = Math.max(0, stat.size - tailBytes);
+  const rl = createInterface({
+    input: createReadStream(sessionFile, { encoding: 'utf8', start: startByte }),
+    crlfDelay: Infinity
+  });
+
+  let tailMalformed = false;
+  let firstLine = startByte > 0;
+  for await (const line of rl) {
+    // Skip potentially partial first line when reading from mid-file
+    if (firstLine) { firstLine = false; continue; }
+    if (!line.trim()) continue;
+    try {
+      const message = JSON.parse(line);
+      tailMalformed = false;
+      onRow(message);
+    } catch {
+      tailMalformed = true;
+    }
+  }
+  return { startByte, tailMalformed };
+}
+
 export async function getLatestUserMessage(sessionId, cwd = null) {
   try {
     const sessionFile = resolveSessionFile(sessionId, cwd);
@@ -315,39 +353,12 @@ export async function getLatestUserMessage(sessionId, cwd = null) {
       return;
     }
 
-    // Read only the tail of the file for performance on large sessions
-    const TAIL_BYTES = 32 * 1024;
-    const stat = statSync(sessionFile);
-    const startByte = Math.max(0, stat.size - TAIL_BYTES);
-
     let latestUserMessage = null;
-    // True while the most recent non-blank line failed to parse. A valid line
-    // clears it, so this ends up describing the LAST non-blank line alone — which
-    // is exactly what a torn tail is. Same semantics as SubagentHistoryService's
-    // readJsonl: only an unterminated tail means the writer is mid-append, while a
-    // corrupted line followed by valid ones is stale damage the file will never
-    // heal and must not block reads forever.
-    let tailMalformed = false;
-    const rl = createInterface({
-      input: createReadStream(sessionFile, { encoding: 'utf8', start: startByte }),
-      crlfDelay: Infinity
-    });
-
-    let firstLine = startByte > 0;
-    for await (const line of rl) {
-      // Skip potentially partial first line when reading from mid-file
-      if (firstLine) { firstLine = false; continue; }
-      if (!line.trim()) continue;
-      try {
-        const message = JSON.parse(line);
-        tailMalformed = false;
-        if (isUserTextMessage(message)) {
-          latestUserMessage = message;
-        }
-      } catch {
-        tailMalformed = true;
+    const { tailMalformed } = await scanSessionJsonlTail(sessionFile, 32 * 1024, (message) => {
+      if (isUserTextMessage(message)) {
+        latestUserMessage = message;
       }
-    }
+    });
 
     if (tailMalformed) {
       await writeJsonResponse({
@@ -365,6 +376,82 @@ export async function getLatestUserMessage(sessionId, cwd = null) {
     });
   } catch (error) {
     console.error('[GET_LATEST_USER_ERROR]', error.message);
+    await writeJsonResponse({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+/**
+ * Build the getRecentAssistantMessages response payload. Exported (not just
+ * inlined) so the chain filter + candidate collection is unit-testable without
+ * going through process.stdout.
+ *
+ * Returns the most recent assistant rows of the session's effective
+ * conversation, oldest first, each shaped as { uuid, text } where text is the
+ * row's joined text-block content. Feeds the Java-side assistant uuid backfill:
+ * streaming-mode assistant messages are synthesized from deltas by the bridge
+ * and never carry the row uuid that the CLI assigns when it appends the JSONL,
+ * so the chat cannot fork from them until the uuid is resolved against the
+ * transcript.
+ */
+export function buildRecentAssistantMessagesPayload(sessionFile, limit = 20) {
+  if (!existsSync(sessionFile)) {
+    return { success: true, messages: [] };
+  }
+
+  // getSession-style one-shot read: waiting for the writer costs nothing here,
+  // and a torn tail is exactly the "row not flushed yet" case — an incomplete
+  // response makes the Java caller retry instead of concluding "no match".
+  const parsed = readParsedHistory(sessionFile, true);
+  if (parsed.malformedTail) {
+    return {
+      success: false,
+      incomplete: true,
+      error: incompleteHistoryError(),
+      messages: [],
+    };
+  }
+  if (parsed.malformedLineNumbers.length > 0) {
+    console.warn('[RECENT_ASSISTANT_MALFORMED_LINES]', parsed.malformedLineNumbers.join(','));
+  }
+
+  // Rewind keeps abandoned branches on disk. Candidates must come from the
+  // live chain only: an abandoned assistant row whose text equals the current
+  // reply would otherwise be matched first (rows are oldest-first) and hand
+  // the backfiller a uuid that cuts the fork at the wrong turn.
+  const chain = selectConversationChain(parsed.messages);
+  const candidates = [];
+  for (const message of chain) {
+    if (
+      message &&
+      message.type === 'assistant' &&
+      typeof message.uuid === 'string' &&
+      !message.isSidechain
+    ) {
+      const text = extractTextContent(message);
+      // Tool-only rows carry no text: Java can never match an empty needle,
+      // so counting them would only evict real candidates from the limit.
+      if (!text.trim()) {
+        continue;
+      }
+      candidates.push({ uuid: message.uuid, text });
+    }
+  }
+
+  return {
+    success: true,
+    messages: candidates.slice(Math.max(0, candidates.length - limit)),
+  };
+}
+
+export async function getRecentAssistantMessages(sessionId, cwd = null, limit = 20) {
+  try {
+    const sessionFile = resolveSessionFile(sessionId, cwd);
+    await writeJsonResponse(buildRecentAssistantMessagesPayload(sessionFile, limit));
+  } catch (error) {
+    console.error('[GET_RECENT_ASSISTANT_ERROR]', error.message);
     await writeJsonResponse({
       success: false,
       error: error.message

@@ -16,9 +16,7 @@ import {
   isDependencyStatusResponse,
   settleDependencyStatusRequest,
 } from '../../../utils/bridgeStartup';
-
-// Matches session-titles-service.cjs#updateTitle, which rejects longer titles.
-const CUSTOM_TITLE_MAX_LENGTH = 50;
+import { CUSTOM_TITLE_MAX_LENGTH } from '../../../utils/sessionTitleLimit';
 
 export function registerSessionAndSdkCallbacks(
   options: UseWindowCallbacksOptions,
@@ -38,6 +36,7 @@ export function registerSessionAndSdkCallbacks(
     updateHistoryTitle,
     applyHistoryTitleLocal,
     setCustomSessionTitle,
+    loadHistorySessionRef,
   } = options;
 
   window.setSessionId = (sessionId: string) => {
@@ -62,6 +61,19 @@ export function registerSessionAndSdkCallbacks(
         updateHistoryTitle(sessionId, title);
       } else {
         applyHistoryTitleLocal(sessionId, title);
+      }
+    }
+
+    // A just-created fork carries the title the frontend requested, but its row
+    // is not in the history list yet (or was stale when opened), so the header
+    // would otherwise fall back to the message-derived title. Apply the pending
+    // fork title the moment this session becomes active.
+    const pendingForkTitle = window.__pendingForkTitle;
+    if (pendingForkTitle && pendingForkTitle.sessionId === sessionId) {
+      delete window.__pendingForkTitle;
+      if (pendingForkTitle.title) {
+        setCustomSessionTitle(pendingForkTitle.title);
+        applyHistoryTitleLocal(sessionId, pendingForkTitle.title);
       }
     }
   };
@@ -244,8 +256,13 @@ export function registerSessionAndSdkCallbacks(
       const errorCode = result.errorCode;
       let errorMessage = tRef.current('history.convertFailed');
 
-      if (errorCode && tRef.current(`history.conversionErrors.${errorCode}`)) {
-        errorMessage = tRef.current(`history.conversionErrors.${errorCode}`);
+      if (errorCode) {
+        // See the fork path: an empty default distinguishes a missing key from a
+        // real translation, which i18next would otherwise return as the key.
+        const translated = tRef.current(`history.conversionErrors.${errorCode}`, { defaultValue: '' });
+        if (translated) {
+          errorMessage = translated;
+        }
       }
 
       addToast(errorMessage, 'error');
@@ -259,5 +276,143 @@ export function registerSessionAndSdkCallbacks(
       addToast(tRef.current('history.convertFailed'), 'error');
       reloadHistory();
     }
+  };
+
+  // =========================================================================
+  // Session Fork Result Callback
+  // =========================================================================
+
+  /** Map a backend ForkResultCode to the localized message, with a generic fallback. */
+  const translateForkError = (errorCode: string | undefined): string => {
+    let errorMessage = tRef.current('history.forkFailed');
+    if (errorCode) {
+      // A missing key makes i18next echo the key itself, which is truthy; ask
+      // for an empty default so an untranslated code falls back to the generic
+      // message instead of leaking `history.forkErrors.XXX` into the toast.
+      const translated = tRef.current(`history.forkErrors.${errorCode}`, { defaultValue: '' });
+      if (translated) {
+        errorMessage = translated;
+      }
+    }
+    return errorMessage;
+  };
+
+  const handleForkSuccess = (
+    result: { newSessionId?: string; forkPointUuid?: string },
+    requestedTitle: string | undefined,
+  ) => {
+    // Consume the fork row's provider: the reload must query the store the fork
+    // came from, and the panel's currentProvider can be stale after switching
+    // chat providers without reopening the list (same reason delete requests
+    // carry their row provider).
+    const requestedProvider = window.__pendingForkProvider;
+    delete window.__pendingForkProvider;
+    // Reload so the fork row appears in the list. No optimistic insert: the
+    // row's messageCount/fileSize are only known to the backend, and unlike
+    // conversion there is no optimistic state to roll back on failure.
+    const provider = requestedProvider || options.currentProviderRef.current;
+    if (provider) {
+      sendBridgeEvent('deep_search_history', provider);
+    } else {
+      console.warn('[Frontend] Provider unavailable for fork list reload');
+    }
+
+    // A fork created from an assistant message switches straight to the fork so
+    // the user continues from that point; history-list forks keep the list open.
+    // The transition clears toasts, so a message-level fork defers its success
+    // toast until the switch completes (same mechanism as the delete toast);
+    // adding it directly here would be wiped before a single frame renders.
+    if (result.forkPointUuid && result.newSessionId) {
+      // Only the auto-opened fork needs the pending title: setSessionId applies
+      // it to the header, and the fork's row is not in the list yet. A
+      // history-list fork keeps the title the backend wrote through the
+      // custom-title service, so stashing it here would leave an unclaimed
+      // global waiting for a session the user may never open.
+      if (typeof requestedTitle === 'string') {
+        window.__pendingForkTitle = {
+          sessionId: result.newSessionId,
+          title: requestedTitle,
+        };
+      }
+      window.__pendingSessionTransitionToast = {
+        message: tRef.current('history.forkSuccess'),
+        type: 'success',
+      };
+      // Read through the ref: the closure would hold the mount-time
+      // loadHistorySession, whose `loading` is permanently false, so a
+      // mid-stream auto-open would skip the interrupt and clear messages
+      // under the live reply (see UseWindowCallbacksOptions). The loader
+      // takes the fork row's provider explicitly: the row is absent from
+      // historyData until the async list reload lands, and falling back to
+      // currentProvider would open the fork through whatever provider the
+      // panel switched to while the fork was running.
+      if (requestedProvider) {
+        loadHistorySessionRef?.current?.(result.newSessionId, requestedProvider);
+      } else {
+        loadHistorySessionRef?.current?.(result.newSessionId);
+      }
+    } else {
+      addToast(tRef.current('history.forkSuccess'), 'success');
+    }
+  };
+
+  /** Release the in-flight fork guard, its 60s backstop and its correlation id. */
+  const settleForkRequest = () => {
+    window.__forkInFlight = false;
+    if (window.__forkInFlightTimer != null) {
+      clearTimeout(window.__forkInFlightTimer);
+      delete window.__forkInFlightTimer;
+    }
+    delete window.__forkInFlightRequestId;
+  };
+
+  window.onForkResult = (json: string) => {
+    let result: {
+      requestId?: string;
+      success?: boolean;
+      newSessionId?: string;
+      forkPointUuid?: string;
+      errorCode?: string;
+    };
+    try {
+      result = JSON.parse(json);
+    } catch (error) {
+      console.error('[Frontend] Failed to parse fork result:', error);
+      settleForkRequest();
+      delete window.__pendingForkTitleRequest;
+      delete window.__pendingForkProvider;
+      addToast(tRef.current('history.forkFailed'), 'error');
+      return;
+    }
+    // Correlate the result with the request still in flight (mirrors the delete
+    // flow's requestId echo). The 60s backstop releases the guard while a large
+    // fork is still running, so the user can start fork B before fork A
+    // settles: without the id check, A's late result would clear B's guard,
+    // consume B's pending title/provider and auto-open A's session under B's
+    // title. A result without a requestId (older backend) belongs to the only
+    // request that could be in flight and is accepted as before; with no
+    // request in flight at all, the pending state belongs to that same fork
+    // and the result is honored so its row still lands in the list.
+    const activeRequestId = window.__forkInFlightRequestId;
+    if (activeRequestId != null && result.requestId != null
+        && result.requestId !== activeRequestId) {
+      console.warn('[Frontend] Ignored a stale fork result: request ' + result.requestId
+          + ' settled while ' + activeRequestId + ' is in flight');
+      return;
+    }
+    settleForkRequest();
+    if (result.success) {
+      // Consume the requested title on every outcome: a result without a new
+      // session id must not leave a stale title to be bound to some later fork.
+      const requestedTitle = window.__pendingForkTitleRequest;
+      delete window.__pendingForkTitleRequest;
+      handleForkSuccess(result, requestedTitle);
+      return;
+    }
+
+    addToast(translateForkError(result.errorCode), 'error');
+    // The fork never produced a session: drop the title it was waiting to bind.
+    delete window.__pendingForkTitleRequest;
+    delete window.__pendingForkProvider;
   };
 }

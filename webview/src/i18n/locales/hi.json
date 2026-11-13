@@ -1076,6 +1076,20 @@
       "ALREADY_CLI_SESSION": "यह सत्र पहले से ही CLI सत्र है",
       "CONVERSION_FAILED": "रूपांतरण विफल, कृपया बाद में पुनः प्रयास करें"
     },
+    "forkSession": "सेशन फोर्क करें",
+    "forkSuccess": "सेशन फोर्क हो गया",
+    "forkFailed": "फोर्क विफल रहा",
+    "forkedTitleSuffix": " (फोर्क)",
+    "forkFromHere": "इस उत्तर से फोर्क करें",
+    "forkErrors": {
+      "INVALID_SESSION_ID": "अमान्य सेशन ID",
+      "UNSUPPORTED_PROVIDER": "फोर्किंग फिलहाल केवल Claude सेशन के लिए समर्थित है",
+      "SESSION_NOT_FOUND": "सेशन फ़ाइल नहीं मिली",
+      "FILE_NOT_EXIST": "सेशन फ़ाइल मौजूद नहीं है",
+      "FORK_POINT_NOT_FOUND": "सेशन में फोर्क पॉइंट संदेश नहीं मिला",
+      "UNRESOLVED_TOOL_USE": "à¤«à¥à¤°à¥à¤ à¤¬à¤¿à¤à¤¦à¥ à¤à¤¾ à¤à¤°à¤£ à¤à¤ à¤à¤¨à¥à¤¤à¥à¤¤à¤°à¤¿à¤¤ à¤à¥à¤² à¤à¥à¤² à¤ªà¤° à¤¸à¤®à¤¾à¤ªà¥à¤¤ à¤¹à¥à¤¤à¤¾ à¤¹à¥",
+      "FORK_FAILED": "फोर्क विफल रहा, कृपया बाद में पुनः प्रयास करें"
+    },
     "entrypointLabel": {
       "sdk-cli": "SDK सत्र",
       "claude-vscode": "VS Code",

@@ -49,8 +49,11 @@ interface Window {
 
   /**
    * Patch a single message UUID without re-sending the full message list.
+   * The role names the pusher (user-row sync vs assistant backfill) so a push
+   * cannot be claimed by the other kind's unresolved message repeating the
+   * same text; callers without a role keep the legacy assistant-first order.
    */
-  patchMessageUuid?: (content: string, uuid: string) => void;
+  patchMessageUuid?: (content: string, uuid: string, role?: 'user' | 'assistant') => void;
 
   /**
    * Update status message
@@ -217,6 +220,18 @@ interface Window {
   onHistoryDeleteResult?: (json: string) => void;
 
   /**
+   * Session fork result callback.
+   * Called by the Java backend after attempting to fork (duplicate) a session.
+   * Payload: { requestId?: string, success: boolean, newSessionId?: string, errorCode?: string }.
+   * requestId echoes the fork request, so a result arriving after the 60s
+   * backstop released its guard cannot settle a different fork (mirrors the
+   * delete flow's requestId);
+   * newSessionId identifies the created fork on success;
+   * errorCode identifies the failure reason for i18n lookup.
+   */
+  onForkResult?: (json: string) => void;
+
+  /**
    * Add user message to chat (used for external Quick Fix feature)
    * Immediately shows the user's message in the chat UI before AI response
    */
@@ -240,6 +255,47 @@ interface Window {
     message: string;
     type?: 'success' | 'error' | 'warning' | 'info';
   };
+
+  /**
+   * Title the frontend asked the backend to set for a fork that is still being
+   * created. Bound to the fork's session id when onForkResult arrives, then
+   * applied by setSessionId once that session becomes active — the fork row is
+   * not in the history list yet, so the chat header would otherwise fall back
+   * to the message-derived title.
+   */
+  __pendingForkTitleRequest?: string;
+
+  __pendingForkTitle?: {
+    sessionId: string;
+    title: string;
+  };
+
+  /**
+   * Provider of the history row a pending fork was created from. The list
+   * reload after onForkResult must query that store: the panel's
+   * currentProvider can be stale after switching chat providers without
+   * reopening the list (same reason delete requests carry their row provider).
+   */
+  __pendingForkProvider?: string;
+
+  /** True while a fork request is awaiting onForkResult; blocks double submits. */
+  __forkInFlight?: boolean;
+
+  /**
+   * Correlation id of the fork request currently in flight. onForkResult
+   * settles the guard and the pending title/provider only when the result's
+   * echoed requestId matches — the 60s backstop can release the guard while a
+   * large fork still runs, and a late result of that abandoned request must
+   * not consume the state of the fork started meanwhile.
+   */
+  __forkInFlightRequestId?: string;
+
+  /**
+   * Handle of the 60s backstop timer arming {@link __forkInFlight}, so
+   * onForkResult can retire it the moment the fork settles instead of leaving
+   * a stale timer to release a later fork's guard early.
+   */
+  __forkInFlightTimer?: number;
 
   /**
    * Usage statistics update callback

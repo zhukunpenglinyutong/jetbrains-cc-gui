@@ -1532,6 +1532,20 @@
       "ALREADY_CLI_SESSION": "此会话已经是 CLI 会话",
       "CONVERSION_FAILED": "转换失败，请稍后重试"
     },
+    "forkSession": "分叉会话",
+    "forkSuccess": "会话已分叉",
+    "forkFailed": "分叉失败",
+    "forkedTitleSuffix": "（分叉）",
+    "forkFromHere": "从此回复分叉",
+    "forkErrors": {
+      "INVALID_SESSION_ID": "无效的会话 ID",
+      "UNSUPPORTED_PROVIDER": "目前仅支持分叉 Claude 会话",
+      "SESSION_NOT_FOUND": "未找到会话文件",
+      "FILE_NOT_EXIST": "会话文件不存在",
+      "FORK_POINT_NOT_FOUND": "会话中未找到分叉点消息",
+      "UNRESOLVED_TOOL_USE": "åæ¯ç¹çååå­å¨æªæ¶å°ç»æçå·¥å·è°ç¨",
+      "FORK_FAILED": "分叉失败，请稍后重试"
+    },
     "timeAgo": {
       "yearsAgo": "年前",
       "monthsAgo": "个月前",

@@ -81,6 +81,40 @@ const QuoteButton = memo(function QuoteButton({
   );
 });
 
+/** Fork icon (git branch) used by the assistant message fork button */
+const ForkIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="4.5" cy="3.5" r="1.7" stroke="currentColor" strokeWidth="1.3"/>
+    <circle cx="4.5" cy="12.5" r="1.7" stroke="currentColor" strokeWidth="1.3"/>
+    <circle cx="11.5" cy="5.5" r="1.7" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M4.5 5.2v5.6M11.5 7.2c0 2.2-2.6 2.4-5.6 2.9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+);
+
+interface ForkButtonProps {
+  onClick: () => void;
+  forkLabel: string;
+}
+
+const ForkButton = memo(function ForkButton({
+  onClick,
+  forkLabel,
+}: ForkButtonProps) {
+  return (
+    <button
+      type="button"
+      className="message-copy-btn message-fork-btn"
+      onClick={onClick}
+      title={forkLabel}
+      aria-label={forkLabel}
+    >
+      <span className="copy-icon">
+        <ForkIcon />
+      </span>
+    </button>
+  );
+});
+
 interface UserMessageHeaderProps {
   messageType: ClaudeMessage['type'];
   timestamp?: string;
@@ -139,10 +173,12 @@ interface AssistantMessageActionsProps {
   isCopied: boolean;
   onQuote: () => void;
   onCopy: () => void;
+  /** Present only for claude-provider messages with a row uuid: forks from this reply. */
+  onFork?: () => void;
   t: TFunction;
 }
 
-/** Copy and quote buttons for assistant messages only */
+/** Copy, quote and fork buttons for assistant messages only */
 export const AssistantMessageActions = memo(function AssistantMessageActions({
   messageType,
   isMessageStreaming,
@@ -151,11 +187,18 @@ export const AssistantMessageActions = memo(function AssistantMessageActions({
   isCopied,
   onQuote,
   onCopy,
+  onFork,
   t,
 }: AssistantMessageActionsProps) {
   if (messageType !== 'assistant' || isMessageStreaming || !hasCopyableText) return null;
   return (
     <>
+      {onFork && (
+        <ForkButton
+          onClick={onFork}
+          forkLabel={t('history.forkFromHere', 'Fork from this reply')}
+        />
+      )}
       <QuoteButton
         isQuoted={isQuoted}
         onClick={onQuote}

@@ -66,7 +66,15 @@ function createHarness(currentSessionId: string | null) {
   registerMessageCallbacks(options, () => {}, () => {});
   const dispatch = window.claudeHistoryPageInfo;
   if (!dispatch) throw new Error('claudeHistoryPageInfo was not registered');
-  return { storedTitles, startupHistoryUpdates, dispatch, getMessages: () => messages };
+  return {
+    storedTitles,
+    startupHistoryUpdates,
+    dispatch,
+    getMessages: () => messages,
+    seedMessages: (seed: ClaudeMessage[]) => {
+      messages = seed;
+    },
+  };
 }
 
 const pageInfo = (overrides: Record<string, unknown> = {}) => JSON.stringify({
@@ -191,5 +199,63 @@ describe('native Codex opaque history pages', () => {
     deliver('stale', 'prepend', ['stale'], 'opaque:next', null);
     expect(harness.getMessages()).toHaveLength(3);
     expect(window.__codexHistoryPageInfo?.cursor).toBe('opaque:older');
+  });
+});
+
+describe('patchMessageUuid', () => {
+  type Patch = (content: string, uuid: string, role?: 'user' | 'assistant') => void;
+  const patch = () => window.patchMessageUuid as Patch;
+  const rawUuids = (harness: ReturnType<typeof createHarness>) =>
+    harness.getMessages().map((message) => (typeof message.raw === 'object' ? message.raw?.uuid : null));
+
+  beforeEach(() => {
+    delete (window as unknown as Record<string, unknown>).__sessionTransitioning;
+  });
+
+  it('stamps the unresolved assistant reply an assistant push names', () => {
+    const harness = createHarness('s1');
+    harness.seedMessages([{ type: 'assistant', content: '收到' }]);
+
+    patch()('收到', 'row-1', 'assistant');
+
+    expect(rawUuids(harness)).toEqual(['row-1']);
+  });
+
+  it('never lets a user push claim an unresolved assistant reply with the same text', () => {
+    const harness = createHarness('s1');
+    // "继续" asked and answered verbatim: the push roles are what keep the two
+    // unresolved messages from trading uuids.
+    harness.seedMessages([
+      { type: 'user', content: '继续' },
+      { type: 'assistant', content: '继续' },
+    ]);
+
+    patch()('继续', 'user-row-1', 'user');
+
+    expect(rawUuids(harness)).toEqual(['user-row-1', null]);
+  });
+
+  it('never lets an assistant push claim an unresolved user message with the same text', () => {
+    const harness = createHarness('s1');
+    harness.seedMessages([
+      { type: 'user', content: '继续' },
+      { type: 'assistant', content: '继续' },
+    ]);
+
+    patch()('继续', 'assistant-row-1', 'assistant');
+
+    expect(rawUuids(harness)).toEqual([null, 'assistant-row-1']);
+  });
+
+  it('keeps the legacy assistant-first order for pushes without a role', () => {
+    const harness = createHarness('s1');
+    harness.seedMessages([
+      { type: 'user', content: 'hi' },
+      { type: 'assistant', content: 'hi' },
+    ]);
+
+    patch()('hi', 'legacy-uuid');
+
+    expect(rawUuids(harness)).toEqual([null, 'legacy-uuid']);
   });
 });
