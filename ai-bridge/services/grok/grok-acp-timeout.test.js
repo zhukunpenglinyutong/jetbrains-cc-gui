@@ -434,6 +434,31 @@ test('Review item 1c: hard cap on total request time terminates a hung turn desp
   assert.equal(client.isUnhealthy(), true);
 });
 
+test('control RPCs (session/new etc.) keep their fixed deadline despite stderr chatter; only session/prompt gets the turn cap', async (t) => {
+  createFakeGrokCli(
+    t,
+    `
+    if (msg.method === 'session/new') {
+      setInterval(() => {
+        process.stderr.write('[grok] retrying network...\\n');
+      }, 20);
+    }
+    `,
+  );
+
+  const client = await startWarmClient(t, {
+    env: { ...process.env, GROK_ACP_MAX_TURN_TIMEOUT_MS: String(60 * 60 * 1000) },
+  });
+
+  const startedAt = Date.now();
+  await assert.rejects(
+    () => client.request('session/new', {}, 150),
+    (err) => err.code === 'ACP_TIMEOUT',
+  );
+  const elapsed = Date.now() - startedAt;
+  assert.ok(elapsed >= 120 && elapsed < 600, `expected fixed 150ms deadline, got ${elapsed}ms`);
+});
+
 test('Review item 2: formatGrokError returns original ACP_TIMEOUT message even when stderr contains .403Z timestamps or oauth logs', () => {
   const err403Timestamp = Object.assign(new Error('ACP timeout waiting for session/prompt'), {
     code: 'ACP_TIMEOUT',

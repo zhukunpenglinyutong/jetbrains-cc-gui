@@ -391,16 +391,21 @@ export class GrokAcpClient {
       throw new Error('ACP client is not running');
     }
     const recycleOnTimeout = options.recycleOnTimeout !== false;
+    // Only the user turn may outlive its window; control RPCs keep their fixed deadline.
+    const isTurn = method === 'session/prompt';
     const rawMaxTimeout =
       options.maxTimeoutMs ??
       options.maxDurationMs ??
-      this.env?.GROK_ACP_MAX_TURN_TIMEOUT_MS ??
-      process.env?.GROK_ACP_MAX_TURN_TIMEOUT_MS;
+      (isTurn
+        ? this.env?.GROK_ACP_MAX_TURN_TIMEOUT_MS ?? process.env?.GROK_ACP_MAX_TURN_TIMEOUT_MS
+        : undefined);
     const parsedMaxTimeout = Number(rawMaxTimeout);
     const maxTimeoutMs =
       Number.isFinite(parsedMaxTimeout) && parsedMaxTimeout > 0
         ? Math.floor(parsedMaxTimeout)
-        : Math.max(timeoutMs, MAX_TURN_PROMPT_TIMEOUT_MS);
+        : isTurn
+          ? Math.max(timeoutMs, MAX_TURN_PROMPT_TIMEOUT_MS)
+          : timeoutMs;
     const deadlineAt = Date.now() + (recycleOnTimeout ? maxTimeoutMs : timeoutMs);
 
     const id = this.nextId++;
