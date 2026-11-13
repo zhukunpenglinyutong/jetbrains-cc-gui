@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+// happy-dom drops the first element DOMPurify >=3.4.17 sanitizes; jsdom and Chromium do not.
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import hljs from 'highlight.js/lib/core';
@@ -6,6 +8,12 @@ import {
   resetLinkifyCapabilities,
   setLinkifyCapabilities,
 } from '../utils/linkifyCapabilities';
+
+// jsdom has no Clipboard API; the copy tests spy on this stub.
+Object.defineProperty(navigator, 'clipboard', {
+  configurable: true,
+  value: { writeText: async () => {} },
+});
 
 const bridgeMocks = vi.hoisted(() => ({
   openBrowser: vi.fn(),
