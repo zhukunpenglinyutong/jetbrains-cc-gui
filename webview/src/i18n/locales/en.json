@@ -179,8 +179,7 @@
       "matchCase": "Match Case (Alt+C)",
       "wholeWord": "Match Whole Word (Alt+W)",
       "regex": "Use Regular Expression (Alt+R)",
-      "invalidRegex": "Invalid regex",
-      "openTooltip": "Search in conversation (Cmd/Ctrl+F)"
+      "invalidRegex": "Invalid regex"
     },
     "compactSummary": {
       "receivedTime": "Recorded time",
@@ -1975,6 +1974,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "Copy command",
+    "bashGroupCopyOutput": "Copy output",
+    "bashGroupOutput": "Output",
+    "bashGroupOutputFailed": "Failed",
+    "bashGroupRunning": "Running…",
+    "bashGroupNoOutput": "(no output)",
     "promptLabel": "Prompt",
     "updatePlan": "Update Plan",
     "applyPatch": "Apply Patch",
@@ -2460,11 +2465,6 @@
     },
     "omp": {
       "label": "OMP CLI"
-    },
-    "beta": {
-      "badge": "Beta",
-      "title": "Beta Feature",
-      "message": "This feature is still in Beta. If you encounter any bugs, please report them to the author promptly."
     },
     "dsh": {
       "label": "DeepSeek Harness"

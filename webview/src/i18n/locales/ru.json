@@ -141,8 +141,7 @@
       "matchCase": "Учитывать регистр (Alt+C)",
       "wholeWord": "Слово целиком (Alt+W)",
       "regex": "Регулярное выражение (Alt+R)",
-      "invalidRegex": "Недопустимое регулярное выражение",
-      "openTooltip": "Поиск в беседе (Cmd/Ctrl+F)"
+      "invalidRegex": "Недопустимое регулярное выражение"
     },
     "compactSummary": {
       "receivedTime": "Время записи",
@@ -1538,6 +1537,12 @@
     "bashGroupCompleted": "завершено",
     "bashGroupAllCompleted": "Все завершены",
     "bashGroupFailed": "ошибка",
+    "bashGroupCopyCommand": "Копировать команду",
+    "bashGroupCopyOutput": "Копировать вывод",
+    "bashGroupOutput": "Вывод",
+    "bashGroupOutputFailed": "Ошибка",
+    "bashGroupRunning": "Выполняется…",
+    "bashGroupNoOutput": "(нет вывода)",
     "promptLabel": "Промпт",
     "reportFindings": {
       "title": "Результаты ревью",

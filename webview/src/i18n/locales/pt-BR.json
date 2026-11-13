@@ -141,8 +141,7 @@
       "matchCase": "Diferenciar maiúsculas (Alt+C)",
       "wholeWord": "Palavra inteira (Alt+W)",
       "regex": "Expressão regular (Alt+R)",
-      "invalidRegex": "Regex inválida",
-      "openTooltip": "Pesquisar na conversa (Cmd/Ctrl+F)"
+      "invalidRegex": "Regex inválida"
     },
     "compactSummary": {
       "receivedTime": "Hora registrada",
@@ -1652,6 +1651,12 @@
     "bashGroupCompleted": "concluído",
     "bashGroupAllCompleted": "Todos Concluídos",
     "bashGroupFailed": "falhou",
+    "bashGroupCopyCommand": "Copiar comando",
+    "bashGroupCopyOutput": "Copiar saída",
+    "bashGroupOutput": "Saída",
+    "bashGroupOutputFailed": "Falhou",
+    "bashGroupRunning": "Executando…",
+    "bashGroupNoOutput": "(sem saída)",
     "updatePlan": "Atualizar Plano",
     "applyPatch": "Aplicar Patch",
     "reportFindings": {

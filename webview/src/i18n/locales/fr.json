@@ -141,8 +141,7 @@
       "matchCase": "Respecter la casse (Alt+C)",
       "wholeWord": "Mot entier (Alt+W)",
       "regex": "Expression régulière (Alt+R)",
-      "invalidRegex": "Regex invalide",
-      "openTooltip": "Rechercher dans la conversation (Cmd/Ctrl+F)"
+      "invalidRegex": "Regex invalide"
     },
     "compactSummary": {
       "receivedTime": "Heure enregistrée",
@@ -1512,6 +1511,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "Copier la commande",
+    "bashGroupCopyOutput": "Copier la sortie",
+    "bashGroupOutput": "Sortie",
+    "bashGroupOutputFailed": "Échec",
+    "bashGroupRunning": "En cours…",
+    "bashGroupNoOutput": "(aucune sortie)",
     "reportFindings": {
       "title": "Constats de la revue",
       "findingsCount_one": "{{count}} constat",
