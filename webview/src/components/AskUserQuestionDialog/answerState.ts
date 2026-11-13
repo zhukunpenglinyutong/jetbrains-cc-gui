@@ -94,7 +94,7 @@ export const formatAnswers = (
   questions.forEach((q) => {
     const key = q.id ?? q.question;
     const selectedSet = answers[key] || new Set<string>();
-    const customText = (customInputs[key] || '').trim();
+    const customText = q.choiceOnly ? '' : (customInputs[key] || '').trim();
 
     // Filter out the "Other" marker, get actually selected options
     const selectedLabels = Array.from(selectedSet).filter(label => label !== OTHER_OPTION_MARKER);

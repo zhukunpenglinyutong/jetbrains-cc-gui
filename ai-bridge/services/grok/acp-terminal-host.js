@@ -184,13 +184,49 @@ export function writeTempScript(commandLine) {
   return scriptPath;
 }
 
+function killTerminalProcess(child, signal) {
+  if (!child) return;
+  if (process.platform !== 'win32' && typeof child.pid === 'number' && child.pid > 0) {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch {
+      // EPERM / ESRCH: fall back to direct child.kill
+    }
+  }
+  try {
+    child.kill(signal);
+  } catch {
+    // ignore EPERM / ESRCH
+  }
+}
+
+function isProcessGroupAlive(child) {
+  if (!child) return false;
+  if (process.platform !== 'win32' && typeof child.pid === 'number' && child.pid > 0) {
+    try {
+      process.kill(-child.pid, 0);
+      return true;
+    } catch (err) {
+      if (err && err.code === 'EPERM') return true;
+      return false;
+    }
+  }
+  return child.exitCode === null && child.signalCode === null;
+}
+
+/**
+ * Host for ACP terminal/* lifecycle commands and child process execution.
+ */
 export class AcpTerminalHost {
   /**
-   * @param {object} opts
-   * @param {string} [opts.defaultCwd]
-   * @param {NodeJS.ProcessEnv} [opts.env]
-   * @param {(event: string, data?: any) => void} [opts.onEvent]
-   * @param {(info: {command:string,args:string[],cwd:string,sessionId:string}) => Promise<boolean>} [opts.authorizeCreate]
+   * Creates an ACP terminal host instance.
+   *
+   * @param {object} [opts] Host configuration options
+   * @param {string} [opts.defaultCwd] Default working directory for spawned commands
+   * @param {NodeJS.ProcessEnv} [opts.env] Base environment variables for spawned commands
+   * @param {(event: string, data?: any) => void} [opts.onEvent] Event listener callback
+   * @param {(info: {command:string,args:string[],cwd:string,sessionId:string}) => Promise<boolean>} [opts.authorizeCreate] Authorization callback before spawning
    */
   constructor({ defaultCwd = process.cwd(), env = process.env, onEvent, authorizeCreate } = {}) {
     this.defaultCwd = defaultCwd || process.cwd();
@@ -201,6 +237,11 @@ export class AcpTerminalHost {
     this.terminals = new Map();
   }
 
+  /**
+   * Returns the number of tracked terminals.
+   *
+   * @return {number} count of active or retained terminal entries
+   */
   size() {
     return this.terminals.size;
   }
@@ -229,6 +270,12 @@ export class AcpTerminalHost {
     }
   }
 
+  /**
+   * Spawns a new terminal command after checking authorization and registers its output stream.
+   *
+   * @param {object} [params] Terminal creation parameters
+   * @return {Promise<{terminalId: string}>} created terminal identifier object
+   */
   async create(params = {}) {
     const command = params.command;
     if (!command || !String(command).trim()) {
@@ -370,14 +417,38 @@ export class AcpTerminalHost {
       exitCode: null,
       signal: null,
       exited: false,
+      closedPipes: false,
       released: false,
       child,
       exitPromise: null,
+      closePromise: null,
       scriptPath, // may be null; used for cleanup on close
     };
 
+    const cleanupTempScript = () => {
+      if (state.scriptPath) {
+        const toRemove = state.scriptPath;
+        state.scriptPath = null;
+        try {
+          fs.rmSync(path.dirname(toRemove), { recursive: true, force: true });
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    let resolveClose;
+    state.closePromise = new Promise((resolve) => {
+      resolveClose = resolve;
+    });
+
     state.exitPromise = new Promise((resolve) => {
+      let exitDrainTimer = null;
       const finish = (code, signal) => {
+        if (exitDrainTimer) {
+          clearTimeout(exitDrainTimer);
+          exitDrainTimer = null;
+        }
         if (state.exited) return;
         state.exited = true;
         state.exitCode = code == null ? null : Number(code);
@@ -391,17 +462,25 @@ export class AcpTerminalHost {
       };
       child.on('error', (err) => {
         this.#append(state, `[spawn error] ${err.message || String(err)}\n`);
+        state.closedPipes = true;
+        resolveClose();
         finish(1, null);
       });
+      child.on('exit', (code, signal) => {
+        // When a command backgrounds a child (e.g. `sleep 30 &`), the login shell
+        // exits immediately while the backgrounded grandchild keeps stdout/stderr
+        // open, delaying `close`. Give buffered output a short window to drain,
+        // then mark the terminal exited so `wait_for_exit` does not hang.
+        exitDrainTimer = setTimeout(() => {
+          cleanupTempScript();
+          finish(code, signal);
+        }, 50);
+        exitDrainTimer.unref?.();
+      });
       child.on('close', (code, signal) => {
-        // Best-effort cleanup of any temp script we created for complex payloads.
-        if (state.scriptPath) {
-          try {
-            fs.rmSync(path.dirname(state.scriptPath), { recursive: true, force: true });
-          } catch {
-            // ignore
-          }
-        }
+        state.closedPipes = true;
+        resolveClose();
+        cleanupTempScript();
         finish(code, signal);
       });
     });
@@ -476,44 +555,63 @@ export class AcpTerminalHost {
     };
   }
 
-  async kill(params = {}) {
-    const state = this.#get(params.terminalId || params.terminal_id);
-    if (!state.exited && state.child && !state.child.killed) {
-      try {
-        state.child.kill('SIGTERM');
-      } catch {
-        // ignore
-      }
-      // Force kill shortly after if still running
-      setTimeout(() => {
-        if (!state.exited && state.child && !state.child.killed) {
-          try {
-            state.child.kill('SIGKILL');
-          } catch {
-            // ignore
-          }
+  async #terminateProcess(state) {
+    if (!state?.child) return;
+    const needsKill = () =>
+      !state.exited || !state.closedPipes || isProcessGroupAlive(state.child);
+
+    if (needsKill()) {
+      killTerminalProcess(state.child, 'SIGTERM');
+      const sigkillTimer = setTimeout(() => {
+        if (needsKill()) {
+          killTerminalProcess(state.child, 'SIGKILL');
         }
-      }, 500).unref?.();
-    }
-    // Wait briefly for exit so subsequent output has status
-    if (!state.exited) {
+      }, 500);
+      sigkillTimer.unref?.();
+
+      const waitUntil = Date.now() + 1000;
       await Promise.race([
-        state.exitPromise,
+        state.closePromise,
         new Promise((r) => setTimeout(r, 1000)),
       ]);
+      while (isProcessGroupAlive(state.child) && Date.now() < waitUntil) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      if (!needsKill()) {
+        clearTimeout(sigkillTimer);
+      }
     }
-    // Best-effort cleanup of any temp script
+
     if (state.scriptPath) {
+      const toRemove = state.scriptPath;
+      state.scriptPath = null;
       try {
-        fs.rmSync(path.dirname(state.scriptPath), { recursive: true, force: true });
+        fs.rmSync(path.dirname(toRemove), { recursive: true, force: true });
       } catch {
         // ignore
       }
     }
+  }
+
+  /**
+   * Terminates a running terminal process (and its process group on POSIX).
+   *
+   * @param {object} [params] Kill parameters containing terminalId
+   * @return {Promise<object>} empty JSON-RPC result object
+   */
+  async kill(params = {}) {
+    const state = this.#get(params.terminalId || params.terminal_id);
+    await this.#terminateProcess(state);
     this.onEvent('kill', { terminalId: state.terminalId });
     return {};
   }
 
+  /**
+   * Releases a terminal entry and terminates its process if still running.
+   *
+   * @param {object} [params] Release parameters containing terminalId
+   * @return {Promise<object>} empty JSON-RPC result object
+   */
   async release(params = {}) {
     const id = params.terminalId || params.terminal_id;
     const state = this.terminals.get(id);
@@ -521,27 +619,8 @@ export class AcpTerminalHost {
       // Idempotent release
       return {};
     }
-    if (!state.exited && state.child && !state.child.killed) {
-      try {
-        state.child.kill('SIGTERM');
-      } catch {
-        // ignore
-      }
-      try {
-        state.child.kill('SIGKILL');
-      } catch {
-        // ignore
-      }
-    }
+    await this.#terminateProcess(state);
     state.released = true;
-    // Best-effort cleanup of any temp script
-    if (state && state.scriptPath) {
-      try {
-        fs.rmSync(path.dirname(state.scriptPath), { recursive: true, force: true });
-      } catch {
-        // ignore
-      }
-    }
     this.terminals.delete(id);
     this.onEvent('release', { terminalId: id });
     return {};
