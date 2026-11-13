@@ -21,6 +21,7 @@ export function normalizeQuestion(raw: any): Question | null {
   // explicitly mark optional properties with `required: false`.
   const required = typeof raw.required === 'boolean' ? raw.required : true;
   const isSecret = raw.isSecret === true || raw.secret === true;
+  const choiceOnly = raw.choiceOnly === true;
   const detail = typeof raw.detail === 'string' ? raw.detail : '';
   const intent = normalizeIntent(raw.intent);
   const rawOptions = Array.isArray(raw.options) ? raw.options : (Array.isArray(raw.choices) ? raw.choices : []);
@@ -43,6 +44,7 @@ export function normalizeQuestion(raw: any): Question | null {
     multiSelect,
     required,
     ...(isSecret ? { isSecret: true } : {}),
+    ...(choiceOnly ? { choiceOnly: true } : {}),
     ...(detail ? { detail } : {}),
     ...(intent ? { intent } : {}),
   };
