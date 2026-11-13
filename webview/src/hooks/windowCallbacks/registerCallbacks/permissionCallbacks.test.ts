@@ -399,6 +399,85 @@ it('offers confirm and cancel for MCP user verification and maps cancel to the n
   expect(JSON.parse(call![1] as string).result).toEqual({ action: 'cancel', content: null });
 });
 
+describe('MCP tool-call approval with an empty form schema (issue 2079)', () => {
+  const meta = { codex_approval_kind: 'mcp_tool_call' };
+
+  function requestElicitation(requestedSchema: unknown) {
+    const { result } = renderHook(() => useDialogManagement({ t }));
+    act(() => { registerDialogCallbacks(result.current); });
+    act(() => {
+      window.onCodexRuntimeEvent?.(JSON.stringify({
+        kind: 'interactionRequested',
+        channelId: 'C',
+        interactionKey: 'mcp-key',
+        dialogToken: 'mcp-token',
+        deliverySequence: 1,
+        payload: {
+          method: 'mcpServer/elicitation/request',
+          params: {
+            serverName: 'noop',
+            request: { mode: 'form', message: 'Allow the noop tool?', _meta: meta, requestedSchema },
+          },
+        },
+      }));
+    });
+    return result;
+  }
+
+  function sentResult() {
+    const call = vi.mocked(sendBridgeEvent).mock.calls.find(([event]) => event === 'codex_interaction_response');
+    return call ? JSON.parse(call[1] as string).result : undefined;
+  }
+
+  const emptySchema = { type: 'object', properties: {} };
+
+  it('offers Allow and Deny instead of an unsupported-format dialog', () => {
+    const result = requestElicitation(emptySchema);
+    const questions = result.current.currentAskUserQuestionRequest?.questions;
+    expect(questions).toHaveLength(1);
+    expect(questions?.[0]?.question).toBe('Allow the noop tool?');
+    expect(questions?.[0]?.options.map(option => option.label)).toEqual(['Allow', 'Deny']);
+  });
+
+  it('maps Allow to accept with empty content and keeps _meta', () => {
+    const result = requestElicitation(emptySchema);
+    const id = result.current.currentAskUserQuestionRequest!.questions[0]!.id!;
+    act(() => { result.current.handleAskUserQuestionSubmit('mcp-key', { [id]: 'Allow' }); });
+    expect(sentResult()).toEqual({ action: 'accept', content: {}, _meta: meta });
+  });
+
+  it('maps Deny to decline without content', () => {
+    const result = requestElicitation(emptySchema);
+    const id = result.current.currentAskUserQuestionRequest!.questions[0]!.id!;
+    act(() => { result.current.handleAskUserQuestionSubmit('mcp-key', { [id]: 'Deny' }); });
+    expect(sentResult()).toEqual({ action: 'decline', content: null, _meta: meta });
+  });
+
+  it('does not treat free text as an approval', () => {
+    const result = requestElicitation(emptySchema);
+    const id = result.current.currentAskUserQuestionRequest!.questions[0]!.id!;
+    act(() => { result.current.handleAskUserQuestionSubmit('mcp-key', { [id]: 'sure, go ahead' }); });
+    expect(sentResult().action).toBe('decline');
+  });
+
+  it('maps closing the dialog to cancel', () => {
+    const result = requestElicitation(emptySchema);
+    act(() => { result.current.handleAskUserQuestionCancel('mcp-key'); });
+    expect(sentResult()).toEqual({ action: 'cancel', content: null, _meta: meta });
+  });
+
+  it('still reports malformed schemas as invalid question data', () => {
+    expect(requestElicitation(undefined).current.currentAskUserQuestionRequest?.questions).toEqual([]);
+    expect(requestElicitation({ type: 'object' }).current.currentAskUserQuestionRequest?.questions).toEqual([]);
+  });
+
+  it('keeps one question per field for a normal form', () => {
+    const result = requestElicitation({ type: 'object', properties: { name: { type: 'string' } } });
+    const questions = result.current.currentAskUserQuestionRequest?.questions;
+    expect(questions?.map(question => question.id)).toEqual(['name']);
+  });
+});
+
 describe('Codex command approval suggestions', () => {
   const ruleDecision = { acceptWithExecpolicyAmendment: { execpolicy_amendment: ['git', 'status'] } };
 

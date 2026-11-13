@@ -3,6 +3,12 @@ import { createElement } from 'react';
 import { Modal } from 'antd';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import type { AskUserQuestionRequest, Question } from '../../../components/AskUserQuestionDialog';
+import {
+  CODEX_EMPTY_FORM_ALLOW_LABEL,
+  CODEX_EMPTY_FORM_DENY_LABEL,
+  CODEX_EMPTY_FORM_QUESTION_ID,
+  isEmptyFormSchema,
+} from '../../codexElicitation';
 
 type PermissionCallbacks = Pick<UseWindowCallbacksOptions,
   | 'openPermissionDialog' | 'openAskUserQuestionDialog' | 'openPlanApprovalDialog'
@@ -144,6 +150,22 @@ function buildMcpQuestionRequest(
   let questions = mode === 'form'
     ? schemaQuestions(nativeRequest, serverName)
     : [];
+  // A form with no fields (MCP tool-call approvals) is a pure allow/deny prompt.
+  if (mode === 'form' && questions.length === 0 && isEmptyFormSchema(requestedSchema)) {
+    questions = [{
+      id: CODEX_EMPTY_FORM_QUESTION_ID,
+      question: typeof nativeRequest.message === 'string' && nativeRequest.message
+        ? nativeRequest.message
+        : 'Do you want to allow this MCP request?',
+      header: serverName ?? 'MCP server',
+      options: [
+        { label: CODEX_EMPTY_FORM_ALLOW_LABEL, description: 'Allow the MCP request.' },
+        { label: CODEX_EMPTY_FORM_DENY_LABEL, description: 'Deny the MCP request.' },
+      ],
+      multiSelect: false,
+      required: true,
+    }];
+  }
   if (mode === 'url') {
     questions = [{
       id: '__codex_url__',
