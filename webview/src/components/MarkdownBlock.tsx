@@ -1,4 +1,4 @@
-import { marked } from 'marked';
+import { marked, type Token } from 'marked';
 import DOMPurify from 'dompurify';
 import { memo, useMemo, useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -240,7 +240,9 @@ function makeStreamSafe(content: string): string {
 
   // If still inside a code block, append a closing fence
   if (fence.open) {
-    result = result + '\n' + fence.marker;
+    // Indent the temporary closer into the owning list item; at column 0 marked
+    // ends the item there and opens a second, empty fence.
+    result = result + '\n' + ' '.repeat(fence.container) + fence.marker;
   }
 
   // Handle inline code: detect unclosed inline code (`)
@@ -318,10 +320,11 @@ function splitMarkdownBlocks(content: string): string[] {
 
     if (trimmed === '') {
       // A blank line inside a list item does not end that item: the following
-      // indented content still belongs to it. Splitting here would turn a fence
-      // indented 4+ spaces into a top-level indented code block, which renders
-      // the backticks literally and escapes the code's generics as prose.
-      if (scan.containers.length > 0 && nextLineColumn(lines, index + 1) >= containerColumn(scan)) {
+      // content still belongs to it when it reaches any open item, not only the
+      // innermost one. Splitting here would turn a fence indented 4+ spaces into
+      // a top-level indented code block, which renders the backticks literally
+      // and escapes the code's generics as prose.
+      if (scan.containers.length > 0 && nextLineColumn(lines, index + 1) >= scan.containers[0]) {
         current.push(line);
         continue;
       }
@@ -475,6 +478,13 @@ function stripAndEscapeOutsideCodeBlocks(content: string): string {
     .join('');
 }
 
+/** The text marked parses: math delimiters normalized, prose tags stripped and escaped. */
+function prepareMarkdown(content: string): string {
+  return stripAndEscapeOutsideCodeBlocks(
+    normalizeIndentedDisplayMath(normalizeBracketMathDelimiters(content)),
+  );
+}
+
 function isLatexCodeLanguage(language: string | null): boolean {
   return language !== null && LATEX_CODE_LANGUAGES.has(language.toLowerCase());
 }
@@ -537,10 +547,7 @@ function renderFullMarkdownHtml(
   try {
     // Strip system-internal XML tags and escape remaining XML tags outside code blocks
     // (mirrors CLI's stripPromptXMLTags + html token discard)
-    const cleaned = stripAndEscapeOutsideCodeBlocks(
-      normalizeIndentedDisplayMath(normalizeBracketMathDelimiters(content)),
-    );
-    const parsed = marked.parse(cleaned);
+    const parsed = marked.parse(prepareMarkdown(content));
     const sanitized = DOMPurify.sanitize(
       typeof parsed === 'string' ? parsed : String(parsed),
       {
@@ -651,6 +658,11 @@ interface BlockSectionProps {
 const TAB_WIDTH = 4;
 const LIST_MARKER_RE = /^([-*+]|\d{1,9}[.)])([ \t]+)(.*)$/;
 const FENCE_LINE_RE = /^(`{3,}|~{3,})(.*)$/;
+/**
+ * Heading, quote and rule lines end a list item instead of continuing it lazily,
+ * as in marked. HTML starts are left out: tags are escaped before marked parses.
+ */
+const ITEM_END_RE = /^(?:#|>|([-*_])(?:[ \t]*\1){2,}[ \t]*$)/;
 
 /** Visual column of a line's first non-whitespace character, tabs advancing to the next four-column stop. */
 function leadingColumn(line: string): number {
@@ -764,6 +776,9 @@ function scanLine(line: string, scan: FenceScan): boolean {
   const content = lineContent(line);
 
   if (scan.marker) {
+    // shortcut: an unindented line inside a list item's fence stays code even where
+    // marked ends the item (its tags can then vanish); following marked would turn
+    // the rest of the answer into one code block whenever the closer is unindented.
     const fence = FENCE_LINE_RE.exec(content);
     const indentation = leadingColumn(line) - scan.fenceContainer;
     if (
@@ -798,7 +813,8 @@ function scanLine(line: string, scan: FenceScan): boolean {
   while (scan.containers.length > 0 && column < containerColumn(scan)) {
     const lazyContinuation = scan.paragraphOpen
       && !LIST_MARKER_RE.test(content)
-      && !fenceMarkerOf(content);
+      && !fenceMarkerOf(content)
+      && !ITEM_END_RE.test(content);
     if (lazyContinuation) {
       break;
     }
@@ -868,7 +884,7 @@ function getFenceState(source: string) {
     scanLine(line, scan);
     if (previous && !scan.marker) closed++;
   }
-  return { open: scan.marker !== '', marker: scan.marker, closed };
+  return { open: scan.marker !== '', marker: scan.marker, container: scan.fenceContainer, closed };
 }
 
 function useStreamingHighlightSource(source: string, isStreamingTail: boolean) {
@@ -985,7 +1001,13 @@ const BlockSection = memo(function BlockSection({
     if (!button) return;
     const code = button.closest('.code-block-wrapper')?.querySelector('pre code');
     const index = Array.from(event.currentTarget.querySelectorAll('pre code')).indexOf(code as HTMLElement);
-    const token = marked.lexer(source).filter(token => token.type === 'code')[index];
+    // Lex the text the renderer parses (raw tags can open HTML blocks that hide a
+    // fence) and walk nested tokens, so code tokens line up with rendered blocks.
+    const codeTokens: Token[] = [];
+    marked.walkTokens(marked.lexer(prepareMarkdown(source)), (token) => {
+      if (token.type === 'code') codeTokens.push(token);
+    });
+    const token = codeTokens[index];
     if (!token || token.type !== 'code') return;
     event.preventDefault();
     event.stopPropagation();
