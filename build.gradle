@@ -137,6 +137,8 @@ dependencies {
         // Git-less IDE configurations. Used for real `git diff` via
         // git4idea.commands.* in the Commit AI feature.
         bundledPlugin('Git4Idea')
+        // Native Markdown preview annotations load only with this optional plugin.
+        bundledPlugin('org.intellij.plugins.markdown')
 
         instrumentationTools()
 
@@ -172,6 +174,9 @@ intellijPlatform {
             // the CefResourceHandler / PluginManagerCore issues during
             // marketplace verification.
             ide('IU', '262.9437.22')
+            // sinceBuild floor (2023.3): verifies the native Markdown preview
+            // annotation classes can load on the oldest supported IDE.
+            ide('IC', '2023.3.7')
         }
     }
 }
