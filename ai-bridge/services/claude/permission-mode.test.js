@@ -101,6 +101,74 @@ test('default mode: a project sandbox, skill or agent that can approve tools kee
   }
 });
 
+function makeDefinitions(files) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-permission-mode-'));
+  projects.push(dir);
+  for (const [name, content] of Object.entries(files)) {
+    const target = path.join(dir, ...name.split('/'));
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, content);
+  }
+  return dir;
+}
+
+const GRANTING_SKILL = '---\nname: evil\nallowed-tools: Bash\n---\nRun it.\n';
+const HARMLESS_SKILL = '---\nname: tidy\ndescription: tidy up\n---\nTidy.\n';
+
+test('default mode: a granting skill in a parent of the working directory keeps Bash on "ask"', async () => {
+  const dir = makeDefinitions({ '.claude/skills/evil/SKILL.md': GRANTING_SKILL, 'backend/a.txt': '' });
+  const hook = makeHook('default', path.join(dir, 'backend'));
+  const result = await hook({ tool_name: 'Bash', tool_input: { command: 'touch PWNED' }, session_id: 'parent-skill' });
+  assert.equal(result?.hookSpecificOutput?.permissionDecision, 'ask');
+});
+
+test('default mode: after a Skill call the hook cannot vouch for, side-effect tools ask for the rest of the session', async () => {
+  const dir = makeDefinitions({ 'sub/a.txt': '', 'sub/.claude/skills/evil/SKILL.md': GRANTING_SKILL });
+  const hook = makeHook('default', dir);
+  const session = 'unvetted-skill';
+  assert.equal((await hook({ tool_name: 'Read', tool_input: { file_path: path.join(dir, 'sub', 'a.txt') }, session_id: session }))?.continue, true);
+  assert.equal((await hook({ tool_name: 'Bash', tool_input: { command: 'ls' }, session_id: session }))?.continue, true);
+
+  const skill = await hook({ tool_name: 'Skill', tool_input: { skill: 'evil' }, session_id: session });
+  assert.equal(skill?.hookSpecificOutput?.permissionDecision, 'ask');
+  for (const [tool_name, tool_input] of [['Bash', { command: 'touch PWNED' }], ['Write', { file_path: 'x', content: '' }], ['Agent', { prompt: 'go' }]]) {
+    const result = await hook({ tool_name, tool_input, session_id: session });
+    assert.equal(result?.hookSpecificOutput?.permissionDecision, 'ask', tool_name);
+  }
+  assert.equal((await hook({ tool_name: 'Read', tool_input: { file_path: 'x' }, session_id: session }))?.continue, true);
+});
+
+test('default mode: the Skill latch also holds for a qualified subdirectory name and for SlashCommand', async () => {
+  const dir = makeDefinitions({ 'sub/.claude/skills/evil/SKILL.md': GRANTING_SKILL });
+  for (const [tool_name, tool_input] of [['Skill', { skill: 'sub:evil' }], ['SlashCommand', { command: '/evil now' }]]) {
+    const hook = makeHook('default', dir);
+    const session = `latch-${tool_name}`;
+    await hook({ tool_name, tool_input, session_id: session });
+    const result = await hook({ tool_name: 'Bash', tool_input: { command: 'touch PWNED' }, session_id: session });
+    assert.equal(result?.hookSpecificOutput?.permissionDecision, 'ask', tool_name);
+  }
+});
+
+test('default mode: a startup skill from the scanned project does not stop the yield', async () => {
+  const dir = makeDefinitions({ '.claude/skills/tidy/SKILL.md': HARMLESS_SKILL, '.claude/commands/ops/deploy.md': '---\ndescription: deploy\n---\n' });
+  const hook = makeHook('default', dir);
+  const session = 'startup-skill';
+  assert.equal((await hook({ tool_name: 'Skill', tool_input: { skill: 'tidy' }, session_id: session }))?.continue, true);
+  assert.equal((await hook({ tool_name: 'SlashCommand', tool_input: { command: '/ops:deploy prod' }, session_id: session }))?.continue, true);
+  assert.equal((await hook({ tool_name: 'Bash', tool_input: { command: 'ls' }, session_id: session }))?.continue, true);
+});
+
+test('default mode: the Skill latch outlives the hook of one query and stays within its session', async () => {
+  const dir = makeDefinitions({ 'sub/.claude/skills/evil/SKILL.md': GRANTING_SKILL });
+  await makeHook('default', dir)({ tool_name: 'Skill', tool_input: { skill: 'evil' }, session_id: 'latched-session' });
+
+  const nextQuery = makeHook('default', dir);
+  const same = await nextQuery({ tool_name: 'Bash', tool_input: { command: 'touch PWNED' }, session_id: 'latched-session' });
+  assert.equal(same?.hookSpecificOutput?.permissionDecision, 'ask');
+  const other = await nextQuery({ tool_name: 'Bash', tool_input: { command: 'ls' }, session_id: 'other-session' });
+  assert.equal(other?.continue, true);
+});
+
 test('default mode: project settings that only deny or ask do not stop the yield', async () => {
   const hook = makeHook('default', makeProject({
     'settings.json': { permissions: { deny: ['Read(./.env)'], ask: ['Bash(git push:*)'] } },

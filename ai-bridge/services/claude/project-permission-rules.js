@@ -204,7 +204,8 @@ function readFrom(fd, length, position, budget) {
   return buffer.subarray(0, bytes);
 }
 
-function definitionGrants(file, budget) {
+/** The frontmatter blocks of a Markdown file, or INCOMPLETE when it is still open after the read limit. */
+function readFrontmatterBlocks(file, budget) {
   const fd = fs.openSync(file, 'r');
   try {
     const size = fs.fstatSync(fd).size;
@@ -215,11 +216,16 @@ function definitionGrants(file, budget) {
       head = Buffer.concat([head, rest]);
       blocks = frontmatterBlocks(head.toString('utf8'), head.length >= size);
     }
-    if (blocks === INCOMPLETE) return true;
-    return blocks.some(block => frontmatterGrants(block, budget));
+    return blocks;
   } finally {
     fs.closeSync(fd);
   }
+}
+
+function definitionGrants(file, budget) {
+  const blocks = readFrontmatterBlocks(file, budget);
+  if (blocks === INCOMPLETE) return true;
+  return blocks.some(block => frontmatterGrants(block, budget));
 }
 
 function readSettings(file, budget) {
@@ -285,41 +291,153 @@ function anyDefinitionGrants(root, budget) {
   return walk(root, 0);
 }
 
+function newBudget() {
+  return { remaining: MAX_TOTAL_READ_BYTES, parseRemaining: MAX_TOTAL_PARSE_CHARS };
+}
+
+/** The working directory and each of its parents up to the filesystem root. */
+function selfAndAncestors(cwd) {
+  const dirs = [];
+  let dir = path.resolve(cwd);
+  for (;;) {
+    dirs.push(dir);
+    const parent = path.dirname(dir);
+    if (parent === dir) return dirs;
+    dir = parent;
+  }
+}
+
 /**
- * Whether the project's own Claude configuration in the working directory can approve
- * tool calls without asking:
- * - .claude/settings.json or .claude/settings.local.json with allow rules, a permissive
- *   default mode, a PreToolUse hook or a sandbox that auto-allows Bash;
- * - an agent, skill or command under .claude/agents, .claude/skills or .claude/commands
- *   whose YAML frontmatter pre-approves tools (allowed-tools), sets a permissive
+ * Whether the project's own Claude configuration can approve tool calls without asking:
+ * - .claude/settings.json or .claude/settings.local.json in the working directory with
+ *   allow rules, a permissive default mode, a PreToolUse hook or a sandbox that
+ *   auto-allows Bash;
+ * - an agent, skill or command under .claude/agents, .claude/skills or .claude/commands in
+ *   the working directory or any parent directory (the CLI loads definitions from parents
+ *   too) whose YAML frontmatter pre-approves tools (allowed-tools), sets a permissive
  *   permissionMode or declares a PreToolUse hook.
  *
  * All of these come with the repository, so a repository the user merely opened can ship
  * them. Anything that cannot be read, parsed or fully scanned counts as such a rule,
  * because it cannot be shown to be safe. The user's own configuration directory, also when
  * reached through a link, is never treated as project configuration.
+ *
+ * Skills the CLI discovers later in subdirectories are not scanned here; the hook stops
+ * trusting the session once a skill it cannot vouch for is invoked (isKnownStaticSkill).
  */
 export function projectHasAutoApproveRules(cwd) {
   if (!cwd || typeof cwd !== 'string') return true;
 
+  const budget = newBudget();
   const claudeDir = path.join(cwd, '.claude');
-  if (isUserConfigDir(claudeDir)) return false;
-
-  const budget = { remaining: MAX_TOTAL_READ_BYTES, parseRemaining: MAX_TOTAL_PARSE_CHARS };
-  for (const name of PROJECT_SETTINGS_FILES) {
-    let raw;
-    try {
-      raw = readSettings(path.join(claudeDir, name), budget);
-    } catch (error) {
-      if (isMissing(error)) continue;
-      return true;
-    }
-    try {
-      if (definesAutoApprove(JSON.parse(raw))) return true;
-    } catch {
-      return true;
+  if (!isUserConfigDir(claudeDir)) {
+    for (const name of PROJECT_SETTINGS_FILES) {
+      let raw;
+      try {
+        raw = readSettings(path.join(claudeDir, name), budget);
+      } catch (error) {
+        if (isMissing(error)) continue;
+        return true;
+      }
+      try {
+        if (definesAutoApprove(JSON.parse(raw))) return true;
+      } catch {
+        return true;
+      }
     }
   }
 
-  return DEFINITION_DIRS.some(sub => anyDefinitionGrants(path.join(claudeDir, sub), budget));
+  for (const dir of selfAndAncestors(cwd)) {
+    const definitions = path.join(dir, '.claude');
+    if (isUserConfigDir(definitions)) continue;
+    if (DEFINITION_DIRS.some(sub => anyDefinitionGrants(path.join(definitions, sub), budget))) return true;
+  }
+  return false;
+}
+
+/** The entry of dir named exactly name (case-sensitive, also on Windows), or null. */
+function exactEntry(dir, name) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir);
+  } catch (error) {
+    if (isMissing(error)) return null;
+    throw error;
+  }
+  return entries.includes(name) ? path.join(dir, name) : null;
+}
+
+/**
+ * Whether a definition is one the CLI lists under exactly this name from startup: its
+ * frontmatter parses, does not rename it and does not make it conditional (paths), since
+ * the CLI holds conditional skills back and a later skill could take the name.
+ */
+function isPlainStaticDefinition(file, expectedName, budget) {
+  const blocks = readFrontmatterBlocks(file, budget);
+  if (blocks === INCOMPLETE) return false;
+  for (const block of blocks) {
+    if (block.length > MAX_FRONTMATTER_PARSE_CHARS) return false;
+    const doc = YAML.parseDocument(block, { merge: false, uniqueKeys: false });
+    if (doc.errors.length > 0) return false;
+    const contents = YAML.isAlias(doc.contents) ? doc.contents.resolve(doc) : doc.contents;
+    if (contents === null || contents === undefined) continue;
+    if (!YAML.isMap(contents)) return false;
+    for (const pair of contents.items) {
+      const key = normalizeKey(toJS(pair.key, doc));
+      if (key === '<<') return false;
+      const value = toJS(pair.value, doc);
+      if (key === 'paths' && nonEmpty(value)) return false;
+      if (key === 'name' && value !== null && value !== undefined && String(value) !== expectedName) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Whether a skill name passed to the Skill tool resolves to a definition loaded at
+ * startup from the user's configuration directory or from .claude in the working
+ * directory or a parent: .claude/skills/<name>/SKILL.md, or .claude/commands/<a>/<b>.md
+ * for "a:b".
+ *
+ * The CLI discovers more skills while it works, from .claude/skills in any subdirectory
+ * a tool touches. Such a skill cannot take a name that a startup skill already has: it is
+ * only reachable by a directory-qualified name. So only a bare name found here, spelled
+ * exactly the same, resolves to a definition this module has scanned (or the user's own).
+ * Every other name may be a skill that was never scanned.
+ */
+export function isKnownStaticSkill(cwd, skillName) {
+  if (!cwd || typeof cwd !== 'string' || typeof skillName !== 'string') return false;
+  const name = skillName.trim().replace(/^\//, '');
+  if (!name || /[\0/\\]/.test(name)) return false;
+  const segments = name.split(':');
+  if (segments.some(segment => !segment || segment === '.' || segment === '..')) return false;
+
+  const roots = [getClaudeDir(), process.env.CLAUDE_CONFIG_DIR]
+    .filter(Boolean)
+    .concat(selfAndAncestors(cwd).map(dir => path.join(dir, '.claude')));
+  const budget = newBudget();
+  let found = false;
+  try {
+    for (const root of roots) {
+      const definitions = [];
+      const skillDir = exactEntry(path.join(root, 'skills'), name);
+      const skillFile = skillDir && exactEntry(skillDir, 'SKILL.md');
+      if (skillFile) definitions.push(skillFile);
+
+      let commandDir = path.join(root, 'commands');
+      for (const segment of segments.slice(0, -1)) {
+        commandDir = commandDir && exactEntry(commandDir, segment);
+      }
+      const commandFile = commandDir && exactEntry(commandDir, `${segments[segments.length - 1]}.md`);
+      if (commandFile) definitions.push(commandFile);
+
+      for (const file of definitions) {
+        if (!fs.statSync(file).isFile() || !isPlainStaticDefinition(file, name, budget)) return false;
+        found = true;
+      }
+    }
+  } catch {
+    return false;
+  }
+  return found;
 }

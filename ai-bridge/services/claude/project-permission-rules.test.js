@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { projectHasAutoApproveRules } from './project-permission-rules.js';
+import { isKnownStaticSkill, projectHasAutoApproveRules } from './project-permission-rules.js';
 
 const created = [];
 
@@ -337,4 +337,100 @@ test('the user configuration directory reached through a link is never read as p
     if (previous === undefined) delete process.env.CLAUDE_CONFIG_DIR;
     else process.env.CLAUDE_CONFIG_DIR = previous;
   }
+});
+
+function withConfigDir(dir, run) {
+  const previous = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = dir;
+  try {
+    return run();
+  } finally {
+    if (previous === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = previous;
+  }
+}
+
+function subdirectory(dir, ...parts) {
+  const target = path.join(dir, ...parts);
+  fs.mkdirSync(target, { recursive: true });
+  return target;
+}
+
+test('a granting skill, agent or command in a parent directory of the working directory is detected', () => {
+  const skill = makeProject({ 'skills/evil/SKILL.md': '---\nname: evil\nallowed-tools: Bash\n---\n' });
+  assert.equal(projectHasAutoApproveRules(subdirectory(skill, 'backend')), true);
+  assert.equal(projectHasAutoApproveRules(subdirectory(skill, 'backend', 'src')), true);
+
+  const agent = makeProject({ 'agents/ed.md': '---\nname: ed\npermissionMode: acceptEdits\n---\n' });
+  assert.equal(projectHasAutoApproveRules(subdirectory(agent, 'backend')), true);
+
+  const command = makeProject({ 'commands/deploy.md': '---\nallowed-tools: Bash\n---\n' });
+  assert.equal(projectHasAutoApproveRules(subdirectory(command, 'backend')), true);
+});
+
+test('harmless definitions in a parent directory do not stop the yield', () => {
+  const dir = makeProject({ 'skills/tidy/SKILL.md': '---\nname: tidy\ndescription: tidy up\n---\n' });
+  assert.equal(projectHasAutoApproveRules(subdirectory(dir, 'backend')), false);
+});
+
+test('the user configuration directory among the parents is not read as project configuration', () => {
+  const dir = makeProject({ 'skills/mine/SKILL.md': '---\nallowed-tools: Bash\n---\n' });
+  const cwd = subdirectory(dir, 'backend');
+  assert.equal(withConfigDir(path.join(dir, '.claude'), () => projectHasAutoApproveRules(cwd)), false);
+});
+
+test('a startup skill in the working directory, a parent or the user configuration resolves to a scanned definition', () => {
+  const dir = makeProject({
+    'skills/tidy/SKILL.md': '---\nname: tidy\ndescription: tidy up\n---\n',
+    'skills/plain/SKILL.md': 'No frontmatter.\n',
+    'commands/ops/deploy.md': '---\ndescription: deploy\n---\n',
+  });
+  assert.equal(isKnownStaticSkill(dir, 'tidy'), true);
+  assert.equal(isKnownStaticSkill(dir, '/tidy'), true);
+  assert.equal(isKnownStaticSkill(dir, 'plain'), true);
+  assert.equal(isKnownStaticSkill(dir, 'ops:deploy'), true);
+  assert.equal(isKnownStaticSkill(subdirectory(dir, 'backend'), 'tidy'), true);
+
+  const config = makeProject({ 'skills/mine/SKILL.md': '---\nname: mine\nallowed-tools: Bash\n---\n' });
+  const elsewhere = makeProject();
+  assert.equal(withConfigDir(path.join(config, '.claude'), () => isKnownStaticSkill(elsewhere, 'mine')), true);
+});
+
+test('a skill that only exists in a subdirectory is not a startup skill', () => {
+  const dir = makeProject();
+  const sub = subdirectory(dir, 'sub', '.claude', 'skills', 'evil');
+  fs.writeFileSync(path.join(sub, 'SKILL.md'), '---\nname: evil\nallowed-tools: Bash\n---\n');
+  assert.equal(isKnownStaticSkill(dir, 'evil'), false);
+  assert.equal(isKnownStaticSkill(dir, 'sub:evil'), false);
+});
+
+test('names that do not resolve exactly to a startup definition are not trusted', () => {
+  const dir = makeProject({ 'skills/tidy/SKILL.md': '---\nname: tidy\n---\n' });
+  for (const name of ['Tidy', 'TIDY', 'missing', '', '  ', '../tidy', 'tidy/SKILL', 'skills\\tidy', 'a::b', ':tidy', 'plugin:tidy', '.', '..']) {
+    assert.equal(isKnownStaticSkill(dir, name), false, JSON.stringify(name));
+  }
+  assert.equal(isKnownStaticSkill(dir, undefined), false);
+  assert.equal(isKnownStaticSkill(dir, 42), false);
+  assert.equal(isKnownStaticSkill('', 'tidy'), false);
+});
+
+test('a conditional, renamed or unreadable startup skill does not keep its name for itself', () => {
+  const dir = makeProject({
+    'skills/scoped/SKILL.md': '---\nname: scoped\npaths: ["src/**"]\n---\n',
+    'skills/renamed/SKILL.md': '---\nname: other\n---\n',
+    'skills/broken/SKILL.md': '---\nname: broken\ndescription: "unterminated\n---\n',
+    'skills/merged/SKILL.md': '---\nbase: &b {paths: ["src/**"]}\n<<: *b\n---\n',
+    'skills/open/SKILL.md': `---\nname: open\npadding: ${'x'.repeat(66 * 1024)}\n`,
+  });
+  for (const name of ['scoped', 'renamed', 'broken', 'merged', 'open']) {
+    assert.equal(isKnownStaticSkill(dir, name), false, name);
+  }
+});
+
+test('one unvetted definition of a name in any startup location is enough to distrust it', () => {
+  const parent = makeProject({ 'skills/tidy/SKILL.md': '---\nname: tidy\npaths: ["**"]\n---\n' });
+  const cwd = subdirectory(parent, 'backend');
+  fs.mkdirSync(path.join(cwd, '.claude', 'skills', 'tidy'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, '.claude', 'skills', 'tidy', 'SKILL.md'), '---\nname: tidy\n---\n');
+  assert.equal(isKnownStaticSkill(cwd, 'tidy'), false);
 });
