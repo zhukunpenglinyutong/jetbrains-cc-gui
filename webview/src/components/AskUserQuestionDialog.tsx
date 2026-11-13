@@ -33,6 +33,8 @@ export interface Question {
   /** Optional MCP form fields may be left blank. */
   required?: boolean;
   isSecret?: boolean;
+  /** Only the listed options are valid answers: no "Other" row and no free text. */
+  choiceOnly?: boolean;
   /**
    * Supporting detail rendered with the question but kept out of the option
    * labels — DSH carries the plan under review here, so dropping it left the

@@ -439,18 +439,55 @@ describe('MCP tool-call approval with an empty form schema (issue 2079)', () => 
     expect(questions?.[0]?.options.map(option => option.label)).toEqual(['Allow', 'Deny']);
   });
 
-  it('maps Allow to accept with empty content and keeps _meta', () => {
+  it('maps Allow to a one-time accept without echoing _meta', () => {
     const result = requestElicitation(emptySchema);
     const id = result.current.currentAskUserQuestionRequest!.questions[0]!.id!;
     act(() => { result.current.handleAskUserQuestionSubmit('mcp-key', { [id]: 'Allow' }); });
-    expect(sentResult()).toEqual({ action: 'accept', content: {}, _meta: meta });
+    expect(sentResult()).toEqual({ action: 'accept', content: {} });
+  });
+
+  it('does not widen Allow when the request offers a string persist mode', () => {
+    const { result } = renderHook(() => useDialogManagement({ t }));
+    act(() => { registerDialogCallbacks(result.current); });
+    act(() => {
+      window.onCodexRuntimeEvent?.(JSON.stringify({
+        kind: 'interactionRequested', channelId: 'C', interactionKey: 'mcp-key', dialogToken: 'mcp-token',
+        deliverySequence: 1,
+        payload: { method: 'mcpServer/elicitation/request', params: {
+          serverName: 'plugin', mode: 'form', message: 'Allow?', requestedSchema: emptySchema,
+          _meta: { codex_approval_kind: 'mcp_tool_call', persist: 'session' } } },
+      }));
+    });
+    const id = result.current.currentAskUserQuestionRequest!.questions[0]!.id!;
+    act(() => { result.current.handleAskUserQuestionSubmit('mcp-key', { [id]: 'Allow' }); });
+    expect(sentResult()._meta).toBeUndefined();
+  });
+
+  it('does not offer Allow for a tool suggestion, which Allow could not install', () => {
+    const { result } = renderHook(() => useDialogManagement({ t }));
+    act(() => { registerDialogCallbacks(result.current); });
+    act(() => {
+      window.onCodexRuntimeEvent?.(JSON.stringify({
+        kind: 'interactionRequested', channelId: 'C', interactionKey: 'mcp-key', dialogToken: 'mcp-token',
+        deliverySequence: 1,
+        payload: { method: 'mcpServer/elicitation/request', params: {
+          serverName: 'plugin', mode: 'form', message: 'Install?', requestedSchema: emptySchema,
+          _meta: { codex_approval_kind: 'tool_suggestion', persist: 'always' } } },
+      }));
+    });
+    expect(result.current.currentAskUserQuestionRequest?.questions).toEqual([]);
+  });
+
+  it('restricts the Allow/Deny question to its two options', () => {
+    const result = requestElicitation(emptySchema);
+    expect(result.current.currentAskUserQuestionRequest?.questions[0]?.choiceOnly).toBe(true);
   });
 
   it('maps Deny to decline without content', () => {
     const result = requestElicitation(emptySchema);
     const id = result.current.currentAskUserQuestionRequest!.questions[0]!.id!;
     act(() => { result.current.handleAskUserQuestionSubmit('mcp-key', { [id]: 'Deny' }); });
-    expect(sentResult()).toEqual({ action: 'decline', content: null, _meta: meta });
+    expect(sentResult()).toEqual({ action: 'decline', content: null });
   });
 
   it('does not treat free text as an approval', () => {

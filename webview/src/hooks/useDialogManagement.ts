@@ -512,11 +512,11 @@ export function useDialogManagement({ t, addToast }: UseDialogManagementOptions)
           const choice = answers[CODEX_EMPTY_FORM_QUESTION_ID];
           const allowed = (Array.isArray(choice) ? choice[0] : choice) === CODEX_EMPTY_FORM_ALLOW_LABEL;
           // Anything but an explicit Allow (including free text) is a denial.
-          const decision: Record<string, unknown> = allowed
+          // No _meta echo: Codex reads a string `persist` in the reply as "remember
+          // for the session" (tool calls) or "never suggest again" (tool suggestions).
+          return sendCodexQuestionResult(current, allowed
             ? { action: 'accept', content: {} }
-            : { action: 'decline', content: null };
-          if (elicitation.meta !== undefined) decision._meta = elicitation.meta;
-          return sendCodexQuestionResult(current, decision);
+            : { action: 'decline', content: null });
         }
         const result: Record<string, unknown> = {
           action: elicitation?.mode === 'userVerification'

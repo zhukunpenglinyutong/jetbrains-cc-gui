@@ -8,6 +8,7 @@ import {
   CODEX_EMPTY_FORM_DENY_LABEL,
   CODEX_EMPTY_FORM_QUESTION_ID,
   isEmptyFormSchema,
+  isToolSuggestion,
 } from '../../codexElicitation';
 
 type PermissionCallbacks = Pick<UseWindowCallbacksOptions,
@@ -151,7 +152,7 @@ function buildMcpQuestionRequest(
     ? schemaQuestions(nativeRequest, serverName)
     : [];
   // A form with no fields (MCP tool-call approvals) is a pure allow/deny prompt.
-  if (mode === 'form' && questions.length === 0 && isEmptyFormSchema(requestedSchema)) {
+  if (mode === 'form' && questions.length === 0 && isEmptyFormSchema(requestedSchema) && !isToolSuggestion(meta)) {
     questions = [{
       id: CODEX_EMPTY_FORM_QUESTION_ID,
       question: typeof nativeRequest.message === 'string' && nativeRequest.message
@@ -164,6 +165,7 @@ function buildMcpQuestionRequest(
       ],
       multiSelect: false,
       required: true,
+      choiceOnly: true,
     }];
   }
   if (mode === 'url') {
