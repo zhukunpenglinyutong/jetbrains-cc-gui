@@ -195,6 +195,15 @@ public class PathUtils {
         return path.startsWith(prefix);
     }
 
+    /** True for a UNC path to another machine (any {@code //} or {@code \\} prefix except the WSL roots). */
+    public static boolean isRemoteUncPath(String path) {
+        if (path == null) {
+            return false;
+        }
+        String p = path.replace('\\', '/');
+        return p.startsWith("//") && !isWslUncPath(p);
+    }
+
     /** True for the WSL UNC roots ({@code \\wsl.localhost\...}, {@code \\wsl$\...}) in either slash form. */
     private static boolean isWslUncPath(String path) {
         String p = path.replace('\\', '/');
