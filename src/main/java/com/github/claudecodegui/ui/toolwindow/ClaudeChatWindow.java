@@ -1672,9 +1672,6 @@ public class ClaudeChatWindow {
             return;
         }
 
-        if (savedState.permissionMode != null && !savedState.permissionMode.trim().isEmpty()) {
-            session.setPermissionMode(savedState.permissionMode);
-        }
         if (savedState.provider != null && !savedState.provider.trim().isEmpty()) {
             session.setProvider(savedState.provider);
             // HandlerContext keeps its own currentProvider (read by
@@ -1688,6 +1685,10 @@ public class ClaudeChatWindow {
             if (handlerContext != null) {
                 handlerContext.setCurrentProvider(savedState.provider);
             }
+        }
+        // After the provider: SessionState drops "sandbox" while the provider is not gemini.
+        if (savedState.permissionMode != null && !savedState.permissionMode.trim().isEmpty()) {
+            session.setPermissionMode(savedState.permissionMode);
         }
         if (savedState.model != null && !savedState.model.trim().isEmpty()) {
             session.setModel(savedState.model);

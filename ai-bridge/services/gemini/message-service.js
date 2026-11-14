@@ -583,6 +583,8 @@ const IGNORED_WORK_CWD_DIRS = new Set([
   'out',
 ]);
 const MAX_WORK_CWD_SCAN_DEPTH = 2;
+// Total CLI silence, in idle windows, after which project file changes stop deferring the reap.
+const WORK_CWD_MAX_SILENCE_WINDOWS = 2;
 const MAX_WORK_CWD_SCAN_ENTRIES = 500;
 const GIT_STATUS_TIMEOUT_MS = 1500;
 const MAX_GIT_STATUS_PATHS = 500;
@@ -1774,7 +1776,11 @@ export async function sendMessage({
       // stops an armed timer from delaying a runner that is done otherwise.
       reapTimer.unref?.();
     };
+    // Last time the CLI itself showed life (stdout line, stderr, stored thinking).
+    // Deferrals in reapHungTurn deliberately do not move it.
+    let lastCliActivityAt = Date.now();
     const resetIdleReapTimer = () => {
+      lastCliActivityAt = Date.now();
       if (reapTimer !== null) {
         armIdleReapTimer();
       }
@@ -1974,10 +1980,13 @@ export async function sendMessage({
         const now = Date.now();
         const silenceMs = idleReapMinutes * 60 * 1000;
         const activeSessionId = polledSessionId || currentSessionId || discoverTurnConversationId();
+        // Project file changes cannot be told apart from the user's own edits in the
+        // IDE, so they may only extend a silent turn up to WORK_CWD_MAX_SILENCE_WINDOWS.
+        const workCwdMayDefer = now - lastCliActivityAt < silenceMs * WORK_CWD_MAX_SILENCE_WINDOWS;
         let hasLiveActivity = isTurnActivityLive({
           sessionId: activeSessionId,
           cliHome,
-          workCwd: trackedWorkCwd,
+          workCwd: workCwdMayDefer ? trackedWorkCwd : '',
           silenceMs,
           now,
           state: turnActivityState,
@@ -2035,6 +2044,7 @@ export async function sendMessage({
       emitEndStream: false,
       onSpawn: (child) => {
         reapChild = child;
+        lastCliActivityAt = Date.now();
         armIdleReapTimer();
         ensureThinkingPoll();
       },
@@ -2370,6 +2380,8 @@ export async function sendMessage({
               schedulePostResultKill();
             } else if (!shown) {
               emptyAnswerPending = true;
+              // The kill makes the close handler flush the pending (empty) answer.
+              schedulePostResultKill();
             } else {
               emitStreamEndOnce();
               emitSuccessFooter();

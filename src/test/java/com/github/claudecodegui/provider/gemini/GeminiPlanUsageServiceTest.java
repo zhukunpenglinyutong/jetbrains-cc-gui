@@ -146,8 +146,12 @@ public class GeminiPlanUsageServiceTest {
     }
 
     private static void setGeminiCliForTests(String binaryPath) throws Exception {
+        setGeminiCliStatusForTests(CliToolStatus.installed(CliToolId.GEMINI, "1.1.26", binaryPath));
+    }
+
+    private static void setGeminiCliStatusForTests(CliToolStatus status) throws Exception {
         Map<String, CliToolStatus> map = new HashMap<>();
-        map.put(CliToolId.GEMINI.getId(), CliToolStatus.installed(CliToolId.GEMINI, "1.1.26", binaryPath));
+        map.put(CliToolId.GEMINI.getId(), status);
         Class<?> cachedClass = Class.forName("com.github.claudecodegui.cli.CliStatusDetector$CachedDetection");
         Constructor<?> ctor = cachedClass.getDeclaredConstructor(Map.class, long.class);
         ctor.setAccessible(true);
@@ -373,6 +377,19 @@ public class GeminiPlanUsageServiceTest {
         GeminiPlanUsageService.resolvePlanUsagePayload(
                 "gemini-3.7-flash-high", t0 + GeminiPlanUsageService.OLD_CLI_NEGATIVE_TTL_MS + 1);
         assertEquals(2, calls[0]);
+    }
+
+    @Test
+    public void missingCliIsRedetectedOnTheNextPollAfterInstall() throws Exception {
+        setGeminiCliStatusForTests(CliToolStatus.notInstalled(CliToolId.GEMINI));
+        long t0 = 1_000_000L;
+        assertFalse(GeminiPlanUsageService.geminiCliStatus(t0).isInstalled());
+
+        // The user runs the installer; the next 120 s poll must see it.
+        setGeminiCliForTests("/mock/agy");
+        CliToolStatus afterInstall = GeminiPlanUsageService.geminiCliStatus(t0 + 120_000L);
+        assertTrue(afterInstall.isInstalled());
+        assertEquals("1.1.26", afterInstall.getVersion());
     }
 
     @Test

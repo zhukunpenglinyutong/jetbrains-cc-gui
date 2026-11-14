@@ -214,6 +214,12 @@ if (mode) {
     await new Promise((res) => setTimeout(res, 1700));
     await write(result);
     process.exit(0);
+  } else if (mode === 'cwd-churn-hang') {
+    // Hung CLI while project files keep changing (the user editing in the IDE).
+    const conv = process.env.FAKE_CONV_ID || CONV;
+    await write(JSON.stringify({ event: 'init', conversation_id: conv, init: { cwd: process.cwd(), tools: [], permission_mode: 'default' } }));
+    let n = 0;
+    setInterval(() => { fs.writeFileSync('user-edit.txt', 'edit ' + (n += 1)); }, 400);
   } else if (mode === 'stderr-reset-reap') {
     const conv = process.env.FAKE_CONV_ID || CONV;
     const init = JSON.stringify({ event: 'init', conversation_id: conv, init: { cwd: process.cwd(), tools: [], permission_mode: 'default' } });
@@ -2337,6 +2343,31 @@ test('Story 1.10 post-result reap: a CLI that hangs after emitting a SUCCESS res
   assert.match(stderr, /post-result idle reap/);
 });
 
+test('post-result kill: an empty SUCCESS result followed by a hang ends the turn even with the idle reaper off', async () => {
+  const convId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+  const customLines = [
+    { event: 'init', conversation_id: convId, init: { cwd: '/tmp', tools: [], permission_mode: 'default' } },
+    { event: 'result', result: { conversation_id: convId, status: 'SUCCESS', response: '', duration_seconds: 1, num_turns: 1 } },
+  ];
+
+  const startedAt = Date.now();
+  const { stdout, timedOut } = await runService({
+    mode: 'custom-hang',
+    customLines,
+    extraEnv: { GEMINI_IDLE_REAP_MINUTES: '0' },
+    postResultKillDelayMs: 300,
+    timeoutMs: 9000,
+  });
+
+  assert.equal(timedOut, false, 'the lingering CLI must be killed after the empty result');
+  assert.ok(Date.now() - startedAt < 6000);
+  assert.equal(markers(stdout, 'SEND_ERROR').length, 0);
+  assert.equal(markers(stdout, 'STREAM_END').length, 1);
+  const footers = protocolLines(stdout).filter((l) => l.startsWith('{"success"'));
+  assert.equal(footers.length, 1, `exactly one terminal JSON footer, got: ${JSON.stringify(footers)}`);
+  assert.equal(JSON.parse(footers[0]).success, true);
+});
+
 test('Story 1.10 post-result reap: a CLI that hangs after emitting an ERROR result is killed without stacking a second [SEND_ERROR]', async () => {
   const convId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
   const customLines = [
@@ -4272,6 +4303,27 @@ test('Story 012 AC-2: reapHungTurn defers killing agy when workCwd files are mod
     assert.equal(timedOut, false, 'the turn must complete on its own without being reaped');
     assert.equal(markers(stdout, 'SEND_ERROR').length, 0, 'no reap error when workCwd has active file modifications');
     assert.equal(finalPayload(stdout).success, true, 'tool activity in workCwd must postpone idle reap so turn finishes successfully');
+  } finally {
+    rmSync(tempWorkDir, { recursive: true, force: true });
+  }
+});
+
+test('reapHungTurn stops deferring on project file changes after two silent windows', async () => {
+  const tempWorkDir = mkdtempSync(join(tmpdir(), 'gemini-work-churn-'));
+  try {
+    const startedAt = Date.now();
+    const { stdout, timedOut } = await runService({
+      mode: 'cwd-churn-hang',
+      cwd: tempWorkDir,
+      extraEnv: { GEMINI_IDLE_REAP_MINUTES: '0.05' }, // 3.0s window
+      timeoutMs: 20000,
+    });
+    const elapsedMs = Date.now() - startedAt;
+
+    assert.equal(timedOut, false, 'a hung CLI must still be reaped while files keep changing');
+    assert.equal(finalPayload(stdout).success, false);
+    assert.ok(stdout.includes('IDLE_REAP'), 'the reap reports IDLE_REAP');
+    assert.ok(elapsedMs >= 5500, `file churn defers at least one extra window (took ${elapsedMs}ms)`);
   } finally {
     rmSync(tempWorkDir, { recursive: true, force: true });
   }

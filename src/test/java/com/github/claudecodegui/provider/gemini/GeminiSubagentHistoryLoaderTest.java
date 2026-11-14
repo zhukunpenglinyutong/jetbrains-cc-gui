@@ -237,7 +237,7 @@ public class GeminiSubagentHistoryLoaderTest {
     }
 
     @Test
-    public void loadStatusesMarksStaleUncompletedChildAsFinished() throws Exception {
+    public void loadStatusesMarksStaleUncompletedChildAsError() throws Exception {
         Path home = temporaryFolder.newFolder("gemini-stale-child").toPath();
         Path conversationsDir = home.resolve("conversations");
         Files.createDirectories(conversationsDir);
@@ -247,8 +247,8 @@ public class GeminiSubagentHistoryLoaderTest {
                 blobStep(1, 14, protoMessage(19, protoField(2, "Subagent crashed mid-task")))
         );
 
-        // Age the child DB past the staleness threshold (e.g. 10 minutes ago)
-        long staleMtime = System.currentTimeMillis() - 10 * 60 * 1000L;
+        // Age the child DB past the staleness threshold
+        long staleMtime = System.currentTimeMillis() - GeminiSubagentHistoryLoader.STALE_RUNNING_GRACE_MS - 60_000L;
         Files.setLastModifiedTime(childDb, FileTime.fromMillis(staleMtime));
 
         GeminiSubagentHistoryLoader loader = new GeminiSubagentHistoryLoader(home);
@@ -258,9 +258,32 @@ public class GeminiSubagentHistoryLoaderTest {
 
         assertEquals(1, results.size());
         GeminiSubagentHistoryLoader.StatusResult res = results.get(0);
-        assertTrue("Stale child without parent step 101 should be marked completed instead of running forever",
+        assertTrue("Stale child without parent step 101 should stop polling instead of running forever",
                 res.completed());
-        assertEquals("completed", res.status());
+        assertEquals("No recorded completion must not read as success", "error", res.status());
+        assertEquals(GeminiSubagentHistoryLoader.STALE_CHILD_ERROR, res.error());
+    }
+
+    @Test
+    public void loadStatusesKeepsQuietChildRunningWithinGraceWindow() throws Exception {
+        Path home = temporaryFolder.newFolder("gemini-quiet-child").toPath();
+        Path conversationsDir = home.resolve("conversations");
+        Files.createDirectories(conversationsDir);
+
+        Path childDb = conversationsDir.resolve(CHILD_A_ID + ".db");
+        createDbWithBlobs(childDb,
+                blobStep(1, 14, protoMessage(19, protoField(2, "Run the full build")))
+        );
+        // Quiet for 2 minutes, e.g. a long build tool with no DB writes
+        Files.setLastModifiedTime(childDb, FileTime.fromMillis(System.currentTimeMillis() - 2 * 60_000L));
+
+        GeminiSubagentHistoryLoader loader = new GeminiSubagentHistoryLoader(home);
+        List<GeminiSubagentHistoryLoader.StatusResult> results = loader.loadStatuses(PARENT_ID, List.of(
+                new GeminiSubagentHistoryLoader.StatusRequest("call-quiet", CHILD_A_ID)
+        ));
+
+        assertEquals("running", results.get(0).status());
+        assertFalse(results.get(0).completed());
     }
 
     @Test

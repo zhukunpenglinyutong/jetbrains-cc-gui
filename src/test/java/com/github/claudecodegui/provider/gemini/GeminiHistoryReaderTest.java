@@ -85,6 +85,9 @@ public class GeminiHistoryReaderTest {
                 sessionEntry(UUID_B, "Other project chat", "unrelated", 2, T_OLD, OTHER_PROJECT_URI)));
         createConversationDb(home, UUID_A, userStep("hello"), agentStep("hi"));
         createConversationDb(home, UUID_B, userStep("elsewhere"));
+        // Database last written before the cache entry, so the cache time is the newest.
+        Files.setLastModifiedTime(home.resolve("conversations").resolve(UUID_A + ".db"),
+                FileTime.from(Instant.parse(T_OLD)));
 
         GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
         JsonObject envelope = parse(reader.getSessionsForProjectAsJson(PROJECT));
@@ -307,6 +310,8 @@ public class GeminiHistoryReaderTest {
         writeCache(home, cacheWith(
                 sessionEntry(UUID_A, "Cached Session A", "preview A", 5, T_OLD, PROJECT_URI)));
         createConversationDb(home, UUID_A, userStep("cached db prompt"));
+        Files.setLastModifiedTime(home.resolve("conversations").resolve(UUID_A + ".db"),
+                FileTime.from(Instant.parse(T_OLD)));
 
         // UUID_B exists only as a database on disk (not in metadata cache) with a newer mtime
         createConversationDb(home, UUID_B, userStep("Uncached session B prompt"));
@@ -328,6 +333,26 @@ public class GeminiHistoryReaderTest {
         assertEquals(UUID_A, sessionA.sessionId);
         assertEquals("Cached Session A", sessionA.title);
         assertEquals(5, sessionA.messageCount);
+    }
+
+    @Test
+    public void listAllSessionsPrefersNewerDatabaseTimeOverStaleCacheEntry() throws Exception {
+        Path home = cliHome();
+        // A was cached long ago, but its database was written after B's.
+        writeCache(home, cacheWith(
+                sessionEntry(UUID_A, "Cached Session A", "preview A", 5, T_OLD, PROJECT_URI)));
+        createConversationDb(home, UUID_A, userStep("still active"));
+        createConversationDb(home, UUID_B, userStep("other session"));
+        Path conversations = home.resolve("conversations");
+        Files.setLastModifiedTime(conversations.resolve(UUID_B + ".db"), FileTime.from(Instant.parse(T_NEW)));
+        Instant activeToday = Instant.parse(T_NEW).plusSeconds(3600);
+        Files.setLastModifiedTime(conversations.resolve(UUID_A + ".db"), FileTime.from(activeToday));
+
+        List<GeminiHistoryReader.SessionInfo> sessions = new GeminiHistoryReader(home, new Gson()).listAllSessions();
+
+        assertEquals(UUID_A, sessions.get(0).sessionId);
+        assertEquals(activeToday.toEpochMilli(), sessions.get(0).lastTimestamp);
+        assertEquals("Cached Session A", sessions.get(0).title);
     }
 
     @Test
@@ -1031,6 +1056,32 @@ public class GeminiHistoryReaderTest {
 
         JsonObject toolResult = findBlock(messages, "tool_result");
         assertEquals(gitStatusOutput, toolResult.get("content").getAsString());
+    }
+
+    @Test
+    public void plainTextThatAlsoParsesAsProtobufIsNotUnwrapped() throws Exception {
+        // "\n\n## Acknowledgements\n" is a complete protobuf by accident: field 1
+        // "## Acknowl" plus two fixed32 fields ('e' = field 12, wire type 5).
+        String output = "\n\n## Acknowledgements\n";
+        Path home = cliHome();
+        byte[] call = concat(
+                protoField(1, "call_cat"),
+                protoField(2, "run_command"),
+                protoField(3, "{\"CommandLine\":\"cat README.md\"}"));
+        createLiveConversationDb(home, UUID_A,
+                liveStep(15, protoMessage(20, protoMessage(7, call))),
+                liveStep(132, concat(
+                        protoMessage(5, protoMessage(4, call)),
+                        protoMessage(140, concat(
+                                protoMessage(1, concat(
+                                        protoField(1, "toolSummary"),
+                                        protoField(2, "cat"))),
+                                protoField(2, output))))));
+
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+        List<JsonObject> messages = reader.getSessionMessages(UUID_A, PROJECT);
+
+        assertEquals(output, findBlock(messages, "tool_result").get("content").getAsString());
     }
 
     @Test

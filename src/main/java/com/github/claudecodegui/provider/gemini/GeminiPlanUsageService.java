@@ -66,6 +66,8 @@ public final class GeminiPlanUsageService {
     static final long OLD_CLI_NEGATIVE_TTL_MS = 10 * 60_000L;
     /** TTL for cached Gemini CLI binary/version detection across 120s polls. */
     static final long CLI_STATUS_TTL_MS = 10 * 60_000L;
+    // Missing or below-floor CLI: re-detect on the next poll so `agy install/update` shows up at once.
+    static final long CLI_STATUS_UNUSABLE_TTL_MS = 60_000L;
     /** Max age for serving a stale cached payload after repeated probe failures. */
     static final long STALE_MAX_MS = 30 * 60_000L;
     private static final long PROBE_TIMEOUT_SECONDS = 15L;
@@ -397,9 +399,14 @@ public final class GeminiPlanUsageService {
         return geminiCliStatus(System.currentTimeMillis());
     }
 
+    private static long cliStatusTtlMs(CliToolStatus status) {
+        boolean usable = status.isInstalled() && cliMeetsProductFloor(status.getVersion());
+        return usable ? CLI_STATUS_TTL_MS : CLI_STATUS_UNUSABLE_TTL_MS;
+    }
+
     static CliToolStatus geminiCliStatus(long nowMs) {
         CachedCliStatus cached = cachedCliStatus;
-        if (cached != null && nowMs - cached.atMs < CLI_STATUS_TTL_MS) {
+        if (cached != null && nowMs - cached.atMs < cliStatusTtlMs(cached.status)) {
             return cached.status;
         }
         try {

@@ -24,11 +24,16 @@ import java.util.regex.Pattern;
  */
 public class GeminiSubagentHistoryLoader {
 
-    public static final long STALE_RUNNING_GRACE_MS = 60_000L;
+    // A child can run a long tool (a build, a test suite) without writing to its DB,
+    // so the window is generous; past it the child is reported as an error, never as
+    // a success, because no completion was recorded.
+    public static final long STALE_RUNNING_GRACE_MS = 15 * 60_000L;
+    static final String STALE_CHILD_ERROR = "Subagent stopped without reporting a result";
 
     private static final Logger LOG = Logger.getInstance(GeminiSubagentHistoryLoader.class);
     private static final String STATUS_COMPLETED = "completed";
     private static final String STATUS_RUNNING = "running";
+    private static final String STATUS_ERROR = "error";
     private static final Pattern MESSAGE_PATTERN = Pattern.compile(
             "\\[Message\\]\\s+timestamp=\\S+\\s+sender=([^\\s]+)\\s+priority=\\S+\\s+content=(.*)",
             Pattern.DOTALL
@@ -288,7 +293,7 @@ public class GeminiSubagentHistoryLoader {
             } else if (!hasChildDb) {
                 results.add(new StatusResult(toolUseId, agentId, false, STATUS_RUNNING, false, null, "Subagent log not found yet", List.of()));
             } else if (isStaleChildDb(childDb)) {
-                results.add(new StatusResult(toolUseId, agentId, true, STATUS_COMPLETED, true, null, null, List.of()));
+                results.add(new StatusResult(toolUseId, agentId, true, STATUS_ERROR, true, null, STALE_CHILD_ERROR, List.of()));
             } else {
                 results.add(new StatusResult(toolUseId, agentId, true, STATUS_RUNNING, false, null, null, List.of()));
             }
@@ -328,7 +333,7 @@ public class GeminiSubagentHistoryLoader {
             return new SessionResult(toolUseId, agentId, true, STATUS_COMPLETED, true, completion, null, messages);
         }
         if (isStaleChildDb(childDb)) {
-            return new SessionResult(toolUseId, agentId, true, STATUS_COMPLETED, true, null, null, messages);
+            return new SessionResult(toolUseId, agentId, true, STATUS_ERROR, true, null, STALE_CHILD_ERROR, messages);
         }
         return new SessionResult(toolUseId, agentId, true, STATUS_RUNNING, false, null, null, messages);
     }

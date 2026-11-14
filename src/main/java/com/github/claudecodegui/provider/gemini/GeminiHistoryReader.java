@@ -202,8 +202,11 @@ public class GeminiHistoryReader {
             if (cached.messageCount > 0) {
                 target.messageCount = cached.messageCount;
             }
-            if (cached.lastTimestamp > 0) {
+            // Current CLIs no longer maintain the cache: its time must not hide newer DB writes.
+            if (cached.lastTimestamp > target.lastTimestamp) {
                 target.lastTimestamp = cached.lastTimestamp;
+            }
+            if (cached.firstTimestamp > 0 && cached.firstTimestamp < target.firstTimestamp) {
                 target.firstTimestamp = cached.firstTimestamp;
             }
             if (cached.workspaces != null && !cached.workspaces.isEmpty()) {
@@ -356,7 +359,8 @@ public class GeminiHistoryReader {
                 if (!isSafeSessionId(id)) {
                     continue;
                 }
-                long mtime = fileMtime(db);
+                // New steps land in -wal and leave the .db mtime alone until a checkpoint.
+                long mtime = Math.max(fileMtime(db), fileMtime(db.resolveSibling(fileName + "-wal")));
                 ScanMeta meta = readScanMeta(db, mtime);
                 if (meta.childSessionIds != null && !meta.childSessionIds.isEmpty()) {
                     subagentChildIds.addAll(meta.childSessionIds);
@@ -1253,7 +1257,29 @@ public class GeminiHistoryReader {
         if (blob.length < 2 || (blob[0] & 0xFF) != 0x0A || !consumesEntireMessage(blob)) {
             return null;
         }
+        // Printable text can also parse as protobuf: "\n\n## Acknowledgements\n" reads as
+        // field 1 "## Acknowl" plus two fixed32 fields. A real multi-field wrapper carries
+        // tag/length bytes that are not text, so text is only unwrapped when field 1
+        // alone spans the whole blob.
+        if (isPrintableText(blob) && nextFieldOffset(blob, 0) != blob.length) {
+            return null;
+        }
         return ProtoFields.parse(blob).string(1);
+    }
+
+    /** True when {@code data} is valid UTF-8 with no control characters other than tab, LF and CR. */
+    private static boolean isPrintableText(byte[] data) {
+        String text = utf8(data);
+        if (text == null) {
+            return false;
+        }
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if ((c < 0x20 && c != '\t' && c != '\n' && c != '\r') || c == 0x7F) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** True when {@code data} is one protobuf message and every byte belongs to a field. */
