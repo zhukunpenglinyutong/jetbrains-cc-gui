@@ -1,10 +1,62 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.settings.SessionSupplierCatalog;
+import com.google.gson.JsonObject;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
 public class SessionSupplierBindingTest {
+    @Test
+    public void anUnconfiguredConversationPicksUpTheFirstSupplierForEachEngine() {
+        ClaudeSession session = new ClaudeSession(null, null, null, java.util.Map.of());
+        FakeSettings settings = new FakeSettings();
+        session.initializeSupplierDefaults(settings);
+        assertEquals(SessionSupplierCatalog.UNAVAILABLE, session.getState().getSupplierId("claude"));
+        assertEquals(SessionSupplierCatalog.UNAVAILABLE, session.getState().getSupplierId("codex"));
+
+        settings.claude = supplier("first-claude");
+        settings.codex = supplier("first-codex");
+        session.initializeSupplierDefaults(settings);
+        assertEquals("first-claude", session.getState().getSupplierId("claude"));
+        assertEquals("first-codex", session.getState().getSupplierId("codex"));
+
+        settings.claude = supplier("new-global-default");
+        settings.codex = null;
+        session.initializeSupplierDefaults(settings);
+        assertEquals("first-claude", session.getState().getSupplierId("claude"));
+        assertEquals("first-codex", session.getState().getSupplierId("codex"));
+    }
+
+    @Test
+    public void readingDefaultsCannotOverwriteAnExplicitSelectionMadeWhileReading() {
+        ClaudeSession session = new ClaudeSession(null, null, null, java.util.Map.of());
+        FakeSettings settings = new FakeSettings() {
+            @Override
+            public JsonObject getActiveClaudeProvider() {
+                session.getState().setSupplierId("claude", "explicit-choice");
+                return supplier("global-default");
+            }
+        };
+        session.initializeSupplierDefaults(settings);
+        assertEquals("explicit-choice", session.getState().getSupplierId("claude"));
+    }
+
+    @Test
+    public void firstSupplierRecoveryDoesNotRedirectAnAlreadyCapturedTurn() {
+        ClaudeSession session = new ClaudeSession(null, null, null, java.util.Map.of());
+        FakeSettings settings = new FakeSettings();
+        session.initializeSupplierDefaults(settings);
+        session.getState().beginTurn();
+        settings.claude = supplier("first-claude");
+        session.initializeSupplierDefaults(settings);
+        assertEquals("first-claude", session.getState().getSupplierId("claude"));
+        assertEquals(SessionSupplierCatalog.UNAVAILABLE, session.getState().getRuntimeSupplierId("claude"));
+        session.getState().beginTurn();
+        assertEquals("first-claude", session.getState().getRuntimeSupplierId("claude"));
+    }
+
     @Test
     public void switchingDuringTurnDefersRoutingUntilTheNextTurn() {
         SessionState state = new SessionState();
@@ -43,5 +95,26 @@ public class SessionSupplierBindingTest {
         assertEquals("codex-a", a.getRuntimeSupplierId("codex"));
         assertEquals("claude-a", a.getSupplierId("claude"));
         assertEquals("codex-b", b.getRuntimeSupplierId("codex"));
+    }
+
+    private static JsonObject supplier(String id) {
+        JsonObject supplier = new JsonObject();
+        supplier.addProperty("id", id);
+        return supplier;
+    }
+
+    private static class FakeSettings extends CodemossSettingsService {
+        private JsonObject claude;
+        private JsonObject codex;
+
+        @Override
+        public JsonObject getActiveClaudeProvider() {
+            return claude;
+        }
+
+        @Override
+        public JsonObject getActiveCodexProvider() {
+            return codex;
+        }
     }
 }

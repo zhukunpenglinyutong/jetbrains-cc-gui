@@ -1328,7 +1328,10 @@
     "providerAdded": "Fournisseur ajouté",
     "providerUpdated": "Fournisseur mis à jour",
     "providerDeleted": "Fournisseur supprimé",
-    "codexSettingsDispatchFailed": "Impossible d'envoyer les paramètres Codex à l'IDE. Rouvrez la discussion et réessayez."
+    "codexSettingsDispatchFailed": "Impossible d'envoyer les paramètres Codex à l'IDE. Rouvrez la discussion et réessayez.",
+    "codexSettingsRuntimeInactive": "L’environnement d’exécution de Codex est inactif. Rouvrez la conversation et réessayez.",
+    "codexSettingsServiceUnavailable": "Le service Codex est indisponible. Rouvrez la conversation et réessayez.",
+    "codexSettingsUpdateFailed": "Impossible de confirmer les paramètres de Codex. Rouvrez la conversation et réessayez."
   },
   "config": {
     "clickToCopy": "Cliquer pour copier",

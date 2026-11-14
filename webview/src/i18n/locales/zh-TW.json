@@ -1352,7 +1352,10 @@
     "providerAdded": "供應商新增成功",
     "providerUpdated": "供應商更新成功",
     "providerDeleted": "供應商刪除成功",
-    "codexSettingsDispatchFailed": "無法將 Codex 設定傳送到 IDE，請重新開啟對話後再試。"
+    "codexSettingsDispatchFailed": "無法將 Codex 設定傳送到 IDE，請重新開啟對話後再試。",
+    "codexSettingsRuntimeInactive": "Codex 執行環境未啟用，請重新開啟對話後重試。",
+    "codexSettingsServiceUnavailable": "Codex 服務目前無法使用，請重新開啟對話後重試。",
+    "codexSettingsUpdateFailed": "無法確認 Codex 設定，請重新開啟對話後重試。"
   },
   "config": {
     "clickToCopy": "點選複製",

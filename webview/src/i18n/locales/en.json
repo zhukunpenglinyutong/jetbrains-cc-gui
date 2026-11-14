@@ -1778,7 +1778,10 @@
     "providerAdded": "Provider added",
     "providerUpdated": "Provider updated",
     "providerDeleted": "Provider deleted",
-    "codexSettingsDispatchFailed": "Cannot send Codex settings to the IDE. Reopen the chat and try again."
+    "codexSettingsDispatchFailed": "Cannot send Codex settings to the IDE. Reopen the chat and try again.",
+    "codexSettingsRuntimeInactive": "The Codex runtime is inactive. Reopen the chat and try again.",
+    "codexSettingsServiceUnavailable": "The Codex service is unavailable. Reopen the chat and try again.",
+    "codexSettingsUpdateFailed": "Could not confirm Codex settings. Reopen the chat and try again."
   },
   "config": {
     "clickToCopy": "Click to copy",

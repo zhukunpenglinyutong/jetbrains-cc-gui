@@ -972,10 +972,22 @@ public class ClaudeSession {
     }
 
     private void initializeSupplierDefaults() {
-        CodemossSettingsService settings = new CodemossSettingsService();
+        initializeSupplierDefaults(new CodemossSettingsService());
+    }
+
+    void initializeSupplierDefaults(CodemossSettingsService settings) {
         for (String engine : List.of("claude", "codex")) {
-            if (state.getSupplierId(engine) == null) {
-                state.setSupplierId(engine, SessionSupplierCatalog.defaultId(settings, engine));
+            String current = state.getSupplierId(engine);
+            if (current != null && !SessionSupplierCatalog.UNAVAILABLE.equals(current)) {
+                continue;
+            }
+            String defaultId = SessionSupplierCatalog.defaultId(settings, engine);
+            synchronized (state.getMessageStateLock()) {
+                // Reading configuration must not overwrite an explicit selection made in the meantime.
+                current = state.getSupplierId(engine);
+                if (current == null || SessionSupplierCatalog.UNAVAILABLE.equals(current)) {
+                    state.setSupplierId(engine, defaultId);
+                }
             }
         }
     }

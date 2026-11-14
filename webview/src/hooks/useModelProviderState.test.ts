@@ -169,6 +169,43 @@ describe('Codex native auto availability', () => {
     expect(options.addToast).toHaveBeenCalledWith('Configuration unavailable', 'error');
   });
 
+  it.each([
+    ['Codex runtime access is inactive', 'toast.codexSettingsRuntimeInactive'],
+    ['Codex app-server daemon is unavailable', 'toast.codexSettingsServiceUnavailable'],
+    ['Codex bridge is unavailable', 'toast.codexSettingsServiceUnavailable'],
+    ['Codex settings update failed', 'toast.codexSettingsUpdateFailed'],
+    ['Codex settings update returned no acknowledgement', 'toast.codexSettingsUpdateFailed'],
+  ])('localizes a known settings failure: %s', (error, messageKey) => {
+    const { result } = renderHook(() => useModelProviderState(options));
+    act(() => result.current.handleProviderSelect('codex'));
+    act(() => result.current.handleModeSelect('plan'));
+    const response = { requestType: 'codex_update_settings', requestId: latestSettingsRequest().requestId,
+      requestedSettings: { collaborationMode: 'plan' }, error };
+    act(() => window.dispatchEvent(new CustomEvent('codex-interaction-response', { detail: response })));
+    expect(result.current.codexSettingsPending).toBe(false);
+    expect(result.current.codexEffectiveSettings).toBeNull();
+    expect(options.addToast).toHaveBeenCalledWith(messageKey, 'error');
+    act(() => window.dispatchEvent(new CustomEvent('codex-interaction-response', { detail: response })));
+    expect(options.addToast).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the current language when a pending settings request fails', () => {
+    const oldT = ((key: string) => `old:${key}`) as TFunction;
+    const newT = ((key: string) => `new:${key}`) as TFunction;
+    const { result, rerender } = renderHook(({ t }) => useModelProviderState({ addToast: options.addToast, t }), {
+      initialProps: { t: oldT },
+    });
+    act(() => result.current.handleProviderSelect('codex'));
+    act(() => result.current.handleModeSelect('plan'));
+    const requestId = latestSettingsRequest().requestId;
+    rerender({ t: newT });
+    act(() => window.dispatchEvent(new CustomEvent('codex-interaction-response', { detail: {
+      requestType: 'codex_update_settings', requestId, requestedSettings: { collaborationMode: 'plan' },
+      error: 'Codex app-server daemon is unavailable',
+    } })));
+    expect(options.addToast).toHaveBeenCalledWith('new:toast.codexSettingsServiceUnavailable', 'error');
+  });
+
   it('ignores stale failures and keeps successful queue acknowledgements pending until native confirmation', () => {
     const { result } = renderHook(() => useModelProviderState(options));
     act(() => result.current.handleProviderSelect('codex'));

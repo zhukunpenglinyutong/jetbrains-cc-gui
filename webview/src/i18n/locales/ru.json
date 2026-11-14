@@ -1340,7 +1340,10 @@
     "providerAdded": "Провайдер добавлен",
     "providerUpdated": "Провайдер обновлён",
     "providerDeleted": "Провайдер удалён",
-    "codexSettingsDispatchFailed": "Не удалось отправить настройки Codex в IDE. Откройте чат заново и повторите попытку."
+    "codexSettingsDispatchFailed": "Не удалось отправить настройки Codex в IDE. Откройте чат заново и повторите попытку.",
+    "codexSettingsRuntimeInactive": "Среда выполнения Codex неактивна. Откройте чат заново и повторите попытку.",
+    "codexSettingsServiceUnavailable": "Сервис Codex недоступен. Откройте чат заново и повторите попытку.",
+    "codexSettingsUpdateFailed": "Не удалось подтвердить настройки Codex. Откройте чат заново и повторите попытку."
   },
   "config": {
     "clickToCopy": "Нажмите для копирования",
