@@ -5,6 +5,7 @@ import com.github.claudecodegui.model.SessionTemplate;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.google.gson.JsonObject;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
@@ -113,6 +114,7 @@ public class SessionLifecycleQuiescenceTest {
                 host.stopped.complete(null);
                 assertEquals("selected-after-acceptance", host.session.getModel());
                 assertEquals(oldModel, previous.getModel());
+                host.awaitHistoryLoadIfNeeded();
                 assertFalse(host.events.contains("sessionTransitionFailed"));
                 if (host.events.contains("setSessionId")) {
                     assertTrue(host.events.indexOf("clearMessages") < host.events.indexOf("setSessionId"));
@@ -179,11 +181,23 @@ public class SessionLifecycleQuiescenceTest {
     }
 
     private static final class Host implements SessionLifecycleManager.SessionHost, AutoCloseable {
+        // History acceptance must not race a null SDK failure on the common pool.
+        private final ClaudeSDKBridge historyBridge = new ClaudeSDKBridge() {
+            @Override public JsonObject getSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit) {
+                return null;
+            }
+            @Override public List<JsonObject> getSessionMessages(String sessionId, String cwd) {
+                return List.of();
+            }
+            @Override public void resetPersistentRuntime(String runtimeSessionEpoch) { }
+            @Override public void shutdownDaemon() { }
+        };
         private final CompletableFuture<Void> stopped = new CompletableFuture<>();
         private CompletableFuture<Void> secondStop;
         private int stopCalls;
         private final List<String> events = new CopyOnWriteArrayList<>();
         private final CountDownLatch failure = new CountDownLatch(1);
+        private final CountDownLatch historyFinished = new CountDownLatch(1);
         private final HandlerContext context = new HandlerContext(null, null, null, null, null);
         private final StreamMessageCoalescer coalescer;
         private ClaudeSession session;
@@ -215,7 +229,7 @@ public class SessionLifecycleQuiescenceTest {
         }
 
         @Override public Project getProject() { return null; }
-        @Override public ClaudeSDKBridge getClaudeSDKBridge() { return null; }
+        @Override public ClaudeSDKBridge getClaudeSDKBridge() { return historyBridge; }
         @Override public CodexSDKBridge getCodexSDKBridge() { return null; }
         @Override public Map<String, MarkerCliBridge> getCliBridges() { return Map.of(); }
         @Override public ClaudeSession getSession() { return session; }
@@ -231,7 +245,8 @@ public class SessionLifecycleQuiescenceTest {
                 if (args.length > 1) { lastClearToken = args[1]; }
                 onClear.accept(session);
             }
-            if (name.equals("sessionTransitionFailed")) { failure.countDown(); }
+            if (name.equals("sessionTransitionFailed")) { failure.countDown(); historyFinished.countDown(); }
+            if (name.equals("historyLoadComplete")) { historyFinished.countDown(); }
         }
         @Override public boolean isDisposed() { return false; }
         @Override public JBCefBrowser getBrowser() { return null; }
@@ -246,6 +261,23 @@ public class SessionLifecycleQuiescenceTest {
         @Override public void invalidateSessionCallbacks() { invalidated = true; }
         @Override public void setSlashCommandsFetched(boolean value) { }
         @Override public void setFetchedSlashCommandsCount(int count) { }
-        @Override public void close() { coalescer.dispose(); }
+        private void awaitHistoryLoadIfNeeded() {
+            if (!"next-session".equals(session.getSessionId()) || !events.contains("clearMessages")) { return; }
+            try {
+                assertTrue("The fixture history load did not finish", historyFinished.await(5, TimeUnit.SECONDS));
+                assertFalse("The fixture history load failed", events.contains("sessionTransitionFailed"));
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("Interrupted while draining the fixture history load", error);
+            }
+        }
+        @Override public void close() {
+            try {
+                awaitHistoryLoadIfNeeded();
+            } finally {
+                coalescer.dispose();
+                historyBridge.cleanupAllProcesses();
+            }
+        }
     }
 }
