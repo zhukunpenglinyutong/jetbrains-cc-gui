@@ -141,8 +141,7 @@
       "matchCase": "Учитывать регистр (Alt+C)",
       "wholeWord": "Слово целиком (Alt+W)",
       "regex": "Регулярное выражение (Alt+R)",
-      "invalidRegex": "Недопустимое регулярное выражение",
-      "openTooltip": "Поиск в беседе (Cmd/Ctrl+F)"
+      "invalidRegex": "Недопустимое регулярное выражение"
     },
     "compactSummary": {
       "receivedTime": "Время записи",
@@ -169,6 +168,7 @@
     "codexReviewStarted": "Codex is reviewing the workspace",
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexCliOutdated": "Codex CLI {{version}} устарел: некоторые модели и режимы разрешений могут работать неправильно. Обновите его до версии {{minimumVersion}} или новее.",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
     "continueRefiningPlan": "Продолжить доработку этого плана:"
   },
@@ -1071,27 +1071,12 @@
     "confirmConvert": "Преобразовать в сессию CLI?",
     "convertConfirmMessage": "Это изменит entrypoint сессии, чтобы она отображалась в списке /resume CLI Claude Code.",
     "timeAgo": {
-      "yearsAgo_one": "{{count}} год назад",
-      "yearsAgo_other": "{{count}} лет назад",
-      "monthsAgo_one": "{{count}} месяц назад",
-      "monthsAgo_other": "{{count}} месяцев назад",
-      "daysAgo_one": "{{count}} день назад",
-      "daysAgo_other": "{{count}} дней назад",
-      "hoursAgo_one": "{{count}} час назад",
-      "hoursAgo_other": "{{count}} часов назад",
-      "minutesAgo_one": "{{count}} минуту назад",
-      "minutesAgo_other": "{{count}} минут назад",
-      "justNow": "только что",
-      "yearsAgo_few": "{{count}} года назад",
-      "yearsAgo_many": "{{count}} лет назад",
-      "monthsAgo_few": "{{count}} месяца назад",
-      "monthsAgo_many": "{{count}} месяцев назад",
-      "daysAgo_few": "{{count}} дня назад",
-      "daysAgo_many": "{{count}} дней назад",
-      "hoursAgo_few": "{{count}} часа назад",
-      "hoursAgo_many": "{{count}} часов назад",
-      "minutesAgo_few": "{{count}} минуты назад",
-      "minutesAgo_many": "{{count}} минут назад"
+      "yearsAgo": "г. назад",
+      "monthsAgo": "мес. назад",
+      "daysAgo": "дн. назад",
+      "hoursAgo": "ч. назад",
+      "minutesAgo": "мин. назад",
+      "secondsAgo": "сек. назад"
     },
     "conversionErrors": {
       "INVALID_SESSION_ID": "Недействительный ID сеанса",
@@ -1147,7 +1132,11 @@
     "codexDeliveryFailed": "Codex не получил ваш выбор ({{error}}). Если диалог не продолжается, нажмите «Стоп» и отправьте сообщение снова.",
     "codexDeliveryUnconfirmed": "Codex ещё не подтвердил получение вашего выбора ({{error}}). Он ещё может вступить в силу, поэтому не отвечайте повторно; если диалог не продолжается, нажмите «Стоп» и отправьте сообщение снова."
   },
+  "modelConfig": {
+    "approvals": "Подтверждения"
+  },
   "askUserQuestion": {
+    "ompTitle": "У OMP есть несколько вопросов к вам",
     "title": "У Claude есть вопросы к вам",
     "progress": "Вопрос {{current}} / {{total}}",
     "multiSelectHint": "Можно выбрать несколько вариантов",
@@ -1537,6 +1526,12 @@
     "bashGroupCompleted": "завершено",
     "bashGroupAllCompleted": "Все завершены",
     "bashGroupFailed": "ошибка",
+    "bashGroupCopyCommand": "Копировать команду",
+    "bashGroupCopyOutput": "Копировать вывод",
+    "bashGroupOutput": "Вывод",
+    "bashGroupOutputFailed": "Ошибка",
+    "bashGroupRunning": "Выполняется…",
+    "bashGroupNoOutput": "(нет вывода)",
     "promptLabel": "Промпт",
     "reportFindings": {
       "title": "Результаты ревью",
@@ -1800,13 +1795,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Самая быстрая для быстрых ответов"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · Самая мощная · класс Mythos"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · Самая мощная · класс Mythos"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · Предыдущее поколение Fable"
+        "description": "Fable 5.1 · Предыдущее поколение Fable"
       }
     },
     "longContext": {
@@ -1925,6 +1920,25 @@
       "label": "Полный автомат",
       "tooltip": "Codex approval_policy=never — выполняет команды и записывает файлы без запросов (песочница рабочей области применяется).",
       "description": "Режим без вмешательства. Codex выполняет правки и команды немедленно."
+    }
+  },
+  "ompApprovals": {
+    "title": "Выберите режим подтверждений OMP",
+    "default": {
+      "label": "По умолчанию",
+      "description": "Полный автомат, если не задан tools.approvalMode"
+    },
+    "alwaysAsk": {
+      "label": "Спрашивать",
+      "description": "Спрашивает перед правками и командами"
+    },
+    "write": {
+      "label": "Автоодобрение правок",
+      "description": "Спрашивает только перед командами"
+    },
+    "yolo": {
+      "label": "Полный автомат",
+      "description": "Никогда не спрашивает"
     }
   },
   "ompModes": {
@@ -2232,6 +2246,25 @@
         }
       }
     },
+    "claudeCodeWindowsTooOld": {
+      "title": "Claude Code не может запуститься в этой версии Windows",
+      "intro": "Windows не дала Claude Code запуститься, так как не нашла нужную системную функцию (ошибка 0xC0000139). Обычно это значит, что Windows слишком старая: Claude Code 2.1.118 и новее использует ClosePseudoConsole, для которой нужна Windows 10 версии 1809 или Windows Server 2019.",
+      "reason": "Windows отклоняет программу ещё при загрузке, до запуска Claude Code, поэтому смена модели, провайдера или настроек разрешений не поможет.",
+      "solutions": {
+        "updateWindows": {
+          "title": "Вариант 1: обновить Windows",
+          "step0": "Обновите систему до Windows 10 версии 1809 или новее либо до Windows Server 2019 или новее. В этих версиях недостающая функция есть."
+        },
+        "useOlderSdk": {
+          "title": "Вариант 2: перейти на более старый SDK",
+          "step0": "В управлении зависимостями переключите версию SDK на v0.2.112 или более раннюю. Новые модели могут не принимать эту версию. Если модель требует более новый Claude Code, выберите другую модель или обновите Windows: обновление SDK вернёт эту ошибку."
+        },
+        "checkCustomCli": {
+          "title": "Вариант 3: проверить свой Claude CLI",
+          "step0": "Если вы указали «Путь к Claude CLI (переопределение)», плагин запускает этот файл вместо SDK, поэтому смена SDK ничего не даст. Очистите путь или укажите более старый Claude Code. Если Windows уже обновлена, проверьте это в первую очередь."
+        }
+      }
+    },
     "spawnEbusy": {
       "title": "spawn EBUSY — не удалось запустить дочерний процесс",
       "intro": "Эта ошибка обычно вызвана несовместимой версией Node.js или неполной установкой SDK. Попробуйте два варианта ниже по порядку:",
@@ -2245,6 +2278,22 @@
           "title": "Вариант 2: Переустановите последний SDK из официального реестра npm",
           "step0": "1. Переключитесь на официальный реестр npm (избегайте зеркала Taobao — у него может не быть последней версии):",
           "step1": "2. Откройте управление зависимостями и переустановите последний SDK:"
+        }
+      }
+    },
+    "codexCliVersionTooOld": {
+      "title": "Codex CLI слишком старый для этого режима разрешений",
+      "intro": "Режимы «Полный автомат» и «Автоодобрение» используют настройку автоматической проверки. Этот Codex CLI её не распознаёт и отклонил запрос, поэтому сообщение не было обработано.",
+      "reason": "Плагин запускает Codex CLI, найденный на вашем компьютере, поэтому обновление плагина не обновляет CLI. Если ошибка сохраняется после обновления, возможно, в PATH раньше находится более старый codex.",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "Вариант 1: установить или обновить CLI по официальной инструкции",
+          "step0": "1. Откройте официальную инструкцию и выберите подходящий для вашей среды вариант: автономный установщик, npm или Homebrew. Обновляйте тем же способом, каким установили; не выполняйте npm uninstall для автономной установки:",
+          "step1": "2. В новом терминале убедитесь, что версия изменилась, затем перезапустите IDE, чтобы плагин начал использовать новый CLI:"
+        },
+        "useDefaultMode": {
+          "title": "Вариант 2: временно сменить режим разрешений",
+          "step0": "Переключитесь на «Обычный режим». Он не использует автоматическую проверку, поэтому можно продолжать работу до обновления CLI. Если ошибка сохраняется, обновите CLI, как описано в варианте 1."
         }
       }
     },

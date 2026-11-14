@@ -59,10 +59,15 @@ public final class RelayUsageJson {
         return null;
     }
 
-    /** String value of {@code key}, or null. */
-    public static String asString(JsonObject o, String key) {
-        if (o != null && o.has(key) && o.get(key).isJsonPrimitive() && !o.get(key).isJsonNull()) {
-            return o.get(key).getAsString();
+    /** First non-null string among {@code keys}; String primitives only. */
+    public static String asString(JsonObject o, String... keys) {
+        for (String k : keys) {
+            if (o != null && o.has(k) && o.get(k).isJsonPrimitive() && !o.get(k).isJsonNull()) {
+                try {
+                    return o.get(k).getAsString();
+                } catch (RuntimeException ignored) {
+                }
+            }
         }
         return null;
     }
@@ -141,25 +146,32 @@ public final class RelayUsageJson {
      * Assemble the shared capacity payload from ordered windows. The binding
      * {@code capacity_pct} prefers the 5h window (the shortest actionable budget)
      * and otherwise falls back to the worst window, mirroring the original z.ai
-     * behaviour. {@code windows} must be non-empty; {@code level} (plan tier) is
-     * optional and vendor-specific.
+     * behaviour. {@code period_type} always names the same window as
+     * {@code capacity_pct} so consumers never pair a percentage with a
+     * different period (e.g. OpenCode without a rolling window).
+     * {@code windows} must be non-empty; {@code level} (plan tier) is optional
+     * and vendor-specific.
      */
     public static JsonObject capacityPayload(String source, Collection<JsonObject> windows, String level) {
         if (windows == null || windows.isEmpty()) {
             return null;
         }
-        Double primary5h = null;
-        double maxPct = 0;
+        JsonObject binding = null;
         for (JsonObject w : windows) {
-            double pct = w.get("used_pct").getAsDouble();
             if ("5h".equals(w.get("id").getAsString())) {
-                primary5h = pct;
-            }
-            if (pct > maxPct) {
-                maxPct = pct;
+                binding = w;
+                break;
             }
         }
-        double capacity = primary5h != null ? primary5h : maxPct;
+        if (binding == null) {
+            binding = windows.iterator().next();
+            for (JsonObject w : windows) {
+                if (w.get("used_pct").getAsDouble() > binding.get("used_pct").getAsDouble()) {
+                    binding = w;
+                }
+            }
+        }
+        double capacity = binding.get("used_pct").getAsDouble();
 
         JsonObject out = new JsonObject();
         out.addProperty("ok", true);
@@ -167,7 +179,7 @@ public final class RelayUsageJson {
         out.addProperty("provider", "claude");
         out.addProperty("source", source);
         out.addProperty("capacity_pct", capacity);
-        out.addProperty("period_type", windows.iterator().next().get("id").getAsString());
+        out.addProperty("period_type", binding.get("id").getAsString());
         JsonArray arr = new JsonArray();
         for (JsonObject w : windows) {
             arr.add(w);
@@ -176,6 +188,51 @@ public final class RelayUsageJson {
         if (level != null) {
             out.addProperty("level", level);
         }
+        return out;
+    }
+
+    // ===== balance payload construction =====
+
+    /**
+     * A prepaid account balance: {@code remaining} is always known,
+     * {@code total}/{@code used} only where the vendor reports them
+     * (OpenRouter credits). {@code unit} is an ISO-4217 code ("CNY"/"USD").
+     */
+    public record Balance(double remaining, Double total, Double used, String unit) {
+
+        /** Canonicalize a vendor currency code; defaults to CNY when absent. */
+        public static String unitOrCny(String unit) {
+            return unit == null || unit.isBlank() ? "CNY" : unit;
+        }
+    }
+
+    /**
+     * Assemble the balance form of the shared capacity payload — same
+     * envelope as {@link #capacityPayload(String, Collection, String)} but the
+     * data lives in {@code balance{remaining, total?, used?, unit}} instead of
+     * {@code capacity_pct}/{@code windows[]}. Balance vendors have no
+     * percentage denominator, so the webview renders the amount directly.
+     * Null when the balance carries no finite remaining amount.
+     */
+    public static JsonObject balancePayload(String source, Balance balance) {
+        if (balance == null || !Double.isFinite(balance.remaining())) {
+            return null;
+        }
+        JsonObject bal = new JsonObject();
+        bal.addProperty("remaining", balance.remaining());
+        if (balance.total() != null && Double.isFinite(balance.total())) {
+            bal.addProperty("total", balance.total());
+        }
+        if (balance.used() != null && Double.isFinite(balance.used())) {
+            bal.addProperty("used", balance.used());
+        }
+        bal.addProperty("unit", Balance.unitOrCny(balance.unit()));
+        JsonObject out = new JsonObject();
+        out.addProperty("ok", true);
+        out.addProperty("present", true);
+        out.addProperty("provider", "claude");
+        out.addProperty("source", source);
+        out.add("balance", bal);
         return out;
     }
 

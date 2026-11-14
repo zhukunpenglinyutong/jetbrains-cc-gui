@@ -536,7 +536,7 @@ public class ClaudeChatWindow {
             }
 
             persistTabSessionState();
-            chatWindowDelegate.refreshUnreadBadge();
+            chatWindowDelegate.refreshTabIndicator();
         }
     }
 
@@ -1634,6 +1634,7 @@ public class ClaudeChatWindow {
         target.setModel(source.getModel());
         target.setPermissionMode(source.getPermissionMode());
         target.setReasoningEffort(source.getReasoningEffort());
+        target.setOmpApprovalMode(source.getOmpApprovalMode());
     }
 
     public SessionLifecycleManager getSessionLifecycleManager() {
@@ -1675,6 +1676,7 @@ public class ClaudeChatWindow {
         if (savedState.reasoningEffort != null && !savedState.reasoningEffort.trim().isEmpty()) {
             session.setReasoningEffort(savedState.reasoningEffort);
         }
+        session.getState().setOmpApprovalMode(savedState.ompApprovalMode);
 
         boolean sameProject = TabSessionRestorePolicy.matchesProjectIdentity(
                 savedState,
@@ -2724,6 +2726,13 @@ public class ClaudeChatWindow {
                     }
 
                     @Override
+                    public void onTurnFailed() {
+                        if (!disposed && session == callbackSession) {
+                            chatWindowDelegate.onTurnFailed();
+                        }
+                    }
+
+                    @Override
                     public void callJavaScript(String functionName, String... args) {
                         ClaudeChatWindow.this.callJavaScript(functionName, args);
                     }
@@ -3229,6 +3238,7 @@ public class ClaudeChatWindow {
         snapshot.model = session.getModel();
         snapshot.permissionMode = session.getPermissionMode();
         snapshot.reasoningEffort = session.getReasoningEffort();
+        snapshot.ompApprovalMode = session.getState().getOmpApprovalMode();
         snapshot.unread = chatWindowDelegate.hasUnread();
 
         TabStateService.getInstance(project).saveTabSessionState(tabIndex, snapshot);

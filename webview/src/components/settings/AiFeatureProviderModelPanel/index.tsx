@@ -101,16 +101,15 @@ const AiFeatureProviderModelPanel = ({
     ? [{ id: currentModel, label: currentModel }, ...availableModels]
     : availableModels;
 
-  const getProviderLabel = useCallback((provider: AiFeatureProvider, beta?: boolean) => {
+  const getProviderLabel = useCallback((provider: AiFeatureProvider) => {
     const base = t(`providers.${provider}.label`, {
       defaultValue: t(`${providerKeyPrefix}.${provider}`, { defaultValue: provider }),
     });
-    const betaSuffix = beta ? ` (${t('providers.beta.badge', { defaultValue: 'Beta' })})` : '';
     const available = availability[provider];
     const unavailableSuffix = !available
       ? ` (${t(`${settingsKeyPrefix}.providerUnavailable`)})`
       : '';
-    return `${base}${betaSuffix}${unavailableSuffix}`;
+    return `${base}${unavailableSuffix}`;
   }, [availability, providerKeyPrefix, settingsKeyPrefix, t]);
 
   // Never gate options by availability — settings should always allow choosing a
@@ -119,7 +118,7 @@ const AiFeatureProviderModelPanel = ({
   const providerOptions = useMemo<SelectOption[]>(
     () => FEATURE_PROVIDER_INFOS.map((provider) => ({
       value: provider.id,
-      label: getProviderLabel(provider.id, provider.beta),
+      label: getProviderLabel(provider.id),
     })),
     [getProviderLabel],
   );

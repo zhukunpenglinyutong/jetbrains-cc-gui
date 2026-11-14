@@ -483,6 +483,72 @@ public class SafeJsonFileOpsTest {
         assertEquals("{\"v\":1}", Files.readString(file, StandardCharsets.UTF_8));
     }
 
+    @Test
+    public void unimplementedIjentLockFailsWithoutWriting() throws Exception {
+        assertUnsupportedLockFailsWithoutWriting(new kotlin.NotImplementedError("Not yet implemented"));
+    }
+
+    @Test
+    public void unsupportedProviderLockFailsWithoutWriting() throws Exception {
+        assertUnsupportedLockFailsWithoutWriting(new UnsupportedOperationException("Locking unsupported"));
+    }
+
+    private void assertUnsupportedLockFailsWithoutWriting(Throwable failure) throws Exception {
+        Path target = tempDir.resolve("config.json");
+        Path lock = tempDir.resolve("config.json.lock");
+        Files.writeString(target, "{\"keep\":true}");
+        AtomicBoolean ran = new AtomicBoolean();
+        AtomicReference<java.nio.channels.FileChannel> opened = new AtomicReference<>();
+        try {
+            SafeJsonFileOps.withLock(lock, 1_000, () -> {
+                ran.set(true);
+                Files.writeString(target, "{}");
+            }, channel -> {
+                opened.set(channel);
+                if (failure instanceof Error error) {
+                    throw error;
+                }
+                throw (RuntimeException) failure;
+            });
+            fail("An unsupported lock must be reported as an IOException");
+        } catch (IOException expected) {
+            assertTrue(expected.getCause() == failure);
+            assertTrue(expected.getMessage().contains(lock.toString()));
+            assertTrue(expected.getMessage().contains("no changes were written"));
+        }
+        assertFalse(ran.get());
+        assertEquals("{\"keep\":true}", Files.readString(target));
+        assertFalse("The failed channel must be closed", opened.get().isOpen());
+        // A retry must acquire a real OS lock, not reuse a stale thread-local entry.
+        SafeJsonFileOps.withLock(lock, 1_000, () -> {
+            ran.set(true);
+            try (java.nio.channels.FileChannel competing = java.nio.channels.FileChannel.open(
+                    lock, java.nio.file.StandardOpenOption.WRITE)) {
+                try (java.nio.channels.FileLock unexpected = competing.tryLock()) {
+                    fail("The retry must hold the OS lock");
+                } catch (java.nio.channels.OverlappingFileLockException expected) {
+                    // The original cross-process locking protocol is preserved.
+                }
+            }
+        });
+        assertTrue(ran.get());
+    }
+
+    @Test
+    public void unrelatedErrorsFromLockProviderAreNotSwallowed() throws Exception {
+        Path lock = tempDir.resolve("broken.lock");
+        AssertionError failure = new AssertionError("unrelated provider bug");
+        try {
+            SafeJsonFileOps.withLock(lock, 1_000, () -> fail("Action must not run"), channel -> {
+                throw failure;
+            });
+            fail("Unrelated errors must propagate");
+        } catch (AssertionError expected) {
+            assertTrue(expected == failure);
+        }
+        SafeJsonFileOps.withLock(lock, 1_000, () -> { });
+    }
+
     /** withLock serialises concurrent read-modify-write cycles in-process. */
     @Test
     public void withLockSerialisesConcurrentWriters() throws Exception {

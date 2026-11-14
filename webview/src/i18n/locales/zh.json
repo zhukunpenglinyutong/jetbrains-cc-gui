@@ -100,6 +100,9 @@
     "usagePercentage": "上下文: {{percentage}}",
     "planUsage": {
       "title": "Claude 额度详情",
+      "balanceLabel": "余额：",
+      "balanceRemaining": "余额：{{value}}",
+      "balanceDetail": "总额 {{total}} · 已用 {{used}}",
       "grokTitle": "Grok 额度详情",
       "staleIdle": "这是上次读取的额度，下次使用 Grok 时会自动刷新",
       "loading": "正在获取额度…",
@@ -179,8 +182,7 @@
       "matchCase": "区分大小写 (Alt+C)",
       "wholeWord": "全词匹配 (Alt+W)",
       "regex": "正则表达式 (Alt+R)",
-      "invalidRegex": "正则无效",
-      "openTooltip": "在对话中搜索 (Cmd/Ctrl+F)"
+      "invalidRegex": "正则无效"
     },
     "compactSummary": {
       "receivedTime": "记录时间",
@@ -207,6 +209,7 @@
     "codexReviewStarted": "Codex 正在审查工作区改动",
     "codexDiffUsage": "请直接使用 /diff，无需参数",
     "codexApprovalsUsage": "请直接使用 /approvals，无需参数",
+    "codexCliOutdated": "Codex CLI {{version}} 版本较旧，部分模型和权限模式可能无法正常使用，请升级到 {{minimumVersion}} 或更高版本。",
     "codexSandboxConflict": "Codex 自动审查不能使用 danger-full-access 沙箱，请改用 workspace-write 或请求批准模式。",
     "continueRefiningPlan": "继续完善此计划："
   },
@@ -591,6 +594,12 @@
         "disabled": "已关闭",
         "hint": "开启后，在提交对话框中显示「AI 生成提交信息」按钮。关闭后隐藏该按钮。"
       },
+      "sessionGitRepositoryMatching": {
+        "label": "按 Git 远端仓库匹配历史会话",
+        "enabled": "启用",
+        "disabled": "禁用",
+        "hint": "显示远端主机、所有者及仓库都相同的 Codex 和 Claude Code 会话。无法读取 Git 信息时按工作目录匹配。"
+      },
       "statusBarWidget": {
         "label": "状态栏信息展示",
         "enabled": "已开启",
@@ -965,16 +974,6 @@
           "importanceHint": "重要度越高，自动补全时越靠前"
         },
         "timeAgo": {
-          "yearsAgo_one": "{{count}} year ago",
-          "yearsAgo_other": "{{count}} years ago",
-          "monthsAgo_one": "{{count}} month ago",
-          "monthsAgo_other": "{{count}} months ago",
-          "daysAgo_one": "{{count}} day ago",
-          "daysAgo_other": "{{count}} days ago",
-          "hoursAgo_one": "{{count}} hour ago",
-          "hoursAgo_other": "{{count}} hours ago",
-          "minutesAgo_one": "{{count}} minute ago",
-          "minutesAgo_other": "{{count}} minutes ago",
           "justNow": "刚刚",
           "yearsAgo": "{{count}}年前",
           "monthsAgo": "{{count}}个月前",
@@ -1464,6 +1463,9 @@
     }
   },
   "history": {
+    "confirmDirectoryTitle": "在另一个目录中打开会话？",
+    "confirmDirectoryMessage": "命令和文件修改将在下方目录中执行。",
+    "executionDirectory": "运行目录",
     "title": "历史会话",
     "sessionDeleted": "会话已删除",
     "confirmDelete": "确认删除",
@@ -1575,6 +1577,7 @@
     "codexDeliveryUnconfirmed": "Codex 还没有确认收到你的选择（{{error}}）。它可能仍会生效，请不要重复作答；如果对话没有继续，请点击停止后重新发送。"
   },
   "askUserQuestion": {
+    "ompTitle": "OMP 有一些问题想问你",
     "configWarning": "Codex 部分配置可能未生效，请查看兼容提示详情。",
     "configWarningTitle": "Codex 配置兼容提示",
     "apiDeprecationWarning": "Codex 返回接口兼容提示，可查看详情。",
@@ -1980,6 +1983,12 @@
     "bashGroupCompleted": "完成",
     "bashGroupAllCompleted": "全部完成",
     "bashGroupFailed": "失败",
+    "bashGroupCopyCommand": "复制命令",
+    "bashGroupCopyOutput": "复制输出",
+    "bashGroupOutput": "输出",
+    "bashGroupOutputFailed": "执行失败",
+    "bashGroupRunning": "运行中…",
+    "bashGroupNoOutput": "（无输出）",
     "updatePlan": "更新计划",
     "applyPatch": "应用补丁",
     "reportFindings": {
@@ -2274,13 +2283,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 速度最快，适合快速答复"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · 最强大 · Mythos 级"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · 最强大 · Mythos 级"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · 保留的前代 Fable 模型"
+        "description": "Fable 5.1 · 保留的前代 Fable 模型"
       }
     },
     "codex": {
@@ -2335,6 +2344,7 @@
     "effort": "思考强度",
     "speed": "速度",
     "preset": "预设",
+    "approvals": "审批",
     "model": "模型"
   },
   "modes": {
@@ -2463,11 +2473,6 @@
     },
     "omp": {
       "label": "OMP CLI"
-    },
-    "beta": {
-      "badge": "Beta",
-      "title": "Beta 功能",
-      "message": "此功能仍处于 Beta 阶段。如果遇到使用 Bug，请及时反馈给作者。"
     },
     "dsh": {
       "label": "DeepSeek Harness"
@@ -2649,6 +2654,25 @@
       "description": "Codex快速响应模式（会产生额外消耗）"
     }
   },
+  "ompApprovals": {
+    "title": "选择 OMP 审批模式",
+    "default": {
+      "label": "默认",
+      "description": "未设置时完全自动（OMP 的 tools.approvalMode）"
+    },
+    "alwaysAsk": {
+      "label": "询问",
+      "description": "编辑和命令执行前都会询问"
+    },
+    "write": {
+      "label": "自动批准编辑",
+      "description": "仅在执行命令前询问"
+    },
+    "yolo": {
+      "label": "完全自动",
+      "description": "从不询问"
+    }
+  },
   "dshPresets": {
     "title": "选择 DeepSeek Harness Agent 预设",
     "none": {
@@ -2806,6 +2830,25 @@
         }
       }
     },
+    "claudeCodeWindowsTooOld": {
+      "title": "当前 Windows 版本无法启动 Claude Code",
+      "intro": "Windows 阻止了 Claude Code 启动，因为找不到它需要的系统函数（错误 0xC0000139）。这通常说明 Windows 版本过旧：Claude Code 2.1.118 及更高版本使用 ClosePseudoConsole，需要 Windows 10 1809 或 Windows Server 2019。",
+      "reason": "Windows 在加载程序时就拒绝了它，此时 Claude Code 还没有运行，所以更换模型、供应商或权限设置都没有帮助。",
+      "solutions": {
+        "updateWindows": {
+          "title": "方案一：升级 Windows",
+          "step0": "升级到 Windows 10 1809 或更高版本，或 Windows Server 2019 或更高版本。这些版本包含缺失的函数。"
+        },
+        "useOlderSdk": {
+          "title": "方案二：切换到旧版 SDK",
+          "step0": "在「依赖管理」中将 SDK 版本切换到 v0.2.112 或更早版本。较新的模型可能不接受这个旧版本。如果模型要求更新的 Claude Code，请换用其他模型或升级 Windows，因为更新 SDK 会让这个错误再次出现。"
+        },
+        "checkCustomCli": {
+          "title": "方案三：检查自定义的 Claude CLI",
+          "step0": "如果设置了「Claude CLI 路径（覆盖）」，插件会运行该程序而不是 SDK，切换 SDK 不会有任何效果。请清空该路径，或改为指向旧版 Claude Code。如果 Windows 已是最新版本，请先检查这一项。"
+        }
+      }
+    },
     "spawnEbusy": {
       "title": "spawn EBUSY — 子进程启动失败",
       "intro": "该错误通常由 Node.js 版本不兼容或 SDK 安装不完整引起，按以下两个方向排查通常可解决：",
@@ -2819,6 +2862,22 @@
           "title": "方案二：用 npm 官方源重装最新版 SDK",
           "step0": "1. 切换到 npm 官方源（淘宝源可能未同步最新版本，请勿使用淘宝源安装）：",
           "step1": "2. 打开「依赖管理」重装最新版 SDK："
+        }
+      }
+    },
+    "codexCliVersionTooOld": {
+      "title": "Codex CLI 版本过低，不支持当前权限模式",
+      "intro": "全自动和自动审批模式会用到自动审查器设置。当前的 Codex CLI 不认识这个设置并拒绝了请求，所以这条消息没有被处理。",
+      "reason": "插件使用本机识别到的 Codex CLI，更新插件不会同时更新 CLI。如果更新后仍然报错，可能是 PATH 上还有一个更旧的 codex 排在前面。",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "方案一：按官方说明安装或更新 CLI",
+          "step0": "1. 打开官方说明，选择适合当前运行环境的独立安装器、npm 或 Homebrew。更新时沿用原安装渠道，不要直接对独立安装版执行 npm 卸载：",
+          "step1": "2. 在新终端中确认版本已经更新，然后重启 IDE，让插件换用新的 CLI："
+        },
+        "useDefaultMode": {
+          "title": "方案二：暂时切换权限模式",
+          "step0": "切换到默认模式。这个模式不使用自动审查器，可以在更新 CLI 之前继续工作。如果仍然报错，请按方案一更新 CLI。"
         }
       }
     },

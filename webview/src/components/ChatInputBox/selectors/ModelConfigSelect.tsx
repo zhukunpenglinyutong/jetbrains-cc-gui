@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 import { readClaudeModelMapping } from '../../../utils/claudeModelMapping';
-import { useReasoningEffortGuard } from '../reasoningUtils';
+import { useOmpRoles } from '../../../hooks/providers/useCliModels';
+import { useReasoningEffortGuard, type OmpReasoningCatalog } from '../reasoningUtils';
 import {
   AVAILABLE_MODELS,
+  OMP_APPROVAL_DEFAULT,
   type CodexFastMode,
   type ModelInfo,
+  type OmpApprovalMode,
   type ReasoningEffort,
 } from '../types';
 import { ModelConfigDropdown } from './ModelConfigDropdown';
@@ -38,6 +41,8 @@ interface ModelConfigSelectProps {
   onCodexFastModeChange?: (mode: CodexFastMode) => void;
   dshPreset?: string;
   onDshPresetChange?: (preset: string) => void;
+  ompApprovalMode?: OmpApprovalMode;
+  onOmpApprovalModeChange?: (mode: OmpApprovalMode) => void;
 }
 
 /**
@@ -63,6 +68,8 @@ export const ModelConfigSelect = ({
   onCodexFastModeChange,
   dshPreset = '',
   onDshPresetChange,
+  ompApprovalMode = OMP_APPROVAL_DEFAULT,
+  onOmpApprovalModeChange,
 }: ModelConfigSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
@@ -73,6 +80,7 @@ export const ModelConfigSelect = ({
     effortTriggerRef,
     speedTriggerRef,
     presetTriggerRef,
+    approvalTriggerRef,
     openSubmenu,
     scheduleSubmenu,
     retainActiveSubmenu,
@@ -91,11 +99,15 @@ export const ModelConfigSelect = ({
     onReasoningChange?.(effort);
   }, [onReasoningChange]);
 
+  const ompRoles = useOmpRoles();
+  const ompCatalog = useMemo<OmpReasoningCatalog>(() => ({ models, roles: ompRoles }), [models, ompRoles]);
+
   const { isVisible: showEffort, currentLevel } = useReasoningEffortGuard(
     reasoningEffort,
     handleReasoningChange,
     selectedModel,
     currentProvider,
+    ompCatalog,
   );
 
   const modelMapping = readClaudeModelMapping();
@@ -106,6 +118,7 @@ export const ModelConfigSelect = ({
     showEffortRow,
     showSpeed,
     showPreset,
+    showApproval,
     contextSupported,
     showDivider,
   } = useModelConfigRows({
@@ -116,11 +129,13 @@ export const ModelConfigSelect = ({
     onReasoningChange,
     onCodexFastModeChange,
     onDshPresetChange,
+    onOmpApprovalModeChange,
     showEffort,
   });
   const {
     speedLabel,
     dshPresetLabel,
+    ompApprovalLabel,
     effortLabel,
     summaryText,
   } = useModelConfigSummary({
@@ -132,10 +147,12 @@ export const ModelConfigSelect = ({
     longContextEnabled,
     codexFastMode,
     dshPreset,
+    ompApprovalMode,
     show1MContext,
     showEffortRow,
     showSpeed,
     showPreset,
+    showApproval,
     currentLevel,
   });
 
@@ -186,7 +203,7 @@ export const ModelConfigSelect = ({
       window.addEventListener('resize', mainRecalculate);
       return () => window.removeEventListener('resize', mainRecalculate);
     }
-  }, [isOpen, mainRecalculate, showEffortRow, showSpeed, showPreset, showContextRow]);
+  }, [isOpen, mainRecalculate, showEffortRow, showSpeed, showPreset, showApproval, showContextRow]);
 
   return (
     <div style={WRAPPER_STYLE}>
@@ -228,14 +245,20 @@ export const ModelConfigSelect = ({
           dshPreset={dshPreset}
           onDshPresetChange={onDshPresetChange}
           dshPresetLabel={dshPresetLabel}
+          showApproval={showApproval}
+          ompApprovalMode={ompApprovalMode}
+          onOmpApprovalModeChange={onOmpApprovalModeChange}
+          ompApprovalLabel={ompApprovalLabel}
           showEffortRow={showEffortRow}
           reasoningEffort={reasoningEffort}
           onReasoningChange={handleReasoningChange}
+          ompCatalog={ompCatalog}
           effortLabel={effortLabel}
           activeSubmenu={activeSubmenu}
           effortTriggerRef={effortTriggerRef}
           speedTriggerRef={speedTriggerRef}
           presetTriggerRef={presetTriggerRef}
+          approvalTriggerRef={approvalTriggerRef}
           scheduleSubmenu={scheduleSubmenu}
           openSubmenu={openSubmenu}
         />

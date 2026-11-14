@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler.provider;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.provider.claude.ClaudePlanUsageService;
 import com.github.claudecodegui.settings.ProviderManager;
 
 import com.github.claudecodegui.model.DeleteResult;
@@ -252,6 +253,11 @@ public class ClaudeProviderOperations {
             } catch (Exception e) {
                 LOG.warn("[ProviderHandler] Failed to shut down Claude daemon during switch", e);
             }
+
+            // The cached rate_limit snapshot was reported for the account active before
+            // the switch, so the plan-usage bar would keep showing its figure until the
+            // new account emits an event of its own.
+            ClaudePlanUsageService.clearRateLimitCache();
 
             if (ProviderManager.DISABLED_PROVIDER_ID.equals(id)) {
                 context.getSettingsService().deactivateClaudeProvider();

@@ -32,6 +32,12 @@ public class CodexMessageHandler implements MessageCallback {
     private static final Logger LOG = Logger.getInstance(CodexMessageHandler.class);
 
     /**
+     * CLI providers whose bridge emits one Claude-schema {@code [USAGE]} marker per
+     * model step, with cache-exclusive input and the provider's own {@code cost_usd}.
+     */
+    private static final Set<String> STEP_USAGE_PROVIDERS = Set.of("opencode", "omp");
+
+    /**
      * state.
      */
     private final SessionState state;
@@ -655,7 +661,7 @@ public class CodexMessageHandler implements MessageCallback {
     /**
      * Handle a per-step usage marker ([USAGE] → onMessage("usage", json)).
      *
-     * <p>OpenCode emits one marker per model step. The latest step is the current
+     * <p>OpenCode and OMP emit one marker per model step. The latest step is the current
      * context snapshot ({@code message.usage}, read by the context ring); the steps
      * of a turn are summed into {@code turnUsage} for the message footer.</p>
      *
@@ -665,8 +671,9 @@ public class CodexMessageHandler implements MessageCallback {
         if (jsonContent == null || jsonContent.isEmpty()) {
             return;
         }
-        if (!"opencode".equals(state.getProvider())) {
-            LOG.debug("Usage marker dropped (provider '" + state.getProvider()
+        String provider = state.getProvider();
+        if (provider == null || !STEP_USAGE_PROVIDERS.contains(provider)) {
+            LOG.debug("Usage marker dropped (provider '" + provider
                     + "' is not vetted for [USAGE]): " + jsonContent);
             return;
         }

@@ -3,7 +3,9 @@ import test from 'node:test';
 
 import {
   buildCodexCliEnvironment,
-  isCodexNativeAutoReviewSupported,
+  CODEX_CLI_RECOMMENDED_MIN_VERSION,
+  isCodexCliOutdated,
+  parseCodexCliVersion,
   normalizeCodexPermissionMode,
 } from './codex-utils.js';
 
@@ -72,9 +74,27 @@ test('normalizes native auto mode casing and aliases before dispatch', () => {
   assert.equal(normalizeCodexPermissionMode(' AutoEdit '), 'acceptEdits');
 });
 
-test('requires Codex 0.146.0 or later for native auto review config', () => {
-  assert.equal(isCodexNativeAutoReviewSupported('0.145.0'), false);
-  assert.equal(isCodexNativeAutoReviewSupported('0.146.0'), true);
-  assert.equal(isCodexNativeAutoReviewSupported('0.151.0'), true);
-  assert.equal(isCodexNativeAutoReviewSupported('not-a-version'), false);
+test('reads the CLI version from the initialize user agent', () => {
+  assert.equal(parseCodexCliVersion('codemoss_intellij/0.164.0 (Mac OS 27.0.1; arm64) unknown (codemoss_intellij; 0.6.4)'), '0.164.0');
+  assert.equal(parseCodexCliVersion('probe/0.123.0 (Alpine Linux 3.24.3; aarch64) unknown'), '0.123.0');
+  assert.equal(parseCodexCliVersion('codex_cli_rs/0.165.0-alpha.2 (Windows 11; x86_64)'), '0.165.0');
+});
+
+test('treats a user agent without a proven release version as unknown', () => {
+  assert.equal(parseCodexCliVersion('codex-test-peer/1.0'), null);
+  assert.equal(parseCodexCliVersion('codex_cli_rs/0.0.0 (Mac OS 27.0.1; arm64) unknown'), null);
+  assert.equal(parseCodexCliVersion('no version here'), null);
+  assert.equal(parseCodexCliVersion(''), null);
+  assert.equal(parseCodexCliVersion(undefined), null);
+});
+
+test('flags only a proven CLI version below the recommended minimum', () => {
+  assert.equal(CODEX_CLI_RECOMMENDED_MIN_VERSION, '0.160.0');
+  assert.equal(isCodexCliOutdated('0.123.0'), true);
+  assert.equal(isCodexCliOutdated('0.159.9'), true);
+  assert.equal(isCodexCliOutdated('0.160.0'), false);
+  assert.equal(isCodexCliOutdated('0.164.0'), false);
+  assert.equal(isCodexCliOutdated('1.0.0'), false);
+  assert.equal(isCodexCliOutdated(null), false);
+  assert.equal(isCodexCliOutdated('not-a-version'), false);
 });

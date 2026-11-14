@@ -163,6 +163,7 @@ const App = () => {
           reasoningEffort={model.reasoningEffort}
           codexFastMode={model.codexFastMode}
           dshPreset={model.dshPreset}
+          ompApprovalMode={model.ompApprovalMode}
           streamingEnabledSetting={model.streamingEnabledSetting}
           sendShortcut={model.sendShortcut}
           autoOpenFileEnabled={model.autoOpenFileEnabled}
@@ -176,6 +177,7 @@ const App = () => {
           onReasoningChange={model.handleReasoningChange}
           onCodexFastModeChange={model.handleCodexFastModeChange}
           onDshPresetChange={model.handleDshPresetChange}
+          onOmpApprovalModeChange={model.handleOmpApprovalModeChange}
           onToggleThinking={model.handleToggleThinking}
           onStreamingEnabledChange={model.handleStreamingEnabledChange}
           onAutoOpenFileEnabledChange={model.handleAutoOpenFileEnabledChange}

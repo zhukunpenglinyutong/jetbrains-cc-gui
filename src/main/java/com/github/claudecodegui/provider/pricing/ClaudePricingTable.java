@@ -33,6 +33,7 @@ public final class ClaudePricingTable {
             Map.entry("claude-opus-4-8", OPUS_4_5_PRICING),
             Map.entry("claude-opus-5-5", OPUS_5_5_PRICING),
             Map.entry("claude-opus-5", OPUS_4_5_PRICING),
+            Map.entry("claude-fable-5-2", FABLE_5_PRICING),
             Map.entry("claude-fable-5-1", FABLE_5_PRICING),
             Map.entry("claude-fable-5", FABLE_5_PRICING),
             Map.entry("claude-sonnet-4", TIERED_SONNET_PRICING),
@@ -46,6 +47,7 @@ public final class ClaudePricingTable {
             Map.entry("claude-haiku-4-5", HAIKU_4_5_PRICING)
     );
     private static final List<String> MODEL_PREFIXES = List.of(
+            "claude-fable-5-2",
             "claude-fable-5-1",
             "claude-fable-5",
             "claude-opus-5-5",

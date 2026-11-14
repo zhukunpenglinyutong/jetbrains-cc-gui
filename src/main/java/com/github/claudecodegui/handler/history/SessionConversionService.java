@@ -10,9 +10,11 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -93,14 +95,8 @@ class SessionConversionService {
         }
 
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            Path sessionFile = null;
-            Path tempFile = null;
-            Path backupFile = null;
-            FileLock fileLock = null;
-            FileChannel fileChannel = null;
-
             try {
-                sessionFile = this.findSessionFile(sessionId, projectPath);
+                Path sessionFile = this.findSessionFile(sessionId, projectPath);
                 if (sessionFile == null) {
                     LOG.warn("[SessionConversionService] Session file not found: " + sessionId);
                     this.sendConversionResult(false, ConversionResultCode.SESSION_NOT_FOUND);
@@ -115,125 +111,160 @@ class SessionConversionService {
                     return;
                 }
 
-                // Acquire file lock to prevent concurrent modification
-                try {
-                    fileChannel = FileChannel.open(sessionFile, StandardOpenOption.WRITE);
-                    fileLock = fileChannel.tryLock();
-                    if (fileLock == null) {
-                        LOG.warn("[SessionConversionService] Session file is locked by another process: " + sessionId);
-                        this.sendConversionResult(false, ConversionResultCode.FILE_LOCKED);
-                        return;
-                    }
-                } catch (OverlappingFileLockException e) {
-                    LOG.warn("[SessionConversionService] Session file is already locked: " + sessionId);
-                    this.sendConversionResult(false, ConversionResultCode.FILE_LOCKED);
-                    return;
-                }
-
-                // Create unique files in the same directory so the final move can stay atomic.
-                Path sessionDir = sessionFile.getParent();
-                backupFile = Files.createTempFile(sessionDir, sessionId + ".jsonl.backup.", ".tmp");
-                Files.copy(sessionFile, backupFile, StandardCopyOption.REPLACE_EXISTING);
-                LOG.debug("[SessionConversionService] Created backup: " + backupFile);
-
-                tempFile = Files.createTempFile(sessionDir, sessionId + ".jsonl.convert.", ".tmp");
-
-                // Stream processing to handle large files efficiently
-                AtomicInteger modifiedCount = new AtomicInteger(0);
-                AtomicBoolean hasCliEntrypoint = new AtomicBoolean(false);
-
-                try (Stream<String> lines = Files.lines(sessionFile, StandardCharsets.UTF_8);
-                     BufferedWriter writer = Files.newBufferedWriter(tempFile, StandardCharsets.UTF_8)) {
-
-                    lines.forEach(line -> {
-                        try {
-                            String newLine = this.convertEntrypointInLine(
-                                    line,
-                                    hasCliEntrypoint,
-                                    modifiedCount
-                            );
-                            writer.write(newLine);
-                            writer.newLine();
-                        } catch (IOException e) {
-                            throw new UncheckedIOException(e);
-                        }
-                    });
-                } catch (UncheckedIOException e) {
-                    // UncheckedIOException wraps the IOException thrown inside the lambda.
-                    // Unwrap and rethrow so the outer catch(Exception) handles it uniformly.
-                    throw e.getCause();
-                } catch (IOException e) {
-                    LOG.error("[SessionConversionService] IO error writing temp file: " + tempFile, e);
-                    throw e;
-                }
-
-                // Check if any modifications were made
-                if (modifiedCount.get() == 0) {
-                    if (hasCliEntrypoint.get()) {
-                        LOG.debug("[SessionConversionService] Session is already a CLI session: " + sessionId);
-                        this.sendConversionResult(true, ConversionResultCode.ALREADY_CLI_SESSION);
-                    } else {
-                        LOG.debug("[SessionConversionService] Session is not an SDK-created session: " + sessionId);
-                        this.sendConversionResult(false, ConversionResultCode.NOT_SDK_SESSION);
-                    }
-                    return;
-                }
-
-                // Our work through the locked handle is done; release it before the
-                // swap so the atomic move (and any backup restore) cannot trip over
-                // our own open handle on Windows.
-                releaseFileLock(fileLock, fileChannel);
-
-                // Atomic move: replace original file with modified temp file
-                Files.move(tempFile, sessionFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-                tempFile = null; // Mark as successfully moved
-
-                LOG.debug("[SessionConversionService] Successfully converted session: " + sessionId
-                        + " (" + modifiedCount.get() + " lines modified)");
-
-                // No explicit index invalidation needed: the rewrite bumped the file
-                // mtime so the incremental scan re-reads this session, and the
-                // frontend follows success with a deep_search_history reload anyway.
-                this.sendConversionResult(true, null);
-
+                FileConversionResult result = this.convertSessionFile(sessionFile, sessionId);
+                this.sendConversionResult(result.success(), result.code());
             } catch (Exception e) {
                 LOG.error("[SessionConversionService] Failed to convert session: " + e.getMessage(), e);
-
-                // Release our own lock first so the restore move cannot fail on it (Windows).
-                releaseFileLock(fileLock, fileChannel);
-
-                // Restore from backup if conversion failed
-                if (backupFile != null && Files.exists(backupFile)) {
-                    try {
-                        Files.move(backupFile, sessionFile, StandardCopyOption.REPLACE_EXISTING);
-                        LOG.info("[SessionConversionService] Restored session from backup after failure");
-                    } catch (Exception restoreError) {
-                        LOG.error("[SessionConversionService] Failed to restore backup: "
-                                + restoreError.getMessage(), restoreError);
-                    }
-                }
-
                 this.sendConversionResult(false, ConversionResultCode.CONVERSION_FAILED);
-            } finally {
-                // Idempotent: no-op if the success/failure paths already released it.
-                releaseFileLock(fileLock, fileChannel);
-
-                // Clean up temporary and backup files
-                try {
-                    if (tempFile != null && Files.exists(tempFile)) {
-                        Files.deleteIfExists(tempFile);
-                        LOG.debug("[SessionConversionService] Cleaned up temp file: " + tempFile);
-                    }
-                    if (backupFile != null && Files.exists(backupFile)) {
-                        Files.deleteIfExists(backupFile);
-                        LOG.debug("[SessionConversionService] Cleaned up backup file: " + backupFile);
-                    }
-                } catch (IOException cleanupError) {
-                    LOG.warn("[SessionConversionService] Failed to clean up temporary files: "
-                            + cleanupError.getMessage());
-                }
             }
         });
+    }
+
+    /**
+     * Outcome of rewriting one session file.
+     *
+     * @param success whether the conversion succeeded
+     * @param code result code, or null for a plain success
+     */
+    record FileConversionResult(boolean success, ConversionResultCode code) { }
+
+    /**
+     * Rewrite the entrypoint of one session file in place, keeping a backup while doing so.
+     *
+     * @param sessionFile existing session file.
+     * @param sessionId session id, used for temporary file names.
+     * @return what to report to the frontend.
+     */
+    FileConversionResult convertSessionFile(Path sessionFile, String sessionId) {
+        Path tempFile = null;
+        Path backupFile = null;
+        boolean backupComplete = false;
+        FileLock fileLock = null;
+        FileChannel fileChannel = null;
+
+        try {
+            // Acquire file lock to prevent concurrent modification. The channel is also opened
+            // for reading: on Windows the lock is mandatory and applies to every other handle,
+            // including ones from this JVM, so the backup and the rewrite must read through
+            // this channel instead of opening the file again.
+            try {
+                fileChannel = FileChannel.open(sessionFile, StandardOpenOption.READ, StandardOpenOption.WRITE);
+                fileLock = fileChannel.tryLock();
+                if (fileLock == null) {
+                    LOG.warn("[SessionConversionService] Session file is locked by another process: " + sessionId);
+                    return new FileConversionResult(false, ConversionResultCode.FILE_LOCKED);
+                }
+            } catch (OverlappingFileLockException e) {
+                LOG.warn("[SessionConversionService] Session file is already locked: " + sessionId);
+                return new FileConversionResult(false, ConversionResultCode.FILE_LOCKED);
+            }
+
+            // Create unique files in the same directory so the final move can stay atomic.
+            Path sessionDir = sessionFile.getParent();
+            backupFile = Files.createTempFile(sessionDir, sessionId + ".jsonl.backup.", ".tmp");
+            copyThroughChannel(fileChannel, backupFile);
+            backupComplete = true;
+            LOG.debug("[SessionConversionService] Created backup: " + backupFile);
+
+            tempFile = Files.createTempFile(sessionDir, sessionId + ".jsonl.convert.", ".tmp");
+
+            // Stream processing to handle large files efficiently
+            AtomicInteger modifiedCount = new AtomicInteger(0);
+            AtomicBoolean hasCliEntrypoint = new AtomicBoolean(false);
+
+            // The reader is deliberately not closed: closing it would close the locked channel.
+            BufferedReader reader = new BufferedReader(
+                    Channels.newReader(fileChannel.position(0), StandardCharsets.UTF_8.newDecoder(), -1));
+            try (Stream<String> lines = reader.lines();
+                 BufferedWriter writer = Files.newBufferedWriter(tempFile, StandardCharsets.UTF_8)) {
+
+                lines.forEach(line -> {
+                    try {
+                        String newLine = this.convertEntrypointInLine(
+                                line,
+                                hasCliEntrypoint,
+                                modifiedCount
+                        );
+                        writer.write(newLine);
+                        writer.newLine();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                });
+            } catch (UncheckedIOException e) {
+                // UncheckedIOException wraps the IOException thrown inside the lambda.
+                // Unwrap and rethrow so the outer catch(Exception) handles it uniformly.
+                throw e.getCause();
+            } catch (IOException e) {
+                LOG.error("[SessionConversionService] IO error writing temp file: " + tempFile, e);
+                throw e;
+            }
+
+            // Check if any modifications were made
+            if (modifiedCount.get() == 0) {
+                if (hasCliEntrypoint.get()) {
+                    LOG.debug("[SessionConversionService] Session is already a CLI session: " + sessionId);
+                    return new FileConversionResult(true, ConversionResultCode.ALREADY_CLI_SESSION);
+                }
+                LOG.debug("[SessionConversionService] Session is not an SDK-created session: " + sessionId);
+                return new FileConversionResult(false, ConversionResultCode.NOT_SDK_SESSION);
+            }
+
+            // Our work through the locked handle is done; release it before the
+            // swap so the atomic move (and any backup restore) cannot trip over
+            // our own open handle on Windows.
+            releaseFileLock(fileLock, fileChannel);
+
+            // Atomic move: replace original file with modified temp file
+            Files.move(tempFile, sessionFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            tempFile = null; // Mark as successfully moved
+
+            LOG.debug("[SessionConversionService] Successfully converted session: " + sessionId
+                    + " (" + modifiedCount.get() + " lines modified)");
+
+            // No explicit index invalidation needed: the rewrite bumped the file
+            // mtime so the incremental scan re-reads this session, and the
+            // frontend follows success with a deep_search_history reload anyway.
+            return new FileConversionResult(true, null);
+
+        } catch (Exception e) {
+            LOG.error("[SessionConversionService] Failed to convert session: " + e.getMessage(), e);
+
+            // Release our own lock first so the restore move cannot fail on it (Windows).
+            releaseFileLock(fileLock, fileChannel);
+
+            // Restore from backup if conversion failed. A backup that was never fully written is
+            // an empty or partial file and must never replace the session.
+            if (backupComplete && backupFile != null && Files.exists(backupFile)) {
+                try {
+                    Files.move(backupFile, sessionFile, StandardCopyOption.REPLACE_EXISTING);
+                    LOG.info("[SessionConversionService] Restored session from backup after failure");
+                } catch (Exception restoreError) {
+                    LOG.error("[SessionConversionService] Failed to restore backup: "
+                            + restoreError.getMessage(), restoreError);
+                }
+            }
+
+            return new FileConversionResult(false, ConversionResultCode.CONVERSION_FAILED);
+        } finally {
+            // Idempotent: no-op if the success/failure paths already released it.
+            releaseFileLock(fileLock, fileChannel);
+
+            // Clean up temporary and backup files
+            try {
+                if (tempFile != null && Files.exists(tempFile)) {
+                    Files.deleteIfExists(tempFile);
+                    LOG.debug("[SessionConversionService] Cleaned up temp file: " + tempFile);
+                }
+                if (backupFile != null && Files.exists(backupFile)) {
+                    Files.deleteIfExists(backupFile);
+                    LOG.debug("[SessionConversionService] Cleaned up backup file: " + backupFile);
+                }
+            } catch (IOException cleanupError) {
+                LOG.warn("[SessionConversionService] Failed to clean up temporary files: "
+                        + cleanupError.getMessage());
+            }
+        }
     }
 
     /**
@@ -292,6 +323,29 @@ class SessionConversionService {
         } catch (Exception e) {
             LOG.warn("[SessionConversionService] Failed to check active session: " + e.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * Copy the whole file behind an already locked channel into {@code target}, without
+     * opening a second handle on the locked file.
+     *
+     * @param source locked, readable channel positioned anywhere.
+     * @param target file to create or overwrite.
+     * @throws IOException if the copy stops before the whole file has been written.
+     */
+    private static void copyThroughChannel(FileChannel source, Path target) throws IOException {
+        try (FileChannel out = FileChannel.open(target, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            long size = source.size();
+            long position = 0;
+            while (position < size) {
+                long moved = source.transferTo(position, size - position, out);
+                if (moved <= 0) {
+                    throw new IOException("Backup copy stopped at byte " + position + " of " + size);
+                }
+                position += moved;
+            }
+            out.force(true);
         }
     }
 

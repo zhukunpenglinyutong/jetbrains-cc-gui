@@ -100,6 +100,9 @@
     "usagePercentage": "Usage: {{percentage}}",
     "planUsage": {
       "title": "Claude plan usage",
+      "balanceLabel": "Balance: ",
+      "balanceRemaining": "Balance: {{value}}",
+      "balanceDetail": "Total {{total}} · Used {{used}}",
       "grokTitle": "Grok plan usage",
       "staleIdle": "Last reading. It refreshes the next time you use Grok",
       "loading": "Loading usage…",
@@ -179,8 +182,7 @@
       "matchCase": "Match Case (Alt+C)",
       "wholeWord": "Match Whole Word (Alt+W)",
       "regex": "Use Regular Expression (Alt+R)",
-      "invalidRegex": "Invalid regex",
-      "openTooltip": "Search in conversation (Cmd/Ctrl+F)"
+      "invalidRegex": "Invalid regex"
     },
     "compactSummary": {
       "receivedTime": "Recorded time",
@@ -207,6 +209,7 @@
     "codexReviewStarted": "Codex is reviewing the workspace",
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexCliOutdated": "Codex CLI {{version}} is outdated; some models and permission modes may not work. Update to {{minimumVersion}} or newer.",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
     "continueRefiningPlan": "Continue refining this plan:"
   },
@@ -590,6 +593,12 @@
         "enabled": "Enabled",
         "disabled": "Disabled",
         "hint": "When enabled, shows the 'AI Generate Commit Message' button in the commit dialog. When disabled, the button is hidden."
+      },
+      "sessionGitRepositoryMatching": {
+        "label": "Match sessions by Git remote repository",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "Include Codex and Claude Code history from other directories with the same normalized remote host, owner, and repository. When Git information is unavailable, match by working directory."
       },
       "statusBarWidget": {
         "label": "Status Bar Info Display",
@@ -1459,6 +1468,9 @@
     }
   },
   "history": {
+    "confirmDirectoryTitle": "Open session in another directory?",
+    "confirmDirectoryMessage": "Commands and file changes will run in the directory shown below.",
+    "executionDirectory": "Run in",
     "title": "History",
     "sessionDeleted": "Session deleted",
     "confirmDelete": "Confirm Delete",
@@ -1570,6 +1582,7 @@
     "codexDeliveryUnconfirmed": "Codex has not confirmed your choice yet ({{error}}). It may still take effect, so do not answer again; if the conversation does not continue, click Stop and send your message again."
   },
   "askUserQuestion": {
+    "ompTitle": "OMP has some questions for you",
     "configWarning": "Codex reported a configuration warning. Review the details.",
     "configWarningTitle": "Codex configuration warning",
     "apiDeprecationWarning": "Codex reported an API compatibility notice. Review the details.",
@@ -1974,6 +1987,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "Copy command",
+    "bashGroupCopyOutput": "Copy output",
+    "bashGroupOutput": "Output",
+    "bashGroupOutputFailed": "Failed",
+    "bashGroupRunning": "Running…",
+    "bashGroupNoOutput": "(no output)",
     "promptLabel": "Prompt",
     "updatePlan": "Update Plan",
     "applyPatch": "Apply Patch",
@@ -2269,13 +2288,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Fastest for quick answers"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · Most powerful · Mythos-class"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · Most powerful · Mythos-class"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · Previous Fable generation"
+        "description": "Fable 5.1 · Previous Fable generation"
       }
     },
     "codex": {
@@ -2330,6 +2349,7 @@
     "effort": "Effort",
     "speed": "Speed",
     "preset": "Preset",
+    "approvals": "Approvals",
     "model": "Model"
   },
   "modes": {
@@ -2459,11 +2479,6 @@
     },
     "omp": {
       "label": "OMP CLI"
-    },
-    "beta": {
-      "badge": "Beta",
-      "title": "Beta Feature",
-      "message": "This feature is still in Beta. If you encounter any bugs, please report them to the author promptly."
     },
     "dsh": {
       "label": "DeepSeek Harness"
@@ -2645,6 +2660,25 @@
       "description": "Codex fast response mode (uses additional credits)"
     }
   },
+  "ompApprovals": {
+    "title": "Select OMP approval mode",
+    "default": {
+      "label": "Default",
+      "description": "Full auto unless OMP's tools.approvalMode is set"
+    },
+    "alwaysAsk": {
+      "label": "Ask",
+      "description": "Asks before edits and commands"
+    },
+    "write": {
+      "label": "Auto-approve edits",
+      "description": "Asks only before commands"
+    },
+    "yolo": {
+      "label": "Full auto",
+      "description": "Never asks"
+    }
+  },
   "dshPresets": {
     "title": "Select DeepSeek Harness agent preset",
     "none": {
@@ -2802,6 +2836,25 @@
         }
       }
     },
+    "claudeCodeWindowsTooOld": {
+      "title": "Claude Code cannot start on this version of Windows",
+      "intro": "Windows stopped Claude Code from starting because a system function it needs was not found (error 0xC0000139). This usually means Windows is too old: Claude Code 2.1.118 and later use ClosePseudoConsole, which requires Windows 10 version 1809 or Windows Server 2019.",
+      "reason": "Windows rejects the program while loading it, before Claude Code runs, so changing the model, provider or permission settings will not help.",
+      "solutions": {
+        "updateWindows": {
+          "title": "Option 1: Update Windows",
+          "step0": "Update to Windows 10 version 1809 or later, or Windows Server 2019 or later. These versions include the missing function."
+        },
+        "useOlderSdk": {
+          "title": "Option 2: Switch to an older SDK",
+          "step0": "In Dependency Management, switch the SDK version to v0.2.112 or earlier. Newer models may not accept that older version. If a model asks for a newer Claude Code, choose another model or update Windows: updating the SDK brings this error back."
+        },
+        "checkCustomCli": {
+          "title": "Option 3: Check your custom Claude CLI",
+          "step0": "If you set \"Claude CLI Path (override)\", the plugin runs that binary instead of the SDK, so switching the SDK has no effect. Clear the path or point it to an older Claude Code. Check this first if your Windows is already up to date."
+        }
+      }
+    },
     "spawnEbusy": {
       "title": "spawn EBUSY — child process failed to launch",
       "intro": "This error is typically caused by an incompatible Node.js version or an incomplete SDK installation. Try the two options below in order:",
@@ -2815,6 +2868,22 @@
           "title": "Option 2: Reinstall the latest SDK from the official npm registry",
           "step0": "1. Switch to the official npm registry (avoid the Taobao mirror — it may not have the latest version):",
           "step1": "2. Open Dependency Management and reinstall the latest SDK:"
+        }
+      }
+    },
+    "codexCliVersionTooOld": {
+      "title": "Codex CLI is too old for this permission mode",
+      "intro": "Full Auto and Auto Mode use the automatic reviewer setting. This Codex CLI does not recognize it and rejected the request, so your message was not processed.",
+      "reason": "The plugin runs the Codex CLI found on your machine, so updating the plugin does not update the CLI. If the error continues after updating, an older codex may come first on your PATH.",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "Option 1: Install or update the CLI using the official instructions",
+          "step0": "1. Open the official instructions and choose the standalone installer, npm, or Homebrew for your runtime environment. Update through the original installation channel; do not use npm uninstall for a standalone installation:",
+          "step1": "2. In a new terminal, confirm the version has changed, then restart the IDE so the plugin picks up the new CLI:"
+        },
+        "useDefaultMode": {
+          "title": "Option 2: Switch the permission mode for now",
+          "step0": "Switch to Default Mode. It does not use the automatic reviewer, so you can keep working until the CLI is updated. If the error continues, update the CLI as described in Option 1."
         }
       }
     },

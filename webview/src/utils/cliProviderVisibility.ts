@@ -3,7 +3,7 @@
  *
  * Hidden providers are omitted from the switcher dropdown but remain fully
  * functional — a hidden active provider still displays in the trigger button.
- * Storage: localStorage (same pattern as betaProviderNotice).
+ * Storage: localStorage (same pattern as skipNewSessionConfirm).
  */
 
 export const CLI_PROVIDER_VISIBILITY_KEY = 'cli-provider-hidden-ids';

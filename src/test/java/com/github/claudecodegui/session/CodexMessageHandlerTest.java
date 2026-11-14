@@ -980,4 +980,43 @@ public class CodexMessageHandlerTest {
         assertTrue(assistant.raw.has("turnUsage"));
         assertFalse(assistant.raw.has("turnCostUsd"));
     }
+
+    @Test
+    public void ompUsageMarkersFeedTheTurnFooterCostAndContextRing() {
+        SessionState state = new SessionState();
+        state.setProvider("omp");
+        state.setModel("slow");
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("stream_start", "");
+        // OMP reports a step's usage before the tool call it ends with.
+        handler.onMessage("usage", "{\"input_tokens\":4,\"output_tokens\":179,\"cache_read_input_tokens\":0,"
+                + "\"cache_creation_input_tokens\":14888,\"total_tokens\":15071,\"cost_usd\":0.1227,"
+                + "\"model_context_window\":1000000}");
+        handler.onMessage("assistant", "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":["
+                + "{\"type\":\"tool_use\",\"id\":\"t1\",\"name\":\"bash\",\"input\":{\"command\":\"ls\"}}]}}");
+        handler.onMessage("content_delta", "Done.");
+        handler.onMessage("usage", "{\"input_tokens\":2,\"output_tokens\":4,\"cache_read_input_tokens\":14888,"
+                + "\"cache_creation_input_tokens\":120,\"total_tokens\":15014,\"cost_usd\":0.002,"
+                + "\"model_context_window\":1000000}");
+        handler.onMessage("stream_end", "");
+
+        Message assistant = lastAssistantMessage(handler, state);
+        JsonObject turnUsage = assistant.raw.getAsJsonObject("turnUsage");
+        assertEquals(6, turnUsage.get("input_tokens").getAsInt());
+        assertEquals(183, turnUsage.get("output_tokens").getAsInt());
+        assertEquals(14888, turnUsage.get("cache_read_input_tokens").getAsInt());
+        assertEquals(15008, turnUsage.get("cache_creation_input_tokens").getAsInt());
+        assertEquals(0.1247, assistant.raw.get("turnCostUsd").getAsDouble(), 1e-9);
+
+        // The ring shows what the latest step sent to the model, against OMP's own window.
+        assertEquals(2, callback.usageUpdates.size());
+        assertEquals(2 + 120 + 14888, callback.usageUpdates.get(1)[0]);
+        assertEquals(1_000_000, callback.usageUpdates.get(1)[1]);
+        // The tool call merged into the same assistant message kept its usage.
+        assertEquals(15014, assistant.raw.getAsJsonObject("message").getAsJsonObject("usage").get("total_tokens").getAsInt());
+    }
 }

@@ -3,6 +3,7 @@ package com.github.claudecodegui.util;
 import org.junit.Assume;
 import org.junit.Test;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -74,6 +75,42 @@ public class WslPathUtilTest {
             Path sibling = Files.createDirectories(root.resolve("project-evil"));
             Path file = Files.write(sibling.resolve("file.txt"), new byte[]{1});
             assertFalse(WslPathUtil.isPathWithinDirectory(file.toString(), project.toString()));
+        } finally {
+            deleteRecursively(root);
+        }
+    }
+
+    @Test
+    public void danglingSymlinkPointingOutsideIsRejected() throws IOException {
+        Assume.assumeFalse("Symlink-resolving branch only applies to native POSIX paths",
+                PlatformUtils.isWindows());
+
+        Path root = Files.createTempDirectory("wslpathutil-test");
+        try {
+            Path project = Files.createDirectories(root.resolve("project"));
+            Path dangling = project.resolve("dangling.txt");
+            try {
+                Files.createSymbolicLink(dangling, root.resolve("not-created-yet.txt"));
+            } catch (IOException | UnsupportedOperationException e) {
+                Assume.assumeNoException("Filesystem does not support symlinks", e);
+            }
+
+            // Writing through this link would create a file outside the project.
+            assertFalse(WslPathUtil.isPathWithinDirectory(dangling.toString(), project.toString()));
+        } finally {
+            deleteRecursively(root);
+        }
+    }
+
+    @Test
+    public void invalidPathIsRejectedInsteadOfThrowing() throws IOException {
+        Path root = Files.createTempDirectory("wslpathutil-test");
+        try {
+            Path project = Files.createDirectories(root.resolve("project"));
+            String invalid = project + File.separator + "a\u0000.txt";
+
+            assertFalse(WslPathUtil.isPathWithinDirectory(invalid, project.toString()));
+            assertFalse(WslPathUtil.isPathWithinDirectory(project.resolve("a.txt").toString(), invalid));
         } finally {
             deleteRecursively(root);
         }

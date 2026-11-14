@@ -34,13 +34,14 @@ import {
 const DEFAULT_TIMEOUT_MS = 120_000;
 
 /**
- * User-turn session/prompt budget. Long agentic runs (tools + terminal) routinely
- * exceed 5 minutes; 300s was killing healthy turns with ACP timeout.
+ * User-turn session/prompt silence window (sliding on ACP stdout/stderr activity).
+ * Long agentic runs (tools + terminal) routinely exceed 5 minutes; 300s was killing
+ * healthy turns with ACP timeout. Total request duration is capped at MAX_TURN_PROMPT_TIMEOUT_MS.
  * Override: GROK_ACP_TURN_TIMEOUT_MS (clamped 5m … 4h).
  */
 const DEFAULT_TURN_PROMPT_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes
 const MIN_TURN_PROMPT_TIMEOUT_MS = 5 * 60 * 1000;
-const MAX_TURN_PROMPT_TIMEOUT_MS = 4 * 60 * 60 * 1000;
+export const MAX_TURN_PROMPT_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 
 export function resolveTurnPromptTimeoutMs(env = process.env) {
   const raw = env?.GROK_ACP_TURN_TIMEOUT_MS;
@@ -162,6 +163,7 @@ export async function ensureSession(client, { sessionId = '', cwd = '', model = 
   const workCwd = cwd && cwd.trim() ? cwd.trim() : process.cwd();
   let activeSessionId = sessionId && String(sessionId).trim() ? String(sessionId).trim() : '';
   let sessionMeta = null;
+  let resumed = false;
 
   const canLoad = !!activeSessionId && client && true; // assume capability check if exposed
 
@@ -172,6 +174,7 @@ export async function ensureSession(client, { sessionId = '', cwd = '', model = 
         cwd: workCwd,
         mcpServers: [],
       });
+      resumed = true;
     } catch (e) {
       // fall through to new
       activeSessionId = '';
@@ -210,7 +213,7 @@ export async function ensureSession(client, { sessionId = '', cwd = '', model = 
     }
   }
 
-  return { sessionId: activeSessionId, sessionMeta };
+  return { sessionId: activeSessionId, sessionMeta, resumed };
 }
 
 /**
@@ -249,7 +252,22 @@ export async function applyPermissionModeToSession(client, sessionId, permission
   }
 }
 
+/**
+ * JSON-RPC client for Grok ACP (`grok agent stdio`) with sliding activity timeouts.
+ */
 export class GrokAcpClient {
+  /**
+   * Creates a Grok ACP client instance.
+   *
+   * @param {object} [options] Client configuration options
+   * @param {NodeJS.ProcessEnv} [options.env] Environment variables for the ACP process
+   * @param {string} [options.cwd] Working directory for the ACP process
+   * @param {(method: string, params: object) => void} [options.onNotification] Notification handler
+   * @param {(method: string, params: object, id: number|string, client: GrokAcpClient) => Promise<boolean>|boolean} [options.onServerRequest] Server request handler
+   * @param {((payload: {path: string, content: string}) => void)|null} [options.onFsWrite] Callback invoked after fs/write_text_file
+   * @param {(chunk: string) => void} [options.onStderr] Stderr chunk listener
+   * @param {AcpTerminalHost|null} [options.terminalHost] Optional ACP terminal host instance
+   */
   constructor({
     env = process.env,
     cwd = process.cwd(),
@@ -273,12 +291,41 @@ export class GrokAcpClient {
     this.pending = new Map();
     this.closed = false;
     this.stderrBuf = '';
+    this.activeServerRequests = 0;
   }
 
+  /**
+   * Checks whether a server-to-client request (such as permission/question UI or
+   * `terminal/wait_for_exit`) is currently active.
+   *
+   * @return {boolean} true if a server request is in flight
+   */
+  hasActiveWork() {
+    return this.activeServerRequests > 0;
+  }
+
+  /**
+   * Records live ACP activity and refreshes the inactivity deadline for pending
+   * requests that allow sliding timeouts.
+   */
+  touchActivity() {
+    for (const [, p] of this.pending) {
+      p.refreshTimeout?.();
+    }
+  }
+
+  /**
+   * Returns the trailing stderr buffer collected from the ACP child process.
+   *
+   * @return {string} last 4000 characters of stderr output
+   */
   getLastStderr() {
     return this.stderrBuf.slice(-4000);
   }
 
+  /**
+   * Spawns the `grok agent stdio` child process and attaches stdio listeners.
+   */
   start() {
     if (this.proc) return;
 
@@ -300,6 +347,7 @@ export class GrokAcpClient {
     this.rl.on('line', (line) => this.#handleLine(line));
 
     this.proc.stderr.on('data', (chunk) => {
+      this.touchActivity();
       const s = chunk.toString();
       this.stderrBuf = (this.stderrBuf + s).slice(-8000);
       try {
@@ -328,46 +376,97 @@ export class GrokAcpClient {
   }
 
   /**
-   * @param {string} method
-   * @param {object} [params]
-   * @param {number} [timeoutMs]
-   * @param {{ recycleOnTimeout?: boolean }} [options]
-   *   recycleOnTimeout (default true): on timeout, mark unhealthy + kill process
-   *   so the next user turn recovers. Set false for best-effort control prompts
-   *   (/always-approve) that must not abort an in-flight user turn.
+   * Sends a JSON-RPC request over ACP stdio with an activity-sliding timeout
+   * (bounded by a hard cap on total duration) or a fixed deadline when
+   * `recycleOnTimeout` is false.
+   *
+   * @param {string} method JSON-RPC method name
+   * @param {object} [params] JSON-RPC request parameters
+   * @param {number} [timeoutMs] Inactivity timeout window in milliseconds (or fixed deadline when recycleOnTimeout is false)
+   * @param {{ recycleOnTimeout?: boolean, maxTimeoutMs?: number, maxDurationMs?: number }} [options] Request timeout options
+   * @return {Promise<any>} resolved JSON-RPC result payload
    */
   async request(method, params = {}, timeoutMs = DEFAULT_TIMEOUT_MS, options = {}) {
     if (!this.proc || this.closed) {
       throw new Error('ACP client is not running');
     }
     const recycleOnTimeout = options.recycleOnTimeout !== false;
+    // Only the user turn may outlive its window; control RPCs keep their fixed deadline.
+    const isTurn = method === 'session/prompt';
+    const rawMaxTimeout =
+      options.maxTimeoutMs ??
+      options.maxDurationMs ??
+      (isTurn
+        ? this.env?.GROK_ACP_MAX_TURN_TIMEOUT_MS ?? process.env?.GROK_ACP_MAX_TURN_TIMEOUT_MS
+        : undefined);
+    const parsedMaxTimeout = Number(rawMaxTimeout);
+    const maxTimeoutMs =
+      Number.isFinite(parsedMaxTimeout) && parsedMaxTimeout > 0
+        ? Math.floor(parsedMaxTimeout)
+        : isTurn
+          ? Math.max(timeoutMs, MAX_TURN_PROMPT_TIMEOUT_MS)
+          : timeoutMs;
+    const deadlineAt = Date.now() + (recycleOnTimeout ? maxTimeoutMs : timeoutMs);
+
     const id = this.nextId++;
     const payload = { jsonrpc: '2.0', id, method, params };
 
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      let timer = null;
+      const onTimeout = () => {
+        if (!this.pending.has(id)) return;
+        const hardExpired = Date.now() >= deadlineAt;
+        if (recycleOnTimeout && !hardExpired && this.hasActiveWork()) {
+          armTimer();
+          return;
+        }
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
         const err = new Error(`ACP timeout waiting for ${method}`);
         err.code = 'ACP_TIMEOUT';
         err.method = method;
+        err.stderr = this.getLastStderr();
         this.pending.delete(id);
         if (recycleOnTimeout) {
           // Abandoning a user-turn RPC leaves the agent busy → recycle.
           this.markUnhealthy(err.message, { killProcess: true });
         }
-        // Soft timeout: leave client alive (control-plane /always-approve).
+        // Soft timeout: leave client alive (control-plane /always-approve, _x.ai/billing).
         reject(err);
-      }, timeoutMs);
+      };
+      const armTimer = () => {
+        if (!this.pending.has(id) && timer !== null) return;
+        if (!recycleOnTimeout) {
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(onTimeout, timeoutMs);
+          return;
+        }
+        const remainingHardMs = deadlineAt - Date.now();
+        if (remainingHardMs <= 0) {
+          onTimeout();
+          return;
+        }
+        const delayMs = Math.min(timeoutMs, remainingHardMs);
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(onTimeout, delayMs);
+      };
 
       this.pending.set(id, {
+        refreshTimeout: recycleOnTimeout ? armTimer : null,
         resolve: (result) => {
-          clearTimeout(timer);
+          if (timer) clearTimeout(timer);
+          this.pending.delete(id);
           resolve(result);
         },
         reject: (error) => {
-          clearTimeout(timer);
+          if (timer) clearTimeout(timer);
+          this.pending.delete(id);
           reject(error);
         },
       });
+      armTimer();
 
       this.proc.stdin.write(JSON.stringify(payload) + '\n');
     });
@@ -417,13 +516,28 @@ export class GrokAcpClient {
     return !!(this.unhealthy || this.closed);
   }
 
+  /**
+   * Sends a JSON-RPC success response to a server-initiated request.
+   *
+   * @param {number|string} id Request identifier
+   * @param {any} result Result payload
+   */
   respond(id, result) {
     if (!this.proc || this.closed) return;
+    this.touchActivity();
     this.proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
   }
 
+  /**
+   * Sends a JSON-RPC error response to a server-initiated request.
+   *
+   * @param {number|string} id Request identifier
+   * @param {number} code JSON-RPC error code
+   * @param {string} message Error description
+   */
   respondError(id, code, message) {
     if (!this.proc || this.closed) return;
+    this.touchActivity();
     this.proc.stdin.write(
       JSON.stringify({
         jsonrpc: '2.0',
@@ -504,6 +618,7 @@ export class GrokAcpClient {
   #handleLine(line) {
     const trimmed = (line || '').trim();
     if (!trimmed) return;
+    this.touchActivity();
 
     let message;
     try {
@@ -612,6 +727,7 @@ export class GrokAcpClient {
 
     // ACP terminal host (clientCapabilities.terminal === true)
     if (this.terminalHost && isTerminalMethod(method)) {
+      this.activeServerRequests += 1;
       Promise.resolve(this.terminalHost.handle(method, params))
         .then((result) => {
           this.respond(id, result ?? {});
@@ -619,12 +735,17 @@ export class GrokAcpClient {
         .catch((e) => {
           const code = typeof e?.code === 'number' ? e.code : -32000;
           this.respondError(id, code, e?.message || String(e));
+        })
+        .finally(() => {
+          this.activeServerRequests = Math.max(0, this.activeServerRequests - 1);
+          this.touchActivity();
         });
       return;
     }
 
     // Custom handler (permissions, etc.)
     if (typeof this.onServerRequest === 'function') {
+      this.activeServerRequests += 1;
       Promise.resolve(this.onServerRequest(method, params, id, this))
         .then((handled) => {
           if (!handled) {
@@ -634,6 +755,10 @@ export class GrokAcpClient {
         })
         .catch((e) => {
           this.respondError(id, -32000, e.message || String(e));
+        })
+        .finally(() => {
+          this.activeServerRequests = Math.max(0, this.activeServerRequests - 1);
+          this.touchActivity();
         });
       return;
     }
@@ -814,6 +939,7 @@ export async function runAcpTurn({
       agentPrompt,
       openedFiles,
       attachments,
+      includeGlobalRules: !sessionInfo.resumed,
     });
 
     // Signal the normalizer to open [STREAM_START] only for the user turn.
@@ -1122,7 +1248,13 @@ export function isAutoApproveMode(permissionMode) {
  * When the user only attaches images with empty text, inject
  * GROK_IMAGE_ONLY_FALLBACK_TEXT so the payload stays valid.
  */
-export function buildPromptBlocks({ message, agentPrompt, openedFiles, attachments }) {
+export function buildPromptBlocks({
+  message,
+  agentPrompt,
+  openedFiles,
+  attachments,
+  includeGlobalRules = true,
+}) {
   const blocks = [];
   let text = message || '';
 
@@ -1150,19 +1282,22 @@ export function buildPromptBlocks({ message, agentPrompt, openedFiles, attachmen
   }
 
   // Load user-global rules for Grok from ~/.grok/grok-rules.md (if exists).
-  // This allows persistent, user-level instructions without hardcoding in the plugin.
-  try {
-    const rulesPath = path.join(homedir(), '.grok', 'grok-rules.md');
-    if (fs.existsSync(rulesPath)) {
-      const rulesContent = fs.readFileSync(rulesPath, 'utf8').trim();
-      if (rulesContent) {
-        console.log('[Grok] Loaded global rules from ~/.grok/grok-rules.md (' + rulesContent.length + ' chars)');
-        text += `\n\n## Global Grok Rules (~/.grok/grok-rules.md)\n\n${rulesContent}`;
+  // Inject once on the first turn of a new session so multi-turn transcripts
+  // do not repeat the global rules block in every subsequent prompt.
+  if (includeGlobalRules !== false) {
+    try {
+      const rulesPath = path.join(homedir(), '.grok', 'grok-rules.md');
+      if (fs.existsSync(rulesPath)) {
+        const rulesContent = fs.readFileSync(rulesPath, 'utf8').trim();
+        if (rulesContent) {
+          console.log('[Grok] Loaded global rules from ~/.grok/grok-rules.md (' + rulesContent.length + ' chars)');
+          text += `\n\n## Global Grok Rules (~/.grok/grok-rules.md)\n\n${rulesContent}`;
+        }
       }
+    } catch (err) {
+      // Non-fatal: don't break prompt building if the file is unreadable
+      console.error('[Grok] Failed to read ~/.grok/grok-rules.md:', err?.message || err);
     }
-  } catch (err) {
-    // Non-fatal: don't break prompt building if the file is unreadable
-    console.error('[Grok] Failed to read ~/.grok/grok-rules.md:', err?.message || err);
   }
 
   if (openedFiles && typeof openedFiles === 'object') {

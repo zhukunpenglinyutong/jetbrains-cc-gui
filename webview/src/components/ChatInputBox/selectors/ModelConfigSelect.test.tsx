@@ -134,7 +134,7 @@ describe('ModelConfigSelect', () => {
     expect(screen.queryByTestId('model-config-option-speed')).toBeNull();
   });
 
-  it('selects a model from the inline list without closing the popover', () => {
+  it('closes the popover after switching to a different model', () => {
     const onModelSelect = vi.fn();
     render(
       <ModelConfigSelect
@@ -151,6 +151,25 @@ describe('ModelConfigSelect', () => {
     fireEvent.click(screen.getByTestId('model-option-claude-haiku-4-5'));
 
     expect(onModelSelect).toHaveBeenCalledWith('claude-haiku-4-5');
+    expect(screen.queryByTestId('model-config-dropdown')).toBeNull();
+  });
+
+  it('keeps the popover open when clicking the already-selected model', () => {
+    const onModelSelect = vi.fn();
+    render(
+      <ModelConfigSelect
+        selectedModel="claude-sonnet-5"
+        onModelSelect={onModelSelect}
+        models={claudeModels}
+        currentProvider="claude"
+        reasoningEffort="high"
+        onReasoningChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('model-config-trigger'));
+    fireEvent.click(screen.getByTestId('model-option-claude-sonnet-5'));
+
     expect(screen.getByTestId('model-config-dropdown')).toBeTruthy();
   });
 
@@ -403,5 +422,69 @@ describe('ModelConfigSelect', () => {
       });
       expect(screen.getByTestId('reasoning-selector-dropdown')).toBeTruthy();
     });
+  });
+});
+
+describe('ModelConfigSelect — OMP approvals and effort', () => {
+  const ompModels = [
+    { id: 'auto', label: 'OMP Auto' },
+    { id: 'anthropic/claude-opus-5-5', label: 'Opus', supportedReasoningEfforts: ['low', 'high', 'max'] },
+  ];
+
+  const renderOmp = (props: Partial<React.ComponentProps<typeof ModelConfigSelect>> = {}) => render(
+    <ModelConfigSelect
+      selectedModel="auto"
+      onModelSelect={vi.fn()}
+      models={ompModels}
+      currentProvider="omp"
+      reasoningEffort="high"
+      onReasoningChange={vi.fn()}
+      ompApprovalMode="default"
+      onOmpApprovalModeChange={vi.fn()}
+      {...props}
+    />,
+  );
+
+  it('shows the approvals row for omp and reports the chosen option id', () => {
+    const onOmpApprovalModeChange = vi.fn();
+    renderOmp({ onOmpApprovalModeChange });
+    fireEvent.click(screen.getByTestId('model-config-trigger'));
+    fireEvent.click(screen.getByTestId('model-config-option-approval'));
+    for (const id of ['default', 'always-ask', 'write', 'yolo']) {
+      expect(screen.getByTestId(`omp-approval-option-${id}`)).toBeTruthy();
+    }
+    fireEvent.click(screen.getByTestId('omp-approval-option-write'));
+    expect(onOmpApprovalModeChange).toHaveBeenCalledWith('write');
+  });
+
+  it.each(['claude', 'codex', 'dsh', 'pi'])('hides the approvals row for %s', (provider) => {
+    renderOmp({ currentProvider: provider });
+    fireEvent.click(screen.getByTestId('model-config-trigger'));
+    expect(screen.queryByTestId('model-config-option-approval')).toBeNull();
+  });
+
+  it('adds a non-default approval to the summary text only', () => {
+    const { unmount } = renderOmp({ ompApprovalMode: 'yolo' });
+    expect(screen.getByTestId('model-config-trigger').textContent).toContain('Full auto');
+    unmount();
+    renderOmp({ ompApprovalMode: 'default' });
+    expect(screen.getByTestId('model-config-trigger').textContent).not.toContain('Default');
+  });
+
+  it('offers only the selected model\'s effort levels, including max', () => {
+    renderOmp({ selectedModel: 'anthropic/claude-opus-5-5' });
+    fireEvent.click(screen.getByTestId('model-config-trigger'));
+    fireEvent.click(screen.getByTestId('model-config-option-effort'));
+    const dropdown = screen.getByTestId('reasoning-selector-dropdown');
+    expect(dropdown.querySelectorAll('.selector-option')).toHaveLength(3);
+  });
+
+  it('offers no max for auto, whose model the plugin does not know', () => {
+    renderOmp({ selectedModel: 'auto' });
+    fireEvent.click(screen.getByTestId('model-config-trigger'));
+    fireEvent.click(screen.getByTestId('model-config-option-effort'));
+    const dropdown = screen.getByTestId('reasoning-selector-dropdown');
+    expect(dropdown.querySelectorAll('.selector-option')).toHaveLength(4);
+    expect(dropdown.textContent).not.toContain('Max');
   });
 });

@@ -9,7 +9,7 @@ import { StringDecoder } from 'string_decoder';
 import { emitSendError, endStream } from './marker-protocol.js';
 import { resolveCliSpawn, decodeCliOutput, stripOuterQuotes } from './cli-path.js';
 
-function killChildTree(child, label) {
+export function killChildTree(child, label) {
   if (!child || child.killed) return;
   try {
     if (process.platform === 'win32') {

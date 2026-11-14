@@ -34,6 +34,7 @@ public class EnvironmentConfigurator {
     private static final String CLAUDE_SESSION_ID_ENV = "CLAUDE_SESSION_ID";
     private static final String CLAUDE_PERMISSION_SAFETY_NET_ENV = "CLAUDE_PERMISSION_SAFETY_NET_MS";
     private static final String CODEX_HOME_ENV = "CODEX_HOME";
+    private static final String CODEX_INHERIT_PROXY_ENV = "CC_GUI_CODEX_INHERIT_PROXY";
     private static final String HOME_ENV = "HOME";
     private static final Pattern WSL_MOUNT_PATH_PATTERN = Pattern.compile("^/mnt/([a-zA-Z])(?:/(.*))?$");
 
@@ -269,14 +270,15 @@ public class EnvironmentConfigurator {
         propagateWslEnv(env, isWsl);
     }
 
-    // Permission vars that must cross the Windows→WSL boundary via WSLENV.
+    // Vars that must cross the Windows→WSL boundary via WSLENV. An unset var simply does not cross.
     private static final String[] WSL_PROPAGATED_KEYS = {
             CLAUDE_PERMISSION_ENV,
             CLAUDE_SESSION_ID_ENV,
-            CLAUDE_PERMISSION_SAFETY_NET_ENV
+            CLAUDE_PERMISSION_SAFETY_NET_ENV,
+            CODEX_INHERIT_PROXY_ENV
     };
 
-    /** Appends permission-bridge keys to WSLENV so they reach the daemon inside WSL. */
+    /** Appends the propagated keys to WSLENV so they reach the daemon inside WSL. */
     private static void propagateWslEnv(Map<String, String> env, boolean isWsl) {
         if (!isWsl) {
             return;

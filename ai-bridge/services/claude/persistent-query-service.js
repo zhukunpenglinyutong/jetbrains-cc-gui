@@ -22,7 +22,7 @@ import { buildIDEContextPrompt } from '../system-prompts.js';
 import { buildQuickFixPrompt } from '../quickfix-prompts.js';
 import { registerActiveQueryResult, removeSession } from './message-service.js';
 import { normalizePermissionMode } from './permission-mode.js';
-import { redactSecrets, truncateString } from './message-output-filter.js';
+import { MAX_SEND_ERROR_LENGTH, prependSdkStderr, redactSecrets, truncateString } from './message-output-filter.js';
 import { extractResultError } from './message-utils.js';
 import {
   beginRuntimeTurn,
@@ -64,6 +64,7 @@ import {
   processToolResultMessages,
   shouldOutputMessage,
 } from './stream-event-processor.js';
+import { resolveStallTimeoutMs, takeWithStallTimeout, trackToolActivity } from './turn-stall-watchdog.js';
 import { generateSessionTitle } from '../session-title-service.js';
 import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
 
@@ -316,14 +317,22 @@ _runtimeCleanupTimer.unref();
     console.log('[MESSAGE_START]');
     runtime.inputStream.enqueue(requestContext.userMessage);
 
+    const stallTimeoutMs = resolveStallTimeoutMs();
+    const pendingToolUseIds = new Set();
+
     while (true) {
       let next;
       try {
         // Receive message from perpetual reader via turnSink
-        // (perpetual reader owns runtime.query.next())
-        next = await runtime.turnSink.take();
+        // (perpetual reader owns runtime.query.next()). A stalled upstream would
+        // otherwise leave this wait, and every request queued behind it, hanging.
+        next = await takeWithStallTimeout(runtime.turnSink, {
+          timeoutMs: stallTimeoutMs,
+          hasToolInFlight: () => pendingToolUseIds.size > 0,
+        });
       } catch (error) {
         const wrapped = new Error(error?.message || String(error));
+        if (error?.code) wrapped.code = error.code;
         wrapped.runtimeTerminated = true;
         wrapped.resumeExpiredNotified = error?.resumeExpiredNotified === true;
         throw wrapped;
@@ -337,6 +346,10 @@ _runtimeCleanupTimer.unref();
 
       touchRuntime(runtime);
       const msg = next.value;
+
+      if (!msg?.parent_tool_use_id) {
+        trackToolActivity(pendingToolUseIds, msg);
+      }
 
       if (turnState.streamingEnabled && !turnState.streamStarted) {
         process.stdout.write('[STREAM_START]\n');
@@ -493,11 +506,11 @@ function emitSendError(runtime, error, requestContext) {
 
   if (runtime?.stderrLines?.length) {
     const sdkErrorText = redactSecrets(runtime.stderrLines.slice(-10).join('\n'));
-    payload.error = `SDK-STDERR:\n\`\`\`\n${sdkErrorText}\n\`\`\`\n\n${payload.error}`;
+    payload.error = prependSdkStderr(payload.error, sdkErrorText);
     payload.details.sdkError = sdkErrorText;
   }
 
-  payload.error = truncateString(payload.error, 2500);
+  payload.error = truncateString(payload.error, MAX_SEND_ERROR_LENGTH);
 
   // The error payload is emitted on three channels intentionally:
   //   1. stderr ([SEND_ERROR] tag) — captured by Java's stderrLines for diagnostics
@@ -897,6 +910,7 @@ export const __testing = {
     setCachedQueryFn(queryFn);
   },
   notifyExpiredResume,
+  emitSendError,
   async buildRequestContext(params = {}, withAttachments = false, overrides = {}) {
     return buildRequestContext(params, withAttachments, overrides);
   },

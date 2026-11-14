@@ -3,7 +3,6 @@ package com.github.claudecodegui.util;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -41,13 +40,17 @@ public final class WslPathUtil {
         // or their forward-slash forms (IntelliJ's project.getBasePath() returns
         // forward slashes when the project lives on the WSL filesystem).
         // Checked before the "already Unix" guard so //wsl.localhost/... is stripped.
-        if (windowsPath.startsWith("\\\\wsl") || windowsPath.startsWith("//wsl")) {
+        if (isWslUncPath(windowsPath)) {
             String normalized = windowsPath.replace('\\', '/');
             int distroNameStart = normalized.indexOf('/', 2);        // index of '/' before <distro>
             if (distroNameStart > 0) {
                 int distroPathStart = normalized.indexOf('/', distroNameStart + 1); // index of '/' after <distro>
                 if (distroPathStart > 0) {
                     return normalized.substring(distroPathStart);    // /home/...
+                }
+                // Nothing follows <distro>, so the path is the distro root.
+                if (normalized.length() > distroNameStart + 1) {
+                    return "/";
                 }
             }
         }
@@ -67,6 +70,25 @@ public final class WslPathUtil {
         }
         // Fallback: just replace backslashes
         return windowsPath.replace('\\', '/');
+    }
+
+    private static boolean isWslUncPath(String path) {
+        return path.startsWith("\\\\wsl") || path.startsWith("//wsl");
+    }
+
+    /** Returns the distro of a WSL UNC path (e.g. {@code Ubuntu} for {@code \\wsl.localhost\Ubuntu\home\x}), or null for any other path. */
+    public static String uncDistroName(String path) {
+        if (path == null || !isWslUncPath(path)) {
+            return null;
+        }
+        String normalized = path.replace('\\', '/');
+        int nameStart = normalized.indexOf('/', 2) + 1;
+        if (nameStart <= 0) {
+            return null;
+        }
+        int nameEnd = normalized.indexOf('/', nameStart);
+        String name = nameEnd < 0 ? normalized.substring(nameStart) : normalized.substring(nameStart, nameEnd);
+        return name.isEmpty() ? null : name;
     }
 
     /** Converts a Linux absolute path to its Windows UNC form (e.g. {@code /home/x} to {@code \\wsl.localhost\Ubuntu\home\x}). */
@@ -138,7 +160,7 @@ public final class WslPathUtil {
         // Only WSL Linux paths on a Windows JVM (e.g. "/home/x", or "//wsl$/..." which
         // convertToWslPath folds to it) need the lexical fallback: getCanonicalPath would
         // misread "/home/x" as a drive-relative path there. Every other path — native POSIX
-        // paths on macOS/Linux, and Windows drive/UNC paths — MUST go through getCanonicalPath
+        // paths on macOS/Linux, and Windows drive/UNC paths — MUST go through canonicalLocalPath
         // so symlinks, "..", and encoded chars are resolved before the project-boundary check.
         // Using foldPosix for native POSIX paths silently strips symlink resolution and lets a
         // symlink inside the project escape the boundary, weakening the auto-approve gate.
@@ -153,12 +175,25 @@ public final class WslPathUtil {
         }
         try {
             // Use canonical path to resolve symlinks, "..", encoded chars on native local paths.
-            String canonicalFile = new File(filePath).getCanonicalPath();
-            String canonicalBase = new File(basePath).getCanonicalPath();
-            return canonicalFile.startsWith(canonicalBase + File.separator) || canonicalFile.equals(canonicalBase);
-        } catch (IOException e) {
+            java.nio.file.Path canonicalFile = canonicalLocalPath(filePath);
+            java.nio.file.Path canonicalBase = canonicalLocalPath(basePath);
+            return canonicalFile.startsWith(canonicalBase);
+        } catch (IOException | java.nio.file.InvalidPathException e) {
             return false;
         }
+    }
+
+    /** Resolve links/junctions in the deepest existing ancestor, including for new files. */
+    private static java.nio.file.Path canonicalLocalPath(String value) throws IOException {
+        java.nio.file.Path path = java.nio.file.Path.of(value).toAbsolutePath();
+        java.nio.file.Path ancestor = path;
+        while (ancestor != null && !java.nio.file.Files.exists(ancestor, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            ancestor = ancestor.getParent();
+        }
+        if (ancestor == null) {
+            throw new IOException("No existing filesystem ancestor");
+        }
+        return ancestor.toRealPath().resolve(ancestor.relativize(path)).normalize();
     }
 
     /** Resolves "." and ".." in an absolute POSIX path. Returns {@code null} if the path escapes above root. */
