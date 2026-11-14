@@ -3,6 +3,7 @@ import { useRef, type RefObject } from 'react';
 import { useFileChangesManagement } from './useFileChangesManagement.js';
 import { useFileChanges } from './useFileChanges';
 import type { ClaudeContentBlock, ClaudeMessage, FileChangeSummary, ToolInput, ToolResultBlock } from '../types';
+import type { SubagentHistoryResponse } from '../types/subagent';
 
 function makeMessages(count: number): ClaudeMessage[] {
   return Array.from({ length: count }, () => ({ raw: { role: 'assistant', content: [] } }) as unknown as ClaudeMessage);
@@ -193,6 +194,22 @@ describe('useFileChangesManagement > confirmEdits (Keep All)', () => {
 
     expect(localStorage.getItem('keep-all-base-session-1')).toBeNull();
     expect(localStorage.getItem('keep-all-anchor-session-1')).toBeNull();
+  });
+
+  it('never evicts the opened session and drops every legacy baseline', () => {
+    localStorage.setItem('confirmed-edits-session-1', JSON.stringify(['op-a']));
+    for (let index = 0; index < 60; index += 1) {
+      localStorage.setItem(`confirmed-edits-other-${index}`, '[]');
+    }
+    localStorage.setItem('keep-all-base-other-0', '3');
+
+    const { result } = renderHook((props) => useFileChangesManagement(props), {
+      initialProps: makeOptions([], 'session-1'),
+    });
+
+    expect([...result.current.confirmedEditKeys]).toEqual(['op-a']);
+    expect(localStorage.getItem('keep-all-base-other-0')).toBeNull();
+    expect(Object.keys(localStorage).filter(key => key.startsWith('confirmed-edits-'))).toHaveLength(50);
   });
 });
 
@@ -410,5 +427,74 @@ describe('Native Diff APPLY receipts', () => {
     expect(localStorage.getItem('codex-reviewed-edits-B')).toBeNull();
     rerender(props('A', a));
     expect(result.current.files).toHaveLength(1);
+  });
+});
+
+describe('Claude Keep All through the real ledger', () => {
+  afterEach(() => localStorage.clear());
+  const tool = (id: string, name: string, input: ToolInput): ClaudeMessage => ({
+    type: 'assistant', raw: { message: { content: [{ type: 'tool_use', id, name, input }] } },
+  });
+  const edit = (id: string, path: string, before: string, after: string) =>
+    tool(id, 'Edit', { file_path: path, old_string: before, new_string: after });
+  const getContentBlocks = (message: ClaudeMessage): ClaudeContentBlock[] =>
+    typeof message.raw === 'object' && Array.isArray(message.raw.message?.content)
+      ? message.raw.message.content as ClaudeContentBlock[] : [];
+  const asyncIds = new Set(['agent-bg']);
+  const findToolResult = (id?: string): ToolResultBlock | null => id
+    ? { type: 'tool_result', tool_use_id: id, content: asyncIds.has(id) ? 'Async agent launched successfully.' : 'ok' } : null;
+  const sidechain = (agent: string, path: string): SubagentHistoryResponse => ({
+    success: true, toolUseId: agent, messages: [
+      { type: 'assistant', message: { content: [{ type: 'tool_use', id: `${agent}-edit`, name: 'Edit',
+        input: { file_path: path, old_string: 'x', new_string: 'y' } }] } },
+      { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: `${agent}-edit`, content: 'ok' }] } },
+    ] } as unknown as SubagentHistoryResponse);
+  interface Props { messages: ClaudeMessage[]; histories?: Record<string, SubagentHistoryResponse> }
+  const useClaudeEdits = ({ messages, histories }: Props) => {
+    const sessionRef = useRef<string | null>('claude-session');
+    const fileChangesRef = useRef<FileChangeSummary[]>([]);
+    const management = useFileChangesManagement({ currentSessionId: 'claude-session', currentSessionIdRef: sessionRef,
+      currentProvider: 'claude', messages, fileChangesRef, getContentBlocks, findToolResult });
+    const files = useFileChanges({ messages, currentSessionId: 'claude-session', getContentBlocks, findToolResult,
+      confirmedEditKeys: management.confirmedEditKeys, subagentHistories: histories });
+    fileChangesRef.current = files;
+    return { ...management, files };
+  };
+  const ops = (files: FileChangeSummary[]) => files.map(file =>
+    [file.filePath, file.operations.map(op => `${op.oldString}->${op.newString}`)]);
+
+  it('keeps a byte-identical redo after Keep All visible, also after a reload', () => {
+    const first = [edit('e1', '/x.ts', 'foo', 'bar')];
+    const { result, rerender, unmount } = renderHook(useClaudeEdits, { initialProps: { messages: first } as Props });
+    act(() => result.current.handleKeepAll());
+    expect(result.current.files).toEqual([]);
+    const later = [...first, edit('e2', '/x.ts', 'bar', 'foo'), edit('e3', '/x.ts', 'foo', 'bar')];
+    rerender({ messages: later });
+    expect(ops(result.current.files)).toEqual([['/x.ts', ['bar->foo', 'foo->bar']]]);
+    unmount();
+    const reloaded = renderHook(useClaudeEdits, { initialProps: { messages: later } });
+    expect(ops(reloaded.result.current.files)).toEqual([['/x.ts', ['bar->foo', 'foo->bar']]]);
+  });
+
+  it('acknowledges the edits made before a patch renamed the file', () => {
+    const messages = [edit('e1', '/old.ts', 'a', 'b'), tool('p1', 'apply_patch', { patch:
+      '*** Begin Patch\n*** Update File: /old.ts\n*** Move to: /new.ts\n@@\n-b\n+c\n*** End Patch' })];
+    const { result } = renderHook(useClaudeEdits, { initialProps: { messages } as Props });
+    expect(result.current.files.map(file => file.filePath)).toEqual(['/new.ts']);
+    act(() => result.current.handleKeepAll());
+    expect(result.current.files).toEqual([]);
+  });
+
+  it('hides a finished agent sidechain fetched after Keep All, but not a background agent', () => {
+    const messages = [tool('agent-sync', 'Agent', { description: 'd', prompt: 'p' }),
+      tool('agent-bg', 'Agent', { description: 'd', prompt: 'p', run_in_background: true })];
+    const { result, rerender, unmount } = renderHook(useClaudeEdits, { initialProps: { messages } as Props });
+    act(() => result.current.handleKeepAll());
+    const histories = { 'agent-sync': sidechain('agent-sync', '/sync.ts'), 'agent-bg': sidechain('agent-bg', '/bg.ts') };
+    rerender({ messages, histories });
+    expect(result.current.files.map(file => file.filePath)).toEqual(['/bg.ts']);
+    unmount();
+    const reloaded = renderHook(useClaudeEdits, { initialProps: { messages, histories } });
+    expect(reloaded.result.current.files.map(file => file.filePath)).toEqual(['/bg.ts']);
   });
 });

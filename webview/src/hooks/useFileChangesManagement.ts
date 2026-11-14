@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { ClaudeMessage, ToolResultBlock } from '../types';
 import { debugLog } from '../utils/debug';
-import { editOperationKey } from './useFileChanges';
+import { isAsyncAgentInput } from '../utils/subagentResult';
+import { AGENT_TOOL_NAMES, isToolName, normalizeToolName } from '../utils/toolConstants';
+import { acknowledgedAgentKey } from './useFileChanges';
 
 /** localStorage prefix for the edit operations acknowledged via Keep All (per session). */
 const CONFIRMED_EDITS_PREFIX = 'confirmed-edits-';
@@ -83,6 +85,8 @@ export function useFileChangesManagement({
   messages,
   currentProvider = 'claude',
   fileChangesRef,
+  getContentBlocks,
+  findToolResult,
 }: UseFileChangesManagementOptions) {
   // List of processed file paths (filtered from fileChanges after Apply/Reject, persisted to localStorage)
   const [processedFiles, setProcessedFiles] = useState<string[]>([]);
@@ -114,9 +118,9 @@ export function useFileChangesManagement({
   // identity can delimit it.
   const [confirmedEdits, setConfirmedEdits] = useState<string[]>([]);
 
-  // Ref to always hold the latest transcript, so the pending flush in the restore
-  // effect can tell an id landing on its own session apart from a switch to a
-  // different one.
+  // Ref to always hold the latest transcript, for Keep All and for the pending
+  // flush in the restore effect (which tells an id landing on its own session
+  // apart from a switch to a different one).
   const messagesRef = useRef(messages);
   useEffect(() => {
     messagesRef.current = messages;
@@ -259,27 +263,32 @@ export function useFileChangesManagement({
 
   // Callback for Keep All - acknowledge everything the ledger currently holds, so
   // the ledger rebuilds from whatever comes after. Codex records the ledger keys
-  // it reviewed; Claude records one content fingerprint per operation, because a
-  // transcript position cannot survive a session reload (see editOperationKey).
-  // Reads fileChangesRef (the unfiltered ledger) so files already handled one by
-  // one via Apply/Reject are acknowledged too.
+  // it reviewed; Claude records each operation's content fingerprint (editKey,
+  // see editOperationKey), because a transcript position cannot survive a
+  // session reload. Reads fileChangesRef (the unfiltered ledger) so files
+  // already handled one by one via Apply/Reject are acknowledged too.
   const handleKeepAll = useCallback(() => {
     const files = fileChangesRef?.current ?? [];
     if (currentProvider === 'codex') { reviewChanges(files); return; }
-    const keys: string[] = [];
-    for (const file of files) {
-      for (const op of file.operations ?? []) {
-        keys.push(editOperationKey({
-          filePath: file.filePath,
-          toolName: op.toolName,
-          oldString: op.oldString,
-          newString: op.newString,
-          replaceAll: op.replaceAll,
-        }));
+    const keys = files.flatMap(file => (file.operations ?? [])
+      .map((op: { editKey?: string }) => op.editKey)
+      .filter((key: string | undefined): key is string => Boolean(key)));
+    // A finished agent's sidechain is only fetched once its card is expanded, so
+    // its edits may be missing from the ledger; acknowledge the agent itself.
+    // shortcut: background agents are skipped because their end is not known here;
+    // their unfetched edits still show up later, track task notifications to cover them.
+    messagesRef.current.forEach((message, index) => {
+      if (message.type !== 'assistant') return;
+      for (const block of getContentBlocks(message)) {
+        if (block?.type !== 'tool_use' || typeof block.id !== 'string') continue;
+        const toolName = normalizeToolName(block.name ?? '');
+        if (!isToolName(toolName, AGENT_TOOL_NAMES)) continue;
+        const result = findToolResult(block.id, index);
+        if (result && !isAsyncAgentInput(block.input, toolName, result)) keys.push(acknowledgedAgentKey(block.id));
       }
-    }
+    });
     confirmEdits(keys);
-  }, [currentProvider, fileChangesRef, reviewChanges, confirmEdits]);
+  }, [currentProvider, fileChangesRef, reviewChanges, confirmEdits, getContentBlocks, findToolResult]);
 
   // Register window callbacks for editable diff operations from Java backend
   useEffect(() => {
@@ -375,31 +384,29 @@ export function useFileChangesManagement({
       return;
     }
 
-    // Cleanup old localStorage entries to prevent infinite growth
+    // Cleanup old localStorage entries to prevent infinite growth. The session
+    // being opened is never evicted, or its Keep All would be lost on this load.
+    // shortcut: other sessions go in browser key order, not least recently used;
+    // store a timestamp per entry if users start losing marks of recent sessions.
+    // Superseded position-based baselines are dropped for every session: they
+    // cannot be mapped onto a rebuilt transcript and are never read back.
     const MAX_STORED_SESSIONS = 50;
+    const ownKeys = new Set([`processed-files-${currentSessionId}`, `${CONFIRMED_EDITS_PREFIX}${currentSessionId}`]);
     try {
-      const keysToCheck = Object.keys(localStorage).filter((key) => (
-        key.startsWith('processed-files-')
-        || key.startsWith(CONFIRMED_EDITS_PREFIX)
-        || LEGACY_BASELINE_PREFIXES.some((prefix) => key.startsWith(prefix))
+      const storedKeys = Object.keys(localStorage);
+      storedKeys.filter((key) => LEGACY_BASELINE_PREFIXES.some((prefix) => key.startsWith(prefix)))
+        .forEach((key) => localStorage.removeItem(key));
+      const keysToCheck = storedKeys.filter((key) => (
+        key.startsWith('processed-files-') || key.startsWith(CONFIRMED_EDITS_PREFIX)
       ));
       if (keysToCheck.length > MAX_STORED_SESSIONS) {
-        const toRemove = keysToCheck.slice(0, keysToCheck.length - MAX_STORED_SESSIONS);
-        toRemove.forEach((key) => localStorage.removeItem(key));
+        keysToCheck.filter((key) => !ownKeys.has(key))
+          .slice(0, keysToCheck.length - MAX_STORED_SESSIONS)
+          .forEach((key) => localStorage.removeItem(key));
       }
     } catch {
       // Ignore cleanup errors
     }
-
-    // Drop superseded position-based baselines: they cannot be mapped onto the
-    // rebuilt transcript and are never read back.
-    LEGACY_BASELINE_PREFIXES.forEach((prefix) => {
-      try {
-        localStorage.removeItem(`${prefix}${currentSessionId}`);
-      } catch {
-        // Ignore storage errors
-      }
-    });
 
     const processed = readReviewCheckpoint(`processed-files-${currentSessionId}`);
     if (processed.length > 0) {
