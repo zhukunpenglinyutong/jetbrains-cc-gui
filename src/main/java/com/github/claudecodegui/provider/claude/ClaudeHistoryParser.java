@@ -90,6 +90,8 @@ class ClaudeHistoryParser {
 
             ClaudeHistoryReader.SessionInfo session = new ClaudeHistoryReader.SessionInfo();
             session.sessionId = sessionId;
+            session.cwd = messages.stream().map(message -> message.cwd)
+                    .filter(cwd -> cwd != null && !cwd.isBlank()).findFirst().orElse(null);
             session.title = summary;
             session.messageCount = messages.size();
             session.lastTimestamp = lastTimestamp;

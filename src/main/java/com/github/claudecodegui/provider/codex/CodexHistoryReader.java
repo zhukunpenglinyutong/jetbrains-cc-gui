@@ -4,6 +4,7 @@ import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.util.PathUtils;
+import com.github.claudecodegui.util.SessionPathUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -20,6 +21,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -72,6 +74,7 @@ public class CodexHistoryReader {
      * Session info.
      */
     public static class SessionInfo {
+        public boolean requiresCwdConfirmation;
         public String sessionId;
         public String title;
         public int messageCount;
@@ -134,6 +137,10 @@ public class CodexHistoryReader {
      * @param projectPath The project path to filter by
      */
     public String getSessionsForProjectAsJson(String projectPath) {
+        return getSessionsForProjectAsJson(projectPath, null);
+    }
+
+    public String getSessionsForProjectAsJson(String projectPath, Predicate<String> additionalMatch) {
         try {
             List<SessionInfo> allSessions = readAllSessions();
 
@@ -145,7 +152,7 @@ public class CodexHistoryReader {
             // Accept both candidates to cover either layout (issue #1789).
             Set<String> projectPathCandidates = new LinkedHashSet<>();
             projectPathCandidates.add(normalizedProjectPath);
-            projectPathCandidates.add(normalizePath(PathUtils.realPath(projectPath)));
+            projectPathCandidates.add(normalizePath(PathUtils.realPath(SessionPathUtils.normalize(projectPath))));
 
             LOG.info("[CodexHistoryReader] Filtering sessions for project: " + normalizedProjectPath);
             LOG.info("[CodexHistoryReader] Total sessions before filtering: " + allSessions.size());
@@ -160,11 +167,19 @@ public class CodexHistoryReader {
                                                              // Match if cwd equals a project path candidate or is a subdirectory of it
                                                              boolean matches = projectPathCandidates.stream()
                                                                                         .anyMatch(candidate -> normalizedCwd.equals(candidate) ||
-                                                                                                                normalizedCwd.startsWith(candidate + "/"));
+                                                                                                                normalizedCwd.startsWith(candidate + "/"))
+                                                                     || additionalMatch != null && additionalMatch.test(session.cwd);
                                                              if (matches) {
                                                                  LOG.debug("[CodexHistoryReader] Session " + session.sessionId + " matches (cwd: " + session.cwd + ")");
                                                              }
                                                              return matches;
+                                                         })
+                                                         .map(session -> {
+                                                             SessionInfo row = gson.fromJson(gson.toJson(session), SessionInfo.class);
+                                                             String path = normalizePath(row.cwd);
+                                                             row.requiresCwdConfirmation = projectPathCandidates.stream()
+                                                                     .noneMatch(candidate -> path.equals(candidate) || path.startsWith(candidate + "/"));
+                                                             return row;
                                                          })
                                                          .collect(Collectors.toList());
 
@@ -195,16 +210,7 @@ public class CodexHistoryReader {
      * Converts backslashes to forward slashes and removes trailing slashes.
      */
     private String normalizePath(String path) {
-        if (path == null) {
-            return "";
-        }
-        // Convert backslashes to forward slashes
-        String normalized = path.replace("\\", "/");
-        // Remove trailing slash
-        while (normalized.endsWith("/") && normalized.length() > 1) {
-            normalized = normalized.substring(0, normalized.length() - 1);
-        }
-        return normalized;
+        return SessionPathUtils.forComparison(path);
     }
 
     /**

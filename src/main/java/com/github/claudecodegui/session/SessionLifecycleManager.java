@@ -204,6 +204,11 @@ public class SessionLifecycleManager {
     /**
      * Load a history session by ID.
      */
+    static String resolveClaudeHistoryWorkingDirectory(String sessionId, String fallbackCwd, String projectRoot,
+            CodemossSettingsService settings, com.github.claudecodegui.provider.claude.ClaudeHistoryReader reader) {
+        return reader.resolveRepositoryHistoryCwd(sessionId, fallbackCwd, projectRoot, settings);
+    }
+
     public void loadHistorySession(String sessionId, String projectPath) {
         loadHistorySession(sessionId, projectPath, null, null);
     }
@@ -275,6 +280,10 @@ public class SessionLifecycleManager {
 
             String workingDir = (projectPath != null && !projectPath.isEmpty())
                                     ? projectPath : NodeDetector.convertToWslPath(determineWorkingDirectory());
+            if ("claude".equals(newSession.getProvider()) && host.getProject() != null) {
+                workingDir = resolveClaudeHistoryWorkingDirectory(sessionId, workingDir, host.getProject().getBasePath(),
+                        host.getHandlerContext().getSettingsService(), new com.github.claudecodegui.provider.claude.ClaudeHistoryReader());
+            }
             newSession.setSessionInfo(sessionId, workingDir);
 
             newSession.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
