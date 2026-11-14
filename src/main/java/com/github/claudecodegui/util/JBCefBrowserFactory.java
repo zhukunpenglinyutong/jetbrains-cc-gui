@@ -16,9 +16,9 @@ import org.cef.misc.BoolRef;
 
 import java.lang.reflect.Method;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -46,9 +46,12 @@ public final class JBCefBrowserFactory {
      */
     private static final String JCEF_OUT_OF_PROCESS_REGISTRY_KEY = "ide.browser.jcef.out-of-process.enabled";
     private static final ConcurrentMap<Class<?>, Optional<Method>> IS_CLOSED_METHODS = new ConcurrentHashMap<>();
-    /** Gateway/JetBrains Client backend proxy for a browser that paints on the client. */
-    private static final String REMOTE_DEVELOPMENT_BROWSER_CLASS = "com.jetbrains.rdserver.cef.BackendCefBrowser";
-    private static final AtomicBoolean REMOTE_DEVELOPMENT_BROWSER_LOGGED = new AtomicBoolean();
+    /**
+     * Package of Gateway/JetBrains Client backend proxies for browsers that paint on the client,
+     * currently {@code com.jetbrains.rdserver.cef.BackendCefBrowser}.
+     */
+    private static final String REMOTE_DEVELOPMENT_PACKAGE = "com.jetbrains.rdserver.";
+    private static final Set<String> LOGGED_BROWSER_CLASSES = ConcurrentHashMap.newKeySet();
 
     /**
      * First platform baseline version (2026.1) whose JBCefApp initialization
@@ -75,18 +78,21 @@ public final class JBCefBrowserFactory {
 
     /** Gateway's backend proxy has no local paint callbacks; out-of-process JCEF still does. */
     public static boolean isRemoteDevelopmentBrowser(CefBrowser browser) {
-        if (browser == null || !isRemoteDevelopmentBrowserClass(browser.getClass().getName())) {
+        if (browser == null) {
             return false;
         }
-        // Without this line a renamed platform class would silently fall back to the local OSR path.
-        if (REMOTE_DEVELOPMENT_BROWSER_LOGGED.compareAndSet(false, true)) {
-            LOG.info("Remote Development browser detected; client-side surface repaint is active");
+        String className = browser.getClass().getName();
+        boolean remote = isRemoteDevelopmentBrowserClass(className);
+        // One line per implementation shows which surface path a moved platform class takes.
+        if (LOGGED_BROWSER_CLASSES.add(className)) {
+            LOG.info("JCEF browser implementation " + className + ", client-side surface repaint=" + remote);
         }
-        return true;
+        return remote;
     }
 
+    /** The class name is internal; matching the package tolerates a renamed proxy class. */
     static boolean isRemoteDevelopmentBrowserClass(String className) {
-        return REMOTE_DEVELOPMENT_BROWSER_CLASS.equals(className);
+        return className != null && className.startsWith(REMOTE_DEVELOPMENT_PACKAGE);
     }
 
     /**

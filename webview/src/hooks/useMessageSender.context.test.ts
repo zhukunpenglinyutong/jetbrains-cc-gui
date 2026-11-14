@@ -1,6 +1,6 @@
 import { updateClaudeModelCapabilities } from '../utils/claudeModelCapabilities';
 import { act, renderHook } from '@testing-library/react';
-import { useMessageSender } from './useMessageSender';
+import { isLocalContextCommand, useMessageSender } from './useMessageSender';
 import type { UseMessageSenderOptions } from './useMessageSender';
 import { writeClaudeModelMapping } from '../utils/claudeModelMapping';
 
@@ -450,5 +450,49 @@ describe('useMessageSender - /context command', () => {
 
     const payload = getBridgePayload('send_message_with_attachments');
     expect(payload.reasoningEffort).toBe('low');
+  });
+
+  it.each([false, true])('sends ompApprovalMode for omp and never for claude (attachments: %s)', (withAttachments) => {
+    const attachments = withAttachments
+      ? [{ id: 'a', fileName: 'a.txt', mediaType: 'text/plain', data: 'aGk=' }]
+      : undefined;
+    const event = withAttachments ? 'send_message_with_attachments' : 'send_message';
+
+    const omp = renderHook(() => useMessageSender(createOptions({
+      currentProvider: 'omp', selectedModel: 'auto', ompApprovalMode: 'write',
+    })));
+    act(() => omp.result.current.handleSubmit('hello', attachments));
+    expect(getBridgePayload(event).ompApprovalMode).toBe('write');
+    omp.unmount();
+
+    window.sendToJava = vi.fn();
+    const claude = renderHook(() => useMessageSender(createOptions({ ompApprovalMode: 'write' })));
+    act(() => claude.result.current.handleSubmit('hello', attachments));
+    expect(getBridgePayload(event)).not.toHaveProperty('ompApprovalMode');
+  });
+
+  it.each(['/context', '/plugins list'])('sends %s to OMP, which implements it itself', (command) => {
+    const addToast = vi.fn();
+    const openContextUsageDialog = vi.fn();
+    const { result } = renderHook(() => useMessageSender(createOptions({
+      currentProvider: 'omp', selectedModel: 'auto', addToast, openContextUsageDialog,
+    })));
+
+    act(() => result.current.handleSubmit(command));
+
+    expect(getBridgePayload('send_message').text).toBe(command);
+    expect(addToast).not.toHaveBeenCalled();
+    expect(openContextUsageDialog).not.toHaveBeenCalled();
+  });
+
+  it('answers /context locally for Claude and Codex, never for OMP', () => {
+    expect(isLocalContextCommand('/context', 'omp')).toBe(false);
+    expect(isLocalContextCommand('/context', 'claude')).toBe(true);
+    expect(isLocalContextCommand('/CONTEXT now', 'codex')).toBe(true);
+  });
+
+  it('does not treat other text as the local /context command', () => {
+    expect(isLocalContextCommand('context', 'claude')).toBe(false);
+    expect(isLocalContextCommand('/compact', 'claude')).toBe(false);
   });
 });

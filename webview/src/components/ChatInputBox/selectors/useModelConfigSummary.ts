@@ -3,6 +3,7 @@ import type { ClaudeModelMapping } from '../../../utils/claudeModelMapping';
 import { resolveModelDisplayLabel } from '../modelLabelUtils';
 import {
   DSH_PRESETS,
+  OMP_APPROVAL_OPTIONS,
   REASONING_LEVELS,
   getUserDshPresetOptions,
   modelSupports1MContext,
@@ -10,6 +11,7 @@ import {
   strip1MContextSuffix,
   type CodexFastMode,
   type ModelInfo,
+  type OmpApprovalMode,
   type ReasoningEffort,
   type ReasoningInfo,
 } from '../types';
@@ -51,6 +53,7 @@ interface UseModelConfigRowsInput {
   onReasoningChange?: (effort: ReasoningEffort) => void;
   onCodexFastModeChange?: (mode: CodexFastMode) => void;
   onDshPresetChange?: (preset: string) => void;
+  onOmpApprovalModeChange?: (mode: OmpApprovalMode) => void;
   showEffort: boolean;
 }
 
@@ -66,6 +69,7 @@ export const useModelConfigRows = ({
   onReasoningChange,
   onCodexFastModeChange,
   onDshPresetChange,
+  onOmpApprovalModeChange,
   showEffort,
 }: UseModelConfigRowsInput) => {
   const show1MContext = currentProvider === 'claude'
@@ -75,8 +79,9 @@ export const useModelConfigRows = ({
   const showEffortRow = showEffort && !!onReasoningChange;
   const showSpeed = currentProvider === 'codex' && !!onCodexFastModeChange;
   const showPreset = currentProvider === 'dsh' && !!onDshPresetChange;
+  const showApproval = currentProvider === 'omp' && !!onOmpApprovalModeChange;
   const contextSupported = modelSupports1MContext(selectedModel);
-  const hasTrailingRows = showContextRow || showSpeed || showPreset;
+  const hasTrailingRows = showContextRow || showSpeed || showPreset || showApproval;
   const showDivider = showEffortRow || hasTrailingRows;
 
   return {
@@ -85,6 +90,7 @@ export const useModelConfigRows = ({
     showEffortRow,
     showSpeed,
     showPreset,
+    showApproval,
     contextSupported,
     showDivider,
   };
@@ -99,10 +105,12 @@ interface UseModelConfigSummaryInput {
   longContextEnabled: boolean;
   codexFastMode: CodexFastMode;
   dshPreset: string;
+  ompApprovalMode: OmpApprovalMode;
   show1MContext: boolean;
   showEffortRow: boolean;
   showSpeed: boolean;
   showPreset: boolean;
+  showApproval: boolean;
   currentLevel: ReasoningInfo | undefined;
 }
 
@@ -119,10 +127,12 @@ export const useModelConfigSummary = ({
   longContextEnabled,
   codexFastMode,
   dshPreset,
+  ompApprovalMode,
   show1MContext,
   showEffortRow,
   showSpeed,
   showPreset,
+  showApproval,
   currentLevel,
 }: UseModelConfigSummaryInput) => {
   const modelLabel = currentModel
@@ -142,6 +152,8 @@ export const useModelConfigSummary = ({
   const currentDshPreset = dshOptions.find((preset) => preset.id === dshPreset) || dshOptions[0];
   const dshPresetLabel = currentDshPreset?.label
     || (currentDshPreset?.labelKey ? t(currentDshPreset.labelKey, { defaultValue: currentDshPreset.id }) : '');
+  const currentApproval = OMP_APPROVAL_OPTIONS.find((option) => option.id === ompApprovalMode) || OMP_APPROVAL_OPTIONS[0];
+  const ompApprovalLabel = t(currentApproval.labelKey, { defaultValue: currentApproval.label });
   const effortLabel = currentLevel ? getReasoningLabel(t, currentLevel.id) : '';
   const speedLabel = t(`codexFastMode.${codexFastMode}.label`, {
     defaultValue: codexFastMode === 'fast' ? 'Fast' : 'Standard',
@@ -152,12 +164,14 @@ export const useModelConfigSummary = ({
     showEffortRow ? effortLabel : '',
     showSpeed && codexFastMode === 'fast' ? speedLabel : '',
     showPreset && dshPreset ? dshPresetLabel : '',
+    showApproval && currentApproval.id !== 'default' ? ompApprovalLabel : '',
   ].filter(Boolean);
   const summaryText = summaryParts.join(' ');
 
   return {
     speedLabel,
     dshPresetLabel,
+    ompApprovalLabel,
     effortLabel,
     summaryText,
   };

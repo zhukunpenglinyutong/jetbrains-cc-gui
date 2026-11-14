@@ -11,7 +11,11 @@ import { startTransition } from 'react';
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import type { ClaudeMessage, ClaudeRawMessage } from '../../../types';
 import { sendBridgeEvent } from '../../../utils/bridge';
-import { clearPendingStreamStart, isPendingStreamStartActive } from '../../../utils/streamLifecycle';
+import {
+  clearPendingStreamStart,
+  isPendingStreamStartActive,
+  scheduleLoadingResyncAfterImmunity,
+} from '../../../utils/streamLifecycle';
 import { THROTTLE_INTERVAL } from '../../useStreamingMessages';
 import { parseSequence } from '../parseSequence';
 import { chooseEndedStreamingContent, ensureRawTextCovers, getStreamEndHandlingMode, getRawUuid, isCodexMessageSnapshot, mergeRawBlocksForFinalization } from '../messageSync';
@@ -269,8 +273,11 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     window.__lastStreamEndedAt = undefined;
     // Clear idempotency guard for the new turn
     window.__streamEndProcessedTurnId = undefined;
-    // Record turn start time for duration calculation in onStreamEnd
-    window.__turnStartedAt = Date.now();
+    // Record turn start time for duration calculation in onStreamEnd. A replay into a page that is
+    // still streaming (remote reconnect) continues the same turn, so keep its original start.
+    if (!(isReplayStart && isStreamingRef.current && window.__turnStartedAt)) {
+      window.__turnStartedAt = Date.now();
+    }
     window.__streamingDeltaRenderDeferred = false;
     streamingContentRef.current = '';
     streamingThinkingRef.current = '';
@@ -505,6 +512,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // Finalize the old turn's bubble below, but keep the marker and the
     // loading state; the dispatched turn's own stream end will reset both.
     const suppressLoadingReset = isPendingStreamStartActive();
+    if (suppressLoadingReset) scheduleLoadingResyncAfterImmunity();
 
     clearStallWatchdog();
     const nativeProvider = options.currentProviderRef.current === 'codex';

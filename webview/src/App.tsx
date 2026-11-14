@@ -70,6 +70,7 @@ const App = () => {
     findToolResult, getToolResultRaw, subagents, allSubagents, globalTodos,
     filteredFileChanges, rewindableMessages,
     subagentHistoryCtxValue, sessionIdCtxValue,
+    startupHistoryLoadState,
     chatInputRef, messagesContainerRef, messagesEndRef, inputAreaRef, isAutoScrollingRef,
     handleUndoFile, onDiscardAll, handleKeepAll,
     handleSubmit, interruptSession, messageQueue, dequeueMessage, handleEditQueuedMessage, reorderMessageQueue,
@@ -126,6 +127,7 @@ const App = () => {
           filteredFileChanges={filteredFileChanges}
           subagentHistoryCtxValue={subagentHistoryCtxValue}
           sessionIdCtxValue={sessionIdCtxValue}
+          startupHistoryLoadState={startupHistoryLoadState}
           chatInputRef={chatInputRef}
           messagesContainerRef={messagesContainerRef}
           messagesEndRef={messagesEndRef}
@@ -161,6 +163,7 @@ const App = () => {
           reasoningEffort={model.reasoningEffort}
           codexFastMode={model.codexFastMode}
           dshPreset={model.dshPreset}
+          ompApprovalMode={model.ompApprovalMode}
           streamingEnabledSetting={model.streamingEnabledSetting}
           sendShortcut={model.sendShortcut}
           autoOpenFileEnabled={model.autoOpenFileEnabled}
@@ -174,6 +177,7 @@ const App = () => {
           onReasoningChange={model.handleReasoningChange}
           onCodexFastModeChange={model.handleCodexFastModeChange}
           onDshPresetChange={model.handleDshPresetChange}
+          onOmpApprovalModeChange={model.handleOmpApprovalModeChange}
           onToggleThinking={model.handleToggleThinking}
           onStreamingEnabledChange={model.handleStreamingEnabledChange}
           onAutoOpenFileEnabledChange={model.handleAutoOpenFileEnabledChange}

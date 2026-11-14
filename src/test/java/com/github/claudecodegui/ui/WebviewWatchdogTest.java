@@ -18,6 +18,146 @@ import static org.junit.Assert.assertTrue;
  */
 public class WebviewWatchdogTest {
 
+    /** Tab activation resets health timers but must still reconcile a disconnected transport. */
+    @Test
+    public void reportsOneResumePerHeartbeatGapEvenAfterActivation() {
+        AtomicLong now = new AtomicLong(1_000L);
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, new AtomicInteger(), new AtomicInteger(), Runnable::run);
+        assertFalse(watchdog.handleHeartbeat(null));
+        now.addAndGet(20_000L);
+        watchdog.markTabActivated();
+
+        assertTrue(watchdog.handleHeartbeat(null));
+        assertFalse(watchdog.handleHeartbeat(null));
+        now.addAndGet(20_000L);
+        watchdog.markFrontendReady();
+        assertFalse(watchdog.handleHeartbeat(null));
+    }
+
+    /** A hidden page's throttled timers must not replay the transcript on every heartbeat. */
+    @Test
+    public void defersHiddenPageResumeUntilVisible() {
+        AtomicLong now = new AtomicLong(1_000L);
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, new AtomicInteger(), new AtomicInteger(), Runnable::run);
+        for (int minute = 0; minute < 3; minute++) {
+            now.addAndGet(60_000L);
+            assertFalse(watchdog.handleHeartbeat("{\"visibility\":\"hidden\"}"));
+        }
+
+        now.addAndGet(5_000L);
+        assertTrue(watchdog.handleHeartbeat("{\"visibility\":\"visible\"}"));
+        now.addAndGet(5_000L);
+        assertFalse(watchdog.handleHeartbeat("{\"visibility\":\"visible\"}"));
+    }
+
+    /** Gaps on a congested transport share one replay per interval, and the last is not lost. */
+    @Test
+    public void reconcilesRepeatedGapsAtMostOncePerInterval() {
+        AtomicLong now = new AtomicLong(1_000L);
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, new AtomicInteger(), new AtomicInteger(), Runnable::run);
+        now.set(21_000L);
+        assertTrue(watchdog.handleHeartbeat(null));
+        now.set(41_000L);
+        assertFalse(watchdog.handleHeartbeat(null));
+        for (long time = 46_000L; time < 81_000L; time += 5_000L) {
+            now.set(time);
+            assertFalse(watchdog.handleHeartbeat(null));
+        }
+
+        now.set(81_000L);
+        assertTrue(watchdog.handleHeartbeat(null));
+        now.set(86_000L);
+        assertFalse(watchdog.handleHeartbeat(null));
+    }
+
+    /** Client clocks must not make a healthy remote renderer look stalled. */
+    @Test
+    public void measuresRenderAgeOnTheClientClock() {
+        AtomicLong now = new AtomicLong(1_000_000L);
+        AtomicInteger reloads = new AtomicInteger();
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, reloads, new AtomicInteger(), Runnable::run);
+        watchdog.handleHeartbeat("{\"ts\":100000,\"raf\":100000,\"visibility\":\"visible\"}");
+        now.addAndGet(5_000L);
+
+        watchdog.checkHealth();
+
+        assertEquals(0, reloads.get());
+    }
+
+    /** A client clock ahead of the Host must not hide a genuinely frozen renderer. */
+    @Test
+    public void detectsStalledRenderEvenWhenClientClockIsAhead() {
+        AtomicLong now = new AtomicLong(1_000_000L);
+        AtomicInteger reloads = new AtomicInteger();
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, reloads, new AtomicInteger(), Runnable::run);
+        watchdog.handleHeartbeat("{\"ts\":2000000,\"raf\":1900000,\"visibility\":\"visible\"}");
+
+        watchdog.checkHealth();
+
+        assertEquals(1, reloads.get());
+    }
+
+    @Test
+    public void doesNotReloadWhenReturningToAWebviewThatWasHiddenForLong() {
+        AtomicLong now = new AtomicLong(1_000_000L);
+        AtomicInteger reloads = new AtomicInteger();
+        AtomicInteger recreates = new AtomicInteger();
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, reloads, recreates, Runnable::run);
+        watchdog.handleHeartbeat(heartbeat(now.get(), 900_000L, "hidden"));
+        now.addAndGet(180_000L);
+        watchdog.handleHeartbeat(heartbeat(now.get(), 900_000L, "hidden"));
+        now.addAndGet(5_000L);
+        watchdog.handleHeartbeat(heartbeat(now.get(), 900_000L, "visible"));
+        now.addAndGet(5_000L);
+
+        watchdog.checkHealth();
+
+        assertEquals(0, reloads.get());
+        assertEquals(0, recreates.get());
+    }
+
+    @Test
+    public void doesNotReloadWhenReturningToAHiddenWebviewAfterTabActivation() {
+        AtomicLong now = new AtomicLong(1_000_000L);
+        AtomicInteger reloads = new AtomicInteger();
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, reloads, new AtomicInteger(), Runnable::run);
+        watchdog.handleHeartbeat(heartbeat(now.get(), 900_000L, "hidden"));
+        now.addAndGet(180_000L);
+        watchdog.markTabActivated();
+        now.addAndGet(1_000L);
+        watchdog.handleHeartbeat(heartbeat(now.get(), 900_000L, "visible"));
+        now.addAndGet(5_000L);
+
+        watchdog.checkHealth();
+
+        assertEquals(0, reloads.get());
+    }
+
+    @Test
+    public void stillReloadsWhenRenderStaysFrozenAfterTheWebviewBecameVisible() {
+        AtomicLong now = new AtomicLong(1_000_000L);
+        AtomicInteger reloads = new AtomicInteger();
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, reloads, new AtomicInteger(), Runnable::run);
+        watchdog.handleHeartbeat(heartbeat(now.get(), 900_000L, "hidden"));
+        now.addAndGet(180_000L);
+        for (int beat = 0; beat <= 4; beat++) {
+            watchdog.handleHeartbeat(heartbeat(now.get(), 900_000L, "visible"));
+            now.addAndGet(5_000L);
+        }
+
+        watchdog.checkHealth();
+
+        assertEquals(1, reloads.get());
+    }
+
     /** Verifies that an unready frontend uses the bounded startup timeout. */
     @Test
     public void usesShortTimeoutBeforeFrontendReady() {
@@ -233,6 +373,10 @@ public class WebviewWatchdogTest {
         watchdog.checkHealth();
         queued.getAndSet(null).run();
         assertEquals(2, recoveries.get());
+    }
+
+    private static String heartbeat(long ts, long raf, String visibility) {
+        return "{\"ts\":" + ts + ",\"raf\":" + raf + ",\"visibility\":\"" + visibility + "\"}";
     }
 
     private static WebviewWatchdog createWatchdog() {

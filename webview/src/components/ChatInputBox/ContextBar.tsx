@@ -18,6 +18,8 @@ interface ContextBarProps {
   onClearAgent?: () => void;
   /** Current provider (for conditional rendering) */
   currentProvider?: string;
+  /** Selected model id (the OMP plan-usage bar follows it) */
+  selectedModel?: string;
   /** Whether there are messages (for rewind button visibility) */
   hasMessages?: boolean;
   /** Rewind callback */
@@ -44,6 +46,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
   selectedAgent,
   onClearAgent,
   currentProvider = 'claude',
+  selectedModel,
   hasMessages = false,
   onRewind,
   statusPanelExpanded = true,
@@ -79,6 +82,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
       {/* Right side tools - StatusPanel toggle and Rewind button */}
       <ContextToolsRight
         currentProvider={currentProvider}
+        selectedModel={selectedModel}
         hasMessages={hasMessages}
         onRewind={onRewind}
         statusPanelExpanded={statusPanelExpanded}

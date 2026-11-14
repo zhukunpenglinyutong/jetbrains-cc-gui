@@ -91,7 +91,19 @@ describe('onStreamStart bubble routing', () => {
     expect(refs.isStreamingRef.current).toBe(true);
   });
 
-  const olderTurnStreamingAssistant: ClaudeMessage = {
+  it('keeps the turn start when a replay reaches a page that is still streaming', () => {
+    createHarness([{ type: 'user', content: 'q1' }], 0);
+    window.onStreamStart!();
+    window.__turnStartedAt = 1_000;
+
+    window.onStreamStart!('replay');
+    expect(window.__turnStartedAt).toBe(1_000);
+
+    window.onStreamStart!();
+    expect(window.__turnStartedAt).toBeGreaterThan(1_000);
+  });
+
+    const olderTurnStreamingAssistant: ClaudeMessage = {
     type: 'assistant',
     content: 'partial answer from turn 1',
     isStreaming: true,

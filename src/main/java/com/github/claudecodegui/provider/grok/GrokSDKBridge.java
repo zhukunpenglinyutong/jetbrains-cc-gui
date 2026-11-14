@@ -6,9 +6,11 @@ import com.google.gson.JsonObject;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
+import com.github.claudecodegui.provider.common.HistoryCancellation;
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
+import com.github.claudecodegui.provider.common.SessionHistoryNotFoundException;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.util.PlatformUtils;
@@ -16,10 +18,12 @@ import com.github.claudecodegui.util.PlatformUtils;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -33,6 +37,8 @@ import java.nio.file.Paths;
  * Node transport is ACP primary ({@code grok agent stdio}) which emits Claude-compatible tags.
  */
 public class GrokSDKBridge extends BaseSDKBridge {
+
+    private static final String KEY_RESULT = "result";
 
     private String baseUrl = null;
     private String apiKey = null;
@@ -340,6 +346,10 @@ public class GrokSDKBridge extends BaseSDKBridge {
             callback.onMessage("tool_result", line.substring("[TOOL_RESULT]".length()).trim());
             return;
         }
+        if (line.startsWith("[RESULT]")) {
+            callback.onMessage(KEY_RESULT, line.substring("[RESULT]".length()).trim());
+            return;
+        }
         if (line.startsWith("[USAGE]")) {
             String usageJson = line.substring("[USAGE]".length()).trim();
             try {
@@ -585,13 +595,16 @@ public class GrokSDKBridge extends BaseSDKBridge {
     }
 
     /**
-     * Context usage for the /context dialog.
-     * Prefer daemon runtime snapshot when available; otherwise synthesize from the
-     * last ACP [USAGE] line + static model context limits.
+     * Resolves context usage for the /context dialog, preferring the live daemon snapshot when available.
+     *
+     * @param sessionId Session identifier
+     * @param cwd Working directory path
+     * @param model Selected model identifier
+     * @return future completing with context usage payload
      */
     public CompletableFuture<JsonObject> getContextUsage(String sessionId, String cwd, String model) {
         String effectiveModel = (model != null && !model.isEmpty()) ? model : lastUsageModel;
-        int maxTokens = ModelProviderHandler.getModelContextLimit(effectiveModel);
+        int maxTokens = ModelProviderHandler.resolveContextLimit("grok", effectiveModel, cwd);
         int usedTokens = lastUsedTokens.get();
 
         DaemonBridge db = daemonCoordinator.getCurrentDaemonBridge();
@@ -621,7 +634,7 @@ public class GrokSDKBridge extends BaseSDKBridge {
             params.addProperty("model", model);
         }
         params.addProperty("usedTokens", lastUsedTokens.get());
-        params.addProperty("maxTokens", ModelProviderHandler.getModelContextLimit(model));
+        params.addProperty("maxTokens", ModelProviderHandler.resolveContextLimit("grok", model, cwd));
 
         AtomicReference<JsonObject> resultRef = new AtomicReference<>();
         CompletableFuture<JsonObject> resultFuture = new CompletableFuture<>();
@@ -860,8 +873,8 @@ public class GrokSDKBridge extends BaseSDKBridge {
 
             @Override
             public void onResult(JsonObject response) {
-                if (response != null && response.has("result") && response.get("result").isJsonObject()) {
-                    JsonObject result = response.getAsJsonObject("result");
+                if (response != null && response.has(KEY_RESULT) && response.get(KEY_RESULT).isJsonObject()) {
+                    JsonObject result = response.getAsJsonObject(KEY_RESULT);
                     if (result.has("present")
                             && result.get("present").isJsonPrimitive()
                             && result.get("present").getAsJsonPrimitive().isBoolean()) {
@@ -1209,6 +1222,20 @@ public class GrokSDKBridge extends BaseSDKBridge {
         } catch (Exception e) {
             LOG.warn("[GrokSDKBridge] Failed to load session messages: " + e.getMessage());
             return java.util.Collections.emptyList();
+        }
+    }
+
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd,
+                                               BooleanSupplier cancellation) {
+        try {
+            HistoryCancellation.check(cancellation);
+            List<JsonObject> messages = new GrokHistoryReader().getSessionMessages(sessionId, cwd, cancellation);
+            HistoryCancellation.check(cancellation);
+            return messages;
+        } catch (CancellationException | SessionHistoryNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to load Grok session history", e);
         }
     }
 }

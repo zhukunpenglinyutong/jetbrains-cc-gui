@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -15,9 +15,7 @@ import {
   useChatComputations,
 } from './hooks';
 import type { UseWindowCallbacksOptions, UseMessageSenderOptions } from './hooks';
-import {
-  CONTEXT_COMMANDS,
-} from './hooks/useMessageSender';
+import { isLocalContextCommand } from './hooks/useMessageSender';
 import { parseCodexCommand } from './hooks/codexCommandDispatcher';
 import { useCodexQuestionResponses } from './hooks/useCodexQuestionResponses';
 import { useCodexTurnActivity } from './hooks/useCodexTurnActivity';
@@ -30,6 +28,7 @@ import { useSession } from './contexts/SessionContext';
 import { useUIState } from './contexts/UIStateContext';
 import { useDialogs } from './contexts/DialogContext';
 import type { ApplyHistoryModel } from './applyHistoryModel';
+import { startupHistoryStateForSession, type StartupHistoryLoadState } from './types/startupHistory';
 import { useCodexPlanState } from './hooks/useCodexPlanState';
 
 /**
@@ -52,6 +51,7 @@ export interface ChatControllerModelSlice {
   codexSandboxSelection: UseMessageSenderOptions['codexSandboxSelection'];
   codexSandboxSource?: UseMessageSenderOptions['codexSandboxSource'];
   dshPreset: UseMessageSenderOptions['dshPreset'];
+  ompApprovalMode: UseMessageSenderOptions['ompApprovalMode'];
   longContextEnabled: UseMessageSenderOptions['longContextEnabled'];
   handleModeSelect: (mode: PermissionMode) => void;
   handleProviderSelect: (providerId: string) => void;
@@ -149,13 +149,18 @@ export const useAppChatController = ({
   } = useUIState();
 
   const chatInputRef = useRef<ChatInputBoxHandle>(null);
+  const [startupHistoryLoadState, setStartupHistoryLoadState] = useState<StartupHistoryLoadState | null>(null);
+
+  useEffect(() => {
+    setStartupHistoryLoadState(previous => startupHistoryStateForSession(previous, currentSessionId));
+  }, [currentSessionId]);
 
   const {
     currentProvider, selectedModel, permissionMode,
     selectedAgent, sdkStatusLoading, currentSdkInstalled,
     codexNativeAutoReviewAvailable,
     reasoningEffort, codexFastMode, codexCollaborationMode, codexApprovalPreset,
-    codexSandboxSelection, codexSandboxSource, dshPreset, longContextEnabled,
+    codexSandboxSelection, codexSandboxSource, dshPreset, ompApprovalMode, longContextEnabled,
     handleModeSelect, handleProviderSelect,
     currentProviderRef, syncActiveProviderModelMapping,
     setPermissionMode, setCurrentProvider,
@@ -272,6 +277,7 @@ export const useAppChatController = ({
     setCustomSessionTitle,
     setRestoredSessionTitle,
     setPermissionDialogTimeoutSeconds,
+    setStartupHistoryLoadState,
     clearQueuedMessages,
   });
 
@@ -296,7 +302,7 @@ export const useAppChatController = ({
     t, addToast,
     currentProvider, selectedModel, permissionMode, reasoningEffort, selectedAgent, codexFastMode,
     codexCollaborationMode, codexApprovalPreset, codexSandboxSelection, codexSandboxSource,
-    codexNativeAutoReviewAvailable, dshPreset,
+    codexNativeAutoReviewAvailable, dshPreset, ompApprovalMode,
     sdkStatusLoading, currentSdkInstalled,
     sentAttachmentsRef, chatInputRef, messagesContainerRef,
     isUserAtBottomRef, userPausedRef, isStreamingRef,
@@ -396,8 +402,8 @@ export const useAppChatController = ({
         addToast(t('chat.planModeEnabled', { defaultValue: 'Plan mode enabled' }), 'info');
         return;
       }
-      // /context - handled locally even while loading
-      if (text.split(/\s+/)[0].toLowerCase() === '/context' || CONTEXT_COMMANDS.has(text.split(/\s+/)[0].toLowerCase())) {
+      // /context answered by the plugin works even while loading; OMP's own /context is an ordinary message
+      if (isLocalContextCommand(text, currentProvider)) {
         hookHandleSubmit(content, attachments);
         return;
       }
@@ -468,6 +474,7 @@ export const useAppChatController = ({
     findToolResult, getToolResultRaw, subagents, allSubagents, globalTodos,
     filteredFileChanges, rewindableMessages,
     subagentHistoryCtxValue, sessionIdCtxValue,
+    startupHistoryLoadState,
     // Refs
     chatInputRef, messagesContainerRef, messagesEndRef, inputAreaRef, isAutoScrollingRef,
     // Message actions

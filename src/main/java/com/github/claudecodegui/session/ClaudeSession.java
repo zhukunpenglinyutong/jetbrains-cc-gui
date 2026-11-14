@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.function.BooleanSupplier;
 
 /**
  * Session management for Claude conversations.
@@ -271,6 +272,17 @@ public class ClaudeSession {
                     }
 
                     @Override
+                    public List<JsonObject> getProviderSessionMessages(
+                            String provider,
+                            String sessionId,
+                            String cwd,
+                            BooleanSupplier cancellation
+                    ) {
+                        return providerRouter.getSessionMessages(provider, sessionId, cwd,
+                                ClaudeSession.this.state.getChannelId(), cancellation);
+                    }
+
+                    @Override
                     public JsonObject getLatestClaudeUserMessage(String sessionId, String cwd) {
                         return claudeSDKBridge.getLatestClaudeUserMessage(sessionId, cwd);
                     }
@@ -278,6 +290,18 @@ public class ClaudeSession {
                     @Override
                     public JsonObject getProviderSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit) {
                         return claudeSDKBridge.getSessionMessagesPage(sessionId, cwd, beforeTurn, limit);
+                    }
+
+                    @Override
+                    public JsonObject getProviderSessionMessagesPage(
+                            String sessionId,
+                            String cwd,
+                            Integer beforeTurn,
+                            int limit,
+                            BooleanSupplier cancellation
+                    ) {
+                        return claudeSDKBridge.getSessionMessagesPage(
+                                sessionId, cwd, beforeTurn, limit, cancellation);
                     }
                 }
         );
@@ -630,7 +654,7 @@ public class ClaudeSession {
             String clientMessageId
     ) {
         return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode,
-                requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset, clientMessageId, null);
+                requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset, null, clientMessageId, null);
     }
 
     /**
@@ -643,6 +667,7 @@ public class ClaudeSession {
      * @param requestedReasoningEffort requested reasoning effort
      * @param requestedCodexFastMode requested Codex service tier
      * @param requestedDshPreset requested DSH preset
+     * @param requestedOmpApprovalMode OMP approval mode of this message, or null when none is stated
      * @param clientMessageId frontend submission identity
      * @param nativeCodexSettings filtered native Codex settings
      * @return future completed after the provider turn
@@ -655,12 +680,13 @@ public class ClaudeSession {
             String requestedReasoningEffort,
             String requestedCodexFastMode,
             String requestedDshPreset,
+            String requestedOmpApprovalMode,
             String clientMessageId,
             JsonObject nativeCodexSettings
     ) {
         return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode,
                 requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
-                clientMessageId, nativeCodexSettings);
+                requestedOmpApprovalMode, clientMessageId, nativeCodexSettings);
     }
 
     /**
@@ -777,7 +803,7 @@ public class ClaudeSession {
     ) {
         return send(input, attachments, agentPrompt, fileTagPaths, requestedPermissionMode,
                 requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
-                requestedClientMessageId, null);
+                null, requestedClientMessageId, null);
     }
 
     /**
@@ -791,6 +817,7 @@ public class ClaudeSession {
      * @param requestedReasoningEffort requested reasoning effort
      * @param requestedCodexFastMode requested Codex service tier
      * @param requestedDshPreset requested DSH preset
+     * @param requestedOmpApprovalMode OMP approval mode of this message, or null when none is stated
      * @param requestedClientMessageId frontend submission identity
      * @param nativeCodexSettings filtered native Codex settings
      * @return future completed after the provider turn
@@ -804,6 +831,7 @@ public class ClaudeSession {
             String requestedReasoningEffort,
             String requestedCodexFastMode,
             String requestedDshPreset,
+            String requestedOmpApprovalMode,
             String requestedClientMessageId,
             JsonObject nativeCodexSettings
     ) {
@@ -850,6 +878,7 @@ public class ClaudeSession {
                             finalRequestedReasoningEffort,
                             finalRequestedCodexFastMode,
                             finalRequestedDshPreset,
+                            requestedOmpApprovalMode,
                             clientMessageId,
                             nativeCodexSettings,
                             turnOwner
@@ -956,6 +985,17 @@ public class ClaudeSession {
      */
     public CompletableFuture<Void> loadFromServer() {
         return messageOrchestrator.loadFromServer();
+    }
+
+    /** Load history with cancellation support for automatic startup restoration. */
+    public CompletableFuture<Void> loadFromServer(
+            SessionMessageOrchestrator.HistoryLoadCancellation cancellation) {
+        return messageOrchestrator.loadFromServer(cancellation);
+    }
+
+    /** Number of history loads whose transcript replaced this session's messages. */
+    public long getCommittedHistoryLoadCount() {
+        return messageOrchestrator.getCommittedHistoryLoadCount();
     }
 
     /**

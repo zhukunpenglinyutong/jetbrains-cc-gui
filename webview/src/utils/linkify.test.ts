@@ -5,6 +5,7 @@ import {
   isMarkdownFileNavigationHref,
   linkifyHtml,
   linkifyPlainTextSegment,
+  normalizeFileLinkHref,
   normalizeFileNavigationTarget,
   parseFileLinkTarget,
 } from './linkify';
@@ -36,6 +37,77 @@ describe('linkify', () => {
     expect(isMarkdownFileNavigationHref('file:///tmp/demo.txt')).toBe(true);
     expect(isMarkdownFileNavigationHref('https://example.com/docs')).toBe(false);
   });
+
+  it('normalizes markdown-style file hrefs with GitHub line fragments', () => {
+    expect(normalizeFileLinkHref('Assets/GameScripts/Foo.cs')).toBe('Assets/GameScripts/Foo.cs');
+    expect(normalizeFileLinkHref('Assets/GameScripts/Foo.cs:42')).toBe('Assets/GameScripts/Foo.cs:42');
+    expect(normalizeFileLinkHref('Assets/GameScripts/Foo.cs#L42')).toBe('Assets/GameScripts/Foo.cs:42');
+    expect(normalizeFileLinkHref('Assets/GameScripts/Foo.cs#L42-L50')).toBe('Assets/GameScripts/Foo.cs:42-50');
+    expect(normalizeFileLinkHref('https://example.com/Foo.cs')).toBeNull();
+    expect(normalizeFileLinkHref('javascript:1')).toBeNull();
+  });
+
+  it.each([
+    'javascript:payload.cs',
+    'javascript%3Apayload.cs',
+    'javascript%253Apayload.cs',
+    'data:text/html,payload.ts',
+    'command:payload.ts',
+  ])('does not classify custom protocols as file paths: %s', (href) => {
+    expect(normalizeFileLinkHref(href)).toBeNull();
+  });
+
+  it('keeps encoded line targets and file URIs navigable', () => {
+    expect(normalizeFileLinkHref('Foo.cs%3A12')).toBe('Foo.cs:12');
+    expect(normalizeFileLinkHref('file:///C:/Project/Foo.cs')).toBe('file:///C:/Project/Foo.cs');
+  });
+
+  it.each([
+    ['Assets/脚本/Foo.cs#L12', 'Assets/脚本/Foo.cs:12'],
+    ['Assets/%E8%84%9A%E6%9C%AC/Foo.cs#L12', 'Assets/脚本/Foo.cs:12'],
+    ['docs/说明.md#L3-L9', 'docs/说明.md:3-9'],
+    ['/Users/me/CCGUI%20%E9%A1%B9%E7%9B%AE/src/a.ts#L12', '/Users/me/CCGUI 项目/src/a.ts:12'],
+    ['C:/My%20Project/Foo.cs#L7', 'C:/My Project/Foo.cs:7'],
+    ['file:///C:/Project/Foo.cs#L12', 'C:/Project/Foo.cs:12'],
+    ['file:///tmp/C%23/a.ts#L12', '/tmp/C#/a.ts:12'],
+    ['file:///tmp/a%3Fb.ts#L12', '/tmp/a?b.ts:12'],
+    ['file:///C:/P/C%23/Foo.cs#L3', 'C:/P/C#/Foo.cs:3'],
+    ['/tmp/C%23/a.ts#L12', '/tmp/C#/a.ts:12'],
+    // An encoded # belongs to the file name; it is not a line fragment.
+    ['/tmp/foo%23L5', '/tmp/foo#L5'],
+  ])('reaches the bridge with the right path and line: %s', (href, expected) => {
+    expect(normalizeFileNavigationTarget(normalizeFileLinkHref(href)!)).toBe(expected);
+  });
+
+  it.each([
+    ['Foo.cs#L0', 'Foo.cs'],
+    ['Foo.cs#L20-L10', 'Foo.cs'],
+    ['Assets/脚本/Foo.cs#L0', 'Assets/脚本/Foo.cs'],
+  ])('opens the file without a line when the fragment is not a valid range: %s', (href, expected) => {
+    expect(normalizeFileLinkHref(href)).toBe(expected);
+  });
+
+  it.each([
+    'javascript:payload.cs#L1',
+    'javascript%3Apayload.cs%23L1',
+    'java%09script:payload.cs#L1',
+    'java%0Ascript:payload.cs',
+    '%01javascript:payload.cs#L1',
+    'data:text/html,payload.ts#L2',
+    'command:payload.ts#L2',
+    'web+foo:x.cs#L1',
+    'web+foo:x.cs',
+    'svn+ssh://host/x.cs#L1',
+  ])('does not treat a line fragment on a custom protocol as a file: %s', (href) => {
+    expect(normalizeFileLinkHref(href)).toBeNull();
+  });
+
+  it.each(['#section', 'README#L5', 'https://example.com/Foo.cs#L1'])(
+    'does not treat other fragments as file targets: %s',
+    (href) => {
+      expect(normalizeFileLinkHref(href)).toBeNull();
+    },
+  );
 
   it('decorates markdown file links with file-link metadata', () => {
     const root = document.createElement('div');
@@ -171,6 +243,35 @@ describe('linkify', () => {
 
     expect(root.querySelector('a.url-link')?.textContent).toBe('docs');
     expect(root.querySelector('a.file-link')?.textContent).toBe('src/components/App.tsx');
+  });
+
+  it('decorates existing markdown anchors that target local files', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<p><a href="Assets/GameScripts/Foo.cs#L12">Foo.cs</a></p>';
+
+    decorateExistingAnchors(root);
+
+    const link = root.querySelector('a')!;
+    expect(link.classList.contains('file-link')).toBe(true);
+    expect(link.getAttribute('data-linkify')).toBe('file');
+    expect(link.getAttribute('data-file-path')).toBe('Assets/GameScripts/Foo.cs:12');
+  });
+
+  it('only keeps data-file-path that it derived from the href itself', () => {
+    const root = document.createElement('div');
+    root.innerHTML = [
+      '<a id="fragment" href="#top" data-file-path="/etc/hosts">fragment</a>',
+      '<a id="url" href="https://example.com" data-file-path="/etc/hosts">url</a>',
+      '<a id="file" href="src/App.tsx" data-file-path="/etc/hosts">file</a>',
+      '<a id="no-href" data-file-path="/etc/hosts">no href</a>',
+    ].join('');
+
+    decorateExistingAnchors(root);
+
+    expect(root.querySelector('#fragment')?.getAttribute('data-file-path')).toBeNull();
+    expect(root.querySelector('#url')?.getAttribute('data-file-path')).toBeNull();
+    expect(root.querySelector('#file')?.getAttribute('data-file-path')).toBe('src/App.tsx');
+    expect(root.querySelector('#no-href')?.getAttribute('data-file-path')).toBeNull();
   });
 
   it('keeps class links disabled when capability is off', () => {

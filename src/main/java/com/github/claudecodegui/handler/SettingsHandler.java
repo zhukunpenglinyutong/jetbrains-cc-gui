@@ -72,10 +72,16 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_send_shortcut",
         "get_auto_open_file_enabled",
         "set_auto_open_file_enabled",
+        "get_load_history_on_startup",
+        "set_load_history_on_startup",
+        "get_history_load_timeout",
+        "set_history_load_timeout",
         "get_permission_dialog_timeout",
         "set_permission_dialog_timeout",
         "get_commit_generation_enabled",
         "set_commit_generation_enabled",
+        "get_session_git_repository_matching_enabled",
+        "set_session_git_repository_matching_enabled",
         "get_status_bar_widget_enabled",
         "set_status_bar_widget_enabled",
 
@@ -271,6 +277,18 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_auto_open_file_enabled":
                 projectConfigHandler.handleSetAutoOpenFileEnabled(content);
                 return true;
+            case "get_load_history_on_startup":
+                projectConfigHandler.handleGetLoadHistoryOnStartup();
+                return true;
+            case "set_load_history_on_startup":
+                projectConfigHandler.handleSetLoadHistoryOnStartup(content);
+                return true;
+            case "get_history_load_timeout":
+                projectConfigHandler.handleGetHistoryLoadTimeout();
+                return true;
+            case "set_history_load_timeout":
+                projectConfigHandler.handleSetHistoryLoadTimeout(content);
+                return true;
             case "get_permission_dialog_timeout":
                 projectConfigHandler.handleGetPermissionDialogTimeout();
                 return true;
@@ -282,6 +300,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_commit_generation_enabled":
                 projectConfigHandler.handleSetCommitGenerationEnabled(content);
+                return true;
+            case "get_session_git_repository_matching_enabled":
+                projectConfigHandler.handleGetSessionGitRepositoryMatchingEnabled();
+                return true;
+            case "set_session_git_repository_matching_enabled":
+                projectConfigHandler.handleSetSessionGitRepositoryMatchingEnabled(content);
                 return true;
             case "get_status_bar_widget_enabled":
                 projectConfigHandler.handleGetStatusBarWidgetEnabled();

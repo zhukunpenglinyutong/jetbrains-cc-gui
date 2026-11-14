@@ -1,7 +1,9 @@
 import styles from './style.module.less';
+import type { KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import Tooltip from 'antd/es/tooltip';
 
-export type SettingsTab = 'basic' | 'providers' | 'dependencies' | 'usage' | 'permissions' | 'promptEnhancer' | 'commit' | 'mcp' | 'agents' | 'prompts' | 'skills' | 'pet' | 'other' | 'community';
+export type SettingsTab = 'basic' | 'providers' | 'dependencies' | 'usage' | 'permissions' | 'promptEnhancer' | 'commit' | 'mcp' | 'agents' | 'prompts' | 'skills' | 'hooks' | 'pet' | 'other' | 'community';
 
 interface SidebarItem {
   key: SettingsTab;
@@ -25,6 +27,7 @@ const sidebarGroups: { key: string; items: SidebarItem[] }[] = [
     { key: 'agents', icon: 'codicon-robot', labelKey: 'settings.agents' },
     { key: 'skills', icon: 'codicon-book', labelKey: 'settings.skills' },
     { key: 'mcp', icon: 'codicon-server', labelKey: 'settings.mcp' },
+    { key: 'hooks', icon: 'codicon-symbol-event', labelKey: 'settings.hooks.title' },
     { key: 'pet', icon: 'codicon-hubot', labelKey: 'settings.pet.title' },
   ] },
   { key: 'maintenance', items: [
@@ -59,23 +62,47 @@ const SettingsSidebar = ({
   const renderItem = (item: SidebarItem) => {
     const label = t(item.labelKey);
     const isDisabled = disabledTabs.includes(item.key);
-    return (
+    const activateItem = () => {
+      if (isDisabled) {
+        onDisabledTabClick?.(item.key);
+        return;
+      }
+      onTabChange(item.key);
+    };
+    const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      activateItem();
+    };
+    const sidebarItem = (
       <div
-        key={item.key}
         className={`${styles.sidebarItem} ${currentTab === item.key ? styles.active : ''} ${isDisabled ? styles.disabled : ''}`}
-        onClick={() => {
-          if (isDisabled) {
-            onDisabledTabClick?.(item.key);
-            return;
-          }
-          onTabChange(item.key);
-        }}
-        title={isCollapsed ? label : ''}
+        role="button"
+        tabIndex={0}
+        onClick={activateItem}
+        onKeyDown={handleKeyDown}
+        aria-label={label}
         aria-disabled={isDisabled}
       >
         <span className={`codicon ${item.icon}`} />
         <span className={styles.sidebarItemText}>{label}</span>
       </div>
+    );
+
+    return (
+      <Tooltip
+        key={item.key}
+        title={isCollapsed ? label : null}
+        trigger={['hover', 'focus']}
+        placement="right"
+        color="var(--dropdown-bg)"
+        // antd cannot parse a CSS variable and picks white text, which vanishes on the light theme's background.
+        styles={{ container: { color: 'var(--text-primary)' } }}
+        mouseEnterDelay={0.15}
+        destroyOnHidden
+      >
+        {sidebarItem}
+      </Tooltip>
     );
   };
 

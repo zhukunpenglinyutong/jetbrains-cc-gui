@@ -681,6 +681,8 @@ async function runDaemonMain() {
   sendDaemonEvent('ready', {
     pid: process.pid,
     sdkPreloaded: false, // SDK is loading in the background
+    // WSL sets this in every process; Java checks it against the project's distro.
+    wslDistro: process.env.WSL_DISTRO_NAME,
   });
 
   // Pre-load SDK in the background (non-blocking). Errors are logged but do

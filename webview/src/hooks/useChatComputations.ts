@@ -253,8 +253,8 @@ export function useChatComputations({
   });
   const fileChanges = useFileChanges({
     messages: editMessages, getContentBlocks, findToolResult,
-    startFromIndex: fileChangeMgmt.baseMessageIndex,
     ignoredLedgerKeys: fileChangeMgmt.ignoredLedgerKeys,
+    confirmedEditKeys: fileChangeMgmt.confirmedEditKeys,
     // Sidechain Edit/Write from Agent/Task tools must appear in the Edits tab too
     subagentHistories,
     currentSessionId,

@@ -104,15 +104,17 @@ test('windows launches a .cmd Grok shim through cmd.exe, not a direct spawn', ()
   const env = { PATH: 'C:\\Windows\\system32', ComSpec: 'C:\\Windows\\system32\\cmd.exe' };
   const shim = resolveGrokAgentLaunch('C:\\Program Files\\nodejs\\grok.cmd', 'win32', env);
   assert.equal(shim.file, 'C:\\Windows\\system32\\cmd.exe');
-  // /s strips the outer quotes, leaving `"grok.cmd" "agent" "stdio"`.
-  assert.deepEqual(shim.args, ['/d', '/s', '/c', '""grok.cmd" "agent" "stdio""']);
+  // /s strips the outer quotes, leaving the quoted FULL shim path as the
+  // command token — a bare-name PATH lookup leaves %~dp0 pointing at the
+  // child's CWD (see resolveCliSpawn), so npm-style shims break by basename.
+  assert.deepEqual(shim.args, ['/d', '/s', '/c', '""C:\\Program Files\\nodejs\\grok.cmd" "agent" "stdio""']);
   assert.equal(shim.windowsHide, true);
   assert.equal(shim.options.shell, false);
   assert.equal(shim.options.windowsVerbatimArguments, true);
-  // Invoked by basename with the shim directory prepended to PATH, so the
-  // spaced `C:\Program Files\...` prefix never becomes the command token.
+  // The shim's own directory still leads PATH so sibling `%~dp0` files resolve,
+  // and the spaced path is quoted inside the command token.
   assert.match(shim.options.env.PATH, /^C:\\Program Files\\nodejs;/);
-  assert.equal(shim.args[3].includes('C:\\Program'), false);
+  assert.match(shim.args[3], /^""C:\\Program Files\\nodejs\\grok\.cmd"/);
 
   const bat = resolveGrokAgentLaunch('C:\\tools\\grok.bat', 'win32', env);
   assert.equal(bat.file, 'C:\\Windows\\system32\\cmd.exe');

@@ -51,6 +51,10 @@ const BasicTab = ({ themeSync, basicActions, addToast }: BasicTabProps) => {
       onSendShortcutChange={basicActions.handleSendShortcutChange}
       autoOpenFileEnabled={basicActions.autoOpenFileEnabled}
       onAutoOpenFileEnabledChange={basicActions.handleAutoOpenFileEnabledChange}
+      loadHistoryOnStartup={basicActions.loadHistoryOnStartup}
+      onLoadHistoryOnStartupChange={basicActions.handleLoadHistoryOnStartupChange}
+      historyLoadTimeoutSeconds={basicActions.historyLoadTimeoutSeconds}
+      onHistoryLoadTimeoutChange={basicActions.handleHistoryLoadTimeoutChange}
       chatBgColor={themeSync.chatBgColor}
       onChatBgColorChange={themeSync.setChatBgColor}
       userMsgColor={themeSync.userMsgColor}
@@ -70,6 +74,8 @@ const BasicTab = ({ themeSync, basicActions, addToast }: BasicTabProps) => {
         basicActions.handleCommitGenerationEnabledChange(enabled);
         addToast(t('toast.restartRequired'), 'warning');
       }}
+      sessionGitRepositoryMatchingEnabled={basicActions.sessionGitRepositoryMatchingEnabled}
+      onSessionGitRepositoryMatchingEnabledChange={basicActions.handleSessionGitRepositoryMatchingEnabledChange}
       statusBarWidgetEnabled={basicActions.statusBarWidgetEnabled}
       onStatusBarWidgetEnabledChange={(enabled) => {
         basicActions.handleStatusBarWidgetEnabledChange(enabled);

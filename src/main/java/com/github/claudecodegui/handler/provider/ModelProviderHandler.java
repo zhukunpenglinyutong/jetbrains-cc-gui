@@ -5,9 +5,13 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.session.SessionSendService;
 import com.github.claudecodegui.session.SessionState;
+import com.github.claudecodegui.skill.OmpSlashCommandService;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.provider.ClaudeContextWindowOverrideProvider;
 import com.github.claudecodegui.provider.CustomModelContextWindowProvider;
+import com.github.claudecodegui.provider.grok.GrokContextWindowResolver;
+import com.github.claudecodegui.provider.omp.OmpContextWindows;
+import com.github.claudecodegui.provider.opencode.OpenCodeContextWindowResolver;
 import com.github.claudecodegui.util.EditorFileUtils;
 import com.github.claudecodegui.util.TokenUsageUtils;
 import com.google.gson.Gson;
@@ -39,6 +43,7 @@ public class ModelProviderHandler {
     static final Map<String, Integer> MODEL_CONTEXT_LIMITS = new HashMap<>();
     static {
         // Claude models with 1M context (base IDs)
+        MODEL_CONTEXT_LIMITS.put("claude-fable-5-2", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-fable-5-1", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-5-5", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-5", 200_000);
@@ -50,6 +55,7 @@ public class ModelProviderHandler {
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-8", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-6", 200_000);
         // Claude models with [1m] suffix - 1M context
+        MODEL_CONTEXT_LIMITS.put("claude-fable-5-2[1m]", 1_000_000);
         MODEL_CONTEXT_LIMITS.put("claude-fable-5-1[1m]", 1_000_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-5-5[1m]", 1_000_000);
         MODEL_CONTEXT_LIMITS.put("claude-opus-5[1m]", 1_000_000);
@@ -93,10 +99,22 @@ public class ModelProviderHandler {
         MODEL_CONTEXT_LIMITS.put("grok-beta", 128_000);
         MODEL_CONTEXT_LIMITS.put("grok", 500_000);
         MODEL_CONTEXT_LIMITS.put("grok-1.5", 128_000);
+        MODEL_CONTEXT_LIMITS.put("grok-4.7", 256_000);
+        MODEL_CONTEXT_LIMITS.put("grok-4.7-build-fast", 256_000);
+        MODEL_CONTEXT_LIMITS.put("grok-4.7-build", 256_000);
         MODEL_CONTEXT_LIMITS.put("grok-4.6", 500_000);
         MODEL_CONTEXT_LIMITS.put("grok-4.5", 500_000); // legacy alias
         MODEL_CONTEXT_LIMITS.put("grok-4", 500_000);
         MODEL_CONTEXT_LIMITS.put("grok-build", 500_000);
+
+        // MiniMax models (context window from ~/.minimax/config.yaml limit.context)
+        MODEL_CONTEXT_LIMITS.put("minimax/MiniMax-M3", 400_000);
+        MODEL_CONTEXT_LIMITS.put("MiniMax-M3", 400_000);
+        MODEL_CONTEXT_LIMITS.put("minimax/MiniMax-M2.7", 200_000);
+        MODEL_CONTEXT_LIMITS.put("MiniMax-M2.7", 200_000);
+        MODEL_CONTEXT_LIMITS.put("minimax/MiniMax-M2.7-highspeed", 200_000);
+        MODEL_CONTEXT_LIMITS.put("MiniMax-M2.7-highspeed", 200_000);
+
         // ZCode models (GLM)
         MODEL_CONTEXT_LIMITS.put("GLM-5.3", 1_000_000);
         MODEL_CONTEXT_LIMITS.put("GLM-5.3-Flash", 1_000_000);
@@ -164,7 +182,7 @@ public class ModelProviderHandler {
                     : model;
             int newMaxTokens = isClaude
                     ? getClaudeContextLimit(resolvedModelForUsage, sessionCwd(context))
-                    : getModelContextLimit(provider, model);
+                    : providerContextLimit(provider, model, sessionCwd(context));
             LOG.info("[ModelProviderHandler] Model context limit: " + newMaxTokens
                     + " tokens for selected model: " + model
                     + ", resolved model: " + resolvedModelForUsage);
@@ -233,7 +251,7 @@ public class ModelProviderHandler {
             // actually send the next Claude message.
             shutdownStaleClaudeDaemonIfLeavingClaude(previousProvider, provider);
 
-            refreshSlashCommandsForProvider(provider);
+            refreshSlashCommandsForProvider(provider, providerChanged);
             usagePushService.refreshContextBar();
         } catch (Exception e) {
             LOG.error("[ModelProviderHandler] Failed to set provider: " + e.getMessage(), e);
@@ -382,7 +400,7 @@ public class ModelProviderHandler {
         }
     }
 
-    private void refreshSlashCommandsForProvider(String provider) {
+    private String resolveSlashCommandCwd() {
         String cwd = null;
         if (context.getSession() != null) {
             cwd = context.getSession().getCwd();
@@ -390,8 +408,11 @@ public class ModelProviderHandler {
         if (cwd == null) {
             cwd = context.getProject().getBasePath();
         }
+        return cwd;
+    }
 
-        final String finalCwd = cwd;
+    private void refreshSlashCommandsForProvider(String provider, boolean providerChanged) {
+        final String finalCwd = resolveSlashCommandCwd();
         CompletableFuture.runAsync(() -> {
             String currentFilePath = EditorFileUtils.getCurrentEditorFilePath(context.getProject());
             var commands = SlashCommandRegistry.getCommands(provider, finalCwd, currentFilePath);
@@ -416,6 +437,25 @@ public class ModelProviderHandler {
                     LOG.warn("[ModelProviderHandler] Failed to refresh slash commands: " + e.getMessage());
                 }
             });
+
+            // set_provider is re-sent on every message; only a real switch, or a
+            // directory without a catalog yet, is worth spawning omp for. The cached
+            // (or empty) list above is queued first so the fetched one always lands last.
+            if (OmpSlashCommandService.isOmp(provider)
+                    && (providerChanged || !OmpSlashCommandService.hasCached(finalCwd))) {
+                OmpSlashCommandService.refreshAndPush(
+                        finalCwd,
+                        () -> OmpSlashCommandService.isOmp(context.getCurrentProvider())
+                                && OmpSlashCommandService.cacheKey(finalCwd)
+                                        .equals(OmpSlashCommandService.cacheKey(resolveSlashCommandCwd())),
+                        fetchedJson -> ApplicationManager.getApplication().invokeLater(() -> {
+                            try {
+                                context.callJavaScript("updateSlashCommands", context.escapeJs(fetchedJson));
+                            } catch (Exception e) {
+                                LOG.warn("[ModelProviderHandler] Failed to push omp slash commands: " + e.getMessage());
+                            }
+                        }));
+            }
         }, AppExecutorUtil.getAppExecutorService()).exceptionally(ex -> {
             LOG.error("[ModelProviderHandler] Failed to refresh slash commands asynchronously: " + ex.getMessage(), ex);
             return null;
@@ -550,6 +590,32 @@ public class ModelProviderHandler {
     }
 
     public static int getModelContextLimit(String provider, String model) {
+        return providerContextLimit(provider, model, null);
+    }
+
+    /**
+     * Non-Claude context window: OpenCode's own {@code limit.context} (project config
+     * when {@code cwd} is known), then the custom window table, then the static table.
+     */
+    private static int providerContextLimit(String provider, String model, String cwd) {
+        if ("opencode".equalsIgnoreCase(provider)) {
+            Integer declared = OpenCodeContextWindowResolver.resolve(model, cwd);
+            if (declared != null) {
+                return declared;
+            }
+        }
+        if ("omp".equalsIgnoreCase(provider)) {
+            Integer declared = OmpContextWindows.resolve(model);
+            if (declared != null) {
+                return declared;
+            }
+        }
+        if ("grok".equalsIgnoreCase(provider)) {
+            Integer declared = GrokContextWindowResolver.resolve(model);
+            if (declared != null && declared > 0) {
+                return declared;
+            }
+        }
         return CustomModelContextWindowProvider.getInstance()
                 .getContextWindow(provider, model)
                 .orElseGet(() -> getModelContextLimit(model));
@@ -607,7 +673,7 @@ public class ModelProviderHandler {
      */
     public static int resolveContextLimit(String provider, String selectedModel, String cwd) {
         if (!"claude".equalsIgnoreCase(provider)) {
-            return getModelContextLimit(provider, selectedModel);
+            return providerContextLimit(provider, selectedModel, cwd);
         }
         JsonObject env = ClaudeContextWindowOverrideProvider.getInstance().getUserSettingsEnv();
         String cliModel = env == null ? selectedModel : resolveConfiguredClaudeModel(selectedModel, env);

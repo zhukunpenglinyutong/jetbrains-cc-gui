@@ -153,6 +153,17 @@ public class ModelProviderHandlerTest {
     }
 
     @Test
+    public void shouldKeepExpectedContextLimitsForVisibleMiniMaxModels() {
+        // MiniMax context windows come from ~/.minimax/config.yaml limit.context.
+        assertEquals(400_000, ModelProviderHandler.getModelContextLimit("minimax/MiniMax-M3"));
+        assertEquals(400_000, ModelProviderHandler.getModelContextLimit("MiniMax-M3"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("minimax/MiniMax-M2.7"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("MiniMax-M2.7"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("minimax/MiniMax-M2.7-highspeed"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("MiniMax-M2.7-highspeed"));
+    }
+
+    @Test
     public void shouldReturnCorrectContextLimitsForClaudeModels() {
         // Base IDs without [1m] suffix - 200k context by default
         assertTrue(ModelProviderHandler.MODEL_CONTEXT_LIMITS.containsKey("claude-opus-5-5"));
@@ -165,6 +176,8 @@ public class ModelProviderHandlerTest {
         assertTrue(ModelProviderHandler.MODEL_CONTEXT_LIMITS.containsKey("claude-sonnet-5[1m]"));
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-opus-5-5"));
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-opus-5"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-fable-5-2"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-fable-5-1"));
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-fable-5"));
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-sonnet-5-5"));
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-sonnet-5"));
@@ -175,6 +188,8 @@ public class ModelProviderHandlerTest {
         // IDs with [1m] suffix - 1M context
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-opus-5-5[1m]"));
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-opus-5[1m]"));
+        assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-fable-5-2[1m]"));
+        assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-fable-5-1[1m]"));
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-fable-5[1m]"));
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-sonnet-5-5[1m]"));
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-sonnet-5[1m]"));
@@ -659,5 +674,17 @@ public class ModelProviderHandlerTest {
         // signals an init race. The predicate must treat it the same as null
         // to avoid spurious 5–10s daemon restarts.
         assertFalse(ModelProviderHandler.shouldShutdownClaudeDaemonOnProviderSwitch("claude", ""));
+    }
+
+    @Test
+    public void resolveContextLimitUsesOpenCodeProjectConfigOnlyWhenTheCwdIsKnown() throws Exception {
+        Path project = Files.createTempDirectory("oc-project-limit");
+        Files.writeString(project.resolve("opencode.jsonc"),
+                "{ \"provider\": { \"lmstudio\": { \"models\": { \"qwen-project-only\": "
+                        + "{ \"limit\": { \"context\": 32768, }, }, }, }, }, }");
+
+        assertEquals(32_768, ModelProviderHandler.resolveContextLimit("opencode", "lmstudio/qwen-project-only",
+                project.toString()));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("opencode", "lmstudio/qwen-project-only"));
     }
 }

@@ -98,6 +98,12 @@ public class CodexSettingsManager {
         Path configPath = getConfigTomlPath();
         if (!Files.exists(configPath)) {
             LOG.info("[CodexSettingsManager] config.toml not found at: " + configPath);
+            Map<String, Object> pluginConfig = readPluginConfigUnlocked();
+            if (pluginConfig.containsKey(MODEL_ALIASES_KEY)) {
+                Map<String, Object> config = new LinkedHashMap<>();
+                config.put(MODEL_ALIASES_KEY, deepCopyValue(pluginConfig.get(MODEL_ALIASES_KEY)));
+                return config;
+            }
             return null;
         }
 
@@ -109,10 +115,14 @@ public class CodexSettingsManager {
             LOG.warn("[CodexSettingsManager] Failed to read config.toml: " + e.getMessage());
             throw new IOException("Failed to read config.toml: " + e.getMessage(), e);
         }
-        if (!config.containsKey(MODEL_ALIASES_KEY)) {
-            Map<String, Object> pluginConfig = readPluginConfigUnlocked();
-            if (pluginConfig.containsKey(MODEL_ALIASES_KEY)) {
-                config.put(MODEL_ALIASES_KEY, pluginConfig.get(MODEL_ALIASES_KEY));
+        Map<String, Object> pluginConfig = readPluginConfigUnlocked();
+        if (pluginConfig.containsKey(MODEL_ALIASES_KEY)) {
+            Object pluginAliases = pluginConfig.get(MODEL_ALIASES_KEY);
+            Object nativeAliases = config.get(MODEL_ALIASES_KEY);
+            if (pluginAliases instanceof Map || nativeAliases instanceof Map) {
+                config.put(MODEL_ALIASES_KEY, mergeModelAliases(pluginAliases, nativeAliases));
+            } else if (!config.containsKey(MODEL_ALIASES_KEY)) {
+                config.put(MODEL_ALIASES_KEY, deepCopyValue(pluginAliases));
             }
         }
         return config;
@@ -133,7 +143,13 @@ public class CodexSettingsManager {
         Map<String, Object> nativeConfig = nativeConfig(config);
         Map<String, Object> pluginConfig = readPluginConfigUnlocked();
         if (config.containsKey(MODEL_ALIASES_KEY)) {
-            pluginConfig.put(MODEL_ALIASES_KEY, deepCopyValue(config.get(MODEL_ALIASES_KEY)));
+            Object configAliases = config.get(MODEL_ALIASES_KEY);
+            if (configAliases instanceof Map) {
+                pluginConfig.put(MODEL_ALIASES_KEY,
+                        mergeModelAliases(pluginConfig.get(MODEL_ALIASES_KEY), configAliases));
+            } else {
+                pluginConfig.put(MODEL_ALIASES_KEY, deepCopyValue(configAliases));
+            }
         } else {
             pluginConfig.remove(MODEL_ALIASES_KEY);
         }
@@ -152,6 +168,18 @@ public class CodexSettingsManager {
             throw failure;
         }
         LOG.info("[CodexSettingsManager] Wrote config.toml to: " + configPath);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> mergeModelAliases(Object pluginAliases, Object configAliases) {
+        Map<String, Object> merged = new LinkedHashMap<>();
+        if (pluginAliases instanceof Map) {
+            merged.putAll((Map<String, Object>) deepCopyValue(pluginAliases));
+        }
+        if (configAliases instanceof Map) {
+            merged.putAll((Map<String, Object>) deepCopyValue(configAliases));
+        }
+        return merged;
     }
 
     private Map<String, Object> readPluginConfigUnlocked() throws IOException {

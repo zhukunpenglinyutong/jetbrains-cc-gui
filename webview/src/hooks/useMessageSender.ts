@@ -5,10 +5,11 @@ import { sendBridgeEvent } from '../utils/bridge';
 import { clearPendingStreamStart, markPendingStreamStart } from '../utils/streamLifecycle';
 import type { ClaudeContentBlock, ClaudeMessage } from '../types';
 import {
+  OMP_APPROVAL_DEFAULT,
   apply1MContextSuffix,
 } from '../components/ChatInputBox/types';
 import { claudeModelAllowsEffort } from '../components/ChatInputBox/reasoningUtils';
-import type { Attachment, ChatInputBoxHandle, PermissionMode, ReasoningEffort, SelectedAgent, CodexFastMode } from '../components/ChatInputBox/types';
+import type { Attachment, ChatInputBoxHandle, OmpApprovalMode, PermissionMode, ReasoningEffort, SelectedAgent, CodexFastMode } from '../components/ChatInputBox/types';
 import { expandQuoteTokens } from '../components/ChatInputBox/utils/quoteRegistry';
 import type { ViewMode } from './useModelProviderState';
 import { parseCodexCommand } from './codexCommandDispatcher';
@@ -25,6 +26,12 @@ export const CODEX_REVIEW_COMMANDS = new Set(['/review']);
 
 // Hoisted regex to avoid creating new RegExp on every call
 const WHITESPACE_REGEX = /\s+/;
+
+/** Whether `/context` is answered by the plugin itself. OMP has a `/context` of its own. */
+export function isLocalContextCommand(text: string, provider: string): boolean {
+  if (provider === 'omp' || !text.startsWith('/')) return false;
+  return CONTEXT_COMMANDS.has(text.split(WHITESPACE_REGEX)[0].toLowerCase());
+}
 
 function createContextUsageRequestId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -54,6 +61,7 @@ export interface UseMessageSenderOptions {
   codexSandboxSource?: 'default' | 'native' | 'migrated' | 'user';
   codexNativeAutoReviewAvailable: boolean;
   dshPreset?: string;
+  ompApprovalMode?: OmpApprovalMode;
   selectedAgent: SelectedAgent | null;
   sdkStatusLoading: boolean;
   currentSdkInstalled: boolean;
@@ -95,6 +103,7 @@ export function useMessageSender({
   codexSandboxSource = 'default',
   codexNativeAutoReviewAvailable,
   dshPreset,
+  ompApprovalMode,
   selectedAgent,
   sdkStatusLoading,
   currentSdkInstalled,
@@ -210,50 +219,48 @@ export function useMessageSender({
 
   /**
    * Check for context usage command (/context)
-   * Only available for Claude provider. Opens a dialog to display context window usage.
+   * Opens the plugin's context window dialog for Claude. OMP has a /context of
+   * its own, so there the command is sent on like any other.
    */
   const checkContextCommand = useCallback((text: string): boolean => {
-    if (!text.startsWith('/')) return false;
+    if (!isLocalContextCommand(text, currentProvider)) return false;
     const command = text.split(WHITESPACE_REGEX)[0].toLowerCase();
-    if (CONTEXT_COMMANDS.has(command)) {
-      if (currentProvider !== 'claude') {
-        addToast(t('chat.commandProviderOnly', {
-          command,
-          provider: 'Claude',
-          defaultValue: `${command} is only available for Claude provider`,
-        }), 'warning');
-        return true;
-      }
-
-      const requestId = createContextUsageRequestId();
-
-      // Open dialog with loading state immediately
-      openContextUsageDialog(requestId, true);
-
-      // Send bridge event to fetch context usage with current model
-      // Apply [1m] suffix if long context is enabled so the SDK creates
-      // a runtime with the correct context window limit.
-      const sent = sendBridgeEvent('get_context_usage', JSON.stringify({
-        model: apply1MContextSuffix(selectedModel, longContextEnabled ?? false),
-        requestId,
-      }));
-
-      if (!sent) {
-        closeContextUsageDialog(requestId);
-        addToast(t('chat.bridgeUnavailable', {
-          defaultValue: 'Bridge is not available right now',
-        }), 'error');
-      }
+    if (currentProvider !== 'claude') {
+      addToast(t('chat.commandProviderOnly', {
+        command,
+        provider: 'Claude',
+        defaultValue: `${command} is only available for Claude provider`,
+      }), 'warning');
       return true;
     }
-    return false;
+
+    const requestId = createContextUsageRequestId();
+
+    // Open dialog with loading state immediately
+    openContextUsageDialog(requestId, true);
+
+    // Send bridge event to fetch context usage with current model
+    // Apply [1m] suffix if long context is enabled so the SDK creates
+    // a runtime with the correct context window limit.
+    const sent = sendBridgeEvent('get_context_usage', JSON.stringify({
+      model: apply1MContextSuffix(selectedModel, longContextEnabled ?? false),
+      requestId,
+    }));
+
+    if (!sent) {
+      closeContextUsageDialog(requestId);
+      addToast(t('chat.bridgeUnavailable', {
+        defaultValue: 'Bridge is not available right now',
+      }), 'error');
+    }
+    return true;
   }, [currentProvider, selectedModel, longContextEnabled, addToast, t, openContextUsageDialog, closeContextUsageDialog]);
 
   /**
-   * Check for unimplemented slash commands
+   * Check for unimplemented slash commands (OMP implements /plugins itself)
    */
   const checkUnimplementedCommand = useCallback((text: string): boolean => {
-    if (!text.startsWith('/')) return false;
+    if (!text.startsWith('/') || currentProvider === 'omp') return false;
 
     const command = text.split(/\s+/)[0].toLowerCase();
     const unimplementedCommands = ['/plugin', '/plugins'];
@@ -273,7 +280,7 @@ export function useMessageSender({
       return true;
     }
     return false;
-  }, [t, setMessages]);
+  }, [t, setMessages, currentProvider]);
 
   /**
    * Build content blocks for the user message
@@ -350,6 +357,7 @@ export function useMessageSender({
         clientMessageId,
         ...reasoningEffortPayload,
         ...(currentProvider === 'dsh' ? { dshPreset: dshPreset || '' } : {}),
+        ...(currentProvider === 'omp' ? { ompApprovalMode: ompApprovalMode || OMP_APPROVAL_DEFAULT } : {}),
         codexFastMode,
         ...(currentProvider === 'codex' ? {
           codexSettings: {
@@ -372,7 +380,7 @@ export function useMessageSender({
       return false;
     }
   }, [codexApprovalPreset, codexCollaborationMode, codexFastMode, codexNativeAutoReviewAvailable,
-    codexSandboxSelection, codexSandboxSource, currentProvider, dshPreset, selectedModel, reasoningEffort, longContextEnabled]);
+    codexSandboxSelection, codexSandboxSource, currentProvider, dshPreset, ompApprovalMode, selectedModel, reasoningEffort, longContextEnabled]);
 
   /**
    * Execute message sending (from queue or directly)
@@ -504,6 +512,7 @@ export function useMessageSender({
     currentSdkInstalled,
     currentProvider,
     dshPreset,
+    ompApprovalMode,
     permissionMode,
     selectedAgent,
     buildUserContentBlocks,

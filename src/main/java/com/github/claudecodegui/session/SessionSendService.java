@@ -218,7 +218,7 @@ public class SessionSendService {
     ) {
         return sendMessageToProvider(channelId, input, attachments, openedFilesJson, externalAgentPrompt, fileTagPaths,
                 requestedPermissionMode, requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
-                clientMessageId, nativeCodexSettings, state.getTurnOwner());
+                null, clientMessageId, nativeCodexSettings, state.getTurnOwner());
     }
 
     public CompletableFuture<Void> sendMessageToProvider(
@@ -228,14 +228,19 @@ public class SessionSendService {
     ) {
         return sendMessageToProvider(channelId, input, attachments, openedFilesJson, externalAgentPrompt, fileTagPaths,
                 requestedPermissionMode, requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
-                null, null, expectedTurnOwner);
+                null, null, null, expectedTurnOwner);
     }
 
+    /**
+     * @param requestedOmpApprovalMode OMP approval mode this message was sent with
+     *                                 ("" = OMP's own setting), or null when the sender states none
+     */
     public CompletableFuture<Void> sendMessageToProvider(
             String channelId, String input, List<ClaudeSession.Attachment> attachments, JsonObject openedFilesJson,
             String externalAgentPrompt, List<String> fileTagPaths, String requestedPermissionMode,
             String requestedReasoningEffort, String requestedCodexFastMode, String requestedDshPreset,
-            String clientMessageId, JsonObject nativeCodexSettings, Object expectedTurnOwner
+            String requestedOmpApprovalMode, String clientMessageId, JsonObject nativeCodexSettings,
+            Object expectedTurnOwner
     ) {
         if (!state.isCurrentTurn(expectedTurnOwner)) {
             return CompletableFuture.completedFuture(null);
@@ -318,6 +323,9 @@ public class SessionSendService {
             if ("dsh".equals(currentProvider) && requestedDshPreset != null) {
                 state.setDshPreset(requestedDshPreset);
             }
+            if ("omp".equals(currentProvider) && requestedOmpApprovalMode != null) {
+                state.setOmpApprovalMode(requestedOmpApprovalMode);
+            }
             return sendToCliProvider(
                     currentProvider,
                     channelId,
@@ -328,6 +336,7 @@ public class SessionSendService {
                     fileTagPaths,
                     normalizedRequestedEffort,
                     effectivePermissionMode,
+                    requestedOmpApprovalMode,
                     expectedTurnOwner
             );
         }
@@ -482,7 +491,8 @@ public class SessionSendService {
         }
 
         JsonObject turnSettings = nativeCodexSettings == null ? new JsonObject() : nativeCodexSettings.deepCopy();
-        turnSettings.add("additionalContext", this.contextService.buildCodexAdditionalContext(openedFilesJson, fileTagPaths));
+        turnSettings.add("additionalContext", this.contextService.buildCodexAdditionalContext(
+                openedFilesJson, fileTagPaths, this.codexSDKBridge::normalizePathForNode));
         String sessionInstructions = this.contextService.buildCodexSessionInstructions(agentPrompt, openedFilesJson);
         String configuredModel = new CodexSettingsManager(this.gson).resolveModelAlias(this.state.getModel());
 
@@ -628,6 +638,7 @@ public class SessionSendService {
             List<String> fileTagPaths,
             String requestedReasoningEffort,
             String permissionMode,
+            String requestedOmpApprovalMode,
             Object expectedTurnOwner
     ) {
         MarkerCliBridge bridge = cliBridges.get(provider);
@@ -650,6 +661,7 @@ public class SessionSendService {
         }
 
         String effort = normalizeCliReasoningEffort(
+                provider,
                 requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort()
         );
         String modelForCli = normalizeCliModelForProvider(provider, state.getModel());
@@ -657,6 +669,11 @@ public class SessionSendService {
                 ? permissionMode
                 : "default";
         Boolean thinking = readThinkingEnabled();
+        // The mode travels with its message, so a later send cannot change it while this
+        // one is still starting. A send that states none (Quick Fix) uses the tab's choice.
+        String ompApprovalMode = requestedOmpApprovalMode != null
+                ? SessionState.normalizeOmpApprovalMode(requestedOmpApprovalMode)
+                : state.getOmpApprovalMode();
         int attachmentCount = attachments != null ? attachments.size() : 0;
 
         LOG.info("[Lifecycle] sendToCli provider=" + provider
@@ -679,6 +696,7 @@ public class SessionSendService {
                 attachments,
                 effectiveMode,
                 "dsh".equals(provider) ? state.getDshPreset() : null,
+                "omp".equals(provider) ? ompApprovalMode : null,
                 thinking,
                 handler
         ));
@@ -719,11 +737,18 @@ public class SessionSendService {
         return new CodexMessageHandler(state, callbacks);
     }
 
-    static String normalizeCliReasoningEffort(String effort) {
-        if (effort == null) {
-            return "medium";
+    /**
+     * Map the UI effort onto the CLI flag value.
+     *
+     * <p>OMP accepts every UI level as {@code --thinking}, and an empty result
+     * omits the flag so the model keeps the level from OMP's own config. The
+     * other CLI providers only know low/medium/high and default to medium.
+     */
+    static String normalizeCliReasoningEffort(String provider, String effort) {
+        String normalized = effort == null ? "" : effort.trim().toLowerCase();
+        if ("omp".equals(provider)) {
+            return SessionState.isValidReasoningEffort(normalized) ? normalized : "";
         }
-        String normalized = effort.trim().toLowerCase();
         if ("low".equals(normalized) || "medium".equals(normalized) || "high".equals(normalized)) {
             return normalized;
         }

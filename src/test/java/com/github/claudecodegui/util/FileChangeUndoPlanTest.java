@@ -67,6 +67,33 @@ public class FileChangeUndoPlanTest {
         assertThrows(IllegalArgumentException.class, () -> FileChangeUndoPlan.rebuild("file", null, ops(unknown)));
     }
 
+    /** An edit whose replaced text went unrecorded must not write a guess back, with or without a kind. */
+    @Test
+    public void refusesEditsWhoseReplacedTextWasNotRecorded() {
+        JsonObject overwrite = change("update", "", "after\n");
+        overwrite.addProperty("oldStringKnown", false);
+        assertThrows(IllegalArgumentException.class, () -> FileChangeUndoPlan.rebuild("file", "after\n", ops(overwrite)));
+        JsonObject caseInsensitive = new JsonObject();
+        caseInsensitive.addProperty("oldString", "foo");
+        caseInsensitive.addProperty("newString", "bar");
+        caseInsensitive.addProperty("oldStringKnown", false);
+        assertThrows(IllegalArgumentException.class, () -> FileChangeUndoPlan.rebuild("file", "bar\n", ops(caseInsensitive)));
+        JsonObject unlocatedAdd = change("add", "", "created\n");
+        unlocatedAdd.addProperty("oldStringKnown", false);
+        assertThrows(IllegalArgumentException.class, () -> FileChangeUndoPlan.rebuild("file", "created\n", ops(unlocatedAdd)));
+    }
+
+    /** A legacy write records no prior content, so reversing it could only blank the file. */
+    @Test
+    public void refusesToBlankAFileWhenReversingALegacyWrite() {
+        JsonObject write = new JsonObject();
+        write.addProperty("toolName", "Write");
+        write.addProperty("oldString", "");
+        write.addProperty("newString", "Y\n");
+        JsonObject patch = update("@@\n-Y\n+Z", "Y", "Z");
+        assertThrows(IllegalArgumentException.class, () -> FileChangeUndoPlan.rebuild("file", "Z\n", ops(write, patch)));
+    }
+
     /** Preserves missing final newlines instead of silently changing file bytes. */
     @Test
     public void respectsEndOfFileMarkers() {

@@ -35,6 +35,8 @@ describe('useSettingsWindowCallbacks', () => {
     setCodeFontConfig: vi.fn(),
     setIdeTheme: vi.fn(),
     setLocalStreamingEnabled: vi.fn(),
+    setLoadHistoryOnStartup: vi.fn(),
+    setHistoryLoadTimeoutSeconds: vi.fn(),
     setCodexSandboxMode: vi.fn(),
     setLocalSendShortcut: vi.fn(),
     setLoading: vi.fn(),
@@ -58,6 +60,9 @@ describe('useSettingsWindowCallbacks', () => {
     updateCodexProviders: vi.fn(),
     updateActiveCodexProvider: vi.fn(),
     updateCurrentCodexConfig: vi.fn(),
+    updateHooks: vi.fn(),
+    updateHookSource: vi.fn(),
+    updateHookMutationResult: vi.fn(),
     cleanupAgentsTimeout: vi.fn(),
     showAlert: vi.fn(),
     addToast: vi.fn(),
@@ -109,6 +114,19 @@ describe('useSettingsWindowCallbacks', () => {
     expect(allMessages).not.toContain('get_prompt_enhancer_config:');
   });
 
+  it('loads and applies the persisted repository history preference and cleans up its callback', () => {
+    const deps = createDeps();
+    deps.setSessionGitRepositoryMatchingEnabled = vi.fn();
+    const hook = renderHook(() => useSettingsWindowCallbacks(deps));
+    expect(SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES).toContain('get_session_git_repository_matching_enabled:');
+    window.updateSessionGitRepositoryMatchingEnabled?.('{"sessionGitRepositoryMatchingEnabled":true}');
+    expect(deps.setSessionGitRepositoryMatchingEnabled).toHaveBeenLastCalledWith(true);
+    window.updateSessionGitRepositoryMatchingEnabled?.('{}');
+    expect(deps.setSessionGitRepositoryMatchingEnabled).toHaveBeenLastCalledWith(false);
+    hook.unmount();
+    expect(window.updateSessionGitRepositoryMatchingEnabled).toBeUndefined();
+  });
+
   it('registers prompt enhancer callback and updates state from backend payload', () => {
     const deps = createDeps();
 
@@ -145,6 +163,26 @@ describe('useSettingsWindowCallbacks', () => {
     window.updatePromptEnhancerConfig?.(JSON.stringify(payload));
 
     expect(deps.setPromptEnhancerConfig).toHaveBeenCalledWith(payload);
+  });
+
+  it('updates the startup history loading preference from the Java callback', () => {
+    const deps = createDeps();
+
+    renderHook(() => useSettingsWindowCallbacks(deps));
+
+    window.updateLoadHistoryOnStartup?.(JSON.stringify({ loadHistoryOnStartup: true }));
+
+    expect(deps.setLoadHistoryOnStartup).toHaveBeenCalledWith(true);
+  });
+
+  it('clamps the history load timeout received from the Java callback', () => {
+    const deps = createDeps();
+
+    renderHook(() => useSettingsWindowCallbacks(deps));
+
+    window.updateHistoryLoadTimeout?.(JSON.stringify({ historyLoadTimeoutSeconds: 999 }));
+
+    expect(deps.setHistoryLoadTimeoutSeconds).toHaveBeenCalledWith(120);
   });
 
   it('registers commit AI callback and updates only commit AI state from backend payload', () => {

@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderConfig, CodexProviderConfig } from '../../../types/provider';
 import type { AgentConfig } from '../../../types/agent';
+import type { HookCatalog, HookMutationResult, HookSourcePayload, HookToggleResult } from '../../../types/hooks';
 import type { PromptConfig } from '../../../types/prompt';
 import type { CommitAiConfig } from '../../../types/aiFeatureConfig';
 import { normalizeAiFeatureConfig, DEFAULT_COMMIT_AI_CONFIG } from '../../../types/aiFeatureConfig';
@@ -18,6 +19,7 @@ import {
   subscribeProviderList,
 } from '../../../utils/runtimeProviderCapabilities';
 import { scheduleBatchedBridgeRequests } from './scheduleBatchedBridgeRequests';
+import { clampHistoryLoadTimeoutSeconds } from '../../../utils/historyLoadTimeout';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -35,6 +37,8 @@ export const SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES = [
   'get_claude_cli_path:',
   'get_working_directory:',
   'get_streaming_enabled:',
+  'get_load_history_on_startup:',
+  'get_history_load_timeout:',
   'get_codex_sandbox_mode:',
   'get_permission_dialog_timeout:',
   // Appearance fonts
@@ -45,6 +49,7 @@ export const SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES = [
   'get_sound_notification_config:',
   'get_commit_generation_enabled:',
   'get_ai_title_generation_enabled:',
+  'get_session_git_repository_matching_enabled:',
   'get_status_bar_widget_enabled:',
   'get_task_completion_notification_enabled:',
   'get_ask_user_question_notification_enabled:',
@@ -76,6 +81,8 @@ export interface SettingsWindowCallbacksDeps {
   setCodeFontConfig: (config: CodeFontConfig | undefined) => void;
   setIdeTheme: (theme: 'light' | 'dark' | null) => void;
   setLocalStreamingEnabled: (enabled: boolean) => void;
+  setLoadHistoryOnStartup?: (enabled: boolean) => void;
+  setHistoryLoadTimeoutSeconds?: (seconds: number) => void;
   setCodexSandboxMode?: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
   setCodexSandboxSource?: (source: string) => void;
   setLocalSendShortcut: (shortcut: 'enter' | 'cmdEnter') => void;
@@ -85,6 +92,7 @@ export interface SettingsWindowCallbacksDeps {
   // AI feature toggle setters
   setCommitGenerationEnabled?: (enabled: boolean) => void;
   setAiTitleGenerationEnabled?: (enabled: boolean) => void;
+  setSessionGitRepositoryMatchingEnabled?: (enabled: boolean) => void;
   setStatusBarWidgetEnabled?: (enabled: boolean) => void;
   setTaskCompletionNotificationEnabled?: (enabled: boolean) => void;
   setAskUserQuestionNotificationEnabled?: (enabled: boolean) => void;
@@ -103,6 +111,10 @@ export interface SettingsWindowCallbacksDeps {
   loadCodexProviders: () => void;
   loadAgents: () => void;
   updateAgents: (agents: AgentConfig[]) => void;
+  updateHooks: (catalog: HookCatalog) => void;
+  updateHookSource: (payload: HookSourcePayload) => void;
+  updateHookMutationResult: (payload: HookMutationResult) => void;
+  updateHookToggleResult?: (payload: HookToggleResult) => void;
   handleAgentOperationResult: (result: any) => void;
   handleAgentImportPreviewResult: (previewData: any) => void;
   handleAgentImportResult: (result: any) => void;
@@ -288,6 +300,28 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       };
     }
 
+    const previousUpdateLoadHistoryOnStartup = window.updateLoadHistoryOnStartup;
+    window.updateLoadHistoryOnStartup = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setLoadHistoryOnStartup?.(data.loadHistoryOnStartup ?? true);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse load history on startup config:', error);
+      }
+    };
+
+    const previousUpdateHistoryLoadTimeout = window.updateHistoryLoadTimeout;
+    window.updateHistoryLoadTimeout = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        if (typeof data.historyLoadTimeoutSeconds === 'number') {
+          d().setHistoryLoadTimeoutSeconds?.(clampHistoryLoadTimeoutSeconds(data.historyLoadTimeoutSeconds));
+        }
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse history load timeout:', error);
+      }
+    };
+
     // Codex sandbox callback: the legacy project record only. Desired/effective
     // are never reported by the host — the live scope comes from the chat state
     // and the app-server's own thread/settings/updated echo.
@@ -392,6 +426,15 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       }
     };
 
+    window.updateSessionGitRepositoryMatchingEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setSessionGitRepositoryMatchingEnabled?.(data.sessionGitRepositoryMatchingEnabled === true);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse session repository matching config:', error);
+      }
+    };
+
     // Status bar widget config callback
     window.updateStatusBarWidgetEnabled = (jsonStr: string) => {
       try {
@@ -473,6 +516,42 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         console.error('[SettingsView] Failed to parse agents:', error);
       }
       previousUpdateAgents?.(jsonStr);
+    };
+
+    window.updateHooks = (jsonStr: string) => {
+      try {
+        const catalog: HookCatalog = JSON.parse(jsonStr);
+        if (!Array.isArray(catalog.items) || !Array.isArray(catalog.sources)) {
+          throw new Error('Invalid hook catalog');
+        }
+        d().updateHooks(catalog);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse hooks:', error);
+      }
+    };
+
+    window.hookSourceResult = (jsonStr: string) => {
+      try {
+        d().updateHookSource(JSON.parse(jsonStr) as HookSourcePayload);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse hook source:', error);
+      }
+    };
+
+    window.hookMutationResult = (jsonStr: string) => {
+      try {
+        d().updateHookMutationResult(JSON.parse(jsonStr) as HookMutationResult);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse hook mutation result:', error);
+      }
+    };
+
+    window.hookToggleResult = (jsonStr: string) => {
+      try {
+        d().updateHookToggleResult?.(JSON.parse(jsonStr) as HookToggleResult);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse hook toggle result:', error);
+      }
     };
 
     window.agentOperationResult = (jsonStr: string) => {
@@ -614,6 +693,8 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       if (!d().onStreamingEnabledChangeProp) {
         window.updateStreamingEnabled = previousUpdateStreamingEnabled;
       }
+      window.updateLoadHistoryOnStartup = previousUpdateLoadHistoryOnStartup;
+      window.updateHistoryLoadTimeout = previousUpdateHistoryLoadTimeout;
       window.updateCodexSandboxMode = undefined;
       if (!d().onSendShortcutChangeProp) {
         window.updateSendShortcut = previousUpdateSendShortcut;
@@ -625,12 +706,17 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateSoundNotificationConfig = undefined;
       window.updateCommitGenerationEnabled = undefined;
       window.updateAiTitleGenerationEnabled = undefined;
+      window.updateSessionGitRepositoryMatchingEnabled = undefined;
       window.updateStatusBarWidgetEnabled = undefined;
       window.updateTaskCompletionNotificationEnabled = undefined;
       window.updateAskUserQuestionNotificationEnabled = undefined;
       window.updateSystemNotificationOnlyWhenUnfocused = undefined;
       window.updateAskUserQuestionSoundNotificationEnabled = undefined;
       window.updateAgents = previousUpdateAgents;
+      window.updateHooks = undefined;
+      window.hookSourceResult = undefined;
+      window.hookMutationResult = undefined;
+      window.hookToggleResult = undefined;
       window.agentOperationResult = undefined;
       window.agentImportPreviewResult = undefined;
       window.agentImportResult = undefined;

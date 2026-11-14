@@ -1,4 +1,18 @@
 {
+  "startupHistory": {
+    "unloaded": "El historial de esta sesión restaurada aún no se ha cargado.",
+    "loading": "Cargando historial…",
+    "loaded_one": "Se cargó {{count}} mensaje.",
+    "loaded_other": "Se cargaron {{count}} mensajes.",
+    "missing": "El historial guardado ya no está disponible. Hay una nueva sesión lista.",
+    "timeout": "La carga agotó el tiempo de espera. Pulsa Reintentar.",
+    "cancelled": "Se canceló la carga. Pulsa Reintentar para volver a cargar.",
+    "failed": "No se pudo cargar el historial. Pulsa Reintentar.",
+    "superseded": "Una actividad más reciente interrumpió la carga del historial. Pulsa Reintentar para cargarlo.",
+    "load": "Cargar historial",
+    "retry": "Reintentar",
+    "cancel": "Cancelar"
+  },
   "common": {
     "ready": "Listo",
     "loading": "Cargando",
@@ -127,8 +141,7 @@
       "matchCase": "Coincidir mayúsculas y minúsculas (Alt+C)",
       "wholeWord": "Coincidir palabra completa (Alt+W)",
       "regex": "Expresión regular (Alt+R)",
-      "invalidRegex": "Regex no válida",
-      "openTooltip": "Buscar en la conversación (Cmd/Ctrl+F)"
+      "invalidRegex": "Regex no válida"
     },
     "compactSummary": {
       "receivedTime": "Hora registrada",
@@ -155,6 +168,7 @@
     "codexReviewStarted": "Codex is reviewing the workspace",
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexCliOutdated": "Codex CLI {{version}} está desactualizado; es posible que algunos modelos y modos de permisos no funcionen. Actualiza a {{minimumVersion}} o posterior.",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
     "continueRefiningPlan": "Continuar refinando este plan:"
   },
@@ -253,6 +267,17 @@
         "enabled": "Activado",
         "disabled": "Desactivado",
         "hint": "Al activar, seleccionar un archivo en el árbol del proyecto enviará automáticamente su ruta al AI (nota: solo se envía la ruta del archivo, no su contenido). Al desactivar, se requiere acción manual."
+      },
+      "loadHistoryOnStartup": {
+        "label": "Cargar historial al iniciar",
+        "enabled": "Activado",
+        "disabled": "Desactivado",
+        "hint": "Carga automáticamente el historial de las sesiones restauradas. Los errores y tiempos de espera requieren un reintento manual."
+      },
+      "historyLoadTimeout": {
+        "label": "Tiempo de espera del historial",
+        "unit": "segundos",
+        "hint": "La restauración automática y la carga manual comparten este límite (5–120 segundos). Puedes reintentar en la conversación."
       },
       "promptEnhancer": {
         "label": "Prompt Enhancer",
@@ -982,6 +1007,132 @@
       "source": "Source: {{source}}",
       "readOnlyTitle": "Read only",
       "readOnlyDesc": "Inspect files without writing to the workspace."
+    },
+    "hooks": {
+      "title": "Hooks",
+      "description": "Consulta y edita con seguridad los hooks de Codex y Claude Code.",
+      "refresh": "Actualizar",
+      "provider": "Proveedor",
+      "scope": "Ámbito",
+      "all": "Todos",
+      "allProviders": "Todos los proveedores",
+      "allScopes": "Todos los ámbitos",
+      "global": "Usuario",
+      "project": "Proyecto",
+      "projectLocal": "Proyecto (ajuste local)",
+      "search": "Buscar hooks",
+      "searchPlaceholder": "Buscar eventos, comandos o rutas",
+      "noMatches": "Ningún hook coincide con los filtros.",
+      "toggleUnavailable": "La activación individual requiere verificar el comportamiento del proveedor.",
+      "enabled": "Activado",
+      "disabled": "Desactivado",
+      "enable": "Activar hook",
+      "disable": "Desactivar hook",
+      "managedToggleHint": "Control gestionado por CC GUI; conserva la configuración original y permite restaurarla.",
+      "nativeToggleHint": "Cambia tu preferencia de Codex; la confianza, las funciones y las políticas también controlan la ejecución.",
+      "toggleFailed": "Error al cambiar el hook",
+      "loading": "Buscando hooks…",
+      "empty": "No se encontraron hooks.",
+      "valid": "Formato reconocido",
+      "validationWarning": "Requiere revisión",
+      "matcher": "Filtro",
+      "noCommand": "Sin comando",
+      "readOnly": "Solo lectura",
+      "viewSource": "Ver fuente",
+      "editSource": "Editar fuente",
+      "sourcePreview": "Vista previa de la fuente",
+      "sourceTab": "Fuente",
+      "detailsTab": "Detalles",
+      "viewMode": "Vista de hooks",
+      "loadingSource": "Cargando fuente…",
+      "sourceEditor": "Editor de fuente",
+      "affectedFile": "Archivo afectado",
+      "backupDirectory": "Carpeta de respaldo",
+      "latestBackup": "Restaurar la última copia de esta sesión de edición",
+      "lastModified": "Última modificación",
+      "event": "Evento",
+      "format": "Formato",
+      "revision": "Revisión",
+      "command": "Comando",
+      "validationIssues": "Problemas de validación",
+      "providerFields": "Campos del proveedor",
+      "noProviderFields": "Sin campos específicos",
+      "none": "Ninguno",
+      "reviewChanges": "Revisar cambios",
+      "hideChanges": "Ocultar cambios",
+      "noChanges": "No hay cambios para guardar",
+      "technicalInfo": "Información técnica",
+      "moreActions": "Más acciones",
+      "conflictTitle": "La fuente cambió externamente",
+      "conflictDescription": "Recarga la versión externa o conserva el borrador y sincroniza la última revisión.",
+      "reloadExternal": "Recargar versión externa",
+      "keepDraft": "Conservar borrador y sincronizar",
+      "discardDraft": "Descartar borrador",
+      "discardChangesTitle": "¿Descartar cambios sin guardar?",
+      "discardChangesMessage": "Los cambios sin guardar se perderán al cerrar.",
+      "backupOnSave": "Se crea un respaldo antes de guardar",
+      "save": "Guardar",
+      "saving": "Guardando…",
+      "restore": "Restaurar la última copia de esta sesión de edición",
+      "saveFailed": "Error al guardar",
+      "sourceLoadFailed": "Error al recargar fuente",
+      "noPreview": "Sin vista previa.",
+      "sourceNotice": "Revisa {{count}} fuentes; sus operaciones están restringidas.",
+      "sharedProjectWarning": "La configuración del proyecto puede incluirse en commits y afectar a otros usuarios. Revisa las diferencias antes de compartir.",
+      "bridgeUnavailable": "La conexión al IDE no está disponible. Vuelve a abrir los ajustes.",
+      "sourceTimeout": "La lectura agotó el tiempo. Recarga la fuente antes de editar.",
+      "mutationTimeout": "La confirmación agotó el tiempo. Actualiza antes de reintentar; el cambio puede estar guardado.",
+      "mutationConfirmedLate": "Se confirmó el guardado retrasado. El borrador se conservó; recarga la fuente.",
+      "issues": {
+        "COMMAND_MISSING": "Falta el comando",
+        "TYPE_MISSING": "Falta el tipo",
+        "HOOKS_NOT_OBJECT": "hooks debe ser un objeto",
+        "SETTINGS_NOT_OBJECT": "La configuración debe ser un objeto",
+        "INVALID_JSON": "JSON no válido",
+        "HOOK_ENTRY_NOT_OBJECT": "La entrada debe ser un objeto",
+        "INVALID_TOML": "TOML no válido",
+        "CODEX_HOOKS_NOT_TABLE": "hooks de Codex debe ser una tabla",
+        "CODEX_HOOK_EVENT_NOT_ARRAY": "Los eventos deben ser matrices",
+        "CODEX_HOOK_ENTRY_NOT_TABLE": "La entrada debe ser una tabla",
+        "CODEX_ENABLED_INVALID": "Campo de activación no válido",
+        "CODEX_MATCHER_INVALID": "Filtro no válido",
+        "CODEX_COMMANDS_INVALID": "Falta un comando o herramienta MCP válida",
+        "CODEX_HOOKS_FEATURE_DISABLED": "Función hooks desactivada",
+        "READ_FAILED": "Error de lectura",
+        "CODEX_EVENT_UNSUPPORTED": "Evento no compatible con el esquema verificado",
+        "CODEX_HANDLER_UNSUPPORTED": "Tipo de controlador no compatible",
+        "CODEX_HOOK_FILE_FIELDS_INVALID": "Campos del archivo no válidos",
+        "CODEX_STATE_INLINE_UNSUPPORTED": "No se puede editar el estado en línea con seguridad; usa una tabla.",
+        "LINKED_SOURCE_READ_ONLY": "Los archivos enlazados son de solo lectura. Edita directamente el archivo original.",
+        "HOOK_SOURCE_UNAVAILABLE": "El archivo de origen no está disponible."
+      },
+      "sharedToggleTitle": "Confirmar cambio del proyecto compartido",
+      "sharedToggleMessage": "Esto modifica el archivo compartido .claude/settings.json y puede afectar a otros colaboradores. Los datos de restauración se guardan solo en este equipo.",
+      "confirmSharedToggle": "Cambiar configuración compartida",
+      "sensitiveSourceWarning": "Este archivo puede contener credenciales y configuración sensible. Muéstralo cuando estés listo para editarlo.",
+      "revealSource": "Mostrar configuración",
+      "errors": {
+        "HOOK_SHARED_CONFIRMATION_REQUIRED": "Confirma primero el cambio de configuración compartida.",
+        "HOOK_CATALOG_TIMEOUT": "Se agotó el tiempo de actualización. Actualiza antes de cambiar otro hook.",
+        "HOOK_REVISION_CONFLICT": "El archivo cambió fuera de esta página. Actualiza e inténtalo de nuevo.",
+        "HOOK_RESTORE_CONFLICT": "No se pudo restaurar el hook porque este evento ya no es una lista en el archivo. Corrige el archivo e inténtalo de nuevo.",
+        "HOOK_TOGGLE_LOCKED": "Hay otro cambio en curso en este archivo. Inténtalo de nuevo en un momento.",
+        "HOOK_TOGGLE_LOCK_FAILED": "No se pudo bloquear el archivo para este cambio.",
+        "HOOK_FILE_LOCKED": "Hay otro cambio en curso en este archivo. Inténtalo de nuevo en un momento.",
+        "HOOK_NOT_FOUND": "Este hook ya no está en el archivo. Actualiza la lista.",
+        "HOOK_NOT_DISABLED": "Este hook no está desactivado. Actualiza la lista.",
+        "HOOK_ALREADY_DISABLED": "Este hook ya está desactivado. Actualiza la lista.",
+        "HOOK_STATE_WRITE_FAILED": "No se pudo guardar el registro del hook desactivado. El cambio del archivo se revirtió en lo posible.",
+        "HOOK_TOGGLE_FAILED": "No se pudo cambiar el hook.",
+        "INVALID_HOOK_PATH": "Este archivo no se puede cambiar aquí. Los archivos enlazados y los que están fuera de las ubicaciones conocidas son de solo lectura.",
+        "INVALID_BACKUP_PATH": "El archivo de copia de seguridad no está disponible.",
+        "SOURCE_TOO_LARGE": "El archivo supera los 128 KB y no se puede editar aquí.",
+        "INVALID_REQUEST": "La solicitud no es válida. Actualiza la página e inténtalo de nuevo.",
+        "WRITE_FAILED": "No se pudo guardar el archivo.",
+        "RESTORE_FAILED": "No se pudo restaurar la copia de seguridad.",
+        "UNSUPPORTED_HOOK_PROVIDER": "Este tipo de hook no se puede cambiar aquí.",
+        "UNKNOWN_ERROR": "Error desconocido."
+      }
     }
   },
   "history": {
@@ -1095,7 +1246,11 @@
     "codexDeliveryFailed": "Codex no recibió tu elección ({{error}}). Si la conversación no continúa, pulsa Detener y vuelve a enviar el mensaje.",
     "codexDeliveryUnconfirmed": "Codex aún no ha confirmado tu elección ({{error}}). Puede que todavía se aplique, así que no respondas de nuevo; si la conversación no continúa, pulsa Detener y vuelve a enviar el mensaje."
   },
+  "modelConfig": {
+    "approvals": "Aprobaciones"
+  },
   "askUserQuestion": {
+    "ompTitle": "OMP tiene algunas preguntas para ti",
     "title": "Claude tiene algunas preguntas para ti",
     "progress": "Pregunta {{current}} / {{total}}",
     "multiSelectHint": "Puedes seleccionar múltiples opciones",
@@ -1487,6 +1642,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "Copiar comando",
+    "bashGroupCopyOutput": "Copiar salida",
+    "bashGroupOutput": "Salida",
+    "bashGroupOutputFailed": "Falló",
+    "bashGroupRunning": "En ejecución…",
+    "bashGroupNoOutput": "(sin salida)",
     "reportFindings": {
       "title": "Hallazgos de la revisión",
       "findingsCount_one": "{{count}} hallazgo",
@@ -1750,13 +1911,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · El más rápido para respuestas rápidas"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · El más potente · clase Mythos"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · El más potente · clase Mythos"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · Generación anterior de Fable"
+        "description": "Fable 5.1 · Generación anterior de Fable"
       }
     },
     "longContext": {
@@ -1874,6 +2035,25 @@
       "label": "Full Auto",
       "tooltip": "Codex approval_policy=never – runs commands and writes files without prompting (workspace sandbox still enforced).",
       "description": "Hands-off mode. Codex executes edits and shell commands immediately."
+    }
+  },
+  "ompApprovals": {
+    "title": "Selecciona el modo de aprobación de OMP",
+    "default": {
+      "label": "Predeterminado",
+      "description": "Automático total si no se define tools.approvalMode"
+    },
+    "alwaysAsk": {
+      "label": "Preguntar",
+      "description": "Pregunta antes de editar y de ejecutar comandos"
+    },
+    "write": {
+      "label": "Aprobar ediciones automáticamente",
+      "description": "Solo pregunta antes de ejecutar comandos"
+    },
+    "yolo": {
+      "label": "Automático total",
+      "description": "Nunca pregunta"
     }
   },
   "ompModes": {
@@ -2187,6 +2367,25 @@
         }
       }
     },
+    "claudeCodeWindowsTooOld": {
+      "title": "Claude Code no puede iniciarse en esta versión de Windows",
+      "intro": "Windows impidió que Claude Code se iniciara porque no encontró una función del sistema que necesita (error 0xC0000139). Esto suele indicar que Windows es demasiado antiguo: Claude Code 2.1.118 y posteriores usan ClosePseudoConsole, que requiere Windows 10 versión 1809 o Windows Server 2019.",
+      "reason": "Windows rechaza el programa al cargarlo, antes de que Claude Code se ejecute, así que cambiar el modelo, el proveedor o los permisos no ayudará.",
+      "solutions": {
+        "updateWindows": {
+          "title": "Opción 1: Actualiza Windows",
+          "step0": "Actualiza a Windows 10 versión 1809 o posterior, o a Windows Server 2019 o posterior. Estas versiones incluyen la función que falta."
+        },
+        "useOlderSdk": {
+          "title": "Opción 2: Cambia a un SDK anterior",
+          "step0": "En Gestión de dependencias, cambia la versión del SDK a v0.2.112 o anterior. Es posible que los modelos más recientes no acepten esa versión. Si un modelo pide un Claude Code más reciente, elige otro modelo o actualiza Windows: actualizar el SDK hará que este error vuelva a aparecer."
+        },
+        "checkCustomCli": {
+          "title": "Opción 3: Revisa tu CLI de Claude personalizado",
+          "step0": "Si configuraste \"Ruta del CLI de Claude (anulación)\", el plugin ejecuta ese binario en lugar del SDK, así que cambiar el SDK no tiene efecto. Borra la ruta o apúntala a un Claude Code anterior. Revisa esto primero si tu Windows ya está actualizado."
+        }
+      }
+    },
     "spawnEbusy": {
       "title": "spawn EBUSY — error al iniciar el proceso hijo",
       "intro": "Este error suele estar causado por una versión incompatible de Node.js o una instalación incompleta del SDK. Prueba las dos opciones siguientes en orden:",
@@ -2200,6 +2399,22 @@
           "title": "Opción 2: Reinstalar el último SDK desde el registro oficial de npm",
           "step0": "1. Cambia al registro oficial de npm (evita el mirror de Taobao — puede no tener la última versión):",
           "step1": "2. Abre Gestión de dependencias y reinstala el último SDK:"
+        }
+      }
+    },
+    "codexCliVersionTooOld": {
+      "title": "Codex CLI es demasiado antiguo para este modo de permisos",
+      "intro": "Automático total y Aprobación automática usan la configuración del revisor automático. Este Codex CLI no la reconoce y rechazó la solicitud, por lo que tu mensaje no se procesó.",
+      "reason": "El plugin ejecuta el Codex CLI que encuentra en tu equipo, por lo que actualizar el plugin no actualiza el CLI. Si el error continúa después de actualizar, puede haber un codex más antiguo primero en tu PATH.",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "Opción 1: instalar o actualizar el CLI con las instrucciones oficiales",
+          "step0": "1. Abre las instrucciones oficiales y elige el instalador independiente, npm o Homebrew según tu entorno de ejecución. Actualiza siempre por el canal de instalación original; no ejecutes npm uninstall en una instalación independiente:",
+          "step1": "2. En una terminal nueva, confirma que la versión ha cambiado y reinicia el IDE para que el plugin use el nuevo CLI:"
+        },
+        "useDefaultMode": {
+          "title": "Opción 2: cambiar el modo de permisos por ahora",
+          "step0": "Cambia a Default Mode. No usa el revisor automático, así que puedes seguir trabajando hasta actualizar el CLI. Si el error continúa, actualiza el CLI como se indica en la opción 1."
         }
       }
     },

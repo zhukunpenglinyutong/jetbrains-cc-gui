@@ -1,4 +1,4 @@
-import { marked } from 'marked';
+import { marked, type Token } from 'marked';
 import DOMPurify from 'dompurify';
 import { memo, useMemo, useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import { useMarkdownFileLinkTooltip } from '../hooks/useMarkdownFileLinkTooltip'
 import {
   decorateExistingAnchors,
   linkifyHtml,
+  normalizeFileLinkHref,
 } from '../utils/linkify';
 import {
   getLinkifyCapabilities,
@@ -24,6 +25,7 @@ import { ImagePreviewOverlay } from './MarkdownBlock/ImagePreviewOverlay';
 import hljs from 'highlight.js/lib/core';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
+import dart from 'highlight.js/lib/languages/dart';
 import diff from 'highlight.js/lib/languages/diff';
 import dockerfile from 'highlight.js/lib/languages/dockerfile';
 import go from 'highlight.js/lib/languages/go';
@@ -40,7 +42,6 @@ import sql from 'highlight.js/lib/languages/sql';
 import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
-import 'highlight.js/styles/github-dark.css';
 import 'katex/dist/katex.css';
 import { markedHighlight } from 'marked-highlight';
 import { copyToClipboard } from '../utils/copyUtils';
@@ -83,6 +84,10 @@ function isAllowedHrefValue(value: string): boolean {
     return true;
   }
 
+  if (normalizeFileLinkHref(trimmed)) {
+    return true;
+  }
+
   if (!URI_SCHEME_REGEX.test(trimmed)) {
     return true;
   }
@@ -120,6 +125,7 @@ const MARKDOWN_LINK_SANITIZE_OPTIONS = {
 const highlightLanguages: Array<[string, Parameters<typeof hljs.registerLanguage>[1]]> = [
   ['bash', bash],
   ['css', css],
+  ['dart', dart],
   ['diff', diff],
   ['dockerfile', dockerfile],
   ['go', go],
@@ -147,6 +153,7 @@ hljs.registerAliases(['ts', 'tsx'], { languageName: 'typescript' });
 hljs.registerAliases(['sh', 'zsh'], { languageName: 'bash' });
 hljs.registerAliases(['html', 'xhtml', 'svg'], { languageName: 'xml' });
 hljs.registerAliases(['yml'], { languageName: 'yaml' });
+hljs.registerAliases(['flutter'], { languageName: 'dart' });
 
 // Configure marked to use syntax highlighting
 marked.use(
@@ -232,7 +239,9 @@ function makeStreamSafe(content: string): string {
 
   // If still inside a code block, append a closing fence
   if (fence.open) {
-    result = result + '\n' + fence.marker;
+    // Indent the temporary closer into the owning list item; at column 0 marked
+    // ends the item there and opens a second, empty fence.
+    result = result + '\n' + ' '.repeat(fence.container) + fence.marker;
   }
 
   // Handle inline code: detect unclosed inline code (`)
@@ -263,8 +272,7 @@ function splitMarkdownBlocks(content: string): string[] {
   const lines = content.split('\n');
   const blocks: string[] = [];
   let current: string[] = [];
-  let inFence = false;
-  let fenceMarker = '';
+  let scan = createFenceScan();
   let inDisplayMath = false;
   let mathCloser = '';
 
@@ -273,16 +281,19 @@ function splitMarkdownBlocks(content: string): string[] {
       blocks.push(current.join('\n'));
       current = [];
     }
+    scan = createFenceScan();
+    inDisplayMath = false;
+    mathCloser = '';
   };
 
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
     const trimmed = line.trim();
 
-    if (inFence) {
+    // Code blocks (fenced or indented) own their blank lines; never split them.
+    if (scan.marker || scan.indentedCode) {
       current.push(line);
-      if (!nextFenceMarker(line, fenceMarker)) {
-        inFence = false;
-      }
+      scanLine(line, scan);
       continue;
     }
 
@@ -294,10 +305,7 @@ function splitMarkdownBlocks(content: string): string[] {
       continue;
     }
 
-    const openingFence = nextFenceMarker(line, '');
-    if (openingFence) {
-      inFence = true;
-      fenceMarker = openingFence;
+    if (scanLine(line, scan)) {
       current.push(line);
       continue;
     }
@@ -310,6 +318,15 @@ function splitMarkdownBlocks(content: string): string[] {
     }
 
     if (trimmed === '') {
+      // A blank line inside a list item does not end that item: the following
+      // content still belongs to it when it reaches any open item, not only the
+      // innermost one. Splitting here would turn a fence indented 4+ spaces into
+      // a top-level indented code block, which renders the backticks literally
+      // and escapes the code's generics as prose.
+      if (scan.containers.length > 0 && nextLineColumn(lines, index + 1) >= scan.containers[0]) {
+        current.push(line);
+        continue;
+      }
       flush();
       continue;
     }
@@ -352,21 +369,19 @@ function escapeXmlTags(text: string): string {
  * (outside fenced code blocks and inline code). Preserves code content as-is
  * so marked can handle XML tags inside code naturally (auto-escape).
  */
-function splitCodeFences(content: string): string[] {
+function splitCodeFences(content: string, trackIndentedCode = true): string[] {
   const parts: string[] = [];
-  let marker = '';
+  const scan = createFenceScan(trackIndentedCode);
   let start = 0;
   let offset = 0;
+  let previousCode = false;
   for (const line of content.split('\n')) {
-    const nextMarker = nextFenceMarker(line, marker);
-    if (!marker && nextMarker) {
+    const isCode = scanLine(line, scan);
+    if (isCode !== previousCode) {
       parts.push(content.slice(start, offset));
       start = offset;
-    } else if (marker && !nextMarker) {
-      parts.push(content.slice(start, offset + line.length));
-      start = offset + line.length;
+      previousCode = isCode;
     }
-    marker = nextMarker;
     offset += line.length + 1;
   }
   parts.push(content.slice(start));
@@ -389,7 +404,7 @@ const BRACKET_MATH_DELIMITER_MAP: Record<string, string> = {
  * fenced code blocks and inline code keep their literal backslash delimiters.
  */
 function normalizeBracketMathDelimiters(content: string): string {
-  return splitCodeFences(content)
+  return splitCodeFences(content, false)
     .map((fencePart, fenceIdx) => {
       if (fenceIdx % 2 === 1) return fencePart;
 
@@ -408,7 +423,7 @@ function normalizeBracketMathDelimiters(content: string): string {
 }
 
 function normalizeIndentedDisplayMath(content: string): string {
-  return splitCodeFences(content)
+  return splitCodeFences(content, false)
     .map((part, partIndex) => {
       if (partIndex % 2 === 1) return part;
 
@@ -460,6 +475,13 @@ function stripAndEscapeOutsideCodeBlocks(content: string): string {
         .join('');
     })
     .join('');
+}
+
+/** The text marked parses: math delimiters normalized, prose tags stripped and escaped. */
+function prepareMarkdown(content: string): string {
+  return stripAndEscapeOutsideCodeBlocks(
+    normalizeIndentedDisplayMath(normalizeBracketMathDelimiters(content)),
+  );
 }
 
 function isLatexCodeLanguage(language: string | null): boolean {
@@ -524,10 +546,7 @@ function renderFullMarkdownHtml(
   try {
     // Strip system-internal XML tags and escape remaining XML tags outside code blocks
     // (mirrors CLI's stripPromptXMLTags + html token discard)
-    const cleaned = stripAndEscapeOutsideCodeBlocks(
-      normalizeIndentedDisplayMath(normalizeBracketMathDelimiters(content)),
-    );
-    const parsed = marked.parse(cleaned);
+    const parsed = marked.parse(prepareMarkdown(content));
     const sanitized = DOMPurify.sanitize(
       typeof parsed === 'string' ? parsed : String(parsed),
       {
@@ -635,22 +654,236 @@ interface BlockSectionProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
-function nextFenceMarker(line: string, marker: string): string {
-  const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-  if (!fence) return marker;
-  if (!marker) return fence[1][0] !== '`' || !fence[2].includes('`') ? fence[1] : '';
-  return fence[1][0] === marker[0] && fence[1].length >= marker.length && !fence[2].trim() ? '' : marker;
+const TAB_WIDTH = 4;
+const LIST_MARKER_RE = /^([-*+]|\d{1,9}[.)])([ \t]+)(.*)$/;
+const FENCE_LINE_RE = /^(`{3,}|~{3,})(.*)$/;
+/**
+ * Heading, quote and rule lines end a list item instead of continuing it lazily,
+ * as in marked. HTML starts are left out: tags are escaped before marked parses.
+ */
+const ITEM_END_RE = /^(?:#|>|([-*_])(?:[ \t]*\1){2,}[ \t]*$)/;
+
+/** Visual column of a line's first non-whitespace character, tabs advancing to the next four-column stop. */
+function leadingColumn(line: string): number {
+  let column = 0;
+  for (let index = 0; index < line.length; index++) {
+    const ch = line[index];
+    if (ch === ' ') {
+      column += 1;
+    } else if (ch === '\t') {
+      column += TAB_WIDTH - (column % TAB_WIDTH);
+    } else {
+      break;
+    }
+  }
+  return column;
+}
+
+/** Line text without its leading spaces and tabs. */
+function lineContent(line: string): string {
+  let index = 0;
+  while (index < line.length && (line[index] === ' ' || line[index] === '\t')) {
+    index += 1;
+  }
+  return line.slice(index);
+}
+
+/** Width in columns of a whitespace run that starts at `startColumn`, tabs included. */
+function columnWidth(whitespace: string, startColumn: number): number {
+  let column = startColumn;
+  let width = 0;
+  for (const ch of whitespace) {
+    const advance = ch === '\t' ? TAB_WIDTH - (column % TAB_WIDTH) : 1;
+    column += advance;
+    width += advance;
+  }
+  return width;
+}
+
+/**
+ * Column of the next non-blank line at or after `from`, or -1 when only blank
+ * lines remain.
+ */
+function nextLineColumn(lines: string[], from: number): number {
+  for (let index = from; index < lines.length; index++) {
+    if (lines[index].trim() !== '') {
+      return leadingColumn(lines[index]);
+    }
+  }
+  return -1;
+}
+
+interface FenceScan {
+  /** Open fence marker, '' when no fence is open. */
+  marker: string;
+  /** Content column of the list item that owns the open fence. */
+  fenceContainer: number;
+  /** Content columns of the active list items, outermost first. */
+  containers: number[];
+  /** Whether the innermost list item still has an open paragraph (lazy continuations). */
+  paragraphOpen: boolean;
+  /** Whether the previous lines belong to an indented code block. */
+  indentedCode: boolean;
+  /**
+   * Whether indented code blocks are tracked as code. The escape pass needs them
+   * protected, while the math normalizers must keep treating indented LaTeX as
+   * prose (assistant history emits it that way).
+   */
+  trackIndentedCode: boolean;
+}
+
+/** Fresh scan state for one document or block. */
+function createFenceScan(trackIndentedCode = true): FenceScan {
+  return {
+    marker: '',
+    fenceContainer: 0,
+    containers: [],
+    paragraphOpen: false,
+    indentedCode: false,
+    trackIndentedCode,
+  };
+}
+
+/** Content column the line is measured against: innermost list item, or the document. */
+function containerColumn(scan: FenceScan): number {
+  return scan.containers.length > 0 ? scan.containers[scan.containers.length - 1] : 0;
+}
+
+/** Fence marker opened by `content`, or '' when the text is not a fence opener. */
+function fenceMarkerOf(content: string): string {
+  const fence = FENCE_LINE_RE.exec(content);
+  if (!fence) return '';
+  // A backtick fence cannot carry a backtick in its info string.
+  return fence[1][0] !== '`' || !fence[2].includes('`') ? fence[1] : '';
+}
+
+/**
+ * Scan one line, updating fence and list-container state the way marked parses
+ * containers.
+ *
+ * The scanner keeps a stack of list-item content columns instead of one indent,
+ * so a fence nested to any depth is measured against the item that owns it.
+ * Indentation is counted in columns with four-column tab stops, and a lazy
+ * continuation line (paragraph text that is not indented into the item) keeps
+ * the enclosing list alive instead of dropping it.
+ *
+ * @param line one markdown line
+ * @param scan mutable scan state
+ * @returns true when the line belongs to a code block (fenced or indented)
+ */
+function scanLine(line: string, scan: FenceScan): boolean {
+  const content = lineContent(line);
+
+  if (scan.marker) {
+    // shortcut: an unindented line inside a list item's fence stays code even where
+    // marked ends the item (its tags can then vanish); following marked would turn
+    // the rest of the answer into one code block whenever the closer is unindented.
+    const fence = FENCE_LINE_RE.exec(content);
+    const indentation = leadingColumn(line) - scan.fenceContainer;
+    if (
+      fence
+      && fence[1][0] === scan.marker[0]
+      && fence[1].length >= scan.marker.length
+      && !fence[2].trim()
+      && indentation <= 3
+    ) {
+      scan.marker = '';
+    }
+    return true;
+  }
+
+  if (content === '') {
+    // Blank lines close paragraphs but not list items or indented code blocks.
+    scan.paragraphOpen = false;
+    return scan.indentedCode;
+  }
+
+  const column = leadingColumn(line);
+
+  if (scan.indentedCode) {
+    if (column - containerColumn(scan) >= 4) {
+      return true;
+    }
+    scan.indentedCode = false;
+  }
+
+  // Dedent out of list items this line is not indented into. A paragraph line
+  // that continues the innermost item lazily keeps the stack alive.
+  while (scan.containers.length > 0 && column < containerColumn(scan)) {
+    const lazyContinuation = scan.paragraphOpen
+      && !LIST_MARKER_RE.test(content)
+      && !fenceMarkerOf(content)
+      && !ITEM_END_RE.test(content);
+    if (lazyContinuation) {
+      break;
+    }
+    scan.containers.pop();
+  }
+
+  const base = containerColumn(scan);
+  const relative = column - base;
+
+  if (relative >= 0 && relative <= 3) {
+    const marker = fenceMarkerOf(content);
+    if (marker) {
+      scan.marker = marker;
+      scan.fenceContainer = base;
+      scan.paragraphOpen = false;
+      return true;
+    }
+
+    const listItem = LIST_MARKER_RE.exec(content);
+    if (listItem) {
+      const markerWidth = listItem[1].length;
+      const gapWidth = columnWidth(listItem[2], column + markerWidth);
+      // Five or more spaces leave the content one space past the marker; the
+      // remaining spaces make a fence there an indented code block, not a fence.
+      const contentColumn = column + markerWidth + (gapWidth > 4 ? 1 : gapWidth);
+      scan.containers.push(contentColumn);
+      const afterMarker = listItem[3];
+      if (gapWidth > 4) {
+        if (!scan.trackIndentedCode) {
+          scan.paragraphOpen = false;
+          return false;
+        }
+        scan.indentedCode = true;
+        scan.paragraphOpen = false;
+        return true;
+      }
+      const inlineFence = fenceMarkerOf(afterMarker);
+      if (inlineFence) {
+        scan.marker = inlineFence;
+        scan.fenceContainer = contentColumn;
+        scan.paragraphOpen = false;
+        return true;
+      }
+      scan.paragraphOpen = afterMarker.trim() !== '';
+      return false;
+    }
+  }
+
+  if (relative >= 4 && !scan.paragraphOpen) {
+    if (!scan.trackIndentedCode) {
+      scan.paragraphOpen = true;
+      return false;
+    }
+    scan.indentedCode = true;
+    return true;
+  }
+
+  scan.paragraphOpen = true;
+  return false;
 }
 
 function getFenceState(source: string) {
-  let marker = '';
+  const scan = createFenceScan();
   let closed = 0;
   for (const line of source.split('\n')) {
-    const nextMarker = nextFenceMarker(line, marker);
-    if (marker && !nextMarker) closed++;
-    marker = nextMarker;
+    const previous = scan.marker;
+    scanLine(line, scan);
+    if (previous && !scan.marker) closed++;
   }
-  return { open: marker !== '', marker, closed };
+  return { open: scan.marker !== '', marker: scan.marker, container: scan.fenceContainer, closed };
 }
 
 function useStreamingHighlightSource(source: string, isStreamingTail: boolean) {
@@ -767,7 +1000,13 @@ const BlockSection = memo(function BlockSection({
     if (!button) return;
     const code = button.closest('.code-block-wrapper')?.querySelector('pre code');
     const index = Array.from(event.currentTarget.querySelectorAll('pre code')).indexOf(code as HTMLElement);
-    const token = marked.lexer(source).filter(token => token.type === 'code')[index];
+    // Lex the text the renderer parses (raw tags can open HTML blocks that hide a
+    // fence) and walk nested tokens, so code tokens line up with rendered blocks.
+    const codeTokens: Token[] = [];
+    marked.walkTokens(marked.lexer(prepareMarkdown(source)), (token) => {
+      if (token.type === 'code') codeTokens.push(token);
+    });
+    const token = codeTokens[index];
     if (!token || token.type !== 'code') return;
     event.preventDefault();
     event.stopPropagation();

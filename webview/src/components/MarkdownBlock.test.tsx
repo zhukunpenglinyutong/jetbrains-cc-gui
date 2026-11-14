@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+// happy-dom drops the first element DOMPurify >=3.4.17 sanitizes; jsdom and Chromium do not.
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import hljs from 'highlight.js/lib/core';
@@ -6,6 +8,12 @@ import {
   resetLinkifyCapabilities,
   setLinkifyCapabilities,
 } from '../utils/linkifyCapabilities';
+
+// jsdom has no Clipboard API; the copy tests spy on this stub.
+Object.defineProperty(navigator, 'clipboard', {
+  configurable: true,
+  value: { writeText: async () => {} },
+});
 
 const bridgeMocks = vi.hoisted(() => ({
   openBrowser: vi.fn(),
@@ -304,6 +312,77 @@ describe('MarkdownBlock linkify integration', () => {
     expect(markdownLink.classList.contains('url-link')).toBe(true);
   });
 
+  it('routes markdown file links through openFile and shows file tooltips', () => {
+    bridgeMocks.resolveFilePathWithCallback.mockImplementation((path: string, callback: (result: string | null) => void) => {
+      callback(path);
+    });
+
+    render(
+      <MarkdownBlock content={'Open [Foo.cs](Assets/GameScripts/Foo.cs#L12)'} />,
+    );
+
+    const fileLink = screen.getByRole('link', { name: 'Foo.cs' });
+    expect(fileLink.classList.contains('file-link')).toBe(true);
+    expect(fileLink.getAttribute('data-linkify')).toBe('file');
+    expect(fileLink.getAttribute('data-file-path')).toBe('Assets/GameScripts/Foo.cs:12');
+
+    fireEvent.mouseOver(fileLink, {
+      clientX: 10,
+      clientY: 10,
+    });
+    expect(bridgeMocks.resolveFilePathWithCallback).toHaveBeenCalledWith(
+      'Assets/GameScripts/Foo.cs:12',
+      expect.any(Function),
+    );
+    expect(document.querySelector('.file-link-tooltip')?.textContent).toBe('Assets/GameScripts/Foo.cs:12');
+
+    fireEvent.click(fileLink);
+    expect(bridgeMocks.openFile).toHaveBeenCalledWith('Assets/GameScripts/Foo.cs:12');
+  });
+
+  it('opens line fragments on paths with spaces and non-ASCII names', () => {
+    render(
+      <MarkdownBlock content={'[a.ts](/Users/me/CCGUI%20%E9%A1%B9%E7%9B%AE/src/a.ts#L12) [Foo.cs](Assets/%E8%84%9A%E6%9C%AC/Foo.cs#L3-L9)'} />,
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: 'a.ts' }));
+    expect(bridgeMocks.openFile).toHaveBeenLastCalledWith('/Users/me/CCGUI%20%E9%A1%B9%E7%9B%AE/src/a.ts:12');
+
+    const relativeLink = screen.getByRole('link', { name: 'Foo.cs' });
+    expect(relativeLink.classList.contains('file-link')).toBe(true);
+    fireEvent.click(relativeLink);
+    expect(bridgeMocks.openFile).toHaveBeenLastCalledWith('Assets/%E8%84%9A%E6%9C%AC/Foo.cs:3-9');
+  });
+
+  it('strips the href of a custom protocol even with a line fragment', () => {
+    const { container } = render(
+      <MarkdownBlock content={'[run](javascript:alert(1)//x.cs#L1)'} />,
+    );
+
+    expect(container.querySelector('a[href^="javascript"]')).toBeNull();
+  });
+
+  it('escapes raw anchors, so message text cannot author data-file-path', () => {
+    const { container } = render(
+      <MarkdownBlock content={'<a href="#top" data-file-path="/etc/hosts">harmless</a>'} />,
+    );
+
+    expect(container.querySelector('a')).toBeNull();
+  });
+
+  it('preserves standalone markdown file links with colon line suffixes', () => {
+    render(
+      <MarkdownBlock content={'Open [Foo.cs](Foo.cs:12)'} />,
+    );
+
+    const fileLink = screen.getByRole('link', { name: 'Foo.cs' });
+    expect(fileLink.getAttribute('href')).toBe('Foo.cs:12');
+    expect(fileLink.getAttribute('data-file-path')).toBe('Foo.cs:12');
+
+    fireEvent.click(fileLink);
+    expect(bridgeMocks.openFile).toHaveBeenCalledWith('Foo.cs:12');
+  });
+
   it('renders LaTeX math while preserving dollar signs in code blocks', () => {
     render(
       <MarkdownBlock
@@ -558,6 +637,20 @@ describe('MarkdownBlock linkify integration', () => {
       'com.github.claudecodegui.handler.file.OpenFileHandler',
     );
     expect(bridgeMocks.openBrowser).toHaveBeenCalledWith('https://example.com/docs');
+  });
+
+  it('previews a linked image without letting the link navigate the webview', () => {
+    const { container } = render(
+      <MarkdownBlock content="[![build](https://example.com/badge.png)](https://example.com/repo)" />
+    );
+
+    const image = container.querySelector('a img');
+    expect(image).not.toBeNull();
+    const defaultAllowed = fireEvent.click(image!);
+
+    expect(defaultAllowed).toBe(false);
+    expect(container.querySelector('.image-preview-overlay')).not.toBeNull();
+    expect(bridgeMocks.openBrowser).not.toHaveBeenCalled();
   });
 
   it('strips system-internal XML tags (context, commit_analysis, etc.)', () => {
@@ -961,5 +1054,244 @@ describe('MarkdownBlock linkify integration', () => {
     const paragraphs = document.querySelectorAll('.md-block > p');
     expect(paragraphs[0].textContent).toBe('Intro.');
     expect(paragraphs[paragraphs.length - 1].textContent).toBe('Outro.');
+  });
+
+  it('syntax-highlights Dart fences and the flutter alias', () => {
+    // Dart is Flutter's language, so both tags should reach the dart grammar
+    // instead of falling back to plain text.
+    const snippet = [
+      'class Counter extends StatelessWidget {',
+      '  const Counter({super.key, required this.count});',
+      '  final int count;',
+      '}',
+    ].join('\n');
+
+    const view = render(
+      <MarkdownBlock content={'```dart\n' + snippet + '\n```'} />,
+    );
+    const dartCode = view.container.querySelector('pre code');
+    expect(dartCode?.className).toContain('language-dart');
+    expect(dartCode?.querySelectorAll('.hljs-keyword').length).toBeGreaterThan(0);
+    expect(dartCode?.textContent).toContain('StatelessWidget');
+
+    view.rerender(<MarkdownBlock content={'```flutter\n' + snippet + '\n```'} />);
+    const flutterCode = view.container.querySelector('pre code');
+    expect(flutterCode?.className).toContain('language-flutter');
+    expect(flutterCode?.querySelectorAll('.hljs-keyword').length).toBeGreaterThan(0);
+  });
+
+  it('renders fenced code blocks indented under list items', () => {
+    // Issue #2046: a fence indented 4+ spaces under a list item used to be split
+    // into its own block, miss the 0-3 space fence rule, and render as an
+    // indented code block with visible backticks and escaped generics.
+    const ordered = [
+      '1. Step one:',
+      '',
+      '    ```dart',
+      '    List<Widget> items = <Widget>[];',
+      '    Map<String, int> m = {};',
+      '    ```',
+      '',
+      '2. Step two',
+    ].join('\n');
+
+    const view = render(<MarkdownBlock content={ordered} />);
+    const code = view.container.querySelector('pre code');
+    expect(code?.className).toContain('language-dart');
+    expect(code?.querySelectorAll('span[class*="hljs-"]').length).toBeGreaterThan(0);
+    expect(code?.textContent).toContain('List<Widget> items = <Widget>[];');
+    expect(code?.textContent).not.toContain('```');
+    // The block belongs to the list item that owns it, not to the document root.
+    expect(view.container.querySelector('ol > li pre code')).not.toBeNull();
+
+    const unordered = [
+      '- Step one:',
+      '',
+      '    ```dart',
+      '    final items = <Widget>[];',
+      '    ```',
+    ].join('\n');
+
+    view.rerender(<MarkdownBlock content={unordered} />);
+    const unorderedCode = view.container.querySelector('pre code');
+    expect(unorderedCode?.className).toContain('language-dart');
+    expect(unorderedCode?.textContent).toContain('final items = <Widget>[];');
+    expect(unorderedCode?.textContent).not.toContain('```');
+    expect(view.container.querySelector('ul > li pre code')).not.toBeNull();
+
+    // While the fence is still open the tail must not leak backticks either.
+    view.rerender(
+      <MarkdownBlock content={'- Step one:\n\n    ```dart\n    final items = <Widget>[];'} isStreaming />,
+    );
+    const streamingCode = view.container.querySelector('pre code');
+    expect(streamingCode?.textContent).toContain('final items = <Widget>[];');
+    expect(streamingCode?.textContent).not.toContain('```');
+  });
+
+  it('renders a fenced code block nested in a sub-list', () => {
+    const nested = [
+      '- Parent:',
+      '  - Child:',
+      '',
+      '    ```dart',
+      '    final items = <Widget>[];',
+      '    ```',
+    ].join('\n');
+
+    const view = render(<MarkdownBlock content={nested} />);
+    const code = view.container.querySelector('pre code');
+    expect(code?.className).toContain('language-dart');
+    expect(code?.textContent).toContain('final items = <Widget>[];');
+    expect(code?.textContent).not.toContain('```');
+    expect(view.container.querySelector('ul ul li pre code')).not.toBeNull();
+  });
+
+  it('renders a fence that opens on the list-marker line', () => {
+    // The opener follows the marker on the same line, so the scanner must look
+    // past "- " before testing for a fence.
+    const content = ['- ```dart', '  final items = <Widget>[];', '  ```'].join('\n');
+
+    const view = render(<MarkdownBlock content={content} />);
+    const code = view.container.querySelector('li pre code');
+    expect(code?.className).toContain('language-dart');
+    expect(code?.textContent).toContain('final items = <Widget>[];');
+    expect(code?.textContent).not.toContain('```');
+
+    view.rerender(<MarkdownBlock content={'- ```dart\n  final items = <Widget>[];'} isStreaming />);
+    const streamingCode = view.container.querySelector('li pre code');
+    expect(streamingCode?.textContent).toContain('final items = <Widget>[];');
+    expect(streamingCode?.textContent).not.toContain('```');
+  });
+
+  it('renders a fence nested four list levels deep', () => {
+    const content = [
+      '- Level one:',
+      '  - Level two:',
+      '    - Level three:',
+      '      - Level four:',
+      '',
+      '        ```dart',
+      '        final items = <Widget>[];',
+      '        ```',
+    ].join('\n');
+
+    const view = render(<MarkdownBlock content={content} />);
+    const code = view.container.querySelector('pre code');
+    expect(code?.className).toContain('language-dart');
+    expect(code?.textContent).toContain('final items = <Widget>[];');
+    expect(code?.textContent).not.toContain('```');
+    expect(view.container.querySelector('ul ul ul ul li pre code')).not.toBeNull();
+  });
+
+  it('renders a tab-indented fence inside a list item', () => {
+    const content = ['- Step:', '', '\t```dart', '\tfinal items = <Widget>[];', '\t```'].join('\n');
+
+    const view = render(<MarkdownBlock content={content} />);
+    const code = view.container.querySelector('li pre code');
+    expect(code?.className).toContain('language-dart');
+    expect(code?.textContent).toContain('final items = <Widget>[];');
+    expect(code?.textContent).not.toContain('```');
+  });
+
+  it('keeps a fence inside its list item after a lazy continuation line', () => {
+    // An unindented paragraph line still belongs to the item; dropping the list
+    // state there moved the following fence out of the item.
+    const content = [
+      '- Step one',
+      'lazy continuation',
+      '',
+      '  ```dart',
+      '  final items = <Widget>[];',
+      '  ```',
+    ].join('\n');
+
+    const view = render(<MarkdownBlock content={content} />);
+    const code = view.container.querySelector('li pre code');
+    expect(code?.className).toContain('language-dart');
+    expect(code?.textContent).toContain('final items = <Widget>[];');
+    expect(code?.textContent).not.toContain('```');
+  });
+
+  it('does not double-escape an indented code block', () => {
+    // Five spaces after the marker put four spaces past the item's content
+    // column: CommonMark (and marked) parse that as an indented code block.
+    // The escape pass must leave it to marked, which escapes the tags once.
+    const content = [
+      '-     ```dart',
+      '      final items = <Widget>[];',
+      '      ```',
+    ].join('\n');
+
+    const view = render(<MarkdownBlock content={content} />);
+    const code = view.container.querySelector('li pre code');
+    expect(code?.textContent).toContain('final items = <Widget>[];');
+    expect(code?.textContent).not.toContain('&lt;Widget&gt;');
+  });
+
+  it('keeps a fence owned by an outer item in its list after a deeper sub-item', () => {
+    // The blank line is inside "1. Step" even though the fence is shallower
+    // than "- sub"; splitting there renders the fence as indented code.
+    const content = ['1. Step', '    - sub', '', '    ```bash', '    npm i <pkg>', '    ```'].join('\n');
+
+    const view = render(<MarkdownBlock content={content} />);
+    const code = view.container.querySelector('pre code');
+    expect(code?.className).toContain('language-bash');
+    expect(code?.textContent).toContain('npm i <pkg>');
+    expect(code?.textContent).not.toContain('```');
+    expect(code?.closest('li')?.parentElement?.tagName).toBe('OL');
+  });
+
+  it('does not flash an empty code block below a list item while its fence streams', () => {
+    // The temporary closing fence must sit inside the item; at column 0 marked
+    // ends the item there and opens a second, empty fence.
+    const view = render(
+      <MarkdownBlock content={'- Step one:\n\n    ```dart\n    final items = <Widget>[];'} isStreaming />,
+    );
+    expect(view.container.querySelectorAll('pre')).toHaveLength(1);
+
+    view.rerender(<MarkdownBlock content={'- ```dart\n  final items = <Widget>[];'} isStreaming />);
+    expect(view.container.querySelectorAll('pre')).toHaveLength(1);
+  });
+
+  it('copies the latest code of a fence nested in a list before highlighting catches up', async () => {
+    vi.useFakeTimers();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    const view = render(<MarkdownBlock content={'- Step\n\n  ```unknown\n  first'} isStreaming />);
+    view.rerender(<MarkdownBlock content={'- Step\n\n  ```unknown\n  first\n  latest'} isStreaming />);
+    fireEvent.click(view.container.querySelector('.copy-code-btn') as HTMLElement);
+    await act(async () => {});
+    expect(writeText).toHaveBeenLastCalledWith('first\nlatest\n');
+  });
+
+  it('copies the right block when a tag line precedes fences nested in a list', async () => {
+    // Raw "<Widget>" alone on a line opens an HTML block that swallows the first
+    // fence; the copy lookup must lex the escaped text the renderer parses.
+    vi.useFakeTimers();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    const content = '- <Widget>\n  ```dart\n  A\n  ```\n\n  ```dart\n  B';
+    const view = render(<MarkdownBlock content={content} isStreaming />);
+    view.rerender(<MarkdownBlock content={`${content}\n  B2`} isStreaming />);
+    const buttons = view.container.querySelectorAll('.copy-code-btn');
+    fireEvent.click(buttons[0] as HTMLElement);
+    await act(async () => {});
+    expect(writeText).toHaveBeenLastCalledWith('A\n');
+    fireEvent.click(buttons[1] as HTMLElement);
+    await act(async () => {});
+    expect(writeText).toHaveBeenLastCalledWith('B\nB2\n');
+  });
+
+  it('ends a list at a heading, quote or rule instead of reading it as a lazy line', () => {
+    // marked ends the item at these lines, so the 4-space line below is indented
+    // code that marked escapes once; a list kept open escaped it as prose first.
+    for (const breaker of ['---', '# Heading', '> quote']) {
+      const view = render(
+        <MarkdownBlock content={`- Option A\n  - fast\n${breaker}\n\n  Then run:\n\n    cat <file>`} />,
+      );
+      expect(view.container.querySelector('pre code')?.textContent).toContain('cat <file>');
+      view.unmount();
+    }
+
+    const single = render(<MarkdownBlock content={'- a\n# Heading\n\n  intro\n\n    <Widget>'} />);
+    expect(single.container.querySelector('pre code')?.textContent).toContain('<Widget>');
   });
 });

@@ -11,9 +11,14 @@ import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import type { ClaudeMessage, CodexHistoryPageInfo } from '../../../types';
 import { mergeCodexHistory } from '../../codexHistoryMerge';
 import type { ContextUsageData } from '../../../components/ContextUsageDialog';
+import { isStartupHistoryLoadState } from '../../../types/startupHistory';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import { debugError } from '../../../utils/debug';
-import { clearPendingStreamStart, isPendingStreamStartActive } from '../../../utils/streamLifecycle';
+import {
+  clearPendingStreamStart,
+  isPendingStreamStartActive,
+  scheduleLoadingResyncAfterImmunity,
+} from '../../../utils/streamLifecycle';
 import {
   appendOptimisticMessageIfMissing,
   ensureStreamingAssistantInList,
@@ -116,7 +121,35 @@ export function registerMessageCallbacks(
     closeContextUsageDialog,
     currentSessionIdRef,
     setRestoredSessionTitle,
+    setStartupHistoryLoadState,
   } = options;
+
+  window.updateStartupHistoryLoadState = (json: string) => {
+    try {
+      const next = JSON.parse(json) as unknown;
+      if (!isStartupHistoryLoadState(next)) return;
+      if (currentSessionIdRef.current && next.sessionId !== currentSessionIdRef.current) return;
+      setStartupHistoryLoadState((previous) => {
+        if (previous?.sessionId === next.sessionId && previous.generation > next.generation) {
+          return previous;
+        }
+        if (previous?.sessionId === next.sessionId && previous.generation === next.generation
+          && (previous.status === 'loaded' || previous.status === 'missing'
+            || (previous.status === 'loading' && next.status === 'unloaded'))) {
+          return previous;
+        }
+        return next;
+      });
+    } catch {
+      // Ignore malformed native state; a later refresh or retry will replace it.
+    }
+  };
+
+  if (window.__pendingStartupHistoryLoadState) {
+    const pending = window.__pendingStartupHistoryLoadState;
+    window.__pendingStartupHistoryLoadState = undefined;
+    window.updateStartupHistoryLoadState(pending);
+  }
 
   const ensureStreamingAssistantPreserved = (prevList: ClaudeMessage[], resultList: ClaudeMessage[]): ClaudeMessage[] => {
     const { list, streamingIndex } = ensureStreamingAssistantInList(
@@ -743,7 +776,10 @@ export function registerMessageCallbacks(
     // must not reset the loading state the newly dispatched turn just
     // claimed, or the queue drain dispatches the next item while the
     // previous send is still booting (overlapping turns on one Codex thread).
+    // The swallowed reset may also be the new turn's own, so re-check with
+    // the backend once the window closes.
     if (!isLoading && isPendingStreamStartActive()) {
+      scheduleLoadingResyncAfterImmunity();
       return;
     }
     if (!isLoading) clearPendingStreamStart();
@@ -786,7 +822,12 @@ export function registerMessageCallbacks(
     if (!summary || !summary.trim()) return;
     setStatus(summary);
   };
-  window.setHistoryData = (data) => setHistoryData(data);
+  window.setHistoryData = (data) => {
+    // A delayed reload for a different provider must not replace the visible history.
+    if (typeof data !== 'function' && data?.provider && options.currentProviderRef?.current
+        && data.provider !== options.currentProviderRef.current) return;
+    setHistoryData(data);
+  };
 
   const pendingStatus = (window as unknown as Record<string, unknown>).__pendingStatusText;
   if (typeof pendingStatus === 'string' && pendingStatus.length > 0) {

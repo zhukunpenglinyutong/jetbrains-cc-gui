@@ -18,6 +18,10 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -40,9 +44,8 @@ public class CodexHistoryReaderRefactorTest {
      * real ~/.codemoss/config.json. Point it at an empty config so the exact-cost assertions
      * below stay hermetic regardless of local custom pricing.
      *
-     * The SessionIndexCache memory cache keys the "__all__" entry without a sessionsDir
-     * dimension, so one test's scan would otherwise be served to the next; clear it around
-     * each test.
+     * Clear the shared in-memory index around each test and isolate the disk index
+     * so no test can reuse history metadata from another test or the developer's files.
      */
     @Before
     public void isolateCustomPricingFromLocalConfig() throws IOException {
@@ -59,6 +62,63 @@ public class CodexHistoryReaderRefactorTest {
         SessionIndexCache.getInstance().clearAll();
         Files.deleteIfExists(pricingIsolationDir);
         deleteDirectory(indexCacheIsolationDir);
+    }
+
+    /** Startup creates the bridge before the configured WSL Node path is applied. */
+    @Test
+    public void restoreUsesWslHistoryWhenHomeChangesAfterReaderConstruction() throws IOException {
+        Path roots = Files.createTempDirectory("codex-history-late-wsl-home");
+        try {
+            Path windows = roots.resolve("windows/sessions");
+            Path wsl = roots.resolve("wsl/sessions");
+            Path rollout = writeSessionFile(wsl, "11111111-1111-4111-8111-111111111111",
+                    line("2026-11-11T10:00:00Z", "session_meta", "{\"id\":\"11111111-1111-4111-8111-111111111111\",\"cwd\":\"/workspace/demo\"}"),
+                    line("2026-11-11T10:00:01Z", "event_msg", "{\"type\":\"user_message\",\"message\":\"saved in WSL\"}"),
+                    line("2026-11-11T10:00:02Z", "response_item", "{\"type\":\"message\"}"));
+            AtomicReference<Path> activeRoot = new AtomicReference<>(windows);
+            CodexHistoryReader reader = new CodexHistoryReader(activeRoot::get, gson,
+                    new SessionIndexManager(indexCacheIsolationDir));
+            activeRoot.set(wsl);
+            assertEquals(rollout.toRealPath(), reader.resolveSessionFile("11111111-1111-4111-8111-111111111111"));
+            assertTrue(reader.getSessionMessagesAsJson("11111111-1111-4111-8111-111111111111").contains("saved in WSL"));
+            assertEquals(1, reader.readAllSessions().size());
+            AtomicInteger records = new AtomicInteger();
+            assertEquals(3, reader.forEachSessionMessage("11111111-1111-4111-8111-111111111111", ignored -> records.incrementAndGet()));
+            assertEquals(3, records.get());
+        } finally {
+            deleteDirectory(roots);
+        }
+    }
+
+    /** A preliminary local scan must not pin subsequent WSL transcript reads to Windows. */
+    @Test
+    public void historyReadersFollowHomeChangesAfterAnEarlierRead() throws IOException {
+        Path roots = Files.createTempDirectory("codex-history-switch-home");
+        try {
+            Path windows = roots.resolve("windows/sessions");
+            Path wsl = roots.resolve("wsl/sessions");
+            writeSessionFile(windows, "22222222-2222-4222-8222-222222222222",
+                    line("2026-11-11T10:00:00Z", "session_meta", "{\"id\":\"22222222-2222-4222-8222-222222222222\",\"cwd\":\"/workspace/demo\"}"),
+                    line("2026-11-11T10:00:01Z", "event_msg", "{\"type\":\"user_message\",\"message\":\"Windows transcript\"}"),
+                    line("2026-11-11T10:00:02Z", "response_item", "{\"type\":\"message\"}"));
+            Path rollout = writeSessionFile(wsl, "22222222-2222-4222-8222-222222222222",
+                    line("2026-11-11T10:00:00Z", "session_meta", "{\"id\":\"22222222-2222-4222-8222-222222222222\",\"cwd\":\"/workspace/demo\"}"),
+                    line("2026-11-11T10:00:01Z", "event_msg", "{\"type\":\"user_message\",\"message\":\"WSL transcript\"}"),
+                    line("2026-11-11T10:00:02Z", "response_item", "{\"type\":\"message\"}"));
+            AtomicReference<Path> activeRoot = new AtomicReference<>(windows);
+            CodexHistoryReader reader = new CodexHistoryReader(activeRoot::get, gson,
+                    new SessionIndexManager(indexCacheIsolationDir));
+            assertTrue(reader.getSessionMessagesAsJson("22222222-2222-4222-8222-222222222222").contains("Windows transcript"));
+            assertEquals(1, reader.readAllSessions().size());
+            activeRoot.set(wsl);
+            String restored = reader.getSessionMessagesAsJson("22222222-2222-4222-8222-222222222222");
+            assertTrue(restored.contains("WSL transcript"));
+            assertFalse(restored.contains("Windows transcript"));
+            assertEquals(rollout.toRealPath(), reader.resolveSessionFile("22222222-2222-4222-8222-222222222222"));
+            assertEquals("WSL transcript", reader.readAllSessions().get(0).title);
+        } finally {
+            deleteDirectory(roots);
+        }
     }
 
     @Test
@@ -219,6 +279,37 @@ public class CodexHistoryReaderRefactorTest {
             assertEquals(2, messages.size());
             assertEquals("event_msg", messages.get(0).type);
             assertEquals("response_item", messages.get(1).type);
+        } finally {
+            deleteDirectory(sessionsDir);
+        }
+    }
+
+    @Test
+    public void sessionServiceStopsDeliveringMessagesAfterCancellation() throws IOException {
+        Path sessionsDir = Files.createTempDirectory("codex-history-cancel");
+        try {
+            writeSessionFile(
+                    sessionsDir,
+                    "session-cancel",
+                    line("2026-03-10T10:00:00Z", "event_msg",
+                            "{\"type\":\"user_message\",\"message\":\"first\"}"),
+                    line("2026-03-10T10:01:00Z", "response_item",
+                            "{\"type\":\"message\",\"role\":\"assistant\",\"content\":[]}"));
+            CodexHistorySessionService service = new CodexHistorySessionService(sessionsDir, gson);
+            AtomicBoolean cancelled = new AtomicBoolean();
+            AtomicInteger delivered = new AtomicInteger();
+
+            try {
+                service.forEachSessionMessage("session-cancel", cancelled::get, message -> {
+                    delivered.incrementAndGet();
+                    cancelled.set(true);
+                });
+                org.junit.Assert.fail("cancelled history read must stop before the next record");
+            } catch (CancellationException expected) {
+                // Expected: the second record is never delivered.
+            }
+
+            assertEquals(1, delivered.get());
         } finally {
             deleteDirectory(sessionsDir);
         }

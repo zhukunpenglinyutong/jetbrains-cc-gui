@@ -7,6 +7,7 @@
  */
 
 import type { MutableRefObject } from 'react';
+import type { StartupHistoryLoadState } from '../../types/startupHistory';
 import { forceWebviewRepaint } from '../../utils/forceWebviewRepaint';
 
 export interface ResetTransientUiStateOptions {
@@ -38,6 +39,12 @@ export interface ResetTransientUiStateOptions {
    * queued messages from firing into a freshly cleared/replaced session.
    */
   clearQueuedMessages?: () => void;
+
+  /**
+   * Drops the restored-history banner. Java retires the restore on every
+   * session swap, so its state never belongs to the session that follows.
+   */
+  setStartupHistoryLoadState?: (state: StartupHistoryLoadState | null) => void;
 }
 
 /**
@@ -58,6 +65,7 @@ export const buildResetTransientUiState = (opts: ResetTransientUiStateOptions) =
     if (opts.clearQueuedMessages) {
       opts.clearQueuedMessages();
     }
+    opts.setStartupHistoryLoadState?.(null);
     opts.isStreamingRef.current = false;
     opts.useBackendStreamingRenderRef.current = false;
     opts.streamingMessageIndexRef.current = -1;
