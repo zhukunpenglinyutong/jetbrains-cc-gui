@@ -1339,7 +1339,8 @@
     "invalidJsonConfig": "Неверный формат JSON",
     "providerAdded": "Провайдер добавлен",
     "providerUpdated": "Провайдер обновлён",
-    "providerDeleted": "Провайдер удалён"
+    "providerDeleted": "Провайдер удалён",
+    "codexSettingsDispatchFailed": "Не удалось отправить настройки Codex в IDE. Откройте чат заново и повторите попытку."
   },
   "config": {
     "clickToCopy": "Нажмите для копирования",

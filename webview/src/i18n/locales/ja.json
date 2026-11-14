@@ -1322,7 +1322,8 @@
     "invalidJsonConfig": "無効なJSON設定形式",
     "providerAdded": "プロバイダーを追加しました",
     "providerUpdated": "プロバイダーを更新しました",
-    "providerDeleted": "プロバイダーを削除しました"
+    "providerDeleted": "プロバイダーを削除しました",
+    "codexSettingsDispatchFailed": "Codex の設定を IDE に送信できません。チャットを開き直して、もう一度お試しください。"
   },
   "config": {
     "clickToCopy": "クリックしてコピー",

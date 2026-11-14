@@ -28,7 +28,6 @@ import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.TabStateService;
-import com.intellij.util.concurrency.AppExecutorUtil;
 import com.github.claudecodegui.ui.ChatWindowDelegate;
 import com.github.claudecodegui.ui.DraftCacheKeys;
 import com.github.claudecodegui.ui.EditorContextTracker;
@@ -40,7 +39,13 @@ import com.github.claudecodegui.ui.detached.DetachedWindowManager;
 import com.github.claudecodegui.util.HtmlLoader;
 import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.util.ProjectTrust;
 import com.github.claudecodegui.util.ThemeConfigService;
+import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
+import com.intellij.notification.Notification;
+import com.intellij.notification.NotificationAction;
+import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationType;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -68,10 +73,6 @@ import java.awt.event.WindowEvent;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -170,11 +171,7 @@ public class ClaudeChatWindow {
     private final PendingFileReferencesBuffer pendingFileReferencesBuffer =
             new PendingFileReferencesBuffer();
     private volatile boolean slashCommandsFetched = false;
-    private final AtomicLong restoredHistoryLoadGeneration = new AtomicLong();
-    private final AtomicReference<RestoredHistoryLoadRequest> activeRestoredHistoryLoad =
-            new AtomicReference<>();
-    private final RestoredHistorySession<ClaudeSession> restoredHistory = new RestoredHistorySession<>();
-    private volatile JsonObject restoredHistoryLoadState;
+    private final RestoredHistoryLoader restoredHistoryLoader;
 
     // Shared serializer for structured bridges (Gson instances are thread-safe).
     private static final Gson GSON = new Gson();
@@ -242,6 +239,32 @@ public class ClaudeChatWindow {
         this(project, false);
     }
 
+    private static void showUntrustedProjectNotice(Project project) {
+        Notification notification = NotificationGroupManager.getInstance()
+                .getNotificationGroup("CC GUI Notifications")
+                .createNotification(ClaudeCodeGuiBundle.message("notification.untrustedProject.claudeSettings"),
+                        NotificationType.WARNING);
+        if (ProjectTrust.canRequestTrust()) {
+            notification.addAction(NotificationAction.createSimpleExpiring(
+                    ClaudeCodeGuiBundle.message("notification.untrustedProject.trustAction"),
+                    () -> ProjectTrust.requestTrust(
+                            project,
+                            ClaudeCodeGuiBundle.message("notification.untrustedProject.dialogTitle"),
+                            ClaudeCodeGuiBundle.message("notification.untrustedProject.dialogMessage"),
+                            ClaudeCodeGuiBundle.message("notification.untrustedProject.dialogTrust"),
+                            ClaudeCodeGuiBundle.message("notification.untrustedProject.dialogDistrust"))));
+        }
+        notification.notify(project);
+    }
+
+    private static void showOutsideWorkingDirectoryNotice(Project project) {
+        NotificationGroupManager.getInstance()
+                .getNotificationGroup("CC GUI Notifications")
+                .createNotification(ClaudeCodeGuiBundle.message("notification.untrustedWorkingDirectory.claudeSettings"),
+                        NotificationType.WARNING)
+                .notify(project);
+    }
+
     public ClaudeChatWindow(Project project, boolean skipRegister) {
         this(project, skipRegister, true);
     }
@@ -250,6 +273,10 @@ public class ClaudeChatWindow {
     public ClaudeChatWindow(Project project, boolean skipRegister, boolean initializeWebview) {
         this.project = project;
         this.claudeSDKBridge = new ClaudeSDKBridge();
+        this.claudeSDKBridge.setProjectTrustSupplier(
+                cwd -> ProjectTrust.isTrustedForClaude(project, cwd,
+                        ClaudeChatWindow::showUntrustedProjectNotice,
+                        ClaudeChatWindow::showOutsideWorkingDirectoryNotice));
         this.codexSDKBridge = new CodexSDKBridge();
         this.grokSDKBridge = new GrokSDKBridge();
         this.zcodeSDKBridge = new ZcodeSDKBridge();
@@ -263,6 +290,33 @@ public class ClaudeChatWindow {
                 this.kimiCliBridge, this.openCodeCliBridge, this.piCliBridge,
                 this.ompCliBridge, new DshCliBridge(), this.miniMaxCliBridge);
         this.settingsService = new CodemossSettingsService();
+        this.restoredHistoryLoader = new RestoredHistoryLoader(settingsService, new RestoredHistoryLoader.Host() {
+            @Override
+            public ClaudeSession currentSession() {
+                return session;
+            }
+
+            @Override
+            public boolean isFrontendReady() {
+                return frontendReady;
+            }
+
+            @Override
+            public boolean isDisposed() {
+                return disposed;
+            }
+
+            @Override
+            public boolean callJavaScript(String functionName, String... args) {
+                return ClaudeChatWindow.this.callJavaScript(functionName, args);
+            }
+
+            @Override
+            public void exposeReplacementSession() {
+                sessionId = resolveExposedSessionId(null, permissionServiceKey);
+                persistTabSessionState();
+            }
+        });
         this.htmlLoader = new HtmlLoader(getClass());
         this.mainPanel = new JPanel(new BorderLayout());
         this.surfaceFrameFence = new SurfaceFrameFence(new SurfaceFrameFence.Listener() {
@@ -446,7 +500,7 @@ public class ClaudeChatWindow {
                     sessionCallbackAdapter.deactivate();
                 }
                 // Every session swap starts here; the frontend drops the banner on the following clearMessages.
-                ClaudeChatWindow.this.retireRestoredHistory();
+                restoredHistoryLoader.retire();
             }
 
             @Override
@@ -1718,8 +1772,7 @@ public class ClaudeChatWindow {
         }
         String restoredSupplier = "codex".equals(session.getProvider()) ? savedState.codexSupplierId : savedState.claudeSupplierId;
         session.setSessionInfo(restoredSessionId, restoredCwd, null, restoredSupplier);
-        restoredHistory.bind(session, restoredSessionId);
-        restoredHistoryLoadState = null;
+        restoredHistoryLoader.bind(session, restoredSessionId);
         chatWindowDelegate.restoreUnread(sameProject && savedState.unread);
         persistTabSessionState();
 
@@ -1732,263 +1785,20 @@ public class ClaudeChatWindow {
         if (session != null && isNonEmpty(session.getSessionId())
                 && TabSessionRestorePolicy.shouldLoadImmediately(
                         savedState, loadImmediately, settingsService.isLoadHistoryOnStartup())) {
-            loadRestoredHistoryIfNeeded(savedState);
+            restoredHistoryLoader.loadIfNeeded(savedState);
         }
     }
 
-    public synchronized void loadRestoredHistoryIfNeeded() {
-        if (!isRestoredHistorySessionCurrent() || !frontendReady) {
-            return;
-        }
-        RestoredHistoryLoadRequest active = activeRestoredHistoryLoad.get();
-        if (active != null) {
-            publishRestoredHistoryState("loading", active, null, null, 0, false);
-            return;
-        }
-        if (restoredHistory.wasAttempted()) {
-            // Activation or a reloaded webview may replay an outcome, but retry
-            // remains an explicit user action after failure, timeout or cancel.
-            JsonObject previous = restoredHistoryLoadState;
-            if (previous != null) {
-                callJavaScript("updateStartupHistoryLoadState", JsUtils.escapeJs(previous.toString()));
-            }
-            return;
-        }
-        if (!settingsService.isLoadHistoryOnStartup()) {
-            publishRestoredHistoryState("unloaded", null, null, null, 0, true);
-            return;
-        }
-        startRestoredHistoryLoad();
-    }
-
-    private void loadRestoredHistoryIfNeeded(TabStateService.TabSessionState savedState) {
-        if (!TabSessionRestorePolicy.shouldStartHistoryLoad(savedState, frontendReady, settingsService.isLoadHistoryOnStartup())
-                || session == null || !isNonEmpty(session.getSessionId())) {
-            return;
-        }
-        loadRestoredHistoryIfNeeded();
+    public void loadRestoredHistoryIfNeeded() {
+        restoredHistoryLoader.loadIfNeeded();
     }
 
     public void loadRestoredHistoryManually() {
-        if (!frontendReady || !isRestoredHistorySessionCurrent()) {
-            publishRestoredHistoryState("failed", null, "HISTORY_LOAD_SESSION_CHANGED",
-                    "The restored session is no longer active", 0, false);
-            return;
-        }
-        startRestoredHistoryLoad();
+        restoredHistoryLoader.loadManually();
     }
 
     public void cancelRestoredHistoryLoad(String requestId) {
-        RestoredHistoryLoadRequest request = activeRestoredHistoryLoad.get();
-        if (request == null || requestId == null || !request.requestId().equals(requestId.trim())) {
-            return;
-        }
-        if (request.cancel(RestoredHistoryLoadRequest.CANCELLED)) {
-            request.completeExceptionally(
-                    new java.util.concurrent.CancellationException("History loading was cancelled"));
-        }
-    }
-
-    private synchronized void startRestoredHistoryLoad() {
-        ClaudeSession restoringSession = session;
-        if (restoringSession == null || !isRestoredHistorySessionCurrent()) {
-            return;
-        }
-        String restoringSessionId = restoringSession.getSessionId();
-        long generation = restoredHistoryLoadGeneration.get() + 1;
-        RestoredHistoryLoadRequest request = new RestoredHistoryLoadRequest(generation,
-                () -> isRestoredHistoryRequestCurrent(generation, restoringSession, restoringSessionId));
-        if (!activeRestoredHistoryLoad.compareAndSet(null, request)) {
-            RestoredHistoryLoadRequest active = activeRestoredHistoryLoad.get();
-            if (active != null) {
-                publishRestoredHistoryState("loading", active, null, null, 0, false);
-            }
-            return;
-        }
-        restoredHistoryLoadGeneration.set(generation);
-        restoredHistory.markAttempted();
-
-        publishRestoredHistoryState("loading", request, null, null, 0, false);
-        long loadStartedNanos = System.nanoTime();
-        CompletableFuture<Void> loadFuture;
-        try {
-            loadFuture = restoringSession.loadFromServer(request);
-        } catch (RuntimeException error) {
-            completeRestoredHistoryLoad(request, restoringSession, restoringSessionId, error, loadStartedNanos);
-            return;
-        }
-        int timeoutSeconds = settingsService.getHistoryLoadTimeoutSeconds();
-        request.bind(loadFuture, AppExecutorUtil.getAppScheduledExecutorService(), timeoutSeconds);
-        loadFuture.whenComplete((ignored, error) -> {
-            completeRestoredHistoryLoad(request, restoringSession, restoringSessionId, error, loadStartedNanos);
-        });
-    }
-
-    private synchronized void completeRestoredHistoryLoad(RestoredHistoryLoadRequest request, ClaudeSession restoringSession,
-                                             String restoringSessionId, Throwable error, long loadStartedNanos) {
-        if (!activeRestoredHistoryLoad.compareAndSet(request, null)) {
-            return;
-        }
-        if (request.wasCommitted()) {
-            restoredHistory.markCommitted(restoringSession, restoringSessionId);
-        }
-        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - loadStartedNanos);
-        ApplicationManager.getApplication().invokeLater(() -> onRestoredHistoryLoadFinished(
-                request, restoringSession, restoringSessionId, error, elapsedMillis));
-    }
-
-    private void onRestoredHistoryLoadFinished(RestoredHistoryLoadRequest request, ClaudeSession restoringSession,
-                                              String restoringSessionId, Throwable error, long elapsedMillis) {
-        if (disposed || session != restoringSession || activeRestoredHistoryLoad.get() != null
-                || restoredHistoryLoadGeneration.get() != request.generation()) {
-            return;
-        }
-        if (request.wasCommitted() && !isNonEmpty(restoringSession.getSessionId())) {
-            sessionId = resolveExposedSessionId(null, permissionServiceKey);
-            persistTabSessionState();
-            callJavaScript("historyLoadComplete", "0");
-            publishRestoredHistoryState("missing", request, "HISTORY_LOAD_NOT_FOUND",
-                    "The session history no longer exists. A new session is ready.", 0, false);
-            restoredHistory.complete(restoringSession, restoringSessionId);
-            return;
-        }
-        if (!restoringSessionId.equals(restoringSession.getSessionId())) {
-            return;
-        }
-        if (request.wasCommitted()) {
-            int messageCount = restoringSession.getMessages().size();
-            LOG.info("[TabRestore] Restored history load completed: provider="
-                    + restoringSession.getProvider() + ", status=loaded, elapsedMs=" + elapsedMillis);
-            callJavaScript("historyLoadComplete", String.valueOf(messageCount));
-            publishRestoredHistoryState("loaded", request, null, null, messageCount, false);
-            restoredHistory.complete(restoringSession, restoringSessionId);
-            return;
-        }
-        String errorCode = request.cancellationCode();
-        if (errorCode == null) {
-            errorCode = error == null ? RestoredHistoryLoadRequest.SUPERSEDED : historyLoadErrorCode(error);
-        }
-        String message = error != null ? errorMessage(error) : "History was not committed; retry loading";
-        String status = (RestoredHistoryLoadRequest.TIMEOUT.equals(errorCode)
-                || "HISTORY_LOAD_PROVIDER_TIMEOUT".equals(errorCode)) ? "timeout"
-                : RestoredHistoryLoadRequest.CANCELLED.equals(errorCode) ? "cancelled" : "failed";
-        LOG.warn("[TabRestore] Restored history load ended: provider="
-                + restoringSession.getProvider() + ", status=" + status
-                + ", errorCode=" + errorCode + ", elapsedMs=" + elapsedMillis, error);
-        callJavaScript("historyLoadComplete");
-        publishRestoredHistoryState(status, request, errorCode, message, 0, true);
-    }
-
-    /** A session swap supersedes the restore, so neither its late outcome nor a replay reaches the new session. */
-    private synchronized void retireRestoredHistory() {
-        RestoredHistoryLoadRequest active = activeRestoredHistoryLoad.getAndSet(null);
-        if (active != null) {
-            active.cancel(RestoredHistoryLoadRequest.SUPERSEDED);
-        }
-        restoredHistoryLoadGeneration.incrementAndGet();
-        restoredHistory.retire();
-        restoredHistoryLoadState = null;
-    }
-
-    /** Settles a pending restore once an ordinary reload of the same session committed its transcript. */
-    private void settleRestoredHistoryIfCommitted(ClaudeSession reloaded, long committedBefore) {
-        if (reloaded.getCommittedHistoryLoadCount() > committedBefore) {
-            settleRestoredHistoryAfterOrdinaryLoad(reloaded);
-        }
-    }
-
-    /** A committed same-session reload fulfils the pending restore and replaces its stale banner. */
-    private synchronized void settleRestoredHistoryAfterOrdinaryLoad(ClaudeSession loadedSession) {
-        String loadedSessionId = loadedSession.getSessionId();
-        if (session != loadedSession || !restoredHistory.settleByOrdinaryLoad(loadedSession, loadedSessionId)) {
-            return;
-        }
-        RestoredHistoryLoadRequest active = activeRestoredHistoryLoad.getAndSet(null);
-        if (active != null) {
-            active.cancel(RestoredHistoryLoadRequest.SUPERSEDED);
-        }
-        restoredHistoryLoadGeneration.incrementAndGet();
-        publishRestoredHistoryState("loaded", null, null, null, loadedSession.getMessages().size(), false);
-        restoredHistory.complete(loadedSession, loadedSessionId);
-    }
-
-    private boolean isRestoredHistoryRequestCurrent(long generation, ClaudeSession expectedSession,
-                                                    String expectedSessionId) {
-        RestoredHistoryLoadRequest active = activeRestoredHistoryLoad.get();
-        return !disposed && active != null && active.generation() == generation
-                && session == expectedSession && expectedSessionId.equals(expectedSession.getSessionId());
-    }
-
-    private boolean isRestoredHistorySessionCurrent() {
-        ClaudeSession current = session;
-        return current != null && restoredHistory.isCurrent(current, current.getSessionId());
-    }
-
-    private void publishRestoredHistoryState(String status, RestoredHistoryLoadRequest request,
-                                             String errorCode, String message, int messageCount,
-                                             boolean retryable) {
-        JsonObject payload = new JsonObject();
-        payload.addProperty("status", status);
-        payload.addProperty("sessionId", restoredHistory.sessionId());
-        payload.addProperty("requestId", request != null ? request.requestId() : "");
-        payload.addProperty("generation", request != null ? request.generation() : restoredHistoryLoadGeneration.get());
-        payload.addProperty("messageCount", messageCount);
-        payload.addProperty("retryable", retryable);
-        if (errorCode != null) {
-            payload.addProperty("errorCode", errorCode);
-        }
-        if (message != null) {
-            payload.addProperty("message", message);
-        }
-        restoredHistoryLoadState = payload;
-        callJavaScript("updateStartupHistoryLoadState", JsUtils.escapeJs(payload.toString()));
-    }
-
-    private String errorMessage(Throwable error) {
-        Throwable current = error;
-        while (current.getCause() != null
-                && (current instanceof java.util.concurrent.CompletionException
-                || current instanceof java.util.concurrent.ExecutionException)) {
-            current = current.getCause();
-        }
-        return current.getMessage() != null ? current.getMessage() : current.getClass().getSimpleName();
-    }
-
-    static String historyLoadErrorCode(Throwable error) {
-        Throwable current = error;
-        while (current != null) {
-            if (current instanceof com.github.claudecodegui.session.SessionMessageOrchestrator.HistoryLoadNotCommittedException) {
-                return RestoredHistoryLoadRequest.SUPERSEDED;
-            }
-            if (current instanceof java.util.concurrent.TimeoutException) {
-                return "HISTORY_LOAD_PROVIDER_TIMEOUT";
-            }
-            if (current instanceof java.nio.file.AccessDeniedException || current instanceof SecurityException) {
-                return "HISTORY_LOAD_PERMISSION_DENIED";
-            }
-            if (current instanceof java.nio.file.NoSuchFileException) {
-                return "HISTORY_LOAD_NOT_FOUND";
-            }
-            if (current instanceof com.google.gson.JsonParseException) {
-                return "HISTORY_LOAD_INVALID_DATA";
-            }
-            if (current instanceof java.io.IOException) {
-                String ioMessage = current.getMessage();
-                if (ioMessage != null && ioMessage.toLowerCase(java.util.Locale.ROOT).contains("not found")) {
-                    return "HISTORY_LOAD_NOT_FOUND";
-                }
-                return "HISTORY_LOAD_IO_ERROR";
-            }
-            String detail = current.getMessage();
-            if (detail != null) {
-                String normalized = detail.toLowerCase(java.util.Locale.ROOT);
-                if (normalized.contains("timed out") || normalized.contains("timeout")) {
-                    return "HISTORY_LOAD_PROVIDER_TIMEOUT";
-                }
-            }
-            current = current.getCause();
-        }
-        return "HISTORY_LOAD_PROVIDER_ERROR";
+        restoredHistoryLoader.cancel(requestId);
     }
 
     public void addCodeSnippetFromExternal(String selectionInfo) {
@@ -3124,7 +2934,7 @@ public class ClaudeChatWindow {
             } else {
                 ApplicationManager.getApplication().invokeLater(() -> {
                     if (!disposed) {
-                        settleRestoredHistoryIfCommitted(current, committedBefore);
+                        restoredHistoryLoader.settleIfCommitted(current, committedBefore);
                     }
                 });
             }
@@ -3445,14 +3255,7 @@ public class ClaudeChatWindow {
     }
 
     private void disposeWindowResources() {
-        RestoredHistoryLoadRequest historyRequest = activeRestoredHistoryLoad.getAndSet(null);
-        if (historyRequest != null) {
-            try {
-                historyRequest.cancel(RestoredHistoryLoadRequest.CANCELLED);
-            } catch (Exception | LinkageError error) {
-                LOG.warn("Failed to cancel restored history loading", error);
-            }
-        }
+        restoredHistoryLoader.dispose();
         this.webviewEventQueue.dispose();
         cancelScheduledOsrSurfaceRefresh();
         surfaceRefreshCoordinator.invalidate();
@@ -3760,7 +3563,7 @@ public class ClaudeChatWindow {
                     callJavaScript("historyLoadComplete", "0");
                     return;
                 }
-                settleRestoredHistoryIfCommitted(restoring, committedBefore);
+                restoredHistoryLoader.settleIfCommitted(restoring, committedBefore);
                 int count = restoring.getMessages().size();
                 if (streamCoalescer != null) {
                     // Same lock contract as enqueue: the flush may deep-copy live messages.
@@ -3999,7 +3802,7 @@ public class ClaudeChatWindow {
 
             @Override
             public void retireRestoredHistory() {
-                ClaudeChatWindow.this.retireRestoredHistory();
+                restoredHistoryLoader.retire();
             }
 
             @Override

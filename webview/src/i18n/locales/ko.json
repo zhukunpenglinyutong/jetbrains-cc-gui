@@ -1412,7 +1412,8 @@
     "invalidJsonConfig": "잘못된 JSON 설정 형식",
     "providerAdded": "제공자 추가됨",
     "providerUpdated": "제공자 업데이트됨",
-    "providerDeleted": "제공자 삭제됨"
+    "providerDeleted": "제공자 삭제됨",
+    "codexSettingsDispatchFailed": "Codex 설정을 IDE로 보낼 수 없습니다. 대화를 다시 열고 재시도하세요."
   },
   "config": {
     "clickToCopy": "클릭하여 복사",

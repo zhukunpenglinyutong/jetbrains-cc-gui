@@ -1725,8 +1725,6 @@
     "ompTitle": "OMP has some questions for you",
     "configWarning": "Codex reported a configuration warning. Review the details.",
     "configWarningTitle": "Codex configuration warning",
-    "apiDeprecationWarning": "Codex reported an API compatibility notice. Review the details.",
-    "apiDeprecationTitle": "Codex API compatibility notice",
     "warningDetails": "View details",
     "title": "Claude has some questions for you",
     "progress": "Question {{current}} / {{total}}",
@@ -1779,7 +1777,8 @@
     "invalidJsonConfig": "Invalid JSON config format",
     "providerAdded": "Provider added",
     "providerUpdated": "Provider updated",
-    "providerDeleted": "Provider deleted"
+    "providerDeleted": "Provider deleted",
+    "codexSettingsDispatchFailed": "Cannot send Codex settings to the IDE. Reopen the chat and try again."
   },
   "config": {
     "clickToCopy": "Click to copy",

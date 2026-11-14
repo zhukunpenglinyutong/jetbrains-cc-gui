@@ -88,6 +88,10 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         );
     }
 
+    public void setProjectTrustSupplier(java.util.function.Predicate<String> projectTrust) {
+        requestParamsBuilder.setProjectTrust(projectTrust);
+    }
+
     public void setSessionSupplierResolver(java.util.function.Supplier<String> resolver) {
         this.requestParamsBuilder.setSessionSupplierResolver(resolver);
     }
@@ -141,7 +145,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * Prewarm daemon asynchronously to reduce first-message latency.
      */
     public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch) {
-        daemonCoordinator.prewarmDaemonAsync(normalizeCwdForNode(cwd), runtimeSessionEpoch, null);
+        prewarmDaemonAsync(cwd, runtimeSessionEpoch, null);
     }
 
     /**
@@ -153,7 +157,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * @param sessionId The historical session ID to resume
      */
     public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String sessionId) {
-        daemonCoordinator.prewarmDaemonAsync(normalizeCwdForNode(cwd), runtimeSessionEpoch, sessionId);
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        daemonCoordinator.prewarmDaemonAsync(requestCwd.nodeCwd(), runtimeSessionEpoch, sessionId,
+                requestCwd.projectTrusted());
     }
 
     public void resetPersistentRuntime(String runtimeSessionEpoch) {
@@ -478,14 +484,16 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             boolean ultracode,
             MessageCallback callback
     ) {
-        String normalizedCwd = normalizeCwdForNode(cwd);
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        String normalizedCwd = requestCwd.nodeCwd();
+        boolean projectTrusted = requestCwd.projectTrusted();
 
         // Try daemon mode first (avoids per-request Node.js process spawning)
         DaemonBridge db = daemonCoordinator.getDaemonBridge();
         if (db != null) {
             return sendMessageViaDaemon(db, channelId, message, sessionId, runtimeSessionEpoch, normalizedCwd,
                     attachments, permissionMode, model, openedFiles, agentPrompt,
-                    streaming, disableThinking, reasoningEffort, ultracode, callback);
+                    streaming, disableThinking, reasoningEffort, ultracode, projectTrusted, callback);
         }
 
         // Fallback: per-process mode (spawns a new Node.js process per request)
@@ -505,6 +513,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 disableThinking,
                 reasoningEffort,
                 ultracode,
+                projectTrusted,
                 callback
         );
     }
@@ -541,21 +550,23 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * Get MCP server connection status.
      */
     public CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
-        return mcpQueryService.getMcpServerStatus(normalizeCwdForNode(cwd));
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        return mcpQueryService.getMcpServerStatus(requestCwd.nodeCwd(), requestCwd.projectTrusted());
     }
 
     /**
      * Get MCP server tools list.
      */
     public CompletableFuture<JsonObject> getMcpServerTools(String serverId) {
-        return mcpQueryService.getMcpServerTools(serverId, null);
+        return mcpQueryService.getMcpServerTools(serverId, null, false);
     }
 
     /**
      * Get MCP server tools list with working directory for project-specific config resolution.
      */
     public CompletableFuture<JsonObject> getMcpServerTools(String serverId, String cwd) {
-        return mcpQueryService.getMcpServerTools(serverId, normalizeCwdForNode(cwd));
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        return mcpQueryService.getMcpServerTools(serverId, requestCwd.nodeCwd(), requestCwd.projectTrusted());
     }
 
     // ============================================================================
@@ -601,17 +612,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             return CompletableFuture.completedFuture(error);
         }
 
-        JsonObject params = new JsonObject();
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        JsonObject params = buildContextUsageParams(sessionId, requestCwd, model);
         this.requestParamsBuilder.addSessionSupplier(params);
-        if (sessionId != null && !sessionId.isEmpty()) {
-            params.addProperty("sessionId", sessionId);
-        }
-        if (cwd != null && !cwd.isEmpty()) {
-            params.addProperty("cwd", cwd);
-        }
-        if (model != null && !model.isEmpty()) {
-            params.addProperty("model", model);
-        }
 
         AtomicReference<JsonObject> resultRef = new AtomicReference<>();
         CompletableFuture<JsonObject> resultFuture = new CompletableFuture<>();
@@ -807,6 +810,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             Boolean disableThinking,
             String reasoningEffort,
             boolean ultracode,
+            boolean projectTrusted,
             MessageCallback callback
     ) {
         return daemonRequestExecutor.sendMessageViaDaemon(
@@ -825,8 +829,30 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 disableThinking,
                 reasoningEffort,
                 ultracode,
+                projectTrusted,
                 callback
         );
+    }
+
+    /** The cwd Node runs in, with trust decided on the IDE's form of the same path. */
+    private ClaudeRequestParamsBuilder.RequestCwd resolveRequestCwd(String cwd) {
+        return requestParamsBuilder.resolveRequestCwd(cwd, this::normalizeCwdForNode);
+    }
+
+    static JsonObject buildContextUsageParams(String sessionId, ClaudeRequestParamsBuilder.RequestCwd requestCwd, String model) {
+        JsonObject params = new JsonObject();
+        if (sessionId != null && !sessionId.isEmpty()) {
+            params.addProperty("sessionId", sessionId);
+        }
+        String nodeCwd = requestCwd.nodeCwd();
+        if (nodeCwd != null && !nodeCwd.isEmpty()) {
+            params.addProperty("cwd", nodeCwd);
+        }
+        if (model != null && !model.isEmpty()) {
+            params.addProperty("model", model);
+        }
+        params.addProperty("projectTrusted", requestCwd.projectTrusted());
+        return params;
     }
 
     /**

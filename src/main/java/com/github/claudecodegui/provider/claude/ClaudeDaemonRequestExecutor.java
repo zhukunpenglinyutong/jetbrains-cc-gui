@@ -36,27 +36,6 @@ class ClaudeDaemonRequestExecutor {
         this.outputExtractor = outputExtractor;
     }
 
-    CompletableFuture<SDKResult> sendMessageViaDaemon(
-            DaemonBridge daemon,
-            String channelId,
-            String message,
-            String sessionId,
-            String runtimeSessionEpoch,
-            String cwd,
-            List<ClaudeSession.Attachment> attachments,
-            String permissionMode,
-            String model,
-            JsonObject openedFiles,
-            String agentPrompt,
-            Boolean streaming,
-            Boolean disableThinking,
-            String reasoningEffort,
-            MessageCallback callback
-    ) {
-        return sendMessageViaDaemon(daemon, channelId, message, sessionId, runtimeSessionEpoch, cwd,
-                attachments, permissionMode, model, openedFiles, agentPrompt, streaming,
-                disableThinking, reasoningEffort, false, callback);
-    }
 
     CompletableFuture<SDKResult> sendMessageViaDaemon(
             DaemonBridge daemon,
@@ -74,6 +53,7 @@ class ClaudeDaemonRequestExecutor {
             Boolean disableThinking,
             String reasoningEffort,
             boolean ultracode,
+            boolean projectTrusted,
             MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
@@ -98,7 +78,8 @@ class ClaudeDaemonRequestExecutor {
                         streaming,
                         disableThinking,
                         reasoningEffort,
-                        ultracode
+                        ultracode,
+                        projectTrusted
                 );
 
                 boolean hasAttachments = attachments != null && !attachments.isEmpty() && params.has("attachments");

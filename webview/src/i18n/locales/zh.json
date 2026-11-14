@@ -1720,8 +1720,6 @@
     "ompTitle": "OMP 有一些问题想问你",
     "configWarning": "Codex 部分配置可能未生效，请查看兼容提示详情。",
     "configWarningTitle": "Codex 配置兼容提示",
-    "apiDeprecationWarning": "Codex 返回接口兼容提示，可查看详情。",
-    "apiDeprecationTitle": "Codex 接口兼容提示",
     "warningDetails": "查看详情",
     "title": "Claude 有一些问题想问你",
     "progress": "问题 {{current}} / {{total}}",
@@ -1774,7 +1772,8 @@
     "invalidJsonConfig": "配置 JSON 格式错误，请修正后再保存",
     "providerAdded": "供应商添加成功",
     "providerUpdated": "供应商更新成功",
-    "providerDeleted": "供应商删除成功"
+    "providerDeleted": "供应商删除成功",
+    "codexSettingsDispatchFailed": "无法将 Codex 设置发送到 IDE，请重新打开对话后重试。"
   },
   "config": {
     "clickToCopy": "点击复制",

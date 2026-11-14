@@ -69,14 +69,14 @@ public class RestoredHistoryLoadRequestTest {
     @Test
     public void classifiesHistoryLoadFailuresAcrossWrappedCauses() {
         assertEquals("HISTORY_LOAD_PROVIDER_TIMEOUT",
-                ClaudeChatWindow.historyLoadErrorCode(new CompletionException(new TimeoutException())));
+                RestoredHistoryLoader.historyLoadErrorCode(new CompletionException(new TimeoutException())));
         assertEquals("HISTORY_LOAD_PERMISSION_DENIED",
-                ClaudeChatWindow.historyLoadErrorCode(
+                RestoredHistoryLoader.historyLoadErrorCode(
                         new IllegalStateException(new java.nio.file.AccessDeniedException("history"))));
         assertEquals("HISTORY_LOAD_NOT_FOUND",
-                ClaudeChatWindow.historyLoadErrorCode(
+                RestoredHistoryLoader.historyLoadErrorCode(
                         new IllegalStateException(new java.io.IOException("Session file not found"))));
         assertEquals("HISTORY_LOAD_PROVIDER_ERROR",
-                ClaudeChatWindow.historyLoadErrorCode(new IllegalStateException("provider failed")));
+                RestoredHistoryLoader.historyLoadErrorCode(new IllegalStateException("provider failed")));
     }
 }

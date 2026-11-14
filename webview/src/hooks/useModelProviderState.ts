@@ -70,6 +70,22 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   const [codexSandboxSource, setCodexSandboxSource] = useState<CodexSandboxSource>('default');
   const [codexEffectiveSettings, setCodexEffectiveSettings] = useState<Record<string, unknown> | null>(null);
   const [codexSettingsPending, setCodexSettingsPending] = useState(false);
+  const pendingCodexSettingsRequest = useRef<string | null>(null);
+  const submitCodexSettings = useCallback((settings: {
+    collaborationMode: CodexCollaborationMode;
+    approvalPreset: CodexApprovalPreset;
+    sandboxSelection: CodexSandboxSelection;
+    sandboxSource: CodexSandboxSource;
+  }) => {
+    const requestId = crypto.randomUUID();
+    pendingCodexSettingsRequest.current = requestId;
+    setCodexSettingsPending(true);
+    if (sendBridgeEvent('codex_update_settings', JSON.stringify({ requestId, settings })) === false) {
+      pendingCodexSettingsRequest.current = null;
+      setCodexSettingsPending(false);
+      addToast(t('toast.codexSettingsDispatchFailed'), 'error');
+    }
+  }, [addToast, t]);
 
   // External-facing ref so window callbacks can read the latest provider
   // without re-binding. Mirrored in an effect (bridge callbacks fire async,
@@ -79,15 +95,31 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     currentProviderRef.current = currentProvider;
   }, [currentProvider]);
 
+  // A previous provider's confirmation cannot describe a newly selected runtime.
+  useEffect(() => {
+    setCodexEffectiveSettings(null);
+    pendingCodexSettingsRequest.current = null;
+    setCodexSettingsPending(false);
+  }, [currentProvider]);
+
   // Native settings acknowledgements only become effective after the app
   // server emits thread/settings/updated. Keep that boundary visible to the
   // UI so a mid-turn selection is presented as “next turn” until confirmed.
   useEffect(() => {
     const handleRuntimeEvent = (event: Event) => {
       const detail = (event as CustomEvent<Record<string, unknown>>).detail;
-      if (currentProvider !== 'codex' || !detail || detail.kind !== 'thread/settings/updated'
-        || (detail.rootThreadId && detail.threadId !== detail.rootThreadId)) return;
+      if (currentProvider !== 'codex' || !detail) return;
       const payload = detail.payload;
+      const runtimeState = payload && typeof payload === 'object'
+        ? (payload as Record<string, unknown>).state : undefined;
+      if (detail.kind === 'runtimeReset' || (detail.kind === 'runtimeStateChanged'
+        && typeof runtimeState === 'string'
+        && ['starting', 'initializing', 'draining', 'stopped', 'failed'].includes(runtimeState))) {
+        setCodexEffectiveSettings(null);
+        return;
+      }
+      if (detail.kind !== 'thread/settings/updated'
+        || (detail.rootThreadId && detail.threadId !== detail.rootThreadId)) return;
       setCodexEffectiveSettings(payload && typeof payload === 'object' && !Array.isArray(payload)
         ? payload as Record<string, unknown> : null);
       const settings = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
@@ -99,11 +131,39 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       const expectedReviewer = codexApprovalPreset === 'request' ? 'user' : 'auto_review';
       const matches = collaboration?.mode === codexCollaborationMode && settings.approvalPolicy === expectedPolicy
         && settings.approvalsReviewer === expectedReviewer && (sandboxType === expectedSandbox || sandboxType === codexSandboxSelection);
+      if (matches) pendingCodexSettingsRequest.current = null;
       setCodexSettingsPending((pending) => pending && !matches);
     };
     window.addEventListener('codex-runtime-event', handleRuntimeEvent);
     return () => window.removeEventListener('codex-runtime-event', handleRuntimeEvent);
   }, [currentProvider, codexApprovalPreset, codexCollaborationMode, codexSandboxSelection]);
+
+  useEffect(() => {
+    const handleSettingsResponse = (event: Event) => {
+      if (currentProvider !== 'codex') return;
+      let detail: unknown = (event as CustomEvent<unknown>).detail;
+      if (typeof detail === 'string') {
+        try { detail = JSON.parse(detail); } catch { return; }
+      }
+      if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return;
+      const response = detail as Record<string, unknown>;
+      if (response.requestType !== 'codex_update_settings' || typeof response.error !== 'string'
+        || !pendingCodexSettingsRequest.current || response.requestId !== pendingCodexSettingsRequest.current) return;
+      const requested = response.requestedSettings;
+      if (!requested || typeof requested !== 'object' || Array.isArray(requested)) return;
+      const values = requested as Record<string, unknown>;
+      const expected: Record<string, string> = { collaborationMode: codexCollaborationMode,
+        approvalPreset: codexApprovalPreset, sandboxSelection: codexSandboxSelection };
+      const keys = Object.keys(expected).filter(key => Object.hasOwn(values, key));
+      // A late failure from a previous selection must not clear the current selection's pending state.
+      if (!keys.length || keys.some(key => values[key] !== expected[key])) return;
+      pendingCodexSettingsRequest.current = null;
+      setCodexSettingsPending(false);
+      addToast(response.error, 'error');
+    };
+    window.addEventListener('codex-interaction-response', handleSettingsResponse);
+    return () => window.removeEventListener('codex-interaction-response', handleSettingsResponse);
+  }, [currentProvider, codexApprovalPreset, codexCollaborationMode, codexSandboxSelection, addToast]);
 
   // ── Provider-specific sub-hooks ──
   const claude = useClaudeProvider();
@@ -157,13 +217,10 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     }
     setCodexApprovalPreset(derived.approvalPreset);
     setCodexSandboxSelection(derived.sandboxSelection);
-    setCodexSettingsPending(true);
-    sendBridgeEvent('set_codex_approval_preset', derived.approvalPreset);
-    sendBridgeEvent('set_codex_sandbox_selection', JSON.stringify({
-      selection: derived.sandboxSelection,
-      source: codexSandboxSource,
-    }));
-  }, [currentProvider, codexApprovalPreset, codexPermissionMode, codexSandboxSelection, codexSandboxSource]);
+    submitCodexSettings({ collaborationMode: codexCollaborationMode,
+      approvalPreset: derived.approvalPreset, sandboxSelection: derived.sandboxSelection,
+      sandboxSource: codexSandboxSource });
+  }, [currentProvider, codexApprovalPreset, codexPermissionMode, codexSandboxSelection, codexSandboxSource, codexCollaborationMode, submitCodexSettings]);
 
   const {
     selectedGrokModel, setSelectedGrokModel,
@@ -301,21 +358,18 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       setCodexPermissionMode(mode);
       const collaborationMode: CodexCollaborationMode = mode === 'plan' ? 'plan' : 'default';
       setCodexCollaborationMode(collaborationMode);
-      sendBridgeEvent('set_codex_collaboration_mode', collaborationMode);
       const approvalPreset: CodexApprovalPreset = mode === 'plan'
           || (mode === 'default' && codexCollaborationMode === 'plan') ? codexApprovalPreset : mode === 'auto'
         ? 'auto'
         : mode === 'bypassPermissions' ? 'full-access' : 'request';
       setCodexApprovalPreset(approvalPreset);
-      setCodexSettingsPending(true);
-      sendBridgeEvent('set_codex_approval_preset', approvalPreset);
+      let sandboxSelection = codexSandboxSelection;
+      let sandboxSource = codexSandboxSource;
       if (mode === 'bypassPermissions') {
         setCodexSandboxSelection('danger-full-access');
         setCodexSandboxSource('user');
-        sendBridgeEvent('set_codex_sandbox_selection', JSON.stringify({
-          selection: 'danger-full-access',
-          source: 'user',
-        }));
+        sandboxSelection = 'danger-full-access';
+        sandboxSource = 'user';
       } else if (codexSandboxSelection === 'danger-full-access' && codexSandboxSource !== 'native') {
         // Auto review rejects a full-access sandbox, and default/plan no longer
         // carry bypass semantics — leaving the bypass-installed full-access in
@@ -325,11 +379,10 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
         // selection comes from the user's own Codex config and stays untouched.
         setCodexSandboxSelection('workspace-write');
         setCodexSandboxSource('user');
-        sendBridgeEvent('set_codex_sandbox_selection', JSON.stringify({
-          selection: 'workspace-write',
-          source: 'user',
-        }));
+        sandboxSelection = 'workspace-write';
+        sandboxSource = 'user';
       }
+      submitCodexSettings({ collaborationMode, approvalPreset, sandboxSelection, sandboxSource });
       sendBridgeEvent('set_mode', mode);
       return;
     }
@@ -357,6 +410,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     codexApprovalPreset,
     codexSandboxSelection,
     codexSandboxSource,
+    submitCodexSettings,
     setCodexPermissionMode,
     setCodexCollaborationMode,
     setCodexApprovalPreset,
@@ -382,12 +436,9 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   const handleCodexSandboxSelectionChange = useCallback((mode: CodexSandboxSelection) => {
     setCodexSandboxSelection(mode);
     setCodexSandboxSource('user');
-    setCodexSettingsPending(true);
-    sendBridgeEvent('set_codex_sandbox_selection', JSON.stringify({
-      selection: mode,
-      source: 'user',
-    }));
-  }, [setCodexSandboxSelection, setCodexSandboxSource]);
+    submitCodexSettings({ collaborationMode: codexCollaborationMode, approvalPreset: codexApprovalPreset,
+      sandboxSelection: mode, sandboxSource: 'user' });
+  }, [codexCollaborationMode, codexApprovalPreset, submitCodexSettings, setCodexSandboxSelection, setCodexSandboxSource]);
 
   const handleModelSelect = useCallback((modelId: string) => {
     applyModelSelect(currentProvider, modelId, longContextEnabled, ompRoles, {
@@ -422,6 +473,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   ]);
 
   const handleProviderSelect = useCallback((providerId: string) => {
+    pendingCodexSettingsRequest.current = null;
     setCurrentProvider(providerId);
     sendBridgeEvent('set_provider', providerId);
 

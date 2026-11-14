@@ -211,6 +211,22 @@ export const SCENARIOS = {
       ctx.notify(turnCompleted(turnId));
     },
   },
+  'permission-settings': {
+    async onThreadStart(params, ctx) {
+      ctx.threadSettings = params;
+      ctx.reply(ctx.currentId, { thread: { id: THREAD_ID } });
+    },
+    async onTurnStart(params, ctx) {
+      const turnId = `permission-turn-${ctx.currentId}`;
+      ctx.reply(ctx.currentId, { turn: { id: turnId } });
+      ctx.notify({ method: 'item/completed', params: { threadId: THREAD_ID, turnId,
+        item: { id: 'permission-status', type: 'agentMessage', text: JSON.stringify({
+          threadSandbox: ctx.threadSettings.sandbox, sandboxPolicy: params.sandboxPolicy,
+          approvalPolicy: params.approvalPolicy, approvalsReviewer: params.approvalsReviewer,
+        }) } } });
+      ctx.notify(turnCompleted(turnId));
+    },
+  },
   'service-tier': {
     async onTurnStart(params, ctx) {
       if (Object.hasOwn(params, 'serviceTier')) ctx.nativeTier = normalizedServiceTier(params.serviceTier);

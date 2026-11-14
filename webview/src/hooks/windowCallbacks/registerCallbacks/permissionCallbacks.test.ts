@@ -315,7 +315,17 @@ describe('Codex CLI version notice', () => {
   });
 });
 
-it.each(['configWarning', 'deprecationNotice'])('keeps %s details behind a compact warning without interrupting the question', method => {
+it('drops Codex API deprecation notices without a toast', () => {
+  const { result } = renderHook(() => useDialogManagement({ t }));
+  const addToast = vi.fn();
+  act(() => registerPermissionCallbacks({ ...result.current, addToast,
+    currentProviderRef: { current: 'codex' }, currentSessionIdRef: { current: 'thread' } }));
+  act(() => window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'nativeWarning', threadId: 'thread',
+    payload: { method: 'deprecationNotice', message: 'Full-history hydration is deprecated for paginated threads' } })));
+  expect(addToast).not.toHaveBeenCalled();
+});
+
+it.each(['configWarning'])('keeps %s details behind a compact warning without interrupting the question', method => {
   const { result } = renderHook(() => useDialogManagement({ t }));
   const addToast = vi.fn();
   const showWarning = vi.spyOn(Modal, 'warning').mockReturnValue({ destroy: vi.fn(), update: vi.fn() });
@@ -328,9 +338,7 @@ it.each(['configWarning', 'deprecationNotice'])('keeps %s details behind a compa
   const [message, severity, action] = addToast.mock.calls[0];
   expect(message).not.toContain('disable_response_storage');
   expect(severity).toBe('warning');
-  expect(message).toBe(method === 'configWarning'
-    ? 'Codex reported a configuration warning. Review the details.'
-    : 'Codex reported an API compatibility notice. Review the details.');
+  expect(message).toBe('Codex reported a configuration warning. Review the details.');
   expect(showWarning).not.toHaveBeenCalled();
   action.onClick();
   expect(showWarning).toHaveBeenCalledWith(expect.objectContaining({
