@@ -34,6 +34,53 @@ public class CodexProviderTransportIntegrationTest {
     public TemporaryFolder folder = new TemporaryFolder();
 
     @Test
+    public void nativeOperationMigratesPluginAliasesAndBacksUpTheOriginalBeforeDispatch() throws Exception {
+        try (Fixture fixture = this.fixture("early-notification")) {
+            Path home = Path.of(fixture.scope);
+            String original = "# Keep this original before migration.\nmodel = \"test-model\"\n"
+                    + "[model_aliases]\n\"test-model\" = \"vendor/test-model\"\n";
+            Files.writeString(home.resolve("config.toml"), original);
+            JsonObject result = fixture.bridge.compactCodex("fixture", fixture.cwd.toString(), "th-test-root-0001", fixture.callback)
+                    .get(15, TimeUnit.SECONDS);
+            assertFalse(result.toString(), result.has("error"));
+            assertEquals(original, Files.readString(home.resolve("config.toml.pre-cli-migration.bak")));
+            assertFalse(Files.readString(home.resolve("config.toml")).contains("model_aliases"));
+            assertTrue(Files.readString(home.resolve("config.toml.ccgui")).contains("vendor/test-model"));
+        }
+    }
+
+    /** Every conversation is bound, so the alias separation must not sit behind the supplier branch. */
+    @Test
+    public void boundConversationStillMigratesPluginAliases() throws Exception {
+        try (Fixture fixture = this.fixture("early-notification", new BoundSettings())) {
+            fixture.bridge.setSessionSupplierResolver(() -> "fixture-supplier");
+            Path home = Path.of(fixture.scope);
+            Files.writeString(home.resolve("config.toml"), "model = \"test-model\"\n"
+                    + "[model_aliases]\n\"test-model\" = \"vendor/test-model\"\n");
+            fixture.bridge.compactCodex("fixture", fixture.cwd.toString(), "th-test-root-0001", fixture.callback)
+                    .get(15, TimeUnit.SECONDS);
+            assertFalse(Files.readString(home.resolve("config.toml")).contains("model_aliases"));
+            assertTrue(Files.readString(home.resolve("config.toml.ccgui")).contains("vendor/test-model"));
+        }
+    }
+
+    @Test
+    public void unreadablePluginAliasesDoNotBlockNativeOperations() throws Exception {
+        try (Fixture fixture = this.fixture("early-notification")) {
+            Path home = Path.of(fixture.scope);
+            String config = "model = \"test-model\"\n";
+            String broken = "model_aliases = [\n";
+            Files.writeString(home.resolve("config.toml"), config);
+            Files.writeString(home.resolve("config.toml.ccgui"), broken);
+            JsonObject result = fixture.bridge.compactCodex("fixture", fixture.cwd.toString(), "th-test-root-0001", fixture.callback)
+                    .get(15, TimeUnit.SECONDS);
+            assertFalse(result.toString(), result.has("error"));
+            assertEquals(config, Files.readString(home.resolve("config.toml")));
+            assertEquals(broken, Files.readString(home.resolve("config.toml.ccgui")));
+        }
+    }
+
+    @Test
     public void concurrentPageAnswersDispatchOnlyOneNativeDecision() throws Exception {
         try (Fixture fixture = fixture("async-question")) {
             CompletableFuture<SDKResult> send = fixture.send();
@@ -488,12 +535,16 @@ public class CodexProviderTransportIntegrationTest {
     }
 
     private Fixture fixture(String scenario) throws Exception {
+        return this.fixture(scenario, new FixtureSettings("cli_login"));
+    }
+
+    private Fixture fixture(String scenario, CodemossSettingsService settings) throws Exception {
         Path root = this.folder.newFolder(scenario).toPath();
         Path cwd = Files.createDirectory(root.resolve("workspace"));
         Path trace = root.resolve("trace.ndjson");
         AtomicReference<Process> process = new AtomicReference<>();
         CodexFixtureDaemon daemon = new CodexFixtureDaemon(Path.of(System.getProperty("user.dir")), root, scenario, trace, process);
-        CodexSDKBridge bridge = new CodexSDKBridge(root, new FixtureSettings("cli_login"), () -> daemon, root.toString());
+        CodexSDKBridge bridge = new CodexSDKBridge(root, settings, () -> daemon, root.toString());
         return new Fixture(bridge, daemon, cwd, trace, process, root.toString());
     }
 
@@ -508,6 +559,18 @@ public class CodexProviderTransportIntegrationTest {
 
         @Override
         public String getCodexRuntimeAccessMode() { return this.access; }
+
+        @Override
+        public JsonObject getActiveCodexProvider() { return new JsonObject(); }
+    }
+
+    private static final class BoundSettings extends CodemossSettingsService {
+        @Override
+        public List<JsonObject> getCodexProviders() {
+            JsonObject supplier = new JsonObject();
+            supplier.addProperty("id", "fixture-supplier");
+            return List.of(supplier);
+        }
 
         @Override
         public JsonObject getActiveCodexProvider() { return new JsonObject(); }

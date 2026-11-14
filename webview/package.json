@@ -10,6 +10,7 @@
     "postbuild": "node scripts/copy-dist.mjs",
     "test": "node --test scripts/copy-dist.test.mjs && vitest run && tsc -p tsconfig.test.json --noEmit",
     "pretest:e2e": "npm run build",
+    "test:tokentracker": "node scripts/run-tokentracker-contract.mjs",
     "test:e2e": "playwright test",
     "preview": "vite preview"
   },

@@ -25,6 +25,7 @@ import java.util.stream.Stream;
  * Uses lite-read strategy for efficient metadata extraction.
  */
 class ClaudeHistoryIndexService {
+    private static final com.google.gson.Gson HISTORY_GSON = new com.google.gson.Gson();
 
     private static final Logger LOG = Logger.getInstance(ClaudeHistoryIndexService.class);
 
@@ -215,9 +216,63 @@ class ClaudeHistoryIndexService {
         return new ArrayList<>(sessions.subList(fromIndex, toIndex));
     }
 
-    /**
-     * Legacy method without pagination for backward compatibility.
-     */
+    private record TranscriptStamp(java.nio.file.attribute.FileTime modified, long size) { }
+    private record CachedRepositorySessions(Map<Path, TranscriptStamp> files,
+            List<ClaudeHistoryReader.SessionInfo> sessions) { }
+    private static final java.util.concurrent.ConcurrentHashMap<Path, CachedRepositorySessions> REPOSITORY_SESSIONS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private List<ClaudeHistoryReader.SessionInfo> cachedRepositorySessions(Path directory) throws IOException {
+        Map<Path, TranscriptStamp> files = new HashMap<>();
+        try (Stream<Path> paths = Files.list(directory)) {
+            for (Path path : paths.filter(p -> p.toString().endsWith(".jsonl")).toList()) {
+                BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
+                if (attributes.isRegularFile()) {
+                    files.put(path, new TranscriptStamp(attributes.lastModifiedTime(), attributes.size()));
+                }
+            }
+        }
+        CachedRepositorySessions cached = REPOSITORY_SESSIONS.get(directory);
+        if (cached != null && cached.files().equals(files)) {
+            return cached.sessions();
+        }
+        var sessions = scanProjectSessionsLite(directory, 0, 0).sessions;
+        if (REPOSITORY_SESSIONS.size() > 512) {
+            REPOSITORY_SESSIONS.clear();
+        }
+        REPOSITORY_SESSIONS.put(directory, new CachedRepositorySessions(files, sessions));
+        return sessions;
+    }
+
+    /** Includes other project directories only when their recorded cwd matches the extra predicate. */
+    List<ClaudeHistoryReader.SessionInfo> readProjectSessions(String projectPath,
+            java.util.function.Predicate<String> additionalMatch) throws IOException {
+        List<ClaudeHistoryReader.SessionInfo> sessions = new ArrayList<>(readProjectSessions(projectPath));
+        if (additionalMatch == null || !Files.isDirectory(projectsDir)) {
+            return sessions;
+        }
+        Set<String> currentKeys = new HashSet<>(PathUtils.getSanitizedPathCandidates(projectPath));
+        try (Stream<Path> directories = Files.list(projectsDir)) {
+            for (Path directory : directories.filter(Files::isDirectory).toList()) {
+                if (currentKeys.contains(directory.getFileName().toString())) {
+                    continue;
+                }
+                try {
+                    for (ClaudeHistoryReader.SessionInfo session : cachedRepositorySessions(directory)) {
+                        if (additionalMatch.test(session.cwd)) {
+                            ClaudeHistoryReader.SessionInfo row = HISTORY_GSON.fromJson(HISTORY_GSON.toJson(session), ClaudeHistoryReader.SessionInfo.class);
+                            row.requiresCwdConfirmation = true;
+                            sessions.add(row);
+                        }
+                    }
+                } catch (IOException error) {
+                    LOG.debug("Skipping unavailable history directory " + directory, error);
+                }
+            }
+        }
+        return mergeSessions(sessions);
+    }
+
     List<ClaudeHistoryReader.SessionInfo> readProjectSessions(String projectPath) throws IOException {
         return readProjectSessions(projectPath, 0, 0);
     }
@@ -570,6 +625,7 @@ class ClaudeHistoryIndexService {
         session.firstTimestamp = liteInfo.createdAt;
         session.fileSize = liteInfo.fileSize;
         session.entrypoint = liteInfo.entrypoint;
+        session.cwd = liteInfo.cwd;
         return session;
     }
 

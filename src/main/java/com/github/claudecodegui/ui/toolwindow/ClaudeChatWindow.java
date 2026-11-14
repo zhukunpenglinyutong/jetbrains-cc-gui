@@ -364,6 +364,9 @@ public class ClaudeChatWindow {
 
         this.session = new ClaudeSession(
                 project, claudeSDKBridge, codexSDKBridge, cliBridges, grokSDKBridge, zcodeSDKBridge);
+        // Bind to the installed session, never to temporary lifecycle/default sessions.
+        this.claudeSDKBridge.setSessionSupplierResolver(() -> this.session.getState().getRuntimeSupplierId("claude"));
+        this.codexSDKBridge.setSessionSupplierResolver(() -> this.session.getState().getRuntimeSupplierId("codex"));
 
         this.chatWindowDelegate = new ChatWindowDelegate(createDelegateHost());
         chatWindowDelegate.loadPermissionModeFromSettings();
@@ -483,6 +486,20 @@ public class ClaudeChatWindow {
             }
 
             @Override
+            public void invalidatePendingHistoryLoads() {
+                if (historyHandler != null) {
+                    historyHandler.invalidatePendingLoads();
+                }
+            }
+
+            @Override
+            public void clearReplacedHistory() {
+                if (historyHandler != null) {
+                    historyHandler.clearCodexHistory();
+                }
+            }
+
+            @Override
             public void setSlashCommandsFetched(boolean fetched) {
                 slashCommandsFetched = fetched;
             }
@@ -572,7 +589,7 @@ public class ClaudeChatWindow {
             }
 
             persistTabSessionState();
-            chatWindowDelegate.refreshUnreadBadge();
+            chatWindowDelegate.refreshTabIndicator();
         }
     }
 
@@ -1670,6 +1687,8 @@ public class ClaudeChatWindow {
         target.setModel(source.getModel());
         target.setPermissionMode(source.getPermissionMode());
         target.setReasoningEffort(source.getReasoningEffort());
+        target.setClaudeUltracode(source.isClaudeUltracode());
+        target.setOmpApprovalMode(source.getOmpApprovalMode());
     }
 
     public SessionLifecycleManager getSessionLifecycleManager() {
@@ -1683,6 +1702,12 @@ public class ClaudeChatWindow {
 
         if (savedState.permissionMode != null && !savedState.permissionMode.trim().isEmpty()) {
             session.setPermissionMode(savedState.permissionMode);
+        }
+        if (savedState.claudeSupplierId != null) {
+            session.getState().setSupplierId("claude", savedState.claudeSupplierId);
+        }
+        if (savedState.codexSupplierId != null) {
+            session.getState().setSupplierId("codex", savedState.codexSupplierId);
         }
         if (savedState.provider != null && !savedState.provider.trim().isEmpty()) {
             session.setProvider(savedState.provider);
@@ -1711,6 +1736,8 @@ public class ClaudeChatWindow {
         if (savedState.reasoningEffort != null && !savedState.reasoningEffort.trim().isEmpty()) {
             session.setReasoningEffort(savedState.reasoningEffort);
         }
+        session.setClaudeUltracode(savedState.claudeUltracode);
+        session.getState().setOmpApprovalMode(savedState.ompApprovalMode);
 
         boolean sameProject = TabSessionRestorePolicy.matchesProjectIdentity(
                 savedState,
@@ -1725,7 +1752,8 @@ public class ClaudeChatWindow {
                     + savedState.projectPath + ", currentProject="
                     + (project != null ? project.getBasePath() : null));
         }
-        session.setSessionInfo(restoredSessionId, restoredCwd);
+        String restoredSupplier = "codex".equals(session.getProvider()) ? savedState.codexSupplierId : savedState.claudeSupplierId;
+        session.setSessionInfo(restoredSessionId, restoredCwd, null, restoredSupplier);
         restoredHistory.bind(session, restoredSessionId);
         restoredHistoryLoadState = null;
         chatWindowDelegate.restoreUnread(sameProject && savedState.unread);
@@ -2729,6 +2757,14 @@ public class ClaudeChatWindow {
             return;
         }
         if (dispatcher.dispatch(type, content)) {
+            if ("set_claude_ultracode".equals(type) || "set_reasoning_effort".equals(type)) {
+                ClaudeSession configuredSession = this.session;
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (!this.disposed && this.session == configuredSession) {
+                        this.persistTabSessionState();
+                    }
+                });
+            }
             return;
         }
 
@@ -2760,6 +2796,13 @@ public class ClaudeChatWindow {
                     }
 
                     @Override
+                    public void onTurnFailed() {
+                        if (!disposed && session == callbackSession) {
+                            chatWindowDelegate.onTurnFailed();
+                        }
+                    }
+
+                    @Override
                     public void callJavaScript(String functionName, String... args) {
                         ClaudeChatWindow.this.callJavaScript(functionName, args);
                     }
@@ -2771,10 +2814,15 @@ public class ClaudeChatWindow {
             /** Keeps window identity and persisted tabs aligned with the bound session. */
             @Override
             public void onSessionIdReceived(String newSessionId) {
+                onSessionIdReceived(newSessionId, null);
+            }
+
+            @Override
+            public void onSessionIdReceived(String newSessionId, String transitionToken) {
                 if (newSessionId == null || ClaudeChatWindow.this.session != callbackSession) {
                     return;
                 }
-                super.onSessionIdReceived(newSessionId);
+                super.onSessionIdReceived(newSessionId, transitionToken);
                 String exposedSessionId = resolveExposedSessionId(newSessionId, ClaudeChatWindow.this.permissionServiceKey);
                 if (exposedSessionId.equals(ClaudeChatWindow.this.sessionId)) {
                     return;
@@ -2909,6 +2957,11 @@ public class ClaudeChatWindow {
                     var adapter = sessionCallbackAdapter;
                     String currentSessionId = session != null ? session.getSessionId() : null;
                     if (currentSessionId == null || !currentSessionId.equals(taskSessionId)) {
+                        return;
+                    }
+                    String taskEpoch = data.has("runtimeSessionEpoch") && data.get("runtimeSessionEpoch").isJsonPrimitive()
+                            ? data.get("runtimeSessionEpoch").getAsString() : null;
+                    if (taskEpoch != null && !taskEpoch.equals(session.getRuntimeSessionEpoch())) {
                         return;
                     }
                     if (adapter != null && data.has("taskEvent") && !data.get("taskEvent").isJsonNull()) {
@@ -3250,6 +3303,10 @@ public class ClaudeChatWindow {
         if (project == null || project.isDisposed() || session == null) {
             return;
         }
+        var supplierBindings = com.github.claudecodegui.settings.SessionSupplierStateService.getInstance();
+        if (supplierBindings != null) {
+            supplierBindings.saveSupplier(session.getProvider(), session.getSessionId(), session.getState().getSupplierId(session.getProvider()));
+        }
 
         int tabIndex = getTabIndex();
         if (tabIndex < 0) {
@@ -3265,7 +3322,11 @@ public class ClaudeChatWindow {
         snapshot.model = session.getModel();
         snapshot.permissionMode = session.getPermissionMode();
         snapshot.reasoningEffort = session.getReasoningEffort();
+        snapshot.claudeSupplierId = session.getState().getSupplierId("claude");
+        snapshot.codexSupplierId = session.getState().getSupplierId("codex");
+        snapshot.ompApprovalMode = session.getState().getOmpApprovalMode();
         snapshot.unread = chatWindowDelegate.hasUnread();
+        snapshot.claudeUltracode = session.isClaudeUltracode();
 
         TabStateService.getInstance(project).saveTabSessionState(tabIndex, snapshot);
     }
@@ -3846,6 +3907,7 @@ public class ClaudeChatWindow {
             @Override
             public void setHandlerContext(HandlerContext ctx) {
                 handlerContext = ctx;
+                ctx.setSessionPreferencesChanged(ClaudeChatWindow.this::persistTabSessionState);
             }
 
             @Override

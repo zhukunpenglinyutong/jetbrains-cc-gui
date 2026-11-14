@@ -1,13 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SPECIAL_PROVIDER_IDS, type CodexProviderConfig, type ProviderConfig } from '../../../types/provider';
-import { sendBridgeEvent } from '../../../utils/bridge';
-import {
-  subscribeActiveCodexProvider,
-  subscribeActiveProvider,
-  subscribeCodexProviderList,
-  subscribeProviderList,
-} from '../../../utils/runtimeProviderCapabilities';
+import { SPECIAL_PROVIDER_IDS } from '../../../types/provider';
+import { useSessionSupplier } from '../../../contexts/SessionSupplierContext';
+import type { SupplierEntry } from '../../../hooks/useSessionSuppliers';
 import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 
 const DISABLED_OPTION_STYLE: React.CSSProperties = { cursor: 'default' };
@@ -20,32 +15,21 @@ interface RuntimeProviderSelectProps {
   embedded?: boolean;
   triggerRef?: React.RefObject<HTMLElement | null>;
   onClose?: () => void;
-  onProviderSwitched?: (providerName: string) => void;
+  onProviderSwitched?: (providerName: string, appliesNextTurn: boolean) => void;
 }
 
-type RuntimeProvider = ProviderConfig | CodexProviderConfig;
-
-type ProviderKind = 'claude' | 'codex';
-
-const isProviderKind = (provider: string): provider is ProviderKind => provider === 'claude' || provider === 'codex';
-
-const parseProviderList = (json: string): RuntimeProvider[] => {
-  const parsed = JSON.parse(json);
-  return Array.isArray(parsed) ? parsed : [];
-};
-
 /**
- * RuntimeProviderSelect - lightweight active-provider switcher for current engine.
- * Claude mode switches Claude Code providers; Codex mode switches Codex providers.
+ * Uses the chat's shared supplier controller, including its session binding fence.
+ * This menu never changes the default supplier in global configuration.
  */
 export const RuntimeProviderSelect = ({ currentProvider, embedded = false, triggerRef, onClose, onProviderSwitched }: RuntimeProviderSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [providersByKind, setProvidersByKind] = useState<Record<ProviderKind, RuntimeProvider[]>>({
-    claude: [],
-    codex: [],
-  });
+  const controller = useSessionSupplier();
+  const session = controller?.provider === currentProvider ? controller : null;
+  const visibleProviders = session?.suppliers ?? [];
+  const loading = !session || session.pending;
+  const selectionVersion = useRef(0);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { positionedStyle, maxHeight: viewportMaxHeight, maxWidth, recalculate } = useDropdownPosition({
@@ -56,15 +40,10 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, trigg
     maxWidth: 360,
   });
 
-  const providerKind: ProviderKind = currentProvider === 'codex' ? 'codex' : 'claude';
-  const visibleProviders = providersByKind[providerKind];
-  const activeProvider = useMemo(
-    () => visibleProviders.find((provider) => provider.isActive),
-    [visibleProviders]
-  );
+  const activeProvider = visibleProviders.find(provider => provider.id === session?.supplierId);
 
-  const getProviderDisplayName = useCallback((provider: RuntimeProvider, kind: ProviderKind) => {
-    if (kind === 'claude') {
+  const getProviderDisplayName = useCallback((provider: SupplierEntry) => {
+    if (currentProvider === 'claude') {
       if (provider.id === SPECIAL_PROVIDER_IDS.LOCAL_SETTINGS) {
         return t('settings.provider.localProviderName');
       }
@@ -76,108 +55,45 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, trigg
       }
     }
 
-    if (kind === 'codex' && provider.id === SPECIAL_PROVIDER_IDS.CODEX_CLI_LOGIN) {
+    if (currentProvider === 'codex' && provider.id === SPECIAL_PROVIDER_IDS.CODEX_CLI_LOGIN) {
       return t('settings.codexProvider.dialog.cliLoginProviderName');
     }
 
     return provider.name || provider.id;
-  }, [t]);
+  }, [t, currentProvider]);
 
-  const requestProviders = useCallback((kind: ProviderKind) => {
-    setLoading(true);
-    sendBridgeEvent(kind === 'codex' ? 'get_codex_providers' : 'get_providers');
-  }, []);
+  const refresh = session?.refresh;
 
   const handleToggle = useCallback((event: React.MouseEvent) => {
     event.stopPropagation();
-    if (!isProviderKind(currentProvider)) {
+    if (currentProvider !== 'claude' && currentProvider !== 'codex') {
       return;
     }
     const nextOpen = !isOpen;
     setIsOpen(nextOpen);
     if (nextOpen) {
       recalculate();
-      requestProviders(providerKind);
+      refresh?.();
     }
-  }, [currentProvider, isOpen, providerKind, recalculate, requestProviders]);
+  }, [currentProvider, isOpen, recalculate, refresh]);
 
-  const handleSelect = useCallback((provider: RuntimeProvider) => {
-    const eventName = providerKind === 'codex' ? 'switch_codex_provider' : 'switch_provider';
-    sendBridgeEvent(eventName, JSON.stringify({ id: provider.id }));
-    onProviderSwitched?.(getProviderDisplayName(provider, providerKind));
-    setProvidersByKind((previous) => ({
-      ...previous,
-      [providerKind]: previous[providerKind].map((item) => ({
-        ...item,
-        isActive: item.id === provider.id,
-      })),
-    }));
+  const handleSelect = useCallback(async (provider: SupplierEntry) => {
+    if (!session || loading || !provider.available) return;
+    if (provider.id === session.supplierId) {
+      setIsOpen(false);
+      onClose?.();
+      return;
+    }
+    const version = ++selectionVersion.current;
+    const switched = await session.selectSupplier(provider.id);
+    // Closing the menu or changing conversations must not emit a late success toast.
+    if (!switched || version !== selectionVersion.current) return;
+    onProviderSwitched?.(getProviderDisplayName(provider), session.busy);
     setIsOpen(false);
     onClose?.();
-  }, [getProviderDisplayName, onClose, onProviderSwitched, providerKind]);
+  }, [getProviderDisplayName, onClose, onProviderSwitched, session, loading]);
 
-  useEffect(() => {
-    const unsubscribeProviders = subscribeProviderList((json) => {
-      try {
-        const providers = parseProviderList(json);
-        setProvidersByKind((previous) => ({ ...previous, claude: providers }));
-        setLoading(false);
-      } catch (error) {
-        console.error('[RuntimeProviderSelect] Failed to parse Claude providers:', error);
-        setLoading(false);
-      }
-    });
-
-    const unsubscribeActiveProvider = subscribeActiveProvider((json) => {
-      try {
-        const activeProvider = JSON.parse(json) as RuntimeProvider;
-        if (!activeProvider?.id) return;
-        setProvidersByKind((previous) => ({
-          ...previous,
-          claude: previous.claude.map((provider) => ({
-            ...provider,
-            isActive: provider.id === activeProvider.id,
-          })),
-        }));
-      } catch (error) {
-        console.error('[RuntimeProviderSelect] Failed to parse active Claude provider:', error);
-      }
-    });
-
-    const unsubscribeCodexProviders = subscribeCodexProviderList((json) => {
-      try {
-        const providers = parseProviderList(json);
-        setProvidersByKind((previous) => ({ ...previous, codex: providers }));
-        setLoading(false);
-      } catch (error) {
-        console.error('[RuntimeProviderSelect] Failed to parse Codex providers:', error);
-        setLoading(false);
-      }
-    });
-
-    const unsubscribeActiveCodexProvider = subscribeActiveCodexProvider((json) => {
-      try {
-        const activeProvider = JSON.parse(json) as RuntimeProvider;
-        if (!activeProvider?.id) return;
-        setProvidersByKind((previous) => ({
-          ...previous,
-          codex: previous.codex.map((provider) => ({
-            ...provider,
-            isActive: provider.id === activeProvider.id,
-          })),
-        }));
-      } catch (error) {
-        console.error('[RuntimeProviderSelect] Failed to parse active Codex provider:', error);
-      }
-    });
-
-    return () => {
-      unsubscribeProviders();
-      unsubscribeActiveProvider();
-      unsubscribeCodexProviders();
-      unsubscribeActiveCodexProvider();
-    };
-  }, []);
+  useEffect(() => () => { selectionVersion.current += 1; }, [currentProvider, session?.bindingToken]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -205,8 +121,8 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, trigg
 
   useEffect(() => {
     if (!embedded) return;
-    requestProviders(providerKind);
-  }, [embedded, providerKind, requestProviders]);
+    refresh?.();
+  }, [embedded, refresh]);
 
   useLayoutEffect(() => {
     if (!embedded) return;
@@ -218,11 +134,11 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, trigg
     recalculate();
   }, [embedded, isOpen, recalculate, visibleProviders.length, loading]);
 
-  if (!isProviderKind(currentProvider)) {
+  if (currentProvider !== 'claude' && currentProvider !== 'codex') {
     return null;
   }
 
-  const activeName = activeProvider ? getProviderDisplayName(activeProvider, providerKind) : t('config.runtimeProvider.title');
+  const activeName = activeProvider ? getProviderDisplayName(activeProvider) : t('config.runtimeProvider.title');
 
   const dropdownMaxHeight = viewportMaxHeight ? `${Math.min(300, viewportMaxHeight)}px` : '300px';
   const dropdownStyle: React.CSSProperties = {
@@ -237,10 +153,18 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, trigg
     <div
       ref={dropdownRef}
       role="listbox"
+      aria-label={t('config.runtimeProvider.title')}
+      aria-busy={loading}
       className="selector-dropdown runtime-provider-dropdown"
       style={dropdownStyle}
       onMouseEnter={(event) => event.stopPropagation()}
     >
+      {session?.error && (
+        <div className="selector-option disabled" role="status">
+          <span className="codicon codicon-warning" />
+          <span>{t('sessionSupplier.unavailable', 'Supplier unavailable. Reopen this menu to retry or select another supplier.')}</span>
+        </div>
+      )}
       {loading && visibleProviders.length === 0 ? (
         <div className="selector-option disabled" style={DISABLED_OPTION_STYLE}>
           <span className="codicon codicon-loading codicon-modifier-spin" />
@@ -253,32 +177,45 @@ export const RuntimeProviderSelect = ({ currentProvider, embedded = false, trigg
         </div>
       ) : (
         visibleProviders.map((provider) => {
-          const selected = !!provider.isActive;
-          const description = provider.remark || ('websiteUrl' in provider ? provider.websiteUrl : undefined);
+          const selected = provider.id === session?.supplierId;
+          const disabled = loading || !provider.available;
           return (
             <div
               key={provider.id}
-              className={`selector-option ${selected ? 'selected' : ''}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => handleSelect(provider)}
+              className={`selector-option ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
+              role="option"
+              aria-selected={selected}
+              aria-disabled={disabled}
+              tabIndex={disabled ? -1 : 0}
+              onClick={() => { void handleSelect(provider); }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault();
-                  handleSelect(provider);
+                  void handleSelect(provider);
                 }
               }}
-              title={description || getProviderDisplayName(provider, providerKind)}
+              title={getProviderDisplayName(provider)}
             >
               <span className="codicon codicon-key" />
               <div style={PROVIDER_INFO_STYLE}>
-                <span className="runtime-provider-name">{getProviderDisplayName(provider, providerKind)}</span>
-                {description ? <span className="model-description">{description}</span> : null}
+                <span className="runtime-provider-name">{getProviderDisplayName(provider)}</span>
               </div>
               {selected && <span className="codicon codicon-check check-mark" />}
             </div>
           );
         })
+      )}
+      {session?.deferred && (
+        <div className="selector-option disabled" role="status">
+          <span className="codicon codicon-clock" />
+          <span>{t('sessionSupplier.nextTurn', 'Applies to the next turn')}</span>
+        </div>
+      )}
+      {session?.missing && !loading && visibleProviders.length > 0 && !session.error && (
+        <div className="selector-option disabled" role="status">
+          <span className="codicon codicon-info" />
+          <span>{t('sessionSupplier.choose', 'Select a supplier')}</span>
+        </div>
       )}
     </div>
   );

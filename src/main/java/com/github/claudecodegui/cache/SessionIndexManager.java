@@ -581,7 +581,7 @@ public class SessionIndexManager {
 
     /**
      * Clears all Codex indexes.
-     * Codex uses "__all__" as its index key, so deleting a session requires clearing the entire Codex index.
+     * Codex indexes session lists per history directory; clear every root after deleting a session.
      */
     public void clearAllCodexIndex() {
         synchronized (indexFileLock) {

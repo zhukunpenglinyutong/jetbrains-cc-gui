@@ -5,12 +5,16 @@ import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.application.Application;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.jcef.JBCefBrowser;
 import org.junit.Test;
 
 import java.util.Map;
 import java.util.List;
+import java.util.ArrayList;
+import java.lang.reflect.Proxy;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertFalse;
@@ -21,6 +25,47 @@ import static org.junit.Assert.assertTrue;
 
 /** Verifies history switching waits for the previous native writer to finish releasing. */
 public class SessionLifecycleReleaseTest {
+    /** Null transcript ids still require a new supplier binding after the old writer drains. */
+    @Test
+    public void newUnsavedSessionPublishesItsBindingAfterInstallation() {
+        HoldingReleaseBridge bridge = new HoldingReleaseBridge();
+        Host host = new Host(bridge);
+        host.session.setSessionInfo(null, "/fixture");
+        ClaudeSession previous = host.session;
+        SessionLifecycleManager manager = new SessionLifecycleManager(host) {
+            @Override public String determineWorkingDirectory() { return "/fixture"; }
+            @Override public void fetchSlashCommandsOnStartup(boolean userRequested) { }
+        };
+        Application previousApplication = ApplicationManager.getApplication();
+        List<Runnable> uiCalls = new ArrayList<>();
+        Application application = (Application) Proxy.newProxyInstance(Application.class.getClassLoader(),
+                new Class<?>[]{Application.class}, (proxy, method, arguments) -> {
+                    if ("invokeLater".equals(method.getName())) {
+                        uiCalls.add((Runnable) arguments[0]);
+                    }
+                    return method.getReturnType() == boolean.class ? false : null;
+                });
+        ApplicationManager.setApplication(application);
+        try {
+            manager.createNewSession();
+            assertSame(previous, host.session);
+            assertFalse(host.scriptNames.contains("notifySessionSupplierBindingChanged"));
+            bridge.release.complete(new JsonObject());
+            assertNotSame(previous, host.session);
+            assertSame(host.session, host.context.getSession());
+            for (Runnable callback : List.copyOf(uiCalls)) {
+                callback.run();
+            }
+            assertTrue(host.scriptNames.contains("notifySessionSupplierBindingChanged"));
+            assertEquals(0, host.bindingArgumentCount);
+            assertTrue(host.scriptNames.indexOf("notifySessionSupplierBindingChanged") < host.scriptNames.indexOf("historyLoadComplete"));
+        } finally {
+            host.coalescer.dispose();
+            bridge.cleanupAllProcesses();
+            ApplicationManager.setApplication(previousApplication);
+        }
+    }
+
     /** Restored chats share a default channel only after the preceding writer has drained. */
     @Test
     public void historyRestoreDoesNotReuseTheChannelDuringAnUnfinishedRelease() {
@@ -101,6 +146,8 @@ public class SessionLifecycleReleaseTest {
         private final HandlerContext context;
         private final StreamMessageCoalescer coalescer;
         private ClaudeSession session;
+        private final List<String> scriptNames = new ArrayList<>();
+        private int bindingArgumentCount = -1;
 
         private Host(HoldingReleaseBridge bridge) {
             this.bridge = bridge;
@@ -141,7 +188,12 @@ public class SessionLifecycleReleaseTest {
         /** Keeps decisions local to the isolated fixture. */
         @Override public void clearPermissionDecisionMemory() { }
         /** Replaces JCEF delivery while exercising the lifecycle manager. */
-        @Override public void callJavaScript(String functionName, String... args) { }
+        @Override public void callJavaScript(String functionName, String... args) {
+            this.scriptNames.add(functionName);
+            if ("notifySessionSupplierBindingChanged".equals(functionName)) {
+                this.bindingArgumentCount = args.length;
+            }
+        }
         /** Keeps the destination available during release ordering. */
         @Override public boolean isDisposed() { return false; }
         /** Avoids constructing a real JCEF browser. */

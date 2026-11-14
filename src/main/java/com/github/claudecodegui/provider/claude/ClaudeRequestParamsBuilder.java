@@ -21,6 +21,18 @@ class ClaudeRequestParamsBuilder {
 
     private final Gson gson;
     private volatile Predicate<String> projectTrust = UNTRUSTED;
+    private java.util.function.Supplier<String> sessionSupplierResolver = () -> null;
+
+    void setSessionSupplierResolver(java.util.function.Supplier<String> resolver) {
+        sessionSupplierResolver = resolver;
+    }
+
+    void addSessionSupplier(JsonObject params) {
+        String id = sessionSupplierResolver.get();
+        if (id != null) {
+            params.addProperty("supplierId", id);
+        }
+    }
 
     ClaudeRequestParamsBuilder(Gson gson) {
         this.gson = gson;
@@ -67,9 +79,11 @@ class ClaudeRequestParamsBuilder {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
+            boolean ultracode,
             boolean projectTrusted
     ) {
         JsonObject params = new JsonObject();
+        addSessionSupplier(params);
         params.addProperty("message", message);
         params.addProperty("sessionId", sessionId != null ? sessionId : "");
         params.addProperty("runtimeSessionEpoch", runtimeSessionEpoch != null ? runtimeSessionEpoch : "");
@@ -94,7 +108,10 @@ class ClaudeRequestParamsBuilder {
         if (disableThinking != null && disableThinking) {
             params.addProperty("disableThinking", true);
         }
-        if (reasoningEffort != null && !reasoningEffort.trim().isEmpty()) {
+        // Explicit false clears a previously enabled native workflow mode.
+        params.addProperty("ultracode", ultracode);
+        if (reasoningEffort != null && !reasoningEffort.trim().isEmpty()
+                && !"ultra".equals(reasoningEffort.trim())) {
             params.addProperty("reasoningEffort", reasoningEffort);
         }
         params.addProperty("projectTrusted", projectTrusted);

@@ -41,6 +41,9 @@ export const HistoryItemMeta = ({
 
   return (
     <div className="history-item-meta">
+      {session.requiresCwdConfirmation && session.cwd && (
+        <span title={session.cwd}>{t('history.executionDirectory', 'Run in')}: {session.cwd}</span>
+      )}
       <span>{isKnownHistoryMessageCount(session.messageCount)
         ? t('history.messageCount', { count: session.messageCount }) : t('history.messageCountUnknown')}</span>
       {fileSize ? (

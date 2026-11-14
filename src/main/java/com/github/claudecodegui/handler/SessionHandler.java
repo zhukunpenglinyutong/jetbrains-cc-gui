@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Session management message handler.
@@ -35,9 +36,17 @@ public class SessionHandler extends BaseMessageHandler {
             "send_message",
             "send_message_with_attachments",
             "interrupt_session",
-            "restart_session"
+            "restart_session",
+            "sync_loading_state"
             // Note: create_new_session should not be handled here; it should be handled by ClaudeSDKToolWindow.createNewSession()
     };
+
+    /**
+     * Sends accepted from the webview whose turn has not begun yet. The Node
+     * check runs first and may take seconds; the session still reports the
+     * previous turn's idle state until send() begins the new turn.
+     */
+    private final AtomicInteger sendsBeforeTurnStart = new AtomicInteger();
 
     public SessionHandler(HandlerContext context) {
         super(context);
@@ -66,6 +75,9 @@ public class SessionHandler extends BaseMessageHandler {
             case "restart_session":
                 LOG.debug("[SessionHandler] 处理: restart_session");
                 handleRestartSession();
+                return true;
+            case "sync_loading_state":
+                handleSyncLoadingState();
                 return true;
             default:
                 return false;
@@ -135,8 +147,10 @@ public class SessionHandler extends BaseMessageHandler {
         java.util.List<String> fileTagPaths = null;
         String requestedPermissionMode = null;
         String requestedReasoningEffort = null;
+        Boolean requestedClaudeUltracode = null;
         String requestedCodexFastMode = null;
         String requestedDshPreset = null;
+        String requestedOmpApprovalMode = null;
         String clientMessageId = null;
         JsonObject nativeCodexSettings = null;
         try {
@@ -182,11 +196,13 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             requestedReasoningEffort = extractReasoningEffort(payload);
+            requestedClaudeUltracode = extractClaudeUltracode(payload);
 
             if (payload != null && payload.has("codexFastMode") && !payload.get("codexFastMode").isJsonNull()) {
                 requestedCodexFastMode = payload.get("codexFastMode").getAsString();
             }
             requestedDshPreset = extractDshPreset(payload);
+            requestedOmpApprovalMode = extractOmpApprovalMode(payload);
             nativeCodexSettings = extractNativeCodexSettings(payload);
             if (payload != null && payload.has("clientMessageId")
                     && !payload.get("clientMessageId").isJsonNull()) {
@@ -203,12 +219,15 @@ public class SessionHandler extends BaseMessageHandler {
         final java.util.List<String> finalFileTagPaths = fileTagPaths;
         final String finalRequestedPermissionMode = requestedPermissionMode;
         final String finalRequestedReasoningEffort = requestedReasoningEffort;
+        final Boolean finalClaudeUltracode = requestedClaudeUltracode != null
+                ? requestedClaudeUltracode : context.getSession().isClaudeUltracode();
         final String finalRequestedCodexFastMode = requestedCodexFastMode;
         final String finalRequestedDshPreset = requestedDshPreset;
+        final String finalRequestedOmpApprovalMode = requestedOmpApprovalMode;
         final String finalClientMessageId = clientMessageId;
         final JsonObject finalNativeCodexSettings = nativeCodexSettings;
 
-        CompletableFuture.runAsync(() -> {
+        runSendTask(() -> {
             if (!ensureNodeVersionReady()) {
                 return;
             }
@@ -227,10 +246,11 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             // [FIX] Pass agent prompt and file tags directly to session
-            context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths,
+            context.getSession().send(finalPrompt, null, finalAgentPrompt, finalFileTagPaths,
                             finalRequestedPermissionMode, finalRequestedReasoningEffort,
-                            finalRequestedCodexFastMode, finalRequestedDshPreset, finalClientMessageId,
-                            finalNativeCodexSettings)
+                            finalRequestedCodexFastMode, finalRequestedDshPreset,
+                            finalRequestedOmpApprovalMode, finalClientMessageId,
+                            finalNativeCodexSettings, finalClaudeUltracode)
                 .thenRun(() -> {
                     // Claude now triggers success on actual stream_end callback.
                     // Codex has no stream_end event, keep success trigger at completion.
@@ -291,8 +311,10 @@ public class SessionHandler extends BaseMessageHandler {
             String agentPrompt = null;
             String requestedPermissionMode = null;
             String requestedReasoningEffort = null;
+            Boolean requestedClaudeUltracode = null;
             String requestedCodexFastMode = null;
             String requestedDshPreset = null;
+            String requestedOmpApprovalMode = null;
             String clientMessageId = null;
             JsonObject nativeCodexSettings = null;
             if (payload != null && payload.has("agent") && !payload.get("agent").isJsonNull()) {
@@ -330,11 +352,13 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             requestedReasoningEffort = extractReasoningEffort(payload);
+            requestedClaudeUltracode = extractClaudeUltracode(payload);
 
             if (payload != null && payload.has("codexFastMode") && !payload.get("codexFastMode").isJsonNull()) {
                 requestedCodexFastMode = payload.get("codexFastMode").getAsString();
             }
             requestedDshPreset = extractDshPreset(payload);
+            requestedOmpApprovalMode = extractOmpApprovalMode(payload);
             nativeCodexSettings = extractNativeCodexSettings(payload);
             if (payload != null && payload.has("clientMessageId")
                     && !payload.get("clientMessageId").isJsonNull()) {
@@ -342,8 +366,8 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             sendMessageWithAttachments(text, atts, agentPrompt, fileTagPaths, requestedPermissionMode,
-                    requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset, clientMessageId,
-                    nativeCodexSettings);
+                    requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
+                    requestedOmpApprovalMode, clientMessageId, nativeCodexSettings, requestedClaudeUltracode);
         } catch (Exception e) {
             LOG.error("[SessionHandler] 解析附件负载失败: " + e.getMessage(), e);
             handleSendMessage(content);
@@ -363,8 +387,10 @@ public class SessionHandler extends BaseMessageHandler {
         String requestedReasoningEffort,
         String requestedCodexFastMode,
         String requestedDshPreset,
+        String requestedOmpApprovalMode,
         String clientMessageId,
-        JsonObject nativeCodexSettings
+        JsonObject nativeCodexSettings,
+        Boolean requestedClaudeUltracode
     ) {
         // Version check (consistent with handleSendMessage) — runs inside the
         // async block below; see ensureNodeVersionReady for why it must not
@@ -373,12 +399,14 @@ public class SessionHandler extends BaseMessageHandler {
         final java.util.List<String> finalFileTagPaths = fileTagPaths;
         final String finalRequestedPermissionMode = requestedPermissionMode;
         final String finalRequestedReasoningEffort = requestedReasoningEffort;
+        final Boolean finalClaudeUltracode = requestedClaudeUltracode != null
+                ? requestedClaudeUltracode : context.getSession().isClaudeUltracode();
         final String finalRequestedCodexFastMode = requestedCodexFastMode;
         final String finalRequestedDshPreset = requestedDshPreset;
         final String finalClientMessageId = clientMessageId;
         final JsonObject finalNativeCodexSettings = nativeCodexSettings;
 
-        CompletableFuture.runAsync(() -> {
+        runSendTask(() -> {
             if (!ensureNodeVersionReady()) {
                 return;
             }
@@ -398,8 +426,9 @@ public class SessionHandler extends BaseMessageHandler {
             // [FIX] Pass agent prompt and file tags directly to session
             context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths,
                             finalRequestedPermissionMode, finalRequestedReasoningEffort,
-                            finalRequestedCodexFastMode, finalRequestedDshPreset, finalClientMessageId,
-                            finalNativeCodexSettings)
+                            finalRequestedCodexFastMode, finalRequestedDshPreset,
+                            requestedOmpApprovalMode, finalClientMessageId,
+                            finalNativeCodexSettings, finalClaudeUltracode)
                 .thenRun(() -> {
                     // Claude now triggers success on actual stream_end callback.
                     // Codex has no stream_end event, keep success trigger at completion.
@@ -424,6 +453,35 @@ public class SessionHandler extends BaseMessageHandler {
                     return null;
                     });
         });
+    }
+
+    /**
+     * Run a send off the UI thread, counting it as pending until send() has
+     * begun its turn (send() does that synchronously) or the send gave up.
+     */
+    private void runSendTask(Runnable task) {
+        sendsBeforeTurnStart.incrementAndGet();
+        CompletableFuture.runAsync(() -> {
+            try {
+                task.run();
+            } finally {
+                sendsBeforeTurnStart.decrementAndGet();
+            }
+        });
+    }
+
+    /**
+     * Re-send the real loading state. The webview asks when a send it
+     * dispatched has not started streaming within its immunity window: the
+     * loading reset it swallowed meanwhile may have been that turn's only one.
+     */
+    private void handleSyncLoadingState() {
+        ClaudeSession session = context.getSession();
+        if (session == null) {
+            return;
+        }
+        boolean loading = session.isLoading() || sendsBeforeTurnStart.get() > 0;
+        callJavaScript("showLoading", String.valueOf(loading));
     }
 
     /**
@@ -494,6 +552,15 @@ public class SessionHandler extends BaseMessageHandler {
         return projectPath;
     }
 
+    static Boolean extractClaudeUltracode(JsonObject payload) {
+        if (payload == null || !payload.has("claudeUltracode")) {
+            return null;
+        }
+        var value = payload.get("claudeUltracode");
+        return value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean()
+                ? value.getAsBoolean() : null;
+    }
+
     private String extractReasoningEffort(JsonObject payload) {
         if (payload == null || !payload.has("reasoningEffort") || payload.get("reasoningEffort").isJsonNull()) {
             return null;
@@ -507,6 +574,17 @@ public class SessionHandler extends BaseMessageHandler {
         }
         String preset = payload.get("dshPreset").getAsString();
         return SessionState.isValidDshPreset(preset) ? preset.trim() : null;
+    }
+
+    /**
+     * The OMP approval mode this message was sent with ("" = OMP's own setting),
+     * or null when the payload states none.
+     */
+    private String extractOmpApprovalMode(JsonObject payload) {
+        if (payload == null || !payload.has("ompApprovalMode") || payload.get("ompApprovalMode").isJsonNull()) {
+            return null;
+        }
+        return SessionState.normalizeOmpApprovalMode(payload.get("ompApprovalMode").getAsString());
     }
 
     private JsonObject extractNativeCodexSettings(JsonObject payload) {

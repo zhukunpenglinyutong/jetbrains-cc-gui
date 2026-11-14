@@ -1,4 +1,10 @@
 {
+  "sessionSupplier": {
+    "label": "Supplier",
+    "choose": "Select a supplier",
+    "nextTurn": "Applies to the next turn",
+    "unavailable": "Supplier unavailable. Reopen this menu to retry or select another supplier."
+  },
   "startupHistory": {
     "unloaded": "History for this restored session has not been loaded.",
     "loading": "Loading session history...",
@@ -100,6 +106,9 @@
     "usagePercentage": "Usage: {{percentage}}",
     "planUsage": {
       "title": "Claude plan usage",
+      "balanceLabel": "Balance: ",
+      "balanceRemaining": "Balance: {{value}}",
+      "balanceDetail": "Total {{total}} · Used {{used}}",
       "grokTitle": "Grok plan usage",
       "staleIdle": "Last reading. It refreshes the next time you use Grok",
       "loading": "Loading usage…",
@@ -142,6 +151,10 @@
     "localProject": "Local",
     "disabled": "Disabled",
     "sdkNotInstalled": "{{provider}} SDK is not installed. Please install the SDK to start chatting.",
+    "codexUltraCapabilitiesLoading": "Checking Ultra availability. Try sending again when model loading finishes.",
+    "codexUltraCapabilitiesUnavailable": "Could not verify Ultra availability. Retry loading models or choose another effort.",
+    "sessionTransitionTakingLonger": "The session change is taking longer than expected. You can try opening it again; queued messages are paused.",
+    "sessionTransitionInProgress": "A session change is already in progress. Please wait a moment.",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "Preparing pasted image...",
     "sdkStatusUnavailable": "Could not check SDK status.",
@@ -179,8 +192,7 @@
       "matchCase": "Match Case (Alt+C)",
       "wholeWord": "Match Whole Word (Alt+W)",
       "regex": "Use Regular Expression (Alt+R)",
-      "invalidRegex": "Invalid regex",
-      "openTooltip": "Search in conversation (Cmd/Ctrl+F)"
+      "invalidRegex": "Invalid regex"
     },
     "compactSummary": {
       "receivedTime": "Recorded time",
@@ -209,7 +221,11 @@
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexCliOutdated": "Codex CLI {{version}} is outdated; some models and permission modes may not work. Update to {{minimumVersion}} or newer.",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "Continue refining this plan:"
+    "continueRefiningPlan": "Continue refining this plan:",
+    "backgroundTasksRunning": "{{count}} background tasks running",
+    "backgroundTasksRunning_one": "{{count}} background task running",
+    "backgroundTasksRunning_other": "{{count}} background tasks running",
+    "stopBackgroundTasks": "Stop background tasks"
   },
   "settings": {
     "title": "Settings",
@@ -592,6 +608,12 @@
         "disabled": "Disabled",
         "hint": "When enabled, shows the 'AI Generate Commit Message' button in the commit dialog. When disabled, the button is hidden."
       },
+      "sessionGitRepositoryMatching": {
+        "label": "Match sessions by Git remote repository",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "Include Codex and Claude Code history from other directories with the same normalized remote host, owner, and repository. When Git information is unavailable, match by working directory."
+      },
       "statusBarWidget": {
         "label": "Status Bar Info Display",
         "enabled": "Enabled",
@@ -940,6 +962,132 @@
     "agentsDesc": "Manage and configure AI agents",
     "skills": "Skills",
     "skillsDesc": "Manage and configure skill modules",
+    "hooks": {
+      "title": "Hooks",
+      "description": "Inspect and safely edit Codex and Claude Code hooks.",
+      "refresh": "Refresh",
+      "provider": "Provider",
+      "scope": "Scope",
+      "all": "All",
+      "allProviders": "All providers",
+      "allScopes": "All scopes",
+      "global": "User",
+      "project": "Project",
+      "projectLocal": "Project (local override)",
+      "search": "Search hooks",
+      "searchPlaceholder": "Search events, commands, or paths",
+      "noMatches": "No hooks match the current filters.",
+      "toggleUnavailable": "Individual hook enable/disable controls are unavailable until each provider's runtime semantics are verified.",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "enable": "Enable hook",
+      "disable": "Disable hook",
+      "managedToggleHint": "CCGUI-managed toggle. The original configuration is preserved and can be restored.",
+      "nativeToggleHint": "Changes your Codex user preference. Trust, feature settings, and policy still control execution.",
+      "toggleFailed": "Hook toggle failed",
+      "loading": "Scanning hook locations...",
+      "empty": "No hooks were discovered.",
+      "valid": "Schema recognized",
+      "validationWarning": "Needs review",
+      "matcher": "Matcher",
+      "noCommand": "No command",
+      "readOnly": "Read-only",
+      "viewSource": "View source",
+      "editSource": "Edit source",
+      "sourcePreview": "Hook source preview",
+      "sourceTab": "Source",
+      "detailsTab": "Details",
+      "viewMode": "Hook view",
+      "loadingSource": "Loading source...",
+      "sourceEditor": "Hook source editor",
+      "affectedFile": "Affected file",
+      "backupDirectory": "Backup directory",
+      "latestBackup": "Restore last backup from this editor session",
+      "lastModified": "Last modified",
+      "event": "Event",
+      "format": "Format",
+      "revision": "Revision",
+      "command": "Command",
+      "validationIssues": "Validation issues",
+      "providerFields": "Provider-specific fields",
+      "noProviderFields": "No provider-specific fields",
+      "none": "None",
+      "reviewChanges": "Review changes",
+      "hideChanges": "Hide changes",
+      "noChanges": "No changes to save",
+      "technicalInfo": "Technical information",
+      "moreActions": "More actions",
+      "conflictTitle": "This hook source changed outside CC GUI",
+      "conflictDescription": "Reload the external version, or keep your draft while synchronizing to the latest revision before saving again.",
+      "reloadExternal": "Reload external version",
+      "keepDraft": "Keep draft and sync",
+      "discardDraft": "Discard draft",
+      "discardChangesTitle": "Discard unsaved changes?",
+      "discardChangesMessage": "Your changes have not been saved and cannot be recovered after closing the editor.",
+      "backupOnSave": "A backup is created before saving",
+      "save": "Save",
+      "saving": "Saving...",
+      "restore": "Restore last backup from this editor session",
+      "saveFailed": "Save failed",
+      "sourceLoadFailed": "Source reload failed",
+      "noPreview": "No preview available.",
+      "sourceNotice": "{{count}} hook sources need review. Editing or toggling is restricted for affected entries.",
+      "issues": {
+        "COMMAND_MISSING": "Command is missing",
+        "TYPE_MISSING": "Type is missing",
+        "HOOKS_NOT_OBJECT": "Hooks must be an object",
+        "SETTINGS_NOT_OBJECT": "Settings must be an object",
+        "INVALID_JSON": "Invalid JSON",
+        "HOOK_ENTRY_NOT_OBJECT": "Hook entry is not an object",
+        "INVALID_TOML": "Invalid TOML",
+        "CODEX_HOOKS_NOT_TABLE": "Codex hooks must be a table",
+        "CODEX_HOOK_EVENT_NOT_ARRAY": "Codex hook events must be arrays of tables",
+        "CODEX_HOOK_ENTRY_NOT_TABLE": "Codex hook entries must be tables",
+        "CODEX_ENABLED_INVALID": "Codex hook enabled field is missing or invalid",
+        "CODEX_MATCHER_INVALID": "Codex hook matcher field is invalid",
+        "CODEX_COMMANDS_INVALID": "Hook handler is missing a valid command or MCP tool",
+        "CODEX_HOOKS_FEATURE_DISABLED": "The Codex hooks feature is not enabled",
+        "READ_FAILED": "Read failed",
+        "CODEX_EVENT_UNSUPPORTED": "Event is not supported by the verified Codex schema",
+        "CODEX_HANDLER_UNSUPPORTED": "Handler type is not supported by the verified Codex schema",
+        "CODEX_HOOK_FILE_FIELDS_INVALID": "Hook file fields are invalid",
+        "CODEX_STATE_INLINE_UNSUPPORTED": "Inline state cannot be safely edited; use a state table",
+        "LINKED_SOURCE_READ_ONLY": "Linked files are read-only; edit the original file directly.",
+        "HOOK_SOURCE_UNAVAILABLE": "The source file is unavailable."
+      },
+      "sharedProjectWarning": "Project configuration may be committed and affect other users. Review the file diff before sharing.",
+      "bridgeUnavailable": "The IDE connection is unavailable. Reopen the settings page and try again.",
+      "sourceTimeout": "Reading timed out. Reload the source before editing.",
+      "mutationTimeout": "Confirmation timed out. Refresh before retrying because the change may have been saved.",
+      "mutationConfirmedLate": "The delayed save was confirmed. Reload the source to synchronize; your draft was retained.",
+      "sharedToggleTitle": "Confirm shared project change",
+      "sharedToggleMessage": "This changes the shared .claude/settings.json file and may affect other contributors. Disabled-hook recovery data stays on this machine.",
+      "confirmSharedToggle": "Change shared configuration",
+      "sensitiveSourceWarning": "This file may contain credentials and other sensitive configuration. Reveal it only when you are ready to edit it.",
+      "revealSource": "Reveal configuration",
+      "errors": {
+        "HOOK_SHARED_CONFIRMATION_REQUIRED": "Confirm the shared project configuration change first.",
+        "HOOK_CATALOG_TIMEOUT": "Hook refresh timed out. Refresh before changing another hook.",
+        "HOOK_REVISION_CONFLICT": "The file changed outside this page. Refresh and try again.",
+        "HOOK_RESTORE_CONFLICT": "The hook could not be restored because this event is no longer a list in the file. Fix the file, then try again.",
+        "HOOK_TOGGLE_LOCKED": "Another change to this file is in progress. Try again in a moment.",
+        "HOOK_TOGGLE_LOCK_FAILED": "Could not lock the file for this change.",
+        "HOOK_FILE_LOCKED": "Another change to this file is in progress. Try again in a moment.",
+        "HOOK_NOT_FOUND": "This hook is no longer in the file. Refresh the list.",
+        "HOOK_NOT_DISABLED": "This hook is not disabled. Refresh the list.",
+        "HOOK_ALREADY_DISABLED": "This hook is already disabled. Refresh the list.",
+        "HOOK_STATE_WRITE_FAILED": "Could not save the disabled-hook record. The file change was rolled back where possible.",
+        "HOOK_TOGGLE_FAILED": "The hook could not be changed.",
+        "INVALID_HOOK_PATH": "This file can't be changed here. Linked files and files outside the known locations are read-only.",
+        "INVALID_BACKUP_PATH": "The backup file is not available.",
+        "SOURCE_TOO_LARGE": "The file is larger than 128 KB and can't be edited here.",
+        "INVALID_REQUEST": "The request was invalid. Refresh the page and try again.",
+        "WRITE_FAILED": "The file could not be saved.",
+        "RESTORE_FAILED": "The backup could not be restored.",
+        "UNSUPPORTED_HOOK_PROVIDER": "This kind of hook can't be changed here.",
+        "UNKNOWN_ERROR": "Unknown error."
+      }
+    },
     "other": {
       "title": "Other Settings",
       "description": "Configure miscellaneous settings",
@@ -1460,6 +1608,9 @@
     }
   },
   "history": {
+    "confirmDirectoryTitle": "Open session in another directory?",
+    "confirmDirectoryMessage": "Commands and file changes will run in the directory shown below.",
+    "executionDirectory": "Run in",
     "title": "History",
     "sessionDeleted": "Session deleted",
     "confirmDelete": "Confirm Delete",
@@ -1571,6 +1722,7 @@
     "codexDeliveryUnconfirmed": "Codex has not confirmed your choice yet ({{error}}). It may still take effect, so do not answer again; if the conversation does not continue, click Stop and send your message again."
   },
   "askUserQuestion": {
+    "ompTitle": "OMP has some questions for you",
     "configWarning": "Codex reported a configuration warning. Review the details.",
     "configWarningTitle": "Codex configuration warning",
     "apiDeprecationWarning": "Codex reported an API compatibility notice. Review the details.",
@@ -1726,8 +1878,23 @@
   },
   "mcp": {
     "nativeToolCount": "{{count}} tools",
-    "nativeRuntime": {"notStarted": "Not started", "starting": "Connecting", "connected": "Connected", "authenticationRequired": "Authentication required", "failed": "Connection failed", "cancelled": "Cancelled", "disabled": "Disabled", "unknown": "Connection status unknown"},
-    "nativeAuth": {"unsupported": "OAuth not applicable", "notLoggedIn": "OAuth not logged in", "bearerToken": "Token authentication", "oAuth": "OAuth logged in", "unknown": "Authentication status unknown"},
+    "nativeRuntime": {
+      "notStarted": "Not started",
+      "starting": "Connecting",
+      "connected": "Connected",
+      "authenticationRequired": "Authentication required",
+      "failed": "Connection failed",
+      "cancelled": "Cancelled",
+      "disabled": "Disabled",
+      "unknown": "Connection status unknown"
+    },
+    "nativeAuth": {
+      "unsupported": "OAuth not applicable",
+      "notLoggedIn": "OAuth not logged in",
+      "bearerToken": "Token authentication",
+      "oAuth": "OAuth logged in",
+      "unknown": "Authentication status unknown"
+    },
     "title": "MCP Servers",
     "whatIsMcp": "What is MCP?",
     "refreshStatus": "Refresh server status",
@@ -1975,6 +2142,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "Copy command",
+    "bashGroupCopyOutput": "Copy output",
+    "bashGroupOutput": "Output",
+    "bashGroupOutputFailed": "Failed",
+    "bashGroupRunning": "Running…",
+    "bashGroupNoOutput": "(no output)",
     "promptLabel": "Prompt",
     "updatePlan": "Update Plan",
     "applyPatch": "Apply Patch",
@@ -2022,6 +2195,7 @@
       "loading": "Loading Agent process…",
       "unavailable": "Process log is unavailable until this session has an id.",
       "reportGenerated": "Structured analysis report generated",
+      "historyTruncated": "History shortened: {{count}} records omitted. The initial task and recent activity are retained.",
       "unitMs": "ms",
       "unitS": "s",
       "unitTools": "tools",
@@ -2270,13 +2444,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Fastest for quick answers"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · Most powerful · Mythos-class"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · Most powerful · Mythos-class"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · Previous Fable generation"
+        "description": "Fable 5.1 · Previous Fable generation"
       }
     },
     "codex": {
@@ -2331,7 +2505,12 @@
     "effort": "Effort",
     "speed": "Speed",
     "preset": "Preset",
-    "model": "Model"
+    "approvals": "Approvals",
+    "model": "Model",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Native Claude workflow with automatic task delegation. Keeps your selected effort."
+    }
   },
   "modes": {
     "default": {
@@ -2461,11 +2640,6 @@
     "omp": {
       "label": "OMP CLI"
     },
-    "beta": {
-      "badge": "Beta",
-      "title": "Beta Feature",
-      "message": "This feature is still in Beta. If you encounter any bugs, please report them to the author promptly."
-    },
     "dsh": {
       "label": "DeepSeek Harness"
     },
@@ -2579,6 +2753,10 @@
     "max": {
       "label": "Max",
       "description": "Maximum reasoning depth"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "Maximum reasoning with automatic task delegation"
     }
   },
   "errorBoundary": {
@@ -2644,6 +2822,25 @@
     "fast": {
       "label": "Fast",
       "description": "Codex fast response mode (uses additional credits)"
+    }
+  },
+  "ompApprovals": {
+    "title": "Select OMP approval mode",
+    "default": {
+      "label": "Default",
+      "description": "Full auto unless OMP's tools.approvalMode is set"
+    },
+    "alwaysAsk": {
+      "label": "Ask",
+      "description": "Asks before edits and commands"
+    },
+    "write": {
+      "label": "Auto-approve edits",
+      "description": "Asks only before commands"
+    },
+    "yolo": {
+      "label": "Full auto",
+      "description": "Never asks"
     }
   },
   "dshPresets": {

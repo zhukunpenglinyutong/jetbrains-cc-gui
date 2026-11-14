@@ -26,7 +26,7 @@ public class ClaudeProjectTrustParamsTest {
     private static final UnaryOperator<String> NO_CONVERSION = cwd -> cwd;
 
     private static JsonObject sendParams(ClaudeRequestParamsBuilder builder, boolean projectTrusted) {
-        return builder.buildSendParams("hi", "", "", "/work", "default", "", null, null, null, null, null, null, projectTrusted);
+        return builder.buildSendParams("hi", "", "", "/work", "default", "", null, null, null, null, null, null, false, projectTrusted);
     }
 
     private static ClaudeRequestParamsBuilder builder(Predicate<String> projectTrust) {

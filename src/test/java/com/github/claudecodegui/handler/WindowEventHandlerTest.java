@@ -15,6 +15,21 @@ import static org.junit.Assert.assertTrue;
  */
 public class WindowEventHandlerTest {
 
+    @Test
+    public void newSessionRequestRetainsTransitionTokenAndTargetProvider() {
+        AtomicReference<String> observed = new AtomicReference<>();
+        HandlerContext context = new HandlerContext(null, null, null, null, new NoOpJsCallback());
+        WindowEventHandler handler = new WindowEventHandler(context, new NoOpCallback() {
+            @Override public void onCreateNewSession(String token, String provider) {
+                observed.set(token + ":" + provider);
+            }
+        });
+        handler.handle("create_new_session", "{\"transitionToken\":\"request-B\",\"provider\":\"codex\"}");
+        assertEquals("request-B:codex", observed.get());
+        handler.handle("create_new_session", "");
+        assertEquals("null:null", observed.get());
+    }
+
     /** Verifies that history_dom_committed is supported and dispatched exactly once. */
     @Test
     public void dispatchesHistoryDomCommittedCallback() {
