@@ -1,9 +1,14 @@
 import { act, renderHook } from '@testing-library/react';
+import { useState } from 'react';
+import { useReasoningEffortGuard } from '../../components/ChatInputBox/reasoningUtils';
+import type { ReasoningEffort } from '../../components/ChatInputBox/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __resetCliModelsCacheForTests, useCliModels, useOmpRoles } from './useCliModels';
 import { CODEX_MODELS, KIMI_MODELS, OMP_ROLE_MODELS, apply1MContextSuffix, modelSupports1MContext } from '../../components/ChatInputBox/types';
 import { installRuntimeProviderDispatchers } from '../../utils/runtimeProviderCapabilities';
 import { readClaudeModelMapping, writeClaudeModelMapping } from '../../utils/claudeModelMapping';
+import { codexModelReasoningEfforts, getCodexReasoningCapabilities, isCodexUltraCapabilityUnconfirmed,
+  subscribeCodexReasoningCapabilities } from '../../utils/codexReasoningCapabilities';
 
 const sendBridgeEventMock = vi.hoisted(() => vi.fn());
 
@@ -18,6 +23,31 @@ function emitCliModels(payload: unknown) {
 }
 
 describe('useCliModels', () => {
+  it('preserves a saved Ultra preference across discovery timeout and retries before deciding support', () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => {
+      const catalog = useCliModels('codex');
+      const [effort, setEffort] = useState<ReasoningEffort>('ultra');
+      const row = catalog.cliModels.find(model => model.id === 'native-model');
+      useReasoningEffortGuard(effort, setEffort, 'native-model', 'codex', undefined, row?.supportedReasoningEfforts,
+        catalog.cliReasoningCapabilitiesUnconfirmed);
+      return { ...catalog, effort };
+    });
+    expect(result.current.effort).toBe('ultra');
+    act(() => vi.advanceTimersByTime(16_000));
+    expect(result.current.cliModelsError).toBe('timeout');
+    expect(result.current.effort).toBe('ultra');
+    expect(isCodexUltraCapabilityUnconfirmed('native-model', result.current.effort)).toBe(true);
+    act(() => result.current.refreshCliModels('codex'));
+    emitCliModels({ provider: 'codex', success: true,
+      models: [{ id: 'native-model', label: 'Native', supportedReasoningEfforts: ['high', 'ultra'] }] });
+    expect(result.current.effort).toBe('ultra');
+    expect(isCodexUltraCapabilityUnconfirmed('native-model', result.current.effort)).toBe(false);
+    act(() => result.current.refreshCliModels('codex'));
+    emitCliModels({ provider: 'codex', success: true, models: [] });
+    expect(result.current.effort).toBe('high');
+  });
+
   beforeEach(() => {
     localStorage.clear();
     sendBridgeEventMock.mockClear();
@@ -55,6 +85,90 @@ describe('useCliModels', () => {
   it('fetches the codex catalog when the codex provider is active', () => {
     renderHook(() => useCliModels('codex'));
     expect(sendBridgeEventMock).toHaveBeenCalledWith('codex_native_list_models', expect.stringContaining('"requestId"'));
+  });
+
+  it('publishes a delayed native catalog atomically for restored Ultra and settles unknown models', () => {
+    const { result } = renderHook(() => useCliModels('codex'));
+    expect(isCodexUltraCapabilityUnconfirmed('native-model', 'ultra')).toBe(true);
+    const snapshots: Array<{ status: string; efforts?: readonly string[] }> = [];
+    const unsubscribe = subscribeCodexReasoningCapabilities(() => snapshots.push({
+      status: getCodexReasoningCapabilities().status, efforts: codexModelReasoningEfforts('native-model'),
+    }));
+    const requestId = JSON.parse(sendBridgeEventMock.mock.calls.at(-1)![1]).requestId;
+    act(() => window.dispatchEvent(new CustomEvent('codex-native-data', { detail: {
+      requestType: 'codex_native_list_models', requestId,
+      data: [{ model: 'native-model', supportedReasoningEfforts: [{ reasoningEffort: 'high' }, { reasoningEffort: 'ultra' }] }],
+    } })));
+    expect(snapshots).toEqual([{ status: 'ready', efforts: ['high', 'ultra'] }]);
+    expect(isCodexUltraCapabilityUnconfirmed('custom-model', 'ultra')).toBe(false);
+    expect(codexModelReasoningEfforts('custom-model')).toBeUndefined();
+    act(() => result.current.refreshCliModels('codex'));
+    expect(isCodexUltraCapabilityUnconfirmed('native-model', 'ultra')).toBe(false);
+    expect(isCodexUltraCapabilityUnconfirmed('custom-model', 'ultra')).toBe(true);
+    unsubscribe();
+  });
+
+  it.each([true, false])('distinguishes unsupported models from failed discovery (success: %s)', success => {
+    renderHook(() => useCliModels('codex'));
+    emitCliModels({ provider: 'codex', models: [], success, ...(success ? {} : { error: 'unavailable' }) });
+    expect(getCodexReasoningCapabilities().status).toBe(success ? 'ready' : 'unavailable');
+    expect(isCodexUltraCapabilityUnconfirmed('custom-model', 'ultra')).toBe(!success);
+  });
+
+  it('discards partial native capabilities when a later catalog page fails', () => {
+    const { result } = renderHook(() => useCliModels('codex'));
+    const requestId = JSON.parse(sendBridgeEventMock.mock.calls.at(-1)![1]).requestId;
+    act(() => window.dispatchEvent(new CustomEvent('codex-native-data', { detail: {
+      requestType: 'codex_native_list_models', requestId, nextCursor: 'page-two',
+      data: [{ model: 'custom-ultra', supportedReasoningEfforts: ['high', 'ultra'] }],
+    } })));
+    expect(result.current.cliModelsLoading).toBe(true);
+    expect(isCodexUltraCapabilityUnconfirmed('custom-ultra', 'ultra')).toBe(true);
+    act(() => window.dispatchEvent(new CustomEvent('codex-native-data', { detail: {
+      requestType: 'codex_native_list_models', requestId, error: 'second page failed',
+    } })));
+    expect(result.current.cliModels).toEqual(CODEX_MODELS);
+    expect(result.current.cliCatalogHasEntries).toBe(false);
+    expect(result.current.cliModelsError).toBe('second page failed');
+    expect(codexModelReasoningEfforts('custom-ultra')).toBeUndefined();
+    expect(isCodexUltraCapabilityUnconfirmed('custom-ultra', 'ultra')).toBe(true);
+  });
+
+  it('settles capability loading on timeout or unmount and retries on remount', () => {
+    vi.useFakeTimers();
+    const first = renderHook(() => useCliModels('codex'));
+    act(() => vi.advanceTimersByTime(15_000));
+    expect(getCodexReasoningCapabilities().status).toBe('unavailable');
+    first.unmount();
+    const second = renderHook(() => useCliModels('codex'));
+    expect(getCodexReasoningCapabilities().status).toBe('loading');
+    second.unmount();
+    expect(getCodexReasoningCapabilities().status).toBe('unavailable');
+  });
+
+  it('keeps confirmed capabilities on a refresh timeout without deciding unknown models', () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useCliModels('codex'));
+    emitCliModels({ provider: 'codex', models: [{ id: 'native-model', supportedReasoningEfforts: ['high', 'ultra'] }] });
+    act(() => result.current.refreshCliModels('codex'));
+    act(() => vi.advanceTimersByTime(15_000));
+    expect(codexModelReasoningEfforts('native-model')).toEqual(['high', 'ultra']);
+    expect(getCodexReasoningCapabilities().status).toBe('unavailable');
+    expect(isCodexUltraCapabilityUnconfirmed('custom-model', 'ultra')).toBe(true);
+  });
+
+  it('revokes previous native capabilities and request IDs when the active provider changes', () => {
+    renderHook(() => useCliModels('codex'));
+    emitCliModels({ provider: 'codex', models: [{ id: 'native-model', supportedReasoningEfforts: ['high', 'ultra'] }] });
+    const previousRequestId = JSON.parse(sendBridgeEventMock.mock.calls.at(-1)![1]).requestId;
+    act(() => window.updateActiveCodexProvider?.('{}'));
+    expect(isCodexUltraCapabilityUnconfirmed('native-model', 'ultra')).toBe(true);
+    act(() => window.dispatchEvent(new CustomEvent('codex-native-data', { detail: {
+      requestType: 'codex_native_list_models', requestId: previousRequestId,
+      data: [{ model: 'native-model', supportedReasoningEfforts: ['ultra'] }],
+    } })));
+    expect(codexModelReasoningEfforts('native-model')).toBeUndefined();
+    expect(getCodexReasoningCapabilities().status).toBe('loading');
   });
 
   it('fetches the grok catalog when the grok provider is active', () => {
@@ -229,6 +343,19 @@ describe('useCliModels', () => {
       result.current.refreshCliModels('codex');
     });
     expect(sendBridgeEventMock).toHaveBeenCalledWith('codex_native_list_models', expect.stringContaining('"requestId"'));
+  });
+
+  it('keeps failed discovery retryable after the picker remounts without treating it as an unsupported model', () => {
+    const first = renderHook(() => useCliModels('codex'));
+    emitCliModels({ provider: 'codex', success: false, error: 'offline', models: [] });
+    first.unmount();
+    const second = renderHook(() => useCliModels('codex'));
+    expect(second.result.current.cliModelsError).toBe('offline');
+    expect(second.result.current.cliReasoningCapabilitiesUnconfirmed).toBe(true);
+    act(() => second.result.current.refreshCliModels('codex'));
+    emitCliModels({ provider: 'codex', success: true, models: [] });
+    expect(second.result.current.cliModelsError).toBeNull();
+    expect(second.result.current.cliReasoningCapabilitiesUnconfirmed).toBe(false);
   });
 
   it('refetches the codex catalog when the active codex provider changes', () => {

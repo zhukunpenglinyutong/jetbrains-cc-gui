@@ -106,6 +106,10 @@
     "localProject": "स्थानीय",
     "disabled": "अक्षम",
     "sdkNotInstalled": "{{provider}} SDK इंस्टॉल नहीं है। चैट शुरू करने के लिए कृपया SDK इंस्टॉल करें।",
+    "codexUltraCapabilitiesLoading": "Ultra की उपलब्धता जाँची जा रही है। मॉडल लोड होने के बाद फिर से भेजें।",
+    "codexUltraCapabilitiesUnavailable": "Ultra की उपलब्धता की पुष्टि नहीं हो सकी। मॉडल दोबारा लोड करें या दूसरा प्रयास स्तर चुनें।",
+    "sessionTransitionTakingLonger": "सत्र बदलने में अपेक्षा से अधिक समय लग रहा है। आप इसे फिर से खोलने का प्रयास कर सकते हैं; कतार के संदेश रुके हुए हैं।",
+    "sessionTransitionInProgress": "सत्र बदलना पहले से जारी है। कृपया कुछ क्षण प्रतीक्षा करें।",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "पेस्ट की गई छवि तैयार हो रही है...",
     "sdkStatusUnavailable": "SDK स्थिति की जांच नहीं हो सकी।",
@@ -170,7 +174,11 @@
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexCliOutdated": "Codex CLI {{version}} पुराना है; कुछ मॉडल और अनुमति मोड ठीक से काम नहीं कर सकते। {{minimumVersion}} या नए संस्करण में अपडेट करें।",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "इस योजना को और बेहतर बनाना जारी रखें:"
+    "continueRefiningPlan": "इस योजना को और बेहतर बनाना जारी रखें:",
+    "backgroundTasksRunning": "{{count}} पृष्ठभूमि कार्य चल रहे हैं",
+    "backgroundTasksRunning_one": "{{count}} पृष्ठभूमि कार्य चल रहा है",
+    "backgroundTasksRunning_other": "{{count}} पृष्ठभूमि कार्य चल रहे हैं",
+    "stopBackgroundTasks": "पृष्ठभूमि कार्य रोकें"
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -1247,7 +1255,11 @@
     "codexDeliveryUnconfirmed": "Codex ने अभी तक आपके चुनाव की पुष्टि नहीं की है ({{error}})। यह अभी भी लागू हो सकता है, इसलिए दोबारा जवाब न दें; अगर बातचीत आगे नहीं बढ़ती, तो रोकें पर क्लिक करके संदेश फिर से भेजें।"
   },
   "modelConfig": {
-    "approvals": "अनुमोदन"
+    "approvals": "अनुमोदन",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "स्वचालित कार्य प्रत्यायोजन वाला Claude का मूल वर्कफ़्लो। चुने गए तर्क स्तर को बनाए रखता है।"
+    }
   },
   "askUserQuestion": {
     "ompTitle": "OMP के पास आपके लिए कुछ प्रश्न हैं",
@@ -1691,6 +1703,7 @@
       "loading": "एजेंट प्रक्रिया लोड हो रही है…",
       "unavailable": "जब तक सत्र का id नहीं है, प्रक्रिया लॉग उपलब्ध नहीं है।",
       "reportGenerated": "संरचित विश्लेषण रिपोर्ट तैयार की गई",
+      "historyTruncated": "इतिहास छोटा किया गया: {{count}} रिकॉर्ड छोड़े गए। शुरुआती कार्य और हाल की गतिविधि रखी गई है।",
       "unitMs": "मि॰से॰",
       "unitS": "से॰",
       "unitTools": "उपकरण",
@@ -2171,6 +2184,10 @@
     "xhigh": {
       "label": "अधिकतम",
       "description": "अधिकतम तर्क गहराई"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "स्वचालित कार्य प्रत्यायोजन के साथ अधिकतम तर्क"
     }
   },
   "errorBoundary": {

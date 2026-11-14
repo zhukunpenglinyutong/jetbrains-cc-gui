@@ -21,6 +21,7 @@ test('abortCurrentTurn marks runtime as user-aborted before disposing it', async
       },
     },
     query: {
+      interrupt: async () => {},
       close() {},
     },
   };
@@ -52,6 +53,7 @@ test('abortCurrentTurn clears turnSink before marking abort', async () => {
       },
     },
     query: {
+      interrupt: async () => {},
       close() {},
     },
   };
@@ -83,6 +85,7 @@ test('abortCurrentTurn fails turnSink to unblock waiting take()', async () => {
       },
     },
     query: {
+      interrupt: async () => {},
       close() {},
     },
   };
@@ -124,6 +127,7 @@ test('abortCurrentTurn handles null turnSink gracefully', async () => {
       },
     },
     query: {
+      interrupt: async () => {},
       close() {},
     },
   };
@@ -150,6 +154,7 @@ test('abortCurrentTurn prevents perpetual reader from pushing to cleared sink', 
       done() {},
     },
     query: {
+      interrupt: async () => {},
       close() {},
     },
   };
@@ -189,6 +194,7 @@ test('abortCurrentTurn is idempotent (double abort is safe)', async () => {
       },
     },
     query: {
+      interrupt: async () => {},
       close() {},
     },
   };

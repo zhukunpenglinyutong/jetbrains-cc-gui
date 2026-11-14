@@ -106,6 +106,10 @@
     "localProject": "Local",
     "disabled": "Désactivé",
     "sdkNotInstalled": "{{provider}} SDK n'est pas installé. Veuillez installer le SDK pour commencer à discuter.",
+    "codexUltraCapabilitiesLoading": "Vérification de la disponibilité d’Ultra. Réessayez l’envoi après le chargement du modèle.",
+    "codexUltraCapabilitiesUnavailable": "Impossible de vérifier la disponibilité d’Ultra. Rechargez les modèles ou choisissez un autre niveau d’effort.",
+    "sessionTransitionTakingLonger": "Le changement de session prend plus de temps que prévu. Vous pouvez réessayer de l’ouvrir ; les messages en attente sont suspendus.",
+    "sessionTransitionInProgress": "Un changement de session est déjà en cours. Veuillez patienter.",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "Préparation de l'image collée...",
     "sdkStatusUnavailable": "Impossible de vérifier l'état du SDK.",
@@ -170,7 +174,11 @@
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexCliOutdated": "Codex CLI {{version}} est obsolète ; certains modèles et modes d'autorisation peuvent ne pas fonctionner. Mettez à jour vers la version {{minimumVersion}} ou ultérieure.",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "Continuer à affiner ce plan :"
+    "continueRefiningPlan": "Continuer à affiner ce plan :",
+    "backgroundTasksRunning": "{{count}} tâches en arrière-plan en cours",
+    "backgroundTasksRunning_one": "{{count}} tâche en arrière-plan en cours",
+    "backgroundTasksRunning_other": "{{count}} tâches en arrière-plan en cours",
+    "stopBackgroundTasks": "Arrêter les tâches en arrière-plan"
   },
   "settings": {
     "title": "Paramètres",
@@ -1247,7 +1255,11 @@
     "codexDeliveryUnconfirmed": "Codex n'a pas encore confirmé votre choix ({{error}}). Il peut encore être appliqué, ne répondez donc pas une seconde fois ; si la conversation ne reprend pas, cliquez sur Arrêter puis renvoyez votre message."
   },
   "modelConfig": {
-    "approvals": "Approbations"
+    "approvals": "Approbations",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Workflow natif Claude avec délégation automatique des tâches. Conserve le niveau de raisonnement choisi."
+    }
   },
   "askUserQuestion": {
     "ompTitle": "OMP a quelques questions à vous poser",
@@ -1692,6 +1704,7 @@
       "loading": "Chargement du processus de l'agent…",
       "unavailable": "Le journal du processus n'est pas disponible tant que la session n'a pas d'identifiant.",
       "reportGenerated": "Rapport d'analyse structuré généré",
+      "historyTruncated": "Historique abrégé : {{count}} entrées omises. La tâche initiale et l’activité récente sont conservées.",
       "unitMs": "ms",
       "unitS": "s",
       "unitTools": "outils",
@@ -2173,6 +2186,10 @@
     "xhigh": {
       "label": "Maximum",
       "description": "Profondeur de raisonnement maximale"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "Raisonnement maximal avec délégation automatique des tâches"
     }
   },
   "errorBoundary": {

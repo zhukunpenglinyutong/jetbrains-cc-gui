@@ -865,7 +865,7 @@ public class ClaudeMessageHandler implements MessageCallback {
             // intentional defense-in-depth - see DaemonBridge.handleDaemonEvent.
             String subtype = systemObj.has("subtype") && !systemObj.get("subtype").isJsonNull()
                     ? systemObj.get("subtype").getAsString() : null;
-            if (subtype != null && subtype.startsWith("task_")) {
+            if (subtype != null && (subtype.startsWith("task_") || "background_tasks_changed".equals(subtype))) {
                 callbackHandler.notifyTaskEvent(content);
                 // task_* events carry no slash_commands; skip the rest.
                 return;

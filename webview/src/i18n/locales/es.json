@@ -106,6 +106,10 @@
     "localProject": "Local",
     "disabled": "Deshabilitado",
     "sdkNotInstalled": "{{provider}} SDK no está instalado. Instala el SDK para comenzar a chatear.",
+    "codexUltraCapabilitiesLoading": "Comprobando la disponibilidad de Ultra. Vuelve a enviar cuando termine de cargar el modelo.",
+    "codexUltraCapabilitiesUnavailable": "No se pudo verificar la disponibilidad de Ultra. Vuelve a cargar los modelos o elige otro nivel de esfuerzo.",
+    "sessionTransitionTakingLonger": "El cambio de sesión está tardando más de lo esperado. Puedes intentar abrirla de nuevo; los mensajes en cola están pausados.",
+    "sessionTransitionInProgress": "Ya hay un cambio de sesión en curso. Espera un momento.",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "Preparando imagen pegada...",
     "sdkStatusUnavailable": "No se pudo comprobar el estado del SDK.",
@@ -170,7 +174,11 @@
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexCliOutdated": "Codex CLI {{version}} está desactualizado; es posible que algunos modelos y modos de permisos no funcionen. Actualiza a {{minimumVersion}} o posterior.",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "Continuar refinando este plan:"
+    "continueRefiningPlan": "Continuar refinando este plan:",
+    "backgroundTasksRunning": "{{count}} tareas en segundo plano en ejecución",
+    "backgroundTasksRunning_one": "{{count}} tarea en segundo plano en ejecución",
+    "backgroundTasksRunning_other": "{{count}} tareas en segundo plano en ejecución",
+    "stopBackgroundTasks": "Detener tareas en segundo plano"
   },
   "settings": {
     "title": "Configuración",
@@ -1247,7 +1255,11 @@
     "codexDeliveryUnconfirmed": "Codex aún no ha confirmado tu elección ({{error}}). Puede que todavía se aplique, así que no respondas de nuevo; si la conversación no continúa, pulsa Detener y vuelve a enviar el mensaje."
   },
   "modelConfig": {
-    "approvals": "Aprobaciones"
+    "approvals": "Aprobaciones",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Flujo nativo de Claude con delegación automática de tareas. Mantiene el nivel de razonamiento elegido."
+    }
   },
   "askUserQuestion": {
     "ompTitle": "OMP tiene algunas preguntas para ti",
@@ -1692,6 +1704,7 @@
       "loading": "Cargando proceso del agente…",
       "unavailable": "El registro del proceso no está disponible hasta que la sesión tenga un id.",
       "reportGenerated": "Informe de análisis estructurado generado",
+      "historyTruncated": "Historial abreviado: se omitieron {{count}} registros. Se conservan la tarea inicial y la actividad reciente.",
       "unitMs": "ms",
       "unitS": "s",
       "unitTools": "herramientas",
@@ -2179,6 +2192,10 @@
     "xhigh": {
       "label": "Máximo",
       "description": "Profundidad máxima de razonamiento"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "Razonamiento máximo con delegación automática de tareas"
     }
   },
   "errorBoundary": {

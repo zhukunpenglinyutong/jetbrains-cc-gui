@@ -3,6 +3,7 @@ import type { CodexFastMode, ModelInfo, OmpApprovalMode, ReasoningEffort } from 
 import type { OmpReasoningCatalog } from '../reasoningUtils';
 import { CodexFastModeSelect } from './CodexFastModeSelect';
 import { DshPresetSelect } from './DshPresetSelect';
+import { ModelConfigUltracodeRow } from './ModelConfigUltracodeRow';
 import { ModelConfigContextRow } from './ModelConfigContextRow';
 import { ModelConfigSubmenuRow } from './ModelConfigSubmenuRow';
 import { ModelSelect } from './ModelSelect';
@@ -38,6 +39,11 @@ interface ModelConfigDropdownProps {
   longContextEnabled: boolean;
   onLongContextChange?: (enabled: boolean) => void;
   // Function rows below the model list.
+  showUltracode: boolean;
+  claudeUltracode: boolean;
+  onClaudeUltracodeChange?: (enabled: boolean) => void;
+  supportedReasoningEfforts?: readonly string[];
+  reasoningCapabilitiesUnconfirmed: boolean;
   showDivider: boolean;
   showContextRow: boolean;
   contextSupported: boolean;
@@ -89,6 +95,11 @@ export const ModelConfigDropdown = ({
   onAddModel,
   longContextEnabled,
   onLongContextChange,
+  showUltracode,
+  claudeUltracode,
+  onClaudeUltracodeChange,
+  supportedReasoningEfforts,
+  reasoningCapabilitiesUnconfirmed,
   showDivider,
   showContextRow,
   contextSupported,
@@ -155,6 +166,13 @@ export const ModelConfigDropdown = ({
         supported={contextSupported}
         enabled={longContextEnabled}
         onChange={onLongContextChange}
+        onHover={() => scheduleSubmenu('none')}
+      />
+
+      <ModelConfigUltracodeRow
+        visible={showUltracode}
+        enabled={claudeUltracode}
+        onChange={onClaudeUltracodeChange}
         onHover={() => scheduleSubmenu('none')}
       />
 
@@ -237,6 +255,8 @@ export const ModelConfigDropdown = ({
           selectedModel={selectedModel}
           currentProvider={currentProvider}
           ompCatalog={ompCatalog}
+          supportedReasoningEfforts={supportedReasoningEfforts}
+          reasoningCapabilitiesUnconfirmed={reasoningCapabilitiesUnconfirmed}
           embedded
           triggerRef={effortTriggerRef}
           onClose={onClose}

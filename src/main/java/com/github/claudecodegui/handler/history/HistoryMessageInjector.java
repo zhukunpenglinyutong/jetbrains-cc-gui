@@ -82,6 +82,13 @@ public class HistoryMessageInjector {
         return generation;
     }
 
+    /** Fence in-flight loads without discarding the reader the current session still pages with. */
+    void fencePendingCodexLoads() {
+        synchronized (sessionLoadGeneration) {
+            sessionLoadGeneration.incrementAndGet();
+        }
+    }
+
     void publishIfCurrent(long generation, Runnable publication) {
         synchronized (sessionLoadGeneration) {
             if (generation == sessionLoadGeneration.get()) {
@@ -108,10 +115,14 @@ public class HistoryMessageInjector {
         String provider = currentProvider;
         String resolvedSessionId = sessionId;
         String model = null;
+        String transitionToken = null;
 
         try {
             JsonObject payload = new Gson().fromJson(sessionId, JsonObject.class);
             if (payload != null) {
+                if (payload.has("transitionToken") && payload.get("transitionToken").isJsonPrimitive()) {
+                    transitionToken = payload.get("transitionToken").getAsString();
+                }
                 if (payload.has("sessionId") && !payload.get("sessionId").isJsonNull()) {
                     resolvedSessionId = payload.get("sessionId").getAsString();
                 }
@@ -137,7 +148,11 @@ public class HistoryMessageInjector {
         String projectPath = NodeDetector.isWslPath(nodePath) ? NodeDetector.convertToWslPath(rawPath) : rawPath;
         if (projectPath == null) {
             LOG.warn("[HistoryHandler] Project base path is null");
-            notifyHistoryLoadComplete();
+            if (transitionToken == null) {
+                notifyHistoryLoadComplete();
+            } else {
+                context.callJavaScript("sessionTransitionFailed", "Project base path is unavailable", context.escapeJs(transitionToken));
+            }
             return;
         }
         LOG.info("[HistoryHandler] Loading history session: " + resolvedSessionId
@@ -146,14 +161,22 @@ public class HistoryMessageInjector {
 
         if ("codex".equals(provider)) {
             // Codex session: read session info and restore session state
-            loadCodexSession(resolvedSessionId, model);
+            if (transitionToken == null) {
+                loadCodexSession(resolvedSessionId, model);
+            } else {
+                loadCodexSession(resolvedSessionId, model, transitionToken);
+            }
         } else {
             // Claude / CLI providers: use existing callback mechanism
             if (sessionLoadCallback != null) {
-                sessionLoadCallback.onLoadSession(resolvedSessionId, projectPath, provider, model);
+                sessionLoadCallback.onLoadSession(resolvedSessionId, projectPath, provider, model, transitionToken);
             } else {
                 LOG.warn("[HistoryHandler] WARNING: No session load callback set");
-                notifyHistoryLoadComplete();
+                if (transitionToken == null) {
+                    notifyHistoryLoadComplete();
+                } else {
+                    context.callJavaScript("sessionTransitionFailed", "Session loader is unavailable", context.escapeJs(transitionToken));
+                }
             }
         }
     }
@@ -167,23 +190,23 @@ public class HistoryMessageInjector {
     }
 
     void loadCodexSession(String sessionId, String model) {
+        loadCodexSession(sessionId, model, null);
+    }
+
+    void loadCodexSession(String sessionId, String model, String requestedTransitionToken) {
         long generation = invalidateCodexHistory();
+        String transitionToken = requestedTransitionToken == null || requestedTransitionToken.isBlank()
+                ? "backend:" + UUID.randomUUID() : requestedTransitionToken;
+        ClaudeSession activeSession = this.context.getSession();
+        context.callJavaScript("sessionTransitionStarted", context.escapeJs(sessionId), "", context.escapeJs(transitionToken));
         CompletableFuture.runAsync(() -> {
             LOG.info("[HistoryHandler] ========== 开始加载 Codex 会话 ==========");
             LOG.info("[HistoryHandler] SessionId: " + sessionId);
 
             try {
-                ClaudeSession activeSession = this.context.getSession();
-                String oldThread = activeSession == null ? null : activeSession.getSessionId();
-                if (activeSession != null && "codex".equals(activeSession.getProvider())
-                        && oldThread != null && !oldThread.equals(sessionId) && this.context.getCodexSDKBridge() != null) {
-                    // Node bounds the release itself; keep a Java-side ceiling so
-                    // this history load can never block on the release forever.
-                    JsonObject release = this.context.getCodexSDKBridge().releaseCodexThread(activeSession.getChannelId(),
-                            activeSession.getCwd(), oldThread).get(30, java.util.concurrent.TimeUnit.SECONDS);
-                    if (release.has("error")) {
-                        throw new IllegalStateException(release.get("error").getAsString());
-                    }
+                if (!quiesceForCodexHistory(generation, activeSession, sessionId)
+                        .get(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                    return;
                 }
                 CodexHistoryReader codexReader = new CodexHistoryReader();
                 CodexHistoryPage page = this.readInitialCodexHistory(codexReader, sessionId, generation);
@@ -191,8 +214,13 @@ public class HistoryMessageInjector {
                     String threadIdToUse = page.threadId != null ? page.threadId : sessionId;
                     String cwd = page.cwd;
 
-                    context.getSession().setSessionInfo(threadIdToUse, cwd);
+                    // Acceptance precedes restored identity, just as it does for Claude.
+                    // Both carry the request token so queued callbacks from a superseded
+                    // load cannot commit a later frontend selection.
+                    context.executeJavaScriptQueued("if (window.clearMessages) { window.clearMessages(undefined, "
+                            + new Gson().toJson(transitionToken) + "); }");
                     context.getSession().setProvider("codex");
+                    context.getSession().setSessionInfo(threadIdToUse, cwd, transitionToken);
                     this.nativeHistoryReader = page.nativeReader;
                     this.nativeHistoryCursor = page.cursor;
                     if (model != null && !model.isBlank()) {
@@ -202,9 +230,9 @@ public class HistoryMessageInjector {
                     pushRestoredCodexUsage();
                     LOG.info("[HistoryHandler] 恢复 Codex 会话状态: threadId=" + threadIdToUse + " (from sessionId=" + sessionId + "), cwd=" + cwd);
 
-                    injectCodexHistoryPage(sessionId, page, true);
+                    injectCodexHistoryPage(threadIdToUse, page, true, transitionToken);
 
-                    notifyHistoryLoadComplete(generation);
+                    notifyHistoryLoadComplete(generation, transitionToken);
                 });
 
                 LOG.info("[HistoryHandler] ========== Codex 会话加载完成 ==========");
@@ -214,21 +242,46 @@ public class HistoryMessageInjector {
                     LOG.info("[HistoryHandler] Ignoring stale Codex session load failure: " + sessionId);
                     return;
                 }
-                LOG.error("[HistoryHandler] 加载 Codex 会话失败: " + e.getMessage(), e);
+                LOG.warn("[HistoryHandler] 加载 Codex 会话失败: " + e.getMessage(), e);
 
                 ApplicationManager.getApplication().invokeLater(() -> publishIfCurrent(generation, () -> {
                     String errorMsg = context.escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
-                    String jsCode = "if (window.addErrorMessage) { " +
-                                            "  window.addErrorMessage('加载 Codex 会话失败: " + errorMsg + "'); " +
-                                            "}";
-                    context.executeJavaScriptQueued(jsCode);
+                    context.callJavaScript("sessionTransitionFailed", "Failed to load session: " + errorMsg,
+                            context.escapeJs(transitionToken));
                 }));
-                notifyHistoryLoadComplete(generation);
             }
         }, CodexSDKBridge.codexControlExecutor());
     }
 
-    private CodexHistoryPage readInitialCodexHistory(CodexHistoryReader legacyReader, String sessionId, long generation) throws Exception {
+    /** A queued load must never stop the session installed by a newer selection. */
+    CompletableFuture<Boolean> quiesceForCodexHistory(long generation, ClaudeSession activeSession, String targetSessionId) {
+        synchronized (sessionLoadGeneration) {
+            if (generation != sessionLoadGeneration.get() || activeSession != context.getSession()) {
+                return CompletableFuture.completedFuture(false);
+            }
+            if (activeSession == null) {
+                return CompletableFuture.completedFuture(true);
+            }
+            if (!"codex".equals(activeSession.getProvider())) {
+                return activeSession.interrupt().thenApply(ignored -> true);
+            }
+            String oldThread = activeSession.getSessionId();
+            if (!java.util.Objects.equals(oldThread, targetSessionId)
+                    && (oldThread != null || activeSession.isBusy() || activeSession.getState().getExecutionState().hasLiveTurn())
+                    && context.getCodexSDKBridge() != null) {
+                return context.getCodexSDKBridge().releaseCodexThread(activeSession.getChannelId(),
+                        activeSession.getCwd(), oldThread).thenApply(release -> {
+                    if (release.has("error")) {
+                        throw new IllegalStateException(release.get("error").getAsString());
+                    }
+                    return true;
+                });
+            }
+            return CompletableFuture.completedFuture(true);
+        }
+    }
+
+    CodexHistoryPage readInitialCodexHistory(CodexHistoryReader legacyReader, String sessionId, long generation) throws Exception {
         // The session may be absent in exactly the scenario loadCodexSession
         // already anticipates; keep the reader usable without a channel id.
         ClaudeSession session = this.context.getSession();
@@ -652,7 +705,15 @@ public class HistoryMessageInjector {
     }
 
     private void notifyHistoryLoadComplete(long generation) {
+        notifyHistoryLoadComplete(generation, null);
+    }
+
+    private void notifyHistoryLoadComplete(long generation, String transitionToken) {
         ApplicationManager.getApplication().invokeLater(() -> publishIfCurrent(generation, () -> {
+            if (transitionToken != null) {
+                context.callJavaScript("historyLoadComplete", "", context.escapeJs(transitionToken));
+                return;
+            }
             String jsCode = "if (window.historyLoadComplete) { " +
                                     "  try { " +
                                     "    window.historyLoadComplete(); " +
@@ -1847,15 +1908,22 @@ public class HistoryMessageInjector {
      * 分批注入前端消息，避免长历史单次传输阻塞 WebView。
      */
     private void injectCodexHistoryPage(String sessionId, CodexHistoryPage page, boolean replace) {
+        injectCodexHistoryPage(sessionId, page, replace, null);
+    }
+
+    private void injectCodexHistoryPage(String sessionId, CodexHistoryPage page, boolean replace, String transitionToken) {
         String pageId = UUID.randomUUID().toString();
         Gson gson = new Gson();
         JsonObject startInfo = new JsonObject();
         startInfo.addProperty("pageId", pageId);
         startInfo.addProperty("sessionId", sessionId);
         startInfo.addProperty("mode", replace ? "replace" : "prepend");
+        if (transitionToken != null) {
+            startInfo.addProperty("transitionToken", transitionToken);
+        }
 
-        if (replace) {
-            // Keep the session-transition barrier active until historyLoadComplete.
+        if (replace && transitionToken == null) {
+            // A cursor reset replaces the page within an already selected session.
             context.executeJavaScriptQueued("if (window.clearMessages) { window.clearMessages(); }");
         }
         context.callJavaScript("beginCodexHistoryPage", context.escapeJs(gson.toJson(startInfo)));
@@ -1871,6 +1939,9 @@ public class HistoryMessageInjector {
         pageInfo.addProperty("pageId", pageId);
         pageInfo.addProperty("sessionId", sessionId);
         pageInfo.addProperty("mode", replace ? "replace" : "prepend");
+        if (transitionToken != null) {
+            pageInfo.addProperty("transitionToken", transitionToken);
+        }
         pageInfo.addProperty("fromTurn", page.fromTurn);
         pageInfo.addProperty("toTurn", page.toTurn);
         pageInfo.addProperty("totalTurns", page.totalTurns);

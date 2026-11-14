@@ -45,6 +45,10 @@ public class SessionCallbackFacade {
         callbackHandler.notifySessionIdReceived(sessionId);
     }
 
+    public void notifySessionIdReceived(String sessionId, String transitionToken) {
+        callbackHandler.notifySessionIdReceived(sessionId, transitionToken);
+    }
+
     public void notifyPermissionRequested(PermissionRequest request) {
         callbackHandler.notifyPermissionRequested(request);
     }
