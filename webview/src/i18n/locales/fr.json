@@ -1302,7 +1302,7 @@
     "providerAdded": "Fournisseur ajouté",
     "providerUpdated": "Fournisseur mis à jour",
     "providerDeleted": "Fournisseur supprimé",
-    "codexSettingsDispatchFailed": "Impossible d?envoyer les param?tres Codex ? l?IDE. Rouvrez la discussion et r?essayez."
+    "codexSettingsDispatchFailed": "Impossible d'envoyer les paramètres Codex à l'IDE. Rouvrez la discussion et réessayez."
   },
   "config": {
     "clickToCopy": "Cliquer pour copier",

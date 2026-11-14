@@ -258,7 +258,7 @@ public class CodexAppServerRequestExecutorTest {
 
     /** Keeps the user message separate from a copied native context snapshot. */
     @Test
-    public void sendParamsCarrySandboxProvenanceWithoutInternalRevision() {
+    public void sendParamsCarryNativeSettingsWithoutInternalMetadata() {
         JsonObject nativeSettings = new JsonObject();
         nativeSettings.addProperty("collaborationMode", "plan");
         nativeSettings.addProperty("approvalPreset", "request");
@@ -280,7 +280,7 @@ public class CodexAppServerRequestExecutorTest {
         assertEquals("plan", params.get("collaborationMode").getAsString());
         assertEquals("request", params.get("approvalPreset").getAsString());
         assertEquals("workspace-write", params.get("sandboxSelection").getAsString());
-        assertEquals("user", params.get("sandboxSource").getAsString());
+        assertTrue(!params.has("sandboxSource"));
         assertEquals("task", params.get("message").getAsString());
         assertEquals(additionalContext, params.getAsJsonObject("additionalContext"));
         editor.addProperty("value", "changed after enqueue");

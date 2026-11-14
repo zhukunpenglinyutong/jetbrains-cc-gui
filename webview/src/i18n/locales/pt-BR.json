@@ -1441,7 +1441,7 @@
     "providerAdded": "Provedor adicionado",
     "providerUpdated": "Provedor atualizado",
     "providerDeleted": "Provedor excluído",
-    "codexSettingsDispatchFailed": "N?o foi poss?vel enviar as configura??es do Codex para a IDE. Reabra o chat e tente novamente."
+    "codexSettingsDispatchFailed": "Não foi possível enviar as configurações do Codex para a IDE. Reabra o chat e tente novamente."
   },
   "config": {
     "clickToCopy": "Clique para copiar",

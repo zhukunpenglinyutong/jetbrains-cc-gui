@@ -493,7 +493,6 @@ class CodexAppServerRequestExecutor {
             copyNativeSetting(nativeSettings, params, "collaborationMode");
             copyNativeSetting(nativeSettings, params, "approvalPreset");
             copyNativeSetting(nativeSettings, params, "sandboxSelection");
-            copyNativeSetting(nativeSettings, params, "sandboxSource");
             if (nativeSettings.has("cwdExplicit")) {
                 params.add("cwdExplicit", nativeSettings.get("cwdExplicit").deepCopy());
             }

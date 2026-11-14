@@ -1344,7 +1344,7 @@
     "providerAdded": "供應商新增成功",
     "providerUpdated": "供應商更新成功",
     "providerDeleted": "供應商刪除成功",
-    "codexSettingsDispatchFailed": "??? IDE ?? Codex ??????????????"
+    "codexSettingsDispatchFailed": "無法將 Codex 設定傳送到 IDE，請重新開啟對話後再試。"
   },
   "config": {
     "clickToCopy": "點選複製",

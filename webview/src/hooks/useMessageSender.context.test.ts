@@ -252,7 +252,6 @@ describe('useMessageSender - /context command', () => {
       codexCollaborationMode: 'plan',
       codexApprovalPreset: 'request',
       codexSandboxSelection: 'read-only',
-      codexSandboxSource: 'user',
     });
     const { result } = renderHook(() => useMessageSender(opts));
 
@@ -262,7 +261,6 @@ describe('useMessageSender - /context command', () => {
       collaborationMode: 'plan',
       approvalPreset: 'request',
       sandboxSelection: 'read-only',
-      sandboxSource: 'user',
       skills: [],
     });
   });

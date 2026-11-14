@@ -1761,7 +1761,7 @@
     "providerAdded": "供应商添加成功",
     "providerUpdated": "供应商更新成功",
     "providerDeleted": "供应商删除成功",
-    "codexSettingsDispatchFailed": "??? IDE ?? Codex ??????????????"
+    "codexSettingsDispatchFailed": "无法将 Codex 设置发送到 IDE，请重新打开对话后重试。"
   },
   "config": {
     "clickToCopy": "点击复制",

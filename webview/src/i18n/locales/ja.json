@@ -1297,7 +1297,7 @@
     "providerAdded": "プロバイダーを追加しました",
     "providerUpdated": "プロバイダーを更新しました",
     "providerDeleted": "プロバイダーを削除しました",
-    "codexSettingsDispatchFailed": "Codex ???? IDE ?????????????????????????????"
+    "codexSettingsDispatchFailed": "Codex の設定を IDE に送信できません。チャットを開き直して、もう一度お試しください。"
   },
   "config": {
     "clickToCopy": "クリックしてコピー",
