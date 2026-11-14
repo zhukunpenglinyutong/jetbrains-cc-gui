@@ -316,6 +316,15 @@ final class OmpToolMapper {
      * so where it lands is only known from the result.
      */
     static boolean isPlainPath(String path) {
+        return isPlainPath(path, File.separatorChar == '\\');
+    }
+
+    /**
+     * {@link #isPlainPath(String)} with the host's rules given explicitly. On Windows omp turns
+     * {@code /c/...} into a drive path, and any other leading slash is drive-relative, so no path
+     * starting with {@code /} is written as given there.
+     */
+    static boolean isPlainPath(String path, boolean windows) {
         if (path == null || path.isEmpty() || !path.equals(path.strip())) {
             return false;
         }
@@ -330,7 +339,7 @@ final class OmpToolMapper {
         if (path.startsWith("~") && !"~".equals(path) && !path.startsWith("~/") && !path.startsWith("~\\")) {
             return false;
         }
-        if (File.separatorChar == '\\' && path.startsWith("/")) {
+        if (windows && path.startsWith("/")) {
             return false;
         }
         return (DRIVE_PREFIX.matcher(path).find() ? path.substring(2) : path).indexOf(':') < 0;
