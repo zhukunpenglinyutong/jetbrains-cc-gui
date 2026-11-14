@@ -392,6 +392,25 @@ public class OmpHistoryRestoreTest {
         }
     }
 
+    @Test
+    public void windowsPathRulesApplyOnlyToWindowsSessionsOnAWindowsHost() {
+        assertFalse(OmpToolMapper.usesWindowsPathRules("/home/u/project", true));
+        assertTrue(OmpToolMapper.usesWindowsPathRules("C:\\work\\project", true));
+        assertTrue(OmpToolMapper.usesWindowsPathRules(null, true));
+        assertFalse(OmpToolMapper.usesWindowsPathRules("/home/u/project", false));
+        assertFalse(OmpToolMapper.usesWindowsPathRules("C:\\work\\project", false));
+        assertFalse(OmpToolMapper.usesWindowsPathRules(null, false));
+    }
+
+    @Test
+    public void writeWithoutResultToAnAbsolutePosixPathInAPosixSessionIsAWriteOnEveryHost() throws Exception {
+        writeSession(header(), user("w"),
+                assistant("a1", null, call("w1", "write", "{'path':'/home/u/x.txt','content':'x'}")));
+        JsonObject use = blocks(load(), "tool_use").get(0);
+        assertEquals("Write", use.get("name").getAsString());
+        assertEquals("/home/u/x.txt", use.getAsJsonObject("input").get("file_path").getAsString());
+    }
+
     // ---- task ----
 
     @Test

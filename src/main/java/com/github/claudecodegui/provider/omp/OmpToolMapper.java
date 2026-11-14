@@ -265,7 +265,7 @@ final class OmpToolMapper {
         }
         if (filePath == null) {
             // omp rewrites some paths before writing; only a plain one is known without the result.
-            if (!isPlainPath(path)) {
+            if (!isPlainPath(path, usesWindowsPathRules(cwd, File.separatorChar == '\\'))) {
                 return null;
             }
             filePath = absolute(path, cwd, home);
@@ -317,6 +317,15 @@ final class OmpToolMapper {
      */
     static boolean isPlainPath(String path) {
         return isPlainPath(path, File.separatorChar == '\\');
+    }
+
+    /**
+     * Whether omp applied Windows path rules in a session. On a Windows host a POSIX session
+     * directory means omp ran in WSL, where it writes POSIX paths as given; OmpHistoryReader
+     * reads the session's {@code ~} the same way. Without a session directory the host decides.
+     */
+    static boolean usesWindowsPathRules(String sessionCwd, boolean windowsHost) {
+        return windowsHost && (sessionCwd == null || !sessionCwd.startsWith("/"));
     }
 
     /**
