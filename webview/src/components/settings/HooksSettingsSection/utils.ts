@@ -66,5 +66,6 @@ export function hookOperationMessage(error: string, translate: (key: string) => 
   if (key) return translate(`settings.hooks.${key}`);
   const errorKey = `settings.hooks.errors.${error}`;
   const translated = translate(errorKey);
-  return translated === errorKey ? error : translated;
+  // Parse failures such as INVALID_JSON share their wording with source issues.
+  return translated === errorKey ? issueLabel(error, translate) : translated;
 }

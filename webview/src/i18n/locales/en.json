@@ -999,10 +999,7 @@
         "CODEX_MATCHER_INVALID": "Codex hook matcher field is invalid",
         "CODEX_COMMANDS_INVALID": "Hook handler is missing a valid command or MCP tool",
         "CODEX_HOOKS_FEATURE_DISABLED": "The Codex hooks feature is not enabled",
-        "FILE_LIMIT_REACHED": "File limit reached",
-        "SCAN_FAILED": "Scan failed",
         "READ_FAILED": "Read failed",
-        "PREVIEW_TRUNCATED": "Preview truncated",
         "CODEX_EVENT_UNSUPPORTED": "Event is not supported by the verified Codex schema",
         "CODEX_HANDLER_UNSUPPORTED": "Handler type is not supported by the verified Codex schema",
         "CODEX_HOOK_FILE_FIELDS_INVALID": "Hook file fields are invalid",
@@ -1010,7 +1007,6 @@
         "LINKED_SOURCE_READ_ONLY": "Linked files are read-only; edit the original file directly.",
         "HOOK_SOURCE_UNAVAILABLE": "The source file is unavailable."
       },
-      "executionUnknown": "Execution status unknown",
       "sharedProjectWarning": "Project configuration may be committed and affect other users. Review the file diff before sharing.",
       "bridgeUnavailable": "The IDE connection is unavailable. Reopen the settings page and try again.",
       "sourceTimeout": "Reading timed out. Reload the source before editing.",
@@ -1023,7 +1019,25 @@
       "revealSource": "Reveal configuration",
       "errors": {
         "HOOK_SHARED_CONFIRMATION_REQUIRED": "Confirm the shared project configuration change first.",
-        "HOOK_CATALOG_TIMEOUT": "Hook refresh timed out. Refresh before changing another hook."
+        "HOOK_CATALOG_TIMEOUT": "Hook refresh timed out. Refresh before changing another hook.",
+        "HOOK_REVISION_CONFLICT": "The file changed outside this page. Refresh and try again.",
+        "HOOK_RESTORE_CONFLICT": "The hook could not be restored because this event is no longer a list in the file. Fix the file, then try again.",
+        "HOOK_TOGGLE_LOCKED": "Another change to this file is in progress. Try again in a moment.",
+        "HOOK_TOGGLE_LOCK_FAILED": "Could not lock the file for this change.",
+        "HOOK_FILE_LOCKED": "Another change to this file is in progress. Try again in a moment.",
+        "HOOK_NOT_FOUND": "This hook is no longer in the file. Refresh the list.",
+        "HOOK_NOT_DISABLED": "This hook is not disabled. Refresh the list.",
+        "HOOK_ALREADY_DISABLED": "This hook is already disabled. Refresh the list.",
+        "HOOK_STATE_WRITE_FAILED": "Could not save the disabled-hook record. The file change was rolled back where possible.",
+        "HOOK_TOGGLE_FAILED": "The hook could not be changed.",
+        "INVALID_HOOK_PATH": "This file can't be changed here. Linked files and files outside the known locations are read-only.",
+        "INVALID_BACKUP_PATH": "The backup file is not available.",
+        "SOURCE_TOO_LARGE": "The file is larger than 128 KB and can't be edited here.",
+        "INVALID_REQUEST": "The request was invalid. Refresh the page and try again.",
+        "WRITE_FAILED": "The file could not be saved.",
+        "RESTORE_FAILED": "The backup could not be restored.",
+        "UNSUPPORTED_HOOK_PROVIDER": "This kind of hook can't be changed here.",
+        "UNKNOWN_ERROR": "Unknown error."
       }
     },
     "other": {

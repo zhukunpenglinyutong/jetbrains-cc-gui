@@ -58,15 +58,6 @@ final class HookPathPolicy {
                 || normalized.equals(projectClaude.resolve("settings.local.json"));
     }
 
-    boolean isUnderHookRoot(Path target, Path hookRoot) throws IOException {
-        if (!Files.isDirectory(hookRoot)) {
-            return false;
-        }
-        Path realTarget = target.toRealPath();
-        Path realRoot = hookRoot.toRealPath();
-        return realTarget.startsWith(realRoot) && !realTarget.equals(realRoot);
-    }
-
     boolean isCodexConfig(Path target, Path project) {
         Path normalized = target.toAbsolutePath().normalize();
         if (normalized.equals(codexHome.resolve("config.toml"))) {

@@ -113,12 +113,16 @@ export const HookGroup = memo(function HookGroup({
   onEdit,
   onToggle,
 }: HookGroupProps) {
+  const { t } = useTranslation();
   return (
     <section className={styles.hookGroup} aria-labelledby={`hook-group-${provider}`}>
       <div className={styles.groupHeader}>
         <h4 id={`hook-group-${provider}`}>{PROVIDER_LABELS[provider]}</h4>
         <span>{items.length}</span>
       </div>
+      {provider === 'codex' && items.some((item) => item.toggleSupported) && (
+        <p className={styles.groupHint}>{t('settings.hooks.nativeToggleHint')}</p>
+      )}
       <div className={styles.groupList}>
         {items.map((item) => (
           <HookRow
@@ -192,18 +196,12 @@ const HookRow = memo(function HookRow({ item, toggleLoading, toggleDisabled, onE
                 {t('settings.hooks.validationWarning')}
               </span>
             )}
-            {item.executionStateKnown === false && (
-              <span className={styles.readOnlyBadge}>{t('settings.hooks.executionUnknown')}</span>
-            )}
             {!editSupported && <span className={styles.readOnlyBadge}>{t('settings.hooks.readOnly')}</span>}
           </span>
           <span className={styles.rowSummary} title={summary}>
             <code>{item.command || t('settings.hooks.noCommand')}</code>
             {item.matcher && <><span aria-hidden="true">·</span><span>{item.matcher}</span></>}
           </span>
-          {item.provider === 'codex' && item.toggleSupported && (
-            <span className={styles.rowSummary}>{t('settings.hooks.nativeToggleHint')}</span>
-          )}
         </span>
         <span
           className={`codicon ${editSupported ? 'codicon-chevron-right' : 'codicon-lock'} ${styles.rowIndicator}`}

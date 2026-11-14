@@ -72,6 +72,28 @@ public class HookReviewRegressionTest {
         assertEquals("{\"hooks\":{\"Stop\":17}}", Files.readString(source));
     }
 
+    @Test public void restoreFindsOrRecreatesAGroupMovedOrDeletedOutsideCcgui() throws Exception {
+        String original = "{\"hooks\":{\"PreToolUse\":[{\"matcher\":\"Bash\",\"hooks\":["
+                + "{\"type\":\"command\",\"command\":\"A\"},{\"type\":\"command\",\"command\":\"B\"}]}]}}";
+        String moved = "{\"hooks\":{\"PreToolUse\":[{\"matcher\":\"Write\",\"hooks\":[{\"type\":\"command\",\"command\":\"W\"}]},"
+                + "{\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"B\"}]}]}}";
+        String movedRestored = "{\"hooks\":{\"PreToolUse\":[{\"matcher\":\"Write\",\"hooks\":[{\"type\":\"command\",\"command\":\"W\"}]},"
+                + "{\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"A\"},{\"type\":\"command\",\"command\":\"B\"}]}]}}";
+        String deletedRestored = "{\"hooks\":{\"PreToolUse\":[{\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"A\"}]}]}}";
+        String[][] cases = {{moved, movedRestored}, {"{\"hooks\":{\"PreToolUse\":[]}}", deletedRestored}};
+        for (String[] edit : cases) {
+            Path home = temporary.newFolder().toPath();
+            Path source = settings(home, original);
+            HookCatalogService catalog = new HookCatalogService(home);
+            HookToggleService service = new HookToggleService(home);
+            assertTrue(service.toggle(null, request(command(catalog, 'A'), false)).get("success").getAsBoolean());
+            Files.writeString(source, edit[0]);
+            JsonObject result = service.toggle(null, request(item(catalog, true), true));
+            assertTrue(result.toString(), result.get("success").getAsBoolean());
+            assertEquals(JsonParser.parseString(edit[1]), JsonParser.parseString(Files.readString(source)));
+        }
+    }
+
     @Test public void sharedProjectToggleNeedsExplicitConfirmationEvenWithSpoofedScope() throws Exception {
         Path home = temporary.newFolder("home").toPath();
         Path project = temporary.newFolder("project").toPath();

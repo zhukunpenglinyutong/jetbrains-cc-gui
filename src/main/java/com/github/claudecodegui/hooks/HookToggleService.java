@@ -489,16 +489,12 @@ public final class HookToggleService {
         if (entry.has("wrapped") && entry.get("wrapped").getAsBoolean()) {
             int parentIndex = restoredEventIndex(disabled, entry, entry.get("parentIndex").getAsInt());
             boolean removed = entry.has("containerRemoved") && entry.get("containerRemoved").getAsBoolean();
-            if (!removed && parentIndex >= 0 && parentIndex < eventArray.size()) {
-                JsonElement parent = eventArray.get(parentIndex);
-                if (parent.isJsonObject() && matchesContainer(parent.getAsJsonObject(), entry)) {
-                    insert(parent.getAsJsonObject().getAsJsonArray("hooks"), index, hook);
-                    return true;
-                }
+            JsonObject parent = removed ? null : findContainer(eventArray, parentIndex, entry);
+            if (parent != null) {
+                insert(parent.getAsJsonArray("hooks"), index, hook);
+                return true;
             }
-            if (!removed) {
-                return false;
-            }
+            // The group was moved or deleted outside CCGUI; recreate it instead of stranding the record.
             JsonObject wrapper = entry.has("container") && entry.get("container").isJsonObject()
                     ? entry.getAsJsonObject("container").deepCopy() : new JsonObject();
             if (matcher != null) {
@@ -513,6 +509,20 @@ public final class HookToggleService {
         }
         insert(eventArray, restoredEventIndex(disabled, entry, entry.get("orderIndex").getAsInt()), hook);
         return true;
+    }
+
+    // Prefer the recorded position; fall back to any group with the same matcher and metadata.
+    private static JsonObject findContainer(JsonArray groups, int preferredIndex, JsonObject entry) {
+        if (preferredIndex >= 0 && preferredIndex < groups.size() && groups.get(preferredIndex).isJsonObject()
+                && matchesContainer(groups.get(preferredIndex).getAsJsonObject(), entry)) {
+            return groups.get(preferredIndex).getAsJsonObject();
+        }
+        for (JsonElement group : groups) {
+            if (group.isJsonObject() && matchesContainer(group.getAsJsonObject(), entry)) {
+                return group.getAsJsonObject();
+            }
+        }
+        return null;
     }
 
     private static void insert(JsonArray array, int index, JsonElement value) {

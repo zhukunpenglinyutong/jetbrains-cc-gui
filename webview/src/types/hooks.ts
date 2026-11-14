@@ -9,7 +9,6 @@ export interface HookItem {
   matcher?: string;
   command: string;
   enabled: boolean;
-  executionStateKnown?: boolean;
   toggleSupported: boolean;
   managedToggleSupported?: boolean;
   toggleMode?: 'ccgui-managed' | 'native';
